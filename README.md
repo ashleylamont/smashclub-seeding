@@ -2,6 +2,10 @@
 
 Automatically seed Super Smash Bros Ultimate tournaments based on historical player performance.
 
+This tool was created to assist with event planning for Atlassian's [Smash Club](https://hello.atlassian.net/wiki/spaces/smash/overview).
+
+It was also largely vibe-coded with Rovo Dev CLI, so there may be some quirks.
+
 ## Features
 
 - **Weighted Scoring**: Recent tournaments weighted higher (exponential decay 0.8)
