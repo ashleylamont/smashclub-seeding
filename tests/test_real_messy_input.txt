@@ -1,0 +1,77 @@
+1	
+[Atlas] @Pit Switch 
+
+2	
+[Atlas]@Palutena 
+
+3	
+Kirby (Host: @King Dedede)
+
+4	
+Jigglypuff (Host: @King Dedede)
+
+5	
+[Atlas]@King Dedede 
+
+6	
+[Atlas]@Byleth 
+
+7	
+[Atlas]@Ike 
+
+8	
+[Atlas]@Marth Switch
+
+9	
+[Atlas]@Roy 
+
+10	
+[Atlas]@Lucina - Ready to taunt and spike Donkeykong 
+
+11	
+[Atlas]@Shulk 
+
+12	
+Ganondorf (Host: @Shulk) 
+
+13	
+[Atlas]@Wolf O'Donnell 
+
+14	
+[Atlas]@Captain Falcon 
+
+15	
+[Atlas]@Solid Snake (Dietary: Gluten Free) 
+
+16	
+Cloud Strife (Host: @Palutena)
+
+17	
+[Atlas]@Corrin 
+
+18	
+Samus Aran (Host: @Corrin )
+
+19	
+[Relevance AI] Jack Morrison Relevance 
+
+20	
+[Relevance AI] Amelie Lacroix
+
+21	
+[Relevance AI] Hanzo Shimada
+
+22	
+[Relevance AI] Fareeha Amari
+
+23	
+[Relevance AI] Akande Ogundimu (cofounder of relevance ai)
+
+24	
+[Google] Aleksandra Zaryanova Google
+
+25	
+[Google] Angela Ziegler Google
+
+26	
+[Google] Ana Amari Google
