@@ -107,22 +107,28 @@ Fox McCloud [CAN]
 class TestRookiesAdjustment:
     """Tests for Rookies placement adjustment."""
 
-    def test_rookies_placed_after_main_bracket(self, calculator):
-        """Rookies placements should start after the last main 1v1 placement."""
+    def test_rookies_placed_dynamically(self, calculator):
+        """Rookies placements should be adjusted dynamically based on transitive comparisons."""
         # In Winter Bash 2024, main 1v1 goes to placement 8
-        # So rookies should start at 9
         results = [r for r in calculator.results
                    if r.tournament == "Winter Bash 2024" and r.is_1v1_rookies]
 
-        # Samus Aran was 1st in rookies, should be adjusted to 9
+        # Samus Aran was 1st in rookies
+        # She also competed in main bracket (1st place) so algorithm has perfect data
+        # She should be placed somewhere reasonable (better than old system which put her at 9th)
         alice_rookies = [r for r in results if r.player_name == "Samus Aran"]
         assert len(alice_rookies) == 1
-        assert alice_rookies[0].placement == 9  # 8 (max main) + 1
+        # Dynamic adjustment should place her better than the old system (which was 9th)
+        assert alice_rookies[0].placement < 9  # Better than old system
+        assert alice_rookies[0].placement >= 1  # Not better than her actual 1st place
 
-        # Angela Ziegler was 2nd in rookies, should be adjusted to 10
+        # Angela Ziegler was 2nd in rookies
+        # She's a pure rookie (no main bracket history), so gets additional penalty
         ivy_rookies = [r for r in results if r.player_name == "Angela Ziegler"]
         assert len(ivy_rookies) == 1
-        assert ivy_rookies[0].placement == 10  # 8 (max main) + 2
+        # Pure rookies get max_main + 10 penalty to ensure they rank below all main bracket players
+        # Winter Bash max_main = 8, so min placement = 8 + 10 = 18
+        assert ivy_rookies[0].placement >= 18  # Pure rookies rank below all main bracket players
 
     def test_rookies_in_different_tournament(self, calculator):
         """Rookies in March Madness should be adjusted based on that tournament's max."""
@@ -132,11 +138,15 @@ class TestRookiesAdjustment:
 
         zoe = [r for r in results if r.player_name == "Satya Vaswani"]
         assert len(zoe) == 1
-        assert zoe[0].placement == 7  # 6 (max main) + 1
+        # Zoe is a pure rookie (no main bracket history), so gets additional penalty
+        # March Madness max_main = 6, so min placement = 6 + 10 = 16
+        assert zoe[0].placement >= 16  # Pure rookies rank below all main bracket players
 
         xavier = [r for r in results if r.player_name == "Akande Ogundimu"]
         assert len(xavier) == 1
-        assert xavier[0].placement == 8  # 6 (max main) + 2
+        # Xavier is also a pure rookie
+        # March Madness max_main = 6, so min placement = 6 + 10 = 16
+        assert xavier[0].placement >= 16  # Pure rookies rank below all main bracket players
 
 
 class TestScoreCalculation:

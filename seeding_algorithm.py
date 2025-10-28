@@ -136,6 +136,8 @@ class SeedingCalculator:
                 shorthand = 'TIP1'
             elif 'tech in place #2' in tournament.lower():
                 shorthand = 'TIP2'
+            elif 'tech in place #3' in tournament.lower():
+                shorthand = 'TIP3'
             elif 'tech in place 0' in tournament.lower():
                 shorthand = 'TIP0'
             elif 'rookierumble' in tournament.lower():
@@ -176,28 +178,160 @@ class SeedingCalculator:
 
     def _adjust_rookies_placements(self) -> None:
         """
-        Adjust Rookies placements to start from the bottom of the main 1v1 bracket.
-        Per instructions: "Treat results from the '1v1 Rookies' format starting from 
-        the bottom of the 1v1 results of the same tournament name."
+        Dynamically adjust Rookies placements using transitive performance comparisons.
+        
+        Instead of using a fixed multiplier, this method analyzes each rookie's performance
+        against players who competed in both rookie and main brackets across tournaments,
+        and uses those comparisons to estimate where the rookie would place in the main bracket.
         """
-        # Group tournaments by name and find max placement in main 1v1
-        tournament_max_placement = {}
+        # Build player histories for transitive comparisons
+        player_histories = defaultdict(list)
         for result in self.results:
-            if result.is_1v1:
-                if result.tournament not in tournament_max_placement:
-                    tournament_max_placement[result.tournament] = result.placement
-                else:
-                    tournament_max_placement[result.tournament] = max(
-                        tournament_max_placement[result.tournament],
-                        result.placement
-                    )
+            if result.is_1v1 or result.is_1v1_rookies:
+                player_histories[result.player_name].append({
+                    'tournament': result.tournament,
+                    'placement': result.placement,
+                    'date': result.date,
+                    'format': result.format,
+                    'company': result.company
+                })
 
-        # Adjust Rookies placements
+        # Group tournaments by name
+        tournament_max_placement = {}
+        tournaments = {}
         for result in self.results:
-            if result.is_1v1_rookies and result.tournament in tournament_max_placement:
-                max_main_placement = tournament_max_placement[result.tournament]
-                # Rookies 1st place becomes (max_main + 1), 2nd becomes (max_main + 2), etc.
-                result.placement = max_main_placement + result.placement
+            tournament = result.tournament
+            if tournament not in tournaments:
+                tournaments[tournament] = {'rookies': [], 'main': []}
+
+            if result.is_1v1:
+                tournament_max_placement[tournament] = max(
+                    tournament_max_placement.get(tournament, 0),
+                    result.placement
+                )
+                tournaments[tournament]['main'].append({
+                    'player': result.player_name,
+                    'placement': result.placement
+                })
+            elif result.is_1v1_rookies:
+                tournaments[tournament]['rookies'].append({
+                    'player': result.player_name,
+                    'placement': result.placement,
+                    'result_obj': result
+                })
+
+        # Build transitive comparisons for each rookie player
+        for tournament, brackets in tournaments.items():
+            if not brackets['rookies']:
+                continue  # Skip if no rookies in this tournament
+
+            max_main = tournament_max_placement.get(tournament, 0)
+
+            # For rookies-only tournaments (no main bracket), estimate a reasonable adjustment
+            # Use the number of rookies as a proxy for tournament size
+            if max_main == 0:
+                num_rookies = len(brackets['rookies'])
+                # Assume rookies-only tournament is similar to a larger bracket
+                # Use 3x the number of rookies as the "virtual" main bracket size
+                # This ensures rookies-only tournaments are adjusted more conservatively
+                max_main = num_rookies * 3
+
+            # For each rookie in this tournament
+            for rookie_entry in brackets['rookies']:
+                rookie_player = rookie_entry['player']
+                rookie_placement = rookie_entry['placement']
+                result_obj = rookie_entry['result_obj']
+
+                # Skip transitive comparisons for rookies-only tournaments
+                # Using other rookies as anchors creates circular reasoning
+                if not brackets['main']:
+                    # Rookies-only: use simple fallback
+                    fallback = max_main + rookie_placement
+                    result_obj.placement = int(round(fallback))
+                    continue
+
+                # Find transitive comparisons
+                estimates = []
+
+                # Look at all tournaments this rookie has competed in
+                for rookie_tournament_result in player_histories[rookie_player]:
+                    other_tournament = rookie_tournament_result['tournament']
+
+                    if other_tournament == tournament:
+                        continue
+
+                    # Find other players who competed in both tournaments
+                    for other_player, other_history in player_histories.items():
+                        if other_player == rookie_player:
+                            continue
+
+                        # Did other_player compete against rookie in other_tournament?
+                        other_in_comparison = [
+                            h for h in other_history
+                            if h['tournament'] == other_tournament
+                               and h['format'] == rookie_tournament_result['format']
+                        ]
+                        if not other_in_comparison:
+                            continue
+
+                        # Did other_player compete in current tournament?
+                        # For tournaments with main brackets, look for '1v1'
+                        # For rookies-only tournaments, look for '1v1 Rookies'
+                        if brackets['main']:
+                            # Tournament has main bracket
+                            other_in_main = [
+                                h for h in other_history
+                                if h['tournament'] == tournament
+                                   and h['format'] == '1v1'
+                            ]
+                        else:
+                            # Rookies-only tournament
+                            other_in_main = [
+                                h for h in other_history
+                                if h['tournament'] == tournament
+                                   and h['format'] == '1v1 Rookies'
+                            ]
+
+                        if not other_in_main:
+                            continue
+
+                        # Calculate estimate based on performance delta
+                        rookie_comp_place = rookie_tournament_result['placement']
+                        other_comp_place = other_in_comparison[0]['placement']
+                        other_main_place = other_in_main[0]['placement']
+
+                        performance_delta = rookie_comp_place - other_comp_place
+                        estimated = other_main_place + (performance_delta * 0.5)
+                        estimates.append(estimated)
+
+                # Determine final adjusted placement
+                if estimates:
+                    # Use median for robustness
+                    import statistics
+                    median_estimate = statistics.median(estimates)
+
+                    # Apply modest penalty: transitive comparisons tend to be somewhat optimistic
+                    # 1.3x multiplier accounts for the skill gap between rookie and main brackets
+                    # More conservative than raw data, but not as aggressive as 1.6x
+                    ROOKIE_PENALTY = 1.3
+                    adjusted_estimate = median_estimate * ROOKIE_PENALTY
+
+                    result_obj.placement = int(round(adjusted_estimate))
+                else:
+                    # No transitive data - use old system as fallback
+                    # Place rookies below the main bracket
+                    fallback = max_main + rookie_placement
+                    result_obj.placement = int(round(fallback))
+
+                # Check if this is a pure rookie (never competed in main bracket)
+                player_main_history = [r for r in self.results
+                                       if r.player_name == result_obj.player_name
+                                       and r.is_1v1 and not r.is_1v1_rookies]
+
+                if not player_main_history:
+                    # Pure rookie - ensure they rank below all main bracket players
+                    # Add +10 penalty
+                    result_obj.placement = max(result_obj.placement, max_main + 10)
 
     def find_player_results(self, player: PlayerInput, verbose: bool = False, interactive: bool = True) -> List[
         TournamentResult]:
@@ -238,6 +372,44 @@ class SeedingCalculator:
                 # Also check for N/A entries for this player
                 na_key = f"{normalized_name}|N/A"
                 na_results = self.player_results.get(na_key, [])
+
+                # Also check for similar company variants (e.g., Optus/Optiver typo)
+                similar_company_results = []
+                for key in self.player_results.keys():
+                    if '|' not in key:
+                        continue
+                    key_name, key_company = key.rsplit('|', 1)
+                    if key_name == normalized_name and key_company != normalized_company:
+                        # Check if companies are similar (typo)
+                        if self._companies_are_similar({normalized_company, key_company}):
+                            similar_company_results.extend(self.player_results[key])
+
+                # Handle similar company results (auto-merge in non-interactive, prompt in interactive)
+                if similar_company_results:
+                    similar_companies = set(r.company for r in similar_company_results)
+                    if interactive:
+                        YELLOW = '\033[93m'
+                        BLUE = '\033[94m'
+                        RESET = '\033[0m'
+                        print(
+                            f"\n{YELLOW}⚠{RESET}  Found additional results for '{player.name}' with similar company name:")
+                        print(f"   {len(results)} results in {normalized_company}")
+                        print(f"   {len(similar_company_results)} results in {', '.join(similar_companies)}")
+                        print(f"   This looks like a typo or company name variant.")
+                        response = input(f"   Merge these results? (y/n): ").strip().lower()
+                        if response == 'y':
+                            results = results + similar_company_results
+                            if verbose:
+                                print(f"{BLUE}│{RESET} Merging similar company results ({len(results)} total)")
+                    else:
+                        # In non-interactive mode, automatically merge similar companies
+                        results = results + similar_company_results
+                        if verbose:
+                            BLUE = '\033[94m'
+                            GREEN = '\033[92m'
+                            RESET = '\033[0m'
+                            print(
+                                f"{BLUE}│{RESET} {GREEN}Auto-merged{RESET} similar company variant: {', '.join(similar_companies)}")
 
                 if na_results:
                     # Found entries with both specified company and N/A
@@ -394,8 +566,8 @@ class SeedingCalculator:
             RESET = '\033[0m'
             print(f"{BLUE}└─{RESET} {RED}✗ No matches found{RESET}")
 
-        # Check for potential cross-company matches
-        if interactive and normalized_name:
+        # Check for potential cross-company matches (company changes or data entry errors)
+        if normalized_name:
             normalized_name_lower = normalized_name.lower()
             potential_matches = []
 
@@ -407,34 +579,110 @@ class SeedingCalculator:
             if potential_matches:
                 # Get unique companies for this player name
                 companies = set(r.company for r in potential_matches)
-                if verbose:
-                    YELLOW = '\033[93m'
-                    BLUE = '\033[94m'
-                    RESET = '\033[0m'
-                    print(f"{BLUE}│{RESET} {YELLOW}Found name match in different company:{RESET}")
-                    for company in companies:
-                        count = len([r for r in potential_matches if r.company == company])
-                        print(f"{BLUE}│{RESET}   - {count} results in {company}")
 
-                # Ask user if they want to use these results
-                print(f"\n{YELLOW}⚠{RESET}  Player '{player.name}' has results under different company:")
-                print(f"   Input company: {player.company or 'None'}")
-                print(f"   Found in: {', '.join(sorted(companies))}")
-                response = input(f"   Use these results anyway? (y/n): ").strip().lower()
-
-                if response == 'y':
+                # If player specified a company and we found matches in OTHER companies
+                if player.company and normalized_company not in companies:
                     if verbose:
-                        GREEN = '\033[92m'
+                        YELLOW = '\033[93m'
                         BLUE = '\033[94m'
                         RESET = '\033[0m'
-                        print(
-                            f"{BLUE}└──>{RESET} {GREEN}Using cross-company match ({len(potential_matches)} results){RESET}")
-                    return potential_matches
-                else:
+                        print(f"{BLUE}│{RESET} {YELLOW}Found name match in different company:{RESET}")
+                        for company in companies:
+                            count = len([r for r in potential_matches if r.company == company])
+                            print(f"{BLUE}│{RESET}   - {count} results in {company}")
+
+                    if interactive:
+                        # Ask user if they want to use these results
+                        print(f"\n{YELLOW}⚠{RESET}  Player '{player.name}' has results under different company:")
+                        print(f"   Input company: {player.company or 'None'}")
+                        print(f"   Found in: {', '.join(sorted(companies))}")
+                        print(f"   This could be a company change or data entry error.")
+                        response = input(f"   Merge all results for this player? (y/n): ").strip().lower()
+
+                        if response == 'y':
+                            if verbose:
+                                GREEN = '\033[92m'
+                                BLUE = '\033[94m'
+                                RESET = '\033[0m'
+                                print(
+                                    f"{BLUE}└──>{RESET} {GREEN}Merging cross-company results ({len(potential_matches)} results){RESET}")
+                            return potential_matches
+                        else:
+                            if verbose:
+                                print(f"{BLUE}└─{RESET} Skipping cross-company match")
+                    else:
+                        # Non-interactive mode: auto-merge if companies are similar or single result
+                        if len(companies) == 1 or self._companies_are_similar(companies):
+                            if verbose:
+                                GREEN = '\033[92m'
+                                BLUE = '\033[94m'
+                                RESET = '\033[0m'
+                                print(
+                                    f"{BLUE}└──>{RESET} {GREEN}Auto-merging similar companies ({len(potential_matches)} results){RESET}")
+                            return potential_matches
+
+                # If no company specified, check if there are multiple companies
+                elif not player.company and len(companies) > 1:
                     if verbose:
-                        print(f"{BLUE}└─{RESET} Skipping cross-company match")
+                        YELLOW = '\033[93m'
+                        BLUE = '\033[94m'
+                        RESET = '\033[0m'
+                        print(f"{BLUE}│{RESET} {YELLOW}Found name match across multiple companies:{RESET}")
+                        for company in companies:
+                            count = len([r for r in potential_matches if r.company == company])
+                            print(f"{BLUE}│{RESET}   - {count} results in {company}")
+
+                    if interactive:
+                        print(f"\n{YELLOW}⚠{RESET}  Player '{player.name}' has results under multiple companies:")
+                        print(f"   Found in: {', '.join(sorted(companies))}")
+                        print(f"   This could be a company change or duplicate entries.")
+                        response = input(f"   Use all results for this player? (y/n): ").strip().lower()
+
+                        if response == 'y':
+                            if verbose:
+                                GREEN = '\033[92m'
+                                BLUE = '\033[94m'
+                                RESET = '\033[0m'
+                                print(
+                                    f"{BLUE}└──>{RESET} {GREEN}Using all results across companies ({len(potential_matches)} results){RESET}")
+                            return potential_matches
+                        else:
+                            if verbose:
+                                print(f"{BLUE}└─{RESET} Skipping multi-company match")
 
         return []
+
+    def _companies_are_similar(self, companies: set) -> bool:
+        """
+        Check if companies are similar enough to auto-merge (e.g., typos like Optus/Optiver).
+        
+        Args:
+            companies: Set of company names
+        
+        Returns:
+            True if companies should be auto-merged
+        """
+        if len(companies) != 2:
+            return False
+
+        companies_list = list(companies)
+        comp1, comp2 = companies_list[0].lower(), companies_list[1].lower()
+
+        # Check for common typos/variants
+        similar_pairs = [
+            ('optiver', 'optus'),  # Common typo
+            ('atlassian', 'atlas'),  # Abbreviation
+            ('google', 'alphabet'),  # Parent company
+        ]
+
+        for pair in similar_pairs:
+            if (comp1 in pair and comp2 in pair) or (comp2 in pair and comp1 in pair):
+                return True
+
+        # Use fuzzy matching for other cases
+        from difflib import SequenceMatcher
+        similarity = SequenceMatcher(None, comp1, comp2).ratio()
+        return similarity > 0.8
 
     def calculate_player_score(self, results: List[TournamentResult], recency_decay: float = 0.4,
                                use_time_decay: bool = True) -> Dict[str, float]:

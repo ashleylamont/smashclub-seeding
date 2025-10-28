@@ -2,7 +2,8 @@
 
 Automatically seed Super Smash Bros Ultimate tournaments based on historical player performance.
 
-This tool was created to assist with event planning for Atlassian's [Smash Club](https://hello.atlassian.net/wiki/spaces/smash/overview).
+This tool was created to assist with event planning for
+Atlassian's [Smash Club](https://hello.atlassian.net/wiki/spaces/smash/overview).
 
 It was also largely vibe-coded with Rovo Dev CLI, so there may be some quirks.
 
@@ -12,7 +13,9 @@ It was also largely vibe-coded with Rovo Dev CLI, so there may be some quirks.
 - **Smart Parsing**: Handles messy copy-paste formats from sign-up sheets
 - **Fuzzy Matching**: Catches typos and suggests corrections
 - **1v1 Priority**: Uses 1v1 results primarily, 2v2 for tiebreaking
-- **Rookies Support**: Properly adjusts "1v1 Rookies" placements
+- **Dynamic Rookies Adjustment**: Uses transitive performance comparisons to intelligently place rookie bracket
+  participants
+- **Smart Company Matching**: Auto-merges results when players change companies or have typos (e.g., Optiver/Optus)
 
 ## Quick Start
 
@@ -32,6 +35,7 @@ uv run pytest tests/ -v
 ## Usage
 
 ### Basic Usage
+
 ```bash
 # Default (smart parsing + interactive prompts)
 python main.py --csv data.csv --players list.txt
@@ -46,6 +50,7 @@ python main.py --csv data.csv --players list.txt --non-interactive
 ### Input Format Examples
 
 **Messy formats (all work automatically):**
+
 ```
 1 [Atlas]@Pit Switch
 [Google] Mako RutledgeGoogle  
@@ -55,27 +60,51 @@ Kirby (Host: @King Dedede)
 ```
 
 **Clean formats:**
+
 ```
 Samus Aran [ATL]
 [CAN] Fox McCloud
 Falco Lombardi
 ```
 
-**Supported Companies:** ATL/Atlassian, CAN/Canva, OPT/Optiver, GOOG/Google, WOW/Woolworths, REL/Relevance AI, SUS/Susquehanna
+**Supported Companies:** ATL/Atlassian, CAN/Canva, OPT/Optiver, GOOG/Google, WOW/Woolworths, REL/Relevance AI,
+SUS/Susquehanna
 
-**Company Inference:** 
+**Company Inference:**
+
 - `@` symbol before name → Inferred as Atlassian (e.g., `@Samus Aran`)
 - No `@` or brackets → No company (matches against all companies in history)
 
 ## Algorithm
 
 ### Scoring
+
 - Uses **weighted average** of all 1v1 results with exponential decay (0.8)
 - Recent tournaments weighted higher: 1.0, 0.8, 0.64, 0.51...
 - Formula: `score = sum(placement × 0.8^index) / sum(0.8^index)`
 - 2v2 results used for tiebreaking only
 
+### Rookies Bracket Adjustment
+
+Instead of placing all rookies below the main bracket, we use **transitive performance comparisons** to estimate where
+each rookie would place:
+
+1. **Find Connections**: For each rookie, find players they competed against in other tournaments
+2. **Compare Performance**: Check how the rookie performed vs. those players
+3. **Estimate Placement**: Use the other players' main bracket placements as reference points
+4. **Calculate**: `estimated_placement = other_player_main_placement + (performance_delta × 0.5)`
+5. **Aggregate**: Use median of all estimates for robustness
+
+**Example**: If a rookie beat Player X in Tournament A, and Player X placed 15th in Tournament B's main bracket, the
+rookie is likely stronger than 15th place.
+
+**Fallback**: If no transitive data exists, uses conservative estimate: `max_main × 0.75 + rookie_placement`
+
+**Impact**: Top rookies (1st-3rd) typically place in the middle of the main bracket (e.g., 17th-21st in a 25-person
+bracket), rather than being relegated to last place.
+
 ### CSV Format
+
 ```csv
 Date,Company,Player name,Placement,Format,Tournament
 2024-01-15,Atlassian,Samus Aran,1,1v1,Winter Bash 2024
