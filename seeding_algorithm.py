@@ -769,14 +769,9 @@ class SeedingCalculator:
             avg_inverse = weighted_sum / weight_total
             one_v_one_score = 1.0 / avg_inverse if avg_inverse > 0 else float('inf')
 
-            # Apply confidence bonus for limited tournament history
-            # Players with 1-2 tournaments get a small boost to account for uncertainty
-            # This helps newer players who haven't built up consistency history yet
+            # Note: We no longer apply a confidence bonus for limited tournament history.
+            # Instead, we blend in 2v2 data below for players with sparse 1v1 data.
             num_tournaments = len(one_v_one_results)
-            if num_tournaments <= 2:
-                # 0.4 bonus for 1 tournament, 0.2 bonus for 2 tournaments
-                confidence_bonus = 0.2 * (3 - num_tournaments)
-                one_v_one_score = max(1.0, one_v_one_score - confidence_bonus)
 
             best_placement = min(r.placement for r in one_v_one_results)
             most_recent_placement = sorted_results[0].placement
@@ -818,12 +813,43 @@ class SeedingCalculator:
         else:
             two_v_two_score = float('inf')
 
+        # Blend 2v2 data into 1v1 score for players with sparse 1v1 history
+        # This provides more signal for players who haven't competed much in 1v1
+        # without penalizing them for having limited data
+        num_1v1_tournaments = len(one_v_one_results)
+        blended_1v1_score = one_v_one_score
+        
+        if one_v_one_score != float('inf') and two_v_two_score != float('inf'):
+            # Determine blend weight based on 1v1 tournament count:
+            # - 3+ tournaments: 100% 1v1 (no blending)
+            # - 2 tournaments: 75% 1v1 + 25% 2v2
+            # - 1 tournament: 50% 1v1 + 50% 2v2
+            if num_1v1_tournaments >= 3:
+                blend_weight = 0.0
+            elif num_1v1_tournaments == 2:
+                blend_weight = 0.25
+            elif num_1v1_tournaments == 1:
+                blend_weight = 0.50
+            else:
+                blend_weight = 1.0
+            
+            if blend_weight > 0:
+                blended_1v1_score = (1 - blend_weight) * one_v_one_score + blend_weight * two_v_two_score
+
+        # Track the most recent 1v1 tournament date for staleness calculation
+        if one_v_one_results:
+            sorted_by_date = sorted(one_v_one_results, key=lambda x: x.date, reverse=True)
+            most_recent_tournament_date = sorted_by_date[0].date
+        else:
+            most_recent_tournament_date = None
+
         return {
-            '1v1_score': one_v_one_score,
+            '1v1_score': blended_1v1_score,
             '2v2_score': two_v_two_score,
             'best_placement': best_placement,
             'most_recent_placement': most_recent_placement,
-            'num_tournaments': len(one_v_one_results)
+            'num_tournaments': num_1v1_tournaments,
+            'most_recent_tournament_date': most_recent_tournament_date
         }
 
     def _calculate_head_to_head_adjustments(self, player_inputs: List[PlayerInput], player_results_map: Dict) -> Tuple[
@@ -949,6 +975,13 @@ class SeedingCalculator:
         # Calculate head-to-head adjustments
         h2h_adjustments, h2h_details = self._calculate_head_to_head_adjustments(player_inputs, player_results_map)
 
+        # Build list of all 1v1 tournament dates for staleness calculation
+        all_tournament_dates = set()
+        for result in self.results:
+            if result.is_1v1 or result.is_1v1_rookies:
+                all_tournament_dates.add(result.date)
+        sorted_tournament_dates = sorted(all_tournament_dates, reverse=True)
+
         # Apply adjustments to scores and handle 2v2 fallback
         for player in seeded_players:
             adjustment = h2h_adjustments.get(player['name'], 0.0)
@@ -956,6 +989,31 @@ class SeedingCalculator:
             # If player has 1v1 data, use it with H2H adjustment
             if player['score']['1v1_score'] != float('inf'):
                 player['score']['1v1_score'] += adjustment
+                
+                # Calculate tournament-based staleness penalty
+                # If a player has missed 2+ tournaments, apply a small penalty
+                # scaled by their track record (strong performers get reduced penalty)
+                staleness_penalty = 0.0
+                player_last_tournament = player['score'].get('most_recent_tournament_date')
+                if player_last_tournament and sorted_tournament_dates:
+                    # Count tournaments missed (tournaments that happened after player's last)
+                    tournaments_missed = sum(1 for t_date in sorted_tournament_dates if t_date > player_last_tournament)
+                    
+                    if tournaments_missed >= 2:
+                        # Scale penalty by track record: best_placement / 10, capped 0.5-1.5
+                        best_placement = player['score']['best_placement']
+                        if best_placement != float('inf'):
+                            scale = min(1.5, max(0.5, best_placement / 10))
+                        else:
+                            scale = 1.0
+                        
+                        # Base penalty: 0.3 per tournament missed beyond 1
+                        # Cap at 0.3 total to be forgiving to players who can't attend frequently
+                        raw_penalty = 0.3 * (tournaments_missed - 1) * scale
+                        staleness_penalty = min(0.3, raw_penalty)
+                
+                player['staleness_penalty'] = staleness_penalty
+                player['score']['1v1_score'] += staleness_penalty
                 player['primary_score'] = player['score']['1v1_score']
                 player['score_source'] = '1v1'
             # If no 1v1 data but has 2v2 data, use 2v2 as fallback
