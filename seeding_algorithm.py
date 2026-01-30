@@ -23,6 +23,10 @@ COMPANY_CODES = {
     'WOW': 'Woolworths',
     'REL': 'Relevance AI',
     'SUS': 'Susquehanna',
+    'AMD': 'AMD',
+    'LYR': 'Lyra',
+    'DEC': 'Deckard',
+    'ANA': 'Anaplan',
 }
 
 # Aliases for company names (maps various inputs to standard codes)
@@ -36,6 +40,10 @@ COMPANY_ALIASES = {
     'Relevance AI': 'REL',
     'Relevance': 'REL',
     'Susquehanna': 'SUS',
+    'AMD': 'AMD',
+    'Lyra': 'LYR',
+    'Deckard': 'DEC',
+    'Anaplan': 'ANA',
 }
 
 
