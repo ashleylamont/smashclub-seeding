@@ -14,6 +14,20 @@ import datetime
 from difflib import SequenceMatcher
 import hashlib
 
+from colorama import Fore, Style, init as colorama_init
+
+# Initialize colorama for cross-platform support (especially Windows)
+colorama_init()
+
+# Terminal color constants using colorama for cross-platform support
+BLUE = Fore.LIGHTBLUE_EX
+GREEN = Fore.LIGHTGREEN_EX
+YELLOW = Fore.LIGHTYELLOW_EX
+RED = Fore.LIGHTRED_EX
+CYAN = Fore.LIGHTCYAN_EX
+RESET = Style.RESET_ALL
+BOLD = Style.BRIGHT
+
 # Centralized company definitions
 COMPANY_CODES = {
     'ATL': 'Atlassian',
@@ -356,11 +370,6 @@ class SeedingCalculator:
 
         if verbose:
             # Color codes
-            BLUE = '\033[94m'
-            GREEN = '\033[92m'
-            YELLOW = '\033[93m'
-            RESET = '\033[0m'
-            BOLD = '\033[1m'
 
             print(f"\n{BOLD}{BLUE}┌─ Matching Player{RESET}")
             print(f"{BLUE}│{RESET} Input:      {BOLD}'{player.name}'{RESET} [{player.company or 'None'}]")
@@ -371,8 +380,6 @@ class SeedingCalculator:
             # Try full name match first with company
             full_key = f"{normalized_name}|{normalized_company}"
             if verbose:
-                BLUE = '\033[94m'
-                RESET = '\033[0m'
                 print(f"{BLUE}│{RESET} Trying: full name + company → '{full_key}'")
             if full_key in self.player_results:
                 results = self.player_results[full_key]
@@ -396,9 +403,6 @@ class SeedingCalculator:
                 if similar_company_results:
                     similar_companies = set(r.company for r in similar_company_results)
                     if interactive:
-                        YELLOW = '\033[93m'
-                        BLUE = '\033[94m'
-                        RESET = '\033[0m'
                         print(
                             f"\n{YELLOW}⚠{RESET}  Found additional results for '{player.name}' with similar company name:")
                         print(f"   {len(results)} results in {normalized_company}")
@@ -413,18 +417,12 @@ class SeedingCalculator:
                         # In non-interactive mode, automatically merge similar companies
                         results = results + similar_company_results
                         if verbose:
-                            BLUE = '\033[94m'
-                            GREEN = '\033[92m'
-                            RESET = '\033[0m'
                             print(
                                 f"{BLUE}│{RESET} {GREEN}Auto-merged{RESET} similar company variant: {', '.join(similar_companies)}")
 
                 if na_results:
                     # Found entries with both specified company and N/A
                     if interactive:
-                        YELLOW = '\033[93m'
-                        BLUE = '\033[94m'
-                        RESET = '\033[0m'
                         print(
                             f"\n{YELLOW}⚠{RESET}  Found additional results for '{player.name}' marked as N/A company:")
                         print(f"   {len(results)} results in {normalized_company}")
@@ -439,11 +437,6 @@ class SeedingCalculator:
                         results = results + na_results
 
                 if verbose:
-                    GREEN = '\033[92m'
-                    BLUE = '\033[94m'
-                    CYAN = '\033[96m'
-                    RESET = '\033[0m'
-                    BOLD = '\033[1m'
                     unique_names = set((r.player_name, r.company) for r in results)
                     print(
                         f"{BLUE}│{RESET} {GREEN}✓ Matched{RESET} via {BOLD}full name + company{RESET} ({len(results)} results)")
@@ -456,8 +449,6 @@ class SeedingCalculator:
             first_name = normalized_name.split()[0] if normalized_name else ""
             first_key = f"{first_name}|{normalized_company}"
             if verbose:
-                BLUE = '\033[94m'
-                RESET = '\033[0m'
                 print(f"{BLUE}│{RESET} Trying: first name + company → '{first_key}'")
             if first_key in self.player_results:
                 # Check if this is the only match or a clear match
@@ -466,11 +457,6 @@ class SeedingCalculator:
                 filtered = [r for r in results if r.company == normalized_company]
                 if filtered:
                     if verbose:
-                        GREEN = '\033[92m'
-                        BLUE = '\033[94m'
-                        CYAN = '\033[96m'
-                        RESET = '\033[0m'
-                        BOLD = '\033[1m'
                         unique_names = set((r.player_name, r.company) for r in filtered)
                         print(
                             f"{BLUE}│{RESET} {GREEN}✓ Matched{RESET} via {BOLD}first name + company{RESET} ({len(filtered)} results)")
@@ -479,10 +465,6 @@ class SeedingCalculator:
                                 f"{BLUE}└──>{RESET} Input: '{player.name}' [{player.company or 'None'}] → Matched: {GREEN}{name}{RESET} [{CYAN}{company}{RESET}]")
                     return filtered
                 if verbose:
-                    GREEN = '\033[92m'
-                    BLUE = '\033[94m'
-                    RESET = '\033[0m'
-                    BOLD = '\033[1m'
                     print(
                         f"{BLUE}│{RESET} {GREEN}✓ Matched{RESET} via {BOLD}first name + company{RESET} (unfiltered, {len(results)} results)")
                     print(f"{BLUE}└──>{RESET} (multiple companies found)")
@@ -492,16 +474,11 @@ class SeedingCalculator:
         if not normalized_company:
             normalized_company = 'Atlassian'
             if verbose:
-                YELLOW = '\033[93m'
-                BLUE = '\033[94m'
-                RESET = '\033[0m'
                 print(f"{BLUE}│{RESET} {YELLOW}Note:{RESET} No company specified, defaulting to {normalized_company}")
 
             # Try full name match with default company
             full_key = f"{normalized_name}|{normalized_company}"
             if verbose:
-                BLUE = '\033[94m'
-                RESET = '\033[0m'
                 print(f"{BLUE}│{RESET} Trying: full name + default company → '{full_key}'")
             if full_key in self.player_results:
                 results = self.player_results[full_key]
@@ -513,9 +490,6 @@ class SeedingCalculator:
                 if na_results:
                     # Found entries with both default company and N/A
                     if interactive:
-                        YELLOW = '\033[93m'
-                        BLUE = '\033[94m'
-                        RESET = '\033[0m'
                         print(
                             f"\n{YELLOW}⚠{RESET}  Found additional results for '{player.name}' marked as N/A company:")
                         print(f"   {len(results)} results in {normalized_company}")
@@ -530,11 +504,6 @@ class SeedingCalculator:
                         results = results + na_results
 
                 if verbose:
-                    GREEN = '\033[92m'
-                    BLUE = '\033[94m'
-                    CYAN = '\033[96m'
-                    RESET = '\033[0m'
-                    BOLD = '\033[1m'
                     unique_names = set((r.player_name, r.company) for r in results)
                     print(
                         f"{BLUE}│{RESET} {GREEN}✓ Matched{RESET} via {BOLD}full name + default company{RESET} ({len(results)} results)")
@@ -547,17 +516,10 @@ class SeedingCalculator:
             first_name = normalized_name.split()[0] if normalized_name else ""
             first_key = f"{first_name}|{normalized_company}"
             if verbose:
-                BLUE = '\033[94m'
-                RESET = '\033[0m'
                 print(f"{BLUE}│{RESET} Trying: first name + default company → '{first_key}'")
             if first_key in self.player_results:
                 results = self.player_results[first_key]
                 if verbose:
-                    GREEN = '\033[92m'
-                    BLUE = '\033[94m'
-                    CYAN = '\033[96m'
-                    RESET = '\033[0m'
-                    BOLD = '\033[1m'
                     unique_names = set((r.player_name, r.company) for r in results)
                     print(
                         f"{BLUE}│{RESET} {GREEN}✓ Matched{RESET} via {BOLD}first name + default company{RESET} ({len(results)} results)")
@@ -568,10 +530,6 @@ class SeedingCalculator:
 
         # If no matches found, check if there's a name match with different company
         if verbose:
-            RED = '\033[91m'
-            BLUE = '\033[94m'
-            YELLOW = '\033[93m'
-            RESET = '\033[0m'
             print(f"{BLUE}└─{RESET} {RED}✗ No matches found{RESET}")
 
         # Check for potential cross-company matches (company changes or data entry errors)
@@ -591,9 +549,6 @@ class SeedingCalculator:
                 # If player specified a company and we found matches in OTHER companies
                 if player.company and normalized_company not in companies:
                     if verbose:
-                        YELLOW = '\033[93m'
-                        BLUE = '\033[94m'
-                        RESET = '\033[0m'
                         print(f"{BLUE}│{RESET} {YELLOW}Found name match in different company:{RESET}")
                         for company in companies:
                             count = len([r for r in potential_matches if r.company == company])
@@ -601,8 +556,6 @@ class SeedingCalculator:
 
                     if interactive:
                         # Ask user if they want to use these results
-                        YELLOW = '\033[93m'
-                        RESET = '\033[0m'
                         print(f"\n{YELLOW}⚠{RESET}  Player '{player.name}' has results under different company:")
                         print(f"   Input company: {player.company or 'None'}")
                         print(f"   Found in: {', '.join(sorted(companies))}")
@@ -611,9 +564,6 @@ class SeedingCalculator:
 
                         if response == 'y':
                             if verbose:
-                                GREEN = '\033[92m'
-                                BLUE = '\033[94m'
-                                RESET = '\033[0m'
                                 print(
                                     f"{BLUE}└──>{RESET} {GREEN}Merging cross-company results ({len(potential_matches)} results){RESET}")
                             return potential_matches
@@ -624,9 +574,6 @@ class SeedingCalculator:
                         # Non-interactive mode: auto-merge if companies are similar or single result
                         if len(companies) == 1 or self._companies_are_similar(companies):
                             if verbose:
-                                GREEN = '\033[92m'
-                                BLUE = '\033[94m'
-                                RESET = '\033[0m'
                                 print(
                                     f"{BLUE}└──>{RESET} {GREEN}Auto-merging similar companies ({len(potential_matches)} results){RESET}")
                             return potential_matches
@@ -634,9 +581,6 @@ class SeedingCalculator:
                 # If no company specified, check if there are multiple companies
                 elif not player.company and len(companies) > 1:
                     if verbose:
-                        YELLOW = '\033[93m'
-                        BLUE = '\033[94m'
-                        RESET = '\033[0m'
                         print(f"{BLUE}│{RESET} {YELLOW}Found name match across multiple companies:{RESET}")
                         for company in companies:
                             count = len([r for r in potential_matches if r.company == company])
@@ -650,9 +594,6 @@ class SeedingCalculator:
 
                         if response == 'y':
                             if verbose:
-                                GREEN = '\033[92m'
-                                BLUE = '\033[94m'
-                                RESET = '\033[0m'
                                 print(
                                     f"{BLUE}└──>{RESET} {GREEN}Using all results across companies ({len(potential_matches)} results){RESET}")
                             return potential_matches
