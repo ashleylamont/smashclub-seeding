@@ -749,7 +749,7 @@ class SeedingCalculator:
                     days_ago = (now - result.date).days
                     # Decay over ~3 months (90 days): 0.4^(days/90)
                     # This gives tournaments a ~60 day half-life, strongly prioritizing recent results
-                    weight = recency_decay ** (days_ago / 90)
+                    recency_weight = recency_decay ** (days_ago / 90)
 
                     # Apply inverse power scaling to placement with exponent 0.75
                     # This strongly emphasizes top placements (2nd vs 3rd matters MUCH more than 13th vs 17th)
@@ -760,19 +760,26 @@ class SeedingCalculator:
                     # So 2nd→3rd is MORE significant (ratio: 2.4x) because we use inverse (smaller changes at top matter more)
                     inverse_placement = 1.0 / (result.placement ** 0.75)
 
+                    # Performance-weighted approach: better results get more influence in the average
+                    # Multiply recency weight by the performance quality (inverse_placement score)
+                    # This means a 5th place gets 3.3x more weight than a 25th place, encouraging participation
+                    performance_weight = recency_weight * inverse_placement
+                    
                     # Store the reciprocal so lower placements still give worse (higher) scores
                     # We'll convert back after averaging
-                    weighted_sum += inverse_placement * weight
-                    weight_total += weight
+                    weighted_sum += inverse_placement * performance_weight
+                    weight_total += performance_weight
             else:
                 # POSITION-based decay: each tournament gets exponentially less weight
                 # based on how many tournaments ago it was for this player
                 for i, result in enumerate(sorted_results):
-                    weight = recency_decay ** i  # Exponential decay: 1.0, 0.6, 0.36, 0.22, ...
+                    recency_weight = recency_decay ** i  # Exponential decay: 1.0, 0.6, 0.36, 0.22, ...
                     # Apply same inverse power scaling as time-based decay
                     inverse_placement = 1.0 / (result.placement ** 0.75)
-                    weighted_sum += inverse_placement * weight
-                    weight_total += weight
+                    # Apply performance weighting: better results get more influence
+                    performance_weight = recency_weight * inverse_placement
+                    weighted_sum += inverse_placement * performance_weight
+                    weight_total += performance_weight
 
             # For inverse scoring, convert the average back to a "placement-like" score
             # where higher placement numbers give higher (worse) scores
