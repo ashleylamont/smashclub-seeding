@@ -127,6 +127,7 @@ def print_seeding_results(seeded_players, show_details=False, calculator=None, c
         print("\nNote: 'Score' uses inverse power scaling (1/p^0.75) so top placements matter much more.")
         print("      Example: 1st→1.0, 2nd→1.68, 3rd→2.28, 5th→3.34, 9th→5.24, 13th→6.76, 17th→8.20")
         print("      Key: 2nd→3rd difference is much more significant than 13th→17th difference.")
+        print("      Peak Placement Bonus: 1st→-2.0, 2nd→-1.5, 3rd→-1.2, 5th→-0.8, 7th→-0.5, 10th→-0.2")
         print("      Recent results strongly prioritized (decay: 0.4^(days/90), ~60 day half-life)")
         print("      'Best' and 'Recent' show raw placement numbers from tournaments.")
         print("      '2v2' score is used as a tiebreaker when 1v1 scores are equal.")
@@ -183,6 +184,8 @@ def print_seeding_results(seeded_players, show_details=False, calculator=None, c
                 if player['has_history']:
                     score = player['score']
                     print(f"  📊 Weighted Score: {score['1v1_score']:.2f}")
+                    if 'peak_bonus' in score and score['peak_bonus'] != 0:
+                        print(f"  ⭐ Peak Placement Bonus: {score['peak_bonus']:.1f} (for {score['best_placement']:.0f} place finish)")
                     print(f"  🏆 All-time Best: {score['best_placement']:.0f}")
                     print(f"  🎯 Most Recent: {score['most_recent_placement']:.0f}")
                     print(f"  🎮 Tournaments Attended: {score['num_tournaments']}")

@@ -853,13 +853,41 @@ class SeedingCalculator:
         else:
             most_recent_tournament_date = None
 
+        # Calculate peak placement bonus for top finishes with time decay
+        # This gives exponential credit for reaching elite placements, but decays over time
+        peak_bonus = 0.0
+        if best_placement != float('inf') and best_placement <= 10:
+            # Find the date of the best placement
+            best_result = min(one_v_one_results, key=lambda r: r.placement)
+            best_result_date = best_result.date
+            
+            # Calculate time decay: exponential decay with 360-day half-life
+            now = datetime.datetime.now()
+            days_since_best = (now - best_result_date).days
+            
+            # Time decay factor: exponential decay with 360-day half-life
+            # Using 0.5^(days/360) so that after 360 days, bonus is at 50% strength
+            time_decay = 0.5 ** (days_since_best / 360.0)
+            
+            # Exponential formula: bonus = -2.5 / (placement^0.5) + 0.5
+            # This creates: 1st→-2.0, 2nd→-1.27, 3rd→-0.94, 5th→-0.62, 7th→-0.45, 10th→-0.29
+            # Rewards elite placements with diminishing returns for lower ranks
+            base_peak_bonus = -2.5 / (best_placement ** 0.5) + 0.5
+            
+            # Apply time decay to the peak bonus
+            peak_bonus = base_peak_bonus * time_decay
+            
+            # Apply the peak bonus to the blended score
+            blended_1v1_score += peak_bonus
+
         return {
             '1v1_score': blended_1v1_score,
             '2v2_score': two_v_two_score,
             'best_placement': best_placement,
             'most_recent_placement': most_recent_placement,
             'num_tournaments': num_1v1_tournaments,
-            'most_recent_tournament_date': most_recent_tournament_date
+            'most_recent_tournament_date': most_recent_tournament_date,
+            'peak_bonus': peak_bonus
         }
 
     def _calculate_head_to_head_adjustments(self, player_inputs: List[PlayerInput], player_results_map: Dict) -> Tuple[
