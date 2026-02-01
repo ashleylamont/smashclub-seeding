@@ -12,3 +12,10 @@ wheels/
 # Data files
 *players.txt
 *.csv
+
+# macOS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes

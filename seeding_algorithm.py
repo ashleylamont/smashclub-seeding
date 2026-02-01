@@ -749,7 +749,7 @@ class SeedingCalculator:
                     days_ago = (now - result.date).days
                     # Decay over ~3 months (90 days): 0.4^(days/90)
                     # This gives tournaments a ~60 day half-life, strongly prioritizing recent results
-                    weight = recency_decay ** (days_ago / 90)
+                    recency_weight = recency_decay ** (days_ago / 90)
 
                     # Apply inverse power scaling to placement with exponent 0.75
                     # This strongly emphasizes top placements (2nd vs 3rd matters MUCH more than 13th vs 17th)
@@ -760,19 +760,26 @@ class SeedingCalculator:
                     # So 2nd→3rd is MORE significant (ratio: 2.4x) because we use inverse (smaller changes at top matter more)
                     inverse_placement = 1.0 / (result.placement ** 0.75)
 
+                    # Performance-weighted approach: better results get more influence in the average
+                    # Multiply recency weight by the performance quality (inverse_placement score)
+                    # This means a 5th place gets 3.3x more weight than a 25th place, encouraging participation
+                    performance_weight = recency_weight * inverse_placement
+                    
                     # Store the reciprocal so lower placements still give worse (higher) scores
                     # We'll convert back after averaging
-                    weighted_sum += inverse_placement * weight
-                    weight_total += weight
+                    weighted_sum += inverse_placement * performance_weight
+                    weight_total += performance_weight
             else:
                 # POSITION-based decay: each tournament gets exponentially less weight
                 # based on how many tournaments ago it was for this player
                 for i, result in enumerate(sorted_results):
-                    weight = recency_decay ** i  # Exponential decay: 1.0, 0.6, 0.36, 0.22, ...
+                    recency_weight = recency_decay ** i  # Exponential decay: 1.0, 0.6, 0.36, 0.22, ...
                     # Apply same inverse power scaling as time-based decay
                     inverse_placement = 1.0 / (result.placement ** 0.75)
-                    weighted_sum += inverse_placement * weight
-                    weight_total += weight
+                    # Apply performance weighting: better results get more influence
+                    performance_weight = recency_weight * inverse_placement
+                    weighted_sum += inverse_placement * performance_weight
+                    weight_total += performance_weight
 
             # For inverse scoring, convert the average back to a "placement-like" score
             # where higher placement numbers give higher (worse) scores
@@ -853,13 +860,41 @@ class SeedingCalculator:
         else:
             most_recent_tournament_date = None
 
+        # Calculate peak placement bonus for top finishes with time decay
+        # This gives exponential credit for reaching elite placements, but decays over time
+        peak_bonus = 0.0
+        if best_placement != float('inf') and best_placement <= 10:
+            # Find the date of the best placement
+            best_result = min(one_v_one_results, key=lambda r: r.placement)
+            best_result_date = best_result.date
+            
+            # Calculate time decay: exponential decay with 360-day half-life
+            now = datetime.datetime.now()
+            days_since_best = (now - best_result_date).days
+            
+            # Time decay factor: exponential decay with 360-day half-life
+            # Using 0.5^(days/360) so that after 360 days, bonus is at 50% strength
+            time_decay = 0.5 ** (days_since_best / 360.0)
+            
+            # Exponential formula: bonus = -2.5 / (placement^0.5) + 0.5
+            # This creates: 1st→-2.0, 2nd→-1.27, 3rd→-0.94, 5th→-0.62, 7th→-0.45, 10th→-0.29
+            # Rewards elite placements with diminishing returns for lower ranks
+            base_peak_bonus = -2.5 / (best_placement ** 0.5) + 0.5
+            
+            # Apply time decay to the peak bonus
+            peak_bonus = base_peak_bonus * time_decay
+            
+            # Apply the peak bonus to the blended score
+            blended_1v1_score += peak_bonus
+
         return {
             '1v1_score': blended_1v1_score,
             '2v2_score': two_v_two_score,
             'best_placement': best_placement,
             'most_recent_placement': most_recent_placement,
             'num_tournaments': num_1v1_tournaments,
-            'most_recent_tournament_date': most_recent_tournament_date
+            'most_recent_tournament_date': most_recent_tournament_date,
+            'peak_bonus': peak_bonus
         }
 
     def _calculate_head_to_head_adjustments(self, player_inputs: List[PlayerInput], player_results_map: Dict) -> Tuple[
