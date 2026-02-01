@@ -601,6 +601,8 @@ class SeedingCalculator:
 
                     if interactive:
                         # Ask user if they want to use these results
+                        YELLOW = '\033[93m'
+                        RESET = '\033[0m'
                         print(f"\n{YELLOW}⚠{RESET}  Player '{player.name}' has results under different company:")
                         print(f"   Input company: {player.company or 'None'}")
                         print(f"   Found in: {', '.join(sorted(companies))}")

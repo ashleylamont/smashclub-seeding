@@ -7,6 +7,14 @@ Atlassian's [Smash Club](https://hello.atlassian.net/wiki/spaces/smash/overview)
 
 It was also largely vibe-coded with Rovo Dev CLI, so there may be some quirks.
 
+## Recent Updates
+
+### Bug Fixes (February 2026)
+- **Fixed `ModuleNotFoundError: No module named 'tabulate'`**: Updated installation instructions to use `uv sync` instead of manual dependency installation
+- **Fixed `UnboundLocalError: cannot access local variable 'YELLOW'`**: Resolved color variable scoping issue in interactive prompts when players have cross-company tournament history
+- **Improved CSV file handling**: Better error messages when CSV files are missing or incorrectly named
+- **Enhanced documentation**: Added comprehensive data export instructions and troubleshooting guide
+
 ## Features
 
 - **Weighted Scoring**: Recent tournaments weighted higher (exponential decay 0.8)
@@ -21,16 +29,75 @@ It was also largely vibe-coded with Rovo Dev CLI, so there may be some quirks.
 
 ```bash
 # Install dependencies
-uv pip install pytest
+uv sync
 
-# Run seeding
-uv run python main.py --csv your_data.csv --players player_list.txt --details --bracket
+# Run seeding (basic)
+uv run python main.py --csv results.csv --players main_bracket_list.txt --non-interactive
+
+# Run seeding (with details and bracket)
+uv run python main.py --csv results.csv --players player_list.txt --details --bracket --non-interactive
 
 # Run tests
 uv run pytest tests/ -v
 ```
 
-## Usage
+## Data Setup
+
+### Exporting Tournament Results
+
+To use this tool, you need historical tournament data in CSV format. Here's how to export it from the Atlassian Smash Club database:
+
+#### Method 1: From Confluence Results Database
+
+1. **Navigate to the Results Database**:
+   - Go to [Results Database](https://hello.atlassian.net/wiki/spaces/smash/database/5194207434)
+   - This contains all historical tournament results
+
+2. **Export to CSV**:
+   - Click on the "Export" or "Download" button (usually in the top-right)
+   - Select "CSV" as the export format
+   - Save the file as `results.csv` in your project directory
+
+#### Method 2: Manual CSV Creation
+
+If you need to create the CSV manually, use this exact format:
+
+```csv
+Date,Company,Player name,Placement,Format,Tournament
+2024-01-15,Atlassian,Samus Aran,1,1v1,Winter Bash 2024
+2024-01-15,Atlassian,Fox McCloud,2,1v1,Winter Bash 2024
+2024-01-15,Atlassian,Falco Lombardi,3,1v1,Winter Bash 2024
+2024-01-15,Atlassian,Samus Aran,1,2v2,Winter Bash 2024 Doubles
+2024-01-15,N/A,Ganondorf,1,1v1 Rookies,Winter Bash 2024 Rookies
+```
+
+**Required Columns:**
+- `Date`: YYYY-MM-DD format
+- `Company`: Atlassian, Canva, Optiver, Google, etc. (or N/A)
+- `Player name`: Full name as used in tournaments
+- `Placement`: Integer placement (1, 2, 3, etc.)
+- `Format`: 1v1, 2v2, or "1v1 Rookies"
+- `Tournament`: Tournament name/identifier
+
+#### Method 3: Database Query
+
+If you have direct access to the database, you can export using:
+
+```sql
+SELECT Date, Company, "Player name", Placement, Format, Tournament 
+FROM tournament_results 
+ORDER BY Date DESC;
+```
+
+### File Structure
+
+After setup, your repository should contain:
+```
+├── results.csv              # Historical tournament data (required)
+├── main_bracket_list.txt    # Current tournament players (required)
+├── main.py                  # Main seeding script
+└── README.md               # This file
+```
 
 ## Usage
 
@@ -134,6 +201,81 @@ uv run pytest tests/ -q
 - `--bracket` - Show bracket matchups
 - `--no-smart-parse` - Disable intelligent parsing
 - `--non-interactive` - No prompts (for automation)
+
+## Troubleshooting
+
+### Common Issues
+
+#### `ModuleNotFoundError: No module named 'tabulate'`
+
+**Problem**: Dependencies not installed.
+
+**Solution**:
+```bash
+# Install dependencies first
+uv sync
+
+# Then run the script
+uv run python main.py --csv results.csv --players main_bracket_list.txt --non-interactive
+```
+
+#### `Error: Could not find CSV file: data.csv`
+
+**Problem**: Missing or incorrectly named CSV file.
+
+**Solution**:
+- Ensure your CSV file is named `results.csv` (not `data.csv`)
+- Place it in the same directory as `main.py`
+- Export data following the [Data Setup](#data-setup) instructions above
+
+#### `EOFError: EOF when reading a line`
+
+**Problem**: Script trying to prompt for input in non-interactive environment.
+
+**Solution**: Add the `--non-interactive` flag:
+```bash
+uv run python main.py --csv results.csv --players main_bracket_list.txt --non-interactive
+```
+
+#### `UnboundLocalError: cannot access local variable 'YELLOW'`
+
+**Problem**: Color variable bug (fixed in latest version).
+
+**Solution**: This was a bug that has been fixed. If you encounter it:
+1. Pull the latest code from the repository
+2. The fix ensures color variables are properly defined in all code paths
+
+#### Player not found in database
+
+**Problem**: Player name variations or company mismatches.
+
+**Solutions**:
+- Remove `--non-interactive` to get prompts for fuzzy matching
+- Use `--verbose` to see detailed matching information
+- Check player name spelling in your player list file
+- Verify company abbreviations match the database format
+
+#### No tournament history found
+
+**Problem**: Player is new or name doesn't match database records.
+
+**Expected Behavior**: New players without history will be seeded last automatically.
+
+### Getting Help
+
+If you encounter other issues:
+
+1. **Run with verbose output**:
+   ```bash
+   uv run python main.py --csv results.csv --players main_bracket_list.txt --verbose
+   ```
+
+2. **Check the test suite**:
+   ```bash
+   uv run pytest tests/ -v
+   ```
+
+3. **Verify your data format** matches the CSV format in [Data Setup](#data-setup)
 
 ## References
 
