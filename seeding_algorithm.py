@@ -14,19 +14,10 @@ import datetime
 from difflib import SequenceMatcher
 import hashlib
 
-from colorama import Fore, Style, init as colorama_init
-
-# Initialize colorama for cross-platform support (especially Windows)
-colorama_init()
-
-# Terminal color constants using colorama for cross-platform support
-BLUE = Fore.LIGHTBLUE_EX
-GREEN = Fore.LIGHTGREEN_EX
-YELLOW = Fore.LIGHTYELLOW_EX
-RED = Fore.LIGHTRED_EX
-CYAN = Fore.LIGHTCYAN_EX
-RESET = Style.RESET_ALL
-BOLD = Style.BRIGHT
+# Import color constants from output module (lazy import to avoid circular dependency)
+def _get_colors():
+    from output import BLUE, GREEN, YELLOW, RED, CYAN, RESET, BOLD
+    return BLUE, GREEN, YELLOW, RED, CYAN, RESET, BOLD
 
 # Centralized company definitions
 COMPANY_CODES = {
@@ -368,9 +359,10 @@ class SeedingCalculator:
         normalized_name = player.normalize_name()
         normalized_company = player.normalize_company()
 
+        # Get color constants for verbose output
+        BLUE = GREEN = YELLOW = RED = CYAN = RESET = BOLD = ""
         if verbose:
-            # Color codes
-
+            BLUE, GREEN, YELLOW, RED, CYAN, RESET, BOLD = _get_colors()
             print(f"\n{BOLD}{BLUE}┌─ Matching Player{RESET}")
             print(f"{BLUE}│{RESET} Input:      {BOLD}'{player.name}'{RESET} [{player.company or 'None'}]")
             print(f"{BLUE}│{RESET} Normalized: '{normalized_name}' [{normalized_company or 'None'}]")
@@ -1186,10 +1178,13 @@ def smart_parse_player_list(player_list_str: str,
         interactive: If True, prompts user for confirmation
         verbose: If True, shows detailed parsing information
     """
+    # Get colors for output
+    BLUE, GREEN, YELLOW, RED, CYAN, RESET, BOLD = _get_colors()
+    
     players = []
     lines = player_list_str.strip().split('\n')
 
-    print(f"\nParsing {len(lines)} player entries...")
+    print(f"\n{BOLD}{CYAN}Parsing {len(lines)} player entries...{RESET}")
 
     for line in lines:
         line = line.strip()
@@ -1204,8 +1199,8 @@ def smart_parse_player_list(player_list_str: str,
             continue
 
         if verbose:
-            print(f"\n  Raw: '{original_line}'")
-            print(f"  Parsed: '{name}' [{company or 'None'}]")
+            print(f"\n  {BLUE}Raw:{RESET} '{original_line}'")
+            print(f"  {BLUE}Parsed:{RESET} '{BOLD}{name}{RESET}' [{CYAN}{company or 'None'}{RESET}]")
 
         # Try fuzzy matching if we have historical data
         if calculator and interactive:
@@ -1221,38 +1216,38 @@ def smart_parse_player_list(player_list_str: str,
                                                                      interactive=False)
                     if matched_results:
                         matched_company = matched_results[0].company
-                        print(f"-> {name} => {matched_name} [{matched_company}] (exact match)")
+                        print(f"{GREEN}✓{RESET} {name} => {GREEN}{matched_name}{RESET} [{CYAN}{matched_company}{RESET}]")
                     else:
-                        print(f"-> {name} => {matched_name} (exact match)")
+                        print(f"{GREEN}✓{RESET} {name} => {GREEN}{matched_name}{RESET}")
                     name = matched_name
                 elif score >= 0.75:
                     # High confidence - suggest but allow override
-                    print(f"\nDid you mean: '{matched_name}' instead of '{name}'? (similarity: {score:.0%})")
-                    response = input("   Press Enter to accept, or type the correct name: ").strip()
+                    print(f"\n{YELLOW}?{RESET} Did you mean: '{BOLD}{matched_name}{RESET}' instead of '{name}'? (similarity: {score:.0%})")
+                    response = input(f"   Press Enter to accept, or type the correct name: ").strip()
                     if not response:
-                        print(f"   Using: {matched_name}")
+                        print(f"   {GREEN}Using:{RESET} {matched_name}")
                         name = matched_name
                     else:
-                        print(f"   Using: {response}")
+                        print(f"   {GREEN}Using:{RESET} {response}")
                         name = response
                 elif score >= 0.6:
                     # Medium confidence - ask for confirmation
-                    print(f"\nPossible match for '{name}': '{matched_name}' (similarity: {score:.0%})")
-                    response = input("   Use this name? (y/n): ").strip().lower()
+                    print(f"\n{YELLOW}?{RESET} Possible match for '{name}': '{BOLD}{matched_name}{RESET}' (similarity: {score:.0%})")
+                    response = input(f"   Use this name? (y/n): ").strip().lower()
                     if response == 'y':
-                        print(f"   Using: {matched_name}")
+                        print(f"   {GREEN}Using:{RESET} {matched_name}")
                         name = matched_name
                     else:
                         print(f"   Using original: {name}")
 
         # Note when company is not specified (don't prompt by default)
         if not company:
-            print(f"Note: No company specified for: {name}")
+            print(f"{YELLOW}Note:{RESET} No company specified for: {BOLD}{name}{RESET}")
             # Leave as None - will match against all companies in history
 
         players.append(PlayerInput(name=name, company=company))
 
-    print(f"\nParsed {len(players)} players\n")
+    print(f"\n{BOLD}{GREEN}Parsed {len(players)} players{RESET}\n")
     return players
 
 
