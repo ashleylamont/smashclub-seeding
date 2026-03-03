@@ -70,7 +70,7 @@ class TestCleanPlayerEntry:
     def test_clean_whitespace(self):
         """Should normalize whitespace."""
         name, company = clean_player_entry("  [ATL]   Bob    Smith  ")
-        assert name == "Fox McCloud"
+        assert name == "Bob Smith"
         assert company == "ATL"
 
     def test_clean_switch_suffix(self):

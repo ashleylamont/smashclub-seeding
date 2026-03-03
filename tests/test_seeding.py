@@ -290,9 +290,9 @@ class TestSeeding:
 
     def test_first_name_matching(self, calculator):
         """Should match players by first name when full name not found."""
-        # Test data has "Samus Aran", try matching with just "Alice"
-        alice = PlayerInput("Alice", "ATL")
-        results = calculator.find_player_results(alice)
+        # Test data has "Samus Aran", try matching with just "Samus"
+        samus = PlayerInput("Samus", "ATL")
+        results = calculator.find_player_results(samus)
 
         assert len(results) > 0
         assert any(r.player_name == "Samus Aran" for r in results)
@@ -351,11 +351,11 @@ class TestEdgeCases:
 
     def test_player_name_case_insensitive(self, calculator):
         """Player name matching should be case insensitive."""
-        alice_lower = PlayerInput("samus aran", "ATL")
-        alice_upper = PlayerInput("SAMUS ARAN", "ATL")
+        samus_lower = PlayerInput("samus aran", "ATL")
+        samus_upper = PlayerInput("SAMUS ARAN", "ATL")
 
-        results_lower = calculator.find_player_results(alice_lower)
-        results_upper = calculator.find_player_results(alice_upper)
+        results_lower = calculator.find_player_results(samus_lower)
+        results_upper = calculator.find_player_results(samus_upper)
 
         assert len(results_lower) > 0
         assert len(results_lower) == len(results_upper)
