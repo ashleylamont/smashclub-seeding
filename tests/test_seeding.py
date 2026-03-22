@@ -395,6 +395,15 @@ class TestEdgeCases:
         assert len(results_full) > 0
         assert all(r.player_name == "Fox McCloud" for r in results_full)
 
+    def test_get_all_players_from_history_returns_unique_players(self, calculator):
+        players = calculator.get_all_players_from_history()
+
+        names = {(player.name, player.company) for player in players}
+        assert ('Samus Aran', 'Atlassian') in names
+        assert ('Fox McCloud', 'Atlassian') in names
+        assert ('Akande Ogundimu', 'Canva') in names
+        assert len(names) == len(players)
+
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

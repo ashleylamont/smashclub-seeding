@@ -905,6 +905,15 @@ class SeedingCalculator:
 
         return adjustments, h2h_details
 
+    def get_all_players_from_history(self) -> List[PlayerInput]:
+        """Return all unique players found in historical placement data."""
+        unique_players = {}
+        for result in self.results:
+            key = (result.player_name.strip().lower(), result.company.strip())
+            if key not in unique_players:
+                unique_players[key] = PlayerInput(result.player_name, result.company)
+        return sorted(unique_players.values(), key=lambda player: ((player.company or '').lower(), player.name.lower()))
+
     def seed_players(self, player_inputs: List[PlayerInput], verbose: bool = False, interactive: bool = True,
                      use_time_decay: bool = True) -> List[Dict]:
         """

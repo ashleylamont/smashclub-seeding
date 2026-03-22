@@ -9,9 +9,21 @@ wheels/
 # Virtual environments
 .venv
 
+# Local secrets
+.env
+
 # Data files
 *players.txt
 *.csv
+players.yaml
+glicko_exports
+
+
+# Local Challonge cache
+.challonge-cache/
+.challonge-aliases.json
+.glicko-player-aliases.json
+.glicko-stored-player-aliases.json
 
 # macOS files
 .DS_Store
