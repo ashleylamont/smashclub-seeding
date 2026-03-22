@@ -1,0 +1,18 @@
+players:
+  - id: samus-aran
+    canonical_name: Samus Aran
+    company: Metroid
+    aliases:
+      - Samus
+      - Zero Suit Samus
+
+  - id: Tracer
+    canonical_name: Tracer
+    company: Overwatch
+    aliases:
+      - Lena
+      - Lena Oxton
+    past_companies:
+      - RAF
+      - Overwatch
+      - N/A

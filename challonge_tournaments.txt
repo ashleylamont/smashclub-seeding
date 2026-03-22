@@ -1,0 +1,18 @@
+# One Challonge tournament slug or URL per line
+# Blank lines and lines starting with # are ignored
+
+elevateyourgame
+teamkken24
+Devprodpunchout
+pavethepath
+framedatasignalschampionship
+enterprisetransformationopen
+titlesponsorbattlegrounds
+titlesponsorrookierumble
+techinplace0
+techinplace1
+techinplace1rookies
+techinplace3
+techinplace3rookies
+techinplace6
+techinplace6rookies
