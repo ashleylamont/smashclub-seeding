@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  legacy-python:
+    # Reference implementation kept in legacy/ during the rework.
+    # Only the self-contained tests run (some fixtures were never committed).
+    # Non-blocking: uv.lock pins the packages.atlassian.com PyPI mirror, whose
+    # reachability from public runners is unverified.
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: legacy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: |
+          uv run pytest \
+            tests/test_ordering.py \
+            tests/test_registry_integration.py \
+            tests/test_registry_bootstrap.py \
+            tests/test_player_registry.py \
+            tests/test_challonge_import.py \
+            tests/test_main_challonge_config.py \
+            tests/test_smart_parsing.py \
+            -q
