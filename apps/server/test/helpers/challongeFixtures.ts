@@ -73,15 +73,20 @@ export function apiPayloads(fixture: FixtureTournament): {
   };
 }
 
-/** A ChallongeClient whose fetch is served from fixtures, keyed by slug. */
+/**
+ * A ChallongeClient whose fetch is served from fixtures, keyed by slug.
+ * Payloads are built per request so tests may mutate fixtures (e.g. seed
+ * pushes) and see the change on re-fetch.
+ */
 export function fixtureClient(fixtures: FixtureTournament[]): ChallongeClient {
-  const bySlug = new Map(fixtures.map((f) => [f.slug, apiPayloads(f)]));
+  const bySlug = new Map(fixtures.map((f) => [f.slug, f]));
   const fetchImpl: typeof fetch = async (input) => {
     const url = String(input);
     const match = url.match(/\/tournaments\/([^/]+?)(?:\/(participants|matches))?\.json$/);
     if (!match) return new Response('not found', { status: 404 });
-    const payloads = bySlug.get(match[1]!);
-    if (!payloads) return new Response('not found', { status: 404 });
+    const fixture = bySlug.get(match[1]!);
+    if (!fixture) return new Response('not found', { status: 404 });
+    const payloads = apiPayloads(fixture);
     const body =
       match[2] === 'participants' ? payloads.participants : match[2] === 'matches' ? payloads.matches : payloads.tournament;
     return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });

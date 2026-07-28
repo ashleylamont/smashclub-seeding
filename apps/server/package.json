@@ -4,11 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "exports": {
-    "./bootstrap": "./src/bootstrap/importRegistry.ts"
+    "./bootstrap": "./src/bootstrap/importRegistry.ts",
+    "./router": "./src/trpc/router.ts"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/index.js --packages=external",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/index.js --external:pg --external:fastify --external:@fastify/* --external:@trpc/server --external:better-auth --external:croner --external:drizzle-orm --external:zod",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit"
   },
@@ -19,6 +20,7 @@
     "@smashclub/engine": "workspace:*",
     "@smashclub/shared": "workspace:*",
     "@trpc/server": "^11.0.0",
+    "better-auth": "^1.6.25",
     "croner": "^9.0.0",
     "drizzle-orm": "^0.44.0",
     "fastify": "^5.0.0",
