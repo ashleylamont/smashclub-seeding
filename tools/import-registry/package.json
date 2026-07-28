@@ -10,6 +10,7 @@
   "dependencies": {
     "@smashclub/db": "workspace:*",
     "@smashclub/engine": "workspace:*",
+    "@smashclub/server": "workspace:*",
     "@smashclub/shared": "workspace:*",
     "pg": "^8.16.0",
     "yaml": "^2.7.0"

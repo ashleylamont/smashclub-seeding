@@ -1,0 +1,198 @@
+import {
+  extractMatches,
+  extractParticipants,
+  extractPublicBracket,
+  extractTournament,
+  type ChallongeMatch,
+  type ChallongeParticipant,
+  type ChallongeTournament,
+  type PublicBracket,
+} from '@smashclub/engine';
+
+export class ChallongeApiError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+  }
+}
+
+export interface ChallongeClientOptions {
+  apiKey?: string;
+  username?: string;
+  /** Minimum spacing between requests (Challonge v1 limits are undocumented). */
+  minRequestSpacingMs?: number;
+  maxRetries?: number;
+  fetchImpl?: typeof fetch;
+  baseUrl?: string;
+  publicBaseUrl?: string;
+}
+
+export interface TournamentBundle {
+  tournament: ChallongeTournament;
+  participants: ChallongeParticipant[];
+  matches: ChallongeMatch[];
+  source: 'api' | 'public';
+}
+
+/**
+ * Challonge v1 client. All requests flow through a single queue with minimum
+ * spacing and exponential backoff on 429/5xx. Falls back to the public
+ * bracket JSON for reads when credentials are missing or the API 404s.
+ */
+export class ChallongeClient {
+  private readonly apiKey?: string;
+  private readonly username?: string;
+  private readonly spacingMs: number;
+  private readonly maxRetries: number;
+  private readonly fetchImpl: typeof fetch;
+  private readonly baseUrl: string;
+  private readonly publicBaseUrl: string;
+  private queue: Promise<unknown> = Promise.resolve();
+  private lastRequestAt = 0;
+
+  constructor(options: ChallongeClientOptions = {}) {
+    this.apiKey = options.apiKey;
+    this.username = options.username;
+    this.spacingMs = options.minRequestSpacingMs ?? 500;
+    this.maxRetries = options.maxRetries ?? 3;
+    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.baseUrl = options.baseUrl ?? 'https://api.challonge.com/v1';
+    this.publicBaseUrl = options.publicBaseUrl ?? 'https://challonge.com';
+  }
+
+  get hasCredentials(): boolean {
+    return Boolean(this.apiKey && this.username);
+  }
+
+  async fetchTournamentBundle(slug: string): Promise<TournamentBundle> {
+    if (this.hasCredentials) {
+      try {
+        const tournament = extractTournament(await this.requestJson(`${this.baseUrl}/tournaments/${slug}.json`, true));
+        const participants = extractParticipants(
+          await this.requestJson(`${this.baseUrl}/tournaments/${slug}/participants.json`, true),
+        );
+        const matches = extractMatches(
+          await this.requestJson(`${this.baseUrl}/tournaments/${slug}/matches.json`, true),
+        );
+        return { tournament, participants, matches, source: 'api' };
+      } catch (error) {
+        if (!(error instanceof ChallongeApiError) || error.status !== 404) throw error;
+        // 404 with credentials: tournament may be outside the account; try public.
+      }
+    }
+    const bracket = await this.fetchPublicBracket(slug);
+    const tournament: ChallongeTournament = {
+      id: 0,
+      name: slug,
+      url: slug,
+      state: bracket.allComplete ? 'complete' : 'underway',
+      startedAt: null,
+      completedAt: bracket.allComplete ? bracket.latestMatchDate : null,
+      updatedAt: bracket.latestMatchDate,
+      tournamentType: null,
+    };
+    return { tournament, participants: bracket.participants, matches: bracket.matches, source: 'public' };
+  }
+
+  async fetchPublicBracket(slug: string): Promise<PublicBracket> {
+    return extractPublicBracket(await this.requestJson(`${this.publicBaseUrl}/${slug}.json`, false));
+  }
+
+  /** PUT participant seed; used by the seeding push. */
+  async updateParticipantSeed(slug: string, participantId: number, seed: number): Promise<void> {
+    if (!this.hasCredentials) {
+      throw new ChallongeApiError('Challonge credentials are required to push seeds.');
+    }
+    await this.request(
+      `${this.baseUrl}/tournaments/${slug}/participants/${participantId}.json`,
+      true,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participant: { seed } }),
+      },
+    );
+  }
+
+  private async requestJson(url: string, useAuth: boolean): Promise<unknown> {
+    const response = await this.request(url, useAuth);
+    try {
+      return await response.json();
+    } catch {
+      throw new ChallongeApiError('Challonge API returned invalid JSON.');
+    }
+  }
+
+  private request(url: string, useAuth: boolean, init: RequestInit = {}): Promise<Response> {
+    const run = this.queue.then(() => this.requestWithRetries(url, useAuth, init));
+    // Keep the queue alive regardless of individual failures.
+    this.queue = run.catch(() => undefined);
+    return run;
+  }
+
+  private async requestWithRetries(url: string, useAuth: boolean, init: RequestInit): Promise<Response> {
+    let attempt = 0;
+    for (;;) {
+      await this.waitForSpacing();
+      const headers: Record<string, string> = {
+        Accept: 'application/json',
+        'User-Agent': 'smashclub/1.0 (+club ranking sync)',
+        ...(init.headers as Record<string, string> | undefined),
+      };
+      if (useAuth && this.hasCredentials) {
+        const token = Buffer.from(`${this.username}:${this.apiKey}`).toString('base64');
+        headers.Authorization = `Basic ${token}`;
+      }
+      let response: Response;
+      try {
+        response = await this.fetchImpl(url, { ...init, headers });
+      } catch (error) {
+        if (attempt >= this.maxRetries) {
+          throw new ChallongeApiError(`Failed to reach Challonge: ${String(error)}`);
+        }
+        await sleep(backoffMs(attempt));
+        attempt += 1;
+        continue;
+      }
+      if (response.status === 429 || response.status >= 500) {
+        if (attempt >= this.maxRetries) {
+          throw new ChallongeApiError(`Challonge request failed (${response.status}) after retries.`, response.status);
+        }
+        await sleep(backoffMs(attempt));
+        attempt += 1;
+        continue;
+      }
+      if (response.status === 401) {
+        throw new ChallongeApiError(
+          'Challonge API authentication failed (401). Check CHALLONGE_USERNAME and CHALLONGE_API_KEY.',
+          401,
+        );
+      }
+      if (response.status === 404) {
+        throw new ChallongeApiError('Challonge tournament not found (404).', 404);
+      }
+      if (!response.ok) {
+        const detail = (await response.text().catch(() => '')).slice(0, 200);
+        throw new ChallongeApiError(`Challonge request failed (${response.status}): ${detail}`, response.status);
+      }
+      return response;
+    }
+  }
+
+  private async waitForSpacing(): Promise<void> {
+    const now = Date.now();
+    const wait = this.lastRequestAt + this.spacingMs - now;
+    this.lastRequestAt = Math.max(now, this.lastRequestAt + this.spacingMs);
+    if (wait > 0) await sleep(wait);
+  }
+}
+
+function backoffMs(attempt: number): number {
+  return 1000 * 2 ** attempt;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
