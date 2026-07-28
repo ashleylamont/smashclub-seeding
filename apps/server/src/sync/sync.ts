@@ -4,6 +4,8 @@ import { sets, syncJobs, tournamentParticipants, tournaments } from '@smashclub/
 import { scoresIndicateForfeit, type ChallongeMatch } from '@smashclub/engine';
 import type { ChallongeClient } from '../challonge/client';
 import { matchTournamentParticipants } from '../identity/matching';
+import { liveBus } from '../live/bus';
+import { markDraftRunsStale } from '../seeding/seeding';
 
 export interface SyncResult {
   tournamentId: string;
@@ -53,6 +55,12 @@ export async function syncTournament(db: Db, client: ChallongeClient, tournament
       .where(eq(tournaments.id, tournamentId));
 
     // --- participants ---
+    const beforeCount = (
+      await db
+        .select({ id: tournamentParticipants.id })
+        .from(tournamentParticipants)
+        .where(eq(tournamentParticipants.tournamentId, tournamentId))
+    ).length;
     let participantsUpserted = 0;
     for (const participant of bundle.participants) {
       await db
@@ -85,6 +93,10 @@ export async function syncTournament(db: Db, client: ChallongeClient, tournament
       .from(tournamentParticipants)
       .where(eq(tournamentParticipants.tournamentId, tournamentId));
     const participantIdByChallongeId = new Map(participantRows.map((row) => [row.challongeParticipantId, row.id]));
+    if (participantRows.length !== beforeCount) {
+      // Roster changed: any draft seeding run no longer reflects reality.
+      await markDraftRunsStale(db, tournamentId);
+    }
 
     // --- sets ---
     let setsUpserted = 0;
@@ -147,6 +159,10 @@ export async function syncTournament(db: Db, client: ChallongeClient, tournament
       .update(syncJobs)
       .set({ status: 'complete', finishedAt: new Date(), stats: result as unknown as Record<string, unknown> })
       .where(eq(syncJobs.id, job!.id));
+    if (setsChanged > 0) {
+      liveBus.publish({ type: 'set_updated', tournamentId, payload: { setsChanged } });
+    }
+    liveBus.publish({ type: 'sync_completed', tournamentId, payload: result });
     return result;
   } catch (error) {
     await db

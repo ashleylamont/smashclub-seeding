@@ -34,3 +34,6 @@ legacy/.glicko-player-aliases.json
 legacy/.glicko-stored-player-aliases.json
 # legacy pytest fixtures remain committed where present
 !legacy/tests/*.csv
+
+# k8s secrets
+deploy/k8s/secret.yaml

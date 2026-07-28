@@ -16,6 +16,8 @@ const envSchema = z.object({
   ADMIN_EMAILS: z.string().default(''),
   /** Absolute path of the built SPA to serve statically (production). */
   WEB_DIST_DIR: z.string().optional(),
+  /** Drizzle SQL migrations folder, applied at startup. */
+  MIGRATIONS_DIR: z.string().default('./migrations'),
 });
 
 export type Env = z.infer<typeof envSchema>;

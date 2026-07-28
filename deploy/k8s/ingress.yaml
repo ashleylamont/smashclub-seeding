@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: smashclub
+  annotations:
+    # SSE: disable buffering and allow long-lived connections on the live
+    # feed. The server sends heartbeat comments every 25s.
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: smash.example.com # replace
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: smashclub
+                port:
+                  number: 80
+  # tls: add your cert-manager / TLS config here
