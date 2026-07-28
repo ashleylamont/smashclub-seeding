@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "exports": {
+    "./bootstrap": "./src/bootstrap/importRegistry.ts"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/index.js --packages=external",
@@ -17,11 +20,13 @@
     "@smashclub/shared": "workspace:*",
     "@trpc/server": "^11.0.0",
     "croner": "^9.0.0",
+    "drizzle-orm": "^0.44.0",
     "fastify": "^5.0.0",
     "pg": "^8.16.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.3.0",
     "@types/node": "^24.12.0",
     "@types/pg": "^8.15.0",
     "esbuild": "^0.25.0",

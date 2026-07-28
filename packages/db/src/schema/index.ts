@@ -1,2 +1,2 @@
-// Drizzle schema (populated in the DB phase).
-export {};
+export * from './auth';
+export * from './domain';

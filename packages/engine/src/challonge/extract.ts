@@ -149,6 +149,80 @@ export function scoresIndicateForfeit(scoresCsv: string | null): boolean {
   });
 }
 
+export interface PublicBracket {
+  participants: ChallongeParticipant[];
+  matches: ChallongeMatch[];
+  /** True when every listed match is complete. */
+  allComplete: boolean;
+  /** Latest underway_at across completed matches, if any. */
+  latestMatchDate: string | null;
+}
+
+/**
+ * The unauthenticated fallback `https://challonge.com/{slug}.json` payload:
+ * matches grouped by round with embedded player objects. Participants are
+ * derived from the embedded players (the public payload has no participant
+ * list).
+ */
+export function extractPublicBracket(payload: unknown): PublicBracket {
+  const record = asRecord(payload, 'public bracket');
+  const byRound = record.matches_by_round;
+  if (typeof byRound !== 'object' || byRound === null || Array.isArray(byRound)) {
+    throw new ChallongePayloadError('Public Challonge bracket JSON did not include matches_by_round data.');
+  }
+
+  const rawMatches: Record<string, unknown>[] = [];
+  for (const roundMatches of Object.values(byRound as Record<string, unknown>)) {
+    if (Array.isArray(roundMatches)) {
+      for (const m of roundMatches) {
+        if (typeof m === 'object' && m !== null && !Array.isArray(m)) {
+          rawMatches.push(m as Record<string, unknown>);
+        }
+      }
+    }
+  }
+
+  const participantsById = new Map<number, ChallongeParticipant>();
+  const matches: ChallongeMatch[] = [];
+  const completedDates: string[] = [];
+  for (const m of rawMatches) {
+    const player1 = typeof m.player1 === 'object' && m.player1 !== null ? (m.player1 as Record<string, unknown>) : {};
+    const player2 = typeof m.player2 === 'object' && m.player2 !== null ? (m.player2 as Record<string, unknown>) : {};
+    for (const p of [player1, player2]) {
+      const pid = num(p.id);
+      const displayName = (str(p.display_name) ?? str(p.name) ?? '').trim();
+      if (pid !== null && displayName && !participantsById.has(pid)) {
+        participantsById.set(pid, { id: pid, displayName, seed: num(p.seed), finalRank: null });
+      }
+    }
+    const id = num(m.id);
+    if (id === null) continue;
+    const state = str(m.state) ?? 'unknown';
+    if (state === 'complete' && str(m.underway_at)) completedDates.push(str(m.underway_at)!);
+    matches.push({
+      id,
+      state,
+      round: num(m.round),
+      suggestedPlayOrder: num(m.suggested_play_order),
+      identifier: str(m.identifier),
+      player1Id: num(player1.id),
+      player2Id: num(player2.id),
+      winnerId: num(m.winner_id),
+      scoresCsv: str(m.scores_csv),
+      completedAt: str(m.completed_at) ?? str(m.underway_at),
+      updatedAt: str(m.updated_at),
+    });
+  }
+
+  completedDates.sort();
+  return {
+    participants: [...participantsById.values()],
+    matches,
+    allComplete: matches.length > 0 && matches.every((m) => m.state === 'complete'),
+    latestMatchDate: completedDates[completedDates.length - 1] ?? null,
+  };
+}
+
 /** Accepts a bare slug or any challonge.com URL and returns the slug. */
 export function normalizeTournamentId(tournamentId: string): string {
   const raw = tournamentId.trim();
