@@ -4,103 +4,80 @@
 
 .filters {
   display: flex;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  padding: 1rem;
-  background: #f5f5f5;
-  border-radius: 8px;
+  gap: 16px;
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  flex-wrap: wrap;
 }
 
 .filters label {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 4px;
   font-weight: 600;
-}
-
-.filters select {
-  padding: 0.5rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-size: 0.95rem;
-}
-
-.rankings-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: white;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  border-radius: 8px;
-  overflow: hidden;
+  font-size: 13px;
+  color: var(--text-h);
 }
 
 .rankings-table th {
-  background: #2c3e50;
-  color: white;
-  padding: 0.75rem;
-  text-align: left;
-  font-weight: 600;
   cursor: pointer;
   user-select: none;
 }
 
 .rankings-table th:hover {
-  background: #34495e;
-}
-
-.rankings-table td {
-  padding: 0.75rem;
-  border-top: 1px solid #eee;
+  color: var(--accent);
 }
 
 .player-row {
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background-color 0.15s;
 }
 
 .player-row:hover {
-  background-color: #f8f9fa;
+  background-color: var(--accent-bg);
 }
 
 .player-name {
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--text-h);
 }
 
 .league-cell {
-  text-align: center;
   padding: 6px 8px;
 }
 
 .league-badge {
   display: inline-block;
-  padding: 4px 10px;
+  padding: 3px 10px;
   border-radius: 12px;
-  font-size: 0.85rem;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
 }
 
 .league-badge.champions {
-  background-color: #ffd700;
-  color: #2c2c2c;
-  box-shadow: 0 2px 4px rgba(255, 215, 0, 0.3);
+  background-color: var(--badge-champions-bg);
+  color: var(--badge-champions-text);
 }
 
 .league-badge.smashclub {
-  background-color: #4a90e2;
-  color: white;
-  box-shadow: 0 2px 4px rgba(74, 144, 226, 0.3);
+  background-color: var(--badge-smashclub-bg);
+  color: var(--badge-smashclub-text);
 }
 
 .league-badge.grads {
-  background-color: #50c878;
-  color: white;
-  box-shadow: 0 2px 4px rgba(80, 200, 120, 0.3);
+  background-color: var(--badge-grads-bg);
+  color: var(--badge-grads-text);
 }
 
 .league-badge.interns {
-  background-color: #888;
-  color: white;
-  box-shadow: 0 2px 4px rgba(136, 136, 136, 0.3);
+  background-color: var(--badge-interns-bg);
+  color: var(--badge-interns-text);
+}
+
+.no-rows {
+  padding: 16px 0;
 }

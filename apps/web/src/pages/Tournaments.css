@@ -1,0 +1,86 @@
+.tournament-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tournament-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: var(--text);
+  padding: 12px 16px;
+  transition: border-color 0.15s;
+  flex-wrap: wrap;
+}
+
+.tournament-row:hover {
+  border-color: var(--accent-border);
+  text-decoration: none;
+}
+
+.tournament-row-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tournament-name {
+  font-weight: 600;
+  color: var(--text-h);
+  font-size: 15px;
+}
+
+.tournament-tags {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tournament-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.tournament-subtitle {
+  margin-bottom: 20px;
+}
+
+.live-feed h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.live-feed-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.set-winner {
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.set-winner::after {
+  content: ' 🏅';
+  font-size: 11px;
+}
+
+.set-excluded td {
+  opacity: 0.6;
+}
+
+.excluded-chip {
+  margin-left: 8px;
+}

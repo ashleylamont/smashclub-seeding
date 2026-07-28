@@ -1,50 +1,50 @@
 .ratings-over-time {
-  margin-top: 2rem;
-  background: white;
-  border-radius: 8px;
-  padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-
-.ratings-over-time h2 {
-  margin: 0 0 1rem 0;
-  color: #2c3e50;
+  margin-top: 24px;
 }
 
 .chart-controls {
   display: flex;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  padding: 0.75rem;
-  background: #f5f5f5;
-  border-radius: 8px;
+  gap: 16px;
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  flex-wrap: wrap;
 }
 
 .chart-controls label {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 4px;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 13px;
+  color: var(--text-h);
 }
 
-.chart-controls select,
-.chart-controls input[type="text"] {
-  padding: 0.4rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-size: 0.9rem;
-}
-
-.chart-controls input[type="text"] {
+.chart-controls input[type='text'] {
   min-width: 180px;
 }
 
 .no-data {
-  color: #7f8c8d;
+  color: var(--text-soft);
   font-style: italic;
-  padding: 2rem;
+  padding: 24px;
   text-align: center;
+}
+
+.custom-tooltip {
+  background: var(--card-bg);
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.custom-tooltip p {
+  margin: 3px 0;
 }
 
 .ratings-tooltip {
@@ -53,77 +53,12 @@
 }
 
 .ratings-tooltip p {
-  margin: 0.15rem 0;
-  font-size: 0.85rem;
+  margin: 2px 0;
+  font-size: 13px;
 }
 
 .tooltip-label {
-  margin-bottom: 0.5rem !important;
-  font-size: 0.9rem !important;
-}
-
-.chart-container {
-  display: flex;
-  gap: 2rem;
-  align-items: flex-start;
-}
-
-.chart-wrapper {
-  display: flex;
-  gap: 2rem;
-  align-items: flex-start;
-}
-
-.legend-container {
-  flex-shrink: 0;
-  min-width: 150px;
-  max-height: 300px;
-  overflow-y: auto;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  padding: 0.5rem;
-  background: #fafafa;
-}
-
-.legend-items {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-  user-select: none;
-}
-
-.legend-item:hover {
-  background-color: #f5f5f5;
-}
-
-.legend-item.hidden {
-  text-decoration: line-through;
-}
-
-.legend-item span {
-  font-size: 0.85rem;
-}
-
-/* Style for Recharts legend items */
-.recharts-legend-item {
-  transition: opacity 0.2s;
-}
-
-.recharts-legend-item:hover {
-  opacity: 1 !important;
-}
-
-/* Gray out hidden legend items */
-.recharts-legend-item.recharts-legend-item-hidden {
-  opacity: 0.4;
-  text-decoration: line-through;
+  margin-bottom: 6px;
+  font-size: 14px;
+  color: var(--text-h);
 }
