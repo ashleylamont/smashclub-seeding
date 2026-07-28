@@ -1,0 +1,134 @@
+.player-page .profile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+}
+
+.player-page .profile-header h1 {
+  margin: 0;
+}
+
+.company-tag {
+  margin-top: 6px;
+  color: var(--text-soft);
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  padding: 16px;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.stat-label {
+  color: var(--text-soft);
+  font-size: 12px;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.stat-detail {
+  color: var(--text-soft);
+  font-size: 12px;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.match-history-scroll {
+  max-height: 480px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.match-table {
+  border: none;
+}
+
+.match-table th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.match-table tr.win td:first-child {
+  box-shadow: inset 3px 0 0 var(--success);
+}
+
+.match-table tr.loss td:first-child {
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+
+.match-table tr.decay {
+  opacity: 0.75;
+}
+
+.match-table tr.decay td:first-child {
+  box-shadow: inset 3px 0 0 var(--warning);
+}
+
+.result-win {
+  color: var(--success);
+  font-weight: 700;
+}
+
+.result-loss {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.result-decay {
+  color: var(--text-soft);
+  font-style: italic;
+}
+
+.rating-up {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.rating-down {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.rd-decay {
+  font-size: 12px;
+  color: var(--warning);
+  font-weight: 500;
+}
+
+.weight-indicator {
+  font-size: 12px;
+  color: var(--text-soft);
+  font-weight: 400;
+  font-style: italic;
+}
+
+.rookie-chip {
+  margin-left: 6px;
+}

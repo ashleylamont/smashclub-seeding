@@ -1,21 +1,45 @@
 :root {
   --text: #6b6375;
   --text-h: #08060d;
+  --text-soft: #8f8899;
   --bg: #fff;
+  --card-bg: #fff;
+  --surface: #f7f6f9;
   --border: #e5e4e7;
   --code-bg: #f4f3ec;
   --accent: #aa3bff;
   --accent-bg: rgba(170, 59, 255, 0.1);
   --accent-border: rgba(170, 59, 255, 0.5);
+  --accent-contrast: #fff;
   --social-bg: rgba(244, 243, 236, 0.5);
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+
+  --success: #1c7e43;
+  --success-bg: rgba(38, 166, 91, 0.12);
+  --danger: #c0392b;
+  --danger-bg: rgba(231, 76, 60, 0.1);
+  --warning: #b0720a;
+  --warning-bg: rgba(243, 156, 18, 0.12);
+  --live: #e0245e;
+  --live-bg: rgba(224, 36, 94, 0.1);
+
+  --badge-champions-bg: #ffd700;
+  --badge-champions-text: #2c2c2c;
+  --badge-smashclub-bg: #4a90e2;
+  --badge-smashclub-text: #fff;
+  --badge-grads-bg: #50c878;
+  --badge-grads-text: #fff;
+  --badge-interns-bg: #888;
+  --badge-interns-text: #fff;
+
+  --chart-grid: #e5e4e7;
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
-  font: 18px/145% var(--sans);
+  font: 16px/145% var(--sans);
   letter-spacing: 0.18px;
   color-scheme: light dark;
   color: var(--text);
@@ -26,7 +50,7 @@
   -moz-osx-font-smoothing: grayscale;
 
   @media (max-width: 1024px) {
-    font-size: 16px;
+    font-size: 15px;
   }
 }
 
@@ -34,78 +58,97 @@
   :root {
     --text: #9ca3af;
     --text-h: #f3f4f6;
+    --text-soft: #7b8291;
     --bg: #16171d;
+    --card-bg: #1c1d25;
+    --surface: #1f2028;
     --border: #2e303a;
     --code-bg: #1f2028;
     --accent: #c084fc;
     --accent-bg: rgba(192, 132, 252, 0.15);
     --accent-border: rgba(192, 132, 252, 0.5);
+    --accent-contrast: #16171d;
     --social-bg: rgba(47, 48, 58, 0.5);
     --shadow:
       rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
 
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
-}
+    --success: #4ade80;
+    --success-bg: rgba(74, 222, 128, 0.12);
+    --danger: #f87171;
+    --danger-bg: rgba(248, 113, 113, 0.12);
+    --warning: #fbbf24;
+    --warning-bg: rgba(251, 191, 36, 0.12);
+    --live: #f9548b;
+    --live-bg: rgba(249, 84, 139, 0.15);
 
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
+    --chart-grid: #2e303a;
+  }
 }
 
 body {
   margin: 0;
 }
 
+#root {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+
 h1,
-h2 {
+h2,
+h3 {
   font-family: var(--heading);
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-h);
 }
 
 h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
+  font-size: 28px;
+  letter-spacing: -0.5px;
+  margin: 0 0 16px;
 }
+
 h2 {
-  font-size: 24px;
+  font-size: 21px;
   line-height: 118%;
   letter-spacing: -0.24px;
   margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
 }
+
+h3 {
+  font-size: 17px;
+  margin: 0 0 8px;
+}
+
 p {
   margin: 0;
 }
 
-code,
-.counter {
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+code {
   font-family: var(--mono);
   display: inline-flex;
   border-radius: 4px;
   color: var(--text-h);
+  font-size: 13px;
+  line-height: 135%;
+  padding: 2px 6px;
+  background: var(--code-bg);
 }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
 }
