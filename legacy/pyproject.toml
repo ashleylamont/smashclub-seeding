@@ -18,6 +18,15 @@ dev = [
     "pytest>=8.0.0",
 ]
 
+# Pin the public index explicitly. The committed lock previously recorded an
+# authenticated internal mirror, inherited from whichever machine ran `uv lock`
+# — which made the project uninstallable anywhere else (401 Unauthorized) and
+# meant CI could never install it. Declaring the index here keeps a relock on a
+# corporate network from reintroducing that.
+[[tool.uv.index]]
+url = "https://pypi.org/simple"
+default = true
+
 [tool.pytest.ini_options]
 testpaths = ["test_seeding.py"]
 python_files = ["test_*.py"]

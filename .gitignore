@@ -32,6 +32,10 @@ legacy/.challonge-cache/
 legacy/.challonge-aliases.json
 legacy/.glicko-player-aliases.json
 legacy/.glicko-stored-player-aliases.json
+# Written into the working directory by the registry-bootstrap tests (and by
+# `main.py --bootstrap-players-yaml`). Ignored so a run against real history
+# cannot leave real names sitting in the tree looking committable.
+legacy/players.bootstrap.yaml
 # legacy pytest fixtures remain committed where present
 !legacy/tests/*.csv
 
