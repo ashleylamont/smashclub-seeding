@@ -17,6 +17,10 @@ export interface RegistryPlayerInput {
   company?: string | null;
   aliases?: string[] | null;
   past_companies?: string[] | null;
+  /** Present in newer players.yaml files; a stable short numeric id. */
+  numeric_id?: number | null;
+  /** Smash character slug, used for leaderboard avatars. */
+  main_character?: string | null;
 }
 
 export async function importCompanyTaxonomy(db: Db, taxonomy: CompanyTaxonomy = DEFAULT_COMPANY_TAXONOMY): Promise<Map<string, string>> {

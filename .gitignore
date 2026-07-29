@@ -37,3 +37,8 @@ legacy/.glicko-stored-player-aliases.json
 
 # k8s secrets
 deploy/k8s/secret.yaml
+
+# Playwright / e2e
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/screenshots/

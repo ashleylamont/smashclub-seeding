@@ -12,7 +12,7 @@ export type Auth = ReturnType<typeof createAuth>;
  * logged-in user can link their other provider from /me, and both providers
  * land on the same user row.
  */
-export function createAuth(db: Db, env: Env) {
+export function createAuth(db: Db, env: Env, options: { enableCredentials?: boolean } = {}) {
   const socialProviders: Record<string, { clientId: string; clientSecret: string }> = {};
   if (env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET) {
     socialProviders.discord = { clientId: env.DISCORD_CLIENT_ID, clientSecret: env.DISCORD_CLIENT_SECRET };
@@ -30,6 +30,12 @@ export function createAuth(db: Db, env: Env) {
       schema: { user, session, account, verification },
     }),
     socialProviders,
+    /**
+     * Email/password is enabled only by the local dev harness, so the
+     * Fastify↔better-auth bridge and the role/claim flows can be exercised
+     * end to end without a real OAuth provider. Production uses OAuth only.
+     */
+    emailAndPassword: { enabled: options.enableCredentials === true },
     account: {
       accountLinking: {
         enabled: true,
@@ -41,7 +47,35 @@ export function createAuth(db: Db, env: Env) {
         role: { type: 'string', defaultValue: 'user', input: false },
       },
     },
+    databaseHooks: {
+      user: {
+        create: {
+          /**
+           * Stamp the admin role at creation for addresses in ADMIN_EMAILS,
+           * covering OAuth sign-ups too. Without this the role would only be
+           * applied lazily on the first API call, so the client's session (and
+           * therefore the admin navigation) would lag a request behind.
+           */
+          before: async (user: { email?: string }) => {
+            if (isAdminEmail(user.email, env)) {
+              return { data: { ...user, role: 'admin' } };
+            }
+            return undefined;
+          },
+        },
+      },
+    },
   });
+}
+
+function adminEmails(env: Env): string[] {
+  return env.ADMIN_EMAILS.split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function isAdminEmail(email: string | undefined, env: Env): boolean {
+  return email ? adminEmails(env).includes(email.toLowerCase()) : false;
 }
 
 export interface SessionUser {
@@ -66,14 +100,11 @@ export async function getSessionUser(
   const { id, email, name } = sessionData.user;
   let role = (sessionData.user as { role?: string }).role === 'admin' ? 'admin' : 'user';
 
-  if (role !== 'admin') {
-    const adminEmails = env.ADMIN_EMAILS.split(',')
-      .map((entry) => entry.trim().toLowerCase())
-      .filter(Boolean);
-    if (adminEmails.includes(email.toLowerCase())) {
-      await db.update(user).set({ role: 'admin', updatedAt: new Date() }).where(eq(user.id, id));
-      role = 'admin';
-    }
+  // Catch-up promotion for accounts created before their address was added to
+  // ADMIN_EMAILS; new accounts are stamped by the create hook above.
+  if (role !== 'admin' && isAdminEmail(email, env)) {
+    await db.update(user).set({ role: 'admin', updatedAt: new Date() }).where(eq(user.id, id));
+    role = 'admin';
   }
 
   return { id, email, name, role: role as 'admin' | 'user' };
