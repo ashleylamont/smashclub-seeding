@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
-    "dev": "pnpm --filter @smashclub/server dev"
+    "dev": "pnpm --filter @smashclub/server dev",
+    "golden-check": "pnpm --filter @smashclub/golden-check start"
   },
   "devDependencies": {
     "typescript": "~5.9.3",
