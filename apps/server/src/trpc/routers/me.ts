@@ -5,6 +5,18 @@ import { companies, playerClaims, players } from '@smashclub/db';
 import { authedProcedure, router } from '../trpc';
 
 export const meRouter = router({
+  /**
+   * Authoritative identity and role for the signed-in caller. The client gates
+   * admin navigation on this rather than on the auth session, because role
+   * promotion from ADMIN_EMAILS is applied server-side.
+   */
+  whoami: authedProcedure.query(({ ctx }) => ({
+    id: ctx.user.id,
+    email: ctx.user.email,
+    name: ctx.user.name,
+    role: ctx.user.role,
+  })),
+
   /** The caller's claim state (live claim + history). */
   claims: authedProcedure.query(async ({ ctx }) => {
     const rows = await ctx.db

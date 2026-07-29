@@ -13,7 +13,8 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "dev": "pnpm --filter @smashclub/server dev",
-    "golden-check": "pnpm --filter @smashclub/golden-check start"
+    "golden-check": "pnpm --filter @smashclub/golden-check start",
+    "dev:harness": "pnpm --filter @smashclub/server dev:harness"
   },
   "devDependencies": {
     "typescript": "~5.9.3",
