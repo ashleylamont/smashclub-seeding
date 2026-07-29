@@ -42,3 +42,6 @@ deploy/k8s/secret.yaml
 apps/web/test-results/
 apps/web/playwright-report/
 apps/web/screenshots/
+
+# Raw Challonge dumps contain real player names
+challonge-raw/
