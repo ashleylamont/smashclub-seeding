@@ -158,15 +158,24 @@ function describeData(sets: EvalSet[]): void {
 function table(scores: ModelScore[]): void {
   const best = Math.min(...scores.map((s) => s.logLoss));
   const width = Math.max(...scores.map((s) => s.name.length));
-  console.log(`\n${'model'.padEnd(width)}   log loss   Brier   accuracy   uninformative`);
-  console.log('─'.repeat(width + 45));
+  console.log(
+    `\n${'model'.padEnd(width)}   log loss   Brier   accuracy   ceiling   informed   uninformative`,
+  );
+  console.log('─'.repeat(width + 66));
   for (const score of [...scores].sort((a, b) => a.logLoss - b.logLoss)) {
     const marker = score.logLoss === best ? ' ←' : '';
     console.log(
       `${score.name.padEnd(width)}   ${score.logLoss.toFixed(4)}   ${score.brier.toFixed(4)}   ` +
-        `${(100 * score.accuracy).toFixed(1)}%      ${(100 * score.uninformative).toFixed(0)}%${marker}`,
+        `${(100 * score.accuracy).toFixed(1)}%      ${(100 * score.accuracyCeiling).toFixed(1)}%     ` +
+        `${(100 * score.informedAccuracy).toFixed(1)}%      ${(100 * score.uninformative).toFixed(0)}%${marker}`,
     );
   }
+  console.log(
+    '\n  ceiling  = accuracy a perfectly calibrated predictor would get with these same\n' +
+      '             probabilities. Bracket sets are seeded to be close, so most are genuinely\n' +
+      '             near even — this is the honest upper bound, not 100%.\n' +
+      '  informed = accuracy over only the sets the model had an opinion about (p != 0.5).',
+  );
 }
 
 function calibrationReport(score: ModelScore): void {

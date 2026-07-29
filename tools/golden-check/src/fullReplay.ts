@@ -94,7 +94,12 @@ export function checkFullReplay(dataset: LegacyDataset, cacheDir: string): boole
     sets,
     tournaments,
     settings: defaultGlickoSettings,
-    compat: { legacyOrdering: true, rookieScaleUsesPreviousWinner: true, skipTrailingDecay: true },
+    compat: {
+      legacyOrdering: true,
+      rookieScaleUsesPreviousWinner: true,
+      skipTrailingDecay: true,
+      decayPerBracket: true,
+    },
   });
 
   // Compare against the export by (tournament, player identity, nth set), since
