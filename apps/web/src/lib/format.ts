@@ -47,6 +47,17 @@ export function leagueClass(league: string): string {
   return 'interns';
 }
 
+/**
+ * League tier as an ordinal class, highest first. Leagues are a ranked ladder,
+ * so they get one colour ramp rather than four unrelated hues.
+ */
+export function tierClass(league: string): string {
+  if (league.includes('Champions')) return 'tier-1';
+  if (league.includes('Full-Timers')) return 'tier-2';
+  if (league.includes('Grads')) return 'tier-3';
+  return 'tier-4';
+}
+
 /** Bracket round label: winners rounds are positive, losers negative. */
 export function roundLabel(round: number): string {
   return round >= 0 ? `W${round}` : `L${-round}`;

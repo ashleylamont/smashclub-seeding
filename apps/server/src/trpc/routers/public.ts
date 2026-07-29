@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { and, asc, desc, eq, ilike, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, ne } from 'drizzle-orm';
 import {
   companies,
   playerClaims,
@@ -19,10 +19,15 @@ const playerName = (row: { displayName: string | null; canonicalName: string }):
 
 export const publicRouter = router({
   leaderboard: publicProcedure.query(async ({ ctx }) => {
+    // Before the first recompute there is nothing to rank, but the response
+    // shape stays identical so callers need no narrowing.
     const recomputeId = await latestRecomputeId(ctx.db);
-    if (!recomputeId) return { computedAt: null, rows: [] };
-    const [recompute] = await ctx.db.select().from(recomputes).where(eq(recomputes.id, recomputeId));
-    const rows = await ctx.db
+    const [recompute] = recomputeId
+      ? await ctx.db.select().from(recomputes).where(eq(recomputes.id, recomputeId))
+      : [];
+    const rows = !recomputeId
+      ? []
+      : await ctx.db
       .select({
         playerId: playerRatings.playerId,
         rank: playerRatings.rank,
@@ -60,15 +65,39 @@ export const publicRouter = router({
       .where(eq(playerClaims.status, 'approved'));
     const verifiedIds = new Set(verified.map((row) => row.playerId));
 
+    // Rank movement against the previous complete recompute, so the board can
+    // show who is climbing rather than just a static order.
+    const [previous] = recomputeId
+      ? await ctx.db
+          .select({ id: recomputes.id })
+          .from(recomputes)
+          .where(and(eq(recomputes.status, 'complete'), ne(recomputes.id, recomputeId)))
+          .orderBy(desc(recomputes.startedAt))
+          .limit(1)
+      : [];
+    const previousRanks = new Map<string, number>();
+    if (previous) {
+      const previousRows = await ctx.db
+        .select({ playerId: playerRatings.playerId, rank: playerRatings.rank })
+        .from(playerRatings)
+        .where(eq(playerRatings.recomputeId, previous.id));
+      for (const row of previousRows) previousRanks.set(row.playerId, row.rank);
+    }
+
     return {
       computedAt: recompute?.finishedAt?.toISOString() ?? null,
       /** Which rating model produced these numbers. */
       model: recompute?.model ?? 'glicko2',
-      rows: rows.map((row) => ({
-        ...row,
-        name: playerName(row),
-        verified: verifiedIds.has(row.playerId),
-      })),
+      rows: rows.map((row) => {
+        const previousRank = previousRanks.get(row.playerId);
+        return {
+          ...row,
+          name: playerName(row),
+          verified: verifiedIds.has(row.playerId),
+          /** Places gained since the previous recompute; null if newly ranked. */
+          rankDelta: previousRank === undefined ? null : previousRank - row.rank,
+        };
+      }),
     };
   }),
 
@@ -162,6 +191,8 @@ export const publicRouter = router({
         seq: ratingEvents.seq,
         playerId: ratingEvents.playerId,
         isDecay: ratingEvents.isDecay,
+        /** Null for decay events; drives the last-five form pips. */
+        won: ratingEvents.won,
         postRating: ratingEvents.postRating,
         postRd: ratingEvents.postRd,
         tournamentId: ratingEvents.tournamentId,
