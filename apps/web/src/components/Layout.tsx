@@ -34,8 +34,9 @@ export function Layout() {
   return (
     <div className="app-shell">
       <nav className="app-nav">
+        {/* The lime marquee block is drawn in CSS, so the wordmark is text only. */}
         <Link to="/" className="logo">
-          🎮 Smash Club
+          Smash Club
         </Link>
         <div className="nav-links">
           <Link to="/" className="nav-link" activeProps={{ className: 'nav-link active' }} activeOptions={{ exact: true }}>
@@ -77,9 +78,7 @@ export function Layout() {
         <Outlet />
       </main>
 
-      <footer className="app-footer">
-        🎮 Smash Club — Glicko-2 club rankings, synced from Challonge
-      </footer>
+      <footer className="app-footer">Smash Club — club rankings, synced from Challonge</footer>
     </div>
   );
 }

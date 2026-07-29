@@ -39,14 +39,6 @@ export function timeAgo(iso: string | null | undefined): string {
   return `${years} year${years === 1 ? '' : 's'} ago`;
 }
 
-/** League badge class for the legacy quartile league labels. */
-export function leagueClass(league: string): string {
-  if (league.includes('Champions')) return 'champions';
-  if (league.includes('Full-Timers')) return 'smashclub';
-  if (league.includes('Grads')) return 'grads';
-  return 'interns';
-}
-
 /**
  * League tier as an ordinal class, highest first. Leagues are a ranked ladder,
  * so they get one colour ramp rather than four unrelated hues.

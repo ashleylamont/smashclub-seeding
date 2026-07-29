@@ -31,6 +31,25 @@ export function LeaderboardPage() {
   );
 
   /**
+   * The masthead eyebrow says what the ladder covers. The nav already carries the
+   * club name, so repeating it here would spend the most prominent small line on
+   * nothing.
+   */
+  const coverage = useMemo(() => {
+    const dates = (tournaments.data ?? [])
+      .map((t) => t.eventDate)
+      .filter((d): d is string => Boolean(d))
+      .sort();
+    const events = `${(tournaments.data ?? []).length} event${(tournaments.data ?? []).length === 1 ? '' : 's'}`;
+    if (dates.length === 0) return events;
+    const span = (iso: string) =>
+      new Date(iso).toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+    const first = span(dates[0]!);
+    const last = span(dates[dates.length - 1]!);
+    return `${events} · ${first === last ? first : `${first} – ${last}`}`;
+  }, [tournaments.data]);
+
+  /**
    * Per-player sparkline traces and form pips, derived from the same rating
    * history the chart uses — one request serves both rather than adding a
    * per-row query.
@@ -79,7 +98,7 @@ export function LeaderboardPage() {
     <div className="page">
       <header className="hero">
         <div className="hero-headline">
-          <p className="hero-eyebrow">Smash Club</p>
+          <p className="hero-eyebrow">{coverage}</p>
           <h1 className="hero-title">Rankings</h1>
           <p className="hero-sub muted">
             Ranked on best-estimate skill. The ± figure is how much that estimate could move — a wide band

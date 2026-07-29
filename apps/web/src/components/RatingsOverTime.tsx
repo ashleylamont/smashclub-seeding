@@ -1,5 +1,14 @@
-import { useMemo, useState } from 'react';
-import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useCallback, useMemo, useState } from 'react';
+import {
+  CartesianGrid,
+  LabelList,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import type { RatingHistoryData } from '../lib/apiTypes';
 import './RatingsOverTime.css';
 
@@ -9,16 +18,41 @@ interface RatingsOverTimeProps {
   tournamentNames: Map<string, string>;
 }
 
-// Perceptually distinct, contrast-safe color palette
-const COLORS = [
-  '#F3C300', '#875692', '#F38400', '#A1CAF1', '#BE0032',
-  '#C2B280', '#848482', '#008856', '#E68FAC', '#0067A5',
-  '#F99379', '#604E97', '#F6A600', '#B3446C', '#DCD300',
-  '#882D17', '#8DB600', '#654522', '#E25822', '#2B3D26',
+/**
+ * Head-to-head trajectories.
+ *
+ * This is a *comparison* chart, not a chart of everyone: a line per player only
+ * reads while there are few enough lines to tell apart. The previous version
+ * cycled a 20-hue palette by rank index, which meant (a) hues repeated once past
+ * the end of the list, and (b) removing a player repainted everyone below them.
+ *
+ * So: an explicit selection capped at the palette size, and a colour slot that
+ * belongs to the *player* for as long as they are selected. Dropping one player
+ * leaves every other line exactly the colour it was.
+ */
+
+/** The validated categorical palette, in fixed order. Never cycled. */
+const SERIES_SLOTS = [
+  'var(--series-1)',
+  'var(--series-2)',
+  'var(--series-3)',
+  'var(--series-4)',
+  'var(--series-5)',
+  'var(--series-6)',
+  'var(--series-7)',
+  'var(--series-8)',
 ];
 
+/** Secondary encoding, so identity survives colour-blindness and print. */
+const SERIES_DASH = ['0', '6 4', '2 3', '10 4', '1 3', '8 3 2 3', '4 2', '12 5'];
+
+const MAX_SERIES = SERIES_SLOTS.length;
+
+/** How many players are pre-selected on first render. */
+const DEFAULT_SELECTION = 5;
+
 type Granularity = 'tournament' | 'event';
-type YMode = 'rating' | 'floor';
+type YMode = 'rating' | 'cautious';
 
 interface Snapshot {
   label: string;
@@ -28,31 +62,68 @@ interface Snapshot {
 
 export function RatingsOverTime({ history, tournamentNames }: RatingsOverTimeProps) {
   const [granularity, setGranularity] = useState<Granularity>('tournament');
-  const [showTopN, setShowTopN] = useState<number>(10);
   const [yMode, setYMode] = useState<YMode>('rating');
-  const [searchFilter, setSearchFilter] = useState('');
-  const [hiddenPlayers, setHiddenPlayers] = useState<Set<string>>(new Set());
-  const [hoveredPlayer, setHoveredPlayer] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
-  const topPlayers = useMemo(() => {
-    const query = searchFilter.trim().toLowerCase();
-    const filtered = history.players.filter((p) => !query || p.name.toLowerCase().includes(query));
-    return filtered.slice(0, showTopN);
-  }, [history.players, showTopN, searchFilter]);
+  /**
+   * playerId -> colour slot. The array position *is* the slot, so a player
+   * keeps their colour until they are removed, and a freed slot is reused by
+   * whoever is added next.
+   */
+  const [slots, setSlots] = useState<(string | null)[]>(() => {
+    const initial: (string | null)[] = Array.from({ length: MAX_SERIES }, () => null);
+    history.players.slice(0, DEFAULT_SELECTION).forEach((player, i) => {
+      initial[i] = player.playerId;
+    });
+    return initial;
+  });
+
+  const selected = useMemo(
+    () =>
+      slots
+        .map((playerId, slot) => (playerId ? { playerId, slot } : null))
+        .filter((entry): entry is { playerId: string; slot: number } => entry !== null),
+    [slots],
+  );
+  const selectedIds = useMemo(() => new Set(selected.map((s) => s.playerId)), [selected]);
+  const full = selected.length >= MAX_SERIES;
+
+  const toggle = useCallback((playerId: string) => {
+    setSlots((prev) => {
+      const at = prev.indexOf(playerId);
+      if (at !== -1) {
+        const next = [...prev];
+        next[at] = null;
+        return next;
+      }
+      const free = prev.indexOf(null);
+      if (free === -1) return prev; // At capacity — the UI disables this case.
+      const next = [...prev];
+      next[free] = playerId;
+      return next;
+    });
+  }, []);
+
+  const nameById = useMemo(() => new Map(history.players.map((p) => [p.playerId, p.name])), [history.players]);
+
+  const searchResults = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return [];
+    return history.players.filter((p) => p.name.toLowerCase().includes(query)).slice(0, 8);
+  }, [history.players, search]);
 
   const chartData = useMemo(() => {
-    if (history.events.length === 0 || topPlayers.length === 0) return [];
-    const selected = new Set(topPlayers.map((p) => p.playerId));
-    const value = (rating: number, rd: number) => (yMode === 'floor' ? rating - 2 * rd : rating);
+    if (history.events.length === 0 || selected.length === 0) return [];
+    const value = (rating: number, rd: number) => (yMode === 'cautious' ? rating - 2 * rd : rating);
 
     const state = new Map<string, { rating: number; rd: number }>();
     const snapshots: Snapshot[] = [];
 
     const takeSnapshot = (label: string, index: number) => {
       const snapshot: Snapshot = { label, index };
-      for (const player of topPlayers) {
-        const s = state.get(player.playerId);
-        snapshot[player.playerId] = s ? value(s.rating, s.rd) : null;
+      for (const { playerId } of selected) {
+        const s = state.get(playerId);
+        snapshot[playerId] = s ? value(s.rating, s.rd) : null;
       }
       snapshots.push(snapshot);
     };
@@ -70,156 +141,217 @@ export function RatingsOverTime({ history, tournamentNames }: RatingsOverTimePro
         for (const event of events) {
           state.set(event.playerId, { rating: event.postRating, rd: event.postRd });
         }
-        const name = tournamentNames.get(tournamentId) ?? `Tournament ${index + 1}`;
-        takeSnapshot(name.length > 30 ? name.substring(0, 27) + '…' : name, index);
+        const name = tournamentNames.get(tournamentId) ?? `Event ${index + 1}`;
+        takeSnapshot(name.length > 24 ? name.slice(0, 21) + '…' : name, index);
         index += 1;
       }
     } else {
       // One snapshot per rating event that touches a charted player.
       for (const event of history.events) {
         state.set(event.playerId, { rating: event.postRating, rd: event.postRd });
-        if (selected.has(event.playerId)) {
-          takeSnapshot(`#${event.seq}`, event.seq);
-        }
+        if (selectedIds.has(event.playerId)) takeSnapshot(`#${event.seq}`, event.seq);
       }
     }
     return snapshots;
-  }, [history.events, topPlayers, granularity, yMode, tournamentNames]);
+  }, [history.events, selected, selectedIds, granularity, yMode, tournamentNames]);
 
-  const nameById = useMemo(() => new Map(history.players.map((p) => [p.playerId, p.name])), [history.players]);
+  /** Last snapshot index at which each series has a value, for direct labels. */
+  const lastIndexOf = useMemo(() => {
+    const map = new Map<string, number>();
+    chartData.forEach((snapshot, i) => {
+      for (const { playerId } of selected) {
+        if (snapshot[playerId] != null) map.set(playerId, i);
+      }
+    });
+    return map;
+  }, [chartData, selected]);
+
+  /** Direct labels only while few enough lines that names will not collide. */
+  const directLabels = selected.length <= 4;
 
   if (history.events.length === 0) {
     return (
-      <div className="ratings-over-time card">
-        <h2>📈 Ratings Over Time</h2>
+      <section className="ratings-over-time section">
+        <h2>Ratings over time</h2>
         <p className="no-data">No rating history yet — sync a tournament to get started.</p>
-      </div>
+      </section>
     );
   }
 
   return (
-    <div className="ratings-over-time card">
-      <h2>📈 Ratings Over Time</h2>
+    <section className="ratings-over-time section">
+      <h2>Ratings over time</h2>
+      <p className="muted chart-caption">
+        Compare up to {MAX_SERIES} players. Each keeps its colour and dash pattern while selected, so removing
+        one never recolours the rest.
+      </p>
+
       <div className="chart-controls">
-        <label>
-          Granularity
-          <select className="select" value={granularity} onChange={(e) => setGranularity(e.target.value as Granularity)}>
+        <label className="chart-control">
+          <span className="control-label">Granularity</span>
+          <select
+            className="select"
+            value={granularity}
+            onChange={(e) => setGranularity(e.target.value as Granularity)}
+          >
             <option value="tournament">Per tournament</option>
             <option value="event">Per rating event</option>
           </select>
         </label>
-        <label>
-          Show top
-          <select className="select" value={showTopN} onChange={(e) => setShowTopN(Number(e.target.value))}>
-            <option value={5}>Top 5</option>
-            <option value={10}>Top 10</option>
-            <option value={15}>Top 15</option>
-            <option value={20}>Top 20</option>
-            <option value={999}>All</option>
-          </select>
-        </label>
-        <label>
-          Y-axis
+        <label className="chart-control">
+          <span className="control-label">Y-axis</span>
           <select className="select" value={yMode} onChange={(e) => setYMode(e.target.value as YMode)}>
-            <option value="rating">Rating</option>
-            <option value="floor">Rating floor (rating − 2×RD)</option>
+            <option value="rating">Skill estimate</option>
+            <option value="cautious">Cautious (rating − 2×RD)</option>
           </select>
         </label>
-        <label>
-          Filter players
+        <label className="chart-control chart-control-search">
+          <span className="control-label">Add player</span>
           <input
             className="input"
-            type="text"
-            placeholder="Search by name…"
-            value={searchFilter}
-            onChange={(e) => setSearchFilter(e.target.value)}
+            type="search"
+            placeholder={full ? `${MAX_SERIES} selected — remove one first` : 'Search by name…'}
+            value={search}
+            disabled={full}
+            onChange={(e) => setSearch(e.target.value)}
           />
         </label>
       </div>
 
-      <ResponsiveContainer width="100%" height={Math.max(480, 380 + topPlayers.length * 8)}>
-        <LineChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
-          <XAxis
-            dataKey="label"
-            angle={granularity === 'tournament' ? -30 : 0}
-            textAnchor={granularity === 'tournament' ? 'end' : 'middle'}
-            height={granularity === 'tournament' ? 80 : 40}
-            tick={{ fontSize: 11 }}
-          />
-          <YAxis
-            label={{
-              value: yMode === 'floor' ? 'Rating floor (rating − 2×RD)' : 'Rating',
-              angle: -90,
-              position: 'insideLeft',
-            }}
-            allowDecimals={false}
-            domain={['auto', 'auto']}
-          />
-          <Tooltip
-            content={({ active, payload, label }) => {
-              if (!active || !payload || payload.length === 0) return null;
-              const sorted = [...payload]
-                .filter((p) => p.value != null)
-                .sort((a, b) => (b.value as number) - (a.value as number));
-              return (
-                <div className="custom-tooltip ratings-tooltip">
-                  <p className="tooltip-label">
-                    <strong>{label}</strong>
-                  </p>
-                  {sorted.map((entry, i) => (
-                    <p key={i} style={{ color: entry.color, margin: '4px 0' }}>
-                      <strong>{i + 1}.</strong> {nameById.get(entry.dataKey as string) ?? '?'}:{' '}
-                      {(entry.value as number).toFixed(0)}
-                    </p>
-                  ))}
-                </div>
-              );
-            }}
-          />
-          <Legend
-            formatter={(value: string) => nameById.get(value) ?? value}
-            onClick={(data) => {
-              const key = data.dataKey as string;
-              setHiddenPlayers((prev) => {
-                const next = new Set(prev);
-                if (next.has(key)) next.delete(key);
-                else next.add(key);
-                return next;
-              });
-            }}
-            onMouseEnter={(data) => {
-              const key = data.dataKey as string;
-              if (!hiddenPlayers.has(key)) setHoveredPlayer(key);
-            }}
-            onMouseLeave={() => setHoveredPlayer(null)}
-            wrapperStyle={{ cursor: 'pointer' }}
-          />
-          {topPlayers.map((player, i) => {
-            const key = player.playerId;
-            const isHidden = hiddenPlayers.has(key);
-            const color = COLORS[i % COLORS.length];
-            const isHovered = hoveredPlayer === key;
-            const isOtherHovered = hoveredPlayer !== null && !isHovered;
-            return (
+      {searchResults.length > 0 && (
+        <ul className="chart-search-results">
+          {searchResults.map((player) => (
+            <li key={player.playerId}>
+              <button
+                type="button"
+                className="btn btn-small"
+                disabled={selectedIds.has(player.playerId)}
+                onClick={() => {
+                  toggle(player.playerId);
+                  setSearch('');
+                }}
+              >
+                {selectedIds.has(player.playerId) ? '✓ ' : '+ '}
+                {player.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* The legend is also the selection: click to drop a player. */}
+      <ul className="chart-legend">
+        {selected.map(({ playerId, slot }) => (
+          <li key={playerId}>
+            <button
+              type="button"
+              className="legend-item"
+              onClick={() => toggle(playerId)}
+              title="Remove from chart"
+            >
+              <svg className="legend-swatch" width="22" height="8" aria-hidden="true">
+                <line
+                  x1="0"
+                  y1="4"
+                  x2="22"
+                  y2="4"
+                  stroke={SERIES_SLOTS[slot]}
+                  strokeWidth="2"
+                  strokeDasharray={SERIES_DASH[slot]}
+                />
+              </svg>
+              <span className="legend-name">{nameById.get(playerId) ?? '?'}</span>
+              <span className="legend-remove" aria-hidden="true">
+                ×
+              </span>
+            </button>
+          </li>
+        ))}
+        {selected.length === 0 && <li className="muted">Search above to add a player.</li>}
+      </ul>
+
+      {selected.length === 0 ? (
+        <p className="no-data">No players selected.</p>
+      ) : (
+        <ResponsiveContainer width="100%" height={380}>
+          <LineChart data={chartData} margin={{ top: 8, right: directLabels ? 96 : 16, bottom: 4, left: 0 }}>
+            <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
+            <XAxis
+              dataKey="label"
+              angle={granularity === 'tournament' ? -30 : 0}
+              textAnchor={granularity === 'tournament' ? 'end' : 'middle'}
+              height={granularity === 'tournament' ? 88 : 32}
+              tick={{ fill: 'var(--text-soft)', fontSize: 10 }}
+              stroke="var(--border-strong)"
+              tickLine={false}
+              interval="preserveStartEnd"
+            />
+            <YAxis
+              allowDecimals={false}
+              domain={['auto', 'auto']}
+              tick={{ fill: 'var(--text-soft)', fontSize: 11 }}
+              stroke="var(--border-strong)"
+              tickLine={false}
+              width={48}
+            />
+            <Tooltip
+              cursor={{ stroke: 'var(--border-strong)' }}
+              content={({ active, payload, label }) => {
+                if (!active || !payload || payload.length === 0) return null;
+                const sorted = [...payload]
+                  .filter((p) => p.value != null)
+                  .sort((a, b) => (b.value as number) - (a.value as number));
+                return (
+                  <div className="custom-tooltip ratings-tooltip">
+                    <p className="tooltip-label">{label}</p>
+                    {sorted.map((entry) => (
+                      <p key={entry.dataKey as string} className="tooltip-row">
+                        <span className="tooltip-swatch" style={{ background: entry.color }} />
+                        <span className="tooltip-name">{nameById.get(entry.dataKey as string) ?? '?'}</span>
+                        <span className="num">{(entry.value as number).toFixed(0)}</span>
+                      </p>
+                    ))}
+                  </div>
+                );
+              }}
+            />
+            {selected.map(({ playerId, slot }) => (
               <Line
-                key={key}
+                key={playerId}
                 type="monotone"
-                dataKey={key}
-                stroke={color}
-                name={key}
-                dot={granularity === 'tournament' ? { r: 4, fill: color, stroke: color } : false}
-                activeDot={{ r: 6, fill: color, stroke: 'var(--bg)', strokeWidth: 2 }}
+                dataKey={playerId}
+                stroke={SERIES_SLOTS[slot]}
+                name={playerId}
+                dot={false}
+                activeDot={{ r: 4, fill: SERIES_SLOTS[slot], stroke: 'var(--bg)', strokeWidth: 2 }}
                 connectNulls
-                strokeWidth={isHovered ? 4 : 2.5}
-                strokeOpacity={isHidden ? 0 : isOtherHovered ? 0.2 : 1}
-                strokeDasharray={i % 4 === 0 ? '0' : i % 4 === 1 ? '5 5' : i % 4 === 2 ? '10 5' : '2 4'}
-                hide={isHidden}
-              />
-            );
-          })}
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
+                strokeWidth={2}
+                strokeDasharray={SERIES_DASH[slot]}
+                isAnimationActive={false}
+              >
+                {directLabels && (
+                  <LabelList
+                    dataKey={playerId}
+                    content={(props: { index?: number; x?: number | string; y?: number | string }) => {
+                      if (props.index !== lastIndexOf.get(playerId)) return null;
+                      return (
+                        <text
+                          x={Number(props.x) + 8}
+                          y={Number(props.y) + 4}
+                          fill={SERIES_SLOTS[slot]}
+                          fontSize={11}
+                        >
+                          {nameById.get(playerId) ?? ''}
+                        </text>
+                      );
+                    }}
+                  />
+                )}
+              </Line>
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      )}
+    </section>
   );
 }

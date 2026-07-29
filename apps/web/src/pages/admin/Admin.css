@@ -1,49 +1,53 @@
-/* Admin section: shared layout, review queue, players registry, seeding, settings. */
+/*
+ * Admin section: shared layout, review queue, players registry, seeding,
+ * settings. Denser than the public pages — these are working screens — but the
+ * same square, rule-bounded language.
+ */
 
 .admin-header {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--s4);
   flex-wrap: wrap;
-  margin-bottom: 20px;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 12px;
+  margin-bottom: var(--s5);
+  border-bottom: 2px solid var(--border-strong);
 }
 
 .admin-header h1 {
-  margin: 0;
+  font-size: var(--fs-xl);
+  padding-bottom: var(--s2);
 }
 
 .admin-tabs {
   display: flex;
-  gap: 4px;
   flex-wrap: wrap;
 }
 
 .admin-tab {
-  padding: 6px 14px;
-  border-radius: 8px;
+  padding: var(--s2) var(--s3);
+  font-family: var(--display);
+  font-size: var(--fs-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
   color: var(--text);
-  text-decoration: none;
-  font-weight: 500;
-  font-size: 14px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
 }
 
 .admin-tab:hover {
-  background: var(--surface);
   color: var(--text-h);
-  text-decoration: none;
 }
 
 .admin-tab.active {
-  background: var(--accent-bg);
   color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
 }
 
 .admin-form-row {
   display: flex;
-  gap: 10px;
+  gap: var(--s2);
   align-items: center;
   flex-wrap: wrap;
 }
@@ -55,67 +59,67 @@
 .checkbox-label {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 14px;
+  gap: var(--s2);
+  font-size: var(--fs-sm);
   cursor: pointer;
   white-space: nowrap;
 }
 
 .row-actions {
   display: inline-flex;
-  gap: 6px;
+  gap: var(--s1);
   align-items: center;
   flex-wrap: wrap;
 }
 
 .date-edit {
   display: inline-flex;
-  gap: 6px;
+  gap: var(--s1);
   align-items: center;
   flex-wrap: wrap;
 }
 
-/* --- review queue --- */
+/* ── review queue ───────────────────────────────────────────────── */
 
 .review-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--s5);
 }
 
 .review-card-header {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 12px;
+  gap: var(--s3);
   flex-wrap: wrap;
-  margin-bottom: 10px;
+  margin-bottom: var(--s3);
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--border);
 }
 
 .review-name {
-  font-weight: 700;
-  font-size: 16px;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: var(--fs-lg);
+  text-transform: uppercase;
   color: var(--text-h);
-  margin-right: 8px;
+  margin-right: var(--s2);
 }
 
 .candidate-list {
   list-style: none;
-  margin: 0 0 10px;
+  margin: 0 0 var(--s3);
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
 }
 
 .candidate-row {
   display: grid;
   grid-template-columns: minmax(140px, 1fr) auto minmax(80px, 160px) 48px auto;
-  gap: 10px;
+  gap: var(--s3);
   align-items: center;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--border);
 }
 
 .candidate-name {
@@ -123,134 +127,158 @@
   font-weight: 500;
 }
 
+/* Segmented, like the leaderboard's confidence meter — a gauge, not a bar. */
 .score-bar {
   display: block;
   height: 8px;
-  border-radius: 4px;
-  background: var(--surface);
-  overflow: hidden;
+  background: repeating-linear-gradient(
+    to right,
+    var(--border-strong) 0px,
+    var(--border-strong) 3px,
+    transparent 3px,
+    transparent 5px
+  );
 }
 
 .score-bar-fill {
   display: block;
   height: 100%;
-  background: var(--accent);
-  border-radius: 4px;
+  background: repeating-linear-gradient(
+    to right,
+    var(--accent) 0px,
+    var(--accent) 3px,
+    transparent 3px,
+    transparent 5px
+  );
 }
 
 .score-value {
-  font-size: 12px;
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
   color: var(--text-soft);
   text-align: right;
 }
 
+/*
+ * Match reasons. Structured evidence (a registry alias, a prior decision) is
+ * trustworthy; a fuzzy name match never is — it is a suggestion for a human, so
+ * it is coloured as a caution, not an endorsement.
+ */
 .chip.reason-structured {
-  background: var(--success-bg);
-  color: var(--success);
-  border-color: transparent;
+  color: var(--good);
+  border-color: var(--good);
+  background: var(--good-bg);
 }
 
 .chip.reason-fuzzy {
-  background: var(--warning-bg);
-  color: var(--warning);
-  border-color: transparent;
+  color: var(--warn);
+  border-color: var(--warn);
+  background: var(--warn-bg);
 }
 
 .chip.reason-name-shape {
-  background: var(--accent-bg);
   color: var(--accent);
-  border-color: transparent;
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
 }
 
 .review-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--s2);
   align-items: center;
   flex-wrap: wrap;
 }
 
-/* --- players registry --- */
+/* ── players registry ───────────────────────────────────────────── */
 
 .alias-chips {
   display: inline-flex;
-  gap: 4px;
+  gap: var(--s1);
   flex-wrap: wrap;
-  margin-right: 8px;
+  margin-right: var(--s2);
 }
 
 .alias-add {
   display: inline-flex;
-  gap: 4px;
+  gap: var(--s1);
   align-items: center;
 }
 
 .alias-add .input {
   width: 110px;
-  padding: 3px 8px;
-  font-size: 13px;
+  padding: 2px var(--s2);
+  font-size: var(--fs-xs);
 }
 
 .player-inactive {
-  opacity: 0.55;
+  color: var(--text-soft);
 }
 
 .merge-bar {
   display: flex;
-  gap: 10px;
+  gap: var(--s3);
   align-items: center;
   flex-wrap: wrap;
 }
 
-/* --- seeding --- */
+/* ── seeding ────────────────────────────────────────────────────── */
 
 .seeding-grid {
   display: grid;
   grid-template-columns: 48px 32px minmax(160px, 1fr) 80px 60px 110px 60px;
-  gap: 10px;
+  gap: var(--s3);
   align-items: center;
 }
 
 .seeding-list-header {
-  padding: 8px 12px;
-  font-size: 12px;
-  font-weight: 600;
+  padding: var(--s2) var(--s2) 6px;
+  font-family: var(--display);
+  font-size: var(--fs-xs);
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.12em;
   color: var(--text-soft);
+  border-bottom: 2px solid var(--border-strong);
 }
 
 .seeding-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
 }
 
 .seeding-row {
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--card-bg);
-  font-size: 14px;
+  padding: var(--s2);
+  border-bottom: 1px solid var(--border);
+  border-left: 3px solid transparent;
+  background: var(--bg);
+  font-size: var(--fs-sm);
 }
 
 .seeding-row.dragging {
   z-index: 20;
   position: relative;
-  box-shadow: var(--shadow);
-  border-color: var(--accent-border);
+  border-color: var(--accent);
+  border-left-color: var(--accent);
+  background: var(--surface-2);
 }
 
+/* A locked seed is pinned by hand, so it is marked rather than merely tinted. */
 .seeding-row.locked {
   background: var(--surface);
+  border-left-color: var(--warn);
 }
 
 .seed-number {
+  font-family: var(--mono);
   font-weight: 700;
   color: var(--text-h);
 }
 
 .seeding-name {
-  font-weight: 600;
+  font-family: var(--display);
+  font-size: var(--fs-md);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--text-h);
 }
 
@@ -259,50 +287,60 @@
   user-select: none;
   touch-action: none;
   text-align: center;
+  color: var(--text-soft);
+}
+
+.drag-handle:hover {
+  color: var(--accent);
 }
 
 .drag-handle.disabled {
   cursor: default;
-  opacity: 0.6;
+  opacity: 0.4;
 }
 
 .seed-up {
-  color: var(--success);
-  font-weight: 600;
+  color: var(--good);
+  font-family: var(--mono);
 }
 
 .seed-down {
-  color: var(--danger);
-  font-weight: 600;
+  color: var(--bad);
+  font-family: var(--mono);
 }
 
 .push-preview {
   max-height: 300px;
   overflow-y: auto;
-  margin: 10px 0 0;
-  padding-left: 28px;
+  margin: var(--s3) 0 0;
+  padding-left: var(--s6);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
 }
 
-/* --- settings --- */
+/* ── settings ───────────────────────────────────────────────────── */
 
 .settings-groups {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 12px;
-  margin-top: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--s5);
+  margin-top: var(--s4);
 }
 
 .settings-group h3 {
-  margin-bottom: 12px;
+  margin-bottom: var(--s3);
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--border);
 }
 
 .settings-field {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  padding: 6px 0;
-  font-size: 14px;
+  gap: var(--s3);
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-sm);
   color: var(--text-h);
 }
 
@@ -313,5 +351,18 @@
 
 .settings-hint {
   display: block;
-  font-size: 12px;
+  font-size: var(--fs-xs);
+  color: var(--text-soft);
+}
+
+@media (max-width: 860px) {
+  .candidate-row,
+  .seeding-grid {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: var(--s1);
+  }
+  .admin-form-row .input {
+    min-width: 0;
+    width: 100%;
+  }
 }

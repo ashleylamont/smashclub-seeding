@@ -4,87 +4,101 @@
   gap: var(--s5);
 }
 
-/* ── hero ─────────────────────────────────────────────────────── */
+/*
+ * Masthead, not a hero card: a rule-bounded band on the page field. The title
+ * is set large in the condensed face and the stats sit on the same baseline
+ * grid, so hierarchy comes from type size and rules rather than a container.
+ */
 .hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--s5);
   align-items: end;
-  padding: var(--s6) var(--s5) var(--s5);
-  background:
-    radial-gradient(120% 140% at 0% 0%, var(--accent-bg) 0%, transparent 58%),
-    var(--bg-elev);
-  border: 1px solid var(--border);
-  border-radius: var(--r3);
+  gap: var(--s5);
+  padding-bottom: var(--s3);
+  border-bottom: 2px solid var(--border-strong);
 }
 
 .hero-eyebrow {
+  font-family: var(--display);
   font-size: var(--fs-xs);
   text-transform: uppercase;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.24em;
   color: var(--accent);
-  font-weight: 700;
+  font-weight: 600;
   margin-bottom: var(--s2);
 }
 
 .hero-title {
+  font-family: var(--display);
   font-size: var(--fs-3xl);
-  letter-spacing: -0.035em;
-  line-height: 1;
-  margin-bottom: var(--s3);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: -0.005em;
+  line-height: 0.92;
+  color: var(--text-h);
+  margin-bottom: var(--s2);
 }
 
 .hero-sub {
-  max-width: 54ch;
+  max-width: 56ch;
   font-size: var(--fs-sm);
-  line-height: 1.5;
+  line-height: 1.45;
 }
 
+/* Stats read as a scoreboard strip, separated by rules rather than gaps. */
 .hero-stats {
   display: flex;
-  gap: var(--s5);
   margin: 0;
-  flex-wrap: wrap;
+  border-left: 1px solid var(--border);
 }
 
 .stat {
   display: flex;
   flex-direction: column;
   gap: var(--s1);
+  padding: 0 var(--s4);
+  border-right: 1px solid var(--border);
 }
 
 .stat dt {
+  font-family: var(--display);
   font-size: var(--fs-xs);
   text-transform: uppercase;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.14em;
   color: var(--text-soft);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .stat dd {
   margin: 0;
+  font-family: var(--mono);
   font-size: var(--fs-xl);
-  font-weight: 650;
+  font-weight: 700;
   color: var(--text-h);
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .stat-climber dd {
-  font-size: var(--fs-md);
+  font-family: var(--sans);
+  font-size: var(--fs-sm);
   display: flex;
   align-items: baseline;
   gap: var(--s2);
+  font-weight: 400;
 }
 
 .stat-climber-name {
-  max-width: 15ch;
+  max-width: 14ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text-h);
 }
 
 .stat-climber-delta {
   color: var(--good);
+  font-family: var(--mono);
   font-size: var(--fs-sm);
   font-weight: 700;
 }
@@ -92,27 +106,21 @@
 .hero-meta {
   grid-column: 1 / -1;
   font-size: var(--fs-xs);
-  border-top: 1px solid var(--border);
-  padding-top: var(--s3);
-  margin-top: var(--s2);
+  font-family: var(--mono);
+  letter-spacing: 0.02em;
 }
 
 .hero-meta code {
   font-family: var(--mono);
   font-size: var(--fs-xs);
-  background: var(--surface-2);
-  border-radius: var(--r1);
-  padding: 1px 5px;
-  color: var(--text);
+  color: var(--accent);
 }
 
 /* ── states ───────────────────────────────────────────────────── */
 .empty-state {
   padding: var(--s7) var(--s5);
   text-align: center;
-  background: var(--surface);
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--r3);
+  border: 1px solid var(--border);
 }
 
 .empty-state h2 {
@@ -125,47 +133,39 @@
   font-size: var(--fs-sm);
 }
 
-.loading-text {
-  color: var(--text-soft);
+.loading-text,
+.error-text {
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
   padding: var(--s4) 0;
 }
 
 .error-text {
   color: var(--bad);
-  background: var(--bad-bg);
-  border: 1px solid var(--bad);
-  border-radius: var(--r2);
-  padding: var(--s3) var(--s4);
+  border-left: 2px solid var(--bad);
+  padding-left: var(--s3);
 }
 
 .skeleton-hero {
-  height: 190px;
-  border-radius: var(--r3);
-  background: linear-gradient(90deg, var(--surface) 0%, var(--surface-2) 50%, var(--surface) 100%);
-  background-size: 200% 100%;
-  animation: shimmer 1.4s linear infinite;
-}
-
-@keyframes shimmer {
-  from {
-    background-position: 200% 0;
-  }
-  to {
-    background-position: -200% 0;
-  }
+  height: 150px;
+  border-bottom: 2px solid var(--border-strong);
 }
 
 @media (max-width: 860px) {
   .hero {
     grid-template-columns: 1fr;
     align-items: start;
-    padding: var(--s5) var(--s4) var(--s4);
   }
   .hero-title {
     font-size: var(--fs-2xl);
   }
   .hero-stats {
-    gap: var(--s4);
+    border-left: none;
+    flex-wrap: wrap;
+    gap: var(--s2) 0;
+  }
+  .stat:first-child {
+    padding-left: 0;
   }
   .stat dd {
     font-size: var(--fs-lg);
