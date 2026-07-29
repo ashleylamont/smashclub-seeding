@@ -34,7 +34,7 @@ export function Layout() {
   return (
     <div className="app-shell">
       <nav className="app-nav">
-        {/* The lime marquee block is drawn in CSS, so the wordmark is text only. */}
+        {/* The marquee block is drawn in CSS, so the wordmark is text only. */}
         <Link to="/" className="logo">
           Smash Club
         </Link>

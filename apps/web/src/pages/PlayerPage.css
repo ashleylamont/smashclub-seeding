@@ -175,9 +175,16 @@
   color: var(--bad);
 }
 
+/*
+ * A parenthetical annotation, not a state — so it takes quiet ink rather than
+ * the caution colour. It shares a cell with the green rating delta, and on paper
+ * dark green and dark amber are not separable under deuteranopia (both have to
+ * be dark to reach 4.5:1), so colouring it amber would have been a distinction
+ * nobody could read.
+ */
 .rd-decay {
   font-size: var(--fs-xs);
-  color: var(--warn);
+  color: var(--text-soft);
 }
 
 .weight-indicator {

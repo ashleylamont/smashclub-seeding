@@ -317,10 +317,12 @@
   border-left-color: var(--tier);
 }
 
+/* The podium numerals carry the brand, not the league ramp — the league is
+   already stated by the left edge and the tag. */
 .is-podium .rank {
   font-size: var(--fs-2xl);
   font-weight: 700;
-  color: var(--tier);
+  color: var(--accent);
   line-height: 0.85;
 }
 
