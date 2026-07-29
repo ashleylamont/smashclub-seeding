@@ -326,10 +326,11 @@ function SeedingRow({
       <span
         className={`drag-handle${disabled ? ' disabled' : ''}`}
         title={entry.locked ? 'Locked in place' : draggable ? 'Drag to reorder' : 'Run is not editable'}
+        aria-label={entry.locked ? `Seed ${seed} locked` : `Reorder seed ${seed}: ${entry.name}`}
         {...attributes}
         {...listeners}
       >
-        {entry.locked ? '🔒' : '☰'}
+        <span aria-hidden="true">{entry.locked ? '🔒' : '☰'}</span>
       </span>
       <span className="seeding-name">{entry.name}</span>
       <span>{entry.autoScore != null ? entry.autoScore.toFixed(0) : '—'}</span>
@@ -350,12 +351,17 @@ function SeedingRow({
         )}
       </span>
       <span>
+        {/* The glyph alone is not a label: without aria-label the accessible
+            name is the emoji, which says nothing and conveys the lock state by
+            picture only. */}
         <button
           type="button"
           className="btn btn-small"
           disabled={toggleLock.isPending || !draggable}
           onClick={() => toggleLock.mutate()}
           title={entry.locked ? 'Unlock this seed' : 'Lock this seed in place'}
+          aria-label={entry.locked ? `Unlock seed ${seed}` : `Lock seed ${seed} in place`}
+          aria-pressed={entry.locked}
         >
           {entry.locked ? '🔒' : '🔓'}
         </button>
