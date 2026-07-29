@@ -18,6 +18,7 @@ import { normalizeTournamentId } from '@smashclub/engine';
 import { glickoSettingsSchema } from '@smashclub/shared';
 import { ensureAlias } from '../../identity/matching';
 import { mergePlayers } from '../../players/merge';
+import { compareModels } from '../../recompute/compareModels';
 import { resolveReviewItem } from '../../review/resolve';
 import {
   createSeedingRun,
@@ -330,4 +331,11 @@ export const adminRouter = router({
     await ctx.recomputeTrigger.runNow();
     return { ok: true };
   }),
+
+  /**
+   * Side-by-side of what each rating model would publish. Read-only — switching
+   * the active model moves every member's number, so it should never be a blind
+   * setting change.
+   */
+  compareModels: adminProcedure.query(async ({ ctx }) => compareModels(ctx.db)),
 });

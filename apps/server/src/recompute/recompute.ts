@@ -5,8 +5,11 @@ import {
   calibrateLeagueBands,
   computeLeaderboard,
   replayRatings,
+  runWhrModel,
   type EngineSet,
   type EngineTournament,
+  type LeaderboardRow,
+  type RatingEvent,
 } from '@smashclub/engine';
 import { getGlickoSettings, updateGlickoSettings } from '../settings';
 
@@ -21,7 +24,9 @@ const EVENT_INSERT_CHUNK = 500;
  * new recompute row. Readers always query the latest complete recompute, so
  * a running recompute never disturbs them. Old recomputes are pruned.
  */
-export async function runRecompute(db: Db): Promise<{ recomputeId: string; players: number; sets: number; events: number }> {
+export async function runRecompute(
+  db: Db,
+): Promise<{ recomputeId: string; model: string; players: number; sets: number; events: number }> {
   const { glicko, version } = await getGlickoSettings(db);
 
   const tournamentRows = await db
@@ -71,33 +76,60 @@ export async function runRecompute(db: Db): Promise<{ recomputeId: string; playe
       challongeMatchId: row.challongeMatchId,
     }));
 
+  const model = glicko.activeModel;
   const [recompute] = await db
     .insert(recomputes)
     .values({
       engineVersion: ENGINE_VERSION,
+      model,
       settingsSnapshot: { glicko, version } as unknown as Record<string, unknown>,
     })
     .returning({ id: recomputes.id });
   const recomputeId = recompute!.id;
 
   try {
-    const replay = replayRatings({ sets: engineSets, tournaments: engineTournaments, settings: glicko });
-
-    // The default league bands are placeholders; fit them to this club's actual
-    // distribution once, then leave them alone so a league label keeps meaning
-    // the same thing over time.
+    /**
+     * Both models are fitted from the same set list and produce the same output
+     * shape, so which one is authoritative is a single setting rather than a
+     * fork in the pipeline. League bands are shared, which is what makes the
+     * admin comparison view meaningful — a rank move between models is a real
+     * difference in the model, not a difference in how leagues were cut.
+     */
+    let ratingEventRows: RatingEvent[];
+    let leaderboard: LeaderboardRow[];
     let effectiveSettings = glicko;
-    if (!glicko.leagueBandsCalibrated && replay.finalStates.size >= 8) {
-      const provisional = computeLeaderboard(replay.finalStates, glicko);
+
+    /** Fit the bands to the club's real distribution once, then leave them be. */
+    const calibrateOnce = async (provisional: LeaderboardRow[]): Promise<void> => {
+      if (glicko.leagueBandsCalibrated || provisional.length < 8) return;
       const bands = calibrateLeagueBands(provisional.map((row) => row.skillRating));
       effectiveSettings = { ...glicko, leagueBands: bands, leagueBandsCalibrated: true };
       await updateGlickoSettings(db, effectiveSettings);
+    };
+
+    if (model === 'whr') {
+      const first = runWhrModel({ sets: engineSets, tournaments: engineTournaments, settings: glicko });
+      await calibrateOnce(first.leaderboard);
+      // Re-derive leagues if calibration changed the bands. The fit itself does
+      // not depend on them, so only the labels are recomputed.
+      const run =
+        effectiveSettings === glicko
+          ? first
+          : runWhrModel({ sets: engineSets, tournaments: engineTournaments, settings: effectiveSettings });
+      ratingEventRows = run.events;
+      leaderboard = run.leaderboard;
+      if (!run.converged) {
+        console.warn(`WHR fit did not converge in ${run.iterations} iterations; ratings may be unstable`);
+      }
+    } else {
+      const replay = replayRatings({ sets: engineSets, tournaments: engineTournaments, settings: glicko });
+      await calibrateOnce(computeLeaderboard(replay.finalStates, glicko));
+      ratingEventRows = replay.events;
+      leaderboard = computeLeaderboard(replay.finalStates, effectiveSettings);
     }
 
-    const leaderboard = computeLeaderboard(replay.finalStates, effectiveSettings);
-
-    for (let offset = 0; offset < replay.events.length; offset += EVENT_INSERT_CHUNK) {
-      const chunk = replay.events.slice(offset, offset + EVENT_INSERT_CHUNK);
+    for (let offset = 0; offset < ratingEventRows.length; offset += EVENT_INSERT_CHUNK) {
+      const chunk = ratingEventRows.slice(offset, offset + EVENT_INSERT_CHUNK);
       await db.insert(ratingEvents).values(
         chunk.map((event) => ({
           recomputeId,
@@ -150,14 +182,14 @@ export async function runRecompute(db: Db): Promise<{ recomputeId: string; playe
       );
     }
 
-    const stats = { players: leaderboard.length, sets: engineSets.length, events: replay.events.length };
+    const stats = { players: leaderboard.length, sets: engineSets.length, events: ratingEventRows.length };
     await db
       .update(recomputes)
       .set({ status: 'complete', finishedAt: new Date(), stats })
       .where(eq(recomputes.id, recomputeId));
 
     await pruneOldRecomputes(db);
-    return { recomputeId, ...stats };
+    return { recomputeId, model, ...stats };
   } catch (error) {
     await db
       .update(recomputes)

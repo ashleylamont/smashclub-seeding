@@ -355,6 +355,50 @@
   color: var(--text-soft);
 }
 
+.league-name-input {
+  flex: 1;
+  min-width: 0;
+  margin-right: var(--s3);
+  /* Overrides the right-alignment settings fields use for their numbers. */
+  text-align: left;
+}
+
+/* ── model comparison ───────────────────────────────────────────── */
+
+.comparison-stats {
+  display: flex;
+  flex-wrap: wrap;
+  margin: var(--s4) 0;
+  border-left: 1px solid var(--border);
+}
+
+.comparison-stats .stat {
+  padding: 0 var(--s4);
+  border-right: 1px solid var(--border);
+}
+
+.comparison-stats dt {
+  font-family: var(--display);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-soft);
+  margin-bottom: var(--s1);
+}
+
+.comparison-stats dd {
+  margin: 0;
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  color: var(--text-h);
+  line-height: 1;
+}
+
+.comparison-note {
+  margin-top: var(--s3);
+  font-size: var(--fs-xs);
+}
+
 @media (max-width: 860px) {
   .candidate-row,
   .seeding-grid {
