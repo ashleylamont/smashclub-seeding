@@ -1,9 +1,16 @@
-import { DEFAULT_COMPANY_TAXONOMY, type CompanyTaxonomy } from './companies';
+import { DEFAULT_COMPANY_TAXONOMY, isNonCompanyLabel, type CompanyTaxonomy } from './companies';
 
 export interface CleanedPlayerEntry {
   name: string;
   /** Company code (e.g. ATL) when recognised; raw bracket text when not; null when absent. */
   companyCode: string | null;
+  /**
+   * A company-shaped label that the taxonomy does not recognise, e.g. a new
+   * employer appearing for the first time. Surfaced so an admin can add it
+   * rather than silently losing the player's company — which also weakens
+   * company-scoped identity matching.
+   */
+  unknownCompanyLabel?: string;
 }
 
 /**
@@ -45,13 +52,28 @@ export function cleanPlayerEntry(line: string, taxonomy: CompanyTaxonomy = DEFAU
     working = working.slice(0, dashIndex).trim();
   }
 
+  let unknownCompanyLabel: string | undefined;
   if (company) {
     const lower = company.toLowerCase();
+    let resolved: string | null = null;
     for (const [alias, code] of Object.entries(taxonomy.aliases)) {
       if (lower === alias.toLowerCase()) {
-        company = code;
+        resolved = code;
         break;
       }
+    }
+    if (!resolved && Object.hasOwn(taxonomy.codes, company.toUpperCase())) {
+      resolved = company.toUpperCase();
+    }
+    if (resolved) {
+      company = resolved;
+    } else if (isNonCompanyLabel(company)) {
+      // A marker like "N/A" or "DQ", not an employer.
+      company = null;
+    } else {
+      // Keep the raw text as the company (legacy behaviour) but flag it so it
+      // can be added to the taxonomy instead of quietly disappearing.
+      unknownCompanyLabel = company;
     }
   }
 
@@ -83,7 +105,7 @@ export function cleanPlayerEntry(line: string, taxonomy: CompanyTaxonomy = DEFAU
     company = 'ATL';
   }
 
-  return { name, companyCode: company };
+  return unknownCompanyLabel ? { name, companyCode: company, unknownCompanyLabel } : { name, companyCode: company };
 }
 
 /**

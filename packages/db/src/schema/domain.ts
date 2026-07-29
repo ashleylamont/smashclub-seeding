@@ -245,6 +245,11 @@ export const recomputeStatusEnum = pgEnum('recompute_status', ['running', 'compl
 export const recomputes = pgTable('recomputes', {
   id: uuid('id').primaryKey().defaultRandom(),
   status: recomputeStatusEnum('status').notNull().default('running'),
+  /**
+   * Which rating model produced this run. Models run in parallel so they can be
+   * compared on the same data before one becomes authoritative.
+   */
+  model: text('model').notNull().default('glicko2'),
   engineVersion: text('engine_version').notNull(),
   settingsSnapshot: jsonb('settings_snapshot').notNull(),
   stats: jsonb('stats'),
@@ -294,6 +299,11 @@ export const playerRatings = pgTable(
     vol: doublePrecision('vol').notNull(),
     effectiveRating: doublePrecision('effective_rating').notNull(),
     effectiveRd: doublePrecision('effective_rd').notNull(),
+    /** Best estimate — what the public leaderboard ranks on. */
+    skillRating: doublePrecision('skill_rating').notNull().default(1500),
+    /** Uncertainty on skillRating, shown as a ± band rather than hidden. */
+    skillSd: doublePrecision('skill_sd').notNull().default(350),
+    /** Pessimistic estimate — what bracket seeding uses. */
     conservativeRating: doublePrecision('conservative_rating').notNull(),
     matchCount: integer('match_count').notNull(),
     wins: integer('wins').notNull(),

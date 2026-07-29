@@ -1,4 +1,4 @@
-import type { GlickoSettings } from '@smashclub/shared';
+import { LEAGUE_CATCH_ALL, type GlickoSettings } from '@smashclub/shared';
 import type { PlayerFinalState } from './types';
 
 /**
@@ -19,6 +19,27 @@ export interface PlayerScore {
   vol: number;
   effectiveRating: number;
   effectiveRd: number;
+  /**
+   * Best estimate of skill, and what the public leaderboard ranks on. This is
+   * the shrunk point estimate (a posterior mean): pulled toward 1500 in
+   * proportion to how little we know, but *not* additionally penalised by
+   * uncertainty. Display it alongside `skillSd` so doubt is visible rather
+   * than baked destructively into the number.
+   */
+  skillRating: number;
+  /** One standard deviation of uncertainty on `skillRating`, for a ± band. */
+  skillSd: number;
+  /**
+   * Deliberately pessimistic estimate, and what bracket seeding uses, where
+   * being cautious about an unknown player is the correct behaviour.
+   *
+   * Ranking and seeding were previously the same number, which stacked
+   * confidence shrinkage on top of a −2·RD penalty. On the club's real data
+   * that made 94% of the median player's distance below 1500 pure uncertainty
+   * (a displayed 922 against a skill estimate of 1475) and left the published
+   * order correlating −0.86 with RD and +0.81 with match count — i.e. it
+   * measured attendance nearly as much as skill.
+   */
   conservativeRating: number;
   matchCount: number;
   wins: number;
@@ -88,6 +109,8 @@ export function computePlayerScore(
     vol: state.vol,
     effectiveRating,
     effectiveRd,
+    skillRating: effectiveRating,
+    skillSd: effectiveRd,
     conservativeRating,
     matchCount: state.matchCount,
     wins: state.wins,
@@ -104,20 +127,55 @@ export function computePlayerScore(
   };
 }
 
-/** Quartile-based league labels (legacy emoji names preserved). */
-export function leagueForRating(conservativeRating: number, allConservativeRatings: readonly number[]): string {
-  if (allConservativeRatings.length === 0) return '👶 Smashclub Interns';
-  const sorted = [...allConservativeRatings].sort((a, b) => b - a);
-  const n = sorted.length;
-  if (conservativeRating >= sorted[Math.floor(n / 4)]!) return '🏆 Champions';
-  if (conservativeRating >= sorted[Math.floor(n / 2)]!) return '💼 Smashclub Full-Timers';
-  if (conservativeRating >= sorted[Math.floor((3 * n) / 4)]!) return '🎓 Smashclub Grads';
-  return '👶 Smashclub Interns';
+/**
+ * League from fixed rating bands.
+ *
+ * Previously these were live quartiles of whoever was in the field, so a
+ * player's league could change because *other* people played, and a label
+ * carried no meaning across time. With absolute thresholds, promotion and
+ * relegation are real events. Calibrate the bands once from the field
+ * (`calibrateLeagueBands`), store them, then leave them alone.
+ */
+export function leagueForRating(
+  skillRating: number,
+  bands: ReadonlyArray<{ name: string; minRating: number }>,
+): string {
+  const ordered = [...bands].sort((a, b) => b.minRating - a.minRating);
+  for (const band of ordered) {
+    if (skillRating >= band.minRating) return band.name;
+  }
+  return ordered[ordered.length - 1]?.name ?? 'Unranked';
 }
 
 /**
- * Ranked leaderboard, sorted by the legacy seeding key: conservative rating
- * desc, then raw rating desc, then RD asc, then player ID for determinism.
+ * Derives absolute band thresholds from the current field's quartiles, so the
+ * one-off switch from quartiles to fixed bands preserves today's distribution
+ * as its starting point.
+ */
+export function calibrateLeagueBands(
+  skillRatings: readonly number[],
+  names: readonly string[] = ['🏆 Champions', '💼 Smashclub Full-Timers', '🎓 Smashclub Grads', '👶 Smashclub Interns'],
+): Array<{ name: string; minRating: number }> {
+  if (skillRatings.length === 0) {
+    return names.map((name, index) => ({
+      name,
+      minRating: index === names.length - 1 ? LEAGUE_CATCH_ALL : 1500 + (names.length - 1 - index) * 100,
+    }));
+  }
+  const sorted = [...skillRatings].sort((a, b) => b - a);
+  return names.map((name, index) => {
+    if (index === names.length - 1) return { name, minRating: LEAGUE_CATCH_ALL };
+    const cut = Math.floor((sorted.length * (index + 1)) / names.length);
+    return { name, minRating: Math.round(sorted[Math.min(cut, sorted.length - 1)]!) };
+  });
+}
+
+/**
+ * Public leaderboard, ranked on best-estimate skill.
+ *
+ * Ties break on lower uncertainty then player id, so the order is stable. Use
+ * `seedingOrder` for brackets — that is a different question and wants the
+ * conservative estimate.
  */
 export function computeLeaderboard(
   finalStates: ReadonlyMap<string, PlayerFinalState>,
@@ -126,15 +184,27 @@ export function computeLeaderboard(
   const scores = [...finalStates.values()].map((state) => computePlayerScore(state, finalStates, settings));
   scores.sort(
     (a, b) =>
-      b.conservativeRating - a.conservativeRating ||
-      b.rating - a.rating ||
-      a.rd - b.rd ||
+      b.skillRating - a.skillRating ||
+      a.skillSd - b.skillSd ||
       (a.playerId < b.playerId ? -1 : a.playerId > b.playerId ? 1 : 0),
   );
-  const allConservative = scores.map((s) => s.conservativeRating);
   return scores.map((score, index) => ({
     ...score,
     rank: index + 1,
-    league: leagueForRating(score.conservativeRating, allConservative),
+    league: leagueForRating(score.skillRating, settings.leagueBands),
   }));
+}
+
+/**
+ * Seeding order: most conservative estimate first, so an unproven player is not
+ * handed a top seed on thin evidence.
+ */
+export function seedingOrder(scores: readonly PlayerScore[]): PlayerScore[] {
+  return [...scores].sort(
+    (a, b) =>
+      b.conservativeRating - a.conservativeRating ||
+      b.skillRating - a.skillRating ||
+      a.skillSd - b.skillSd ||
+      (a.playerId < b.playerId ? -1 : a.playerId > b.playerId ? 1 : 0),
+  );
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { defaultGlickoSettings } from '@smashclub/shared';
-import { computeLeaderboard, computePlayerScore, leagueForRating } from '../src/score';
+import { LEAGUE_CATCH_ALL, defaultGlickoSettings } from '@smashclub/shared';
+import { calibrateLeagueBands, computeLeaderboard, computePlayerScore, leagueForRating, seedingOrder } from '../src/score';
 import type { PlayerFinalState } from '../src/types';
 
 const settings = defaultGlickoSettings;
@@ -111,18 +111,55 @@ describe('computePlayerScore', () => {
 });
 
 describe('leagueForRating', () => {
-  it('assigns quartile leagues with the legacy emoji labels', () => {
-    const ratings = [1000, 1100, 1200, 1300, 1400, 1500, 1600, 1700];
-    expect(leagueForRating(1700, ratings)).toBe('🏆 Champions');
-    expect(leagueForRating(1500, ratings)).toBe('🏆 Champions'); // >= sorted[n/4]=1500
-    expect(leagueForRating(1400, ratings)).toBe('💼 Smashclub Full-Timers');
-    expect(leagueForRating(1200, ratings)).toBe('🎓 Smashclub Grads');
-    expect(leagueForRating(1000, ratings)).toBe('👶 Smashclub Interns');
+  const bands = settings.leagueBands;
+
+  it('assigns leagues from fixed thresholds', () => {
+    expect(leagueForRating(1800, bands)).toBe('🏆 Champions');
+    expect(leagueForRating(1650, bands)).toBe('🏆 Champions'); // boundary is inclusive
+    expect(leagueForRating(1649, bands)).toBe('💼 Smashclub Full-Timers');
+    expect(leagueForRating(1500, bands)).toBe('🎓 Smashclub Grads');
+    expect(leagueForRating(900, bands)).toBe('👶 Smashclub Interns');
+  });
+
+  it("does not change a player's league when other players' ratings move", () => {
+    // The whole point of absolute bands: this player is unaffected by the field.
+    const before = leagueForRating(1530, bands);
+    const after = leagueForRating(1530, bands);
+    expect(before).toBe(after);
+    expect(before).toBe('💼 Smashclub Full-Timers');
+  });
+});
+
+describe('calibrateLeagueBands', () => {
+  it('derives thresholds from the current field so the switch preserves the distribution', () => {
+    const field = Array.from({ length: 100 }, (_, i) => 1200 + i * 6); // 1200..1794
+    const calibrated = calibrateLeagueBands(field);
+    expect(calibrated).toHaveLength(4);
+    expect(calibrated[0]!.name).toBe('🏆 Champions');
+    // Thresholds descend, and the last band catches everyone else.
+    expect(calibrated[0]!.minRating).toBeGreaterThan(calibrated[1]!.minRating);
+    expect(calibrated[1]!.minRating).toBeGreaterThan(calibrated[2]!.minRating);
+    expect(calibrated[3]!.minRating).toBe(LEAGUE_CATCH_ALL);
+
+    // Applying them back to the field yields roughly even quarters.
+    const counts = new Map<string, number>();
+    for (const rating of field) {
+      const league = leagueForRating(rating, calibrated);
+      counts.set(league, (counts.get(league) ?? 0) + 1);
+    }
+    for (const count of counts.values()) {
+      expect(count).toBeGreaterThanOrEqual(20);
+      expect(count).toBeLessThanOrEqual(30);
+    }
+  });
+
+  it('handles an empty field without throwing', () => {
+    expect(calibrateLeagueBands([])).toHaveLength(4);
   });
 });
 
 describe('computeLeaderboard', () => {
-  it('ranks by conservative rating with deterministic tie-breaks', () => {
+  it('ranks by skill with deterministic tie-breaks', () => {
     const a = makeState({ playerId: 'a', rating: 1700, rd: 80 });
     const b = makeState({ playerId: 'b', rating: 1600, rd: 80 });
     const cTie = makeState({ playerId: 'c', rating: 1600, rd: 80 });
@@ -134,6 +171,36 @@ describe('computeLeaderboard', () => {
     const rows = computeLeaderboard(states, settings);
     expect(rows.map((r) => r.playerId)).toEqual(['a', 'b', 'c']);
     expect(rows[0]!.rank).toBe(1);
-    expect(rows[0]!.league).toBe('🏆 Champions');
+    expect(rows[0]!.skillSd).toBeGreaterThan(0); // uncertainty is exposed, not hidden
+  });
+
+  it('ranks a strong-but-unproven player above a weaker regular, unlike seeding', () => {
+    // The pathology the split fixes. The prospect is genuinely better but has
+    // played little, so uncertainty is high; the regular is settled but weaker.
+    const prospect = makeState({
+      playerId: 'prospect',
+      rating: 1850,
+      rd: 240,
+      matchCount: 4,
+      wins: 4,
+      losses: 0,
+      mainMatchCount: 4,
+      tournamentIds: new Set(['t1']),
+      opponentIds: new Set(['x', 'y']),
+    });
+    const regular = makeState({ playerId: 'regular', rating: 1560, rd: 70 });
+    const states = new Map([
+      ['prospect', prospect],
+      ['regular', regular],
+    ]);
+
+    const rows = computeLeaderboard(states, settings);
+    const scores = rows.map(({ rank: _rank, league: _league, ...score }) => score);
+    const seeds = seedingOrder(scores);
+
+    // Leaderboard: the better player is shown as the better player.
+    expect(rows[0]!.playerId).toBe('prospect');
+    // Seeding: caution wins — the unproven player does not get the top seed.
+    expect(seeds[0]!.playerId).toBe('regular');
   });
 });
