@@ -29,7 +29,7 @@ interface Props {
   trends: Map<string, PlayerTrend>;
 }
 
-type SortField = 'rank' | 'skillRating' | 'wins' | 'tournamentCount' | 'certainty';
+type SortField = 'rank' | 'skillRating' | 'wins' | 'eventCount' | 'certainty';
 
 /**
  * The board's columns. Every sortable measure has its own column, so the header
@@ -45,7 +45,7 @@ const COLUMNS: { key: string; label: string; field: SortField | null; title?: st
   { key: 'form', label: 'Form', field: null, title: 'Last five sets, oldest first' },
   { key: 'spark', label: 'Trend', field: null, title: 'Recent rating trajectory' },
   { key: 'record', label: 'W–L', field: 'wins', title: 'Sets won and lost' },
-  { key: 'events', label: 'Ev', field: 'tournamentCount', title: 'Tournaments played' },
+  { key: 'events', label: 'Ev', field: 'eventCount', title: 'Events attended — a main and rookie bracket on one night count once' },
 ];
 
 /**
@@ -85,8 +85,8 @@ export function Leaderboard({ rows, trends }: Props) {
           return row.skillRating;
         case 'wins':
           return row.wins;
-        case 'tournamentCount':
-          return row.tournamentCount;
+        case 'eventCount':
+          return row.eventCount;
         case 'certainty':
           return -row.skillSd;
       }
@@ -226,7 +226,7 @@ export function Leaderboard({ rows, trends }: Props) {
                 <span className="record num">
                   {row.wins}–{row.losses}
                 </span>
-                <span className="events num">{row.tournamentCount}</span>
+                <span className="events num">{row.eventCount}</span>
               </Link>
             </li>
           );

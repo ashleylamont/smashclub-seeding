@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { and, asc, desc, eq, ilike, inArray, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNotNull, ne } from 'drizzle-orm';
 import {
   companies,
   playerClaims,
@@ -11,6 +11,7 @@ import {
   tournamentParticipants,
   tournaments,
 } from '@smashclub/db';
+import { eventKeyOf } from '@smashclub/engine';
 import { latestRecomputeId } from '../../recompute/recompute';
 import { publicProcedure, router } from '../trpc';
 
@@ -45,6 +46,7 @@ export const publicRouter = router({
         losses: playerRatings.losses,
         matchCount: playerRatings.matchCount,
         tournamentCount: playerRatings.tournamentCount,
+        eventCount: playerRatings.eventCount,
         sampleConfidence: playerRatings.sampleConfidence,
         rookieRatio: playerRatings.rookieRatio,
         lastPlayedDate: playerRatings.lastPlayedDate,
@@ -84,10 +86,26 @@ export const publicRouter = router({
       for (const row of previousRows) previousRanks.set(row.playerId, row.rank);
     }
 
+    /*
+     * Club-wide event count for the masthead. Derived here rather than in the web
+     * app: what groups brackets into an event is an engine rule (`eventKeyOf`),
+     * and apps/web has no dependency on the engine, so re-deriving it there would
+     * duplicate the definition where it could silently drift.
+     */
+    const eventDates = await ctx.db
+      .select({ eventDate: tournaments.eventDate })
+      .from(tournaments)
+      .where(isNotNull(tournaments.eventDate));
+    const eventCount = new Set(
+      eventDates.map((row) => eventKeyOf(row.eventDate!.toISOString())),
+    ).size;
+
     return {
       computedAt: recompute?.finishedAt?.toISOString() ?? null,
       /** Which rating model produced these numbers. */
       model: recompute?.model ?? 'glicko2',
+      /** Occasions the club has run, not brackets — a main+rookie night is one. */
+      eventCount,
       rows: rows.map((row) => {
         const previousRank = previousRanks.get(row.playerId);
         return {

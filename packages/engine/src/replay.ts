@@ -1,4 +1,5 @@
 import type { GlickoSettings } from '@smashclub/shared';
+import { eventKeyOf } from './events';
 import { GLICKO2_SCALE, updateRating, type Rating } from './glicko2';
 import type {
   EngineSet,
@@ -30,12 +31,12 @@ export interface LegacyCompat {
    */
   skipTrailingDecay?: boolean;
   /**
-   * Count inactivity decay in missed *brackets* rather than missed event days.
+   * Count inactivity decay in missed *brackets* rather than missed events.
    *
    * The club runs a main and a rookie bracket on the same evening as two
    * separate Challonge tournaments. Counting per bracket means a main-only
    * regular is recorded as having "missed" every rookie bracket they were never
-   * in — and vice versa — so RD grows on days they actually attended.
+   * in — and vice versa — so RD grows on evenings they actually attended.
    */
   decayPerBracket?: boolean;
 }
@@ -61,12 +62,12 @@ export interface LegacyCompat {
  * - Rookie-bracket scaling by the player's pre-set rating tier. (Legacy read
  *   the winner of the *previous* set due to a use-before-assign bug; here the
  *   actual winner of the current set is used.)
- * - Inactivity decay, escalating per consecutive miss, RD capped. Decay after a
- *   player's most recent event is applied through the final period and
- *   persisted into the final state (legacy computed it for charts but never
- *   applied it). Legacy counted a missed period per *bracket*; here it is per
- *   event day, since a main and a rookie bracket on one evening are one
- *   occasion and only one of them can be attended.
+ * - Inactivity decay, counted in missed *events* and escalating per consecutive
+ *   miss, RD capped. Not elapsed time: a long gap between club nights costs one
+ *   step, not one per day. Decay after a player's most recent event is applied
+ *   through the final period and persisted into the final state (legacy computed
+ *   it for charts but never applied it). Legacy counted a missed period per
+ *   *bracket*, charging players for brackets they were never in.
  */
 export function replayRatings(input: {
   sets: readonly EngineSet[];
@@ -110,23 +111,16 @@ export function replayRatings(input: {
   orderedTournaments.forEach((t, index) => tournamentSequences.set(t.id, index));
 
   /*
-   * Decay periods are event *days*, not brackets.
+   * A decay period is one *event*, not one bracket.
    *
-   * The club runs a main and a rookie bracket on one evening, as two separate
-   * Challonge tournaments. Counting a missed period per bracket meant a
-   * main-only regular was charged a decay step for every rookie bracket they
-   * were never eligible for, so their RD grew on evenings they had actually
-   * turned up — and the same in reverse for rookie-only players. An occasion is
-   * the unit a player can attend or miss, so that is the unit decay counts.
+   * Decay counts occasions a player could have attended and did not. It is NOT
+   * elapsed time: a three-month gap between club nights costs one step, not
+   * ninety. `eventKeyOf` decides which brackets are the same occasion.
    *
-   * eventDate is a timestamp, and same-day brackets often carry different
-   * times, so the day is taken from the date portion rather than the instant.
-   *
-   * That date portion is UTC. For an Australian club this is safe — an evening
-   * local time lands in the morning of the same UTC day — but a club in a
-   * UTC-negative zone could have one evening straddle UTC midnight and split
-   * into two periods. If the club ever moves, this wants a configured timezone
-   * rather than a slice.
+   * Counting per bracket instead meant a main-only regular was charged a step for
+   * every rookie bracket they were never eligible for, so their RD grew on
+   * evenings they had actually turned up to — and the reverse for rookie-only
+   * players.
    */
   const periodByTournament = new Map<string, number>();
   const tournamentIdByPeriod: string[] = [];
@@ -136,14 +130,14 @@ export function replayRatings(input: {
       tournamentIdByPeriod.push(t.id);
     });
   } else {
-    const periodByDay = new Map<string, number>();
+    const periodByEvent = new Map<string, number>();
     for (const tournament of orderedTournaments) {
-      const day = tournament.eventDate.slice(0, 10);
-      let period = periodByDay.get(day);
+      const key = eventKeyOf(tournament.eventDate);
+      let period = periodByEvent.get(key);
       if (period === undefined) {
-        period = periodByDay.size;
-        periodByDay.set(day, period);
-        // Decay events need a tournament to hang off; use the day's first bracket.
+        period = periodByEvent.size;
+        periodByEvent.set(key, period);
+        // Decay events need a tournament to hang off; use the event's first bracket.
         tournamentIdByPeriod.push(tournament.id);
       }
       periodByTournament.set(tournament.id, period);
@@ -178,10 +172,12 @@ export function replayRatings(input: {
     losses: number;
     mainMatchCount: number;
     rookieMatchCount: number;
-    /** Dense index of the last event *day* played; drives decay counting. */
+    /** Dense index of the last event played; drives decay counting. */
     lastPeriodIndex: number | null;
     lastPlayedDate: string | null;
     tournamentIds: Set<string>;
+    /** Events (occasions) attended, as opposed to brackets entered. */
+    eventKeys: Set<string>;
     opponentIds: Set<string>;
   }
 
@@ -207,6 +203,7 @@ export function replayRatings(input: {
         lastPeriodIndex: null,
         lastPlayedDate: null,
         tournamentIds: new Set(),
+        eventKeys: new Set(),
         opponentIds: new Set(),
       };
       states.set(playerId, state);
@@ -323,6 +320,7 @@ export function replayRatings(input: {
       state.lastPeriodIndex = period;
       state.lastPlayedDate = tournament.eventDate;
       state.tournamentIds.add(set.tournamentId);
+      state.eventKeys.add(eventKeyOf(tournament.eventDate));
       state.opponentIds.add(opponentId);
       events.push({
         seq: seq++,
@@ -344,7 +342,7 @@ export function replayRatings(input: {
   }
 
   // Trailing decay: players who stopped playing keep accruing RD through the
-  // most recent event day, and it counts (persisted into final state).
+  // most recent event, and it counts (persisted into final state).
   // Legacy computed these snapshots for charts but never wrote them back, so
   // going dark did not affect seeding.
   const lastPeriod = tournamentIdByPeriod.length - 1;
@@ -369,6 +367,7 @@ export function replayRatings(input: {
       lastPeriodIndex: state.lastPeriodIndex!,
       lastPlayedDate: state.lastPlayedDate!,
       tournamentIds: state.tournamentIds,
+      eventKeys: state.eventKeys,
       opponentIds: state.opponentIds,
     });
   }

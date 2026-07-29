@@ -70,7 +70,13 @@ export interface PlayerFinalState {
   lastPeriodIndex: number;
   /** ISO date of the player's most recent set. */
   lastPlayedDate: string;
+  /** Brackets entered. */
   tournamentIds: Set<string>;
+  /**
+   * Events (occasions) attended. Smaller than `tournamentIds` for anyone who
+   * played both the main and the rookie bracket on one evening.
+   */
+  eventKeys: Set<string>;
   opponentIds: Set<string>;
 }
 

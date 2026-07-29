@@ -85,7 +85,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
   const confidenceExplainer = useMemo(() => {
     if (!rating) return 'No rated match history yet.';
     const parts: string[] = [
-      `${rating.tournamentCount} event(s), ${rating.uniqueOpponentCount} unique opponent(s), ${rating.matchCount} set(s).`,
+      `${rating.tournamentCount} bracket(s), ${rating.uniqueOpponentCount} unique opponent(s), ${rating.matchCount} set(s).`,
     ];
     if (rating.rookieRatio > 0) {
       parts.push(`${(rating.rookieRatio * 100).toFixed(0)}% of sets in rookie brackets.`);
@@ -155,9 +155,20 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         </div>
         <div className="stat">
           <dt>Events</dt>
-          <dd className="num">{rating ? rating.tournamentCount : '—'}</dd>
+          <dd className="num">{rating ? rating.eventCount : '—'}</dd>
           <p className="stat-detail">
-            {rating ? `${rating.mainMatchCount} main / ${rating.rookieMatchCount} rookie sets` : ''}
+            {rating
+              ? [
+                  // Only worth stating when it differs — i.e. when they entered
+                  // both the main and the rookie bracket on one evening.
+                  rating.tournamentCount !== rating.eventCount
+                    ? `${rating.tournamentCount} brackets`
+                    : null,
+                  `${rating.mainMatchCount} main / ${rating.rookieMatchCount} rookie sets`,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
+              : ''}
           </p>
         </div>
         <div className="stat">

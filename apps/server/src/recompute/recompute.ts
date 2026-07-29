@@ -172,6 +172,7 @@ export async function runRecompute(
           mainMatchCount: row.mainMatchCount,
           rookieMatchCount: row.rookieMatchCount,
           tournamentCount: row.tournamentCount,
+          eventCount: row.eventCount,
           uniqueOpponentCount: row.uniqueOpponentCount,
           bridgeOpponentCount: row.bridgeOpponentCount,
           rookieRatio: row.rookieRatio,
