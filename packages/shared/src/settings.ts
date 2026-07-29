@@ -63,6 +63,14 @@ export const glickoSettingsSchema = z.object({
    * time. Calibrate once from the field (admin action), then leave fixed so
    * promotion and relegation are real events.
    */
+  /**
+   * False until the bands have been fitted to the club's actual rating
+   * distribution. The shipped defaults are arbitrary guesses — on real data they
+   * put over half the field into a single league — so the first recompute
+   * calibrates them from the field and sets this, after which they stay put.
+   */
+  leagueBandsCalibrated: z.boolean().default(false),
+
   leagueBands: z
     .array(z.object({ name: z.string(), minRating: z.number() }))
     .default([

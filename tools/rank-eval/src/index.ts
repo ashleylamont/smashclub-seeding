@@ -29,6 +29,7 @@ import {
   type ModelScore,
 } from '@smashclub/engine';
 import { defaultGlickoSettings } from '@smashclub/shared';
+import { impactReport } from './impact';
 
 interface CacheRow {
   Date: string;
@@ -184,7 +185,14 @@ function calibrationReport(score: ModelScore): void {
 function main(): void {
   const { positionals, values } = parseArgs({
     allowPositionals: true,
-    options: { synthetic: { type: 'boolean' }, calibration: { type: 'boolean' }, registry: { type: 'string' } },
+    options: {
+      synthetic: { type: 'boolean' },
+      calibration: { type: 'boolean' },
+      registry: { type: 'string' },
+      impact: { type: 'boolean' },
+      'identity-impact': { type: 'boolean' },
+      names: { type: 'boolean' },
+    },
     strict: false,
   });
   const cacheDir = positionals.find((p) => p !== '--');
@@ -196,6 +204,12 @@ function main(): void {
       : `source: ${cacheDir}${values.registry ? ` (identities resolved via ${values.registry})` : ' (raw identities, no registry)'}`,
   );
   describeData(sets);
+
+  if (values.impact) {
+    // Real names are never printed unless explicitly asked for.
+    impactReport(sets, !values.names);
+    return;
+  }
 
   const settings = defaultGlickoSettings;
   const models: EvalModel[] = [

@@ -1,8 +1,14 @@
 import { and, eq, inArray, isNotNull, ne, notInArray, sql } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
 import { playerRatings, ratingEvents, recomputes, sets, tournaments } from '@smashclub/db';
-import { computeLeaderboard, replayRatings, type EngineSet, type EngineTournament } from '@smashclub/engine';
-import { getGlickoSettings } from '../settings';
+import {
+  calibrateLeagueBands,
+  computeLeaderboard,
+  replayRatings,
+  type EngineSet,
+  type EngineTournament,
+} from '@smashclub/engine';
+import { getGlickoSettings, updateGlickoSettings } from '../settings';
 
 export const ENGINE_VERSION = '1.0.0';
 const KEEP_RECOMPUTES = 5;
@@ -76,7 +82,19 @@ export async function runRecompute(db: Db): Promise<{ recomputeId: string; playe
 
   try {
     const replay = replayRatings({ sets: engineSets, tournaments: engineTournaments, settings: glicko });
-    const leaderboard = computeLeaderboard(replay.finalStates, glicko);
+
+    // The default league bands are placeholders; fit them to this club's actual
+    // distribution once, then leave them alone so a league label keeps meaning
+    // the same thing over time.
+    let effectiveSettings = glicko;
+    if (!glicko.leagueBandsCalibrated && replay.finalStates.size >= 8) {
+      const provisional = computeLeaderboard(replay.finalStates, glicko);
+      const bands = calibrateLeagueBands(provisional.map((row) => row.skillRating));
+      effectiveSettings = { ...glicko, leagueBands: bands, leagueBandsCalibrated: true };
+      await updateGlickoSettings(db, effectiveSettings);
+    }
+
+    const leaderboard = computeLeaderboard(replay.finalStates, effectiveSettings);
 
     for (let offset = 0; offset < replay.events.length; offset += EVENT_INSERT_CHUNK) {
       const chunk = replay.events.slice(offset, offset + EVENT_INSERT_CHUNK);
