@@ -85,6 +85,71 @@ describe('walkForward', () => {
   });
 });
 
+describe('accuracy ceiling', () => {
+  /**
+   * Raw accuracy is easy to misread: 59% against a 50% coin flip looks like the
+   * model barely works. The ceiling is what makes it interpretable — with these
+   * probabilities, a *perfectly calibrated* predictor would only reach that, so
+   * the gap between accuracy and ceiling is the room actually left.
+   */
+  it('is 50% for a coin flip, which therefore has no room to improve', () => {
+    const { scores } = walkForward({ sets: makeSets(), models: [coinFlipModel], minTrainingEvents: 1 });
+    expect(scores[0]!.accuracyCeiling).toBeCloseTo(0.5, 9);
+    expect(scores[0]!.accuracy).toBeCloseTo(0.5, 9);
+    expect(scores[0]!.uninformative).toBe(1);
+    // With no opinions at all, informed accuracy falls back to a coin flip.
+    expect(scores[0]!.informedAccuracy).toBeCloseTo(0.5, 9);
+  });
+
+  it('is 100% only for a model that claims certainty', () => {
+    const certain: EvalModel = {
+      name: 'certain',
+      fit: () => (set) => (set.p1PlayerId === 'strong' ? 1 : 0),
+    };
+    const { scores } = walkForward({ sets: makeSets(), models: [certain], minTrainingEvents: 1 });
+    expect(scores[0]!.accuracyCeiling).toBeCloseTo(1, 6);
+    // And here the claim is right, so accuracy reaches the ceiling.
+    expect(scores[0]!.accuracy).toBeCloseTo(1, 6);
+  });
+
+  it('sits between accuracy and 100% for a hedging model, and bounds it', () => {
+    // Always says 60% for p1 — right on this data, but never certain.
+    const hedging: EvalModel = { name: 'hedging', fit: () => (set) => (set.p1PlayerId === 'strong' ? 0.6 : 0.4) };
+    const { scores } = walkForward({ sets: makeSets(), models: [hedging], minTrainingEvents: 1 });
+    expect(scores[0]!.accuracyCeiling).toBeCloseTo(0.6, 9);
+    // A hedged-but-correct model can beat its own ceiling on a lucky sample:
+    // the ceiling describes the probabilities, not the outcomes.
+    expect(scores[0]!.accuracy).toBeCloseTo(1, 6);
+    expect(scores[0]!.uninformative).toBe(0);
+  });
+
+  it('measures informed accuracy only over sets the model had an opinion on', () => {
+    // Opinionated about 'strong' pairings, silent (0.5) about everything else.
+    const sets = [
+      ...makeSets(),
+      // A pair the model refuses to call, added to the final (scored) event.
+      { p1PlayerId: 'a', p2PlayerId: 'b', winner: 1 as const, tournamentId: 'event-2', time: 60 },
+      { p1PlayerId: 'a', p2PlayerId: 'b', winner: 2 as const, tournamentId: 'event-2', time: 60 },
+    ];
+    const partial: EvalModel = {
+      name: 'partial',
+      fit: () => (set) => {
+        if (set.p1PlayerId === 'strong') return 0.9;
+        if (set.p2PlayerId === 'strong') return 0.1;
+        return 0.5;
+      },
+    };
+    const { scores } = walkForward({ sets, models: [partial], minTrainingEvents: 2 });
+    const score = scores[0]!;
+    expect(score.predictions).toBe(14);
+    expect(score.uninformative).toBeCloseTo(2 / 14, 9);
+    // Every opinion it offered was correct, even though overall accuracy is
+    // dragged down by the two coin flips counted as half-right.
+    expect(score.informedAccuracy).toBeCloseTo(1, 9);
+    expect(score.accuracy).toBeCloseTo(13 / 14, 9);
+  });
+});
+
 describe('pairedBootstrap', () => {
   it('reports a clear win when one series is uniformly lower', () => {
     const a = Array.from({ length: 200 }, (_, i) => 0.4 + (i % 7) * 0.01);

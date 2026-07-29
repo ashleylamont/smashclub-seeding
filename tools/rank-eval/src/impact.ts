@@ -82,7 +82,7 @@ function glickoRows(
   sets: readonly EvalSet[],
   settings: GlickoSettings,
   mode: 'current' | 'shipped',
-): { rows: Row[]; scores: PlayerScore[] } {
+): { rows: Row[]; scores: PlayerScore[]; decayEvents: number; periods: number } {
   const input = toEngineInput(sets);
   const replay = replayRatings({
     sets: input.sets,
@@ -91,12 +91,19 @@ function glickoRows(
     // "current" reproduces what the club runs today, defects included.
     compat:
       mode === 'current'
-        ? { legacyOrdering: true, rookieScaleUsesPreviousWinner: true, skipTrailingDecay: true }
+        ? {
+            legacyOrdering: true,
+            rookieScaleUsesPreviousWinner: true,
+            skipTrailingDecay: true,
+            decayPerBracket: true,
+          }
         : undefined,
   });
   const scores = [...replay.finalStates.values()].map((state) =>
     computePlayerScore(state, replay.finalStates, settings),
   );
+  const decayEvents = replay.events.filter((event) => event.isDecay).length;
+  const periods = new Set(replay.decayPeriods.values()).size;
 
   if (mode === 'current') {
     // Today's published order: conservative score, and quartile leagues.
@@ -112,6 +119,8 @@ function glickoRows(
         sets: score.matchCount,
       })),
       scores,
+      decayEvents,
+      periods,
     };
   }
 
@@ -136,6 +145,8 @@ function glickoRows(
       sets: row.matchCount,
     })),
     scores,
+    decayEvents,
+    periods,
   };
 }
 
@@ -242,6 +253,57 @@ export function impactReport(sets: readonly EvalSet[], anonymise: boolean): void
         biggest.map((m) => `${label(m.playerId)} ${m.from}→${m.to}`).join(', '),
     );
   }
+
+  /*
+   * Decay used to be counted per bracket. The club runs a main and a rookie
+   * bracket on one evening, so a main-only regular was charged a decay step for
+   * every rookie bracket they were never in.
+   *
+   * Isolated deliberately: the "current" column also skips trailing decay, so
+   * comparing against it would conflate two separate changes. This toggles only
+   * decayPerBracket, holding everything else at the shipped settings.
+   */
+  const decayAb = (perBracket: boolean): { events: number; medianRd: number; atCap: number; periods: number } => {
+    const input = toEngineInput(sets);
+    const replay = replayRatings({
+      sets: input.sets,
+      tournaments: input.tournaments,
+      settings,
+      compat: perBracket ? { decayPerBracket: true } : undefined,
+    });
+    /*
+     * Effective RD, not raw: the published figure applies the rookie-isolation
+     * multiplier on top, and that is the quantity that saturates at the cap.
+     * On the club's own export 31 of 98 players sit at the cap on effective RD
+     * while none do on raw RD, so measuring the raw value would report a
+     * problem that looks absent.
+     */
+    const rds = [...replay.finalStates.values()]
+      .map((state) => computePlayerScore(state, replay.finalStates, settings).effectiveRd)
+      .sort((a, b) => a - b);
+    return {
+      events: replay.events.filter((event) => event.isDecay).length,
+      medianRd: rds[Math.floor(rds.length / 2)] ?? NaN,
+      atCap: rds.filter((rd) => rd >= settings.rdCap - 0.5).length,
+      periods: new Set(replay.decayPeriods.values()).size,
+    };
+  };
+  const perBracket = decayAb(true);
+  const perDay = decayAb(false);
+
+  console.log('\n── inactivity decay: counted per bracket vs per event day ──');
+  console.log(`  periods:      per-bracket ${perBracket.periods}   per-day ${perDay.periods}`);
+  console.log(
+    `  decay events: per-bracket ${perBracket.events}   per-day ${perDay.events}   ` +
+      `(${perBracket.events - perDay.events} were for brackets the player was never in, ` +
+      `${(((perBracket.events - perDay.events) / (perBracket.events || 1)) * 100).toFixed(0)}%)`,
+  );
+  console.log(
+    `  median effective RD: per-bracket ${perBracket.medianRd.toFixed(0)}   per-day ${perDay.medianRd.toFixed(0)}`,
+  );
+  console.log(
+    `  at the RD cap:       per-bracket ${perBracket.atCap}/${current.rows.length}   per-day ${perDay.atCap}/${current.rows.length}`,
+  );
 
   console.log('\n── league spread ──');
   console.log(`  current: ${leagueSpread(current.rows)}`);

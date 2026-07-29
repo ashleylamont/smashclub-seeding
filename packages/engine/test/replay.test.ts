@@ -217,4 +217,113 @@ describe('replayRatings', () => {
     const { events } = replayRatings({ sets, tournaments, settings });
     expect(events.some((e) => e.isDecay)).toBe(false);
   });
+
+  /*
+   * The club runs a main and a rookie bracket on the same evening, as two
+   * separate Challonge tournaments. Decay counts occasions a player could have
+   * attended, so both brackets are one period.
+   */
+  describe('decay counts event days, not brackets', () => {
+    /** One evening, two brackets; alice is main-only, kirby is rookie-only. */
+    const sameDayBrackets = (): { tournaments: EngineTournament[]; sets: EngineSet[] } => ({
+      tournaments: [
+        tournament('main1', '2025-01-10T18:00:00.000Z', false, 1),
+        tournament('rookie1', '2025-01-10T20:30:00.000Z', true, 2),
+        tournament('main2', '2025-02-10T18:00:00.000Z', false, 3),
+        tournament('rookie2', '2025-02-10T20:30:00.000Z', true, 4),
+      ],
+      sets: [
+        makeSet('main1', 'alice', 'bob', 1),
+        makeSet('rookie1', 'kirby', 'yoshi', 1),
+        makeSet('main2', 'alice', 'bob', 1),
+        makeSet('rookie2', 'kirby', 'yoshi', 1),
+      ],
+    });
+
+    it('charges no decay to a main-only player who attended every evening', () => {
+      const { tournaments, sets } = sameDayBrackets();
+      const { events } = replayRatings({ sets, tournaments, settings });
+
+      expect(events.filter((e) => e.playerId === 'alice' && e.isDecay)).toHaveLength(0);
+      // Nor to the rookie-only player, for the main brackets they were never in.
+      expect(events.filter((e) => e.playerId === 'kirby' && e.isDecay)).toHaveLength(0);
+      expect(events.some((e) => e.isDecay)).toBe(false);
+    });
+
+    it('is the behaviour that changed: per-bracket counting charged both of them', () => {
+      const { tournaments, sets } = sameDayBrackets();
+      const { events } = replayRatings({
+        sets,
+        tournaments,
+        settings,
+        compat: { decayPerBracket: true },
+      });
+
+      // Alice is charged for both rookie brackets — one inline, one by trailing
+      // decay — and kirby for the main bracket. None was ever open to them.
+      const alice = events.filter((e) => e.playerId === 'alice' && e.isDecay);
+      const kirby = events.filter((e) => e.playerId === 'kirby' && e.isDecay);
+      expect(alice.map((e) => e.tournamentId)).toEqual(['rookie1', 'rookie2']);
+      expect(kirby.map((e) => e.tournamentId)).toEqual(['main2']);
+      // And it cost them real confidence on evenings they turned up to.
+      expect(alice[0]!.postRd).toBeGreaterThan(alice[0]!.preRd);
+    });
+
+    it('still charges one step per genuinely missed evening', () => {
+      const tournaments = [
+        tournament('main1', '2025-01-10T18:00:00.000Z', false, 1),
+        tournament('rookie1', '2025-01-10T20:30:00.000Z', true, 2),
+        tournament('main2', '2025-02-10T18:00:00.000Z', false, 3),
+        tournament('rookie2', '2025-02-10T20:30:00.000Z', true, 4),
+        tournament('main3', '2025-03-10T18:00:00.000Z', false, 5),
+      ];
+      // Alice plays the first and last evening, missing the middle one entirely.
+      const sets = [
+        makeSet('main1', 'alice', 'bob', 1),
+        makeSet('rookie1', 'kirby', 'yoshi', 1),
+        makeSet('main2', 'bob', 'carol', 1),
+        makeSet('rookie2', 'kirby', 'yoshi', 1),
+        makeSet('main3', 'alice', 'bob', 1),
+      ];
+      const { events } = replayRatings({ sets, tournaments, settings });
+
+      const aliceDecay = events.filter((e) => e.playerId === 'alice' && e.isDecay);
+      // One missed evening, not two missed brackets.
+      expect(aliceDecay).toHaveLength(1);
+      // Attributed to a bracket from the evening that was missed.
+      expect(['main2', 'rookie2']).toContain(aliceDecay[0]!.tournamentId);
+      expect(aliceDecay[0]!.postRd).toBeGreaterThan(aliceDecay[0]!.preRd);
+    });
+
+    it('treats same-day brackets as one period regardless of their times', () => {
+      const tournaments = [
+        tournament('a', '2025-01-10T09:00:00.000Z', false, 1),
+        tournament('b', '2025-01-10T23:59:00.000Z', true, 2),
+      ];
+      const sets = [makeSet('a', 'alice', 'bob', 1), makeSet('b', 'kirby', 'yoshi', 1)];
+      const { decayPeriods } = replayRatings({ sets, tournaments, settings });
+      expect(decayPeriods.get('a')).toBe(decayPeriods.get('b'));
+    });
+
+    it('trailing decay also counts evenings, so an absent regular loses one step per evening', () => {
+      const tournaments = [
+        tournament('main1', '2025-01-10T18:00:00.000Z', false, 1),
+        tournament('rookie1', '2025-01-10T20:30:00.000Z', true, 2),
+        tournament('main2', '2025-02-10T18:00:00.000Z', false, 3),
+        tournament('rookie2', '2025-02-10T20:30:00.000Z', true, 4),
+      ];
+      // Alice stops after the first evening; bob keeps playing.
+      const sets = [
+        makeSet('main1', 'alice', 'bob', 1),
+        makeSet('rookie1', 'kirby', 'yoshi', 1),
+        makeSet('main2', 'bob', 'carol', 1),
+        makeSet('rookie2', 'kirby', 'yoshi', 1),
+      ];
+      const { events } = replayRatings({ sets, tournaments, settings });
+
+      // Two evenings exist; alice attended the first, so she decays for the
+      // second only — one step, not the two brackets it contained.
+      expect(events.filter((e) => e.playerId === 'alice' && e.isDecay)).toHaveLength(1);
+    });
+  });
 });

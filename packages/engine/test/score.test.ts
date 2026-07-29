@@ -14,7 +14,7 @@ const makeState = (overrides: Partial<PlayerFinalState> & { playerId: string }):
   losses: 4,
   mainMatchCount: 10,
   rookieMatchCount: 0,
-  lastTournamentSequence: 2,
+  lastPeriodIndex: 2,
   lastPlayedDate: '2025-03-01',
   tournamentIds: new Set(['t1', 't2', 't3']),
   opponentIds: new Set(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']),

@@ -62,8 +62,12 @@ export interface PlayerFinalState {
   losses: number;
   mainMatchCount: number;
   rookieMatchCount: number;
-  /** Sequence (dense chronological tournament index) of the last event played. */
-  lastTournamentSequence: number;
+  /**
+   * Dense chronological index of the last event *day* played. Decay counts
+   * missed days rather than missed brackets, because the club runs a main and a
+   * rookie bracket on one evening and a player can only attend one of them.
+   */
+  lastPeriodIndex: number;
   /** ISO date of the player's most recent set. */
   lastPlayedDate: string;
   tournamentIds: Set<string>;
@@ -73,6 +77,8 @@ export interface PlayerFinalState {
 export interface ReplayResult {
   events: RatingEvent[];
   finalStates: Map<string, PlayerFinalState>;
-  /** Tournament ID -> dense chronological sequence used for decay counting. */
+  /** Tournament ID -> dense chronological bracket index, used for set ordering. */
   tournamentSequences: Map<string, number>;
+  /** Tournament ID -> dense event-day index, used for decay counting. */
+  decayPeriods: Map<string, number>;
 }

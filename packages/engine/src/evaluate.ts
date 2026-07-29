@@ -56,6 +56,20 @@ export interface ModelScore {
   calibration: CalibrationBin[];
   /** Fraction of predictions that were exactly 0.5 (i.e. no information). */
   uninformative: number;
+  /**
+   * Expected accuracy if this model's stated probabilities were perfectly
+   * calibrated: mean(max(p, 1−p)).
+   *
+   * This is the honest ceiling, and it is the number that makes raw accuracy
+   * interpretable. Bracket sets are seeded to be competitive, so many are
+   * genuinely close to even — and a set the model *correctly* calls at 55% is
+   * still lost 45% of the time. Comparing accuracy to 50% asks "is it better
+   * than guessing"; comparing it to this asks "is it extracting what is there",
+   * which is the answerable question.
+   */
+  accuracyCeiling: number;
+  /** Accuracy over only the predictions where the model had information. */
+  informedAccuracy: number;
 }
 
 function clampProbability(p: number): number {
@@ -138,6 +152,17 @@ export function walkForward(input: {
       perSetLogLoss: bucket.losses,
       calibration: calibrate(bucket.probs, bucket.outcomes),
       uninformative: bucket.probs.filter((p) => Math.abs(p - 0.5) < 1e-9).length / n,
+      accuracyCeiling: bucket.probs.reduce((s, p) => s + Math.max(p, 1 - p), 0) / n,
+      informedAccuracy: (() => {
+        let informed = 0;
+        let right = 0;
+        bucket.probs.forEach((p, i) => {
+          if (Math.abs(p - 0.5) < 1e-9) return;
+          informed += 1;
+          if ((p > 0.5 ? 1 : 0) === bucket.outcomes[i]) right += 1;
+        });
+        return informed === 0 ? 0.5 : right / informed;
+      })(),
     };
   });
 
