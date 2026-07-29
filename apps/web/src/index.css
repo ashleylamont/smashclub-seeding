@@ -1,0 +1,371 @@
+/*
+ * Design tokens — arcade CRT.
+ *
+ * A dark field with hard edges, a condensed scoreboard face, and one saturated
+ * red accent. Deliberately not a stack of rounded cards: hierarchy comes from
+ * type weight, density and hairline rules, so there are no decorative gradients
+ * and no drop shadows anywhere in the app.
+ *
+ * Light mode is a printed-results variant of the same structure — same square
+ * edges and same grid, ink on paper — rather than an inversion of the dark
+ * palette, since a bright-on-black scheme cannot simply be flipped.
+ *
+ * ── one red, on purpose ──
+ * The accent red and the negative state (losses, down-deltas) are the SAME red.
+ * Two different reds in one interface cannot be told apart: searching for a
+ * second red that separates from the accent pushed it into purple, which does
+ * not read as a loss. So there is exactly one red, it means "brand" and "down",
+ * green means "up", and negatives always carry a non-colour cue as well — the
+ * ▲/▼ glyph, the sign on the number, the W/L letter, or pip height. Red↔green is
+ * the one pair no hue choice can fix; it is precisely the axis protanopes and
+ * deuteranopes lose, which is why nothing depends on it alone.
+ *
+ * The league ramp is a cool single-hue sequential ramp, deliberately away from
+ * the warm accent/negative/caution family, and validated as a ramp (monotone
+ * lightness, ΔL ≥ 0.06, one hue) rather than four unrelated colours.
+ *
+ * Fonts are self-hosted from npm, so there is no font-CDN request at runtime.
+ */
+@import '@fontsource/oswald/400.css';
+@import '@fontsource/oswald/600.css';
+@import '@fontsource/oswald/700.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/700.css';
+
+:root {
+  color-scheme: dark;
+
+  /* ── surfaces: a neutral dark field ────────────────────────── */
+  --bg: #07090a;
+  --bg-elev: #0c0e0f;
+  --surface: #0f1213;
+  --surface-2: #15191a;
+  --surface-hover: #201d1d;
+  --border: #24262a;
+  --border-strong: #43464d;
+
+  /* ── ink ──────────────────────────────────────────────────── */
+  --text-h: #f1f0ee;
+  --text: #9a9895;
+  --text-soft: #64625f;
+
+  /* ── brand: arcade red. 5.62:1 on the field, so it works as ink. ── */
+  --accent: #ff3b30;
+  --accent-strong: #ff6257;
+  --accent-bg: rgba(255, 59, 48, 0.12);
+  --accent-border: rgba(255, 59, 48, 0.5);
+  /* Label colour on top of the accent fill: 5.52:1. */
+  --accent-contrast: #1c0503;
+
+  /* ── state ────────────────────────────────────────────────── */
+  --good: #46d97a;
+  --good-bg: rgba(70, 217, 122, 0.13);
+  /* Deliberately identical to the accent — see the note at the top. */
+  --bad: #ff3b30;
+  --bad-bg: rgba(255, 59, 48, 0.13);
+  --warn: #f5a509;
+  --warn-bg: rgba(245, 165, 9, 0.13);
+  /* A red LIVE badge is the conventional reading, so it reuses the brand. */
+  --live: #ff3b30;
+  --live-bg: rgba(255, 59, 48, 0.16);
+
+  /* ── league tiers: cool sequential ramp, away from the warm set ── */
+  --tier-1: #6dcaf8;
+  --tier-1-bg: rgba(109, 202, 248, 0.13);
+  --tier-2: #4a9dc5;
+  --tier-2-bg: rgba(74, 157, 197, 0.12);
+  --tier-3: #32718f;
+  --tier-3-bg: rgba(50, 113, 143, 0.14);
+  --tier-4: #374b55;
+  --tier-4-bg: rgba(55, 75, 85, 0.2);
+
+  /*
+   * ── chart series ────────────────────────────────────────────
+   * Eight slots, fixed order, never cycled. A slot means the same hue family in
+   * both themes; only the step changes, because a bright-on-black set cannot be
+   * flipped onto paper. Both sets clear the categorical checks (lightness band,
+   * chroma floor, protan/deutan/tritan separation, normal-vision floor, and 3:1
+   * against their own surface) — the light steps are deliberately darker than
+   * the dark ones for that last gate.
+   */
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
+  --series-8: #e66767;
+  --chart-grid: #1d2624;
+
+  /* ── space ────────────────────────────────────────────────── */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+
+  /* Square everything. Radii stay as tokens so nothing has to hardcode 0. */
+  --r1: 0px;
+  --r2: 0px;
+  --r3: 0px;
+  --r-pill: 0px;
+
+  --sans: 'Liberation Sans', system-ui, sans-serif;
+  --display: 'Oswald', 'Arial Narrow', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'DejaVu Sans Mono', monospace;
+
+  --fs-xs: 11px;
+  --fs-sm: 13px;
+  --fs-md: 15px;
+  --fs-lg: 19px;
+  --fs-xl: 26px;
+  --fs-2xl: 40px;
+  --fs-3xl: 64px;
+
+  font: var(--fs-md) / 1.4 var(--sans);
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/*
+ * Printed-results variant: same grid and square edges, ink on paper.
+ *
+ * The two blocks below carry the SAME declarations — one for the OS preference,
+ * one for the in-app toggle, which has to beat that preference in both
+ * directions. CSS cannot share a declaration block across a media query, so if
+ * you change one, change the other; they had already drifted once, leaving the
+ * toggle without --good-bg, --warn-bg or --live-bg.
+ */
+@media (prefers-color-scheme: light) {
+  :root:where(:not([data-theme='dark'])) {
+    color-scheme: light;
+
+      /* Warm paper, so the red reads as ink rather than as a signal light. */
+      --bg: #eeece4;
+      --bg-elev: #f6f5ef;
+      --surface: #fbfaf5;
+      --surface-2: #eeece4;
+      --surface-hover: #e6e1d6;
+      --border: #d2cec0;
+      --border-strong: #a8a493;
+
+      --text-h: #14160f;
+      --text: #4c5348;
+      --text-soft: #767d70;
+
+      /* 5.06:1 on paper as ink; 5.55:1 for a label on the fill. */
+      --accent: #c22014;
+      --accent-strong: #9c1409;
+      --accent-bg: rgba(194, 32, 20, 0.1);
+      --accent-border: rgba(194, 32, 20, 0.4);
+      --accent-contrast: #fff4f2;
+
+      --good: #0f7a3d;
+      --good-bg: rgba(15, 122, 61, 0.12);
+      /* Same red as the accent, as in dark mode. */
+      --bad: #c22014;
+      --bad-bg: rgba(194, 32, 20, 0.1);
+      --warn: #8a5a00;
+      --warn-bg: rgba(138, 90, 0, 0.12);
+      --live: #c22014;
+      --live-bg: rgba(194, 32, 20, 0.12);
+
+      --tier-1: #005a7c;
+      --tier-1-bg: rgba(0, 90, 124, 0.14);
+      --tier-2: #227ba2;
+      --tier-2-bg: rgba(34, 123, 162, 0.12);
+      --tier-3: #5b94b2;
+      --tier-3-bg: rgba(91, 148, 178, 0.12);
+      --tier-4: #8ca6b4;
+      --tier-4-bg: rgba(140, 166, 180, 0.16);
+
+      --series-1: #2a77d3;
+      --series-2: #e25c23;
+      --series-3: #29996d;
+      --series-4: #93640c;
+      --series-5: #cd648d;
+      --series-6: #018301;
+      --series-7: #4c3bab;
+      --series-8: #e24948;
+      --chart-grid: #d2cec0;
+  }
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+    /* Warm paper, so the red reads as ink rather than as a signal light. */
+    --bg: #eeece4;
+    --bg-elev: #f6f5ef;
+    --surface: #fbfaf5;
+    --surface-2: #eeece4;
+    --surface-hover: #e6e1d6;
+    --border: #d2cec0;
+    --border-strong: #a8a493;
+
+    --text-h: #14160f;
+    --text: #4c5348;
+    --text-soft: #767d70;
+
+    /* 5.06:1 on paper as ink; 5.55:1 for a label on the fill. */
+    --accent: #c22014;
+    --accent-strong: #9c1409;
+    --accent-bg: rgba(194, 32, 20, 0.1);
+    --accent-border: rgba(194, 32, 20, 0.4);
+    --accent-contrast: #fff4f2;
+
+    --good: #0f7a3d;
+    --good-bg: rgba(15, 122, 61, 0.12);
+    /* Same red as the accent, as in dark mode. */
+    --bad: #c22014;
+    --bad-bg: rgba(194, 32, 20, 0.1);
+    --warn: #8a5a00;
+    --warn-bg: rgba(138, 90, 0, 0.12);
+    --live: #c22014;
+    --live-bg: rgba(194, 32, 20, 0.12);
+
+    --tier-1: #005a7c;
+    --tier-1-bg: rgba(0, 90, 124, 0.14);
+    --tier-2: #227ba2;
+    --tier-2-bg: rgba(34, 123, 162, 0.12);
+    --tier-3: #5b94b2;
+    --tier-3-bg: rgba(91, 148, 178, 0.12);
+    --tier-4: #8ca6b4;
+    --tier-4-bg: rgba(140, 166, 180, 0.16);
+
+    --series-1: #2a77d3;
+    --series-2: #e25c23;
+    --series-3: #29996d;
+    --series-4: #93640c;
+    --series-5: #cd648d;
+    --series-6: #018301;
+    --series-7: #4c3bab;
+    --series-8: #e24948;
+    --chart-grid: #d2cec0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+/*
+ * Scanline texture. A repeating 1px rule at very low opacity — grain, not a
+ * decorative sheen — and only in dark mode, where a CRT reference makes sense.
+ */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.022) 0px,
+    rgba(255, 255, 255, 0.022) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+@media (prefers-color-scheme: light) {
+  :root:where(:not([data-theme='dark'])) body::before {
+    display: none;
+  }
+}
+:root[data-theme='light'] body::before {
+  display: none;
+}
+
+#root {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--display);
+  color: var(--text-h);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  margin: 0;
+  line-height: 1.05;
+}
+
+h1 {
+  font-size: var(--fs-xl);
+}
+h2 {
+  font-size: var(--fs-lg);
+}
+h3 {
+  font-size: var(--fs-md);
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+/* Figures that are compared down a column: monospaced and tabular. */
+.num {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  color: var(--text-soft);
+}
+
+/* Section label: the one place small uppercase type is used, as a rule-and-tag. */
+.eyebrow {
+  font-family: var(--display);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

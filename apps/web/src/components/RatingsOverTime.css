@@ -1,0 +1,158 @@
+/* Ratings-over-time comparison chart. */
+
+.ratings-over-time .chart-caption {
+  max-width: 74ch;
+  font-size: var(--fs-xs);
+  margin-bottom: var(--s3);
+}
+
+.chart-controls {
+  display: flex;
+  gap: var(--s4);
+  margin-bottom: var(--s3);
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.chart-control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.chart-control-search {
+  margin-left: auto;
+}
+
+.chart-control .select,
+.chart-control .input {
+  min-width: 168px;
+}
+
+/* ── selection ──────────────────────────────────────────────────── */
+.chart-search-results {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin: 0 0 var(--s3);
+  padding: 0;
+}
+
+/*
+ * The legend is the selection control, so each entry is a button. Identity is
+ * carried by the dash pattern as well as the colour — the swatch is drawn as a
+ * line segment, not a block, so the pattern is actually visible.
+ */
+.chart-legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s3);
+  margin: 0 0 var(--s3);
+  padding: 0;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  cursor: pointer;
+  font-family: var(--display);
+  font-size: var(--fs-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+.legend-item:hover {
+  color: var(--text-h);
+}
+
+.legend-swatch {
+  flex-shrink: 0;
+}
+
+.legend-remove {
+  color: var(--text-soft);
+  font-family: var(--mono);
+}
+
+.legend-item:hover .legend-remove {
+  color: var(--bad);
+}
+
+.no-data {
+  color: var(--text-soft);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  padding: var(--s5) 0;
+}
+
+/* ── tooltip ────────────────────────────────────────────────────── */
+.custom-tooltip {
+  background: var(--bg);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  font-size: var(--fs-sm);
+}
+
+.custom-tooltip p {
+  margin: 2px 0;
+}
+
+.tooltip-label {
+  margin-bottom: var(--s2);
+  padding-bottom: var(--s1);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--display);
+  font-size: var(--fs-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-h);
+}
+
+.ratings-tooltip {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.tooltip-row {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s2);
+  font-size: var(--fs-xs);
+}
+
+.tooltip-swatch {
+  width: 8px;
+  height: 8px;
+}
+
+.tooltip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-h);
+}
+
+@media (max-width: 860px) {
+  .chart-control-search {
+    margin-left: 0;
+  }
+  .chart-control {
+    flex: 1 1 150px;
+  }
+  .chart-control .select,
+  .chart-control .input {
+    min-width: 0;
+    width: 100%;
+  }
+}

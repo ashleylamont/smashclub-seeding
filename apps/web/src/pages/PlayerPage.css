@@ -1,0 +1,219 @@
+/*
+ * Player profile. Same structural language as the rankings page: a masthead
+ * bounded by a rule, a scoreboard stat strip separated by hairlines, then the
+ * trajectory and the match log. No cards.
+ */
+
+.player-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+}
+
+.profile-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--s5);
+  padding-bottom: var(--s3);
+  border-bottom: 2px solid var(--border-strong);
+}
+
+.profile-identity .eyebrow {
+  margin-bottom: var(--s2);
+}
+
+.profile-name {
+  font-size: var(--fs-3xl);
+  line-height: 0.92;
+  letter-spacing: -0.01em;
+  margin-bottom: var(--s2);
+}
+
+.profile-company {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+/* The headline figure: rating and its uncertainty on one baseline. */
+.profile-headline {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-areas:
+    'label label'
+    'value band';
+  align-items: baseline;
+  gap: 0 var(--s2);
+  text-align: right;
+}
+
+.headline-label {
+  grid-area: label;
+  font-family: var(--display);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--text-soft);
+}
+
+.headline-value {
+  grid-area: value;
+  font-size: var(--fs-3xl);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.headline-band {
+  grid-area: band;
+  font-size: var(--fs-md);
+  color: var(--text-soft);
+}
+
+/* ── stat strip ─────────────────────────────────────────────────── */
+.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  margin: 0;
+  border-left: 1px solid var(--border);
+}
+
+.profile-stats .stat {
+  padding: 0 var(--s4);
+  border-right: 1px solid var(--border);
+}
+
+.profile-stats dt {
+  font-family: var(--display);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-soft);
+  margin-bottom: var(--s1);
+}
+
+.profile-stats dd {
+  margin: 0;
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  color: var(--text-h);
+  line-height: 1;
+}
+
+.stat-detail {
+  color: var(--text-soft);
+  font-size: var(--fs-xs);
+  margin-top: var(--s2);
+  line-height: 1.45;
+}
+
+/* ── trajectory ─────────────────────────────────────────────────── */
+.chart-caption {
+  max-width: 68ch;
+  font-size: var(--fs-xs);
+  margin-bottom: var(--s3);
+}
+
+/* ── match log ──────────────────────────────────────────────────── */
+.match-history-scroll {
+  max-height: 520px;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--border);
+}
+
+.match-table th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+/*
+ * Outcome is carried by a coloured left edge *and* by the W/L glyph in the
+ * result column, so it never depends on colour alone.
+ */
+.match-table tr td:first-child {
+  border-left: 3px solid transparent;
+}
+
+.match-table tr.win td:first-child {
+  border-left-color: var(--good);
+}
+
+.match-table tr.loss td:first-child {
+  border-left-color: var(--bad);
+}
+
+.match-table tr.decay {
+  color: var(--text-soft);
+}
+
+.match-table tr.decay td:first-child {
+  border-left-color: var(--warn);
+}
+
+.result-win {
+  color: var(--good);
+  font-weight: 700;
+}
+
+.result-loss {
+  color: var(--bad);
+  font-weight: 700;
+}
+
+.result-decay {
+  color: var(--text-soft);
+}
+
+.rating-up {
+  color: var(--good);
+}
+
+.rating-down {
+  color: var(--bad);
+}
+
+/*
+ * A parenthetical annotation, not a state — so it takes quiet ink rather than
+ * the caution colour. It shares a cell with the green rating delta, and on paper
+ * dark green and dark amber are not separable under deuteranopia (both have to
+ * be dark to reach 4.5:1), so colouring it amber would have been a distinction
+ * nobody could read.
+ */
+.rd-decay {
+  font-size: var(--fs-xs);
+  color: var(--text-soft);
+}
+
+.weight-indicator {
+  font-size: var(--fs-xs);
+  color: var(--text-soft);
+}
+
+.rookie-chip {
+  margin-left: var(--s2);
+}
+
+@media (max-width: 860px) {
+  .profile-header {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+  .profile-name {
+    font-size: var(--fs-2xl);
+  }
+  .profile-headline {
+    text-align: left;
+    justify-content: start;
+  }
+  .profile-stats {
+    border-left: none;
+  }
+  .profile-stats .stat {
+    padding: var(--s2) var(--s3);
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+}

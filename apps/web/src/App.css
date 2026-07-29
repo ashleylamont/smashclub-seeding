@@ -1,0 +1,520 @@
+/*
+ * App shell + shared primitives (buttons, tags, panels, tables), in the arcade
+ * CRT language: square edges, hairline rules, no shadows, no gradients, and the
+ * condensed display face for anything that acts as a label.
+ *
+ * Containers earn their border. A panel is a rule-bounded region on the page
+ * field, not a raised card — so panels never nest inside other panels.
+ */
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+}
+
+/* ── top nav: a marquee bar ─────────────────────────────────────── */
+
+.app-nav {
+  display: flex;
+  align-items: stretch;
+  gap: var(--s5);
+  padding: 0 var(--s5);
+  border-bottom: 2px solid var(--border-strong);
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.app-nav .logo {
+  display: flex;
+  align-items: center;
+  font-family: var(--display);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-h);
+  white-space: nowrap;
+  padding-right: var(--s2);
+}
+
+/* The one flourish: a red block that reads as a cabinet marquee. */
+.app-nav .logo::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  background: var(--accent);
+  margin-right: var(--s2);
+}
+
+.app-nav .nav-links {
+  display: flex;
+  flex: 1;
+}
+
+.app-nav .nav-link {
+  display: flex;
+  align-items: center;
+  padding: var(--s3);
+  font-family: var(--display);
+  font-size: var(--fs-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text);
+  /* Reserve the underline's space so the active state does not shift text. */
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+}
+
+.app-nav .nav-link:hover {
+  color: var(--text-h);
+}
+
+.app-nav .nav-link.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.app-nav .nav-right {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s1) var(--s2);
+  border: 1px solid var(--border-strong);
+  color: var(--text-h);
+  font-family: var(--display);
+  font-size: var(--fs-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.user-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.user-chip .avatar {
+  width: 22px;
+  height: 22px;
+  object-fit: cover;
+}
+
+.user-chip .avatar-fallback {
+  width: 22px;
+  height: 22px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+}
+
+/* ── main + footer ──────────────────────────────────────────────── */
+
+.app-main {
+  flex: 1;
+  width: 1180px;
+  max-width: calc(100% - var(--s6));
+  margin: var(--s5) auto var(--s7);
+}
+
+.app-footer {
+  border-top: 1px solid var(--border);
+  padding: var(--s3) var(--s5);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  color: var(--text-soft);
+  text-align: center;
+}
+
+/* ── buttons ────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 6px var(--s3);
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-h);
+  font-family: var(--display);
+  font-size: var(--fs-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background-color 0.12s;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+}
+
+.btn.btn-primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: var(--accent-contrast);
+}
+
+.btn.btn-danger {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+.btn.btn-danger:hover:not(:disabled) {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: var(--bg);
+}
+
+.btn.btn-small {
+  padding: 2px var(--s2);
+  font-size: var(--fs-xs);
+}
+
+/* ── form controls ──────────────────────────────────────────────── */
+
+.input,
+.select,
+.textarea {
+  padding: 6px var(--s2);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-h);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.input::placeholder {
+  color: var(--text-soft);
+}
+
+/* ── tags ───────────────────────────────────────────────────────────
+   Square, bordered, monospaced — a stamped label rather than a pill. */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: 1px var(--s2);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+}
+
+.chip.chip-accent {
+  color: var(--accent);
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.chip.chip-success {
+  color: var(--good);
+  border-color: var(--good);
+  background: var(--good-bg);
+}
+
+.chip.chip-danger {
+  color: var(--bad);
+  border-color: var(--bad);
+  background: var(--bad-bg);
+}
+
+.chip.chip-warning {
+  color: var(--warn);
+  border-color: var(--warn);
+  background: var(--warn-bg);
+}
+
+/* League tags carry the ladder ramp, so a league reads as a rung. */
+.chip.tier-1 {
+  color: var(--tier-1);
+  border-color: var(--tier-1);
+  background: var(--tier-1-bg);
+}
+.chip.tier-2 {
+  color: var(--tier-2);
+  border-color: var(--tier-2);
+  background: var(--tier-2-bg);
+}
+.chip.tier-3 {
+  color: var(--tier-3);
+  border-color: var(--tier-3);
+  background: var(--tier-3-bg);
+}
+.chip.tier-4 {
+  color: var(--tier-4);
+  border-color: var(--tier-4);
+  background: var(--tier-4-bg);
+}
+
+.verified-badge {
+  color: var(--accent);
+  font-weight: 700;
+  cursor: default;
+}
+
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 1px var(--s2);
+  background: var(--live);
+  color: var(--bg);
+  font-family: var(--display);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.live-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+  animation: live-blink 1.1s steps(1, end) infinite;
+}
+
+/* Hard on/off, like a cabinet indicator — not a soft pulse. */
+@keyframes live-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0.15;
+  }
+}
+
+/* ── panels ─────────────────────────────────────────────────────────
+   A bounded region, flat on the field. `.card` keeps its name because it is
+   used throughout the app, but it is no longer card-like. */
+
+.card {
+  background: transparent;
+  border: 1px solid var(--border);
+  padding: var(--s4);
+}
+
+/* Nested panels would reintroduce the stacked-card look. */
+.card .card {
+  border: 0;
+  padding: 0;
+}
+
+.banner {
+  padding: var(--s2) var(--s3);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  margin-bottom: var(--s3);
+  border-left: 3px solid transparent;
+}
+
+.banner.banner-warning {
+  background: var(--warn-bg);
+  border-left-color: var(--warn);
+  color: var(--warn);
+}
+
+.banner.banner-success {
+  background: var(--good-bg);
+  border-left-color: var(--good);
+  color: var(--good);
+}
+
+.banner.banner-danger {
+  background: var(--bad-bg);
+  border-left-color: var(--bad);
+  color: var(--bad);
+}
+
+/* ── generic data table ─────────────────────────────────────────────
+   Hairline horizontal rules only. No vertical rules and no zebra fill: the
+   monospaced figures already line up into columns. */
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+
+.data-table th {
+  color: var(--text-soft);
+  padding: var(--s2) var(--s3) 6px;
+  text-align: left;
+  font-family: var(--display);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  border-bottom: 2px solid var(--border-strong);
+  white-space: nowrap;
+  background: var(--bg);
+}
+
+.data-table td {
+  padding: 5px var(--s3);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.data-table tbody tr:hover {
+  background: var(--surface-hover);
+}
+
+/* Numeric columns are opted in by the markup with `.num`. */
+.data-table td.num,
+.data-table th.num {
+  text-align: right;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+/* ── misc ───────────────────────────────────────────────────────── */
+
+.muted {
+  color: var(--text-soft);
+  font-size: var(--fs-sm);
+}
+
+.error-text {
+  color: var(--bad);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+}
+
+.loading-text {
+  color: var(--text-soft);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  padding: var(--s5) 0;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  margin-bottom: var(--s4);
+  padding-bottom: var(--s2);
+  border-bottom: 2px solid var(--border-strong);
+}
+
+.page-header h1 {
+  font-size: var(--fs-2xl);
+  letter-spacing: -0.005em;
+}
+
+.section {
+  margin-bottom: var(--s6);
+}
+
+.section > h2,
+.section > h3 {
+  margin-bottom: var(--s3);
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── modal ──────────────────────────────────────────────────────── */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: var(--s5);
+}
+
+.modal {
+  background: var(--bg);
+  border: 1px solid var(--accent-border);
+  padding: var(--s5);
+  max-width: 520px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal h2,
+.modal h3 {
+  margin-bottom: var(--s3);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s2);
+  margin-top: var(--s4);
+}
+
+@media (max-width: 860px) {
+  .app-nav {
+    flex-wrap: wrap;
+    gap: var(--s3);
+    padding: 0 var(--s3);
+  }
+  .app-nav .logo {
+    padding: var(--s2) 0;
+  }
+  .app-nav .nav-links {
+    order: 3;
+    width: 100%;
+    overflow-x: auto;
+  }
+  .app-nav .nav-link {
+    padding: var(--s2);
+    font-size: var(--fs-xs);
+  }
+  .app-main {
+    max-width: calc(100% - var(--s4));
+    margin-top: var(--s4);
+  }
+  .page-header h1 {
+    font-size: var(--fs-xl);
+  }
+}

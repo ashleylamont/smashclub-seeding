@@ -1,0 +1,1 @@
+ALTER TABLE "player_ratings" ADD COLUMN "event_count" integer DEFAULT 0 NOT NULL;
