@@ -8,6 +8,13 @@
       "when": 1785279906420,
       "tag": "0000_rich_switch",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785305924684,
+      "tag": "0001_glossy_gorgon",
+      "breakpoints": true
     }
   ]
 }

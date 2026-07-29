@@ -13,6 +13,15 @@ export default defineConfig({
         test: {
           name: 'server',
           include: ['apps/server/test/**/*.test.ts'],
+          /**
+           * Each server test boots its own in-process Postgres (PGlite) and
+           * applies every migration, which is slow and memory-hungry. Run these
+           * files one at a time with a generous timeout — in parallel they
+           * contend and overrun the default 5s limit.
+           */
+          fileParallelism: false,
+          testTimeout: 60_000,
+          hookTimeout: 60_000,
         },
       },
     ],

@@ -27,6 +27,11 @@ export const publicRouter = router({
         playerId: playerRatings.playerId,
         rank: playerRatings.rank,
         league: playerRatings.league,
+        /** Best estimate — the leaderboard is ranked on this. */
+        skillRating: playerRatings.skillRating,
+        /** Uncertainty on the estimate, for a ± band. */
+        skillSd: playerRatings.skillSd,
+        /** Pessimistic estimate — used for seeding, shown for reference. */
         conservativeRating: playerRatings.conservativeRating,
         rating: playerRatings.rating,
         rd: playerRatings.rd,
@@ -57,6 +62,8 @@ export const publicRouter = router({
 
     return {
       computedAt: recompute?.finishedAt?.toISOString() ?? null,
+      /** Which rating model produced these numbers. */
+      model: recompute?.model ?? 'glicko2',
       rows: rows.map((row) => ({
         ...row,
         name: playerName(row),

@@ -113,6 +113,8 @@ export async function runRecompute(db: Db): Promise<{ recomputeId: string; playe
           vol: row.vol,
           effectiveRating: row.effectiveRating,
           effectiveRd: row.effectiveRd,
+          skillRating: row.skillRating,
+          skillSd: row.skillSd,
           conservativeRating: row.conservativeRating,
           matchCount: row.matchCount,
           wins: row.wins,
