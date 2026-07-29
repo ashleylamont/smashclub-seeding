@@ -1,92 +1,210 @@
+/*
+ * Design tokens.
+ *
+ * Dark-first "broadcast" look for a competitive club: near-black surfaces, one
+ * electric violet accent carried from the original app, tabular numerals
+ * everywhere numbers are compared down a column.
+ *
+ * The chart series palette is the validated categorical set (fixed slot order,
+ * never cycled) with per-mode steps chosen for each surface rather than being
+ * flipped automatically.
+ */
+
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --text-soft: #8f8899;
-  --bg: #fff;
-  --card-bg: #fff;
-  --surface: #f7f6f9;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --accent-contrast: #fff;
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  color-scheme: dark;
 
-  --success: #1c7e43;
-  --success-bg: rgba(38, 166, 91, 0.12);
-  --danger: #c0392b;
-  --danger-bg: rgba(231, 76, 60, 0.1);
-  --warning: #b0720a;
-  --warning-bg: rgba(243, 156, 18, 0.12);
-  --live: #e0245e;
-  --live-bg: rgba(224, 36, 94, 0.1);
+  /* ── surfaces ─────────────────────────────────────────────── */
+  --bg: #0d0d12;
+  --bg-elev: #14141c;
+  --surface: #191922;
+  --surface-2: #20202b;
+  --surface-hover: #262633;
+  --border: #2a2a38;
+  --border-strong: #3a3a4d;
 
-  --badge-champions-bg: #ffd700;
-  --badge-champions-text: #2c2c2c;
-  --badge-smashclub-bg: #4a90e2;
-  --badge-smashclub-text: #fff;
-  --badge-grads-bg: #50c878;
-  --badge-grads-text: #fff;
-  --badge-interns-bg: #888;
-  --badge-interns-text: #fff;
+  /* ── ink ──────────────────────────────────────────────────── */
+  --text-h: #f4f3f8;
+  --text: #a8a6b8;
+  --text-soft: #74718a;
 
-  --chart-grid: #e5e4e7;
+  /* ── brand ────────────────────────────────────────────────── */
+  --accent: #b98cff;
+  --accent-strong: #a06bff;
+  --accent-bg: rgba(169, 118, 255, 0.14);
+  --accent-border: rgba(169, 118, 255, 0.42);
+  --accent-contrast: #100c18;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  /* ── state ────────────────────────────────────────────────── */
+  --good: #4ade80;
+  --good-bg: rgba(74, 222, 128, 0.13);
+  --bad: #f87171;
+  --bad-bg: rgba(248, 113, 113, 0.13);
+  --warn: #fbbf24;
+  --warn-bg: rgba(251, 191, 36, 0.13);
+  --live: #f9548b;
+  --live-bg: rgba(249, 84, 139, 0.15);
 
-  font: 16px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
+  /* ── league tiers ─────────────────────────────────────────────
+     Leagues are ordinal, so they read as one ramp rather than four
+     unrelated hues; the top tier alone gets a warm accent so first
+     place is unmistakable. */
+  --tier-1: #f0c04a;
+  --tier-1-bg: rgba(240, 192, 74, 0.15);
+  --tier-2: #b98cff;
+  --tier-2-bg: rgba(185, 140, 255, 0.14);
+  --tier-3: #6f8fd8;
+  --tier-3-bg: rgba(111, 143, 216, 0.14);
+  --tier-4: #6f6d84;
+  --tier-4-bg: rgba(111, 109, 132, 0.16);
+
+  /* ── chart series (validated categorical order, dark steps) ── */
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
+  --series-8: #e66767;
+  --chart-grid: #262633;
+
+  /* ── space / radius / type ────────────────────────────────── */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+  --r1: 6px;
+  --r2: 10px;
+  --r3: 16px;
+  --r-pill: 999px;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 8px 24px -6px rgba(0, 0, 0, 0.55);
+
+  --sans: ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --fs-xs: 11px;
+  --fs-sm: 13px;
+  --fs-md: 15px;
+  --fs-lg: 19px;
+  --fs-xl: 26px;
+  --fs-2xl: 38px;
+  --fs-3xl: 54px;
+
+  font: var(--fs-md) / 1.45 var(--sans);
   color: var(--text);
   background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
 
-  @media (max-width: 1024px) {
-    font-size: 15px;
+/* Light mode is a selected set of steps for a light surface, not an inversion. */
+@media (prefers-color-scheme: light) {
+  :root:where(:not([data-theme='dark'])) {
+    color-scheme: light;
+    --bg: #f7f6fa;
+    --bg-elev: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f2f1f6;
+    --surface-hover: #eceaf3;
+    --border: #e2e0ea;
+    --border-strong: #cdcada;
+
+    --text-h: #17141f;
+    --text: #565269;
+    --text-soft: #837f95;
+
+    --accent: #7c3aed;
+    --accent-strong: #6d28d9;
+    --accent-bg: rgba(124, 58, 237, 0.09);
+    --accent-border: rgba(124, 58, 237, 0.35);
+    --accent-contrast: #ffffff;
+
+    --good: #15803d;
+    --good-bg: rgba(21, 128, 61, 0.1);
+    --bad: #b91c1c;
+    --bad-bg: rgba(185, 28, 28, 0.09);
+    --warn: #a16207;
+    --warn-bg: rgba(161, 98, 7, 0.11);
+    --live: #db2777;
+    --live-bg: rgba(219, 39, 119, 0.1);
+
+    --tier-1: #a16207;
+    --tier-1-bg: rgba(240, 192, 74, 0.22);
+    --tier-2: #6d28d9;
+    --tier-2-bg: rgba(109, 40, 217, 0.11);
+    --tier-3: #3b5bab;
+    --tier-3-bg: rgba(59, 91, 171, 0.11);
+    --tier-4: #5c5a6e;
+    --tier-4-bg: rgba(92, 90, 110, 0.12);
+
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-4: #eda100;
+    --series-5: #e87ba4;
+    --series-6: #008300;
+    --series-7: #4a3aa7;
+    --series-8: #e34948;
+    --chart-grid: #e2e0ea;
+
+    --shadow-1: 0 1px 2px rgba(16, 12, 24, 0.06);
+    --shadow-2: 0 10px 28px -8px rgba(16, 12, 24, 0.16);
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --text-soft: #7b8291;
-    --bg: #16171d;
-    --card-bg: #1c1d25;
-    --surface: #1f2028;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --accent-contrast: #16171d;
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+/* The in-app toggle must beat the OS preference in both directions. */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f7f6fa;
+  --bg-elev: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f2f1f6;
+  --surface-hover: #eceaf3;
+  --border: #e2e0ea;
+  --border-strong: #cdcada;
+  --text-h: #17141f;
+  --text: #565269;
+  --text-soft: #837f95;
+  --accent: #7c3aed;
+  --accent-strong: #6d28d9;
+  --accent-bg: rgba(124, 58, 237, 0.09);
+  --accent-border: rgba(124, 58, 237, 0.35);
+  --accent-contrast: #ffffff;
+  --good: #15803d;
+  --bad: #b91c1c;
+  --warn: #a16207;
+  --live: #db2777;
+  --tier-1: #a16207;
+  --tier-1-bg: rgba(240, 192, 74, 0.22);
+  --tier-2: #6d28d9;
+  --tier-2-bg: rgba(109, 40, 217, 0.11);
+  --tier-3: #3b5bab;
+  --tier-3-bg: rgba(59, 91, 171, 0.11);
+  --tier-4: #5c5a6e;
+  --tier-4-bg: rgba(92, 90, 110, 0.12);
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #4a3aa7;
+  --series-8: #e34948;
+  --chart-grid: #e2e0ea;
+}
 
-    --success: #4ade80;
-    --success-bg: rgba(74, 222, 128, 0.12);
-    --danger: #f87171;
-    --danger-bg: rgba(248, 113, 113, 0.12);
-    --warning: #fbbf24;
-    --warning-bg: rgba(251, 191, 36, 0.12);
-    --live: #f9548b;
-    --live-bg: rgba(249, 84, 139, 0.15);
-
-    --chart-grid: #2e303a;
-  }
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
+  background: var(--bg);
 }
 
 #root {
@@ -98,27 +216,21 @@ body {
 h1,
 h2,
 h3 {
-  font-family: var(--heading);
-  font-weight: 600;
   color: var(--text-h);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  margin: 0;
+  line-height: 1.15;
 }
 
 h1 {
-  font-size: 28px;
-  letter-spacing: -0.5px;
-  margin: 0 0 16px;
+  font-size: var(--fs-xl);
 }
-
 h2 {
-  font-size: 21px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
+  font-size: var(--fs-lg);
 }
-
 h3 {
-  font-size: 17px;
-  margin: 0 0 8px;
+  font-size: var(--fs-md);
 }
 
 p {
@@ -126,29 +238,44 @@ p {
 }
 
 a {
-  color: var(--accent);
+  color: inherit;
   text-decoration: none;
-}
-
-a:hover {
-  text-decoration: underline;
-}
-
-code {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-  font-size: 13px;
-  line-height: 135%;
-  padding: 2px 6px;
-  background: var(--code-bg);
 }
 
 button,
 input,
-select,
-textarea {
+select {
   font: inherit;
   color: inherit;
+}
+
+/* Every number that is compared down a column gets fixed-width digits. */
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  color: var(--text-soft);
+}
+
+/* Visible focus, since much of the app is keyboard-navigable tables. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -2,6 +2,10 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    // Playwright specs must never be collected by vitest — they use a different
+    // runner and fail confusingly if globbed (easy to hit by running vitest
+    // from inside apps/web).
+    exclude: ['**/node_modules/**', '**/dist/**', '**/e2e/**'],
     projects: [
       {
         test: {

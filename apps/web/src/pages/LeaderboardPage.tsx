@@ -2,8 +2,14 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { trpc } from '../lib/trpc';
 import { timeAgo } from '../lib/format';
-import { Leaderboard } from '../components/Leaderboard';
+import { Leaderboard, type PlayerTrend } from '../components/Leaderboard';
 import { RatingsOverTime } from '../components/RatingsOverTime';
+import './LeaderboardPage.css';
+
+/** How many recent results the form pips show. */
+const FORM_LENGTH = 5;
+/** How many rating points a sparkline traces. */
+const SPARK_LENGTH = 12;
 
 export function LeaderboardPage() {
   const leaderboard = useQuery({
@@ -24,23 +30,109 @@ export function LeaderboardPage() {
     [tournaments.data],
   );
 
-  if (leaderboard.isPending) return <p className="loading-text">Loading rankings…</p>;
-  if (leaderboard.isError) return <p className="error-text">Failed to load rankings: {leaderboard.error.message}</p>;
+  /**
+   * Per-player sparkline traces and form pips, derived from the same rating
+   * history the chart uses — one request serves both rather than adding a
+   * per-row query.
+   */
+  const trends = useMemo(() => {
+    const map = new Map<string, PlayerTrend>();
+    for (const event of ratingHistory.data?.events ?? []) {
+      const trend = map.get(event.playerId) ?? { points: [], form: [] };
+      trend.points.push(event.postRating);
+      if (!event.isDecay && event.won !== null) trend.form.push(event.won);
+      map.set(event.playerId, trend);
+    }
+    for (const trend of map.values()) {
+      trend.points = trend.points.slice(-SPARK_LENGTH);
+      trend.form = trend.form.slice(-FORM_LENGTH);
+    }
+    return map;
+  }, [ratingHistory.data]);
 
-  const { computedAt, rows } = leaderboard.data;
+  if (leaderboard.isPending) {
+    return (
+      <div className="page">
+        <div className="skeleton-hero" />
+        <p className="loading-text">Loading rankings…</p>
+      </div>
+    );
+  }
+  if (leaderboard.isError) {
+    return <p className="error-text">Failed to load rankings: {leaderboard.error.message}</p>;
+  }
+
+  const { computedAt, rows, model } = leaderboard.data;
+
+  const summary = (() => {
+    if (rows.length === 0) return null;
+    const rated = rows.filter((r) => r.matchCount > 0);
+    const sets = rated.reduce((sum, r) => sum + r.matchCount, 0) / 2;
+    const median = [...rated].sort((a, b) => a.skillRating - b.skillRating)[Math.floor(rated.length / 2)];
+    const climber = [...rows]
+      .filter((r) => r.rankDelta !== null && r.rankDelta > 0)
+      .sort((a, b) => (b.rankDelta ?? 0) - (a.rankDelta ?? 0))[0];
+    return { players: rated.length, sets: Math.round(sets), median, climber };
+  })();
 
   return (
-    <div>
-      <div className="page-header">
-        <h1>Rankings</h1>
-        <span className="muted">{computedAt ? `Updated ${timeAgo(computedAt)}` : 'No recompute yet'}</span>
-      </div>
+    <div className="page">
+      <header className="hero">
+        <div className="hero-headline">
+          <p className="hero-eyebrow">Smash Club</p>
+          <h1 className="hero-title">Rankings</h1>
+          <p className="hero-sub muted">
+            Ranked on best-estimate skill. The ± figure is how much that estimate could move — a wide band
+            means we simply have not seen enough sets yet.
+          </p>
+        </div>
+
+        {summary && (
+          <dl className="hero-stats">
+            <div className="stat">
+              <dt>Players</dt>
+              <dd className="num">{summary.players}</dd>
+            </div>
+            <div className="stat">
+              <dt>Sets rated</dt>
+              <dd className="num">{summary.sets}</dd>
+            </div>
+            <div className="stat">
+              <dt>Median rating</dt>
+              <dd className="num">{summary.median ? Math.round(summary.median.skillRating) : '—'}</dd>
+            </div>
+            {summary.climber && (
+              <div className="stat stat-climber">
+                <dt>Biggest climb</dt>
+                <dd>
+                  <span className="stat-climber-name">{summary.climber.name}</span>
+                  <span className="stat-climber-delta num"> ▲{summary.climber.rankDelta}</span>
+                </dd>
+              </div>
+            )}
+          </dl>
+        )}
+
+        <p className="hero-meta muted">
+          {computedAt ? `Updated ${timeAgo(computedAt)}` : 'No recompute yet'} · model <code>{model}</code>
+        </p>
+      </header>
+
       {rows.length === 0 ? (
-        <p className="muted">No ranked players yet. Once a tournament is synced and ratings computed, they show up here.</p>
+        <div className="empty-state">
+          <h2>Nothing ranked yet</h2>
+          <p className="muted">
+            Register a Challonge tournament in the admin area and sync it — ratings appear here once the first
+            recompute finishes.
+          </p>
+        </div>
       ) : (
-        <Leaderboard rows={rows} />
+        <Leaderboard rows={rows} trends={trends} />
       )}
-      {ratingHistory.data && <RatingsOverTime history={ratingHistory.data} tournamentNames={tournamentNames} />}
+
+      {ratingHistory.data && ratingHistory.data.players.length > 0 && (
+        <RatingsOverTime history={ratingHistory.data} tournamentNames={tournamentNames} />
+      )}
     </div>
   );
 }
