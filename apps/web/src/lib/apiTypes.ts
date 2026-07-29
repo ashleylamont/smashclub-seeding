@@ -49,6 +49,8 @@ export type SeedingRunData = NonNullable<Awaited<ReturnType<typeof trpc.admin.se
 export type SeedingEntry = SeedingRunData['entries'][number];
 export type SettingsData = Awaited<ReturnType<typeof trpc.admin.settings.query>>;
 export type GlickoSettings = SettingsData['glicko'];
+export type ModelComparison = Awaited<ReturnType<typeof trpc.admin.compareModels.query>>;
+export type ModelComparisonRow = ModelComparison['rows'][number];
 
 /** Shape of review-item candidates (stored as untyped JSON server-side). */
 export interface ReviewCandidate {

@@ -3,6 +3,7 @@ export * from './types';
 export * from './replay';
 export * from './score';
 export * from './whr';
+export * from './whrRun';
 export * from './evaluate';
 export * from './models';
 export * from './identity/companies';
