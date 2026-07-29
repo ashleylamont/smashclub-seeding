@@ -176,10 +176,12 @@
   background: var(--warn-bg);
 }
 
+/* Informative, not a verdict — so it stays off the warm accent/caution family,
+   which now reads as "reject". */
 .chip.reason-name-shape {
-  color: var(--accent);
-  border-color: var(--accent-border);
-  background: var(--accent-bg);
+  color: var(--tier-2);
+  border-color: var(--tier-2);
+  background: var(--tier-2-bg);
 }
 
 .review-actions {

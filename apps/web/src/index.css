@@ -1,14 +1,28 @@
 /*
  * Design tokens — arcade CRT.
  *
- * A dark phosphor field with hard edges, a condensed scoreboard face, and one
- * saturated lime accent. Deliberately not a stack of rounded cards: hierarchy
- * comes from type weight, density and hairline rules, so there are no
- * decorative gradients and no drop shadows anywhere in the app.
+ * A dark field with hard edges, a condensed scoreboard face, and one saturated
+ * red accent. Deliberately not a stack of rounded cards: hierarchy comes from
+ * type weight, density and hairline rules, so there are no decorative gradients
+ * and no drop shadows anywhere in the app.
  *
  * Light mode is a printed-results variant of the same structure — same square
  * edges and same grid, ink on paper — rather than an inversion of the dark
- * palette, since a lime-on-black scheme cannot simply be flipped.
+ * palette, since a bright-on-black scheme cannot simply be flipped.
+ *
+ * ── one red, on purpose ──
+ * The accent red and the negative state (losses, down-deltas) are the SAME red.
+ * Two different reds in one interface cannot be told apart: searching for a
+ * second red that separates from the accent pushed it into purple, which does
+ * not read as a loss. So there is exactly one red, it means "brand" and "down",
+ * green means "up", and negatives always carry a non-colour cue as well — the
+ * ▲/▼ glyph, the sign on the number, the W/L letter, or pip height. Red↔green is
+ * the one pair no hue choice can fix; it is precisely the axis protanopes and
+ * deuteranopes lose, which is why nothing depends on it alone.
+ *
+ * The league ramp is a cool single-hue sequential ramp, deliberately away from
+ * the warm accent/negative/caution family, and validated as a ramp (monotone
+ * lightness, ΔL ≥ 0.06, one hue) rather than four unrelated colours.
  *
  * Fonts are self-hosted from npm, so there is no font-CDN request at runtime.
  */
@@ -21,51 +35,54 @@
 :root {
   color-scheme: dark;
 
-  /* ── surfaces: a phosphor field ────────────────────────────── */
+  /* ── surfaces: a neutral dark field ────────────────────────── */
   --bg: #07090a;
-  --bg-elev: #0b0e0f;
-  --surface: #0d1112;
-  --surface-2: #121718;
-  --surface-hover: #18211f;
-  --border: #1d2624;
-  --border-strong: #33443e;
+  --bg-elev: #0c0e0f;
+  --surface: #0f1213;
+  --surface-2: #15191a;
+  --surface-hover: #201d1d;
+  --border: #24262a;
+  --border-strong: #43464d;
 
   /* ── ink ──────────────────────────────────────────────────── */
-  --text-h: #eef5ec;
-  --text: #93a294;
-  --text-soft: #5d6b60;
+  --text-h: #f1f0ee;
+  --text: #9a9895;
+  --text-soft: #64625f;
 
-  /* ── brand: phosphor lime ─────────────────────────────────── */
-  --accent: #b6f23c;
-  --accent-strong: #cbff5c;
-  --accent-bg: rgba(182, 242, 60, 0.12);
-  --accent-border: rgba(182, 242, 60, 0.5);
-  --accent-contrast: #06170a;
+  /* ── brand: arcade red. 5.62:1 on the field, so it works as ink. ── */
+  --accent: #ff3b30;
+  --accent-strong: #ff6257;
+  --accent-bg: rgba(255, 59, 48, 0.12);
+  --accent-border: rgba(255, 59, 48, 0.5);
+  /* Label colour on top of the accent fill: 5.52:1. */
+  --accent-contrast: #1c0503;
 
   /* ── state ────────────────────────────────────────────────── */
-  --good: #7ceb4f;
-  --good-bg: rgba(124, 235, 79, 0.13);
-  --bad: #ff4d6d;
-  --bad-bg: rgba(255, 77, 109, 0.13);
-  --warn: #ffc247;
-  --warn-bg: rgba(255, 194, 71, 0.13);
-  --live: #ff2e88;
-  --live-bg: rgba(255, 46, 136, 0.16);
+  --good: #46d97a;
+  --good-bg: rgba(70, 217, 122, 0.13);
+  /* Deliberately identical to the accent — see the note at the top. */
+  --bad: #ff3b30;
+  --bad-bg: rgba(255, 59, 48, 0.13);
+  --warn: #f5a509;
+  --warn-bg: rgba(245, 165, 9, 0.13);
+  /* A red LIVE badge is the conventional reading, so it reuses the brand. */
+  --live: #ff3b30;
+  --live-bg: rgba(255, 59, 48, 0.16);
 
-  /* ── league tiers: one phosphor ramp, since leagues are a ladder ── */
-  --tier-1: #d9ff3d;
-  --tier-1-bg: rgba(217, 255, 61, 0.13);
-  --tier-2: #6ce0a0;
-  --tier-2-bg: rgba(108, 224, 160, 0.12);
-  --tier-3: #3fa9a0;
-  --tier-3-bg: rgba(63, 169, 160, 0.12);
-  --tier-4: #4a5a55;
-  --tier-4-bg: rgba(74, 90, 85, 0.18);
+  /* ── league tiers: cool sequential ramp, away from the warm set ── */
+  --tier-1: #6dcaf8;
+  --tier-1-bg: rgba(109, 202, 248, 0.13);
+  --tier-2: #4a9dc5;
+  --tier-2-bg: rgba(74, 157, 197, 0.12);
+  --tier-3: #32718f;
+  --tier-3-bg: rgba(50, 113, 143, 0.14);
+  --tier-4: #374b55;
+  --tier-4-bg: rgba(55, 75, 85, 0.2);
 
   /*
    * ── chart series ────────────────────────────────────────────
    * Eight slots, fixed order, never cycled. A slot means the same hue family in
-   * both themes; only the step changes, because a lime-on-black set cannot be
+   * both themes; only the step changes, because a bright-on-black set cannot be
    * flipped onto paper. Both sets clear the categorical checks (lightness band,
    * chroma floor, protan/deutan/tritan separation, normal-vision floor, and 3:1
    * against their own surface) — the light steps are deliberately darker than
@@ -115,15 +132,79 @@
   text-rendering: optimizeLegibility;
 }
 
-/* Printed-results variant: same grid and square edges, ink on paper. */
+/*
+ * Printed-results variant: same grid and square edges, ink on paper.
+ *
+ * The two blocks below carry the SAME declarations — one for the OS preference,
+ * one for the in-app toggle, which has to beat that preference in both
+ * directions. CSS cannot share a declaration block across a media query, so if
+ * you change one, change the other; they had already drifted once, leaving the
+ * toggle without --good-bg, --warn-bg or --live-bg.
+ */
 @media (prefers-color-scheme: light) {
   :root:where(:not([data-theme='dark'])) {
     color-scheme: light;
+
+      /* Warm paper, so the red reads as ink rather than as a signal light. */
+      --bg: #eeece4;
+      --bg-elev: #f6f5ef;
+      --surface: #fbfaf5;
+      --surface-2: #eeece4;
+      --surface-hover: #e6e1d6;
+      --border: #d2cec0;
+      --border-strong: #a8a493;
+
+      --text-h: #14160f;
+      --text: #4c5348;
+      --text-soft: #767d70;
+
+      /* 5.06:1 on paper as ink; 5.55:1 for a label on the fill. */
+      --accent: #c22014;
+      --accent-strong: #9c1409;
+      --accent-bg: rgba(194, 32, 20, 0.1);
+      --accent-border: rgba(194, 32, 20, 0.4);
+      --accent-contrast: #fff4f2;
+
+      --good: #0f7a3d;
+      --good-bg: rgba(15, 122, 61, 0.12);
+      /* Same red as the accent, as in dark mode. */
+      --bad: #c22014;
+      --bad-bg: rgba(194, 32, 20, 0.1);
+      --warn: #8a5a00;
+      --warn-bg: rgba(138, 90, 0, 0.12);
+      --live: #c22014;
+      --live-bg: rgba(194, 32, 20, 0.12);
+
+      --tier-1: #005a7c;
+      --tier-1-bg: rgba(0, 90, 124, 0.14);
+      --tier-2: #227ba2;
+      --tier-2-bg: rgba(34, 123, 162, 0.12);
+      --tier-3: #5b94b2;
+      --tier-3-bg: rgba(91, 148, 178, 0.12);
+      --tier-4: #8ca6b4;
+      --tier-4-bg: rgba(140, 166, 180, 0.16);
+
+      --series-1: #2a77d3;
+      --series-2: #e25c23;
+      --series-3: #29996d;
+      --series-4: #93640c;
+      --series-5: #cd648d;
+      --series-6: #018301;
+      --series-7: #4c3bab;
+      --series-8: #e24948;
+      --chart-grid: #d2cec0;
+  }
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+    /* Warm paper, so the red reads as ink rather than as a signal light. */
     --bg: #eeece4;
     --bg-elev: #f6f5ef;
     --surface: #fbfaf5;
     --surface-2: #eeece4;
-    --surface-hover: #e5e2d6;
+    --surface-hover: #e6e1d6;
     --border: #d2cec0;
     --border-strong: #a8a493;
 
@@ -131,29 +212,31 @@
     --text: #4c5348;
     --text-soft: #767d70;
 
-    --accent: #4a6b00;
-    --accent-strong: #3b5600;
-    --accent-bg: rgba(74, 107, 0, 0.1);
-    --accent-border: rgba(74, 107, 0, 0.4);
-    --accent-contrast: #fbfaf5;
+    /* 5.06:1 on paper as ink; 5.55:1 for a label on the fill. */
+    --accent: #c22014;
+    --accent-strong: #9c1409;
+    --accent-bg: rgba(194, 32, 20, 0.1);
+    --accent-border: rgba(194, 32, 20, 0.4);
+    --accent-contrast: #fff4f2;
 
-    --good: #2f6b1f;
-    --good-bg: rgba(47, 107, 31, 0.12);
-    --bad: #a81f38;
-    --bad-bg: rgba(168, 31, 56, 0.1);
+    --good: #0f7a3d;
+    --good-bg: rgba(15, 122, 61, 0.12);
+    /* Same red as the accent, as in dark mode. */
+    --bad: #c22014;
+    --bad-bg: rgba(194, 32, 20, 0.1);
     --warn: #8a5a00;
     --warn-bg: rgba(138, 90, 0, 0.12);
-    --live: #b3005e;
-    --live-bg: rgba(179, 0, 94, 0.1);
+    --live: #c22014;
+    --live-bg: rgba(194, 32, 20, 0.12);
 
-    --tier-1: #5c6b00;
-    --tier-1-bg: rgba(140, 165, 0, 0.16);
-    --tier-2: #216b47;
-    --tier-2-bg: rgba(33, 107, 71, 0.11);
-    --tier-3: #1f5f5b;
-    --tier-3-bg: rgba(31, 95, 91, 0.1);
-    --tier-4: #6d7469;
-    --tier-4-bg: rgba(109, 116, 105, 0.13);
+    --tier-1: #005a7c;
+    --tier-1-bg: rgba(0, 90, 124, 0.14);
+    --tier-2: #227ba2;
+    --tier-2-bg: rgba(34, 123, 162, 0.12);
+    --tier-3: #5b94b2;
+    --tier-3-bg: rgba(91, 148, 178, 0.12);
+    --tier-4: #8ca6b4;
+    --tier-4-bg: rgba(140, 166, 180, 0.16);
 
     --series-1: #2a77d3;
     --series-2: #e25c23;
@@ -164,50 +247,6 @@
     --series-7: #4c3bab;
     --series-8: #e24948;
     --chart-grid: #d2cec0;
-  }
-}
-
-/* The in-app toggle must beat the OS preference in both directions. */
-:root[data-theme='light'] {
-  color-scheme: light;
-  --bg: #eeece4;
-  --bg-elev: #f6f5ef;
-  --surface: #fbfaf5;
-  --surface-2: #eeece4;
-  --surface-hover: #e5e2d6;
-  --border: #d2cec0;
-  --border-strong: #a8a493;
-  --text-h: #14160f;
-  --text: #4c5348;
-  --text-soft: #767d70;
-  --accent: #4a6b00;
-  --accent-strong: #3b5600;
-  --accent-bg: rgba(74, 107, 0, 0.1);
-  --accent-border: rgba(74, 107, 0, 0.4);
-  --accent-contrast: #fbfaf5;
-  --good: #2f6b1f;
-  --good-bg: rgba(47, 107, 31, 0.12);
-  --bad: #a81f38;
-  --bad-bg: rgba(168, 31, 56, 0.1);
-  --warn: #8a5a00;
-  --live: #b3005e;
-  --tier-1: #5c6b00;
-  --tier-1-bg: rgba(140, 165, 0, 0.16);
-  --tier-2: #216b47;
-  --tier-2-bg: rgba(33, 107, 71, 0.11);
-  --tier-3: #1f5f5b;
-  --tier-3-bg: rgba(31, 95, 91, 0.1);
-  --tier-4: #6d7469;
-  --tier-4-bg: rgba(109, 116, 105, 0.13);
-  --series-1: #2a77d3;
-  --series-2: #e25c23;
-  --series-3: #29996d;
-  --series-4: #93640c;
-  --series-5: #cd648d;
-  --series-6: #018301;
-  --series-7: #4c3bab;
-  --series-8: #e24948;
-  --chart-grid: #d2cec0;
 }
 
 * {

@@ -40,7 +40,7 @@
   padding-right: var(--s2);
 }
 
-/* The one flourish: a lime block that reads as a cabinet marquee. */
+/* The one flourish: a red block that reads as a cabinet marquee. */
 .app-nav .logo::before {
   content: '';
   width: 10px;
