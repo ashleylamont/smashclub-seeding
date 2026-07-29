@@ -1,0 +1,20 @@
+{
+  "name": "@smashclub/rank-eval",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@smashclub/engine": "workspace:*",
+    "@smashclub/shared": "workspace:*",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.0",
+    "tsx": "^4.19.0",
+    "typescript": "~5.9.3"
+  }
+}

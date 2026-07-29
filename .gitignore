@@ -1,29 +1,17 @@
-# Python-generated files
-__pycache__/
-*.py[oc]
-build/
+# Node
+node_modules/
 dist/
-wheels/
-*.egg-info
-
-# Virtual environments
-.venv
+*.tsbuildinfo
+.eslintcache
 
 # Local secrets
 .env
+.env.local
 
-# Data files
-*players.txt
-*.csv
-players.yaml
-glicko_exports
-
-
-# Local Challonge cache
-.challonge-cache/
-.challonge-aliases.json
-.glicko-player-aliases.json
-.glicko-stored-player-aliases.json
+# Test artifacts
+coverage/
+playwright-report/
+test-results/
 
 # macOS files
 .DS_Store
@@ -31,3 +19,33 @@ glicko_exports
 ._*
 .Spotlight-V100
 .Trashes
+
+# --- Legacy Python CLI (kept during transition, see legacy/) ---
+__pycache__/
+*.py[oc]
+.venv
+legacy/*players.txt
+legacy/*.csv
+legacy/players.yaml
+legacy/glicko_exports
+legacy/.challonge-cache/
+legacy/.challonge-aliases.json
+legacy/.glicko-player-aliases.json
+legacy/.glicko-stored-player-aliases.json
+# Written into the working directory by the registry-bootstrap tests (and by
+# `main.py --bootstrap-players-yaml`). Ignored so a run against real history
+# cannot leave real names sitting in the tree looking committable.
+legacy/players.bootstrap.yaml
+# legacy pytest fixtures remain committed where present
+!legacy/tests/*.csv
+
+# k8s secrets
+deploy/k8s/secret.yaml
+
+# Playwright / e2e
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/screenshots/
+
+# Raw Challonge dumps contain real player names
+challonge-raw/

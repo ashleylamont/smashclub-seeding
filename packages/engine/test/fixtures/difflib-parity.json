@@ -1,0 +1,117 @@
+[
+  {
+    "a": "samus aran",
+    "b": "samus aran",
+    "ratio": 1.0
+  },
+  {
+    "a": "samuss aran",
+    "b": "samus aran",
+    "ratio": 0.9523809523809523
+  },
+  {
+    "a": "samus x aran",
+    "b": "samus aran",
+    "ratio": 0.9090909090909091
+  },
+  {
+    "a": "jack morrison",
+    "b": "jackson",
+    "ratio": 0.7
+  },
+  {
+    "a": "josh c",
+    "b": "josh cortese",
+    "ratio": 0.6666666666666666
+  },
+  {
+    "a": "fox mccloud",
+    "b": "fox mccloud",
+    "ratio": 1.0
+  },
+  {
+    "a": "fox",
+    "b": "fox mccloud",
+    "ratio": 0.42857142857142855
+  },
+  {
+    "a": "mako rutledge",
+    "b": "mako rutledge",
+    "ratio": 1.0
+  },
+  {
+    "a": "matthew jakeman",
+    "b": "matthew chen",
+    "ratio": 0.7407407407407407
+  },
+  {
+    "a": "matthew jakeman",
+    "b": "matthew kokolich",
+    "ratio": 0.5806451612903226
+  },
+  {
+    "a": "jackson",
+    "b": "jackson lin",
+    "ratio": 0.7777777777777778
+  },
+  {
+    "a": "kai mashimo",
+    "b": "kai",
+    "ratio": 0.42857142857142855
+  },
+  {
+    "a": "reinhardt wilhelm",
+    "b": "reinhart wilhelm",
+    "ratio": 0.9696969696969697
+  },
+  {
+    "a": "solid snake",
+    "b": "solidsnake",
+    "ratio": 0.9523809523809523
+  },
+  {
+    "a": "lucina",
+    "b": "lucian",
+    "ratio": 0.8333333333333334
+  },
+  {
+    "a": "king dedede",
+    "b": "king d",
+    "ratio": 0.7058823529411765
+  },
+  {
+    "a": "abcdefghij",
+    "b": "jihgfedcba",
+    "ratio": 0.1
+  },
+  {
+    "a": "aaabbbccc",
+    "b": "cccbbbaaa",
+    "ratio": 0.3333333333333333
+  },
+  {
+    "a": "",
+    "b": "nonempty",
+    "ratio": 0.0
+  },
+  {
+    "a": "a",
+    "b": "a",
+    "ratio": 1.0
+  },
+  {
+    "a": "ab",
+    "b": "ba",
+    "ratio": 0.5
+  },
+  {
+    "a": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxunique tail",
+    "b": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxunique tail",
+    "ratio": 0.7630331753554502
+  },
+  {
+    "a": "the quick brown fox jumps over the lazy dog the quick brown fox jumps over the lazy dog the quick brown fox jumps over the lazy dog the quick brown fox jumps over the lazy dog the quick brown fox jumps over the lazy dog ",
+    "b": "the quick brown fox jumps over a lazy dog the quick brown fox jumps over a lazy dog the quick brown fox jumps over a lazy dog the quick brown fox jumps over a lazy dog the quick brown fox jumps over a lazy dog ",
+    "ratio": 0.14418604651162792
+  }
+]

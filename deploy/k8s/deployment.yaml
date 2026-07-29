@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: smashclub
+  labels:
+    app: smashclub
+spec:
+  replicas: 1
+  # The in-process sync scheduler must not double-run; a pg advisory lock is
+  # the backstop, Recreate is the guarantee. Brief downtime on deploy is the
+  # accepted trade for a club tool.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: smashclub
+  template:
+    metadata:
+      labels:
+        app: smashclub
+    spec:
+      containers:
+        - name: app
+          image: smashclub:latest # replace with your registry image
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - secretRef:
+                name: smashclub-secrets
+          env:
+            - name: BETTER_AUTH_URL
+              value: https://smash.example.com # public URL, used for OAuth callbacks
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: smashclub
+spec:
+  selector:
+    app: smashclub
+  ports:
+    - port: 80
+      targetPort: 3000

@@ -1,0 +1,117 @@
+/* Tournament index + single-tournament page. */
+
+.tournament-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+
+.tournament-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s3);
+  color: var(--text);
+  padding: var(--s3) var(--s2) var(--s3) 0;
+  border-bottom: 1px solid var(--border);
+  border-left: 3px solid transparent;
+}
+
+.tournament-row:hover {
+  background: var(--surface-hover);
+  border-left-color: var(--accent);
+}
+
+.tournament-row-main {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.tournament-name {
+  font-family: var(--display);
+  font-size: var(--fs-md);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-h);
+}
+
+.tournament-tags {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.tournament-row-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.tournament-subtitle {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  margin-bottom: var(--s5);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+}
+
+/* ── live feed ──────────────────────────────────────────────────── */
+.live-feed h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.live-feed-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+}
+
+.live-feed-list li {
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* The winner is named in bold *and* marked, so the result never rests on
+   weight alone. */
+.set-winner {
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.set-winner::after {
+  content: ' ◄';
+  color: var(--accent);
+  font-size: var(--fs-xs);
+}
+
+.set-excluded td {
+  color: var(--text-soft);
+}
+
+.excluded-chip {
+  margin-left: var(--s2);
+}
+
+@media (max-width: 860px) {
+  .tournament-row {
+    grid-template-columns: 1fr;
+    row-gap: var(--s1);
+  }
+}

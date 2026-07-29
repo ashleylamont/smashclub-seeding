@@ -1,0 +1,18 @@
+{
+  "name": "@smashclub/challonge-dump",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@smashclub/engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.0",
+    "tsx": "^4.19.0",
+    "typescript": "~5.9.3"
+  }
+}
