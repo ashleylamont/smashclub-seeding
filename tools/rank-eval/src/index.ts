@@ -208,7 +208,6 @@ function main(): void {
   if (values.impact) {
     // Real names are never printed unless explicitly asked for.
     impactReport(sets, !values.names);
-    return;
   }
 
   const settings = defaultGlickoSettings;
@@ -223,6 +222,23 @@ function main(): void {
     whrModel({ driftVariancePerDay: 0.00005 }, 'whr (slow drift)'),
     whrModel({ driftVariancePerDay: 0.0008 }, 'whr (fast drift)'),
   ];
+
+  /*
+   * The focused reports are opt-in and each does its own fitting, so asking for
+   * one suppresses the default comparison table rather than printing both. Asking
+   * for several prints all of them — the flags are independent.
+   */
+  const focused = Boolean(values.impact || values['identity-impact']);
+  if (focused) {
+    if (values['identity-impact']) {
+      if (cacheDir && values.registry) {
+        identityImpact(cacheDir, String(values.registry), models);
+      } else {
+        console.log('\n--identity-impact needs a cache directory and --registry to compare against.');
+      }
+    }
+    return;
+  }
 
   const { scores, folds, evaluatedSets } = walkForward({ sets, models, minTrainingEvents: 2 });
   console.log(`\nwalk-forward: ${folds} folds, ${evaluatedSets} out-of-sample sets predicted`);
@@ -250,9 +266,6 @@ function main(): void {
     if (baseline) calibrationReport(baseline);
   }
 
-  if (values['identity-impact'] && cacheDir && values.registry) {
-    identityImpact(cacheDir, String(values.registry), models);
-  }
 }
 
 /**

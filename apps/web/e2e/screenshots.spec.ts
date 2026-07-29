@@ -42,8 +42,10 @@ const TARGETS: Target[] = [
     name: 'leaderboard',
     path: '/',
     expect: async (page) => {
-      await expect(page.getByRole('table').or(page.getByTestId('leaderboard'))).toBeVisible();
-      await expect(page.locator('text=/Champions|Full-Timers|Grads|Interns/').first()).toBeVisible();
+      // The board is a list of links, not a table — rows have to be reachable by
+      // keyboard, which a clickable <tr> was not.
+      await expect(page.locator('.board-list .board-row').first()).toBeVisible();
+      await expect(page.locator('.board-row .rating-value').first()).toBeVisible();
     },
   },
   {

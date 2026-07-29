@@ -115,7 +115,18 @@ function glickoRows(
     };
   }
 
-  const board = computeLeaderboard(replay.finalStates, settings);
+  /*
+   * Calibrate the bands from this model's own distribution, exactly as the first
+   * recompute does. Comparing calibrated bands for one model against the shipped
+   * placeholder defaults for another would make the league spread say more about
+   * which column got calibrated than about the models.
+   */
+  const provisional = computeLeaderboard(replay.finalStates, settings);
+  const calibrated: GlickoSettings = {
+    ...settings,
+    leagueBands: calibrateLeagueBands(provisional.map((row) => row.skillRating)),
+  };
+  const board = computeLeaderboard(replay.finalStates, calibrated);
   return {
     rows: board.map((row) => ({
       playerId: row.playerId,
