@@ -1,4 +1,5 @@
 import type { GlickoSettings } from '@smashclub/shared';
+import { eventKeyOf } from './events';
 import { fitWhr } from './whr';
 import { leagueForRating, type LeaderboardRow, type PlayerScore } from './score';
 import type { EngineSet, EngineTournament, RatingEvent } from './types';
@@ -10,9 +11,9 @@ import type { EngineSet, EngineTournament, RatingEvent } from './types';
  *
  * Two structural differences from the Glicko path, both deliberate:
  *
- *  - **A rating period is an event *day*, not a tournament.** Main and rookie
- *    brackets on the same date are one period, because they are one occasion and
- *    a player's skill did not change between them.
+ *  - **A rating period is one event, not one bracket.** Main and rookie brackets
+ *    on the same evening are one period (see `eventKeyOf`), because they are one
+ *    occasion and a player's skill did not change between them.
  *  - **Movement is booked per period, not per set.** WHR fits every rating from
  *    all evidence at once; it does not attribute a share of the change to an
  *    individual result, and pretending otherwise would invent numbers. So the
@@ -34,7 +35,7 @@ export interface WhrRunResult {
   leaderboard: LeaderboardRow[];
   converged: boolean;
   iterations: number;
-  /** Distinct event days the fit ran over. */
+  /** Distinct events (occasions) the fit ran over. */
   periods: number;
 }
 
@@ -48,6 +49,7 @@ interface Participation {
   mainMatchCount: number;
   rookieMatchCount: number;
   tournamentIds: Set<string>;
+  eventKeys: Set<string>;
   opponentIds: Set<string>;
   lastPlayedDate: string;
 }
@@ -66,7 +68,17 @@ export function runWhrModel(input: {
     .filter((set) => tournamentById.has(set.tournamentId) && set.p1PlayerId !== set.p2PlayerId)
     .map((set) => {
       const tournament = tournamentById.get(set.tournamentId)!;
-      return { set, tournament, day: Math.floor(Date.parse(tournament.eventDate) / MS_PER_DAY) };
+      return {
+        set,
+        tournament,
+        /** Which occasion this set belongs to — the rating period. */
+        eventKey: eventKeyOf(tournament.eventDate),
+        /**
+         * Elapsed days, for the drift-variance axis only. Unlike the period, this
+         * one really is time: uncertainty grows with the gap between occasions.
+         */
+        day: Math.floor(Date.parse(tournament.eventDate) / MS_PER_DAY),
+      };
     })
     .sort(
       (a, b) =>
@@ -108,6 +120,7 @@ export function runWhrModel(input: {
         mainMatchCount: 0,
         rookieMatchCount: 0,
         tournamentIds: new Set(),
+        eventKeys: new Set(),
         opponentIds: new Set(),
         lastPlayedDate: eventDate,
       };
@@ -117,7 +130,7 @@ export function runWhrModel(input: {
     return row;
   };
 
-  for (const { set, tournament } of rateable) {
+  for (const { set, tournament, eventKey } of rateable) {
     const p1 = ensure(set.p1PlayerId, tournament.eventDate);
     const p2 = ensure(set.p2PlayerId, tournament.eventDate);
     for (const [self, other] of [
@@ -126,6 +139,7 @@ export function runWhrModel(input: {
     ] as const) {
       self.matchCount += 1;
       self.tournamentIds.add(tournament.id);
+      self.eventKeys.add(eventKey);
       self.opponentIds.add(other.playerId);
       if (tournament.isRookie) self.rookieMatchCount += 1;
       else self.mainMatchCount += 1;
@@ -145,9 +159,9 @@ export function runWhrModel(input: {
   const events: RatingEvent[] = [];
   const seqByPlayer = new Map<string, number>();
   const lastPeriodRating = new Map<string, { rating: number; sd: number }>();
-  const bookedPeriod = new Map<string, number>();
+  const bookedPeriod = new Map<string, string>();
 
-  for (const { set, tournament, day } of rateable) {
+  for (const { set, tournament, day, eventKey } of rateable) {
     const time = day - originDay;
     for (const [playerId, opponentId, won] of [
       [set.p1PlayerId, set.p2PlayerId, set.winner === 1],
@@ -158,7 +172,7 @@ export function runWhrModel(input: {
         rating: settings.initialRating,
         sd: settings.initialRd,
       };
-      const firstOfPeriod = bookedPeriod.get(playerId) !== time;
+      const firstOfPeriod = bookedPeriod.get(playerId) !== eventKey;
 
       const seq = (seqByPlayer.get(playerId) ?? 0) + 1;
       seqByPlayer.set(playerId, seq);
@@ -183,7 +197,7 @@ export function runWhrModel(input: {
       });
 
       if (firstOfPeriod) {
-        bookedPeriod.set(playerId, time);
+        bookedPeriod.set(playerId, eventKey);
         lastPeriodRating.set(playerId, current);
       }
     }
@@ -214,6 +228,7 @@ export function runWhrModel(input: {
       mainMatchCount: row.mainMatchCount,
       rookieMatchCount: row.rookieMatchCount,
       tournamentCount: row.tournamentIds.size,
+      eventCount: row.eventKeys.size,
       uniqueOpponentCount: row.opponentIds.size,
       bridgeOpponentCount,
       rookieRatio,
@@ -243,6 +258,6 @@ export function runWhrModel(input: {
     league: leagueForRating(score.skillRating, settings.leagueBands),
   }));
 
-  const periods = new Set(rateable.map((r) => r.day)).size;
+  const periods = new Set(rateable.map((r) => r.eventKey)).size;
   return { events, leaderboard, converged: fit.converged, iterations: fit.iterations, periods };
 }

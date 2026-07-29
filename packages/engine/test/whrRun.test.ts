@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { defaultGlickoSettings } from '@smashclub/shared';
 import { runWhrModel } from '../src/whrRun';
+import { replayRatings } from '../src/replay';
+import { computeLeaderboard } from '../src/score';
 import type { EngineSet, EngineTournament } from '../src/types';
 
 /**
@@ -135,6 +137,45 @@ describe('runWhrModel', () => {
     for (const row of run.leaderboard) {
       expect({ wins: row.wins, losses: row.losses }).toEqual(expected.get(row.playerId));
       expect(row.matchCount).toBe(row.wins + row.losses);
+    }
+  });
+
+  it('counts events attended, not brackets entered', () => {
+    const { tournaments, sets } = club();
+    const run = runWhrModel({ sets, tournaments, settings });
+
+    // Falco plays a rookie set on each of the two evenings: two brackets, two
+    // events. Kirby plays rookie1 and rookie2 as well.
+    const falco = run.leaderboard.find((r) => r.playerId === 'falco')!;
+    expect(falco.tournamentCount).toBe(2);
+    expect(falco.eventCount).toBe(2);
+
+    // Alice plays two sets in main1 and one in main2 — two brackets, two events.
+    const alice = run.leaderboard.find((r) => r.playerId === 'alice')!;
+    expect(alice.tournamentCount).toBe(2);
+    expect(alice.eventCount).toBe(2);
+
+    // Nobody can attend more events than brackets.
+    for (const row of run.leaderboard) {
+      expect(row.eventCount).toBeLessThanOrEqual(row.tournamentCount);
+    }
+  });
+
+  it('agrees with the Glicko replay on how many events each player attended', () => {
+    const { tournaments, sets } = club();
+    // One player in both brackets of one evening — the case the two paths could
+    // disagree on if they derived "same occasion" differently.
+    sets.push(makeSet('rookie1', 'alice', 'kirby', 1));
+
+    const whr = runWhrModel({ sets, tournaments, settings });
+    const glicko = computeLeaderboard(
+      replayRatings({ sets, tournaments, settings }).finalStates,
+      settings,
+    );
+
+    const whrEvents = new Map(whr.leaderboard.map((r) => [r.playerId, r.eventCount]));
+    for (const row of glicko) {
+      expect(whrEvents.get(row.playerId), row.playerId).toBe(row.eventCount);
     }
   });
 

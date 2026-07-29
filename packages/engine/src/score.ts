@@ -46,7 +46,14 @@ export interface PlayerScore {
   losses: number;
   mainMatchCount: number;
   rookieMatchCount: number;
+  /** Brackets entered. */
   tournamentCount: number;
+  /**
+   * Events (occasions) attended — what a member means by "how many have I been
+   * to". Lower than `tournamentCount` for anyone who played both the main and
+   * the rookie bracket on one evening.
+   */
+  eventCount: number;
   uniqueOpponentCount: number;
   bridgeOpponentCount: number;
   rookieRatio: number;
@@ -118,6 +125,7 @@ export function computePlayerScore(
     mainMatchCount: state.mainMatchCount,
     rookieMatchCount: state.rookieMatchCount,
     tournamentCount: state.tournamentIds.size,
+    eventCount: state.eventKeys.size,
     uniqueOpponentCount: state.opponentIds.size,
     bridgeOpponentCount,
     rookieRatio,

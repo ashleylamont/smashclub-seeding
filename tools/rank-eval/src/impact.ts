@@ -262,6 +262,9 @@ export function impactReport(sets: readonly EvalSet[], anonymise: boolean): void
    * Isolated deliberately: the "current" column also skips trailing decay, so
    * comparing against it would conflate two separate changes. This toggles only
    * decayPerBracket, holding everything else at the shipped settings.
+   *
+   * Note the unit either way is *events missed*, never elapsed time — a long gap
+   * between club nights costs one step, not one per day.
    */
   const decayAb = (perBracket: boolean): { events: number; medianRd: number; atCap: number; periods: number } => {
     const input = toEngineInput(sets);
@@ -291,18 +294,20 @@ export function impactReport(sets: readonly EvalSet[], anonymise: boolean): void
   const perBracket = decayAb(true);
   const perDay = decayAb(false);
 
-  console.log('\n── inactivity decay: counted per bracket vs per event day ──');
-  console.log(`  periods:      per-bracket ${perBracket.periods}   per-day ${perDay.periods}`);
+  console.log('\n── inactivity decay: counted per bracket vs per event ──');
   console.log(
-    `  decay events: per-bracket ${perBracket.events}   per-day ${perDay.events}   ` +
+    `  periods counted:     ${perBracket.periods} brackets   vs   ${perDay.periods} events`,
+  );
+  console.log(
+    `  decay steps charged: ${perBracket.events}   vs   ${perDay.events}   ` +
       `(${perBracket.events - perDay.events} were for brackets the player was never in, ` +
       `${(((perBracket.events - perDay.events) / (perBracket.events || 1)) * 100).toFixed(0)}%)`,
   );
   console.log(
-    `  median effective RD: per-bracket ${perBracket.medianRd.toFixed(0)}   per-day ${perDay.medianRd.toFixed(0)}`,
+    `  median effective RD: ${perBracket.medianRd.toFixed(0)}   vs   ${perDay.medianRd.toFixed(0)}`,
   );
   console.log(
-    `  at the RD cap:       per-bracket ${perBracket.atCap}/${current.rows.length}   per-day ${perDay.atCap}/${current.rows.length}`,
+    `  at the RD cap:       ${perBracket.atCap}/${current.rows.length}   vs   ${perDay.atCap}/${current.rows.length}`,
   );
 
   console.log('\n── league spread ──');

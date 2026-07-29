@@ -34,20 +34,25 @@ export function LeaderboardPage() {
    * The masthead eyebrow says what the ladder covers. The nav already carries the
    * club name, so repeating it here would spend the most prominent small line on
    * nothing.
+   *
+   * The event count comes from the server: a main and a rookie bracket on one
+   * evening are one event, and that rule lives in the engine. Counting the
+   * tournament rows here instead said "15 events" for ten occasions.
    */
   const coverage = useMemo(() => {
     const dates = (tournaments.data ?? [])
       .map((t) => t.eventDate)
       .filter((d): d is string => Boolean(d))
       .sort();
-    const events = `${(tournaments.data ?? []).length} event${(tournaments.data ?? []).length === 1 ? '' : 's'}`;
+    const count = leaderboard.data?.eventCount ?? 0;
+    const events = `${count} event${count === 1 ? '' : 's'}`;
     if (dates.length === 0) return events;
     const span = (iso: string) =>
       new Date(iso).toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
     const first = span(dates[0]!);
     const last = span(dates[dates.length - 1]!);
     return `${events} · ${first === last ? first : `${first} – ${last}`}`;
-  }, [tournaments.data]);
+  }, [tournaments.data, leaderboard.data]);
 
   /**
    * Per-player sparkline traces and form pips, derived from the same rating

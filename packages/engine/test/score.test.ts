@@ -17,6 +17,7 @@ const makeState = (overrides: Partial<PlayerFinalState> & { playerId: string }):
   lastPeriodIndex: 2,
   lastPlayedDate: '2025-03-01',
   tournamentIds: new Set(['t1', 't2', 't3']),
+  eventKeys: new Set(['2025-01-01', '2025-02-01', '2025-03-01']),
   opponentIds: new Set(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']),
   ...overrides,
 });

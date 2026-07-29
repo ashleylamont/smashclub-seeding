@@ -295,6 +295,19 @@ describe('replayRatings', () => {
       expect(aliceDecay[0]!.postRd).toBeGreaterThan(aliceDecay[0]!.preRd);
     });
 
+    it('counts events attended separately from brackets entered', () => {
+      const { tournaments, sets } = sameDayBrackets();
+      // Falco crosses both brackets on the first evening; alice plays main only.
+      sets.push(makeSet('rookie1', 'alice', 'kirby', 1));
+      const { finalStates } = replayRatings({ sets, tournaments, settings });
+
+      const alice = finalStates.get('alice')!;
+      // Two brackets on the first evening plus the main on the second: three
+      // brackets, but only two occasions.
+      expect(alice.tournamentIds.size).toBe(3);
+      expect(alice.eventKeys.size).toBe(2);
+    });
+
     it('treats same-day brackets as one period regardless of their times', () => {
       const tournaments = [
         tournament('a', '2025-01-10T09:00:00.000Z', false, 1),

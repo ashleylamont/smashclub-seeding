@@ -310,7 +310,14 @@ export const playerRatings = pgTable(
     losses: integer('losses').notNull(),
     mainMatchCount: integer('main_match_count').notNull(),
     rookieMatchCount: integer('rookie_match_count').notNull(),
+    /** Brackets entered. */
     tournamentCount: integer('tournament_count').notNull(),
+    /**
+     * Events (occasions) attended — what "Events" means to a member. Lower than
+     * `tournamentCount` for anyone who played both the main and the rookie
+     * bracket on one evening, which is also the unit inactivity decay counts.
+     */
+    eventCount: integer('event_count').notNull().default(0),
     uniqueOpponentCount: integer('unique_opponent_count').notNull(),
     bridgeOpponentCount: integer('bridge_opponent_count').notNull(),
     rookieRatio: doublePrecision('rookie_ratio').notNull(),

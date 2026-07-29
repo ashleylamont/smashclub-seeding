@@ -43,8 +43,14 @@ const night1Rookie: FixtureTournament = {
   participants: [
     { id: 1, name: '[ATL] Kirby' },
     { id: 2, name: '[ATL] Yoshi' },
+    // Also in the main bracket the same evening: one player, two brackets, one
+    // occasion. This is the case eventCount exists to describe.
+    { id: 3, name: '[ATL] Fox McCloud' },
   ],
-  matches: [{ id: 21, p1: 1, p2: 2, winner: 1, order: 1 }],
+  matches: [
+    { id: 21, p1: 1, p2: 2, winner: 1, order: 1 },
+    { id: 22, p1: 3, p2: 1, winner: 1, order: 2 },
+  ],
 };
 
 const night2Main: FixtureTournament = {
@@ -155,6 +161,39 @@ describe('inactivity decay through sync and recompute', () => {
     // The main-bracket pair played both nights and are untouched.
     for (const name of ['Fox McCloud', 'Samus Aran']) {
       expect(await decayEventsFor(run.recomputeId, name), name).toHaveLength(0);
+    }
+  });
+
+  it('publishes events attended separately from brackets entered', async () => {
+    await syncAll();
+    const run = await runRecompute(db);
+
+    const counts = async (name: string): Promise<{ eventCount: number; tournamentCount: number }> => {
+      const [row] = await db
+        .select({ eventCount: playerRatings.eventCount, tournamentCount: playerRatings.tournamentCount })
+        .from(playerRatings)
+        .where(
+          and(eq(playerRatings.recomputeId, run.recomputeId), eq(playerRatings.playerId, await playerId(name))),
+        );
+      return row!;
+    };
+
+    // Fox played the main and rookie brackets on night one, plus the main on
+    // night two: three brackets, two occasions.
+    expect(await counts('Fox McCloud')).toEqual({ eventCount: 2, tournamentCount: 3 });
+    // One bracket per night for everyone else.
+    expect(await counts('Kirby')).toEqual({ eventCount: 2, tournamentCount: 2 });
+    expect(await counts('Samus Aran')).toEqual({ eventCount: 2, tournamentCount: 2 });
+
+    // The invariant, for the whole field: you cannot attend more occasions than
+    // the brackets you entered.
+    const all = await db
+      .select({ eventCount: playerRatings.eventCount, tournamentCount: playerRatings.tournamentCount })
+      .from(playerRatings)
+      .where(eq(playerRatings.recomputeId, run.recomputeId));
+    expect(all).toHaveLength(4);
+    for (const row of all) {
+      expect(row.eventCount).toBeLessThanOrEqual(row.tournamentCount);
     }
   });
 
