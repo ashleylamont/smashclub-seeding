@@ -21,11 +21,15 @@ jobs:
       - run: pnpm build
 
   legacy-python:
-    # Reference implementation kept in legacy/ during the rework.
-    # Only the self-contained tests run (some fixtures were never committed).
-    # Non-blocking: uv.lock pins the packages.atlassian.com PyPI mirror, whose
-    # reachability from public runners is unverified.
-    continue-on-error: true
+    # Reference implementation kept in legacy/ during the rework. The TypeScript
+    # port is verified against this engine's own recorded output by
+    # tools/golden-check, so these tests guard the thing that master is compared
+    # against.
+    #
+    # test_smart_parsing.py and test_seeding.py are excluded on purpose: both
+    # construct SeedingCalculator('tests/test_data.csv'), a fixture of real
+    # player data that is deliberately not committed. Listing them here only
+    # produced collection errors.
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -33,13 +37,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+      # --locked fails if uv.lock has drifted from pyproject.toml; --extra dev
+      # is what installs pytest, which a bare `uv run` does not.
       - run: |
-          uv run pytest \
+          uv run --locked --extra dev pytest \
             tests/test_ordering.py \
             tests/test_registry_integration.py \
             tests/test_registry_bootstrap.py \
             tests/test_player_registry.py \
             tests/test_challonge_import.py \
             tests/test_main_challonge_config.py \
-            tests/test_smart_parsing.py \
             -q
