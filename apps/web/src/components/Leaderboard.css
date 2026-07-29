@@ -2,18 +2,24 @@
   display: flex;
   flex-direction: column;
   gap: var(--s3);
+
+  /*
+   * One column definition, shared by the header and every row, so the two can
+   * never drift out of alignment:
+   * rank · movement · identity · rating · certainty · form · spark · record · events
+   */
+  --cols: 42px 34px minmax(0, 1fr) 104px 56px 66px 52px 52px 30px;
+  --row-gap: var(--s3);
 }
 
-/* ── controls ─────────────────────────────────────────────────── */
+/* ── controls: a rule-bounded strip, not a card ───────────────── */
 .board-controls {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s4);
   align-items: flex-end;
-  padding: var(--s3) var(--s4);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r2);
+  padding: var(--s2) 0 var(--s3);
+  border-bottom: 1px solid var(--border);
 }
 
 .control {
@@ -23,81 +29,111 @@
 }
 
 .control-label {
+  font-family: var(--display);
   font-size: var(--fs-xs);
   text-transform: uppercase;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.14em;
   color: var(--text-soft);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .control-input {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--r1);
-  padding: var(--s2) var(--s3);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  padding: 6px var(--s2);
   min-width: 168px;
   color: var(--text-h);
-}
-
-.control-input:hover {
-  border-color: var(--border-strong);
-}
-
-.control-sort {
-  margin-left: auto;
-}
-
-.sort-buttons {
-  display: flex;
-  gap: var(--s1);
-  flex-wrap: wrap;
-}
-
-.sort-button {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  padding: var(--s2) var(--s3);
+  font-family: var(--mono);
   font-size: var(--fs-sm);
-  cursor: pointer;
-  color: var(--text);
 }
 
-.sort-button:hover {
-  background: var(--surface-hover);
+.control-input:hover,
+.control-input:focus {
+  border-color: var(--accent-border);
+}
+
+.board-count {
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  margin: 0 0 0 auto;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/*
+ * ── header row: also the sort control ─────────────────────────
+ * Column headers carry the sort, so the measures are named once instead of
+ * twice. Same grid as the rows, and the whole strip is sticky so the columns
+ * stay identified while scrolling a long field.
+ */
+.board-head {
+  display: grid;
+  grid-template-columns: var(--cols);
+  gap: var(--row-gap);
+  align-items: end;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg);
+  padding: var(--s2) var(--s2) 5px 0;
+  /* Matches the rows' tier edge so the label sits over its own column. */
+  border-left: 3px solid transparent;
+  border-bottom: 2px solid var(--border-strong);
+}
+
+.head-cell {
+  font-family: var(--display);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-soft);
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: right;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.head-sortable {
+  cursor: pointer;
+}
+
+.head-sortable:hover {
   color: var(--text-h);
 }
 
-.sort-button.is-active {
-  background: var(--accent-bg);
-  border-color: var(--accent-border);
+.head-cell.is-active {
   color: var(--accent);
   font-weight: 600;
 }
 
-.board-count {
-  font-size: var(--fs-sm);
-  margin: 0 var(--s1);
+.head-caret {
+  display: inline-block;
+  width: 0.7em;
+  text-align: left;
 }
 
-/* ── rows ─────────────────────────────────────────────────────── */
+/* Left-aligned columns: the label sits over content that starts at the left. */
+.head-identity,
+.head-movement,
+.head-form,
+.head-spark {
+  text-align: left;
+}
+
+/* ── rows: dense, hairline-ruled, hard-edged ─────────────────── */
 .board-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
 }
 
 .board-row {
-  /* League identity as a coloured leading edge rather than a badge column. */
   --tier: var(--tier-4);
   --tier-bg: var(--tier-4-bg);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--tier);
-  border-radius: var(--r1);
+  border-bottom: 1px solid var(--border);
 }
 
 .board-row.tier-1 {
@@ -115,47 +151,33 @@
 
 .board-row:hover {
   background: var(--surface-hover);
-  border-color: var(--border-strong);
 }
 
 .board-link {
   display: grid;
-  grid-template-columns: 48px 44px 34px minmax(0, 1fr) 128px 66px 76px 62px 44px;
+  grid-template-columns: var(--cols);
   align-items: center;
-  gap: var(--s3);
-  padding: var(--s2) var(--s4) var(--s2) var(--s3);
+  gap: var(--row-gap);
+  /* Tight rows: ~30 players per screen on a laptop. */
+  padding: var(--s1) var(--s2) var(--s1) 0;
+  border-left: 3px solid transparent;
+}
+
+.board-row:hover .board-link {
+  border-left-color: var(--tier);
 }
 
 .rank {
-  font-size: var(--fs-lg);
+  font-family: var(--mono);
+  font-size: var(--fs-md);
   font-weight: 700;
-  color: var(--text-h);
+  color: var(--text-soft);
   text-align: right;
 }
 
-/* Top three read as a podium without changing the row's structure. */
-.is-podium {
-  background: linear-gradient(90deg, var(--tier-bg) 0%, var(--surface) 42%);
-  border-color: var(--border-strong);
-}
-.is-podium .board-link {
-  padding-top: var(--s3);
-  padding-bottom: var(--s3);
-}
-.is-podium .rank {
-  font-size: var(--fs-xl);
-}
-.rank-1 {
-  color: var(--tier-1);
-}
-.rank-2,
-.rank-3 {
-  color: var(--text-h);
-}
-
 .movement {
+  font-family: var(--mono);
   font-size: var(--fs-xs);
-  font-weight: 600;
 }
 .movement-up {
   color: var(--good);
@@ -164,31 +186,23 @@
   color: var(--bad);
 }
 .movement-flat {
-  color: var(--text-soft);
-}
-
-.avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: var(--r-pill);
-  background: var(--tier-bg);
-  color: var(--tier);
-  display: grid;
-  place-items: center;
-  font-size: var(--fs-xs);
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  color: var(--border-strong);
 }
 
 .identity {
   display: flex;
-  flex-direction: column;
+  align-items: baseline;
+  gap: var(--s2);
   min-width: 0;
 }
 
 .identity-name {
+  font-family: var(--display);
+  font-size: var(--fs-md);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--text-h);
-  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -196,71 +210,87 @@
 
 .verified {
   color: var(--accent);
-  margin-left: var(--s1);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
 }
 
 .identity-meta {
+  font-family: var(--mono);
   font-size: var(--fs-xs);
+  color: var(--text-soft);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex-shrink: 0;
 }
 
-/* ── rating + uncertainty ─────────────────────────────────────── */
+/* ── rating + confidence ─────────────────────────────────────── */
 .rating {
-  display: grid;
-  grid-template-columns: auto auto;
+  display: flex;
   align-items: baseline;
   gap: var(--s2);
-  row-gap: var(--s1);
+  justify-content: flex-end;
 }
 
 .rating-value {
-  font-size: var(--fs-lg);
-  font-weight: 650;
+  font-family: var(--mono);
+  font-size: var(--fs-md);
+  font-weight: 700;
   color: var(--text-h);
 }
 
 .rating-band {
+  font-family: var(--mono);
   font-size: var(--fs-xs);
   color: var(--text-soft);
 }
 
+/* Segmented meter: fuller = better established. Reads as a gauge, not a bar
+   chart, and cannot be mistaken for a magnitude. */
 .certainty-track {
-  grid-column: 1 / -1;
-  height: 3px;
-  background: var(--surface-2);
-  border-radius: var(--r-pill);
-  overflow: hidden;
+  display: block;
+  height: 8px;
+  background: repeating-linear-gradient(
+    to right,
+    var(--border-strong) 0px,
+    var(--border-strong) 3px,
+    transparent 3px,
+    transparent 5px
+  );
 }
 
-/* Fuller bar = better established rating; a stub means barely any evidence. */
 .certainty-fill {
   display: block;
   height: 100%;
-  background: var(--tier);
-  opacity: 0.8;
+  background: repeating-linear-gradient(
+    to right,
+    var(--tier) 0px,
+    var(--tier) 3px,
+    transparent 3px,
+    transparent 5px
+  );
 }
 
 /* ── form + spark ─────────────────────────────────────────────── */
+/*
+ * Form pips sit on a shared baseline and encode the result twice: a win is a
+ * full-height mark, a loss a stub. Colour alone would exclude anyone who cannot
+ * separate the green from the red, and green/red is exactly the pair to avoid.
+ */
 .form {
   display: flex;
-  gap: 3px;
-  align-items: center;
+  gap: 2px;
+  align-items: flex-end;
+  height: 14px;
 }
 
 .pip {
-  width: 9px;
-  height: 9px;
-  border-radius: 2px;
+  width: 8px;
 }
 .pip-win {
+  height: 14px;
   background: var(--good);
 }
 .pip-loss {
+  height: 5px;
   background: var(--bad);
-  opacity: 0.55;
 }
 
 .spark {
@@ -270,18 +300,47 @@
 
 .record,
 .events {
-  font-size: var(--fs-sm);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
   color: var(--text);
   text-align: right;
+}
+
+/* ── podium: the only rows given extra weight ────────────────── */
+.is-podium {
+  background: var(--surface);
+}
+
+.is-podium .board-link {
+  padding-top: var(--s3);
+  padding-bottom: var(--s3);
+  border-left-color: var(--tier);
+}
+
+.is-podium .rank {
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  color: var(--tier);
+  line-height: 0.85;
+}
+
+.is-podium .identity-name {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.is-podium .rating-value {
+  font-size: var(--fs-lg);
 }
 
 .board-empty {
   padding: var(--s6);
   text-align: center;
   color: var(--text-soft);
-  background: var(--surface);
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--r2);
+  border: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
 }
 
 .link-button {
@@ -291,29 +350,39 @@
   cursor: pointer;
   padding: 0;
   text-decoration: underline;
+  font: inherit;
 }
 
-/* ── narrow screens: the grid becomes a card ──────────────────── */
+/* ── narrow screens ──────────────────────────────────────────── */
 @media (max-width: 860px) {
+  /* Two-line rows below the fold-point, so column headers no longer describe
+     the layout — the values are labelled in place instead. */
+  .board-head {
+    display: none;
+  }
+  .board-list {
+    border-top: 1px solid var(--border);
+  }
   .board-link {
-    grid-template-columns: 40px 34px minmax(0, 1fr) auto;
+    grid-template-columns: 34px minmax(0, 1fr) auto;
     grid-template-areas:
-      'rank avatar identity rating'
-      '. . form record';
-    row-gap: var(--s2);
+      'rank identity rating'
+      'rank form record';
+    row-gap: 2px;
+    padding: var(--s2) var(--s2) var(--s2) 0;
   }
   .rank {
     grid-area: rank;
-  }
-  .avatar {
-    grid-area: avatar;
+    align-self: start;
   }
   .identity {
     grid-area: identity;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
   }
   .rating {
     grid-area: rating;
-    justify-items: end;
   }
   .form {
     grid-area: form;
@@ -321,8 +390,7 @@
   .record {
     grid-area: record;
   }
-  /* Movement, sparkline and event count are secondary; drop them rather than
-     letting a nine-column grid overflow a phone. */
+  /* Secondary columns are dropped rather than allowed to overflow. */
   .movement,
   .spark,
   .events {
@@ -330,12 +398,20 @@
   }
   .control-sort {
     margin-left: 0;
+    width: 100%;
+  }
+  .sort-buttons {
+    width: 100%;
+  }
+  .sort-button {
+    flex: 1;
+    padding: 6px var(--s1);
   }
   .control-input {
     min-width: 0;
     width: 100%;
   }
   .control {
-    flex: 1 1 140px;
+    flex: 1 1 130px;
   }
 }

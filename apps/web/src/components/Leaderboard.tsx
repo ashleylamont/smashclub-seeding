@@ -31,20 +31,22 @@ interface Props {
 
 type SortField = 'rank' | 'skillRating' | 'wins' | 'tournamentCount' | 'certainty';
 
-const SORT_LABELS: Record<SortField, string> = {
-  rank: 'Rank',
-  skillRating: 'Rating',
-  wins: 'Wins',
-  tournamentCount: 'Events',
-  certainty: 'Certainty',
-};
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
-  return `${parts[0]![0]!}${parts[parts.length - 1]![0]!}`.toUpperCase();
-}
+/**
+ * The board's columns. Every sortable measure has its own column, so the header
+ * row *is* the sort control — a separate button strip would name the same fields
+ * twice. `field: null` marks a column that carries no orderable measure.
+ */
+const COLUMNS: { key: string; label: string; field: SortField | null; title?: string }[] = [
+  { key: 'rank', label: '#', field: 'rank', title: 'Rank' },
+  { key: 'movement', label: 'Δ', field: null, title: 'Rank movement since the previous recompute' },
+  { key: 'identity', label: 'Player', field: null },
+  { key: 'rating', label: 'Rating', field: 'skillRating', title: 'Best-estimate skill ± one standard deviation' },
+  { key: 'certainty', label: 'Conf', field: 'certainty', title: 'How well established the rating is' },
+  { key: 'form', label: 'Form', field: null, title: 'Last five sets, oldest first' },
+  { key: 'spark', label: 'Trend', field: null, title: 'Recent rating trajectory' },
+  { key: 'record', label: 'W–L', field: 'wins', title: 'Sets won and lost' },
+  { key: 'events', label: 'Ev', field: 'tournamentCount', title: 'Tournaments played' },
+];
 
 /**
  * Bar length encodes *confidence*, not doubt: a full bar means the rating is
@@ -130,28 +132,36 @@ export function Leaderboard({ rows, trends }: Props) {
             ))}
           </select>
         </label>
-        <div className="control control-sort">
-          <span className="control-label">Sort by</span>
-          <div className="sort-buttons" role="group" aria-label="Sort leaderboard">
-            {(Object.keys(SORT_LABELS) as SortField[]).map((field) => (
-              <button
-                key={field}
-                type="button"
-                className={`sort-button${sortField === field ? ' is-active' : ''}`}
-                aria-pressed={sortField === field}
-                onClick={() => sortBy(field)}
-              >
-                {SORT_LABELS[field]}
-                {sortField === field && <span aria-hidden="true">{descending ? ' ↓' : ' ↑'}</span>}
-              </button>
-            ))}
-          </div>
-        </div>
+        <p className="board-count muted num">
+          {visible.length}/{rows.length} players
+        </p>
       </div>
 
-      <p className="board-count muted num">
-        {visible.length} of {rows.length} players
-      </p>
+      <div className="board-head" role="row">
+        {COLUMNS.map((column) =>
+          column.field === null ? (
+            <span key={column.key} className={`head-cell head-${column.key}`} title={column.title}>
+              {column.label}
+            </span>
+          ) : (
+            <button
+              key={column.key}
+              type="button"
+              className={`head-cell head-${column.key} head-sortable${
+                sortField === column.field ? ' is-active' : ''
+              }`}
+              title={column.title}
+              aria-sort={sortField === column.field ? (descending ? 'descending' : 'ascending') : 'none'}
+              onClick={() => sortBy(column.field as SortField)}
+            >
+              {column.label}
+              <span className="head-caret" aria-hidden="true">
+                {sortField === column.field ? (descending ? '▾' : '▴') : ''}
+              </span>
+            </button>
+          ),
+        )}
+      </div>
 
       <ol className="board-list">
         {visible.map((row) => {
@@ -177,10 +187,6 @@ export function Leaderboard({ rows, trends }: Props) {
                   )}
                 </span>
 
-                <span className="avatar" aria-hidden="true">
-                  {initials(row.name)}
-                </span>
-
                 <span className="identity">
                   <span className="identity-name">
                     {row.name}
@@ -190,9 +196,7 @@ export function Leaderboard({ rows, trends }: Props) {
                       </span>
                     )}
                   </span>
-                  <span className="identity-meta muted">
-                    {row.companyCode ?? 'Independent'} · {row.league}
-                  </span>
+                  <span className="identity-meta">{row.companyCode ?? 'IND'}</span>
                 </span>
 
                 <span className="rating">
@@ -200,12 +204,13 @@ export function Leaderboard({ rows, trends }: Props) {
                   <span className="rating-band num" title="Uncertainty on the estimate (± one standard deviation)">
                     ±{Math.round(row.skillSd)}
                   </span>
-                  <span
-                    className="certainty-track"
-                    title={`Confidence: ${Math.round(confidenceWidth(row.skillSd))}% — a fuller bar means more sets played against more opponents`}
-                  >
-                    <span className="certainty-fill" style={{ width: `${confidenceWidth(row.skillSd)}%` }} />
-                  </span>
+                </span>
+
+                <span
+                  className="certainty-track"
+                  title={`Confidence ${Math.round(confidenceWidth(row.skillSd))}% — fuller means more sets against more opponents`}
+                >
+                  <span className="certainty-fill" style={{ width: `${confidenceWidth(row.skillSd)}%` }} />
                 </span>
 
                 <span className="form" aria-label={`Recent form: ${trend?.form.map((w) => (w ? 'win' : 'loss')).join(', ') || 'no results'}`}>

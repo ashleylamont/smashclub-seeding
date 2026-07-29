@@ -60,7 +60,7 @@ function TournamentGroup({ title, items, live }: { title: string; items: Tournam
       <h2>{title}</h2>
       <div className="tournament-list">
         {items.map((t) => (
-          <Link key={t.id} to="/tournaments/$slug" params={{ slug: t.slug }} className="tournament-row card">
+          <Link key={t.id} to="/tournaments/$slug" params={{ slug: t.slug }} className="tournament-row">
             <div className="tournament-row-main">
               <span className="tournament-name">{t.name}</span>
               <span className="tournament-tags">

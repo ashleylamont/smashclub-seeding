@@ -93,9 +93,11 @@ function ReviewCard({ item, onResolved }: { item: ReviewItem; onResolved: () => 
       )}
 
       <div className="review-actions">
+        {/* None of the three outcomes is the default one, so none gets the filled
+            accent — with a queue this long it would just be lime everywhere. */}
         <button
           type="button"
-          className="btn btn-small btn-primary"
+          className="btn btn-small"
           disabled={resolve.isPending}
           onClick={() => resolve.mutate({ kind: 'created_new' })}
         >
