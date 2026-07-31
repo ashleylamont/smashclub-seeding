@@ -25,13 +25,19 @@ export interface SyncResult {
  */
 export interface SyncOptions {
   /**
-   * `api` (default) uses the authenticated Challonge API, falling back to the
-   * public bracket for tournaments outside the account.
+   * `public` (THE DEFAULT) reads the unauthenticated, unmetered bracket page
+   * and never touches the API.
    *
-   * `public` never touches the metered API. Live polling uses this: the free
-   * tier allows 500 API requests per MONTH, so no metered poll loop is
-   * affordable at any interval, whereas the public bracket page is
-   * unauthenticated and unmetered.
+   * `api` uses the authenticated Challonge API, falling back to the public
+   * bracket when the tournament is outside the account. It is opt-in per sync
+   * and deliberately NOT a fallback: Challonge's free tier allows 500 requests
+   * per MONTH, and an automatic fallback would quietly spend that allowance
+   * every time the public path had a bad day.
+   *
+   * The API is worth spending on for a tournament the club owns, because it is
+   * the only source of `final_rank` (placements). Everything the ratings engine
+   * needs — participants, matches, winners, scores, seeds — is in the public
+   * bracket.
    */
   source?: 'api' | 'public';
 }
@@ -54,9 +60,9 @@ export async function syncTournament(
     await db.update(tournaments).set({ syncState: 'syncing', updatedAt: new Date() }).where(eq(tournaments.id, tournamentId));
 
     const bundle =
-      options.source === 'public'
-        ? await client.fetchPublicTournamentBundle(tournament.challongeSlug)
-        : await client.fetchTournamentBundle(tournament.challongeSlug);
+      options.source === 'api'
+        ? await client.fetchTournamentBundle(tournament.challongeSlug)
+        : await client.fetchPublicTournamentBundle(tournament.challongeSlug);
 
     const eventDate = tournament.eventDateManual
       ? tournament.eventDate
@@ -99,7 +105,10 @@ export async function syncTournament(
           set: {
             rawName: participant.displayName,
             challongeSeed: participant.seed,
-            finalRank: participant.finalRank,
+            // The public bracket carries no final_rank, so a public sync must
+            // not blank a placement an API sync previously recorded. Absent
+            // means "unknown here", not "cleared".
+            ...(participant.finalRank !== null ? { finalRank: participant.finalRank } : {}),
             updatedAt: new Date(),
           },
         });

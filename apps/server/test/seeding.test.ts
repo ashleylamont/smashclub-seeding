@@ -62,7 +62,10 @@ async function setupRatedAndUpcoming(): Promise<string> {
   const client = fixtureClient([history, upcoming]);
   const rows = await db.select().from(tournaments);
   for (const row of rows) {
-    await syncTournament(db, client, row.id);
+    // `api` on purpose: seeding runs BEFORE an event starts, and the public
+    // bracket derives its roster from matches that do not exist yet. This is
+    // the one flow that genuinely needs the metered API.
+    await syncTournament(db, client, row.id, { source: 'api' });
   }
   await runRecompute(db);
   return rows.find((row) => row.challongeSlug === 'upcoming1')!.id;
@@ -130,7 +133,7 @@ describe('seeding workbench', () => {
       ...upcoming,
       participants: [...upcoming.participants, { id: 24, name: '[ATL] Falco Lombardi', seed: 4 }],
     };
-    await syncTournament(db, fixtureClient([grown]), upcomingId);
+    await syncTournament(db, fixtureClient([grown]), upcomingId, { source: 'api' });
 
     const result = await latestSeedingRun(db, upcomingId);
     expect(result!.run.status).toBe('stale');
@@ -147,7 +150,7 @@ describe('seeding workbench', () => {
         { id: 25, name: 'Aaa Newcomer', seed: 5 },
       ],
     };
-    await syncTournament(db, fixtureClient([withUnknowns]), upcomingId);
+    await syncTournament(db, fixtureClient([withUnknowns]), upcomingId, { source: 'api' });
     // Unknowns are queued for review, still unresolved at seeding time.
     expect((await db.select().from(reviewItems)).length).toBeGreaterThan(0);
 

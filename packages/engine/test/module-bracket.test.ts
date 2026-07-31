@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { ChallongePayloadError, extractModuleBracketPayload, extractPublicBracket } from '../src/challonge/extract';
+import {
+  ChallongePayloadError,
+  extractModuleBracketPayload,
+  extractModuleTournamentName,
+  extractPublicBracket,
+} from '../src/challonge/extract';
 
 /**
  * The public fallback reads `https://challonge.com/{slug}/module` because
@@ -81,6 +86,21 @@ describe('extractModuleBracketPayload', () => {
   it('rejects a truncated payload rather than returning a partial bracket', () => {
     const truncated = "<script>window._initialStoreState['TournamentStore'] = {\"matches_by_round\":{";
     expect(() => extractModuleBracketPayload(truncated)).toThrow(/truncated/i);
+  });
+});
+
+describe('extractModuleTournamentName', () => {
+  it('recovers the tournament name from the page title', () => {
+    // The module payload has no name field; the title is the only source.
+    expect(extractModuleTournamentName('<title>\nTech In Place # 10 - \nChallonge\n</title>')).toBe(
+      'Tech In Place # 10',
+    );
+  });
+
+  it('returns null when there is no title, so callers keep the name they hold', () => {
+    // Returning the slug here would rename every tournament to its slug.
+    expect(extractModuleTournamentName('<html><body>no title</body></html>')).toBeNull();
+    expect(extractModuleTournamentName('<title> - Challonge</title>')).toBeNull();
   });
 });
 

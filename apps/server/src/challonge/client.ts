@@ -1,6 +1,7 @@
 import {
   extractMatches,
   extractModuleBracketPayload,
+  extractModuleTournamentName,
   extractParticipants,
   extractPublicBracket,
   extractTournament,
@@ -98,18 +99,33 @@ export class ChallongeClient {
    * `unknown`; liveness is an explicit, expiring admin decision instead.
    */
   async fetchPublicTournamentBundle(slug: string): Promise<TournamentBundle> {
-    const bracket = await this.fetchPublicBracket(slug);
+    const html = await this.fetchModulePage(slug);
+    const payload = extractModuleBracketPayload(html);
+    const bracket = extractPublicBracket(payload);
+    const meta = (payload as { tournament?: Record<string, unknown> }).tournament ?? {};
+
+    const rawState = typeof meta.state === 'string' ? meta.state : null;
     const tournament: ChallongeTournament = {
-      id: 0,
-      name: slug,
+      id: typeof meta.id === 'number' ? meta.id : 0,
+      // The payload has no name; it lives in the page title. Empty string when
+      // unrecoverable so sync keeps the name it already has rather than
+      // overwriting it with the slug (`name || existing`).
+      name: extractModuleTournamentName(html) ?? '',
       url: slug,
-      state: bracket.allComplete ? 'complete' : 'unknown',
+      state: rawState ?? (bracket.allComplete ? 'complete' : 'unknown'),
+      // The module payload carries no tournament-level timestamps; the latest
+      // match time is the best available anchor.
       startedAt: null,
       completedAt: bracket.allComplete ? bracket.latestMatchDate : null,
       updatedAt: bracket.latestMatchDate,
-      tournamentType: null,
+      tournamentType: typeof meta.tournament_type === 'string' ? meta.tournament_type : null,
     };
     return { tournament, participants: bracket.participants, matches: bracket.matches, source: 'public' };
+  }
+
+  private async fetchModulePage(slug: string): Promise<string> {
+    const response = await this.request(`${this.publicBaseUrl}/${slug}/module`, false);
+    return response.text();
   }
 
   /**
@@ -123,8 +139,7 @@ export class ChallongeClient {
    * `matches_by_round` payload.
    */
   async fetchPublicBracket(slug: string): Promise<PublicBracket> {
-    const response = await this.request(`${this.publicBaseUrl}/${slug}/module`, false);
-    return extractPublicBracket(extractModuleBracketPayload(await response.text()));
+    return extractPublicBracket(extractModuleBracketPayload(await this.fetchModulePage(slug)));
   }
 
   /** PUT participant seed; used by the seeding push. */
