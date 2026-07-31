@@ -29,7 +29,15 @@ export async function createSeedingRun(db: Db, tournamentId: string, createdBy: 
     .from(tournamentParticipants)
     .where(eq(tournamentParticipants.tournamentId, tournamentId));
   if (participants.length === 0) {
-    throw new Error('Tournament has no participants to seed — sync it first.');
+    // Seeding happens BEFORE an event starts, and the public bracket derives its
+    // participant list from matches — which do not exist yet, and which Challonge
+    // only sometimes pre-generates. The roster is therefore only reliably
+    // available from the API, making seeding one of the few flows worth spending
+    // the metered allowance on.
+    throw new Error(
+      'Tournament has no participants to seed. Press "Sync (API)" first — the free public ' +
+        'bracket carries no roster until matches exist.',
+    );
   }
 
   const ratingByPlayer = new Map<string, { conservativeRating: number; rating: number; rd: number }>();
