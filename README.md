@@ -64,6 +64,35 @@ Environment variables (see `apps/server/src/env.ts`): `DATABASE_URL`
 `GOOGLE_CLIENT_ID/SECRET`, `ADMIN_EMAILS` (comma-separated; promoted to
 admin at login).
 
+`ADMIN_EMAILS` is matched against the account's primary email — the address
+from whichever provider was used to *sign up*. Linking a second provider
+later does not add its address to that check, so list the one the admin
+signed up with.
+
+### Accounts and providers
+
+Identity is the user row, never an email address. Discord and Google can be
+linked to one account even when their email addresses differ, so a work
+Google account and a personal Discord one land on the same player claim.
+
+Linking happens from **/me** while signed in. Signing in with a
+not-yet-linked provider creates a *separate* account instead — nothing can
+match two providers up before the user has proven they own both — so the
+sign-in page tells people to sign in with their original provider first and
+link from there.
+
+### Character head icons
+
+Players can pin up to four fighters, drawn as head icons beside their name.
+The PNGs are Nintendo's assets and are not committed; fetch them once with:
+
+```bash
+pnpm --filter @smashclub/fetch-character-icons start
+```
+
+Every icon falls back to a two-letter badge, so an empty
+`apps/web/public/characters/` is a cosmetic gap rather than a broken page.
+
 ## Production bootstrap
 
 1. Deploy (below) with secrets set.

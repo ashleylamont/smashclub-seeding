@@ -1,8 +1,31 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
+import type { Db } from '@smashclub/db';
 import { companies, playerClaims, players } from '@smashclub/db';
+import { charactersByPlayer, characterSlugsSchema, setPlayerCharacters } from '../../players/characters';
 import { authedProcedure, router } from '../trpc';
+
+/**
+ * Every self-service edit below is gated on the caller holding an *approved*
+ * claim on the player they are editing — a pending claim is not yet proof of
+ * anything, so it grants nothing.
+ */
+async function assertApprovedClaim(db: Db, userId: string, playerId: string): Promise<void> {
+  const approved = await db
+    .select({ id: playerClaims.id })
+    .from(playerClaims)
+    .where(
+      and(
+        eq(playerClaims.userId, userId),
+        eq(playerClaims.playerId, playerId),
+        eq(playerClaims.status, 'approved'),
+      ),
+    );
+  if (approved.length === 0) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'You have not claimed this player.' });
+  }
+}
 
 export const meRouter = router({
   /**
@@ -36,9 +59,14 @@ export const meRouter = router({
       .leftJoin(companies, eq(players.companyId, companies.id))
       .where(eq(playerClaims.userId, ctx.user.id))
       .orderBy(desc(playerClaims.createdAt));
+    const characters = await charactersByPlayer(
+      ctx.db,
+      rows.map((row) => row.playerId),
+    );
     return rows.map((row) => ({
       ...row,
       playerName: row.displayName ?? row.canonicalName,
+      characters: characters.get(row.playerId) ?? [],
       createdAt: row.createdAt.toISOString(),
       resolvedAt: row.resolvedAt?.toISOString() ?? null,
     }));
@@ -87,27 +115,48 @@ export const meRouter = router({
     return { ok: true };
   }),
 
-  /** Any approved claimant may edit the player's public display name. */
+  /**
+   * Any approved claimant may set the player's public alias — the name the
+   * leaderboard shows instead of the registry's canonical one. Null clears it
+   * and falls back to the canonical name.
+   */
   updateDisplayName: authedProcedure
     .input(z.object({ playerId: z.uuid(), displayName: z.string().trim().min(1).max(80).nullable() }))
     .mutation(async ({ ctx, input }) => {
-      const approved = await ctx.db
-        .select({ id: playerClaims.id })
-        .from(playerClaims)
-        .where(
-          and(
-            eq(playerClaims.userId, ctx.user.id),
-            eq(playerClaims.playerId, input.playerId),
-            eq(playerClaims.status, 'approved'),
-          ),
-        );
-      if (approved.length === 0) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'You have not claimed this player.' });
+      await assertApprovedClaim(ctx.db, ctx.user.id, input.playerId);
+
+      // Two players publishing the same alias would make the board ambiguous,
+      // so the name is claimed first-come. Canonical names may still collide —
+      // real people share names — it is only the chosen alias that is unique.
+      if (input.displayName) {
+        const clash = await ctx.db
+          .select({ id: players.id })
+          .from(players)
+          .where(
+            and(
+              sql`lower(${players.displayName}) = ${input.displayName.toLowerCase()}`,
+              eq(players.status, 'active'),
+              ne(players.id, input.playerId),
+            ),
+          );
+        if (clash.length > 0) {
+          throw new TRPCError({ code: 'CONFLICT', message: `“${input.displayName}” is already taken.` });
+        }
       }
+
       await ctx.db
         .update(players)
         .set({ displayName: input.displayName, updatedAt: new Date() })
         .where(eq(players.id, input.playerId));
+      return { ok: true };
+    }),
+
+  /** Approved claimants keep their own mains current. */
+  updateCharacters: authedProcedure
+    .input(z.object({ playerId: z.uuid(), characters: characterSlugsSchema }))
+    .mutation(async ({ ctx, input }) => {
+      await assertApprovedClaim(ctx.db, ctx.user.id, input.playerId);
+      await setPlayerCharacters(ctx.db, input.playerId, input.characters);
       return { ok: true };
     }),
 });

@@ -1,0 +1,61 @@
+/*
+ * Head icons beside a player's name. Square-edged like everything else, and
+ * sized to sit on the same baseline as the name without changing the row
+ * height of the board — the board's rhythm is the point of the board.
+ */
+
+.character-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  vertical-align: middle;
+}
+
+.character-icon {
+  display: block;
+  object-fit: contain;
+  image-rendering: crisp-edges;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  flex: none;
+}
+
+/* The text fallback stands in for a missing icon file, so it has to occupy
+   exactly the same box. */
+.character-icon-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--text-soft);
+  letter-spacing: -0.03em;
+  user-select: none;
+}
+
+.character-icons-sm .character-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.character-icons-sm .character-icon-fallback {
+  font-size: 9px;
+}
+
+.character-icons-lg .character-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.character-icons-lg .character-icon-fallback {
+  font-size: 13px;
+}
+
+/* The main is the one that matters; secondaries recede rather than compete. */
+.character-icons .character-icon:not(:first-child) {
+  opacity: 0.62;
+}
+
+.character-icons:hover .character-icon {
+  opacity: 1;
+}

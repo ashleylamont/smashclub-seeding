@@ -12,7 +12,13 @@ const envSchema = z.object({
   DISCORD_CLIENT_SECRET: z.string().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
-  /** Comma-separated emails promoted to admin at login. */
+  /**
+   * Comma-separated emails promoted to admin at login. Matched against the
+   * account's primary email — the address of the provider used to sign up.
+   * Providers linked afterwards may carry different addresses (that is
+   * supported and expected) but those addresses are not checked here, so list
+   * the one the admin originally signed up with.
+   */
   ADMIN_EMAILS: z.string().default(''),
   /** Absolute path of the built SPA to serve statically (production). */
   WEB_DIST_DIR: z.string().optional(),

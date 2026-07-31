@@ -49,3 +49,7 @@ apps/web/screenshots/
 
 # Raw Challonge dumps contain real player names
 challonge-raw/
+
+# Head icons are Nintendo's assets, fetched on demand rather than vendored.
+# Populate with: pnpm --filter @smashclub/fetch-character-icons start
+apps/web/public/characters/*.png
