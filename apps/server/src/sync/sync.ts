@@ -23,7 +23,31 @@ export interface SyncResult {
  * player IDs onto sets. Safe to run repeatedly; score amendments and DQ
  * changes upstream flow through.
  */
-export async function syncTournament(db: Db, client: ChallongeClient, tournamentId: string): Promise<SyncResult> {
+export interface SyncOptions {
+  /**
+   * `public` (THE DEFAULT) reads the unauthenticated, unmetered bracket page
+   * and never touches the API.
+   *
+   * `api` uses the authenticated Challonge API, falling back to the public
+   * bracket when the tournament is outside the account. It is opt-in per sync
+   * and deliberately NOT a fallback: Challonge's free tier allows 500 requests
+   * per MONTH, and an automatic fallback would quietly spend that allowance
+   * every time the public path had a bad day.
+   *
+   * The API is worth spending on for a tournament the club owns, because it is
+   * the only source of `final_rank` (placements). Everything the ratings engine
+   * needs — participants, matches, winners, scores, seeds — is in the public
+   * bracket.
+   */
+  source?: 'api' | 'public';
+}
+
+export async function syncTournament(
+  db: Db,
+  client: ChallongeClient,
+  tournamentId: string,
+  options: SyncOptions = {},
+): Promise<SyncResult> {
   const [tournament] = await db.select().from(tournaments).where(eq(tournaments.id, tournamentId));
   if (!tournament) throw new Error(`Unknown tournament ${tournamentId}`);
 
@@ -35,7 +59,10 @@ export async function syncTournament(db: Db, client: ChallongeClient, tournament
   try {
     await db.update(tournaments).set({ syncState: 'syncing', updatedAt: new Date() }).where(eq(tournaments.id, tournamentId));
 
-    const bundle = await client.fetchTournamentBundle(tournament.challongeSlug);
+    const bundle =
+      options.source === 'api'
+        ? await client.fetchTournamentBundle(tournament.challongeSlug)
+        : await client.fetchPublicTournamentBundle(tournament.challongeSlug);
 
     const eventDate = tournament.eventDateManual
       ? tournament.eventDate
@@ -78,7 +105,10 @@ export async function syncTournament(db: Db, client: ChallongeClient, tournament
           set: {
             rawName: participant.displayName,
             challongeSeed: participant.seed,
-            finalRank: participant.finalRank,
+            // The public bracket carries no final_rank, so a public sync must
+            // not blank a placement an API sync previously recorded. Absent
+            // means "unknown here", not "cleared".
+            ...(participant.finalRank !== null ? { finalRank: participant.finalRank } : {}),
             updatedAt: new Date(),
           },
         });
@@ -141,10 +171,19 @@ export async function syncTournament(db: Db, client: ChallongeClient, tournament
     const outcomes = await matchTournamentParticipants(db, tournamentId);
     const queuedForReview = outcomes.filter((o) => o.method === 'queued').length;
 
-    const syncState = bundle.tournament.state === 'complete' ? 'synced' : bundle.tournament.state === 'underway' ? 'live' : 'registered';
+    // `underway` deliberately no longer maps to a `live` sync state. Challonge's
+    // `underway` is sticky — tournaments abandoned years ago still report it —
+    // so deriving liveness from it meant polling dead brackets every 15s
+    // forever, which exhausts the free tier's 500 requests/month in about 40
+    // minutes. Liveness is now an explicit, expiring admin decision
+    // (`tournaments.live_until`); this only records synced-vs-not.
+    const syncState = bundle.tournament.state === 'complete' ? 'synced' : 'registered';
+    // A finished bracket ends live monitoring immediately, without waiting for
+    // the window to expire.
+    const liveUntil = bundle.tournament.state === 'complete' ? null : tournament.liveUntil;
     await db
       .update(tournaments)
-      .set({ syncState, lastSyncedAt: new Date(), syncError: null, updatedAt: new Date() })
+      .set({ syncState, liveUntil, lastSyncedAt: new Date(), syncError: null, updatedAt: new Date() })
       .where(eq(tournaments.id, tournamentId));
 
     const result: SyncResult = {

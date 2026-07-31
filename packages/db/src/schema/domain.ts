@@ -195,7 +195,22 @@ export const tournaments = pgTable('tournaments', {
   /** True once an admin overrides eventDate; sync stops touching it. */
   eventDateManual: boolean('event_date_manual').notNull().default(false),
   challongeState: text('challonge_state'),
+  /**
+   * NOTE: the `live` enum value is retained for historical rows only. Live
+   * monitoring is no longer expressed here — see `liveUntil`.
+   */
   syncState: syncStateEnum('sync_state').notNull().default('registered'),
+  /**
+   * Live monitoring is EXPLICIT and SELF-EXPIRING: an admin starts it for a
+   * bounded window and the fast poller only considers tournaments whose window
+   * has not passed. It is never inferred from Challonge's `state`.
+   *
+   * Why: `state: underway` is sticky. Tournaments abandoned years ago still
+   * report it, and the public bracket path synthesises it for any unfinished
+   * bracket — so inferring "live" from state meant polling dead tournaments
+   * forever.
+   */
+  liveUntil: timestamp('live_until', { withTimezone: true }),
   isRookie: boolean('is_rookie').notNull().default(false),
   lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
   syncError: text('sync_error'),
