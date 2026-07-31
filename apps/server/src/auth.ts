@@ -40,6 +40,16 @@ export function createAuth(db: Db, env: Env, options: { enableCredentials?: bool
       accountLinking: {
         enabled: true,
         trustedProviders: ['discord', 'google'],
+        /**
+         * Identity is the user row, never the email address. Club members
+         * routinely sign in with a work Google account and a personal Discord
+         * one; with this off, better-auth refuses to link the second provider
+         * whenever its email differs, which is exactly the common case. Linking
+         * here is always an explicit, authenticated action from /me — the user
+         * is already signed in to the account being linked *to* — so the
+         * differing address is not a trust boundary being crossed.
+         */
+        allowDifferentEmails: true,
       },
     },
     user: {

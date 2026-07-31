@@ -15,6 +15,7 @@ import {
 } from 'recharts';
 import { trpc } from '../lib/trpc';
 import type { PlayerData, PlayerEventView } from '../lib/apiTypes';
+import { CharacterIcons } from '../components/CharacterIcons';
 import { formatDate, tierClass } from '../lib/format';
 import './PlayerPage.css';
 
@@ -127,6 +128,11 @@ function PlayerProfile({ data }: { data: PlayerData }) {
               </>
             )}
           </p>
+          {player.characters.length > 0 && (
+            <div className="profile-characters">
+              <CharacterIcons slugs={player.characters} size="lg" />
+            </div>
+          )}
         </div>
 
         {/* The headline figure is the skill estimate with its uncertainty

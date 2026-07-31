@@ -2,11 +2,27 @@ import { eq } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
 import { identityDecisions, players, reviewItems, tournamentParticipants } from '@smashclub/db';
 import { backfillSetPlayers, ensureAlias } from '../identity/matching';
+import { setPlayerCharacters } from '../players/characters';
+
+/**
+ * Optional profile details captured when the reviewer mints a new player.
+ * Every field is optional so the queue keeps its one-click rhythm: supplying
+ * nothing reproduces the previous behaviour exactly.
+ */
+export interface NewPlayerDetails {
+  /** Overrides the bracket's cleaned name as the registry name. */
+  canonicalName?: string;
+  /** Public-facing alias. */
+  displayName?: string | null;
+  /** Overrides the company detected from the bracket entry. */
+  companyId?: string | null;
+  characters?: string[];
+}
 
 export type ReviewResolutionInput =
   | { kind: 'linked_existing'; playerId: string }
-  | { kind: 'created_new' }
-  | { kind: 'kept_separate' };
+  | { kind: 'created_new'; details?: NewPlayerDetails }
+  | { kind: 'kept_separate'; details?: NewPlayerDetails };
 
 /**
  * Resolve a pending review item. Every resolution links the participant to a
@@ -44,12 +60,29 @@ export async function resolveReviewItem(
     // created_new and kept_separate both mint a new player; kept_separate
     // additionally records rejections against the offered candidates so the
     // pair is never suggested again.
+    const details = input.details;
+    const canonicalName = details?.canonicalName?.trim() || item.cleanedName;
+    const companyId = details?.companyId !== undefined ? details.companyId : item.companyId;
+
     const [created] = await db
       .insert(players)
-      .values({ canonicalName: item.cleanedName, companyId: item.companyId })
+      .values({
+        canonicalName,
+        companyId,
+        displayName: details?.displayName?.trim() || null,
+      })
       .returning({ id: players.id });
     playerId = created!.id;
+
+    // The bracket's own spelling is always aliased under the company it was
+    // entered with, so the next import of that same entry matches silently —
+    // even when the reviewer corrected the name or company on the way through.
     await ensureAlias(db, playerId, aliasNorm, item.companyId, 'challonge');
+    const canonicalNorm = canonicalName.toLowerCase();
+    if (canonicalNorm !== aliasNorm || companyId !== item.companyId) {
+      await ensureAlias(db, playerId, canonicalNorm, companyId, 'manual');
+    }
+    if (details?.characters) await setPlayerCharacters(db, playerId, details.characters);
 
     if (input.kind === 'kept_separate') {
       const candidates = (item.candidates as Array<{ playerId: string }> | null) ?? [];

@@ -64,6 +64,39 @@ Environment variables (see `apps/server/src/env.ts`): `DATABASE_URL`
 `GOOGLE_CLIENT_ID/SECRET`, `ADMIN_EMAILS` (comma-separated; promoted to
 admin at login).
 
+`ADMIN_EMAILS` is matched against the account's primary email — the address
+from whichever provider was used to *sign up*. Linking a second provider
+later does not add its address to that check, so list the one the admin
+signed up with.
+
+### Accounts and providers
+
+Identity is the user row, never an email address. Discord and Google can be
+linked to one account even when their email addresses differ, so a work
+Google account and a personal Discord one land on the same player claim.
+
+Linking happens from **/me** while signed in. Signing in with a
+not-yet-linked provider creates a *separate* account instead — nothing can
+match two providers up before the user has proven they own both — so the
+sign-in page tells people to sign in with their original provider first and
+link from there.
+
+### Character head icons
+
+Players can pin up to four fighters, drawn as head icons beside their name.
+The PNGs live in `apps/web/public/characters/` and are committed — Vite
+copies `public/` into `dist/` at build time and the server serves `dist/`,
+so an icon absent from the build context is absent from the deployed image.
+
+To refresh them after a roster change, use either
+`pnpm --filter @smashclub/fetch-character-icons start` or the standalone
+`tools/fetch-character-icons/fetch-icons.sh` (bash, curl and python3 only;
+emits a zip), then rebuild the web app. See
+`apps/web/public/characters/README.md`.
+
+Every icon falls back to a two-letter badge, so a fighter without one is a
+cosmetic gap rather than a broken page.
+
 ## Production bootstrap
 
 1. Deploy (below) with secrets set.

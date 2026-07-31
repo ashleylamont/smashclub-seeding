@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import type { LeaderboardRow } from '../lib/apiTypes';
 import { Sparkline } from './Sparkline';
+import { CharacterIcons } from './CharacterIcons';
 import { tierClass } from '../lib/format';
 import './Leaderboard.css';
 
@@ -196,7 +197,10 @@ export function Leaderboard({ rows, trends }: Props) {
                       </span>
                     )}
                   </span>
-                  <span className="identity-meta">{row.companyCode ?? 'IND'}</span>
+                  <span className="identity-meta">
+                    {row.companyCode ?? 'IND'}
+                    <CharacterIcons slugs={row.characters} />
+                  </span>
                 </span>
 
                 <span className="rating">
