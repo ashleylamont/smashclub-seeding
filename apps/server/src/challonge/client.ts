@@ -1,5 +1,6 @@
 import {
   extractMatches,
+  extractModuleBracketPayload,
   extractParticipants,
   extractPublicBracket,
   extractTournament,
@@ -82,12 +83,27 @@ export class ChallongeClient {
         // 404 with credentials: tournament may be outside the account; try public.
       }
     }
+    return this.fetchPublicTournamentBundle(slug);
+  }
+
+  /**
+   * Bundle built purely from the public bracket, never touching the metered
+   * API. This is what live polling uses: Challonge's free tier allows 500 API
+   * requests per MONTH, so a metered poll loop is not viable at any interval.
+   *
+   * `state` is deliberately NOT reported as `underway` for an unfinished
+   * bracket. The public payload cannot distinguish "in progress right now"
+   * from "abandoned in 2022", and treating unfinished as underway is what made
+   * dead tournaments poll forever. Anything not complete is reported as
+   * `unknown`; liveness is an explicit, expiring admin decision instead.
+   */
+  async fetchPublicTournamentBundle(slug: string): Promise<TournamentBundle> {
     const bracket = await this.fetchPublicBracket(slug);
     const tournament: ChallongeTournament = {
       id: 0,
       name: slug,
       url: slug,
-      state: bracket.allComplete ? 'complete' : 'underway',
+      state: bracket.allComplete ? 'complete' : 'unknown',
       startedAt: null,
       completedAt: bracket.allComplete ? bracket.latestMatchDate : null,
       updatedAt: bracket.latestMatchDate,
@@ -96,8 +112,19 @@ export class ChallongeClient {
     return { tournament, participants: bracket.participants, matches: bracket.matches, source: 'public' };
   }
 
+  /**
+   * Public fallback for tournaments outside the credentialed account — the API
+   * 404s for those, and most of the club's history belongs to other organisers.
+   *
+   * Reads the embeddable `/module` page rather than `{slug}.json`: that JSON
+   * endpoint now sits behind Cloudflare's bot challenge and answers any
+   * non-browser client with 403 + `cf-mitigated: challenge`, whatever
+   * User-Agent it sends. The module page is not challenged and embeds the same
+   * `matches_by_round` payload.
+   */
   async fetchPublicBracket(slug: string): Promise<PublicBracket> {
-    return extractPublicBracket(await this.requestJson(`${this.publicBaseUrl}/${slug}.json`, false));
+    const response = await this.request(`${this.publicBaseUrl}/${slug}/module`, false);
+    return extractPublicBracket(extractModuleBracketPayload(await response.text()));
   }
 
   /** PUT participant seed; used by the seeding push. */
@@ -156,7 +183,19 @@ export class ChallongeClient {
         attempt += 1;
         continue;
       }
-      if (response.status === 429 || response.status >= 500) {
+      // 429 is NOT retried. Challonge's limit is a MONTHLY request quota, not a
+      // burst limit, so a 429 means the allowance is gone — retrying three
+      // times with backoff turns one rejected request into four, all of which
+      // still count against the quota. Fail loudly and immediately instead.
+      if (response.status === 429) {
+        throw new ChallongeApiError(
+          `Challonge rejected the request (429): the API request quota is exhausted. ` +
+            `The free tier allows 500 requests per month; check https://connect.challonge.com. ` +
+            `This request was NOT retried, deliberately.`,
+          429,
+        );
+      }
+      if (response.status >= 500) {
         if (attempt >= this.maxRetries) {
           throw new ChallongeApiError(`Challonge request failed (${response.status}) after retries.`, response.status);
         }
@@ -174,8 +213,21 @@ export class ChallongeClient {
         throw new ChallongeApiError('Challonge tournament not found (404).', 404);
       }
       if (!response.ok) {
+        // Report the headers that identify WHY, not 200 chars of body. A
+        // Cloudflare challenge page's body says only "Just a moment..." while
+        // `cf-mitigated: challenge` is what distinguishes bot-blocking from an
+        // auth or slug problem — the useful half used to be discarded.
+        const mitigated = response.headers.get('cf-mitigated');
+        const server = response.headers.get('server');
+        const contentType = response.headers.get('content-type') ?? 'unknown';
+        const hint = mitigated
+          ? ` — blocked by a ${server ?? 'CDN'} bot challenge (cf-mitigated: ${mitigated}); this endpoint cannot be read by a non-browser client`
+          : '';
         const detail = (await response.text().catch(() => '')).slice(0, 200);
-        throw new ChallongeApiError(`Challonge request failed (${response.status}): ${detail}`, response.status);
+        throw new ChallongeApiError(
+          `Challonge request failed (${response.status}) for ${url} [content-type: ${contentType}]${hint}: ${detail}`,
+          response.status,
+        );
       }
       return response;
     }
