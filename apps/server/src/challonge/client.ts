@@ -124,7 +124,18 @@ export class ChallongeClient {
   }
 
   private async fetchModulePage(slug: string): Promise<string> {
-    const response = await this.request(`${this.publicBaseUrl}/${slug}/module`, false);
+    // `Accept: text/html`, overriding the client-wide `application/json`.
+    //
+    // This is load-bearing. /module is an HTML page, and asking Rails for a JSON
+    // representation it does not have makes it return 500 —
+    // {"status":"500","error":"Internal Server Error"}. The failure is
+    // INTERMITTENT because Cloudflare serves cached HTML for some requests
+    // regardless of Accept, so the same URL alternates 200/500 and looks
+    // slug-specific or random. Measured before this fix: ~10 of 20 requests
+    // failed with Accept: application/json; 0 of 12 with text/html.
+    const response = await this.request(`${this.publicBaseUrl}/${slug}/module`, false, {
+      headers: { Accept: 'text/html' },
+    });
     return response.text();
   }
 
@@ -212,7 +223,13 @@ export class ChallongeClient {
       }
       if (response.status >= 500) {
         if (attempt >= this.maxRetries) {
-          throw new ChallongeApiError(`Challonge request failed (${response.status}) after retries.`, response.status);
+          // Include the URL and body: "failed (500) after retries" alone gives
+          // no way to tell which endpoint, which tournament, or why.
+          const detail = (await response.text().catch(() => '')).slice(0, 200);
+          throw new ChallongeApiError(
+            `Challonge request failed (${response.status}) after retries for ${url}: ${detail}`,
+            response.status,
+          );
         }
         await sleep(backoffMs(attempt));
         attempt += 1;
