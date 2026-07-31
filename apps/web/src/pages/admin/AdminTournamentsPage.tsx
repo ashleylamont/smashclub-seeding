@@ -171,6 +171,13 @@ function TournamentRow({ tournament, onChanged }: { tournament: TournamentListIt
     mutationFn: () => trpc.admin.syncNow.mutate({ tournamentId: tournament.id }),
     onSuccess: onChanged,
   });
+  // Opt-in metered sync. The default reads the free public bracket; the API is
+  // only worth spending quota on for a tournament the club owns, since it is
+  // the sole source of final placements.
+  const syncApi = useMutation({
+    mutationFn: () => trpc.admin.syncNow.mutate({ tournamentId: tournament.id, useApi: true }),
+    onSuccess: onChanged,
+  });
   const update = useMutation({
     mutationFn: (patch: { isRookie?: boolean; eventDate?: string | null }) =>
       trpc.admin.updateTournament.mutate({ tournamentId: tournament.id, ...patch }),
@@ -207,7 +214,7 @@ function TournamentRow({ tournament, onChanged }: { tournament: TournamentListIt
     setEditingDate(true);
   };
 
-  const error = sync.error ?? update.error ?? setLive.error ?? endLive.error;
+  const error = sync.error ?? syncApi.error ?? update.error ?? setLive.error ?? endLive.error;
 
   return (
     <tr>
@@ -275,8 +282,23 @@ function TournamentRow({ tournament, onChanged }: { tournament: TournamentListIt
         {tournament.lastSyncedAt && <div className="muted">{timeAgo(tournament.lastSyncedAt)}</div>}
       </td>
       <td>
-        <button type="button" className="btn btn-small" disabled={sync.isPending} onClick={() => sync.mutate()}>
+        <button
+          type="button"
+          className="btn btn-small"
+          disabled={sync.isPending}
+          title="Sync from the free public bracket. No API quota used."
+          onClick={() => sync.mutate()}
+        >
           {sync.isPending ? 'Syncing…' : 'Sync now'}
+        </button>{' '}
+        <button
+          type="button"
+          className="btn btn-small"
+          disabled={syncApi.isPending}
+          title="Sync via the Challonge API — SPENDS ~3 of the 500 requests/month allowance. Only useful for tournaments the club owns; it is the only way to get final placements."
+          onClick={() => syncApi.mutate()}
+        >
+          {syncApi.isPending ? 'Syncing…' : 'Sync (API)'}
         </button>{' '}
         {isLive ? (
           <button

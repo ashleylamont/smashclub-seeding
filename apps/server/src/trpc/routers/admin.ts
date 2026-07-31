@@ -50,11 +50,26 @@ export const adminRouter = router({
       return { tournamentId: row.id, slug };
     }),
 
-  syncNow: adminProcedure.input(z.object({ tournamentId: z.uuid() })).mutation(async ({ ctx, input }) => {
-    const result = await syncTournament(ctx.db, ctx.challonge, input.tournamentId);
-    ctx.recomputeTrigger.request();
-    return result;
-  }),
+  syncNow: adminProcedure
+    .input(
+      z.object({
+        tournamentId: z.uuid(),
+        /**
+         * Spend metered API requests for this sync. Off by default: the free
+         * tier is 500 requests/month and the public bracket carries everything
+         * the ratings engine needs. Worth turning on for a tournament the club
+         * owns, since the API is the only source of final placements.
+         */
+        useApi: z.boolean().default(false),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const result = await syncTournament(ctx.db, ctx.challonge, input.tournamentId, {
+        source: input.useApi ? 'api' : 'public',
+      });
+      ctx.recomputeTrigger.request();
+      return result;
+    }),
 
   /**
    * Open a bounded live-monitoring window. Liveness is an explicit admin

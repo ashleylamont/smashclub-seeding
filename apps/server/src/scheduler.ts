@@ -23,12 +23,17 @@ const LIVE_POLL_MS = 60_000;
  *   daily otherwise (cron sweep decides who is due)
  * - completed-but-unsynced: picked up by the sweep
  *
+ * NOTHING HERE TOUCHES THE METERED API. Both the live poller and the sweep use
+ * the unauthenticated public bracket (syncTournament's default). Challonge's
+ * free tier is 500 API requests per MONTH — a dozen tournaments swept daily at
+ * 3 API calls each would be ~1,080/month on its own, over twice the allowance.
+ * API syncs are an explicit, per-tournament admin action.
+ *
  * LIVENESS IS NEVER INFERRED FROM CHALLONGE STATE. `underway` is sticky —
  * tournaments abandoned years ago still report it, and an unfinished public
  * bracket cannot be told apart from one in progress — so inferring it meant
- * polling dead tournaments forever. Challonge's free tier is 500 API requests
- * per MONTH; a single permanently-"live" tournament exhausted that in about 40
- * minutes.
+ * polling dead tournaments forever, which exhausted a month's API allowance in
+ * about 40 minutes.
  */
 export class SyncScheduler {
   private liveTimer: ReturnType<typeof setInterval> | null = null;
@@ -63,8 +68,7 @@ export class SyncScheduler {
       .from(tournaments)
       .where(gt(tournaments.liveUntil, new Date()));
     for (const row of liveRows) {
-      // `public`: live polling must never touch the metered API.
-      await this.syncOne(row.id, true, { source: 'public' });
+      await this.syncOne(row.id, true);
     }
   }
 

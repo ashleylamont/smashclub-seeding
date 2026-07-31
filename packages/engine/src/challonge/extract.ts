@@ -217,6 +217,21 @@ export function extractModuleBracketPayload(html: string): unknown {
 }
 
 /**
+ * The module payload carries the tournament's id, state and type but NOT its
+ * name — that appears only in the page title, as "<name> - Challonge".
+ *
+ * Returns null when no name can be recovered, so callers keep the name they
+ * already hold rather than overwriting it with a slug.
+ */
+export function extractModuleTournamentName(html: string): string | null {
+  const match = /<title>([\s\S]*?)<\/title>/i.exec(html);
+  if (!match) return null;
+  const title = match[1]!.replace(/\s+/g, ' ').trim();
+  const name = title.replace(/\s*-\s*Challonge\s*$/i, '').trim();
+  return name.length > 0 ? name : null;
+}
+
+/**
  * Challonge's JSON endpoint reports set scores as `scores_csv` ("2-1,0-2"); the
  * embedded module payload reports them as a `scores` array ([2, 1]). Normalise
  * the latter so forfeit detection keeps working — {@link scoresIndicateForfeit}
