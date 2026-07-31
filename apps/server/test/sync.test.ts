@@ -130,11 +130,47 @@ describe('syncTournament', () => {
     expect(forfeit!.exclusionManual).toBe(true);
   });
 
-  it('marks an underway tournament as live', async () => {
+  /**
+   * Regression guard. `underway` used to map to syncState 'live', which the
+   * scheduler fast-polled every 15s forever. Challonge's `underway` is sticky —
+   * tournaments abandoned years ago still report it — so dead brackets were
+   * polled indefinitely, exhausting the free tier's 500 requests/month in about
+   * 40 minutes. Liveness is now explicit and expiring (`liveUntil`).
+   */
+  it('does NOT infer live monitoring from an underway state', async () => {
     const id = await tournamentId();
     const live: FixtureTournament = { ...baseFixture, state: 'underway', completedAt: null };
     await syncTournament(db, fixtureClient([live]), id);
     const [tournament] = await db.select().from(tournaments);
-    expect(tournament!.syncState).toBe('live');
+    expect(tournament!.syncState).toBe('registered');
+    expect(tournament!.liveUntil).toBeNull();
+  });
+
+  it('keeps an open live window while the bracket is unfinished', async () => {
+    const id = await tournamentId();
+    const liveUntil = new Date(Date.now() + 60 * 60 * 1000);
+    await db.update(tournaments).set({ liveUntil }).where(eq(tournaments.id, id));
+
+    const unfinished: FixtureTournament = { ...baseFixture, state: 'underway', completedAt: null };
+    await syncTournament(db, fixtureClient([unfinished]), id);
+
+    const [tournament] = await db.select().from(tournaments);
+    expect(tournament!.liveUntil?.toISOString()).toBe(liveUntil.toISOString());
+  });
+
+  it('closes the live window as soon as the bracket completes', async () => {
+    const id = await tournamentId();
+    await db
+      .update(tournaments)
+      .set({ liveUntil: new Date(Date.now() + 60 * 60 * 1000) })
+      .where(eq(tournaments.id, id));
+
+    // baseFixture is a completed tournament.
+    await syncTournament(db, fixtureClient([baseFixture]), id);
+
+    const [tournament] = await db.select().from(tournaments);
+    expect(tournament!.syncState).toBe('synced');
+    // Without this the poller would keep going until the window ran out.
+    expect(tournament!.liveUntil).toBeNull();
   });
 });
