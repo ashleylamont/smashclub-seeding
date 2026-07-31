@@ -91,6 +91,29 @@ export const playerAliases = pgTable(
   ],
 );
 
+/**
+ * Fighters a player mains, shown as head icons beside their name. Ordered by
+ * `position` (0 = the main), so "mains Fox, secondaries Falco" survives a
+ * round-trip rather than collapsing into an unordered set.
+ *
+ * Slugs are validated against the shared roster at the API boundary rather
+ * than by a DB enum: the roster is a list of names, and a new DLC fighter
+ * should not need a migration.
+ */
+export const playerCharacters = pgTable(
+  'player_characters',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    playerId: uuid('player_id')
+      .notNull()
+      .references(() => players.id, { onDelete: 'cascade' }),
+    characterSlug: text('character_slug').notNull(),
+    position: integer('position').notNull().default(0),
+    ...timestamps,
+  },
+  (table) => [uniqueIndex('player_characters_player_slug_idx').on(table.playerId, table.characterSlug)],
+);
+
 export const identityDecisionKindEnum = pgEnum('identity_decision_kind', ['merge', 'keep_separate']);
 
 /**

@@ -219,6 +219,20 @@
   color: var(--text-soft);
   white-space: nowrap;
   flex-shrink: 0;
+  /* The company tag and the head icons sit on one line beside the name. The
+     row aligns on the baseline, but icons have none, so this inner box
+     centres them against the tag instead. */
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* The icons are supporting detail — at board width the name and the rating are
+   what the row is for, so they are the first thing to go. */
+@media (max-width: 720px) {
+  .identity-meta .character-icons {
+    display: none;
+  }
 }
 
 /* ── rating + confidence ─────────────────────────────────────── */

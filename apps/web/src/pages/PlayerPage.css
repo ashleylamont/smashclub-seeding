@@ -37,6 +37,10 @@
   flex-wrap: wrap;
 }
 
+.profile-characters {
+  margin-top: var(--s2);
+}
+
 /* The headline figure: rating and its uncertainty on one baseline. */
 .profile-headline {
   display: grid;

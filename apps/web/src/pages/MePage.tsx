@@ -4,6 +4,7 @@ import { Link, Navigate } from '@tanstack/react-router';
 import { authClient, sessionRole } from '../lib/auth';
 import { trpc } from '../lib/trpc';
 import type { MyClaim } from '../lib/apiTypes';
+import { CharacterPicker } from '../components/CharacterPicker';
 import { formatDate } from '../lib/format';
 import './Auth.css';
 
@@ -72,22 +73,35 @@ function LinkedProviders() {
     }
   };
 
+  const unlinked = PROVIDERS.filter((provider) => !linked.has(provider));
+
   return (
-    <div className="provider-list">
-      {PROVIDERS.map((provider) =>
-        linked.has(provider) ? (
-          <span key={provider} className="chip chip-success">
-            ✓ {provider === 'discord' ? 'Discord' : 'Google'} linked
-          </span>
-        ) : (
-          <button key={provider} type="button" className="btn btn-small" onClick={() => void link(provider)}>
-            Link {provider === 'discord' ? 'Discord' : 'Google'}
-          </button>
-        ),
+    <>
+      <div className="provider-list">
+        {PROVIDERS.map((provider) =>
+          linked.has(provider) ? (
+            <span key={provider} className="chip chip-success">
+              ✓ {provider === 'discord' ? 'Discord' : 'Google'} linked
+            </span>
+          ) : (
+            <button key={provider} type="button" className="btn btn-small" onClick={() => void link(provider)}>
+              Link {provider === 'discord' ? 'Discord' : 'Google'}
+            </button>
+          ),
+        )}
+        {accounts.isError && <span className="error-text">{accounts.error.message}</span>}
+        {error && <span className="error-text">{error}</span>}
+      </div>
+      {/* Prompted rather than buried, because the failure mode is silent: sign
+          in with the unlinked provider some day and you get a second, empty
+          account instead of this one. */}
+      {accounts.data && unlinked.length > 0 && (
+        <p className="muted">
+          Link {unlinked.map((provider) => (provider === 'discord' ? 'Discord' : 'Google')).join(' and ')} so you can
+          sign in either way and still land on this account. A different email address on the other provider is fine.
+        </p>
       )}
-      {accounts.isError && <span className="error-text">{accounts.error.message}</span>}
-      {error && <span className="error-text">{error}</span>}
-    </div>
+    </>
   );
 }
 
@@ -167,41 +181,77 @@ function LiveClaim({ claim, onChanged }: { claim: MyClaim; onChanged: () => void
       </div>
       {claim.note && <p className="muted">Note: {claim.note}</p>}
       {withdraw.isError && <p className="error-text">{withdraw.error.message}</p>}
-      {claim.status === 'approved' && <DisplayNameEditor claim={claim} onChanged={onChanged} />}
+      {claim.status === 'approved' && <ProfileEditor claim={claim} onChanged={onChanged} />}
     </div>
   );
 }
 
-function DisplayNameEditor({ claim, onChanged }: { claim: MyClaim; onChanged: () => void }) {
+/**
+ * Self-service profile editing for an approved claimant. Both fields are the
+ * player's own to set — an admin should not be the bottleneck on someone
+ * changing their tag or switching mains.
+ */
+function ProfileEditor({ claim, onChanged }: { claim: MyClaim; onChanged: () => void }) {
   const [displayName, setDisplayName] = useState(claim.displayName ?? '');
-  const update = useMutation({
+  const [characters, setCharacters] = useState<string[]>(claim.characters);
+
+  const updateName = useMutation({
     mutationFn: (name: string | null) =>
       trpc.me.updateDisplayName.mutate({ playerId: claim.playerId, displayName: name }),
     onSuccess: onChanged,
   });
 
+  const updateCharacters = useMutation({
+    mutationFn: (slugs: string[]) => trpc.me.updateCharacters.mutate({ playerId: claim.playerId, characters: slugs }),
+    onSuccess: onChanged,
+  });
+
+  const dirtyCharacters = characters.join(',') !== claim.characters.join(',');
+
   return (
-    <div className="display-name-row">
-      <label htmlFor="display-name" className="muted">
-        Display name
-      </label>
-      <input
-        id="display-name"
-        className="input"
-        value={displayName}
-        placeholder={claim.canonicalName}
-        onChange={(e) => setDisplayName(e.target.value)}
-      />
-      <button
-        type="button"
-        className="btn btn-small"
-        disabled={update.isPending}
-        onClick={() => update.mutate(displayName.trim() === '' ? null : displayName.trim())}
-      >
-        Save
-      </button>
-      {update.isSuccess && <span className="chip chip-success">saved</span>}
-      {update.isError && <span className="error-text">{update.error.message}</span>}
+    <div className="profile-editor">
+      <div className="display-name-row">
+        <label htmlFor="display-name" className="muted">
+          Public alias
+        </label>
+        <input
+          id="display-name"
+          className="input"
+          value={displayName}
+          placeholder={claim.canonicalName}
+          onChange={(e) => setDisplayName(e.target.value)}
+        />
+        <button
+          type="button"
+          className="btn btn-small"
+          disabled={updateName.isPending}
+          onClick={() => updateName.mutate(displayName.trim() === '' ? null : displayName.trim())}
+        >
+          Save
+        </button>
+        {updateName.isSuccess && <span className="chip chip-success">saved</span>}
+        {updateName.isError && <span className="error-text">{updateName.error.message}</span>}
+      </div>
+      <p className="muted">
+        The name shown on the leaderboard. Leave it blank to go by “{claim.canonicalName}”.
+      </p>
+
+      <div className="character-editor">
+        <div className="display-name-row">
+          <span className="muted">Characters</span>
+          <button
+            type="button"
+            className="btn btn-small"
+            disabled={!dirtyCharacters || updateCharacters.isPending}
+            onClick={() => updateCharacters.mutate(characters)}
+          >
+            Save
+          </button>
+          {updateCharacters.isSuccess && !dirtyCharacters && <span className="chip chip-success">saved</span>}
+          {updateCharacters.isError && <span className="error-text">{updateCharacters.error.message}</span>}
+        </div>
+        <CharacterPicker value={characters} onChange={setCharacters} />
+      </div>
     </div>
   );
 }

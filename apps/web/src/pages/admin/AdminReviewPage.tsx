@@ -1,12 +1,25 @@
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
 import type { ReviewCandidate, ReviewItem } from '../../lib/apiTypes';
 import { timeAgo } from '../../lib/format';
+import { PlayerFormModal, type PlayerFormValues } from '../../components/PlayerFormModal';
+
+/** Details the reviewer may attach when a resolution mints a new player. */
+interface NewPlayerDetails {
+  canonicalName?: string;
+  displayName?: string | null;
+  companyCode?: string | null;
+  characters?: string[];
+}
 
 type Resolution =
   | { kind: 'linked_existing'; playerId: string }
-  | { kind: 'created_new' }
-  | { kind: 'kept_separate' };
+  | { kind: 'created_new'; details?: NewPlayerDetails }
+  | { kind: 'kept_separate'; details?: NewPlayerDetails };
+
+/** Which resolution the detail form is currently standing in for. */
+type DetailKind = 'created_new' | 'kept_separate';
 
 export function AdminReviewPage() {
   const queryClient = useQueryClient();
@@ -44,12 +57,34 @@ export function AdminReviewPage() {
 
 function ReviewCard({ item, onResolved }: { item: ReviewItem; onResolved: () => void }) {
   const candidates = (item.candidates as ReviewCandidate[] | null) ?? [];
+  const [detailKind, setDetailKind] = useState<DetailKind | null>(null);
+
+  const companies = useQuery({
+    queryKey: ['admin', 'companies'],
+    queryFn: () => trpc.admin.companies.query(),
+  });
 
   const resolve = useMutation({
     mutationFn: (resolution: Resolution) =>
       trpc.admin.resolveReview.mutate({ reviewItemId: item.id, resolution }),
-    onSuccess: onResolved,
+    onSuccess: () => {
+      setDetailKind(null);
+      onResolved();
+    },
   });
+
+  const submitDetails = (values: PlayerFormValues) => {
+    if (!detailKind) return;
+    resolve.mutate({
+      kind: detailKind,
+      details: {
+        canonicalName: values.canonicalName,
+        displayName: values.displayName === '' ? null : values.displayName,
+        companyCode: values.companyCode === '' ? null : values.companyCode,
+        characters: values.characters,
+      },
+    });
+  };
 
   return (
     <div className="card review-card">
@@ -94,26 +129,55 @@ function ReviewCard({ item, onResolved }: { item: ReviewItem; onResolved: () => 
 
       <div className="review-actions">
         {/* None of the three outcomes is the default one, so none gets the filled
-            accent — with a queue this long it would just be red everywhere. */}
+            accent — with a queue this long it would just be red everywhere.
+            Each opens the detail form, which carries a "create as-is" escape so
+            working the queue at speed still costs a single extra click. */}
         <button
           type="button"
           className="btn btn-small"
           disabled={resolve.isPending}
-          onClick={() => resolve.mutate({ kind: 'created_new' })}
+          onClick={() => setDetailKind('created_new')}
         >
-          Create new player
+          Create new player…
         </button>
         <button
           type="button"
           className="btn btn-small"
           disabled={resolve.isPending}
-          onClick={() => resolve.mutate({ kind: 'kept_separate' })}
+          onClick={() => setDetailKind('kept_separate')}
           title="Reject all candidates and create a separate player"
         >
-          Keep separate
+          Keep separate…
         </button>
         {resolve.isError && <span className="error-text">{resolve.error.message}</span>}
       </div>
+
+      {detailKind && (
+        <PlayerFormModal
+          title={detailKind === 'created_new' ? 'Create new player' : 'Keep separate — new player'}
+          submitLabel={detailKind === 'created_new' ? 'Create player' : 'Keep separate'}
+          companies={companies.data ?? []}
+          initial={{
+            canonicalName: item.cleanedName,
+            companyCode: item.companyCode ?? '',
+          }}
+          busy={resolve.isPending}
+          error={resolve.error?.message ?? null}
+          secondary={{
+            label: detailKind === 'created_new' ? 'Create as-is' : 'Keep separate as-is',
+            onClick: () => resolve.mutate({ kind: detailKind }),
+          }}
+          onCancel={() => setDetailKind(null)}
+          onSubmit={submitDetails}
+        >
+          <p className="muted">
+            From “{item.rawName}” in {item.tournamentName}.
+            {detailKind === 'kept_separate' &&
+              ' The offered candidates are recorded as rejected, so this pairing is never suggested again.'}{' '}
+            The bracket's own spelling stays aliased to this player whatever you name them here.
+          </p>
+        </PlayerFormModal>
+      )}
     </div>
   );
 }
