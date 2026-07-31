@@ -16,9 +16,15 @@ interface Props {
   slugs: string[];
   /** `sm` sits inside a leaderboard row; `lg` heads a profile. */
   size?: 'sm' | 'lg';
+  /**
+   * Lazy by default, which is right for a long board. The picker overrides it:
+   * its ninety icons are the content of the dialog, all on screen at once, and
+   * deferring them just opens the form full of blanks that pop in.
+   */
+  loading?: 'lazy' | 'eager';
 }
 
-export function CharacterIcons({ slugs, size = 'sm' }: Props) {
+export function CharacterIcons({ slugs, size = 'sm', loading = 'lazy' }: Props) {
   if (slugs.length === 0) return null;
   return (
     <span className={`character-icons character-icons-${size}`}>
@@ -26,6 +32,7 @@ export function CharacterIcons({ slugs, size = 'sm' }: Props) {
         <CharacterIcon
           key={slug}
           slug={slug}
+          loading={loading}
           /* Only the first is the main, and only it is worth spelling out in
              the accessible name — the rest are secondaries. */
           label={index === 0 ? `Mains ${characterName(slug)}` : characterName(slug)}
@@ -35,7 +42,7 @@ export function CharacterIcons({ slugs, size = 'sm' }: Props) {
   );
 }
 
-function CharacterIcon({ slug, label }: { slug: string; label: string }) {
+function CharacterIcon({ slug, label, loading }: { slug: string; label: string; loading: 'lazy' | 'eager' }) {
   const [failed, setFailed] = useState(false);
   const name = characterName(slug);
 
@@ -53,7 +60,7 @@ function CharacterIcon({ slug, label }: { slug: string; label: string }) {
       src={`/characters/${slug}.png`}
       alt={label}
       title={label}
-      loading="lazy"
+      loading={loading}
       draggable={false}
       onError={() => setFailed(true)}
     />
