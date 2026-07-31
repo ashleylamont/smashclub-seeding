@@ -56,6 +56,44 @@ export const adminRouter = router({
     return result;
   }),
 
+  /**
+   * Open a bounded live-monitoring window. Liveness is an explicit admin
+   * decision that EXPIRES — it is never inferred from Challonge's `state`,
+   * which is sticky enough that abandoned tournaments would be polled forever.
+   *
+   * While the window is open the tournament is polled roughly every 60s through
+   * the unmetered public bracket, never the metered API. The window is capped
+   * so a forgotten "go live" cannot run indefinitely; a completed bracket ends
+   * it early (see sync.ts).
+   */
+  setTournamentLive: adminProcedure
+    .input(
+      z.object({
+        tournamentId: z.uuid(),
+        /** Window length. Capped at 12h — an event that runs longer can be re-armed. */
+        hours: z.number().int().min(1).max(12).default(6),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const liveUntil = new Date(Date.now() + input.hours * 60 * 60 * 1000);
+      await ctx.db
+        .update(tournaments)
+        .set({ liveUntil, updatedAt: new Date() })
+        .where(eq(tournaments.id, input.tournamentId));
+      return { liveUntil: liveUntil.toISOString() };
+    }),
+
+  /** Close the live window immediately. */
+  endTournamentLive: adminProcedure
+    .input(z.object({ tournamentId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db
+        .update(tournaments)
+        .set({ liveUntil: null, updatedAt: new Date() })
+        .where(eq(tournaments.id, input.tournamentId));
+      return { ok: true };
+    }),
+
   updateTournament: adminProcedure
     .input(
       z.object({

@@ -23,7 +23,25 @@ export interface SyncResult {
  * player IDs onto sets. Safe to run repeatedly; score amendments and DQ
  * changes upstream flow through.
  */
-export async function syncTournament(db: Db, client: ChallongeClient, tournamentId: string): Promise<SyncResult> {
+export interface SyncOptions {
+  /**
+   * `api` (default) uses the authenticated Challonge API, falling back to the
+   * public bracket for tournaments outside the account.
+   *
+   * `public` never touches the metered API. Live polling uses this: the free
+   * tier allows 500 API requests per MONTH, so no metered poll loop is
+   * affordable at any interval, whereas the public bracket page is
+   * unauthenticated and unmetered.
+   */
+  source?: 'api' | 'public';
+}
+
+export async function syncTournament(
+  db: Db,
+  client: ChallongeClient,
+  tournamentId: string,
+  options: SyncOptions = {},
+): Promise<SyncResult> {
   const [tournament] = await db.select().from(tournaments).where(eq(tournaments.id, tournamentId));
   if (!tournament) throw new Error(`Unknown tournament ${tournamentId}`);
 
@@ -35,7 +53,10 @@ export async function syncTournament(db: Db, client: ChallongeClient, tournament
   try {
     await db.update(tournaments).set({ syncState: 'syncing', updatedAt: new Date() }).where(eq(tournaments.id, tournamentId));
 
-    const bundle = await client.fetchTournamentBundle(tournament.challongeSlug);
+    const bundle =
+      options.source === 'public'
+        ? await client.fetchPublicTournamentBundle(tournament.challongeSlug)
+        : await client.fetchTournamentBundle(tournament.challongeSlug);
 
     const eventDate = tournament.eventDateManual
       ? tournament.eventDate
@@ -141,10 +162,19 @@ export async function syncTournament(db: Db, client: ChallongeClient, tournament
     const outcomes = await matchTournamentParticipants(db, tournamentId);
     const queuedForReview = outcomes.filter((o) => o.method === 'queued').length;
 
-    const syncState = bundle.tournament.state === 'complete' ? 'synced' : bundle.tournament.state === 'underway' ? 'live' : 'registered';
+    // `underway` deliberately no longer maps to a `live` sync state. Challonge's
+    // `underway` is sticky — tournaments abandoned years ago still report it —
+    // so deriving liveness from it meant polling dead brackets every 15s
+    // forever, which exhausts the free tier's 500 requests/month in about 40
+    // minutes. Liveness is now an explicit, expiring admin decision
+    // (`tournaments.live_until`); this only records synced-vs-not.
+    const syncState = bundle.tournament.state === 'complete' ? 'synced' : 'registered';
+    // A finished bracket ends live monitoring immediately, without waiting for
+    // the window to expire.
+    const liveUntil = bundle.tournament.state === 'complete' ? null : tournament.liveUntil;
     await db
       .update(tournaments)
-      .set({ syncState, lastSyncedAt: new Date(), syncError: null, updatedAt: new Date() })
+      .set({ syncState, liveUntil, lastSyncedAt: new Date(), syncError: null, updatedAt: new Date() })
       .where(eq(tournaments.id, tournamentId));
 
     const result: SyncResult = {
