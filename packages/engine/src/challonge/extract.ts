@@ -159,10 +159,99 @@ export interface PublicBracket {
 }
 
 /**
- * The unauthenticated fallback `https://challonge.com/{slug}.json` payload:
- * matches grouped by round with embedded player objects. Participants are
- * derived from the embedded players (the public payload has no participant
- * list).
+ * Pulls the bracket payload out of the `https://challonge.com/{slug}/module`
+ * page, which embeds it as `window._initialStoreState['TournamentStore']`.
+ *
+ * WHY SCRAPE A PAGE INSTEAD OF READING JSON: `https://challonge.com/{slug}.json`
+ * — the endpoint this fallback used to call — is now behind Cloudflare's bot
+ * challenge and answers non-browser clients with `403` +
+ * `cf-mitigated: challenge`, regardless of User-Agent. The `/module` page (the
+ * embeddable bracket) is not challenged and carries the same
+ * `matches_by_round` structure the JSON endpoint returned, so
+ * {@link extractPublicBracket} consumes it unchanged.
+ *
+ * This is an undocumented internal shape and can change without notice. It is
+ * only reachable for tournaments outside the credentialed account; anything the
+ * API can see is fetched through the API instead.
+ */
+export function extractModuleBracketPayload(html: string): unknown {
+  const marker = /window\._initialStoreState\[['"]TournamentStore['"]\]\s*=\s*/.exec(html);
+  if (!marker) {
+    throw new ChallongePayloadError(
+      'Challonge bracket page did not contain an embedded TournamentStore payload.',
+    );
+  }
+  const start = html.indexOf('{', marker.index + marker[0].length);
+  if (start === -1) {
+    throw new ChallongePayloadError('Challonge TournamentStore assignment was not an object.');
+  }
+  // Brace-match past strings so braces inside player names/URLs do not end it early.
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < html.length; i += 1) {
+    const ch = html[i]!;
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{') depth += 1;
+    else if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        const raw = html.slice(start, i + 1);
+        try {
+          return JSON.parse(raw);
+        } catch (error) {
+          throw new ChallongePayloadError(
+            `Challonge TournamentStore payload was not valid JSON: ${String(error)}`,
+          );
+        }
+      }
+    }
+  }
+  throw new ChallongePayloadError('Challonge TournamentStore payload was truncated.');
+}
+
+/**
+ * The module payload carries the tournament's id, state and type but NOT its
+ * name — that appears only in the page title, as "<name> - Challonge".
+ *
+ * Returns null when no name can be recovered, so callers keep the name they
+ * already hold rather than overwriting it with a slug.
+ */
+export function extractModuleTournamentName(html: string): string | null {
+  const match = /<title>([\s\S]*?)<\/title>/i.exec(html);
+  if (!match) return null;
+  const title = match[1]!.replace(/\s+/g, ' ').trim();
+  const name = title.replace(/\s*-\s*Challonge\s*$/i, '').trim();
+  return name.length > 0 ? name : null;
+}
+
+/**
+ * Challonge's JSON endpoint reports set scores as `scores_csv` ("2-1,0-2"); the
+ * embedded module payload reports them as a `scores` array ([2, 1]). Normalise
+ * the latter so forfeit detection keeps working — {@link scoresIndicateForfeit}
+ * looks for a negative game score, and dropping this would silently stop
+ * excluding forfeited sets from ratings.
+ */
+function scoresCsvFrom(value: unknown): string | null {
+  if (!Array.isArray(value) || value.length !== 2) return null;
+  const [a, b] = value;
+  if (typeof a !== 'number' || typeof b !== 'number') return null;
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  return `${a}-${b}`;
+}
+
+/**
+ * The unauthenticated fallback payload: matches grouped by round with embedded
+ * player objects. Participants are derived from the embedded players (the
+ * public payload has no participant list). Accepts both the historical
+ * `{slug}.json` shape and the `{slug}/module` TournamentStore shape — they
+ * agree on `matches_by_round`.
  */
 export function extractPublicBracket(payload: unknown): PublicBracket {
   const record = asRecord(payload, 'public bracket');
@@ -208,7 +297,7 @@ export function extractPublicBracket(payload: unknown): PublicBracket {
       player1Id: num(player1.id),
       player2Id: num(player2.id),
       winnerId: num(m.winner_id),
-      scoresCsv: str(m.scores_csv),
+      scoresCsv: str(m.scores_csv) ?? scoresCsvFrom(m.scores),
       completedAt: str(m.completed_at) ?? str(m.underway_at),
       updatedAt: str(m.updated_at),
     });

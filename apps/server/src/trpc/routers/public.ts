@@ -256,6 +256,8 @@ export const publicRouter = router({
       challongeState: row.challongeState,
       syncState: row.syncState,
       lastSyncedAt: row.lastSyncedAt?.toISOString() ?? null,
+      /** Open live-monitoring window, if any; null once it expires or the bracket completes. */
+      liveUntil: row.liveUntil?.toISOString() ?? null,
     }));
   }),
 

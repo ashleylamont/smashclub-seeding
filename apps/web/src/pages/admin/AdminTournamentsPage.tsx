@@ -5,6 +5,17 @@ import { trpc } from '../../lib/trpc';
 import type { TournamentListItem } from '../../lib/apiTypes';
 import { formatDateTime, timeAgo } from '../../lib/format';
 
+/**
+ * Default live-monitoring window. Deliberately bounded: the previous behaviour
+ * inferred "live" from Challonge's sticky `underway` state and polled dead
+ * brackets forever. An event running longer than this can simply be re-armed.
+ */
+const LIVE_HOURS = 6;
+
+function formatClock(date: Date): string {
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
 export function AdminTournamentsPage() {
   const queryClient = useQueryClient();
   const tournaments = useQuery({
@@ -160,6 +171,13 @@ function TournamentRow({ tournament, onChanged }: { tournament: TournamentListIt
     mutationFn: () => trpc.admin.syncNow.mutate({ tournamentId: tournament.id }),
     onSuccess: onChanged,
   });
+  // Opt-in metered sync. The default reads the free public bracket; the API is
+  // only worth spending quota on for a tournament the club owns, since it is
+  // the sole source of final placements.
+  const syncApi = useMutation({
+    mutationFn: () => trpc.admin.syncNow.mutate({ tournamentId: tournament.id, useApi: true }),
+    onSuccess: onChanged,
+  });
   const update = useMutation({
     mutationFn: (patch: { isRookie?: boolean; eventDate?: string | null }) =>
       trpc.admin.updateTournament.mutate({ tournamentId: tournament.id, ...patch }),
@@ -168,6 +186,19 @@ function TournamentRow({ tournament, onChanged }: { tournament: TournamentListIt
       onChanged();
     },
   });
+  // Live monitoring is opt-in and time-boxed: it is never inferred from
+  // Challonge's state, which stays "underway" on abandoned brackets forever.
+  const setLive = useMutation({
+    mutationFn: () => trpc.admin.setTournamentLive.mutate({ tournamentId: tournament.id, hours: LIVE_HOURS }),
+    onSuccess: onChanged,
+  });
+  const endLive = useMutation({
+    mutationFn: () => trpc.admin.endTournamentLive.mutate({ tournamentId: tournament.id }),
+    onSuccess: onChanged,
+  });
+
+  const liveUntil = tournament.liveUntil ? new Date(tournament.liveUntil) : null;
+  const isLive = liveUntil !== null && liveUntil.getTime() > Date.now();
 
   const startEditDate = () => {
     if (tournament.eventDate) {
@@ -183,7 +214,7 @@ function TournamentRow({ tournament, onChanged }: { tournament: TournamentListIt
     setEditingDate(true);
   };
 
-  const error = sync.error ?? update.error;
+  const error = sync.error ?? syncApi.error ?? update.error ?? setLive.error ?? endLive.error;
 
   return (
     <tr>
@@ -251,9 +282,45 @@ function TournamentRow({ tournament, onChanged }: { tournament: TournamentListIt
         {tournament.lastSyncedAt && <div className="muted">{timeAgo(tournament.lastSyncedAt)}</div>}
       </td>
       <td>
-        <button type="button" className="btn btn-small" disabled={sync.isPending} onClick={() => sync.mutate()}>
+        <button
+          type="button"
+          className="btn btn-small"
+          disabled={sync.isPending}
+          title="Sync from the free public bracket. No API quota used."
+          onClick={() => sync.mutate()}
+        >
           {sync.isPending ? 'Syncing…' : 'Sync now'}
-        </button>
+        </button>{' '}
+        <button
+          type="button"
+          className="btn btn-small"
+          disabled={syncApi.isPending}
+          title="Sync via the Challonge API — SPENDS ~3 of the 500 requests/month allowance. Only useful for tournaments the club owns; it is the only way to get final placements."
+          onClick={() => syncApi.mutate()}
+        >
+          {syncApi.isPending ? 'Syncing…' : 'Sync (API)'}
+        </button>{' '}
+        {isLive ? (
+          <button
+            type="button"
+            className="btn btn-small"
+            disabled={endLive.isPending}
+            title={`Live until ${liveUntil!.toLocaleString()} — polling the public bracket every 60s`}
+            onClick={() => endLive.mutate()}
+          >
+            {endLive.isPending ? 'Stopping…' : `Stop live (until ${formatClock(liveUntil!)})`}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-small"
+            disabled={setLive.isPending}
+            title={`Poll this bracket every 60s for ${LIVE_HOURS}h, then stop automatically. Uses the public bracket, not the rate-limited API.`}
+            onClick={() => setLive.mutate()}
+          >
+            {setLive.isPending ? 'Starting…' : `Go live (${LIVE_HOURS}h)`}
+          </button>
+        )}
       </td>
     </tr>
   );
