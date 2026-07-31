@@ -185,7 +185,10 @@ test.describe('admin', () => {
 
     // "Keep separate" rejects the suggested candidates — the safe resolution, and
     // the one that must never be applied automatically by a fuzzy name match.
-    await cards.first().getByRole('button', { name: /Keep separate/i }).click();
+    // It opens the detail form; "as-is" is the escape hatch that keeps working a
+    // long queue to one extra click, and is what this exercises.
+    await cards.first().getByRole('button', { name: /Keep separate…/i }).click();
+    await page.getByRole('button', { name: /Keep separate as-is/i }).click();
     await expect(cards).toHaveCount(before - 1, { timeout: 30_000 });
   });
 
@@ -307,5 +310,71 @@ test.describe('admin', () => {
         { timeout: 120_000, intervals: [1000] },
       )
       .toBe('glicko2');
+  });
+});
+
+test.describe('player profiles and companies', () => {
+  test('a player is created from the registry with an alias and a character', async ({ page }) => {
+    await signInAsAdmin(page.request);
+    await page.goto('/admin/players');
+    await settle(page);
+
+    await page.getByRole('button', { name: /New player/i }).click();
+    const modal = page.locator('.modal');
+    await expect(modal).toBeVisible();
+
+    // Anchored: each field's hint text mentions the other field by name, so an
+    // unanchored match resolves to both inputs.
+    await modal.getByLabel(/^Registry name/).fill('Roy Koopa');
+    // The public alias is the point of the field: the board must show this, not
+    // the registry name.
+    await modal.getByLabel(/^Public alias/).fill('koopz');
+
+    await modal.getByPlaceholder(/Filter characters/i).fill('bowser jr');
+    await modal.getByRole('button', { name: 'Bowser Jr.' }).click();
+    await expect(modal.locator('.selected-character')).toHaveCount(1);
+    await expect(modal.locator('.selected-main-chip')).toBeVisible();
+
+    await modal.getByRole('button', { name: /Create player/i }).click();
+    await expect(modal).toBeHidden();
+
+    // The registry lists it, carrying both the alias and the head icon.
+    const row = page.locator('.data-table tbody tr', { hasText: 'Roy Koopa' }).first();
+    await expect(row).toContainText('koopz');
+    await expect(row.locator('.character-icons')).toBeVisible();
+
+    // And the alias is what the public board would publish.
+    const search = await page.request.get(
+      `/api/trpc/public.searchPlayers?input=${encodeURIComponent(JSON.stringify({ query: 'Roy Koopa' }))}`,
+    );
+    const body = await search.json();
+    expect(body.result.data[0].name).toBe('koopz');
+  });
+
+  test('a company is created and picked up by the player form', async ({ page }) => {
+    await signInAsAdmin(page.request);
+    await page.goto('/admin/companies');
+    await settle(page);
+
+    await page.getByRole('button', { name: /New company/i }).click();
+    const modal = page.locator('.modal');
+    await modal.getByLabel(/^Code/).fill('ZED');
+    await modal.getByLabel(/^Name/).fill('Zed Corp');
+    await modal.getByPlaceholder('e.g. Atlas', { exact: true }).fill('Zedd');
+    await modal.getByRole('button', { name: 'Add' }).click();
+    await modal.getByRole('button', { name: /Create company/i }).click();
+    await expect(modal).toBeHidden();
+
+    const row = page.locator('.data-table tbody tr', { hasText: 'Zed Corp' }).first();
+    await expect(row).toContainText('ZED');
+    // Aliases are normalised on the way in — matching is case-insensitive, so
+    // storing both cases would just be two rows meaning one thing.
+    await expect(row).toContainText('zedd');
+
+    // The new company is immediately selectable when tagging a player.
+    await page.goto('/admin/players');
+    await settle(page);
+    await page.getByRole('button', { name: /New player/i }).click();
+    await expect(page.locator('.modal select.select')).toContainText('ZED — Zed Corp');
   });
 });

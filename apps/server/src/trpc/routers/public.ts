@@ -13,6 +13,7 @@ import {
 } from '@smashclub/db';
 import { eventKeyOf } from '@smashclub/engine';
 import { latestRecomputeId } from '../../recompute/recompute';
+import { charactersByPlayer, charactersForPlayer } from '../../players/characters';
 import { publicProcedure, router } from '../trpc';
 
 const playerName = (row: { displayName: string | null; canonicalName: string }): string =>
@@ -100,6 +101,11 @@ export const publicRouter = router({
       eventDates.map((row) => eventKeyOf(row.eventDate!.toISOString())),
     ).size;
 
+    const characters = await charactersByPlayer(
+      ctx.db,
+      rows.map((row) => row.playerId),
+    );
+
     return {
       computedAt: recompute?.finishedAt?.toISOString() ?? null,
       /** Which rating model produced these numbers. */
@@ -112,6 +118,8 @@ export const publicRouter = router({
           ...row,
           name: playerName(row),
           verified: verifiedIds.has(row.playerId),
+          /** Mains, in the player's chosen order; drawn as head icons. */
+          characters: characters.get(row.playerId) ?? [],
           /** Places gained since the previous recompute; null if newly ranked. */
           rankDelta: previousRank === undefined ? null : previousRank - row.rank,
         };
@@ -194,6 +202,7 @@ export const publicRouter = router({
         companyCode: player.companyCode,
         companyName: player.companyName,
         verified: verified.length > 0,
+        characters: await charactersForPlayer(ctx.db, input.playerId),
       },
       rating: ratingRow,
       events,

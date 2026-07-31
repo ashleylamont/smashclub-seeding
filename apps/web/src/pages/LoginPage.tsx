@@ -24,7 +24,7 @@ export function LoginPage() {
       <div className="login-card card">
         <h1>Sign in</h1>
         <p className="muted">
-          Sign in to claim your player, track your results, and manage your display name.
+          Sign in to claim your player, track your results, and set your public alias and characters.
         </p>
         <div className="login-buttons">
           <button type="button" className="btn provider-btn discord" onClick={() => void signIn('discord')}>
@@ -35,6 +35,14 @@ export function LoginPage() {
           </button>
         </div>
         {error && <p className="error-text">{error}</p>}
+        {/* Signing in with the other provider mints a second account rather than
+            finding the first — nothing can match them up before you have proven
+            you own both. Linking from /me is what joins them, and it works
+            regardless of whether the two addresses match. */}
+        <p className="muted login-note">
+          Already signed up with the other one? Sign in with it first, then link this one from your account page —
+          that keeps one account. The two can use different email addresses.
+        </p>
       </div>
     </div>
   );

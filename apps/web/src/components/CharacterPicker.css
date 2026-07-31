@@ -1,0 +1,108 @@
+/*
+ * Character picker. The selected strip reads as a small roster of its own,
+ * above a dense scrolling grid of every fighter — dense because 89 options in
+ * a comfortable list would be a page of scrolling inside a modal.
+ */
+
+.character-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.character-picker-selected {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: center;
+  min-height: 30px;
+  padding: var(--s2);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.selected-character {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: 2px var(--s1) 2px 2px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elev);
+  font-size: var(--fs-sm);
+}
+
+.selected-character.is-main {
+  border-color: var(--accent-border);
+}
+
+.selected-character-name {
+  color: var(--text-h);
+  white-space: nowrap;
+}
+
+.selected-main-chip {
+  font-size: 9px;
+}
+
+.selected-character-remove {
+  border: none;
+  background: none;
+  color: var(--text-soft);
+  cursor: pointer;
+  font-size: var(--fs-md);
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.selected-character-remove:hover {
+  color: var(--bad);
+}
+
+.character-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 1px;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  background: var(--border);
+}
+
+.character-option {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: 3px var(--s1);
+  background: var(--bg);
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+  font-size: var(--fs-xs);
+  font-family: inherit;
+}
+
+.character-option:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-h);
+}
+
+.character-option.is-selected {
+  background: var(--accent-bg);
+  color: var(--text-h);
+}
+
+.character-option:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.character-option-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.character-picker-hint {
+  font-size: var(--fs-xs);
+}

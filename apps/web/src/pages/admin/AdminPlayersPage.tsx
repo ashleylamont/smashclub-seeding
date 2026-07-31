@@ -4,6 +4,8 @@ import { Link } from '@tanstack/react-router';
 import { trpc } from '../../lib/trpc';
 import type { AdminClaim, AdminCompany, AdminPlayer } from '../../lib/apiTypes';
 import { timeAgo } from '../../lib/format';
+import { CharacterIcons } from '../../components/CharacterIcons';
+import { PlayerFormModal, type PlayerFormValues } from '../../components/PlayerFormModal';
 
 export function AdminPlayersPage() {
   const queryClient = useQueryClient();
@@ -18,12 +20,28 @@ export function AdminPlayersPage() {
 
   const [filter, setFilter] = useState('');
   const [mergeSelection, setMergeSelection] = useState<string[]>([]);
+  const [creating, setCreating] = useState(false);
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['admin', 'players'] });
     void queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
     void queryClient.invalidateQueries({ queryKey: ['player'] });
   };
+
+  const create = useMutation({
+    mutationFn: (values: PlayerFormValues) =>
+      trpc.admin.createPlayer.mutate({
+        canonicalName: values.canonicalName,
+        displayName: values.displayName === '' ? null : values.displayName,
+        companyCode: values.companyCode === '' ? null : values.companyCode,
+        characters: values.characters,
+        aliases: values.aliases,
+      }),
+    onSuccess: () => {
+      setCreating(false);
+      invalidate();
+    },
+  });
 
   const filtered = useMemo(() => {
     const query = filter.trim().toLowerCase();
@@ -50,13 +68,36 @@ export function AdminPlayersPage() {
       <div className="section">
         <div className="page-header">
           <h2>Player registry</h2>
-          <input
-            className="input"
-            placeholder="Filter by name or alias…"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-          />
+          <span className="admin-form-row">
+            <input
+              className="input"
+              placeholder="Filter by name or alias…"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+            />
+            <button type="button" className="btn btn-small btn-primary" onClick={() => setCreating(true)}>
+              New player
+            </button>
+          </span>
         </div>
+
+        {creating && (
+          <PlayerFormModal
+            title="New player"
+            submitLabel="Create player"
+            companies={companies.data ?? []}
+            showAliases
+            busy={create.isPending}
+            error={create.error?.message ?? null}
+            onCancel={() => setCreating(false)}
+            onSubmit={(values) => create.mutate(values)}
+          >
+            <p className="muted">
+              Adds a player to the registry directly. Their registry name and any aliases are matched against future
+              bracket entries, so this player will link automatically instead of going to the review queue.
+            </p>
+          </PlayerFormModal>
+        )}
 
         {mergeSelection.length > 0 && (
           <MergeBar
@@ -79,6 +120,7 @@ export function AdminPlayersPage() {
                 <tr>
                   <th title="Select two players to merge">Merge</th>
                   <th>Name</th>
+                  <th>Characters</th>
                   <th>Company</th>
                   <th>Aliases</th>
                   <th>Legacy ID</th>
@@ -195,16 +237,16 @@ function PlayerRow({
   onChanged: () => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(player.canonicalName);
-  const [companyCode, setCompanyCode] = useState(player.companyCode ?? '');
   const [aliasInput, setAliasInput] = useState('');
 
   const update = useMutation({
-    mutationFn: () =>
+    mutationFn: (values: PlayerFormValues) =>
       trpc.admin.updatePlayer.mutate({
         playerId: player.id,
-        canonicalName: name.trim(),
-        companyCode: companyCode === '' ? null : companyCode,
+        canonicalName: values.canonicalName,
+        displayName: values.displayName === '' ? null : values.displayName,
+        companyCode: values.companyCode === '' ? null : values.companyCode,
+        characters: values.characters,
       }),
     onSuccess: () => {
       setEditing(false);
@@ -239,32 +281,16 @@ function PlayerRow({
         />
       </td>
       <td>
-        {editing ? (
-          <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
-        ) : (
-          <>
-            <Link to="/players/$playerId" params={{ playerId: player.id }}>
-              {player.canonicalName}
-            </Link>
-            {player.displayName && <span className="muted"> aka “{player.displayName}”</span>}
-          </>
-        )}
+        <Link to="/players/$playerId" params={{ playerId: player.id }}>
+          {player.canonicalName}
+        </Link>
+        {player.displayName && <span className="muted"> aka “{player.displayName}”</span>}
         {error && <div className="error-text">{error.message}</div>}
       </td>
       <td>
-        {editing ? (
-          <select className="select" value={companyCode} onChange={(e) => setCompanyCode(e.target.value)}>
-            <option value="">No company</option>
-            {companies.map((c) => (
-              <option key={c.code} value={c.code}>
-                {c.code} — {c.name}
-              </option>
-            ))}
-          </select>
-        ) : (
-          (player.companyCode ?? '—')
-        )}
+        {player.characters.length > 0 ? <CharacterIcons slugs={player.characters} /> : <span className="muted">—</span>}
       </td>
+      <td>{player.companyCode ?? '—'}</td>
       <td>
         <span className="alias-chips">
           {player.aliases.map((alias) => (
@@ -298,24 +324,25 @@ function PlayerRow({
         <span className={`chip ${player.status === 'active' ? '' : 'chip-warning'}`}>{player.status}</span>
       </td>
       <td>
-        {editing ? (
-          <span className="row-actions">
-            <button
-              type="button"
-              className="btn btn-small btn-primary"
-              disabled={name.trim() === '' || update.isPending}
-              onClick={() => update.mutate()}
-            >
-              Save
-            </button>
-            <button type="button" className="btn btn-small" onClick={() => setEditing(false)}>
-              Cancel
-            </button>
-          </span>
-        ) : (
-          <button type="button" className="btn btn-small" onClick={() => setEditing(true)}>
-            Edit
-          </button>
+        <button type="button" className="btn btn-small" onClick={() => setEditing(true)}>
+          Edit
+        </button>
+        {editing && (
+          <PlayerFormModal
+            title={`Edit ${player.canonicalName}`}
+            submitLabel="Save changes"
+            companies={companies}
+            initial={{
+              canonicalName: player.canonicalName,
+              displayName: player.displayName ?? '',
+              companyCode: player.companyCode ?? '',
+              characters: player.characters,
+            }}
+            busy={update.isPending}
+            error={update.error?.message ?? null}
+            onCancel={() => setEditing(false)}
+            onSubmit={(values) => update.mutate(values)}
+          />
         )}
       </td>
     </tr>

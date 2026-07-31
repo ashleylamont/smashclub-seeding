@@ -78,10 +78,69 @@ function payloadsFor(fixture: FixtureTournament) {
   };
 }
 
+/**
+ * The `challonge.com/{slug}/module` page, which is what sync reads BY DEFAULT
+ * — the metered API is opt-in. The bracket is embedded as
+ * `window._initialStoreState['TournamentStore']` and the tournament's name
+ * appears only in the page title.
+ *
+ * Mirrors the real payload in what it deliberately lacks: no `final_rank`, and
+ * no tournament-level timestamps, so the event date comes from match times.
+ */
+function modulePage(fixture: FixtureTournament): string {
+  const participantById = new Map(fixture.participants.map((p) => [p.id, p]));
+  const player = (id: number | null | undefined) => {
+    if (id === null || id === undefined) return null;
+    const p = participantById.get(id);
+    return p ? { id: p.id, display_name: p.name, seed: p.seed ?? null } : null;
+  };
+
+  const matchesByRound: Record<string, unknown[]> = {};
+  for (const m of fixture.matches) {
+    const round = String(m.round ?? 1);
+    (matchesByRound[round] ??= []).push({
+      id: m.id,
+      round: m.round ?? 1,
+      state: m.state ?? 'complete',
+      identifier: `M${m.id}`,
+      winner_id: m.winner ?? null,
+      scores_csv: m.scores === undefined ? '2-1' : m.scores,
+      underway_at: m.completedAt ?? fixture.startedAt,
+      player1: player(m.p1),
+      player2: player(m.p2),
+    });
+  }
+
+  const store = {
+    requested_plotter: 'DoubleEliminationBracketPlotter',
+    tournament: { id: fixture.id, state: fixture.state, tournament_type: 'double elimination' },
+    matches_by_round: matchesByRound,
+  };
+  return [
+    `<!DOCTYPE html><html><head><title>${fixture.name} - Challonge</title></head><body>`,
+    '<script>',
+    `window._initialStoreState = {}; window._initialStoreState['TournamentStore'] = ${JSON.stringify(store)};`,
+    '</script></body></html>',
+  ].join('\n');
+}
+
 export function createFixtureClient(fixtures: FixtureTournament[]): ChallongeClient {
   const bySlug = new Map(fixtures.map((f) => [f.slug, f]));
   const fetchImpl: typeof fetch = async (input) => {
     const url = String(input);
+
+    // Serve the public bracket first: it is the default sync source, so
+    // without this the harness falls through to a real network request.
+    const moduleMatch = url.match(/challonge\.com\/([^/]+)\/module$/);
+    if (moduleMatch) {
+      const fixture = bySlug.get(moduleMatch[1]!);
+      if (!fixture) return new Response('not found', { status: 404 });
+      return new Response(modulePage(fixture), {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      });
+    }
+
     const match = url.match(/\/tournaments\/([^/]+?)(?:\/(participants|matches))?\.json$/);
     if (!match) return new Response('not found', { status: 404 });
     const fixture = bySlug.get(match[1]!);
