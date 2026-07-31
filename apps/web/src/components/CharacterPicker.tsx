@@ -105,7 +105,7 @@ export function CharacterPicker({ value, onChange, max = MAX_CHARACTERS_PER_PLAY
               title={character.name}
               onClick={() => toggle(character.slug)}
             >
-              <CharacterIcons slugs={[character.slug]} />
+              <CharacterIcons slugs={[character.slug]} loading="eager" />
               <span className="character-option-name">{character.name}</span>
             </button>
           );

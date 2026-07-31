@@ -84,14 +84,18 @@ link from there.
 ### Character head icons
 
 Players can pin up to four fighters, drawn as head icons beside their name.
-The PNGs are Nintendo's assets and are not committed; fetch them once with:
+The PNGs live in `apps/web/public/characters/` and are committed — Vite
+copies `public/` into `dist/` at build time and the server serves `dist/`,
+so an icon absent from the build context is absent from the deployed image.
 
-```bash
-pnpm --filter @smashclub/fetch-character-icons start
-```
+To refresh them after a roster change, use either
+`pnpm --filter @smashclub/fetch-character-icons start` or the standalone
+`tools/fetch-character-icons/fetch-icons.sh` (bash, curl and python3 only;
+emits a zip), then rebuild the web app. See
+`apps/web/public/characters/README.md`.
 
-Every icon falls back to a two-letter badge, so an empty
-`apps/web/public/characters/` is a cosmetic gap rather than a broken page.
+Every icon falls back to a two-letter badge, so a fighter without one is a
+cosmetic gap rather than a broken page.
 
 ## Production bootstrap
 
