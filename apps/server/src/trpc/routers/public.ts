@@ -12,12 +12,12 @@ import {
   tournaments,
 } from '@smashclub/db';
 import { eventKeyOf } from '@smashclub/engine';
+import { publicPlayerName } from '@smashclub/shared';
 import { latestRecomputeId } from '../../recompute/recompute';
 import { charactersByPlayer, charactersForPlayer } from '../../players/characters';
 import { publicProcedure, router } from '../trpc';
 
-const playerName = (row: { displayName: string | null; canonicalName: string }): string =>
-  row.displayName ?? row.canonicalName;
+const playerName = publicPlayerName;
 
 export const publicRouter = router({
   leaderboard: publicProcedure.query(async ({ ctx }) => {
@@ -169,7 +169,10 @@ export const publicRouter = router({
         ...row,
         tournamentDate: row.tournamentDate?.toISOString() ?? null,
         opponentName: row.opponentCanonicalName
-          ? (row.opponentDisplayName ?? row.opponentCanonicalName)
+          ? publicPlayerName({
+              displayName: row.opponentDisplayName,
+              canonicalName: row.opponentCanonicalName,
+            })
           : null,
       }));
     }
@@ -267,7 +270,9 @@ export const publicRouter = router({
     const participantName = new Map(
       participants.map((p) => [
         p.id,
-        p.canonicalName ? (p.displayName ?? p.canonicalName) : p.cleanedName,
+        p.canonicalName
+          ? publicPlayerName({ displayName: p.displayName, canonicalName: p.canonicalName })
+          : p.cleanedName,
       ]),
     );
 
@@ -344,7 +349,7 @@ export const publicRouter = router({
       const claimed = new Set(claims.map((row) => row.playerId));
       return rows.map((row) => ({
         id: row.id,
-        name: row.displayName ?? row.canonicalName,
+        name: playerName(row),
         companyCode: row.companyCode,
         verified: claimed.has(row.id),
       }));

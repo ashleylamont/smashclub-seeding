@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate } from '@tanstack/react-router';
+import { defaultPublicAlias } from '@smashclub/shared';
 import { authClient, sessionRole } from '../lib/auth';
 import { trpc } from '../lib/trpc';
 import type { MyClaim } from '../lib/apiTypes';
@@ -218,7 +219,7 @@ function ProfileEditor({ claim, onChanged }: { claim: MyClaim; onChanged: () => 
           id="display-name"
           className="input"
           value={displayName}
-          placeholder={claim.canonicalName}
+          placeholder={defaultPublicAlias(claim.canonicalName)}
           onChange={(e) => setDisplayName(e.target.value)}
         />
         <button
@@ -233,7 +234,7 @@ function ProfileEditor({ claim, onChanged }: { claim: MyClaim; onChanged: () => 
         {updateName.isError && <span className="error-text">{updateName.error.message}</span>}
       </div>
       <p className="muted">
-        The name shown on the leaderboard. Leave it blank to go by “{claim.canonicalName}”.
+        The name shown on the leaderboard. Leave it blank to go by “{defaultPublicAlias(claim.canonicalName)}”.
       </p>
 
       <div className="character-editor">
