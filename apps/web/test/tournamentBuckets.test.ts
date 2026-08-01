@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bucketFor } from '../src/pages/TournamentsPage';
+import { bucketFor } from '../src/lib/tournamentBuckets';
 
 const NOW = Date.parse('2026-08-01T00:00:00.000Z');
 
