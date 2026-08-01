@@ -15,7 +15,7 @@ import { CHARACTERS, isCharacterSlug } from '@smashclub/shared';
  *   import unchanged.
  * - `past_companies` is **not stored as history**. It is used as extra alias
  *   scope: a player's names are also aliased under each past employer, so
- *   "[Atlas] Alex H" still resolves after Alex moves on. This mirrors the
+ *   "[Atlas] Sample P" still resolves after Sample moves on. This mirrors the
  *   legacy alias_map semantics and is what the previous CLI importer did.
  */
 

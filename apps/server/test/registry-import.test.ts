@@ -16,11 +16,11 @@ const REGISTRY_YAML = `players:
     company: AMD
     aliases: []
     numeric_id: 1
-  - id: alex-h
-    canonical_name: Alex Hogue
+  - id: sample-player
+    canonical_name: Sample Player
     company: N/A
     past_companies: [N/A, Atlassian]
-    aliases: [Alex H, Alex]
+    aliases: [Sample P, Sample]
     main_character: Ness
     numeric_id: 2
   - id: belinda-wong
@@ -68,12 +68,12 @@ describe('registry import — preview', () => {
     expect(plan.counts.create).toBe(3);
     expect(plan.counts.update).toBe(0);
     expect(plan.counts.unchanged).toBe(0);
-    expect(plan.entries.map((entry) => entry.id)).toEqual(['vincent', 'alex-h', 'belinda-wong']);
+    expect(plan.entries.map((entry) => entry.id)).toEqual(['vincent', 'sample-player', 'belinda-wong']);
     expect(plan.entries.every((entry) => entry.action === 'create')).toBe(true);
 
     // "N/A" is a marker, not an employer: it must never become a company.
     expect(plan.companiesToCreate.map((company) => company.name).sort()).toEqual(['AMD', 'Atlassian']);
-    expect(plan.entries.find((entry) => entry.id === 'alex-h')!.companyCode).toBeNull();
+    expect(plan.entries.find((entry) => entry.id === 'sample-player')!.companyCode).toBeNull();
 
     const belinda = plan.entries.find((entry) => entry.id === 'belinda-wong')!;
     expect(belinda.charactersToAdd).toEqual(['bowser-jr']);
@@ -103,27 +103,27 @@ describe('registry import — apply', () => {
 
     // id -> legacy_id, the idempotency key.
     const rows = await db.select().from(players);
-    expect(rows.map((row) => row.legacyId).sort()).toEqual(['alex-h', 'belinda-wong', 'vincent']);
+    expect(rows.map((row) => row.legacyId).sort()).toEqual(['belinda-wong', 'sample-player', 'vincent']);
 
     expect(await companyCodeOf('vincent')).toBe('AMD');
     expect(await companyCodeOf('belinda-wong')).toBe('ATL');
     // company: N/A means no company, not a company called "N/A".
-    expect(await companyCodeOf('alex-h')).toBeNull();
+    expect(await companyCodeOf('sample-player')).toBeNull();
     expect(await db.select().from(companies).where(eq(companies.name, 'N/A'))).toHaveLength(0);
 
     // The canonical name is an alias too, and past employers add alias scope.
-    const alexAliases = await aliasesOf('alex-h');
-    expect(alexAliases).toContainEqual({ alias: 'alex hogue', company: null });
-    expect(alexAliases).toContainEqual({ alias: 'alex h', company: null });
-    expect(alexAliases).toContainEqual({ alias: 'alex h', company: 'ATL' });
-    expect(alexAliases.every((row) => row.alias === row.alias.toLowerCase())).toBe(true);
+    const sampleAliases = await aliasesOf('sample-player');
+    expect(sampleAliases).toContainEqual({ alias: 'sample player', company: null });
+    expect(sampleAliases).toContainEqual({ alias: 'sample p', company: null });
+    expect(sampleAliases).toContainEqual({ alias: 'sample p', company: 'ATL' });
+    expect(sampleAliases.every((row) => row.alias === row.alias.toLowerCase())).toBe(true);
 
-    const [alex] = await db.select().from(players).where(eq(players.legacyId, 'alex-h'));
-    const alexCharacters = await db
+    const [sample] = await db.select().from(players).where(eq(players.legacyId, 'sample-player'));
+    const sampleCharacters = await db
       .select()
       .from(playerCharacters)
-      .where(eq(playerCharacters.playerId, alex!.id));
-    expect(alexCharacters.map((row) => row.characterSlug)).toEqual(['ness']);
+      .where(eq(playerCharacters.playerId, sample!.id));
+    expect(sampleCharacters.map((row) => row.characterSlug)).toEqual(['ness']);
   });
 
   it('creates the companies the preview promised, and only those', async () => {
@@ -253,10 +253,10 @@ describe('registry parsing', () => {
     const parsed = parseRegistryYaml(REGISTRY_YAML);
     expect(parsed.issues).toEqual([]);
     expect(parsed.entries[1]).toEqual({
-      id: 'alex-h',
-      canonical_name: 'Alex Hogue',
+      id: 'sample-player',
+      canonical_name: 'Sample Player',
       company: 'N/A',
-      aliases: ['Alex H', 'Alex'],
+      aliases: ['Sample P', 'Sample'],
       past_companies: ['N/A', 'Atlassian'],
       main_character: 'Ness',
     });

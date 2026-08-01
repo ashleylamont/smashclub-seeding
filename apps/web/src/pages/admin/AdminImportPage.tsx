@@ -79,7 +79,7 @@ export function AdminImportPage() {
       <div className="import-input">
         <textarea
           className="textarea import-textarea"
-          placeholder={'players:\n  - id: alex-h\n    canonical_name: Alex Hogue\n    company: Atlassian\n    aliases: [Alex H, Alex]\n    main_character: Ness'}
+          placeholder={'players:\n  - id: sample-player\n    canonical_name: Sample Player\n    company: Atlassian\n    aliases: [Sample P, Sample]\n    main_character: Ness'}
           value={yaml}
           spellCheck={false}
           onChange={(event) => {
