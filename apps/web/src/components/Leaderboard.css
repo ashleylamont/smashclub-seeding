@@ -52,12 +52,38 @@
   border-color: var(--accent-border);
 }
 
+/*
+ * The activity setting sits in the same strip as search and company: it is one
+ * of the things that decides who is on the board. Its control is a checkbox
+ * rather than an input, so it gets its own box to sit on the label's baseline
+ * instead of stretching to `.control-input`'s height.
+ */
+.control-check .checkbox-control {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 6px 0;
+  font-size: var(--fs-sm);
+  color: var(--text-h);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.control-check input {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
 .board-count {
   font-family: var(--mono);
   font-size: var(--fs-xs);
   margin: 0 0 0 auto;
   letter-spacing: 0.04em;
   white-space: nowrap;
+}
+
+.board-count-note {
+  color: var(--text-soft);
 }
 
 /*
