@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
 import { companies, playerClaims, players } from '@smashclub/db';
+import { publicPlayerName } from '@smashclub/shared';
 import { charactersByPlayer, characterSlugsSchema, setPlayerCharacters } from '../../players/characters';
 import { authedProcedure, router } from '../trpc';
 
@@ -65,7 +66,7 @@ export const meRouter = router({
     );
     return rows.map((row) => ({
       ...row,
-      playerName: row.displayName ?? row.canonicalName,
+      playerName: publicPlayerName(row),
       characters: characters.get(row.playerId) ?? [],
       createdAt: row.createdAt.toISOString(),
       resolvedAt: row.resolvedAt?.toISOString() ?? null,

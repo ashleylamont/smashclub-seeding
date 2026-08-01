@@ -118,7 +118,9 @@ async function publicDeltas(): Promise<Map<string, number | null>> {
     recomputeTrigger: new RecomputeTrigger(db, 1_000_000),
   });
   const { rows } = await caller.public.leaderboard();
-  return new Map(rows.map((row) => [row.name, row.rankDelta]));
+  // Keyed on the canonical name, not the published one, so this map shares a
+  // key space with board() above — the published name is the shortened alias.
+  return new Map(rows.map((row) => [row.canonicalName, row.rankDelta]));
 }
 
 describe('rank movement over the last club night', () => {

@@ -65,7 +65,9 @@ describe('HTTP surface', () => {
     const body = response.json() as { result: { data: { rows: Array<{ name: string; rank: number }> } } };
     const rows = body.result.data.rows;
     expect(rows).toHaveLength(2);
-    expect(rows[0]!.name).toBe('Fox McCloud');
+    // No display_name set, so the board publishes the default alias — first
+    // name plus initials — not the canonical "Fox McCloud".
+    expect(rows[0]!.name).toBe('Fox M');
     expect(rows[0]!.rank).toBe(1);
   });
 
