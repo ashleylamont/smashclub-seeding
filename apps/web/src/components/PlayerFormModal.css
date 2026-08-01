@@ -96,3 +96,12 @@
     max-height: 160px;
   }
 }
+
+/* The sticky actions hang off the modal's own bottom padding, and the sheet
+   layout on narrow screens uses a different one — including the safe-area
+   inset. Keep the two in step or the bar floats above the edge it is pinned to. */
+@media (max-width: 860px) {
+  .modal-wide .modal-actions {
+    bottom: calc(-1 * (var(--s4) + env(safe-area-inset-bottom)));
+  }
+}

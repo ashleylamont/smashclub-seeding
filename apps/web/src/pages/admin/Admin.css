@@ -22,6 +22,7 @@
 .admin-tabs {
   display: flex;
   flex-wrap: wrap;
+  max-width: 100%;
 }
 
 .admin-tab {
@@ -473,17 +474,8 @@
   border-color: var(--warn);
 }
 
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
+/* `.visually-hidden` used to be defined here, which meant it only worked on
+   admin screens — it is now a global utility in index.css. */
 
 @media (max-width: 860px) {
   .candidate-row,
@@ -494,5 +486,51 @@
   .admin-form-row .input {
     min-width: 0;
     width: 100%;
+  }
+  /*
+   * Seven tabs wrapping into three ragged rows pushed the working screen a long
+   * way down the page. One scrolling row keeps the header the height of a
+   * header; the active tab is scrolled into view so the current section is
+   * never off-screen.
+   */
+  .admin-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    width: 100%;
+  }
+  .admin-tab {
+    white-space: nowrap;
+    padding: var(--s2) var(--s3) var(--s2) 0;
+    margin-right: var(--s3);
+    scroll-margin-inline: var(--s4);
+  }
+  .settings-groups {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s5);
+  }
+  /*
+   * A number keeps its place at the end of the row; a `select` does not. Sized
+   * by its longest option, "Glicko-2 (per-tournament periods)" left its label
+   * about ninety pixels to say "Authoritative ratings" and a two-line
+   * explanation in. Wrapping lets the control take a line of its own while the
+   * short numeric rows stay one line each.
+   */
+  .settings-field {
+    flex-wrap: wrap;
+  }
+  .settings-field .select {
+    flex: 1 0 100%;
+  }
+  /* A right-aligned 120px field next to a wrapping label is the widest thing on
+     these rows; letting it shrink keeps the pair on one line. */
+  .settings-field .input {
+    width: 96px;
+  }
+  .settings-field .league-name-input {
+    width: auto;
+  }
+  .push-preview {
+    padding-left: var(--s4);
   }
 }

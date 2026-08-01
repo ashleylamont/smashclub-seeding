@@ -55,6 +55,10 @@
 
 .headline-label {
   grid-area: label;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s2);
   font-family: var(--display);
   font-size: var(--fs-xs);
   text-transform: uppercase;
@@ -133,6 +137,17 @@
   z-index: 10;
 }
 
+/* Five columns of short values. Squeezed onto a phone this became "Apr / 15, /
+   2026" against "Dev / Weekly / 5 / Rookies" — taller than scrolling, and
+   unreadable with it. It keeps its shape; the container scrolls. */
+.match-table {
+  --table-min: 600px;
+}
+
+.match-table td:first-child {
+  white-space: nowrap;
+}
+
 /*
  * Outcome is carried by a coloured left edge *and* by the W/L glyph in the
  * result column, so it never depends on colour alone.
@@ -204,6 +219,7 @@
   .profile-header {
     grid-template-columns: 1fr;
     align-items: start;
+    gap: var(--s4);
   }
   .profile-name {
     font-size: var(--fs-2xl);
@@ -212,12 +228,35 @@
     text-align: left;
     justify-content: start;
   }
+  .headline-label {
+    justify-content: flex-start;
+  }
+  /* One stat per row when stacked, so the detail line under each figure has the
+     width to be a sentence rather than four words deep. */
   .profile-stats {
+    grid-template-columns: minmax(0, 1fr);
     border-left: none;
+    border-top: 1px solid var(--border);
   }
   .profile-stats .stat {
-    padding: var(--s2) var(--s3);
+    padding: var(--s3) 0;
     border-right: none;
     border-bottom: 1px solid var(--border);
+  }
+  /*
+   * The log scrolls sideways here, and a region that scrolls both ways inside a
+   * page that also scrolls is a trap for a thumb — a flick meant for the page
+   * gets eaten by the box. So the height cap comes off and the page takes the
+   * vertical scrolling.
+   *
+   * The header stops being sticky with it: the box is still its own scrollport
+   * (it has to be, to scroll sideways), so a sticky header in it has nothing to
+   * travel along and would only be pinned to a top edge it already sits on.
+   */
+  .match-history-scroll {
+    max-height: none;
+  }
+  .match-table th {
+    position: static;
   }
 }

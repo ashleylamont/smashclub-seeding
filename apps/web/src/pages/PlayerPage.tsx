@@ -16,6 +16,7 @@ import {
 import { trpc } from '../lib/trpc';
 import type { PlayerData, PlayerEventView } from '../lib/apiTypes';
 import { CharacterIcons } from '../components/CharacterIcons';
+import { InfoTip } from '../components/InfoTip';
 import { formatDate, tierClass } from '../lib/format';
 import './PlayerPage.css';
 
@@ -141,7 +142,14 @@ function PlayerProfile({ data }: { data: PlayerData }) {
             from sits below it. */}
         {rating && (
           <div className="profile-headline">
-            <span className="headline-label">Rating</span>
+            <span className="headline-label">
+              Rating
+              <InfoTip label="Rating" align="end">
+                The board ranks on this: the skill estimate below, less two standard deviations. It is deliberately
+                cautious, so a place has to be earned in sets and held by turning up — missing club nights widens
+                the deviation and costs places.
+              </InfoTip>
+            </span>
             <span className="headline-value num">{rating.conservativeRating.toFixed(0)}</span>
             <span className="headline-band num">
               skill {rating.skillRating.toFixed(0)} ± {rating.skillSd.toFixed(0)}
@@ -264,7 +272,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         {events.length === 0 ? (
           <p className="muted">No match history available for this player.</p>
         ) : (
-          <div className="match-history-scroll">
+          <div className="match-history-scroll table-scroll">
             <table className="match-table data-table">
               <thead>
                 <tr>
@@ -272,7 +280,9 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                   <th>Event</th>
                   <th>Opponent</th>
                   <th>Result</th>
-                  <th className="num">Δ Rating</th>
+                  <th className="num" title="How much this set moved the skill estimate">
+                    Δ Rating
+                  </th>
                 </tr>
               </thead>
               <tbody>

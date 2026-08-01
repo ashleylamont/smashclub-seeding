@@ -1,7 +1,9 @@
+import { useEffect, useRef } from 'react';
 import { Link, Outlet, useNavigate } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { authClient, sessionRole } from '../lib/auth';
 import { useEventSource } from '../lib/useEventSource';
+import { ThemeToggle } from './ThemeToggle';
 import '../App.css';
 
 /** App shell: top nav, routed content, footer. Also holds the global SSE
@@ -11,6 +13,29 @@ export function Layout() {
   const role = sessionRole(session);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const nav = useRef<HTMLElement>(null);
+
+  /*
+   * Publishes the nav's height as `--nav-h`.
+   *
+   * The board's column headers are sticky, and so is the nav — both at
+   * `top: 0`, with the nav on top and opaque, so scrolling a long board parked
+   * the headers underneath it and the columns went unlabelled exactly when the
+   * labels were needed. The height is not a constant to hard-code: the bar is
+   * one row on a laptop and two on a phone, it grows when an admin gets a third
+   * link, and touch targets change it again. So it is measured.
+   */
+  useEffect(() => {
+    const element = nav.current;
+    if (!element) return;
+    const publish = () => {
+      document.documentElement.style.setProperty('--nav-h', `${Math.round(element.offsetHeight)}px`);
+    };
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   useEventSource('/api/live', (type) => {
     if (type === 'recompute_completed') {
@@ -33,7 +58,13 @@ export function Layout() {
 
   return (
     <div className="app-shell">
-      <nav className="app-nav">
+      {/* The nav is sticky and, on a phone, two rows deep — so a keyboard user
+          reaching the board should not have to walk it on every route change. */}
+      <a href="#main" className="skip-link">
+        Skip to content
+      </a>
+
+      <nav className="app-nav" ref={nav}>
         {/* The marquee block is drawn in CSS, so the wordmark is text only. */}
         <Link to="/" className="logo">
           Smash Club
@@ -52,15 +83,21 @@ export function Layout() {
           )}
         </div>
         <div className="nav-right">
+          <ThemeToggle />
           {isPending ? null : session ? (
             <>
               <Link to="/me" className="user-chip" title="Your account">
                 {userImage ? (
                   <img src={userImage} alt="" className="avatar" />
                 ) : (
-                  <span className="avatar-fallback">{userName.charAt(0).toUpperCase() || '?'}</span>
+                  <span className="avatar-fallback" aria-hidden="true">
+                    {userName.charAt(0).toUpperCase() || '?'}
+                  </span>
                 )}
-                <span>{userName}</span>
+                {/* Taken off-screen rather than removed on narrow widths, where
+                    the nav has no room for it: it is the chip's accessible name,
+                    and `display: none` would leave the link nameless. */}
+                <span className="user-chip-name">{userName}</span>
               </Link>
               <button type="button" className="btn btn-small" onClick={() => void signOut()}>
                 Sign out
@@ -74,7 +111,7 @@ export function Layout() {
         </div>
       </nav>
 
-      <main className="app-main">
+      <main className="app-main" id="main" tabIndex={-1}>
         <Outlet />
       </main>
 
