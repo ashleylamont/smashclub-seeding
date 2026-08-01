@@ -14,6 +14,15 @@ export default defineConfig({
         },
       },
       {
+        // Pure UI logic only (bucketing, formatting). Component/rendering
+        // coverage lives in the Playwright e2e specs, which vitest must not
+        // collect (see `exclude` above).
+        test: {
+          name: 'web',
+          include: ['apps/web/test/**/*.test.ts'],
+        },
+      },
+      {
         test: {
           name: 'server',
           include: ['apps/server/test/**/*.test.ts'],

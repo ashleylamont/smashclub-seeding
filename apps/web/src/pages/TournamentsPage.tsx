@@ -8,11 +8,22 @@ import './Tournaments.css';
 
 type Bucket = 'live' | 'upcoming' | 'completed';
 
-function bucketFor(t: TournamentListItem): Bucket {
+/**
+ * "Live" is an explicit, expiring admin decision (`liveUntil`) — NEVER inferred
+ * from Challonge's state.
+ *
+ * Challonge's `underway` and `awaiting_review` are sticky: a bracket nobody
+ * closed properly still reports them years later. Inferring liveness from them
+ * listed 2024 tournaments under "Live" (and previously drove a 15s poll loop
+ * against a rate-limited API). A past-dated bracket that upstream never closed
+ * is shown as completed — which is what it actually is — and the row still
+ * displays its real sync state.
+ */
+export function bucketFor(t: TournamentListItem, now: number = Date.now()): Bucket {
+  if (t.liveUntil && new Date(t.liveUntil).getTime() > now) return 'live';
   if (t.challongeState === 'complete') return 'completed';
-  if (t.syncState === 'live' || t.challongeState === 'underway' || t.challongeState === 'awaiting_review') {
-    return 'live';
-  }
+  const eventTime = t.eventDate ? new Date(t.eventDate).getTime() : null;
+  if (eventTime !== null && eventTime < now) return 'completed';
   return 'upcoming';
 }
 
@@ -24,11 +35,12 @@ export function TournamentsPage() {
 
   const groups = useMemo(() => {
     const all = query.data ?? [];
-    const live = all.filter((t) => bucketFor(t) === 'live');
+    const now = Date.now();
+    const live = all.filter((t) => bucketFor(t, now) === 'live');
     const upcoming = all
-      .filter((t) => bucketFor(t) === 'upcoming')
+      .filter((t) => bucketFor(t, now) === 'upcoming')
       .sort((a, b) => (a.eventDate ?? '9999').localeCompare(b.eventDate ?? '9999'));
-    const completed = all.filter((t) => bucketFor(t) === 'completed');
+    const completed = all.filter((t) => bucketFor(t, now) === 'completed');
     return { live, upcoming, completed };
   }, [query.data]);
 
