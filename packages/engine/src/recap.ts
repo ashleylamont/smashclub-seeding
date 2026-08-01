@@ -25,6 +25,7 @@
 
 import { eventKeyOf } from './events';
 import { winProbability } from './glicko2';
+import { DISPLAY_CENTRE, NATURAL_TO_DISPLAY, probabilityFromRatings } from './whr';
 
 // ---------------------------------------------------------------------------
 // Input
@@ -118,6 +119,14 @@ export interface RecapInput {
   rankMovement?: readonly RecapRankMovement[];
   /** Entrant counts for earlier nights, for the turnout comparison. */
   priorTurnouts?: readonly { eventKey: string; entrants: number }[];
+  /**
+   * Which rating model produced `ratingEvents`. Upset odds are computed with
+   * that model's own probability formula — Glicko attenuates by the
+   * opponent's RD alone, WHR by the summed variance of both players — so a
+   * recap's "had a 12% chance" is the number the active model would actually
+   * have quoted before the set. Defaults to Glicko for older callers.
+   */
+  model?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -554,7 +563,7 @@ export function buildRecap(input: RecapInput): RecapResult {
   collectGrandFinals(played, outcomes, push);
   const deciderSetIds = new Set([...outcomes.values()].map((o) => o.decider.id));
   collectSeedUpsets(played, stageOf, weightOf, push);
-  collectRatingUpsets(played, ratingEvents, stageOf, weightOf, push);
+  collectRatingUpsets(played, ratingEvents, input.model === 'whr', stageOf, weightOf, push);
   collectNailbiters(played, deciderSetIds, stageOf, weightOf, push);
   collectLosersRuns(played, placement, push);
   collectOverperformers(orderedTournaments, participants, push);
@@ -700,6 +709,7 @@ function collectSeedUpsets(
 function collectRatingUpsets(
   played: readonly PlayedSet[],
   ratingEvents: readonly RecapRatingEvent[],
+  isWhr: boolean,
   stageOf: (p: PlayedSet) => string | null,
   weightOf: (p: PlayedSet) => number,
   push: Push,
@@ -720,10 +730,16 @@ function collectRatingUpsets(
     const loserEvent = events.find((e) => e.playerId === p.loser.playerId);
     if (!winnerEvent || !loserEvent) continue;
 
-    const probability = winProbability(
-      { rating: winnerEvent.preRating, rd: winnerEvent.preRd, vol: 0 },
-      { rating: loserEvent.preRating, rd: loserEvent.preRd, vol: 0 },
-    );
+    const probability = isWhr
+      ? probabilityFromRatings(
+          (winnerEvent.preRating - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY,
+          (loserEvent.preRating - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY,
+          (winnerEvent.preRd / NATURAL_TO_DISPLAY) ** 2 + (loserEvent.preRd / NATURAL_TO_DISPLAY) ** 2,
+        )
+      : winProbability(
+          { rating: winnerEvent.preRating, rd: winnerEvent.preRd, vol: 0 },
+          { rating: loserEvent.preRating, rd: loserEvent.preRd, vol: 0 },
+        );
     // Only genuine longshots; an even set is not an upset.
     if (probability > 0.35) continue;
     const notability = 0.6 * (1 - probability / 0.35) + 0.3 * weightOf(p) + 0.1;

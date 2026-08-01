@@ -22,6 +22,13 @@ export interface PlayerEventView {
   preRd: number;
   postRd: number;
   weight: number;
+  /**
+   * WHR only, null under Glicko: the current fit's hindsight estimate of
+   * skill at this night, revised as later results arrive. `pre`/`post` above
+   * are the frozen ledger of what the board published at the time.
+   */
+  revisedRating: number | null;
+  revisedSd: number | null;
   tournamentId: string;
   tournamentName: string;
   tournamentDate: string | null;

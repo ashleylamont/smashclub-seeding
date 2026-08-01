@@ -5,6 +5,7 @@ import {
   calibrateLeagueBands,
   computeLeaderboard,
   eventKeyOf,
+  parseScoresCsv,
   replayRatings,
   runWhrModel,
   type EngineSet,
@@ -67,16 +68,24 @@ export async function runRecompute(
 
   const engineSets: EngineSet[] = setRows
     .filter((row) => row.p1PlayerId !== row.p2PlayerId)
-    .map((row) => ({
-      id: row.id,
-      tournamentId: row.tournamentId,
-      p1PlayerId: row.p1PlayerId!,
-      p2PlayerId: row.p2PlayerId!,
-      winner: row.winner as 1 | 2,
-      suggestedPlayOrder: row.suggestedPlayOrder,
-      completedAt: row.completedAt?.toISOString() ?? null,
-      challongeMatchId: row.challongeMatchId,
-    }));
+    .map((row) => {
+      // Game counts feed WHR's evidence weighting (a 3-0 outrates a 3-2);
+      // forfeits and unreadable scorelines come back `unknown` and rate as a
+      // plain set. The Glicko replay ignores these fields.
+      const score = parseScoresCsv(row.scoresCsv);
+      return {
+        id: row.id,
+        tournamentId: row.tournamentId,
+        p1PlayerId: row.p1PlayerId!,
+        p2PlayerId: row.p2PlayerId!,
+        winner: row.winner as 1 | 2,
+        suggestedPlayOrder: row.suggestedPlayOrder,
+        completedAt: row.completedAt?.toISOString() ?? null,
+        challongeMatchId: row.challongeMatchId,
+        p1Games: score.unknown ? null : score.p1,
+        p2Games: score.unknown ? null : score.p2,
+      };
+    });
 
   const model = glicko.activeModel;
   const [recompute] = await db
@@ -100,6 +109,14 @@ export async function runRecompute(
     let ratingEventRows: RatingEvent[];
     let leaderboard: LeaderboardRow[];
     let effectiveSettings = glicko;
+    /** WHR fit diagnostics, recorded in the recompute's stats. */
+    let modelStats: Record<string, unknown> = {};
+    /**
+     * Where everyone ranked before the latest night. The WHR run derives this
+     * from the same history prefix its ledger is built on; the Glicko path
+     * re-replays with the night withheld.
+     */
+    let previousRanks: Map<string, number>;
 
     /**
      * Fit the bands to the club's real distribution once, then leave them be —
@@ -132,6 +149,8 @@ export async function runRecompute(
           : runWhrModel({ sets: engineSets, tournaments: engineTournaments, settings: effectiveSettings });
       ratingEventRows = run.events;
       leaderboard = run.leaderboard;
+      previousRanks = run.previousRanks;
+      modelStats = { whr: { converged: run.converged, iterations: run.iterations, periods: run.periods } };
       if (!run.converged) {
         console.warn(`WHR fit did not converge in ${run.iterations} iterations; ratings may be unstable`);
       }
@@ -140,6 +159,7 @@ export async function runRecompute(
       await calibrateOnce(computeLeaderboard(replay.finalStates, glicko));
       ratingEventRows = replay.events;
       leaderboard = computeLeaderboard(replay.finalStates, effectiveSettings);
+      previousRanks = ranksBeforeLastEvent(engineSets, engineTournaments, effectiveSettings);
     }
 
     for (let offset = 0; offset < ratingEventRows.length; offset += EVENT_INSERT_CHUNK) {
@@ -161,11 +181,11 @@ export async function runRecompute(
           preVol: event.preVol,
           postVol: event.postVol,
           weight: event.weight,
+          revisedRating: event.revisedRating ?? null,
+          revisedSd: event.revisedSd ?? null,
         })),
       );
     }
-
-    const previousRanks = ranksBeforeLastEvent(engineSets, engineTournaments, effectiveSettings, model);
 
     if (leaderboard.length > 0) {
       await db.insert(playerRatings).values(
@@ -206,7 +226,12 @@ export async function runRecompute(
       );
     }
 
-    const stats = { players: leaderboard.length, sets: engineSets.length, events: ratingEventRows.length };
+    const stats = {
+      players: leaderboard.length,
+      sets: engineSets.length,
+      events: ratingEventRows.length,
+      ...modelStats,
+    };
     await db
       .update(recomputes)
       .set({ status: 'complete', finishedAt: new Date(), stats })
@@ -236,12 +261,15 @@ export async function runRecompute(
  * Withholding a whole *event* (main + rookie bracket on one evening), not a
  * single bracket, so a player who only entered the rookie side is not compared
  * against a board that already contains the main bracket's results.
+ *
+ * Glicko only: the WHR run already fits every history prefix to freeze its
+ * ledger, and reports the second-to-last prefix's board as `previousRanks` —
+ * the same answer, from the same fit, without a second withheld run.
  */
 function ranksBeforeLastEvent(
   engineSets: readonly EngineSet[],
   engineTournaments: readonly EngineTournament[],
   settings: GlickoSettings,
-  model: string,
 ): Map<string, number> {
   const ranks = new Map<string, number>();
   if (engineSets.length === 0) return ranks;
@@ -257,13 +285,10 @@ function ranksBeforeLastEvent(
   // the board renders as "–" rather than as a climb from nowhere.
   if (priorSets.length === 0) return ranks;
 
-  const leaderboard =
-    model === 'whr'
-      ? runWhrModel({ sets: priorSets, tournaments: engineTournaments, settings }).leaderboard
-      : computeLeaderboard(
-          replayRatings({ sets: priorSets, tournaments: engineTournaments, settings }).finalStates,
-          settings,
-        );
+  const leaderboard = computeLeaderboard(
+    replayRatings({ sets: priorSets, tournaments: engineTournaments, settings }).finalStates,
+    settings,
+  );
   for (const row of leaderboard) ranks.set(row.playerId, row.rank);
   return ranks;
 }

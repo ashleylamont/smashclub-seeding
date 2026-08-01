@@ -141,10 +141,12 @@ function lastSeenChip(row: LeaderboardRow): { text: string; className: string; t
  * the other way round reads backwards — a long bar looks like "more/better"
  * whatever the label says.
  *
- * 350 is the starting rating deviation, i.e. knowing nothing at all.
+ * The server computes `sampleConfidence` against the active model's own
+ * "knowing nothing" scale (Glicko's initial RD, WHR's prior), so the meter is
+ * not re-derived here from a hardcoded Glicko constant.
  */
-function confidenceWidth(sd: number): number {
-  return Math.max(4, Math.min(100, (1 - sd / 350) * 100));
+function confidenceWidth(sampleConfidence: number): number {
+  return Math.max(4, Math.min(100, sampleConfidence * 100));
 }
 
 /** "▲2" / "▼1" / "–" — the movement column, spelled out for a screen reader. */
@@ -172,7 +174,7 @@ function formLabel(form: boolean[]): string {
 function sortKeyNote(row: LeaderboardRow, field: SortField): string | null {
   switch (field) {
     case 'certainty':
-      return `${Math.round(confidenceWidth(row.skillSd))}% conf`;
+      return `${Math.round(confidenceWidth(row.sampleConfidence))}% conf`;
     case 'eventCount':
       return `${row.eventCount} event${row.eventCount === 1 ? '' : 's'}`;
     default:
@@ -454,9 +456,9 @@ export function Leaderboard({ rows, trends, hideInactive, onHideInactiveChange, 
                 <span
                   className="certainty-track"
                   aria-hidden="true"
-                  title={`Confidence ${Math.round(confidenceWidth(row.skillSd))}% — fuller means more sets against more opponents`}
+                  title={`Confidence ${Math.round(confidenceWidth(row.sampleConfidence))}% — fuller means more sets against more opponents`}
                 >
-                  <span className="certainty-fill" style={{ width: `${confidenceWidth(row.skillSd)}%` }} />
+                  <span className="certainty-fill" style={{ width: `${confidenceWidth(row.sampleConfidence)}%` }} />
                 </span>
 
                 <span className="form" aria-hidden="true">
