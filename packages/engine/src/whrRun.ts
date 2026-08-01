@@ -1,7 +1,7 @@
 import type { GlickoSettings } from '@smashclub/shared';
 import { eventKeyOf } from './events';
 import { fitWhr } from './whr';
-import { leagueForRating, type LeaderboardRow, type PlayerScore } from './score';
+import { rankScores, type LeaderboardRow, type PlayerScore } from './score';
 import type { EngineSet, EngineTournament, RatingEvent } from './types';
 
 /**
@@ -245,18 +245,9 @@ export function runWhrModel(input: {
     });
   }
 
-  scores.sort(
-    (a, b) =>
-      b.skillRating - a.skillRating ||
-      a.skillSd - b.skillSd ||
-      (a.playerId < b.playerId ? -1 : a.playerId > b.playerId ? 1 : 0),
-  );
-
-  const leaderboard = scores.map((score, index) => ({
-    ...score,
-    rank: index + 1,
-    league: leagueForRating(score.skillRating, settings.leagueBands),
-  }));
+  // Ranked exactly as the Glicko-2 board is, so switching the active model is a
+  // change of model and not a change of what "first" means.
+  const leaderboard = rankScores(scores, settings);
 
   const periods = new Set(rateable.map((r) => r.eventKey)).size;
   return { events, leaderboard, converged: fit.converged, iterations: fit.iterations, periods };

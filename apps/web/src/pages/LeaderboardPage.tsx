@@ -92,7 +92,9 @@ export function LeaderboardPage() {
     if (rows.length === 0) return null;
     const rated = rows.filter((r) => r.matchCount > 0);
     const sets = rated.reduce((sum, r) => sum + r.matchCount, 0) / 2;
-    const median = [...rated].sort((a, b) => a.skillRating - b.skillRating)[Math.floor(rated.length / 2)];
+    const median = [...rated].sort((a, b) => a.conservativeRating - b.conservativeRating)[
+      Math.floor(rated.length / 2)
+    ];
     const climber = [...rows]
       .filter((r) => r.rankDelta !== null && r.rankDelta > 0)
       .sort((a, b) => (b.rankDelta ?? 0) - (a.rankDelta ?? 0))[0];
@@ -106,8 +108,9 @@ export function LeaderboardPage() {
           <p className="hero-eyebrow">{coverage}</p>
           <h1 className="hero-title">Rankings</h1>
           <p className="hero-sub muted">
-            Ranked on best-estimate skill. The ± figure is how much that estimate could move — a wide band
-            means we simply have not seen enough sets yet.
+            Ranked cautiously: your skill estimate less two standard deviations, so a rating has to be
+            earned in sets and kept up by turning up. The smaller figure is that estimate and its ± band —
+            play more and the gap between the two closes.
           </p>
         </div>
 
@@ -123,7 +126,7 @@ export function LeaderboardPage() {
             </div>
             <div className="stat">
               <dt>Median rating</dt>
-              <dd className="num">{summary.median ? Math.round(summary.median.skillRating) : '—'}</dd>
+              <dd className="num">{summary.median ? Math.round(summary.median.conservativeRating) : '—'}</dd>
             </div>
             {summary.climber && (
               <div className="stat stat-climber">

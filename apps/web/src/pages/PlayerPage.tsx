@@ -135,22 +135,28 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           )}
         </div>
 
-        {/* The headline figure is the skill estimate with its uncertainty
-            beside it — the same number the leaderboard ranks on. */}
+        {/* The headline figure is the ranked number — the cautious estimate —
+            because a profile that led with a figure the board does not rank on
+            just looks like the board is wrong. The skill estimate it is derived
+            from sits below it. */}
         {rating && (
           <div className="profile-headline">
-            <span className="headline-label">Skill</span>
-            <span className="headline-value num">{rating.skillRating.toFixed(0)}</span>
-            <span className="headline-band num">± {rating.skillSd.toFixed(0)}</span>
+            <span className="headline-label">Rating</span>
+            <span className="headline-value num">{rating.conservativeRating.toFixed(0)}</span>
+            <span className="headline-band num">
+              skill {rating.skillRating.toFixed(0)} ± {rating.skillSd.toFixed(0)}
+            </span>
           </div>
         )}
       </header>
 
       <dl className="profile-stats">
         <div className="stat">
-          <dt>Seeding rating</dt>
-          <dd className="num">{rating ? rating.conservativeRating.toFixed(0) : '—'}</dd>
-          <p className="stat-detail">Cautious estimate — what brackets are seeded on.</p>
+          <dt>Skill estimate</dt>
+          <dd className="num">{rating ? rating.skillRating.toFixed(0) : '—'}</dd>
+          <p className="stat-detail">
+            Best guess before uncertainty is subtracted. Play more, and the rating above closes on it.
+          </p>
         </div>
         <div className="stat">
           <dt>Record</dt>

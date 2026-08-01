@@ -71,6 +71,16 @@ export const glickoSettingsSchema = z.object({
    */
   leagueBandsCalibrated: z.boolean().default(false),
 
+  /**
+   * Which number the stored bands were fitted to. Bands cut from the skill
+   * estimate mean nothing against the conservative one — the scales differ by
+   * roughly 2·RD — so when this does not match what the board ranks on, the
+   * next recompute refits and stamps the new basis. Defaults to `skill`, which
+   * is what every set of bands stored before the board moved to the
+   * conservative rating was fitted to.
+   */
+  leagueBandBasis: z.enum(['skill', 'conservative']).default('skill'),
+
   leagueBands: z
     .array(z.object({ name: z.string(), minRating: z.number() }))
     .default([

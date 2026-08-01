@@ -43,6 +43,13 @@
       "when": 1785548822707,
       "tag": "0005_low_iron_lad",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785575062539,
+      "tag": "0006_mean_silver_samurai",
+      "breakpoints": true
     }
   ]
 }
