@@ -78,6 +78,44 @@ test.describe('public browsing', () => {
     expect([...ascending].sort((a, b) => a - b)).toEqual(ascending);
   });
 
+  test('hides inactive players by default, and ranks the field it shows', async ({ page }) => {
+    await page.goto('/');
+    await settle(page);
+
+    const rows = page.locator('.board-list .board-row');
+    const toggle = page.getByRole('checkbox', { name: 'Hide inactive' });
+
+    /** Ranks down the board, which must always run 1, 2, 3… with no holes. */
+    const ranks = () =>
+      rows.locator('.rank').evaluateAll((nodes) => nodes.map((node) => Number(node.textContent)));
+    const contiguous = (count: number) => Array.from({ length: count }, (_, i) => i + 1);
+
+    // On by default, and the board says how many it is holding back.
+    await expect(toggle).toBeChecked();
+    const shown = await rows.count();
+    expect(shown).toBeGreaterThan(10);
+    await expect(page.locator('.board-count')).toContainText('inactive hidden');
+    expect(await ranks()).toEqual(contiguous(shown));
+
+    // Turning it off widens the field, and the board renumbers to match rather
+    // than leaving gaps where the hidden players were.
+    await toggle.uncheck();
+    await settle(page);
+    const all = await rows.count();
+    expect(all).toBeGreaterThan(shown);
+    expect(await ranks()).toEqual(contiguous(all));
+
+    // The setting survives leaving the screen and coming back.
+    await toggle.check();
+    await settle(page);
+    await page.locator('.board-row .board-link').first().click();
+    await expect(page).toHaveURL(/\/players\//);
+    await page.goBack();
+    await settle(page);
+    await expect(toggle).toBeChecked();
+    expect(await rows.count()).toBe(shown);
+  });
+
   test('filters by name and clears back to the full field', async ({ page }) => {
     await page.goto('/');
     await settle(page);
@@ -96,7 +134,7 @@ test.describe('public browsing', () => {
     expect(await rows.count()).toBe(total);
   });
 
-  test('a board row opens that player, whose page leads with skill and its band', async ({ page }) => {
+  test('a board row opens that player, who leads with the ranked figure and its band', async ({ page }) => {
     await page.goto('/');
     await settle(page);
     const name = (await page.locator('.board-row .identity-name').first().innerText()).trim();
@@ -107,10 +145,17 @@ test.describe('public browsing', () => {
 
     // The board uppercases names in CSS, so compare case-insensitively.
     await expect(page.locator('.profile-name')).toHaveText(new RegExp(escapeRegExp(name), 'i'));
-    await expect(page.locator('.headline-label')).toHaveText('Skill');
+    /*
+     * The profile leads with the number the board ranks on, and publishes the
+     * skill estimate it is derived from beside it. These assertions still named
+     * the pre-`01b0694` layout — a "Skill" headline over a separate "Seeding
+     * rating" stat — and had been failing ever since that swap.
+     *
+     * `toContainText`, because the label also carries the explanation control.
+     */
+    await expect(page.locator('.headline-label')).toContainText('Rating');
     await expect(page.locator('.headline-band')).toContainText('±');
-    // Seeding is published as its own, separate figure.
-    await expect(page.locator('.profile-stats')).toContainText('Seeding rating');
+    await expect(page.locator('.profile-stats')).toContainText('Skill estimate');
     // The match log lists real results.
     await expect(page.locator('.match-table tbody tr').first()).toBeVisible();
   });
@@ -139,6 +184,94 @@ test.describe('public browsing', () => {
     expect(namesAfter).toEqual(names.slice(1));
     expect(await swatchColours()).toEqual(coloursBefore.slice(1));
   });
+});
+
+/**
+ * The narrow layout is not the wide one with things removed — it drops the
+ * column headers, and with them the sort control and every `title=` explanation
+ * the board relies on. These cover what stands in for them.
+ */
+test.describe('on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('the board is still sortable once the header row is gone', async ({ page }) => {
+    await page.goto('/');
+    await settle(page);
+
+    await expect(page.locator('.board-head')).toBeHidden();
+    const sort = page.locator('.control-sort select');
+    await expect(sort).toBeVisible();
+
+    await sort.selectOption('eventCount');
+    await settle(page);
+
+    /*
+     * Sorting on a measure this layout does not draw would otherwise reorder
+     * the board into apparent nonsense, so the row states the sorted figure.
+     */
+    const notes = await page.locator('.board-row .identity-sortkey').evaluateAll((nodes) =>
+      nodes.slice(0, 5).map((node) => Number(/\d+/.exec(node.textContent ?? '')?.[0])),
+    );
+    expect(notes.length).toBe(5);
+    expect([...notes].sort((a, b) => b - a)).toEqual(notes);
+
+    // And the direction toggle flips it.
+    await page.getByRole('button', { name: /Reverse the order/i }).click();
+    await settle(page);
+    const ascending = await page.locator('.board-row .identity-sortkey').evaluateAll((nodes) =>
+      nodes.slice(0, 5).map((node) => Number(/\d+/.exec(node.textContent ?? '')?.[0])),
+    );
+    expect([...ascending].sort((a, b) => a - b)).toEqual(ascending);
+  });
+
+  test('the key names the marks, including the ones this width drops', async ({ page }) => {
+    await page.goto('/');
+    await settle(page);
+
+    const legend = page.locator('.board-legend');
+    await expect(legend.locator('.legend-terms')).toBeHidden();
+    await page.locator('.board-legend-summary').click();
+
+    await expect(legend).toContainText('Movement');
+    await expect(legend).toContainText('Confidence');
+    // The samples are the real marks, so they have to actually render — an
+    // unscoped rule hiding the board's meter once blanked this one too.
+    await expect(legend.locator('.legend-sample-meter .certainty-fill')).toBeVisible();
+    await expect(legend.locator('.legend-league')).not.toHaveCount(0);
+  });
+
+  test('an explanation opens on tap and closes on Escape', async ({ page }) => {
+    await page.goto('/');
+    await settle(page);
+
+    await page.locator('.hero-meta .info-tip-button').click();
+    const panel = page.locator('.info-tip-panel');
+    // It can open a long way from the mark that opened it, so it names itself.
+    await expect(panel.locator('.info-tip-title')).toHaveText('Rating model');
+
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+  });
+});
+
+test('the colour scheme can be pinned, and survives a reload', async ({ page }) => {
+  await page.goto('/');
+  await settle(page);
+  const root = page.locator('html');
+  await expect(root).not.toHaveAttribute('data-theme', /.*/);
+
+  const toggle = page.getByRole('button', { name: /^Theme:/ });
+  await toggle.click();
+  await expect(root).toHaveAttribute('data-theme', 'light');
+
+  // Applied before first paint on the way back in, not after React mounts.
+  await page.reload();
+  await expect(root).toHaveAttribute('data-theme', 'light');
+
+  await page.getByRole('button', { name: /^Theme:/ }).click();
+  await expect(root).toHaveAttribute('data-theme', 'dark');
+  await page.getByRole('button', { name: /^Theme:/ }).click();
+  await expect(root).not.toHaveAttribute('data-theme', /.*/);
 });
 
 test.describe('auth bridge', () => {

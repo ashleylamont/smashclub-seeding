@@ -25,6 +25,12 @@ workflow).
   band are shown next to it. Movement arrows compare against a replay with
   the most recent club night withheld, so they report what the games did and
   not what the last recompute happened to change.
+- **The board shows the current field.** Players with no event in the last
+  year are hidden by default (a setting on the rankings screen). A rank is a
+  position *within* a field, so both the rank and the rank it is compared
+  against are re-derived over the players on screen: ranks run 1..n with no
+  holes, and ▲2 always means "passed two people who are still playing"
+  rather than "two people above you aged out".
 - **Identity is human-decided.** Challonge display names are cleaned
   (company tags, `@` conventions, parentheticals) and matched against player
   names *and* their stored aliases; safe structured short-forms auto-link;
@@ -32,6 +38,20 @@ workflow).
   queue, where a reviewer can also look up any player by hand. Fuzzy
   similarity never merges on its own, and decisions (including "keep
   separate") are stored so a question is never asked twice.
+
+  How *durable* an automatic link is tracks how strong the evidence was. An
+  exact alias or a stored decision is a club record being recognised, so it
+  links and stands. A structured short form ("Josh C") is only an inference
+  from the pool as it stands today, so it links this participant and writes
+  nothing — the moment a second Josh C. makes it ambiguous the name falls
+  through to review instead of resolving silently on a year-old guess.
+
+  A bracket roster is upstream input, though, and a display name is not proof
+  of identity: whoever controls a name in a registered bracket chooses which
+  existing alias it matches. Registering a bracket is admin-only and every
+  link is reversible from **Admin → Review** and **Admin → Players**, which
+  is the control that makes this acceptable — so register brackets you know,
+  and treat a roster you did not recognise as something to review.
 - **Live mode.** Tournaments that are underway on Challonge are polled every
   ~15s; changed sets trigger a debounced recompute and push SSE events to
   viewers on the tournament page.
@@ -69,13 +89,31 @@ pnpm --filter @smashclub/web dev
 Environment variables (see `apps/server/src/env.ts`): `DATABASE_URL`
 (required), `CHALLONGE_API_KEY` + `CHALLONGE_USERNAME`,
 `BETTER_AUTH_SECRET` + `BETTER_AUTH_URL`, `DISCORD_CLIENT_ID/SECRET`,
-`GOOGLE_CLIENT_ID/SECRET`, `ADMIN_EMAILS` (comma-separated; promoted to
-admin at login).
+`GOOGLE_CLIENT_ID/SECRET`, `ADMIN_EMAILS` (comma-separated), `TRUST_PROXY`,
+and the `SSE_MAX_*` live-feed limits.
+
+### Administrators
+
+`ADMIN_EMAILS` is the **single source of truth** for admin access. The
+`user.role` column is a cache of it: every request reconciles the two in both
+directions, so
+
+- adding an address grants admin on that account's next call, and
+- **removing one revokes it just as promptly** — including for a session that
+  is already signed in, and for every provider linked to that account.
+
+There is deliberately no way to pin an admin in the database that the
+allowlist will not take back; a role nothing can revoke is a role nobody can
+offboard. Offboarding is exactly "remove the address and redeploy" — no SQL,
+no session invalidation step to forget.
 
 `ADMIN_EMAILS` is matched against the account's primary email — the address
 from whichever provider was used to *sign up*. Linking a second provider
 later does not add its address to that check, so list the one the admin
-signed up with.
+signed up with. The address must also be one the provider reports as
+**verified**: Discord hands out unverified addresses for accounts that never
+confirmed their email, and an unverified address is not evidence that whoever
+is signing in controls the allowlisted mailbox.
 
 ### Accounts and providers
 
@@ -88,6 +126,19 @@ not-yet-linked provider creates a *separate* account instead — nothing can
 match two providers up before the user has proven they own both — so the
 sign-in page tells people to sign in with their original provider first and
 link from there.
+
+### Reading the board
+
+The columns are explained in place: on a laptop by the header row, and
+everywhere by the **How to read the board** key under the filters, which draws
+the actual marks — the confidence meter, the form pips, the league ramp the
+rows carry on their left edge. Below ~860px the header row is dropped, so the
+sort moves into the filter strip and a row states whichever figure it is
+ordered by when that column is not on screen.
+
+Colour scheme follows the OS by default and can be pinned light or dark from
+the nav; the choice is stored under `smashclub:theme` and applied by an inline
+script in `index.html` before first paint.
 
 ### Character head icons
 
@@ -134,6 +185,26 @@ kubectl apply -f deploy/k8s/ingress.yaml   # SSE annotations included
 
 The database is the club's system of record — schedule backups (e.g.
 CloudNativePG with scheduled `pg_dump` to object storage).
+
+### Live-feed limits
+
+`/api/live` is public and long-lived, so the server bounds what an anonymous
+client can make it hold: a global cap on concurrent streams
+(`SSE_MAX_CONNECTIONS`), a per-client cap (`SSE_MAX_CONNECTIONS_PER_IP`), a
+maximum stream lifetime (`SSE_MAX_STREAM_MS`) after which the server hangs up
+on its own, and a buffered-bytes ceiling (`SSE_MAX_BUFFERED_BYTES`) that
+closes a consumer which has stopped reading. Excess streams get
+`503` + `Retry-After` rather than a socket. `EventSource` reconnects by
+itself, so the lifetime close is invisible in the browser; a refused stream
+is not retried, so a client over the cap keeps a working page that stops
+live-updating until it is reloaded. Size the per-client cap with that in
+mind — every open tab is one stream and a live tournament page is two.
+
+Set `TRUST_PROXY=true` behind the ingress. Without it every request appears
+to come from the ingress pod and the per-client cap collapses into a second
+global one; with it, Fastify reads the client address from
+`X-Forwarded-For`. Leave it off if the server is ever exposed directly —
+otherwise clients pick their own address.
 
 ## Rating system notes
 

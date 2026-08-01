@@ -4,7 +4,9 @@ import { Link, useParams } from '@tanstack/react-router';
 import { trpc } from '../lib/trpc';
 import type { TournamentData, TournamentSet } from '../lib/apiTypes';
 import { formatDate, formatDateTime, roundLabel, timeAgo } from '../lib/format';
+import { challongeStateLabel, setStateLabel, syncStateLabel } from '../lib/labels';
 import { useEventSource } from '../lib/useEventSource';
+import { InfoTip } from '../components/InfoTip';
 import './Tournaments.css';
 
 export function TournamentPage() {
@@ -48,19 +50,38 @@ function TournamentDetail({ data }: { data: TournamentData }) {
     [data.sets],
   );
 
+  const bracket = challongeStateLabel(data.challongeState);
+  const sync = syncStateLabel(data.syncState);
+
   return (
     <div>
       <div className="page-header">
         <h1>{data.name}</h1>
         <span className="tournament-tags">
           {isLive && <span className="live-badge">LIVE</span>}
-          {data.isRookie && <span className="chip chip-warning">rookie</span>}
-          <span className="chip">{data.challongeState ?? 'pending'}</span>
+          {data.isRookie && (
+            <span className="chip chip-warning" title="A beginners' bracket — sets in it are weighted differently">
+              rookie
+            </span>
+          )}
+          <span className="chip" title={bracket.hint}>
+            {bracket.label}
+          </span>
         </span>
       </div>
+      {/*
+       * Two different states used to be printed raw, side by side, in the same
+       * grey: Challonge's word for the bracket and ours for the pipeline. They
+       * answer different questions — "has it been played" and "have we counted
+       * it" — so they are labelled as such and the second explains itself.
+       */}
       <p className="muted tournament-subtitle">
-        {formatDate(data.eventDate)} · sync: {data.syncState}
-        {data.lastSyncedAt ? ` (${timeAgo(data.lastSyncedAt)})` : ''}
+        <span>{formatDate(data.eventDate)}</span>
+        <span className="tournament-sync">
+          Results: {sync.label}
+          {data.lastSyncedAt ? ` · checked ${timeAgo(data.lastSyncedAt)}` : ''}
+          <InfoTip label="Results status">{sync.hint}</InfoTip>
+        </span>
         {/* The recap covers the whole evening, so it is worth reaching for
             while a bracket is still running as well as after it finishes. */}
         <Link to="/recaps/$slug" params={{ slug: data.slug }} className="tournament-recap-link">
@@ -98,23 +119,27 @@ function TournamentDetail({ data }: { data: TournamentData }) {
       {standings.length > 0 && (
         <div className="section">
           <h2>Standings</h2>
+          {/* Three short columns fit any phone, so this one opts out of the
+              minimum width that makes the sets table scroll. */}
           <div className="table-scroll">
-            <table className="data-table">
+            <table className="data-table table-narrow">
               <thead>
                 <tr>
-                  <th>Place</th>
-                  <th>Player</th>
-                  <th>Seed</th>
+                  <th className="num">Place</th>
+                  <th className="col-fill">Player</th>
+                  <th className="num" title="The seed they entered the bracket on">
+                    Seed
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {standings.map((p) => (
                   <tr key={p.id}>
-                    <td>{p.finalRank}</td>
+                    <td className="num">{p.finalRank}</td>
                     <td>
                       <ParticipantName name={p.name} playerId={p.playerId} />
                     </td>
-                    <td>{p.challongeSeed ?? '—'}</td>
+                    <td className="num">{p.challongeSeed ?? '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -127,11 +152,13 @@ function TournamentDetail({ data }: { data: TournamentData }) {
         <div className="section">
           <h2>Participants ({data.participants.length})</h2>
           <div className="table-scroll">
-            <table className="data-table">
+            <table className="data-table table-narrow">
               <thead>
                 <tr>
-                  <th>Seed</th>
-                  <th>Player</th>
+                  <th className="num" title="The seed they entered the bracket on">
+                    Seed
+                  </th>
+                  <th className="col-fill">Player</th>
                 </tr>
               </thead>
               <tbody>
@@ -139,7 +166,7 @@ function TournamentDetail({ data }: { data: TournamentData }) {
                   .sort((a, b) => (a.challongeSeed ?? 1e9) - (b.challongeSeed ?? 1e9))
                   .map((p) => (
                     <tr key={p.id}>
-                      <td>{p.challongeSeed ?? '—'}</td>
+                      <td className="num">{p.challongeSeed ?? '—'}</td>
                       <td>
                         <ParticipantName name={p.name} playerId={p.playerId} />
                       </td>
@@ -157,35 +184,41 @@ function TournamentDetail({ data }: { data: TournamentData }) {
           <p className="muted">No sets yet.</p>
         ) : (
           <div className="table-scroll">
-            <table className="data-table">
+            <table className="data-table sets-table">
               <thead>
                 <tr>
-                  <th>Round</th>
-                  <th>Set</th>
-                  <th>Match</th>
+                  <th title="Winners rounds are W1, W2…; losers rounds are L1, L2…">Round</th>
+                  <th title="Challonge's identifier for this set in the bracket">Set</th>
+                  <th className="col-fill">Match</th>
                   <th>Score</th>
-                  <th>State</th>
-                  <th>Completed</th>
+                  <th>Status</th>
+                  <th>Reported</th>
                 </tr>
               </thead>
               <tbody>
-                {data.sets.map((set) => (
-                  <tr key={set.id} className={set.excludedFromRatings ? 'set-excluded' : undefined}>
-                    <td>{set.round != null ? roundLabel(set.round) : '—'}</td>
-                    <td>{set.identifier ?? '—'}</td>
-                    <td>
-                      <SetLine set={set} />
-                      {set.excludedFromRatings && (
-                        <span className="chip chip-danger excluded-chip" title="Excluded from ratings">
-                          excluded
-                        </span>
-                      )}
-                    </td>
-                    <td>{set.scoresCsv ?? '—'}</td>
-                    <td>{set.state}</td>
-                    <td>{set.completedAt ? formatDateTime(set.completedAt) : '—'}</td>
-                  </tr>
-                ))}
+                {data.sets.map((set) => {
+                  const state = setStateLabel(set.state);
+                  return (
+                    <tr key={set.id} className={set.excludedFromRatings ? 'set-excluded' : undefined}>
+                      <td className="mono">{set.round != null ? roundLabel(set.round) : '—'}</td>
+                      <td className="mono">{set.identifier ?? '—'}</td>
+                      <td>
+                        <SetLine set={set} />
+                        {set.excludedFromRatings && (
+                          <span
+                            className="chip chip-danger excluded-chip"
+                            title="Not counted towards ratings — a walkover, a disqualification, or an admin exclusion"
+                          >
+                            excluded
+                          </span>
+                        )}
+                      </td>
+                      <td className="mono">{set.scoresCsv ?? '—'}</td>
+                      <td title={state.hint}>{state.label}</td>
+                      <td className="mono">{set.completedAt ? formatDateTime(set.completedAt) : '—'}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

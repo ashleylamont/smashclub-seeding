@@ -1,0 +1,103 @@
+/*
+ * Explanation affordance. Square and hairline-bounded like every other surface
+ * in the app — the panel is a rule-bounded note on the page field, not a
+ * floating card, so it has a border and no shadow.
+ */
+
+.info-tip {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+.info-tip-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Sized so the glyph reads at label scale; the tap area is grown below. */
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-soft);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  position: relative;
+}
+
+/* A 15px target is not tappable. The visible mark stays small and a transparent
+   box around it does the catching, so the glyph does not have to grow into the
+   dense rows it sits in. */
+.info-tip-button::after {
+  content: '';
+  position: absolute;
+  inset: -11px;
+}
+
+.info-tip-button:hover,
+.info-tip-button.is-open {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.info-tip-panel {
+  position: absolute;
+  top: calc(100% + var(--s2));
+  z-index: 60;
+  display: block;
+  width: max-content;
+  max-width: min(300px, calc(100vw - var(--s5)));
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--accent);
+  background: var(--bg-elev);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: normal;
+  text-transform: none;
+  /* Panels open inside uppercase display-face headings and inside monospaced
+     figures; neither should leak into the sentence. */
+  white-space: normal;
+}
+
+/* The panel can appear well away from the mark that opened it, so it names what
+   it is answering. */
+.info-tip-title {
+  display: block;
+  margin-bottom: var(--s1);
+  font-family: var(--display);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-h);
+}
+
+.info-tip-start {
+  left: 0;
+}
+
+.info-tip-end {
+  right: 0;
+}
+
+/* Narrow screens have no room to hang a panel off a mid-line glyph without it
+   running off one edge or the other, so it spans the viewport gutter instead. */
+@media (max-width: 560px) {
+  .info-tip-panel {
+    position: fixed;
+    top: auto;
+    left: var(--s2);
+    right: var(--s2);
+    bottom: var(--s2);
+    max-width: none;
+    width: auto;
+  }
+}

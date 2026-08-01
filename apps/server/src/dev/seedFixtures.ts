@@ -159,6 +159,34 @@ interface FixtureMatchLocal {
   scores: string;
 }
 
+/** How many club nights the synthetic club has run. */
+const SYNTHETIC_EVENTS = 6;
+/** Roughly a quarter between nights, so six of them span over two years. */
+const SYNTHETIC_EVENT_GAP_DAYS = 100;
+/** The most recent night is recent enough to still be underway. */
+const SYNTHETIC_LATEST_DAYS_AGO = 24;
+
+/**
+ * Club nights, oldest first, dated relative to now rather than written down.
+ *
+ * Fixed dates rot: a fixture pinned to a calendar year quietly turns into "a
+ * club that stopped meeting" as real time passes, and the rankings board hides
+ * players who have not been seen in a year — so a pinned fixture eventually
+ * seeds a board that renders empty by default. Anchoring to today keeps the
+ * harness saying the same thing every day it is run.
+ *
+ * The span deliberately overshoots that one-year window, so the seeded club has
+ * both a current field and a tail that has aged out of it.
+ */
+function syntheticEventDates(today: Date = new Date()): string[] {
+  return Array.from({ length: SYNTHETIC_EVENTS }, (_, index) => {
+    const daysAgo = SYNTHETIC_LATEST_DAYS_AGO + (SYNTHETIC_EVENTS - 1 - index) * SYNTHETIC_EVENT_GAP_DAYS;
+    const date = new Date(today);
+    date.setUTCDate(date.getUTCDate() - daysAgo);
+    return date.toISOString().slice(0, 10);
+  });
+}
+
 /** Deterministic synthetic club, used when no real cache is supplied. */
 function syntheticFixtures(): { fixtures: FixtureTournament[]; registry: RegistryPlayerInput[] } {
   const pseudo = new Pseudonymiser();
@@ -166,16 +194,25 @@ function syntheticFixtures(): { fixtures: FixtureTournament[]; registry: Registr
   // Fixed "true skill" so results are plausible rather than uniform noise.
   const skill = new Map(roster.map((name, i) => [name, 1200 + ((i * 37) % 600)]));
   const companies = ['ATL', 'CAN', 'GOOG', 'OPT', 'WOW'];
+  /**
+   * The people who came twice, early on, and never came back. Every club has
+   * them, and the rankings board's activity setting exists for them — so the
+   * harness has to seed some or the setting looks like it does nothing.
+   */
+  const lapsed = roster.slice(44);
 
   const fixtures: FixtureTournament[] = [];
   let matchId = 700_000;
-  const dates = ['2025-06-11', '2025-08-13', '2025-10-15', '2025-12-10', '2026-02-11', '2026-04-15'];
+  const dates = syntheticEventDates();
 
   dates.forEach((date, eventIndex) => {
     const isRookieEvent = eventIndex % 2 === 1;
     // Rookie brackets draw the lower half of the roster, with a little overlap.
     const pool = isRookieEvent ? roster.slice(24, 44) : roster.slice(0, 30);
-    const entrants = pool.filter((_, i) => (i + eventIndex) % 5 !== 4);
+    const entrants = [
+      ...pool.filter((_, i) => (i + eventIndex) % 5 !== 4),
+      ...(eventIndex < 2 ? lapsed : []),
+    ];
     const participantIds = new Map<string, number>();
     entrants.forEach((name, i) => {
       participantIds.set(`[${companies[i % companies.length]!}] ${name}`, 2000 + eventIndex * 100 + i);

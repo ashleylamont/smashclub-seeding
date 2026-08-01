@@ -2,16 +2,31 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { trpc } from '../lib/trpc';
 import { timeAgo } from '../lib/format';
+import { filterInactive } from '../lib/activity';
+import { useNow } from '../lib/useNow';
+import { useStoredFlag } from '../lib/useStoredFlag';
 import { Leaderboard, type PlayerTrend } from '../components/Leaderboard';
 import { RatingsOverTime } from '../components/RatingsOverTime';
+import { InfoTip } from '../components/InfoTip';
 import './LeaderboardPage.css';
 
 /** How many recent results the form pips show. */
 const FORM_LENGTH = 5;
 /** How many rating points a sparkline traces. */
 const SPARK_LENGTH = 12;
+/**
+ * How often the clock is re-read for the activity cutoff. The window is a year
+ * wide, so nothing is lost by checking hourly — this exists only so a page left
+ * open across a boundary eventually agrees with a reload.
+ */
+const ACTIVITY_TICK_MS = 60 * 60 * 1000;
+/** Remembered across visits: every row is a link, so the board remounts often. */
+const HIDE_INACTIVE_KEY = 'rankings.hideInactive';
 
 export function LeaderboardPage() {
+  const now = useNow(ACTIVITY_TICK_MS);
+  const [hideInactive, setHideInactive] = useStoredFlag(HIDE_INACTIVE_KEY, true);
+
   const leaderboard = useQuery({
     queryKey: ['leaderboard'],
     queryFn: () => trpc.public.leaderboard.query(),
@@ -28,6 +43,19 @@ export function LeaderboardPage() {
   const tournamentNames = useMemo(
     () => new Map((tournaments.data ?? []).map((t) => [t.id, t.name])),
     [tournaments.data],
+  );
+
+  /**
+   * The field the screen is actually about. Hiding the long tail of players who
+   * stopped coming is not just a display filter: rank and movement are
+   * positions *within* a field, so both are re-derived over whoever is left
+   * (see lib/activity). Everything below — the board, and the headline stats
+   * that summarise it — reads from here rather than the raw response, so the
+   * masthead can never describe a different set of players to the rows.
+   */
+  const board = useMemo(
+    () => filterInactive(leaderboard.data?.rows ?? [], now, hideInactive),
+    [leaderboard.data, now, hideInactive],
   );
 
   /**
@@ -83,10 +111,22 @@ export function LeaderboardPage() {
     );
   }
   if (leaderboard.isError) {
-    return <p className="error-text">Failed to load rankings: {leaderboard.error.message}</p>;
+    return (
+      <div className="page">
+        <p className="error-text">Failed to load rankings: {leaderboard.error.message}</p>
+        <p className="muted">
+          The board is served by the club's own API — if this keeps happening the server is probably down rather
+          than your connection.{' '}
+          <button type="button" className="link-button" onClick={() => void leaderboard.refetch()}>
+            Try again
+          </button>
+        </p>
+      </div>
+    );
   }
 
-  const { computedAt, rows, model } = leaderboard.data;
+  const { computedAt, model } = leaderboard.data;
+  const rows = board.rows;
 
   const summary = (() => {
     if (rows.length === 0) return null;
@@ -142,10 +182,19 @@ export function LeaderboardPage() {
 
         <p className="hero-meta muted">
           {computedAt ? `Updated ${timeAgo(computedAt)}` : 'No recompute yet'} · model <code>{model}</code>
+          <InfoTip label="Rating model">
+            Which rating system produced these numbers. Every recompute replays the club's whole set history
+            through it, so ratings are derived from the results rather than adjusted after them — and switching
+            model re-derives the entire board.
+          </InfoTip>
+          {/* Says so here as well as on the control, because the stats above
+              count this field and would otherwise look simply wrong to anyone
+              who knows how many people are in the club. */}
+          {hideInactive && board.inactiveCount > 0 && ` · ${board.inactiveCount} inactive not counted`}
         </p>
       </header>
 
-      {rows.length === 0 ? (
+      {leaderboard.data.rows.length === 0 ? (
         <div className="empty-state">
           <h2>Nothing ranked yet</h2>
           <p className="muted">
@@ -154,7 +203,13 @@ export function LeaderboardPage() {
           </p>
         </div>
       ) : (
-        <Leaderboard rows={rows} trends={trends} />
+        <Leaderboard
+          rows={rows}
+          trends={trends}
+          hideInactive={hideInactive}
+          onHideInactiveChange={setHideInactive}
+          inactiveCount={board.inactiveCount}
+        />
       )}
 
       {ratingHistory.data && ratingHistory.data.players.length > 0 && (
