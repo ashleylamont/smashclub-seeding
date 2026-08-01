@@ -2,8 +2,25 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover lets the safe-area insets in App.css actually do
+         something on notched phones. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Club rankings for Super Smash Bros., computed from Challonge tournament history." />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#07090a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#eeece4" media="(prefers-color-scheme: light)" />
     <title>Smash Club Rankings</title>
+    <script>
+      // Applies the stored colour-scheme preference before first paint, so a
+      // pinned light theme does not flash the dark field on load. Must agree
+      // with src/lib/theme.ts on the key and the attribute.
+      try {
+        var mode = localStorage.getItem('smashclub:theme');
+        if (mode === 'light' || mode === 'dark') document.documentElement.setAttribute('data-theme', mode);
+      } catch (e) {
+        /* Storage can throw; the OS preference is a fine fallback. */
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

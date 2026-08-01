@@ -1,0 +1,17 @@
+name: Setup Node and pnpm
+description: >-
+  Install pnpm and Node and restore the workspace. Every Node job needs exactly
+  this preamble; keeping it in one place stops the jobs drifting apart on Node
+  version or install flags. Run actions/checkout first — a local action cannot
+  be resolved before the repository is on disk.
+
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: pnpm
+    - shell: bash
+      run: pnpm install --frozen-lockfile

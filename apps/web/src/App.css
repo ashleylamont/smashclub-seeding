@@ -13,6 +13,31 @@
   min-height: 100svh;
 }
 
+/* ── skip link ──────────────────────────────────────────────────────
+   Parked off-screen until focused, then drawn as a normal accent button in the
+   top-left. The nav is sticky and two rows deep on a phone, so tabbing past it
+   on every route change is a real cost. */
+
+.skip-link {
+  position: absolute;
+  top: var(--s2);
+  left: var(--s2);
+  z-index: 200;
+  padding: var(--s2) var(--s3);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-family: var(--display);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  transform: translateY(calc(-100% - var(--s4)));
+}
+
+.skip-link:focus {
+  transform: none;
+}
+
 /* ── top nav: a marquee bar ─────────────────────────────────────── */
 
 .app-nav {
@@ -81,7 +106,24 @@
 .app-nav .nav-right {
   display: flex;
   align-items: center;
-  gap: var(--s3);
+  gap: var(--s2);
+  /* Owns the push to the right edge, so it still sits there once the links
+     drop to their own row on a phone and stop being the flexing child. */
+  margin-left: auto;
+}
+
+/* Glyph then word, so it reads at a glance and still says which mode it is in.
+   The word is dropped on narrow screens; the accessible name keeps both. */
+.theme-toggle {
+  gap: var(--s2);
+  /* The glyph is the whole control once the word is gone, so it is set at body
+     size rather than at the button's condensed label size. */
+  font-size: var(--fs-md);
+  line-height: 1;
+}
+
+.theme-toggle .theme-toggle-label {
+  font-size: var(--fs-xs);
 }
 
 .user-chip {
@@ -95,6 +137,15 @@
   font-size: var(--fs-sm);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  /* A long display name must not push the sign-out button off the bar. */
+  min-width: 0;
+}
+
+.user-chip .user-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 16ch;
 }
 
 .user-chip:hover {
@@ -106,6 +157,7 @@
   width: 22px;
   height: 22px;
   object-fit: cover;
+  flex: none;
 }
 
 .user-chip .avatar-fallback {
@@ -119,6 +171,7 @@
   font-family: var(--mono);
   font-size: var(--fs-xs);
   font-weight: 700;
+  flex: none;
 }
 
 /* ── main + footer ──────────────────────────────────────────────── */
@@ -128,11 +181,16 @@
   width: 1180px;
   max-width: calc(100% - var(--s6));
   margin: var(--s5) auto var(--s7);
+  /* Every horizontal overflow in the app is meant to be caught by a scroll
+     container (`.table-scroll`, `.board-scroll`). This is the backstop: the
+     page field itself never scrolls sideways. */
+  min-width: 0;
 }
 
 .app-footer {
   border-top: 1px solid var(--border);
   padding: var(--s3) var(--s5);
+  padding-bottom: calc(var(--s3) + env(safe-area-inset-bottom));
   font-family: var(--mono);
   font-size: var(--fs-xs);
   color: var(--text-soft);
@@ -406,8 +464,44 @@
   text-align: right;
 }
 
+/*
+ * ── table scrolling ─────────────────────────────────────────────────
+ * `overflow-x: auto` alone does nothing while the table is happy to be squeezed
+ * — and a table set to `width: 100%` is very happy to be squeezed. On a phone
+ * that produced six columns of one-word-per-line rubble: "Mr Game / and Watch /
+ * ◄ vs / Pokemon / Trainer" down a 60px cell, which is unreadable and still
+ * takes more height than scrolling would have.
+ *
+ * So a table inside a scroller declares the width it needs to stay legible and
+ * the container scrolls. `min-width` is on the *table*, not the container, so
+ * a short table (two columns of names) still fits without inventing a scrollbar.
+ */
 .table-scroll {
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+/*
+ * A table declares the width it needs through `--table-min`, rather than
+ * through a competing `min-width` rule that would then have to out-specify this
+ * one. `.table-narrow` is the opt-out for tables that are genuinely two short
+ * columns wide.
+ */
+.table-scroll > .data-table {
+  min-width: var(--table-min, 560px);
+}
+
+.data-table.table-narrow {
+  --table-min: 0px;
+}
+
+/*
+ * The column that should absorb the slack. Without it a table of short values
+ * pads its *first* column — which is how a two-column list ended up with its
+ * seed numbers floating in the middle of the page and the names beside them.
+ */
+.data-table th.col-fill {
+  width: 100%;
 }
 
 /* ── misc ───────────────────────────────────────────────────────── */
@@ -492,23 +586,75 @@
   margin-top: var(--s4);
 }
 
+/*
+ * ── touch ───────────────────────────────────────────────────────────
+ * The app is dense on purpose, and density is right under a mouse. A finger is
+ * not a mouse: the same 20px-tall controls are a coin toss to hit. On a coarse
+ * pointer the targets grow towards the 44px guidance while the type stays as
+ * it is, so the screens keep their rhythm and stop mis-firing.
+ */
+@media (pointer: coarse) {
+  .btn {
+    min-height: 40px;
+  }
+
+  .btn.btn-small {
+    min-height: 34px;
+    padding: 6px var(--s2);
+  }
+
+  .app-nav .nav-link {
+    min-height: 44px;
+  }
+
+  .user-chip {
+    min-height: 34px;
+  }
+
+  /*
+   * iOS Safari zooms the viewport when a focused field is set under 16px, and
+   * it does not zoom back out afterwards. The app's small type is fine to read
+   * on a phone; being thrown into a zoomed viewport by tapping the board's
+   * search box is not.
+   */
+  .input,
+  .select,
+  .textarea,
+  .control-input {
+    min-height: 40px;
+    font-size: 16px;
+  }
+}
+
 @media (max-width: 860px) {
   .app-nav {
     flex-wrap: wrap;
-    gap: var(--s3);
+    gap: 0 var(--s3);
     padding: 0 var(--s3);
   }
   .app-nav .logo {
     padding: var(--s2) 0;
   }
+  /*
+   * The links belong on their own row here, and the rule that used to say so
+   * never fired: the base `.nav-links { flex: 1 }` pins flex-basis to 0, so a
+   * plain `width: 100%` is ignored when the line is measured. The result was
+   * logo · Sign in · Home · Tournaments crammed onto one row, with the account
+   * controls stranded in the middle of the navigation.
+   */
   .app-nav .nav-links {
     order: 3;
-    width: 100%;
+    flex: 1 0 100%;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
+    border-top: 1px solid var(--border);
+    /* Hairline row divider, so the two rows do not read as one wrapped mess. */
+    margin-top: -1px;
   }
   .app-nav .nav-link {
-    padding: var(--s2);
-    font-size: var(--fs-xs);
+    padding: var(--s2) var(--s3) var(--s2) 0;
+    margin-right: var(--s3);
+    font-size: var(--fs-sm);
   }
   .app-main {
     max-width: calc(100% - var(--s4));
@@ -516,5 +662,38 @@
   }
   .page-header h1 {
     font-size: var(--fs-xl);
+  }
+
+  /* A dialog on a phone is a sheet: it uses the width it has, and it rises from
+     the bottom edge where a thumb already is. */
+  .modal-overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+  .modal {
+    max-width: none;
+    max-height: 92svh;
+    padding: var(--s4);
+    padding-bottom: calc(var(--s4) + env(safe-area-inset-bottom));
+    border: 0;
+    border-top: 3px solid var(--accent);
+  }
+}
+
+@media (max-width: 560px) {
+  /* Below this the bar cannot carry a name as well as the theme and sign-out
+     controls, and the avatar already identifies the account. The name is the
+     chip's accessible name, so it goes off-screen rather than away. */
+  .user-chip .user-chip-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  /* The toggle's label is already `aria-hidden`; its button carries a full
+     accessible name of its own. */
+  .theme-toggle .theme-toggle-label {
+    display: none;
   }
 }

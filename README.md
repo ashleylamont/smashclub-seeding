@@ -127,6 +127,19 @@ match two providers up before the user has proven they own both — so the
 sign-in page tells people to sign in with their original provider first and
 link from there.
 
+### Reading the board
+
+The columns are explained in place: on a laptop by the header row, and
+everywhere by the **How to read the board** key under the filters, which draws
+the actual marks — the confidence meter, the form pips, the league ramp the
+rows carry on their left edge. Below ~860px the header row is dropped, so the
+sort moves into the filter strip and a row states whichever figure it is
+ordered by when that column is not on screen.
+
+Colour scheme follows the OS by default and can be pinned light or dark from
+the nav; the choice is stored under `smashclub:theme` and applied by an inline
+script in `index.html` before first paint.
+
 ### Character head icons
 
 Players can pin up to four fighters, drawn as head icons beside their name.
