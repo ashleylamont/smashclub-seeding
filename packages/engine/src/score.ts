@@ -20,25 +20,26 @@ export interface PlayerScore {
   effectiveRating: number;
   effectiveRd: number;
   /**
-   * Best estimate of skill, and what the public leaderboard ranks on. This is
-   * the shrunk point estimate (a posterior mean): pulled toward 1500 in
-   * proportion to how little we know, but *not* additionally penalised by
-   * uncertainty. Display it alongside `skillSd` so doubt is visible rather
-   * than baked destructively into the number.
+   * Best estimate of skill: the shrunk point estimate (a posterior mean),
+   * pulled toward 1500 in proportion to how little we know but *not*
+   * additionally penalised by uncertainty. Shown alongside `skillSd` as a ±
+   * band, so doubt stays visible next to the ranked number.
    */
   skillRating: number;
   /** One standard deviation of uncertainty on `skillRating`, for a ± band. */
   skillSd: number;
   /**
-   * Deliberately pessimistic estimate, and what bracket seeding uses, where
-   * being cautious about an unknown player is the correct behaviour.
+   * Deliberately pessimistic estimate — skill minus two standard deviations —
+   * and what both the public leaderboard and bracket seeding rank on.
    *
-   * Ranking and seeding were previously the same number, which stacked
-   * confidence shrinkage on top of a −2·RD penalty. On the club's real data
-   * that made 94% of the median player's distance below 1500 pure uncertainty
-   * (a displayed 922 against a skill estimate of 1475) and left the published
-   * order correlating −0.86 with RD and +0.81 with match count — i.e. it
-   * measured attendance nearly as much as skill.
+   * This is a club decision, not a statistical one, and it has a known cost:
+   * uncertainty is not skill, so ranking on it means the order partly measures
+   * how recently and how often you have turned up (on the club's real data the
+   * published order correlated −0.86 with RD and +0.81 with match count, and
+   * the median player displayed 922 against a skill estimate of 1475). That is
+   * the intent: inactivity inflates RD and must visibly cost you places, which
+   * ranking on `skillRating` alone could never do — decay moves RD, not the
+   * point estimate.
    */
   conservativeRating: number;
   matchCount: number;
@@ -145,12 +146,12 @@ export function computePlayerScore(
  * (`calibrateLeagueBands`), store them, then leave them alone.
  */
 export function leagueForRating(
-  skillRating: number,
+  rating: number,
   bands: ReadonlyArray<{ name: string; minRating: number }>,
 ): string {
   const ordered = [...bands].sort((a, b) => b.minRating - a.minRating);
   for (const band of ordered) {
-    if (skillRating >= band.minRating) return band.name;
+    if (rating >= band.minRating) return band.name;
   }
   return ordered[ordered.length - 1]?.name ?? 'Unranked';
 }
@@ -159,18 +160,22 @@ export function leagueForRating(
  * Derives absolute band thresholds from the current field's quartiles, so the
  * one-off switch from quartiles to fixed bands preserves today's distribution
  * as its starting point.
+ *
+ * Feed it the same number the board ranks on — bands cut from one scale are
+ * meaningless against another, which is why the settings record which basis
+ * the stored bands were fitted to.
  */
 export function calibrateLeagueBands(
-  skillRatings: readonly number[],
+  ratings: readonly number[],
   names: readonly string[] = ['🏆 Champions', '💼 Smashclub Full-Timers', '🎓 Smashclub Grads', '👶 Smashclub Interns'],
 ): Array<{ name: string; minRating: number }> {
-  if (skillRatings.length === 0) {
+  if (ratings.length === 0) {
     return names.map((name, index) => ({
       name,
       minRating: index === names.length - 1 ? LEAGUE_CATCH_ALL : 1500 + (names.length - 1 - index) * 100,
     }));
   }
-  const sorted = [...skillRatings].sort((a, b) => b - a);
+  const sorted = [...ratings].sort((a, b) => b - a);
   return names.map((name, index) => {
     if (index === names.length - 1) return { name, minRating: LEAGUE_CATCH_ALL };
     const cut = Math.floor((sorted.length * (index + 1)) / names.length);
@@ -179,27 +184,34 @@ export function calibrateLeagueBands(
 }
 
 /**
- * Public leaderboard, ranked on best-estimate skill.
+ * Public leaderboard, ranked on the conservative estimate — the same number
+ * `seedingOrder` uses, so the board and the bracket agree about who is ahead.
  *
- * Ties break on lower uncertainty then player id, so the order is stable. Use
- * `seedingOrder` for brackets — that is a different question and wants the
- * conservative estimate.
+ * Ranking on the point estimate instead left inactivity with no effect at all
+ * on the published order: decay grows RD and leaves the rating untouched, so a
+ * player who stopped turning up held their place indefinitely. See
+ * `PlayerScore.conservativeRating` for what this costs.
+ *
+ * Ties break on the point estimate, then lower uncertainty, then player id, so
+ * the order is stable.
  */
 export function computeLeaderboard(
   finalStates: ReadonlyMap<string, PlayerFinalState>,
   settings: GlickoSettings,
 ): LeaderboardRow[] {
   const scores = [...finalStates.values()].map((state) => computePlayerScore(state, finalStates, settings));
-  scores.sort(
-    (a, b) =>
-      b.skillRating - a.skillRating ||
-      a.skillSd - b.skillSd ||
-      (a.playerId < b.playerId ? -1 : a.playerId > b.playerId ? 1 : 0),
-  );
-  return scores.map((score, index) => ({
+  return rankScores(scores, settings);
+}
+
+/**
+ * Rank an already-computed set of scores. Shared with the WHR model so both
+ * models order the board the same way.
+ */
+export function rankScores(scores: readonly PlayerScore[], settings: GlickoSettings): LeaderboardRow[] {
+  return seedingOrder(scores).map((score, index) => ({
     ...score,
     rank: index + 1,
-    league: leagueForRating(score.skillRating, settings.leagueBands),
+    league: leagueForRating(score.conservativeRating, settings.leagueBands),
   }));
 }
 

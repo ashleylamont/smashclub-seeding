@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { and, asc, desc, eq, ilike, inArray, isNotNull, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNotNull } from 'drizzle-orm';
 import {
   companies,
   playerClaims,
@@ -33,12 +33,14 @@ export const publicRouter = router({
       .select({
         playerId: playerRatings.playerId,
         rank: playerRatings.rank,
+        /** Rank before the club's most recent night; null if unrated then. */
+        previousRank: playerRatings.previousRank,
         league: playerRatings.league,
-        /** Best estimate — the leaderboard is ranked on this. */
+        /** Best estimate, shown with its ± band. */
         skillRating: playerRatings.skillRating,
         /** Uncertainty on the estimate, for a ± band. */
         skillSd: playerRatings.skillSd,
-        /** Pessimistic estimate — used for seeding, shown for reference. */
+        /** Pessimistic estimate — what the board and seeding are ranked on. */
         conservativeRating: playerRatings.conservativeRating,
         rating: playerRatings.rating,
         rd: playerRatings.rd,
@@ -68,25 +70,6 @@ export const publicRouter = router({
       .where(eq(playerClaims.status, 'approved'));
     const verifiedIds = new Set(verified.map((row) => row.playerId));
 
-    // Rank movement against the previous complete recompute, so the board can
-    // show who is climbing rather than just a static order.
-    const [previous] = recomputeId
-      ? await ctx.db
-          .select({ id: recomputes.id })
-          .from(recomputes)
-          .where(and(eq(recomputes.status, 'complete'), ne(recomputes.id, recomputeId)))
-          .orderBy(desc(recomputes.startedAt))
-          .limit(1)
-      : [];
-    const previousRanks = new Map<string, number>();
-    if (previous) {
-      const previousRows = await ctx.db
-        .select({ playerId: playerRatings.playerId, rank: playerRatings.rank })
-        .from(playerRatings)
-        .where(eq(playerRatings.recomputeId, previous.id));
-      for (const row of previousRows) previousRanks.set(row.playerId, row.rank);
-    }
-
     /*
      * Club-wide event count for the masthead. Derived here rather than in the web
      * app: what groups brackets into an event is an engine rule (`eventKeyOf`),
@@ -112,18 +95,20 @@ export const publicRouter = router({
       model: recompute?.model ?? 'glicko2',
       /** Occasions the club has run, not brackets — a main+rookie night is one. */
       eventCount,
-      rows: rows.map((row) => {
-        const previousRank = previousRanks.get(row.playerId);
-        return {
-          ...row,
-          name: playerName(row),
-          verified: verifiedIds.has(row.playerId),
-          /** Mains, in the player's chosen order; drawn as head icons. */
-          characters: characters.get(row.playerId) ?? [],
-          /** Places gained since the previous recompute; null if newly ranked. */
-          rankDelta: previousRank === undefined ? null : previousRank - row.rank,
-        };
-      }),
+      rows: rows.map((row) => ({
+        ...row,
+        name: playerName(row),
+        verified: verifiedIds.has(row.playerId),
+        /** Mains, in the player's chosen order; drawn as head icons. */
+        characters: characters.get(row.playerId) ?? [],
+        /**
+         * Places gained over the club's most recent night; null if this player
+         * had no rating before it. Recorded by the recompute against a replay
+         * that withholds that night, so it reports what the games did and not
+         * what any other recompute happened to change.
+         */
+        rankDelta: row.previousRank === null ? null : row.previousRank - row.rank,
+      })),
     };
   }),
 
