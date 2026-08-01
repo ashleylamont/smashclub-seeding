@@ -18,12 +18,20 @@ workflow).
   recompute replays the full set history through the Glicko-2 engine and
   writes `rating_events` + `player_ratings` under a new `recomputes` row.
   Readers always use the latest complete recompute.
+- **The board ranks cautiously.** Both the leaderboard and bracket seeding
+  order on the conservative rating — the skill estimate less two standard
+  deviations — so a place is earned in sets and held by turning up: missing
+  club nights widens the deviation and costs places. The estimate and its ±
+  band are shown next to it. Movement arrows compare against a replay with
+  the most recent club night withheld, so they report what the games did and
+  not what the last recompute happened to change.
 - **Identity is human-decided.** Challonge display names are cleaned
   (company tags, `@` conventions, parentheticals) and matched against player
-  aliases; safe structured short-forms auto-link; everything else — including
-  every fuzzy match — lands in an admin review queue. Fuzzy similarity never
-  merges on its own, and decisions (including "keep separate") are stored so
-  a question is never asked twice.
+  names *and* their stored aliases; safe structured short-forms auto-link;
+  everything else — including every fuzzy match — lands in an admin review
+  queue, where a reviewer can also look up any player by hand. Fuzzy
+  similarity never merges on its own, and decisions (including "keep
+  separate") are stored so a question is never asked twice.
 - **Live mode.** Tournaments that are underway on Challonge are polled every
   ~15s; changed sets trigger a debounced recompute and push SSE events to
   viewers on the tournament page.

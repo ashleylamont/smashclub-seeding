@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  candidateNames,
   findSimilarPlayer,
   firstNameCompatible,
+  matchStructuredAlias,
   preferMoreSpecificDisplay,
   rankReviewCandidates,
   resolveStructuredAlias,
@@ -125,6 +127,55 @@ describe('rankReviewCandidates', () => {
 
   it('returns an empty list when nothing is plausible', () => {
     expect(rankReviewCandidates('Zaphod Beeblebrox', 'ATL', [candidate('Fox McCloud')])).toEqual([]);
+  });
+});
+
+describe('aliases are matched alongside the canonical name', () => {
+  const withAliases = (name: string, aliases: string[], companyCode: string | null = 'ATL') => ({
+    name,
+    companyCode,
+    aliases,
+  });
+
+  it('scores a typo of an alias the canonical name could never reach', () => {
+    const pool = [withAliases('Fox McCloud', ['starfox'])];
+    // "starfoxx" against "Fox McCloud" is far below the floor...
+    expect(findSimilarPlayer('starfoxx', 'ATL', [candidate('Fox McCloud')])).toBeNull();
+    // ...but the club has already taught the system this player is "starfox".
+    const hit = findSimilarPlayer('starfoxx', 'ATL', pool);
+    expect(hit?.candidate.name).toBe('Fox McCloud');
+    expect(hit?.matchedName).toBe('starfox');
+  });
+
+  it('keeps the best-scoring spelling and reports which one it was', () => {
+    const pool = [withAliases('Fox McCloud', ['foxy mccloud'])];
+    const ranked = rankReviewCandidates('Fox McCloud', 'ATL', pool);
+    expect(ranked[0]!.score).toBe(1);
+    expect(ranked[0]!.matchedName).toBe('Fox McCloud');
+  });
+
+  it('reports the canonical name when no alias is involved', () => {
+    const ranked = rankReviewCandidates('Josh Cortese', 'ATL', [candidate('Josh Cortese')]);
+    expect(ranked[0]!.matchedName).toBe('Josh Cortese');
+  });
+
+  it('resolves a short form of an alias structurally', () => {
+    const pool = [withAliases('Ashley Lamont', ['sam vimes'])];
+    const match = matchStructuredAlias('Sam V', 'ATL', pool);
+    expect(match?.candidate.name).toBe('Ashley Lamont');
+    expect(match?.matchedName).toBe('sam vimes');
+  });
+
+  it('still refuses to resolve an alias short form that is ambiguous', () => {
+    const pool = [withAliases('Ashley Lamont', ['sam vimes']), candidate('Sam Vines')];
+    expect(resolveStructuredAlias('Sam V', 'ATL', pool)).toBeNull();
+  });
+
+  it('does not double-count an alias that merely restates the name', () => {
+    const pool = [withAliases('Fox McCloud', ['fox mccloud', '  '])];
+    expect(candidateNames(pool[0]!)).toEqual(['Fox McCloud']);
+    // One candidate, one entry — the alias must not split it into two rows.
+    expect(rankReviewCandidates('Fox McCloud', 'ATL', pool)).toHaveLength(1);
   });
 });
 

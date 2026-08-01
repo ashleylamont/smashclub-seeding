@@ -1,0 +1,1 @@
+ALTER TABLE "player_ratings" ADD COLUMN "previous_rank" integer;

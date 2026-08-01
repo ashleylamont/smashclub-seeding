@@ -331,6 +331,18 @@ export const playerRatings = pgTable(
       .notNull()
       .references(() => players.id, { onDelete: 'cascade' }),
     rank: integer('rank').notNull(),
+    /**
+     * Where this player stood before the most recent club night, from a replay
+     * of the same history with that night's sets withheld. Null when they had
+     * no rating yet.
+     *
+     * Stored rather than derived by diffing recomputes: a recompute happens
+     * whenever anything changes — a resolved identity, a settings tweak, a
+     * model switch — so a diff between the last two of them showed movement
+     * that no game caused, and showed nothing at all when two nights were
+     * synced back to back.
+     */
+    previousRank: integer('previous_rank'),
     league: text('league').notNull(),
     rating: doublePrecision('rating').notNull(),
     rd: doublePrecision('rd').notNull(),

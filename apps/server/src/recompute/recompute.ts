@@ -4,6 +4,7 @@ import { playerRatings, ratingEvents, recomputes, sets, tournaments } from '@sma
 import {
   calibrateLeagueBands,
   computeLeaderboard,
+  eventKeyOf,
   replayRatings,
   runWhrModel,
   type EngineSet,
@@ -11,6 +12,7 @@ import {
   type LeaderboardRow,
   type RatingEvent,
 } from '@smashclub/engine';
+import type { GlickoSettings } from '@smashclub/shared';
 import { getGlickoSettings, updateGlickoSettings } from '../settings';
 
 export const ENGINE_VERSION = '1.0.0';
@@ -99,11 +101,23 @@ export async function runRecompute(
     let leaderboard: LeaderboardRow[];
     let effectiveSettings = glicko;
 
-    /** Fit the bands to the club's real distribution once, then leave them be. */
+    /**
+     * Fit the bands to the club's real distribution once, then leave them be —
+     * except when the stored bands were fitted to a different number than the
+     * board now ranks on, which is a scale change, not a re-cut of the same
+     * scale. Leaving those in place would drop the entire field into the bottom
+     * league the moment the ranking basis moved.
+     */
     const calibrateOnce = async (provisional: LeaderboardRow[]): Promise<void> => {
-      if (glicko.leagueBandsCalibrated || provisional.length < 8) return;
-      const bands = calibrateLeagueBands(provisional.map((row) => row.skillRating));
-      effectiveSettings = { ...glicko, leagueBands: bands, leagueBandsCalibrated: true };
+      const basisChanged = glicko.leagueBandBasis !== 'conservative';
+      if ((glicko.leagueBandsCalibrated && !basisChanged) || provisional.length < 8) return;
+      const bands = calibrateLeagueBands(provisional.map((row) => row.conservativeRating));
+      effectiveSettings = {
+        ...glicko,
+        leagueBands: bands,
+        leagueBandsCalibrated: true,
+        leagueBandBasis: 'conservative',
+      };
       await updateGlickoSettings(db, effectiveSettings);
     };
 
@@ -151,12 +165,15 @@ export async function runRecompute(
       );
     }
 
+    const previousRanks = ranksBeforeLastEvent(engineSets, engineTournaments, effectiveSettings, model);
+
     if (leaderboard.length > 0) {
       await db.insert(playerRatings).values(
         leaderboard.map((row) => ({
           recomputeId,
           playerId: row.playerId,
           rank: row.rank,
+          previousRank: previousRanks.get(row.playerId) ?? null,
           league: row.league,
           rating: row.rating,
           rd: row.rd,
@@ -198,6 +215,51 @@ export async function runRecompute(
       .where(eq(recomputes.id, recomputeId));
     throw error;
   }
+}
+
+/**
+ * Where everyone stood *before* the club's most recent night: the same model
+ * over the same history, with that night's brackets withheld.
+ *
+ * This is what the board's ▲▼ column reports against. Diffing the last two
+ * recomputes instead reported "movement" from anything that happened to trigger
+ * a recompute — resolving an identity, saving a setting, switching the active
+ * model, which moved half the field at once — and reported nothing when two
+ * nights were synced back to back.
+ *
+ * Withholding a whole *event* (main + rookie bracket on one evening), not a
+ * single bracket, so a player who only entered the rookie side is not compared
+ * against a board that already contains the main bracket's results.
+ */
+function ranksBeforeLastEvent(
+  engineSets: readonly EngineSet[],
+  engineTournaments: readonly EngineTournament[],
+  settings: GlickoSettings,
+  model: string,
+): Map<string, number> {
+  const ranks = new Map<string, number>();
+  if (engineSets.length === 0) return ranks;
+
+  // Only brackets with rateable sets count: a registered-but-empty tournament
+  // is not a night anyone could have moved on.
+  const dateById = new Map(engineTournaments.map((t) => [t.id, t.eventDate]));
+  const eventKeyOfSet = (set: EngineSet): string => eventKeyOf(dateById.get(set.tournamentId)!);
+  const latestEventKey = engineSets.map(eventKeyOfSet).reduce((a, b) => (b > a ? b : a));
+
+  const priorSets = engineSets.filter((set) => eventKeyOfSet(set) !== latestEventKey);
+  // The club's first night has nothing behind it; every delta is null, which
+  // the board renders as "–" rather than as a climb from nowhere.
+  if (priorSets.length === 0) return ranks;
+
+  const leaderboard =
+    model === 'whr'
+      ? runWhrModel({ sets: priorSets, tournaments: engineTournaments, settings }).leaderboard
+      : computeLeaderboard(
+          replayRatings({ sets: priorSets, tournaments: engineTournaments, settings }).finalStates,
+          settings,
+        );
+  for (const row of leaderboard) ranks.set(row.playerId, row.rank);
+  return ranks;
 }
 
 /** Latest complete recompute ID, or null before the first recompute. */
