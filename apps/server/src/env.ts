@@ -20,6 +20,34 @@ const envSchema = z.object({
    * the one the admin originally signed up with.
    */
   ADMIN_EMAILS: z.string().default(''),
+  /**
+   * Trust `X-Forwarded-*` from the proxy in front of us. Off by default (a
+   * directly-exposed server must not let clients pick their own address);
+   * turn it on behind the k8s ingress, otherwise every request appears to
+   * come from the ingress and the per-IP SSE cap degrades into a second
+   * global one.
+   */
+  TRUST_PROXY: z
+    .string()
+    .default('false')
+    .transform((value) => value === 'true' || value === '1'),
+  /**
+   * Live-feed admission limits. The SSE routes are public and long-lived, so
+   * these are what bound the sockets, bus listeners and timers an anonymous
+   * client can make the process hold. See live/sse.ts.
+   */
+  SSE_MAX_CONNECTIONS: z.coerce.number().int().positive().default(500),
+  /**
+   * Generous, because it is per *address*: every open tab holds one stream and
+   * a live tournament page holds two, so a clubhouse behind one NAT is a
+   * handful of streams per person. The global cap is what bounds an attacker;
+   * this only stops one host from trivially eating it.
+   */
+  SSE_MAX_CONNECTIONS_PER_IP: z.coerce.number().int().positive().default(20),
+  /** Server-initiated close; EventSource reconnects, so this is invisible. */
+  SSE_MAX_STREAM_MS: z.coerce.number().int().positive().default(30 * 60_000),
+  /** Close a stream whose unflushed write buffer passes this (slow consumer). */
+  SSE_MAX_BUFFERED_BYTES: z.coerce.number().int().positive().default(1_048_576),
   /** Absolute path of the built SPA to serve statically (production). */
   WEB_DIST_DIR: z.string().optional(),
   /** Drizzle SQL migrations folder, applied at startup. */

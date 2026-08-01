@@ -1,5 +1,5 @@
 import path from 'node:path';
-import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify';
 import { sql } from 'drizzle-orm';
@@ -8,7 +8,7 @@ import type { Auth } from './auth';
 import { getSessionUser } from './auth';
 import type { ChallongeClient } from './challonge/client';
 import type { Env } from './env';
-import { liveBus, type LiveEvent } from './live/bus';
+import { SseRegistry } from './live/sse';
 import type { RecomputeTrigger } from './recompute/trigger';
 import { appRouter } from './trpc/router';
 import type { TrpcContext } from './trpc/trpc';
@@ -25,7 +25,14 @@ const SSE_HEARTBEAT_MS = 25_000;
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const { db, env, auth, challonge, recomputeTrigger } = deps;
-  const app = Fastify({ logger: env.NODE_ENV !== 'test' });
+  const app = Fastify({ logger: env.NODE_ENV !== 'test', trustProxy: env.TRUST_PROXY });
+  const sse = new SseRegistry({
+    maxConnections: env.SSE_MAX_CONNECTIONS,
+    maxConnectionsPerIp: env.SSE_MAX_CONNECTIONS_PER_IP,
+    maxStreamMs: env.SSE_MAX_STREAM_MS,
+    maxBufferedBytes: env.SSE_MAX_BUFFERED_BYTES,
+    heartbeatMs: SSE_HEARTBEAT_MS,
+  });
 
   app.get('/healthz', async () => {
     await db.execute(sql`select 1`);
@@ -58,11 +65,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     },
   });
 
-  // --- SSE live feeds ---
-  app.get('/api/live', (request, reply) => startSse(request, reply));
-  app.get<{ Params: { tournamentId: string } }>('/api/live/:tournamentId', (request, reply) =>
-    startSse(request, reply, request.params.tournamentId),
-  );
+  // --- SSE live feeds (public; bounded by SseRegistry, see live/sse.ts) ---
+  app.get('/api/live', (request, reply) => {
+    sse.start(request, reply);
+  });
+  app.get<{ Params: { tournamentId: string } }>('/api/live/:tournamentId', (request, reply) => {
+    sse.start(request, reply, request.params.tournamentId);
+  });
 
   // --- static SPA (production) ---
   if (env.WEB_DIST_DIR) {
@@ -77,27 +86,6 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   }
 
   return app;
-}
-
-function startSse(request: FastifyRequest, reply: FastifyReply, tournamentId?: string): void {
-  reply.raw.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache, no-transform',
-    Connection: 'keep-alive',
-    'X-Accel-Buffering': 'no',
-  });
-  reply.raw.write(': connected\n\n');
-
-  const send = (event: LiveEvent): void => {
-    reply.raw.write(`event: ${event.type}\ndata: ${JSON.stringify(event.payload ?? {})}\n\n`);
-  };
-  const unsubscribe = liveBus.subscribe(send, tournamentId);
-  const heartbeat = setInterval(() => reply.raw.write(': heartbeat\n\n'), SSE_HEARTBEAT_MS);
-
-  request.raw.on('close', () => {
-    clearInterval(heartbeat);
-    unsubscribe();
-  });
 }
 
 function toWebHeaders(request: FastifyRequest): Headers {
