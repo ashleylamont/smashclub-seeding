@@ -11,6 +11,7 @@ import { AdminTournamentsPage } from './pages/admin/AdminTournamentsPage';
 import { AdminReviewPage } from './pages/admin/AdminReviewPage';
 import { AdminPlayersPage } from './pages/admin/AdminPlayersPage';
 import { AdminCompaniesPage } from './pages/admin/AdminCompaniesPage';
+import { AdminImportPage } from './pages/admin/AdminImportPage';
 import { AdminSeedingPage } from './pages/admin/AdminSeedingPage';
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
 
@@ -90,6 +91,12 @@ const adminCompaniesRoute = createRoute({
   component: AdminCompaniesPage,
 });
 
+const adminImportRoute = createRoute({
+  getParentRoute: () => adminRoute,
+  path: '/import',
+  component: AdminImportPage,
+});
+
 const adminSeedingRoute = createRoute({
   getParentRoute: () => adminRoute,
   path: '/seeding',
@@ -115,6 +122,7 @@ const routeTree = rootRoute.addChildren([
     adminReviewRoute,
     adminPlayersRoute,
     adminCompaniesRoute,
+    adminImportRoute,
     adminSeedingRoute,
     adminSettingsRoute,
   ]),

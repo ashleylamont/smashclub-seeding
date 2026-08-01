@@ -378,3 +378,66 @@ test.describe('player profiles and companies', () => {
     await expect(page.locator('.modal select.select')).toContainText('ZED — Zed Corp');
   });
 });
+
+test.describe('registry import wizard', () => {
+  const YAML = `players:
+  - id: e2e-peppy
+    canonical_name: Peppy Hare
+    company: N/A
+    aliases: [Peppy]
+    main_character: "Bowser Jr."
+    numeric_id: 900
+`;
+
+  test('previews a pasted registry, applies it once, and is a no-op the second time', async ({ page }) => {
+    await signInAsAdmin(page.request);
+    await page.goto('/admin/import');
+    await settle(page);
+
+    await page.locator('.import-textarea').fill(YAML);
+    await page.getByRole('button', { name: /^Preview$/ }).click();
+
+    const row = page.locator('.data-table tbody tr', { hasText: 'e2e-peppy' }).first();
+    await expect(row).toContainText('create');
+    // "N/A" is a marker, not an employer: no company is planned for it.
+    await expect(page.locator('.import-summary')).toContainText('0 unchanged');
+    await expect(page.locator('.banner-warning')).toHaveCount(0);
+
+    await page.getByRole('button', { name: /^Apply / }).click();
+    await expect(page.locator('.banner-success')).toContainText('1 created');
+
+    // The registry now holds the player, with the alias and the character the
+    // file named.
+    await page.goto('/admin/players');
+    await settle(page);
+    const registryRow = page.locator('.data-table tbody tr', { hasText: 'Peppy Hare' }).first();
+    await expect(registryRow).toContainText('e2e-peppy');
+    await expect(registryRow).toContainText('peppy');
+    await expect(registryRow.locator('.character-icons')).toBeVisible();
+
+    // Re-importing the same file is a genuine no-op, not a second player.
+    await page.goto('/admin/import');
+    await settle(page);
+    await page.locator('.import-textarea').fill(YAML);
+    await page.getByRole('button', { name: /^Preview$/ }).click();
+    await expect(page.locator('.import-summary')).toContainText('1 unchanged');
+    await expect(page.locator('.import-summary')).toContainText('+0 aliases');
+    await expect(page.getByRole('button', { name: /^Apply / })).toBeDisabled();
+  });
+
+  test('names the offending id when an entry is invalid, and refuses to apply', async ({ page }) => {
+    await signInAsAdmin(page.request);
+    await page.goto('/admin/import');
+    await settle(page);
+
+    await page.locator('.import-textarea').fill(
+      'players:\n  - id: e2e-broken\n    canonical_name: Broken Person\n    main_character: Waluigi\n',
+    );
+    await page.getByRole('button', { name: /^Preview$/ }).click();
+
+    const issues = page.locator('.import-issues');
+    await expect(issues).toContainText('e2e-broken');
+    await expect(issues).toContainText('Waluigi');
+    await expect(page.getByRole('button', { name: /^Apply / })).toBeDisabled();
+  });
+});
