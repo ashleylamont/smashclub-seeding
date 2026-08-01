@@ -1,3 +1,13 @@
+# Every job here surfaces on a pull request as its own GitHub check run, named
+# by the `name:` below. That is the point of the split: previously typecheck,
+# unit tests, build and the bundle smoke test were four steps inside one `node`
+# job, so a pull request got a single opaque red tick and you had to open the
+# logs to learn which of the four had broken. They also ran in series, and the
+# first failure hid every later one.
+#
+# `All checks` at the bottom is the aggregate gate. Branch protection should
+# require that one check and nothing else — it is a stable name that stays
+# correct as jobs are added or renamed here.
 name: CI
 
 on:
@@ -5,23 +15,67 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+# A pull request that gets pushed to again does not need its superseded run
+# finished. Runs on main are never cancelled — main's history is the record of
+# what was green.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  node:
+  typecheck:
+    name: Typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup-node-pnpm
       - run: pnpm typecheck
-      - run: pnpm test
-      - run: pnpm build
 
-      # `pnpm build` only BUNDLES, and vitest runs from source — nothing here
-      # ever executed dist/index.js. So a bundle that cannot start shipped
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-node-pnpm
+      - run: pnpm lint
+
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-node-pnpm
+      # Vitest turns on its `github-actions` reporter by itself when it sees
+      # GITHUB_ACTIONS, so a failing assertion is annotated on the diff line
+      # rather than only in the log.
+      - run: pnpm test
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-node-pnpm
+      - run: pnpm build
+      # Handed to `bundle-smoke`, which is a separate check so "the bundle does
+      # not start" reads as its own failure rather than as "build failed".
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-bundle
+          path: apps/server/dist
+          retention-days: 1
+          if-no-files-found: error
+
+  bundle-smoke:
+    name: Server bundle boots
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      # `pnpm build` only BUNDLES, and vitest runs from source — nothing else
+      # here ever executed dist/index.js. So a bundle that cannot start shipped
       # clean: `yaml` was added as a dependency without being added to the
       # esbuild --external list, got inlined, and its internal CommonJS
       # require() became esbuild's throwing ESM shim ("Dynamic require of
@@ -30,7 +84,18 @@ jobs:
       #
       # Starting it with no DATABASE_URL must fail at ENV VALIDATION — which
       # proves the whole module graph loaded first.
-      - name: Server bundle starts
+      #
+      # The install is not optional here: the bundle deliberately leaves fastify,
+      # pg, drizzle and friends external, so without node_modules it dies at
+      # ERR_MODULE_NOT_FOUND long before env validation and this check would go
+      # red for the wrong reason.
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-node-pnpm
+      - uses: actions/download-artifact@v4
+        with:
+          name: server-bundle
+          path: apps/server/dist
+      - name: Start the bundle
         working-directory: apps/server
         run: |
           out=$(node dist/index.js 2>&1 || true)
@@ -45,6 +110,7 @@ jobs:
           fi
 
   legacy-python:
+    name: Legacy Python tests
     # Reference implementation kept in legacy/ during the rework. The TypeScript
     # port is verified against this engine's own recorded output by
     # tools/golden-check, so these tests guard the thing that master is compared
@@ -72,3 +138,24 @@ jobs:
             tests/test_challonge_import.py \
             tests/test_main_challonge_config.py \
             -q
+
+  # The single check to require in branch protection. `if: always()` is what
+  # makes it trustworthy: without it this job would be *skipped* when a
+  # dependency fails, and GitHub reports a skipped required check as passing.
+  all-checks:
+    name: All checks
+    if: always()
+    needs: [typecheck, lint, test, build, bundle-smoke, legacy-python]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check job results
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS"
+          # `cancelled` and `failure` both count as not-green. A skipped job is
+          # allowed, so adding a conditional job later does not wedge the gate.
+          if jq -e 'to_entries | any(.value.result == "failure" or .value.result == "cancelled")' <<<"$RESULTS" >/dev/null; then
+            jq -r 'to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | "::error::\(.key) did not pass (\(.value.result))"' <<<"$RESULTS"
+            exit 1
+          fi
