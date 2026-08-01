@@ -3,6 +3,7 @@ export * from './types';
 export * from './events';
 export * from './replay';
 export * from './score';
+export * from './recap';
 export * from './whr';
 export * from './whrRun';
 export * from './evaluate';

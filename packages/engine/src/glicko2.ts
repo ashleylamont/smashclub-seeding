@@ -122,6 +122,24 @@ export function updateRating(current: Rating, opponents: readonly OpponentSample
 }
 
 /**
+ * Probability that `player` beats `opponent`, in display scale.
+ *
+ * This is the paper's expected score E, with the opponent's RD widening the
+ * curve — a rating gap over an opponent we know little about says less than the
+ * same gap over one we know well, so the probability sits closer to even.
+ *
+ * Both RDs matter to a *prediction*, but only the opponent's enters E: the
+ * player's own uncertainty shifts where their true rating sits rather than
+ * flattening this curve, and Glickman's formulation deliberately keeps it out.
+ * Good enough for "they were a 1-in-8 shot" narration, which is all this is for.
+ */
+export function winProbability(player: Rating, opponent: Rating): number {
+  const mu = (player.rating - 1500) / GLICKO2_SCALE;
+  const muJ = (opponent.rating - 1500) / GLICKO2_SCALE;
+  return expectedScore(mu, muJ, opponent.rd / GLICKO2_SCALE);
+}
+
+/**
  * The paper's step for a player who did not compete during a rating period:
  * RD grows by the volatility, rating and volatility are unchanged.
  */
