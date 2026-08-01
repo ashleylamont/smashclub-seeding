@@ -14,6 +14,7 @@ import {
 import { eventKeyOf } from '@smashclub/engine';
 import { publicPlayerName } from '@smashclub/shared';
 import { latestRecomputeId } from '../../recompute/recompute';
+import { getGlickoSettings } from '../../settings';
 import { charactersByPlayer, charactersForPlayer } from '../../players/characters';
 import { loadRecap } from '../../recap/recap';
 import { publicProcedure, router } from '../trpc';
@@ -41,8 +42,18 @@ export const publicRouter = router({
         skillRating: playerRatings.skillRating,
         /** Uncertainty on the estimate, for a ± band. */
         skillSd: playerRatings.skillSd,
-        /** Pessimistic estimate — what the board and seeding are ranked on. */
+        /** Pessimistic estimate — what bracket seeding is ranked on. */
         conservativeRating: playerRatings.conservativeRating,
+        /** Skill less the activity penalty — what this board is ranked on. */
+        clubRating: playerRatings.clubRating,
+        /** Points currently docked for missed club nights; 0 for most people. */
+        activityPenalty: playerRatings.activityPenalty,
+        /** What missing the next club night would cost, so it can be shown up front. */
+        nextMissPenalty: playerRatings.nextMissPenalty,
+        missedEvents: playerRatings.missedEvents,
+        attendanceStreak: playerRatings.attendanceStreak,
+        /** Too little history to have earned the number yet. */
+        isProvisional: playerRatings.isProvisional,
         rating: playerRatings.rating,
         rd: playerRatings.rd,
         effectiveRd: playerRatings.effectiveRd,
@@ -90,12 +101,26 @@ export const publicRouter = router({
       rows.map((row) => row.playerId),
     );
 
+    /*
+     * The attendance policy in force, so the site can *state* it rather than
+     * hardcode it in prose that silently goes stale the first time an admin
+     * retunes a number. A policy nobody can read is indistinguishable from an
+     * arbitrary one, which was the main charge against ranking on RD.
+     */
+    const { glicko } = await getGlickoSettings(ctx.db);
+    const activityPolicy = {
+      graceEvents: glicko.activityGraceEvents,
+      penaltyPerEvent: glicko.activityPenaltyPerEvent,
+      penaltyCap: glicko.activityPenaltyCap,
+    };
+
     return {
       computedAt: recompute?.finishedAt?.toISOString() ?? null,
       /** Which rating model produced these numbers. */
       model: recompute?.model ?? 'glicko2',
       /** Occasions the club has run, not brackets — a main+rookie night is one. */
       eventCount,
+      activityPolicy,
       rows: rows.map((row) => ({
         ...row,
         name: playerName(row),

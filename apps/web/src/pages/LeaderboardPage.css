@@ -79,7 +79,8 @@
   font-variant-numeric: tabular-nums;
 }
 
-.stat-climber dd {
+.stat-climber dd,
+.stat-streak dd {
   font-family: var(--sans);
   font-size: var(--fs-sm);
   display: flex;
@@ -101,6 +102,16 @@
   font-family: var(--mono);
   font-size: var(--fs-sm);
   font-weight: 700;
+}
+
+/* Turning up regularly, given a place on the masthead next to what winning
+   gets you. It changes no rating — that is the point of it. */
+.stat-streak-count {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .hero-meta {

@@ -1,5 +1,5 @@
 import type { GlickoSettings } from '@smashclub/shared';
-import { eventKeyOf } from './events';
+import { attendanceOf, eventKeyOf } from './events';
 import { GLICKO2_SCALE, updateRating, type Rating } from './glicko2';
 import type {
   EngineSet,
@@ -39,7 +39,24 @@ export interface LegacyCompat {
    * in — and vice versa — so RD grows on evenings they actually attended.
    */
   decayPerBracket?: boolean;
+  /**
+   * Grow RD per missed period by the legacy volatility-scaled, escalating rule
+   * (`LEGACY_DECAY`) instead of the flat quadrature step.
+   *
+   * Only golden-check needs this. Mid-history decay feeds the pre-RD of every
+   * later set, so without it the replay cannot reproduce the recorded output.
+   */
+  legacyVolatilityDecay?: boolean;
 }
+
+/**
+ * The legacy decay constants, as the Python CLI hardcoded them.
+ *
+ * Historical facts rather than tunables — the compat path exists to reproduce a
+ * fixed recorded output — so they live here instead of in settings, where they
+ * would invite someone to tune a formula that production no longer runs.
+ */
+const LEGACY_DECAY = { rdScale: 20, escalation: 0.2 } as const;
 
 /**
  * Replays the full set history through Glicko-2 and returns every rating
@@ -62,12 +79,13 @@ export interface LegacyCompat {
  * - Rookie-bracket scaling by the player's pre-set rating tier. (Legacy read
  *   the winner of the *previous* set due to a use-before-assign bug; here the
  *   actual winner of the current set is used.)
- * - Inactivity decay, counted in missed *events* and escalating per consecutive
- *   miss, RD capped. Not elapsed time: a long gap between club nights costs one
- *   step, not one per day. Decay after a player's most recent event is applied
- *   through the final period and persisted into the final state (legacy computed
- *   it for charts but never applied it). Legacy counted a missed period per
- *   *bracket*, charging players for brackets they were never in.
+ * - Inactivity decay, counted in missed *events*, RD capped. Not elapsed time: a
+ *   long gap between club nights costs one step, not one per day. Decay after a
+ *   player's most recent event is applied through the final period and persisted
+ *   into the final state (legacy computed it for charts but never applied it).
+ *   Legacy counted a missed period per *bracket*, charging players for brackets
+ *   they were never in, and escalated the step per consecutive miss — see
+ *   `decayedRd` for why neither survives.
  */
 export function replayRatings(input: {
   sets: readonly EngineSet[];
@@ -211,12 +229,29 @@ export function replayRatings(input: {
     return state;
   };
 
-  /** One missed-tournament decay step; returns the new (capped) RD. */
+  /**
+   * One missed-event decay step; returns the new (capped) RD.
+   *
+   * A flat growth term combined in quadrature, uniform across players and
+   * across consecutive misses. What it replaced grew RD by ~20 idle Glicko
+   * periods per missed event, escalating 20% per consecutive miss and scaled by
+   * the player's own volatility — three compounding multipliers whose real job
+   * was to make `skill − 2·RD` punish absence hard enough to notice. The board
+   * now states that penalty outright, so RD is free to mean only what it says:
+   * how sure we are. Two players who have been away the same number of events
+   * now accrue the same doubt, and it stops at `decayRdCap` rather than climbing
+   * to the cold-start value, because a lapsed regular is not a stranger.
+   */
   const decayedRd = (rd: number, vol: number, missIndex: number): number => {
-    const multiplier = settings.missedTournamentRdScale * (1 + missIndex * settings.missedTournamentEscalation);
     const phi = rd / GLICKO2_SCALE;
-    const grown = Math.sqrt(phi * phi + multiplier * vol * vol) * GLICKO2_SCALE;
-    return Math.min(grown, settings.rdCap);
+    if (compat?.legacyVolatilityDecay) {
+      const multiplier = LEGACY_DECAY.rdScale * (1 + missIndex * LEGACY_DECAY.escalation);
+      return Math.min(Math.sqrt(phi * phi + multiplier * vol * vol) * GLICKO2_SCALE, settings.rdCap);
+    }
+    const grown = Math.sqrt(rd * rd + settings.missedEventRdGrowth * settings.missedEventRdGrowth);
+    // Already past the ceiling (a newcomer decaying from 350) must not be
+    // dragged *down* to it: decay may only ever widen a player's band.
+    return Math.max(rd, Math.min(grown, settings.decayRdCap));
   };
 
   const applyDecay = (playerId: string, state: InternalState, targetPeriod: number): void => {
@@ -226,6 +261,14 @@ export function replayRatings(input: {
       const missedPeriod = state.lastPeriodIndex + 1 + i;
       const preRd = state.rating.rd;
       const postRd = decayedRd(preRd, state.rating.vol, i);
+      /*
+       * Nothing to record when the step cannot widen the band any further —
+       * someone we have seen once is already at the ceiling, and there is no
+       * more doubt to add about a player we barely know. Emitting the event
+       * anyway would put a run of zero-change decay marks on their chart and
+       * invite the reader to look for a change that is not there.
+       */
+      if (postRd <= preRd) continue;
       state.rating = { ...state.rating, rd: postRd };
       events.push({
         seq: seq++,
@@ -352,10 +395,22 @@ export function replayRatings(input: {
     }
   }
 
+  /*
+   * Attendance is derived from the club's event list, not from the decay
+   * bookkeeping above, so it means the same thing under either rating model —
+   * and stays correct under `decayPerBracket`, where the decay periods are
+   * brackets and would answer "how many events have you missed" wrongly.
+   *
+   * Sorted explicitly rather than relying on tournament order, which under
+   * `legacyOrdering` is input order and not chronological.
+   */
+  const orderedEventKeys = dedupe(orderedTournaments.map((t) => eventKeyOf(t.eventDate))).sort(compareStrings);
+
   const finalStates = new Map<string, PlayerFinalState>();
   for (const [playerId, state] of states) {
     finalStates.set(playerId, {
       playerId,
+      ...attendanceOf(orderedEventKeys, state.eventKeys),
       rating: state.rating.rating,
       rd: state.rating.rd,
       vol: state.rating.vol,

@@ -349,12 +349,27 @@ export const playerRatings = pgTable(
     vol: doublePrecision('vol').notNull(),
     effectiveRating: doublePrecision('effective_rating').notNull(),
     effectiveRd: doublePrecision('effective_rd').notNull(),
-    /** Best estimate — what the public leaderboard ranks on. */
+    /** Best estimate of skill, before the activity penalty. */
     skillRating: doublePrecision('skill_rating').notNull().default(1500),
     /** Uncertainty on skillRating, shown as a ± band rather than hidden. */
     skillSd: doublePrecision('skill_sd').notNull().default(350),
-    /** Pessimistic estimate — what bracket seeding uses. */
+    /**
+     * Pessimistic estimate — what bracket seeding uses, and deliberately not
+     * what the board ranks on. See `PlayerScore.conservativeRating`.
+     */
     conservativeRating: doublePrecision('conservative_rating').notNull(),
+    /** Consecutive club events missed since this player last appeared. */
+    missedEvents: integer('missed_events').notNull().default(0),
+    /** Unbroken run of events attended up to the club's latest; 0 once broken. */
+    attendanceStreak: integer('attendance_streak').notNull().default(0),
+    /** Points subtracted for missed events — the club's attendance policy. */
+    activityPenalty: doublePrecision('activity_penalty').notNull().default(0),
+    /** What one more missed event would add, so the cost can be shown up front. */
+    nextMissPenalty: doublePrecision('next_miss_penalty').notNull().default(0),
+    /** Skill less the activity penalty — what the public board ranks on. */
+    clubRating: doublePrecision('club_rating').notNull().default(1500),
+    /** Too little history to have earned the number yet; badged, not sunk. */
+    isProvisional: boolean('is_provisional').notNull().default(false),
     matchCount: integer('match_count').notNull(),
     wins: integer('wins').notNull(),
     losses: integer('losses').notNull(),

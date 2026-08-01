@@ -52,8 +52,19 @@ export async function createSeedingRun(db: Db, tournamentId: string, createdBy: 
     }
   }
 
-  // Rated players by conservative score; unrated (incl. unresolved) players
-  // sink to the bottom alphabetically — the legacy "no history last" rule.
+  /*
+   * Rated players by conservative score; unrated (incl. unresolved) players sink
+   * to the bottom alphabetically — the legacy "no history last" rule.
+   *
+   * Note this is NOT the public board's order, and is not meant to be. The board
+   * ranks on the club rating (skill less the attendance penalty) because it
+   * reports who is best; a seed is a bet about a draw, where being wrong about
+   * an unknown player is asymmetrically expensive. So the bracket keeps ranking
+   * on skill minus two standard deviations, which puts newcomers and returners
+   * whose band has widened low, where a surprise costs the draw least. Expect
+   * the auto-seed order to differ from the leaderboard, most visibly for someone
+   * back from a long break.
+   */
   const ordered = [...participants].sort((a, b) => {
     const ratingA = a.playerId ? ratingByPlayer.get(a.playerId) : undefined;
     const ratingB = b.playerId ? ratingByPlayer.get(b.playerId) : undefined;

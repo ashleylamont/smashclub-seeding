@@ -18,19 +18,44 @@ workflow).
   recompute replays the full set history through the Glicko-2 engine and
   writes `rating_events` + `player_ratings` under a new `recomputes` row.
   Readers always use the latest complete recompute.
-- **The board ranks cautiously.** Both the leaderboard and bracket seeding
-  order on the conservative rating — the skill estimate less two standard
-  deviations — so a place is earned in sets and held by turning up: missing
-  club nights widens the deviation and costs places. The estimate and its ±
-  band are shown next to it. Movement arrows compare against a replay with
-  the most recent club night withheld, so they report what the games did and
-  not what the last recompute happened to change.
+- **The board states what turning up is worth.** The leaderboard ranks on the
+  club rating: the skill estimate, less a stated penalty for missed club
+  nights. Miss one and nothing happens; after that it is a flat charge per
+  missed night up to a cap, and a single night back clears the whole thing.
+  Both halves are on the row — the estimate with its ± band, and the
+  deduction — so a member who drops places can see which one moved.
+
+  This replaced ranking on the conservative rating (skill less two standard
+  deviations), which made absence cost places only as a side effect of a
+  widening error bar. That worked, but it charged the same thing to everyone
+  we simply had not seen much of: on the club's real data the published order
+  correlated −0.86 with RD and +0.81 with match count, and the median player
+  displayed 922 against a skill estimate of 1475. At a handful of events a
+  year, uncertainty never converges, so the gap never closed and a newcomer
+  was ranked as though being unknown were the same as being bad. Stating the
+  attendance rule outright separates the two: the every-other-night regular
+  and the newcomer are left alone, the genuinely lapsed still slide.
+
+  **Bracket seeding deliberately disagrees**, and still orders on the
+  conservative rating. A seed is a bet about a draw, where being wrong about
+  an unknown player is asymmetrically expensive, so newcomers and returners
+  with a widened band seed low, where a surprise costs least. Expect the
+  auto-seed order to differ from the board, most visibly for someone back
+  from a long break.
+
+  Movement arrows compare against a replay with the most recent club night
+  withheld, so they report what the games did and not what the last recompute
+  happened to change.
 - **The board shows the current field.** Players with no event in the last
-  year are hidden by default (a setting on the rankings screen). A rank is a
-  position *within* a field, so both the rank and the rank it is compared
-  against are re-derived over the players on screen: ranks run 1..n with no
-  holes, and ▲2 always means "passed two people who are still playing"
-  rather than "two people above you aged out".
+  year are hidden by default (a setting on the rankings screen). That is the
+  other half of the same idea: the penalty orders the people who still turn
+  up sometimes, and this takes the long-gone off the board entirely, which is
+  why the penalty can stay modest and capped rather than having to drive a
+  lapsed player's rating to nothing. A rank is a position *within* a field,
+  so both the rank and the rank it is compared against are re-derived over
+  the players on screen: ranks run 1..n with no holes, and ▲2 always means
+  "passed two people who are still playing" rather than "two people above you
+  aged out".
 - **Identity is human-decided.** Challonge display names are cleaned
   (company tags, `@` conventions, parentheticals) and matched against player
   names *and* their stored aliases; safe structured short-forms auto-link;
@@ -210,10 +235,39 @@ otherwise clients pick their own address.
 
 The engine faithfully ports the club's tuned system: per-set rating periods,
 per-tournament inverse-diminishing match weights, rookie-bracket scaling,
-missed-tournament RD decay, and a conservative seeding score
+missed-event RD decay, and a conservative seeding score
 (`effective_rating − 2 × effective_rd` with confidence anchoring). Three
 legacy bugs were fixed rather than ported — rookie scaling now uses the
 current set's winner, trailing inactivity decay affects seeding, and sets
 replay in deterministic chronological order (input order no longer changes
 ratings) — so historical numbers differ slightly from the old CLI exports.
 All tunables live in the admin settings page; changes trigger a recompute.
+
+### Absence: two separate things
+
+Missing club nights has two consequences, and they are deliberately kept
+apart, because conflating them was what made the old behaviour hard to
+explain.
+
+- **Uncertainty (RD)** grows by a flat step per missed event, combined in
+  quadrature and capped below the cold-start value — a lapsed regular is not
+  a stranger, and their first night back should not be a coin flip for
+  seeding. This is an honest statement that skill drifts while unobserved and
+  nothing more. It is *not* scaled by the player's volatility, as it used to
+  be: that made two people away the same length of time accrue different
+  amounts of doubt depending on how erratic their results had been, a
+  difference nobody chose. Someone already above the ceiling — anyone seen
+  only once or twice — accrues nothing further, and no empty decay event is
+  recorded for them.
+- **The activity penalty** is club policy, applied at the board layer and
+  charged off attendance rather than off the error bar. It is the same under
+  either rating model, because "what does missing a club night cost" should
+  not change when an admin switches the estimator.
+
+The engine's fitted ratings are untouched by the penalty, so `rank-eval`
+results cannot regress from it; only the published order changes.
+
+Legacy decay (volatility-scaled and escalating per consecutive miss) survives
+behind the `legacyVolatilityDecay` compat flag, which `golden-check` sets:
+mid-history decay feeds the pre-RD of every later set, so the recorded legacy
+output cannot be reproduced without it.

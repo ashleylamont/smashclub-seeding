@@ -5,7 +5,7 @@ import './InfoTip.css';
  * A short explanation attached to a figure or a label.
  *
  * The app leans hard on `title=` to explain what its numbers mean — what the
- * cautious rating subtracts, what a movement arrow compares against, what a
+ * ranked rating subtracts, what a movement arrow compares against, what a
  * confidence meter is full of. `title` is a hover affordance: on a phone it
  * never appears, which is precisely where the columns that carried those
  * explanations are dropped for space. So anything a reader genuinely needs in

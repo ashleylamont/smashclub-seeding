@@ -103,6 +103,57 @@ function PlayerProfile({ data }: { data: PlayerData }) {
   // Most recent first for the table.
   const tableEvents = useMemo(() => [...events].reverse(), [events]);
 
+  /**
+   * Where this player stands with the attendance policy, and — the part worth
+   * having — what the next club night is worth to them either way.
+   *
+   * Under the old design this question had no answer anyone could give: the cost
+   * of missing a night was an emergent function of the player's volatility,
+   * their current RD, how many nights they had already missed and where the cap
+   * fell. Stating the penalty outright makes it a subtraction, so it can simply
+   * be shown before the decision rather than explained after it.
+   */
+  const activity = useMemo(() => {
+    if (!rating) return null;
+    const { missedEvents, attendanceStreak, activityPenalty, nextMissPenalty } = rating;
+    const standing =
+      missedEvents === 0
+        ? attendanceStreak > 1
+          ? `At the last ${attendanceStreak} club nights in a row.`
+          : 'At the most recent club night.'
+        : `${missedEvents} club night${missedEvents === 1 ? '' : 's'} missed since ${formatDate(rating.lastPlayedDate)}.`;
+
+    const now =
+      activityPenalty > 0
+        ? `${activityPenalty.toFixed(0)} points are currently docked. Playing once puts all of them back.`
+        : missedEvents > 0
+          ? 'Still inside the grace window, so nothing is docked yet.'
+          : 'Nothing docked.';
+
+    const next =
+      nextMissPenalty > 0
+        ? `Missing the next one would cost ${nextMissPenalty.toFixed(0)}${activityPenalty > 0 ? ' more' : ''}.`
+        : activityPenalty > 0
+          ? 'Missing the next one costs nothing further — the penalty is already at its cap.'
+          : 'Missing the next one would still cost nothing.';
+
+    /**
+     * The tile's headline. Deliberately never "−0": inside the grace window
+     * nothing has been docked, and showing a zero deduction reads as a penalty
+     * that happens to round to nothing rather than as no penalty at all.
+     */
+    const headline =
+      activityPenalty > 0
+        ? `−${activityPenalty.toFixed(0)}`
+        : missedEvents > 0
+          ? `${missedEvents} missed`
+          : attendanceStreak > 1
+            ? `${attendanceStreak} in a row`
+            : 'Up to date';
+
+    return { headline, standing, now, next, penalised: activityPenalty > 0 };
+  }, [rating]);
+
   return (
     <div className="player-page">
       <header className="profile-header">
@@ -136,23 +187,26 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           )}
         </div>
 
-        {/* The headline figure is the ranked number — the cautious estimate —
-            because a profile that led with a figure the board does not rank on
-            just looks like the board is wrong. The skill estimate it is derived
-            from sits below it. */}
+        {/* The headline figure is the ranked number — the club rating — because
+            a profile that led with a figure the board does not rank on just
+            looks like the board is wrong. The skill estimate it is built from
+            sits below it, and the deduction, if any, beside that. */}
         {rating && (
           <div className="profile-headline">
             <span className="headline-label">
               Rating
               <InfoTip label="Rating" align="end">
-                The board ranks on this: the skill estimate below, less two standard deviations. It is deliberately
-                cautious, so a place has to be earned in sets and held by turning up — missing club nights widens
-                the deviation and costs places.
+                The board ranks on this: the skill estimate below, less a penalty for missed club nights. Results
+                move the estimate; turning up — or not — moves the penalty. Bracket seeding uses a different,
+                more cautious number, so a seed and a rank need not agree.
               </InfoTip>
             </span>
-            <span className="headline-value num">{rating.conservativeRating.toFixed(0)}</span>
+            <span className="headline-value num">{rating.clubRating.toFixed(0)}</span>
             <span className="headline-band num">
               skill {rating.skillRating.toFixed(0)} ± {rating.skillSd.toFixed(0)}
+              {rating.activityPenalty > 0 && (
+                <span className="headline-penalty"> · −{rating.activityPenalty.toFixed(0)} away</span>
+              )}
             </span>
           </div>
         )}
@@ -163,7 +217,8 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           <dt>Skill estimate</dt>
           <dd className="num">{rating ? rating.skillRating.toFixed(0) : '—'}</dd>
           <p className="stat-detail">
-            Best guess before uncertainty is subtracted. Play more, and the rating above closes on it.
+            Best guess at how good you are, from results alone. The rating above is this number less any
+            penalty for missed club nights — with none owing, the two are the same.
           </p>
         </div>
         <div className="stat">
@@ -196,7 +251,23 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           <dd className="num">{rating ? `${(rating.sampleConfidence * 100).toFixed(0)}%` : '—'}</dd>
           <p className="stat-detail">{confidenceExplainer}</p>
         </div>
+        {activity && (
+          <div className={`stat${activity.penalised ? ' stat-penalised' : ''}`}>
+            <dt>Attendance</dt>
+            <dd className="num">{activity.headline}</dd>
+            <p className="stat-detail">
+              {activity.standing} {activity.now} {activity.next}
+            </p>
+          </div>
+        )}
       </dl>
+
+      {rating?.isProvisional && (
+        <p className="banner banner-info provisional-note">
+          Provisional — too few sets so far for this rating to have settled, so it is held near the middle of
+          the field rather than swinging on a handful of results. It firms up as the sets come in.
+        </p>
+      )}
 
       {chartData.length > 0 && (
         <section className="section rating-chart">

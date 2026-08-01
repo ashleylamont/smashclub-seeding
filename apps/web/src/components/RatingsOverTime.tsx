@@ -202,7 +202,9 @@ export function RatingsOverTime({ history, tournamentNames }: RatingsOverTimePro
           <span className="control-label">Y-axis</span>
           <select className="select" value={yMode} onChange={(e) => setYMode(e.target.value as YMode)}>
             <option value="rating">Skill estimate</option>
-            <option value="cautious">Cautious (rating − 2×RD)</option>
+            {/* The seeding basis, not the board's — labelled as such so the
+                chart is not read as disagreeing with the rankings. */}
+            <option value="cautious">Seeding basis (rating − 2×RD)</option>
           </select>
         </label>
         <label className="chart-control chart-control-search">

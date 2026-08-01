@@ -30,3 +30,51 @@
 export function eventKeyOf(eventDate: string): string {
   return eventDate.slice(0, 10);
 }
+
+/** A player's attendance record against the club's full run of events. */
+export interface Attendance {
+  /**
+   * Consecutive events missed between the player's last appearance and the
+   * club's most recent event. Zero for anyone who played the latest one.
+   */
+  missedEvents: number;
+  /**
+   * Events attended in an unbroken run up to the club's most recent event, or
+   * zero once the run is broken. This is the streak in the sense a member means
+   * it: "how many in a row am I on", which stops being true the night you miss.
+   */
+  attendanceStreak: number;
+}
+
+/**
+ * Attendance derived from the club's event list rather than from either rating
+ * model's internals, so the activity policy means the same thing whichever model
+ * is authoritative. Both `replayRatings` and `runWhrModel` go through this.
+ *
+ * `orderedEventKeys` must be the club's distinct event keys, oldest first.
+ */
+export function attendanceOf(
+  orderedEventKeys: readonly string[],
+  attended: ReadonlySet<string>,
+): Attendance {
+  if (orderedEventKeys.length === 0) return { missedEvents: 0, attendanceStreak: 0 };
+
+  let lastAttendedIndex = -1;
+  for (let i = orderedEventKeys.length - 1; i >= 0; i--) {
+    if (attended.has(orderedEventKeys[i]!)) {
+      lastAttendedIndex = i;
+      break;
+    }
+  }
+  // Never seen at all: no run to break and nothing to have missed.
+  if (lastAttendedIndex === -1) return { missedEvents: 0, attendanceStreak: 0 };
+
+  const missedEvents = orderedEventKeys.length - 1 - lastAttendedIndex;
+  if (missedEvents > 0) return { missedEvents, attendanceStreak: 0 };
+
+  let attendanceStreak = 0;
+  for (let i = lastAttendedIndex; i >= 0 && attended.has(orderedEventKeys[i]!); i--) {
+    attendanceStreak += 1;
+  }
+  return { missedEvents, attendanceStreak };
+}

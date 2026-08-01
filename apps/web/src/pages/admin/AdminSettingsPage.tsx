@@ -62,11 +62,48 @@ const GROUPS: Array<{
     ],
   },
   {
-    title: 'Inactivity decay',
-    note: 'Glicko-2 only.',
+    title: 'Activity policy',
+    note: 'What missing club nights costs on the board. Applies to both models — it is club policy, not model output.',
     fields: [
-      { key: 'missedTournamentRdScale', label: 'RD per missed tournament' },
-      { key: 'missedTournamentEscalation', label: 'Escalation per miss' },
+      {
+        key: 'activityGraceEvents',
+        label: 'Free missed events',
+        hint: 'Missed events before anything is docked. At 1, the every-other-event regular never pays.',
+      },
+      {
+        key: 'activityPenaltyPerEvent',
+        label: 'Points per missed event',
+        hint: 'Subtracted from the skill estimate for each missed event past the grace window.',
+      },
+      {
+        key: 'activityPenaltyCap',
+        label: 'Penalty cap',
+        hint: 'Most that can ever be docked. Playing once clears the whole penalty.',
+      },
+    ],
+  },
+  {
+    title: 'Inactivity decay',
+    note: 'Glicko-2 only. How much *uncertainty* absence adds — separate from the penalty above, which is what it costs.',
+    fields: [
+      {
+        key: 'missedEventRdGrowth',
+        label: 'RD growth per missed event',
+        hint: 'Added in quadrature: rd² + growth². Uniform across players, unlike the old volatility-scaled rule.',
+      },
+      {
+        key: 'decayRdCap',
+        label: 'Decay RD cap',
+        hint: 'Ceiling reached by sitting out. Below the RD cap on purpose — a lapsed regular is not a stranger.',
+      },
+    ],
+  },
+  {
+    title: 'Provisional threshold',
+    note: 'Below either figure a player is badged provisional rather than pushed down the board.',
+    fields: [
+      { key: 'provisionalEventCount', label: 'Events needed' },
+      { key: 'provisionalMatchCount', label: 'Sets needed' },
     ],
   },
   {
@@ -215,9 +252,9 @@ export function AdminSettingsPage() {
           <span className="chip">{settings.data.glicko.leagueBandsCalibrated ? 'calibrated' : 'not yet calibrated'}</span>
         </h3>
         <p className="muted">
-          Absolute thresholds on the skill rating, so a league label means the same thing over time. The first
-          recompute fits these to the club&apos;s distribution; after that they only change here. The bottom band is
-          the catch-all.
+          Absolute thresholds on the club rating — the number the board ranks on — so a league label means the
+          same thing over time. The first recompute fits these to the club&apos;s distribution; after that they
+          only change here. The bottom band is the catch-all.
         </p>
         {bands.map((band, index) => (
           <label key={index} className="settings-field">

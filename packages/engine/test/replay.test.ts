@@ -30,6 +30,20 @@ const makeSet = (
   ...extra,
 });
 
+/**
+ * A club night's worth of sets for one player, against fresh opponents (five
+ * sets puts RD around 209).
+ *
+ * Fixtures that want to *observe* decay have to establish the player first.
+ * Decay widens the band only as far as `decayRdCap`, and someone seen once is
+ * already past it at ~290 — there is no more doubt to add about a player we
+ * barely know, so a single-set fixture produces no decay at all.
+ */
+const clubNight = (tournamentId: string, player: string, opponentPrefix: string, count = 5): EngineSet[] =>
+  Array.from({ length: count }, (_, i) =>
+    makeSet(tournamentId, player, `${opponentPrefix}${i}`, ((i % 2 === 0 ? 1 : 2) as 1 | 2)),
+  );
+
 describe('replayRatings', () => {
   it('a single set matches a direct Glicko-2 update with full weight', () => {
     const t1 = tournament('t1', '2025-01-01');
@@ -95,7 +109,7 @@ describe('replayRatings', () => {
     expect(events.find((e) => e.playerId === 'alice')!.weight).toBeCloseTo(low.rookieBracketBaseScale, 12);
   });
 
-  it('applies inactivity decay for skipped tournaments with escalation and cap', () => {
+  it('grows RD by a flat quadrature step per missed event, uniform across players', () => {
     const tournaments = [
       tournament('t1', '2025-01-01'),
       tournament('t2', '2025-02-01'),
@@ -104,7 +118,7 @@ describe('replayRatings', () => {
     ];
     // Alice plays t1 and t4 (misses t2, t3). Bob/carol/dave fill the middle.
     const sets = [
-      makeSet('t1', 'alice', 'bob', 1),
+      ...clubNight('t1', 'alice', 'a'),
       makeSet('t2', 'bob', 'carol', 1),
       makeSet('t3', 'bob', 'carol', 2),
       makeSet('t4', 'alice', 'bob', 1),
@@ -116,23 +130,16 @@ describe('replayRatings', () => {
     expect(aliceDecay[0]!.tournamentId).toBe('t2');
     expect(aliceDecay[1]!.tournamentId).toBe('t3');
 
-    // First step: multiplier = scale * (1 + 0*esc)
-    const preRd = aliceDecay[0]!.preRd;
-    const vol = aliceDecay[0]!.preVol;
-    const expectedFirst = Math.min(
-      Math.sqrt((preRd / GLICKO2_SCALE) ** 2 + settings.missedTournamentRdScale * vol * vol) * GLICKO2_SCALE,
-      settings.rdCap,
-    );
+    const growth = settings.missedEventRdGrowth;
+    const step = (rd: number): number => Math.min(Math.sqrt(rd * rd + growth * growth), settings.decayRdCap);
+
+    const expectedFirst = step(aliceDecay[0]!.preRd);
     expect(aliceDecay[0]!.postRd).toBeCloseTo(expectedFirst, 9);
 
-    // Second step escalates by 20% and chains from the first.
-    const expectedSecond = Math.min(
-      Math.sqrt(
-        (aliceDecay[0]!.postRd / GLICKO2_SCALE) ** 2 +
-          settings.missedTournamentRdScale * (1 + settings.missedTournamentEscalation) * vol * vol,
-      ) * GLICKO2_SCALE,
-      settings.rdCap,
-    );
+    // The second step is the same size as the first — no escalation. The old
+    // rule grew 20% per consecutive miss on top of a volatility-scaled base,
+    // which made the cost of absence depend on how erratic your results were.
+    const expectedSecond = step(expectedFirst);
     expect(aliceDecay[1]!.postRd).toBeCloseTo(expectedSecond, 9);
 
     // Decay is reflected in the pre-RD of alice's t4 set.
@@ -140,11 +147,139 @@ describe('replayRatings', () => {
     expect(aliceT4.preRd).toBeCloseTo(expectedSecond, 9);
   });
 
+  it('decays by a rule that does not involve volatility at all', () => {
+    // The property the old formula could not have: what absence costs in doubt
+    // no longer depends on how erratic your results happened to be. Two players
+    // with genuinely different volatilities take exactly the same step.
+    const tournaments = [
+      tournament('t1', '2025-01-01'),
+      tournament('t2', '2025-02-01'),
+      tournament('t3', '2025-03-01'),
+    ];
+    const sets = [
+      // Alternating results, then a clean sweep: different volatilities.
+      ...clubNight('t1', 'swingy', 'x'),
+      ...Array.from({ length: 5 }, (_, i) => makeSet('t1', 'dominant', `y${i}`, 1)),
+      makeSet('t2', 'bob', 'carol', 1),
+      makeSet('t3', 'bob', 'carol', 1),
+    ];
+    const { events } = replayRatings({ sets, tournaments, settings });
+
+    const decays = events.filter((e) => e.isDecay && ['swingy', 'dominant'].includes(e.playerId));
+    expect(decays).toHaveLength(4);
+    // The two really do differ in volatility, so this is not a vacuous check.
+    expect(new Set(decays.map((d) => d.preVol.toFixed(12))).size).toBeGreaterThan(1);
+
+    const growth = settings.missedEventRdGrowth;
+    for (const decay of decays) {
+      const expected = Math.min(Math.sqrt(decay.preRd ** 2 + growth ** 2), settings.decayRdCap);
+      expect(decay.postRd).toBeCloseTo(expected, 9);
+      // Decay moves confidence only — never the rating, never the volatility.
+      expect(decay.postRating).toBeCloseTo(decay.preRating, 12);
+      expect(decay.postVol).toBe(decay.preVol);
+    }
+  });
+
+  it('caps decay-driven RD below the cold-start value: a lapsed regular is not a stranger', () => {
+    const tournaments = Array.from({ length: 24 }, (_, i) =>
+      tournament(`t${i}`, `2025-01-${String(i + 1).padStart(2, '0')}`),
+    );
+    const sets = [
+      ...clubNight('t0', 'lapsed', 'a'),
+      ...tournaments.slice(1).map((t) => makeSet(t.id, 'bob', 'carol', 1)),
+    ];
+    const { finalStates } = replayRatings({ sets, tournaments, settings });
+
+    const lapsed = finalStates.get('lapsed')!;
+    expect(lapsed.missedEvents).toBe(23);
+    // Long gone, but the club has not forgotten them entirely: their band stops
+    // short of the value we assign someone we have never seen.
+    expect(lapsed.rd).toBeCloseTo(settings.decayRdCap, 9);
+    expect(lapsed.rd).toBeLessThan(settings.rdCap);
+  });
+
+  it('adds no further doubt about a player who is already at the ceiling', () => {
+    // Seen once, then gone. There is nothing left to forget, so no decay event
+    // is recorded at all rather than a run of zero-change ones.
+    const tournaments = [
+      tournament('t1', '2025-01-01'),
+      tournament('t2', '2025-02-01'),
+      tournament('t3', '2025-03-01'),
+    ];
+    const sets = [
+      makeSet('t1', 'onceOnly', 'bob', 1),
+      makeSet('t2', 'bob', 'carol', 1),
+      makeSet('t3', 'bob', 'carol', 1),
+    ];
+    const { events, finalStates } = replayRatings({ sets, tournaments, settings });
+
+    expect(events.filter((e) => e.playerId === 'onceOnly' && e.isDecay)).toHaveLength(0);
+    expect(finalStates.get('onceOnly')!.rd).toBeGreaterThan(settings.decayRdCap);
+    // The board still notices they are gone — that is the penalty's job, and it
+    // is charged off attendance rather than off the error bar.
+    expect(finalStates.get('onceOnly')!.missedEvents).toBe(2);
+  });
+
+  it('never drags a newcomer past the cold-start RD down to the decay cap', () => {
+    // Someone whose RD is already above decayRdCap (a one-and-done newcomer at
+    // 350ish) must not have decay *reduce* their band: it may only widen it.
+    const tournaments = [
+      tournament('t1', '2025-01-01'),
+      tournament('t2', '2025-02-01'),
+      tournament('t3', '2025-03-01'),
+    ];
+    const sets = [
+      makeSet('t1', 'newcomer', 'bob', 2),
+      makeSet('t2', 'bob', 'carol', 1),
+      makeSet('t3', 'bob', 'carol', 1),
+    ];
+    const { events, finalStates } = replayRatings({ sets, tournaments, settings });
+
+    const newcomer = finalStates.get('newcomer')!;
+    expect(newcomer.rd).toBeGreaterThan(settings.decayRdCap);
+    for (const decay of events.filter((e) => e.playerId === 'newcomer' && e.isDecay)) {
+      expect(decay.postRd).toBeGreaterThanOrEqual(decay.preRd);
+    }
+  });
+
+  it('reproduces the legacy volatility-scaled escalating decay under compat', () => {
+    // golden-check needs this: mid-history decay feeds the pre-RD of every later
+    // set, so the recorded legacy output cannot be reproduced without it.
+    const tournaments = [
+      tournament('t1', '2025-01-01'),
+      tournament('t2', '2025-02-01'),
+      tournament('t3', '2025-03-01'),
+      tournament('t4', '2025-04-01'),
+    ];
+    const sets = [
+      makeSet('t1', 'alice', 'bob', 1),
+      makeSet('t2', 'bob', 'carol', 1),
+      makeSet('t3', 'bob', 'carol', 2),
+      makeSet('t4', 'alice', 'bob', 1),
+    ];
+    const { events } = replayRatings({
+      sets,
+      tournaments,
+      settings,
+      compat: { legacyVolatilityDecay: true },
+    });
+
+    const decay = events.filter((e) => e.playerId === 'alice' && e.isDecay);
+    const vol = decay[0]!.preVol;
+    const legacyStep = (rd: number, missIndex: number): number =>
+      Math.min(
+        Math.sqrt((rd / GLICKO2_SCALE) ** 2 + 20 * (1 + missIndex * 0.2) * vol * vol) * GLICKO2_SCALE,
+        settings.rdCap,
+      );
+    expect(decay[0]!.postRd).toBeCloseTo(legacyStep(decay[0]!.preRd, 0), 9);
+    expect(decay[1]!.postRd).toBeCloseTo(legacyStep(decay[0]!.postRd, 1), 9);
+  });
+
   it('applies trailing decay through the latest tournament to the FINAL state (legacy bug fix)', () => {
     const tournaments = [tournament('t1', '2025-01-01'), tournament('t2', '2025-02-01'), tournament('t3', '2025-03-01')];
     // Carol plays only t1, then goes dark for t2 and t3.
     const sets = [
-      makeSet('t1', 'carol', 'bob', 1),
+      ...clubNight('t1', 'carol', 'c'),
       makeSet('t2', 'bob', 'dave', 1),
       makeSet('t3', 'bob', 'dave', 2),
     ];
@@ -156,6 +291,70 @@ describe('replayRatings', () => {
     // The decayed RD is persisted — going dark costs seeding confidence.
     expect(finalStates.get('carol')!.rd).toBeCloseTo(carolDecay[1]!.postRd, 9);
     expect(finalStates.get('carol')!.rd).toBeGreaterThan(carolDecay[0]!.preRd);
+  });
+
+  describe('attendance', () => {
+    const threeNights = [
+      tournament('t1', '2025-01-01'),
+      tournament('t2', '2025-02-01'),
+      tournament('t3', '2025-03-01'),
+    ];
+
+    it('reports missed events and an unbroken streak', () => {
+      const sets = [
+        makeSet('t1', 'regular', 'bob', 1),
+        makeSet('t2', 'regular', 'bob', 1),
+        makeSet('t3', 'regular', 'bob', 1),
+      ];
+      const { finalStates } = replayRatings({ sets, tournaments: threeNights, settings });
+      const regular = finalStates.get('regular')!;
+      expect(regular.missedEvents).toBe(0);
+      expect(regular.attendanceStreak).toBe(3);
+    });
+
+    it('zeroes the streak the moment a night is missed', () => {
+      const sets = [
+        makeSet('t1', 'lapsed', 'bob', 1),
+        makeSet('t2', 'lapsed', 'bob', 1),
+        makeSet('t3', 'bob', 'carol', 1),
+      ];
+      const { finalStates } = replayRatings({ sets, tournaments: threeNights, settings });
+      const lapsed = finalStates.get('lapsed')!;
+      expect(lapsed.missedEvents).toBe(1);
+      expect(lapsed.attendanceStreak).toBe(0);
+    });
+
+    it('counts only the run ending at the latest event, not the best run ever', () => {
+      // Played t1, missed t2, came back for t3: on a streak of one, not two.
+      const sets = [
+        makeSet('t1', 'returner', 'bob', 1),
+        makeSet('t2', 'bob', 'carol', 1),
+        makeSet('t3', 'returner', 'bob', 1),
+      ];
+      const { finalStates } = replayRatings({ sets, tournaments: threeNights, settings });
+      const returner = finalStates.get('returner')!;
+      expect(returner.missedEvents).toBe(0);
+      expect(returner.attendanceStreak).toBe(1);
+    });
+
+    it('treats a main and a rookie bracket on one evening as one attendance', () => {
+      const tournaments = [
+        tournament('main1', '2025-01-10T18:00:00.000Z', false, 1),
+        tournament('rookie1', '2025-01-10T20:30:00.000Z', true, 2),
+        tournament('main2', '2025-02-10T18:00:00.000Z', false, 3),
+      ];
+      const sets = [
+        makeSet('main1', 'alice', 'bob', 1),
+        makeSet('rookie1', 'alice', 'kirby', 1),
+        makeSet('main2', 'alice', 'bob', 1),
+      ];
+      const { finalStates } = replayRatings({ sets, tournaments, settings });
+      const alice = finalStates.get('alice')!;
+      // Three brackets, two occasions — and two nights in a row, not three.
+      expect(alice.tournamentIds.size).toBe(3);
+      expect(alice.attendanceStreak).toBe(2);
+      expect(alice.missedEvents).toBe(0);
+    });
   });
 
   it('orders tournaments chronologically regardless of input array order', () => {
@@ -232,9 +431,13 @@ describe('replayRatings', () => {
         tournament('main2', '2025-02-10T18:00:00.000Z', false, 3),
         tournament('rookie2', '2025-02-10T20:30:00.000Z', true, 4),
       ],
+      // Both are established on their first evening, so that decay — which only
+      // has anything to add below the ceiling — is observable at all.
       sets: [
-        makeSet('main1', 'alice', 'bob', 1),
-        makeSet('rookie1', 'kirby', 'yoshi', 1),
+        ...clubNight('main1', 'alice', 'a'),
+        // Rookie sets carry scaled-down weight, so it takes more of them to
+        // pull kirby's RD under the ceiling than it takes alice in the main.
+        ...clubNight('rookie1', 'kirby', 'k', 8),
         makeSet('main2', 'alice', 'bob', 1),
         makeSet('rookie2', 'kirby', 'yoshi', 1),
       ],
@@ -279,7 +482,7 @@ describe('replayRatings', () => {
       ];
       // Alice plays the first and last evening, missing the middle one entirely.
       const sets = [
-        makeSet('main1', 'alice', 'bob', 1),
+        ...clubNight('main1', 'alice', 'a'),
         makeSet('rookie1', 'kirby', 'yoshi', 1),
         makeSet('main2', 'bob', 'carol', 1),
         makeSet('rookie2', 'kirby', 'yoshi', 1),
@@ -327,7 +530,7 @@ describe('replayRatings', () => {
       ];
       // Alice stops after the first evening; bob keeps playing.
       const sets = [
-        makeSet('main1', 'alice', 'bob', 1),
+        ...clubNight('main1', 'alice', 'a'),
         makeSet('rookie1', 'kirby', 'yoshi', 1),
         makeSet('main2', 'bob', 'carol', 1),
         makeSet('rookie2', 'kirby', 'yoshi', 1),

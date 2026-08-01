@@ -70,6 +70,13 @@ export interface PlayerFinalState {
   lastPeriodIndex: number;
   /** ISO date of the player's most recent set. */
   lastPlayedDate: string;
+  /**
+   * Consecutive club events missed since the player's last appearance. What the
+   * board's activity penalty is charged on.
+   */
+  missedEvents: number;
+  /** Unbroken run of events attended up to the club's latest; 0 once broken. */
+  attendanceStreak: number;
   /** Brackets entered. */
   tournamentIds: Set<string>;
   /**

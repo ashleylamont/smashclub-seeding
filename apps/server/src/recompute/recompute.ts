@@ -109,14 +109,14 @@ export async function runRecompute(
      * league the moment the ranking basis moved.
      */
     const calibrateOnce = async (provisional: LeaderboardRow[]): Promise<void> => {
-      const basisChanged = glicko.leagueBandBasis !== 'conservative';
+      const basisChanged = glicko.leagueBandBasis !== 'club';
       if ((glicko.leagueBandsCalibrated && !basisChanged) || provisional.length < 8) return;
-      const bands = calibrateLeagueBands(provisional.map((row) => row.conservativeRating));
+      const bands = calibrateLeagueBands(provisional.map((row) => row.clubRating));
       effectiveSettings = {
         ...glicko,
         leagueBands: bands,
         leagueBandsCalibrated: true,
-        leagueBandBasis: 'conservative',
+        leagueBandBasis: 'club',
       };
       await updateGlickoSettings(db, effectiveSettings);
     };
@@ -183,6 +183,12 @@ export async function runRecompute(
           skillRating: row.skillRating,
           skillSd: row.skillSd,
           conservativeRating: row.conservativeRating,
+          missedEvents: row.missedEvents,
+          attendanceStreak: row.attendanceStreak,
+          activityPenalty: row.activityPenalty,
+          nextMissPenalty: row.nextMissPenalty,
+          clubRating: row.clubRating,
+          isProvisional: row.isProvisional,
           matchCount: row.matchCount,
           wins: row.wins,
           losses: row.losses,

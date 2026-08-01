@@ -125,20 +125,49 @@ export function LeaderboardPage() {
     );
   }
 
-  const { computedAt, model } = leaderboard.data;
+  const { computedAt, model, activityPolicy } = leaderboard.data;
+  // Already filtered and re-ranked by the inactivity setting; see lib/activity.
   const rows = board.rows;
+
+  /**
+   * The attendance rule in one sentence, built from the settings actually in
+   * force. Worth spending masthead space on: the point of moving the penalty out
+   * of the error bar was that a member can now be told exactly what missing a
+   * club night costs, and a rule nobody states is not really legible.
+   */
+  const policyLine = (() => {
+    const { graceEvents, penaltyPerEvent, penaltyCap } = activityPolicy;
+    const grace =
+      graceEvents === 0
+        ? 'Miss a club night'
+        : graceEvents === 1
+          ? 'Miss one club night and nothing happens; after that'
+          : `Miss up to ${graceEvents} club nights and nothing happens; after that`;
+    return `${grace} it is ${Math.round(penaltyPerEvent)} points a night, capped at ${Math.round(penaltyCap)}, and a single night back clears the lot.`;
+  })();
 
   const summary = (() => {
     if (rows.length === 0) return null;
     const rated = rows.filter((r) => r.matchCount > 0);
     const sets = rated.reduce((sum, r) => sum + r.matchCount, 0) / 2;
-    const median = [...rated].sort((a, b) => a.conservativeRating - b.conservativeRating)[
-      Math.floor(rated.length / 2)
-    ];
+    const median = [...rated].sort((a, b) => a.clubRating - b.clubRating)[Math.floor(rated.length / 2)];
     const climber = [...rows]
       .filter((r) => r.rankDelta !== null && r.rankDelta > 0)
       .sort((a, b) => (b.rankDelta ?? 0) - (a.rankDelta ?? 0))[0];
-    return { players: rated.length, sets: Math.round(sets), median, climber };
+    /**
+     * The longest active attendance run in the club. A carrot rather than a
+     * lever: it changes nobody's rating, it just gives turning up regularly
+     * something to point at, which in a casual club does more for attendance
+     * than any amount of rating mechanics.
+     */
+    const streak = [...rows].sort((a, b) => b.attendanceStreak - a.attendanceStreak)[0];
+    return {
+      players: rated.length,
+      sets: Math.round(sets),
+      median,
+      climber,
+      streak: streak && streak.attendanceStreak >= 3 ? streak : null,
+    };
   })();
 
   return (
@@ -148,9 +177,8 @@ export function LeaderboardPage() {
           <p className="hero-eyebrow">{coverage}</p>
           <h1 className="hero-title">Rankings</h1>
           <p className="hero-sub muted">
-            Ranked cautiously: your skill estimate less two standard deviations, so a rating has to be
-            earned in sets and kept up by turning up. The smaller figure is that estimate and its ± band —
-            play more and the gap between the two closes.
+            Ranked on your skill estimate, less a penalty for missed club nights. {policyLine} The smaller
+            figure is the estimate and its ± band — play more and the band narrows.
           </p>
         </div>
 
@@ -166,7 +194,7 @@ export function LeaderboardPage() {
             </div>
             <div className="stat">
               <dt>Median rating</dt>
-              <dd className="num">{summary.median ? Math.round(summary.median.conservativeRating) : '—'}</dd>
+              <dd className="num">{summary.median ? Math.round(summary.median.clubRating) : '—'}</dd>
             </div>
             {summary.climber && (
               <div className="stat stat-climber">
@@ -174,6 +202,15 @@ export function LeaderboardPage() {
                 <dd>
                   <span className="stat-climber-name">{summary.climber.name}</span>
                   <span className="stat-climber-delta num"> ▲{summary.climber.rankDelta}</span>
+                </dd>
+              </div>
+            )}
+            {summary.streak && (
+              <div className="stat stat-streak">
+                <dt>Longest streak</dt>
+                <dd>
+                  <span className="stat-climber-name">{summary.streak.name}</span>
+                  <span className="stat-streak-count num"> {summary.streak.attendanceStreak} in a row</span>
                 </dd>
               </div>
             )}

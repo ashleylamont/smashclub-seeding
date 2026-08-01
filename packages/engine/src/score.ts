@@ -30,18 +30,59 @@ export interface PlayerScore {
   skillSd: number;
   /**
    * Deliberately pessimistic estimate — skill minus two standard deviations —
-   * and what both the public leaderboard and bracket seeding rank on.
+   * and what **bracket seeding** ranks on.
    *
-   * This is a club decision, not a statistical one, and it has a known cost:
-   * uncertainty is not skill, so ranking on it means the order partly measures
-   * how recently and how often you have turned up (on the club's real data the
-   * published order correlated −0.86 with RD and +0.81 with match count, and
-   * the median player displayed 922 against a skill estimate of 1475). That is
-   * the intent: inactivity inflates RD and must visibly cost you places, which
-   * ranking on `skillRating` alone could never do — decay moves RD, not the
-   * point estimate.
+   * Right for a bracket and wrong for a board. Seeding wants risk aversion: put
+   * the players we cannot vouch for low, where an upset costs the draw least.
+   * But uncertainty is not lack of skill, and the public board ranking on this
+   * made the order largely a tenure counter — on the club's real data it
+   * correlated −0.86 with RD and +0.81 with match count, and the median player
+   * displayed 922 against a skill estimate of 1475. At a few events a year RD
+   * never converges, so that gap never closes and a newcomer is ranked as if
+   * being unknown were the same as being bad.
+   *
+   * The board therefore ranks on `clubRating`, which states the attendance
+   * policy outright instead of smuggling it through uncertainty. The two orders
+   * disagreeing is the design, not a bug: this one answers "who should get the
+   * top seed", `clubRating` answers "who is best right now".
    */
   conservativeRating: number;
+  /**
+   * Consecutive club events missed since this player last appeared.
+   */
+  missedEvents: number;
+  /** Unbroken run of events attended up to the club's latest; 0 once broken. */
+  attendanceStreak: number;
+  /**
+   * Rating points subtracted for missed events — the club's attendance policy,
+   * stated as a number rather than inferred from a widened error bar. Zero for
+   * anyone inside the grace window, and reset in full the moment they play.
+   */
+  activityPenalty: number;
+  /**
+   * What one *more* missed event would add to `activityPenalty`. Published so a
+   * member can be told what skipping the next club night costs them before they
+   * skip it, which is the whole point of having a legible policy.
+   */
+  nextMissPenalty: number;
+  /**
+   * **What the public board ranks on**: the skill estimate less the activity
+   * penalty.
+   *
+   * Two levers instead of one. `skillRating` says how good we think you are and
+   * already handles thin evidence by shrinking toward the middle;
+   * `activityPenalty` says what the club asks of you. Ranking on their
+   * difference keeps a lapsed player sliding down the board — the thing the
+   * conservative rating was really being used for — without also punishing the
+   * newcomer and the every-other-event regular, who were only ever collateral.
+   */
+  clubRating: number;
+  /**
+   * Too little history to have earned the number yet. Badged rather than sunk:
+   * shrinkage has already pulled them toward the middle, which is the honest
+   * treatment of someone we have barely seen.
+   */
+  isProvisional: boolean;
   matchCount: number;
   wins: number;
   losses: number;
@@ -66,6 +107,21 @@ export interface PlayerScore {
 export interface LeaderboardRow extends PlayerScore {
   rank: number;
   league: string;
+}
+
+/**
+ * The club's attendance policy, in full: a grace window of free misses, then a
+ * flat charge per further consecutive missed event, capped.
+ *
+ * Flat rather than escalating, and capped rather than unbounded, because the
+ * two jobs people wanted from an escalating penalty are better done elsewhere —
+ * ordering among the semi-active (which a bounded penalty already does) and
+ * clearing out the long-gone (which retirement does, by taking them off the
+ * active board entirely rather than by driving their rating to nothing).
+ */
+export function activityPenaltyFor(missedEvents: number, settings: GlickoSettings): number {
+  const charged = Math.max(0, missedEvents - settings.activityGraceEvents);
+  return Math.min(settings.activityPenaltyCap, charged * settings.activityPenaltyPerEvent);
 }
 
 export function computePlayerScore(
@@ -110,6 +166,11 @@ export function computePlayerScore(
     settings.initialRating + (state.rating - settings.initialRating) * anchorFactor * sampleConfidence;
   const conservativeRating = effectiveRating - 2 * effectiveRd;
 
+  const activityPenalty = activityPenaltyFor(state.missedEvents, settings);
+  const nextMissPenalty = activityPenaltyFor(state.missedEvents + 1, settings) - activityPenalty;
+  const isProvisional =
+    state.eventKeys.size < settings.provisionalEventCount || state.matchCount < settings.provisionalMatchCount;
+
   return {
     playerId: state.playerId,
     rating: state.rating,
@@ -120,6 +181,12 @@ export function computePlayerScore(
     skillRating: effectiveRating,
     skillSd: effectiveRd,
     conservativeRating,
+    missedEvents: state.missedEvents,
+    attendanceStreak: state.attendanceStreak,
+    activityPenalty,
+    nextMissPenalty,
+    clubRating: effectiveRating - activityPenalty,
+    isProvisional,
     matchCount: state.matchCount,
     wins: state.wins,
     losses: state.losses,
@@ -184,16 +251,18 @@ export function calibrateLeagueBands(
 }
 
 /**
- * Public leaderboard, ranked on the conservative estimate — the same number
- * `seedingOrder` uses, so the board and the bracket agree about who is ahead.
+ * Public leaderboard, ranked on `clubRating` — the skill estimate less the
+ * activity penalty.
  *
- * Ranking on the point estimate instead left inactivity with no effect at all
- * on the published order: decay grows RD and leaves the rating untouched, so a
- * player who stopped turning up held their place indefinitely. See
- * `PlayerScore.conservativeRating` for what this costs.
+ * Ranking on the point estimate alone left inactivity with no effect on the
+ * published order at all, since decay moves RD and not the rating. Ranking on
+ * the conservative estimate fixed that but overshot: it charged newcomers and
+ * irregular attendees for uncertainty as if it were weakness, and at a handful
+ * of events a year that never washes out. The penalty puts the attendance rule
+ * where a member can read it and leaves the estimate alone.
  *
- * Ties break on the point estimate, then lower uncertainty, then player id, so
- * the order is stable.
+ * Ties break on the unpenalised estimate, then lower uncertainty, then player
+ * id, so the order is stable.
  */
 export function computeLeaderboard(
   finalStates: ReadonlyMap<string, PlayerFinalState>,
@@ -208,16 +277,37 @@ export function computeLeaderboard(
  * models order the board the same way.
  */
 export function rankScores(scores: readonly PlayerScore[], settings: GlickoSettings): LeaderboardRow[] {
-  return seedingOrder(scores).map((score, index) => ({
+  return boardOrder(scores).map((score, index) => ({
     ...score,
     rank: index + 1,
-    league: leagueForRating(score.conservativeRating, settings.leagueBands),
+    league: leagueForRating(score.clubRating, settings.leagueBands),
   }));
+}
+
+/**
+ * Board order: best current club rating first.
+ */
+export function boardOrder(scores: readonly PlayerScore[]): PlayerScore[] {
+  return [...scores].sort(
+    (a, b) =>
+      b.clubRating - a.clubRating ||
+      b.skillRating - a.skillRating ||
+      a.skillSd - b.skillSd ||
+      (a.playerId < b.playerId ? -1 : a.playerId > b.playerId ? 1 : 0),
+  );
 }
 
 /**
  * Seeding order: most conservative estimate first, so an unproven player is not
  * handed a top seed on thin evidence.
+ *
+ * Deliberately *not* the board's order. A bracket and a leaderboard are asking
+ * different questions: the board reports who is best, while a seed is a bet
+ * about a draw, and there the cost of being wrong about someone unknown is
+ * asymmetric — seed them high and one upset unbalances the bracket. So seeding
+ * keeps ranking on skill minus two standard deviations, which puts the players
+ * we cannot vouch for (newcomers, and returners whose band has widened while
+ * they were away) low, where a surprise is cheap.
  */
 export function seedingOrder(scores: readonly PlayerScore[]): PlayerScore[] {
   return [...scores].sort(

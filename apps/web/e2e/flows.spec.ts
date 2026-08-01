@@ -156,6 +156,8 @@ test.describe('public browsing', () => {
     await expect(page.locator('.headline-label')).toContainText('Rating');
     await expect(page.locator('.headline-band')).toContainText('±');
     await expect(page.locator('.profile-stats')).toContainText('Skill estimate');
+    // Attendance is stated as its own figure, not left implicit in the band.
+    await expect(page.locator('.profile-stats')).toContainText('Attendance');
     // The match log lists real results.
     await expect(page.locator('.match-table tbody tr').first()).toBeVisible();
   });

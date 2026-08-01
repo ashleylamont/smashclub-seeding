@@ -1,7 +1,7 @@
 import type { GlickoSettings } from '@smashclub/shared';
-import { eventKeyOf } from './events';
+import { attendanceOf, eventKeyOf } from './events';
 import { fitWhr } from './whr';
-import { rankScores, type LeaderboardRow, type PlayerScore } from './score';
+import { activityPenaltyFor, rankScores, type LeaderboardRow, type PlayerScore } from './score';
 import type { EngineSet, EngineTournament, RatingEvent } from './types';
 
 /**
@@ -204,6 +204,14 @@ export function runWhrModel(input: {
   }
 
   // ---- leaderboard ----
+  /*
+   * The activity penalty is club policy, not model output, so it is computed the
+   * same way here as in the Glicko replay: from the club's event list and who
+   * turned up to what. Switching the active model must not change what missing a
+   * club night costs.
+   */
+  const orderedEventKeys = [...new Set(rateable.map((r) => r.eventKey))];
+
   const scores: PlayerScore[] = [];
   for (const row of participation.values()) {
     const latest = fit.display(row.playerId);
@@ -212,8 +220,16 @@ export function runWhrModel(input: {
       if ((participation.get(opponentId)?.mainMatchCount ?? 0) > 0) bridgeOpponentCount += 1;
     }
     const rookieRatio = row.matchCount ? row.rookieMatchCount / row.matchCount : 0;
+    const attendance = attendanceOf(orderedEventKeys, row.eventKeys);
+    const activityPenalty = activityPenaltyFor(attendance.missedEvents, settings);
     scores.push({
       playerId: row.playerId,
+      ...attendance,
+      activityPenalty,
+      nextMissPenalty: activityPenaltyFor(attendance.missedEvents + 1, settings) - activityPenalty,
+      clubRating: latest.rating - activityPenalty,
+      isProvisional:
+        row.eventKeys.size < settings.provisionalEventCount || row.matchCount < settings.provisionalMatchCount,
       rating: latest.rating,
       rd: latest.sd,
       vol: 0,
