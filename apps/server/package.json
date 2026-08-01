@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/index.js --external:pg --external:fastify --external:@fastify/* --external:@trpc/server --external:better-auth --external:croner --external:drizzle-orm --external:zod",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/index.js --external:pg --external:fastify --external:@fastify/* --external:@trpc/server --external:better-auth --external:croner --external:drizzle-orm --external:zod --external:yaml",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "dev:harness": "tsx src/dev/devServer.ts"

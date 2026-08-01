@@ -20,6 +20,30 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
+      # `pnpm build` only BUNDLES, and vitest runs from source — nothing here
+      # ever executed dist/index.js. So a bundle that cannot start shipped
+      # clean: `yaml` was added as a dependency without being added to the
+      # esbuild --external list, got inlined, and its internal CommonJS
+      # require() became esbuild's throwing ESM shim ("Dynamic require of
+      # 'process' is not supported"). The server died at import in BOTH
+      # environments while CI was green.
+      #
+      # Starting it with no DATABASE_URL must fail at ENV VALIDATION — which
+      # proves the whole module graph loaded first.
+      - name: Server bundle starts
+        working-directory: apps/server
+        run: |
+          out=$(node dist/index.js 2>&1 || true)
+          echo "$out"
+          if grep -q 'Dynamic require' <<<"$out"; then
+            echo "::error::Bundle inlined a CommonJS dependency. Add it to --external in apps/server/package.json."
+            exit 1
+          fi
+          if ! grep -q 'DATABASE_URL' <<<"$out"; then
+            echo "::error::Bundle did not reach env validation — it failed to load."
+            exit 1
+          fi
+
   legacy-python:
     # Reference implementation kept in legacy/ during the rework. The TypeScript
     # port is verified against this engine's own recorded output by
