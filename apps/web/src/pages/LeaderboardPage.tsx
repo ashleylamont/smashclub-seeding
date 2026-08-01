@@ -4,6 +4,7 @@ import { trpc } from '../lib/trpc';
 import { timeAgo } from '../lib/format';
 import { Leaderboard, type PlayerTrend } from '../components/Leaderboard';
 import { RatingsOverTime } from '../components/RatingsOverTime';
+import { InfoTip } from '../components/InfoTip';
 import './LeaderboardPage.css';
 
 /** How many recent results the form pips show. */
@@ -83,7 +84,18 @@ export function LeaderboardPage() {
     );
   }
   if (leaderboard.isError) {
-    return <p className="error-text">Failed to load rankings: {leaderboard.error.message}</p>;
+    return (
+      <div className="page">
+        <p className="error-text">Failed to load rankings: {leaderboard.error.message}</p>
+        <p className="muted">
+          The board is served by the club's own API — if this keeps happening the server is probably down rather
+          than your connection.{' '}
+          <button type="button" className="link-button" onClick={() => void leaderboard.refetch()}>
+            Try again
+          </button>
+        </p>
+      </div>
+    );
   }
 
   const { computedAt, rows, model } = leaderboard.data;
@@ -142,6 +154,11 @@ export function LeaderboardPage() {
 
         <p className="hero-meta muted">
           {computedAt ? `Updated ${timeAgo(computedAt)}` : 'No recompute yet'} · model <code>{model}</code>
+          <InfoTip label="Rating model">
+            Which rating system produced these numbers. Every recompute replays the club's whole set history
+            through it, so ratings are derived from the results rather than adjusted after them — and switching
+            model re-derives the entire board.
+          </InfoTip>
         </p>
       </header>
 

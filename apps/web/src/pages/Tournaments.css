@@ -66,6 +66,33 @@
   font-size: var(--fs-sm);
 }
 
+.tournament-sync {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* A count belongs to its heading, so it takes the heading's baseline at the
+   figure face rather than becoming a second word in the title. */
+.group-count {
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  color: var(--text-soft);
+}
+
+.page-header-note {
+  font-size: var(--fs-sm);
+  max-width: 48ch;
+}
+
+/* The sets table is six columns of short values; squeezed onto a phone it broke
+   every player name into one word per line. It keeps its shape and the
+   container scrolls (see `.table-scroll` in App.css). */
+.sets-table {
+  --table-min: 720px;
+}
+
 /* ── live feed ──────────────────────────────────────────────────── */
 .live-feed h3 {
   display: flex;
@@ -113,5 +140,11 @@
   .tournament-row {
     grid-template-columns: 1fr;
     row-gap: var(--s1);
+  }
+  /* Stacked, the meta line has the full width — so date and status can sit
+     apart on it instead of running together in the middle. */
+  .tournament-row-meta {
+    justify-content: space-between;
+    gap: var(--s2);
   }
 }

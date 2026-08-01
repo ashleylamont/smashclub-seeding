@@ -4,6 +4,7 @@ import { Link } from '@tanstack/react-router';
 import { trpc } from '../lib/trpc';
 import type { TournamentListItem } from '../lib/apiTypes';
 import { formatDate, timeAgo } from '../lib/format';
+import { syncStateLabel } from '../lib/labels';
 import { bucketFor } from '../lib/tournamentBuckets';
 import { useNow } from '../lib/useNow';
 import './Tournaments.css';
@@ -25,7 +26,11 @@ export function TournamentsPage() {
     const upcoming = all
       .filter((t) => bucketFor(t, now) === 'upcoming')
       .sort((a, b) => (a.eventDate ?? '9999').localeCompare(b.eventDate ?? '9999'));
-    const completed = all.filter((t) => bucketFor(t, now) === 'completed');
+    // Newest first, and stated as such on the page — so it is sorted here
+    // rather than inherited from whatever order the API happened to return.
+    const completed = all
+      .filter((t) => bucketFor(t, now) === 'completed')
+      .sort((a, b) => (b.eventDate ?? '').localeCompare(a.eventDate ?? ''));
     return { live, upcoming, completed };
   }, [query.data, now]);
 
@@ -43,7 +48,12 @@ export function TournamentsPage() {
 
   return (
     <div>
-      <h1>Tournaments</h1>
+      <div className="page-header">
+        <h1>Tournaments</h1>
+        <p className="muted page-header-note">
+          Club nights, newest results first. Ratings count every set in these brackets.
+        </p>
+      </div>
       {groups.live.length > 0 && <TournamentGroup title="Live" items={groups.live} live />}
       {groups.upcoming.length > 0 && <TournamentGroup title="Upcoming" items={groups.upcoming} />}
       {groups.completed.length > 0 && <TournamentGroup title="Completed" items={groups.completed} />}
@@ -54,26 +64,40 @@ export function TournamentsPage() {
 function TournamentGroup({ title, items, live }: { title: string; items: TournamentListItem[]; live?: boolean }) {
   return (
     <div className="section">
-      <h2>{title}</h2>
+      {/* The count belongs on the heading: three groups of unknown size, one of
+          which is usually much longer than the other two. */}
+      <h2>
+        {title} <span className="group-count num">{items.length}</span>
+      </h2>
       <div className="tournament-list">
-        {items.map((t) => (
-          <Link key={t.id} to="/tournaments/$slug" params={{ slug: t.slug }} className="tournament-row">
-            <div className="tournament-row-main">
-              <span className="tournament-name">{t.name}</span>
-              <span className="tournament-tags">
-                {live && <span className="live-badge">LIVE</span>}
-                {t.isRookie && <span className="chip chip-warning">rookie</span>}
-              </span>
-            </div>
-            <div className="tournament-row-meta">
-              <span>{formatDate(t.eventDate)}</span>
-              <span className="muted">
-                sync: {t.syncState}
-                {t.lastSyncedAt ? ` · ${timeAgo(t.lastSyncedAt)}` : ''}
-              </span>
-            </div>
-          </Link>
-        ))}
+        {items.map((t) => {
+          const sync = syncStateLabel(t.syncState);
+          return (
+            <Link key={t.id} to="/tournaments/$slug" params={{ slug: t.slug }} className="tournament-row">
+              <div className="tournament-row-main">
+                <span className="tournament-name">{t.name}</span>
+                <span className="tournament-tags">
+                  {live && <span className="live-badge">LIVE</span>}
+                  {t.isRookie && (
+                    <span className="chip chip-warning" title="A beginners' bracket — sets in it are weighted differently">
+                      rookie
+                    </span>
+                  )}
+                </span>
+              </div>
+              <div className="tournament-row-meta">
+                <span>{formatDate(t.eventDate)}</span>
+                {/* `sync: registered` was database vocabulary on a public page.
+                    The state is worth showing — it says whether these results
+                    have reached the ratings — but only in words. */}
+                <span className="muted" title={sync.hint}>
+                  {sync.label}
+                  {t.lastSyncedAt ? ` · ${timeAgo(t.lastSyncedAt)}` : ''}
+                </span>
+              </div>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );
