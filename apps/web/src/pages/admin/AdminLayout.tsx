@@ -7,6 +7,7 @@ const TABS = [
   { to: '/admin/review', label: 'Review' },
   { to: '/admin/players', label: 'Players' },
   { to: '/admin/companies', label: 'Companies' },
+  { to: '/admin/import', label: 'Import' },
   { to: '/admin/seeding', label: 'Seeding' },
   { to: '/admin/settings', label: 'Settings' },
 ] as const;

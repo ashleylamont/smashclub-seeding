@@ -389,6 +389,13 @@ export const reviewItems = pgTable(
     companyId: uuid('company_id').references(() => companies.id, { onDelete: 'set null' }),
     /** Ranked candidates: [{ playerId, score, reason }]. */
     candidates: jsonb('candidates').notNull(),
+    /**
+     * When `candidates` was last scored. The list is a snapshot, so a player
+     * created *after* an item was queued is invisible to it until something
+     * recomputes — this timestamp is what lets the queue say "no candidates as
+     * of 3 weeks ago" rather than the flatly wrong "no candidates".
+     */
+    candidatesComputedAt: timestamp('candidates_computed_at', { withTimezone: true }).notNull().defaultNow(),
     status: reviewStatusEnum('status').notNull().default('pending'),
     resolution: reviewResolutionEnum('resolution'),
     resolvedPlayerId: uuid('resolved_player_id').references(() => players.id, { onDelete: 'set null' }),
