@@ -192,6 +192,26 @@ test.describe('admin', () => {
     await expect(cards).toHaveCount(before - 1, { timeout: 30_000 });
   });
 
+  test('the review queue links an entry to a hand-picked player', async ({ page }) => {
+    await signInAsAdmin(page.request);
+    await page.goto('/admin/review');
+    await settle(page);
+
+    const cards = page.locator('.review-card');
+    const before = await cards.count();
+    test.skip(before === 0, 'nothing pending review in this seed');
+
+    // The manual escape hatch: the reviewer names a player the scoring never
+    // offered, instead of picking from the ranked candidates.
+    await cards.first().getByRole('button', { name: /Find a player…/i }).click();
+    const rows = page.locator('.lookup-row');
+    await expect(rows.first()).toBeVisible();
+    await page.getByPlaceholder(/Search by name/i).fill('a');
+    await settle(page);
+    await rows.first().getByRole('button', { name: /^Link$/ }).click();
+    await expect(cards).toHaveCount(before - 1, { timeout: 30_000 });
+  });
+
   test('seeding generates from the leaderboard, reorders, and survives a reload', async ({ page }) => {
     await signInAsAdmin(page.request);
     await page.goto('/admin/seeding');

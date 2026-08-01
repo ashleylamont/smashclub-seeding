@@ -1,0 +1,50 @@
+/*
+ * Manual player lookup. Same three-column rhythm as the review queue's
+ * candidate rows — name, why it is here, action — so switching between the
+ * scored list and a hand search does not feel like switching screens.
+ */
+
+.lookup-search {
+  width: 100%;
+}
+
+.lookup-list {
+  list-style: none;
+  margin: var(--s3) 0 0;
+  padding: 0;
+  max-height: 44vh;
+  overflow-y: auto;
+}
+
+.lookup-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(0, auto) auto;
+  gap: var(--s3);
+  align-items: center;
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.lookup-name {
+  color: var(--text-h);
+  font-weight: 500;
+}
+
+.lookup-name .chip {
+  margin-left: var(--s2);
+}
+
+.lookup-aliases {
+  font-size: var(--fs-xs);
+  color: var(--text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 860px) {
+  .lookup-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: var(--s1);
+  }
+}

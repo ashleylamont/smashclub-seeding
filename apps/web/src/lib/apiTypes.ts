@@ -61,6 +61,8 @@ export interface ReviewCandidate {
   companyCode: string | null;
   score: number;
   reason: 'fuzzy' | 'structured' | 'name-shape';
+  /** The alias that scored, when it was not the player's registry name. */
+  matchedAlias?: string | null;
 }
 
 /** Shape of a seeding run's push log (stored as untyped JSON server-side). */

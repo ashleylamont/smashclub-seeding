@@ -2,12 +2,14 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import {
   identityDecisions,
+  playerAliases,
   playerRatings,
   players,
   ratingEvents,
   recomputes,
   reviewItems,
   sets,
+  tournamentParticipants,
   tournaments,
   type Db,
 } from '@smashclub/db';
@@ -20,6 +22,9 @@ import { fixtureClient, type FixtureTournament } from './helpers/challongeFixtur
 
 let db: Db;
 let close: () => Promise<void>;
+
+/** A well-formed UUID that belongs to nobody. */
+const MISSING_PLAYER_ID = '00000000-0000-4000-8000-000000000000';
 
 const fixture: FixtureTournament = {
   slug: 'weekly1',
@@ -101,6 +106,45 @@ describe('review resolution -> recompute', () => {
     // dropped from rating input (self-play guard).
     const result = await runRecompute(db);
     expect(result.sets).toBe(2);
+  });
+
+  it('links to a player who was never offered as a candidate', async () => {
+    await syncOnce();
+    const [queueItem] = await db.select().from(reviewItems).where(eq(reviewItems.status, 'pending'));
+    const [samus] = await db.select().from(players).where(eq(players.legacyId, 'samus-aran'));
+    // Nothing links "Falco Lombardi" to Samus Aran — this is the manual-lookup
+    // path, where the reviewer knows something the scoring cannot.
+    const offered = (queueItem!.candidates as Array<{ playerId: string }> | null) ?? [];
+    expect(offered.map((candidate) => candidate.playerId)).not.toContain(samus!.id);
+
+    const result = await resolveReviewItem(db, queueItem!.id, { kind: 'linked_existing', playerId: samus!.id }, null);
+    expect(result.playerId).toBe(samus!.id);
+
+    const [participant] = await db
+      .select()
+      .from(tournamentParticipants)
+      .where(eq(tournamentParticipants.id, queueItem!.tournamentParticipantId));
+    expect(participant!.playerId).toBe(samus!.id);
+    // The bracket's spelling is now aliased, so the next import matches silently.
+    const aliases = await db.select().from(playerAliases).where(eq(playerAliases.playerId, samus!.id));
+    expect(aliases.map((alias) => alias.aliasNorm)).toContain('falco lombardi');
+  });
+
+  it('refuses to link to a player that is gone or merged away', async () => {
+    await syncOnce();
+    const [queueItem] = await db.select().from(reviewItems).where(eq(reviewItems.status, 'pending'));
+    const [fox] = await db.select().from(players).where(eq(players.legacyId, 'fox-mccloud'));
+    await db.update(players).set({ status: 'merged' }).where(eq(players.id, fox!.id));
+
+    await expect(
+      resolveReviewItem(db, queueItem!.id, { kind: 'linked_existing', playerId: fox!.id }, null),
+    ).rejects.toThrow(/merged/);
+    await expect(
+      resolveReviewItem(db, queueItem!.id, { kind: 'linked_existing', playerId: MISSING_PLAYER_ID }, null),
+    ).rejects.toThrow(/Unknown player/);
+
+    const [item] = await db.select().from(reviewItems).where(eq(reviewItems.id, queueItem!.id));
+    expect(item!.status).toBe('pending');
   });
 
   it('kept_separate records rejections so candidates are never re-suggested', async () => {

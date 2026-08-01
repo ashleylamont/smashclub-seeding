@@ -1,6 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
-import { companies, identityDecisions, players, reviewItems } from '@smashclub/db';
+import { companies, identityDecisions, playerAliases, players, reviewItems } from '@smashclub/db';
 import { rankReviewCandidates } from '@smashclub/engine';
 
 /**
@@ -25,15 +25,29 @@ export interface ReviewCandidateSnapshot {
   companyCode: string | null;
   score: number;
   reason: 'fuzzy' | 'structured' | 'name-shape';
+  /**
+   * Set when the score came from one of the player's aliases rather than their
+   * registry name, so the queue can say *why* an apparently unrelated name is
+   * being offered.
+   */
+  matchedAlias: string | null;
 }
 
 export interface CandidatePlayer {
   name: string;
   companyCode: string | null;
+  /** Every other spelling the player already answers to (`alias_norm`). */
+  aliases: string[];
   playerId: string;
 }
 
-/** Active players, the only things a review item may be linked to. */
+/**
+ * Active players, the only things a review item may be linked to, each carrying
+ * the aliases they already answer to. Matching a bracket entry against the
+ * aliases as well as the registry name is what lets a player who enters as
+ * "starfox" be offered for "starfoxx" — scoring the canonical name alone was
+ * blind to every spelling the club had already taught the system.
+ */
 export async function loadCandidatePool(db: Db): Promise<CandidatePlayer[]> {
   const rows = await db
     .select({
@@ -44,7 +58,25 @@ export async function loadCandidatePool(db: Db): Promise<CandidatePlayer[]> {
     .from(players)
     .leftJoin(companies, eq(players.companyId, companies.id))
     .where(eq(players.status, 'active'));
-  return rows.map((row) => ({ name: row.canonicalName, companyCode: row.companyCode ?? null, playerId: row.id }));
+
+  const aliasRows = await db
+    .select({ playerId: playerAliases.playerId, aliasNorm: playerAliases.aliasNorm })
+    .from(playerAliases)
+    .innerJoin(players, eq(playerAliases.playerId, players.id))
+    .where(eq(players.status, 'active'));
+  const aliasesByPlayer = new Map<string, string[]>();
+  for (const row of aliasRows) {
+    const list = aliasesByPlayer.get(row.playerId) ?? [];
+    list.push(row.aliasNorm);
+    aliasesByPlayer.set(row.playerId, list);
+  }
+
+  return rows.map((row) => ({
+    name: row.canonicalName,
+    companyCode: row.companyCode ?? null,
+    aliases: aliasesByPlayer.get(row.id) ?? [],
+    playerId: row.id,
+  }));
 }
 
 /**
@@ -66,6 +98,8 @@ export function scoreCandidates(
       companyCode: entry.candidate.companyCode,
       score: entry.score,
       reason: entry.reason,
+      matchedAlias:
+        entry.matchedName.toLowerCase() === entry.candidate.name.toLowerCase() ? null : entry.matchedName,
     }));
 }
 
@@ -174,7 +208,8 @@ function sameCandidates(stored: unknown, next: ReviewCandidateSnapshot[]): boole
       entry.reason === candidate.reason &&
       Math.abs((entry.score ?? 0) - candidate.score) < 1e-9 &&
       entry.name === candidate.name &&
-      (entry.companyCode ?? null) === candidate.companyCode
+      (entry.companyCode ?? null) === candidate.companyCode &&
+      (entry.matchedAlias ?? null) === candidate.matchedAlias
     );
   });
 }
