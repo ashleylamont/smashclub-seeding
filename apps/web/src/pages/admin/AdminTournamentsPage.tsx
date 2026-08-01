@@ -4,6 +4,7 @@ import { Link } from '@tanstack/react-router';
 import { trpc } from '../../lib/trpc';
 import type { TournamentListItem } from '../../lib/apiTypes';
 import { formatDateTime, timeAgo } from '../../lib/format';
+import { useNow } from '../../lib/useNow';
 
 /**
  * Default live-monitoring window. Deliberately bounded: the previous behaviour
@@ -33,6 +34,10 @@ export function AdminTournamentsPage() {
     void queryClient.invalidateQueries({ queryKey: ['admin', 'jobs'] });
   };
 
+  // One clock for the whole table, passed down: each row only needs it to tell
+  // whether its live window has expired, and a timer per row would be waste.
+  const now = useNow();
+
   return (
     <div>
       <RegisterForm onDone={invalidate} />
@@ -56,7 +61,7 @@ export function AdminTournamentsPage() {
               </thead>
               <tbody>
                 {tournaments.data.map((t) => (
-                  <TournamentRow key={t.id} tournament={t} onChanged={invalidate} />
+                  <TournamentRow key={t.id} tournament={t} now={now} onChanged={invalidate} />
                 ))}
               </tbody>
             </table>
@@ -163,7 +168,16 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function TournamentRow({ tournament, onChanged }: { tournament: TournamentListItem; onChanged: () => void }) {
+function TournamentRow({
+  tournament,
+  now,
+  onChanged,
+}: {
+  tournament: TournamentListItem;
+  /** Ticking clock from the page; see lib/useNow.ts. */
+  now: number;
+  onChanged: () => void;
+}) {
   const [editingDate, setEditingDate] = useState(false);
   const [dateValue, setDateValue] = useState('');
 
@@ -198,7 +212,7 @@ function TournamentRow({ tournament, onChanged }: { tournament: TournamentListIt
   });
 
   const liveUntil = tournament.liveUntil ? new Date(tournament.liveUntil) : null;
-  const isLive = liveUntil !== null && liveUntil.getTime() > Date.now();
+  const isLive = liveUntil !== null && liveUntil.getTime() > now;
 
   const startEditDate = () => {
     if (tournament.eventDate) {
