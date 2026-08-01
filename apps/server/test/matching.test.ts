@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { identityDecisions, players, reviewItems, tournamentParticipants, tournaments, type Db } from '@smashclub/db';
+import {
+  identityDecisions,
+  playerAliases,
+  players,
+  reviewItems,
+  tournamentParticipants,
+  tournaments,
+  type Db,
+} from '@smashclub/db';
 import { importRegistryPlayers, registerTournamentSlugs } from '../src/bootstrap/importRegistry';
 import { syncTournament } from '../src/sync/sync';
 import { createTestDb } from './helpers/testDb';
@@ -44,6 +52,39 @@ describe('participant matching pipeline', () => {
     const [cortese] = await db.select().from(players).where(eq(players.legacyId, 'josh-cortese'));
     expect(joshC.playerId).toBe(cortese!.id);
     expect(await db.select().from(reviewItems)).toHaveLength(0);
+  });
+
+  it('does not turn a structured short form into a durable alias', async () => {
+    await syncWithParticipants(['[ATL] Josh C', '[ATL] Jackson Lin']);
+    // The link is an inference from today's pool, not a club record: writing it
+    // to player_aliases would keep resolving it silently once a second Josh C.
+    // exists. Only registry/manual/decision sources mint aliases.
+    const aliases = await db.select().from(playerAliases).where(eq(playerAliases.aliasNorm, 'josh c'));
+    expect(aliases).toHaveLength(0);
+  });
+
+  it('re-routes a short form to review once the pool makes it ambiguous', async () => {
+    await syncWithParticipants(['[ATL] Josh C', '[ATL] Jackson Lin']);
+    expect(await db.select().from(reviewItems)).toHaveLength(0);
+
+    // A second matching Josh joins the club, so "Josh C" stops being provable.
+    await importRegistryPlayers(db, [{ id: 'josh-chen', canonical_name: 'Josh Chen', company: 'ATL' }]);
+    await registerTournamentSlugs(db, ['weekly2']);
+    const fixture: FixtureTournament = {
+      slug: 'weekly2',
+      state: 'complete',
+      participants: [
+        { id: 1, name: '[ATL] Josh C' },
+        { id: 2, name: '[ATL] Jackson Lin' },
+      ],
+      matches: [{ id: 11, p1: 1, p2: 2, winner: 1, order: 1 }],
+    };
+    const [row] = await db.select({ id: tournaments.id }).from(tournaments).where(eq(tournaments.challongeSlug, 'weekly2'));
+    await syncTournament(db, fixtureClient([fixture]), row!.id);
+
+    const queue = await db.select().from(reviewItems);
+    expect(queue).toHaveLength(1);
+    expect(queue[0]!.cleanedName).toBe('Josh C');
   });
 
   it('never fuzzy-merges: near-miss names go to the review queue with candidates', async () => {

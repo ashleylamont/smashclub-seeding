@@ -64,10 +64,12 @@ export function createAuth(db: Db, env: Env, options: { enableCredentials?: bool
            * Stamp the admin role at creation for addresses in ADMIN_EMAILS,
            * covering OAuth sign-ups too. Without this the role would only be
            * applied lazily on the first API call, so the client's session (and
-           * therefore the admin navigation) would lag a request behind.
+           * therefore the admin navigation) would lag a request behind. This is
+           * purely a latency shortcut — `getSessionUser` reconciles the column
+           * against the allowlist on every request regardless.
            */
-          before: async (user: { email?: string }) => {
-            if (isAdminEmail(user.email, env)) {
+          before: async (user: { email?: string; emailVerified?: boolean }) => {
+            if (isAdminIdentity(user, env)) {
               return { data: { ...user, role: 'admin' } };
             }
             return undefined;
@@ -84,8 +86,18 @@ function adminEmails(env: Env): string[] {
     .filter(Boolean);
 }
 
-function isAdminEmail(email: string | undefined, env: Env): boolean {
-  return email ? adminEmails(env).includes(email.toLowerCase()) : false;
+/**
+ * Whether an account currently qualifies for the admin role.
+ *
+ * The address must be *verified by the provider*, not merely present on the
+ * profile. Discord in particular reports an unverified address for accounts
+ * that never confirmed their email (better-auth maps its `verified` flag onto
+ * `emailVerified`), and an unverified address is not proof that the person
+ * signing in controls the mailbox the club allowlisted.
+ */
+function isAdminIdentity(account: { email?: string | null; emailVerified?: boolean | null }, env: Env): boolean {
+  if (!account.email || account.emailVerified !== true) return false;
+  return adminEmails(env).includes(account.email.toLowerCase());
 }
 
 export interface SessionUser {
@@ -96,8 +108,17 @@ export interface SessionUser {
 }
 
 /**
- * Resolve the request's session user, promoting ADMIN_EMAILS members to
- * admin on first sight (bootstrap path — no manual SQL for the first admin).
+ * Resolve the request's session user and reconcile its role against
+ * ADMIN_EMAILS.
+ *
+ * ADMIN_EMAILS is the single source of truth for administrator access; the
+ * `role` column is a cache of it. Reconciliation runs in *both* directions on
+ * every request, so adding an address grants admin on the allowlisted user's
+ * next call and removing one revokes it just as promptly — including for a
+ * session that is already open, and for any other provider linked to the same
+ * account. There is deliberately no way to pin an admin in the database that
+ * the allowlist will not revoke: a role the allowlist cannot take back is a
+ * role nobody can offboard.
  */
 export async function getSessionUser(
   auth: Auth,
@@ -108,14 +129,12 @@ export async function getSessionUser(
   const sessionData = await auth.api.getSession({ headers });
   if (!sessionData?.user) return null;
   const { id, email, name } = sessionData.user;
-  let role = (sessionData.user as { role?: string }).role === 'admin' ? 'admin' : 'user';
+  const persisted = (sessionData.user as { role?: string }).role === 'admin' ? 'admin' : 'user';
+  const role: 'admin' | 'user' = isAdminIdentity(sessionData.user, env) ? 'admin' : 'user';
 
-  // Catch-up promotion for accounts created before their address was added to
-  // ADMIN_EMAILS; new accounts are stamped by the create hook above.
-  if (role !== 'admin' && isAdminEmail(email, env)) {
-    await db.update(user).set({ role: 'admin', updatedAt: new Date() }).where(eq(user.id, id));
-    role = 'admin';
+  if (role !== persisted) {
+    await db.update(user).set({ role, updatedAt: new Date() }).where(eq(user.id, id));
   }
 
-  return { id, email, name, role: role as 'admin' | 'user' };
+  return { id, email, name, role };
 }

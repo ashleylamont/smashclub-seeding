@@ -19,7 +19,8 @@ import { fileURLToPath } from 'node:url';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
-import { schema, type Db } from '@smashclub/db';
+import { inArray } from 'drizzle-orm';
+import { schema, user, type Db } from '@smashclub/db';
 import { buildApp } from '../app';
 import { createAuth } from '../auth';
 import { loadEnv } from '../env';
@@ -85,6 +86,10 @@ export async function startDevHarness(
       .signUpEmail({ body: { email: email!, password, name: name! } })
       .catch((error: unknown) => log(`  (sign-up for ${email} skipped: ${String(error)})`));
   }
+  // Admin promotion requires a provider-verified address (see auth.ts). The
+  // harness has no mail server, so stand in for the verification an OAuth
+  // provider would have done before these accounts ever reached us.
+  await db.update(user).set({ emailVerified: true }).where(inArray(user.email, [adminEmail, userEmail]));
 
   await app.listen({ port, host: '127.0.0.1' });
   const url = `http://127.0.0.1:${port}`;

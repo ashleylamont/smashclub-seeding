@@ -25,10 +25,21 @@ import { loadCandidatePool, rejectedPlayerIdsFor, scoreCandidates } from './cand
  *  2. exact alias lookup (company-scoped, then company-less)
  *  3. prior human decision in identity_decisions (merge -> silent link)
  *  4. structured short-form alias (unique first-name / first+initial) ->
- *     auto-link and record a `structured` alias
+ *     auto-link, but WITHOUT recording an alias (see below)
  *  5. everything else — including every fuzzy match at any score — becomes a
  *     pending review item with ranked candidates. Fuzzy similarity NEVER
  *     merges on its own.
+ *
+ * Steps 2-4 all bind an upstream-controlled display name to an internal
+ * player, so the strength of the evidence decides how *durable* the result is
+ * allowed to be. An exact alias or a prior human decision is a club record
+ * being recognised. A structured short form is only an inference from the pool
+ * as it stands right now — "Josh C" is Josh Cortese because today he is the
+ * only matching Josh — so it links this participant and stops there. Writing
+ * it into player_aliases would freeze a guess into a club record and keep
+ * resolving it silently even once a second Josh C. makes it ambiguous; left
+ * unwritten, that later ambiguity correctly falls through to review. Admins
+ * can still promote a short form deliberately via addAlias.
  */
 
 export interface MatchOutcome {
@@ -135,11 +146,11 @@ export async function matchTournamentParticipants(db: Db, tournamentId: string):
       continue;
     }
 
-    // 4. Structured short-form alias (unambiguous within the pool).
+    // 4. Structured short-form alias (unambiguous within the pool *right now*).
+    // Deliberately no ensureAlias: this is an inference, not a club record.
     const structured = resolveStructuredAlias(cleaned.name, companyCode, pool);
     if (structured) {
       await linkParticipant(db, participant.id, structured.playerId);
-      await ensureAlias(db, structured.playerId, aliasNorm, companyId, 'structured');
       outcomes.push({
         participantId: participant.id,
         cleanedName: cleaned.name,

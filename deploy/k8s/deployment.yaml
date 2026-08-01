@@ -30,6 +30,13 @@ spec:
           env:
             - name: BETTER_AUTH_URL
               value: https://smash.example.com # public URL, used for OAuth callbacks
+            # Behind the nginx ingress, so read the client address from
+            # X-Forwarded-For. Without this every request looks like it came
+            # from the ingress pod and the per-client SSE cap becomes a second
+            # global one. Do not set this if the pod is ever reachable
+            # directly — clients would get to pick their own address.
+            - name: TRUST_PROXY
+              value: "true"
           readinessProbe:
             httpGet:
               path: /healthz
