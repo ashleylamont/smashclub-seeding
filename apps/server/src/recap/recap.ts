@@ -12,7 +12,9 @@ import {
 import {
   buildRecap,
   eventKeyOf,
+  formatFact,
   pairKey,
+  type RankedRecapFact,
   type RecapHistory,
   type RecapParticipant,
   type RecapResult,
@@ -34,9 +36,24 @@ import { charactersByPlayer } from '../players/characters';
  * ratings themselves when two brackets share a date.
  */
 
-export interface LoadedRecap extends Omit<RecapResult, 'tournaments'> {
+/**
+ * A fact with its copy already applied.
+ *
+ * The web app has no dependency on the engine — see the note on the
+ * leaderboard's event count — so the headline and detail are rendered here
+ * rather than in the browser. The wording still has exactly one home
+ * (`formatFact`), which is the point: a recap page, a share image and any
+ * future chat post all describe a night identically.
+ */
+export interface LoadedRecapFact extends RankedRecapFact {
+  headline: string;
+  detail: string;
+}
+
+export interface LoadedRecap extends Omit<RecapResult, 'tournaments' | 'facts'> {
   /** The night's brackets, main first, each addressable by its own slug. */
   tournaments: Array<RecapTournament & { slug: string }>;
+  facts: LoadedRecapFact[];
   /** Canonical slug for this night — the main bracket's. */
   slug: string;
 }
@@ -176,7 +193,12 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
   // The engine orders brackets main-first, so the night's canonical slug — the
   // one a shared link should carry — is the first one back.
   const withSlugs = result.tournaments.map((t) => ({ ...t, slug: slugById.get(t.id) ?? slug }));
-  return { ...result, tournaments: withSlugs, slug: withSlugs[0]?.slug ?? slug };
+  return {
+    ...result,
+    tournaments: withSlugs,
+    facts: result.facts.map((entry) => ({ ...entry, ...formatFact(entry.fact) })),
+    slug: withSlugs[0]?.slug ?? slug,
+  };
 }
 
 interface RatingContext {

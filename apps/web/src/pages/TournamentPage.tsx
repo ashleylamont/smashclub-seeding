@@ -61,6 +61,22 @@ function TournamentDetail({ data }: { data: TournamentData }) {
       <p className="muted tournament-subtitle">
         {formatDate(data.eventDate)} · sync: {data.syncState}
         {data.lastSyncedAt ? ` (${timeAgo(data.lastSyncedAt)})` : ''}
+        {/* The recap covers the whole evening, so it is worth reaching for
+            while a bracket is still running as well as after it finishes. */}
+        <Link to="/recaps/$slug" params={{ slug: data.slug }} className="tournament-recap-link">
+          {isComplete ? 'The night in review →' : 'Recap so far →'}
+        </Link>
+        {/* Venue mode is for the room's screen, so it is only offered while
+            there is something left to watch. */}
+        {!isComplete && (
+          <Link
+            to="/tournaments/$slug/live"
+            params={{ slug: data.slug }}
+            className="tournament-recap-link tournament-venue-link"
+          >
+            Venue mode →
+          </Link>
+        )}
       </p>
 
       {isLive && recentSets.length > 0 && (

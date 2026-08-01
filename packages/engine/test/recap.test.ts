@@ -243,18 +243,33 @@ describe('placements when Challonge reports none', () => {
     expect(factsOfKind(result, 'podium')).toHaveLength(0);
   });
 
-  it('derives nothing when more than one player is unbeaten', () => {
-    // Two unbeaten players means there is no single champion to anchor the
-    // ordering on, so any podium read off it would be a guess.
-    const a = participant({ name: 'Una' });
-    const b = participant({ name: 'Vex' });
-    const c = participant({ name: 'Wren' });
+  it('crowns the winner of a grand final that went to a bracket reset', () => {
+    /*
+     * The case that matters most: the player coming up through losers has to
+     * win twice, so the eventual champion has a loss on the day. Reading the
+     * champion as "whoever never lost" found nobody here and dropped the podium
+     * from the most dramatic nights.
+     */
+    const fromLosers = participant({ name: 'Una' });
+    const fromWinners = participant({ name: 'Vex' });
+    const third = participant({ name: 'Wren' });
     const result = buildRecap({
       tournaments: [MAIN],
-      participants: [a, b, c],
-      sets: [completedSet(a, c, 1), completedSet(b, c, 1)],
+      participants: [fromLosers, fromWinners, third],
+      sets: [
+        // Una is sent to losers, beats Wren there, then wins grand finals twice.
+        completedSet(fromWinners, fromLosers, 1, { round: 1, completedAt: '2025-03-01T09:00:00.000Z' }),
+        completedSet(fromLosers, third, 1, { round: -1, completedAt: '2025-03-01T09:30:00.000Z' }),
+        completedSet(fromWinners, fromLosers, 2, { round: 3, completedAt: '2025-03-01T10:00:00.000Z' }),
+        completedSet(fromWinners, fromLosers, 2, { round: 3, completedAt: '2025-03-01T10:30:00.000Z' }),
+      ],
     });
-    expect(factsOfKind(result, 'podium')).toHaveLength(0);
+    const [podium] = factsOfKind(result, 'podium');
+    expect(podium?.places.map((p) => [p.player.name, p.place])).toEqual([
+      ['Una', 1],
+      ['Vex', 2],
+      ['Wren', 3],
+    ]);
   });
 
   it('does not claim a seed overperformance from a derived placement', () => {
@@ -266,6 +281,30 @@ describe('placements when Challonge reports none', () => {
       sets: bracket,
     });
     expect(factsOfKind(result, 'overperformer')).toHaveLength(0);
+  });
+
+  it('names the same champion on the podium and in the grand-final card', () => {
+    /*
+     * These two facts are built from the same bracket and must agree. When they
+     * each worked out the decider for themselves they could not: real club sets
+     * often carry neither a completion time nor a play-order hint, and the two
+     * tie-breaks disagreed, so a recap named one player as champion and another
+     * as the grand-final winner on the same page.
+     */
+    const a = participant({ name: 'Una' });
+    const b = participant({ name: 'Vex' });
+    const c = participant({ name: 'Wren' });
+    const noTimestamps: RecapSet[] = [
+      completedSet(a, c, 1, { round: 1, completedAt: null, suggestedPlayOrder: null }),
+      completedSet(b, c, 1, { round: -1, completedAt: null, suggestedPlayOrder: null }),
+      completedSet(a, b, 2, { round: 2, completedAt: null, suggestedPlayOrder: null }),
+    ];
+
+    const result = buildRecap({ tournaments: [MAIN], participants: [a, b, c], sets: noTimestamps });
+    const champion = factsOfKind(result, 'podium')[0]?.places[0]?.player.name;
+    const finalsWinner = factsOfKind(result, 'grand_finals')[0]?.winner.name;
+    expect(champion).toBe('Vex');
+    expect(finalsWinner).toBe(champion);
   });
 
   it('still finds the champion for a clean sweep', () => {
@@ -677,6 +716,24 @@ describe('the night as a whole', () => {
     });
     const scores = result.facts.map((f) => f.notability);
     expect(scores).toEqual([...scores].sort((x, y) => y - x));
+  });
+
+  it('keeps only the most notable few of a repetitive fact kind', () => {
+    // A bracket where most sets go to a deciding game would otherwise bury
+    // everything else under identical "went the distance" cards.
+    const players = Array.from({ length: 10 }, (_, i) => participant({ name: `P${i}` }));
+    const closeSets = players
+      .slice(1)
+      .map((p, i) => completedSet(players[0]!, p, 1, { scoresCsv: '2-1', round: i + 1 }));
+
+    const result = buildRecap({ tournaments: [MAIN], participants: players, sets: closeSets });
+    expect(closeSets).toHaveLength(9);
+    expect(factsOfKind(result, 'nailbiter')).toHaveLength(2);
+
+    // The ones kept are the most notable, not the first encountered: these sets
+    // climb through the rounds, so the latest rounds should survive.
+    const kept = factsOfKind(result, 'nailbiter').map((f) => f.round);
+    expect(kept).toEqual([9, 8]);
   });
 
   it('is empty but well-formed for a night with nothing in it', () => {

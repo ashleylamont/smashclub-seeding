@@ -273,63 +273,158 @@ function stageWeight(round: number | null, maxRound: number): number {
 const saturate = (value: number, scale: number): number =>
   value <= 0 ? 0 : value / (value + scale);
 
-/** When a set finished, for ordering eliminations within a bracket. */
-function setOrderKey(set: RecapSet): [string, number, string] {
-  return [set.completedAt ?? '', set.suggestedPlayOrder ?? 0, set.id];
+/**
+ * Where a set sits in the order a bracket was played: when it finished, then
+ * Challonge's own play-order hint, then the position the caller supplied.
+ *
+ * That last component matters more than it looks. The default sync source
+ * carries neither per-match timestamps nor `suggested_play_order`, so on a real
+ * club bracket the first two are frequently identical across every set of a
+ * tournament and the tie-break is all there is. Callers pass sets in bracket
+ * order, so the index is a meaningful last resort — and, crucially, a stable
+ * one. An earlier version fell back to the set's uuid, which is arbitrary: two
+ * places that both needed to know "which set decided this bracket" could and
+ * did disagree, so a recap could name one player on its podium and a different
+ * one as the grand-final winner.
+ */
+type OrderKey = [string, number, number];
+
+function setOrderKey(set: RecapSet, index: number): OrderKey {
+  return [set.completedAt ?? '', set.suggestedPlayOrder ?? 0, index];
 }
 
-function compareOrderKeys(a: [string, number, string], b: [string, number, string]): number {
-  return a[0].localeCompare(b[0]) || a[1] - b[1] || a[2].localeCompare(b[2]);
+function compareOrderKeys(a: OrderKey, b: OrderKey): number {
+  return a[0].localeCompare(b[0]) || a[1] - b[1] || a[2] - b[2];
+}
+
+/** What a bracket, read on its own terms, says happened. */
+export interface BracketOutcome {
+  /** Placement per participant id, champion first. */
+  placements: Map<string, number>;
+  /** The set that decided the bracket. */
+  decider: RecapSet;
+  /** True when the final needed more than one set — a bracket reset. */
+  bracketReset: boolean;
 }
 
 /**
- * Placements worked out from the bracket, for tournaments Challonge did not
- * report `final_rank` for.
+ * Reads a bracket's result out of its own sets.
  *
- * This is not a nicety: the default sync source is the embedded `/module`
- * bracket page, which carries no placements at all (only the opt-in API path
- * does). Without this, most of the club's history would have no podium — the
- * single fact a recap most obviously needs.
+ * There is deliberately ONE of these. Both the podium and the grand-final fact
+ * need to know who won a bracket, and when they worked it out separately they
+ * could disagree — on real club data, where sets often carry neither a
+ * timestamp nor a play-order hint, two different tie-breaks named two different
+ * champions and the recap contradicted itself on the same page.
+ *
+ * Placements exist because the default sync source is the embedded `/module`
+ * bracket page, which carries no `final_rank` at all (only the opt-in API path
+ * does). Without deriving them, most of the club's history would have no podium
+ * — the one fact a recap most obviously needs.
  *
  * The rule is elimination order: you are out when you lose your last set, and
- * the longer you lasted the better you placed. That is exact for the top three
- * of a double-elimination bracket — the grand-final loser is second, the
- * losers-final loser third — and approximate further down, where real brackets
- * award tied places anyway. Callers therefore use it for the podium and not for
- * anything that reads a placement as precise (see `collectOverperformers`).
+ * the longer you lasted the better you placed. That is exact for the top of a
+ * double-elimination bracket — the grand-final loser is second, the losers-final
+ * loser third — and approximate further down, where real brackets award tied
+ * places anyway. Callers use it for the podium and not for anything that reads a
+ * placement as precise (see `collectOverperformers`).
  *
- * Only derived for a bracket with exactly one undefeated player: any other
- * count means the bracket is unfinished, and a podium guessed from a
- * half-played bracket would simply be wrong.
+ * The champion is the winner of the *final* — the last set of the highest round
+ * — and explicitly not "the player who never lost". In double elimination the
+ * winner frequently has a loss: anyone coming up through losers has one by
+ * definition, and a grand final that goes to a bracket reset means the eventual
+ * champion lost a set on the day. Keying on undefeatedness dropped the podium
+ * from exactly the most dramatic nights.
+ *
+ * Returns null for a bracket with no completed sets to read.
  */
-export function derivePlacements(sets: readonly RecapSet[]): Map<string, number> {
-  const placements = new Map<string, number>();
-  const lastLoss = new Map<string, [string, number, string]>();
-  const entrants = new Set<string>();
+export function deriveBracketOutcome(sets: readonly RecapSet[]): BracketOutcome | null {
+  const lastLoss = new Map<string, OrderKey>();
+  let final: { set: RecapSet; winner: string; key: OrderKey } | null = null;
+  let finalRoundSets = 0;
 
-  for (const set of sets) {
-    if (set.state !== 'complete' || set.winner == null || set.excludedFromRatings) continue;
+  sets.forEach((set, index) => {
+    if (set.state !== 'complete' || set.winner == null || set.excludedFromRatings) return;
     const p1 = set.p1ParticipantId;
     const p2 = set.p2ParticipantId;
-    if (!p1 || !p2) continue;
-    entrants.add(p1);
-    entrants.add(p2);
+    if (!p1 || !p2) return;
+    const winner = set.winner === 1 ? p1 : p2;
     const loser = set.winner === 1 ? p2 : p1;
-    const key = setOrderKey(set);
+
+    const key = setOrderKey(set, index);
     const existing = lastLoss.get(loser);
     if (!existing || compareOrderKeys(key, existing) > 0) lastLoss.set(loser, key);
-  }
 
-  const undefeated = [...entrants].filter((id) => !lastLoss.has(id));
-  if (undefeated.length !== 1) return placements;
+    /*
+     * The final is the highest round; a bracket reset puts two sets there and
+     * the later one decides it. Round rather than raw time, because a bracket
+     * can finish out a lower-round set after the final has been played.
+     */
+    const round = set.round ?? 0;
+    const bestRound = final?.set.round ?? 0;
+    if (final === null || round > bestRound) {
+      final = { set, winner, key };
+      finalRoundSets = 1;
+    } else if (round === bestRound) {
+      finalRoundSets += 1;
+      if (compareOrderKeys(key, final.key) > 0) final = { set, winner, key };
+    }
+  });
 
-  placements.set(undefeated[0]!, 1);
-  const eliminated = [...lastLoss.entries()].sort((a, b) => compareOrderKeys(b[1], a[1]));
+  if (final === null) return null;
+  const decided = final as { set: RecapSet; winner: string; key: OrderKey };
+
+  const placements = new Map<string, number>([[decided.winner, 1]]);
+  const eliminated = [...lastLoss.entries()]
+    .filter(([participantId]) => participantId !== decided.winner)
+    .sort((a, b) => compareOrderKeys(b[1], a[1]));
   eliminated.forEach(([participantId], index) => placements.set(participantId, index + 2));
-  return placements;
+
+  return { placements, decider: decided.set, bracketReset: finalRoundSets > 1 };
 }
 
 export const RECAP_ENGINE_VERSION = '1';
+
+/**
+ * How many facts of each kind a recap may carry.
+ *
+ * Without this a busy night buries everything interesting: a bracket where most
+ * sets go to a deciding game produces a dozen near-identical "went the
+ * distance" cards, and the one genuine upset ends up below the fold. The point
+ * of a recap is selection, so each kind keeps only its most notable few and the
+ * rest are dropped.
+ *
+ * Kinds that are already bounded by construction — one podium and one grand
+ * final per bracket, one turnout comparison per night — are left unlimited.
+ */
+const FACT_LIMITS: Record<RecapFactKind, number> = {
+  podium: Number.POSITIVE_INFINITY,
+  grand_finals: Number.POSITIVE_INFINITY,
+  clean_sweep: Number.POSITIVE_INFINITY,
+  turnout: 1,
+  biggest_climb: 1,
+  debut: 1,
+  seed_upset: 3,
+  rating_upset: 3,
+  milestone: 3,
+  mover: 3,
+  nailbiter: 2,
+  losers_run: 2,
+  overperformer: 2,
+  rivalry: 2,
+};
+
+/** Keep the most notable few of each kind; assumes `facts` is already sorted. */
+function limitByKind(facts: readonly RankedRecapFact[]): RankedRecapFact[] {
+  const kept: RankedRecapFact[] = [];
+  const seen = new Map<RecapFactKind, number>();
+  for (const entry of facts) {
+    const count = seen.get(entry.fact.kind) ?? 0;
+    if (count >= FACT_LIMITS[entry.fact.kind]) continue;
+    seen.set(entry.fact.kind, count + 1);
+    kept.push(entry);
+  }
+  return kept;
+}
 
 // ---------------------------------------------------------------------------
 // The recap
@@ -340,7 +435,6 @@ export function buildRecap(input: RecapInput): RecapResult {
   const ratingEvents = input.ratingEvents ?? [];
 
   const byId = new Map(participants.map((p) => [p.id, p]));
-  const tournamentById = new Map(tournaments.map((t) => [t.id, t]));
   /**
    * Main bracket first, then rookie: a night's headline result is the main
    * bracket's, and `eventDate` alone does not order them reliably.
@@ -366,26 +460,31 @@ export function buildRecap(input: RecapInput): RecapResult {
   }
 
   /*
-   * Placements, reported where Challonge gave them and derived from the
-   * bracket where it did not — which is most of the time, since the default
-   * sync source carries none. `derivedFor` records which brackets were worked
-   * out rather than reported, so facts that need a precise placement can
-   * decline to use one.
+   * Each finished bracket read once, so every fact that depends on "who won
+   * this bracket" agrees with every other. Placements are Challonge's where it
+   * reported them and the bracket's own where it did not — which is most of the
+   * time, since the default sync source carries none. `derivedFor` records
+   * which brackets were worked out rather than reported, so facts that need a
+   * precise placement can decline to use one.
    */
+  const outcomes = new Map<string, BracketOutcome>();
   const placement = new Map<string, number>();
   const derivedFor = new Set<string>();
   for (const tournament of orderedTournaments) {
+    if (tournament.challongeState === 'complete') {
+      const outcome = deriveBracketOutcome(sets.filter((s) => s.tournamentId === tournament.id));
+      if (outcome) outcomes.set(tournament.id, outcome);
+    }
     const entries = participants.filter((p) => p.tournamentId === tournament.id);
     const reported = entries.filter((p) => p.finalRank != null);
     if (reported.length > 0) {
       for (const p of reported) placement.set(p.id, p.finalRank!);
       continue;
     }
-    if (tournament.challongeState !== 'complete') continue;
-    const derived = derivePlacements(sets.filter((s) => s.tournamentId === tournament.id));
-    if (derived.size === 0) continue;
+    const outcome = outcomes.get(tournament.id);
+    if (!outcome) continue;
     derivedFor.add(tournament.id);
-    for (const [participantId, place] of derived) placement.set(participantId, place);
+    for (const [participantId, place] of outcome.placements) placement.set(participantId, place);
   }
 
   const maxRound = played.reduce((max, p) => Math.max(max, Math.abs(p.set.round ?? 0)), 0);
@@ -395,7 +494,7 @@ export function buildRecap(input: RecapInput): RecapResult {
   };
 
   collectPodiums(orderedTournaments, participants, placement, derivedFor, push);
-  collectGrandFinals(played, tournamentById, push);
+  collectGrandFinals(played, outcomes, push);
   collectSeedUpsets(played, maxRound, push);
   collectRatingUpsets(played, ratingEvents, maxRound, push);
   collectNailbiters(played, maxRound, push);
@@ -417,7 +516,7 @@ export function buildRecap(input: RecapInput): RecapResult {
     setsPlayed: played.length,
     isComplete:
       orderedTournaments.length > 0 && orderedTournaments.every((t) => t.challongeState === 'complete'),
-    facts,
+    facts: limitByKind(facts),
   };
 }
 
@@ -448,39 +547,33 @@ function collectPodiums(
 }
 
 /**
- * The last set of each bracket. In double elimination the losers-side finalist
- * must win twice, so two sets share the highest round — that is a bracket
- * reset, and it is the most notable shape a final can have.
+ * The set that decided each finished bracket. In double elimination the
+ * losers-side finalist must win twice, so two sets share the highest round —
+ * that is a bracket reset, and it is the most notable shape a final can have.
+ *
+ * Which set that was comes from {@link deriveBracketOutcome}, the same read the
+ * podium is built from, so the two can never name different champions.
  */
 function collectGrandFinals(
   played: readonly PlayedSet[],
-  tournamentById: ReadonlyMap<string, RecapTournament>,
+  outcomes: ReadonlyMap<string, BracketOutcome>,
   push: Push,
 ): void {
-  const byTournament = new Map<string, PlayedSet[]>();
-  for (const p of played) {
-    const list = byTournament.get(p.set.tournamentId);
-    if (list) list.push(p);
-    else byTournament.set(p.set.tournamentId, [p]);
-  }
-
-  for (const [tournamentId, tournamentSets] of byTournament) {
-    if (tournamentById.get(tournamentId)?.challongeState !== 'complete') continue;
-    const finalRound = tournamentSets.reduce((max, p) => Math.max(max, p.set.round ?? 0), 0);
-    if (finalRound <= 0) continue;
-    const finals = tournamentSets
-      .filter((p) => p.set.round === finalRound)
-      .sort((a, b) => (a.set.completedAt ?? '').localeCompare(b.set.completedAt ?? ''));
-    const decider = finals[finals.length - 1];
+  const playedById = new Map(played.map((p) => [p.set.id, p]));
+  for (const [tournamentId, outcome] of outcomes) {
+    // A bracket whose rounds are all zero or negative has no final worth
+    // naming — that is not a shape the club's brackets take, but the guard
+    // keeps a malformed one from producing a nonsense card.
+    if ((outcome.decider.round ?? 0) <= 0) continue;
+    const decider = playedById.get(outcome.decider.id);
     if (!decider) continue;
-    const bracketReset = finals.length > 1;
-    push(`grand_finals:${tournamentId}`, bracketReset ? 0.95 : 0.7, {
+    push(`grand_finals:${tournamentId}`, outcome.bracketReset ? 0.95 : 0.7, {
       kind: 'grand_finals',
       tournamentId,
       winner: refOf(decider.winner),
       loser: refOf(decider.loser),
       score: scoreText(decider),
-      bracketReset,
+      bracketReset: outcome.bracketReset,
     });
   }
 }

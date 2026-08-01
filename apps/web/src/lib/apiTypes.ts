@@ -35,6 +35,14 @@ export type RatingHistoryData = Awaited<ReturnType<typeof trpc.public.ratingHist
 export type TournamentListItem = Awaited<ReturnType<typeof trpc.public.tournaments.query>>[number];
 export type TournamentData = NonNullable<Awaited<ReturnType<typeof trpc.public.tournament.query>>>;
 export type TournamentSet = TournamentData['sets'][number];
+export type TournamentParticipant = TournamentData['participants'][number];
+
+export type RecapData = NonNullable<Awaited<ReturnType<typeof trpc.public.recap.query>>>;
+/** One ranked fact, with the copy the server rendered for it. */
+export type RecapFactEntry = RecapData['facts'][number];
+/** The structured fact itself — a discriminated union keyed on `kind`. */
+export type RecapFact = RecapFactEntry['fact'];
+export type RecapPlayer = Extract<RecapFact, { kind: 'clean_sweep' }>['player'];
 
 export type SearchPlayerRow = Awaited<ReturnType<typeof trpc.public.searchPlayers.query>>[number];
 
