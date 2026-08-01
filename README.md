@@ -25,6 +25,12 @@ workflow).
   band are shown next to it. Movement arrows compare against a replay with
   the most recent club night withheld, so they report what the games did and
   not what the last recompute happened to change.
+- **The board shows the current field.** Players with no event in the last
+  year are hidden by default (a setting on the rankings screen). A rank is a
+  position *within* a field, so both the rank and the rank it is compared
+  against are re-derived over the players on screen: ranks run 1..n with no
+  holes, and ▲2 always means "passed two people who are still playing"
+  rather than "two people above you aged out".
 - **Identity is human-decided.** Challonge display names are cleaned
   (company tags, `@` conventions, parentheticals) and matched against player
   names *and* their stored aliases; safe structured short-forms auto-link;

@@ -78,6 +78,44 @@ test.describe('public browsing', () => {
     expect([...ascending].sort((a, b) => a - b)).toEqual(ascending);
   });
 
+  test('hides inactive players by default, and ranks the field it shows', async ({ page }) => {
+    await page.goto('/');
+    await settle(page);
+
+    const rows = page.locator('.board-list .board-row');
+    const toggle = page.getByRole('checkbox', { name: 'Hide inactive' });
+
+    /** Ranks down the board, which must always run 1, 2, 3… with no holes. */
+    const ranks = () =>
+      rows.locator('.rank').evaluateAll((nodes) => nodes.map((node) => Number(node.textContent)));
+    const contiguous = (count: number) => Array.from({ length: count }, (_, i) => i + 1);
+
+    // On by default, and the board says how many it is holding back.
+    await expect(toggle).toBeChecked();
+    const shown = await rows.count();
+    expect(shown).toBeGreaterThan(10);
+    await expect(page.locator('.board-count')).toContainText('inactive hidden');
+    expect(await ranks()).toEqual(contiguous(shown));
+
+    // Turning it off widens the field, and the board renumbers to match rather
+    // than leaving gaps where the hidden players were.
+    await toggle.uncheck();
+    await settle(page);
+    const all = await rows.count();
+    expect(all).toBeGreaterThan(shown);
+    expect(await ranks()).toEqual(contiguous(all));
+
+    // The setting survives leaving the screen and coming back.
+    await toggle.check();
+    await settle(page);
+    await page.locator('.board-row .board-link').first().click();
+    await expect(page).toHaveURL(/\/players\//);
+    await page.goBack();
+    await settle(page);
+    await expect(toggle).toBeChecked();
+    expect(await rows.count()).toBe(shown);
+  });
+
   test('filters by name and clears back to the full field', async ({ page }) => {
     await page.goto('/');
     await settle(page);

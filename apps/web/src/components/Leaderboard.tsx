@@ -29,8 +29,14 @@ export interface PlayerTrend {
 }
 
 interface Props {
+  /** Already filtered and re-ranked by the page; see lib/activity. */
   rows: LeaderboardRow[];
   trends: Map<string, PlayerTrend>;
+  /** Whether players with no event in the last year are excluded. */
+  hideInactive: boolean;
+  onHideInactiveChange: (next: boolean) => void;
+  /** How many players the inactivity filter drops (or would drop). */
+  inactiveCount: number;
 }
 
 type SortField = 'rank' | 'rating' | 'wins' | 'eventCount' | 'certainty';
@@ -135,7 +141,7 @@ function sortKeyNote(row: LeaderboardRow, field: SortField): string | null {
   }
 }
 
-export function Leaderboard({ rows, trends }: Props) {
+export function Leaderboard({ rows, trends, hideInactive, onHideInactiveChange, inactiveCount }: Props) {
   const [sortField, setSortField] = useState<SortField>('rank');
   const [descending, setDescending] = useState(false);
   const [companyFilter, setCompanyFilter] = useState('all');
@@ -210,6 +216,23 @@ export function Leaderboard({ rows, trends }: Props) {
             ))}
           </select>
         </label>
+        {/* Not a filter over the field so much as a definition of it: with it
+            on, ranks and movement below are counted among these players only.
+            On by default, because that is the field a member is asking about. */}
+        <label className="control control-check">
+          <span className="control-label">Activity</span>
+          <span
+            className="checkbox-control"
+            title="Hides anyone with no event in the last year. Ranks and movement are counted among the players still shown, so an arrow never comes from someone ageing out."
+          >
+            <input
+              type="checkbox"
+              checked={hideInactive}
+              onChange={(event) => onHideInactiveChange(event.target.checked)}
+            />
+            <span>Hide inactive</span>
+          </span>
+        </label>
 
         {/* Hidden above the fold-point, where the header row already is the sort
             control and naming the measures twice would be the redundancy that
@@ -244,6 +267,13 @@ export function Leaderboard({ rows, trends }: Props) {
 
         <p className="board-count muted num">
           {visible.length}/{rows.length} players
+          {inactiveCount > 0 && (
+            <span className="board-count-note">
+              {hideInactive
+                ? ` · ${inactiveCount} inactive hidden`
+                : ` · ${inactiveCount} inactive shown`}
+            </span>
+          )}
         </p>
       </div>
 
@@ -390,6 +420,17 @@ export function Leaderboard({ rows, trends }: Props) {
       {visible.length === 0 && (
         <p className="board-empty">
           No players match those filters. <button type="button" className="link-button" onClick={() => { setQuery(''); setCompanyFilter('all'); }}>Clear them</button>
+          {/* Offered separately from "clear": the inactivity setting is on by
+              default, so folding it into the same button would quietly undo a
+              default the member never chose to change. */}
+          {hideInactive && inactiveCount > 0 && (
+            <>
+              {' '}or{' '}
+              <button type="button" className="link-button" onClick={() => onHideInactiveChange(false)}>
+                include the {inactiveCount} inactive
+              </button>
+            </>
+          )}
         </p>
       )}
     </section>

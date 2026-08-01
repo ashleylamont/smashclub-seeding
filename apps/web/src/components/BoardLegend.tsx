@@ -65,7 +65,9 @@ export function BoardLegend({ leagues }: Props) {
             </dt>
             <dd>
               Places gained or lost over the last club night — compared against a replay with that night withheld,
-              so it reports what the games did rather than what the last recompute happened to change.
+              so it reports what the games did rather than what the last recompute happened to change. Counted
+              among the players currently shown, so ▲2 means you passed two of them rather than that two dropped
+              off the board.
             </dd>
           </div>
 
