@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { defaultPublicAlias } from '@smashclub/shared';
 import { trpc } from '../lib/trpc';
 import type { AdminCompany } from '../lib/apiTypes';
 import { CharacterPicker } from './CharacterPicker';
@@ -124,10 +125,11 @@ export function PlayerFormModal({
               className="input"
               value={displayName}
               onChange={(event) => setDisplayName(event.target.value)}
-              placeholder={canonicalName.trim() || 'optional username'}
+              placeholder={canonicalName.trim() ? defaultPublicAlias(canonicalName) : 'optional username'}
             />
             <span className="form-hint">
-              The tag shown on the leaderboard. Leave blank to show the registry name.
+              The tag shown on the leaderboard. Leave blank to go by{' '}
+              {canonicalName.trim() ? `“${defaultPublicAlias(canonicalName)}”` : 'the shortened registry name'}.
             </span>
           </label>
 
