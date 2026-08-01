@@ -17,10 +17,16 @@ import {
 import type { Db } from '@smashclub/db';
 import { normalizeTournamentId } from '@smashclub/engine';
 import { glickoSettingsSchema } from '@smashclub/shared';
+import { recomputePendingCandidates } from '../../identity/candidates';
 import { ensureAlias } from '../../identity/matching';
 import { charactersByPlayer, characterSlugsSchema, setPlayerCharacters } from '../../players/characters';
 import { mergePlayers } from '../../players/merge';
 import { compareModels } from '../../recompute/compareModels';
+import {
+  RegistryValidationError,
+  applyRegistryYaml,
+  previewRegistryYaml,
+} from '../../registry/import';
 import { resolveReviewItem, type ReviewResolutionInput } from '../../review/resolve';
 import {
   createSeedingRun,
@@ -99,6 +105,13 @@ async function withResolvedCompany(
     },
   };
 }
+
+/**
+ * Ceiling on a pasted registry. The club's real players.yaml is ~40 KB; 4 MB
+ * is room for an order of magnitude of growth and still small enough that a
+ * mis-paste cannot tie up the server.
+ */
+const REGISTRY_YAML_MAX_BYTES = 4_000_000;
 
 /** Details accepted when creating a player, from the registry or the queue. */
 const playerDetailsSchema = z.object({
@@ -229,6 +242,14 @@ export const adminRouter = router({
   }),
 
   // --- review queue ---
+  /**
+   * The queue reads the stored candidate snapshot rather than re-scoring on
+   * every load: scoring is O(items x players) and this endpoint is polled by
+   * an open admin tab. Freshness comes from the write side instead — every
+   * mutation that can change the answer calls `recomputePendingCandidates` —
+   * plus `candidatesComputedAt`, so a stale-looking item is visibly stale
+   * rather than silently wrong, and the explicit Recompute button below.
+   */
   reviewQueue: adminProcedure.query(async ({ ctx }) => {
     const rows = await ctx.db
       .select({
@@ -237,6 +258,7 @@ export const adminRouter = router({
         cleanedName: reviewItems.cleanedName,
         candidates: reviewItems.candidates,
         createdAt: reviewItems.createdAt,
+        candidatesComputedAt: reviewItems.candidatesComputedAt,
         companyCode: companies.code,
         tournamentName: tournaments.name,
         tournamentId: tournaments.id,
@@ -247,8 +269,24 @@ export const adminRouter = router({
       .leftJoin(companies, eq(reviewItems.companyId, companies.id))
       .where(eq(reviewItems.status, 'pending'))
       .orderBy(asc(reviewItems.createdAt));
-    return rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }));
+    return rows.map((row) => ({
+      ...row,
+      createdAt: row.createdAt.toISOString(),
+      candidatesComputedAt: row.candidatesComputedAt.toISOString(),
+    }));
   }),
+
+  /**
+   * Re-score pending items on demand. Reads players out of Postgres — no
+   * Challonge call — and never touches a resolved or kept-separate item.
+   */
+  recomputeReviewCandidates: adminProcedure
+    .input(z.object({ reviewItemId: z.uuid().optional() }).optional())
+    .mutation(async ({ ctx, input }) => {
+      return recomputePendingCandidates(ctx.db, {
+        ...(input?.reviewItemId ? { reviewItemIds: [input.reviewItemId] } : {}),
+      });
+    }),
 
   resolveReview: adminProcedure
     .input(
@@ -264,6 +302,9 @@ export const adminRouter = router({
     .mutation(async ({ ctx, input }) => {
       const resolution = await withResolvedCompany(ctx.db, input.resolution);
       const result = await resolveReviewItem(ctx.db, input.reviewItemId, resolution, ctx.user.id);
+      // Resolving mints or re-aliases a player, which is exactly the kind of
+      // change the *other* open items were scored before.
+      await recomputePendingCandidates(ctx.db);
       ctx.recomputeTrigger.request();
       return result;
     }),
@@ -320,6 +361,10 @@ export const adminRouter = router({
       await ensureAlias(ctx.db, playerId, alias.toLowerCase(), companyId, 'manual');
     }
     await setPlayerCharacters(ctx.db, playerId, input.characters);
+    // The new player is a candidate for every open review item — including the
+    // ones queued long before they existed, which used to keep insisting there
+    // were "no candidates" for a name this player answers to exactly.
+    await recomputePendingCandidates(ctx.db);
     return { playerId };
   }),
 
@@ -347,6 +392,11 @@ export const adminRouter = router({
       if (input.characters !== undefined) {
         await setPlayerCharacters(ctx.db, input.playerId, input.characters);
       }
+      // A rename or a re-tag changes how this player scores against every open
+      // item, so the snapshots that mention them are now wrong either way.
+      if (input.canonicalName !== undefined || input.companyCode !== undefined) {
+        await recomputePendingCandidates(ctx.db);
+      }
       return { ok: true };
     }),
 
@@ -355,6 +405,7 @@ export const adminRouter = router({
     .mutation(async ({ ctx, input }) => {
       const companyId = await resolveCompanyId(ctx.db, input.companyCode);
       await ensureAlias(ctx.db, input.playerId, input.alias.toLowerCase(), companyId, 'manual');
+      await recomputePendingCandidates(ctx.db);
       return { ok: true };
     }),
 
@@ -362,8 +413,45 @@ export const adminRouter = router({
     .input(z.object({ fromPlayerId: z.uuid(), intoPlayerId: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
       await mergePlayers(ctx.db, input.fromPlayerId, input.intoPlayerId);
+      // The tombstoned player must stop being offered, and its aliases now
+      // belong to the survivor.
+      await recomputePendingCandidates(ctx.db);
       ctx.recomputeTrigger.request();
       return { ok: true };
+    }),
+
+  // --- registry import wizard ---
+  /**
+   * Diff a pasted players.yaml against the database. A mutation rather than a
+   * query only because the document is a whole file — tRPC puts query input in
+   * the URL, and a real registry does not fit there. It writes nothing.
+   */
+  previewRegistryImport: adminProcedure
+    .input(z.object({ yaml: z.string().max(REGISTRY_YAML_MAX_BYTES) }))
+    .mutation(async ({ ctx, input }) => previewRegistryYaml(ctx.db, input.yaml)),
+
+  /**
+   * Apply a pasted players.yaml, transactionally. The document is re-parsed
+   * and re-diffed server-side, so what lands is a decision about the database
+   * as it is now, not as it was when the preview was rendered.
+   */
+  applyRegistryImport: adminProcedure
+    .input(z.object({ yaml: z.string().max(REGISTRY_YAML_MAX_BYTES) }))
+    .mutation(async ({ ctx, input }) => {
+      let result;
+      try {
+        result = await applyRegistryYaml(ctx.db, input.yaml);
+      } catch (error) {
+        if (error instanceof RegistryValidationError) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: error.message, cause: error });
+        }
+        throw error;
+      }
+      // Importing the registry is the moment stale review candidates matter
+      // most: every player it just created is a candidate the open items were
+      // scored without.
+      const candidates = await recomputePendingCandidates(ctx.db);
+      return { ...result, candidates };
     }),
 
   // --- companies ---

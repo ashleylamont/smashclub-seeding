@@ -33,6 +33,18 @@ export function AdminReviewPage() {
     void queryClient.invalidateQueries({ queryKey: ['admin', 'players'] });
   };
 
+  /**
+   * Candidates are a snapshot taken when sync queued the item, so anything
+   * that happened to the registry since — a player created, renamed, merged —
+   * is invisible until they are re-scored. Every mutation that can change the
+   * answer does that automatically; this is the manual escape hatch for
+   * anything that changed the database some other way.
+   */
+  const recompute = useMutation({
+    mutationFn: () => trpc.admin.recomputeReviewCandidates.mutate({}),
+    onSuccess: invalidate,
+  });
+
   if (queue.isPending) return <p className="loading-text">Loading review queue…</p>;
   if (queue.isError) return <p className="error-text">{queue.error.message}</p>;
 
@@ -40,7 +52,21 @@ export function AdminReviewPage() {
     <div>
       <div className="page-header">
         <h2>Identity review queue</h2>
-        <span className="muted">{queue.data.length} pending</span>
+        <span className="admin-form-row">
+          <span className="muted">{queue.data.length} pending</span>
+          {queue.data.length > 0 && (
+            <button
+              type="button"
+              className="btn btn-small"
+              disabled={recompute.isPending}
+              onClick={() => recompute.mutate()}
+              title="Re-score every pending item against the registry as it is now"
+            >
+              {recompute.isPending ? 'Recomputing…' : 'Recompute candidates'}
+            </button>
+          )}
+          {recompute.isError && <span className="error-text">{recompute.error.message}</span>}
+        </span>
       </div>
       {queue.data.length === 0 ? (
         <p className="muted">All clear — no unresolved participant names. 🎉</p>
@@ -73,6 +99,11 @@ function ReviewCard({ item, onResolved }: { item: ReviewItem; onResolved: () => 
     },
   });
 
+  const recomputeItem = useMutation({
+    mutationFn: () => trpc.admin.recomputeReviewCandidates.mutate({ reviewItemId: item.id }),
+    onSuccess: onResolved,
+  });
+
   const submitDetails = (values: PlayerFormValues) => {
     if (!detailKind) return;
     resolve.mutate({
@@ -95,12 +126,24 @@ function ReviewCard({ item, onResolved }: { item: ReviewItem; onResolved: () => 
           {item.rawName !== item.cleanedName && <span className="muted"> raw: “{item.rawName}”</span>}
         </div>
         <span className="muted">
-          {item.tournamentName} · {timeAgo(item.createdAt)}
+          {item.tournamentName} · queued {timeAgo(item.createdAt)}
+          {candidates.length > 0 && <> · candidates scored {timeAgo(item.candidatesComputedAt)}</>}
         </span>
       </div>
 
       {candidates.length === 0 ? (
-        <p className="muted">No candidates — probably a brand new player.</p>
+        <p className="muted">
+          No candidates as of {timeAgo(item.candidatesComputedAt)} — probably a brand new player.{' '}
+          <button
+            type="button"
+            className="btn btn-small"
+            disabled={recomputeItem.isPending}
+            onClick={() => recomputeItem.mutate()}
+            title="Re-score this item against the registry as it is now"
+          >
+            {recomputeItem.isPending ? 'Recomputing…' : 'Recompute'}
+          </button>
+        </p>
       ) : (
         <ul className="candidate-list">
           {candidates.map((candidate) => (

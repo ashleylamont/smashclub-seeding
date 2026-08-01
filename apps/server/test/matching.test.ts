@@ -102,7 +102,11 @@ describe('importRegistryPlayers idempotency', () => {
       { id: 'josh-cortese', canonical_name: 'Josh Cortese', company: 'ATL' },
       { id: 'new-player', canonical_name: 'Peppy Hare', company: 'GOOG', aliases: ['Peppy'] },
     ]);
-    expect(again.updated).toBe(1);
+    // Josh is byte-identical to the first import, so he is *unchanged* rather
+    // than rewritten — re-importing the registry is a no-op for everyone the
+    // file did not actually change.
+    expect(again.unchanged).toBe(1);
+    expect(again.updated).toBe(0);
     expect(again.created).toBe(1);
     const allPlayers = await db.select().from(players);
     expect(allPlayers).toHaveLength(3);

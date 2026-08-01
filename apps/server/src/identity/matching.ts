@@ -5,7 +5,6 @@ import {
   companyAliases,
   identityDecisions,
   playerAliases,
-  players,
   reviewItems,
   sets,
   tournamentParticipants,
@@ -13,10 +12,10 @@ import {
 import {
   cleanPlayerEntry,
   preparePlayerEntry,
-  rankReviewCandidates,
   resolveStructuredAlias,
   type CompanyTaxonomy,
 } from '@smashclub/engine';
+import { loadCandidatePool, rejectedPlayerIdsFor, scoreCandidates } from './candidates';
 
 /**
  * The participant-identity pipeline, replacing the legacy CLI's blocking
@@ -62,25 +61,6 @@ export async function loadCompanyTaxonomy(db: Db): Promise<{
     }
   }
   return { taxonomy, companyIdByCode };
-}
-
-interface CandidatePlayer {
-  name: string;
-  companyCode: string | null;
-  playerId: string;
-}
-
-async function loadCandidatePool(db: Db): Promise<CandidatePlayer[]> {
-  const rows = await db
-    .select({
-      id: players.id,
-      canonicalName: players.canonicalName,
-      companyCode: companies.code,
-    })
-    .from(players)
-    .leftJoin(companies, eq(players.companyId, companies.id))
-    .where(eq(players.status, 'active'));
-  return rows.map((row) => ({ name: row.canonicalName, companyCode: row.companyCode ?? null, playerId: row.id }));
 }
 
 /**
@@ -170,15 +150,13 @@ export async function matchTournamentParticipants(db: Db, tournamentId: string):
       continue;
     }
 
-    // 5. Review queue. Rejected pairs (keep_separate) are filtered out of the
-    // candidate list so a settled question is never re-asked.
-    const rejected = await db
-      .select()
-      .from(identityDecisions)
-      .where(and(eq(identityDecisions.aliasNorm, aliasNorm), eq(identityDecisions.kind, 'keep_separate')));
-    const rejectedPlayerIds = new Set(rejected.map((row) => row.keptSeparateFromPlayerId).filter(Boolean));
-    const candidates = rankReviewCandidates(cleaned.name, companyCode, pool).filter(
-      (entry) => !rejectedPlayerIds.has(entry.candidate.playerId),
+    // 5. Review queue. The ranked list is a snapshot of the pool as it is right
+    // now — see identity/candidates.ts for how it is kept current afterwards.
+    const candidates = scoreCandidates(
+      cleaned.name,
+      companyCode,
+      pool,
+      await rejectedPlayerIdsFor(db, aliasNorm),
     );
 
     const existingPending = await db
@@ -191,13 +169,8 @@ export async function matchTournamentParticipants(db: Db, tournamentId: string):
         rawName: participant.rawName,
         cleanedName: cleaned.name,
         companyId,
-        candidates: candidates.map((entry) => ({
-          playerId: entry.candidate.playerId,
-          name: entry.candidate.name,
-          companyCode: entry.candidate.companyCode,
-          score: entry.score,
-          reason: entry.reason,
-        })),
+        candidates,
+        candidatesComputedAt: new Date(),
       });
     }
     outcomes.push({
