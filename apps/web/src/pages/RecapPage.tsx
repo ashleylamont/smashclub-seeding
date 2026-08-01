@@ -91,16 +91,29 @@ function Recap({ data }: { data: RecapData }) {
             Nothing to report yet — highlights appear as sets are played and the ratings catch up.
           </p>
         ) : (
-          <ul className="fact-grid">
-            {storyFacts.map((entry) => (
-              <FactCard
-                key={entry.id}
-                entry={entry}
-                bracket={entry.fact.tournamentId ? tournamentName.get(entry.fact.tournamentId) : null}
-                multiBracket={data.tournaments.length > 1}
-              />
-            ))}
-          </ul>
+          <>
+            {/* The most notable fact is the night's lead story, not a card
+                among cards — highlights need a front page. */}
+            <LeadStory
+              entry={storyFacts[0]!}
+              bracket={
+                storyFacts[0]!.fact.tournamentId
+                  ? tournamentName.get(storyFacts[0]!.fact.tournamentId)
+                  : null
+              }
+              multiBracket={data.tournaments.length > 1}
+            />
+            <ul className="fact-grid">
+              {storyFacts.slice(1).map((entry) => (
+                <FactCard
+                  key={entry.id}
+                  entry={entry}
+                  bracket={entry.fact.tournamentId ? tournamentName.get(entry.fact.tournamentId) : null}
+                  multiBracket={data.tournaments.length > 1}
+                />
+              ))}
+            </ul>
+          </>
         )}
       </section>
 
@@ -146,9 +159,103 @@ function Podium({ podium, name }: { podium: Extract<RecapFact, { kind: 'podium' 
 }
 
 /**
+ * The one number that makes a fact land, pulled from its structured payload.
+ * "12% win chance" or "0–4 coming in" says more at a glance than a paragraph;
+ * this is what separates a highlight from a summary row.
+ */
+function statOf(fact: RecapFact): { value: string; label: string } | null {
+  switch (fact.kind) {
+    case 'seed_upset':
+      return { value: `#${fact.winnerSeed}`, label: `beat seed #${fact.loserSeed}` };
+    case 'rating_upset':
+      return { value: `${Math.max(1, Math.round(fact.probability * 100))}%`, label: 'win chance' };
+    case 'losers_run':
+      return { value: String(fact.wins), label: 'elimination wins in a row' };
+    case 'overperformer':
+      return { value: `+${fact.placesGained}`, label: 'places over seed' };
+    case 'nailbiter':
+      return { value: fact.score, label: 'went the distance' };
+    case 'clean_sweep':
+      return { value: '0', label: 'games dropped' };
+    case 'biggest_climb':
+      return { value: `+${Math.round(fact.gained)}`, label: 'rating overnight' };
+    case 'mover':
+      return { value: `▲${fact.placesGained}`, label: `now #${fact.rank}` };
+    case 'rivalry':
+      return { value: `${fact.aWins}–${fact.bWins}`, label: 'the series so far' };
+    case 'breakthrough':
+      return { value: `0–${fact.priorLosses}`, label: 'the record coming in' };
+    case 'debut':
+      return fact.players.length > 1 ? { value: String(fact.players.length), label: 'first-timers' } : null;
+    case 'milestone':
+      if (fact.milestone === 'peak_rating') return { value: String(Math.round(fact.value)), label: 'career high' };
+      return { value: String(fact.value), label: fact.milestone === 'sets' ? 'career sets' : 'club nights' };
+    case 'turnout':
+      return { value: String(fact.entrants), label: fact.isRecord ? 'entrants — a record' : 'entrants' };
+    case 'grand_finals':
+      return fact.score
+        ? { value: fact.score, label: fact.bracketReset ? 'after a bracket reset' : 'in the decider' }
+        : null;
+    case 'podium':
+      return null;
+  }
+}
+
+/** Faces for a fact, at a size that reads: the lead gets big heads. */
+function FactFaces({ players, size }: { players: RecapPlayer[]; size: 'sm' | 'lg' }) {
+  if (players.length === 0) return null;
+  return (
+    <div className="fact-players">
+      {players.map((player, index) => (
+        <span className="fact-player" key={`${player.playerId ?? player.name}-${index}`}>
+          {player.characters.length > 0 && <CharacterIcons slugs={[...player.characters]} size={size} />}
+          <PlayerName player={player} />
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The night's most notable fact, front-page treatment: headline at display
+ * scale with the story's one number set beside it.
+ */
+function LeadStory({
+  entry,
+  bracket,
+  multiBracket,
+}: {
+  entry: RecapFactEntry;
+  bracket: string | null | undefined;
+  multiBracket: boolean;
+}) {
+  const { fact, headline, detail } = entry;
+  const stat = statOf(fact);
+  return (
+    <article className={`lead-story fact-${fact.kind}`}>
+      <div className="lead-story-main">
+        <p className="fact-kind">
+          {KIND_LABELS[fact.kind]}
+          {multiBracket && bracket && <span className="fact-kind-bracket"> · {bracket}</span>}
+        </p>
+        <p className="lead-story-headline">{headline}</p>
+        {detail && <p className="lead-story-detail">{detail}</p>}
+        <FactFaces players={playersOf(fact)} size="lg" />
+      </div>
+      {stat && (
+        <div className="lead-story-stat">
+          <span className="lead-story-stat-value num">{stat.value}</span>
+          <span className="lead-story-stat-label">{stat.label}</span>
+        </div>
+      )}
+    </article>
+  );
+}
+
+/**
  * One fact. The copy is written server-side by the engine's formatter, so the
  * page, the share image and anything else built on recaps describe a night the
- * same way; the card adds the faces and the link.
+ * same way; the card adds the number, the faces and the links.
  */
 function FactCard({
   entry,
@@ -160,23 +267,22 @@ function FactCard({
   multiBracket: boolean;
 }) {
   const { fact, headline, detail } = entry;
-  const players = playersOf(fact);
+  const stat = statOf(fact);
 
   return (
     <li className={`fact-card fact-${fact.kind}`}>
-      <p className="fact-kind">{KIND_LABELS[fact.kind]}</p>
+      <div className="fact-top">
+        <p className="fact-kind">{KIND_LABELS[fact.kind]}</p>
+        {stat && (
+          <p className="fact-stat" title={stat.label}>
+            <span className="fact-stat-value num">{stat.value}</span>
+            <span className="fact-stat-label">{stat.label}</span>
+          </p>
+        )}
+      </div>
       <p className="fact-headline">{headline}</p>
       {detail && <p className="fact-detail">{detail}</p>}
-      {players.length > 0 && (
-        <div className="fact-players">
-          {players.map((player, index) => (
-            <span className="fact-player" key={`${player.playerId ?? player.name}-${index}`}>
-              {player.characters.length > 0 && <CharacterIcons slugs={[...player.characters]} />}
-              <PlayerName player={player} />
-            </span>
-          ))}
-        </div>
-      )}
+      <FactFaces players={playersOf(fact)} size="sm" />
       {/* Only worth saying which bracket when the night had more than one. */}
       {multiBracket && bracket && <p className="fact-bracket">{bracket}</p>}
     </li>
@@ -210,6 +316,8 @@ function playersOf(fact: RecapFact): RecapPlayer[] {
       return [fact.winner, fact.loser];
     case 'rivalry':
       return [fact.a, fact.b];
+    case 'breakthrough':
+      return [fact.winner, fact.loser];
     case 'debut':
       return fact.players;
     case 'losers_run':
@@ -228,17 +336,18 @@ const KIND_LABELS: Record<RecapFact['kind'], string> = {
   podium: 'Podium',
   seed_upset: 'Upset',
   rating_upset: 'Upset',
-  losers_run: 'Losers run',
+  losers_run: 'The comeback',
   overperformer: 'Overperformer',
   nailbiter: 'Nailbiter',
   clean_sweep: 'Clean sweep',
-  biggest_climb: 'Biggest climb',
+  biggest_climb: 'Player of the night',
   mover: 'On the board',
   rivalry: 'Rivalry',
-  debut: 'Debut',
+  breakthrough: 'Breakthrough',
+  debut: 'New blood',
   milestone: 'Milestone',
   turnout: 'Turnout',
-  grand_finals: 'Grand finals',
+  grand_finals: 'The final',
 };
 
 /** Copy a link, or save the night as an image. */

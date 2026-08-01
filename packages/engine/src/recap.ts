@@ -135,23 +135,27 @@ export interface RecapPlayerRef {
 export type RecapFact =
   /**
    * `derived` marks a podium worked out from elimination order rather than
-   * reported by Challonge — see {@link derivePlacements}.
+   * reported by Challonge — see {@link deriveBracketOutcome}.
    */
   | { kind: 'podium'; tournamentId: string; derived: boolean; places: Array<{ player: RecapPlayerRef; place: number; seed: number | null }> }
-  | { kind: 'seed_upset'; tournamentId: string; winner: RecapPlayerRef; loser: RecapPlayerRef; winnerSeed: number; loserSeed: number; round: number | null; score: string | null }
-  | { kind: 'rating_upset'; tournamentId: string; winner: RecapPlayerRef; loser: RecapPlayerRef; probability: number; ratingGap: number; round: number | null; score: string | null }
+  /** `stage` is the set's place in the bracket as words ("the winners final"). */
+  | { kind: 'seed_upset'; tournamentId: string; winner: RecapPlayerRef; loser: RecapPlayerRef; winnerSeed: number; loserSeed: number; stage: string | null; score: string | null }
+  | { kind: 'rating_upset'; tournamentId: string; winner: RecapPlayerRef; loser: RecapPlayerRef; probability: number; ratingGap: number; stage: string | null; score: string | null }
   | { kind: 'losers_run'; tournamentId: string; player: RecapPlayerRef; wins: number; finalRank: number | null }
   | { kind: 'overperformer'; tournamentId: string; player: RecapPlayerRef; seed: number; finalRank: number; placesGained: number }
-  | { kind: 'nailbiter'; tournamentId: string; winner: RecapPlayerRef; loser: RecapPlayerRef; score: string; round: number | null }
+  | { kind: 'nailbiter'; tournamentId: string; winner: RecapPlayerRef; loser: RecapPlayerRef; score: string; stage: string | null }
   | { kind: 'clean_sweep'; tournamentId: string; player: RecapPlayerRef; sets: number }
   | { kind: 'biggest_climb'; tournamentId: string; player: RecapPlayerRef; gained: number; from: number; to: number }
   | { kind: 'mover'; tournamentId: null; player: RecapPlayerRef; rank: number; previousRank: number; placesGained: number }
   /** `a` is always the winner of tonight's meeting, and `aWins` includes it. */
   | { kind: 'rivalry'; tournamentId: string; a: RecapPlayerRef; b: RecapPlayerRef; meetings: number; aWins: number; bWins: number }
+  /** Tonight's winner had never beaten this opponent — 0 for `priorLosses`. */
+  | { kind: 'breakthrough'; tournamentId: string; winner: RecapPlayerRef; loser: RecapPlayerRef; priorLosses: number; stage: string | null; score: string | null }
   | { kind: 'debut'; tournamentId: string; players: RecapPlayerRef[] }
   | { kind: 'milestone'; tournamentId: string; player: RecapPlayerRef; milestone: 'sets' | 'events' | 'peak_rating'; value: number }
   | { kind: 'turnout'; tournamentId: null; entrants: number; previousBest: number | null; isRecord: boolean }
-  | { kind: 'grand_finals'; tournamentId: string; winner: RecapPlayerRef; loser: RecapPlayerRef; score: string | null; bracketReset: boolean };
+  /** `runSets`/`gamesDropped` describe the champion's whole night, when known. */
+  | { kind: 'grand_finals'; tournamentId: string; winner: RecapPlayerRef; loser: RecapPlayerRef; score: string | null; bracketReset: boolean; runSets: number; gamesDropped: number | null };
 
 export type RecapFactKind = RecapFact['kind'];
 
@@ -258,6 +262,12 @@ const refOf = (p: RecapParticipant): RecapPlayerRef => ({
 const scoreText = (played: PlayedSet): string | null =>
   played.scoreKnown ? `${played.winnerGames}-${played.loserGames}` : null;
 
+/** The extent of one bracket's rounds: deepest winners and losers round. */
+interface BracketRounds {
+  maxRound: number;
+  minRound: number;
+}
+
 /**
  * How much a set's stage should amplify a fact. Grand finals drama beats
  * round-one drama, and losers-bracket sets are elimination sets, so they
@@ -267,6 +277,29 @@ function stageWeight(round: number | null, maxRound: number): number {
   if (round == null || maxRound <= 0) return 0.5;
   if (round < 0) return Math.min(1, 0.55 + (0.45 * -round) / Math.max(1, maxRound));
   return Math.min(1, 0.35 + (0.5 * round) / Math.max(1, maxRound));
+}
+
+/**
+ * A round as words, for copy: "the grand final", "the winners semis",
+ * "losers round 2".
+ *
+ * "W3" means nothing to most of the room; where a bracket stands relative to
+ * its end is what makes a result a story, and that takes knowing how deep this
+ * bracket goes — hence the per-bracket extents rather than a global number.
+ * Approximate below the last three rounds, which is where names stop existing
+ * anyway.
+ */
+export function stageName(round: number | null, rounds: BracketRounds): string | null {
+  if (round == null) return null;
+  if (round > 0) {
+    if (round === rounds.maxRound) return 'the grand final';
+    if (round === rounds.maxRound - 1) return 'the winners final';
+    if (round === rounds.maxRound - 2) return 'the winners semis';
+    return `winners round ${round}`;
+  }
+  if (round === rounds.minRound) return 'the losers final';
+  if (round === rounds.minRound + 1) return 'the losers semis';
+  return `losers round ${-round}`;
 }
 
 /** Squash an unbounded magnitude into 0..1 without a hard ceiling. */
@@ -411,6 +444,7 @@ const FACT_LIMITS: Record<RecapFactKind, number> = {
   losers_run: 2,
   overperformer: 2,
   rivalry: 2,
+  breakthrough: 2,
 };
 
 /** Keep the most notable few of each kind; assumes `facts` is already sorted. */
@@ -487,7 +521,30 @@ export function buildRecap(input: RecapInput): RecapResult {
     for (const [participantId, place] of outcome.placements) placement.set(participantId, place);
   }
 
-  const maxRound = played.reduce((max, p) => Math.max(max, Math.abs(p.set.round ?? 0)), 0);
+  /*
+   * Round extents per bracket, so stage names and stage weights are relative to
+   * the bracket a set was actually in — a rookie bracket's final is its final,
+   * however deep the main bracket ran the same night.
+   */
+  const roundsByTournament = new Map<string, BracketRounds>();
+  for (const set of sets) {
+    const round = set.round ?? 0;
+    const extent = roundsByTournament.get(set.tournamentId) ?? { maxRound: 0, minRound: 0 };
+    extent.maxRound = Math.max(extent.maxRound, round);
+    extent.minRound = Math.min(extent.minRound, round);
+    roundsByTournament.set(set.tournamentId, extent);
+  }
+  const stageOf = (playedSet: PlayedSet): string | null =>
+    stageName(
+      playedSet.set.round,
+      roundsByTournament.get(playedSet.set.tournamentId) ?? { maxRound: 0, minRound: 0 },
+    );
+  const weightOf = (playedSet: PlayedSet): number => {
+    const extent = roundsByTournament.get(playedSet.set.tournamentId);
+    const depth = extent ? Math.max(extent.maxRound, -extent.minRound) : 0;
+    return stageWeight(playedSet.set.round, depth);
+  };
+
   const facts: RankedRecapFact[] = [];
   const push = (id: string, notability: number, fact: RecapFact): void => {
     facts.push({ id, notability: Math.max(0, Math.min(1, notability)), fact });
@@ -495,15 +552,17 @@ export function buildRecap(input: RecapInput): RecapResult {
 
   collectPodiums(orderedTournaments, participants, placement, derivedFor, push);
   collectGrandFinals(played, outcomes, push);
-  collectSeedUpsets(played, maxRound, push);
-  collectRatingUpsets(played, ratingEvents, maxRound, push);
-  collectNailbiters(played, maxRound, push);
+  const deciderSetIds = new Set([...outcomes.values()].map((o) => o.decider.id));
+  collectSeedUpsets(played, stageOf, weightOf, push);
+  collectRatingUpsets(played, ratingEvents, stageOf, weightOf, push);
+  collectNailbiters(played, deciderSetIds, stageOf, weightOf, push);
   collectLosersRuns(played, placement, push);
   collectOverperformers(orderedTournaments, participants, push);
   collectCleanSweeps(played, participants, placement, push);
   collectClimbs(played, ratingEvents, participants, push);
   collectMovers(input.rankMovement ?? [], participants, push);
   collectRivalries(played, input.history, push);
+  collectBreakthroughs(played, input.history, stageOf, weightOf, push);
   collectDebutsAndMilestones(played, participants, ratingEvents, input.history, push);
   collectTurnout(participants, orderedTournaments, input.priorTurnouts ?? [], push);
 
@@ -567,6 +626,25 @@ function collectGrandFinals(
     if ((outcome.decider.round ?? 0) <= 0) continue;
     const decider = playedById.get(outcome.decider.id);
     if (!decider) continue;
+
+    /*
+     * The champion's whole night, so the card can tell the run and not just
+     * the last set. Games dropped is only claimed when every scoreline was
+     * readable — an unknown score could hide anything.
+     */
+    const run = played.filter(
+      (p) =>
+        p.set.tournamentId === tournamentId &&
+        (p.winner.id === decider.winner.id || p.loser.id === decider.winner.id),
+    );
+    const runSets = run.length;
+    const gamesDropped = run.every((p) => p.scoreKnown)
+      ? run.reduce(
+          (sum, p) => sum + (p.winner.id === decider.winner.id ? p.loserGames : p.winnerGames),
+          0,
+        )
+      : null;
+
     push(`grand_finals:${tournamentId}`, outcome.bracketReset ? 0.95 : 0.7, {
       kind: 'grand_finals',
       tournamentId,
@@ -574,6 +652,8 @@ function collectGrandFinals(
       loser: refOf(decider.loser),
       score: scoreText(decider),
       bracketReset: outcome.bracketReset,
+      runSets,
+      gamesDropped,
     });
   }
 }
@@ -585,13 +665,18 @@ function collectGrandFinals(
  * Magnitude is the *ratio* of seeds, not their difference: 16 beating 1 is a
  * far bigger story than 32 beating 17, though both are fifteen places.
  */
-function collectSeedUpsets(played: readonly PlayedSet[], maxRound: number, push: Push): void {
+function collectSeedUpsets(
+  played: readonly PlayedSet[],
+  stageOf: (p: PlayedSet) => string | null,
+  weightOf: (p: PlayedSet) => number,
+  push: Push,
+): void {
   for (const p of played) {
     const winnerSeed = p.winner.seed;
     const loserSeed = p.loser.seed;
     if (winnerSeed == null || loserSeed == null || winnerSeed <= loserSeed) continue;
     const ratio = Math.log2(winnerSeed / loserSeed);
-    const notability = 0.45 * saturate(ratio, 1.6) + 0.35 * stageWeight(p.set.round, maxRound) + 0.1;
+    const notability = 0.45 * saturate(ratio, 1.6) + 0.35 * weightOf(p) + 0.1;
     push(`seed_upset:${p.set.id}`, notability, {
       kind: 'seed_upset',
       tournamentId: p.set.tournamentId,
@@ -599,7 +684,7 @@ function collectSeedUpsets(played: readonly PlayedSet[], maxRound: number, push:
       loser: refOf(p.loser),
       winnerSeed,
       loserSeed,
-      round: p.set.round,
+      stage: stageOf(p),
       score: scoreText(p),
     });
   }
@@ -615,7 +700,8 @@ function collectSeedUpsets(played: readonly PlayedSet[], maxRound: number, push:
 function collectRatingUpsets(
   played: readonly PlayedSet[],
   ratingEvents: readonly RecapRatingEvent[],
-  maxRound: number,
+  stageOf: (p: PlayedSet) => string | null,
+  weightOf: (p: PlayedSet) => number,
   push: Push,
 ): void {
   if (ratingEvents.length === 0) return;
@@ -640,7 +726,7 @@ function collectRatingUpsets(
     );
     // Only genuine longshots; an even set is not an upset.
     if (probability > 0.35) continue;
-    const notability = 0.6 * (1 - probability / 0.35) + 0.3 * stageWeight(p.set.round, maxRound) + 0.1;
+    const notability = 0.6 * (1 - probability / 0.35) + 0.3 * weightOf(p) + 0.1;
     push(`rating_upset:${p.set.id}`, notability, {
       kind: 'rating_upset',
       tournamentId: p.set.tournamentId,
@@ -648,24 +734,33 @@ function collectRatingUpsets(
       loser: refOf(p.loser),
       probability,
       ratingGap: loserEvent.preRating - winnerEvent.preRating,
-      round: p.set.round,
+      stage: stageOf(p),
       score: scoreText(p),
     });
   }
 }
 
 /** Sets that went to a deciding game — 3-2, 2-1, and so on. */
-function collectNailbiters(played: readonly PlayedSet[], maxRound: number, push: Push): void {
+function collectNailbiters(
+  played: readonly PlayedSet[],
+  deciderSetIds: ReadonlySet<string>,
+  stageOf: (p: PlayedSet) => string | null,
+  weightOf: (p: PlayedSet) => number,
+  push: Push,
+): void {
   for (const p of played) {
     if (!p.scoreKnown) continue;
+    // The set that decided a bracket already has its own card; a nailbiter
+    // card for the same set tells the same story twice.
+    if (deciderSetIds.has(p.set.id)) continue;
     if (p.winnerGames < 2 || p.loserGames !== p.winnerGames - 1) continue;
-    push(`nailbiter:${p.set.id}`, 0.25 + 0.5 * stageWeight(p.set.round, maxRound), {
+    push(`nailbiter:${p.set.id}`, 0.25 + 0.5 * weightOf(p), {
       kind: 'nailbiter',
       tournamentId: p.set.tournamentId,
       winner: refOf(p.winner),
       loser: refOf(p.loser),
       score: `${p.winnerGames}-${p.loserGames}`,
-      round: p.set.round,
+      stage: stageOf(p),
     });
   }
 }
@@ -854,6 +949,9 @@ function collectRivalries(played: readonly PlayedSet[], history: RecapHistory | 
     const winnerIsA = winnerId < loserId;
     const winnerPriorWins = winnerIsA ? prior.aWins : prior.bWins;
     const loserPriorWins = winnerIsA ? prior.bWins : prior.aWins;
+    // A first-ever win over a long-time tormentor is the breakthrough fact's
+    // story; telling it here too would put the same set on two cards.
+    if (winnerPriorWins === 0 && loserPriorWins >= 2) continue;
     push(`rivalry:${p.set.id}`, Math.min(0.85, 0.3 + 0.08 * meetings), {
       kind: 'rivalry',
       tournamentId: p.set.tournamentId,
@@ -862,6 +960,47 @@ function collectRivalries(played: readonly PlayedSet[], history: RecapHistory | 
       meetings,
       aWins: winnerPriorWins + 1,
       bWins: loserPriorWins,
+    });
+  }
+}
+
+/**
+ * A first career win over an opponent who had always won before. Anyone who
+ * has chased the same person across three club nights knows exactly why this
+ * is a highlight and not a statistic.
+ */
+function collectBreakthroughs(
+  played: readonly PlayedSet[],
+  history: RecapHistory | undefined,
+  stageOf: (p: PlayedSet) => string | null,
+  weightOf: (p: PlayedSet) => number,
+  push: Push,
+): void {
+  if (!history) return;
+  // One breakthrough per pairing per night: beating them twice tonight is
+  // still one story.
+  const claimed = new Set<string>();
+  for (const p of played) {
+    const winnerId = p.winner.playerId;
+    const loserId = p.loser.playerId;
+    if (!winnerId || !loserId) continue;
+    const key = pairKey(winnerId, loserId);
+    if (claimed.has(key)) continue;
+    const prior = history.priorMeetings.get(key);
+    if (!prior) continue;
+    const winnerIsA = winnerId < loserId;
+    const winnerPriorWins = winnerIsA ? prior.aWins : prior.bWins;
+    const priorLosses = winnerIsA ? prior.bWins : prior.aWins;
+    if (winnerPriorWins > 0 || priorLosses < 2) continue;
+    claimed.add(key);
+    push(`breakthrough:${p.set.id}`, Math.min(0.85, 0.4 + 0.08 * priorLosses + 0.15 * weightOf(p)), {
+      kind: 'breakthrough',
+      tournamentId: p.set.tournamentId,
+      winner: refOf(p.winner),
+      loser: refOf(p.loser),
+      priorLosses,
+      stage: stageOf(p),
+      score: scoreText(p),
     });
   }
 }
@@ -1001,14 +1140,16 @@ const ordinal = (n: number): string => {
   return `${n}${suffix}`;
 };
 
-const roundName = (round: number | null): string => {
-  if (round == null) return 'a set';
-  return round >= 0 ? `winners round ${round}` : `losers round ${-round}`;
-};
+/** "in the winners final" / "" — stages read as a trailing clause or vanish. */
+const inStage = (stage: string | null): string => (stage ? ` in ${stage}` : '');
 
 /**
  * Fact copy, kept beside the facts themselves so the page, the share image and
  * any future chat post all say the same thing about the same night.
+ *
+ * The voice to hold: say what happened the way someone who was there would
+ * retell it, with the numbers as evidence rather than as the sentence. "The
+ * ratings gave them one chance in eight" lands; "probability 0.12" does not.
  */
 export function formatFact(fact: RecapFact): { headline: string; detail: string } {
   switch (fact.kind) {
@@ -1022,84 +1163,118 @@ export function formatFact(fact: RecapFact): { headline: string; detail: string 
           (runnersUp.length > 0 ? `Ahead of ${runnersUp.join(' and ')}.` : ''),
       };
     }
-    case 'seed_upset':
+    case 'seed_upset': {
+      // A four-fold seed gap reads as a shock; anything less is a scalp.
+      const shock = fact.winnerSeed >= fact.loserSeed * 4;
       return {
-        headline: `${fact.winner.name} upsets ${fact.loser.name}`,
-        detail: `The ${ordinal(fact.winnerSeed)} seed over the ${ordinal(fact.loserSeed)} in ${roundName(fact.round)}${fact.score ? `, ${fact.score}` : ''}.`,
+        headline: shock
+          ? `${fact.winner.name} shocks ${fact.loser.name}`
+          : `${fact.winner.name} takes down ${fact.loser.name}`,
+        detail: `In as the ${ordinal(fact.winnerSeed)} seed against the ${ordinal(fact.loserSeed)}${inStage(fact.stage)}${fact.score ? ` — won ${fact.score}` : ''}.`,
       };
-    case 'rating_upset':
+    }
+    case 'rating_upset': {
+      const oneIn = Math.max(2, Math.round(1 / Math.max(fact.probability, 0.01)));
       return {
-        headline: `${fact.winner.name} beats ${fact.loser.name}`,
-        detail: `A ${Math.round(fact.probability * 100)}% shot on the ratings — ${Math.round(fact.ratingGap)} points the wrong way${fact.score ? `, won ${fact.score}` : ''}.`,
+        headline: `${fact.winner.name} beats the odds`,
+        detail: `The ratings gave them one chance in ${oneIn} against ${fact.loser.name} — ${Math.round(fact.ratingGap)} points apart${inStage(fact.stage)}${fact.score ? `. Won ${fact.score}` : ''}.`,
       };
+    }
     case 'losers_run':
       return {
-        headline: `${fact.player.name}'s losers run`,
-        detail: `${fact.wins} elimination sets in a row${fact.finalRank != null ? `, finishing ${ordinal(fact.finalRank)}` : ''}.`,
+        headline: `${fact.player.name}'s long road back`,
+        detail: `Sent to the losers bracket, then won ${fact.wins} straight elimination sets${fact.finalRank != null ? ` to finish ${ordinal(fact.finalRank)}` : ''}.`,
       };
     case 'overperformer':
       return {
-        headline: `${fact.player.name} outran the seeding`,
-        detail: `Seeded ${ordinal(fact.seed)}, finished ${ordinal(fact.finalRank)} — ${fact.placesGained} places better.`,
+        headline: `${fact.player.name} outruns the seeding`,
+        detail: `In as the ${ordinal(fact.seed)} seed, out in ${ordinal(fact.finalRank)} — ${fact.placesGained} places clear of expectations.`,
       };
     case 'nailbiter':
       return {
-        headline: `${fact.winner.name} ${fact.score} ${fact.loser.name}`,
-        detail: `Went the distance in ${roundName(fact.round)}.`,
+        headline: `${fact.winner.name} edges ${fact.loser.name}`,
+        detail: `${fact.score}${inStage(fact.stage)}, down to the last game.`,
       };
     case 'clean_sweep':
       return {
-        headline: `${fact.player.name} dropped nothing`,
-        detail: `Won the bracket without losing a single game across ${fact.sets} sets.`,
+        headline: `${fact.player.name} drops nothing`,
+        detail: `${fact.sets} sets, not a single game lost, bracket closed.`,
       };
     case 'biggest_climb':
       return {
-        headline: `${fact.player.name} gained ${Math.round(fact.gained)} points`,
-        detail: `${Math.round(fact.from)} → ${Math.round(fact.to)} over the night.`,
+        headline: `${fact.player.name} owns the night`,
+        detail: `Up ${Math.round(fact.gained)} rating in one evening, ${Math.round(fact.from)} → ${Math.round(fact.to)} — the biggest move on the board.`,
       };
     case 'mover':
       return {
         headline: `${fact.player.name} climbs to #${fact.rank}`,
-        detail: `Up ${fact.placesGained} ${fact.placesGained === 1 ? 'place' : 'places'} from #${fact.previousRank}.`,
+        detail: `Up ${fact.placesGained} ${fact.placesGained === 1 ? 'place' : 'places'} from #${fact.previousRank} on tonight's games.`,
       };
-    case 'rivalry':
+    case 'rivalry': {
+      const level = fact.aWins === fact.bWins;
       return {
-        headline: `${fact.a.name} vs ${fact.b.name}, again`,
-        detail: `Their ${ordinal(fact.meetings)} meeting. The series is now ${fact.aWins}–${fact.bWins} to ${fact.a.name}.`,
+        headline: `${fact.a.name} vs ${fact.b.name}, chapter ${fact.meetings}`,
+        detail: level
+          ? `${fact.a.name} took tonight's meeting, and the series is level at ${fact.aWins}–${fact.bWins}.`
+          : `${fact.a.name} took tonight's meeting and leads the series ${fact.aWins}–${fact.bWins}.`,
+      };
+    }
+    case 'breakthrough':
+      return {
+        headline: `${fact.winner.name} finally gets one`,
+        detail: `${fact.priorLosses} career losses to ${fact.loser.name} and never a win — until tonight${inStage(fact.stage)}${fact.score ? `, ${fact.score}` : ''}.`,
       };
     case 'debut':
       return {
-        headline: fact.players.length === 1 ? `${fact.players[0]!.name} debuts` : `${fact.players.length} debuts`,
+        headline:
+          fact.players.length === 1
+            ? `First night for ${fact.players[0]!.name}`
+            : `${fact.players.length} first-timers in the bracket`,
         detail:
           fact.players.length === 1
-            ? 'First club night.'
+            ? 'Welcome to the club.'
             : `First club night for ${fact.players.map((p) => p.name).join(', ')}.`,
       };
     case 'milestone':
       if (fact.milestone === 'peak_rating') {
         return {
-          headline: `${fact.player.name} hits a career high`,
-          detail: `A new peak rating of ${Math.round(fact.value)}.`,
+          headline: `${fact.player.name} has never been rated higher`,
+          detail: `A new career-high rating of ${Math.round(fact.value)}.`,
+        };
+      }
+      if (fact.milestone === 'events') {
+        return {
+          headline: `${fact.player.name}'s ${ordinal(fact.value)} club night`,
+          detail: `${fact.value} evenings of showing up.`,
         };
       }
       return {
-        headline: `${fact.player.name}'s ${fact.value}${fact.milestone === 'sets' ? 'th set' : 'th event'}`,
-        detail: `Passed ${fact.value} career ${fact.milestone} tonight.`,
+        headline: `${fact.player.name}'s ${ordinal(fact.value)} career set`,
+        detail: `Crossed ${fact.value} sets played tonight.`,
       };
-    case 'turnout':
+    case 'turnout': {
+      const tied = fact.previousBest != null && fact.entrants === fact.previousBest;
       return {
-        headline: fact.isRecord ? `Record turnout: ${fact.entrants}` : `${fact.entrants} entrants`,
+        headline: fact.isRecord ? 'The biggest night the club has run' : `${fact.entrants} in the building`,
         detail:
-          fact.previousBest != null
-            ? fact.isRecord
-              ? `Beats the previous best of ${fact.previousBest}.`
-              : `Previous best was ${fact.previousBest}.`
-            : '',
+          fact.previousBest == null
+            ? ''
+            : fact.isRecord
+              ? `${fact.entrants} entrants — past the old record of ${fact.previousBest}.`
+              : tied
+                ? `Ties the club's best night.`
+                : `Best turnout is still ${fact.previousBest}.`,
       };
-    case 'grand_finals':
+    }
+    case 'grand_finals': {
+      const run =
+        fact.gamesDropped != null && fact.gamesDropped > 0
+          ? ` ${fact.runSets} sets won on the night, ${fact.gamesDropped} ${fact.gamesDropped === 1 ? 'game' : 'games'} dropped along the way.`
+          : '';
       return {
-        headline: `${fact.winner.name} wins grand finals`,
-        detail: `${fact.bracketReset ? 'It took a bracket reset. ' : ''}Over ${fact.loser.name}${fact.score ? `, ${fact.score}` : ''}.`,
+        headline: `${fact.winner.name} wins it all`,
+        detail: `${fact.bracketReset ? 'It took a bracket reset. ' : ''}Beat ${fact.loser.name}${fact.score ? ` ${fact.score}` : ''} in the decider.${run}`,
       };
+    }
   }
 }

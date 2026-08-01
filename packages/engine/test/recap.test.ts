@@ -388,26 +388,30 @@ describe('clean sweeps', () => {
 });
 
 describe('nailbiters', () => {
+  // A later set decides the bracket, so the close set is not the decider —
+  // the decider's story belongs to the grand-final card, not a nailbiter.
+  const a = participant({ name: 'Ada' });
+  const b = participant({ name: 'Bo' });
+  const c = participant({ name: 'Cy' });
+  const decider = (winner: RecapParticipant): RecapSet =>
+    completedSet(winner, c, 1, { round: 5, scoresCsv: '3-0', completedAt: '2025-03-01T11:00:00.000Z' });
+
   it('are sets that went to a deciding game', () => {
-    const a = participant({ name: 'Ada' });
-    const b = participant({ name: 'Bo' });
     const result = buildRecap({
       tournaments: [MAIN],
-      participants: [a, b],
-      sets: [completedSet(a, b, 1, { scoresCsv: '3-2' })],
+      participants: [a, b, c],
+      sets: [completedSet(a, b, 1, { scoresCsv: '3-2' }), decider(a)],
     });
     const [fact] = factsOfKind(result, 'nailbiter');
     expect(fact?.score).toBe('3-2');
   });
 
   it('report the score from the winner\'s side even when player two won', () => {
-    const a = participant({ name: 'Ada' });
-    const b = participant({ name: 'Bo' });
     const result = buildRecap({
       tournaments: [MAIN],
-      participants: [a, b],
+      participants: [a, b, c],
       // scores_csv is always player-one-first, so "2-3" is a win for Bo.
-      sets: [completedSet(a, b, 2, { scoresCsv: '2-3' })],
+      sets: [completedSet(a, b, 2, { scoresCsv: '2-3' }), decider(b)],
     });
     const [fact] = factsOfKind(result, 'nailbiter');
     expect(fact?.winner.name).toBe('Bo');
@@ -415,14 +419,24 @@ describe('nailbiters', () => {
   });
 
   it('exclude one-sided sets', () => {
-    const a = participant({ name: 'Ada' });
-    const b = participant({ name: 'Bo' });
+    const result = buildRecap({
+      tournaments: [MAIN],
+      participants: [a, b, c],
+      sets: [completedSet(a, b, 1, { scoresCsv: '3-0' }), decider(a)],
+    });
+    expect(factsOfKind(result, 'nailbiter')).toHaveLength(0);
+  });
+
+  it('never duplicate the set that decided the bracket', () => {
     const result = buildRecap({
       tournaments: [MAIN],
       participants: [a, b],
-      sets: [completedSet(a, b, 1, { scoresCsv: '3-0' })],
+      // The bracket's only set went the distance — but it is the decider, and
+      // the grand-final card already tells that story.
+      sets: [completedSet(a, b, 1, { scoresCsv: '3-2' })],
     });
     expect(factsOfKind(result, 'nailbiter')).toHaveLength(0);
+    expect(factsOfKind(result, 'grand_finals')).toHaveLength(1);
   });
 });
 
@@ -589,6 +603,25 @@ describe('history-derived facts', () => {
     expect(factsOfKind(result, 'rivalry')).toHaveLength(0);
   });
 
+  it('call a first-ever win over a long-time tormentor a breakthrough, not a rivalry', () => {
+    // Ada has lost to Bo three times and never won. Tonight is the story.
+    const result = buildRecap({
+      tournaments: [MAIN],
+      participants: [a, b],
+      sets: [set],
+      history: emptyHistory({
+        priorMeetings: new Map([
+          [pairKey(a.playerId!, b.playerId!), a.playerId! < b.playerId! ? { aWins: 0, bWins: 3 } : { aWins: 3, bWins: 0 }],
+        ]),
+      }),
+    });
+    const [breakthrough] = factsOfKind(result, 'breakthrough');
+    expect(breakthrough?.winner.name).toBe('Ada');
+    expect(breakthrough?.priorLosses).toBe(3);
+    // The same set must not also appear as a rivalry card.
+    expect(factsOfKind(result, 'rivalry')).toHaveLength(0);
+  });
+
   it('announce debuts for players with no prior nights', () => {
     const result = buildRecap({
       tournaments: [MAIN],
@@ -730,10 +763,11 @@ describe('the night as a whole', () => {
     expect(closeSets).toHaveLength(9);
     expect(factsOfKind(result, 'nailbiter')).toHaveLength(2);
 
-    // The ones kept are the most notable, not the first encountered: these sets
-    // climb through the rounds, so the latest rounds should survive.
-    const kept = factsOfKind(result, 'nailbiter').map((f) => f.round);
-    expect(kept).toEqual([9, 8]);
+    // The ones kept are the most notable, not the first encountered: these
+    // sets climb through the rounds, so the deepest two survive — minus the
+    // round-9 decider, whose story belongs to the grand-final card.
+    const kept = factsOfKind(result, 'nailbiter').map((f) => f.stage);
+    expect(kept).toEqual(['the winners final', 'the winners semis']);
   });
 
   it('is empty but well-formed for a night with nothing in it', () => {
@@ -749,20 +783,21 @@ describe('formatFact', () => {
     const other = { playerId: 'y', name: 'Bo', companyCode: null, characters: [] };
     const facts: RecapFact[] = [
       { kind: 'podium', tournamentId: 't', derived: false, places: [{ player, place: 1, seed: 3 }, { player: other, place: 2, seed: 1 }] },
-      { kind: 'seed_upset', tournamentId: 't', winner: player, loser: other, winnerSeed: 8, loserSeed: 1, round: 2, score: '3-1' },
-      { kind: 'rating_upset', tournamentId: 't', winner: player, loser: other, probability: 0.12, ratingGap: 320, round: -3, score: '3-2' },
+      { kind: 'seed_upset', tournamentId: 't', winner: player, loser: other, winnerSeed: 8, loserSeed: 1, stage: 'the winners final', score: '3-1' },
+      { kind: 'rating_upset', tournamentId: 't', winner: player, loser: other, probability: 0.12, ratingGap: 320, stage: 'the losers semis', score: '3-2' },
       { kind: 'losers_run', tournamentId: 't', player, wins: 5, finalRank: 2 },
       { kind: 'overperformer', tournamentId: 't', player, seed: 12, finalRank: 4, placesGained: 8 },
-      { kind: 'nailbiter', tournamentId: 't', winner: player, loser: other, score: '3-2', round: 4 },
+      { kind: 'nailbiter', tournamentId: 't', winner: player, loser: other, score: '3-2', stage: null },
       { kind: 'clean_sweep', tournamentId: 't', player, sets: 5 },
       { kind: 'biggest_climb', tournamentId: 't', player, gained: 62.4, from: 1500, to: 1562.4 },
       { kind: 'mover', tournamentId: null, player, rank: 7, previousRank: 11, placesGained: 4 },
       { kind: 'rivalry', tournamentId: 't', a: player, b: other, meetings: 7, aWins: 4, bWins: 3 },
+      { kind: 'breakthrough', tournamentId: 't', winner: player, loser: other, priorLosses: 4, stage: 'the losers final', score: '2-1' },
       { kind: 'debut', tournamentId: 't', players: [player] },
       { kind: 'milestone', tournamentId: 't', player, milestone: 'sets', value: 100 },
       { kind: 'milestone', tournamentId: 't', player, milestone: 'peak_rating', value: 1712.8 },
       { kind: 'turnout', tournamentId: null, entrants: 24, previousBest: 21, isRecord: true },
-      { kind: 'grand_finals', tournamentId: 't', winner: player, loser: other, score: '3-2', bracketReset: true },
+      { kind: 'grand_finals', tournamentId: 't', winner: player, loser: other, score: '3-2', bracketReset: true, runSets: 6, gamesDropped: 4 },
     ];
 
     for (const fact of facts) {
@@ -782,7 +817,7 @@ describe('formatFact', () => {
     const covered: Record<RecapFactKind, boolean> = {
       podium: false, seed_upset: false, rating_upset: false, losers_run: false,
       overperformer: false, nailbiter: false, clean_sweep: false, biggest_climb: false,
-      mover: false, rivalry: false, debut: false, milestone: false, turnout: false,
+      mover: false, rivalry: false, breakthrough: false, debut: false, milestone: false, turnout: false,
       grand_finals: false,
     };
     for (const fact of facts) covered[fact.kind] = true;
@@ -800,13 +835,13 @@ describe('formatFact', () => {
         loser: other,
         winnerSeed,
         loserSeed,
-        round: 1,
+        stage: null,
         score: null,
       }).detail;
 
-    expect(seedUpset(2, 1)).toContain('2nd seed over the 1st');
-    expect(seedUpset(23, 3)).toContain('23rd seed over the 3rd');
+    expect(seedUpset(2, 1)).toContain('2nd seed against the 1st');
+    expect(seedUpset(23, 3)).toContain('23rd seed against the 3rd');
     // The teens are the case a naive suffix table gets wrong.
-    expect(seedUpset(13, 11)).toContain('13th seed over the 11th');
+    expect(seedUpset(13, 11)).toContain('13th seed against the 11th');
   });
 });
