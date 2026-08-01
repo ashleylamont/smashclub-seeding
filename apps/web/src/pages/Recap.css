@@ -1,0 +1,355 @@
+/*
+ * The night in review.
+ *
+ * Same rules as the rest of the app: square edges, hairline rules, one red, no
+ * gradients or shadows. The recap earns its emphasis from scale — a very large
+ * place number and a condensed display face — rather than from decoration.
+ */
+
+.recap-subtitle {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  font-family: var(--mono);
+  margin-bottom: var(--s5);
+}
+
+.recap-progress-chip {
+  margin-left: var(--s1);
+}
+
+.recap-share {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+/* ── podiums ────────────────────────────────────────────────────── */
+
+.recap-podiums {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--s4);
+  margin-bottom: var(--s6);
+}
+
+.podium-title {
+  font-family: var(--display);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-soft);
+  margin: 0 0 var(--s3);
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--border);
+}
+
+.podium-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* A fixed rank column, so the three names line up however large the winner's
+   numeral is drawn. */
+.podium-place {
+  display: grid;
+  grid-template-columns: 1.4em 1fr;
+  align-items: baseline;
+  gap: var(--s4);
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-2xl);
+}
+
+.podium-place:last-child {
+  border-bottom: 0;
+}
+
+.podium-rank {
+  font-family: var(--display);
+  font-size: 1em;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-soft);
+  text-align: center;
+}
+
+/* Only the winner takes the accent; second and third step down in ink weight
+   so the ramp reads without three competing colours. */
+.podium-place.place-1 {
+  font-size: var(--fs-3xl);
+}
+
+.podium-place.place-1 .podium-rank {
+  color: var(--accent);
+}
+
+.podium-place.place-2 .podium-rank {
+  color: var(--text-h);
+}
+
+.podium-player {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  flex-wrap: wrap;
+  min-width: 0;
+  /* The rank sets the row's scale; the name stays at reading size. */
+  font-size: var(--fs-md);
+}
+
+.podium-place.place-1 .podium-player .fact-name {
+  font-size: var(--fs-lg);
+  color: var(--text-h);
+}
+
+.podium-seed {
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  color: var(--text-soft);
+}
+
+.podium-note {
+  margin: var(--s3) 0 0;
+  padding-top: var(--s2);
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-xs);
+}
+
+/* ── the lead story ─────────────────────────────────────────────── */
+
+.lead-story {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s5);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  padding: var(--s5);
+  margin-bottom: var(--s4);
+}
+
+.lead-story-headline {
+  font-family: var(--display);
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  text-transform: uppercase;
+  line-height: 1.02;
+  color: var(--text-h);
+  margin: var(--s1) 0 var(--s2);
+}
+
+.lead-story-detail {
+  font-size: var(--fs-md);
+  color: var(--text);
+  margin: 0 0 var(--s3);
+  max-width: 60ch;
+}
+
+.lead-story-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  gap: var(--s1);
+  padding-left: var(--s5);
+  border-left: 1px solid var(--border);
+}
+
+.lead-story-stat-value {
+  font-family: var(--display);
+  font-size: var(--fs-3xl);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.lead-story-stat-label {
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-soft);
+  max-width: 14ch;
+}
+
+.fact-kind-bracket {
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+@media (max-width: 640px) {
+  .lead-story {
+    grid-template-columns: 1fr;
+  }
+
+  .lead-story-stat {
+    align-items: flex-start;
+    text-align: left;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    padding: var(--s3) 0 0;
+  }
+
+  .lead-story-headline {
+    font-size: var(--fs-xl);
+  }
+}
+
+/* ── facts ──────────────────────────────────────────────────────── */
+
+.fact-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--s3);
+}
+
+.fact-card {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  padding: var(--s3) var(--s4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+/* The dramatic kinds carry the accent edge; the rest stay neutral so it keeps
+   meaning something. */
+.fact-card.fact-seed_upset,
+.fact-card.fact-rating_upset,
+.fact-card.fact-grand_finals,
+.fact-card.fact-breakthrough,
+.fact-card.fact-clean_sweep {
+  border-left-color: var(--accent);
+}
+
+/* Kind label left, the story's number right. */
+.fact-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.fact-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  margin: 0;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.fact-stat-value {
+  font-family: var(--display);
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.fact-stat-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-soft);
+  max-width: 16ch;
+}
+
+.fact-kind {
+  font-family: var(--display);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-soft);
+  margin: 0;
+}
+
+.fact-headline {
+  font-family: var(--display);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--text-h);
+  margin: 0;
+}
+
+.fact-detail {
+  font-size: var(--fs-sm);
+  color: var(--text);
+  margin: 0;
+}
+
+.fact-players {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  margin-top: var(--s1);
+}
+
+.fact-player {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.fact-name {
+  font-family: var(--display);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--text);
+  text-decoration: none;
+}
+
+a.fact-name:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.fact-company {
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  color: var(--text-soft);
+}
+
+.fact-bracket {
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  color: var(--text-soft);
+  margin: var(--s1) 0 0;
+}
+
+/* ── brackets ───────────────────────────────────────────────────── */
+
+.recap-bracket-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.recap-bracket-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+@media (max-width: 640px) {
+  .podium-place.place-1 {
+    font-size: var(--fs-2xl);
+  }
+}

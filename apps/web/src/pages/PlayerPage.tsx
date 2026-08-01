@@ -16,6 +16,7 @@ import {
 import { trpc } from '../lib/trpc';
 import type { PlayerData, PlayerEventView } from '../lib/apiTypes';
 import { CharacterIcons } from '../components/CharacterIcons';
+import { InfoTip } from '../components/InfoTip';
 import { formatDate, tierClass } from '../lib/format';
 import './PlayerPage.css';
 
@@ -192,7 +193,14 @@ function PlayerProfile({ data }: { data: PlayerData }) {
             sits below it, and the deduction, if any, beside that. */}
         {rating && (
           <div className="profile-headline">
-            <span className="headline-label">Rating</span>
+            <span className="headline-label">
+              Rating
+              <InfoTip label="Rating" align="end">
+                The board ranks on this: the skill estimate below, less a penalty for missed club nights. Results
+                move the estimate; turning up — or not — moves the penalty. Bracket seeding uses a different,
+                more cautious number, so a seed and a rank need not agree.
+              </InfoTip>
+            </span>
             <span className="headline-value num">{rating.clubRating.toFixed(0)}</span>
             <span className="headline-band num">
               skill {rating.skillRating.toFixed(0)} ± {rating.skillSd.toFixed(0)}
@@ -209,7 +217,8 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           <dt>Skill estimate</dt>
           <dd className="num">{rating ? rating.skillRating.toFixed(0) : '—'}</dd>
           <p className="stat-detail">
-            Best guess before uncertainty is subtracted. Play more, and the rating above closes on it.
+            Best guess at how good you are, from results alone. The rating above is this number less any
+            penalty for missed club nights — with none owing, the two are the same.
           </p>
         </div>
         <div className="stat">
@@ -334,7 +343,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         {events.length === 0 ? (
           <p className="muted">No match history available for this player.</p>
         ) : (
-          <div className="match-history-scroll">
+          <div className="match-history-scroll table-scroll">
             <table className="match-table data-table">
               <thead>
                 <tr>
@@ -342,7 +351,9 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                   <th>Event</th>
                   <th>Opponent</th>
                   <th>Result</th>
-                  <th className="num">Δ Rating</th>
+                  <th className="num" title="How much this set moved the skill estimate">
+                    Δ Rating
+                  </th>
                 </tr>
               </thead>
               <tbody>

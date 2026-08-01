@@ -53,12 +53,219 @@
   border-color: var(--accent-border);
 }
 
+/*
+ * The activity setting sits in the same strip as search and company: it is one
+ * of the things that decides who is on the board. Its control is a checkbox
+ * rather than an input, so it gets its own box to sit on the label's baseline
+ * instead of stretching to `.control-input`'s height.
+ */
+.control-check .checkbox-control {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 6px 0;
+  font-size: var(--fs-sm);
+  color: var(--text-h);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.control-check input {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/*
+ * The narrow-screen sort control. Above the fold-point the header row *is* the
+ * sort control, and naming every measure twice on one screen is exactly what
+ * that choice avoided — so this only exists where the header does not.
+ */
+.control-sort {
+  display: none;
+}
+
+.sort-row {
+  display: flex;
+  gap: var(--s1);
+}
+
+.sort-row .control-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.sort-direction {
+  flex: none;
+  padding-inline: var(--s2);
+}
+
 .board-count {
   font-family: var(--mono);
   font-size: var(--fs-xs);
   margin: 0 0 0 auto;
   letter-spacing: 0.04em;
   white-space: nowrap;
+}
+
+.board-count-note {
+  color: var(--text-soft);
+}
+
+/* ── the key ──────────────────────────────────────────────────────
+   A disclosure, closed by default: most visits are "where am I", and a legend
+   that is always open pushes the board itself below the fold. */
+
+.board-legend {
+  border-bottom: 1px solid var(--border);
+}
+
+.board-legend-summary {
+  padding: var(--s2) 0;
+  font-family: var(--display);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-soft);
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.board-legend-summary::-webkit-details-marker {
+  display: none;
+}
+
+/* A rotating caret, so open/closed is stated by the control rather than only by
+   whether something appeared underneath it. */
+.board-legend-summary::before {
+  content: '▸';
+  color: var(--accent);
+  font-size: var(--fs-sm);
+  line-height: 1;
+  transition: transform 0.12s;
+}
+
+.board-legend[open] .board-legend-summary::before {
+  transform: rotate(90deg);
+}
+
+.board-legend-summary:hover {
+  color: var(--text-h);
+}
+
+.board-legend-body {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--s5);
+  padding: 0 0 var(--s4);
+}
+
+.legend-terms {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--s3) var(--s5);
+}
+
+.legend-term dt {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-family: var(--display);
+  font-size: var(--fs-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-h);
+  margin-bottom: 2px;
+}
+
+.legend-term dd {
+  margin: 0;
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  color: var(--text-soft);
+}
+
+/* The key draws the real marks, at their real size — a sample that is only a
+   description of the mark is one more thing to translate. */
+.legend-sample {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  font-size: var(--fs-xs);
+  color: var(--text-soft);
+}
+
+.legend-sample-rating {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+.legend-sample-penalty {
+  color: var(--warn);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+.legend-sample-meter {
+  width: 56px;
+}
+
+.legend-sample-meter .certainty-track {
+  width: 100%;
+  --tier: var(--tier-2);
+}
+
+.legend-leagues-label {
+  font-family: var(--display);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-soft);
+  margin-bottom: var(--s2);
+}
+
+.legend-league-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.legend-league {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: var(--fs-xs);
+  color: var(--text-h);
+}
+
+/* Same 3px edge the rows carry, so the swatch and the board match exactly. */
+.legend-league-swatch {
+  width: 3px;
+  height: 14px;
+  flex: none;
+  background: var(--tier-4);
+}
+
+.legend-league.tier-1 .legend-league-swatch {
+  background: var(--tier-1);
+}
+.legend-league.tier-2 .legend-league-swatch {
+  background: var(--tier-2);
+}
+.legend-league.tier-3 .legend-league-swatch {
+  background: var(--tier-3);
+}
+
+.legend-leagues-note {
+  margin-top: var(--s2);
+  font-size: var(--fs-xs);
 }
 
 /*
@@ -73,7 +280,11 @@
   gap: var(--row-gap);
   align-items: end;
   position: sticky;
-  top: 0;
+  /* Below the nav, which is also sticky and opaque — at `top: 0` these headers
+     parked underneath it and the columns went unlabelled on a long scroll.
+     `--nav-h` is measured in Layout; the fallback keeps this honest if it is
+     ever rendered outside the shell. */
+  top: var(--nav-h, 0px);
   z-index: 2;
   background: var(--bg);
   padding: var(--s2) var(--s2) 5px 0;
@@ -161,11 +372,14 @@
   gap: var(--row-gap);
   /* Tight rows: ~30 players per screen on a laptop. */
   padding: var(--s1) var(--s2) var(--s1) 0;
-  border-left: 3px solid transparent;
-}
-
-.board-row:hover .board-link {
-  border-left-color: var(--tier);
+  /*
+   * The league, as a rung on the ladder. This used to appear on hover only,
+   * which meant that on a touch screen — where the league is not written
+   * anywhere else on the board either — it was simply invisible. It is quiet
+   * enough at 3px to sit under the whole field without becoming a stripe
+   * pattern, and it is what the key's swatches point at.
+   */
+  border-left: 3px solid var(--tier);
 }
 
 .rank {
@@ -240,6 +454,13 @@
   display: inline-flex;
   align-items: center;
   gap: var(--s2);
+}
+
+/* Redundant at board width, where the left edge and the key answer it; the
+   narrow layout turns it on because neither of those is to hand there. */
+.identity-league,
+.identity-sortkey {
+  display: none;
 }
 
 /* The icons are supporting detail — at board width the name and the rating are
@@ -449,58 +670,94 @@
 }
 
 @media (max-width: 860px) {
-  /* Two-line rows below the fold-point, so column headers no longer describe
-     the layout — the values are labelled in place instead. */
+  /*
+   * Two-line rows below the fold-point, so column headers no longer describe
+   * the layout — the values are labelled in place instead, and the sort moves
+   * into the controls strip where the header used to carry it.
+   */
   .board-head {
     display: none;
+  }
+  .control-sort {
+    display: flex;
   }
   .board-list {
     border-top: 1px solid var(--border);
   }
+  /*
+   * Every child of the row has to be placed. The previous grid named five areas
+   * for eight visible children, and `.certainty-track` — neither placed nor
+   * dropped — was auto-flowed into a third row, where it drew an unexplained
+   * dashed stub under every rank. Movement takes the space it was occupying,
+   * which is the better trade anyway: "am I climbing" is a question a phone
+   * should answer, and the ± band beside the rating already says how firm the
+   * number is.
+   */
+  /*
+   * Scoped to the row's direct children throughout. The key below the controls
+   * draws the same marks with the same class names, and an unscoped
+   * `.certainty-track { display: none }` here blanked the sample in the very
+   * legend that was added to explain it.
+   */
   .board-link {
-    grid-template-columns: 34px minmax(0, 1fr) auto;
+    grid-template-columns: 38px minmax(0, 1fr) auto auto;
     grid-template-areas:
-      'rank identity rating'
-      'rank form record';
+      'rank identity rating rating'
+      'rank form     movement record';
+    column-gap: var(--s2);
     row-gap: 2px;
     padding: var(--s2) var(--s2) var(--s2) 0;
   }
-  .rank {
+  .board-link > .rank {
     grid-area: rank;
     align-self: start;
   }
-  .identity {
+  .board-link > .identity {
     grid-area: identity;
     flex-direction: column;
     align-items: flex-start;
     gap: 0;
   }
-  .rating {
-    grid-area: rating;
+  .identity-league {
+    display: inline;
   }
-  .form {
+  /* The figure the board is ordered by, when this layout does not draw its
+     column — otherwise the order looks arbitrary. */
+  .identity-sortkey {
+    display: inline;
+    color: var(--accent);
+  }
+  .board-link > .rating {
+    grid-area: rating;
+    align-self: start;
+  }
+  .board-link > .form {
     grid-area: form;
   }
-  .record {
-    grid-area: record;
+  .board-link > .movement {
+    grid-area: movement;
+    justify-self: end;
+    align-self: center;
   }
-  /* Secondary columns are dropped rather than allowed to overflow. */
-  .movement,
-  .spark,
-  .events,
-  .last-seen {
+  .board-link > .record {
+    grid-area: record;
+    justify-self: end;
+  }
+  /* Dropped rather than allowed to overflow: the trend needs width to say
+     anything, the event count is the least-asked figure on the row, the meter
+     restates the ± band, and the last-seen chip restates the penalty marker
+     that stays on the row beneath the rating. */
+  .board-link > .certainty-track,
+  .board-link > .spark,
+  .board-link > .events,
+  .board-link > .last-seen {
     display: none;
   }
-  .control-sort {
-    margin-left: 0;
-    width: 100%;
-  }
-  .sort-buttons {
-    width: 100%;
-  }
-  .sort-button {
-    flex: 1;
-    padding: 6px var(--s1);
+  /* 40px numerals do not fit a 38px column. The podium still reads as the
+     podium through weight, colour and the row's extra height. */
+  .is-podium .rank {
+    font-size: var(--fs-xl);
+    line-height: 1;
   }
   .control-input {
     min-width: 0;
@@ -508,5 +765,9 @@
   }
   .control {
     flex: 1 1 130px;
+  }
+  .board-legend-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s4);
   }
 }

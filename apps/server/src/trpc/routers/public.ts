@@ -16,6 +16,7 @@ import { publicPlayerName } from '@smashclub/shared';
 import { latestRecomputeId } from '../../recompute/recompute';
 import { getGlickoSettings } from '../../settings';
 import { charactersByPlayer, charactersForPlayer } from '../../players/characters';
+import { loadRecap } from '../../recap/recap';
 import { publicProcedure, router } from '../trpc';
 
 const playerName = publicPlayerName;
@@ -287,9 +288,11 @@ export const publicRouter = router({
         finalRank: tournamentParticipants.finalRank,
         canonicalName: players.canonicalName,
         displayName: players.displayName,
+        companyCode: companies.code,
       })
       .from(tournamentParticipants)
       .leftJoin(players, eq(tournamentParticipants.playerId, players.id))
+      .leftJoin(companies, eq(players.companyId, companies.id))
       .where(eq(tournamentParticipants.tournamentId, tournament.id));
 
     const participantName = new Map(
@@ -321,6 +324,7 @@ export const publicRouter = router({
           id: p.id,
           playerId: p.playerId,
           name: participantName.get(p.id)!,
+          companyCode: p.companyCode,
           challongeSeed: p.challongeSeed,
           finalRank: p.finalRank,
         }))
@@ -334,12 +338,26 @@ export const publicRouter = router({
         scoresCsv: row.scoresCsv,
         excludedFromRatings: row.excludedFromRatings,
         completedAt: row.completedAt?.toISOString() ?? null,
+        /* Participant ids as well as names: a screen that wants a player's seed
+           or company alongside a set should join on the id rather than match on
+           a display name, which is neither unique nor stable. */
+        p1ParticipantId: row.p1ParticipantId,
+        p2ParticipantId: row.p2ParticipantId,
         p1Name: row.p1ParticipantId ? (participantName.get(row.p1ParticipantId) ?? null) : null,
         p2Name: row.p2ParticipantId ? (participantName.get(row.p2ParticipantId) ?? null) : null,
         p1PlayerId: row.p1PlayerId,
         p2PlayerId: row.p2PlayerId,
       })),
     };
+  }),
+
+  /**
+   * The night's recap — every bracket that ran on the same evening as `slug`,
+   * reduced to ranked facts. Public and unauthenticated so a recap link can be
+   * shared out of the club.
+   */
+  recap: publicProcedure.input(z.object({ slug: z.string() })).query(async ({ ctx, input }) => {
+    return loadRecap(ctx.db, input.slug);
   }),
 
   /** Player search for the claim flow and admin tools. */

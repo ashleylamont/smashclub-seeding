@@ -4,6 +4,8 @@ import { LeaderboardPage } from './pages/LeaderboardPage';
 import { PlayerPage } from './pages/PlayerPage';
 import { TournamentsPage } from './pages/TournamentsPage';
 import { TournamentPage } from './pages/TournamentPage';
+import { RecapPage } from './pages/RecapPage';
+import { VenuePage } from './pages/VenuePage';
 import { LoginPage } from './pages/LoginPage';
 import { MePage } from './pages/MePage';
 import { AdminLayout } from './pages/admin/AdminLayout';
@@ -39,6 +41,28 @@ const tournamentRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/tournaments/$slug',
   component: TournamentPage,
+});
+
+/**
+ * Venue mode. Nested under the tournament so the URL reads as a view of that
+ * bracket; it hides the app shell itself rather than living outside the root
+ * layout, which keeps every other route's chrome untouched.
+ */
+const venueRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/tournaments/$slug/live',
+  component: VenuePage,
+});
+
+/**
+ * A night's recap. Addressed by a tournament slug rather than a date so an
+ * existing bracket link maps onto it, and any bracket of the evening resolves
+ * to the same night.
+ */
+const recapRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/recaps/$slug',
+  component: RecapPage,
 });
 
 const loginRoute = createRoute({
@@ -114,6 +138,8 @@ const routeTree = rootRoute.addChildren([
   playerRoute,
   tournamentsRoute,
   tournamentRoute,
+  venueRoute,
+  recapRoute,
   loginRoute,
   meRoute,
   adminRoute.addChildren([

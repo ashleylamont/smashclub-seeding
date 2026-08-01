@@ -54,3 +54,28 @@ export function tierClass(league: string): string {
 export function roundLabel(round: number): string {
   return round >= 0 ? `W${round}` : `L${-round}`;
 }
+
+/**
+ * A scoreline read from the winner's side.
+ *
+ * Challonge reports `scores_csv` player-one-first, so a set player two won
+ * arrives as "1-2". Anywhere the winner is named first — a results ticker, a
+ * result card — printing that verbatim reads as though the winner lost. Flip
+ * each game's pair when player two won.
+ *
+ * Returns null for a score that cannot be read, which includes Challonge's
+ * negative-number forfeit convention; a walkover has no scoreline to show.
+ */
+export function orientScore(scoresCsv: string | null | undefined, winnerSide: number | null): string | null {
+  if (!scoresCsv || (winnerSide !== 1 && winnerSide !== 2)) return null;
+  const games: string[] = [];
+  for (const part of scoresCsv.split(',')) {
+    const match = part.trim().match(/^(-?\d+)-(-?\d+)$/);
+    if (!match) return null;
+    const a = Number(match[1]);
+    const b = Number(match[2]);
+    if (a < 0 || b < 0) return null;
+    games.push(winnerSide === 1 ? `${a}-${b}` : `${b}-${a}`);
+  }
+  return games.length > 0 ? games.join(', ') : null;
+}

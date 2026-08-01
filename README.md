@@ -46,6 +46,16 @@ workflow).
   Movement arrows compare against a replay with the most recent club night
   withheld, so they report what the games did and not what the last recompute
   happened to change.
+- **The board shows the current field.** Players with no event in the last
+  year are hidden by default (a setting on the rankings screen). That is the
+  other half of the same idea: the penalty orders the people who still turn
+  up sometimes, and this takes the long-gone off the board entirely, which is
+  why the penalty can stay modest and capped rather than having to drive a
+  lapsed player's rating to nothing. A rank is a position *within* a field,
+  so both the rank and the rank it is compared against are re-derived over
+  the players on screen: ranks run 1..n with no holes, and ▲2 always means
+  "passed two people who are still playing" rather than "two people above you
+  aged out".
 - **Identity is human-decided.** Challonge display names are cleaned
   (company tags, `@` conventions, parentheticals) and matched against player
   names *and* their stored aliases; safe structured short-forms auto-link;
@@ -141,6 +151,19 @@ not-yet-linked provider creates a *separate* account instead — nothing can
 match two providers up before the user has proven they own both — so the
 sign-in page tells people to sign in with their original provider first and
 link from there.
+
+### Reading the board
+
+The columns are explained in place: on a laptop by the header row, and
+everywhere by the **How to read the board** key under the filters, which draws
+the actual marks — the confidence meter, the form pips, the league ramp the
+rows carry on their left edge. Below ~860px the header row is dropped, so the
+sort moves into the filter strip and a row states whichever figure it is
+ordered by when that column is not on screen.
+
+Colour scheme follows the OS by default and can be pinned light or dark from
+the nav; the choice is stored under `smashclub:theme` and applied by an inline
+script in `index.html` before first paint.
 
 ### Character head icons
 
