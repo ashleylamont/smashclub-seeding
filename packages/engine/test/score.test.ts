@@ -175,9 +175,10 @@ describe('computeLeaderboard', () => {
     expect(rows[0]!.skillSd).toBeGreaterThan(0); // uncertainty is exposed, not hidden
   });
 
-  it('ranks a strong-but-unproven player above a weaker regular, unlike seeding', () => {
-    // The pathology the split fixes. The prospect is genuinely better but has
-    // played little, so uncertainty is high; the regular is settled but weaker.
+  it('agrees with seeding: the unproven player does not outrank the regular', () => {
+    // The prospect's point estimate is far higher, but they have played little,
+    // so uncertainty is high; the regular is settled but weaker. Board and
+    // bracket now answer this the same way.
     const prospect = makeState({
       playerId: 'prospect',
       rating: 1850,
@@ -199,9 +200,45 @@ describe('computeLeaderboard', () => {
     const scores = rows.map(({ rank: _rank, league: _league, ...score }) => score);
     const seeds = seedingOrder(scores);
 
-    // Leaderboard: the better player is shown as the better player.
-    expect(rows[0]!.playerId).toBe('prospect');
-    // Seeding: caution wins — the unproven player does not get the top seed.
-    expect(seeds[0]!.playerId).toBe('regular');
+    expect(rows[0]!.playerId).toBe('regular');
+    expect(seeds.map((s) => s.playerId)).toEqual(rows.map((r) => r.playerId));
+    // The point estimate is not thrown away — it is what the ± band is drawn
+    // around, and it still says the prospect looks stronger.
+    expect(rows[1]!.skillRating).toBeGreaterThan(rows[0]!.skillRating);
+  });
+
+  it('costs an inactive player places, which is the point of ranking this way', () => {
+    // Two identical records; one has sat out club nights, which decay turns
+    // into a wider RD and nothing else. Ranked on the point estimate the two
+    // were indistinguishable.
+    const active = makeState({ playerId: 'active', rating: 1600, rd: 70 });
+    const absent = makeState({ playerId: 'absent', rating: 1600, rd: 190 });
+    const rows = computeLeaderboard(
+      new Map([
+        ['absent', absent],
+        ['active', active],
+      ]),
+      settings,
+    );
+    expect(rows.map((r) => r.playerId)).toEqual(['active', 'absent']);
+    expect(rows[0]!.skillRating).toBeCloseTo(rows[1]!.skillRating, 9);
+  });
+
+  it('labels leagues from the ranked number, so order and league agree', () => {
+    const bands = [
+      { name: 'Top', minRating: 1200 },
+      { name: 'Rest', minRating: LEAGUE_CATCH_ALL },
+    ];
+    const banded = { ...settings, leagueBands: bands };
+    // Skill ~1600 for both, but only the settled player's conservative rating
+    // clears 1200.
+    const rows = computeLeaderboard(
+      new Map([
+        ['settled', makeState({ playerId: 'settled', rating: 1600, rd: 60 })],
+        ['unsure', makeState({ playerId: 'unsure', rating: 1600, rd: 300 })],
+      ]),
+      banded,
+    );
+    expect(rows.map((r) => r.league)).toEqual(['Top', 'Rest']);
   });
 });

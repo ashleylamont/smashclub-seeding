@@ -155,6 +155,34 @@ describe('review-queue candidates stay current', () => {
     expect(candidates.map((candidate) => candidate.playerId)).toContain(survivorId);
   });
 
+  it('offers a player whose alias — not their registry name — resembles the entry', async () => {
+    await syncWithParticipants(['Anthy', '[ATL] Jackson Lin']);
+    const [jackson] = await db.select().from(players).where(eq(players.legacyId, 'jackson'));
+    // Nothing about "Jackson Lin" resembles "Anthy"; the alias is the only link.
+    expect((await anthyItem()).candidates).toEqual([]);
+
+    await adminCaller(db).addAlias({ playerId: jackson!.id, alias: 'Anthea', companyCode: null });
+
+    const candidates = (await anthyItem()).candidates as Array<{
+      playerId: string;
+      name: string;
+      matchedAlias: string | null;
+    }>;
+    expect(candidates.map((candidate) => candidate.playerId)).toContain(jackson!.id);
+    const hit = candidates.find((candidate) => candidate.playerId === jackson!.id)!;
+    expect(hit.name).toBe('Jackson Lin');
+    expect(hit.matchedAlias).toBe('anthea');
+  });
+
+  it('leaves matchedAlias null when the registry name is what matched', async () => {
+    await syncWithParticipants(['Anthy', '[ATL] Jackson Lin']);
+    const [jackson] = await db.select().from(players).where(eq(players.legacyId, 'jackson'));
+    await adminCaller(db).updatePlayer({ playerId: jackson!.id, canonicalName: 'Anthy Lin' });
+
+    const candidates = (await anthyItem()).candidates as Array<{ playerId: string; matchedAlias: string | null }>;
+    expect(candidates.find((candidate) => candidate.playerId === jackson!.id)?.matchedAlias).toBeNull();
+  });
+
   it('refreshes open items when a registry import adds the missing player', async () => {
     await syncWithParticipants(['Anthy', '[ATL] Jackson Lin']);
     const caller = adminCaller(db);

@@ -9,13 +9,15 @@ import './Leaderboard.css';
 /**
  * The ranking board.
  *
- * Ranked on best-estimate skill, with the uncertainty on that estimate shown
- * next to it rather than folded into the number — the previous design published
- * a single figure that mixed the two, so a busy mid-table player outranked a
- * strong infrequent one.
+ * Ranked on the cautious rating — the skill estimate less two standard
+ * deviations — so a place has to be earned in sets and held by turning up:
+ * inactivity widens the deviation, and the club wants that to cost you. The
+ * estimate and its ± band sit beside the ranked number so the subtraction is
+ * legible rather than mysterious.
  *
  * Each row carries the things a club member actually wants: where they sit, which
- * way they are moving, recent form, and how much the rating can be trusted.
+ * way they are moving over the last club night, recent form, and how much the
+ * rating can be trusted.
  */
 
 export interface PlayerTrend {
@@ -30,7 +32,7 @@ interface Props {
   trends: Map<string, PlayerTrend>;
 }
 
-type SortField = 'rank' | 'skillRating' | 'wins' | 'eventCount' | 'certainty';
+type SortField = 'rank' | 'rating' | 'wins' | 'eventCount' | 'certainty';
 
 /**
  * The board's columns. Every sortable measure has its own column, so the header
@@ -39,9 +41,14 @@ type SortField = 'rank' | 'skillRating' | 'wins' | 'eventCount' | 'certainty';
  */
 const COLUMNS: { key: string; label: string; field: SortField | null; title?: string }[] = [
   { key: 'rank', label: '#', field: 'rank', title: 'Rank' },
-  { key: 'movement', label: 'Δ', field: null, title: 'Rank movement since the previous recompute' },
+  { key: 'movement', label: 'Δ', field: null, title: 'Places gained or lost over the last club night' },
   { key: 'identity', label: 'Player', field: null },
-  { key: 'rating', label: 'Rating', field: 'skillRating', title: 'Best-estimate skill ± one standard deviation' },
+  {
+    key: 'rating',
+    label: 'Rating',
+    field: 'rating',
+    title: 'Cautious rating — skill minus uncertainty, and what the board is ranked on',
+  },
   { key: 'certainty', label: 'Conf', field: 'certainty', title: 'How well established the rating is' },
   { key: 'form', label: 'Form', field: null, title: 'Last five sets, oldest first' },
   { key: 'spark', label: 'Trend', field: null, title: 'Recent rating trajectory' },
@@ -82,8 +89,8 @@ export function Leaderboard({ rows, trends }: Props) {
       switch (sortField) {
         case 'rank':
           return row.rank;
-        case 'skillRating':
-          return row.skillRating;
+        case 'rating':
+          return row.conservativeRating;
         case 'wins':
           return row.wins;
         case 'eventCount':
@@ -174,7 +181,7 @@ export function Leaderboard({ rows, trends }: Props) {
                 to="/players/$playerId"
                 params={{ playerId: row.playerId }}
                 className="board-link"
-                aria-label={`${row.name}, rank ${row.rank}, rating ${Math.round(row.skillRating)}`}
+                aria-label={`${row.name}, rank ${row.rank}, rating ${Math.round(row.conservativeRating)}`}
               >
                 <span className={`rank num${podium ? ` rank-${row.rank}` : ''}`}>{row.rank}</span>
 
@@ -204,9 +211,16 @@ export function Leaderboard({ rows, trends }: Props) {
                 </span>
 
                 <span className="rating">
-                  <span className="rating-value num">{Math.round(row.skillRating)}</span>
-                  <span className="rating-band num" title="Uncertainty on the estimate (± one standard deviation)">
-                    ±{Math.round(row.skillSd)}
+                  <span className="rating-value num">{Math.round(row.conservativeRating)}</span>
+                  {/* The ranked number is the skill estimate less two standard
+                      deviations, so the estimate itself is what the band is
+                      drawn around — showing it keeps the subtraction visible
+                      rather than making the rating look inexplicably low. */}
+                  <span
+                    className="rating-band num"
+                    title={`Skill estimate ${Math.round(row.skillRating)} ± ${Math.round(row.skillSd)}; the rating subtracts two standard deviations`}
+                  >
+                    {Math.round(row.skillRating)}±{Math.round(row.skillSd)}
                   </span>
                 </span>
 
