@@ -7,16 +7,19 @@
  *
  * Idempotent: players are keyed by their registry id, tournaments by slug,
  * companies by code. Run it again any time.
+ *
+ * The parsing, validation and diffing are the same code the admin import
+ * wizard runs (apps/server/src/registry), so a file that imports cleanly here
+ * previews cleanly there and vice versa.
  */
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
-import { parse as parseYaml } from 'yaml';
 import { createDb } from '@smashclub/db';
 import {
   importCompanyTaxonomy,
   importRegistryPlayers,
+  parseRegistryYaml,
   registerTournamentSlugs,
-  type RegistryPlayerInput,
 } from '@smashclub/server/bootstrap';
 
 async function main(): Promise<void> {
@@ -39,9 +42,22 @@ async function main(): Promise<void> {
     console.log('Company taxonomy imported.');
 
     if (values.players) {
-      const payload = parseYaml(readFileSync(values.players, 'utf8')) as { players?: RegistryPlayerInput[] };
-      const result = await importRegistryPlayers(db, payload.players ?? []);
-      console.log(`Players imported: ${result.created} created, ${result.updated} updated.`);
+      const parsed = parseRegistryYaml(readFileSync(values.players, 'utf8'));
+      if (parsed.issues.length > 0) {
+        // Refuse the whole file rather than silently importing the entries that
+        // happened to be well-formed.
+        console.error(`${values.players} has ${parsed.issues.length} problem(s):`);
+        for (const issue of parsed.issues) {
+          console.error(`  - ${issue.id ?? `entry #${issue.index + 1}`}: ${issue.message}`);
+        }
+        process.exit(1);
+      }
+      const result = await importRegistryPlayers(db, parsed.entries);
+      console.log(
+        `Players imported: ${result.created} created, ${result.updated} updated, ${result.unchanged} unchanged ` +
+          `(+${result.aliasesAdded} aliases, +${result.charactersAdded} characters, ` +
+          `+${result.companiesCreated} companies).`,
+      );
     }
 
     if (values.tournaments) {

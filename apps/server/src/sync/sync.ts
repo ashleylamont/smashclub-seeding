@@ -3,6 +3,7 @@ import type { Db } from '@smashclub/db';
 import { sets, syncJobs, tournamentParticipants, tournaments } from '@smashclub/db';
 import { scoresIndicateForfeit, type ChallongeMatch } from '@smashclub/engine';
 import type { ChallongeClient } from '../challonge/client';
+import { recomputePendingCandidates } from '../identity/candidates';
 import { matchTournamentParticipants } from '../identity/matching';
 import { liveBus } from '../live/bus';
 import { markDraftRunsStale } from '../seeding/seeding';
@@ -170,6 +171,11 @@ export async function syncTournament(
     // --- identity resolution + denormalisation ---
     const outcomes = await matchTournamentParticipants(db, tournamentId);
     const queuedForReview = outcomes.filter((o) => o.method === 'queued').length;
+    // Refresh the older items' candidate snapshots too, but only when this sync
+    // actually had identities to resolve — a live poll of a settled bracket
+    // should stay a no-op. No Challonge traffic either way: this reads players
+    // out of Postgres.
+    if (outcomes.length > 0) await recomputePendingCandidates(db);
 
     // `underway` deliberately no longer maps to a `live` sync state. Challonge's
     // `underway` is sticky — tournaments abandoned years ago still report it —
