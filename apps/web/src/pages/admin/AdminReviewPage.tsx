@@ -4,6 +4,7 @@ import { trpc } from '../../lib/trpc';
 import type { ReviewCandidate, ReviewItem } from '../../lib/apiTypes';
 import { timeAgo } from '../../lib/format';
 import { PlayerFormModal, type PlayerFormValues } from '../../components/PlayerFormModal';
+import { PlayerLookupModal } from '../../components/PlayerLookupModal';
 
 /** Details the reviewer may attach when a resolution mints a new player. */
 interface NewPlayerDetails {
@@ -84,6 +85,7 @@ export function AdminReviewPage() {
 function ReviewCard({ item, onResolved }: { item: ReviewItem; onResolved: () => void }) {
   const candidates = (item.candidates as ReviewCandidate[] | null) ?? [];
   const [detailKind, setDetailKind] = useState<DetailKind | null>(null);
+  const [lookingUp, setLookingUp] = useState(false);
 
   const companies = useQuery({
     queryKey: ['admin', 'companies'],
@@ -95,6 +97,7 @@ function ReviewCard({ item, onResolved }: { item: ReviewItem; onResolved: () => 
       trpc.admin.resolveReview.mutate({ reviewItemId: item.id, resolution }),
     onSuccess: () => {
       setDetailKind(null);
+      setLookingUp(false);
       onResolved();
     },
   });
@@ -151,6 +154,7 @@ function ReviewCard({ item, onResolved }: { item: ReviewItem; onResolved: () => 
               <span className="candidate-name">
                 {candidate.name}
                 {candidate.companyCode && <span className="muted"> ({candidate.companyCode})</span>}
+                {candidate.matchedAlias && <span className="muted"> via “{candidate.matchedAlias}”</span>}
               </span>
               <span className={`chip reason-${candidate.reason}`}>{candidate.reason}</span>
               <span className="score-bar" title={`score ${(candidate.score * 100).toFixed(0)}%`}>
@@ -179,6 +183,15 @@ function ReviewCard({ item, onResolved }: { item: ReviewItem; onResolved: () => 
           type="button"
           className="btn btn-small"
           disabled={resolve.isPending}
+          onClick={() => setLookingUp(true)}
+          title="Search the registry for the player this entry belongs to"
+        >
+          Find a player…
+        </button>
+        <button
+          type="button"
+          className="btn btn-small"
+          disabled={resolve.isPending}
           onClick={() => setDetailKind('created_new')}
         >
           Create new player…
@@ -194,6 +207,22 @@ function ReviewCard({ item, onResolved }: { item: ReviewItem; onResolved: () => 
         </button>
         {resolve.isError && <span className="error-text">{resolve.error.message}</span>}
       </div>
+
+      {lookingUp && (
+        <PlayerLookupModal
+          title={`Link “${item.cleanedName}” to a player`}
+          candidatePlayerIds={candidates.map((candidate) => candidate.playerId)}
+          busy={resolve.isPending}
+          error={resolve.error?.message ?? null}
+          onPick={(playerId) => resolve.mutate({ kind: 'linked_existing', playerId })}
+          onCancel={() => setLookingUp(false)}
+        >
+          <p className="muted">
+            From “{item.rawName}” in {item.tournamentName}. Linking records the decision and aliases this
+            spelling to the player you pick, so the same entry matches silently next time.
+          </p>
+        </PlayerLookupModal>
+      )}
 
       {detailKind && (
         <PlayerFormModal

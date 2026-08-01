@@ -50,6 +50,12 @@ export async function resolveReviewItem(
   let playerId: string;
 
   if (input.kind === 'linked_existing') {
+    // The reviewer can now name any player, not only one of the ranked
+    // candidates, so the target is no longer guaranteed to be a live player.
+    const [target] = await db.select().from(players).where(eq(players.id, input.playerId));
+    if (!target) throw new Error(`Unknown player ${input.playerId}`);
+    if (target.status !== 'active') throw new Error(`Player ${target.canonicalName} is ${target.status}`);
+
     playerId = input.playerId;
     await ensureAlias(db, playerId, aliasNorm, item.companyId, 'manual');
     await db
