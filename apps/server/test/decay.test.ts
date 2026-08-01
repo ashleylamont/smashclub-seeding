@@ -20,6 +20,23 @@ import { fixtureClient, type FixtureTournament } from './helpers/challongeFixtur
 let db: Db;
 let close: () => Promise<void>;
 
+/**
+ * A run of sets between two players, as a real bracket night produces.
+ *
+ * Fixtures here have to establish their players before decay says anything:
+ * inactivity widens the band only as far as `decayRdCap`, and someone seen once
+ * or twice is already past it — the club has no confidence in them left to lose.
+ * The activity penalty, not the band, is what marks such a player absent.
+ */
+const runOfSets = (count: number, firstId: number, p1: number, p2: number) =>
+  Array.from({ length: count }, (_, i) => ({
+    id: firstId + i,
+    p1,
+    p2,
+    winner: i % 2 === 0 ? 1 : 2,
+    order: i + 1,
+  }));
+
 /** Two club nights, each with a main and a rookie bracket. */
 const night1Main: FixtureTournament = {
   slug: 'main1',
@@ -31,7 +48,7 @@ const night1Main: FixtureTournament = {
     { id: 1, name: '[ATL] Fox McCloud' },
     { id: 2, name: '[ATL] Samus Aran' },
   ],
-  matches: [{ id: 11, p1: 1, p2: 2, winner: 1, order: 1 }],
+  matches: runOfSets(8, 11, 1, 2),
 };
 
 const night1Rookie: FixtureTournament = {
@@ -48,8 +65,10 @@ const night1Rookie: FixtureTournament = {
     { id: 3, name: '[ATL] Fox McCloud' },
   ],
   matches: [
-    { id: 21, p1: 1, p2: 2, winner: 1, order: 1 },
-    { id: 22, p1: 3, p2: 1, winner: 1, order: 2 },
+    // Rookie sets carry scaled-down weight, so it takes more of them than in the
+    // main bracket to settle Kirby's and Yoshi's ratings.
+    ...runOfSets(8, 21, 1, 2),
+    { id: 29, p1: 3, p2: 1, winner: 1, order: 9 },
   ],
 };
 
@@ -194,6 +213,54 @@ describe('inactivity decay through sync and recompute', () => {
     expect(all).toHaveLength(4);
     for (const row of all) {
       expect(row.eventCount).toBeLessThanOrEqual(row.tournamentCount);
+    }
+  });
+
+  it('charges the activity penalty for a missed night and shows what the next costs', async () => {
+    // The rookie pair skip the second night. With a grace window of one, nothing
+    // is docked yet — but the board can already say what the next one costs.
+    await syncAll(['main1', 'rookie1', 'main2']);
+    const run = await runRecompute(db);
+
+    const ratingFor = async (name: string) => {
+      const [row] = await db
+        .select()
+        .from(playerRatings)
+        .where(and(eq(playerRatings.recomputeId, run.recomputeId), eq(playerRatings.playerId, await playerId(name))));
+      return row!;
+    };
+
+    const absent = await ratingFor('Kirby');
+    expect(absent.missedEvents).toBe(1);
+    expect(absent.attendanceStreak).toBe(0);
+    expect(absent.activityPenalty).toBe(0);
+    expect(absent.nextMissPenalty).toBe(40);
+    expect(absent.clubRating).toBeCloseTo(absent.skillRating, 9);
+
+    const present = await ratingFor('Fox McCloud');
+    expect(present.missedEvents).toBe(0);
+    expect(present.attendanceStreak).toBe(2);
+    expect(present.nextMissPenalty).toBe(0);
+  });
+
+  it('ranks the board on the club rating while seeding stays conservative', async () => {
+    await syncAll(['main1', 'rookie1', 'main2']);
+    const run = await runRecompute(db);
+
+    const rows = await db
+      .select()
+      .from(playerRatings)
+      .where(eq(playerRatings.recomputeId, run.recomputeId));
+
+    for (const row of rows) {
+      // The published order is the club rating, and it is the skill estimate
+      // less the penalty — never the conservative number the bracket seeds on.
+      expect(row.clubRating).toBeCloseTo(row.skillRating - row.activityPenalty, 9);
+      expect(row.conservativeRating).toBeCloseTo(row.skillRating - 2 * row.skillSd, 9);
+    }
+    const byRank = [...rows].sort((a, b) => a.rank - b.rank);
+    for (let i = 1; i < byRank.length; i++) {
+      expect(byRank[i - 1]!.clubRating).toBeGreaterThanOrEqual(byRank[i]!.clubRating);
     }
   });
 

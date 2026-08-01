@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { seedingRuns, tournaments, type Db } from '@smashclub/db';
+import { playerRatings, seedingRuns, tournaments, type Db } from '@smashclub/db';
 import { importRegistryPlayers, registerTournamentSlugs } from '../src/bootstrap/importRegistry';
-import { runRecompute } from '../src/recompute/recompute';
+import { latestRecomputeId, runRecompute } from '../src/recompute/recompute';
 import { createSeedingRun, latestSeedingRun, pushSeedingRun, reorderSeedingRun } from '../src/seeding/seeding';
 import { syncTournament } from '../src/sync/sync';
 import { createTestDb } from './helpers/testDb';
@@ -81,6 +81,28 @@ describe('seeding workbench', () => {
     expect(result!.entries.map(entryName)).toEqual(['Fox McCloud', 'Samus Aran', 'Kirby']);
     expect(result!.entries.map((entry) => entry.autoSeed)).toEqual([1, 2, 3]);
     expect(result!.entries[0]!.autoScore).not.toBeNull();
+  });
+
+  it('seeds on the conservative rating, not the club rating the board publishes', async () => {
+    const upcomingId = await setupRatedAndUpcoming();
+    await createSeedingRun(db, upcomingId, null);
+    const result = await latestSeedingRun(db, upcomingId);
+
+    // The two orders are allowed to disagree — a seed is a bet about a draw,
+    // where an unknown player is expensive to be wrong about, while the board is
+    // reporting who is best. What must hold is that the bracket used the
+    // cautious number, so an unproven entrant is never handed a top seed.
+    const recomputeId = await latestRecomputeId(db);
+    const ratings = await db
+      .select()
+      .from(playerRatings)
+      .where(eq(playerRatings.recomputeId, recomputeId!));
+    const byPlayer = new Map(ratings.map((row) => [row.playerId, row]));
+
+    for (const entry of result!.entries) {
+      if (!entry.playerId) continue;
+      expect(entry.autoScore).toBeCloseTo(byPlayer.get(entry.playerId)!.conservativeRating, 9);
+    }
   });
 
   it('supports manual reorder and pushes seeds to Challonge with verification', async () => {

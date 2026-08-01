@@ -34,9 +34,62 @@ export const glickoSettingsSchema = z.object({
   rookieFullPenaltyThreshold: z.number().default(1550),
   rookieOverPenaltyThreshold: z.number().default(1650),
 
-  // Inactivity decay, counted in missed tournaments
-  missedTournamentRdScale: z.number().default(20),
-  missedTournamentEscalation: z.number().default(0.2),
+  /**
+   * How much uncertainty one missed *event* adds, in rating points, combined in
+   * quadrature: rd' = min(decayRdCap, √(rd² + growth²)).
+   *
+   * This is an honest statement about skill drifting while unobserved, and
+   * nothing more. It used to be a policy lever as well — the old formula grew RD
+   * by ~20 idle Glicko periods per missed event and escalated per consecutive
+   * miss, purely so that ranking on `skill − 2·RD` would make absence hurt.
+   * Attendance policy now lives in the activity penalty below, so this can go
+   * back to being a modest, uniform statement of doubt.
+   *
+   * Deliberately *not* scaled by the player's volatility, as the old formula was.
+   * Volatility measures how erratic someone's results are, so charging it here
+   * meant two players absent for the same three months accrued different amounts
+   * of doubt — a difference nobody chose and nobody could explain.
+   */
+  missedEventRdGrowth: z.number().default(35),
+
+  /**
+   * Ceiling on RD reached by missing events, as opposed to `rdCap` (which also
+   * bounds a newcomer's opening RD).
+   *
+   * Set below `rdCap` on purpose: a lapsed regular is not a stranger. Letting
+   * their RD climb all the way to the cold-start value throws away everything
+   * the club learned about them, and makes their first night back a coin flip
+   * for seeding. This floors how much we can forget.
+   */
+  decayRdCap: z.number().default(250),
+
+  /**
+   * Activity policy: what missing club nights costs on the public board.
+   *
+   * Kept as an explicit subtraction from the skill estimate rather than routed
+   * through RD, so that every knob answers a question a member would actually
+   * ask. "How long am I safe for?" — `activityGraceEvents` events. "What does
+   * lapsing cost?" — `activityPenaltyPerEvent` a time, never more than
+   * `activityPenaltyCap`. Playing resets it in full.
+   *
+   * The defaults suit a club that runs an event every few months: one missed
+   * event is free, so the every-other-event regular — the normal case in a
+   * casual club — is never penalised at all, while someone who has drifted off
+   * for a year slides about a league and can win it all back in one night.
+   */
+  activityGraceEvents: z.number().default(1),
+  activityPenaltyPerEvent: z.number().default(40),
+  activityPenaltyCap: z.number().default(120),
+
+  /**
+   * Below either threshold a player is badged *provisional* rather than sunk in
+   * the order. Shrinkage already pulls a thin record toward the middle, which is
+   * the statistically honest treatment of someone we have barely seen; the badge
+   * says the same thing to a reader without pretending they are the worst player
+   * in the club.
+   */
+  provisionalEventCount: z.number().default(2),
+  provisionalMatchCount: z.number().default(8),
 
   // Sample-confidence blend for the conservative seeding score
   confidenceTournamentWeight: z.number().default(0.45),
@@ -72,14 +125,13 @@ export const glickoSettingsSchema = z.object({
   leagueBandsCalibrated: z.boolean().default(false),
 
   /**
-   * Which number the stored bands were fitted to. Bands cut from the skill
-   * estimate mean nothing against the conservative one — the scales differ by
-   * roughly 2·RD — so when this does not match what the board ranks on, the
-   * next recompute refits and stamps the new basis. Defaults to `skill`, which
-   * is what every set of bands stored before the board moved to the
-   * conservative rating was fitted to.
+   * Which number the stored bands were fitted to. Bands cut from one scale mean
+   * nothing against another — skill and the conservative rating differ by
+   * roughly 2·RD — so when this does not match what the board ranks on, the next
+   * recompute refits and stamps the new basis. Defaults to `skill`, which is
+   * what every set of bands stored before the board moved off it was fitted to.
    */
-  leagueBandBasis: z.enum(['skill', 'conservative']).default('skill'),
+  leagueBandBasis: z.enum(['skill', 'conservative', 'club']).default('skill'),
 
   leagueBands: z
     .array(z.object({ name: z.string(), minRating: z.number() }))

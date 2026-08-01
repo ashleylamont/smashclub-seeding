@@ -99,6 +99,7 @@ export function checkFullReplay(dataset: LegacyDataset, cacheDir: string): boole
       rookieScaleUsesPreviousWinner: true,
       skipTrailingDecay: true,
       decayPerBracket: true,
+      legacyVolatilityDecay: true,
     },
   });
 

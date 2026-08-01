@@ -354,6 +354,13 @@
   color: var(--warn);
 }
 
+/* Neutral note: says "here is how to read this", not "something is wrong". */
+.banner.banner-info {
+  background: var(--accent-bg);
+  border-left-color: var(--accent-border);
+  color: var(--text-soft);
+}
+
 .banner.banner-success {
   background: var(--good-bg);
   border-left-color: var(--good);

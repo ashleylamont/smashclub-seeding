@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { LEAGUE_CATCH_ALL, defaultGlickoSettings } from '@smashclub/shared';
-import { calibrateLeagueBands, computeLeaderboard, computePlayerScore, leagueForRating, seedingOrder } from '../src/score';
+import {
+  activityPenaltyFor,
+  calibrateLeagueBands,
+  computeLeaderboard,
+  computePlayerScore,
+  leagueForRating,
+  seedingOrder,
+} from '../src/score';
 import type { PlayerFinalState } from '../src/types';
 
 const settings = defaultGlickoSettings;
@@ -16,6 +23,8 @@ const makeState = (overrides: Partial<PlayerFinalState> & { playerId: string }):
   rookieMatchCount: 0,
   lastPeriodIndex: 2,
   lastPlayedDate: '2025-03-01',
+  missedEvents: 0,
+  attendanceStreak: 3,
   tournamentIds: new Set(['t1', 't2', 't3']),
   eventKeys: new Set(['2025-01-01', '2025-02-01', '2025-03-01']),
   opponentIds: new Set(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']),
@@ -175,44 +184,11 @@ describe('computeLeaderboard', () => {
     expect(rows[0]!.skillSd).toBeGreaterThan(0); // uncertainty is exposed, not hidden
   });
 
-  it('agrees with seeding: the unproven player does not outrank the regular', () => {
-    // The prospect's point estimate is far higher, but they have played little,
-    // so uncertainty is high; the regular is settled but weaker. Board and
-    // bracket now answer this the same way.
-    const prospect = makeState({
-      playerId: 'prospect',
-      rating: 1850,
-      rd: 240,
-      matchCount: 4,
-      wins: 4,
-      losses: 0,
-      mainMatchCount: 4,
-      tournamentIds: new Set(['t1']),
-      opponentIds: new Set(['x', 'y']),
-    });
-    const regular = makeState({ playerId: 'regular', rating: 1560, rd: 70 });
-    const states = new Map([
-      ['prospect', prospect],
-      ['regular', regular],
-    ]);
-
-    const rows = computeLeaderboard(states, settings);
-    const scores = rows.map(({ rank: _rank, league: _league, ...score }) => score);
-    const seeds = seedingOrder(scores);
-
-    expect(rows[0]!.playerId).toBe('regular');
-    expect(seeds.map((s) => s.playerId)).toEqual(rows.map((r) => r.playerId));
-    // The point estimate is not thrown away — it is what the ± band is drawn
-    // around, and it still says the prospect looks stronger.
-    expect(rows[1]!.skillRating).toBeGreaterThan(rows[0]!.skillRating);
-  });
-
-  it('costs an inactive player places, which is the point of ranking this way', () => {
-    // Two identical records; one has sat out club nights, which decay turns
-    // into a wider RD and nothing else. Ranked on the point estimate the two
-    // were indistinguishable.
-    const active = makeState({ playerId: 'active', rating: 1600, rd: 70 });
-    const absent = makeState({ playerId: 'absent', rating: 1600, rd: 190 });
+  it('costs a lapsed player places — via the stated penalty, not a widened band', () => {
+    // Two identical records; one has sat out four club nights. The board has to
+    // separate them, and it is the penalty that does it: skill is untouched.
+    const active = makeState({ playerId: 'active', rating: 1600, missedEvents: 0 });
+    const absent = makeState({ playerId: 'absent', rating: 1600, missedEvents: 4, attendanceStreak: 0 });
     const rows = computeLeaderboard(
       new Map([
         ['absent', absent],
@@ -222,23 +198,119 @@ describe('computeLeaderboard', () => {
     );
     expect(rows.map((r) => r.playerId)).toEqual(['active', 'absent']);
     expect(rows[0]!.skillRating).toBeCloseTo(rows[1]!.skillRating, 9);
+    // 4 missed, 1 free, 3 charged at 40 = 120, which is also the cap.
+    expect(rows[1]!.activityPenalty).toBe(120);
+    expect(rows[1]!.clubRating).toBeCloseTo(rows[1]!.skillRating - 120, 9);
+  });
+
+  it('leaves the every-other-event regular alone: one missed night is free', () => {
+    const steady = makeState({ playerId: 'steady', rating: 1600, missedEvents: 0 });
+    const irregular = makeState({ playerId: 'irregular', rating: 1600, missedEvents: 1, attendanceStreak: 0 });
+    const rows = computeLeaderboard(
+      new Map([
+        ['steady', steady],
+        ['irregular', irregular],
+      ]),
+      settings,
+    );
+    const irregularRow = rows.find((r) => r.playerId === 'irregular')!;
+    expect(irregularRow.activityPenalty).toBe(0);
+    expect(irregularRow.clubRating).toBeCloseTo(irregularRow.skillRating, 9);
+    // Their next miss is the one that starts costing, and they can be told so.
+    expect(irregularRow.nextMissPenalty).toBe(settings.activityPenaltyPerEvent);
+  });
+
+  it('publishes what the next missed night costs, including once capped', () => {
+    const capped = makeState({ playerId: 'gone', missedEvents: 9, attendanceStreak: 0 });
+    const [row] = computeLeaderboard(new Map([['gone', capped]]), settings);
+    expect(row!.activityPenalty).toBe(settings.activityPenaltyCap);
+    expect(row!.nextMissPenalty).toBe(0);
+  });
+
+  it('does not sink an unproven player the way the conservative rating did', () => {
+    // The prospect looks strong on four sets. Shrinkage already pulls a thin
+    // record toward the middle; the board should not *also* charge them for
+    // being unknown, which is what ranking on skill − 2·RD did.
+    const prospect = makeState({
+      playerId: 'prospect',
+      rating: 1850,
+      rd: 240,
+      matchCount: 4,
+      wins: 4,
+      losses: 0,
+      mainMatchCount: 4,
+      tournamentIds: new Set(['t1']),
+      eventKeys: new Set(['2025-03-01']),
+      opponentIds: new Set(['x', 'y']),
+    });
+    const regular = makeState({ playerId: 'regular', rating: 1560, rd: 70 });
+    const rows = computeLeaderboard(
+      new Map([
+        ['prospect', prospect],
+        ['regular', regular],
+      ]),
+      settings,
+    );
+    const prospectRow = rows.find((r) => r.playerId === 'prospect')!;
+    // Held near the middle rather than dumped at the bottom, and badged so a
+    // reader knows why.
+    expect(prospectRow.isProvisional).toBe(true);
+    expect(prospectRow.clubRating).toBeGreaterThan(1400);
+    expect(prospectRow.conservativeRating).toBeLessThan(1200);
+  });
+
+  it('board and bracket deliberately disagree about a returner', () => {
+    // Back after a long absence: the club rating says they are still good (one
+    // night back clears the penalty), the seed says we cannot vouch for them
+    // yet, because their band is wide. Both are right for their own question.
+    const returner = makeState({ playerId: 'returner', rating: 1700, rd: 240, missedEvents: 0 });
+    const regular = makeState({ playerId: 'regular', rating: 1600, rd: 60, missedEvents: 0 });
+    const rows = computeLeaderboard(
+      new Map([
+        ['returner', returner],
+        ['regular', regular],
+      ]),
+      settings,
+    );
+    const scores = rows.map(({ rank: _rank, league: _league, ...score }) => score);
+
+    expect(rows.map((r) => r.playerId)).toEqual(['returner', 'regular']);
+    expect(seedingOrder(scores).map((s) => s.playerId)).toEqual(['regular', 'returner']);
   });
 
   it('labels leagues from the ranked number, so order and league agree', () => {
     const bands = [
-      { name: 'Top', minRating: 1200 },
+      { name: 'Top', minRating: 1550 },
       { name: 'Rest', minRating: LEAGUE_CATCH_ALL },
     ];
     const banded = { ...settings, leagueBands: bands };
-    // Skill ~1600 for both, but only the settled player's conservative rating
-    // clears 1200.
+    // Same skill; only the one who has kept turning up clears the threshold.
     const rows = computeLeaderboard(
       new Map([
-        ['settled', makeState({ playerId: 'settled', rating: 1600, rd: 60 })],
-        ['unsure', makeState({ playerId: 'unsure', rating: 1600, rd: 300 })],
+        ['present', makeState({ playerId: 'present', rating: 1600, missedEvents: 0 })],
+        ['gone', makeState({ playerId: 'gone', rating: 1600, missedEvents: 5, attendanceStreak: 0 })],
       ]),
       banded,
     );
+    expect(rows.map((r) => r.playerId)).toEqual(['present', 'gone']);
     expect(rows.map((r) => r.league)).toEqual(['Top', 'Rest']);
+  });
+});
+
+describe('activityPenaltyFor', () => {
+  it('is free inside the grace window, flat after it, and capped', () => {
+    const missed = [0, 1, 2, 3, 4, 5, 12];
+    expect(missed.map((m) => activityPenaltyFor(m, settings))).toEqual([0, 0, 40, 80, 120, 120, 120]);
+  });
+
+  it('resets in full — the penalty is a function of the current gap only', () => {
+    // Someone back from a year away is charged exactly what a newly-absent
+    // player is: nothing. There is no memory of past absences to serve out.
+    expect(activityPenaltyFor(0, settings)).toBe(0);
+  });
+
+  it('honours a zero grace window', () => {
+    const strict = { ...settings, activityGraceEvents: 0 };
+    expect(activityPenaltyFor(1, strict)).toBe(strict.activityPenaltyPerEvent);
   });
 });

@@ -96,6 +96,7 @@ function glickoRows(
             rookieScaleUsesPreviousWinner: true,
             skipTrailingDecay: true,
             decayPerBracket: true,
+            legacyVolatilityDecay: true,
           }
         : undefined,
   });
@@ -133,14 +134,16 @@ function glickoRows(
   const provisional = computeLeaderboard(replay.finalStates, settings);
   const calibrated: GlickoSettings = {
     ...settings,
-    leagueBands: calibrateLeagueBands(provisional.map((row) => row.skillRating)),
+    // The number the board ranks on, which is what the bands have to be cut
+    // from — see `leagueBandBasis`.
+    leagueBands: calibrateLeagueBands(provisional.map((row) => row.clubRating)),
   };
   const board = computeLeaderboard(replay.finalStates, calibrated);
   return {
     rows: board.map((row) => ({
       playerId: row.playerId,
       rank: row.rank,
-      displayed: row.skillRating,
+      displayed: row.clubRating,
       league: row.league,
       sets: row.matchCount,
     })),
@@ -318,7 +321,7 @@ export function impactReport(sets: readonly EvalSet[], anonymise: boolean): void
   console.log('\n── top 8 under each ──');
   const width = 30;
   console.log(
-    `  ${'A. current (conservative)'.padEnd(width)}${'B. shipped (skill)'.padEnd(width)}C. whr`,
+    `  ${'A. current (conservative)'.padEnd(width)}${'B. shipped (club)'.padEnd(width)}C. whr`,
   );
   for (let i = 0; i < 8; i++) {
     const cells = [current.rows[i], shipped.rows[i], whr[i]].map((row) =>

@@ -96,7 +96,7 @@ test.describe('public browsing', () => {
     expect(await rows.count()).toBe(total);
   });
 
-  test('a board row opens that player, whose page leads with skill and its band', async ({ page }) => {
+  test('a board row opens that player, whose page leads with the ranked number', async ({ page }) => {
     await page.goto('/');
     await settle(page);
     const name = (await page.locator('.board-row .identity-name').first().innerText()).trim();
@@ -107,10 +107,12 @@ test.describe('public browsing', () => {
 
     // The board uppercases names in CSS, so compare case-insensitively.
     await expect(page.locator('.profile-name')).toHaveText(new RegExp(escapeRegExp(name), 'i'));
-    await expect(page.locator('.headline-label')).toHaveText('Skill');
+    // The headline is the number the board ranks on, with the skill estimate it
+    // is built from — and its ± band — published beneath rather than folded in.
+    await expect(page.locator('.headline-label')).toHaveText('Rating');
     await expect(page.locator('.headline-band')).toContainText('±');
-    // Seeding is published as its own, separate figure.
-    await expect(page.locator('.profile-stats')).toContainText('Seeding rating');
+    // Attendance is stated as its own figure, not left implicit in the band.
+    await expect(page.locator('.profile-stats')).toContainText('Attendance');
     // The match log lists real results.
     await expect(page.locator('.match-table tbody tr').first()).toBeVisible();
   });

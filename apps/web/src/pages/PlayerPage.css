@@ -113,6 +113,23 @@
   line-height: 1.45;
 }
 
+/* The deduction, kept beside the estimate it came out of rather than folded
+   silently into the headline figure. */
+.headline-penalty {
+  color: var(--warn);
+}
+
+/* Only the tile whose number is currently costing the player something takes
+   the warning colour; being merely away is not a fault. */
+.profile-stats .stat-penalised dd {
+  color: var(--warn);
+}
+
+.provisional-note {
+  max-width: 78ch;
+  margin-top: var(--s4);
+}
+
 /* ── trajectory ─────────────────────────────────────────────────── */
 .chart-caption {
   max-width: 68ch;

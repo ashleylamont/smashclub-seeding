@@ -6,9 +6,10 @@
   /*
    * One column definition, shared by the header and every row, so the two can
    * never drift out of alignment:
-   * rank · movement · identity · rating · certainty · form · spark · record · events
+   * rank · movement · identity · rating · certainty · form · spark · record ·
+   * events · last seen
    */
-  --cols: 42px 34px minmax(0, 1fr) 104px 56px 66px 52px 52px 30px;
+  --cols: 42px 34px minmax(0, 1fr) 112px 56px 66px 52px 52px 30px 82px;
   --row-gap: var(--s3);
 }
 
@@ -213,6 +214,20 @@
   font-size: var(--fs-xs);
 }
 
+/* Provisional: a quiet marker, not a demotion. The rating is already shrunk
+   toward the middle for thin evidence; this only says so out loud. */
+.provisional {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text-soft);
+  border: 1px solid var(--border-strong);
+  border-radius: 2px;
+  padding: 1px 3px;
+  vertical-align: 0.15em;
+}
+
 .identity-meta {
   font-family: var(--mono);
   font-size: var(--fs-xs);
@@ -241,6 +256,10 @@
   align-items: baseline;
   gap: var(--s2);
   justify-content: flex-end;
+  /* The penalty marker takes a line of its own when there is one. Wrapping
+     rather than shrinking the row means the common case — nothing docked —
+     keeps the tight row height, and a docked row is visibly taller. */
+  flex-wrap: wrap;
 }
 
 .rating-value {
@@ -254,6 +273,50 @@
   font-family: var(--mono);
   font-size: var(--fs-xs);
   color: var(--text-soft);
+}
+
+/* The deduction, shown next to the number it came out of. Stated in points and
+   labelled "away", because a member reading a drop deserves to know it was the
+   calendar and not their results — and that one night back clears it. */
+.rating-penalty {
+  flex-basis: 100%;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  color: var(--warn);
+  white-space: nowrap;
+}
+
+/* ── last seen ───────────────────────────────────────────────── */
+/*
+ * Counted in club nights, the same unit the penalty is charged in, so the chip
+ * and the rating tell one story. Colour is supporting only — the text says
+ * which state this is on its own.
+ */
+.last-seen {
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  text-align: right;
+  white-space: nowrap;
+  color: var(--text-soft);
+}
+
+.last-seen.seen-current {
+  color: var(--text-soft);
+}
+
+/* A run worth naming. */
+.last-seen.seen-streak {
+  color: var(--accent);
+}
+
+/* Away, but inside the grace window: nothing has been docked yet. */
+.last-seen.seen-away {
+  color: var(--text-soft);
+}
+
+.last-seen.seen-lapsed {
+  color: var(--warn);
 }
 
 /* Segmented meter: fuller = better established. Reads as a gauge, not a bar
@@ -370,6 +433,21 @@
 }
 
 /* ── narrow screens ──────────────────────────────────────────── */
+/*
+ * Between the full board and the two-line layout, the last-seen column is the
+ * first thing to go: it is the only column whose content is fully repeated
+ * elsewhere on the row (the penalty marker, and the tooltip on the rating).
+ */
+@media (max-width: 1040px) {
+  .board {
+    --cols: 42px 34px minmax(0, 1fr) 112px 56px 66px 52px 52px 30px;
+  }
+  .last-seen,
+  .head-lastSeen {
+    display: none;
+  }
+}
+
 @media (max-width: 860px) {
   /* Two-line rows below the fold-point, so column headers no longer describe
      the layout — the values are labelled in place instead. */
@@ -409,7 +487,8 @@
   /* Secondary columns are dropped rather than allowed to overflow. */
   .movement,
   .spark,
-  .events {
+  .events,
+  .last-seen {
     display: none;
   }
   .control-sort {

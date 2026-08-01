@@ -9,15 +9,16 @@ import './Leaderboard.css';
 /**
  * The ranking board.
  *
- * Ranked on the cautious rating — the skill estimate less two standard
- * deviations — so a place has to be earned in sets and held by turning up:
- * inactivity widens the deviation, and the club wants that to cost you. The
- * estimate and its ± band sit beside the ranked number so the subtraction is
- * legible rather than mysterious.
+ * Ranked on the club rating: the skill estimate, less a stated penalty for
+ * missed club nights. Both halves are shown — the estimate with its ± band, and
+ * the deduction as its own marker — because a member who drops places deserves
+ * to see which of the two moved. The previous basis (skill less two standard
+ * deviations) hid the attendance rule inside the error bar, so newcomers and
+ * every-other-night regulars paid it too without anyone intending that.
  *
  * Each row carries the things a club member actually wants: where they sit, which
- * way they are moving over the last club night, recent form, and how much the
- * rating can be trusted.
+ * way they are moving over the last club night, recent form, how much the rating
+ * can be trusted, and when they were last seen.
  */
 
 export interface PlayerTrend {
@@ -32,7 +33,7 @@ interface Props {
   trends: Map<string, PlayerTrend>;
 }
 
-type SortField = 'rank' | 'rating' | 'wins' | 'eventCount' | 'certainty';
+type SortField = 'rank' | 'rating' | 'wins' | 'eventCount' | 'certainty' | 'lastSeen';
 
 /**
  * The board's columns. Every sortable measure has its own column, so the header
@@ -47,14 +48,46 @@ const COLUMNS: { key: string; label: string; field: SortField | null; title?: st
     key: 'rating',
     label: 'Rating',
     field: 'rating',
-    title: 'Cautious rating — skill minus uncertainty, and what the board is ranked on',
+    title: 'Club rating — the skill estimate less any penalty for missed club nights',
   },
   { key: 'certainty', label: 'Conf', field: 'certainty', title: 'How well established the rating is' },
   { key: 'form', label: 'Form', field: null, title: 'Last five sets, oldest first' },
   { key: 'spark', label: 'Trend', field: null, title: 'Recent rating trajectory' },
   { key: 'record', label: 'W–L', field: 'wins', title: 'Sets won and lost' },
   { key: 'events', label: 'Ev', field: 'eventCount', title: 'Events attended — a main and rookie bracket on one night count once' },
+  { key: 'lastSeen', label: 'Seen', field: 'lastSeen', title: 'Which club night this player was last at' },
 ];
+
+/**
+ * How long ago someone was last at the club, in club nights rather than in days.
+ *
+ * Events are the unit the whole system counts in — the penalty is charged per
+ * missed night, not per month — so a chip reading "2 missed" lines up with what
+ * the rating did, where "5 months ago" would leave a member converting between
+ * two different clocks to check the arithmetic.
+ */
+function lastSeenChip(row: LeaderboardRow): { text: string; className: string; title: string } {
+  if (row.missedEvents === 0) {
+    const streak = row.attendanceStreak;
+    return {
+      text: streak > 1 ? `${streak} in a row` : 'Latest',
+      className: streak > 2 ? 'seen-streak' : 'seen-current',
+      title:
+        streak > 1
+          ? `At the last ${streak} club nights in a row`
+          : 'At the most recent club night',
+    };
+  }
+  const missed = `${row.missedEvents} missed`;
+  return {
+    text: missed,
+    className: row.activityPenalty > 0 ? 'seen-lapsed' : 'seen-away',
+    title:
+      row.activityPenalty > 0
+        ? `Last seen ${row.lastPlayedDate}. ${row.missedEvents} club nights missed, costing ${Math.round(row.activityPenalty)} points.`
+        : `Last seen ${row.lastPlayedDate}. Inside the grace window, so nothing has been docked.`,
+  };
+}
 
 /**
  * Bar length encodes *confidence*, not doubt: a full bar means the rating is
@@ -90,13 +123,16 @@ export function Leaderboard({ rows, trends }: Props) {
         case 'rank':
           return row.rank;
         case 'rating':
-          return row.conservativeRating;
+          return row.clubRating;
         case 'wins':
           return row.wins;
         case 'eventCount':
           return row.eventCount;
         case 'certainty':
           return -row.skillSd;
+        case 'lastSeen':
+          // Fewer missed nights sorts as "more recent".
+          return -row.missedEvents;
       }
     };
     return [...list].sort((a, b) => (descending ? value(b) - value(a) : value(a) - value(b)));
@@ -175,13 +211,14 @@ export function Leaderboard({ rows, trends }: Props) {
         {visible.map((row) => {
           const trend = trends.get(row.playerId);
           const podium = sortField === 'rank' && !descending && row.rank <= 3;
+          const seen = lastSeenChip(row);
           return (
             <li key={row.playerId} className={`board-row ${tierClass(row.league)}${podium ? ' is-podium' : ''}`}>
               <Link
                 to="/players/$playerId"
                 params={{ playerId: row.playerId }}
                 className="board-link"
-                aria-label={`${row.name}, rank ${row.rank}, rating ${Math.round(row.conservativeRating)}`}
+                aria-label={`${row.name}, rank ${row.rank}, rating ${Math.round(row.clubRating)}`}
               >
                 <span className={`rank num${podium ? ` rank-${row.rank}` : ''}`}>{row.rank}</span>
 
@@ -203,6 +240,14 @@ export function Leaderboard({ rows, trends }: Props) {
                         ✓
                       </span>
                     )}
+                    {/* Says "we have barely seen this player" without pretending
+                        that makes them weak — the number itself is already
+                        shrunk toward the middle for exactly that reason. */}
+                    {row.isProvisional && (
+                      <span className="provisional" title="Provisional — too few sets for this rating to have settled">
+                        P
+                      </span>
+                    )}
                   </span>
                   <span className="identity-meta">
                     {row.companyCode ?? 'IND'}
@@ -211,17 +256,24 @@ export function Leaderboard({ rows, trends }: Props) {
                 </span>
 
                 <span className="rating">
-                  <span className="rating-value num">{Math.round(row.conservativeRating)}</span>
-                  {/* The ranked number is the skill estimate less two standard
-                      deviations, so the estimate itself is what the band is
-                      drawn around — showing it keeps the subtraction visible
-                      rather than making the rating look inexplicably low. */}
+                  <span className="rating-value num">{Math.round(row.clubRating)}</span>
+                  {/* The estimate the ranked number is built from, so a member
+                      can see which half moved: results move the estimate, missed
+                      nights move the penalty beside it. */}
                   <span
                     className="rating-band num"
-                    title={`Skill estimate ${Math.round(row.skillRating)} ± ${Math.round(row.skillSd)}; the rating subtracts two standard deviations`}
+                    title={`Skill estimate ${Math.round(row.skillRating)} ± ${Math.round(row.skillSd)}`}
                   >
                     {Math.round(row.skillRating)}±{Math.round(row.skillSd)}
                   </span>
+                  {row.activityPenalty > 0 && (
+                    <span
+                      className="rating-penalty num"
+                      title={`${Math.round(row.activityPenalty)} points docked for ${row.missedEvents} missed club nights. Play once and it all comes back.`}
+                    >
+                      −{Math.round(row.activityPenalty)} away
+                    </span>
+                  )}
                 </span>
 
                 <span
@@ -245,6 +297,9 @@ export function Leaderboard({ rows, trends }: Props) {
                   {row.wins}–{row.losses}
                 </span>
                 <span className="events num">{row.eventCount}</span>
+                <span className={`last-seen ${seen.className}`} title={seen.title}>
+                  {seen.text}
+                </span>
               </Link>
             </li>
           );
