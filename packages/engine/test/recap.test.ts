@@ -163,6 +163,125 @@ describe('buildRecap without any rating data', () => {
   });
 });
 
+describe('placements when Challonge reports none', () => {
+  /*
+   * The default sync source is the embedded bracket page, which carries no
+   * final_rank at all — so this path, not the reported one, is what most of the
+   * club's history goes through.
+   */
+  const champ = participant({ name: 'Ivy', seed: 3 });
+  const runnerUp = participant({ name: 'Nour', seed: 1 });
+  const third = participant({ name: 'Sam', seed: 2 });
+
+  /** A double-elimination bracket with nobody's final_rank filled in. */
+  const bracket: RecapSet[] = [
+    completedSet(champ, third, 1, { round: 1, completedAt: '2025-03-01T09:00:00.000Z' }),
+    // Sam beats Nour in losers, so Nour is out third.
+    completedSet(third, runnerUp, 1, { round: -1, completedAt: '2025-03-01T09:30:00.000Z' }),
+    completedSet(champ, third, 1, { round: 2, completedAt: '2025-03-01T10:00:00.000Z' }),
+  ];
+
+  it('derives the podium from elimination order', () => {
+    const result = buildRecap({
+      tournaments: [MAIN],
+      participants: [champ, runnerUp, third],
+      sets: bracket,
+    });
+    const [podium] = factsOfKind(result, 'podium');
+    // Last eliminated placed best: Ivy undefeated, then Sam, then Nour.
+    expect(podium?.places.map((p) => [p.player.name, p.place])).toEqual([
+      ['Ivy', 1],
+      ['Sam', 2],
+      ['Nour', 3],
+    ]);
+  });
+
+  it('marks a derived podium as derived', () => {
+    const derivedResult = buildRecap({
+      tournaments: [MAIN],
+      participants: [champ, runnerUp, third],
+      sets: bracket,
+    });
+    expect(factsOfKind(derivedResult, 'podium')[0]?.derived).toBe(true);
+
+    const reportedResult = buildRecap({
+      tournaments: [MAIN],
+      participants: [
+        { ...champ, finalRank: 1 },
+        { ...runnerUp, finalRank: 2 },
+        { ...third, finalRank: 3 },
+      ],
+      sets: bracket,
+    });
+    expect(factsOfKind(reportedResult, 'podium')[0]?.derived).toBe(false);
+  });
+
+  it('prefers what Challonge reported over what the bracket implies', () => {
+    // The API path is authoritative when it is available.
+    const result = buildRecap({
+      tournaments: [MAIN],
+      participants: [
+        { ...champ, finalRank: 1 },
+        { ...runnerUp, finalRank: 2 },
+        { ...third, finalRank: 3 },
+      ],
+      sets: bracket,
+    });
+    expect(factsOfKind(result, 'podium')[0]?.places.map((p) => p.player.name)).toEqual([
+      'Ivy',
+      'Nour',
+      'Sam',
+    ]);
+  });
+
+  it('derives nothing while the bracket is still underway', () => {
+    const result = buildRecap({
+      tournaments: [{ ...MAIN, challongeState: 'underway' }],
+      participants: [champ, runnerUp, third],
+      sets: bracket,
+    });
+    expect(factsOfKind(result, 'podium')).toHaveLength(0);
+  });
+
+  it('derives nothing when more than one player is unbeaten', () => {
+    // Two unbeaten players means there is no single champion to anchor the
+    // ordering on, so any podium read off it would be a guess.
+    const a = participant({ name: 'Una' });
+    const b = participant({ name: 'Vex' });
+    const c = participant({ name: 'Wren' });
+    const result = buildRecap({
+      tournaments: [MAIN],
+      participants: [a, b, c],
+      sets: [completedSet(a, c, 1), completedSet(b, c, 1)],
+    });
+    expect(factsOfKind(result, 'podium')).toHaveLength(0);
+  });
+
+  it('does not claim a seed overperformance from a derived placement', () => {
+    // Derived placements are exact at the top and approximate below it, so
+    // "seeded 3rd, finished 2nd" is not a number worth publishing.
+    const result = buildRecap({
+      tournaments: [MAIN],
+      participants: [champ, runnerUp, third],
+      sets: bracket,
+    });
+    expect(factsOfKind(result, 'overperformer')).toHaveLength(0);
+  });
+
+  it('still finds the champion for a clean sweep', () => {
+    const opponents = [participant({ name: 'Bo' }), participant({ name: 'Cy' }), participant({ name: 'Di' })];
+    const sweeper = participant({ name: 'Ada' });
+    const result = buildRecap({
+      tournaments: [MAIN],
+      participants: [sweeper, ...opponents],
+      sets: opponents.map((o, i) =>
+        completedSet(sweeper, o, 1, { scoresCsv: '3-0', completedAt: `2025-03-01T0${i + 1}:00:00.000Z` }),
+      ),
+    });
+    expect(factsOfKind(result, 'clean_sweep')[0]?.player.name).toBe('Ada');
+  });
+});
+
 describe('excluded sets', () => {
   it('never become facts', () => {
     const winner = participant({ name: 'Ada', seed: 9 });
@@ -572,7 +691,7 @@ describe('formatFact', () => {
     const player = { playerId: 'x', name: 'Ada', companyCode: 'ACME', characters: [] };
     const other = { playerId: 'y', name: 'Bo', companyCode: null, characters: [] };
     const facts: RecapFact[] = [
-      { kind: 'podium', tournamentId: 't', places: [{ player, place: 1, seed: 3 }, { player: other, place: 2, seed: 1 }] },
+      { kind: 'podium', tournamentId: 't', derived: false, places: [{ player, place: 1, seed: 3 }, { player: other, place: 2, seed: 1 }] },
       { kind: 'seed_upset', tournamentId: 't', winner: player, loser: other, winnerSeed: 8, loserSeed: 1, round: 2, score: '3-1' },
       { kind: 'rating_upset', tournamentId: 't', winner: player, loser: other, probability: 0.12, ratingGap: 320, round: -3, score: '3-2' },
       { kind: 'losers_run', tournamentId: 't', player, wins: 5, finalRank: 2 },

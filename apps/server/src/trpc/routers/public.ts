@@ -15,6 +15,7 @@ import { eventKeyOf } from '@smashclub/engine';
 import { publicPlayerName } from '@smashclub/shared';
 import { latestRecomputeId } from '../../recompute/recompute';
 import { charactersByPlayer, charactersForPlayer } from '../../players/characters';
+import { loadRecap } from '../../recap/recap';
 import { publicProcedure, router } from '../trpc';
 
 const playerName = publicPlayerName;
@@ -315,6 +316,15 @@ export const publicRouter = router({
         p2PlayerId: row.p2PlayerId,
       })),
     };
+  }),
+
+  /**
+   * The night's recap — every bracket that ran on the same evening as `slug`,
+   * reduced to ranked facts. Public and unauthenticated so a recap link can be
+   * shared out of the club.
+   */
+  recap: publicProcedure.input(z.object({ slug: z.string() })).query(async ({ ctx, input }) => {
+    return loadRecap(ctx.db, input.slug);
   }),
 
   /** Player search for the claim flow and admin tools. */

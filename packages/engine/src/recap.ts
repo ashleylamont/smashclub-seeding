@@ -58,6 +58,8 @@ export interface RecapSet {
   tournamentId: string;
   /** Positive = winners bracket, negative = losers. */
   round: number | null;
+  /** Challonge's bracket ordering hint; the tie-break for elimination order. */
+  suggestedPlayOrder?: number | null;
   identifier: string | null;
   state: string;
   p1ParticipantId: string | null;
@@ -131,7 +133,11 @@ export interface RecapPlayerRef {
 }
 
 export type RecapFact =
-  | { kind: 'podium'; tournamentId: string; places: Array<{ player: RecapPlayerRef; place: number; seed: number | null }> }
+  /**
+   * `derived` marks a podium worked out from elimination order rather than
+   * reported by Challonge — see {@link derivePlacements}.
+   */
+  | { kind: 'podium'; tournamentId: string; derived: boolean; places: Array<{ player: RecapPlayerRef; place: number; seed: number | null }> }
   | { kind: 'seed_upset'; tournamentId: string; winner: RecapPlayerRef; loser: RecapPlayerRef; winnerSeed: number; loserSeed: number; round: number | null; score: string | null }
   | { kind: 'rating_upset'; tournamentId: string; winner: RecapPlayerRef; loser: RecapPlayerRef; probability: number; ratingGap: number; round: number | null; score: string | null }
   | { kind: 'losers_run'; tournamentId: string; player: RecapPlayerRef; wins: number; finalRank: number | null }
@@ -267,6 +273,62 @@ function stageWeight(round: number | null, maxRound: number): number {
 const saturate = (value: number, scale: number): number =>
   value <= 0 ? 0 : value / (value + scale);
 
+/** When a set finished, for ordering eliminations within a bracket. */
+function setOrderKey(set: RecapSet): [string, number, string] {
+  return [set.completedAt ?? '', set.suggestedPlayOrder ?? 0, set.id];
+}
+
+function compareOrderKeys(a: [string, number, string], b: [string, number, string]): number {
+  return a[0].localeCompare(b[0]) || a[1] - b[1] || a[2].localeCompare(b[2]);
+}
+
+/**
+ * Placements worked out from the bracket, for tournaments Challonge did not
+ * report `final_rank` for.
+ *
+ * This is not a nicety: the default sync source is the embedded `/module`
+ * bracket page, which carries no placements at all (only the opt-in API path
+ * does). Without this, most of the club's history would have no podium — the
+ * single fact a recap most obviously needs.
+ *
+ * The rule is elimination order: you are out when you lose your last set, and
+ * the longer you lasted the better you placed. That is exact for the top three
+ * of a double-elimination bracket — the grand-final loser is second, the
+ * losers-final loser third — and approximate further down, where real brackets
+ * award tied places anyway. Callers therefore use it for the podium and not for
+ * anything that reads a placement as precise (see `collectOverperformers`).
+ *
+ * Only derived for a bracket with exactly one undefeated player: any other
+ * count means the bracket is unfinished, and a podium guessed from a
+ * half-played bracket would simply be wrong.
+ */
+export function derivePlacements(sets: readonly RecapSet[]): Map<string, number> {
+  const placements = new Map<string, number>();
+  const lastLoss = new Map<string, [string, number, string]>();
+  const entrants = new Set<string>();
+
+  for (const set of sets) {
+    if (set.state !== 'complete' || set.winner == null || set.excludedFromRatings) continue;
+    const p1 = set.p1ParticipantId;
+    const p2 = set.p2ParticipantId;
+    if (!p1 || !p2) continue;
+    entrants.add(p1);
+    entrants.add(p2);
+    const loser = set.winner === 1 ? p2 : p1;
+    const key = setOrderKey(set);
+    const existing = lastLoss.get(loser);
+    if (!existing || compareOrderKeys(key, existing) > 0) lastLoss.set(loser, key);
+  }
+
+  const undefeated = [...entrants].filter((id) => !lastLoss.has(id));
+  if (undefeated.length !== 1) return placements;
+
+  placements.set(undefeated[0]!, 1);
+  const eliminated = [...lastLoss.entries()].sort((a, b) => compareOrderKeys(b[1], a[1]));
+  eliminated.forEach(([participantId], index) => placements.set(participantId, index + 2));
+  return placements;
+}
+
 export const RECAP_ENGINE_VERSION = '1';
 
 // ---------------------------------------------------------------------------
@@ -303,20 +365,43 @@ export function buildRecap(input: RecapInput): RecapResult {
     played.push({ set, winner, loser, winnerGames, loserGames, scoreKnown: !score.unknown });
   }
 
+  /*
+   * Placements, reported where Challonge gave them and derived from the
+   * bracket where it did not — which is most of the time, since the default
+   * sync source carries none. `derivedFor` records which brackets were worked
+   * out rather than reported, so facts that need a precise placement can
+   * decline to use one.
+   */
+  const placement = new Map<string, number>();
+  const derivedFor = new Set<string>();
+  for (const tournament of orderedTournaments) {
+    const entries = participants.filter((p) => p.tournamentId === tournament.id);
+    const reported = entries.filter((p) => p.finalRank != null);
+    if (reported.length > 0) {
+      for (const p of reported) placement.set(p.id, p.finalRank!);
+      continue;
+    }
+    if (tournament.challongeState !== 'complete') continue;
+    const derived = derivePlacements(sets.filter((s) => s.tournamentId === tournament.id));
+    if (derived.size === 0) continue;
+    derivedFor.add(tournament.id);
+    for (const [participantId, place] of derived) placement.set(participantId, place);
+  }
+
   const maxRound = played.reduce((max, p) => Math.max(max, Math.abs(p.set.round ?? 0)), 0);
   const facts: RankedRecapFact[] = [];
   const push = (id: string, notability: number, fact: RecapFact): void => {
     facts.push({ id, notability: Math.max(0, Math.min(1, notability)), fact });
   };
 
-  collectPodiums(orderedTournaments, participants, push);
+  collectPodiums(orderedTournaments, participants, placement, derivedFor, push);
   collectGrandFinals(played, tournamentById, push);
   collectSeedUpsets(played, maxRound, push);
   collectRatingUpsets(played, ratingEvents, maxRound, push);
   collectNailbiters(played, maxRound, push);
-  collectLosersRuns(played, push);
+  collectLosersRuns(played, placement, push);
   collectOverperformers(orderedTournaments, participants, push);
-  collectCleanSweeps(played, participants, push);
+  collectCleanSweeps(played, participants, placement, push);
   collectClimbs(played, ratingEvents, participants, push);
   collectMovers(input.rankMovement ?? [], participants, push);
   collectRivalries(played, input.history, push);
@@ -341,12 +426,14 @@ type Push = (id: string, notability: number, fact: RecapFact) => void;
 function collectPodiums(
   tournaments: readonly RecapTournament[],
   participants: readonly RecapParticipant[],
+  placement: ReadonlyMap<string, number>,
+  derivedFor: ReadonlySet<string>,
   push: Push,
 ): void {
   for (const tournament of tournaments) {
     const placed = participants
-      .filter((p) => p.tournamentId === tournament.id && p.finalRank != null)
-      .sort((a, b) => a.finalRank! - b.finalRank!)
+      .filter((p) => p.tournamentId === tournament.id && placement.has(p.id))
+      .sort((a, b) => placement.get(a.id)! - placement.get(b.id)!)
       .slice(0, 3);
     if (placed.length === 0) continue;
     // The main bracket's podium is the night's headline; the rookie one sits
@@ -354,7 +441,8 @@ function collectPodiums(
     push(`podium:${tournament.id}`, tournament.isRookie ? 0.9 : 1, {
       kind: 'podium',
       tournamentId: tournament.id,
-      places: placed.map((p) => ({ player: refOf(p), place: p.finalRank!, seed: p.seed })),
+      derived: derivedFor.has(tournament.id),
+      places: placed.map((p) => ({ player: refOf(p), place: placement.get(p.id)!, seed: p.seed })),
     });
   }
 }
@@ -494,7 +582,11 @@ function collectNailbiters(played: readonly PlayedSet[], maxRound: number, push:
  * Counted as wins in negative rounds, which is the shape of "sent to losers
  * early and fought all the way back".
  */
-function collectLosersRuns(played: readonly PlayedSet[], push: Push): void {
+function collectLosersRuns(
+  played: readonly PlayedSet[],
+  placement: ReadonlyMap<string, number>,
+  push: Push,
+): void {
   const runs = new Map<string, { participant: RecapParticipant; wins: number }>();
   for (const p of played) {
     if ((p.set.round ?? 0) >= 0) continue;
@@ -510,7 +602,7 @@ function collectLosersRuns(played: readonly PlayedSet[], push: Push): void {
       tournamentId: run.participant.tournamentId,
       player: refOf(run.participant),
       wins: run.wins,
-      finalRank: run.participant.finalRank,
+      finalRank: placement.get(run.participant.id) ?? null,
     });
   }
 }
@@ -519,6 +611,11 @@ function collectLosersRuns(played: readonly PlayedSet[], push: Push): void {
  * Seed performance: placing better than you were seeded. Expressed in places
  * gained so it reads plainly, but scored on the ratio for the same reason seed
  * upsets are.
+ *
+ * Deliberately reads `finalRank` — the placement Challonge reported — and not
+ * the derived one. "Seeded 12th, finished 4th" is a claim about an exact
+ * placement, and {@link derivePlacements} is only exact at the top of the
+ * bracket, so a derived 4th is not something to put a number on.
  */
 function collectOverperformers(
   tournaments: readonly RecapTournament[],
@@ -554,9 +651,10 @@ function collectOverperformers(
 function collectCleanSweeps(
   played: readonly PlayedSet[],
   participants: readonly RecapParticipant[],
+  placement: ReadonlyMap<string, number>,
   push: Push,
 ): void {
-  const champions = participants.filter((p) => p.finalRank === 1);
+  const champions = participants.filter((p) => placement.get(p.id) === 1);
   for (const champion of champions) {
     const theirs = played.filter(
       (p) => p.winner.id === champion.id || p.loser.id === champion.id,
