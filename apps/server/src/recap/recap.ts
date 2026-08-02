@@ -152,7 +152,9 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
     .select()
     .from(sets)
     .where(inArray(sets.tournamentId, nightIds))
-    .orderBy(asc(sets.suggestedPlayOrder), asc(sets.challongeMatchId));
+    // Play order, matching the engine's `compareSetsInBracket`. The recap's own
+    // tie-break is this array's index, so this ordering is load-bearing.
+    .orderBy(asc(sets.suggestedPlayOrder), asc(sets.completedAt), asc(sets.challongeMatchId));
 
   const recapSets: RecapSet[] = setRows.map((row) => ({
     id: row.id,

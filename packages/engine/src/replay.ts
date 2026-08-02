@@ -1,6 +1,11 @@
 import type { GlickoSettings } from '@smashclub/shared';
 import { attendanceOf, eventKeyOf } from './events';
 import { GLICKO2_SCALE, updateRating, type Rating } from './glicko2';
+import {
+  compareNullableNumbers,
+  compareSetsInBracket,
+  compareStrings,
+} from './setOrder';
 import type {
   EngineSet,
   EngineTournament,
@@ -167,10 +172,7 @@ export function replayRatings(input: {
     : [...sets].sort(
         (a, b) =>
           tournamentSequences.get(a.tournamentId)! - tournamentSequences.get(b.tournamentId)! ||
-          compareNullableNumbers(a.suggestedPlayOrder, b.suggestedPlayOrder) ||
-          compareNullableStrings(a.completedAt, b.completedAt) ||
-          compareNullableNumbers(a.challongeMatchId, b.challongeMatchId) ||
-          compareStrings(a.id, b.id),
+          compareSetsInBracket(a, b),
       );
 
   // First pass: total sets per player per tournament, for the
@@ -434,19 +436,3 @@ function dedupe(values: readonly string[]): string[] {
   return [...new Set(values)];
 }
 
-function compareStrings(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
-
-function compareNullableNumbers(a: number | null | undefined, b: number | null | undefined): number {
-  const aVal = a ?? Number.POSITIVE_INFINITY;
-  const bVal = b ?? Number.POSITIVE_INFINITY;
-  return aVal - bVal || 0;
-}
-
-function compareNullableStrings(a: string | null | undefined, b: string | null | undefined): number {
-  if (a == null && b == null) return 0;
-  if (a == null) return 1;
-  if (b == null) return -1;
-  return compareStrings(a, b);
-}

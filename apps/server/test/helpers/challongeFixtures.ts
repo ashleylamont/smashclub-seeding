@@ -99,7 +99,10 @@ export function apiPayloads(fixture: FixtureTournament): {
  * tournament's name appears only in the page title.
  *
  * Note what this payload deliberately lacks, mirroring the real one: no
- * `final_rank` and no tournament-level timestamps.
+ * `final_rank`, no tournament-level timestamps, and no `suggested_play_order`
+ * — the play order has to be recovered from the numeric `identifier`. This
+ * fixture used to send `identifier` as a string, which is the v1 API's shape,
+ * not this one; that hid the extractor dropping both fields on every real sync.
  */
 function modulePage(fixture: FixtureTournament): string {
   const participantById = new Map(fixture.participants.map((p) => [p.id, p]));
@@ -115,7 +118,10 @@ function modulePage(fixture: FixtureTournament): string {
       id: m.id,
       round: m.round ?? 1,
       state: m.state ?? 'complete',
-      identifier: `M${m.id}`,
+      // Mirrors the real module payload: a numeric play-order `identifier`, the
+      // label under `raw_identifier`, and no `suggested_play_order` at all.
+      identifier: m.order ?? m.id,
+      raw_identifier: `M${m.id}`,
       winner_id: m.winner ?? null,
       // Real module payloads report `scores` as an array; `scores_csv` is also
       // accepted by the extractor and keeps these fixtures readable.

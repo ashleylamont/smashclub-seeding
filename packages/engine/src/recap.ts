@@ -316,27 +316,30 @@ const saturate = (value: number, scale: number): number =>
   value <= 0 ? 0 : value / (value + scale);
 
 /**
- * Where a set sits in the order a bracket was played: when it finished, then
- * Challonge's own play-order hint, then the position the caller supplied.
+ * Where a set sits in the order a bracket was played: Challonge's play-order
+ * hint, then when it finished, then the position the caller supplied.
  *
- * That last component matters more than it looks. The default sync source
- * carries neither per-match timestamps nor `suggested_play_order`, so on a real
- * club bracket the first two are frequently identical across every set of a
- * tournament and the tie-break is all there is. Callers pass sets in bracket
- * order, so the index is a meaningful last resort — and, crucially, a stable
- * one. An earlier version fell back to the set's uuid, which is arbitrary: two
- * places that both needed to know "which set decided this bracket" could and
- * did disagree, so a recap could name one player on its podium and a different
- * one as the grand-final winner.
+ * The play-order hint leads, matching `compareSetsInBracket`. It used to trail
+ * `completedAt`, which was wrong in a way the club's data exercises constantly:
+ * roughly one set in seven is reported with no timestamp at all, `?? ''` sorts
+ * those *first*, and these keys are compared to find the latest thing that
+ * happened. A player whose last loss happened to carry no timestamp was
+ * therefore read as the first player eliminated, and placed last.
+ *
+ * The index still matters as a last resort. Callers pass sets in bracket order,
+ * so it is meaningful, and — crucially — stable. An earlier version fell back
+ * to the set's uuid, which is arbitrary: two places that both needed to know
+ * "which set decided this bracket" could and did disagree, so a recap could
+ * name one player on its podium and a different one as the grand-final winner.
  */
-type OrderKey = [string, number, number];
+type OrderKey = [number, string, number];
 
 function setOrderKey(set: RecapSet, index: number): OrderKey {
-  return [set.completedAt ?? '', set.suggestedPlayOrder ?? 0, index];
+  return [set.suggestedPlayOrder ?? 0, set.completedAt ?? '', index];
 }
 
 function compareOrderKeys(a: OrderKey, b: OrderKey): number {
-  return a[0].localeCompare(b[0]) || a[1] - b[1] || a[2] - b[2];
+  return a[0] - b[0] || a[1].localeCompare(b[1]) || a[2] - b[2];
 }
 
 /** What a bracket, read on its own terms, says happened. */

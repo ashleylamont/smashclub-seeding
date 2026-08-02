@@ -34,7 +34,10 @@ const STORE = JSON.stringify({
         id: 9001,
         round: 1,
         state: 'complete',
-        identifier: 'A',
+        // The real module payload numbers `identifier` and puts the label in
+        // `raw_identifier` — the opposite way round from the v1 API.
+        identifier: 1,
+        raw_identifier: 'A',
         winner_id: 5001,
         loser_id: 5002,
         scores: [2, 1],
@@ -48,7 +51,8 @@ const STORE = JSON.stringify({
         id: 9002,
         round: 2,
         state: 'complete',
-        identifier: 'B',
+        identifier: 2,
+        raw_identifier: 'B',
         winner_id: 5003,
         loser_id: 5001,
         scores: [2, -1],

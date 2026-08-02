@@ -1,6 +1,7 @@
 import type { GlickoSettings } from '@smashclub/shared';
 import { attendanceOf, eventKeyOf } from './events';
 import { DISPLAY_CENTRE, NATURAL_TO_DISPLAY, fitWhr, type WhrFit } from './whr';
+import { compareNullableNumbers, compareSetsInBracket, compareStrings } from './setOrder';
 import { activityPenaltyFor, rankScores, type LeaderboardRow, type PlayerScore } from './score';
 import type { EngineSet, EngineTournament, RatingEvent } from './types';
 
@@ -137,7 +138,17 @@ export function runWhrModel(input: {
   };
 
   // Rateable sets only, in the same deterministic chronological order the
-  // Glicko replay uses, so the two models see identical input.
+  // Glicko replay uses, so the two models see identical input: brackets by
+  // (eventDate, challongeId, id), then `compareSetsInBracket` within one.
+  //
+  // This once claimed that and did something else — it coalesced a missing play
+  // order to 0 and then fell straight through to the set's random uuid, with no
+  // `completedAt` tie-break at all. Since the default sync source left the play
+  // order null on every set, a bracket's sets were ordered by uuid, i.e.
+  // shuffled. The fit itself is unaffected (it is joint, and `time` is
+  // per-bracket, so it sees the same multiset either way), but `seq` and the
+  // choice of which set carries a period's movement are not — a player's match
+  // history came out in a random order.
   const rateable: RateableSet[] = input.sets
     .filter((set) => tournamentById.has(set.tournamentId) && set.p1PlayerId !== set.p2PlayerId)
     .map((set) => {
@@ -153,10 +164,10 @@ export function runWhrModel(input: {
     .sort(
       (a, b) =>
         a.day - b.day ||
-        (a.tournament.eventDate < b.tournament.eventDate ? -1 : a.tournament.eventDate > b.tournament.eventDate ? 1 : 0) ||
-        a.tournament.id.localeCompare(b.tournament.id) ||
-        (a.set.suggestedPlayOrder ?? 0) - (b.set.suggestedPlayOrder ?? 0) ||
-        a.set.id.localeCompare(b.set.id),
+        compareStrings(a.tournament.eventDate, b.tournament.eventDate) ||
+        compareNullableNumbers(a.tournament.challongeId, b.tournament.challongeId) ||
+        compareStrings(a.tournament.id, b.tournament.id) ||
+        compareSetsInBracket(a.set, b.set),
     );
 
   if (rateable.length === 0) {
