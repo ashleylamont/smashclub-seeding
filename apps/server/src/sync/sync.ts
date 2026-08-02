@@ -151,6 +151,7 @@ export async function syncTournament(
         current.scoresCsv !== values.scoresCsv ||
         current.round !== values.round ||
         current.suggestedPlayOrder !== values.suggestedPlayOrder ||
+        current.identifier !== values.identifier ||
         (current.completedAt?.getTime() ?? null) !== (values.completedAt?.getTime() ?? null);
       if (changed) {
         await db

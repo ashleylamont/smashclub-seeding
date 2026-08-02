@@ -324,7 +324,12 @@ export const publicRouter = router({
       .select()
       .from(sets)
       .where(eq(sets.tournamentId, tournament.id))
-      .orderBy(asc(sets.suggestedPlayOrder), asc(sets.challongeMatchId));
+      // Play order — the SQL twin of the engine's `compareSetsInBracket`.
+      // Postgres sorts NULLs last on ASC, which is the nulls-last rule that
+      // comparator applies. Ordering by `challonge_match_id` alone (what this
+      // did while `suggested_play_order` was never populated) is bracket
+      // *creation* order: the whole winners side, then the whole losers side.
+      .orderBy(asc(sets.suggestedPlayOrder), asc(sets.completedAt), asc(sets.challongeMatchId));
 
     return {
       id: tournament.id,

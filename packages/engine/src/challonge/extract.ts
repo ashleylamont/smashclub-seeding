@@ -58,6 +58,17 @@ function str(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+/**
+ * The bracket label a set is known by ("A", "BE"). The v1 API sends it as
+ * `identifier`; the public bracket sends the *ordinal* under that name and puts
+ * the label in `raw_identifier`, so prefer the label and stringify a number
+ * rather than dropping it — reading `identifier` as a string against the public
+ * payload silently stored null for every set.
+ */
+function identifierOf(m: Record<string, unknown>): string | null {
+  return str(m.raw_identifier) ?? str(m.identifier) ?? num(m.identifier)?.toString() ?? null;
+}
+
 /** `GET /tournaments/{id}.json` → typed tournament. */
 export function extractTournament(payload: unknown): ChallongeTournament {
   const t = unwrap(payload, 'tournament', 'tournament');
@@ -110,7 +121,7 @@ export function extractMatches(payload: unknown): ChallongeMatch[] {
       state: str(m.state) ?? 'unknown',
       round: num(m.round),
       suggestedPlayOrder: num(m.suggested_play_order),
-      identifier: str(m.identifier),
+      identifier: identifierOf(m),
       player1Id: num(m.player1_id),
       player2Id: num(m.player2_id),
       winnerId: num(m.winner_id),
@@ -292,8 +303,21 @@ export function extractPublicBracket(payload: unknown): PublicBracket {
       id,
       state,
       round: num(m.round),
-      suggestedPlayOrder: num(m.suggested_play_order),
-      identifier: str(m.identifier),
+      /*
+       * The public bracket carries no `suggested_play_order`, but its numeric
+       * `identifier` is one: Challonge numbers matches in an order where every
+       * `player{1,2}_prereq_identifier` points strictly backwards, so it is a
+       * topological sort of the bracket and it interleaves the winners and
+       * losers sides the way they are actually played (WR1, LR1, WR2, LR2, LR3,
+       * WR3...). Bracket-creation order — `challonge_match_id`, the previous
+       * fallback — does not: it runs the whole winners side, then the whole
+       * losers side, then the finals.
+       *
+       * Preferring a real `suggested_play_order` keeps the API path
+       * authoritative where it is available; this only fills the gap.
+       */
+      suggestedPlayOrder: num(m.suggested_play_order) ?? num(m.identifier),
+      identifier: identifierOf(m),
       player1Id: num(player1.id),
       player2Id: num(player2.id),
       winnerId: num(m.winner_id),
