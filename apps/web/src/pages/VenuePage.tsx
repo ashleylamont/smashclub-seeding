@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
+import { isBracketOver } from '@smashclub/shared';
 import { trpc } from '../lib/trpc';
 import type { TournamentData, TournamentParticipant, TournamentSet } from '../lib/apiTypes';
 import { orientScore, roundLabel } from '../lib/format';
 import { useEventSource } from '../lib/useEventSource';
+import { useNow } from '../lib/useNow';
 import './Venue.css';
 
 /**
@@ -67,6 +69,7 @@ const TAKEOVER_MS = 6500;
 const IDLE_ROTATE_MS = 7000;
 
 function Venue({ data }: { data: TournamentData }) {
+  const now = useNow();
   const byId = useMemo(
     () => new Map(data.participants.map((p) => [p.id, p])),
     [data.participants],
@@ -110,7 +113,12 @@ function Venue({ data }: { data: TournamentData }) {
 
   const setsDone = completed.length;
   const setsTotal = data.sets.length;
-  const isComplete = data.challongeState === 'complete';
+  /*
+   * Over, not merely finalised. A bracket the room abandoned still reports
+   * `underway` upstream forever, and a projector announcing LIVE over a night
+   * from two years ago is the same lie the tournament page used to tell.
+   */
+  const isComplete = isBracketOver(data, now);
 
   return (
     <div className={`venue${inFinals ? ' venue-finals' : ''}`}>

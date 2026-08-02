@@ -1,4 +1,4 @@
-import { and, gt, inArray, isNull, lte, or } from 'drizzle-orm';
+import { and, gt, inArray, isNull, lte, ne, or } from 'drizzle-orm';
 import { Cron } from 'croner';
 import type { Db } from '@smashclub/db';
 import { tournaments } from '@smashclub/db';
@@ -73,12 +73,26 @@ export class SyncScheduler {
   }
 
   private async sweep(): Promise<void> {
+    /*
+     * Who still has something to tell us: anything never pulled or last pulled
+     * badly, plus any bracket Challonge has not finalised — results can still
+     * land in those. A finalised bracket is done and drops out of the sweep.
+     *
+     * This reads `challonge_state` rather than leaning on `sync_state` staying
+     * `registered` for unfinished brackets, which is what it used to do. That
+     * made one column mean both "have we pulled it" and "is it finished", and
+     * the pages that printed the first got the second.
+     */
     const rows = await this.db
       .select()
       .from(tournaments)
       .where(
         and(
-          inArray(tournaments.syncState, ['registered', 'live', 'error']),
+          or(
+            inArray(tournaments.syncState, ['registered', 'error']),
+            isNull(tournaments.challongeState),
+            ne(tournaments.challongeState, 'complete'),
+          ),
           // Skip anything the fast poller currently owns; an expired or absent
           // window falls back to the sweep automatically.
           or(isNull(tournaments.liveUntil), lte(tournaments.liveUntil, new Date())),

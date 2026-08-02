@@ -147,18 +147,15 @@ export function isRateableMatch(match: ChallongeMatch): boolean {
   );
 }
 
-/**
- * Challonge marks forfeits/DQs with a negative game score (e.g. "-1-0").
- * Such sets are excluded from ratings by default (admin-overridable).
+/*
+ * Sets whose "score" says they were never played — Challonge's negative-number
+ * forfeits, and the club's `99-0` byes — are excluded from ratings by default
+ * (admin-overridable). The predicates live in `@smashclub/shared` because the
+ * web needs the same rule to decide what to print; re-exported here so the
+ * Challonge-facing callers keep importing their Challonge vocabulary from one
+ * place.
  */
-export function scoresIndicateForfeit(scoresCsv: string | null): boolean {
-  if (!scoresCsv) return false;
-  return scoresCsv.split(',').some((setScore) => {
-    const match = setScore.trim().match(/^(-?\d+)-(-?\d+)$/);
-    if (!match) return false;
-    return Number(match[1]) < 0 || Number(match[2]) < 0;
-  });
-}
+export { scoresIndicateBye, scoresIndicateForfeit, scoresIndicateUnplayed } from '@smashclub/shared';
 
 export interface PublicBracket {
   participants: ChallongeParticipant[];

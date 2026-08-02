@@ -295,7 +295,20 @@ export function runWhrModel(input: {
 
   // ---- rating events: the global chronological walk ----
   const events: RatingEvent[] = [];
-  const seqByPlayer = new Map<string, number>();
+  /**
+   * ONE COUNTER FOR THE WHOLE WALK, not one per player.
+   *
+   * The walk is global and chronological; the numbering has to be too, because
+   * `seq` is what readers use as the replay's processing order. The Glicko path
+   * writes it that way. A per-player counter numbered everybody's first set
+   * `1`, so "everything that happened before this night" — `seq < the night's
+   * first seq`, how the recap decides who is new — matched nothing at all: the
+   * recap announced the entire room as first-timers every single night, and
+   * quietly dropped every rivalry, breakthrough and milestone fact with them.
+   * A player's own events still ascend under a global counter, so per-player
+   * history reads exactly as before.
+   */
+  let seq = 0;
 
   for (const { set, tournament, eventKey, trials } of rateable) {
     for (const [playerId, opponentId, won] of [
@@ -312,12 +325,9 @@ export function runWhrModel(input: {
       const postRating = isLastOfNight ? plan.endRating : preRating + plan.deltas[index]!;
       plan.running = postRating;
 
-      const seq = (seqByPlayer.get(playerId) ?? 0) + 1;
-      seqByPlayer.set(playerId, seq);
-
       events.push({
         playerId,
-        seq,
+        seq: seq++,
         setId: set.id,
         tournamentId: tournament.id,
         isDecay: false,

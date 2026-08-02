@@ -7,6 +7,7 @@ import { syncTournament } from '../src/sync/sync';
 import { runRecompute } from '../src/recompute/recompute';
 import { RecomputeTrigger } from '../src/recompute/trigger';
 import { loadEnv } from '../src/env';
+import { getGlickoSettings, updateGlickoSettings } from '../src/settings';
 import { appRouter } from '../src/trpc/router';
 import { createTestDb } from './helpers/testDb';
 import { fixtureClient, type FixtureTournament } from './helpers/challongeFixtures';
@@ -71,7 +72,24 @@ const april: FixtureTournament = {
   ],
 };
 
-const ALL = [march, marchRookie, april];
+/**
+ * A night with one newcomer and one regular, which is what a debut fact has to
+ * tell apart. Both March and April are all-returners or all-newcomers, so
+ * neither can catch a "before tonight" boundary that has collapsed to nothing.
+ */
+const june: FixtureTournament = {
+  slug: 'june-main',
+  state: 'complete',
+  startedAt: '2025-06-01T18:00:00.000+11:00',
+  completedAt: '2025-06-01T21:00:00.000+11:00',
+  participants: [
+    { id: 1, name: '[ATL] Fox McCloud', seed: 1, finalRank: 1 },
+    { id: 6, name: '[ATL] Yoshi', seed: 2, finalRank: 2 },
+  ],
+  matches: [{ id: 51, p1: 1, p2: 6, winner: 1, order: 1, round: 1, scores: '2-0' }],
+};
+
+const ALL = [march, marchRookie, april, june];
 
 beforeEach(async () => {
   ({ db, close } = await createTestDb());
@@ -81,6 +99,7 @@ beforeEach(async () => {
     { id: 'kirby', canonical_name: 'Kirby', company: 'ATL' },
     { id: 'ness', canonical_name: 'Ness', company: 'ATL' },
     { id: 'lucas', canonical_name: 'Lucas', company: 'ATL' },
+    { id: 'yoshi', canonical_name: 'Yoshi', company: 'ATL' },
   ]);
   await registerTournamentSlugs(db, ALL.map((t) => t.slug));
 });
@@ -198,6 +217,30 @@ describe('public.recap', () => {
     expect(factsOfKind(aprilRecap, 'debut')).toHaveLength(0);
   });
 
+  /**
+   * The same slice, under the model production actually runs.
+   *
+   * "Before tonight" is `rating_events.seq < the night's first seq`, which only
+   * means anything if `seq` is the replay's global order. WHR numbered it per
+   * player, so every player's first set was `seq` 1 and nothing was ever
+   * before anything: the recap announced the whole room as first-timers every
+   * night, on every night in club history, and silently dropped every rivalry,
+   * breakthrough and milestone fact with them. Glicko-2 numbered it globally
+   * and passed the test above throughout.
+   */
+  it('reads the same history under WHR as under Glicko-2', async () => {
+    const { glicko } = await getGlickoSettings(db);
+    await updateGlickoSettings(db, { ...glicko, activeModel: 'whr' });
+    await sync(['march-main', 'march-rookie', 'april-main', 'june-main']);
+    await runRecompute(db);
+
+    // June is Yoshi's first night and Fox's third. One debutant, not two —
+    // with a per-player `seq`, Yoshi's first event was numbered 1, which put
+    // the whole of club history *after* the boundary and made everyone new.
+    const [debut] = factsOfKind((await caller().public.recap({ slug: 'june-main' }))!, 'debut');
+    expect(debut?.players.map((p) => p.name)).toEqual(['Yoshi']);
+  });
+
   it('compares turnout only against earlier nights', async () => {
     await sync(['march-main', 'march-rookie', 'april-main']);
     const marchRecap = (await caller().public.recap({ slug: 'march-main' }))!;
@@ -210,11 +253,12 @@ describe('public.recap', () => {
     expect(aprilTurnout).toMatchObject({ entrants: 3, previousBest: 5, isRecord: false });
   });
 
-  it('reports an unfinished bracket as incomplete without inventing a podium', async () => {
+  /** An unfinished bracket, dated `hoursAgo`, synced and recapped. */
+  const recapUnfinished = async (hoursAgo: number) => {
     const underway: FixtureTournament = {
       slug: 'may-main',
       state: 'underway',
-      startedAt: '2025-05-01T18:00:00.000+11:00',
+      startedAt: new Date(Date.now() - hoursAgo * 60 * 60 * 1000).toISOString(),
       completedAt: null,
       participants: [
         { id: 1, name: '[ATL] Fox McCloud', seed: 1 },
@@ -228,12 +272,32 @@ describe('public.recap', () => {
       .from(tournaments)
       .where(eq(tournaments.challongeSlug, underway.slug));
     await syncTournament(db, fixtureClient([...ALL, underway]), row!.id);
+    return (await caller().public.recap({ slug: 'may-main' }))!;
+  };
 
-    const recap = (await caller().public.recap({ slug: 'may-main' }))!;
+  it('reports a bracket still being played as incomplete, without inventing a podium', async () => {
+    const recap = await recapUnfinished(2);
     expect(recap.isComplete).toBe(false);
+    expect(recap.isAbandoned).toBe(false);
     expect(factsOfKind(recap, 'podium')).toHaveLength(0);
     expect(factsOfKind(recap, 'grand_finals')).toHaveLength(0);
     // The set that was played is still a fact worth having.
+    expect(recap.setsPlayed).toBe(1);
+  });
+
+  /**
+   * The night the room ran out of time. Challonge's `underway` is sticky, so
+   * without a clock this bracket reads as "still in progress" forever — years
+   * after everyone went home. Enough elapsed time is itself the evidence that
+   * it is not going to finish.
+   */
+  it('treats a long-unfinished bracket as over, but still crowns nobody', async () => {
+    const recap = await recapUnfinished(30 * 24);
+    expect(recap.isComplete).toBe(true);
+    expect(recap.isAbandoned).toBe(true);
+    // Over is not won: the bracket never reached a final, so it has no podium.
+    expect(factsOfKind(recap, 'podium')).toHaveLength(0);
+    expect(factsOfKind(recap, 'grand_finals')).toHaveLength(0);
     expect(recap.setsPlayed).toBe(1);
   });
 });

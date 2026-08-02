@@ -340,6 +340,12 @@ export const publicRouter = router({
       challongeState: tournament.challongeState,
       syncState: tournament.syncState,
       lastSyncedAt: tournament.lastSyncedAt?.toISOString() ?? null,
+      /**
+       * Open live-monitoring window, if any. This — not `syncState` — is what
+       * "live" means; the page needs it to know whether a bracket is being
+       * watched right now.
+       */
+      liveUntil: tournament.liveUntil?.toISOString() ?? null,
       participants: participants
         .map((p) => ({
           id: p.id,

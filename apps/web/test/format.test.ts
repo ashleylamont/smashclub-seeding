@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { orientScore, roundLabel } from '../src/lib/format';
+import { orientScore, roundLabel, scoreCell } from '../src/lib/format';
 
 /**
  * Challonge reports scores player-one-first. Anywhere the winner is named
@@ -32,6 +32,28 @@ describe('orientScore', () => {
 
   it('has nothing to show when the set has no winner yet', () => {
     expect(orientScore('1-1', null)).toBeNull();
+  });
+
+  it('has nothing to show for a bye', () => {
+    // `99-0` closes a slot nobody played; "won 99-0" is not a result.
+    expect(orientScore('99-0', 1)).toBeNull();
+    expect(orientScore('0-99', 2)).toBeNull();
+  });
+
+  it('still shows a best-of-five', () => {
+    expect(orientScore('3-0', 1)).toBe('3-0');
+  });
+});
+
+describe('scoreCell', () => {
+  it('names what happened when there is no scoreline', () => {
+    expect(scoreCell('99-0')).toBe('bye');
+    expect(scoreCell('-1-0')).toBe('forfeit');
+    expect(scoreCell(null)).toBe('—');
+  });
+
+  it('prints a real score as reported, player one first', () => {
+    expect(scoreCell('1-2')).toBe('1-2');
   });
 });
 

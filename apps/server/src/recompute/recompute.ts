@@ -13,7 +13,7 @@ import {
   type LeaderboardRow,
   type RatingEvent,
 } from '@smashclub/engine';
-import type { GlickoSettings } from '@smashclub/shared';
+import { scoresIndicateUnplayed, type GlickoSettings } from '@smashclub/shared';
 import { getGlickoSettings, updateGlickoSettings } from '../settings';
 
 export const ENGINE_VERSION = '1.0.0';
@@ -68,6 +68,15 @@ export async function runRecompute(
 
   const engineSets: EngineSet[] = setRows
     .filter((row) => row.p1PlayerId !== row.p2PlayerId)
+    /*
+     * A `99-0` is a bye — nobody played it, so it cannot move a rating, and it
+     * must not reach the game-count weighting below as the most decisive set in
+     * club history. The sync marks these excluded, but that is a stored verdict
+     * on rows that may predate the rule; the scoreline is the evidence, so it
+     * is re-read here and the ratings come out right on the next recompute
+     * rather than on the next re-sync.
+     */
+    .filter((row) => !scoresIndicateUnplayed(row.scoresCsv))
     .map((row) => {
       // Game counts feed WHR's evidence weighting (a 3-0 outrates a 3-2);
       // forfeits and unreadable scorelines come back `unknown` and rate as a

@@ -69,7 +69,15 @@ function Recap({ data }: { data: RecapData }) {
       <p className="muted recap-subtitle">
         {formatDate(eventDate)} · {data.entrants} entrants · {data.setsPlayed} sets
         {data.tournaments.length > 1 && ` · ${data.tournaments.length} brackets`}
+        {/* Two different things a reader would otherwise conflate: a night
+            still being played is worth coming back to, a bracket the room ran
+            out of time on is not. */}
         {!data.isComplete && <span className="chip chip-warning recap-progress-chip">still in progress</span>}
+        {data.isComplete && data.isAbandoned && (
+          <span className="chip chip-warning recap-progress-chip" title="The bracket was never played out to a final">
+            bracket unfinished
+          </span>
+        )}
       </p>
 
       {podiums.length > 0 && (
