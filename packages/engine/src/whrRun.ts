@@ -1,6 +1,6 @@
 import type { GlickoSettings } from '@smashclub/shared';
 import { attendanceOf, eventKeyOf } from './events';
-import { fitWhr, NATURAL_TO_DISPLAY, type WhrFit } from './whr';
+import { DISPLAY_CENTRE, NATURAL_TO_DISPLAY, fitWhr, type WhrFit } from './whr';
 import { activityPenaltyFor, rankScores, type LeaderboardRow, type PlayerScore } from './score';
 import type { EngineSet, EngineTournament, RatingEvent } from './types';
 
@@ -41,11 +41,15 @@ import type { EngineSet, EngineTournament, RatingEvent } from './types';
  *    What absence costs on the *board* stays the explicit activity penalty,
  *    shared with the Glicko path — club policy, not model output.
  *
- * The uncertainty machinery the Glicko path needs (rookie RD inflation, the
- * isolation factor, the rating anchor, sample-confidence shrinkage) is absent
- * here on purpose: WHR already answers "how sure are we" with the posterior
- * variance, so `skillSd` is that variance directly rather than a stack of
- * hand-tuned multipliers.
+ * Most of the uncertainty machinery the Glicko path needs (rookie RD
+ * inflation, sample-confidence shrinkage) is absent here on purpose: WHR
+ * already answers "how sure are we" with the posterior variance, so `skillSd`
+ * is that variance directly rather than a stack of hand-tuned multipliers.
+ * The one exception is *bias*, which variance cannot express: a rookie
+ * islander's point estimate is identified mostly by other islanders, so the
+ * board can optionally shrink the displayed number by bridge exposure
+ * (`whrIsolationAnchor`) and start rookie debuts from a calibrated prior
+ * (`whrRookieDebutPrior`).
  */
 export interface WhrRunResult {
   events: RatingEvent[];
@@ -161,6 +165,28 @@ export function runWhrModel(input: {
 
   const originDay = rateable[0]!.day;
 
+  /*
+   * A player who debuts in a rookie bracket gets the rookie prior rather than
+   * the global one. The rookie pool is pinned to the display scale almost
+   * entirely through these priors — cross-bracket sets are scarce — so a prior
+   * that overstates the typical rookie-night newcomer inflates the whole
+   * island, and with it anyone who farms it. A debut bracket is the same in
+   * every history prefix that contains the player, so one map computed over
+   * the full history serves every prefix fit.
+   */
+  const rookieDebutPriorNatural = (settings.whrRookieDebutPrior - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY;
+  const priorMeans = new Map<string, number>();
+  if (rookieDebutPriorNatural !== 0) {
+    const seen = new Set<string>();
+    for (const { set, tournament } of rateable) {
+      for (const playerId of [set.p1PlayerId, set.p2PlayerId]) {
+        if (seen.has(playerId)) continue;
+        seen.add(playerId);
+        if (tournament.isRookie) priorMeans.set(playerId, rookieDebutPriorNatural);
+      }
+    }
+  }
+
   /**
    * One fit per history prefix: `fits[k]` sees events 0..k and nothing later.
    * This is what freezes the ledger — event k's numbers depend only on what
@@ -186,6 +212,7 @@ export function runWhrModel(input: {
         driftVariancePerDay: settings.whrDriftVariancePerDay,
         priorSd: settings.whrPriorSd,
       },
+      priorMeans,
     });
   const fits = orderedEventKeys.map((_, index) => fitPrefix(index));
   const fullFit = fits[fits.length - 1]!;
@@ -300,7 +327,7 @@ export function runWhrModel(input: {
     }
   }
 
-  const leaderboard = buildLeaderboard(fullFit, rateable, orderedEventKeys, settings);
+  const leaderboard = buildLeaderboard(fullFit, rateable, orderedEventKeys, settings, priorMeans);
 
   /**
    * The board as it stood before the latest night: the second-to-last prefix,
@@ -317,6 +344,7 @@ export function runWhrModel(input: {
       previousRateable,
       orderedEventKeys.slice(0, -1),
       settings,
+      priorMeans,
     );
     for (const row of previousBoard) previousRanks.set(row.playerId, row.rank);
   }
@@ -344,6 +372,8 @@ function buildLeaderboard(
   rateable: readonly RateableSet[],
   orderedEventKeys: readonly string[],
   settings: GlickoSettings,
+  /** Natural-units prior centres (rookie debuts); the isolation anchor's target. */
+  priorMeans: ReadonlyMap<string, number>,
 ): LeaderboardRow[] {
   const priorDisplaySd = settings.whrPriorSd * NATURAL_TO_DISPLAY;
   const latestTime =
@@ -396,6 +426,26 @@ function buildLeaderboard(
   }
 
   /*
+   * Matches played against someone with main-bracket experience, per player.
+   * This is the *exposure* version of the bridge measure: a share of the
+   * player's own matches, not a count of acquaintances. The old count-of-5
+   * test declared an islander fully bridged after brushing past five such
+   * players once each — trivially satisfied in brackets that mix veterans in —
+   * while their record stayed 90% intra-island.
+   */
+  const bridgeMatchCounts = new Map<string, number>();
+  for (const { set } of rateable) {
+    for (const [selfId, otherId] of [
+      [set.p1PlayerId, set.p2PlayerId],
+      [set.p2PlayerId, set.p1PlayerId],
+    ] as const) {
+      if ((participation.get(otherId)?.mainMatchCount ?? 0) > 0) {
+        bridgeMatchCounts.set(selfId, (bridgeMatchCounts.get(selfId) ?? 0) + 1);
+      }
+    }
+  }
+
+  /*
    * The activity penalty is club policy, not model output, so it is computed
    * the same way here as in the Glicko replay: from the club's event list and
    * who turned up to what. Switching the active model must not change what
@@ -411,22 +461,49 @@ function buildLeaderboard(
     const rookieRatio = row.matchCount ? row.rookieMatchCount / row.matchCount : 0;
     const attendance = attendanceOf(orderedEventKeys, row.eventKeys);
     const activityPenalty = activityPenaltyFor(attendance.missedEvents, settings);
+
+    /*
+     * The posterior variance says how unsure the fit is, but the *point
+     * estimate* of a rookie islander is identified mostly by other islanders,
+     * and the board publishes the point estimate. When enabled, shrink the
+     * displayed rating toward the player's own prior by how little of their
+     * record touches the established field. The fit and win probabilities are
+     * untouched.
+     */
+    let isolationFactor = 0;
+    let displayedRating = latest.rating;
+    if (settings.whrIsolationAnchor) {
+      const mainExperienceFactor = Math.min(row.mainMatchCount, 5) / 5;
+      const bridgeExposure = row.matchCount ? (bridgeMatchCounts.get(row.playerId) ?? 0) / row.matchCount : 0;
+      isolationFactor = rookieRatio * (1 - Math.max(mainExperienceFactor, bridgeExposure));
+      const anchorFactor = Math.max(0.25, 1 - 0.65 * isolationFactor);
+      const priorDisplay = DISPLAY_CENTRE + (priorMeans.get(row.playerId) ?? 0) * NATURAL_TO_DISPLAY;
+      displayedRating = priorDisplay + (latest.rating - priorDisplay) * anchorFactor;
+    }
+
     scores.push({
       playerId: row.playerId,
       ...attendance,
       activityPenalty,
       nextMissPenalty: activityPenaltyFor(attendance.missedEvents + 1, settings) - activityPenalty,
-      clubRating: latest.rating - activityPenalty,
+      clubRating: displayedRating - activityPenalty,
+      /*
+       * A player with no main-bracket sets stays provisional however many
+       * rookie nights they have played: their level against the field the
+       * board ranks is exactly what the record has not established.
+       */
       isProvisional:
-        row.eventKeys.size < settings.provisionalEventCount || row.matchCount < settings.provisionalMatchCount,
+        row.eventKeys.size < settings.provisionalEventCount ||
+        row.matchCount < settings.provisionalMatchCount ||
+        row.mainMatchCount === 0,
       rating: latest.rating,
       rd: latest.sd,
       vol: 0,
-      effectiveRating: latest.rating,
+      effectiveRating: displayedRating,
       effectiveRd: latest.sd,
-      skillRating: latest.rating,
+      skillRating: displayedRating,
       skillSd: latest.sd,
-      conservativeRating: latest.rating - 2 * latest.sd,
+      conservativeRating: displayedRating - 2 * latest.sd,
       matchCount: row.matchCount,
       wins: row.wins,
       losses: row.losses,
@@ -437,9 +514,7 @@ function buildLeaderboard(
       uniqueOpponentCount: row.opponentIds.size,
       bridgeOpponentCount,
       rookieRatio,
-      // No isolation correction is applied — thin cross-bracket linkage already
-      // shows up as a wider posterior.
-      isolationFactor: 0,
+      isolationFactor,
       /**
        * How much the posterior has tightened relative to *this model's* prior
        * (not the Glicko initial RD, whose scale means nothing here). Zero for

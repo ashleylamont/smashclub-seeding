@@ -5,7 +5,7 @@
  */
 import type { GlickoSettings } from '@smashclub/shared';
 import { updateRating, type Rating } from './glicko2';
-import { fitWhr, probabilityFromRatings, type WhrConfig } from './whr';
+import { DISPLAY_CENTRE, NATURAL_TO_DISPLAY, defaultWhrConfig, fitWhr, probabilityFromRatings, type WhrConfig } from './whr';
 import type { EvalModel, EvalSet } from './evaluate';
 
 /** Always 50/50 — the floor any useful model must beat. */
@@ -208,10 +208,34 @@ export function unweightedTournamentGlickoModel(settings: GlickoSettings): EvalM
   });
 }
 
-export function whrModel(config?: Partial<WhrConfig>, label = 'whr'): EvalModel {
+export interface WhrModelOptions {
+  /**
+   * Display-scale prior mean for players who debut in a rookie bracket.
+   * Applied both inside the fit (training-fold debuts) and to players first
+   * seen in the predicted set itself, so the out-of-sample fold measures the
+   * prior exactly where it matters — a newcomer's first night.
+   */
+  rookieDebutPrior?: number;
+  /** How to tell a rookie bracket from its tournament id. */
+  isRookieTournament?: (tournamentId: string) => boolean;
+}
+
+export function whrModel(config?: Partial<WhrConfig>, label = 'whr', options?: WhrModelOptions): EvalModel {
+  const rookiePriorNatural =
+    options?.rookieDebutPrior === undefined ? 0 : (options.rookieDebutPrior - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY;
+  const isRookie = options?.isRookieTournament ?? (() => false);
   return {
     name: label,
     fit: (training) => {
+      const priorMeans = new Map<string, number>();
+      if (rookiePriorNatural !== 0) {
+        for (const set of [...training].sort((a, b) => a.time - b.time)) {
+          for (const playerId of [set.p1PlayerId, set.p2PlayerId]) {
+            if (priorMeans.has(playerId)) continue;
+            priorMeans.set(playerId, isRookie(set.tournamentId) ? rookiePriorNatural : 0);
+          }
+        }
+      }
       const fit = fitWhr({
         sets: training.map((set) => ({
           p1PlayerId: set.p1PlayerId,
@@ -221,8 +245,20 @@ export function whrModel(config?: Partial<WhrConfig>, label = 'whr'): EvalModel 
           trials: set.trials,
         })),
         config,
+        priorMeans,
       });
-      return (set) => fit.winProbability(set.p1PlayerId, set.p2PlayerId, set.time);
+      return (set) => {
+        if (rookiePriorNatural === 0) return fit.winProbability(set.p1PlayerId, set.p2PlayerId, set.time);
+        // A player unseen in training debuts in the predicted set: give them
+        // the same prior the fit would have.
+        const debutMean = isRookie(set.tournamentId) ? rookiePriorNatural : 0;
+        const a = fit.latest(set.p1PlayerId) ? fit.at(set.p1PlayerId, set.time) : null;
+        const b = fit.latest(set.p2PlayerId) ? fit.at(set.p2PlayerId, set.time) : null;
+        const priorVariance = (config?.priorSd ?? defaultWhrConfig.priorSd) ** 2;
+        const ra = a ?? { r: debutMean, variance: priorVariance };
+        const rb = b ?? { r: debutMean, variance: priorVariance };
+        return probabilityFromRatings(ra.r, rb.r, ra.variance + rb.variance);
+      };
     },
   };
 }

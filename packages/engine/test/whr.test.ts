@@ -144,6 +144,40 @@ describe('fitWhr', () => {
   });
 });
 
+describe('per-player prior means', () => {
+  it('centres an unopposed record on the player’s own prior instead of 1500', () => {
+    const sets: WhrSet[] = [
+      { p1PlayerId: 'a', p2PlayerId: 'b', winner: 1, time: 0 },
+      { p1PlayerId: 'a', p2PlayerId: 'b', winner: 2, time: 0 },
+    ];
+    const centred = fitWhr({ sets });
+    const lowered = fitWhr({ sets, priorMeans: new Map([['a', -0.5], ['b', -0.5]]) });
+
+    // An even record carries no relative information, so the pair should sit
+    // at whatever their priors say — 1500 by default, lower when told so.
+    expect(centred.display('a').rating).toBeCloseTo(1500, 6);
+    expect(lowered.display('a').rating).toBeCloseTo(1500 - 0.5 * NATURAL_TO_DISPLAY, 6);
+    expect(lowered.display('b').rating).toBeCloseTo(lowered.display('a').rating, 6);
+  });
+
+  it('moves only the targeted player, and their opponents through the graph', () => {
+    const sets: WhrSet[] = [
+      { p1PlayerId: 'a', p2PlayerId: 'b', winner: 1, time: 0 },
+      { p1PlayerId: 'c', p2PlayerId: 'd', winner: 1, time: 0 },
+    ];
+    const baseline = fitWhr({ sets });
+    const shifted = fitWhr({ sets, priorMeans: new Map([['a', -0.6]]) });
+
+    // The a–b component sinks with a's prior; the untouched c–d component
+    // must not move at all.
+    expect(shifted.display('a').rating).toBeLessThan(baseline.display('a').rating);
+    expect(shifted.display('b').rating).toBeLessThan(baseline.display('b').rating);
+    // Decoupled component; only convergence noise may differ.
+    expect(shifted.display('c').rating).toBeCloseTo(baseline.display('c').rating, 2);
+    expect(shifted.display('d').rating).toBeCloseTo(baseline.display('d').rating, 2);
+  });
+});
+
 describe('probabilityFromRatings', () => {
   it('is 0.5 for equal ratings and monotonic in the difference', () => {
     expect(probabilityFromRatings(0, 0, 0)).toBeCloseTo(0.5, 12);

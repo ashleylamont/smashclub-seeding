@@ -220,6 +220,9 @@ function main(): void {
   }
 
   const settings = defaultGlickoSettings;
+  // Both the cache loader and the synthetic generator carry rookie-ness in the
+  // tournament name, which walk-forward passes through as the tournament id.
+  const isRookieTournament = (tournamentId: string): boolean => /rookie/i.test(tournamentId);
   const models: EvalModel[] = [
     coinFlipModel,
     experienceModel,
@@ -230,6 +233,11 @@ function main(): void {
     whrModel(undefined, 'whr'),
     whrModel({ driftVariancePerDay: 0.00005 }, 'whr (slow drift)'),
     whrModel({ driftVariancePerDay: 0.0008 }, 'whr (fast drift)'),
+    whrModel(undefined, 'whr (rookie prior 1450)', { rookieDebutPrior: 1450, isRookieTournament }),
+    whrModel(undefined, 'whr (rookie prior 1400)', { rookieDebutPrior: 1400, isRookieTournament }),
+    whrModel(undefined, 'whr (rookie prior 1350)', { rookieDebutPrior: 1350, isRookieTournament }),
+    whrModel(undefined, 'whr (rookie prior 1300)', { rookieDebutPrior: 1300, isRookieTournament }),
+    whrModel(undefined, 'whr (rookie prior 1250)', { rookieDebutPrior: 1250, isRookieTournament }),
   ];
 
   /*

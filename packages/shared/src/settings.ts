@@ -120,6 +120,26 @@ export const glickoSettingsSchema = z.object({
   whrGamesWeight: z.number().default(0.5),
 
   /**
+   * Prior mean (display scale) for players whose first-ever bracket is a rookie
+   * bracket. The global 1500 prior overstates the typical rookie-night
+   * newcomer — the board shows them settling in the 1300s–1400s — and because a
+   * rookie island is pinned to the scale almost entirely through its players'
+   * priors, that error inflates everyone who farms the island. 1500 disables
+   * the correction (identical to the single global prior).
+   */
+  whrRookieDebutPrior: z.number().default(1500),
+
+  /**
+   * Shrink a player's *displayed* WHR rating toward their own prior mean by how
+   * little of their record is exposed to the established field. The fit itself
+   * is untouched — this corrects the point estimate the board publishes, where
+   * an islander's rating is identified mostly by other islanders. Off by
+   * default: flip on together with a recompute once the parameters are
+   * settled.
+   */
+  whrIsolationAnchor: z.boolean().default(false),
+
+  /**
    * Absolute league thresholds on the skill rating, highest first.
    *
    * These replace live quartiles of the current field, under which a player's
