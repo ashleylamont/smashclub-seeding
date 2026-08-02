@@ -160,7 +160,13 @@ export const publicRouter = router({
     const recomputeId = await latestRecomputeId(ctx.db);
     let ratingRow = null;
     let events: Array<Record<string, unknown>> = [];
+    let model = 'glicko2';
     if (recomputeId) {
+      const [recompute] = await ctx.db
+        .select({ model: recomputes.model })
+        .from(recomputes)
+        .where(eq(recomputes.id, recomputeId));
+      model = recompute?.model ?? model;
       const [rating] = await ctx.db
         .select()
         .from(playerRatings)
@@ -178,6 +184,9 @@ export const publicRouter = router({
           preRd: ratingEvents.preRd,
           postRd: ratingEvents.postRd,
           weight: ratingEvents.weight,
+          /** WHR only: the current fit's hindsight estimate at this night. */
+          revisedRating: ratingEvents.revisedRating,
+          revisedSd: ratingEvents.revisedSd,
           tournamentId: ratingEvents.tournamentId,
           tournamentName: tournaments.name,
           tournamentDate: tournaments.eventDate,
@@ -220,6 +229,8 @@ export const publicRouter = router({
       },
       rating: ratingRow,
       events,
+      /** Which rating model produced the events — the profile explains deltas differently per model. */
+      model,
     };
   }),
 

@@ -318,6 +318,14 @@ export const ratingEvents = pgTable('rating_events', {
   preVol: doublePrecision('pre_vol').notNull(),
   postVol: doublePrecision('post_vol').notNull(),
   weight: doublePrecision('weight').notNull(),
+  /**
+   * WHR only, null under Glicko: the current full-history fit's estimate of
+   * the player's skill at this event's time. `pre_`/`post_rating` are the
+   * frozen ledger of what the board published as of that night; this pair is
+   * hindsight, revised as later results teach the model more about the past.
+   */
+  revisedRating: doublePrecision('revised_rating'),
+  revisedSd: doublePrecision('revised_sd'),
 });
 
 export const playerRatings = pgTable(
