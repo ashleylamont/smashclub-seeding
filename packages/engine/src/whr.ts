@@ -79,6 +79,8 @@ interface PlayerTrack {
   variance: number[];
   /** Games indexed by time position. */
   games: Array<Array<{ opponentId: string; opponentTimeIndex: number; won: boolean; trials: number }>>;
+  /** Centre of this player's prior, natural units (0 unless overridden). */
+  priorMean: number;
 }
 
 export interface PlayerRatingAt {
@@ -118,9 +120,19 @@ export function probabilityFromRatings(rA: number, rB: number, varianceSum: numb
   return 1 / (1 + Math.exp(-g(varianceSum) * (rA - rB)));
 }
 
-export function fitWhr(input: { sets: readonly WhrSet[]; config?: Partial<WhrConfig> }): WhrFit {
+export function fitWhr(input: {
+  sets: readonly WhrSet[];
+  config?: Partial<WhrConfig>;
+  /**
+   * Per-player prior centres in natural units (0 = the 1500 display centre).
+   * The prior still attaches only to a player's first appearance; players
+   * absent from the map keep the centred prior.
+   */
+  priorMeans?: ReadonlyMap<string, number>;
+}): WhrFit {
   const config: WhrConfig = { ...defaultWhrConfig, ...input.config };
   const sets = input.sets;
+  const priorMeans = input.priorMeans;
 
   // ---- build per-player tracks ----
   const timesByPlayer = new Map<string, Set<number>>();
@@ -135,12 +147,14 @@ export function fitWhr(input: { sets: readonly WhrSet[]; config?: Partial<WhrCon
   const tracks = new Map<string, PlayerTrack>();
   for (const [playerId, timeSet] of timesByPlayer) {
     const times = [...timeSet].sort((a, b) => a - b);
+    const priorMean = priorMeans?.get(playerId) ?? 0;
     tracks.set(playerId, {
       playerId,
       times,
-      r: times.map(() => 0),
+      r: times.map(() => priorMean),
       variance: times.map(() => config.priorSd * config.priorSd),
       games: times.map(() => []),
+      priorMean,
     });
   }
 
@@ -255,9 +269,9 @@ function newtonUpdatePlayer(track: PlayerTrack, tracks: Map<string, PlayerTrack>
   }
 
   // Prior on the first rating, which anchors the scale and keeps disconnected
-  // components from floating away from 1500.
+  // components from floating away from their prior centre.
   const priorPrecision = 1 / (config.priorSd * config.priorSd);
-  gradient[0]! -= priorPrecision * track.r[0]!;
+  gradient[0]! -= priorPrecision * (track.r[0]! - track.priorMean);
   diagonal[0]! -= priorPrecision;
 
   // Brownian drift between consecutive appearances.

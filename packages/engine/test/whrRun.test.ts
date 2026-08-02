@@ -225,3 +225,87 @@ describe('runWhrModel', () => {
     expect(run.leaderboard.map((r) => r.playerId).sort()).toEqual(['alice', 'bob']);
   });
 });
+
+describe('rookie-island calibration', () => {
+  const row = (run: ReturnType<typeof runWhrModel>, playerId: string) =>
+    run.leaderboard.find((r) => r.playerId === playerId)!;
+
+  it('gives rookie-bracket debutants the rookie prior and leaves the main pool alone', () => {
+    const { tournaments, sets } = club();
+    const before = runWhrModel({ sets, tournaments, settings });
+    const after = runWhrModel({ sets, tournaments, settings: { ...settings, whrRookieDebutPrior: 1350 } });
+
+    // falco farms the rookie island unbeaten; his whole component sinks with
+    // its priors, while the disconnected main pool is untouched.
+    expect(row(after, 'falco').skillRating).toBeLessThan(row(before, 'falco').skillRating);
+    expect(row(after, 'kirby').skillRating).toBeLessThan(row(before, 'kirby').skillRating);
+    // Same component-decoupled fit; only convergence noise may differ.
+    expect(row(after, 'alice').skillRating).toBeCloseTo(row(before, 'alice').skillRating, 2);
+  });
+
+  it('anchors an islander’s displayed rating without touching bridged players', () => {
+    const { tournaments, sets } = club();
+    const raw = runWhrModel({ sets, tournaments, settings });
+    const anchored = runWhrModel({ sets, tournaments, settings: { ...settings, whrIsolationAnchor: true } });
+
+    // falco: all matches rookie, no opponent has main experience — fully
+    // isolated, so the displayed rating shrinks toward the prior.
+    expect(row(anchored, 'falco').isolationFactor).toBeGreaterThan(0.9);
+    expect(row(anchored, 'falco').skillRating).toBeLessThan(row(raw, 'falco').skillRating);
+    expect(row(anchored, 'falco').skillRating).toBeGreaterThan(1500);
+    // alice never plays a rookie bracket: no anchor.
+    expect(row(anchored, 'alice').isolationFactor).toBe(0);
+    expect(row(anchored, 'alice').skillRating).toBeCloseTo(row(raw, 'alice').skillRating, 8);
+    // The fit itself is untouched — only the published number moves.
+    expect(row(anchored, 'falco').rating).toBeCloseTo(row(raw, 'falco').rating, 8);
+  });
+
+  it('measures bridging by match share, not by having met five main players once', () => {
+    // An islander who has brushed past several main-bracket regulars inside
+    // the rookie bracket, but whose record is still 6/7 intra-island.
+    const tournaments = [
+      tournament('m1', '2025-01-10T18:00:00.000Z', false, 1),
+      tournament('r1', '2025-01-10T20:30:00.000Z', true, 2),
+      tournament('m2', '2025-02-10T18:00:00.000Z', false, 3),
+      tournament('r2', '2025-02-10T20:30:00.000Z', true, 4),
+    ];
+    const sets = [
+      // Five main-bracket regulars establish main experience.
+      makeSet('m1', 'v1', 'v2', 1),
+      makeSet('m1', 'v3', 'v4', 1),
+      makeSet('m2', 'v5', 'v1', 1),
+      // The islander meets one veteran once, then farms rookies.
+      makeSet('r1', 'island', 'v5', 1),
+      makeSet('r1', 'island', 'r-a', 1),
+      makeSet('r1', 'island', 'r-b', 1),
+      makeSet('r2', 'island', 'r-c', 1),
+      makeSet('r2', 'island', 'r-d', 1),
+      makeSet('r2', 'island', 'r-e', 1),
+      makeSet('r2', 'island', 'r-f', 1),
+    ];
+    const run = runWhrModel({ sets, tournaments, settings: { ...settings, whrIsolationAnchor: true } });
+    const islander = run.leaderboard.find((r) => r.playerId === 'island')!;
+    // One bridge match in seven is thin exposure; the old count-based test
+    // would have scored this same record 1/5 bridged per *opponent* and, at
+    // five veterans, called it fully bridged.
+    expect(islander.isolationFactor).toBeGreaterThan(0.5);
+  });
+
+  it('keeps a rookie-only record provisional no matter how long it grows', () => {
+    const tournaments = [
+      tournament('r1', '2025-01-10T18:00:00.000Z', true, 1),
+      tournament('r2', '2025-02-10T18:00:00.000Z', true, 2),
+      tournament('m1', '2025-03-10T18:00:00.000Z', false, 3),
+    ];
+    const sets = [
+      ...Array.from({ length: 4 }, (_, i) => makeSet('r1', 'grinder', `op-${i}`, 1 as const)),
+      ...Array.from({ length: 4 }, (_, i) => makeSet('r2', 'grinder', `op-${4 + i}`, 1 as const)),
+      // A main-bracket player with the same volume graduates as before.
+      ...Array.from({ length: 4 }, (_, i) => makeSet('m1', 'regular', `mo-${i}`, 1 as const)),
+      ...Array.from({ length: 4 }, (_, i) => makeSet('r1', 'regular', `mo-${4 + i}`, 1 as const)),
+    ];
+    const run = runWhrModel({ sets, tournaments, settings });
+    expect(run.leaderboard.find((r) => r.playerId === 'grinder')!.isProvisional).toBe(true);
+    expect(run.leaderboard.find((r) => r.playerId === 'regular')!.isProvisional).toBe(false);
+  });
+});
