@@ -157,7 +157,19 @@ export function runWhrModel(input: {
   // Walk the sets in order, booking each player's period movement on their first
   // set of that period.
   const events: RatingEvent[] = [];
-  const seqByPlayer = new Map<string, number>();
+  /**
+   * ONE COUNTER FOR THE WHOLE RUN, not one per player.
+   *
+   * `seq` is the replay's global processing order — that is what the Glicko
+   * path writes and what every reader assumes. A per-player counter numbered
+   * everybody's first set `1`, so "everything that happened before this night"
+   * (`seq < the night's first seq`, how the recap decides who is new) matched
+   * nothing at all: the recap announced the entire room as first-timers every
+   * single night, and quietly dropped every rivalry, breakthrough and milestone
+   * fact along with it. A player's own events are still ascending in a global
+   * counter, so per-player history reads the same as before.
+   */
+  let seq = 0;
   const lastPeriodRating = new Map<string, { rating: number; sd: number }>();
   const bookedPeriod = new Map<string, string>();
 
@@ -174,12 +186,9 @@ export function runWhrModel(input: {
       };
       const firstOfPeriod = bookedPeriod.get(playerId) !== eventKey;
 
-      const seq = (seqByPlayer.get(playerId) ?? 0) + 1;
-      seqByPlayer.set(playerId, seq);
-
       events.push({
         playerId,
-        seq,
+        seq: seq++,
         setId: set.id,
         tournamentId: tournament.id,
         isDecay: false,

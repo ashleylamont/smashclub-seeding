@@ -109,6 +109,46 @@ describe('syncTournament', () => {
     expect(set!.winner).toBe(2);
   });
 
+  /**
+   * A `99-0` is how the club closes a slot nobody played. It has both players
+   * and a winner, so nothing upstream marks it as anything but a result — it
+   * has to be recognised here, or a bye counts as a set won.
+   */
+  it('excludes a bye recorded as 99-0', async () => {
+    const id = await tournamentId();
+    const withBye: FixtureTournament = {
+      ...baseFixture,
+      matches: baseFixture.matches.map((m) => (m.id === 12 ? { ...m, scores: '99-0' } : m)),
+    };
+    await syncTournament(db, fixtureClient([withBye]), id);
+
+    const [bye] = await db.select().from(sets).where(eq(sets.challongeMatchId, 12));
+    expect(bye!.excludedFromRatings).toBe(true);
+  });
+
+  /**
+   * The rule that reads a scoreline lives here, so our verdict on a set can
+   * change while upstream stays byte-identical — which is exactly what happened
+   * when byes joined forfeits as "not a played set". A re-sync that only
+   * compares against Challonge would leave every stored `99-0` counting.
+   */
+  it('re-judges a stored set when the exclusion rule changes under it', async () => {
+    const id = await tournamentId();
+    const withBye: FixtureTournament = {
+      ...baseFixture,
+      matches: baseFixture.matches.map((m) => (m.id === 12 ? { ...m, scores: '99-0' } : m)),
+    };
+    await syncTournament(db, fixtureClient([withBye]), id);
+    // Simulate the row as it was stored under the old rule.
+    await db.update(sets).set({ excludedFromRatings: false }).where(eq(sets.challongeMatchId, 12));
+
+    const result = await syncTournament(db, fixtureClient([withBye]), id);
+
+    expect(result.setsChanged).toBe(1);
+    const [bye] = await db.select().from(sets).where(eq(sets.challongeMatchId, 12));
+    expect(bye!.excludedFromRatings).toBe(true);
+  });
+
   it('respects a manual exclusion override on re-sync', async () => {
     const id = await tournamentId();
     await syncTournament(db, fixtureClient([baseFixture]), id);
@@ -142,8 +182,23 @@ describe('syncTournament', () => {
     const live: FixtureTournament = { ...baseFixture, state: 'underway', completedAt: null };
     await syncTournament(db, fixtureClient([live]), id);
     const [tournament] = await db.select().from(tournaments);
-    expect(tournament!.syncState).toBe('registered');
     expect(tournament!.liveUntil).toBeNull();
+  });
+
+  /**
+   * `sync_state` says whether WE have the results, not whether Challonge has
+   * finished the bracket. It used to answer the second question, so a bracket
+   * the room never closed reported "Not synced yet" on a page listing every
+   * one of its synced sets. What still needs re-polling is decided from
+   * `challonge_state` (see the scheduler's sweep).
+   */
+  it('records an unfinished bracket as synced once its results are in', async () => {
+    const id = await tournamentId();
+    const unfinished: FixtureTournament = { ...baseFixture, state: 'underway', completedAt: null };
+    await syncTournament(db, fixtureClient([unfinished]), id);
+    const [tournament] = await db.select().from(tournaments);
+    expect(tournament!.syncState).toBe('synced');
+    expect(tournament!.challongeState).toBe('underway');
   });
 
   it('keeps an open live window while the bracket is unfinished', async () => {

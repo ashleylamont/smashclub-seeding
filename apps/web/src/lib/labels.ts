@@ -35,8 +35,24 @@ export function syncStateLabel(state: string | null | undefined): StateLabel {
   }
 }
 
-/** Challonge's own tournament state, as reported by their API. */
-export function challongeStateLabel(state: string | null | undefined): StateLabel {
+/**
+ * Challonge's own tournament state, as reported by their API.
+ *
+ * `abandoned` (see `isBracketAbandoned`) overrides the unfinished states. A
+ * bracket the room ran out of time on and nobody closed reports `underway`
+ * forever; calling a night from 2024 "in progress" is not a state, it is a
+ * page that has not noticed what year it is.
+ */
+export function challongeStateLabel(
+  state: string | null | undefined,
+  options: { abandoned?: boolean } = {},
+): StateLabel {
+  if (options.abandoned) {
+    return {
+      label: 'Ended unfinished',
+      hint: 'The night is long past and this bracket was never played out or finalised on Challonge, so it is treated as over. Results from the sets that were played still count.',
+    };
+  }
   switch (state) {
     case 'pending':
     case null:

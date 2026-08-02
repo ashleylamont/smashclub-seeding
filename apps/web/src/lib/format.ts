@@ -1,5 +1,7 @@
 /** Small formatting helpers shared across pages. */
 
+import { scoresIndicateBye, scoresIndicateForfeit, scoresIndicateUnplayed } from '@smashclub/shared';
+
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—';
   const date = new Date(iso);
@@ -63,11 +65,14 @@ export function roundLabel(round: number): string {
  * result card — printing that verbatim reads as though the winner lost. Flip
  * each game's pair when player two won.
  *
- * Returns null for a score that cannot be read, which includes Challonge's
- * negative-number forfeit convention; a walkover has no scoreline to show.
+ * Returns null for a score that cannot be read: Challonge's negative-number
+ * forfeit convention, and the club's `99-0` bye. Neither is a scoreline — one
+ * is a walkover and the other is a match nobody turned up for — and printing
+ * "won 99-0" made byes look like the most one-sided sets in club history.
  */
 export function orientScore(scoresCsv: string | null | undefined, winnerSide: number | null): string | null {
   if (!scoresCsv || (winnerSide !== 1 && winnerSide !== 2)) return null;
+  if (scoresIndicateUnplayed(scoresCsv)) return null;
   const games: string[] = [];
   for (const part of scoresCsv.split(',')) {
     const match = part.trim().match(/^(-?\d+)-(-?\d+)$/);
@@ -78,4 +83,15 @@ export function orientScore(scoresCsv: string | null | undefined, winnerSide: nu
     games.push(winnerSide === 1 ? `${a}-${b}` : `${b}-${a}`);
   }
   return games.length > 0 ? games.join(', ') : null;
+}
+
+/**
+ * A set's score as a table cell reads it: player-one-first, as reported — but
+ * `99-0` is a bye, not a 99-game whitewash, so it is named rather than printed.
+ */
+export function scoreCell(scoresCsv: string | null | undefined): string {
+  if (!scoresCsv) return '—';
+  if (scoresIndicateBye(scoresCsv)) return 'bye';
+  if (scoresIndicateForfeit(scoresCsv)) return 'forfeit';
+  return scoresCsv;
 }

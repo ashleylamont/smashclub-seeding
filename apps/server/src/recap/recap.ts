@@ -188,6 +188,9 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
     history,
     rankMovement,
     priorTurnouts,
+    // Lets the engine call a bracket nobody ever closed on Challonge finished,
+    // once its night is far enough behind us.
+    now: Date.now(),
   });
 
   // The engine orders brackets main-first, so the night's canonical slug — the

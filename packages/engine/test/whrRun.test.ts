@@ -214,6 +214,30 @@ describe('runWhrModel', () => {
     expect(run.converged).toBe(true);
   });
 
+  /**
+   * `seq` is the replay's global processing order, and readers use it as one:
+   * "everything before this night" is `seq < the night's first seq`. A
+   * per-player counter — which this used to be — numbered every player's first
+   * set 1, so a night containing anyone new had a first seq of 1 and nothing
+   * in club history sorted before it. The recap read that as a room full of
+   * first-timers, every night.
+   */
+  it('numbers events in one global chronological sequence', () => {
+    const { tournaments, sets } = club();
+    const run = runWhrModel({ sets, tournaments, settings });
+
+    const seqs = run.events.map((e) => e.seq);
+    expect(seqs).toEqual([...seqs].sort((a, b) => a - b));
+    expect(new Set(seqs).size).toBe(run.events.length);
+
+    // Every event of the first evening comes before every event of the second.
+    const firstNight = run.events.filter((e) => e.tournamentId.endsWith('1'));
+    const secondNight = run.events.filter((e) => e.tournamentId.endsWith('2'));
+    expect(Math.max(...firstNight.map((e) => e.seq))).toBeLessThan(
+      Math.min(...secondNight.map((e) => e.seq)),
+    );
+  });
+
   it('ignores sets whose tournament is unknown, and self-play', () => {
     const tournaments = [tournament('t1', '2025-01-10T18:00:00.000Z')];
     const sets = [

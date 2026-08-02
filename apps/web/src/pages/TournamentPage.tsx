@@ -1,24 +1,27 @@
 import { useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
+import { isBracketAbandoned, isBracketOver } from '@smashclub/shared';
 import { trpc } from '../lib/trpc';
 import type { TournamentData, TournamentSet } from '../lib/apiTypes';
-import { formatDate, formatDateTime, roundLabel, timeAgo } from '../lib/format';
+import { formatDate, formatDateTime, roundLabel, scoreCell, timeAgo } from '../lib/format';
 import { challongeStateLabel, setStateLabel, syncStateLabel } from '../lib/labels';
 import { useEventSource } from '../lib/useEventSource';
+import { useNow } from '../lib/useNow';
 import { InfoTip } from '../components/InfoTip';
 import './Tournaments.css';
 
 export function TournamentPage() {
   const { slug } = useParams({ from: '/tournaments/$slug' });
   const queryClient = useQueryClient();
+  const now = useNow();
 
   const query = useQuery({
     queryKey: ['tournament', slug],
     queryFn: () => trpc.public.tournament.query({ slug }),
   });
 
-  const isLive = query.data?.syncState === 'live';
+  const isLive = isLiveNow(query.data ?? null, now);
   useEventSource(isLive && query.data ? `/api/live/${query.data.id}` : null, (type) => {
     if (type === 'set_updated' || type === 'sync_completed') {
       void queryClient.invalidateQueries({ queryKey: ['tournament', slug] });
@@ -29,12 +32,24 @@ export function TournamentPage() {
   if (query.isError) return <p className="error-text">Failed to load tournament: {query.error.message}</p>;
   if (query.data === null) return <p className="error-text">Tournament not found.</p>;
 
-  return <TournamentDetail data={query.data} />;
+  return <TournamentDetail data={query.data} now={now} />;
 }
 
-function TournamentDetail({ data }: { data: TournamentData }) {
-  const isLive = data.syncState === 'live';
-  const isComplete = data.challongeState === 'complete';
+/**
+ * Live means an admin has an open monitoring window on this bracket — never
+ * Challonge's sticky `underway`, and no longer `syncState === 'live'`, which
+ * the sync pipeline stopped writing when liveness became `liveUntil`. The page
+ * had been asking a question nothing answered, so nothing was ever live.
+ */
+function isLiveNow(data: TournamentData | null, now: number): boolean {
+  return data?.liveUntil != null && new Date(data.liveUntil).getTime() > now;
+}
+
+function TournamentDetail({ data, now }: { data: TournamentData; now: number }) {
+  const isLive = isLiveNow(data, now);
+  // Over, not necessarily finished: a bracket abandoned mid-run is also done.
+  const abandoned = isBracketAbandoned(data, now);
+  const isComplete = isBracketOver(data, now);
 
   const standings = useMemo(() => {
     if (!isComplete) return [];
@@ -50,7 +65,7 @@ function TournamentDetail({ data }: { data: TournamentData }) {
     [data.sets],
   );
 
-  const bracket = challongeStateLabel(data.challongeState);
+  const bracket = challongeStateLabel(data.challongeState, { abandoned });
   const sync = syncStateLabel(data.syncState);
 
   return (
@@ -213,7 +228,7 @@ function TournamentDetail({ data }: { data: TournamentData }) {
                           </span>
                         )}
                       </td>
-                      <td className="mono">{set.scoresCsv ?? '—'}</td>
+                      <td className="mono">{scoreCell(set.scoresCsv)}</td>
                       <td title={state.hint}>{state.label}</td>
                       <td className="mono">{set.completedAt ? formatDateTime(set.completedAt) : '—'}</td>
                     </tr>

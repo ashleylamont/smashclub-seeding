@@ -23,6 +23,12 @@
  * its own idea of what was interesting.
  */
 
+import {
+  isBracketAbandoned,
+  isBracketFinalised,
+  isBracketOver,
+  scoresIndicateUnplayed,
+} from '@smashclub/shared';
 import { eventKeyOf } from './events';
 import { winProbability } from './glicko2';
 
@@ -36,7 +42,11 @@ export interface RecapTournament {
   /** ISO 8601. Brackets sharing an `eventKeyOf` are one night. */
   eventDate: string | null;
   isRookie: boolean;
-  /** Challonge's own state; only 'complete' brackets get placement facts. */
+  /**
+   * Challonge's own state. Placement facts need a bracket that is over, which
+   * is not the same as one Challonge calls complete — see `isBracketOver` and
+   * the `now` input below.
+   */
   challongeState: string | null;
 }
 
@@ -118,6 +128,17 @@ export interface RecapInput {
   rankMovement?: readonly RecapRankMovement[];
   /** Entrant counts for earlier nights, for the turnout comparison. */
   priorTurnouts?: readonly { eventKey: string; entrants: number }[];
+  /**
+   * The clock, as epoch milliseconds — an input rather than a `Date.now()`
+   * read, so a recap of a given night is reproducible and testable.
+   *
+   * It is here for one judgement: a bracket the organiser never finalised
+   * upstream is still *over* once its night is long enough past (see
+   * `isBracketAbandoned`). Without it, a night the room ran out of time on
+   * reads as "still in progress" forever. Omit it and only Challonge's own
+   * `complete` counts, which is the safe reading for a night that just ran.
+   */
+  now?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -174,8 +195,18 @@ export interface RecapResult {
   tournaments: readonly RecapTournament[];
   entrants: number;
   setsPlayed: number;
-  /** True once every bracket of the night is complete on Challonge. */
+  /**
+   * True once nothing more is coming: every bracket of the night either
+   * finished on Challonge or was abandoned long enough ago to count as over.
+   */
   isComplete: boolean;
+  /**
+   * True when the night is over but at least one bracket never actually
+   * finished — the room ran out of time and nobody closed it upstream. The
+   * distinction matters to a reader: "still being played" and "never finished"
+   * are different things, and only one of them is worth waiting for.
+   */
+  isAbandoned: boolean;
   facts: RankedRecapFact[];
 }
 
@@ -200,13 +231,15 @@ export interface ParsedScore {
  *
  * Both are common in the club's history, and they are not distinguishable by
  * anything but arity, so a single pair is read as the set score and multiple
- * pairs are tallied. Negative numbers are Challonge's forfeit convention
- * (see `scoresIndicateForfeit`); a forfeit has no game story worth telling, so
- * it reads as unknown rather than as a scoreline.
+ * pairs are tallied. Scores that record something other than a played set read
+ * as unknown rather than as a scoreline: Challonge's negative-number forfeits,
+ * and the club's `99-0` bye (see `scoresIndicateUnplayed`). Neither has a game
+ * story worth telling, and a bye read literally is a 99-game whitewash — which
+ * is exactly the shape every "one-sided" fact goes looking for.
  */
 export function parseScoresCsv(scoresCsv: string | null | undefined): ParsedScore {
   const unknown: ParsedScore = { p1: 0, p2: 0, unknown: true };
-  if (!scoresCsv) return unknown;
+  if (!scoresCsv || scoresIndicateUnplayed(scoresCsv)) return unknown;
 
   const pairs: Array<[number, number]> = [];
   for (const part of scoresCsv.split(',')) {
@@ -239,6 +272,17 @@ export function pairKey(a: string, b: string): string {
 // ---------------------------------------------------------------------------
 // Internals
 // ---------------------------------------------------------------------------
+
+/**
+ * True for a set two people actually played.
+ *
+ * `excludedFromRatings` is the stored verdict, set at sync time; the scoreline
+ * is re-read here because it is the evidence, and a recap must not depend on a
+ * re-sync having happened to stop calling a `99-0` bye a result.
+ */
+function wasPlayed(set: RecapSet): boolean {
+  return !set.excludedFromRatings && !scoresIndicateUnplayed(set.scoresCsv);
+}
 
 /** A completed, rateable set with both sides resolved to participants. */
 interface PlayedSet {
@@ -368,15 +412,26 @@ export interface BracketOutcome {
  * champion lost a set on the day. Keying on undefeatedness dropped the podium
  * from exactly the most dramatic nights.
  *
- * Returns null for a bracket with no completed sets to read.
+ * Returns null for a bracket with no completed sets to read, and for one that
+ * never reached its final: a night that ran out of time before the deepest
+ * round was played has no champion, and the deepest round that *was* played is
+ * not one. Naming its winner would put a player on a podium they never won —
+ * so an undecided bracket gets no placement facts at all.
  */
 export function deriveBracketOutcome(sets: readonly RecapSet[]): BracketOutcome | null {
   const lastLoss = new Map<string, OrderKey>();
   let final: { set: RecapSet; winner: string; key: OrderKey } | null = null;
   let finalRoundSets = 0;
 
+  /** Deepest round still waiting to be played, if any. */
+  const unplayedRound = sets.reduce<number | null>((deepest, set) => {
+    if (set.state === 'complete' && set.winner != null) return deepest;
+    const round = set.round ?? 0;
+    return deepest === null || round > deepest ? round : deepest;
+  }, null);
+
   sets.forEach((set, index) => {
-    if (set.state !== 'complete' || set.winner == null || set.excludedFromRatings) return;
+    if (set.state !== 'complete' || set.winner == null || !wasPlayed(set)) return;
     const p1 = set.p1ParticipantId;
     const p2 = set.p2ParticipantId;
     if (!p1 || !p2) return;
@@ -405,6 +460,9 @@ export function deriveBracketOutcome(sets: readonly RecapSet[]): BracketOutcome 
 
   if (final === null) return null;
   const decided = final as { set: RecapSet; winner: string; key: OrderKey };
+  // A set still waiting at or beyond the deepest round played means the bracket
+  // never got to its final, so nothing here is a placement.
+  if (unplayedRound !== null && unplayedRound >= (decided.set.round ?? 0)) return null;
 
   const placements = new Map<string, number>([[decided.winner, 1]]);
   const eliminated = [...lastLoss.entries()]
@@ -467,6 +525,9 @@ function limitByKind(facts: readonly RankedRecapFact[]): RankedRecapFact[] {
 export function buildRecap(input: RecapInput): RecapResult {
   const { tournaments, participants, sets } = input;
   const ratingEvents = input.ratingEvents ?? [];
+  // No clock supplied: nothing can be stale, so only Challonge's own `complete`
+  // counts as over — the conservative reading, and the one the old code had.
+  const now = input.now ?? Number.NEGATIVE_INFINITY;
 
   const byId = new Map(participants.map((p) => [p.id, p]));
   /**
@@ -480,7 +541,7 @@ export function buildRecap(input: RecapInput): RecapResult {
 
   const played: PlayedSet[] = [];
   for (const set of sets) {
-    if (set.state !== 'complete' || set.winner == null || set.excludedFromRatings) continue;
+    if (set.state !== 'complete' || set.winner == null || !wasPlayed(set)) continue;
     const p1 = set.p1ParticipantId ? byId.get(set.p1ParticipantId) : undefined;
     const p2 = set.p2ParticipantId ? byId.get(set.p2ParticipantId) : undefined;
     if (!p1 || !p2) continue;
@@ -505,7 +566,13 @@ export function buildRecap(input: RecapInput): RecapResult {
   const placement = new Map<string, number>();
   const derivedFor = new Set<string>();
   for (const tournament of orderedTournaments) {
-    if (tournament.challongeState === 'complete') {
+    /*
+     * Finalised, not merely over. An abandoned bracket is done in the sense
+     * that nothing more is coming, but nobody won it — and the sets it does
+     * have would name the deepest round played as its final. That is how a
+     * winners-semi winner ends up on a podium they never reached.
+     */
+    if (isBracketFinalised(tournament)) {
       const outcome = deriveBracketOutcome(sets.filter((s) => s.tournamentId === tournament.id));
       if (outcome) outcomes.set(tournament.id, outcome);
     }
@@ -573,8 +640,8 @@ export function buildRecap(input: RecapInput): RecapResult {
     tournaments: orderedTournaments,
     entrants: participants.length,
     setsPlayed: played.length,
-    isComplete:
-      orderedTournaments.length > 0 && orderedTournaments.every((t) => t.challongeState === 'complete'),
+    isComplete: orderedTournaments.length > 0 && orderedTournaments.every((t) => isBracketOver(t, now)),
+    isAbandoned: orderedTournaments.some((t) => isBracketAbandoned(t, now)),
     facts: limitByKind(facts),
   };
 }
@@ -1192,7 +1259,7 @@ export function formatFact(fact: RecapFact): { headline: string; detail: string 
       };
     case 'nailbiter':
       return {
-        headline: `${fact.winner.name} edges ${fact.loser.name}`,
+        headline: `${fact.winner.name} holds off ${fact.loser.name}`,
         detail: `${fact.score}${inStage(fact.stage)}, down to the last game.`,
       };
     case 'clean_sweep':

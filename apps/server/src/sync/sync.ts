@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
 import { sets, syncJobs, tournamentParticipants, tournaments } from '@smashclub/db';
-import { scoresIndicateForfeit, type ChallongeMatch } from '@smashclub/engine';
+import { scoresIndicateUnplayed, type ChallongeMatch } from '@smashclub/engine';
 import type { ChallongeClient } from '../challonge/client';
 import { recomputePendingCandidates } from '../identity/candidates';
 import { matchTournamentParticipants } from '../identity/matching';
@@ -151,7 +151,15 @@ export async function syncTournament(
         current.scoresCsv !== values.scoresCsv ||
         current.round !== values.round ||
         current.suggestedPlayOrder !== values.suggestedPlayOrder ||
-        (current.completedAt?.getTime() ?? null) !== (values.completedAt?.getTime() ?? null);
+        (current.completedAt?.getTime() ?? null) !== (values.completedAt?.getTime() ?? null) ||
+        /*
+         * Upstream can be byte-identical and our verdict on it still change,
+         * because the rule that reads it lives here: when byes joined forfeits
+         * as "not a played set", every stored `99-0` needed re-judging. Without
+         * this the fix would only have reached sets Challonge happened to touch
+         * again. An admin's manual override is still respected below.
+         */
+        (!current.exclusionManual && current.excludedFromRatings !== values.excludedFromRatings);
       if (changed) {
         await db
           .update(sets)
@@ -177,13 +185,25 @@ export async function syncTournament(
     // out of Postgres.
     if (outcomes.length > 0) await recomputePendingCandidates(db);
 
-    // `underway` deliberately no longer maps to a `live` sync state. Challonge's
-    // `underway` is sticky — tournaments abandoned years ago still report it —
-    // so deriving liveness from it meant polling dead brackets every 15s
-    // forever, which exhausts the free tier's 500 requests/month in about 40
-    // minutes. Liveness is now an explicit, expiring admin decision
-    // (`tournaments.live_until`); this only records synced-vs-not.
-    const syncState = bundle.tournament.state === 'complete' ? 'synced' : 'registered';
+    /*
+     * `sync_state` answers ONE question: have we pulled this bracket's results
+     * in? We just did, so it is `synced` — whatever Challonge thinks of the
+     * bracket itself.
+     *
+     * It used to fall back to `registered` for anything not `complete`
+     * upstream, which conflated our pipeline's state with Challonge's. A
+     * bracket the room never closed showed "Not synced yet" on a page listing
+     * all 85 of its synced sets. Whether the bracket has finished is
+     * `challonge_state`'s business, and the scheduler decides what to re-poll
+     * from that (see `sweep`) rather than from this column.
+     *
+     * `underway` still deliberately does not map to a `live` sync state:
+     * Challonge's `underway` is sticky — tournaments abandoned years ago report
+     * it — so deriving liveness from it meant polling dead brackets forever,
+     * exhausting the free tier's 500 requests/month in about 40 minutes.
+     * Liveness is an explicit, expiring admin decision (`tournaments.live_until`).
+     */
+    const syncState = 'synced';
     // A finished bracket ends live monitoring immediately, without waiting for
     // the window to expire.
     const liveUntil = bundle.tournament.state === 'complete' ? null : tournament.liveUntil;
@@ -244,7 +264,7 @@ function buildSetValues(
     p2ParticipantId: match.player2Id !== null ? (participantIdByChallongeId.get(match.player2Id) ?? null) : null,
     winner,
     scoresCsv: match.scoresCsv,
-    excludedFromRatings: scoresIndicateForfeit(match.scoresCsv),
+    excludedFromRatings: scoresIndicateUnplayed(match.scoresCsv),
     completedAt: parseDate(match.completedAt),
     raw: match as unknown as Record<string, unknown>,
   };

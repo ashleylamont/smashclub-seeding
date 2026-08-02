@@ -106,6 +106,16 @@ describe('parseScoresCsv', () => {
     expect(parseScoresCsv('-1-0').unknown).toBe(true);
   });
 
+  it('treats a bye as unreadable rather than as a 99-game whitewash', () => {
+    // The club closes an unplayed slot with 99-0. Read literally it is the most
+    // one-sided result in club history, which is what every "dominant" fact
+    // goes looking for.
+    expect(parseScoresCsv('99-0').unknown).toBe(true);
+    expect(parseScoresCsv('0-99').unknown).toBe(true);
+    // A best-of-five is still a real set.
+    expect(parseScoresCsv('3-0')).toEqual({ p1: 3, p2: 0, unknown: false });
+  });
+
   it('treats missing or malformed scores as unknown', () => {
     expect(parseScoresCsv(null).unknown).toBe(true);
     expect(parseScoresCsv('').unknown).toBe(true);
@@ -352,6 +362,87 @@ describe('excluded sets', () => {
       ],
     });
     expect(factsOfKind(result, 'clean_sweep')).toHaveLength(1);
+  });
+});
+
+describe('byes', () => {
+  /*
+   * The club closes an unplayed slot with `99-0`. Sync marks those excluded,
+   * but a recap must not depend on a re-sync having happened: the scoreline is
+   * the evidence, and it is read here as well.
+   */
+  it('are not results, even before a sync has marked them excluded', () => {
+    const winner = participant({ name: 'Ada', seed: 9 });
+    const absent = participant({ name: 'Bo', seed: 1 });
+    const result = buildRecap({
+      tournaments: [MAIN],
+      participants: [winner, absent],
+      sets: [completedSet(winner, absent, 1, { scoresCsv: '99-0', excludedFromRatings: false })],
+    });
+    expect(result.setsPlayed).toBe(0);
+    // Beating the top seed 99-0 would otherwise be the upset of the year.
+    expect(factsOfKind(result, 'seed_upset')).toHaveLength(0);
+    expect(factsOfKind(result, 'clean_sweep')).toHaveLength(0);
+  });
+
+  it('do not put anyone on the podium they walked past', () => {
+    const champ = participant({ name: 'Ivy' });
+    const absent = participant({ name: 'Nour' });
+    const beaten = participant({ name: 'Sam' });
+    const result = buildRecap({
+      tournaments: [MAIN],
+      participants: [champ, absent, beaten],
+      sets: [
+        // Ivy walks past a no-show: a `99-0` recorded to close the slot.
+        completedSet(champ, absent, 1, { round: 1, scoresCsv: '99-0' }),
+        completedSet(champ, beaten, 1, { round: 2 }),
+      ],
+    });
+    // Nour never played, so nothing about them was decided on the night.
+    const places = factsOfKind(result, 'podium')[0]?.places.map((p) => p.player.name) ?? [];
+    expect(places).not.toContain('Nour');
+  });
+});
+
+describe('a bracket that never reached its final', () => {
+  /*
+   * The room runs out of time, everyone goes home, and nobody closes the
+   * bracket upstream. Its deepest *played* round is not its final, and naming
+   * that winner as champion puts a player on a podium they never reached.
+   */
+  const a = participant({ name: 'Ivy' });
+  const b = participant({ name: 'Nour' });
+  const c = participant({ name: 'Sam' });
+
+  it('crowns nobody, even once the night is long enough past to be over', () => {
+    const result = buildRecap({
+      tournaments: [{ ...MAIN, challongeState: 'underway' }],
+      participants: [a, b, c],
+      sets: [
+        completedSet(a, c, 1, { round: 1 }),
+        completedSet(b, c, 1, { round: 1 }),
+        // The final was never played.
+        { ...completedSet(a, b, 1, { round: 2 }), state: 'open', winner: null, scoresCsv: null },
+      ],
+      now: Date.parse('2025-06-01T00:00:00.000Z'),
+    });
+    expect(result.isComplete).toBe(true);
+    expect(result.isAbandoned).toBe(true);
+    expect(factsOfKind(result, 'podium')).toHaveLength(0);
+    expect(factsOfKind(result, 'grand_finals')).toHaveLength(0);
+    // The sets that were played still happened.
+    expect(result.setsPlayed).toBe(2);
+  });
+
+  it('is still in progress on the night itself', () => {
+    const result = buildRecap({
+      tournaments: [{ ...MAIN, challongeState: 'underway' }],
+      participants: [a, b],
+      sets: [completedSet(a, b, 1, { round: 1 })],
+      now: Date.parse('2025-03-01T10:00:00.000Z'),
+    });
+    expect(result.isComplete).toBe(false);
+    expect(result.isAbandoned).toBe(false);
   });
 });
 
