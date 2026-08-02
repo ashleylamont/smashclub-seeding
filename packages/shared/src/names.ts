@@ -28,7 +28,32 @@ export function defaultPublicAlias(canonicalName: string): string {
  * The name to show publicly for a player: their chosen alias if they set one,
  * otherwise the shortened form of their canonical name. Admin surfaces
  * deliberately do not use this — they show the canonical name in full.
+ *
+ * This is the *only* name a public API response may carry. The canonical name
+ * is registry data about a real person and never leaves the server on an
+ * unauthenticated route, so public payloads carry the output of this function
+ * instead of the columns it was derived from.
  */
 export function publicPlayerName(row: { displayName: string | null; canonicalName: string }): string {
   return row.displayName ?? defaultPublicAlias(row.canonicalName);
+}
+
+/**
+ * The public name for a bracket entry, which may not be linked to a player yet.
+ *
+ * An unlinked entry has no alias to fall back on — only what the entrant typed
+ * into Challonge, cleaned of company tags, which for this club is routinely a
+ * full name. So it gets the same shortening a defaulted alias would rather than
+ * being published verbatim: an entry the review queue has not reached yet is
+ * the one case where a full name would otherwise reach a public page, and
+ * whether a name has been reviewed is not something the reader chose.
+ */
+export function publicParticipantName(row: {
+  displayName: string | null;
+  canonicalName: string | null;
+  cleanedName: string;
+}): string {
+  return row.canonicalName === null
+    ? defaultPublicAlias(row.cleanedName)
+    : publicPlayerName({ displayName: row.displayName, canonicalName: row.canonicalName });
 }

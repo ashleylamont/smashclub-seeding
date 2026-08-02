@@ -5,6 +5,7 @@ import {
   playerRatings,
   players,
   ratingEvents,
+  recomputes,
   sets,
   tournamentParticipants,
   tournaments,
@@ -21,7 +22,7 @@ import {
   type RecapSet,
   type RecapTournament,
 } from '@smashclub/engine';
-import { publicPlayerName } from '@smashclub/shared';
+import { publicParticipantName } from '@smashclub/shared';
 import { latestRecomputeId } from '../recompute/recompute';
 import { charactersByPlayer } from '../players/characters';
 
@@ -136,10 +137,9 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
     id: p.id,
     tournamentId: p.tournamentId,
     playerId: p.playerId,
-    // Public surface, so a player with no chosen alias shows the short form.
-    name: p.canonicalName
-      ? publicPlayerName({ displayName: p.displayName, canonicalName: p.canonicalName })
-      : p.cleanedName,
+    // Public surface — and a shareable one — so a player with no chosen alias
+    // shows the short form, as does an entry the review queue has not linked yet.
+    name: publicParticipantName(p),
     companyCode: p.companyCode,
     characters: p.playerId ? (characters.get(p.playerId) ?? []) : [],
     seed: p.seed,
@@ -175,6 +175,9 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
   const { nightEvents, history, rankMovement } = recomputeId
     ? await loadRatingContext(db, recomputeId, nightIds)
     : { nightEvents: [], history: undefined, rankMovement: [] };
+  const [recomputeRow] = recomputeId
+    ? await db.select({ model: recomputes.model }).from(recomputes).where(eq(recomputes.id, recomputeId))
+    : [];
 
   // --- turnout comparison -------------------------------------------------
 
@@ -188,6 +191,7 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
     history,
     rankMovement,
     priorTurnouts,
+    model: recomputeRow?.model,
   });
 
   // The engine orders brackets main-first, so the night's canonical slug — the

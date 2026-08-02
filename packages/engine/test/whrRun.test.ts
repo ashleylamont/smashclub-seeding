@@ -81,38 +81,137 @@ describe('runWhrModel', () => {
     expect(run.periods).toBe(2);
   });
 
-  it('holds a player at one rating for a whole evening, across both brackets', () => {
+  it('chains each evening’s per-set deltas into one continuous ledger', () => {
     const { tournaments, sets } = club();
     const run = runWhrModel({ sets, tournaments, settings });
 
-    // Falco plays a rookie set on each evening; kirby plays on both too.
+    // Within a night the rows chain (post of one set = pre of the next), and
+    // the chain continues across nights, so the log reads as one trajectory.
     for (const playerId of ['alice', 'falco', 'kirby']) {
       const events = run.events.filter((e) => e.playerId === playerId);
-      const byDay = new Map<string, Set<number>>();
-      for (const event of events) {
-        const day = tournaments.find((t) => t.id === event.tournamentId)!.eventDate.slice(0, 10);
-        const ratings = byDay.get(day) ?? new Set<number>();
-        ratings.add(event.postRating);
-        byDay.set(day, ratings);
+      for (let i = 1; i < events.length; i++) {
+        expect(events[i]!.preRating, `${playerId} row ${i} chains`).toBeCloseTo(events[i - 1]!.postRating, 9);
       }
-      for (const [day, ratings] of byDay) {
-        expect(ratings.size, `${playerId} has multiple ratings on ${day}`).toBe(1);
-      }
+      expect(events[0]!.preRating).toBeCloseTo(settings.initialRating, 9);
     }
   });
 
-  it('books each period’s movement exactly once, so per-set deltas do not double count', () => {
+  it('attributes a night’s whole movement across its sets, with no double counting', () => {
     const { tournaments, sets } = club();
     const run = runWhrModel({ sets, tournaments, settings });
 
-    // Alice plays two sets in main1: the first carries the move, the second is flat.
+    // Alice plays two sets in main1. Both carry a share of the night's
+    // movement, and the shares sum to exactly the night's total — the value
+    // the fit assigns her at that time.
     const aliceFirstDay = run.events.filter(
       (e) => e.playerId === 'alice' && e.tournamentId === 'main1',
     );
     expect(aliceFirstDay).toHaveLength(2);
-    expect(aliceFirstDay.filter((e) => e.preRating !== e.postRating)).toHaveLength(1);
-    expect(aliceFirstDay[0]!.preRating).toBeCloseTo(settings.initialRating, 9);
-    expect(aliceFirstDay[1]!.preRating).toBeCloseTo(aliceFirstDay[1]!.postRating, 9);
+    const total = aliceFirstDay.reduce((sum, e) => sum + (e.postRating - e.preRating), 0);
+    expect(total).toBeCloseTo(aliceFirstDay[1]!.postRating - settings.initialRating, 9);
+    // Two wins against distinct opponents: neither row should read as +0.0 —
+    // the failure mode of booking the whole night on the first set.
+    for (const event of aliceFirstDay) {
+      expect(Math.abs(event.postRating - event.preRating)).toBeGreaterThan(0.05);
+    }
+  });
+
+  it('freezes the ledger: appending a later event never rewrites earlier rows', () => {
+    const { tournaments, sets } = club();
+    const firstNightOnly = runWhrModel({
+      sets: sets.filter((s) => ['main1', 'rookie1'].includes(s.tournamentId)),
+      tournaments,
+      settings,
+    });
+    const full = runWhrModel({ sets, tournaments, settings });
+
+    for (const before of firstNightOnly.events) {
+      const after = full.events.find((e) => e.playerId === before.playerId && e.setId === before.setId)!;
+      expect(after.preRating, `${before.playerId} pre`).toBeCloseTo(before.preRating, 9);
+      expect(after.postRating, `${before.playerId} post`).toBeCloseTo(before.postRating, 9);
+      expect(after.preRd).toBeCloseTo(before.preRd, 9);
+      expect(after.postRd).toBeCloseTo(before.postRd, 9);
+    }
+  });
+
+  it('carries the current fit’s hindsight estimate on every event row', () => {
+    const { tournaments, sets } = club();
+    const run = runWhrModel({ sets, tournaments, settings });
+
+    for (const event of run.events) {
+      expect(event.revisedRating).toBeTypeOf('number');
+      expect(event.revisedSd).toBeGreaterThan(0);
+    }
+    // On the latest night, hindsight and the ledger agree — nothing later has
+    // revised it yet. Alice's last set is in main2.
+    const aliceLast = run.events.filter((e) => e.playerId === 'alice').at(-1)!;
+    expect(aliceLast.revisedRating).toBeCloseTo(aliceLast.postRating, 6);
+  });
+
+  it('counts a decisive scoreline as more evidence than a close one', () => {
+    const tournaments = [tournament('t1', '2025-01-10T18:00:00.000Z')];
+    const base = { suggestedPlayOrder: 1, completedAt: null, challongeMatchId: 1 };
+    const sweep: EngineSet[] = [
+      { id: 's-a', tournamentId: 't1', p1PlayerId: 'a', p2PlayerId: 'b', winner: 1, ...base, p1Games: 3, p2Games: 0 },
+    ];
+    const close: EngineSet[] = [
+      { id: 's-a', tournamentId: 't1', p1PlayerId: 'a', p2PlayerId: 'b', winner: 1, ...base, p1Games: 3, p2Games: 2 },
+    ];
+    const sweepRun = runWhrModel({ sets: sweep, tournaments, settings });
+    const closeRun = runWhrModel({ sets: close, tournaments, settings });
+
+    const ratingOf = (run: ReturnType<typeof runWhrModel>, id: string): number =>
+      run.leaderboard.find((r) => r.playerId === id)!.skillRating;
+    expect(ratingOf(sweepRun, 'a')).toBeGreaterThan(ratingOf(closeRun, 'a'));
+    // The extra evidence is visible on the row as its weight.
+    expect(sweepRun.events[0]!.weight).toBeCloseTo(2, 9);
+    expect(closeRun.events[0]!.weight).toBeCloseTo(1, 9);
+  });
+
+  it('reports the previous night’s board for the movement column', () => {
+    const { tournaments, sets } = club();
+    const run = runWhrModel({ sets, tournaments, settings });
+
+    // The prefix without the latest night ranks exactly the players who had
+    // played by then.
+    const firstNight = runWhrModel({
+      sets: sets.filter((s) => ['main1', 'rookie1'].includes(s.tournamentId)),
+      tournaments,
+      settings,
+    });
+    expect(run.previousRanks.size).toBe(firstNight.leaderboard.length);
+    for (const row of firstNight.leaderboard) {
+      expect(run.previousRanks.get(row.playerId)).toBe(row.rank);
+    }
+  });
+
+  it('widens the published uncertainty of a player who has been away', () => {
+    const tournaments = [
+      tournament('t1', '2025-01-10T18:00:00.000Z', false, 1),
+      tournament('t2', '2025-07-10T18:00:00.000Z', false, 2),
+    ];
+    // Everyone plays night one; only carol and dave return six months later.
+    const sets = [
+      makeSet('t1', 'alice', 'bob', 1),
+      makeSet('t1', 'carol', 'dave', 1),
+      makeSet('t2', 'carol', 'dave', 2),
+    ];
+    const run = runWhrModel({ sets, tournaments, settings });
+    const withTwoNights = new Map(run.leaderboard.map((r) => [r.playerId, r]));
+
+    const firstNightOnly = runWhrModel({
+      sets: sets.filter((s) => s.tournamentId === 't1'),
+      tournaments,
+      settings,
+    });
+    const asOfNightOne = new Map(firstNightOnly.leaderboard.map((r) => [r.playerId, r]));
+
+    // Alice sat out six months: her band is wider than it was the night she
+    // played, so her conservative seeding score honestly drops with absence.
+    expect(withTwoNights.get('alice')!.skillSd).toBeGreaterThan(asOfNightOne.get('alice')!.skillSd);
+    expect(withTwoNights.get('alice')!.sampleConfidence).toBeLessThan(
+      asOfNightOne.get('alice')!.sampleConfidence,
+    );
   });
 
   it('emits no decay rows — uncertainty grows from elapsed time inside the fit', () => {

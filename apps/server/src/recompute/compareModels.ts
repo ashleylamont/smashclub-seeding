@@ -3,6 +3,7 @@ import type { Db } from '@smashclub/db';
 import { companies, players, sets, tournaments } from '@smashclub/db';
 import {
   computeLeaderboard,
+  parseScoresCsv,
   replayRatings,
   runWhrModel,
   type EngineSet,
@@ -87,16 +88,23 @@ export async function compareModels(db: Db): Promise<ModelComparison> {
 
   const engineSets: EngineSet[] = setRows
     .filter((row) => row.p1PlayerId !== row.p2PlayerId)
-    .map((row) => ({
-      id: row.id,
-      tournamentId: row.tournamentId,
-      p1PlayerId: row.p1PlayerId!,
-      p2PlayerId: row.p2PlayerId!,
-      winner: row.winner as 1 | 2,
-      suggestedPlayOrder: row.suggestedPlayOrder,
-      completedAt: row.completedAt?.toISOString() ?? null,
-      challongeMatchId: row.challongeMatchId,
-    }));
+    .map((row) => {
+      // Same evidence the production WHR run sees: game counts, unknown on
+      // forfeits or unreadable scorelines.
+      const score = parseScoresCsv(row.scoresCsv);
+      return {
+        id: row.id,
+        tournamentId: row.tournamentId,
+        p1PlayerId: row.p1PlayerId!,
+        p2PlayerId: row.p2PlayerId!,
+        winner: row.winner as 1 | 2,
+        suggestedPlayOrder: row.suggestedPlayOrder,
+        completedAt: row.completedAt?.toISOString() ?? null,
+        challongeMatchId: row.challongeMatchId,
+        p1Games: score.unknown ? null : score.p1,
+        p2Games: score.unknown ? null : score.p2,
+      };
+    });
 
   const replay = replayRatings({ sets: engineSets, tournaments: engineTournaments, settings: glicko });
   const glickoBoard = computeLeaderboard(replay.finalStates, glicko);

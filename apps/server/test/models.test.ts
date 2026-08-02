@@ -121,12 +121,19 @@ describe('parallel rating models', () => {
     expect(byPlayer.size).toBe(5);
 
     for (const [, playerEvents] of byPlayer) {
-      // Main and rookie brackets ran on the same date, so every player sits at
-      // exactly one rating for the whole day — a period is an occasion, not a
-      // bracket, and skill did not change between the two.
-      expect(new Set(playerEvents.map((e) => e.postRating)).size).toBe(1);
-      // The movement into that period is booked once; the rest are flat.
-      expect(playerEvents.filter((e) => e.preRating !== e.postRating).length).toBeLessThanOrEqual(1);
+      const ordered = [...playerEvents].sort((a, b) => a.seq - b.seq);
+      // Main and rookie brackets ran on the same date, so the whole day is one
+      // period: each set carries a share of the day's movement, the rows chain
+      // continuously across the bracket boundary, and the shares sum to the
+      // one number the fit assigns the player for the day.
+      for (let i = 1; i < ordered.length; i++) {
+        expect(ordered[i]!.preRating).toBeCloseTo(ordered[i - 1]!.postRating, 9);
+      }
+      const total = ordered.reduce((sum, e) => sum + (e.postRating - e.preRating), 0);
+      expect(total).toBeCloseTo(ordered[ordered.length - 1]!.postRating - ordered[0]!.preRating, 9);
+      // One posterior per day: the day's end value carries the hindsight
+      // estimate, identical on every row of the day.
+      expect(new Set(ordered.map((e) => e.revisedRating)).size).toBe(1);
       // Every event carries a real opponent; WHR emits no decay rows.
       expect(playerEvents.every((e) => e.opponentPlayerId !== null)).toBe(true);
       expect(playerEvents.every((e) => e.isDecay === false)).toBe(true);

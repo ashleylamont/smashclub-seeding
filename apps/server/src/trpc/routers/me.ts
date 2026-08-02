@@ -3,7 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
 import { companies, playerClaims, players } from '@smashclub/db';
-import { publicPlayerName } from '@smashclub/shared';
+import { defaultPublicAlias, publicPlayerName } from '@smashclub/shared';
 import { charactersByPlayer, characterSlugsSchema, setPlayerCharacters } from '../../players/characters';
 import { authedProcedure, router } from '../trpc';
 
@@ -64,9 +64,16 @@ export const meRouter = router({
       ctx.db,
       rows.map((row) => row.playerId),
     );
-    return rows.map((row) => ({
+    /*
+     * A claim is a *request*, and anyone may request one on any player, so this
+     * route would otherwise hand out the canonical name of whoever the caller
+     * pointed at. It ships the derived alias instead — which is all the profile
+     * editor needs, to show what clearing the alias field would fall back to.
+     */
+    return rows.map(({ canonicalName, ...row }) => ({
       ...row,
-      playerName: publicPlayerName(row),
+      playerName: publicPlayerName({ ...row, canonicalName }),
+      defaultAlias: defaultPublicAlias(canonicalName),
       characters: characters.get(row.playerId) ?? [],
       createdAt: row.createdAt.toISOString(),
       resolvedAt: row.resolvedAt?.toISOString() ?? null,

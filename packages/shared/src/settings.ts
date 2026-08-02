@@ -107,6 +107,17 @@ export const glickoSettingsSchema = z.object({
   /** Whole-History Rating parameters (used when activeModel is 'whr'). */
   whrDriftVariancePerDay: z.number().default(0.0002),
   whrPriorSd: z.number().default(1.2),
+  /**
+   * How much extra evidence a decisive set carries, per game of winning margin
+   * beyond the first: a set counts as `1 + weight · (margin − 1)` independent
+   * results, capped at 2. At the default 0.5 a 3-0 counts as two results, a
+   * 3-1 as one and a half, and a 3-2 — or a set with no recorded game scores —
+   * as exactly one. Games within a set are far from independent (momentum,
+   * character counterpicks, tilt), which is why the weight discounts the
+   * margin rather than counting games outright. Zero disables score
+   * sensitivity entirely.
+   */
+  whrGamesWeight: z.number().default(0.5),
 
   /**
    * Prior mean (display scale) for players whose first-ever bracket is a rookie
