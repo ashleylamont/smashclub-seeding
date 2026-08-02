@@ -498,12 +498,16 @@ test.describe('player profiles and companies', () => {
     await expect(row).toContainText('koopz');
     await expect(row.locator('.character-icons')).toBeVisible();
 
-    // And the alias is what the public board would publish.
-    const search = await page.request.get(
-      `/api/trpc/public.searchPlayers?input=${encodeURIComponent(JSON.stringify({ query: 'Roy Koopa' }))}`,
-    );
-    const body = await search.json();
-    expect(body.result.data[0].name).toBe('koopz');
+    // And the alias is the only handle the public API has on this player: it
+    // is what search matches on, and what search returns.
+    const publicSearch = async (query: string) => {
+      const response = await page.request.get(
+        `/api/trpc/public.searchPlayers?input=${encodeURIComponent(JSON.stringify({ query }))}`,
+      );
+      return (await response.json()).result.data as Array<{ name: string }>;
+    };
+    expect((await publicSearch('koopz'))[0].name).toBe('koopz');
+    expect(await publicSearch('Roy Koopa')).toEqual([]);
   });
 
   test('a company is created and picked up by the player form', async ({ page }) => {
