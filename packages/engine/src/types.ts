@@ -29,6 +29,14 @@ export interface EngineSet {
   completedAt?: string | null;
   /** Stable final tie-breaker. */
   challongeMatchId?: number | null;
+  /**
+   * Games won by each side, when the bracket recorded them. Currently a WHR
+   * input only — a 3-0 carries more evidence than a 3-2 — and ignored by the
+   * Glicko replay, whose update has no slot for a margin. Null/undefined means
+   * the scoreline is unknown (or a forfeit), which rates as a plain set.
+   */
+  p1Games?: number | null;
+  p2Games?: number | null;
 }
 
 export interface RatingEvent {
@@ -50,6 +58,16 @@ export interface RatingEvent {
   postVol: number;
   /** Effective rating-change weight applied to this set (1 for decay events). */
   weight: number;
+  /**
+   * Present under WHR only: the *current* full-history fit's estimate of the
+   * player's skill at this event's time. `pre`/`post` above are the ledger —
+   * what the board published as of that night, frozen thereafter — while this
+   * pair is hindsight, and moves as later results teach us more about the
+   * past. Surfacing both is what makes WHR's revision of history an explained
+   * feature rather than silent drift. Absent for Glicko, which never revises.
+   */
+  revisedRating?: number;
+  revisedSd?: number;
 }
 
 export interface PlayerFinalState {

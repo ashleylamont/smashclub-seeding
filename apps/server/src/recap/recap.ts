@@ -5,6 +5,7 @@ import {
   playerRatings,
   players,
   ratingEvents,
+  recomputes,
   sets,
   tournamentParticipants,
   tournaments,
@@ -174,6 +175,9 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
   const { nightEvents, history, rankMovement } = recomputeId
     ? await loadRatingContext(db, recomputeId, nightIds)
     : { nightEvents: [], history: undefined, rankMovement: [] };
+  const [recomputeRow] = recomputeId
+    ? await db.select({ model: recomputes.model }).from(recomputes).where(eq(recomputes.id, recomputeId))
+    : [];
 
   // --- turnout comparison -------------------------------------------------
 
@@ -187,6 +191,7 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
     history,
     rankMovement,
     priorTurnouts,
+    model: recomputeRow?.model,
   });
 
   // The engine orders brackets main-first, so the night's canonical slug — the
