@@ -21,7 +21,7 @@ import {
   type RecapSet,
   type RecapTournament,
 } from '@smashclub/engine';
-import { publicPlayerName } from '@smashclub/shared';
+import { publicParticipantName } from '@smashclub/shared';
 import { latestRecomputeId } from '../recompute/recompute';
 import { charactersByPlayer } from '../players/characters';
 
@@ -136,10 +136,9 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
     id: p.id,
     tournamentId: p.tournamentId,
     playerId: p.playerId,
-    // Public surface, so a player with no chosen alias shows the short form.
-    name: p.canonicalName
-      ? publicPlayerName({ displayName: p.displayName, canonicalName: p.canonicalName })
-      : p.cleanedName,
+    // Public surface — and a shareable one — so a player with no chosen alias
+    // shows the short form, as does an entry the review queue has not linked yet.
+    name: publicParticipantName(p),
     companyCode: p.companyCode,
     characters: p.playerId ? (characters.get(p.playerId) ?? []) : [],
     seed: p.seed,

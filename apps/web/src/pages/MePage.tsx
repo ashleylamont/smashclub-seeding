@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate } from '@tanstack/react-router';
-import { defaultPublicAlias } from '@smashclub/shared';
 import { authClient, sessionRole } from '../lib/auth';
 import { trpc } from '../lib/trpc';
 import type { MyClaim } from '../lib/apiTypes';
@@ -219,7 +218,7 @@ function ProfileEditor({ claim, onChanged }: { claim: MyClaim; onChanged: () => 
           id="display-name"
           className="input"
           value={displayName}
-          placeholder={defaultPublicAlias(claim.canonicalName)}
+          placeholder={claim.defaultAlias}
           onChange={(e) => setDisplayName(e.target.value)}
         />
         <button
@@ -234,7 +233,7 @@ function ProfileEditor({ claim, onChanged }: { claim: MyClaim; onChanged: () => 
         {updateName.isError && <span className="error-text">{updateName.error.message}</span>}
       </div>
       <p className="muted">
-        The name shown on the leaderboard. Leave it blank to go by “{defaultPublicAlias(claim.canonicalName)}”.
+        The name shown on the leaderboard. Leave it blank to go by “{claim.defaultAlias}”.
       </p>
 
       <div className="character-editor">
@@ -282,7 +281,7 @@ function ClaimSearch({ onChanged }: { onChanged: () => void }) {
       <div className="claim-form-row" style={{ marginTop: 10 }}>
         <input
           className="input"
-          placeholder="Search players by name…"
+          placeholder="Search players by their board name…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
