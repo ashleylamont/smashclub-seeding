@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Link, Outlet, useNavigate } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { authClient, sessionRole } from '../lib/auth';
+import { BUILD_COMMIT_URL, BUILD_LABEL, BUILD_SHA } from '../lib/build';
 import { useEventSource } from '../lib/useEventSource';
 import { ThemeToggle } from './ThemeToggle';
 import '../App.css';
@@ -115,7 +116,21 @@ export function Layout() {
         <Outlet />
       </main>
 
-      <footer className="app-footer">Smash Club — club rankings, synced from Challonge</footer>
+      <footer className="app-footer">
+        <span>Smash Club — club rankings, synced from Challonge</span>
+        {/* The build this page was served from, so "is prod actually on the
+            new image?" is answerable without kubectl. */}
+        <span className="build-tag">
+          build{' '}
+          {BUILD_COMMIT_URL ? (
+            <a href={BUILD_COMMIT_URL} target="_blank" rel="noreferrer" title={BUILD_SHA ?? undefined}>
+              {BUILD_LABEL}
+            </a>
+          ) : (
+            BUILD_LABEL
+          )}
+        </span>
+      </footer>
     </div>
   );
 }

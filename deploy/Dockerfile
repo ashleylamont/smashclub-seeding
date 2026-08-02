@@ -9,6 +9,11 @@ COPY packages ./packages
 COPY apps ./apps
 COPY tools ./tools
 RUN pnpm install --frozen-lockfile
+# Stamps the footer's build indicator. Vite statically replaces
+# import.meta.env.VITE_BUILD_SHA at build time, so this must be set BEFORE the
+# web build; left unset (a plain local `docker build`) the footer reads "dev".
+ARG GIT_SHA=""
+ENV VITE_BUILD_SHA=$GIT_SHA
 RUN pnpm --filter @smashclub/web build && pnpm --filter @smashclub/server build
 # Production node_modules for the server (workspace code is already bundled
 # into dist/index.js; only real npm deps are external).
