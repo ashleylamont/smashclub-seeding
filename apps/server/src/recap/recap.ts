@@ -5,6 +5,7 @@ import {
   playerRatings,
   players,
   ratingEvents,
+  recomputes,
   sets,
   tournamentParticipants,
   tournaments,
@@ -21,7 +22,7 @@ import {
   type RecapSet,
   type RecapTournament,
 } from '@smashclub/engine';
-import { publicPlayerName } from '@smashclub/shared';
+import { publicParticipantName } from '@smashclub/shared';
 import { latestRecomputeId } from '../recompute/recompute';
 import { charactersByPlayer } from '../players/characters';
 
@@ -136,10 +137,9 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
     id: p.id,
     tournamentId: p.tournamentId,
     playerId: p.playerId,
-    // Public surface, so a player with no chosen alias shows the short form.
-    name: p.canonicalName
-      ? publicPlayerName({ displayName: p.displayName, canonicalName: p.canonicalName })
-      : p.cleanedName,
+    // Public surface — and a shareable one — so a player with no chosen alias
+    // shows the short form, as does an entry the review queue has not linked yet.
+    name: publicParticipantName(p),
     companyCode: p.companyCode,
     characters: p.playerId ? (characters.get(p.playerId) ?? []) : [],
     seed: p.seed,
@@ -152,7 +152,9 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
     .select()
     .from(sets)
     .where(inArray(sets.tournamentId, nightIds))
-    .orderBy(asc(sets.suggestedPlayOrder), asc(sets.challongeMatchId));
+    // Play order, matching the engine's `compareSetsInBracket`. The recap's own
+    // tie-break is this array's index, so this ordering is load-bearing.
+    .orderBy(asc(sets.suggestedPlayOrder), asc(sets.completedAt), asc(sets.challongeMatchId));
 
   const recapSets: RecapSet[] = setRows.map((row) => ({
     id: row.id,
@@ -175,6 +177,9 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
   const { nightEvents, history, rankMovement } = recomputeId
     ? await loadRatingContext(db, recomputeId, nightIds)
     : { nightEvents: [], history: undefined, rankMovement: [] };
+  const [recomputeRow] = recomputeId
+    ? await db.select({ model: recomputes.model }).from(recomputes).where(eq(recomputes.id, recomputeId))
+    : [];
 
   // --- turnout comparison -------------------------------------------------
 
@@ -188,6 +193,7 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
     history,
     rankMovement,
     priorTurnouts,
+    model: recomputeRow?.model,
     // Lets the engine call a bracket nobody ever closed on Challonge finished,
     // once its night is far enough behind us.
     now: Date.now(),

@@ -102,7 +102,10 @@ function modulePage(fixture: FixtureTournament): string {
       id: m.id,
       round: m.round ?? 1,
       state: m.state ?? 'complete',
-      identifier: `M${m.id}`,
+      // Mirrors the real module payload: a numeric play-order `identifier`, the
+      // label under `raw_identifier`, and no `suggested_play_order` at all.
+      identifier: m.order ?? m.id,
+      raw_identifier: `M${m.id}`,
       winner_id: m.winner ?? null,
       scores_csv: m.scores === undefined ? '2-1' : m.scores,
       underway_at: m.completedAt ?? fixture.startedAt,

@@ -107,6 +107,37 @@ export const glickoSettingsSchema = z.object({
   /** Whole-History Rating parameters (used when activeModel is 'whr'). */
   whrDriftVariancePerDay: z.number().default(0.0002),
   whrPriorSd: z.number().default(1.2),
+  /**
+   * How much extra evidence a decisive set carries, per game of winning margin
+   * beyond the first: a set counts as `1 + weight · (margin − 1)` independent
+   * results, capped at 2. At the default 0.5 a 3-0 counts as two results, a
+   * 3-1 as one and a half, and a 3-2 — or a set with no recorded game scores —
+   * as exactly one. Games within a set are far from independent (momentum,
+   * character counterpicks, tilt), which is why the weight discounts the
+   * margin rather than counting games outright. Zero disables score
+   * sensitivity entirely.
+   */
+  whrGamesWeight: z.number().default(0.5),
+
+  /**
+   * Prior mean (display scale) for players whose first-ever bracket is a rookie
+   * bracket. The global 1500 prior overstates the typical rookie-night
+   * newcomer — the board shows them settling in the 1300s–1400s — and because a
+   * rookie island is pinned to the scale almost entirely through its players'
+   * priors, that error inflates everyone who farms the island. 1500 disables
+   * the correction (identical to the single global prior).
+   */
+  whrRookieDebutPrior: z.number().default(1500),
+
+  /**
+   * Shrink a player's *displayed* WHR rating toward their own prior mean by how
+   * little of their record is exposed to the established field. The fit itself
+   * is untouched — this corrects the point estimate the board publishes, where
+   * an islander's rating is identified mostly by other islanders. Off by
+   * default: flip on together with a recompute once the parameters are
+   * settled.
+   */
+  whrIsolationAnchor: z.boolean().default(false),
 
   /**
    * Absolute league thresholds on the skill rating, highest first.

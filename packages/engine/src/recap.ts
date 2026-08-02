@@ -31,6 +31,7 @@ import {
 } from '@smashclub/shared';
 import { eventKeyOf } from './events';
 import { winProbability } from './glicko2';
+import { DISPLAY_CENTRE, NATURAL_TO_DISPLAY, probabilityFromRatings } from './whr';
 
 // ---------------------------------------------------------------------------
 // Input
@@ -128,6 +129,14 @@ export interface RecapInput {
   rankMovement?: readonly RecapRankMovement[];
   /** Entrant counts for earlier nights, for the turnout comparison. */
   priorTurnouts?: readonly { eventKey: string; entrants: number }[];
+  /**
+   * Which rating model produced `ratingEvents`. Upset odds are computed with
+   * that model's own probability formula — Glicko attenuates by the
+   * opponent's RD alone, WHR by the summed variance of both players — so a
+   * recap's "had a 12% chance" is the number the active model would actually
+   * have quoted before the set. Defaults to Glicko for older callers.
+   */
+  model?: string;
   /**
    * The clock, as epoch milliseconds — an input rather than a `Date.now()`
    * read, so a recap of a given night is reproducible and testable.
@@ -351,27 +360,30 @@ const saturate = (value: number, scale: number): number =>
   value <= 0 ? 0 : value / (value + scale);
 
 /**
- * Where a set sits in the order a bracket was played: when it finished, then
- * Challonge's own play-order hint, then the position the caller supplied.
+ * Where a set sits in the order a bracket was played: Challonge's play-order
+ * hint, then when it finished, then the position the caller supplied.
  *
- * That last component matters more than it looks. The default sync source
- * carries neither per-match timestamps nor `suggested_play_order`, so on a real
- * club bracket the first two are frequently identical across every set of a
- * tournament and the tie-break is all there is. Callers pass sets in bracket
- * order, so the index is a meaningful last resort — and, crucially, a stable
- * one. An earlier version fell back to the set's uuid, which is arbitrary: two
- * places that both needed to know "which set decided this bracket" could and
- * did disagree, so a recap could name one player on its podium and a different
- * one as the grand-final winner.
+ * The play-order hint leads, matching `compareSetsInBracket`. It used to trail
+ * `completedAt`, which was wrong in a way the club's data exercises constantly:
+ * roughly one set in seven is reported with no timestamp at all, `?? ''` sorts
+ * those *first*, and these keys are compared to find the latest thing that
+ * happened. A player whose last loss happened to carry no timestamp was
+ * therefore read as the first player eliminated, and placed last.
+ *
+ * The index still matters as a last resort. Callers pass sets in bracket order,
+ * so it is meaningful, and — crucially — stable. An earlier version fell back
+ * to the set's uuid, which is arbitrary: two places that both needed to know
+ * "which set decided this bracket" could and did disagree, so a recap could
+ * name one player on its podium and a different one as the grand-final winner.
  */
-type OrderKey = [string, number, number];
+type OrderKey = [number, string, number];
 
 function setOrderKey(set: RecapSet, index: number): OrderKey {
-  return [set.completedAt ?? '', set.suggestedPlayOrder ?? 0, index];
+  return [set.suggestedPlayOrder ?? 0, set.completedAt ?? '', index];
 }
 
 function compareOrderKeys(a: OrderKey, b: OrderKey): number {
-  return a[0].localeCompare(b[0]) || a[1] - b[1] || a[2] - b[2];
+  return a[0] - b[0] || a[1].localeCompare(b[1]) || a[2] - b[2];
 }
 
 /** What a bracket, read on its own terms, says happened. */
@@ -621,7 +633,7 @@ export function buildRecap(input: RecapInput): RecapResult {
   collectGrandFinals(played, outcomes, push);
   const deciderSetIds = new Set([...outcomes.values()].map((o) => o.decider.id));
   collectSeedUpsets(played, stageOf, weightOf, push);
-  collectRatingUpsets(played, ratingEvents, stageOf, weightOf, push);
+  collectRatingUpsets(played, ratingEvents, input.model === 'whr', stageOf, weightOf, push);
   collectNailbiters(played, deciderSetIds, stageOf, weightOf, push);
   collectLosersRuns(played, placement, push);
   collectOverperformers(orderedTournaments, participants, push);
@@ -767,6 +779,7 @@ function collectSeedUpsets(
 function collectRatingUpsets(
   played: readonly PlayedSet[],
   ratingEvents: readonly RecapRatingEvent[],
+  isWhr: boolean,
   stageOf: (p: PlayedSet) => string | null,
   weightOf: (p: PlayedSet) => number,
   push: Push,
@@ -787,10 +800,16 @@ function collectRatingUpsets(
     const loserEvent = events.find((e) => e.playerId === p.loser.playerId);
     if (!winnerEvent || !loserEvent) continue;
 
-    const probability = winProbability(
-      { rating: winnerEvent.preRating, rd: winnerEvent.preRd, vol: 0 },
-      { rating: loserEvent.preRating, rd: loserEvent.preRd, vol: 0 },
-    );
+    const probability = isWhr
+      ? probabilityFromRatings(
+          (winnerEvent.preRating - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY,
+          (loserEvent.preRating - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY,
+          (winnerEvent.preRd / NATURAL_TO_DISPLAY) ** 2 + (loserEvent.preRd / NATURAL_TO_DISPLAY) ** 2,
+        )
+      : winProbability(
+          { rating: winnerEvent.preRating, rd: winnerEvent.preRd, vol: 0 },
+          { rating: loserEvent.preRating, rd: loserEvent.preRd, vol: 0 },
+        );
     // Only genuine longshots; an even set is not an upset.
     if (probability > 0.35) continue;
     const notability = 0.6 * (1 - probability / 0.35) + 0.3 * weightOf(p) + 0.1;

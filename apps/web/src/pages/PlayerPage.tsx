@@ -49,11 +49,21 @@ function PlayerProfile({ data }: { data: PlayerData }) {
   const { player, rating } = data;
   // The server types these rows loosely (Record<string, unknown>); see PlayerEventView.
   const events = data.events as unknown as PlayerEventView[];
+  /**
+   * Which model produced the events changes how they should be read. Glicko
+   * is sequential: each set moved the rating then and there, once, forever.
+   * WHR keeps two books — the frozen ledger of what the board published each
+   * night, and a hindsight estimate that is revised as later results teach
+   * the model more about the past. The profile shows the ledger as the
+   * primary record and the hindsight track alongside it, labelled.
+   */
+  const isWhr = data.model === 'whr';
 
   /**
    * The trajectory. One series — the skill estimate — inside a shaded ±2 SD
    * band, so the uncertainty is visible as width rather than being subtracted
    * into a separate "floor" line that reads as a second, competing rating.
+   * Under WHR a second, dashed series carries the hindsight estimate.
    */
   const chartData = useMemo(
     () =>
@@ -67,8 +77,21 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         band: [event.postRating - 2 * event.postRd, event.postRating + 2 * event.postRd] as [number, number],
         decayRating: event.isDecay ? event.postRating : null,
         rd: event.postRd,
+        revised: isWhr ? event.revisedRating : null,
       })),
-    [events],
+    [events, isWhr],
+  );
+
+  /**
+   * Only draw the hindsight series when it actually disagrees somewhere —
+   * right after a recompute of a fresh night the two coincide, and a dashed
+   * line perfectly under the solid one is noise.
+   */
+  const showRevised = useMemo(
+    () =>
+      isWhr &&
+      chartData.some((point) => point.revised !== null && Math.abs(point.revised - point.rating) >= 1),
+    [isWhr, chartData],
   );
 
   /** Event indices where a new tournament starts, drawn as vertical rules. */
@@ -91,14 +114,21 @@ function PlayerProfile({ data }: { data: PlayerData }) {
     ];
     if (rating.rookieRatio > 0) {
       parts.push(`${(rating.rookieRatio * 100).toFixed(0)}% of sets in rookie brackets.`);
-      if (rating.isolationFactor > 0) {
+      if (isWhr) {
+        // WHR has no isolation correction: thin linkage between the rookie and
+        // main pools simply comes out as a wider band, which this meter reads.
+        parts.push('Where the rookie and main pools barely overlap, the uncertainty band stays wider.');
+      } else if (rating.isolationFactor > 0) {
         parts.push(
           `Isolation ${(rating.isolationFactor * 100).toFixed(0)}% — rookie-only players with little main-bracket exposure carry more uncertainty.`,
         );
       }
     }
+    if (isWhr && rating.missedEvents > 0) {
+      parts.push('Confidence also fades a little for time away, until results firm it up again.');
+    }
     return parts.join(' ');
-  }, [rating]);
+  }, [rating, isWhr]);
 
   // Most recent first for the table.
   const tableEvents = useMemo(() => [...events].reverse(), [events]);
@@ -273,8 +303,20 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         <section className="section rating-chart">
           <h3>Rating trajectory</h3>
           <p className="muted chart-caption">
-            Skill estimate after every set. The shaded band is ±2 standard deviations — it narrows as we see
-            more results. Vertical rules mark the start of each event.
+            {isWhr ? (
+              <>
+                Published rating after every set — the solid line is what the board showed at the time, and it
+                never rewrites. The shaded band is ±2 standard deviations.
+                {showRevised &&
+                  ' The dashed line is hindsight: with everything played since, the model’s revised estimate of how good this player was on each night.'}{' '}
+                Vertical rules mark the start of each event.
+              </>
+            ) : (
+              <>
+                Skill estimate after every set. The shaded band is ±2 standard deviations — it narrows as we
+                see more results. Vertical rules mark the start of each event.
+              </>
+            )}
           </p>
           <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={chartData} margin={{ top: 8, right: 8, bottom: 4, left: 0 }}>
@@ -309,6 +351,9 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                       <p className="num">
                         {d.rating.toFixed(0)} ± {d.rd.toFixed(0)}
                       </p>
+                      {showRevised && d.revised !== null && Math.abs(d.revised - d.rating) >= 1 && (
+                        <p className="num">now revised to {d.revised.toFixed(0)}</p>
+                      )}
                     </div>
                   );
                 }}
@@ -329,8 +374,23 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                 strokeWidth={2}
                 dot={false}
                 isAnimationActive={false}
-                name="Skill"
+                name={isWhr ? 'Published' : 'Skill'}
               />
+              {/* Hindsight: what the current fit says this player's skill was
+                  on each night, given everything played since. Dashed and
+                  behind the published line — context, not the record. */}
+              {showRevised && (
+                <Line
+                  type="monotone"
+                  dataKey="revised"
+                  stroke="var(--series-2)"
+                  strokeWidth={1.5}
+                  strokeDasharray="5 4"
+                  dot={false}
+                  isAnimationActive={false}
+                  name="Hindsight"
+                />
+              )}
               {/* Decay is a different kind of event, so it gets its own mark. */}
               <Scatter dataKey="decayRating" fill="var(--warn)" shape="square" name="Inactivity decay" />
             </ComposedChart>
@@ -340,6 +400,13 @@ function PlayerProfile({ data }: { data: PlayerData }) {
 
       <section className="section match-history">
         <h3>Match log ({matches.length} sets)</h3>
+        {isWhr && events.length > 0 && (
+          <p className="muted chart-caption">
+            Ratings here move once per club night, so each set’s Δ is its share of that night’s movement —
+            bigger for surprising results, smaller for expected ones, adding up to exactly what the night
+            changed. These numbers are what the board published at the time and never rewrite.
+          </p>
+        )}
         {events.length === 0 ? (
           <p className="muted">No match history available for this player.</p>
         ) : (
@@ -351,7 +418,14 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                   <th>Event</th>
                   <th>Opponent</th>
                   <th>Result</th>
-                  <th className="num" title="How much this set moved the skill estimate">
+                  <th
+                    className="num"
+                    title={
+                      isWhr
+                        ? 'This set’s share of the night’s rating movement, weighted by how surprising the result was'
+                        : 'How much this set moved the skill estimate'
+                    }
+                  >
                     Δ Rating
                   </th>
                 </tr>
@@ -389,6 +463,17 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                           <span className="weight-indicator" title={`Match weight: ${(event.weight * 100).toFixed(0)}%`}>
                             {' '}
                             ×{event.weight.toFixed(2)}
+                          </span>
+                        )}
+                        {/* Under WHR a decisive scoreline counts as more than one
+                            result; say so where the extra movement shows up. */}
+                        {!event.isDecay && event.weight != null && event.weight > 1.01 && (
+                          <span
+                            className="weight-indicator"
+                            title={`Decisive set — counted as ${event.weight.toFixed(1)} results`}
+                          >
+                            {' '}
+                            ×{event.weight.toFixed(1)}
                           </span>
                         )}
                       </td>

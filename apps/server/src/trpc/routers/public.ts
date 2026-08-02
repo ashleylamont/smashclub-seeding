@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { and, asc, desc, eq, ilike, inArray, isNotNull } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull } from 'drizzle-orm';
 import {
   companies,
   playerClaims,
@@ -12,7 +12,7 @@ import {
   tournaments,
 } from '@smashclub/db';
 import { eventKeyOf } from '@smashclub/engine';
-import { publicPlayerName } from '@smashclub/shared';
+import { publicParticipantName, publicPlayerName } from '@smashclub/shared';
 import { latestRecomputeId } from '../../recompute/recompute';
 import { getGlickoSettings } from '../../settings';
 import { charactersByPlayer, charactersForPlayer } from '../../players/characters';
@@ -20,6 +20,15 @@ import { loadRecap } from '../../recap/recap';
 import { publicProcedure, router } from '../trpc';
 
 const playerName = publicPlayerName;
+
+/*
+ * Nothing on this router is authenticated, so every response here is public.
+ * `canonicalName` is the registry's record of a real person's name; the club
+ * publishes aliases instead. Queries below still *select* it — it is what the
+ * alias is derived from when a player has not chosen one — but it is destructured
+ * away rather than spread into a response, so adding a column to one of these
+ * selects cannot quietly publish it.
+ */
 
 export const publicRouter = router({
   leaderboard: publicProcedure.query(async ({ ctx }) => {
@@ -121,9 +130,10 @@ export const publicRouter = router({
       /** Occasions the club has run, not brackets — a main+rookie night is one. */
       eventCount,
       activityPolicy,
-      rows: rows.map((row) => ({
+      rows: rows.map(({ canonicalName, displayName, ...row }) => ({
         ...row,
-        name: playerName(row),
+        /** The public alias; the names it was derived from stay server-side. */
+        name: playerName({ canonicalName, displayName }),
         verified: verifiedIds.has(row.playerId),
         /** Mains, in the player's chosen order; drawn as head icons. */
         characters: characters.get(row.playerId) ?? [],
@@ -160,7 +170,13 @@ export const publicRouter = router({
     const recomputeId = await latestRecomputeId(ctx.db);
     let ratingRow = null;
     let events: Array<Record<string, unknown>> = [];
+    let model = 'glicko2';
     if (recomputeId) {
+      const [recompute] = await ctx.db
+        .select({ model: recomputes.model })
+        .from(recomputes)
+        .where(eq(recomputes.id, recomputeId));
+      model = recompute?.model ?? model;
       const [rating] = await ctx.db
         .select()
         .from(playerRatings)
@@ -178,6 +194,9 @@ export const publicRouter = router({
           preRd: ratingEvents.preRd,
           postRd: ratingEvents.postRd,
           weight: ratingEvents.weight,
+          /** WHR only: the current fit's hindsight estimate at this night. */
+          revisedRating: ratingEvents.revisedRating,
+          revisedSd: ratingEvents.revisedSd,
           tournamentId: ratingEvents.tournamentId,
           tournamentName: tournaments.name,
           tournamentDate: tournaments.eventDate,
@@ -191,13 +210,13 @@ export const publicRouter = router({
         .leftJoin(opponents, eq(ratingEvents.opponentPlayerId, opponents.id))
         .where(and(eq(ratingEvents.recomputeId, recomputeId), eq(ratingEvents.playerId, input.playerId)))
         .orderBy(asc(ratingEvents.seq));
-      events = eventRows.map((row) => ({
+      events = eventRows.map(({ opponentCanonicalName, opponentDisplayName, ...row }) => ({
         ...row,
         tournamentDate: row.tournamentDate?.toISOString() ?? null,
-        opponentName: row.opponentCanonicalName
+        opponentName: opponentCanonicalName
           ? publicPlayerName({
-              displayName: row.opponentDisplayName,
-              canonicalName: row.opponentCanonicalName,
+              displayName: opponentDisplayName,
+              canonicalName: opponentCanonicalName,
             })
           : null,
       }));
@@ -212,7 +231,6 @@ export const publicRouter = router({
       player: {
         id: player.id,
         name: playerName(player),
-        canonicalName: player.canonicalName,
         companyCode: player.companyCode,
         companyName: player.companyName,
         verified: verified.length > 0,
@@ -220,6 +238,8 @@ export const publicRouter = router({
       },
       rating: ratingRow,
       events,
+      /** Which rating model produced the events — the profile explains deltas differently per model. */
+      model,
     };
   }),
 
@@ -255,7 +275,10 @@ export const publicRouter = router({
       .orderBy(asc(playerRatings.rank));
     return {
       events: eventRows,
-      players: playerRows.map((row) => ({ ...row, name: playerName(row) })),
+      players: playerRows.map(({ canonicalName, displayName, ...row }) => ({
+        ...row,
+        name: playerName({ canonicalName, displayName }),
+      })),
     };
   }),
 
@@ -295,20 +318,18 @@ export const publicRouter = router({
       .leftJoin(companies, eq(players.companyId, companies.id))
       .where(eq(tournamentParticipants.tournamentId, tournament.id));
 
-    const participantName = new Map(
-      participants.map((p) => [
-        p.id,
-        p.canonicalName
-          ? publicPlayerName({ displayName: p.displayName, canonicalName: p.canonicalName })
-          : p.cleanedName,
-      ]),
-    );
+    const participantName = new Map(participants.map((p) => [p.id, publicParticipantName(p)]));
 
     const setRows = await ctx.db
       .select()
       .from(sets)
       .where(eq(sets.tournamentId, tournament.id))
-      .orderBy(asc(sets.suggestedPlayOrder), asc(sets.challongeMatchId));
+      // Play order — the SQL twin of the engine's `compareSetsInBracket`.
+      // Postgres sorts NULLs last on ASC, which is the nulls-last rule that
+      // comparator applies. Ordering by `challonge_match_id` alone (what this
+      // did while `suggested_play_order` was never populated) is bracket
+      // *creation* order: the whole winners side, then the whole losers side.
+      .orderBy(asc(sets.suggestedPlayOrder), asc(sets.completedAt), asc(sets.challongeMatchId));
 
     return {
       id: tournament.id,
@@ -366,21 +387,43 @@ export const publicRouter = router({
     return loadRecap(ctx.db, input.slug);
   }),
 
-  /** Player search for the claim flow and admin tools. */
+  /**
+   * Player search for the claim flow.
+   *
+   * Matches on the public alias only. Matching the canonical name would not
+   * publish it directly, but it would answer "does a player whose registry name
+   * contains this substring exist?" for any substring a caller cares to try,
+   * which reconstructs the same names a probe at a time. So someone claiming
+   * their player searches the name the board shows — their first name finds it.
+   *
+   * Filtering in JS rather than SQL because the alias is only a column when the
+   * player chose one; otherwise it is derived. The club's roster is small enough
+   * that scanning the active players costs less than keeping a derived column
+   * correct in two places.
+   *
+   * Admin tools do not use this — they load the full roster (admin.players) and
+   * search names and stored aliases client-side.
+   */
   searchPlayers: publicProcedure
     .input(z.object({ query: z.string().min(1).max(100) }))
     .query(async ({ ctx, input }) => {
-      const rows = await ctx.db
-        .select({
-          id: players.id,
-          canonicalName: players.canonicalName,
-          displayName: players.displayName,
-          companyCode: companies.code,
-        })
-        .from(players)
-        .leftJoin(companies, eq(players.companyId, companies.id))
-        .where(and(eq(players.status, 'active'), ilike(players.canonicalName, `%${input.query}%`)))
-        .limit(20);
+      const query = input.query.trim().toLowerCase();
+      const rows = (
+        await ctx.db
+          .select({
+            id: players.id,
+            canonicalName: players.canonicalName,
+            displayName: players.displayName,
+            companyCode: companies.code,
+          })
+          .from(players)
+          .leftJoin(companies, eq(players.companyId, companies.id))
+          .where(eq(players.status, 'active'))
+      )
+        .map((row) => ({ id: row.id, name: playerName(row), companyCode: row.companyCode }))
+        .filter((row) => row.name.toLowerCase().includes(query))
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .slice(0, 20);
       const claims = rows.length
         ? await ctx.db
             .select({ playerId: playerClaims.playerId })
@@ -396,11 +439,6 @@ export const publicRouter = router({
             )
         : [];
       const claimed = new Set(claims.map((row) => row.playerId));
-      return rows.map((row) => ({
-        id: row.id,
-        name: playerName(row),
-        companyCode: row.companyCode,
-        verified: claimed.has(row.id),
-      }));
+      return rows.map((row) => ({ ...row, verified: claimed.has(row.id) }));
     }),
 });

@@ -1,6 +1,7 @@
 export * from './glicko2';
 export * from './types';
 export * from './events';
+export * from './setOrder';
 export * from './replay';
 export * from './score';
 export * from './recap';

@@ -119,8 +119,16 @@ async function publicDeltas(): Promise<Map<string, number | null>> {
   });
   const { rows } = await caller.public.leaderboard();
   // Keyed on the canonical name, not the published one, so this map shares a
-  // key space with board() above — the published name is the shortened alias.
-  return new Map(rows.map((row) => [row.canonicalName, row.rankDelta]));
+  // key space with board() above — the published name is the shortened alias,
+  // and the canonical one never leaves the server on a public route, so the
+  // ids are mapped back through the database rather than read off the response.
+  const canonicalById = new Map(
+    (await db.select({ id: players.id, canonicalName: players.canonicalName }).from(players)).map((row) => [
+      row.id,
+      row.canonicalName,
+    ]),
+  );
+  return new Map(rows.map((row) => [canonicalById.get(row.playerId)!, row.rankDelta]));
 }
 
 describe('rank movement over the last club night', () => {

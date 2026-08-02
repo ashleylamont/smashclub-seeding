@@ -77,6 +77,16 @@ workflow).
   link is reversible from **Admin → Review** and **Admin → Players**, which
   is the control that makes this acceptable — so register brackets you know,
   and treat a roster you did not recognise as something to review.
+- **The public site publishes aliases, not names.** The registry holds a
+  canonical name because identity resolution needs one, but no unauthenticated
+  route returns it. Everything public — board, profile, bracket, recap, search
+  — carries the player's chosen alias, or, if they have not chosen one, their
+  first name plus an initial per name after it ("Fox McCloud" → "Fox M"). A
+  bracket entry the review queue has not linked yet has no alias to fall back
+  on, so the same shortening is applied to what the entrant typed into
+  Challonge. Admin surfaces are the exception and deliberately show names in
+  full: a reviewer deciding whether two entries are the same person cannot do
+  it on initials. See [Names](#names).
 - **Live mode.** Tournaments that are underway on Challonge are polled every
   ~15s; changed sets trigger a debounced recompute and push SSE events to
   viewers on the tournament page.
@@ -151,6 +161,36 @@ not-yet-linked provider creates a *separate* account instead — nothing can
 match two providers up before the user has proven they own both — so the
 sign-in page tells people to sign in with their original provider first and
 link from there.
+
+### Names
+
+Two names per player, and the difference is who may see them.
+
+- **Canonical name** — the registry's record, imported from `players.yaml` or
+  entered by an admin. It exists so identity resolution has something to match
+  bracket entries against, and it is **admin-only**: `apps/server`'s public
+  router selects it (an alias is derived from it) but never returns it.
+- **Public alias** — what every public surface shows. Claimants set their own
+  from **/me**; admins can set one from **Admin → Players**. Unset, it defaults
+  to `defaultPublicAlias` in `packages/shared`: first name, then an initial per
+  name after it. Chosen aliases are unique club-wide, first-come, so the board
+  is never ambiguous.
+
+Consequences worth knowing:
+
+- **Player search matches the alias, not the registry name.** Claiming your
+  player from **/me** means searching the name the board shows — your first
+  name finds you. Matching the canonical name would not have published it, but
+  it would answer "is there a player whose name contains this?" for any
+  substring a caller cared to try, which reconstructs the same names a probe at
+  a time. Admin lookup is unaffected: it loads the roster over an admin route
+  and searches names *and* every stored alias client-side.
+- **A defaulted alias is still matchable.** "Fox M" is exactly the shape the
+  identity matcher reads as a structured short form, so shortening a name does
+  not turn it into something bracket entries cannot resolve against.
+- `apps/server/test/public-names.test.ts` asserts the whole serialised response
+  of every public route, so a column added to one of those selects and spread
+  into a response fails the build rather than shipping.
 
 ### Reading the board
 

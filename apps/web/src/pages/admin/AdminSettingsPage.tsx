@@ -31,12 +31,17 @@ const GROUPS: Array<{
       {
         key: 'whrDriftVariancePerDay',
         label: 'Drift variance / day',
-        hint: 'How fast skill is assumed to move. Higher tracks recent form more closely.',
+        hint: 'How fast skill is assumed to move. Higher tracks recent form more closely, and widens the band faster during absence.',
       },
       {
         key: 'whrPriorSd',
         label: 'Prior SD',
         hint: 'Natural units. Also anchors the scale across weakly-linked brackets.',
+      },
+      {
+        key: 'whrGamesWeight',
+        label: 'Decisive-set weight',
+        hint: 'A set counts as 1 + weight × (game margin − 1) results, capped at 2 — so at 0.5 a 3-0 counts as two results and a 3-2 as one. Zero ignores scorelines.',
       },
     ],
   },

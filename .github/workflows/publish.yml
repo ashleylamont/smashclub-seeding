@@ -49,6 +49,10 @@ jobs:
           file: deploy/Dockerfile
           platforms: linux/amd64
           push: true
+          # Stamps the footer build indicator. Full SHA: the footer shows the
+          # first 7 (matching the `sha-` tag above) and links the whole thing.
+          build-args: |
+            GIT_SHA=${{ github.sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
