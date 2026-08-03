@@ -30,8 +30,14 @@ export interface PlayerEventView {
   revisedRating: number | null;
   revisedSd: number | null;
   tournamentId: string;
+  /**
+   * The bracket a set was played in. A decay row is charged for a whole club
+   * night rather than a bracket, so it names every bracket that ran that
+   * evening — `tournamentId` still points at only the first of them.
+   */
   tournamentName: string;
   tournamentDate: string | null;
+  /** On a decay row: true only when the night had nothing but a rookie bracket. */
   isRookie: boolean;
   opponentPlayerId: string | null;
   opponentName: string | null;

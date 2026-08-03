@@ -10,6 +10,7 @@ import {
   sets,
   tournamentParticipants,
   tournaments,
+  type Db,
 } from '@smashclub/db';
 import { eventKeyOf } from '@smashclub/engine';
 import { publicParticipantName, publicPlayerName } from '@smashclub/shared';
@@ -20,6 +21,72 @@ import { loadRecap } from '../../recap/recap';
 import { publicProcedure, router } from '../trpc';
 
 const playerName = publicPlayerName;
+
+/** One club night's brackets, as a decay row should name them. */
+interface NightBrackets {
+  /** Every bracket of the evening, in the order they were played. */
+  name: string;
+  /** True only when there was nothing but a rookie bracket to enter. */
+  allRookie: boolean;
+}
+
+/**
+ * The brackets that made up each club night, keyed by event key.
+ *
+ * A decay row is an *occasion* the player missed, not a bracket, but the engine
+ * has to hang the event off some tournament and uses the evening's first one
+ * (`tournamentIdByPeriod` in replay.ts). Naming that alone told a rookie-only
+ * player they had missed the main bracket, and a main-only player they had
+ * missed the rookie bracket — the half of the night they were never eligible
+ * for, and the exact conflation that per-event decay exists to avoid. So the
+ * profile names the whole occasion.
+ *
+ * Scoped to the brackets this recompute actually rated: a registered-but-empty
+ * tournament is not something anyone could have turned up to, and the engine
+ * does not count it as a missed event either.
+ */
+async function nightsByEventKey(
+  db: Db,
+  recomputeId: string,
+  keys: ReadonlySet<string>,
+): Promise<Map<string, NightBrackets>> {
+  const nights = new Map<string, NightBrackets>();
+  if (keys.size === 0) return nights;
+
+  const brackets = await db
+    .selectDistinct({
+      name: tournaments.name,
+      eventDate: tournaments.eventDate,
+      isRookie: tournaments.isRookie,
+    })
+    .from(tournaments)
+    .innerJoin(ratingEvents, eq(ratingEvents.tournamentId, tournaments.id))
+    .where(
+      and(
+        eq(ratingEvents.recomputeId, recomputeId),
+        eq(ratingEvents.isDecay, false),
+        isNotNull(tournaments.eventDate),
+      ),
+    )
+    // Chronological, so a night is read back in the order it was played.
+    .orderBy(asc(tournaments.eventDate), asc(tournaments.name));
+
+  const byKey = new Map<string, typeof brackets>();
+  for (const bracket of brackets) {
+    const key = eventKeyOf(bracket.eventDate!.toISOString());
+    if (!keys.has(key)) continue;
+    const list = byKey.get(key);
+    if (list) list.push(bracket);
+    else byKey.set(key, [bracket]);
+  }
+  for (const [key, list] of byKey) {
+    nights.set(key, {
+      name: list.map((bracket) => bracket.name).join(' + '),
+      allRookie: list.every((bracket) => bracket.isRookie),
+    });
+  }
+  return nights;
+}
 
 /*
  * Nothing on this router is authenticated, so every response here is public.
@@ -210,16 +277,32 @@ export const publicRouter = router({
         .leftJoin(opponents, eq(ratingEvents.opponentPlayerId, opponents.id))
         .where(and(eq(ratingEvents.recomputeId, recomputeId), eq(ratingEvents.playerId, input.playerId)))
         .orderBy(asc(ratingEvents.seq));
-      events = eventRows.map(({ opponentCanonicalName, opponentDisplayName, ...row }) => ({
-        ...row,
-        tournamentDate: row.tournamentDate?.toISOString() ?? null,
-        opponentName: opponentCanonicalName
-          ? publicPlayerName({
-              displayName: opponentDisplayName,
-              canonicalName: opponentCanonicalName,
-            })
-          : null,
-      }));
+      const nights = await nightsByEventKey(
+        ctx.db,
+        recomputeId,
+        new Set(
+          eventRows
+            .filter((row) => row.isDecay && row.tournamentDate)
+            .map((row) => eventKeyOf(row.tournamentDate!.toISOString())),
+        ),
+      );
+      events = eventRows.map(({ opponentCanonicalName, opponentDisplayName, ...row }) => {
+        // Decay is charged for the night, so it is named for the night.
+        const night =
+          row.isDecay && row.tournamentDate ? nights.get(eventKeyOf(row.tournamentDate.toISOString())) : undefined;
+        return {
+          ...row,
+          tournamentName: night?.name ?? row.tournamentName,
+          isRookie: night ? night.allRookie : row.isRookie,
+          tournamentDate: row.tournamentDate?.toISOString() ?? null,
+          opponentName: opponentCanonicalName
+            ? publicPlayerName({
+                displayName: opponentDisplayName,
+                canonicalName: opponentCanonicalName,
+              })
+            : null,
+        };
+      });
     }
 
     const verified = await ctx.db
