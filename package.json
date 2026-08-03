@@ -16,6 +16,7 @@
     "golden-check": "pnpm --filter @smashclub/golden-check start",
     "dev:harness": "pnpm --filter @smashclub/server dev:harness",
     "rank-eval": "pnpm --filter @smashclub/rank-eval start",
+    "jakeman": "pnpm --filter @smashclub/jakeman start",
     "challonge-dump": "pnpm --filter @smashclub/challonge-dump start"
   },
   "devDependencies": {
