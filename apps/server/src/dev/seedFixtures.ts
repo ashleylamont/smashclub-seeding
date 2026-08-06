@@ -171,12 +171,13 @@ const SYNTHETIC_LATEST_DAYS_AGO = 24;
  *
  * Fixed dates rot: a fixture pinned to a calendar year quietly turns into "a
  * club that stopped meeting" as real time passes, and the rankings board hides
- * players who have not been seen in a year — so a pinned fixture eventually
+ * players who have not been seen in six months — so a pinned fixture eventually
  * seeds a board that renders empty by default. Anchoring to today keeps the
  * harness saying the same thing every day it is run.
  *
- * The span deliberately overshoots that one-year window, so the seeded club has
- * both a current field and a tail that has aged out of it.
+ * The span deliberately overshoots that activity window, so the seeded club has
+ * both a current field and a tail that has aged out of it. The two most recent
+ * nights fall inside it, which is what keeps the default board populated.
  */
 function syntheticEventDates(today: Date = new Date()): string[] {
   return Array.from({ length: SYNTHETIC_EVENTS }, (_, index) => {

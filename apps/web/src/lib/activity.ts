@@ -5,7 +5,8 @@
  * came back. They are not wrong — the rating they earned is the rating they
  * earned — but they answer a different question to the one the rankings screen
  * is asked, which is "where do I sit among the people I will actually draw
- * against". So the board hides anyone who has not played in a year, by default.
+ * against". So the board hides anyone who has not played in six months, by
+ * default.
  *
  * Hiding rows is only half of it. A rank is a position *within a field*, so
  * dropping players out of the field and leaving the old numbers on the rest
@@ -38,19 +39,46 @@ export interface ActivityFilterResult<T> {
 }
 
 /**
- * The instant that divides active from inactive: the same calendar date, a year
- * back. Counting 365 days instead drifts by a day across a leap year, and "a
- * year ago" is what a member reads the setting to mean.
+ * How long a player can go without a club night before the board stops treating
+ * them as part of the current field.
+ *
+ * Six months rather than a year: at a club that meets every few weeks, a year of
+ * absence is most of a roster turnover, so the old window kept people on the
+ * board long after they had stopped being anyone's likely opponent — which is
+ * the one question the ranking screen is asked. Half a year still carries
+ * someone who took a season off.
+ */
+export const INACTIVE_MONTHS = 6;
+
+/**
+ * The instant that divides active from inactive: the same day of the month, six
+ * months back. Counting a fixed number of days instead drifts against the
+ * calendar, and "six months ago" is what a member reads the setting to mean.
+ *
+ * Stepped in UTC, because that is the clock the other side of the comparison is
+ * on: `lastPlayedDate` is a bare `YYYY-MM-DD`, which parses as UTC midnight.
+ * Walking back in local time instead put the two on different clocks, and a
+ * six-month step crosses a daylight-saving change in any zone that observes one,
+ * so the cutoff landed an hour off — enough to flip who counts on the boundary
+ * day, and to flip it differently for readers in different timezones.
  */
 export function inactiveBefore(now: number): number {
   const cutoff = new Date(now);
-  cutoff.setFullYear(cutoff.getFullYear() - 1);
+  const dayOfMonth = cutoff.getUTCDate();
+  cutoff.setUTCMonth(cutoff.getUTCMonth() - INACTIVE_MONTHS);
+  /*
+   * Stepping back off the end of a longer month overflows into the following
+   * one — 31 August minus six months lands on 3 March, not 28 February — which
+   * would drag the cutoff *forward* and age players out days early.
+   * `setUTCDate(0)` walks back to the last day of the month that was meant.
+   */
+  if (cutoff.getUTCDate() !== dayOfMonth) cutoff.setUTCDate(0);
   return cutoff.getTime();
 }
 
 /**
- * Has this player played inside the last year? "One year or more" ago counts as
- * inactive, so the boundary itself is out.
+ * Has this player played inside the last six months? "Six months or more" ago
+ * counts as inactive, so the boundary itself is out.
  *
  * An unparseable date is treated as active: the filter's job is to tidy the
  * board, and silently disappearing a player over a bad string is a worse
