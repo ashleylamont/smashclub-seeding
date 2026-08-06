@@ -33,7 +33,7 @@ interface Props {
   /** Already filtered and re-ranked by the page; see lib/activity. */
   rows: LeaderboardRow[];
   trends: Map<string, PlayerTrend>;
-  /** Whether players with no event in the last year are excluded. */
+  /** Whether players with no event in the last six months are excluded. */
   hideInactive: boolean;
   onHideInactiveChange: (next: boolean) => void;
   /** How many players the inactivity filter drops (or would drop). */
@@ -264,20 +264,32 @@ export function Leaderboard({ rows, trends, hideInactive, onHideInactiveChange, 
         {/* Not a filter over the field so much as a definition of it: with it
             on, ranks and movement below are counted among these players only.
             On by default, because that is the field a member is asking about. */}
-        <label className="control control-check">
+        <div className="control control-check">
           <span className="control-label">Activity</span>
-          <span
-            className="checkbox-control"
-            title="Hides anyone with no event in the last year. Ranks and movement are counted among the players still shown, so an arrow never comes from someone ageing out."
+          <label
+            className="switch"
+            title="Hides anyone with no event in the last six months. Ranks and movement are counted among the players still shown, so an arrow never comes from someone ageing out."
           >
+            {/*
+             * A native checkbox wearing `role="switch"`: the control reads as a
+             * switch on screen, so it should announce as one too, and the input
+             * underneath still supplies the label association, the space key and
+             * focus without any of it being reimplemented. The track and thumb
+             * are decoration drawn over it, so they say nothing.
+             */}
             <input
               type="checkbox"
+              role="switch"
+              className="switch-input"
               checked={hideInactive}
               onChange={(event) => onHideInactiveChange(event.target.checked)}
             />
+            <span className="switch-track" aria-hidden="true">
+              <span className="switch-thumb" />
+            </span>
             <span>Hide inactive</span>
-          </span>
-        </label>
+          </label>
+        </div>
 
         {/* Hidden above the fold-point, where the header row already is the sort
             control and naming the measures twice would be the redundancy that

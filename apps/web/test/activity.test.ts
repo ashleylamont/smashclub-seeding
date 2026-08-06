@@ -24,21 +24,28 @@ const stale = (playerId: string, rank: number, previousRank: number | null): Ran
 const byId = (rows: RankableRow[]) => new Map(rows.map((r) => [r.playerId, r]));
 
 describe('isActive', () => {
-  it('counts a player who played inside the year', () => {
-    expect(isActive('2025-08-02', NOW)).toBe(true);
+  it('counts a player who played inside the six months', () => {
+    expect(isActive('2026-02-02', NOW)).toBe(true);
   });
 
-  it('drops a player who last played a year ago to the day', () => {
-    expect(isActive('2025-08-01', NOW)).toBe(false);
+  it('drops a player who last played six months ago to the day', () => {
+    expect(isActive('2026-02-01', NOW)).toBe(false);
   });
 
   it('drops a player who last played longer ago than that', () => {
-    expect(isActive('2024-11-30', NOW)).toBe(false);
+    expect(isActive('2025-11-30', NOW)).toBe(false);
   });
 
-  it('measures the year by calendar date, not 365 days', () => {
-    // 2024 was a leap year, so the day after the cutoff is 366 days back.
-    expect(isActive('2024-02-29', Date.parse('2025-02-28T12:00:00.000Z'))).toBe(true);
+  it('drops a player the old one-year window would have kept', () => {
+    expect(isActive('2025-10-01', NOW)).toBe(false);
+  });
+
+  it('does not age players out early when six months back lands in a short month', () => {
+    // Stepping back from the 31st overflows February, so a cutoff left
+    // unclamped would sit on 3 March and hide someone last seen on the 1st.
+    const endOfAugust = Date.parse('2026-08-31T12:00:00.000Z');
+    expect(isActive('2026-03-01', endOfAugust)).toBe(true);
+    expect(isActive('2026-02-27', endOfAugust)).toBe(false);
   });
 
   it('keeps a player rather than hiding them over an unreadable date', () => {

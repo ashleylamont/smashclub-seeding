@@ -83,7 +83,7 @@ test.describe('public browsing', () => {
     await settle(page);
 
     const rows = page.locator('.board-list .board-row');
-    const toggle = page.getByRole('checkbox', { name: 'Hide inactive' });
+    const toggle = page.getByRole('switch', { name: 'Hide inactive' });
 
     /** Ranks down the board, which must always run 1, 2, 3… with no holes. */
     const ranks = () =>

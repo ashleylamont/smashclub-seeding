@@ -15,9 +15,9 @@ const FORM_LENGTH = 5;
 /** How many rating points a sparkline traces. */
 const SPARK_LENGTH = 12;
 /**
- * How often the clock is re-read for the activity cutoff. The window is a year
- * wide, so nothing is lost by checking hourly — this exists only so a page left
- * open across a boundary eventually agrees with a reload.
+ * How often the clock is re-read for the activity cutoff. The window is six
+ * months wide, so nothing is lost by checking hourly — this exists only so a
+ * page left open across a boundary eventually agrees with a reload.
  */
 const ACTIVITY_TICK_MS = 60 * 60 * 1000;
 /** Remembered across visits: every row is a link, so the board remounts often. */
