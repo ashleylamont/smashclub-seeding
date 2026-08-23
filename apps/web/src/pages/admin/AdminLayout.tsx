@@ -10,6 +10,7 @@ const TABS = [
   { to: '/admin/companies', label: 'Companies' },
   { to: '/admin/import', label: 'Import' },
   { to: '/admin/seeding', label: 'Seeding' },
+  { to: '/admin/event-planner', label: 'Event planner' },
   { to: '/admin/settings', label: 'Settings' },
 ] as const;
 
@@ -21,7 +22,7 @@ export function AdminLayout() {
   /*
    * Keeps the current section visible in the tab strip.
    *
-   * Seven tabs do not fit a phone, so below the fold-point the strip scrolls
+   * Eight tabs do not fit a phone, so below the fold-point the strip scrolls
    * sideways rather than wrapping into three rows. Settings then starts off the
    * right edge — you land on the page you asked for with no tab marked. This
    * nudges the strip's own scroll position, deliberately not `scrollIntoView`,

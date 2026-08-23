@@ -1,0 +1,325 @@
+/*
+ * Event planner. Built to be usable at the venue: wide tables collapse into
+ * stacked cards below the fold-point, every control is at least a thumb wide,
+ * and nothing important is conveyed by colour alone.
+ */
+
+.planner-textarea {
+  width: 100%;
+  min-height: 120px;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.85rem;
+  resize: vertical;
+}
+
+.planner-steps {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+  overflow-x: auto;
+}
+
+.planner-steps .admin-tab:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.planner-issues {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.planner-issues li {
+  margin-bottom: 4px;
+}
+
+.planner-issue-link {
+  margin-left: 8px;
+}
+
+.plan-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin: 12px 0 0;
+}
+
+.plan-summary .stat dt {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.plan-summary .stat dd {
+  margin: 2px 0 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.plan-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.plan-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.plan-name {
+  font-weight: 600;
+  flex: 1 1 200px;
+}
+
+.preview-summary {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+/* ── roster ─────────────────────────────────────────────────────── */
+
+.roster-table {
+  display: flex;
+  flex-direction: column;
+  margin-top: 10px;
+}
+
+.roster-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1.2fr 2fr 0.7fr 0.8fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.roster-head {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  border-bottom-width: 2px;
+}
+
+/* An unmatched row is the thing standing between the admin and a frozen
+   roster, so it is marked with an edge as well as a tint. */
+.roster-row.unresolved {
+  border-left: 3px solid var(--danger, #c0392b);
+  background: color-mix(in srgb, var(--danger, #c0392b) 6%, transparent);
+}
+
+.roster-row.highlighted {
+  outline: 2px solid var(--accent, #4a7ebb);
+  outline-offset: -2px;
+}
+
+.roster-raw {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.8rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.roster-match {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.roster-candidates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.roster-error {
+  grid-column: 1 / -1;
+}
+
+/* A short-form match is an inference, not a club record; it is chipped
+   differently so a reviewer can see which rows are guesses. */
+.chip.method-structured {
+  border-style: dashed;
+}
+
+.select-required {
+  border-color: var(--danger, #c0392b);
+}
+
+/* ── divisions ──────────────────────────────────────────────────── */
+
+.division-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.division-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.division-row {
+  display: grid;
+  grid-template-columns: 32px 28px 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card, transparent);
+}
+
+.division-row.dragging {
+  opacity: 0.75;
+}
+
+.division-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+
+/* ── pools ──────────────────────────────────────────────────────── */
+
+.pool-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.pool-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.pool-card h5 {
+  margin: 0 0 6px;
+}
+
+.pool-members {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+}
+
+.pool-members li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.pool-worksheet {
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
+}
+
+.pool-place {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.consolation-preview {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.consolation-list {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+/* ── handoff ────────────────────────────────────────────────────── */
+
+.bracket-checklist {
+  margin: 6px 0 12px;
+  padding-left: 20px;
+}
+
+.bracket-checklist li {
+  margin-bottom: 3px;
+}
+
+.bracket-payloads {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.copy-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.copy-block-text {
+  width: 100%;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.8rem;
+  resize: vertical;
+}
+
+.chip.state-attached {
+  border-style: solid;
+}
+
+.chip.state-error {
+  color: var(--danger, #c0392b);
+}
+
+/* ── venue / narrow screens ─────────────────────────────────────── */
+
+@media (max-width: 860px) {
+  /* The header row cannot survive one column, so the cells label themselves
+     by position instead: pasted line, then meaning, then actions. */
+  .roster-head {
+    display: none;
+  }
+
+  .roster-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding: 10px 6px;
+  }
+
+  .division-row {
+    grid-template-columns: 28px 24px 1fr auto;
+  }
+
+  .division-row .muted {
+    display: none;
+  }
+}
+
+@media print {
+  /* Pool cards are the thing worth printing; the chrome is not. */
+  .planner-steps,
+  .admin-tabs,
+  .row-actions,
+  .copy-block-header {
+    display: none !important;
+  }
+
+  .pool-card {
+    break-inside: avoid;
+  }
+}

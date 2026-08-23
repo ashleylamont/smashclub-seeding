@@ -87,6 +87,12 @@ workflow).
   Challonge. Admin surfaces are the exception and deliberately show names in
   full: a reviewer deciding whether two entries are the same person cannot do
   it on initials. See [Names](#names).
+- **A club night is planned before it exists on Challonge.** A two-division
+  evening is four Challonge brackets, and none of them exists when the
+  attendance list arrives. **Admin → Event planner** holds the night as a saved
+  plan — resolved roster, frozen ranking snapshot, divisions, pools — and hands
+  over copyable payloads for the four brackets. See
+  [Running a two-division night](#running-a-two-division-night-admin--event-planner).
 - **Live mode.** Tournaments that are underway on Challonge are polled every
   ~15s; changed sets trigger a debounced recompute and push SSE events to
   viewers on the tournament page.
@@ -204,6 +210,70 @@ ordered by when that column is not on screen.
 Colour scheme follows the OS by default and can be pinned light or dark from
 the nav; the choice is stored under `smashclub:theme` and applied by an inline
 script in `index.html` before first paint.
+
+### Running a two-division night (Admin → Event planner)
+
+The club's bigger nights run as two competitive divisions, **Upper** and
+**Lower**, each played as four-player round-robin pools feeding a championship
+bracket, with the pool third- and fourth-place finishers dropping into a
+consolation bracket. That is four Challonge tournaments for one evening, and
+the planner is what turns an attendance list into them.
+
+The flow is a saved plan, not a form: every correction is written as it is
+made, the plan and step live in the URL, and the whole thing is resumable from
+another device — an event is set up on a laptop and finished on a phone.
+
+1. **Paste the attendance list.** One person per line; bullets, numbering and
+   stray whitespace are stripped, and lines are never split on commas because a
+   display name may legitimately contain one. Parsing writes nothing at all —
+   no players, no aliases, no review items.
+2. **Resolve every row.** The same identity ladder sync uses
+   (`apps/server/src/identity/resolver.ts`, shared so the two cannot drift):
+   exact alias, prior human decision, unambiguous short form, else a ranked list
+   of candidates for a human to pick from. Fuzzy similarity never selects on its
+   own here either. Missing people can be created inline, and a corrected
+   spelling binds only this event unless **Remember spelling** is used, which
+   writes a real alias.
+3. **Freeze.** The current leaderboard ordering is snapshotted onto the plan,
+   in one transaction, and the divisions are computed from it: explicit pins
+   first, then the remaining Upper places filled from the top of the ranking.
+   A later recompute cannot move anybody afterwards — the snapshot timestamp is
+   shown wherever seeds are. Unranked entrants need an explicit division and
+   seed at the bottom of it.
+4. **Pools.** Each division is *striped* across the seed order rather than
+   filled four at a time, so every pool holds one entrant from each quarter of
+   the field and each pool's qualifiers are worth about the same
+   (`event-planner/pools.ts`). Pools are derived from the frozen seeds rather
+   than stored, so a manual reorder cannot leave two disagreeing copies.
+5. **Hand off to Challonge.** Copyable participant lists in seed order (public
+   aliases, never the pasted line), a seed audit, pool cards to print, and a
+   settings checklist per bracket. This path is deliberately the *only* one
+   that ships first: the first live event must be finishable with no API
+   credentials, no quota and no network.
+6. **Record the pools, draw the consolation.** Confirming each pool's 1-4 by
+   hand — Challonge's own tiebreak settings decide round-robin ties, and an
+   admin reading the standings is a better source than this app guessing. The
+   consolation seeds are then computed to avoid a round-one pool rematch,
+   prefer a third against a fourth, and keep the bracket's seeding otherwise
+   intact (`event-planner/advancement.ts`).
+7. **Attach the four slugs.** Each is registered against the plan's event date
+   as a manual override, which is what makes the four brackets **one club
+   night**: rating chronology groups on the event date (`eventKeyOf`), and
+   `apps/server/test/event-planner.test.ts` asserts the four sync to one event
+   with no double-counted sets. None of them is ever flagged `isRookie` —
+   Upper and Lower are competitive divisions, and the rookie flag means
+   something else.
+
+Safeguards worth knowing: seeds cannot be reordered once a bracket is attached
+or the pools have been played, the roster cannot be reopened while a slug is
+attached, the event date cannot be moved out from under a registered bracket,
+and every one of those is enforced server-side rather than by a disabled
+button.
+
+Not in this version, on purpose: creating the brackets through the Challonge
+API. The v2.1 write adapter is additive and comes after a disposable
+rehearsal proves Challonge's seed-to-group allocation matches the preview; the
+copy-and-paste payloads stay available regardless.
 
 ### Character head icons
 

@@ -1,45 +1,25 @@
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
-import {
-  companies,
-  companyAliases,
-  identityDecisions,
-  playerAliases,
-  reviewItems,
-  sets,
-  tournamentParticipants,
-} from '@smashclub/db';
-import {
-  cleanPlayerEntry,
-  preparePlayerEntry,
-  resolveStructuredAlias,
-  type CompanyTaxonomy,
-} from '@smashclub/engine';
-import { loadCandidatePool, rejectedPlayerIdsFor, scoreCandidates } from './candidates';
+import { playerAliases, reviewItems, sets, tournamentParticipants } from '@smashclub/db';
+import { resolvePlayerInputs } from './resolver';
 
 /**
  * The participant-identity pipeline, replacing the legacy CLI's blocking
- * prompts. Per participant, in order:
+ * prompts. The ladder it climbs per participant — clean, exact alias, prior
+ * human decision, structured short form, else review — lives in
+ * `identity/resolver.ts`, which is a pure read; this module is what turns that
+ * answer into tournament writes.
  *
- *  1. clean the raw display name (company tag, @, parentheticals, ...)
- *  2. exact alias lookup (company-scoped, then company-less)
- *  3. prior human decision in identity_decisions (merge -> silent link)
- *  4. structured short-form alias (unique first-name / first+initial) ->
- *     auto-link, but WITHOUT recording an alias (see below)
- *  5. everything else — including every fuzzy match at any score — becomes a
- *     pending review item with ranked candidates. Fuzzy similarity NEVER
- *     merges on its own.
- *
- * Steps 2-4 all bind an upstream-controlled display name to an internal
- * player, so the strength of the evidence decides how *durable* the result is
- * allowed to be. An exact alias or a prior human decision is a club record
- * being recognised. A structured short form is only an inference from the pool
- * as it stands right now — "Josh C" is Josh Cortese because today he is the
- * only matching Josh — so it links this participant and stops there. Writing
- * it into player_aliases would freeze a guess into a club record and keep
- * resolving it silently even once a second Josh C. makes it ambiguous; left
- * unwritten, that later ambiguity correctly falls through to review. Admins
- * can still promote a short form deliberately via addAlias.
+ * Steps 2-4 of that ladder all bind an upstream-controlled display name to an
+ * internal player, so the strength of the evidence decides how *durable* the
+ * result is allowed to be. An exact alias or a prior human decision is a club
+ * record being recognised. A structured short form is only an inference from
+ * the pool as it stands right now — "Josh C" is Josh Cortese because today he
+ * is the only matching Josh — so it links this participant and stops there.
+ * Writing it into player_aliases would freeze a guess into a club record and
+ * keep resolving it silently even once a second Josh C. makes it ambiguous;
+ * left unwritten, that later ambiguity correctly falls through to review.
+ * Admins can still promote a short form deliberately via addAlias.
  */
 
 export interface MatchOutcome {
@@ -50,126 +30,53 @@ export interface MatchOutcome {
   method: 'existing' | 'alias' | 'decision' | 'structured' | 'queued';
 }
 
-export async function loadCompanyTaxonomy(db: Db): Promise<{
-  taxonomy: CompanyTaxonomy;
-  companyIdByCode: Map<string, string>;
-}> {
-  const companyRows = await db.select().from(companies);
-  const aliasRows = await db.select().from(companyAliases);
-  const nameById = new Map(companyRows.map((row) => [row.id, row.name]));
-  const taxonomy: CompanyTaxonomy = { codes: {}, aliases: {} };
-  const companyIdByCode = new Map<string, string>();
-  for (const row of companyRows) {
-    taxonomy.codes[row.code] = row.name;
-    taxonomy.aliases[row.name] = row.code;
-    companyIdByCode.set(row.code, row.id);
-  }
-  for (const alias of aliasRows) {
-    const name = nameById.get(alias.companyId);
-    if (name) {
-      const code = companyRows.find((c) => c.id === alias.companyId)?.code;
-      if (code) taxonomy.aliases[alias.aliasNorm] = code;
-    }
-  }
-  return { taxonomy, companyIdByCode };
-}
-
 /**
  * Resolve identities for a tournament's unresolved participants. Writes
  * participant.playerId on auto-links and creates pending review items for the
  * rest. Returns the outcomes for observability/tests.
  */
 export async function matchTournamentParticipants(db: Db, tournamentId: string): Promise<MatchOutcome[]> {
-  const { taxonomy, companyIdByCode } = await loadCompanyTaxonomy(db);
   const unresolved = await db
     .select()
     .from(tournamentParticipants)
     .where(and(eq(tournamentParticipants.tournamentId, tournamentId), isNull(tournamentParticipants.playerId)));
   if (unresolved.length === 0) return [];
 
-  const pool = await loadCandidatePool(db);
+  const resolutions = await resolvePlayerInputs(
+    db,
+    unresolved.map((participant) => participant.rawName),
+  );
   const outcomes: MatchOutcome[] = [];
 
-  for (const participant of unresolved) {
-    const prepared = preparePlayerEntry(participant.rawName, taxonomy);
-    const cleaned = cleanPlayerEntry(prepared, taxonomy);
-    const aliasNorm = cleaned.name.toLowerCase();
-    const companyCode = cleaned.companyCode && taxonomy.codes[cleaned.companyCode] ? cleaned.companyCode : null;
-    const companyId = companyCode ? (companyIdByCode.get(companyCode) ?? null) : null;
+  for (const [index, participant] of unresolved.entries()) {
+    const resolution = resolutions[index]!;
+    const { cleanedName, companyId } = resolution;
 
     await db
       .update(tournamentParticipants)
-      .set({ cleanedName: cleaned.name, companyId, updatedAt: new Date() })
+      .set({ cleanedName, companyId, updatedAt: new Date() })
       .where(eq(tournamentParticipants.id, participant.id));
 
-    // 2. Exact alias lookup: company-scoped first, then company-less.
-    const aliasRows = await db
-      .select()
-      .from(playerAliases)
-      .where(eq(playerAliases.aliasNorm, aliasNorm));
-    const aliasHit =
-      (companyId ? aliasRows.find((row) => row.companyId === companyId) : undefined) ??
-      aliasRows.find((row) => row.companyId === null) ??
-      // A single alias under another company still matches when the
-      // participant has no company signal at all (legacy N/A behaviour).
-      (companyId === null && aliasRows.length === 1 ? aliasRows[0] : undefined);
-    if (aliasHit) {
-      await linkParticipant(db, participant.id, aliasHit.playerId);
+    if (resolution.playerId !== null && resolution.method !== 'unresolved') {
+      await linkParticipant(db, participant.id, resolution.playerId);
+      // A decision is a club record being recognised, so it is worth writing
+      // back as an alias; a structured short form is an inference and
+      // deliberately is not (see the module comment).
+      if (resolution.method === 'decision') {
+        await ensureAlias(db, resolution.playerId, cleanedName.toLowerCase(), companyId, 'merge_decision');
+      }
       outcomes.push({
         participantId: participant.id,
-        cleanedName: cleaned.name,
+        cleanedName,
         companyId,
-        playerId: aliasHit.playerId,
-        method: 'alias',
+        playerId: resolution.playerId,
+        method: resolution.method,
       });
       continue;
     }
 
-    // 3. Prior human decision.
-    const decisionRows = await db
-      .select()
-      .from(identityDecisions)
-      .where(and(eq(identityDecisions.aliasNorm, aliasNorm), eq(identityDecisions.kind, 'merge')));
-    const decision =
-      (companyId ? decisionRows.find((row) => row.companyId === companyId) : undefined) ??
-      decisionRows.find((row) => row.companyId === null);
-    if (decision?.playerId) {
-      await linkParticipant(db, participant.id, decision.playerId);
-      await ensureAlias(db, decision.playerId, aliasNorm, companyId, 'merge_decision');
-      outcomes.push({
-        participantId: participant.id,
-        cleanedName: cleaned.name,
-        companyId,
-        playerId: decision.playerId,
-        method: 'decision',
-      });
-      continue;
-    }
-
-    // 4. Structured short-form alias (unambiguous within the pool *right now*).
-    // Deliberately no ensureAlias: this is an inference, not a club record.
-    const structured = resolveStructuredAlias(cleaned.name, companyCode, pool);
-    if (structured) {
-      await linkParticipant(db, participant.id, structured.playerId);
-      outcomes.push({
-        participantId: participant.id,
-        cleanedName: cleaned.name,
-        companyId,
-        playerId: structured.playerId,
-        method: 'structured',
-      });
-      continue;
-    }
-
-    // 5. Review queue. The ranked list is a snapshot of the pool as it is right
+    // Review queue. The ranked list is a snapshot of the pool as it is right
     // now — see identity/candidates.ts for how it is kept current afterwards.
-    const candidates = scoreCandidates(
-      cleaned.name,
-      companyCode,
-      pool,
-      await rejectedPlayerIdsFor(db, aliasNorm),
-    );
-
     const existingPending = await db
       .select({ id: reviewItems.id })
       .from(reviewItems)
@@ -178,15 +85,15 @@ export async function matchTournamentParticipants(db: Db, tournamentId: string):
       await db.insert(reviewItems).values({
         tournamentParticipantId: participant.id,
         rawName: participant.rawName,
-        cleanedName: cleaned.name,
+        cleanedName,
         companyId,
-        candidates,
+        candidates: resolution.candidates,
         candidatesComputedAt: new Date(),
       });
     }
     outcomes.push({
       participantId: participant.id,
-      cleanedName: cleaned.name,
+      cleanedName,
       companyId,
       playerId: null,
       method: 'queued',

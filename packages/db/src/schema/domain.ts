@@ -485,6 +485,178 @@ export const seedingEntries = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Event plans (the two-division club night, planned before Challonge exists)
+// ---------------------------------------------------------------------------
+
+/**
+ * A club night being planned: a pasted attendance list resolved to players,
+ * split into an Upper and a Lower division against a frozen ranking snapshot,
+ * and striped into four-player pools.
+ *
+ * Deliberately NOT the `tournaments` table. A row there requires a unique,
+ * non-null Challonge slug and stands for a bracket that exists remotely; a plan
+ * is the thing that exists *before* any of the four brackets do, and has to
+ * survive an admin closing the laptop halfway through. The two meet at
+ * `event_plan_brackets.tournament_id`, once a slug is known.
+ */
+export const eventPlanStatusEnum = pgEnum('event_plan_status', [
+  'draft',
+  'roster_frozen',
+  'pools_ready',
+  'underway',
+  'complete',
+  'cancelled',
+]);
+
+export const eventPlans = pgTable('event_plans', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  eventDate: timestamp('event_date', { withTimezone: true }).notNull(),
+  /** Prefix suggested for the four Challonge slugs; purely advisory. */
+  slugPrefix: text('slug_prefix'),
+  status: eventPlanStatusEnum('status').notNull().default('draft'),
+  upperTargetSize: integer('upper_target_size'),
+  /** Locked at 4 for the first version; stored so a later format is a data change. */
+  poolSize: integer('pool_size').notNull().default(4),
+  /**
+   * When the leaderboard ordering was frozen into the entries below. Null while
+   * the plan is a draft. Shown wherever seeds are, so nobody reads a week-old
+   * snapshot as today's board.
+   */
+  rankingSnapshotAt: timestamp('ranking_snapshot_at', { withTimezone: true }),
+  /** Which recompute the snapshot came from, for audit. */
+  rankingRecomputeId: uuid('ranking_recompute_id').references(() => recomputes.id, { onDelete: 'set null' }),
+  createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+  ...timestamps,
+});
+
+export const eventPlanDivisionEnum = pgEnum('event_plan_division', ['upper', 'lower']);
+export const eventPlanDivisionPreferenceEnum = pgEnum('event_plan_division_preference', [
+  'auto',
+  'upper',
+  'lower',
+]);
+/**
+ * How a roster row came to point at a player. Mirrors the sync-time pipeline's
+ * outcomes (`identity/resolve.ts`) plus the two only a human can produce.
+ */
+export const eventPlanResolutionEnum = pgEnum('event_plan_resolution', [
+  'alias',
+  'decision',
+  'structured',
+  'manual',
+  'new',
+  'unresolved',
+]);
+
+export const eventPlanEntries = pgTable(
+  'event_plan_entries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    eventPlanId: uuid('event_plan_id')
+      .notNull()
+      .references(() => eventPlans.id, { onDelete: 'cascade' }),
+    sourceLineNumber: integer('source_line_number').notNull(),
+    /** The pasted line, verbatim. Kept forever: it is the audit trail. */
+    rawInput: text('raw_input').notNull(),
+    cleanedName: text('cleaned_name').notNull(),
+    companyId: uuid('company_id').references(() => companies.id, { onDelete: 'set null' }),
+    /** Null while the plan is a draft; required to freeze. */
+    playerId: uuid('player_id').references(() => players.id, { onDelete: 'set null' }),
+    resolutionMethod: eventPlanResolutionEnum('resolution_method').notNull().default('unresolved'),
+    divisionPreference: eventPlanDivisionPreferenceEnum('division_preference').notNull().default('auto'),
+    /** Null until the freeze computes it. */
+    assignedDivision: eventPlanDivisionEnum('assigned_division'),
+    snapshotRank: integer('snapshot_rank'),
+    snapshotScore: doublePrecision('snapshot_score'),
+    divisionSeed: integer('division_seed'),
+    ...timestamps,
+  },
+  (table) => [
+    // One person cannot enter twice. Partial so any number of rows may still be
+    // unresolved while the roster is being worked through.
+    uniqueIndex('event_plan_entries_player_idx')
+      .on(table.eventPlanId, table.playerId)
+      .where(sql`${table.playerId} is not null`),
+    uniqueIndex('event_plan_entries_seed_idx')
+      .on(table.eventPlanId, table.assignedDivision, table.divisionSeed)
+      .where(sql`${table.assignedDivision} is not null and ${table.divisionSeed} is not null`),
+  ],
+);
+
+export const eventPlanStageEnum = pgEnum('event_plan_stage', ['main', 'consolation']);
+/**
+ * How far a bracket has got in the handoff. `draft` is "we know we need this
+ * one"; `attached` is "an admin pasted a slug back"; `verified` is "we read the
+ * roster back from Challonge and the seeds matched". Nothing here is inferred
+ * from Challonge's own state.
+ */
+export const eventPlanBracketStateEnum = pgEnum('event_plan_bracket_state', [
+  'draft',
+  'attached',
+  'verified',
+  'error',
+]);
+
+export const eventPlanBrackets = pgTable(
+  'event_plan_brackets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    eventPlanId: uuid('event_plan_id')
+      .notNull()
+      .references(() => eventPlans.id, { onDelete: 'cascade' }),
+    division: eventPlanDivisionEnum('division').notNull(),
+    stage: eventPlanStageEnum('stage').notNull(),
+    /** Set once the slug has been registered as a real tournament. */
+    tournamentId: uuid('tournament_id').references(() => tournaments.id, { onDelete: 'set null' }),
+    challongeSlug: text('challonge_slug'),
+    externalState: eventPlanBracketStateEnum('external_state').notNull().default('draft'),
+    lastError: text('last_error'),
+    ...timestamps,
+  },
+  (table) => [uniqueIndex('event_plan_brackets_slot_idx').on(table.eventPlanId, table.division, table.stage)],
+);
+
+export const eventPlanPlacementSourceEnum = pgEnum('event_plan_placement_source', ['manual', 'challonge']);
+
+/**
+ * Confirmed 1-4 order within one pool. Manual for the first event: round-robin
+ * ties resolve under Challonge's own tiebreak settings, and an admin reading the
+ * standings screen is more trustworthy than this app guessing at them.
+ */
+export const eventPlanPoolPlacements = pgTable(
+  'event_plan_pool_placements',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    eventPlanId: uuid('event_plan_id')
+      .notNull()
+      .references(() => eventPlans.id, { onDelete: 'cascade' }),
+    division: eventPlanDivisionEnum('division').notNull(),
+    poolIndex: integer('pool_index').notNull(),
+    playerId: uuid('player_id')
+      .notNull()
+      .references(() => players.id, { onDelete: 'cascade' }),
+    place: integer('place').notNull(),
+    source: eventPlanPlacementSourceEnum('source').notNull().default('manual'),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex('event_plan_placements_player_idx').on(
+      table.eventPlanId,
+      table.division,
+      table.poolIndex,
+      table.playerId,
+    ),
+    uniqueIndex('event_plan_placements_place_idx').on(
+      table.eventPlanId,
+      table.division,
+      table.poolIndex,
+      table.place,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Job log + settings
 // ---------------------------------------------------------------------------
 
