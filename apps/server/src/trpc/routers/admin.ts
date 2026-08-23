@@ -28,6 +28,7 @@ import {
   previewRegistryYaml,
 } from '../../registry/import';
 import { resolveReviewItem, type ReviewResolutionInput } from '../../review/resolve';
+import { eventPlannerRouter } from './eventPlanner';
 import {
   createSeedingRun,
   latestSeedingRun,
@@ -124,6 +125,13 @@ const playerDetailsSchema = z.object({
 });
 
 export const adminRouter = router({
+  /**
+   * The two-division club-night planner. Its own router: the flow has a dozen
+   * procedures of its own and none of them are about the tournaments, players
+   * or settings this file otherwise administers.
+   */
+  eventPlanner: eventPlannerRouter,
+
   // --- tournaments ---
   registerTournament: adminProcedure
     .input(z.object({ slugOrUrl: z.string().min(1), isRookie: z.boolean().optional() }))

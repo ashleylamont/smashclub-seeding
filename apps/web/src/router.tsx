@@ -15,6 +15,7 @@ import { AdminPlayersPage } from './pages/admin/AdminPlayersPage';
 import { AdminCompaniesPage } from './pages/admin/AdminCompaniesPage';
 import { AdminImportPage } from './pages/admin/AdminImportPage';
 import { AdminSeedingPage } from './pages/admin/AdminSeedingPage';
+import { AdminEventPlannerPage } from './pages/admin/eventPlanner/AdminEventPlannerPage';
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
 
 const rootRoute = createRootRoute({ component: Layout });
@@ -127,6 +128,22 @@ const adminSeedingRoute = createRoute({
   component: AdminSeedingPage,
 });
 
+/**
+ * Which plan and which step are in the URL, not in component state. An event is
+ * run off this screen by more than one person — the organiser sets it up on a
+ * laptop, somebody else records pool results on a phone — so a refresh, a
+ * back button or a pasted link has to land on the same place.
+ */
+const adminEventPlannerRoute = createRoute({
+  getParentRoute: () => adminRoute,
+  path: '/event-planner',
+  component: AdminEventPlannerPage,
+  validateSearch: (search: Record<string, unknown>): { plan?: string; step?: string } => ({
+    ...(typeof search.plan === 'string' && search.plan !== '' ? { plan: search.plan } : {}),
+    ...(typeof search.step === 'string' && search.step !== '' ? { step: search.step } : {}),
+  }),
+});
+
 const adminSettingsRoute = createRoute({
   getParentRoute: () => adminRoute,
   path: '/settings',
@@ -150,6 +167,7 @@ const routeTree = rootRoute.addChildren([
     adminCompaniesRoute,
     adminImportRoute,
     adminSeedingRoute,
+    adminEventPlannerRoute,
     adminSettingsRoute,
   ]),
 ]);
