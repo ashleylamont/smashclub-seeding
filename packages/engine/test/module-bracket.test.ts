@@ -109,6 +109,55 @@ describe('extractModuleTournamentName', () => {
 });
 
 describe('extractPublicBracket over a module payload', () => {
+  it('orders each stage by play order and preserves final seeds over pool-local seeds', () => {
+    const first = { id: 5001, display_name: 'Alpha', seed: 8 };
+    const second = { id: 5002, display_name: 'Bravo', seed: 7 };
+    const match = (id: number, identifier: number) => ({
+      id, identifier, state: 'complete', winner_id: 5001, player1: first, player2: second,
+    });
+    const bracket = extractPublicBracket({
+      matches_by_round: { '1': [match(20, 2), match(10, 1)] },
+      groups: [{
+        tournament: { id: 70 },
+        matches_by_round: { '1': [
+          { ...match(40, 2), player1: { ...first, id: 101, participant_id: 5001, seed: 1 } },
+          { ...match(30, 1), player2: { id: 103, participant_id: 5003, display_name: 'Charlie', seed: 2 } },
+        ] },
+      }],
+    });
+    expect(bracket.matches.map((m) => [m.id, m.suggestedPlayOrder])).toEqual([[30, 1], [40, 2], [10, 3], [20, 4]]);
+    expect(bracket.participants.find((p) => p.id === 5001)?.seed).toBe(8);
+    expect(bracket.participants.find((p) => p.id === 5003)?.seed).toBeNull();
+  });
+
+  it('flattens nested group stages and normalises their root participant IDs', () => {
+    const store = JSON.parse(STORE) as Record<string, any>;
+    store.groups = [
+      {
+        tournament: { id: 222 },
+        matches_by_round: {
+          '1': [{
+            id: 9010,
+            identifier: 1,
+            raw_identifier: 'A',
+            round: 1,
+            state: 'complete',
+            underway_at: '2025-08-14T16:00:00.000+10:00',
+            scores: [2, 0],
+            winner_id: 6001,
+            player1: { id: 6001, participant_id: 5001, display_name: 'Alpha { brace } "quote"', seed: 1 },
+            player2: { id: 6002, participant_id: 5002, display_name: 'Bravo', seed: 2 },
+          }],
+        },
+      },
+    ];
+    const bracket = extractPublicBracket(extractModuleBracketPayload(modulePage(JSON.stringify(store))));
+    expect(bracket.matches).toHaveLength(3);
+    expect(bracket.matches[0]).toMatchObject({ id: 9010, stage: 'group', groupId: 222, player1Id: 5001, player2Id: 5002, winnerId: 5001 });
+    expect(bracket.matches[1]!.stage).toBe('final');
+    expect(bracket.participants.map((p) => p.id).sort()).toEqual([5001, 5002, 5003]);
+  });
+
   it('reads participants and matches from the embedded structure', () => {
     const bracket = extractPublicBracket(extractModuleBracketPayload(modulePage(STORE)));
     expect(bracket.matches).toHaveLength(2);
@@ -124,6 +173,23 @@ describe('extractPublicBracket over a module payload', () => {
     // would look like a clean win and forfeits would enter the ratings.
     expect(bracket.matches.find((m) => m.id === 9001)?.scoresCsv).toBe('2-1');
     expect(bracket.matches.find((m) => m.id === 9002)?.scoresCsv).toBe('2--1');
+  });
+
+  it('does not turn a missing winner into player one', () => {
+    const store = JSON.parse(STORE) as Record<string, any>;
+    delete store.matches_by_round['1'][0].winner_id;
+    const bracket = extractPublicBracket(extractModuleBracketPayload(modulePage(JSON.stringify(store))));
+    expect(bracket.matches[0]!.winnerId).toBeNull();
+  });
+
+  it('rejects conflicting duplicate match IDs across stages', () => {
+    const store = JSON.parse(STORE) as Record<string, any>;
+    store.groups = [{ tournament: { id: 222 }, matches_by_round: { '1': [{
+      ...store.matches_by_round['1'][0], id: 9001, winner_id: 5002,
+      player1: { id: 5001, participant_id: 5001, display_name: 'Alpha' },
+      player2: { id: 5002, participant_id: 5002, display_name: 'Bravo' },
+    }] } }];
+    expect(() => extractPublicBracket(extractModuleBracketPayload(modulePage(JSON.stringify(store))))).toThrow(/conflicting entries/i);
   });
 
   it('still prefers scores_csv when the payload provides it', () => {

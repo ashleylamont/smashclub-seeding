@@ -270,6 +270,33 @@ attached, the event date cannot be moved out from under a registered bracket,
 and every one of those is enforced server-side rather than by a disabled
 button.
 
+**Interpreting results (Admin → Tournaments).** Each tournament defaults to
+**Auto**: import and count both group and final stages when present, or the
+normal bracket for a single-stage event. Choose **Final stage only** when a
+bracket contains group results that were only used for setup or advancement.
+The setting is available before registration and on existing tournaments;
+changing it refreshes the public bracket and queues a rating recompute. Group
+results remain visible as ignored, and individual match exclusions are preserved.
+Byes and forfeits are still excluded in either mode. Previously imported
+two-stage brackets need a re-sync to recover their pool matches and repair
+missing player links. Keep all brackets from one night on the same event date.
+
+**Event results and recaps.** The tournaments list groups brackets by their shared
+UTC event date; undated brackets remain separate. Event results use linked plan
+roles where available, otherwise explicit division/main/consolation names.
+Upper and Lower standings stay separate. Championship finishers come first,
+followed by consolation finishers, with tied places preserved. Results use the
+actual imported participants and matches, so night-of roster changes do not
+require rewriting the saved seeding plan. Conflicting bracket membership or
+unavailable placements are shown without inventing an order. W–L includes
+eligible pools and finals once each and excludes byes and setup stages.
+
+Recaps share the event title and link, count linked entrants once across brackets,
+and select at most six highlights with repetition and per-player limits. Runbacks
+can surface alongside upsets, breakthroughs and other notable moments; reseeded
+two-stage brackets do not produce misleading seed-versus-finish claims. Share
+images label each bracket's champion separately.
+
 Not in this version, on purpose: creating the brackets through the Challonge
 API. The v2.1 write adapter is additive and comes after a disposable
 rehearsal proves Challonge's seed-to-group allocation matches the preview; the

@@ -6,6 +6,44 @@ const MODULE_HTML =
   '<script>window._initialStoreState[\'TournamentStore\'] = {"tournament":{"id":7,"state":"complete"},"matches_by_round":{}};</script>';
 
 describe('ChallongeClient public bracket requests', () => {
+  it('supplements two-stage API imports with pools while retaining API placements', async () => {
+    const rootPlayer = { id: 1, display_name: 'Alpha', seed: 1 };
+    const opponent = { id: 2, display_name: 'Bravo', seed: 2 };
+    const final = { id: 20, state: 'complete', winner_id: 1, player1: rootPlayer, player2: opponent, scores: [2, 1] };
+    const group = {
+      id: 10, state: 'complete', winner_id: 102, scores: [1, 2],
+      player1: { ...rootPlayer, id: 101, participant_id: 1 },
+      player2: { ...opponent, id: 102, participant_id: 2 },
+    };
+    const store = {
+      tournament: { id: 7, state: 'complete' },
+      matches_by_round: { '1': [final] },
+      groups: [{ tournament: { id: 70 }, matches_by_round: { '1': [group] } }],
+    };
+    const requests: string[] = [];
+    const client = new ChallongeClient({
+      apiKey: 'test-key', username: 'test-user', minRequestSpacingMs: 0,
+      fetchImpl: async (input) => {
+        const url = new URL(String(input));
+        requests.push(url.pathname);
+        if (url.pathname.endsWith('/module')) {
+          return new Response(`<script>window._initialStoreState['TournamentStore'] = ${JSON.stringify(store)};</script>`);
+        }
+        if (url.pathname.endsWith('/participants.json')) {
+          return Response.json([{ participant: { id: 1, name: 'Alpha API', seed: 1, final_rank: 1 } }]);
+        }
+        if (url.pathname.endsWith('/matches.json')) return Response.json([]);
+        return Response.json({ tournament: { id: 7, name: 'Example', group_stage_enabled: true, state: 'complete' } });
+      },
+    });
+    const bundle = await client.fetchTournamentBundle('example');
+    expect(requests).toContain('/example/module');
+    expect(bundle.matches.map((match) => match.stage)).toEqual(['group', 'final']);
+    expect(bundle.matches[0]).toMatchObject({ player1Id: 1, player2Id: 2, winnerId: 2 });
+    expect(bundle.participants.find((p) => p.id === 1)).toMatchObject({ displayName: 'Alpha API', finalRank: 1 });
+    expect(bundle.participants.find((p) => p.id === 2)).toBeDefined();
+  });
+
   /**
    * Regression guard. The client sends `Accept: application/json` for the API,
    * but /module is an HTML page — asking Rails for a JSON representation it does

@@ -2,10 +2,9 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { trpc } from '../lib/trpc';
-import type { TournamentListItem } from '../lib/apiTypes';
-import { formatDate, timeAgo } from '../lib/format';
+import { formatDate } from '../lib/format';
 import { syncStateLabel } from '../lib/labels';
-import { bucketFor } from '../lib/tournamentBuckets';
+import { groupTournamentsByEvent, type TournamentEventGroup } from '../lib/eventGrouping';
 import { useNow } from '../lib/useNow';
 import './Tournaments.css';
 
@@ -22,14 +21,15 @@ export function TournamentsPage() {
 
   const groups = useMemo(() => {
     const all = query.data ?? [];
-    const live = all.filter((t) => bucketFor(t, now) === 'live');
-    const upcoming = all
-      .filter((t) => bucketFor(t, now) === 'upcoming')
+    const events = groupTournamentsByEvent(all, now);
+    const live = events.filter((t) => t.bucket === 'live');
+    const upcoming = events
+      .filter((t) => t.bucket === 'upcoming')
       .sort((a, b) => (a.eventDate ?? '9999').localeCompare(b.eventDate ?? '9999'));
     // Newest first, and stated as such on the page — so it is sorted here
     // rather than inherited from whatever order the API happened to return.
-    const completed = all
-      .filter((t) => bucketFor(t, now) === 'completed')
+    const completed = events
+      .filter((t) => t.bucket === 'completed')
       .sort((a, b) => (b.eventDate ?? '').localeCompare(a.eventDate ?? ''));
     return { live, upcoming, completed };
   }, [query.data, now]);
@@ -51,17 +51,17 @@ export function TournamentsPage() {
       <div className="page-header">
         <h1>Tournaments</h1>
         <p className="muted page-header-note">
-          Club nights, newest results first. Ratings count every set in these brackets.
+          Club nights, newest results first. Ratings count eligible played sets in these brackets.
         </p>
       </div>
-      {groups.live.length > 0 && <TournamentGroup title="Live" items={groups.live} live />}
+      {groups.live.length > 0 && <TournamentGroup title="Live" items={groups.live} />}
       {groups.upcoming.length > 0 && <TournamentGroup title="Upcoming" items={groups.upcoming} />}
       {groups.completed.length > 0 && <TournamentGroup title="Completed" items={groups.completed} />}
     </div>
   );
 }
 
-function TournamentGroup({ title, items, live }: { title: string; items: TournamentListItem[]; live?: boolean }) {
+function TournamentGroup({ title, items }: { title: string; items: TournamentEventGroup[] }) {
   return (
     <div className="section">
       {/* The count belongs on the heading: three groups of unknown size, one of
@@ -70,34 +70,26 @@ function TournamentGroup({ title, items, live }: { title: string; items: Tournam
         {title} <span className="group-count num">{items.length}</span>
       </h2>
       <div className="tournament-list">
-        {items.map((t) => {
-          const sync = syncStateLabel(t.syncState);
-          return (
-            <Link key={t.id} to="/tournaments/$slug" params={{ slug: t.slug }} className="tournament-row">
-              <div className="tournament-row-main">
-                <span className="tournament-name">{t.name}</span>
-                <span className="tournament-tags">
-                  {live && <span className="live-badge">LIVE</span>}
-                  {t.isRookie && (
-                    <span className="chip chip-warning" title="A beginners' bracket — sets in it are weighted differently">
-                      rookie
-                    </span>
-                  )}
-                </span>
+          {items.map((event) => {
+            const sync = event.items.every((t) => t.syncState === 'synced') ? syncStateLabel('synced') : syncStateLabel('registered');
+            return (
+              <div key={event.key} className="tournament-event-card">
+                <div className="tournament-row-main">
+                  <Link to="/events/$slug" params={{ slug: event.slug }} className="tournament-name">{event.title}</Link>
+                  <span className="tournament-tags">
+                    {event.live && <span className="live-badge">LIVE</span>}
+                    {event.items.some((t) => t.isRookie) && <span className="chip chip-warning">rookie bracket</span>}
+                  </span>
+                </div>
+                <div className="tournament-row-meta"><span>{formatDate(event.eventDate)}</span><span className="muted">{sync.label}</span></div>
+                <div className="event-brackets">
+                  {event.items.map((t) => <Link key={t.id} to="/tournaments/$slug" params={{ slug: t.slug }} className="event-bracket-link">{t.name}</Link>)}
+                  <Link to="/events/$slug" params={{ slug: event.slug }} className="tournament-recap-link">Event overview →</Link>
+                  <Link to="/recaps/$slug" params={{ slug: event.slug }} className="tournament-recap-link">Recap →</Link>
+                </div>
               </div>
-              <div className="tournament-row-meta">
-                <span>{formatDate(t.eventDate)}</span>
-                {/* `sync: registered` was database vocabulary on a public page.
-                    The state is worth showing — it says whether these results
-                    have reached the ratings — but only in words. */}
-                <span className="muted" title={sync.hint}>
-                  {sync.label}
-                  {t.lastSyncedAt ? ` · ${timeAgo(t.lastSyncedAt)}` : ''}
-                </span>
-              </div>
-            </Link>
-          );
-        })}
+            );
+          })}
       </div>
     </div>
   );

@@ -100,7 +100,8 @@ export async function matchTournamentParticipants(db: Db, tournamentId: string):
     });
   }
 
-  await backfillSetPlayers(db, tournamentId);
+  // The sync caller backfills every set after resolution, even when this
+  // function had no unresolved participants, and counts those repairs.
   return outcomes;
 }
 
@@ -125,7 +126,7 @@ export async function ensureAlias(
 }
 
 /** Denormalise participants' resolved player IDs onto their sets. */
-export async function backfillSetPlayers(db: Db, tournamentId: string): Promise<void> {
+export async function backfillSetPlayers(db: Db, tournamentId: string): Promise<string[]> {
   const participants = await db
     .select({ id: tournamentParticipants.id, playerId: tournamentParticipants.playerId })
     .from(tournamentParticipants)
@@ -143,13 +144,16 @@ export async function backfillSetPlayers(db: Db, tournamentId: string): Promise<
     .from(sets)
     .where(eq(sets.tournamentId, tournamentId));
 
+  const changedIds: string[] = [];
   for (const row of setRows) {
     const p1 = row.p1ParticipantId ? (byId.get(row.p1ParticipantId) ?? null) : null;
     const p2 = row.p2ParticipantId ? (byId.get(row.p2ParticipantId) ?? null) : null;
     if (p1 !== row.p1PlayerId || p2 !== row.p2PlayerId) {
       await db.update(sets).set({ p1PlayerId: p1, p2PlayerId: p2, updatedAt: new Date() }).where(eq(sets.id, row.id));
+      changedIds.push(row.id);
     }
   }
+  return changedIds;
 }
 
 /** Re-run backfill for every tournament a player appears in (post-merge). */

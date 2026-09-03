@@ -4,7 +4,7 @@ import { sets, syncJobs, tournamentParticipants, tournaments } from '@smashclub/
 import { scoresIndicateUnplayed, type ChallongeMatch } from '@smashclub/engine';
 import type { ChallongeClient } from '../challonge/client';
 import { recomputePendingCandidates } from '../identity/candidates';
-import { matchTournamentParticipants } from '../identity/matching';
+import { backfillSetPlayers, matchTournamentParticipants } from '../identity/matching';
 import { liveBus } from '../live/bus';
 import { markDraftRunsStale } from '../seeding/seeding';
 
@@ -131,7 +131,7 @@ export async function syncTournament(
 
     // --- sets ---
     let setsUpserted = 0;
-    let setsChanged = 0;
+    const changedSetIds = new Set<string>();
     for (const match of bundle.matches) {
       const values = buildSetValues(tournamentId, match, participantIdByChallongeId);
       const existing = await db
@@ -140,13 +140,16 @@ export async function syncTournament(
         .where(and(eq(sets.tournamentId, tournamentId), eq(sets.challongeMatchId, match.id)));
       const current = existing[0];
       if (!current) {
-        await db.insert(sets).values(values);
+        const [inserted] = await db.insert(sets).values(values).returning({ id: sets.id });
         setsUpserted += 1;
-        setsChanged += 1;
+        changedSetIds.add(inserted!.id);
         continue;
       }
       const changed =
         current.state !== values.state ||
+        current.p1ParticipantId !== values.p1ParticipantId ||
+        current.p2ParticipantId !== values.p2ParticipantId ||
+        current.resultStage !== values.resultStage ||
         current.winner !== values.winner ||
         current.scoresCsv !== values.scoresCsv ||
         current.round !== values.round ||
@@ -172,13 +175,17 @@ export async function syncTournament(
             updatedAt: new Date(),
           })
           .where(eq(sets.id, current.id));
-        setsChanged += 1;
+        changedSetIds.add(current.id);
       }
       setsUpserted += 1;
     }
 
     // --- identity resolution + denormalisation ---
     const outcomes = await matchTournamentParticipants(db, tournamentId);
+    // A later stage can introduce sets after every participant is resolved.
+    // Identity matching then has nothing to do, but those sets still need links.
+    for (const id of await backfillSetPlayers(db, tournamentId)) changedSetIds.add(id);
+    const setsChanged = changedSetIds.size;
     const queuedForReview = outcomes.filter((o) => o.method === 'queued').length;
     // Refresh the older items' candidate snapshots too, but only when this sync
     // actually had identities to resolve — a live poll of a settled bracket
@@ -257,6 +264,7 @@ function buildSetValues(
   return {
     tournamentId,
     challongeMatchId: match.id,
+    resultStage: match.stage ?? 'final',
     round: match.round,
     suggestedPlayOrder: match.suggestedPlayOrder,
     identifier: match.identifier,

@@ -52,6 +52,7 @@ export function AdminTournamentsPage() {
               <thead>
                 <tr>
                   <th>Name</th>
+                  <th>Results</th>
                   <th>Event date</th>
                   <th>Rookie</th>
                   <th>State</th>
@@ -127,17 +128,20 @@ export function AdminTournamentsPage() {
 function RegisterForm({ onDone }: { onDone: () => void }) {
   const [slugOrUrl, setSlugOrUrl] = useState('');
   const [isRookie, setIsRookie] = useState(false);
+  const [resultsMode, setResultsMode] = useState<'auto' | 'final_stage_only'>('auto');
 
   const register = useMutation({
     mutationFn: async () => {
-      const { tournamentId } = await trpc.admin.registerTournament.mutate({ slugOrUrl, isRookie });
+      const { tournamentId } = await trpc.admin.registerTournament.mutate({ slugOrUrl, isRookie, resultsMode });
       await trpc.admin.syncNow.mutate({ tournamentId });
     },
     onSuccess: () => {
       setSlugOrUrl('');
       setIsRookie(false);
+      setResultsMode('auto');
       onDone();
     },
+    onError: onDone,
   });
 
   return (
@@ -154,6 +158,13 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
           <input type="checkbox" checked={isRookie} onChange={(e) => setIsRookie(e.target.checked)} />
           Rookie bracket
         </label>
+        <label className="form-field">
+          <span className="form-label">Results</span>
+          <select className="select" value={resultsMode} onChange={(e) => setResultsMode(e.target.value as typeof resultsMode)}>
+            <option value="auto">Auto (pools + finals when present)</option>
+            <option value="final_stage_only">Final stage only</option>
+          </select>
+        </label>
         <button
           type="button"
           className="btn btn-primary"
@@ -163,6 +174,9 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
           {register.isPending ? 'Registering…' : 'Register + sync'}
         </button>
       </div>
+      <p className="muted">
+        Auto counts pools and finals when present. Use Final stage only when recorded groups were only used for setup.
+      </p>
       {register.isError && <p className="error-text">{register.error.message}</p>}
     </div>
   );
@@ -193,12 +207,14 @@ function TournamentRow({
     onSuccess: onChanged,
   });
   const update = useMutation({
-    mutationFn: (patch: { isRookie?: boolean; eventDate?: string | null }) =>
+    mutationFn: (patch: { isRookie?: boolean; resultsMode?: 'auto' | 'final_stage_only'; eventDate?: string | null }) =>
       trpc.admin.updateTournament.mutate({ tournamentId: tournament.id, ...patch }),
     onSuccess: () => {
       setEditingDate(false);
       onChanged();
     },
+    // The mode is saved even if the following refresh fails.
+    onError: onChanged,
   });
   // Live monitoring is opt-in and time-boxed: it is never inferred from
   // Challonge's state, which stays "underway" on abandoned brackets forever.
@@ -237,6 +253,18 @@ function TournamentRow({
           {tournament.name}
         </Link>
         {error && <div className="error-text">{error.message}</div>}
+      </td>
+      <td>
+        <select
+          className="select"
+          aria-label={`Results mode for ${tournament.name}`}
+          value={tournament.resultsMode}
+          disabled={update.isPending}
+          onChange={(e) => update.mutate({ resultsMode: e.target.value as 'auto' | 'final_stage_only' })}
+        >
+          <option value="auto">Auto</option>
+          <option value="final_stage_only">Final stage only</option>
+        </select>
       </td>
       <td>
         {editingDate ? (

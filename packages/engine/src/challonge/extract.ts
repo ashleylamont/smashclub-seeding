@@ -4,6 +4,8 @@
  * testable against recorded payload fixtures.
  */
 
+import { compareSetsInBracket } from '../setOrder';
+
 export class ChallongePayloadError extends Error {}
 
 export interface ChallongeTournament {
@@ -15,6 +17,7 @@ export interface ChallongeTournament {
   completedAt: string | null;
   updatedAt: string | null;
   tournamentType: string | null;
+  groupStageEnabled?: boolean;
 }
 
 export interface ChallongeParticipant {
@@ -36,6 +39,8 @@ export interface ChallongeMatch {
   scoresCsv: string | null;
   completedAt: string | null;
   updatedAt: string | null;
+  stage?: 'group' | 'final';
+  groupId?: number | null;
 }
 
 function asRecord(value: unknown, description: string): Record<string, unknown> {
@@ -83,6 +88,7 @@ export function extractTournament(payload: unknown): ChallongeTournament {
     completedAt: str(t.completed_at),
     updatedAt: str(t.updated_at),
     tournamentType: str(t.tournament_type),
+    groupStageEnabled: t.group_stage_enabled === true,
   };
 }
 
@@ -128,6 +134,8 @@ export function extractMatches(payload: unknown): ChallongeMatch[] {
       scoresCsv: str(m.scores_csv),
       completedAt: str(m.completed_at),
       updatedAt: str(m.updated_at),
+      stage: m.group_id != null || m.is_group_match === true ? 'group' : 'final',
+      groupId: num(m.group_id),
     };
   });
 }
@@ -268,30 +276,113 @@ export function extractPublicBracket(payload: unknown): PublicBracket {
     throw new ChallongePayloadError('Public Challonge bracket JSON did not include matches_by_round data.');
   }
 
-  const rawMatches: Record<string, unknown>[] = [];
+  const rawMatches: Array<{ value: Record<string, unknown>; stage: 'group' | 'final'; groupId: number | null }> = [];
   for (const roundMatches of Object.values(byRound as Record<string, unknown>)) {
     if (Array.isArray(roundMatches)) {
       for (const m of roundMatches) {
         if (typeof m === 'object' && m !== null && !Array.isArray(m)) {
-          rawMatches.push(m as Record<string, unknown>);
+          const match = m as Record<string, unknown>;
+          rawMatches.push({
+            value: match,
+            stage: match.is_group_match === true || num(match.group_id) !== null ? 'group' : 'final',
+            groupId: num(match.group_id),
+          });
         }
       }
     }
   }
 
+  // Two-stage module payloads keep group rounds under nested group stores.
+  // Flatten those rounds before extracting so the group results are retained.
+  const groups = record.groups;
+  if (Array.isArray(groups)) {
+    groups.forEach((group, index) => {
+      if (typeof group !== 'object' || group === null || Array.isArray(group)) return;
+      const g = group as Record<string, unknown>;
+      const gt = typeof g.tournament === 'object' && g.tournament !== null ? (g.tournament as Record<string, unknown>) : {};
+      const groupId = num(gt.id) ?? index;
+      const rounds = g.matches_by_round;
+      if (typeof rounds !== 'object' || rounds === null || Array.isArray(rounds)) return;
+      for (const roundMatches of Object.values(rounds as Record<string, unknown>)) {
+        if (!Array.isArray(roundMatches)) continue;
+        for (const m of roundMatches) {
+          if (typeof m === 'object' && m !== null && !Array.isArray(m)) {
+            rawMatches.push({ value: m as Record<string, unknown>, stage: 'group', groupId });
+          }
+        }
+      }
+    });
+  }
+
+  const byMatchId = new Map<number, { stage: 'group' | 'final'; value: Record<string, unknown> }>();
+  const uniqueMatches: typeof rawMatches = [];
+  for (const entry of rawMatches) {
+    const id = num(entry.value.id);
+    if (id === null) {
+      uniqueMatches.push(entry);
+      continue;
+    }
+    const prior = byMatchId.get(id);
+    if (prior) {
+      const signature = (m: Record<string, unknown>) => JSON.stringify([
+        m.state, m.round, m.winner_id, m.scores_csv ?? m.scores,
+        (m.player1 as Record<string, unknown> | undefined)?.id,
+        (m.player2 as Record<string, unknown> | undefined)?.id,
+      ]);
+      if (prior.stage !== entry.stage || signature(prior.value) !== signature(entry.value)) {
+        throw new ChallongePayloadError(`Public bracket contains conflicting entries for match ${id}.`);
+      }
+      continue;
+    }
+    byMatchId.set(id, entry);
+    uniqueMatches.push(entry);
+  }
+  const hasGroups = uniqueMatches.some((entry) => entry.stage === 'group');
+  // Both stages restart their numbering. Order within each group/bracket using
+  // the same rules as replay, then assign one continuous order across stages.
+  if (hasGroups) {
+    const orderable = (m: Record<string, unknown>) => ({
+      id: String(m.id),
+      suggestedPlayOrder: num(m.suggested_play_order) ?? num(m.identifier),
+      completedAt: str(m.completed_at) ?? str(m.underway_at),
+      challongeMatchId: num(m.id),
+    });
+    uniqueMatches.sort((a, b) =>
+      Number(a.stage === 'final') - Number(b.stage === 'final') ||
+      (a.stage === 'group' ? (a.groupId ?? 0) - (b.groupId ?? 0) : 0) ||
+      compareSetsInBracket(orderable(a.value), orderable(b.value)),
+    );
+  }
+
   const participantsById = new Map<number, ChallongeParticipant>();
-  const matches: ChallongeMatch[] = [];
-  const completedDates: string[] = [];
-  for (const m of rawMatches) {
+  // Final-stage metadata contains the tournament seed. Group-stage seeds are
+  // pool-local positions and must not overwrite it (or create it for a group-only entrant).
+  const participantEntries = [...uniqueMatches].sort(
+    (a, b) => Number(a.stage === 'group') - Number(b.stage === 'group'),
+  );
+  for (const { value: m, stage } of participantEntries) {
     const player1 = typeof m.player1 === 'object' && m.player1 !== null ? (m.player1 as Record<string, unknown>) : {};
     const player2 = typeof m.player2 === 'object' && m.player2 !== null ? (m.player2 as Record<string, unknown>) : {};
     for (const p of [player1, player2]) {
       const pid = num(p.id);
       const displayName = (str(p.display_name) ?? str(p.name) ?? '').trim();
-      if (pid !== null && displayName && !participantsById.has(pid)) {
-        participantsById.set(pid, { id: pid, displayName, seed: num(p.seed), finalRank: null });
+      const participantId = num(p.participant_id) ?? pid;
+      if (participantId !== null && displayName && !participantsById.has(participantId)) {
+        participantsById.set(participantId, {
+          id: participantId,
+          displayName,
+          seed: stage === 'group' ? null : num(p.seed),
+          finalRank: null,
+        });
       }
     }
+  }
+
+  const matches: ChallongeMatch[] = [];
+  const completedDates: string[] = [];
+  for (const [orderIndex, { value: m, stage, groupId }] of uniqueMatches.entries()) {
+    const player1 = typeof m.player1 === 'object' && m.player1 !== null ? (m.player1 as Record<string, unknown>) : {};
+    const player2 = typeof m.player2 === 'object' && m.player2 !== null ? (m.player2 as Record<string, unknown>) : {};
     const id = num(m.id);
     if (id === null) continue;
     const state = str(m.state) ?? 'unknown';
@@ -313,14 +404,23 @@ export function extractPublicBracket(payload: unknown): PublicBracket {
        * Preferring a real `suggested_play_order` keeps the API path
        * authoritative where it is available; this only fills the gap.
        */
-      suggestedPlayOrder: num(m.suggested_play_order) ?? num(m.identifier),
       identifier: identifierOf(m),
-      player1Id: num(player1.id),
-      player2Id: num(player2.id),
-      winnerId: num(m.winner_id),
+      player1Id: num(player1.participant_id) ?? num(player1.id),
+      player2Id: num(player2.participant_id) ?? num(player2.id),
+      winnerId:
+        num(m.winner_id) !== null &&
+        (num(m.winner_id) === num(player1.id) || num(m.winner_id) === num(player1.participant_id))
+          ? num(player1.participant_id) ?? num(player1.id)
+          : num(m.winner_id) !== null &&
+              (num(m.winner_id) === num(player2.id) || num(m.winner_id) === num(player2.participant_id))
+            ? num(player2.participant_id) ?? num(player2.id)
+            : num(m.winner_id),
       scoresCsv: str(m.scores_csv) ?? scoresCsvFrom(m.scores),
       completedAt: str(m.completed_at) ?? str(m.underway_at),
       updatedAt: str(m.updated_at),
+      suggestedPlayOrder: hasGroups ? orderIndex + 1 : num(m.suggested_play_order) ?? num(m.identifier),
+      stage,
+      groupId,
     });
   }
 

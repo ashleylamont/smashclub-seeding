@@ -15,6 +15,8 @@ export interface FixtureMatch {
   round?: number;
   order?: number;
   completedAt?: string;
+  /** Optional logical stage for two-stage event result policy tests. */
+  stage?: 'group' | 'final';
 }
 
 export interface FixtureTournament {
@@ -82,6 +84,7 @@ export function apiPayloads(fixture: FixtureTournament): {
         scores_csv: m.scores === undefined ? '2-1' : m.scores,
         completed_at: m.completedAt ?? defaultMatchTime(fixture),
         updated_at: m.completedAt ?? defaultMatchTime(fixture),
+        ...(m.stage === 'group' ? { group_id: 1, is_group_match: true } : {}),
       },
     })),
   };
@@ -112,9 +115,10 @@ function modulePage(fixture: FixtureTournament): string {
     return p ? { id: p.id, display_name: p.name, seed: p.seed ?? null } : null;
   };
   const matchesByRound: Record<string, unknown[]> = {};
+  const groupMatchesByRound: Record<string, unknown[]> = {};
   for (const m of fixture.matches) {
     const round = String(m.round ?? 1);
-    (matchesByRound[round] ??= []).push({
+    const payload = {
       id: m.id,
       round: m.round ?? 1,
       state: m.state ?? 'complete',
@@ -129,7 +133,11 @@ function modulePage(fixture: FixtureTournament): string {
       underway_at: m.completedAt ?? defaultMatchTime(fixture),
       player1: player(m.p1),
       player2: player(m.p2),
-    });
+    };
+    // Challonge exposes two-stage group results below nested group stores;
+    // the top-level matches_by_round contains only final-stage matches.
+    (m.stage === 'group' ? groupMatchesByRound : matchesByRound)[round] ??= [];
+    (m.stage === 'group' ? groupMatchesByRound : matchesByRound)[round]!.push(payload);
   }
   const store = {
     requested_plotter: 'DoubleEliminationBracketPlotter',
@@ -139,6 +147,10 @@ function modulePage(fixture: FixtureTournament): string {
       tournament_type: 'double elimination',
     },
     matches_by_round: matchesByRound,
+    groups:
+      Object.keys(groupMatchesByRound).length > 0
+        ? [{ tournament: { id: 9001 }, matches_by_round: groupMatchesByRound }]
+        : [],
   };
   return [
     `<!DOCTYPE html><html><head><title>${fixture.name ?? fixture.slug} - Challonge</title></head><body>`,

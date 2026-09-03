@@ -22,7 +22,7 @@ import {
   type RecapSet,
   type RecapTournament,
 } from '@smashclub/engine';
-import { publicParticipantName } from '@smashclub/shared';
+import { compareEventBrackets, eventCanonicalSlug, eventNameOf, includesResultStage, publicParticipantName, scoresIndicateUnplayed } from '@smashclub/shared';
 import { latestRecomputeId } from '../recompute/recompute';
 import { charactersByPlayer } from '../players/characters';
 
@@ -51,10 +51,18 @@ export interface LoadedRecapFact extends RankedRecapFact {
   detail: string;
 }
 
-export interface LoadedRecap extends Omit<RecapResult, 'tournaments' | 'facts'> {
+export interface LoadedRecap extends Omit<RecapResult, 'tournaments' | 'facts' | 'highlights'> {
   /** The night's brackets, main first, each addressable by its own slug. */
   tournaments: Array<RecapTournament & { slug: string }>;
+  name: string;
   facts: LoadedRecapFact[];
+  highlights: LoadedRecapFact[];
+  coverage: {
+    unsyncedBrackets: number;
+    unresolvedEntrants: number;
+    unlinkedPlayedSets: number;
+    ignoredGroupSets: number;
+  };
   /** Canonical slug for this night — the main bracket's. */
   slug: string;
 }
@@ -76,6 +84,9 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
       eventDate: tournaments.eventDate,
       isRookie: tournaments.isRookie,
       challongeState: tournaments.challongeState,
+      resultsMode: tournaments.resultsMode,
+      syncState: tournaments.syncState,
+      raw: tournaments.raw,
     })
     .from(tournaments)
     .where(isNotNull(tournaments.eventDate))
@@ -95,6 +106,7 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
           eventDate: t.eventDate!.toISOString(),
           isRookie: t.isRookie,
           challongeState: t.challongeState,
+          tournamentType: tournamentTypeOf(t.raw),
         }))
       : [
           {
@@ -103,9 +115,12 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
             eventDate: anchor.eventDate?.toISOString() ?? null,
             isRookie: anchor.isRookie,
             challongeState: anchor.challongeState,
+            tournamentType: tournamentTypeOf(anchor.raw),
           },
         ];
   const nightIds = nightTournaments.map((t) => t.id);
+  const modes = new Map(nightRows.map((t) => [t.id, t.resultsMode]));
+  modes.set(anchor.id, anchor.resultsMode);
   const slugById = new Map(nightRows.map((t) => [t.id, t.slug]));
   slugById.set(anchor.id, anchor.challongeSlug);
 
@@ -156,20 +171,23 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
     // tie-break is this array's index, so this ordering is load-bearing.
     .orderBy(asc(sets.suggestedPlayOrder), asc(sets.completedAt), asc(sets.challongeMatchId));
 
-  const recapSets: RecapSet[] = setRows.map((row) => ({
-    id: row.id,
-    tournamentId: row.tournamentId,
-    round: row.round,
-    suggestedPlayOrder: row.suggestedPlayOrder,
-    identifier: row.identifier,
-    state: row.state,
-    p1ParticipantId: row.p1ParticipantId,
-    p2ParticipantId: row.p2ParticipantId,
-    winner: row.winner === 1 || row.winner === 2 ? row.winner : null,
-    scoresCsv: row.scoresCsv,
-    excludedFromRatings: row.excludedFromRatings,
-    completedAt: row.completedAt?.toISOString() ?? null,
-  }));
+  const recapSets: RecapSet[] = setRows
+    .filter((row) => includesResultStage(modes.get(row.tournamentId) ?? 'auto', row.resultStage))
+    .map((row) => ({
+      id: row.id,
+      tournamentId: row.tournamentId,
+      resultStage: row.resultStage,
+      round: row.round,
+      suggestedPlayOrder: row.suggestedPlayOrder,
+      identifier: row.identifier,
+      state: row.state,
+      p1ParticipantId: row.p1ParticipantId,
+      p2ParticipantId: row.p2ParticipantId,
+      winner: row.winner === 1 || row.winner === 2 ? row.winner : null,
+      scoresCsv: row.scoresCsv,
+      excludedFromRatings: row.excludedFromRatings,
+      completedAt: row.completedAt?.toISOString() ?? null,
+    }));
 
   // --- ratings (optional) -------------------------------------------------
 
@@ -201,12 +219,24 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
 
   // The engine orders brackets main-first, so the night's canonical slug — the
   // one a shared link should carry — is the first one back.
-  const withSlugs = result.tournaments.map((t) => ({ ...t, slug: slugById.get(t.id) ?? slug }));
+  const withSlugs = result.tournaments.map((t) => ({ ...t, slug: slugById.get(t.id) ?? slug })).sort(compareEventBrackets);
   return {
     ...result,
+    name: eventNameOf(withSlugs.map(t => t.name)),
     tournaments: withSlugs,
     facts: result.facts.map((entry) => ({ ...entry, ...formatFact(entry.fact) })),
-    slug: withSlugs[0]?.slug ?? slug,
+    highlights: result.highlights.map((entry) => ({ ...entry, ...formatFact(entry.fact) })),
+    coverage: {
+      unsyncedBrackets: (nightRows.length ? nightRows : [anchor]).filter((t) => t.syncState !== 'synced').length,
+      unresolvedEntrants: participants.filter((p) => p.playerId === null).length,
+      unlinkedPlayedSets: setRows.filter((s) =>
+        s.state === 'complete' && (s.winner === 1 || s.winner === 2) && !s.excludedFromRatings && !scoresIndicateUnplayed(s.scoresCsv) &&
+        includesResultStage(modes.get(s.tournamentId) ?? 'auto', s.resultStage) &&
+        (!s.p1PlayerId || !s.p2PlayerId),
+      ).length,
+      ignoredGroupSets: setRows.filter((s) => !includesResultStage(modes.get(s.tournamentId) ?? 'auto', s.resultStage)).length,
+    },
+    slug: eventCanonicalSlug(withSlugs, slug),
   };
 }
 
@@ -379,4 +409,11 @@ async function loadPriorTurnouts(
     byNight.set(key, seen);
   }
   return [...byNight].map(([eventKey, seen]) => ({ eventKey, entrants: seen.size }));
+}
+
+function tournamentTypeOf(raw: unknown): string | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const value = raw as { tournamentType?: unknown; tournament_type?: unknown };
+  const type = value.tournamentType ?? value.tournament_type;
+  return typeof type === 'string' ? type : null;
 }

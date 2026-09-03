@@ -134,7 +134,13 @@ export const adminRouter = router({
 
   // --- tournaments ---
   registerTournament: adminProcedure
-    .input(z.object({ slugOrUrl: z.string().min(1), isRookie: z.boolean().optional() }))
+    .input(
+      z.object({
+        slugOrUrl: z.string().min(1),
+        isRookie: z.boolean().optional(),
+        resultsMode: z.enum(['auto', 'final_stage_only']).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const slug = normalizeTournamentId(input.slugOrUrl);
       const [row] = await ctx.db
@@ -143,6 +149,7 @@ export const adminRouter = router({
           challongeSlug: slug,
           name: slug,
           isRookie: input.isRookie ?? slug.toLowerCase().includes('rookie'),
+          resultsMode: input.resultsMode ?? 'auto',
         })
         .onConflictDoNothing()
         .returning({ id: tournaments.id });
@@ -214,18 +221,45 @@ export const adminRouter = router({
       z.object({
         tournamentId: z.uuid(),
         isRookie: z.boolean().optional(),
+        resultsMode: z.enum(['auto', 'final_stage_only']).optional(),
         eventDate: z.iso.datetime().nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const [before] = await ctx.db
+        .select({ resultsMode: tournaments.resultsMode })
+        .from(tournaments)
+        .where(eq(tournaments.id, input.tournamentId));
+      if (!before) throw new TRPCError({ code: 'NOT_FOUND', message: 'Tournament not found.' });
       const patch: Record<string, unknown> = { updatedAt: new Date() };
       if (input.isRookie !== undefined) patch.isRookie = input.isRookie;
+      if (input.resultsMode !== undefined) patch.resultsMode = input.resultsMode;
       if (input.eventDate !== undefined) {
         patch.eventDate = input.eventDate ? new Date(input.eventDate) : null;
         patch.eventDateManual = input.eventDate !== null;
       }
       await ctx.db.update(tournaments).set(patch).where(eq(tournaments.id, input.tournamentId));
-      ctx.recomputeTrigger.request();
+      // A mode change must re-read the bracket so older imports gain stage
+      // metadata before the recompute is queued. The sync remains idempotent.
+      if (input.resultsMode !== undefined && input.resultsMode !== before?.resultsMode) {
+        try {
+          await syncTournament(ctx.db, ctx.challonge, input.tournamentId, { source: 'public' });
+        } catch (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message:
+              'Results setting saved, but refreshing Challonge failed. Existing results will be recalculated; retry Sync.',
+            cause: error,
+          });
+        } finally {
+          // The setting itself is durable even when Challonge is unavailable;
+          // recalculate existing imported rows regardless, and preserve the
+          // sync error for the caller to display.
+          ctx.recomputeTrigger.request();
+        }
+      } else {
+        ctx.recomputeTrigger.request();
+      }
       return { ok: true };
     }),
 

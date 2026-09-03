@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { reviewItems, sets, tournamentParticipants, tournaments, type Db } from '@smashclub/db';
+import { ratingEvents, reviewItems, sets, tournamentParticipants, tournaments, type Db } from '@smashclub/db';
 import { importRegistryPlayers, registerTournamentSlugs } from '../src/bootstrap/importRegistry';
 import { syncTournament } from '../src/sync/sync';
+import { runRecompute, latestRecomputeId } from '../src/recompute/recompute';
 import { createTestDb } from './helpers/testDb';
 import { fixtureClient, type FixtureTournament } from './helpers/challongeFixtures';
 
@@ -107,6 +108,139 @@ describe('syncTournament', () => {
 
     const [set] = await db.select().from(sets).where(eq(sets.challongeMatchId, 11));
     expect(set!.winner).toBe(2);
+  });
+
+  it('imports a match completed after the roster was already resolved', async () => {
+    const id = await tournamentId();
+    const pending: FixtureTournament = {
+      ...baseFixture,
+      matches: baseFixture.matches.map((match) =>
+        match.id === 11 ? { ...match, state: 'pending', winner: null, scores: null } : match,
+      ),
+    };
+    await syncTournament(db, fixtureClient([pending]), id);
+    const [before] = await db.select().from(sets).where(eq(sets.challongeMatchId, 11));
+    expect(before!.state).toBe('pending');
+    expect(before!.winner).toBeNull();
+
+    const completed = {
+      ...pending,
+      matches: [
+        ...pending.matches.map((match) =>
+          match.id === 11 ? { ...match, state: 'complete', winner: 1, scores: '2-0' } : match,
+        ),
+        // A result can appear after the initial roster sync without changing
+        // any existing match row; it must still be inserted and rated.
+        { id: 14, p1: 1, p2: 2, winner: 2, order: 4, scores: '2-1' },
+      ],
+    };
+    const result = await syncTournament(db, fixtureClient([completed]), id);
+    expect(result.setsChanged).toBe(2);
+    const [after] = await db.select().from(sets).where(eq(sets.challongeMatchId, 11));
+    expect(after!.state).toBe('complete');
+    expect(after!.winner).toBe(1);
+    const [newResult] = await db.select().from(sets).where(eq(sets.challongeMatchId, 14));
+    expect(newResult!.state).toBe('complete');
+    expect(newResult!.winner).toBe(2);
+  });
+
+  it('detects a changed opponent even when score and winner side stay the same', async () => {
+    const id = await tournamentId();
+    await syncTournament(db, fixtureClient([baseFixture]), id);
+    const [original] = await db.select().from(sets).where(eq(sets.challongeMatchId, 11));
+    const amended: FixtureTournament = {
+      ...baseFixture,
+      matches: baseFixture.matches.map((match) =>
+        match.id === 11 ? { ...match, p2: 3, winner: 1 } : match,
+      ),
+    };
+    const result = await syncTournament(db, fixtureClient([amended]), id);
+    expect(result.setsChanged).toBe(1);
+    const [updated] = await db.select().from(sets).where(eq(sets.challongeMatchId, 11));
+    expect(updated!.p1ParticipantId).toBe(original!.p1ParticipantId);
+    expect(updated!.p2ParticipantId).not.toBe(original!.p2ParticipantId);
+    expect(updated!.winner).toBe(original!.winner);
+    expect(updated!.scoresCsv).toBe(original!.scoresCsv);
+  });
+
+  it('repairs denormalized participant links on an unchanged re-sync', async () => {
+    const id = await tournamentId();
+    await syncTournament(db, fixtureClient([baseFixture]), id);
+    const [original] = await db.select().from(sets).where(eq(sets.challongeMatchId, 11));
+    expect(original!.p1PlayerId).not.toBeNull();
+    expect(original!.p2PlayerId).not.toBeNull();
+    await db
+      .update(sets)
+      .set({ p1PlayerId: null, p2PlayerId: null })
+      .where(eq(sets.challongeMatchId, 11));
+
+    const result = await syncTournament(db, fixtureClient([baseFixture]), id);
+    expect(result.setsChanged).toBeGreaterThan(0);
+    const [repaired] = await db.select().from(sets).where(eq(sets.challongeMatchId, 11));
+    expect(repaired!.p1PlayerId).toBe(original!.p1PlayerId);
+    expect(repaired!.p2PlayerId).toBe(original!.p2PlayerId);
+  });
+
+  it('persists both result stages while final-stage-only policy controls ratings', async () => {
+    const id = await tournamentId();
+    const staged: FixtureTournament = {
+      ...baseFixture,
+      matches: [
+        { id: 21, p1: 1, p2: 2, winner: 1, order: 1, stage: 'group' },
+        { id: 22, p1: 1, p2: 2, winner: 2, order: 2, stage: 'final' },
+      ],
+    };
+    await syncTournament(db, fixtureClient([staged]), id);
+    const stored = await db.select().from(sets);
+    expect(stored.map((row) => row.resultStage).sort()).toEqual(['final', 'group']);
+
+    await runRecompute(db);
+    let recomputeId = await latestRecomputeId(db);
+    let events = await db.select().from(ratingEvents).where(eq(ratingEvents.recomputeId, recomputeId!));
+    expect(events.filter((event) => event.setId === stored.find((row) => row.resultStage === 'group')!.id)).toHaveLength(2);
+
+    await db.update(tournaments).set({ resultsMode: 'final_stage_only' }).where(eq(tournaments.id, id));
+    await runRecompute(db);
+    recomputeId = await latestRecomputeId(db);
+    events = await db.select().from(ratingEvents).where(eq(ratingEvents.recomputeId, recomputeId!));
+    const groupId = stored.find((row) => row.resultStage === 'group')!.id;
+    const finalId = stored.find((row) => row.resultStage === 'final')!.id;
+    expect(events.filter((event) => event.setId === groupId)).toHaveLength(0);
+    expect(events.filter((event) => event.setId === finalId)).toHaveLength(2);
+    expect(await db.select().from(sets)).toHaveLength(2);
+
+    await db.update(tournaments).set({ resultsMode: 'auto' }).where(eq(tournaments.id, id));
+    await runRecompute(db);
+    recomputeId = await latestRecomputeId(db);
+    events = await db.select().from(ratingEvents).where(eq(ratingEvents.recomputeId, recomputeId!));
+    expect(events.filter((event) => event.setId === groupId)).toHaveLength(2);
+    expect(events.filter((event) => event.setId === finalId)).toHaveLength(2);
+  });
+
+  it('preserves a manually excluded final across policy toggles and re-sync', async () => {
+    const id = await tournamentId();
+    const staged: FixtureTournament = {
+      ...baseFixture,
+      matches: [
+        { id: 31, p1: 1, p2: 2, winner: 1, order: 1, stage: 'group' },
+        { id: 32, p1: 1, p2: 2, winner: 2, order: 2, stage: 'final' },
+      ],
+    };
+    await syncTournament(db, fixtureClient([staged]), id);
+    await db
+      .update(sets)
+      .set({ excludedFromRatings: true, exclusionManual: true })
+      .where(eq(sets.challongeMatchId, 32));
+    await db.update(tournaments).set({ resultsMode: 'final_stage_only' }).where(eq(tournaments.id, id));
+    await syncTournament(db, fixtureClient([staged]), id);
+
+    const [finalSet] = await db.select().from(sets).where(eq(sets.challongeMatchId, 32));
+    expect(finalSet!.excludedFromRatings).toBe(true);
+    expect(finalSet!.exclusionManual).toBe(true);
+    await runRecompute(db);
+    const recomputeId = await latestRecomputeId(db);
+    const events = await db.select().from(ratingEvents).where(eq(ratingEvents.recomputeId, recomputeId!));
+    expect(events.filter((event) => event.setId === finalSet!.id)).toHaveLength(0);
   });
 
   /**

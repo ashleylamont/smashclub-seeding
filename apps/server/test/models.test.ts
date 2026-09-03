@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { playerRatings, ratingEvents, recomputes, tournaments, type Db } from '@smashclub/db';
+import { playerRatings, ratingEvents, recomputes, sets, tournaments, type Db } from '@smashclub/db';
 import { LEAGUE_CATCH_ALL } from '@smashclub/shared';
 import { importRegistryPlayers, registerTournamentSlugs } from '../src/bootstrap/importRegistry';
 import { syncTournament } from '../src/sync/sync';
@@ -72,6 +72,18 @@ async function syncBoth(): Promise<void> {
 }
 
 describe('parallel rating models', () => {
+  it('uses the same final-stage-only results for model comparison and both published models', async () => {
+    await syncBoth();
+    await db.update(sets).set({ resultStage: 'group' }).where(eq(sets.challongeMatchId, 11));
+    await db.update(tournaments).set({ resultsMode: 'final_stage_only' })
+      .where(eq(tournaments.challongeSlug, 'main1'));
+    expect((await compareModels(db)).sets).toBe(5);
+    expect((await runRecompute(db)).sets).toBe(5);
+    const { glicko } = await getGlickoSettings(db);
+    await updateGlickoSettings(db, { ...glicko, activeModel: 'whr' });
+    expect((await runRecompute(db)).sets).toBe(5);
+  });
+
   it('records which model produced a recompute', async () => {
     await syncBoth();
     const first = await runRecompute(db);

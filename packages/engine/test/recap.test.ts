@@ -4,6 +4,7 @@ import {
   formatFact,
   pairKey,
   parseScoresCsv,
+  stageName,
   type RecapFact,
   type RecapFactKind,
   type RecapHistory,
@@ -204,6 +205,85 @@ describe('placements when Challonge reports none', () => {
       ['Sam', 2],
       ['Nour', 3],
     ]);
+  });
+
+  it('keeps group results in played totals and facts without treating them as finals', () => {
+    const groupWinner = participant({ name: 'Group Winner', seed: 8 });
+    const seeded = participant({ name: 'Seeded Player', seed: 1 });
+    const champion = participant({ name: 'Champion', seed: 2 });
+    const result = buildRecap({
+      tournaments: [MAIN],
+      participants: [groupWinner, seeded, champion],
+      sets: [
+        // Deliberately deeper than the final stage: this must not crown the
+        // group winner or change the final round's extent.
+        completedSet(groupWinner, seeded, 1, { round: 99, resultStage: 'group' }),
+        completedSet(champion, groupWinner, 1, { round: 1 }),
+        completedSet(champion, seeded, 1, { round: 2 }),
+      ],
+    });
+    const podium = factsOfKind(result, 'podium')[0];
+    expect(podium?.places[0]?.player.name).toBe('Champion');
+    expect(result.setsPlayed).toBe(3);
+    expect(factsOfKind(result, 'seed_upset')).toHaveLength(0);
+  });
+
+  it('does not treat reseeded two-stage brackets as seed performance stories', () => {
+    const group = participant({ name: 'Group Winner', seed: 8, finalRank: 1 });
+    const finalist = participant({ name: 'Finalist', seed: 1, finalRank: 2 });
+    const result = buildRecap({
+      tournaments: [{ ...MAIN, tournamentType: 'single elimination' }],
+      participants: [group, finalist],
+      sets: [
+        completedSet(group, finalist, 1, { round: 1, resultStage: 'group' }),
+        completedSet(finalist, group, 1, { round: 1, resultStage: 'final' }),
+      ],
+    });
+    expect(factsOfKind(result, 'seed_upset')).toHaveLength(0);
+    expect(factsOfKind(result, 'overperformer')).toHaveLength(0);
+    const [finals] = factsOfKind(result, 'grand_finals');
+    expect(finals?.winner.name).toBe('Finalist');
+  });
+
+  it('labels single-elimination rounds without winners-bracket names', () => {
+    expect(stageName(1, { maxRound: 1, minRound: 0 }, 'single elimination')).toBe('the final');
+  });
+
+  it('keeps both semifinal losers tied for third in single elimination', () => {
+    const a = participant({ name: 'A' });
+    const b = participant({ name: 'B' });
+    const c = participant({ name: 'C' });
+    const d = participant({ name: 'D' });
+    const result = buildRecap({
+      tournaments: [{ ...MAIN, tournamentType: 'single elimination' }],
+      participants: [a, b, c, d],
+      sets: [
+        completedSet(a, b, 1, { round: 1, resultStage: 'final' }),
+        completedSet(c, d, 1, { round: 1, resultStage: 'final' }),
+        completedSet(a, c, 1, { round: 2, resultStage: 'final' }),
+      ],
+    });
+    const places = factsOfKind(result, 'podium')[0]?.places.map((place) => [place.player.name, place.place]);
+    expect(places).toEqual([['A', 1], ['C', 2], ['B', 3], ['D', 3]]);
+  });
+
+  it('uses a completed final walkover for structure without counting it as played', () => {
+    const a = participant({ name: 'A' });
+    const b = participant({ name: 'B' });
+    const c = participant({ name: 'C' });
+    const d = participant({ name: 'D' });
+    const result = buildRecap({
+      tournaments: [{ ...MAIN, tournamentType: 'single elimination' }],
+      participants: [a, b, c, d],
+      sets: [
+        completedSet(a, b, 1, { round: 1, resultStage: 'final' }),
+        completedSet(c, d, 1, { round: 1, resultStage: 'final' }),
+        completedSet(a, c, 1, { round: 2, resultStage: 'final', scoresCsv: '99-0' }),
+      ],
+    });
+    expect(factsOfKind(result, 'podium')[0]?.places[0]?.player.name).toBe('A');
+    expect(factsOfKind(result, 'grand_finals')).toHaveLength(0);
+    expect(result.setsPlayed).toBe(2);
   });
 
   it('marks a derived podium as derived', () => {
@@ -475,6 +555,47 @@ describe('clean sweeps', () => {
     sets[2] = { ...sets[2]!, scoresCsv: null };
     const result = buildRecap({ tournaments: [MAIN], participants: [champion, ...others], sets });
     expect(factsOfKind(result, 'clean_sweep')).toHaveLength(0);
+  });
+});
+
+describe('runbacks and highlights', () => {
+  it('reports a later win over the same opponent as a runback', () => {
+    const a = participant({ name: 'Ada' });
+    const b = participant({ name: 'Bo' });
+    const result = buildRecap({
+      tournaments: [MAIN],
+      participants: [a, b],
+      sets: [
+        completedSet(a, b, 1, { completedAt: '2025-03-01T09:00:00.000Z' }),
+        completedSet(a, b, 2, { completedAt: '2025-03-01T10:00:00.000Z', scoresCsv: '2-1' }),
+      ],
+    });
+    const [runback] = factsOfKind(result, 'runback');
+    expect(runback?.winner.name).toBe('Bo');
+    expect(runback?.loser.name).toBe('Ada');
+  });
+
+  it('does not call a single meeting or a bye a runback', () => {
+    const a = participant({ name: 'Ada' });
+    const b = participant({ name: 'Bo' });
+    const result = buildRecap({
+      tournaments: [MAIN],
+      participants: [a, b],
+      sets: [completedSet(a, b, 1), completedSet(a, b, 2, { scoresCsv: '99-0' })],
+    });
+    expect(factsOfKind(result, 'runback')).toHaveLength(0);
+  });
+
+  it('keeps highlights short and leaves sparse nights unpadded', () => {
+    const a = participant({ name: 'Ada' });
+    const b = participant({ name: 'Bo' });
+    const result = buildRecap({
+      tournaments: [MAIN],
+      participants: [a, b],
+      sets: [completedSet(a, b, 1, { round: 1 })],
+    });
+    expect(result.highlights.length).toBeLessThanOrEqual(6);
+    expect(result.highlights.every((entry) => entry.notability >= 0.45)).toBe(true);
   });
 });
 
@@ -879,6 +1000,7 @@ describe('formatFact', () => {
       { kind: 'losers_run', tournamentId: 't', player, wins: 5, finalRank: 2 },
       { kind: 'overperformer', tournamentId: 't', player, seed: 12, finalRank: 4, placesGained: 8 },
       { kind: 'nailbiter', tournamentId: 't', winner: player, loser: other, score: '3-2', stage: null },
+      { kind: 'runback', tournamentId: 't', winner: player, loser: other, score: '2-1' },
       { kind: 'clean_sweep', tournamentId: 't', player, sets: 5 },
       { kind: 'biggest_climb', tournamentId: 't', player, gained: 62.4, from: 1500, to: 1562.4 },
       { kind: 'mover', tournamentId: null, player, rank: 7, previousRank: 11, placesGained: 4 },
@@ -909,7 +1031,7 @@ describe('formatFact', () => {
       podium: false, seed_upset: false, rating_upset: false, losers_run: false,
       overperformer: false, nailbiter: false, clean_sweep: false, biggest_climb: false,
       mover: false, rivalry: false, breakthrough: false, debut: false, milestone: false, turnout: false,
-      grand_finals: false,
+      grand_finals: false, runback: false,
     };
     for (const fact of facts) covered[fact.kind] = true;
     expect(Object.entries(covered).filter(([, seen]) => !seen).map(([kind]) => kind)).toEqual([]);
