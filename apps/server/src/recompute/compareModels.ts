@@ -11,6 +11,7 @@ import {
   type LeaderboardRow,
 } from '@smashclub/engine';
 import { getGlickoSettings } from '../settings';
+import { includesResultStage, scoresIndicateUnplayed } from '@smashclub/shared';
 
 /**
  * Fits both rating models over the same history and reports how the published
@@ -58,6 +59,7 @@ export async function compareModels(db: Db): Promise<ModelComparison> {
       eventDate: tournaments.eventDate,
       isRookie: tournaments.isRookie,
       challongeId: tournaments.challongeId,
+      resultsMode: tournaments.resultsMode,
     })
     .from(tournaments)
     .where(isNotNull(tournaments.eventDate));
@@ -69,6 +71,7 @@ export async function compareModels(db: Db): Promise<ModelComparison> {
     challongeId: row.challongeId,
   }));
   const tournamentIds = engineTournaments.map((t) => t.id);
+  const modes = new Map(tournamentRows.map((t) => [t.id, t.resultsMode]));
 
   const setRows = tournamentIds.length
     ? await db
@@ -87,6 +90,8 @@ export async function compareModels(db: Db): Promise<ModelComparison> {
     : [];
 
   const engineSets: EngineSet[] = setRows
+    .filter((row) => includesResultStage(modes.get(row.tournamentId) ?? 'auto', row.resultStage))
+    .filter((row) => !scoresIndicateUnplayed(row.scoresCsv))
     .filter((row) => row.p1PlayerId !== row.p2PlayerId)
     .map((row) => {
       // Same evidence the production WHR run sees: game counts, unknown on

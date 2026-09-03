@@ -4,6 +4,7 @@ import { LeaderboardPage } from './pages/LeaderboardPage';
 import { PlayerPage } from './pages/PlayerPage';
 import { TournamentsPage } from './pages/TournamentsPage';
 import { TournamentPage } from './pages/TournamentPage';
+import { EventPage } from './pages/EventPage';
 import { RecapPage } from './pages/RecapPage';
 import { VenuePage } from './pages/VenuePage';
 import { LoginPage } from './pages/LoginPage';
@@ -42,6 +43,12 @@ const tournamentRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/tournaments/$slug',
   component: TournamentPage,
+});
+
+const eventRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/events/$slug',
+  component: EventPage,
 });
 
 /**
@@ -155,6 +162,7 @@ const routeTree = rootRoute.addChildren([
   playerRoute,
   tournamentsRoute,
   tournamentRoute,
+  eventRoute,
   venueRoute,
   recapRoute,
   loginRoute,

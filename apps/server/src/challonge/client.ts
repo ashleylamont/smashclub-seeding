@@ -78,6 +78,15 @@ export class ChallongeClient {
         const matches = extractMatches(
           await this.requestJson(`${this.baseUrl}/tournaments/${slug}/matches.json`, true),
         );
+        // v1's match endpoint can omit nested group-stage matches. The public
+        // module carries the complete two-stage view, so use it when the API
+        // advertises a group stage while retaining API placements/names.
+        if (tournament.groupStageEnabled) {
+          const publicBundle = await this.fetchPublicTournamentBundle(slug);
+          const byId = new Map(participants.map((p) => [p.id, p]));
+          for (const p of publicBundle.participants) if (!byId.has(p.id)) byId.set(p.id, p);
+          return { tournament, participants: [...byId.values()], matches: publicBundle.matches, source: 'api' };
+        }
         return { tournament, participants, matches, source: 'api' };
       } catch (error) {
         if (!(error instanceof ChallongeApiError) || error.status !== 404) throw error;
@@ -119,6 +128,8 @@ export class ChallongeClient {
       completedAt: bracket.allComplete ? bracket.latestMatchDate : null,
       updatedAt: bracket.latestMatchDate,
       tournamentType: typeof meta.tournament_type === 'string' ? meta.tournament_type : null,
+      groupStageEnabled: Array.isArray((payload as Record<string, unknown>).groups) &&
+        ((payload as Record<string, unknown>).groups as unknown[]).length > 0,
     };
     return { tournament, participants: bracket.participants, matches: bracket.matches, source: 'public' };
   }

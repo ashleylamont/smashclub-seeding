@@ -182,6 +182,9 @@ export const playerClaims = pgTable(
 
 export const syncStateEnum = pgEnum('sync_state', ['registered', 'syncing', 'live', 'synced', 'error']);
 
+export type TournamentResultsMode = 'auto' | 'final_stage_only';
+export type SetResultStage = 'group' | 'final';
+
 export const tournaments = pgTable('tournaments', {
   id: uuid('id').primaryKey().defaultRandom(),
   challongeSlug: text('challonge_slug').notNull().unique(),
@@ -212,6 +215,8 @@ export const tournaments = pgTable('tournaments', {
    */
   liveUntil: timestamp('live_until', { withTimezone: true }),
   isRookie: boolean('is_rookie').notNull().default(false),
+  /** Which imported stages count toward ratings. Ingestion keeps all stages. */
+  resultsMode: text('results_mode').$type<TournamentResultsMode>().notNull().default('auto'),
   lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
   syncError: text('sync_error'),
   raw: jsonb('raw'),
@@ -252,6 +257,8 @@ export const sets = pgTable(
     suggestedPlayOrder: integer('suggested_play_order'),
     identifier: text('identifier'),
     state: text('state').notNull(),
+    /** Challonge stage classification; defaults to final for legacy/imported rows. */
+    resultStage: text('result_stage').$type<SetResultStage>().notNull().default('final'),
     p1ParticipantId: uuid('p1_participant_id').references(() => tournamentParticipants.id, {
       onDelete: 'set null',
     }),

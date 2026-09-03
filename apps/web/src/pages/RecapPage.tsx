@@ -44,8 +44,8 @@ function Recap({ data }: { data: RecapData }) {
   );
 
   const storyFacts = useMemo(
-    () => data.facts.filter((entry) => !HERO_KINDS.has(entry.fact.kind)),
-    [data.facts],
+    () => data.highlights.filter((entry) => !HERO_KINDS.has(entry.fact.kind)).slice(0, 6),
+    [data.highlights],
   );
 
   const tournamentName = useMemo(
@@ -53,7 +53,7 @@ function Recap({ data }: { data: RecapData }) {
     [data.tournaments],
   );
 
-  const headline = data.tournaments[0]?.name ?? 'Club night';
+  const headline = data.name;
   const eventDate = data.tournaments[0]?.eventDate ?? null;
 
   return (
@@ -63,12 +63,13 @@ function Recap({ data }: { data: RecapData }) {
           <p className="eyebrow">The night in review</p>
           <h1>{headline}</h1>
         </div>
-        <ShareBar data={data} headline={headline} podium={podiums[0] ?? null} />
+        <ShareBar data={data} headline={headline} podium={podiums[0] ?? null} podiums={podiums} />
       </div>
 
       <p className="muted recap-subtitle">
         {formatDate(eventDate)} · {data.entrants} entrants · {data.setsPlayed} sets
         {data.tournaments.length > 1 && ` · ${data.tournaments.length} brackets`}
+        {data.slug && <Link to="/events/$slug" params={{ slug: data.slug }}>Event results →</Link>}
         {/* Two different things a reader would otherwise conflate: a night
             still being played is worth coming back to, a bracket the room ran
             out of time on is not. */}
@@ -79,6 +80,14 @@ function Recap({ data }: { data: RecapData }) {
           </span>
         )}
       </p>
+      {(data.coverage.unsyncedBrackets || data.coverage.unresolvedEntrants || data.coverage.unlinkedPlayedSets || data.coverage.ignoredGroupSets) ? (
+        <div className="banner banner-warning recap-coverage">
+          Coverage: {data.coverage.unsyncedBrackets ? `${data.coverage.unsyncedBrackets} bracket(s) not synced. ` : ''}
+          {data.coverage.unresolvedEntrants ? `${data.coverage.unresolvedEntrants} entrant(s) unresolved. ` : ''}
+          {data.coverage.unlinkedPlayedSets ? `${data.coverage.unlinkedPlayedSets} played set(s) lack linked identities. ` : ''}
+          {data.coverage.ignoredGroupSets ? `${data.coverage.ignoredGroupSets} group/setup result(s) are shown separately.` : ''}
+        </div>
+      ) : null}
 
       {podiums.length > 0 && (
         <section className="recap-podiums">
@@ -96,7 +105,7 @@ function Recap({ data }: { data: RecapData }) {
         <h2>Highlights</h2>
         {storyFacts.length === 0 ? (
           <p className="muted">
-            Nothing to report yet — highlights appear as sets are played and the ratings catch up.
+            No standout moments met the selection threshold. Full results remain available below.
           </p>
         ) : (
           <>
@@ -204,6 +213,8 @@ function statOf(fact: RecapFact): { value: string; label: string } | null {
       return fact.score
         ? { value: fact.score, label: fact.bracketReset ? 'after a bracket reset' : 'in the decider' }
         : null;
+    case 'runback':
+      return fact.score ? { value: fact.score, label: 'the runback' } : null;
     case 'podium':
       return null;
   }
@@ -322,6 +333,8 @@ function playersOf(fact: RecapFact): RecapPlayer[] {
     case 'nailbiter':
     case 'grand_finals':
       return [fact.winner, fact.loser];
+    case 'runback':
+      return [fact.winner, fact.loser];
     case 'rivalry':
       return [fact.a, fact.b];
     case 'breakthrough':
@@ -348,14 +361,15 @@ const KIND_LABELS: Record<RecapFact['kind'], string> = {
   overperformer: 'Overperformer',
   nailbiter: 'Nailbiter',
   clean_sweep: 'Clean sweep',
-  biggest_climb: 'Player of the night',
+  biggest_climb: 'Rating gain',
   mover: 'On the board',
   rivalry: 'Rivalry',
   breakthrough: 'Breakthrough',
-  debut: 'New blood',
+  debut: 'First appearances',
   milestone: 'Milestone',
   turnout: 'Turnout',
   grand_finals: 'The final',
+  runback: 'Runback',
 };
 
 /** Copy a link, or save the night as an image. */
@@ -363,16 +377,18 @@ function ShareBar({
   data,
   headline,
   podium,
+  podiums,
 }: {
   data: RecapData;
   headline: string;
   podium: Extract<RecapFact, { kind: 'podium' }> | null;
+  podiums: Array<Extract<RecapFact, { kind: 'podium' }>>;
 }) {
   const [status, setStatus] = useState<'idle' | 'copied' | 'rendering' | 'failed'>('idle');
 
   const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      await navigator.clipboard.writeText(`${window.location.origin}/recaps/${data.slug}`);
       setStatus('copied');
       setTimeout(() => setStatus('idle'), 2000);
     } catch {
@@ -392,10 +408,13 @@ function ShareBar({
             name: place.player.name,
             companyCode: place.player.companyCode,
           })) ?? [],
-        facts: data.facts
+        facts: data.highlights
           .filter((entry) => entry.fact.kind !== 'podium')
-          .slice(0, 4)
+          .slice(0, 6)
           .map((entry) => entry.headline),
+        champions: data.tournaments.length > 1
+          ? podiums.map((p) => ({ name: p.places[0]?.player.name ?? 'Unknown', bracket: data.tournaments.find((t) => t.id === p.tournamentId)?.name ?? 'Bracket' }))
+          : undefined,
         entrants: data.entrants,
         setsPlayed: data.setsPlayed,
       });

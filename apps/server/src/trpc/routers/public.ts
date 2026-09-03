@@ -13,11 +13,12 @@ import {
   type Db,
 } from '@smashclub/db';
 import { eventKeyOf } from '@smashclub/engine';
-import { publicParticipantName, publicPlayerName } from '@smashclub/shared';
+import { includesResultStage, publicParticipantName, publicPlayerName } from '@smashclub/shared';
 import { latestRecomputeId } from '../../recompute/recompute';
 import { getGlickoSettings } from '../../settings';
 import { charactersByPlayer, charactersForPlayer } from '../../players/characters';
 import { loadRecap } from '../../recap/recap';
+import { loadEventOverview } from '../../events/overview';
 import { publicProcedure, router } from '../trpc';
 
 const playerName = publicPlayerName;
@@ -373,6 +374,7 @@ export const publicRouter = router({
       name: row.name,
       eventDate: row.eventDate?.toISOString() ?? null,
       isRookie: row.isRookie,
+      resultsMode: row.resultsMode,
       challongeState: row.challongeState,
       syncState: row.syncState,
       lastSyncedAt: row.lastSyncedAt?.toISOString() ?? null,
@@ -418,6 +420,7 @@ export const publicRouter = router({
       id: tournament.id,
       slug: tournament.challongeSlug,
       name: tournament.name,
+      resultsMode: tournament.resultsMode,
       eventDate: tournament.eventDate?.toISOString() ?? null,
       isRookie: tournament.isRookie,
       challongeState: tournament.challongeState,
@@ -446,7 +449,9 @@ export const publicRouter = router({
         state: row.state,
         winner: row.winner,
         scoresCsv: row.scoresCsv,
-        excludedFromRatings: row.excludedFromRatings,
+        resultStage: row.resultStage,
+        excludedByResultsMode: !includesResultStage(tournament.resultsMode, row.resultStage),
+        excludedFromRatings: row.excludedFromRatings || !includesResultStage(tournament.resultsMode, row.resultStage),
         completedAt: row.completedAt?.toISOString() ?? null,
         /* Participant ids as well as names: a screen that wants a player's seed
            or company alongside a set should join on the id rather than match on
@@ -459,6 +464,10 @@ export const publicRouter = router({
         p2PlayerId: row.p2PlayerId,
       })),
     };
+  }),
+
+  eventOverview: publicProcedure.input(z.object({ slug: z.string() })).query(async ({ ctx, input }) => {
+    return loadEventOverview(ctx.db, input.slug);
   }),
 
   /**

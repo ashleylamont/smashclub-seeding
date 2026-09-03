@@ -21,6 +21,8 @@ export interface ShareCardInput {
   facts: string[];
   entrants: number;
   setsPlayed: number;
+  /** Champions labelled by bracket for multi-bracket evenings. */
+  champions?: Array<{ name: string; bracket: string }>;
 }
 
 function token(name: string, fallback: string): string {
@@ -105,10 +107,26 @@ export async function renderShareCard(input: ShareCardInput): Promise<Blob | nul
   ctx.fillStyle = border;
   ctx.fillRect(PAD, PAD + 176, WIDTH - PAD * 2, 2);
 
-  // Podium — the headline of any recap.
+  // Podium — the headline of any recap. Multi-bracket cards identify each
+  // champion explicitly so the first bracket is never implied to represent
+  // the whole evening.
   let y = PAD + 240;
   const placeColours = [accent, textH, text];
-  for (const entry of input.podium.slice(0, 3)) {
+  const champions = input.champions?.slice(0, 4);
+  if (champions?.length) {
+    ctx.font = '700 18px "JetBrains Mono", monospace';
+    ctx.fillStyle = soft;
+    for (const champion of champions) {
+      ctx.fillText(fitText(ctx, champion.bracket.toUpperCase(), 520), PAD, y);
+      y += 24;
+      ctx.font = '600 30px Oswald, sans-serif';
+      ctx.fillStyle = textH;
+      ctx.fillText(fitText(ctx, champion.name.toUpperCase(), 520), PAD + 20, y);
+      y += 48;
+      ctx.font = '700 18px "JetBrains Mono", monospace';
+      ctx.fillStyle = soft;
+    }
+  } else for (const entry of input.podium.slice(0, 4)) {
     const index = entry.place - 1;
     ctx.font = '700 48px Oswald, sans-serif';
     ctx.fillStyle = placeColours[index] ?? text;

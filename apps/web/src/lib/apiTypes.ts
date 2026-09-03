@@ -49,6 +49,7 @@ export type TournamentListItem = Awaited<ReturnType<typeof trpc.public.tournamen
 export type TournamentData = NonNullable<Awaited<ReturnType<typeof trpc.public.tournament.query>>>;
 export type TournamentSet = TournamentData['sets'][number];
 export type TournamentParticipant = TournamentData['participants'][number];
+export type EventOverviewData = NonNullable<Awaited<ReturnType<typeof trpc.public.eventOverview.query>>>;
 
 export type RecapData = NonNullable<Awaited<ReturnType<typeof trpc.public.recap.query>>>;
 /** One ranked fact, with the copy the server rendered for it. */

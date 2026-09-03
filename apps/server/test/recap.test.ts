@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { tournaments, type Db } from '@smashclub/db';
+import { sets, tournaments, type Db } from '@smashclub/db';
 import type { RecapFact, RecapFactKind } from '@smashclub/engine';
 import { importRegistryPlayers, registerTournamentSlugs } from '../src/bootstrap/importRegistry';
 import { syncTournament } from '../src/sync/sync';
@@ -143,6 +143,27 @@ function factsOfKind<K extends RecapFactKind>(recap: Recap, kind: K): Array<Extr
 }
 
 describe('public.recap', () => {
+  it('keeps ignored groups visible as excluded but leaves them out of recap results', async () => {
+    await sync(['march-main']);
+    await db.update(sets).set({ resultStage: 'group' }).where(eq(sets.challongeMatchId, 11));
+    const before = (await caller().public.recap({ slug: 'march-main' }))!;
+    await db.update(tournaments).set({ resultsMode: 'final_stage_only' })
+      .where(eq(tournaments.challongeSlug, 'march-main'));
+
+    const view = (await caller().public.tournament({ slug: 'march-main' }))!;
+    const group = view.sets.find((set) => set.resultStage === 'group')!;
+    expect(view.resultsMode).toBe('final_stage_only');
+    expect(group.excludedByResultsMode).toBe(true);
+    expect(group.excludedFromRatings).toBe(true);
+    expect(view.sets).toHaveLength(3);
+    const after = (await caller().public.recap({ slug: 'march-main' }))!;
+    expect(after.setsPlayed).toBe(before.setsPlayed - 1);
+
+    // The tournament policy is separate from per-match admin exclusions.
+    const [stored] = await db.select().from(sets).where(eq(sets.id, group.id));
+    expect(stored!.excludedFromRatings).toBe(false);
+  });
+
   it('returns null for a slug that does not exist', async () => {
     expect(await caller().public.recap({ slug: 'nope' })).toBeNull();
   });

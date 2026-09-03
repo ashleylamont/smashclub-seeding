@@ -13,7 +13,7 @@ import {
   type LeaderboardRow,
   type RatingEvent,
 } from '@smashclub/engine';
-import { scoresIndicateUnplayed, type GlickoSettings } from '@smashclub/shared';
+import { includesResultStage, scoresIndicateUnplayed, type GlickoSettings } from '@smashclub/shared';
 import { getGlickoSettings, updateGlickoSettings } from '../settings';
 
 export const ENGINE_VERSION = '1.0.0';
@@ -38,6 +38,7 @@ export async function runRecompute(
       eventDate: tournaments.eventDate,
       isRookie: tournaments.isRookie,
       challongeId: tournaments.challongeId,
+      resultsMode: tournaments.resultsMode,
     })
     .from(tournaments)
     .where(isNotNull(tournaments.eventDate));
@@ -49,6 +50,7 @@ export async function runRecompute(
     challongeId: row.challongeId,
   }));
   const tournamentIds = engineTournaments.map((t) => t.id);
+  const modes = new Map(tournamentRows.map((t) => [t.id, t.resultsMode]));
 
   const setRows = tournamentIds.length
     ? await db
@@ -67,6 +69,7 @@ export async function runRecompute(
     : [];
 
   const engineSets: EngineSet[] = setRows
+    .filter((row) => includesResultStage(modes.get(row.tournamentId) ?? 'auto', row.resultStage))
     .filter((row) => row.p1PlayerId !== row.p2PlayerId)
     /*
      * A `99-0` is a bye — nobody played it, so it cannot move a rating, and it

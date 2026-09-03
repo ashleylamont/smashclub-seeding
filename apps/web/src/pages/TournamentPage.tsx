@@ -102,6 +102,9 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
         <Link to="/recaps/$slug" params={{ slug: data.slug }} className="tournament-recap-link">
           {isComplete ? 'The night in review →' : 'Recap so far →'}
         </Link>
+        <Link to="/events/$slug" params={{ slug: data.slug }} className="tournament-recap-link">
+          Event results →
+        </Link>
         {/* Venue mode is for the room's screen, so it is only offered while
             there is something left to watch. */}
         {!isComplete && (
@@ -215,16 +218,22 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
                   const state = setStateLabel(set.state);
                   return (
                     <tr key={set.id} className={set.excludedFromRatings ? 'set-excluded' : undefined}>
-                      <td className="mono">{set.round != null ? roundLabel(set.round) : '—'}</td>
+                      <td className="mono">
+                        {set.resultStage === 'group'
+                          ? `Pool ${set.round ?? '—'}`
+                          : set.round != null ? roundLabel(set.round) : '—'}
+                      </td>
                       <td className="mono">{set.identifier ?? '—'}</td>
                       <td>
                         <SetLine set={set} />
                         {set.excludedFromRatings && (
                           <span
                             className="chip chip-danger excluded-chip"
-                            title="Not counted towards ratings — a walkover, a disqualification, or an admin exclusion"
+                            title={set.excludedByResultsMode
+                              ? 'Group results are ignored by this tournament’s Final stage only setting'
+                              : 'Not counted towards ratings — a walkover, a disqualification, or an admin exclusion'}
                           >
-                            excluded
+                            {set.excludedByResultsMode ? 'group ignored' : 'excluded'}
                           </span>
                         )}
                       </td>
