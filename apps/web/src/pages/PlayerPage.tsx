@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
 import {
@@ -71,7 +71,9 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         idx: idx + 1,
         tournament: event.tournamentName,
         date: formatDate(event.tournamentDate),
-        result: event.isDecay ? 'decay' : event.won ? 'W' : 'L',
+        result: event.isDecay
+          ? 'decay'
+          : `${event.resultStage === 'group' ? 'Pool' : event.resultStage === 'final' ? 'Bracket' : '—'} · ${event.won ? 'W' : 'L'}`,
         opponent: event.opponentName,
         rating: event.postRating,
         band: [event.postRating - 2 * event.postRd, event.postRating + 2 * event.postRd] as [number, number],
@@ -104,6 +106,12 @@ function PlayerProfile({ data }: { data: PlayerData }) {
   }, [events]);
 
   const matches = useMemo(() => events.filter((e) => !e.isDecay), [events]);
+  const [stageFilter, setStageFilter] = useState<'all' | 'group' | 'final'>('all');
+  const hasBothStages = useMemo(
+    () => new Set(matches.map((event) => event.resultStage).filter((stage): stage is 'group' | 'final' => stage !== null)).size > 1,
+    [matches],
+  );
+  const effectiveStage = hasBothStages ? stageFilter : 'all';
   const wins = matches.filter((e) => e.won).length;
   const winRate = matches.length > 0 ? ((wins / matches.length) * 100).toFixed(0) : null;
 
@@ -131,7 +139,10 @@ function PlayerProfile({ data }: { data: PlayerData }) {
   }, [rating, isWhr]);
 
   // Most recent first for the table.
-  const tableEvents = useMemo(() => [...events].reverse(), [events]);
+  const tableEvents = useMemo(
+    () => [...events].reverse().filter((event) => effectiveStage === 'all' || event.resultStage === effectiveStage),
+    [events, effectiveStage],
+  );
 
   /**
    * Where this player stands with the attendance policy, and — the part worth
@@ -399,7 +410,22 @@ function PlayerProfile({ data }: { data: PlayerData }) {
       )}
 
       <section className="section match-history">
-        <h3>Match log ({matches.length} sets)</h3>
+        <h3>Match log ({effectiveStage === 'all' ? matches.length : `${tableEvents.filter((event) => !event.isDecay).length} of ${matches.length}`} sets)</h3>
+        {hasBothStages && (
+          <label className="history-stage-filter">
+            <span>Show</span>
+            <select
+              className="select"
+              aria-label="Filter match history by stage"
+              value={stageFilter}
+              onChange={(event) => setStageFilter(event.target.value as typeof stageFilter)}
+            >
+              <option value="all">All stages</option>
+              <option value="group">Pools</option>
+              <option value="final">Bracket</option>
+            </select>
+          </label>
+        )}
         {isWhr && events.length > 0 && (
           <p className="muted chart-caption">
             Ratings here move once per club night, so each set’s Δ is its share of that night’s movement —
@@ -416,6 +442,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                 <tr>
                   <th>Date</th>
                   <th>Event</th>
+                  <th>Stage</th>
                   <th>Opponent</th>
                   <th>Result</th>
                   <th
@@ -441,6 +468,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                         {event.tournamentName}
                         {event.isRookie && <span className="chip chip-warning rookie-chip">rookie</span>}
                       </td>
+                      <td>{event.isDecay ? '—' : event.resultStage === 'group' ? 'Pool' : 'Bracket'}</td>
                       <td>
                         {event.isDecay ? (
                           <em>Inactivity decay</em>

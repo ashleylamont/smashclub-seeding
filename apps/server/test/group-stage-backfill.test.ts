@@ -76,7 +76,10 @@ it('recovers pools from a completed legacy import and requests a rating recomput
   const caller = appRouter.createCaller({ db, user: null, challonge: client, recomputeTrigger: trigger,
     env: loadEnv({ NODE_ENV: 'test', DATABASE_URL: 'postgres://unused', BETTER_AUTH_SECRET: 'test-secret-test-secret-test' }) });
   const profile = await caller.public.player({ playerId: group.p1PlayerId! });
-  expect(profile && 'events' in profile ? (profile.events ?? []).filter(e => !e.isDecay) : []).toHaveLength(2);
+  const profileEvents = profile && 'events' in profile ? (profile.events ?? []) : [];
+  expect(profileEvents.filter(e => !e.isDecay)).toHaveLength(2);
+  expect(profileEvents.filter(e => !e.isDecay).map(e => e.resultStage).sort()).toEqual(['final', 'group']);
+  expect(profileEvents.filter(e => !e.isDecay).every(e => e.setId)).toBe(true);
   const tournament = await caller.public.tournament({ slug: 'staged' });
   expect(tournament!.sets.map(s => s.resultStage).sort()).toEqual(['final', 'group']);
   await (scheduler as unknown as { sweep(): Promise<void> }).sweep();

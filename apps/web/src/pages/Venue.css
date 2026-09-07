@@ -317,7 +317,7 @@ body[data-venue] .app-main {
 
 .venue-result {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto auto minmax(0, 1fr);
   align-items: baseline;
   gap: var(--s3);
   padding: clamp(6px, 0.7vw, 12px) 0;
@@ -347,6 +347,14 @@ body[data-venue] .app-main {
   font-family: var(--mono);
   font-size: 0.75em;
   color: var(--accent);
+}
+
+.venue-result-stage,
+.venue-takeover-stage {
+  font-family: var(--mono);
+  font-size: 0.62em;
+  color: var(--text-soft);
+  white-space: nowrap;
 }
 
 /* ── footer ─────────────────────────────────────────────────────── */

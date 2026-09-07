@@ -148,6 +148,15 @@
   border-bottom: 1px solid var(--border);
 }
 
+.history-stage-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-bottom: var(--s2);
+  color: var(--text-soft);
+  font-size: var(--fs-sm);
+}
+
 .match-table th {
   position: sticky;
   top: 0;

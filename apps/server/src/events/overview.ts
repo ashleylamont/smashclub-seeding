@@ -13,6 +13,10 @@ export interface EventOverviewPlayer {
   inFinalStage: boolean;
   wins: number;
   losses: number;
+  poolWins: number;
+  poolLosses: number;
+  bracketWins: number;
+  bracketLosses: number;
   provisional: boolean;
   tournamentId: string;
 }
@@ -70,13 +74,17 @@ export async function loadEventOverview(db: Db, slug: string): Promise<EventOver
     const finalSets = bracketSets.filter(s => s.resultStage === 'final');
     const finalIds = new Set(finalSets.flatMap(s => [s.p1ParticipantId, s.p2ParticipantId]).filter((id): id is string => id !== null));
     const finalPlayers = ps.filter(p => finalIds.has(p.id));
-    const records = new Map<string, { wins: number; losses: number }>();
+    const records = new Map<string, { wins: number; losses: number; poolWins: number; poolLosses: number; bracketWins: number; bracketLosses: number }>();
     for (const s of bracketSets) {
       if (!validResult(s) || s.excludedFromRatings || scoresIndicateUnplayed(s.scoresCsv) || !includesResultStage(t.resultsMode, s.resultStage)) continue;
       const p1 = byId.get(s.p1ParticipantId!); const p2 = byId.get(s.p2ParticipantId!);
       if (!p1 || !p2 || (p1.playerId && p1.playerId === p2.playerId)) continue;
       for (const [id, won] of [[p1.id, s.winner === 1], [p2.id, s.winner === 2]] as const) {
-        const r = records.get(id) ?? { wins: 0, losses: 0 }; won ? r.wins++ : r.losses++; records.set(id, r);
+        const r = records.get(id) ?? { wins: 0, losses: 0, poolWins: 0, poolLosses: 0, bracketWins: 0, bracketLosses: 0 };
+        won ? r.wins++ : r.losses++;
+        if (s.resultStage === 'group') won ? r.poolWins++ : r.poolLosses++;
+        else won ? r.bracketWins++ : r.bracketLosses++;
+        records.set(id, r);
       }
     }
     const isComplete = t.challongeState === 'complete';
@@ -93,6 +101,8 @@ export async function loadEventOverview(db: Db, slug: string): Promise<EventOver
       players: ps.map(p => ({ playerId: p.playerId, entryKey: p.playerId ? `player:${p.playerId}` : `participant:${p.id}`, name: publicParticipantName(p),
         place: places.get(p.id) ?? null, placeSource: places.has(p.id) ? placeSource : 'unavailable' as const,
         inFinalStage: finalIds.has(p.id), wins: records.get(p.id)?.wins ?? 0, losses: records.get(p.id)?.losses ?? 0,
+        poolWins: records.get(p.id)?.poolWins ?? 0, poolLosses: records.get(p.id)?.poolLosses ?? 0,
+        bracketWins: records.get(p.id)?.bracketWins ?? 0, bracketLosses: records.get(p.id)?.bracketLosses ?? 0,
         provisional: !places.has(p.id), tournamentId: t.id })).sort(sortPlayers) };
   });
   brackets.sort(compareEventBrackets);
@@ -146,7 +156,9 @@ function combineDivision(brackets: EventOverviewBracket[]): { players: EventOver
     const old = out.get(p.entryKey);
     const ranked = { ...p, place, provisional: place === null, placeSource: place === null ? 'unavailable' as const : p.placeSource };
     if (!old) out.set(p.entryKey, ranked);
-    else out.set(p.entryKey, { ...(place !== null ? ranked : old), wins: old.wins + p.wins, losses: old.losses + p.losses });
+    else out.set(p.entryKey, { ...(place !== null ? ranked : old), wins: old.wins + p.wins, losses: old.losses + p.losses,
+      poolWins: old.poolWins + p.poolWins, poolLosses: old.poolLosses + p.poolLosses,
+      bracketWins: old.bracketWins + p.bracketWins, bracketLosses: old.bracketLosses + p.bracketLosses });
   }
   if (!notice && [...out.values()].some(p => p.place === null)) notice = 'Some entrants have no final placement yet; their recorded sets still count towards W-L.';
   return { players: [...out.values()].sort(sortPlayers), notice };

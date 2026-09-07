@@ -29,6 +29,10 @@ export interface PlayerEventView {
    */
   revisedRating: number | null;
   revisedSd: number | null;
+  /** The played set behind this event; null for inactivity decay. */
+  setId: string | null;
+  /** Pool or bracket stage; null for inactivity decay. */
+  resultStage: 'group' | 'final' | null;
   tournamentId: string;
   /**
    * The bracket a set was played in. A decay row is charged for a whole club

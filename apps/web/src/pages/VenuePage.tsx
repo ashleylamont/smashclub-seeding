@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
-import { isBracketOver } from '@smashclub/shared';
+import { isBracketOver, scoresIndicateUnplayed } from '@smashclub/shared';
 import { trpc } from '../lib/trpc';
 import type { TournamentData, TournamentParticipant, TournamentSet } from '../lib/apiTypes';
 import { orientScore, roundLabel } from '../lib/format';
@@ -86,7 +86,7 @@ function Venue({ data }: { data: TournamentData }) {
   const completed = useMemo(
     () =>
       data.sets
-        .filter((s) => s.state === 'complete' && s.winner != null && s.completedAt != null)
+        .filter((s) => s.state === 'complete' && s.winner != null && s.completedAt != null && !s.excludedFromRatings && !scoresIndicateUnplayed(s.scoresCsv))
         .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? '')),
     [data.sets],
   );
@@ -104,15 +104,15 @@ function Venue({ data }: { data: TournamentData }) {
    * bracket rather than a flag, so it needs no admin action on the night.
    */
   const finalRound = useMemo(
-    () => data.sets.reduce((max, s) => Math.max(max, s.round ?? 0), 0),
+    () => data.sets.filter((s) => s.resultStage === 'final').reduce((max, s) => Math.max(max, s.round ?? 0), 0),
     [data.sets],
   );
   const remaining = useMemo(() => data.sets.filter((s) => s.state !== 'complete'), [data.sets]);
   const inFinals =
-    finalRound > 0 && remaining.length > 0 && remaining.every((s) => (s.round ?? 0) === finalRound);
+    finalRound > 0 && remaining.length > 0 && remaining.every((s) => s.resultStage === 'final' && (s.round ?? 0) === finalRound);
 
   const setsDone = completed.length;
-  const setsTotal = data.sets.length;
+  const setsTotal = data.sets.filter(s => !s.excludedFromRatings && !scoresIndicateUnplayed(s.scoresCsv)).length;
   /*
    * Over, not merely finalised. A bracket the room abandoned still reports
    * `underway` upstream forever, and a projector announcing LIVE over a night
@@ -147,7 +147,7 @@ function Venue({ data }: { data: TournamentData }) {
 
       {inFinals && (
         <p className="venue-finals-banner">
-          {remaining.length > 1 ? 'Bracket reset — it all comes down to this' : 'Grand finals'}
+          Final round
         </p>
       )}
 
@@ -161,7 +161,11 @@ function Venue({ data }: { data: TournamentData }) {
               {open.slice(0, 4).map((set) => (
                 <li key={set.id} className="venue-match">
                   <span className="venue-match-round">
-                    {set.round != null ? roundLabel(set.round) : '—'}
+                    {set.resultStage === 'group' ? 'Pool' : 'Bracket'}
+                    {' · '}
+                    {set.resultStage === 'group'
+                      ? set.round != null ? `Round ${set.round}` : '—'
+                      : set.round != null ? roundLabel(set.round) : '—'}
                   </span>
                   <span className="venue-match-players">
                     <VenuePlayer participant={sideOf(set, 1)} />
@@ -187,6 +191,7 @@ function Venue({ data }: { data: TournamentData }) {
                   <li key={set.id} className="venue-result">
                     <span className="venue-result-winner">{winner?.name ?? 'TBD'}</span>
                     <span className="venue-result-score">{orientScore(set.scoresCsv, set.winner) ?? ''}</span>
+                    <span className="venue-result-stage">{set.resultStage === 'group' ? 'Pool' : set.resultStage === 'final' ? 'Bracket' : '—'}</span>
                     <span className="venue-result-loser">{loser?.name ?? 'TBD'}</span>
                   </li>
                 );
@@ -353,6 +358,7 @@ function Takeover({ announcement }: { announcement: Announcement }) {
           {winner?.companyCode && <span className="venue-takeover-company"> {winner.companyCode}</span>}
         </p>
         <p className="venue-takeover-detail">
+          <span className="venue-takeover-stage">{set.resultStage === 'group' ? 'Pool' : set.resultStage === 'final' ? 'Bracket' : '—'}</span>
           {score && <span className="venue-takeover-score">{score}</span>}
           <span>
             over {loser?.name ?? 'TBD'}

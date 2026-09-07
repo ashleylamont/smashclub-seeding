@@ -50,5 +50,21 @@ function EventOverview({ data }: { data: EventOverviewData }) {
 }
 
 function Standings({ players }: { players: EventOverviewData['divisions'][number]['players'] }) {
-  return <div className="table-scroll"><table className="data-table event-standings"><thead><tr><th>Place</th><th>Player</th><th>W-L</th><th>Note</th></tr></thead><tbody>{players.map((p, index) => <tr key={p.entryKey ?? `${p.tournamentId}-${p.playerId ?? index}`}><td className="num">{p.place ?? '—'}</td><td>{p.playerId ? <Link to="/players/$playerId" params={{ playerId: p.playerId }}>{p.name}</Link> : p.name}</td><td className="num">{p.wins}-{p.losses}</td><td className="muted">{p.provisional ? 'Placement unavailable' : p.placeSource === 'derived' ? 'Bracket-derived place' : p.placeSource === 'reported' ? 'Reported place' : ''}</td></tr>)}</tbody></table></div>;
+  const hasPools = players.some(p => p.poolWins + p.poolLosses > 0);
+  return (
+    <div className="table-scroll">
+      <table className="data-table event-standings">
+        <thead><tr><th>Place</th><th>Player</th>{hasPools && <><th>Pool W-L</th><th>Bracket W-L</th></>}<th>{hasPools ? 'Total W-L' : 'W-L'}</th><th>Note</th></tr></thead>
+        <tbody>{players.map(p => (
+          <tr key={p.entryKey}>
+            <td className="num">{p.place ?? '—'}</td>
+            <td>{p.playerId ? <Link to="/players/$playerId" params={{ playerId: p.playerId }}>{p.name}</Link> : p.name}</td>
+            {hasPools && <><td className="num">{p.poolWins}-{p.poolLosses}</td><td className="num">{p.bracketWins}-{p.bracketLosses}</td></>}
+            <td className="num">{p.wins}-{p.losses}</td>
+            <td className="muted">{p.provisional ? 'Placement unavailable' : p.placeSource === 'derived' ? 'Bracket-derived place' : p.placeSource === 'reported' ? 'Reported place' : ''}</td>
+          </tr>
+        ))}</tbody>
+      </table>
+    </div>
+  );
 }

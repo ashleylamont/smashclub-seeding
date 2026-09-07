@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { isBracketAbandoned, isBracketOver } from '@smashclub/shared';
@@ -50,6 +50,16 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
   // Over, not necessarily finished: a bracket abandoned mid-run is also done.
   const abandoned = isBracketAbandoned(data, now);
   const isComplete = isBracketOver(data, now);
+  const [stageFilter, setStageFilter] = useState<'all' | 'group' | 'final'>('all');
+  const hasBothStages = useMemo(
+    () => new Set(data.sets.map((set) => set.resultStage)).size > 1,
+    [data.sets],
+  );
+  const effectiveStage = hasBothStages ? stageFilter : 'all';
+  const visibleSets = useMemo(
+    () => data.sets.filter((set) => effectiveStage === 'all' || set.resultStage === effectiveStage),
+    [data.sets, effectiveStage],
+  );
 
   const standings = useMemo(() => {
     if (!isComplete) return [];
@@ -197,7 +207,22 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
       )}
 
       <div className="section">
-        <h2>Sets ({data.sets.length})</h2>
+        <h2>Sets ({effectiveStage === 'all' ? data.sets.length : `${visibleSets.length} of ${data.sets.length}`})</h2>
+        {hasBothStages && (
+          <label className="history-stage-filter">
+            <span>Show</span>
+            <select
+              className="select"
+              aria-label="Filter sets by stage"
+              value={stageFilter}
+              onChange={(event) => setStageFilter(event.target.value as typeof stageFilter)}
+            >
+              <option value="all">All stages</option>
+              <option value="group">Pools</option>
+              <option value="final">Bracket</option>
+            </select>
+          </label>
+        )}
         {data.sets.length === 0 ? (
           <p className="muted">No sets yet.</p>
         ) : (
@@ -205,6 +230,7 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
             <table className="data-table sets-table">
               <thead>
                 <tr>
+                  <th>Stage</th>
                   <th title="Winners rounds are W1, W2…; losers rounds are L1, L2…">Round</th>
                   <th title="Challonge's identifier for this set in the bracket">Set</th>
                   <th className="col-fill">Match</th>
@@ -214,13 +240,14 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
                 </tr>
               </thead>
               <tbody>
-                {data.sets.map((set) => {
+                {visibleSets.map((set) => {
                   const state = setStateLabel(set.state);
                   return (
                     <tr key={set.id} className={set.excludedFromRatings ? 'set-excluded' : undefined}>
+                      <td>{set.resultStage === 'group' ? 'Pool' : set.resultStage === 'final' ? 'Bracket' : '—'}</td>
                       <td className="mono">
                         {set.resultStage === 'group'
-                          ? `Pool ${set.round ?? '—'}`
+                          ? set.round ?? '—'
                           : set.round != null ? roundLabel(set.round) : '—'}
                       </td>
                       <td className="mono">{set.identifier ?? '—'}</td>

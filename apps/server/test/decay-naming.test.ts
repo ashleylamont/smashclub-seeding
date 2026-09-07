@@ -185,6 +185,8 @@ describe('naming an inactivity decay row', () => {
     // engine happened to hang the event off.
     const decay = await decayRows('Link');
     expect(decay[0]!.isRookie).toBe(false);
+    expect(decay[0]!.resultStage).toBeNull();
+    expect(decay[0]!.setId).toBeNull();
   });
 
   it('leaves the tournament a played set belongs to alone', async () => {
