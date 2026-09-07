@@ -279,7 +279,13 @@ changing it refreshes the public bracket and queues a rating recompute. Group
 results remain visible as ignored, and individual match exclusions are preserved.
 Byes and forfeits are still excluded in either mode. Previously imported
 two-stage brackets need a re-sync to recover their pool matches and repair
-missing player links. Keep all brackets from one night on the same event date.
+missing player links. Migration `0011_backfill_group_stage_results` queues a
+one-time public refresh for synced imports whose stored metadata predates
+stage-aware syncing (including old single-stage imports, which cannot be
+distinguished reliably). The scheduler imports missing sets and requests a
+rating recompute, making played pools appear in player history automatically.
+Already stage-aware imports and the chosen results interpretation are preserved.
+Keep all brackets from one night on the same event date.
 
 **Event results and recaps.** The tournaments list groups brackets by their shared
 UTC event date; undated brackets remain separate. Event results use linked plan
