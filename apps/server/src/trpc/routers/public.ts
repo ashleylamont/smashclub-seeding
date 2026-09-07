@@ -265,6 +265,10 @@ export const publicRouter = router({
           /** WHR only: the current fit's hindsight estimate at this night. */
           revisedRating: ratingEvents.revisedRating,
           revisedSd: ratingEvents.revisedSd,
+          /** The played set that produced this event; null for inactivity decay. */
+          setId: ratingEvents.setId,
+          /** Pool or bracket stage for the played set; null for decay. */
+          resultStage: sets.resultStage,
           tournamentId: ratingEvents.tournamentId,
           tournamentName: tournaments.name,
           tournamentDate: tournaments.eventDate,
@@ -275,6 +279,7 @@ export const publicRouter = router({
         })
         .from(ratingEvents)
         .innerJoin(tournaments, eq(ratingEvents.tournamentId, tournaments.id))
+        .leftJoin(sets, eq(ratingEvents.setId, sets.id))
         .leftJoin(opponents, eq(ratingEvents.opponentPlayerId, opponents.id))
         .where(and(eq(ratingEvents.recomputeId, recomputeId), eq(ratingEvents.playerId, input.playerId)))
         .orderBy(asc(ratingEvents.seq));

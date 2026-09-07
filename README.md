@@ -93,9 +93,10 @@ workflow).
   plan — resolved roster, frozen ranking snapshot, divisions, pools — and hands
   over copyable payloads for the four brackets. See
   [Running a two-division night](#running-a-two-division-night-admin--event-planner).
-- **Live mode.** Tournaments that are underway on Challonge are polled every
-  ~15s; changed sets trigger a debounced recompute and push SSE events to
-  viewers on the tournament page.
+- **Live mode.** An admin opens a bounded monitoring window; those tournaments
+  are polled every ~60s through the public bracket. Changed sets trigger a
+  debounced recompute and push SSE events to viewers. Completed events from
+  the last 30 days get a daily refresh for late corrections.
 
 ## Repository layout
 
@@ -279,7 +280,16 @@ changing it refreshes the public bracket and queues a rating recompute. Group
 results remain visible as ignored, and individual match exclusions are preserved.
 Byes and forfeits are still excluded in either mode. Previously imported
 two-stage brackets need a re-sync to recover their pool matches and repair
-missing player links. Keep all brackets from one night on the same event date.
+missing player links. Migration `0011_backfill_group_stage_results` queues a
+one-time public refresh for synced imports whose stored metadata predates
+stage-aware syncing (including old single-stage imports, which cannot be
+distinguished reliably). The scheduler imports missing sets and requests a
+rating recompute, making played pools appear in player history automatically.
+Already stage-aware imports and the chosen results interpretation are preserved.
+Completed events from the last 30 days are also refreshed once a day through
+the unmetered public source to pick up late corrections; older completed events
+remain available for manual re-sync. These refreshes do not mark an event live.
+Keep all brackets from one night on the same event date.
 
 **Event results and recaps.** The tournaments list groups brackets by their shared
 UTC event date; undated brackets remain separate. Event results use linked plan
@@ -290,6 +300,9 @@ actual imported participants and matches, so night-of roster changes do not
 require rewriting the saved seeding plan. Conflicting bracket membership or
 unavailable placements are shown without inventing an order. W–L includes
 eligible pools and finals once each and excludes byes and setup stages.
+When pools contributed results, standings show Pool W-L, Bracket W-L and the
+combined total. Player match logs and tournament results identify each stage
+and offer a stage filter; the player rating chart still shows the full history.
 
 Recaps share the event title and link, count linked entrants once across brackets,
 and select at most six highlights with repetition and per-player limits. Runbacks

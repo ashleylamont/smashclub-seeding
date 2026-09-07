@@ -1,4 +1,4 @@
-import { and, gt, inArray, isNull, lte, ne, or } from 'drizzle-orm';
+import { and, eq, gte, gt, inArray, isNull, lte, ne, or } from 'drizzle-orm';
 import { Cron } from 'croner';
 import type { Db } from '@smashclub/db';
 import { tournaments } from '@smashclub/db';
@@ -12,6 +12,8 @@ import { syncTournament } from './sync/sync';
  * and a club leaderboard gains nothing from refreshing four times a minute.
  */
 const LIVE_POLL_MS = 60_000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const COMPLETED_REFRESH_WINDOW_MS = 30 * DAY_MS;
 
 /**
  * In-process sync scheduler (single replica; a pg advisory lock in index.ts
@@ -22,6 +24,7 @@ const LIVE_POLL_MS = 60_000;
  * - pending/upcoming: every 10 min on event day, hourly within 7 days,
  *   daily otherwise (cron sweep decides who is due)
  * - completed-but-unsynced: picked up by the sweep
+ * - completed events from the last 30 days: refresh daily for late corrections
  *
  * NOTHING HERE TOUCHES THE METERED API. Both the live poller and the sweep use
  * the unauthenticated public bracket (syncTournament's default). Challonge's
@@ -76,13 +79,16 @@ export class SyncScheduler {
     /*
      * Who still has something to tell us: anything never pulled or last pulled
      * badly, plus any bracket Challonge has not finalised — results can still
-     * land in those. A finalised bracket is done and drops out of the sweep.
+     * land in those. Recent completed brackets also get a daily refresh for
+     * late scores, identity repairs and newly available pool results. Older
+     * completed brackets drop out, bounding background requests.
      *
      * This reads `challonge_state` rather than leaning on `sync_state` staying
      * `registered` for unfinished brackets, which is what it used to do. That
      * made one column mean both "have we pulled it" and "is it finished", and
      * the pages that printed the first got the second.
      */
+    const now = Date.now();
     const rows = await this.db
       .select()
       .from(tournaments)
@@ -92,18 +98,26 @@ export class SyncScheduler {
             inArray(tournaments.syncState, ['registered', 'error']),
             isNull(tournaments.challongeState),
             ne(tournaments.challongeState, 'complete'),
+            and(
+              eq(tournaments.challongeState, 'complete'),
+              gte(tournaments.eventDate, new Date(now - COMPLETED_REFRESH_WINDOW_MS)),
+              lte(tournaments.eventDate, new Date(now)),
+            ),
           ),
           // Skip anything the fast poller currently owns; an expired or absent
           // window falls back to the sweep automatically.
           or(isNull(tournaments.liveUntil), lte(tournaments.liveUntil, new Date())),
         ),
       );
-    const now = Date.now();
     for (const row of rows) {
       const last = row.lastSyncedAt?.getTime() ?? 0;
       const eventTime = row.eventDate?.getTime();
-      let interval = 24 * 60 * 60 * 1000;
-      if (eventTime !== undefined) {
+      let interval = DAY_MS;
+      if (row.lastSyncedAt === null) {
+        interval = 0;
+      } else if (row.challongeState === 'complete' && row.syncState === 'synced') {
+        interval = DAY_MS;
+      } else if (eventTime !== undefined) {
         const distance = Math.abs(eventTime - now);
         if (distance < 24 * 60 * 60 * 1000) interval = 10 * 60 * 1000;
         else if (distance < 7 * 24 * 60 * 60 * 1000) interval = 60 * 60 * 1000;

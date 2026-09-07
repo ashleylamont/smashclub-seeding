@@ -47,11 +47,17 @@ describe('event overview standings', () => {
     const cp = await entrants(cons, ids.slice(2), [1, 2]);
     await match(main, mp[0]!, mp[1]!, 1, 1, '2-0');
     await match(cons, cp[0]!, cp[1]!, 1, 1, '2-0');
+    await match(main, mp[2]!, mp[3]!, 1, 1, '2-0');
     await db.update(sets).set({ resultStage: 'group' }).where(eq(sets.tournamentId, main));
     await match(main, mp[0]!, mp[1]!, 1, 2, '2-0');
     const view = (await loadEventOverview(db, 'night_upper'))!;
     expect(view.divisions[0]!.players.map((p) => p.place)).toEqual([1, 2, 3, 4]);
-    expect(view.divisions[0]!.players.reduce((n, p) => n + p.wins + p.losses, 0)).toBe(6);
+    expect(view.divisions[0]!.players.reduce((n, p) => n + p.wins + p.losses, 0)).toBe(8);
+    const consolationWinner = view.divisions[0]!.players.find(p => p.playerId === ids[2])!;
+    expect(consolationWinner).toMatchObject({ wins: 2, losses: 0, poolWins: 1, poolLosses: 0, bracketWins: 1, bracketLosses: 0 });
+    await db.update(tournaments).set({ resultsMode: 'final_stage_only' }).where(eq(tournaments.id, main));
+    const ignored = (await loadEventOverview(db, 'night_upper'))!;
+    expect(ignored.divisions[0]!.players.every(p => p.poolWins === 0 && p.poolLosses === 0)).toBe(true);
   });
 
   it('withholds placements for incomplete brackets and derives tied semifinal losers', async () => {
