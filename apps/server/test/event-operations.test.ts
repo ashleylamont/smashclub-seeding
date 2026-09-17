@@ -1,0 +1,105 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { eventMatches, eventMatchAudit, eventOperationSettings, eventOperators, eventPlanBrackets, eventPlanEntries, eventPlans, eventScoreReports, eventStations, playerClaims, players, sets, tournaments, user, type Db } from '@smashclub/db';
+import { prepare, reportScore, reviewReport, snapshot, updateMatch, requireOperator } from '../src/event-operations/service';
+import { createTestDb } from './helpers/testDb';
+import type { SessionUser } from '../src/auth';
+let db: Db;
+let close: () => Promise<void>;
+let planId: string;
+let ids: string[];
+const admin: SessionUser = { id: 'admin', role: 'admin', name: 'TO', email: 'to@example.test' };
+const member: SessionUser = { id: 'member', role: 'user', name: 'Player', email: 'player@example.test' };
+beforeEach(async () => {
+    ({ db, close } = await createTestDb());
+    await db.insert(user).values([admin, member]);
+    ids = (await db.insert(players).values(Array.from({ length: 8 }, (_, i) => ({ canonicalName: `Private Name ${i}`, displayName: `Alias${i}` }))).returning()).map(p => p.id);
+    planId = (await db.insert(eventPlans).values({ name: 'Rehearsal', eventDate: new Date(), status: 'pools_ready' }).returning())[0]!.id;
+    await db.insert(eventPlanEntries).values(ids.map((id, i) => ({ eventPlanId: planId, sourceLineNumber: i + 1, rawInput: 'Private', cleanedName: 'Private', playerId: id, assignedDivision: i < 4 ? 'upper' as const : 'lower' as const, divisionSeed: i % 4 + 1 })));
+});
+afterEach(async () => close());
+const score = (m: typeof eventMatches.$inferSelect, requestId = 'r1') => ({ matchId: m.id, expectedRevision: m.revision, requestId, score1: 2, score2: 0, outcome: 'played' as const });
+async function ready() { await prepare(db, planId); return (await db.select().from(eventMatches).where(eq(eventMatches.eventPlanId, planId))); }
+describe('event operations', () => {
+    it('prepares all pairs idempotently, gates publication, exposes safe aliases', async () => {
+        expect(await prepare(db, planId)).toEqual({ created: 12 });
+        expect(await prepare(db, planId)).toEqual({ created: 0 });
+        await expect(snapshot(db, planId)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+        await db.update(eventOperationSettings).set({ published: true }).where(eq(eventOperationSettings.eventPlanId, planId));
+        const publicView = await snapshot(db, planId);
+        expect(publicView.matches).toHaveLength(12);
+        expect(JSON.stringify(publicView)).not.toContain('Private');
+    });
+    it('retries once, rejects stale updates, and audits corrections', async () => {
+        const [m] = await ready();
+        const input = score(m!);
+        await reportScore(db, admin, input);
+        await reportScore(db, admin, input);
+        expect(await db.select().from(eventMatchAudit)).toHaveLength(1);
+        await expect(reportScore(db, admin, { ...input, requestId: 'stale' })).rejects.toMatchObject({ code: 'CONFLICT' });
+        await expect(reportScore(db, admin, { ...input, score1: 3 })).rejects.toMatchObject({ code: 'CONFLICT' });
+        await reportScore(db, admin, { ...input, requestId: 'correction', expectedRevision: 1, score1: 0, score2: 2 });
+        expect((await db.select().from(eventMatchAudit))).toHaveLength(2);
+        expect((await db.select().from(eventMatches).where(eq(eventMatches.id, m!.id)))[0]).toMatchObject({ revision: 2, winnerId: m!.player2Id, syncState: 'local' });
+    });
+    it('allows assigned TOs only in their event and serialises station/player conflicts', async () => {
+        await expect(requireOperator(db, planId, member)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+        await db.insert(eventOperators).values({ eventPlanId: planId, userId: member.id });
+        await requireOperator(db, planId, member);
+        const matches = await ready();
+        const m = matches[0]!;
+        const other = matches.find(x => x.player1Id !== m.player1Id && x.player2Id !== m.player1Id && x.player1Id !== m.player2Id && x.player2Id !== m.player2Id)!;
+        const [station] = await db.insert(eventStations).values({ eventPlanId: planId, name: 'Stage' }).returning();
+        await updateMatch(db, member, { matchId: m.id, expectedRevision: 0, status: 'playing', stationId: station!.id });
+        await expect(updateMatch(db, member, { matchId: other.id, expectedRevision: 0, status: 'playing', stationId: station!.id })).rejects.toMatchObject({ code: 'CONFLICT' });
+        const overlap = matches.find(x => x.id !== m.id && [x.player1Id, x.player2Id].includes(m.player1Id))!;
+        await expect(updateMatch(db, member, { matchId: overlap.id, expectedRevision: 0, status: 'playing' })).rejects.toMatchObject({ code: 'CONFLICT' });
+    });
+    it('keeps player reports pending and prevents stale approval overwriting TO corrections', async () => {
+        const [m] = await ready();
+        await db.update(eventOperationSettings).set({ playerReports: true }).where(eq(eventOperationSettings.eventPlanId, planId));
+        await expect(reportScore(db, member, score(m!))).rejects.toMatchObject({ code: 'FORBIDDEN' });
+        await db.insert(playerClaims).values({ userId: member.id, playerId: m!.player1Id!, status: 'approved' });
+        const r = await reportScore(db, member, score(m!));
+        expect(r.status).toBe('pending');
+        expect(await db.select().from(eventMatchAudit)).toHaveLength(0);
+        await reportScore(db, admin, score(m!, 'to-result'));
+        await expect(reviewReport(db, admin, r.id, true)).rejects.toMatchObject({ code: 'CONFLICT' });
+        await reviewReport(db, admin, r.id, false);
+        expect((await db.select().from(eventScoreReports).where(eq(eventScoreReports.id, r.id)))[0]!.status).toBe('rejected');
+    });
+    it('approves a valid report and makes closed events read-only', async () => {
+        const [m] = await ready();
+        await db.update(eventOperationSettings).set({ playerReports: true }).where(eq(eventOperationSettings.eventPlanId, planId));
+        await db.insert(playerClaims).values({ userId: member.id, playerId: m!.player1Id!, status: 'approved' });
+        const r = await reportScore(db, member, score(m!));
+        await reviewReport(db, admin, r.id, true);
+        await reviewReport(db, admin, r.id, true);
+        expect(await db.select().from(eventMatchAudit)).toHaveLength(1);
+        await db.update(eventPlans).set({ status: 'complete' }).where(eq(eventPlans.id, planId));
+        await expect(reportScore(db, admin, { ...score(m!, 'closed'), expectedRevision: 1 })).rejects.toMatchObject({ code: 'CONFLICT' });
+    });
+    it('imports group results with correct orientation and refreshes unknown finals without overwriting local scores', async () => {
+        const matches = await ready();
+        const group = matches.find(m => m.division === 'upper')!;
+        const [t] = await db.insert(tournaments).values({ challongeSlug: 'upper-test', name: 'Upper' }).returning();
+        await db.insert(eventPlanBrackets).values({ eventPlanId: planId, division: 'upper', stage: 'main', tournamentId: t!.id });
+        await db.insert(sets).values({ tournamentId: t!.id, challongeMatchId: 1, state: 'complete', resultStage: 'group', p1PlayerId: group.player2Id, p2PlayerId: group.player1Id, scoresCsv: '2-1', winner: 1 });
+        const [final] = await db.insert(sets).values({ tournamentId: t!.id, challongeMatchId: 2, state: 'pending', resultStage: 'final' }).returning();
+        await prepare(db, planId);
+        let row = (await db.select().from(eventMatches).where(eq(eventMatches.id, group.id)))[0]!;
+        expect(row).toMatchObject({ score1: 1, score2: 2, status: 'complete', winnerId: group.player2Id, syncState: 'synced' });
+        await reportScore(db, admin, { ...score(row), score1: 2, score2: 0 });
+        await db.update(sets).set({ p1PlayerId: ids[0], p2PlayerId: ids[1], state: 'open' }).where(eq(sets.id, final!.id));
+        await prepare(db, planId);
+        row = (await db.select().from(eventMatches).where(eq(eventMatches.id, group.id)))[0]!;
+        expect(row).toMatchObject({ score1: 2, score2: 0, syncState: 'error' });
+        expect((await db.select().from(eventMatches).where(eq(eventMatches.sourceSetId, final!.id)))[0]).toMatchObject({ status: 'ready', player1Id: ids[0], player2Id: ids[1] });
+        await db.update(sets).set({ scoresCsv: '0-2', winner: 2 }).where(eq(sets.challongeMatchId, 1));
+        await prepare(db, planId);
+        expect((await db.select().from(eventMatches).where(eq(eventMatches.id, group.id)))[0]!.syncState).toBe('synced');
+        await db.update(sets).set({ scoresCsv: null, winner: null, state: 'open' }).where(eq(sets.challongeMatchId, 1));
+        await prepare(db, planId);
+        expect((await db.select().from(eventMatches).where(eq(eventMatches.id, group.id)))[0]).toMatchObject({ status: 'ready', score1: null, winnerId: null });
+    });
+});

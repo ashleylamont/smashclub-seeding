@@ -85,6 +85,13 @@
       "when": 1788742028457,
       "tag": "0011_backfill_group_stage_results",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1789684626659,
+      "tag": "0012_event_operations",
+      "breakpoints": true
     }
   ]
 }
