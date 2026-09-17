@@ -26,6 +26,7 @@ import { createAuth } from '../auth';
 import { loadEnv } from '../env';
 import { RecomputeTrigger } from '../recompute/trigger';
 import { seedDevData } from './seedFixtures';
+import { seedOperations } from './seedOperations';
 
 const migrationsFolder = fileURLToPath(new URL('../../../../packages/db/migrations', import.meta.url));
 
@@ -81,6 +82,8 @@ export async function startDevHarness(
   for (const [email, name] of [
     [adminEmail, 'Dev Admin'],
     [userEmail, 'Dev Player'],
+    ['rehearsal-player@smashclub.dev', 'Rehearsal Player'],
+    ['organiser@smashclub.dev', 'Event Organiser'],
   ]) {
     await auth.api
       .signUpEmail({ body: { email: email!, password, name: name! } })
@@ -89,13 +92,18 @@ export async function startDevHarness(
   // Admin promotion requires a provider-verified address (see auth.ts). The
   // harness has no mail server, so stand in for the verification an OAuth
   // provider would have done before these accounts ever reached us.
-  await db.update(user).set({ emailVerified: true }).where(inArray(user.email, [adminEmail, userEmail]));
+  await db.update(user).set({ emailVerified: true }).where(inArray(user.email, [adminEmail, userEmail, 'rehearsal-player@smashclub.dev', 'organiser@smashclub.dev']));
+  const rehearsalPlanId = await seedOperations(db);
 
   await app.listen({ port, host: '127.0.0.1' });
   const url = `http://127.0.0.1:${port}`;
   log(`\ndev harness listening on ${url}`);
   log(`  admin:  ${adminEmail} / ${password}`);
   log(`  player: ${userEmail} / ${password}`);
+  log(`  rehearsal player: rehearsal-player@smashclub.dev / ${password}`);
+  log(`  event TO: organiser@smashclub.dev / ${password}`);
+  log(`  rehearsal: ${url}/live/${rehearsalPlanId}`);
+  log(`  control: ${url}/admin/event-operations?plan=${rehearsalPlanId}`);
 
   return {
     url,
