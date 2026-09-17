@@ -39,7 +39,7 @@ describe('ChallongeClient public bracket requests', () => {
     const bundle = await client.fetchTournamentBundle('example');
     expect(requests).toContain('/example/module');
     expect(bundle.matches.map((match) => match.stage)).toEqual(['group', 'final']);
-    expect(bundle.matches[0]).toMatchObject({ player1Id: 1, player2Id: 2, winnerId: 2 });
+    expect(bundle.matches[0]).toMatchObject({ player1Id: 1, player2Id: 2, winnerId: 2, sourcePlayer1Id: 101, sourcePlayer2Id: 102 });
     expect(bundle.participants.find((p) => p.id === 1)).toMatchObject({ displayName: 'Alpha API', finalRank: 1 });
     expect(bundle.participants.find((p) => p.id === 2)).toBeDefined();
   });

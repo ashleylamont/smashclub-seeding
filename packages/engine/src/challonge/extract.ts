@@ -41,6 +41,9 @@ export interface ChallongeMatch {
   updatedAt: string | null;
   stage?: 'group' | 'final';
   groupId?: number | null;
+  /** Original group participant IDs retained for verified score delivery. */
+  sourcePlayer1Id?: number | null;
+  sourcePlayer2Id?: number | null;
 }
 
 function asRecord(value: unknown, description: string): Record<string, unknown> {
@@ -405,6 +408,8 @@ export function extractPublicBracket(payload: unknown): PublicBracket {
        * authoritative where it is available; this only fills the gap.
        */
       identifier: identifierOf(m),
+      sourcePlayer1Id: num(player1.id),
+      sourcePlayer2Id: num(player2.id),
       player1Id: num(player1.participant_id) ?? num(player1.id),
       player2Id: num(player2.participant_id) ?? num(player2.id),
       winnerId:
