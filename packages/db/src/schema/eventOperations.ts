@@ -27,3 +27,13 @@ export const eventMatchAudit = pgTable('event_match_audit', {
 });
 export const eventAnnouncements = pgTable('event_announcements', { id: uuid('id').primaryKey().defaultRandom(), eventPlanId: planId(), message: text('message').notNull(), createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow() });
 export const eventPrizes = pgTable('event_prizes', { id: uuid('id').primaryKey().defaultRandom(), eventPlanId: planId(), title: text('title').notNull(), description: text('description'), playerId: uuid('player_id').references(() => players.id) });
+/** Stable membership after an attendance change; all pools are snapshotted together. */
+export const eventPoolAssignments = pgTable('event_pool_assignments', {
+    id: uuid('id').primaryKey().defaultRandom(), eventPlanId: planId(), playerId: uuid('player_id').notNull().references(() => players.id), division: text('division').$type<'upper' | 'lower'>().notNull(), poolIndex: integer('pool_index').notNull(),
+}, t => [uniqueIndex('event_pool_assignments_player_idx').on(t.eventPlanId, t.playerId)]);
+export const eventWithdrawals = pgTable('event_withdrawals', {
+    id: uuid('id').primaryKey().defaultRandom(), eventPlanId: planId(), playerId: uuid('player_id').notNull().references(() => players.id), reason: text('reason').notNull(), createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [uniqueIndex('event_withdrawals_player_idx').on(t.eventPlanId, t.playerId)]);
+export const eventAttendanceAudit = pgTable('event_attendance_audit', {
+    id: uuid('id').primaryKey().defaultRandom(), eventPlanId: planId(), userId: text('user_id').notNull().references(() => user.id), action: text('action').notNull(), details: jsonb('details').notNull(), createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});

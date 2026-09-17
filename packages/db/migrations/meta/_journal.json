@@ -92,6 +92,13 @@
       "when": 1789684626659,
       "tag": "0012_event_operations",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789685048393,
+      "tag": "0013_attendance_operations",
+      "breakpoints": true
     }
   ]
 }

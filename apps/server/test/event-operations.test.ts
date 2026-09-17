@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { eventMatches, eventMatchAudit, eventOperationSettings, eventOperators, eventPlanBrackets, eventPlanEntries, eventPlans, eventScoreReports, eventStations, playerClaims, players, sets, tournaments, user, type Db } from '@smashclub/db';
+import { eventMatches, eventMatchAudit, eventOperationSettings, eventOperators, eventPlanBrackets, eventPlanEntries, eventPlans, eventScoreReports, eventStations, eventPoolAssignments, eventWithdrawals, playerClaims, players, sets, tournaments, user, type Db } from '@smashclub/db';
 import { prepare, reportScore, reviewReport, snapshot, updateMatch, requireOperator } from '../src/event-operations/service';
+import { applyAttendance, previewAttendance, resetOperations } from '../src/event-operations/attendance';
+import { getPlan, unfreezeRoster, reorderDivision, generatePools } from '../src/event-planner/plans';
 import { createTestDb } from './helpers/testDb';
 import type { SessionUser } from '../src/auth';
 let db: Db;
@@ -79,6 +81,15 @@ describe('event operations', () => {
         await db.update(eventPlans).set({ status: 'complete' }).where(eq(eventPlans.id, planId));
         await expect(reportScore(db, admin, { ...score(m!, 'closed'), expectedRevision: 1 })).rejects.toMatchObject({ code: 'CONFLICT' });
     });
+    it('classifies imported bye and forfeit sentinels as unplayed outcomes', async () => {
+        const [t] = await db.insert(tournaments).values({ challongeSlug: 'outcomes', name: 'Outcomes' }).returning();
+        await db.insert(eventPlanBrackets).values({ eventPlanId: planId, division: 'upper', stage: 'main', tournamentId: t!.id });
+        await db.insert(sets).values([{ tournamentId: t!.id, challongeMatchId: 11, state: 'complete', resultStage: 'group', p1PlayerId: ids[0], p2PlayerId: ids[1], scoresCsv: '99-0', winner: 1 }, { tournamentId: t!.id, challongeMatchId: 12, state: 'complete', resultStage: 'final', p1PlayerId: ids[0], p2PlayerId: ids[2], scoresCsv: '-1-0', winner: 2 }]);
+        await prepare(db, planId);
+        const rows = await db.select().from(eventMatches);
+        expect(rows.find(m => m.sourceSetId && m.stage === 'group')!.outcome).toBe('bye');
+        expect(rows.find(m => m.stage === 'main')!.outcome).toBe('forfeit');
+    });
     it('imports group results with correct orientation and refreshes unknown finals without overwriting local scores', async () => {
         const matches = await ready();
         const group = matches.find(m => m.division === 'upper')!;
@@ -101,5 +112,72 @@ describe('event operations', () => {
         await db.update(sets).set({ scoresCsv: null, winner: null, state: 'open' }).where(eq(sets.challongeMatchId, 1));
         await prepare(db, planId);
         expect((await db.select().from(eventMatches).where(eq(eventMatches.id, group.id)))[0]).toMatchObject({ status: 'ready', score1: null, winnerId: null });
+    });
+});
+describe('late attendance and protected pools', () => {
+    it('appends a late player without moving existing members or losing completed scores', async () => {
+        const matches = await ready();
+        const match = matches.find(m => m.division === 'upper')!;
+        await reportScore(db, admin, score(match));
+        const before = (await getPlan(db, planId))!;
+        const [late] = await db.insert(players).values({ canonicalName: 'Late Arrival', displayName: 'Late' }).returning();
+        const input = { planId, action: 'add' as const, playerId: late!.id, division: 'upper' as const, poolIndex: 0 };
+        const preview = await previewAttendance(db, input);
+        expect(preview).toMatchObject({ allowed: true, addedMatches: 4, poolSize: 4 });
+        await applyAttendance(db, admin, { ...input, revisionToken: preview.revisionToken });
+        const after = (await getPlan(db, planId))!;
+        expect(after.divisions[0]!.pools[0]!.members.map(m => m.playerId)).toEqual([...before.divisions[0]!.pools[0]!.members.map(m => m.playerId), late!.id]);
+        expect(after.divisions[1]!.pools).toEqual(before.divisions[1]!.pools);
+        expect(await db.select().from(eventMatches)).toHaveLength(16);
+        expect((await db.select().from(eventMatches).where(eq(eventMatches.id, match.id)))[0]).toMatchObject({ score1: 2, status: 'complete' });
+        expect(await db.select().from(eventPoolAssignments)).toHaveLength(9);
+        const [extra] = await db.insert(players).values({ canonicalName: 'Too many' }).returning();
+        expect((await previewAttendance(db, { ...input, playerId: extra!.id })).allowed).toBe(false);
+    });
+    it('rejects stale attendance previews when another TO changes a match', async () => {
+        const [m] = await ready();
+        const input = { planId, action: 'withdraw' as const, playerId: m!.player1Id! };
+        const preview = await previewAttendance(db, input);
+        await reportScore(db, admin, score(m!));
+        await expect(applyAttendance(db, admin, { ...input, revisionToken: preview.revisionToken })).rejects.toMatchObject({ code: 'CONFLICT' });
+        expect(await db.select().from(eventWithdrawals)).toHaveLength(0);
+    });
+    it('withdraws without inventing scores, retains history, and requires explicit forfeits', async () => {
+        const matches = await ready();
+        const m = matches[0]!;
+        await reportScore(db, admin, score(m));
+        const input = { planId, action: 'withdraw' as const, playerId: m.player1Id!, reason: 'Went home' };
+        const preview = await previewAttendance(db, input);
+        await applyAttendance(db, admin, { ...input, revisionToken: preview.revisionToken });
+        const affected = (await db.select().from(eventMatches)).filter(x => x.player1Id === m.player1Id || x.player2Id === m.player1Id);
+        expect(affected.find(x => x.id === m.id)!.status).toBe('complete');
+        expect(affected.filter(x => x.id !== m.id).every(x => x.status === 'blocked' && x.score1 === null)).toBe(true);
+        const held = affected.find(x => x.id !== m.id)!;
+        await expect(updateMatch(db, admin, { matchId: held.id, expectedRevision: held.revision, status: 'playing' })).rejects.toMatchObject({ code: 'CONFLICT' });
+        await expect(reportScore(db, admin, score(held, 'played-withdrawn'))).rejects.toMatchObject({ code: 'CONFLICT' });
+        await reportScore(db, admin, { ...score(held, 'forfeit'), outcome: 'forfeit', winnerId: held.player1Id === m.player1Id ? held.player2Id! : held.player1Id! });
+        expect((await getPlan(db, planId))!.issues.warnings.some(i => i.code === 'withdrawal_advancement')).toBe(true);
+    });
+    it('guards pool mutations until a genuinely unplayed queue is explicitly reset', async () => {
+        await ready();
+        await expect(unfreezeRoster(db, planId)).rejects.toThrow('Operational matches');
+        await expect(generatePools(db, planId)).rejects.toThrow('Operational matches');
+        const view = (await getPlan(db, planId))!;
+        await expect(reorderDivision(db, planId, 'upper', view.entries.filter(e => e.assignedDivision === 'upper').map(e => e.id))).rejects.toThrow('Operational matches');
+        expect(await resetOperations(db, admin, planId)).toEqual({ removedMatches: 12 });
+        await unfreezeRoster(db, planId);
+        expect((await getPlan(db, planId))!.plan.status).toBe('draft');
+    });
+    it('requires acknowledgement for linked roster changes and refuses reset after scoring', async () => {
+        const [m] = await ready();
+        await db.insert(eventPlanBrackets).values({ eventPlanId: planId, division: 'upper', stage: 'main', challongeSlug: 'linked' });
+        const [late] = await db.insert(players).values({ canonicalName: 'Late' }).returning();
+        const input = { planId, action: 'add' as const, playerId: late!.id, division: 'upper' as const, poolIndex: 0 };
+        const preview = await previewAttendance(db, input);
+        expect(preview.requiresExternalAcknowledgement).toBe(true);
+        await expect(applyAttendance(db, admin, { ...input, revisionToken: preview.revisionToken })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+        await applyAttendance(db, admin, { ...input, revisionToken: preview.revisionToken, acknowledgeExternalChange: true });
+        await reportScore(db, admin, score(m!));
+        await expect(resetOperations(db, admin, planId)).rejects.toMatchObject({ code: 'CONFLICT' });
     });
 });

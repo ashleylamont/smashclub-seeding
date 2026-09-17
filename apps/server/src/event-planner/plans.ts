@@ -3,6 +3,9 @@ import type { Db } from '@smashclub/db';
 import {
   companies,
   eventPlanBrackets,
+  eventMatches,
+  eventPoolAssignments,
+  eventWithdrawals,
   eventPlanEntries,
   eventPlanPoolPlacements,
   eventPlans,
@@ -24,7 +27,7 @@ import {
   type PlanIssue,
   EventPlanValidationError,
 } from './divisions';
-import { poolCountFor, poolLabel, stripeIntoPools } from './pools';
+import { poolLabel, stripeIntoPools } from './pools';
 import { buildConsolationBracket, championshipQualifiers, type ConsolationBracket } from './advancement';
 import { parseRosterText, resolveRoster, type RosterResolution } from './roster';
 
@@ -96,6 +99,7 @@ export interface PlanEntryView {
   playerId: string | null;
   /** Registry name — an admin surface, so shown in full. */
   playerName: string | null;
+  withdrawn?: boolean;
   /** What the export and every public surface will call them. */
   publicName: string | null;
   playerStatus: string | null;
@@ -124,6 +128,7 @@ export interface PoolView {
     snapshotRank: number | null;
     /** Confirmed finish, once the worksheet has been filled in. */
     place: number | null;
+    withdrawn?: boolean;
   }>;
 }
 
@@ -236,7 +241,12 @@ export async function getPlan(db: Db, planId: string): Promise<PlanView | null> 
     .select()
     .from(eventPlanPoolPlacements)
     .where(eq(eventPlanPoolPlacements.eventPlanId, planId));
-  const divisions = buildDivisionViews(entries, plan.poolSize, placements);
+  const assignments = await db.select().from(eventPoolAssignments).where(eq(eventPoolAssignments.eventPlanId, planId));
+  const withdrawals = await db.select().from(eventWithdrawals).where(eq(eventWithdrawals.eventPlanId, planId));
+  const withdrawn = new Set(withdrawals.map(row => row.playerId));
+  for (const entry of entries) entry.withdrawn = !!entry.playerId && withdrawn.has(entry.playerId);
+  const divisions = buildDivisionViews(entries, plan.poolSize, placements, assignments);
+
 
   const bracketRows = await db
     .select({
@@ -282,7 +292,7 @@ export async function getPlan(db: Db, planId: string): Promise<PlanView | null> 
         suggestedSlug: suggestedSlug(plan.slugPrefix ?? plan.name, slot.division, slot.stage),
       };
     }),
-    issues: planIssues(entries, plan.upperTargetSize, plan.poolSize),
+    issues: (()=>{const issues=planIssues(entries, plan.upperTargetSize, plan.poolSize);if(withdrawals.length)issues.warnings.push({code:'withdrawal_advancement',message:'An entrant has withdrawn. Automatic qualifier proposals are paused in their division; reconcile advancement and downstream brackets explicitly.'});return issues;})(),
   };
 }
 
@@ -299,6 +309,7 @@ function buildDivisionViews(
   entries: readonly PlanEntryView[],
   poolSize: number,
   placements: ReadonlyArray<{ division: Division; poolIndex: number; playerId: string; place: number }>,
+  assignments: ReadonlyArray<{ division: Division; poolIndex: number; playerId: string }> = [],
 ): DivisionView[] {
   const views: DivisionView[] = [];
   for (const division of ['upper', 'lower'] as const) {
@@ -319,7 +330,9 @@ function buildDivisionViews(
 
     const divisionPlacements = placements.filter((placement) => placement.division === division);
     const placeByPlayer = new Map(divisionPlacements.map((placement) => [placement.playerId, placement.place]));
-    const pools: PoolView[] = stripeIntoPools(members, poolSize).map((poolMembers, poolIndex) => ({
+    const saved = assignments.filter(a => a.division === division);
+    const poolMembers = saved.length ? Array.from({length: Math.max(...saved.map(a=>a.poolIndex))+1}, (_, index) => members.filter(m=>saved.some(a=>a.poolIndex===index&&a.playerId===m.playerId))) : stripeIntoPools(members, poolSize);
+    const pools: PoolView[] = poolMembers.map((poolMembers, poolIndex) => ({
       poolIndex,
       label: poolLabel(poolIndex),
       members: poolMembers.map((entry) => ({
@@ -329,6 +342,7 @@ function buildDivisionViews(
         seed: entry.divisionSeed!,
         snapshotRank: entry.snapshotRank,
         place: placeByPlayer.get(entry.playerId!) ?? null,
+        withdrawn: entry.withdrawn,
       })),
     }));
 
@@ -350,10 +364,10 @@ function buildDivisionViews(
     views.push({
       division,
       size: members.length,
-      poolCount: poolCountFor(members.length, poolSize),
+      poolCount: pools.length,
       pools,
-      consolation: complete ? buildConsolationBracket(finishers) : null,
-      championship: complete
+      consolation: complete && !members.some(m=>m.withdrawn) ? buildConsolationBracket(finishers) : null,
+      championship: complete && !members.some(m=>m.withdrawn)
         ? championshipQualifiers(finishers).map((qualifier) => ({
             playerId: qualifier.playerId,
             name: nameByPlayer.get(qualifier.playerId) ?? '?',
@@ -730,7 +744,7 @@ export async function freezeRoster(db: Db, planId: string): Promise<void> {
  * seeds are not this app's to change, and quietly recomputing them would leave
  * the plan disagreeing with the bracket people are actually playing.
  */
-export async function unfreezeRoster(db: Db, planId: string): Promise<void> {
+async function unfreezeRosterUnlocked(db: Db, planId: string): Promise<void> {
   const plan = await loadPlanRow(db, planId);
   assertStatus(plan.status, ['roster_frozen', 'pools_ready'], 'unfreeze the roster');
   await assertNoAttachedBracket(
@@ -754,7 +768,7 @@ export async function unfreezeRoster(db: Db, planId: string): Promise<void> {
 }
 
 /** Replace one division's seed order. Pools are re-derived from it. */
-export async function reorderDivision(
+async function reorderDivisionUnlocked(
   db: Db,
   planId: string,
   division: Division,
@@ -809,7 +823,7 @@ export async function reorderDivision(
  * this does is move the plan's state on, which is what the pool cards, the
  * exports and the placement worksheet key off.
  */
-export async function generatePools(db: Db, planId: string): Promise<void> {
+async function generatePoolsUnlocked(db: Db, planId: string): Promise<void> {
   const plan = await loadPlanRow(db, planId);
   assertStatus(plan.status, ['roster_frozen', 'pools_ready'], 'generate pools');
   const view = await getPlan(db, planId);
@@ -1035,4 +1049,28 @@ export async function deletePlan(db: Db, planId: string): Promise<void> {
   const plan = await loadPlanRow(db, planId);
   assertStatus(plan.status, ['draft', 'cancelled'], 'delete this plan');
   await db.delete(eventPlans).where(eq(eventPlans.id, planId));
+}
+
+export async function unfreezeRoster(db: Db, planId: string): Promise<void> {
+  return db.transaction(async tx => {
+    await tx.select().from(eventPlans).where(eq(eventPlans.id, planId)).for('update');
+    if ((await tx.select({id:eventMatches.id}).from(eventMatches).where(eq(eventMatches.eventPlanId, planId)).limit(1)).length) throw new EventPlanStateError('Operational matches already exist. Use attendance changes, or reset an unplayed queue before changing pools.');
+    await unfreezeRosterUnlocked(tx, planId);
+  });
+}
+
+export async function generatePools(db: Db, planId: string): Promise<void> {
+  return db.transaction(async tx => {
+    await tx.select().from(eventPlans).where(eq(eventPlans.id, planId)).for('update');
+    if ((await tx.select({id:eventMatches.id}).from(eventMatches).where(eq(eventMatches.eventPlanId, planId)).limit(1)).length) throw new EventPlanStateError('Operational matches already exist. Use attendance changes, or reset an unplayed queue before changing pools.');
+    await generatePoolsUnlocked(tx, planId);
+  });
+}
+
+export async function reorderDivision(db: Db, planId: string, division: Division, orderedEntryIds: readonly string[]): Promise<void> {
+  return db.transaction(async tx => {
+    await tx.select().from(eventPlans).where(eq(eventPlans.id, planId)).for('update');
+    if ((await tx.select({id:eventMatches.id}).from(eventMatches).where(eq(eventMatches.eventPlanId, planId)).limit(1)).length) throw new EventPlanStateError('Operational matches already exist. Use attendance changes, or reset an unplayed queue before changing pools.');
+    await reorderDivisionUnlocked(tx, planId, division, orderedEntryIds);
+  });
 }
