@@ -96,14 +96,23 @@ export async function prepare(db: Db, planId: string) {
             const nextStatus = importedStatus === 'complete' ? 'complete' : !row.player1Id || !row.player2Id ? 'blocked' : previous.status === 'playing' ? 'playing' : previous.status === 'blocked' && previous.blockedReason !== 'Waiting for bracket participants' ? 'blocked' : 'ready';
             const fields = { sourceSetId: row.sourceSetId, player1Id: row.player1Id ?? null, player2Id: row.player2Id ?? null, score1: row.score1 ?? null, score2: row.score2 ?? null, winnerId: row.winnerId ?? null, outcome: row.outcome ?? null, syncState: 'synced' as const };
             if (Object.entries(fields).some(([key, value]) => previous[key as keyof typeof previous] !== value) || nextStatus !== previous.status) {
-                await tx.update(eventMatches).set({ ...fields, status: nextStatus, blockedReason: !fields.player1Id || !fields.player2Id ? 'Waiting for bracket participants' : nextStatus === 'blocked' ? previous.blockedReason : null, revision: previous.revision + 1 }).where(eq(eventMatches.id, previous.id));
+                let reconciliationReason:string|null=null;
+                const resultChanged=previous.status==='complete'&&(nextStatus!=='complete'||previous.score1!==fields.score1||previous.score2!==fields.score2||previous.winnerId!==fields.winnerId||previous.outcome!==fields.outcome);
+                if(previous.stage==='group'&&previous.poolIndex!==null&&resultChanged){
+                    await tx.delete(eventPlanPoolPlacements).where(and(eq(eventPlanPoolPlacements.eventPlanId,planId),eq(eventPlanPoolPlacements.division,previous.division),eq(eventPlanPoolPlacements.poolIndex,previous.poolIndex)));
+                    reconciliationReason='Imported pool result changed. Reconfirm this pool order and reconcile any downstream bracket entrants.';
+                    for(const bracket of linked.filter(b=>b.division===previous.division&&b.stage==='consolation'&&(b.challongeSlug||b.tournamentId))){
+                        await tx.update(eventPlanBrackets).set({externalState:'error',lastError:reconciliationReason,updatedAt:new Date()}).where(eq(eventPlanBrackets.id,bracket.id));
+                    }
+                }
+                await tx.update(eventMatches).set({ ...fields, status: nextStatus, blockedReason: reconciliationReason??(!fields.player1Id || !fields.player2Id ? 'Waiting for bracket participants' : nextStatus === 'blocked' ? previous.blockedReason : null), revision: previous.revision + 1 }).where(eq(eventMatches.id, previous.id));
             }
         }
         const withdrawn = await tx.select().from(eventWithdrawals).where(eq(eventWithdrawals.eventPlanId, planId));
         const withdrawnIds = new Set(withdrawn.map(w => w.playerId));
         const outstanding = await tx.select().from(eventMatches).where(eq(eventMatches.eventPlanId, planId));
-        for (const m of outstanding.filter(m => m.status !== 'complete' && ((m.player1Id && withdrawnIds.has(m.player1Id)) || (m.player2Id && withdrawnIds.has(m.player2Id))) && m.blockedReason !== 'Player withdrawn: awaiting organiser forfeit decision'))
-            await tx.update(eventMatches).set({ status: 'blocked', blockedReason: 'Player withdrawn: awaiting organiser forfeit decision', revision: m.revision + 1 }).where(eq(eventMatches.id, m.id));
+        for (const m of outstanding.filter(m => m.status !== 'complete' && ((m.player1Id && withdrawnIds.has(m.player1Id)) || (m.player2Id && withdrawnIds.has(m.player2Id))) && m.blockedReason !== (m.player1Id&&m.player2Id&&withdrawnIds.has(m.player1Id)&&withdrawnIds.has(m.player2Id)?'Both players withdrawn: no contest; no winner or score recorded':'Player withdrawn: awaiting organiser forfeit decision')))
+            await tx.update(eventMatches).set({ status: 'blocked', blockedReason: m.player1Id&&m.player2Id&&withdrawnIds.has(m.player1Id)&&withdrawnIds.has(m.player2Id)?'Both players withdrawn: no contest; no winner or score recorded':'Player withdrawn: awaiting organiser forfeit decision', revision: m.revision + 1 }).where(eq(eventMatches.id, m.id));
         await tx.insert(eventOperationSettings).values({ eventPlanId: planId }).onConflictDoNothing();
         return { created: rows.filter(r => !existing.some(m => m.sourceKey === r.sourceKey)).length };
     });
@@ -145,7 +154,7 @@ async function matchForUpdate(db: Db, id: string) {
 async function applyScore(db: Db, match: typeof eventMatches.$inferSelect, input: ScoreInput, winnerId: string, actor: string) {
     if (match.revision !== input.expectedRevision)
         fail('CONFLICT', 'This match changed. Refresh before recording a correction.');
-    if (match.stage === 'group' && match.status === 'complete' && (match.score1 !== input.score1 || match.score2 !== input.score2 || match.winnerId !== winnerId)) {
+    if (match.stage === 'group' && match.status === 'complete' && (match.score1 !== input.score1 || match.score2 !== input.score2 || match.winnerId !== winnerId || match.outcome !== input.outcome)) {
         const attached = await db.select().from(eventPlanBrackets).where(and(eq(eventPlanBrackets.eventPlanId, match.eventPlanId), eq(eventPlanBrackets.division, match.division), eq(eventPlanBrackets.stage, 'consolation')));
         if (attached.some(b => b.challongeSlug || b.tournamentId))
             fail('CONFLICT', 'This pool has a linked consolation bracket. Reconcile downstream entrants before correcting its result.');
@@ -181,9 +190,11 @@ export async function reportScore(db: Db, user: SessionUser, input: ScoreInput) 
         if (input.outcome === 'bye' && match.sourceSetId && match.status === 'blocked')
             fail('BAD_REQUEST', 'An unresolved bracket opponent is not a confirmed bye. Resolve it in Challonge first.');
         const withdrawn = await tx.select().from(eventWithdrawals).where(eq(eventWithdrawals.eventPlanId, match.eventPlanId));
+        if(match.player1Id&&match.player2Id&&[match.player1Id,match.player2Id].every(id=>withdrawn.some(w=>w.playerId===id))&&match.status!=='complete')fail('CONFLICT','Both players withdrew. This is an unplayed no contest with no winner.');
         if (input.outcome === 'played' && withdrawn.some(w => [match.player1Id, match.player2Id].includes(w.playerId)) && match.status !== 'complete')
             fail('CONFLICT', 'A player has withdrawn. Record an explicit forfeit rather than a played result.');
         const winnerId = validateScore(match, input);
+        if(match.status!=='complete'&&withdrawn.some(w=>w.playerId===winnerId))fail('BAD_REQUEST','A withdrawn entrant cannot win an outstanding match. Select the active opponent for the forfeit.');
         if (operator)
             await applyScore(tx, match, input, winnerId, user.id);
         const [report] = await tx.insert(eventScoreReports).values({ ...input, eventPlanId: match.eventPlanId, userId: user.id, winnerId, status: operator ? 'approved' : 'pending' }).returning();

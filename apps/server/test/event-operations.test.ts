@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { eventMatches, eventMatchAudit, eventOperationSettings, eventOperators, eventPlanBrackets, eventPlanEntries, eventPlans, eventScoreReports, eventStations, eventPoolAssignments, eventWithdrawals, playerClaims, players, sets, tournaments, user, type Db } from '@smashclub/db';
+import { eventMatches, eventMatchAudit, eventOperationSettings, eventOperators, eventPlanBrackets, eventPlanEntries, eventPlanPoolPlacements, eventPlans, eventScoreReports, eventStations, eventPoolAssignments, eventWithdrawals, playerClaims, players, sets, tournaments, user, type Db } from '@smashclub/db';
 import { prepare, reportScore, reviewReport, snapshot, updateMatch, requireOperator } from '../src/event-operations/service';
 import { applyAttendance, previewAttendance, resetOperations } from '../src/event-operations/attendance';
-import { getPlan, unfreezeRoster, reorderDivision, generatePools } from '../src/event-planner/plans';
+import { getPlan, unfreezeRoster, reorderDivision, generatePools, savePoolPlacements } from '../src/event-planner/plans';
 import { createTestDb } from './helpers/testDb';
 import type { SessionUser } from '../src/auth';
 let db: Db;
@@ -180,4 +180,64 @@ describe('late attendance and protected pools', () => {
         await reportScore(db, admin, score(m!));
         await expect(resetOperations(db, admin, planId)).rejects.toMatchObject({ code: 'CONFLICT' });
     });
+});
+
+describe('withdrawal advancement recovery',()=>{
+ it('requires fresh completed results then advances only active entrants in confirmed order',async()=>{
+   await ready();
+   const input={planId,action:'withdraw' as const,playerId:ids[0]!};
+   await applyAttendance(db,admin,{...input,revisionToken:(await previewAttendance(db,input)).revisionToken});
+   let view=(await getPlan(db,planId))!;let pool=view.divisions[0]!.pools[0]!;
+   const order=[ids[0]!,ids[1]!,ids[2]!,ids[3]!];
+   await expect(savePoolPlacements(db,planId,'upper',[{poolIndex:0,playerIdsInOrder:order,expectedMatchRevisions:pool.matchRevisions,expectedPlacementRevision:pool.placementRevision}])).rejects.toThrow('Record every pool result');
+   const matches=(await db.select().from(eventMatches)).filter(m=>m.division==='upper');
+   for(const m of matches)await reportScore(db,admin,{...score(m,`finish-${m.id}`),outcome:[m.player1Id,m.player2Id].includes(ids[0]!)?'forfeit':'played',winnerId:m.player1Id===ids[0]?m.player2Id!:m.player1Id!});
+   await expect(savePoolPlacements(db,planId,'upper',[{poolIndex:0,playerIdsInOrder:order,expectedMatchRevisions:pool.matchRevisions,expectedPlacementRevision:pool.placementRevision}])).rejects.toThrow('Pool matches changed');
+   view=(await getPlan(db,planId))!;pool=view.divisions[0]!.pools[0]!;
+   await savePoolPlacements(db,planId,'upper',[{poolIndex:0,playerIdsInOrder:order,expectedMatchRevisions:pool.matchRevisions,expectedPlacementRevision:pool.placementRevision}]);
+   const restored=(await getPlan(db,planId))!.divisions[0]!;
+   expect(restored.championship.map(p=>p.playerId)).toEqual([ids[1],ids[2]]);
+   expect(restored.consolation!.entrants.map(p=>p.playerId)).toEqual([ids[3]]);
+   expect(restored.pools[0]!.members.find(m=>m.playerId===ids[0])!.place).toBe(1);
+   await expect(savePoolPlacements(db,planId,'upper',[{poolIndex:0,playerIdsInOrder:[...order].reverse(),expectedMatchRevisions:pool.matchRevisions,expectedPlacementRevision:pool.placementRevision}])).rejects.toThrow('Pool placements changed');
+ });
+ it('invalidates a stale worksheet after a completed score is corrected',async()=>{
+   const matches=(await ready()).filter(m=>m.division==='upper');
+   for(const m of matches)await reportScore(db,admin,score(m,`finish-${m.id}`));
+   const pool=(await getPlan(db,planId))!.divisions[0]!.pools[0]!;
+   const order=pool.members.map(m=>m.playerId);
+   const [m]=await db.select().from(eventMatches).where(eq(eventMatches.id,matches[0]!.id));
+   await reportScore(db,admin,{...score(m!,'correction'),score1:0,score2:2});
+   await expect(savePoolPlacements(db,planId,'upper',[{poolIndex:0,playerIdsInOrder:order,expectedMatchRevisions:pool.matchRevisions,expectedPlacementRevision:pool.placementRevision}])).rejects.toThrow('Pool matches changed');
+   expect((await getPlan(db,planId))!.divisions[0]!.championship).toHaveLength(0);
+ });
+});
+
+it('allows confirmed advancement past an unplayed no contest between two withdrawals',async()=>{
+ await ready();
+ for(const id of ids.slice(0,2)){const input={planId,action:'withdraw' as const,playerId:id};await applyAttendance(db,admin,{...input,revisionToken:(await previewAttendance(db,input)).revisionToken});}
+ const matches=(await db.select().from(eventMatches)).filter(m=>m.division==='upper');
+ const withdrawn=new Set(ids.slice(0,2));
+ const noContest=matches.find(m=>withdrawn.has(m.player1Id!)&&withdrawn.has(m.player2Id!))!;
+ expect(noContest).toMatchObject({status:'blocked',winnerId:null,score1:null});expect(noContest.blockedReason).toContain('no contest');
+ await expect(reportScore(db,admin,{...score(noContest,'fake-forfeit'),outcome:'forfeit'})).rejects.toThrow('no contest');
+ for(const m of matches.filter(m=>m.id!==noContest.id))await reportScore(db,admin,{...score(m,`finish-${m.id}`),outcome:withdrawn.has(m.player1Id!)||withdrawn.has(m.player2Id!)?'forfeit':'played',winnerId:withdrawn.has(m.player1Id!)?m.player2Id!:m.player1Id!});
+ const pool=(await getPlan(db,planId))!.divisions[0]!.pools[0]!;
+ await savePoolPlacements(db,planId,'upper',[{poolIndex:0,playerIdsInOrder:ids.slice(0,4),expectedMatchRevisions:pool.matchRevisions,expectedPlacementRevision:pool.placementRevision}]);
+ const division=(await getPlan(db,planId))!.divisions[0]!;
+ expect(division.championship.map(p=>p.playerId)).toEqual(ids.slice(2,4));expect(division.consolation).toBeNull();
+});
+
+it('invalidates confirmed placements when imported pool results change, including attached finals',async()=>{
+ const [t]=await db.insert(tournaments).values({challongeSlug:'corrected-pools',name:'Pools'}).returning();
+ await db.insert(eventPlanBrackets).values([{eventPlanId:planId,division:'upper',stage:'main',tournamentId:t!.id},{eventPlanId:planId,division:'upper',stage:'consolation',challongeSlug:'already-handed-off'}]);
+ const [remote]=await db.insert(sets).values({tournamentId:t!.id,challongeMatchId:200,state:'complete',resultStage:'group',p1PlayerId:ids[0],p2PlayerId:ids[1],winner:1,scoresCsv:'2-0'}).returning();
+ await ready();
+ await db.insert(eventPlanPoolPlacements).values(ids.slice(0,4).map((id,i)=>({eventPlanId:planId,division:'upper' as const,poolIndex:0,playerId:id,place:i+1})));
+ await prepare(db,planId);expect(await db.select().from(eventPlanPoolPlacements)).toHaveLength(4);
+ await db.update(sets).set({winner:2,scoresCsv:'0-2'}).where(eq(sets.id,remote!.id));await prepare(db,planId);
+ expect(await db.select().from(eventPlanPoolPlacements)).toHaveLength(0);
+ expect((await getPlan(db,planId))!.divisions[0]!.championship).toHaveLength(0);
+ expect((await db.select().from(eventPlanBrackets)).find(b=>b.stage==='consolation')).toMatchObject({externalState:'error'});
+ expect((await db.select().from(eventMatches)).find(m=>m.sourceSetId===remote!.id)).toMatchObject({score1:0,score2:2,syncState:'synced'});
 });

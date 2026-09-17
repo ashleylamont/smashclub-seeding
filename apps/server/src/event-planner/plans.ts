@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
 import {
@@ -120,6 +121,8 @@ export interface PlanEntryView {
 export interface PoolView {
   poolIndex: number;
   label: string;
+  matchRevisions?: Array<{id:string;revision:number}>;
+  placementRevision?: string;
   members: Array<{
     entryId: string;
     playerId: string;
@@ -246,6 +249,11 @@ export async function getPlan(db: Db, planId: string): Promise<PlanView | null> 
   const withdrawn = new Set(withdrawals.map(row => row.playerId));
   for (const entry of entries) entry.withdrawn = !!entry.playerId && withdrawn.has(entry.playerId);
   const divisions = buildDivisionViews(entries, plan.poolSize, placements, assignments);
+  const operationalMatches=await db.select().from(eventMatches).where(eq(eventMatches.eventPlanId,planId));
+  for(const division of divisions)for(const pool of division.pools){
+    pool.matchRevisions=operationalMatches.filter(m=>m.division===division.division&&m.stage==='group'&&m.poolIndex===pool.poolIndex).map(m=>({id:m.id,revision:m.revision}));
+    pool.placementRevision=createHash('sha256').update(JSON.stringify(placements.filter(p=>p.division===division.division&&p.poolIndex===pool.poolIndex).sort((a,b)=>a.playerId.localeCompare(b.playerId)).map(p=>[p.id,p.playerId,p.place,p.updatedAt]))).digest('hex');
+  }
 
 
   const bracketRows = await db
@@ -292,7 +300,7 @@ export async function getPlan(db: Db, planId: string): Promise<PlanView | null> 
         suggestedSlug: suggestedSlug(plan.slugPrefix ?? plan.name, slot.division, slot.stage),
       };
     }),
-    issues: (()=>{const issues=planIssues(entries, plan.upperTargetSize, plan.poolSize);if(withdrawals.length)issues.warnings.push({code:'withdrawal_advancement',message:'An entrant has withdrawn. Automatic qualifier proposals are paused in their division; reconcile advancement and downstream brackets explicitly.'});return issues;})(),
+    issues: (()=>{const issues=planIssues(entries, plan.upperTargetSize, plan.poolSize);if(withdrawals.length)issues.warnings.push({code:'withdrawal_advancement',message:'Withdrawn entrants stay in the recorded finishing order but are excluded from advancement. Reconfirm affected pools: the first two active entrants advance to championship, and remaining active entrants enter consolation. Reconcile linked Challonge brackets manually.'});return issues;})(),
   };
 }
 
@@ -350,10 +358,10 @@ function buildDivisionViews(
       pools.length > 0 && pools.every((pool) => pool.members.every((member) => member.place !== null));
     const finishers = complete
       ? pools.flatMap((pool) =>
-          pool.members.map((member) => ({
+          [...pool.members].filter(member=>!member.withdrawn).sort((a,b)=>a.place!-b.place!).map((member,index) => ({
             playerId: member.playerId,
             poolIndex: pool.poolIndex,
-            place: member.place!,
+            place: index+1,
           })),
         )
       : [];
@@ -366,8 +374,8 @@ function buildDivisionViews(
       size: members.length,
       poolCount: pools.length,
       pools,
-      consolation: complete && !members.some(m=>m.withdrawn) ? buildConsolationBracket(finishers) : null,
-      championship: complete && !members.some(m=>m.withdrawn)
+      consolation: complete && finishers.some(f=>f.place>=3) ? buildConsolationBracket(finishers) : null,
+      championship: complete
         ? championshipQualifiers(finishers).map((qualifier) => ({
             playerId: qualifier.playerId,
             name: nameByPlayer.get(qualifier.playerId) ?? '?',
@@ -843,10 +851,12 @@ export interface PoolPlacementInput {
   poolIndex: number;
   /** playerId in finishing order; index 0 is first place. */
   playerIdsInOrder: string[];
+  expectedMatchRevisions?: Array<{id:string;revision:number}>;
+  expectedPlacementRevision?: string;
 }
 
 /** Record the confirmed 1-4 for one division's pools. */
-export async function savePoolPlacements(
+async function savePoolPlacementsUnlocked(
   db: Db,
   planId: string,
   division: Division,
@@ -861,6 +871,14 @@ export async function savePoolPlacements(
   }
 
   for (const pool of pools) {
+    const operational=await db.select().from(eventMatches).where(and(eq(eventMatches.eventPlanId,planId),eq(eventMatches.division,division),eq(eventMatches.stage,'group'),eq(eventMatches.poolIndex,pool.poolIndex)));
+    if(operational.length||pool.expectedMatchRevisions?.length) {
+      const expectedRevisions=pool.expectedMatchRevisions;
+      if(pool.expectedPlacementRevision!==divisionView.pools.find(p=>p.poolIndex===pool.poolIndex)?.placementRevision)throw new EventPlanStateError('Pool placements changed since this worksheet was loaded. Refresh before confirming.');
+      if(!expectedRevisions||expectedRevisions.length!==operational.length||new Set(expectedRevisions.map(m=>m.id)).size!==operational.length||operational.some(m=>!expectedRevisions.some(e=>e.id===m.id&&e.revision===m.revision)))throw new EventPlanStateError('Pool matches changed since this worksheet was loaded. Refresh and review the finishing order before confirming.');
+      const withdrawnIds=new Set(divisionView.pools.flatMap(p=>p.members.filter(m=>m.withdrawn).map(m=>m.playerId)));
+      if(operational.some(m=>m.status!=='complete'&&!(m.player1Id&&m.player2Id&&withdrawnIds.has(m.player1Id)&&withdrawnIds.has(m.player2Id))))throw new EventPlanStateError('Record every pool result, including explicit withdrawal forfeits, before confirming its finishing order.');
+    }
     const expected = divisionView.pools.find((entry) => entry.poolIndex === pool.poolIndex);
     if (!expected) throw new EventPlanStateError(`Pool ${pool.poolIndex + 1} is not in the ${division} division.`);
     const members = new Set(expected.members.map((member) => member.playerId));
@@ -924,7 +942,7 @@ export async function savePoolPlacements(
  * divisions, and marking Lower as the rookie bracket would quietly change what
  * the club's own history means.
  */
-export async function attachBracket(
+async function attachBracketUnlocked(
   db: Db,
   planId: string,
   division: Division,
@@ -982,7 +1000,7 @@ export async function attachBracket(
 }
 
 /** Unhook a slug from the plan. The tournament row itself is left alone. */
-export async function detachBracket(
+async function detachBracketUnlocked(
   db: Db,
   planId: string,
   division: Division,
@@ -1008,7 +1026,7 @@ export async function detachBracket(
  * planner's point of view — a closed plan is a record, and reopening one to
  * re-run a night that already rated would be a way to double-count it.
  */
-export async function closePlan(db: Db, planId: string, status: 'complete' | 'cancelled'): Promise<void> {
+async function closePlanUnlocked(db: Db, planId: string, status: 'complete' | 'cancelled'): Promise<void> {
   const plan = await loadPlanRow(db, planId);
   assertStatus(
     plan.status,
@@ -1072,5 +1090,33 @@ export async function reorderDivision(db: Db, planId: string, division: Division
     await tx.select().from(eventPlans).where(eq(eventPlans.id, planId)).for('update');
     if ((await tx.select({id:eventMatches.id}).from(eventMatches).where(eq(eventMatches.eventPlanId, planId)).limit(1)).length) throw new EventPlanStateError('Operational matches already exist. Use attendance changes, or reset an unplayed queue before changing pools.');
     await reorderDivisionUnlocked(tx, planId, division, orderedEntryIds);
+  });
+}
+
+export async function savePoolPlacements(db: Db, planId: string, division: Division, pools: readonly PoolPlacementInput[]):Promise<void> {
+  return db.transaction(async tx=>{
+    await tx.select().from(eventPlans).where(eq(eventPlans.id,planId)).for('update');
+    return savePoolPlacementsUnlocked(tx, planId, division, pools);
+  });
+}
+
+export async function attachBracket(db: Db, planId: string, division: Division, stage: BracketStage, slugOrUrl:string):Promise<{tournamentId:string;slug:string}> {
+  return db.transaction(async tx=>{
+    await tx.select().from(eventPlans).where(eq(eventPlans.id,planId)).for('update');
+    return attachBracketUnlocked(tx, planId, division, stage, slugOrUrl);
+  });
+}
+
+export async function detachBracket(db: Db, planId: string, division: Division, stage: BracketStage):Promise<void> {
+  return db.transaction(async tx=>{
+    await tx.select().from(eventPlans).where(eq(eventPlans.id,planId)).for('update');
+    return detachBracketUnlocked(tx, planId, division, stage);
+  });
+}
+
+export async function closePlan(db: Db, planId: string, status:'complete'|'cancelled'):Promise<void> {
+  return db.transaction(async tx=>{
+    await tx.select().from(eventPlans).where(eq(eventPlans.id,planId)).for('update');
+    return closePlanUnlocked(tx, planId, status);
   });
 }

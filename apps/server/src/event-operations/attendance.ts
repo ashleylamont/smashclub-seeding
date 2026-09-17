@@ -28,7 +28,7 @@ export async function previewAttendance(db: Db, input: AttendanceInput) {
     const warnings: string[] = [];
     if (!['pools_ready', 'underway'].includes(view.plan.status))
         issues.push('Attendance changes require prepared pools in an open event.');
-    if (!player || player.status === 'merged')
+    if (!player || player.status !== 'active')
         issues.push('Choose an existing active player.');
     if (input.action === 'add' && entrant)
         issues.push('This player is already in the event.');
@@ -46,7 +46,7 @@ export async function previewAttendance(db: Db, input: AttendanceInput) {
     if (attached.length)
         warnings.push('This event has a linked Challonge bracket. Update its roster or withdrawal there manually and sync it; Nemesis does not change the remote bracket.');
     if (input.action === 'withdraw')
-        warnings.push('Completed results stay recorded. Outstanding matches are held for explicit forfeit decisions. Automatic advancement for this division pauses until withdrawal rules are reconciled.');
+        warnings.push('Completed results stay recorded. Outstanding matches are held for explicit forfeit decisions. Reconfirm the pool order afterwards: first two active entrants advance to championship and remaining active entrants enter consolation.');
     if (pool?.members.some(m => m.place !== null))
         warnings.push('Confirmed placements for this pool will be cleared and need reconfirmation.');
     const affected = matches.filter(m => m.player1Id === input.playerId || m.player2Id === input.playerId);
@@ -85,8 +85,9 @@ export async function applyAttendance(db: Db, actor: SessionUser, input: Attenda
             const reason = input.reason?.trim() || 'Withdrawn from event';
             await tx.insert(eventWithdrawals).values({ eventPlanId: input.planId, playerId: input.playerId, reason });
             const affected = await tx.select().from(eventMatches).where(and(eq(eventMatches.eventPlanId, input.planId), or(eq(eventMatches.player1Id, input.playerId), eq(eventMatches.player2Id, input.playerId))));
+            const withdrawnIds=new Set((await tx.select().from(eventWithdrawals).where(eq(eventWithdrawals.eventPlanId,input.planId))).map(w=>w.playerId));
             for (const match of affected.filter(m => m.status !== 'complete'))
-                await tx.update(eventMatches).set({ status: 'blocked', blockedReason: 'Player withdrawn: awaiting organiser forfeit decision', revision: match.revision + 1 }).where(eq(eventMatches.id, match.id));
+                await tx.update(eventMatches).set({ status: 'blocked', blockedReason: match.player1Id&&match.player2Id&&withdrawnIds.has(match.player1Id)&&withdrawnIds.has(match.player2Id)?'Both players withdrawn: no contest; no winner or score recorded':'Player withdrawn: awaiting organiser forfeit decision', revision: match.revision + 1 }).where(eq(eventMatches.id, match.id));
         }
         await tx.delete(eventPlanPoolPlacements).where(and(eq(eventPlanPoolPlacements.eventPlanId, input.planId), eq(eventPlanPoolPlacements.division, division), eq(eventPlanPoolPlacements.poolIndex, poolIndex)));
         await tx.insert(eventAttendanceAudit).values({ eventPlanId: input.planId, userId: actor.id, action: input.action, details: { playerId: input.playerId, division, poolIndex, reason: input.reason ?? null, externalAcknowledged: input.acknowledgeExternalChange ?? false, affectedMatches: preview.affectedMatches } });

@@ -102,7 +102,7 @@ function DivisionPools({
         </div>
       ) : (
         <p className="muted">
-          Confirm every pool’s finishing order to generate the consolation draw and its import list.
+          {division.pools.every(pool=>pool.members.every(member=>member.place!==null)) ? 'No active entrants are eligible for consolation.' : 'Confirm every pool’s finishing order to generate the consolation draw and its import list.'}
         </p>
       )}
     </div>
@@ -156,7 +156,7 @@ function PoolCard({
       trpc.admin.eventPlanner.savePoolPlacements.mutate({
         planId,
         division: divisionKey,
-        pools: [{ poolIndex: pool.poolIndex, playerIdsInOrder: order as string[] }],
+        pools: [{ poolIndex: pool.poolIndex, playerIdsInOrder: order as string[], expectedMatchRevisions:pool.matchRevisions??[], expectedPlacementRevision:pool.placementRevision }],
       }),
     onSuccess: onChanged,
   });
@@ -171,6 +171,7 @@ function PoolCard({
         {pool.members.map((member) => (
           <li key={member.playerId}>
             <span className="seed-number">{member.seed}</span> {member.name}
+            {member.withdrawn && <span className="chip">Withdrawn</span>}
             {member.place !== null && <span className="chip">{ordinal(member.place)}</span>}
           </li>
         ))}
@@ -178,6 +179,7 @@ function PoolCard({
 
       <div className="pool-worksheet">
         <span className="form-label">Final order</span>
+        {pool.members.some(member=>member.withdrawn) && <p className="muted">Include withdrawn entrants in the recorded finishing order. On confirmation, they are excluded from advancement: the first two active entrants advance to championship and remaining active entrants enter consolation. Update linked Challonge brackets to match.</p>}
         {pool.members.map((_, place) => (
           <label key={place} className="pool-place">
             <span>{ordinal(place + 1)}</span>
