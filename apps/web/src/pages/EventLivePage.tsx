@@ -7,7 +7,7 @@ import './EventLive.css';
 import { ResultGraphic } from '../components/ResultGraphic';
 import { confirmedPoolGraphics } from '../lib/resultGraphic';
 
-import { liveSections, overlayGeometry, type LiveMatch } from '../lib/eventDisplay';
+import { broadcastQueue, liveSections, overlayGeometry, type LiveMatch } from '../lib/eventDisplay';
 export function EventLivePage() {
   const { planId } = useParams({ from: '/live/$planId' });
   return <EventDisplay planId={planId} />;
@@ -38,7 +38,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
   const focusedStation = focus ? data.stations.find(item => item.id === focus || item.name.toLowerCase() === focus.toLowerCase()) : undefined;
   const onStream = focus ? sections.playing.find(match => match.stationId === focusedStation?.id) :
     sections.playing.find(match => station(match)?.toLowerCase() === 'stage') ?? sections.playing[0];
-  const onDeck = sections.ready.filter(match => !focus || !match.stationId || match.stationId === focusedStation?.id);
+  const onDeck = broadcastQueue(sections.ready.filter(match => !focus || !match.stationId || match.stationId === focusedStation?.id));
   const showName = data.plan.name.split(' · ')[0]!;
   if (overlay) return <div className="event-display event-overlay" style={variables}>
     <aside className="broadcast-rail">

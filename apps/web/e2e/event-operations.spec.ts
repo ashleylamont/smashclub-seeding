@@ -91,15 +91,17 @@ test('rehearsal: two TOs, score approval, station safety, public board and OBS',
     await download.saveAs(testInfo.outputPath('pool-results.svg'));
     await page.screenshot({ path: testInfo.outputPath('live-board.png'), fullPage: true });
 
-    await page.goto(`/overlay/${planId}?captureWidth=68&captureHeight=65`);
+    await page.goto(`/overlay/${planId}`);
     await expect(page.locator('.event-capture')).toBeVisible();
     const geometry = await page.locator('.event-capture').evaluate(element => {
       const box = element.getBoundingClientRect();
-      return { width: box.width / innerWidth, height: box.height / innerHeight,
+      return { width: box.width / innerWidth, height: box.height / innerHeight, aspect: box.width / box.height, right: box.right, bottom: box.bottom, viewportWidth: innerWidth, viewportHeight: innerHeight,
         background: getComputedStyle(element).backgroundColor, documentBackground: getComputedStyle(document.documentElement).backgroundColor };
     });
-    expect(geometry.width).toBeCloseTo(0.68, 2);
-    expect(geometry.height).toBeCloseTo(0.65, 2);
+    expect(geometry.aspect).toBeCloseTo(16 / 9, 2);
+    expect(geometry.right).toBeLessThanOrEqual(geometry.viewportWidth);
+    expect(geometry.bottom).toBeLessThanOrEqual(geometry.viewportHeight);
+    expect(geometry.width).toBeGreaterThan(0.65);
     expect(geometry.background).toBe('rgba(0, 0, 0, 0)');
     expect(geometry.documentBackground).toBe('rgba(0, 0, 0, 0)');
     await page.screenshot({ path: testInfo.outputPath('obs-overlay.png'), omitBackground: true });

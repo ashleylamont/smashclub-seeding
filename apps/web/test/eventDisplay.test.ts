@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { liveSections, overlayGeometry, type LiveMatch } from '../src/lib/eventDisplay';
+import { broadcastQueue, liveSections, overlayGeometry, type LiveMatch } from '../src/lib/eventDisplay';
 
 describe('spectator event board', () => {
   it('keeps blocked matches out of the ready queue and counts only confirmed results', () => {
@@ -11,9 +11,15 @@ describe('spectator event board', () => {
     expect(sections.total).toBe(4);
   });
   it('bounds malformed browser-source geometry while retaining a transparent centre', () => {
-    expect(overlayGeometry('')).toEqual({ width: 68, height: 65 });
+    expect(overlayGeometry('')).toEqual({ width: 78, height: 78 });
     expect(overlayGeometry('?captureWidth=75&captureHeight=70')).toEqual({ width: 75, height: 70 });
-    expect(overlayGeometry('?captureWidth=Infinity&captureHeight=no')).toEqual({ width: 68, height: 65 });
-    expect(overlayGeometry('?captureWidth=-1&captureHeight=999')).toEqual({ width: 35, height: 80 });
+    expect(overlayGeometry('?captureWidth=Infinity&captureHeight=no')).toEqual({ width: 78, height: 78 });
+    expect(overlayGeometry('?captureWidth=-1&captureHeight=999')).toEqual({ width: 35, height: 78 });
   });
+});
+
+it('does not put the same challenger into several broadcast on-deck slots', () => {
+  const matches = [['a', 'b'], ['a', 'c'], ['c', 'd'], ['e', 'f']].map(([player1Id, player2Id], index) => ({ id: String(index), player1Id, player2Id }) as LiveMatch);
+  expect(broadcastQueue(matches).map(match => match.id)).toEqual(['0', '2', '3']);
+  expect(overlayGeometry('?captureWidth=100&captureHeight=100')).toEqual({ width: 78, height: 78 });
 });

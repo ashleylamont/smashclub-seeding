@@ -9,7 +9,7 @@ export function liveSections(matches: readonly LiveMatch[]) {
   return { playing: matches.filter(m => m.status === 'playing'), ready: availableMatches(matches),
     complete: matches.filter(m => m.status === 'complete'), total: matches.length };
 }
-/** Percentages of the browser source: reserve a transparent, centred capture region. */
+/** Percentages of the browser source: reserve a transparent aperture inside the 20% rail and 13% header. */
 export function overlayGeometry(search: string) {
   const params = new URLSearchParams(search);
   const bounded = (key: string, fallback: number, min: number, max: number) => {
@@ -17,5 +17,19 @@ export function overlayGeometry(search: string) {
     const value = raw === null || raw.trim() === '' ? fallback : Number(raw);
     return Math.min(max, Math.max(min, Number.isFinite(value) ? value : fallback));
   };
-  return { width: bounded('captureWidth', 68, 35, 85), height: bounded('captureHeight', 65, 30, 80) };
+  return { width: bounded('captureWidth', 78, 35, 78), height: bounded('captureHeight', 78, 30, 78) };
+}
+
+/** Pick distinct challengers, preserving readiness priority without promising the same player twice. */
+export function broadcastQueue(matches: readonly LiveMatch[], limit = 3): LiveMatch[] {
+  const selected: LiveMatch[] = [];
+  const used = new Set<string>();
+  for (const match of matches) {
+    if (selected.length >= limit) break;
+    if (!match.player1Id || !match.player2Id || used.has(match.player1Id) || used.has(match.player2Id)) continue;
+    selected.push(match);
+    used.add(match.player1Id);
+    used.add(match.player2Id);
+  }
+  return selected;
 }
