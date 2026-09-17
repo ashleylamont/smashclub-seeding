@@ -124,7 +124,7 @@ async function freshOperations(request: APIRequestContext, suffix: string) {
   const created = await mutateData<{ planId: string }>(request, 'admin.eventPlanner.createPlan', {
     name: `Operations regression · ${suffix} · ${Date.now()}`, eventDate: new Date().toISOString(), upperTargetSize: 9,
     rows: sourcePlan.entries.map((entry, index) => ({ lineNumber: index + 1, rawInput: entry.playerName, cleanedName: entry.playerName,
-      playerId: entry.playerId, companyId: entry.companyId, resolutionMethod: 'manual', divisionPreference: 'auto' })),
+      playerId: entry.playerId, companyId: entry.companyId ?? null, resolutionMethod: 'manual', divisionPreference: 'auto' })),
   });
   for (const procedure of ['admin.eventPlanner.freezeRoster', 'admin.eventPlanner.generatePools', 'eventOps.prepare']) {
     await mutateData(request, procedure, created);

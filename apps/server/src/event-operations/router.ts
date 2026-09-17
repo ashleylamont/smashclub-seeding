@@ -1,4 +1,5 @@
 import { eventDeliveryRouter } from './deliveryRouter';
+import { sourceRefreshRouter } from './sourceRefreshRouter';
 import { z } from 'zod';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -10,6 +11,7 @@ const attendanceInput = z.object({ planId: z.string().uuid(), action: z.enum(['a
 const planInput = z.object({ planId: z.string().uuid() });
 export const eventOpsRouter = router({
     delivery: eventDeliveryRouter,
+    sources: sourceRefreshRouter,
     previewAttendance: authedProcedure.input(attendanceInput).query(async ({ ctx, input }) => { await requireOperator(ctx.db, input.planId, ctx.user); return previewAttendance(ctx.db, input); }),
     applyAttendance: authedProcedure.input(attendanceInput.extend({ revisionToken: z.string().min(1) })).mutation(({ ctx, input }) => applyAttendance(ctx.db, ctx.user, input)),
     resetOperations: authedProcedure.input(planInput).mutation(({ ctx, input }) => resetOperations(ctx.db, ctx.user, input.planId)),

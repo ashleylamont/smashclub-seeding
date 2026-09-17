@@ -34,7 +34,8 @@ export async function seedOperations(db: Db): Promise<string> {
     await reportScore(db, actor, { matchId: match.id, expectedRevision: match.revision, requestId: `demo-${match.id}`,
       score1: firstWins ? 2 : 0, score2: firstWins ? 0 : 2, outcome: 'played' });
   }
-  await savePoolPlacements(db, planId, 'lower', [{ poolIndex: completedPool.poolIndex, playerIdsInOrder: poolOrder }]);
+  const scoredPool = (await getPlan(db, planId))!.divisions.find(division => division.division === 'lower')!.pools[0]!;
+  await savePoolPlacements(db, planId, 'lower', [{ poolIndex: completedPool.poolIndex, playerIdsInOrder: poolOrder, expectedMatchRevisions: scoredPool.matchRevisions, expectedPlacementRevision: scoredPool.placementRevision }]);
   view = await snapshot(db, planId);
   const playing = view.matches.find(match => match.division === 'upper' && match.status === 'ready')!;
   await updateMatch(db, actor, { matchId: playing.id, expectedRevision: playing.revision, status: 'playing', stationId: stations[0]!.id });
