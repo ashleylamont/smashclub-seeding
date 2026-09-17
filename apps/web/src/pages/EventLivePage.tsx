@@ -30,29 +30,55 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
   const sections = liveSections(data.matches);
   const poolResults = confirmedPoolGraphics(data.placements, data.entrants);
   const geometry = overlayGeometry(window.location.search);
-  const variables = { '--capture-width': `${geometry.width}%`, '--capture-height': `${geometry.height}%` } as CSSProperties;
+  const search = new URLSearchParams(window.location.search);
+  const customGeometry = search.has('captureWidth') || search.has('captureHeight');
+  const variables = (customGeometry ? { '--capture-width': `${geometry.width}vw`, '--capture-height': `${geometry.height}vh` } : {}) as CSSProperties;
   const station = (match: LiveMatch) => data.stations.find(s => s.id === match.stationId)?.name;
-  return <div className={`event-display ${overlay ? 'event-overlay' : ''}`} style={variables}>
-    <header className="event-live-header"><div><span className="event-eyebrow">SMASH CLUB / {sections.playing.length ? 'LIVE NOW' : 'EVENT BOARD'}</span><h1>{data.plan.name}</h1></div>
-      <div className="event-live-progress"><strong>{sections.complete.length}<span> / {sections.total}</span></strong><span>sets complete</span><progress value={sections.complete.length} max={Math.max(1, sections.total)} aria-label="Sets completed" /></div>
+  const focus = search.get('station');
+  const focusedStation = focus ? data.stations.find(item => item.id === focus || item.name.toLowerCase() === focus.toLowerCase()) : undefined;
+  const onStream = focus ? sections.playing.find(match => match.stationId === focusedStation?.id) :
+    sections.playing.find(match => station(match)?.toLowerCase() === 'stage') ?? sections.playing[0];
+  const onDeck = sections.ready.filter(match => !focus || !match.stationId || match.stationId === focusedStation?.id);
+  const showName = data.plan.name.split(' · ')[0]!;
+  if (overlay) return <div className="event-display event-overlay" style={variables}>
+    <aside className="broadcast-rail">
+      <div className="broadcast-club"><BroadcastMark /><span>SMASH<br />CLUB</span></div>
+      <div className="broadcast-identity"><span className="event-eyebrow">THE CLUB NIGHT</span><h1 title={data.plan.name}>{showName}</h1><span className="broadcast-edition">{data.plan.name.includes(' · ') ? data.plan.name.split(' · ').slice(1).join(' · ') : 'Find your rival.'}</span></div>
+      <div className="broadcast-rail-rule"><span>ON DECK</span><span>↗</span></div>
+      <div className="broadcast-deck">{onDeck.length ? onDeck.slice(0, 3).map((match, index) => <article key={match.id}><span className="broadcast-queue-index">0{index + 1}</span><div><small>{match.division} / {match.stage === 'group' ? `POOL ${String.fromCharCode(65 + (match.poolIndex ?? 0))}` : match.stage}</small><strong>{match.player1Name || 'TBD'}</strong><span className="broadcast-versus">vs</span><strong>{match.player2Name || 'TBD'}</strong></div></article>) : <p className="broadcast-wait">Next challengers<br />coming up.</p>}</div>
+      <div className="broadcast-progress"><span>THE NIGHT SO FAR</span><strong>{String(sections.complete.length).padStart(2, '0')}<i>/{String(sections.total).padStart(2, '0')}</i></strong><progress value={sections.complete.length} max={Math.max(1, sections.total)} aria-label="Sets completed" /><small>SETS IN THE BOOKS</small></div>
+      <span className="broadcast-rail-footer">GOOD GAMES. GREAT RIVALS.</span>
+    </aside>
+    <header className="broadcast-topline"><span><i /> {onStream ? 'ON AIR' : 'STAND BY'}</span><span>{focusedStation?.name ?? (onStream ? station(onStream) : null) ?? (focus ? 'Selected station' : 'Main broadcast')} / {onStream?.stage === 'group' ? 'ROUND ROBIN' : onStream?.stage?.toUpperCase() ?? 'NEXT SET SOON'}</span><span>nemesis.ashl.dev</span></header>
+    <div className="broadcast-matchup" aria-label="On-stream matchup">
+      <div className="broadcast-fighter broadcast-fighter-one"><span className="broadcast-side">P1</span><strong>{onStream?.player1Name || 'NEXT CHALLENGER'}</strong><b>{onStream?.score1 ?? '—'}</b></div>
+      <span className="broadcast-match-versus">VS</span>
+      <div className="broadcast-fighter broadcast-fighter-two"><b>{onStream?.score2 ?? '—'}</b><strong>{onStream?.player2Name || 'NEXT CHALLENGER'}</strong><span className="broadcast-side">P2</span></div>
+    </div>
+    <div className="event-capture" aria-label="Transparent game capture area"><span className="capture-corner capture-corner-tl" /><span className="capture-corner capture-corner-br" /></div>
+    <footer className="broadcast-footer"><div className="broadcast-footer-label"><span>FROM THE</span><strong>FLOOR ↗</strong></div><aside className="event-announcements" aria-label="Announcements"><p>{data.announcements[0]?.message ?? 'Grab a setup. Find your rival. Make it a good set.'}</p></aside><div className="broadcast-footer-mark"><BroadcastMark /></div></footer>
+    {query.isError && <div className="broadcast-offline" role="status">Connection interrupted · last received scores</div>}
+  </div>;
+  return <div className="event-display event-board" style={variables}>
+    <header className="event-live-header"><div className="event-board-brand"><BroadcastMark /><span>SMASH CLUB<br />TOURNAMENT NIGHT</span></div><div className="event-board-title"><span className="event-eyebrow">FIND YOUR RIVAL.</span><h1>{data.plan.name}</h1></div>
+      <div className="event-live-progress"><span>THE NIGHT SO FAR</span><strong>{String(sections.complete.length).padStart(2, '0')}<span> / {sections.total}</span></strong><span>sets in the books</span><progress value={sections.complete.length} max={Math.max(1, sections.total)} aria-label="Sets completed" /></div>
     </header>
-    <div className="event-connection" role="status">{query.isError ? 'Connection interrupted · showing last received results' : 'Updates automatically every 5 seconds'}</div>
-    {overlay && <div className="event-capture" aria-label="Transparent game capture area" />}
+    <div className="event-connection" role="status"><span><i className="event-live-dot" />{sections.playing.length ? 'LIVE FROM THE CLUB' : 'THE EVENT BOARD'}</span><span>{query.isError ? 'Connection interrupted · showing last received results' : 'Results refresh every 5 seconds'}</span></div>
     <div className="event-live-columns">
-      <section className="event-now"><h2><span className="event-live-dot" />Now playing <span>{sections.playing.length}</span></h2>
-        {sections.playing.length ? sections.playing.slice(0, overlay ? 3 : undefined).map(match => <MatchCard key={match.id} match={match} station={station(match)} />) : <p className="event-empty">Waiting for the next set. Stay ready.</p>}
+      <section className="event-now"><h2><span>01 /</span> On the setups <span>{sections.playing.length} LIVE</span></h2>
+        {sections.playing.length ? sections.playing.map(match => <MatchCard key={match.id} match={match} station={station(match)} />) : <p className="event-empty">A little breather.<br /><strong>The next set is coming.</strong></p>}
       </section>
-      <section className="event-next"><h2>Up next <span>{sections.ready.length}</span></h2>
-        {sections.ready.length ? sections.ready.slice(0, overlay ? 3 : 8).map(match => <MatchCard key={match.id} match={match} station={station(match)} />) : <p className="event-empty">The next matchups will appear here.</p>}
+      <section className="event-next"><h2><span>02 /</span> On deck <span>{sections.ready.length} READY</span></h2>
+        {sections.ready.length ? sections.ready.slice(0, 6).map(match => <MatchCard key={match.id} match={match} station={station(match)} />) : <p className="event-empty">Stay close. Your next matchup lands here.</p>}
       </section>
     </div>
-    <aside className="event-announcements" aria-label="Announcements">{data.announcements.length ? data.announcements.slice(0, 2).map(a => <p key={a.id}><strong>CLUB NOTICE</strong> {a.message}</p>) : <p><strong>SMASH CLUB</strong> Good games. Good company.</p>}</aside>
-    {!overlay && <>
+    <aside className="event-announcements" aria-label="Announcements"><strong>FROM THE FLOOR ↗</strong><div>{data.announcements.length ? data.announcements.slice(0, 2).map(a => <p key={a.id}>{a.message}</p>) : <p>Good games. Great rivals. Welcome to the club.</p>}</div></aside>
+    <>
       {data.settings.playerReports && <p><a className="btn" href={`/play/${planId}`}>Report your match score →</a></p>}
       <section className="event-recent"><h2>Recorded results</h2>{sections.complete.length ? <div className="event-results-grid">{sections.complete.slice(-12).reverse().map(match => <MatchCard key={match.id} match={match} station={station(match)} />)}</div> : <p className="event-empty">Results appear here once confirmed.</p>}<p className="event-live-note">Set results are shown as recorded. They do not imply final tournament placements.</p></section>
       {poolResults.length > 0 && <section className="event-pool-results"><h2>Confirmed pool standings</h2><p className="event-live-note">Places are within each pool, as confirmed by the organisers.</p><div className="event-results-grid">{poolResults.map(pool => <article className="event-prize" key={pool.title}><h3>{pool.title}</h3><ol className="event-pool-ranking">{pool.results.map(result => <li key={result.alias}><span>{result.place}</span> {result.alias}</li>)}</ol><ResultGraphic title={`${data.plan.name} · ${pool.title}`} results={pool.results} /></article>)}</div></section>}
       {data.prizes.length > 0 && <section className="event-prizes"><h2>On the line</h2><div className="event-results-grid">{data.prizes.map(prize => <article className="event-prize" key={prize.id}><span className="event-eyebrow">PRIZE</span><h3>{prize.title}</h3><p>{prize.description}</p>{prize.playerName && <strong>{prize.playerName}</strong>}</article>)}</div></section>}
-    </>}
+    </>
   </div>;
 }
 export function MatchCard({ match, station }: { match: LiveMatch; station?: string }) {
@@ -61,4 +87,8 @@ export function MatchCard({ match, station }: { match: LiveMatch; station?: stri
     {[{ name: match.player1Name, id: match.player1Id, score: match.score1 }, { name: match.player2Name, id: match.player2Id, score: match.score2 }].map((p, i) => <div className={`event-contender ${match.status === 'complete' && p.id && p.id === match.winnerId ? 'is-winner' : ''}`} key={i}><span>{p.name || 'To be decided'}</span><strong>{p.score ?? '—'}</strong></div>)}
     {match.status === 'complete' && <span className="event-match-status">Final</span>}
   </article>;
+}
+
+function BroadcastMark() {
+  return <svg viewBox="0 0 100 100" fill="currentColor" aria-hidden="true"><path d="M8 92V8h20l44 54V8h20v84H72L28 38v54Z" /><path d="M36 8h17l39 48V35L70 8H36Z" opacity=".45" /></svg>;
 }
