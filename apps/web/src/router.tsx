@@ -6,6 +6,10 @@ import { TournamentsPage } from './pages/TournamentsPage';
 import { TournamentPage } from './pages/TournamentPage';
 import { EventPage } from './pages/EventPage';
 import { RecapPage } from './pages/RecapPage';
+import { EventLivePage, EventOverlayPage } from './pages/EventLivePage';
+import { AdminEventOperationsPage } from './pages/admin/AdminEventOperationsPage';
+import { EventOperatorPage } from './pages/EventOperatorPage';
+import { PlayerEventPage } from './pages/PlayerEventPage';
 import { VenuePage } from './pages/VenuePage';
 import { LoginPage } from './pages/LoginPage';
 import { MePage } from './pages/MePage';
@@ -157,7 +161,16 @@ const adminSettingsRoute = createRoute({
   component: AdminSettingsPage,
 });
 
+const eventLiveRoute = createRoute({ getParentRoute: () => rootRoute, path: '/live/$planId', component: EventLivePage });
+const eventOverlayRoute = createRoute({ getParentRoute: () => rootRoute, path: '/overlay/$planId', component: EventOverlayPage });
+const eventPlayRoute = createRoute({ getParentRoute: () => rootRoute, path: '/play/$planId', component: PlayerEventPage });
+const eventOperateRoute = createRoute({ getParentRoute: () => rootRoute, path: '/operate/$planId', component: EventOperatorPage });
+const adminEventOperationsRoute = createRoute({ getParentRoute: () => adminRoute, path: '/event-operations', component: AdminEventOperationsPage,
+  validateSearch: (search: Record<string, unknown>): { plan?: string } => typeof search.plan === 'string' ? { plan: search.plan } : {},
+});
+
 const routeTree = rootRoute.addChildren([
+  eventLiveRoute, eventOverlayRoute, eventPlayRoute, eventOperateRoute,
   indexRoute,
   playerRoute,
   tournamentsRoute,
@@ -176,6 +189,7 @@ const routeTree = rootRoute.addChildren([
     adminImportRoute,
     adminSeedingRoute,
     adminEventPlannerRoute,
+    adminEventOperationsRoute,
     adminSettingsRoute,
   ]),
 ]);
