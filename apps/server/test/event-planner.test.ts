@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq, inArray } from 'drizzle-orm';
 import {
   eventPlanEntries,
+  eventPlanBrackets,
   eventPlans,
   playerRatings,
   players,
@@ -567,6 +568,18 @@ describe('attaching the four brackets', () => {
     await freezeRoster(db, second);
     await attachBracket(db, first, 'upper', 'main', 'shared_bracket');
     await expect(attachBracket(db, second, 'upper', 'main', 'shared_bracket')).rejects.toThrow(/already attached/);
+  });
+
+  it('preserves ownership of historical tournament links without a stored slug', async () => {
+    const first = await readyPlan();
+    const second = await createFullPlan();
+    await freezeRoster(db, second);
+    const [historical] = await db.insert(tournaments).values({challongeSlug:'historical_owner',name:'Historical bracket',eventDate:new Date('2024-01-01T00:00:00Z')}).returning();
+    const [slot] = await db.select().from(eventPlanBrackets).where(eq(eventPlanBrackets.eventPlanId,first));
+    await db.update(eventPlanBrackets).set({tournamentId:historical!.id,challongeSlug:null}).where(eq(eventPlanBrackets.id,slot!.id));
+    await expect(attachBracket(db, second, 'upper', 'main', 'historical_owner')).rejects.toThrow(/already attached/);
+    expect((await db.select().from(tournaments).where(eq(tournaments.id,historical!.id)))[0]!.eventDate!.toISOString()).toBe('2024-01-01T00:00:00.000Z');
+    expect((await db.select().from(eventPlanBrackets).where(eq(eventPlanBrackets.id,slot!.id)))[0]!.challongeSlug).toBeNull();
   });
 
   it('requires reconciliation before changing placements after consolation handoff', async () => {

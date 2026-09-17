@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, or, sql } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
 import {
   companies,
@@ -953,38 +953,39 @@ async function attachBracketUnlocked(
   assertStatus(plan.status, ['roster_frozen', 'pools_ready', 'underway'], 'attach a bracket');
   const slug = normalizeTournamentId(slugOrUrl);
 
-  const conflict = await db
-    .select({ id: eventPlanBrackets.id, eventPlanId: eventPlanBrackets.eventPlanId, division: eventPlanBrackets.division, stage: eventPlanBrackets.stage })
-    .from(eventPlanBrackets)
-    .where(eq(eventPlanBrackets.challongeSlug, slug));
-  if (conflict.some((row) => row.eventPlanId !== planId || row.division !== division || row.stage !== stage)) {
-    const other = conflict[0]!;
-    throw new EventPlanStateError(`${slug} is already attached to an event plan's ${other.division} ${other.stage}.`);
-  }
+  // The event lock protects one plan, but ownership spans every plan. The
+  // tournament's unique slug gives all contenders the same durable lock row.
+  // ON CONFLICT also handles two plans registering a brand-new slug together.
+  // Check ownership only AFTER this lock; checking before UPDATE races when
+  // another plan attaches while this transaction waits to update the date.
+  await db.insert(tournaments).values({
+    challongeSlug: slug,
+    name: `${plan.name} — ${divisionLabel(division)} ${stage === 'main' ? 'Main' : 'Consolation'}`,
+    eventDate: plan.eventDate,
+    eventDateManual: true,
+    isRookie: false,
+  }).onConflictDoNothing({ target: tournaments.challongeSlug });
+  const [tournament] = await db.select().from(tournaments)
+    .where(eq(tournaments.challongeSlug, slug)).for('update');
+  if (!tournament) throw new EventPlanStateError('The tournament could not be registered. Try again.');
+  const tournamentId = tournament.id;
 
-  const [existing] = await db.select().from(tournaments).where(eq(tournaments.challongeSlug, slug));
-  let tournamentId: string;
-  if (existing) {
-    tournamentId = existing.id;
-    await db
-      .update(tournaments)
-      .set({ eventDate: plan.eventDate, eventDateManual: true, updatedAt: new Date() })
-      .where(eq(tournaments.id, tournamentId));
-  } else {
-    const [created] = await db
-      .insert(tournaments)
-      .values({
-        challongeSlug: slug,
-        name: `${plan.name} — ${divisionLabel(division)} ${stage === 'main' ? 'Main' : 'Consolation'}`,
-        eventDate: plan.eventDate,
-        eventDateManual: true,
-        // Never inferred from the name: `registerTournament` guesses isRookie
-        // from the slug, and a division called "lower" must not trip that.
-        isRookie: false,
-      })
-      .returning({ id: tournaments.id });
-    tournamentId = created!.id;
+  // Checking the ID as well preserves ownership of older links whose slug is
+  // absent or inconsistent. Existing historical rows are never rewritten here.
+  const links = await db.select({
+    id: eventPlanBrackets.id,
+    eventPlanId: eventPlanBrackets.eventPlanId,
+    division: eventPlanBrackets.division,
+    stage: eventPlanBrackets.stage,
+  }).from(eventPlanBrackets)
+    .where(or(eq(eventPlanBrackets.challongeSlug, slug), eq(eventPlanBrackets.tournamentId, tournamentId)));
+  const conflict = links.find(row => row.eventPlanId !== planId || row.division !== division || row.stage !== stage);
+  if (conflict) {
+    throw new EventPlanStateError(`${slug} is already attached to an event plan's ${conflict.division} ${conflict.stage}.`);
   }
+  await db.update(tournaments)
+    .set({ eventDate: plan.eventDate, eventDateManual: true, updatedAt: new Date() })
+    .where(eq(tournaments.id, tournamentId));
 
   await db
     .update(eventPlanBrackets)
