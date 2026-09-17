@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { eventPlans, eventPlanBrackets, players, sets, tournamentParticipants, tournaments, type Db } from '@smashclub/db';
 import { importRegistryPlayers } from '../src/bootstrap/importRegistry';
 import { loadEventOverview } from '../src/events/overview';
+import { loadRecap } from '../src/recap/recap';
 import { createTestDb } from './helpers/testDb';
 
 let db: Db;
@@ -148,4 +149,7 @@ it('isolates same-date saved plans and leaves historical unlinked brackets toget
   expect((await loadEventOverview(db, 'first-cons'))!.brackets.map(b => b.tournamentId).sort()).toEqual([first, firstCons].sort());
   expect((await loadEventOverview(db, 'second-upper'))!.brackets.map(b => b.tournamentId)).toEqual([second]);
   expect((await loadEventOverview(db, 'historic-upper'))!.brackets.map(b => b.tournamentId).sort()).toEqual([historic, historicCons].sort());
+  expect((await loadRecap(db, 'first-upper'))!.tournaments.map(t => t.id).sort()).toEqual([first, firstCons].sort());
+  expect((await loadRecap(db, 'second-upper'))!.tournaments.map(t => t.id)).toEqual([second]);
+  expect((await loadRecap(db, 'historic-upper'))!.tournaments.map(t => t.id).sort()).toEqual([historic, historicCons].sort());
 });

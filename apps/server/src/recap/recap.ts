@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, isNotNull, lt } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
 import {
   companies,
+  eventPlanBrackets,
   playerRatings,
   players,
   ratingEvents,
@@ -72,9 +73,8 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
   if (!anchor) return null;
 
   /*
-   * The night is every bracket sharing the anchor's event key — normally a main
-   * and a rookie bracket. A tournament with no event date cannot be grouped, so
-   * it is a night of one.
+   * Explicit plan membership owns the event identity. Historical unlinked
+   * brackets still share a night by date; undated unlinked brackets stand alone.
    */
   const allDated = await db
     .select({
@@ -93,17 +93,27 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
     .orderBy(asc(tournaments.eventDate));
 
   const anchorKey = anchor.eventDate ? eventKeyOf(anchor.eventDate.toISOString()) : null;
-  const nightRows =
-    anchorKey === null
-      ? []
-      : allDated.filter((t) => eventKeyOf(t.eventDate!.toISOString()) === anchorKey);
+  const memberships = await db.select().from(eventPlanBrackets).where(isNotNull(eventPlanBrackets.tournamentId));
+  const anchorPlans = new Set(memberships.filter(link => link.tournamentId === anchor.id).map(link => link.eventPlanId));
+  const linkedTournamentIds = new Set(memberships.map(link => link.tournamentId));
+  let nightRows = anchorKey === null ? [] : allDated.filter(t =>
+    !linkedTournamentIds.has(t.id) && eventKeyOf(t.eventDate!.toISOString()) === anchorKey);
+  if (anchorPlans.size === 1) {
+    const planId = [...anchorPlans][0]!;
+    const ids = memberships.filter(link => link.eventPlanId === planId).flatMap(link => link.tournamentId ? [link.tournamentId] : []);
+    nightRows = (await db.select().from(tournaments).where(inArray(tournaments.id, ids)).orderBy(asc(tournaments.eventDate)))
+      .map(t => ({ ...t, slug: t.challongeSlug }));
+  } else if (anchorPlans.size > 1) {
+    // Ambiguous legacy ownership must not merge unrelated event recaps.
+    nightRows = [];
+  }
 
   const nightTournaments: RecapTournament[] =
     nightRows.length > 0
       ? nightRows.map((t) => ({
           id: t.id,
           name: t.name,
-          eventDate: t.eventDate!.toISOString(),
+          eventDate: t.eventDate?.toISOString() ?? null,
           isRookie: t.isRookie,
           challongeState: t.challongeState,
           tournamentType: tournamentTypeOf(t.raw),
