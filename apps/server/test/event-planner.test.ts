@@ -638,7 +638,7 @@ describe('the four brackets rate as one club night', () => {
     for (const pool of [participants.slice(0, 4), participants.slice(4)]) {
       for (let i = 0; i < pool.length; i++) {
         for (let j = i + 1; j < pool.length; j++) {
-          matches.push({ id: matchId++, p1: pool[i]!.id, p2: pool[j]!.id, winner: pool[i]!.id, order: order++ });
+          matches.push({ id: matchId++, p1: pool[i]!.id, p2: pool[j]!.id, winner: pool[i]!.id, order: order++, stage: 'group' as const });
         }
       }
     }
@@ -681,16 +681,17 @@ describe('the four brackets rate as one club night', () => {
     await generatePools(db, planId);
 
     const view = (await getPlan(db, planId))!;
-    const nameFor = (division: 'upper' | 'lower', seed: number) =>
-      view.entries.find((entry) => entry.assignedDivision === division && entry.divisionSeed === seed)!.playerName!;
-    const upperNames = Array.from({ length: 8 }, (_, index) => nameFor('upper', index + 1));
-    const lowerNames = Array.from({ length: 8 }, (_, index) => nameFor('lower', index + 1));
+    // Match the frozen planner pool membership, not adjacent ranking seeds.
+    const namesFor = (division: 'upper' | 'lower') => view.divisions.find(item => item.division === division)!.pools
+      .flatMap(pool => pool.members.map(member => view.entries.find(entry => entry.playerId === member.playerId)!.playerName!));
+    const upperNames = namesFor('upper');
+    const lowerNames = namesFor('lower');
 
     const fixtures = [
       mainBracket('june25_upper', upperNames, 1000),
-      consolationBracket('june25_upper_consolation', upperNames.slice(4), 2000),
+      consolationBracket('june25_upper_consolation', [upperNames[2]!, upperNames[3]!, upperNames[6]!, upperNames[7]!], 2000),
       mainBracket('june25_lower', lowerNames, 3000),
-      consolationBracket('june25_lower_consolation', lowerNames.slice(4), 4000),
+      consolationBracket('june25_lower_consolation', [lowerNames[2]!, lowerNames[3]!, lowerNames[6]!, lowerNames[7]!], 4000),
     ];
     const client = fixtureClient(fixtures);
 
@@ -726,6 +727,8 @@ describe('the four brackets rate as one club night', () => {
     const nightSets = await db.select().from(sets).where(inArray(sets.tournamentId, nightIds));
     const expectedMatches = fixtures.reduce((total, fixture) => total + fixture.matches.length, 0);
     expect(nightSets).toHaveLength(expectedMatches);
+    expect(nightSets.filter(set => set.resultStage === 'group')).toHaveLength(24);
+    expect(nightSets.filter(set => set.resultStage === 'final')).toHaveLength(12);
     expect(new Set(nightSets.map((row) => `${row.tournamentId}:${row.challongeMatchId}`)).size).toBe(
       expectedMatches,
     );
