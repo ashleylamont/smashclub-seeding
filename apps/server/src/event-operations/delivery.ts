@@ -1,6 +1,7 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { eventMatchAudit, eventMatches, eventPlanBrackets, eventPlans, sets, tournamentParticipants, tournaments, type Db } from '@smashclub/db';
+import { scoresIndicateUnplayed } from '@smashclub/shared';
 import type { SessionUser } from '../auth';
 import { ChallongeScoreClient, ChallongeScoreError, type DeliverScoreInput } from '../challonge/scoreClient';
 import { lockEvent, requireOperator } from './service';
@@ -76,6 +77,7 @@ export async function deliverMatchScore(
       await requireOperator(tx, attempt.planId, user);
       if (!plan || ['complete', 'cancelled'].includes(plan.status) || !match || match.revision !== attempt.revision) throw new ChallongeScoreError('remote_conflict', 'Event or match changed before delivery; no write was attempted.');
       const sent = await client.deliverScore(attempt.payload);
+      await storeVerifiedResult(tx, match);
       result = { ok: true, matchId: attempt.matchId, revision: attempt.revision + 1, status: sent.status };
     } catch (error) {
       const known = error instanceof ChallongeScoreError;
@@ -83,6 +85,60 @@ export async function deliverMatchScore(
     }
     if (match) await tx.update(eventMatches).set({ syncState: result.ok ? 'synced' : 'error', revision: result.revision }).where(eq(eventMatches.id, attempt.matchId));
     await tx.update(eventMatchAudit).set({ action: result.ok ? 'delivery_verified' : 'delivery_failed', after: { ...result, payload: attempt.payload } }).where(eq(eventMatchAudit.id, attempt.auditId));
+    return result;
+  });
+}
+
+
+/** Store the remotely verified result in the same orientation as the imported set. */
+async function storeVerifiedResult(db: Db, match: typeof eventMatches.$inferSelect) {
+  const [source] = await db.select().from(sets).where(eq(sets.id, match.sourceSetId!)).for('update');
+  if (!source || !source.p1PlayerId || !source.p2PlayerId || ![match.player1Id, match.player2Id].includes(source.p1PlayerId) ||
+    ![match.player1Id, match.player2Id].includes(source.p2PlayerId) || source.p1PlayerId === source.p2PlayerId) {
+    throw new ChallongeScoreError('ambiguous', 'The imported identities changed; reconcile the verified remote result before continuing.', true);
+  }
+  const flipped = source.p1PlayerId !== match.player1Id;
+  const scoresCsv = `${flipped ? match.score2 : match.score1}-${flipped ? match.score1 : match.score2}`;
+  await db.update(sets).set({ state: 'complete', scoresCsv,
+    winner: source.p1PlayerId === match.winnerId ? 1 : 2,
+    ...(source.exclusionManual ? {} : { excludedFromRatings: scoresIndicateUnplayed(scoresCsv) }),
+    completedAt: source.completedAt ?? new Date(), updatedAt: new Date(),
+  }).where(eq(sets.id, source.id));
+}
+
+/** Read-only remote recovery for a process-interrupted delivery. Never performs a PUT. */
+export async function reconcileMatchDelivery(
+  db: Db, user: SessionUser, input: { matchId: string; expectedRevision: number }, config: DeliveryConfig,
+  reader?: Pick<ChallongeScoreClient, 'readMatch'>,
+): Promise<DeliveryResult> {
+  if (!config.apiKey?.trim()) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Challonge credentials are required to verify an interrupted delivery.' });
+  return db.transaction(async tx => {
+    const [initial] = await tx.select().from(eventMatches).where(eq(eventMatches.id, input.matchId));
+    if (!initial) throw new TRPCError({ code: 'NOT_FOUND', message: 'Match not found.' });
+    await lockEvent(tx, initial.eventPlanId);
+    await requireOperator(tx, initial.eventPlanId, user);
+    const [match] = await tx.select().from(eventMatches).where(eq(eventMatches.id, input.matchId)).for('update');
+    if (!match || match.revision !== input.expectedRevision) return conflict('Match changed; refresh before reconciling.');
+    const [audit] = await tx.select().from(eventMatchAudit).where(and(eq(eventMatchAudit.matchId, input.matchId), eq(eventMatchAudit.action, 'delivery_started'))).orderBy(desc(eventMatchAudit.createdAt)).limit(1);
+    if (!audit) return conflict('No interrupted delivery needs reconciliation.');
+    const payload = (audit.after as { payload?: DeliverScoreInput }).payload;
+    if (!payload || !Array.isArray(payload.participants) || payload.participants.length !== 2) return conflict('The interrupted attempt has no valid delivery payload; reconcile it manually.');
+    const remote = await (reader ?? new ChallongeScoreClient({ apiKey: config.apiKey! })).readMatch(payload.tournamentSlug, payload.matchId);
+    const candidates = payload.participants.map(p => new Set([p.participantId, ...(p.aliases ?? [])]));
+    const ids = candidates.map(set => remote.participantIds.filter(id => set.has(id)));
+    if (ids.some(found => found.length !== 1) || ids[0]![0] === ids[1]![0]) return conflict('Remote participant identities changed. Re-import and resolve the mapping.');
+    const recorded = remote.state === 'complete' && remote.winnerId === ids[payload.participants[0].score > payload.participants[1].score ? 0 : 1]![0] &&
+      ids.every((found, index) => remote.scores?.[found[0]!] === payload.participants[index]!.score);
+    const noResult = ['open', 'underway'].includes(remote.state) && remote.winnerId === null;
+    if (!recorded && !noResult) return conflict('Remote result differs from the interrupted attempt. Reconcile the score manually first.');
+    const before = audit.before as typeof eventMatches.$inferSelect;
+    const unchanged = before.player1Id === match.player1Id && before.player2Id === match.player2Id && before.score1 === match.score1 && before.score2 === match.score2 && before.winnerId === match.winnerId && before.outcome === match.outcome;
+    if (recorded && unchanged) await storeVerifiedResult(tx, match);
+    const result: DeliveryResult = { ok: true, matchId: match.id, revision: match.revision + 1,
+      status: recorded ? unchanged ? 'verified' : 'previous_result_verified' : 'not_recorded',
+      message: recorded ? unchanged ? 'Remote score verified.' : 'The prior result landed; the current local correction still needs delivery.' : 'Remote match has no completed result. The interrupted attempt is closed; a new explicit delivery may be attempted.', mayHaveWritten: recorded };
+    await tx.update(eventMatches).set({ syncState: recorded && unchanged ? 'synced' : 'error', revision: result.revision }).where(eq(eventMatches.id, match.id));
+    await tx.update(eventMatchAudit).set({ action: 'delivery_reconciled', after: { ...result, payload, reconciledBy: user.id } }).where(eq(eventMatchAudit.id, audit.id));
     return result;
   });
 }

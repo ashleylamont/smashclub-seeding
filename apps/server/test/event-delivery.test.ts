@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { eventMatches, eventMatchAudit, eventPlanBrackets, eventPlans, players, sets, tournamentParticipants, tournaments, user, type Db } from '@smashclub/db';
 import type { SessionUser } from '../src/auth';
-import { deliverMatchScore, deliveryStatus, type ScoreSender } from '../src/event-operations/delivery';
+import { deliverMatchScore, deliveryStatus, reconcileMatchDelivery, type ScoreSender } from '../src/event-operations/delivery';
 import { ChallongeScoreError, type DeliverScoreInput } from '../src/challonge/scoreClient';
+import { prepare } from '../src/event-operations/service';
 import { loadEnv } from '../src/env';
 import { createTestDb } from './helpers/testDb';
 let db: Db; let close: () => Promise<void>; let match: typeof eventMatches.$inferSelect;
@@ -20,7 +21,7 @@ beforeEach(async () => {
   await db.insert(eventPlanBrackets).values({ eventPlanId: plan!.id, division: 'upper', stage: 'main', tournamentId: tournament!.id });
   const participants = await db.insert(tournamentParticipants).values(entrants.map((p, index) => ({ tournamentId: tournament!.id, playerId: p.id, challongeParticipantId: index + 1, rawName: 'Private', cleanedName: 'Private' }))).returning();
   const [source] = await db.insert(sets).values({ tournamentId: tournament!.id, challongeMatchId: 9, state: 'open', p1ParticipantId: participants[1]!.id, p2ParticipantId: participants[0]!.id, p1PlayerId: entrants[1]!.id, p2PlayerId: entrants[0]!.id }).returning();
-  [match] = await db.insert(eventMatches).values({ eventPlanId: plan!.id, sourceKey: 'fixture', sourceSetId: source!.id, division: 'upper', stage: 'main', label: 'Final', status: 'complete', player1Id: entrants[0]!.id, player2Id: entrants[1]!.id, score1: 3, score2: 1, winnerId: entrants[0]!.id, outcome: 'played' }).returning() as [typeof eventMatches.$inferSelect];
+  [match] = await db.insert(eventMatches).values({ eventPlanId: plan!.id, sourceKey: `set:${source!.id}`, sourceSetId: source!.id, division: 'upper', stage: 'main', label: 'Final', status: 'complete', player1Id: entrants[0]!.id, player2Id: entrants[1]!.id, score1: 3, score2: 1, winnerId: entrants[0]!.id, outcome: 'played' }).returning() as [typeof eventMatches.$inferSelect];
 });
 afterEach(async () => close());
 function sender(callback?: (payload: DeliverScoreInput) => void): ScoreSender {
@@ -45,6 +46,23 @@ describe('explicit score delivery', () => {
     expect((await db.select().from(eventMatches))[0]).toMatchObject({ syncState: 'synced', score1: 3, score2: 1, revision: 2 });
     expect((await db.select().from(eventMatchAudit))[0]!.action).toBe('delivery_verified');
   });
+  it('retains verified scores on the next prepare before any resync', async () => {
+    await deliverMatchScore(db, admin, input(), config, sender());
+    expect((await db.select().from(sets))[0]).toMatchObject({ state: 'complete', scoresCsv: '1-3', winner: 2 });
+    await prepare(db, match.eventPlanId);
+    expect((await db.select().from(eventMatches))[0]).toMatchObject({ player1Id: match.player2Id, player2Id: match.player1Id, score1: 1, score2: 3, winnerId: match.player1Id, status: 'complete', syncState: 'synced' });
+  });
+
+  it.each([true, false])('recovers an interrupted attempt by reading only (recorded=%s)', async recorded => {
+    const payload: DeliverScoreInput = { tournamentSlug: 'example', matchId: '9', participants: [{ participantId: '1', score: 3 }, { participantId: '2', score: 1 }] };
+    await db.insert(eventMatchAudit).values({ eventPlanId: match.eventPlanId, matchId: match.id, userId: admin.id, action: 'delivery_started', before: match, after: { payload } });
+    const result = await reconcileMatchDelivery(db, admin, input(), { ...config, enabled: false }, { readMatch: async () => ({ id: '9', participantIds: ['2', '1'], state: recorded ? 'complete' : 'open', scores: recorded ? { '1': 3, '2': 1 } : null, winnerId: recorded ? '1' : null }) });
+    expect(result.status).toBe(recorded ? 'verified' : 'not_recorded');
+    expect((await db.select().from(eventMatchAudit))[0]!.action).toBe('delivery_reconciled');
+    expect((await db.select().from(eventMatches))[0]!.syncState).toBe(recorded ? 'synced' : 'error');
+    if (!recorded) expect((await deliverMatchScore(db, admin, { matchId: match.id, expectedRevision: result.revision }, config, sender())).ok).toBe(true);
+  });
+
   it('preserves verified child aliases despite reversed local and imported orientation', async () => {
     await db.update(eventMatches).set({ stage: 'group' }).where(eq(eventMatches.id, match.id));
     await db.update(sets).set({ resultStage: 'group', raw: { player1Id: 2, sourcePlayer1Id: 102, player2Id: 1, sourcePlayer2Id: 101 } }).where(eq(sets.id, match.sourceSetId!));
