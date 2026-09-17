@@ -58,6 +58,7 @@ export function HandoffStep({ view, onChanged }: { view: EventPlanView; onChange
             key={`${bracketExport.division}-${bracketExport.stage}`}
             planId={view.plan.id}
             bracket={bracket}
+            closed={view.plan.status === 'complete' || view.plan.status === 'cancelled'}
             payload={bracketExport}
             onChanged={onChanged}
           />
@@ -82,11 +83,13 @@ export function HandoffStep({ view, onChanged }: { view: EventPlanView; onChange
 function BracketCard({
   planId,
   bracket,
+  closed,
   payload,
   onChanged,
 }: {
   planId: string;
   bracket: EventPlanBracket;
+  closed: boolean;
   payload: EventPlanBracketExport;
   onChanged: () => void;
 }) {
@@ -172,19 +175,19 @@ function BracketCard({
         <button
           type="button"
           className="btn btn-primary"
-          disabled={slug.trim() === '' || attach.isPending}
+          disabled={closed || slug.trim() === '' || attach.isPending}
           onClick={() => attach.mutate()}
           title="Register this bracket against the plan’s event date"
         >
           {attach.isPending ? 'Registering…' : bracket.challongeSlug ? 'Re-attach' : 'Register & attach'}
         </button>
         {bracket.tournamentId && (
-          <button type="button" className="btn" disabled={sync.isPending} onClick={() => sync.mutate()}>
+          <button type="button" className="btn" disabled={closed || sync.isPending} onClick={() => sync.mutate()}>
             {sync.isPending ? 'Syncing…' : 'Sync (API)'}
           </button>
         )}
         {bracket.challongeSlug && (
-          <button type="button" className="btn" disabled={detach.isPending} onClick={() => detach.mutate()}>
+          <button type="button" className="btn" disabled={closed || detach.isPending} onClick={() => detach.mutate()}>
             Detach
           </button>
         )}

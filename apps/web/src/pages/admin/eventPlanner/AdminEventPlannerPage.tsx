@@ -59,7 +59,7 @@ export function AdminEventPlannerPage() {
         <h2>Event planner</h2>
         <p className="muted">
           Paste the attendance list, resolve everybody against the registry, split Upper and Lower off a frozen
-          ranking snapshot, and stripe each division into pools of four. The plan then hands you exactly what
+          ranking snapshot, and stripe each division into balanced pools of three to five. The plan then hands you exactly what
           Challonge needs for the four brackets of the night.
         </p>
       </div>
@@ -247,7 +247,7 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
             <span className="form-label">Upper division size</span>
             {sizes.length === 0 ? (
               <span className="error-text">
-                {total} entrants do not divide into two divisions of whole pools of four. Add or remove names.
+                At least six entrants are needed for two divisions.
               </span>
             ) : (
               <select
@@ -264,8 +264,7 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
               </select>
             )}
             <span className="form-hint">
-              Half the field is the default when both halves are whole pools; otherwise it is a real choice and
-              the app will not make it for you.
+              The default splits attendance evenly. Each pool advances two players; all remaining players enter consolation.
             </span>
           </label>
           <button
@@ -461,13 +460,12 @@ function defaultEventDate(): string {
  * what to *offer*.
  */
 function validUpperSizes(total: number, poolSize = 4): number[] {
-  if (total < poolSize * 2 || total % poolSize !== 0) return [];
-  const sizes: number[] = [];
-  for (let size = poolSize; size <= total - poolSize; size += poolSize) sizes.push(size);
-  return sizes;
+  const minimum = Math.max(3, poolSize - 1);
+  if (total < minimum * 2) return [];
+  return Array.from({ length: total - minimum * 2 + 1 }, (_, index) => minimum + index);
 }
 
 function defaultUpperSize(total: number, poolSize = 4): number | null {
-  const half = total / 2;
+  const half = Math.ceil(total / 2);
   return validUpperSizes(total, poolSize).includes(half) ? half : null;
 }

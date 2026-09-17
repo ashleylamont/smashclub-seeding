@@ -20,11 +20,11 @@ export function PoolsStep({ view, onChanged }: { view: EventPlanView; onChanged:
       <div className="page-header">
         <h3>Pools</h3>
         <span className="muted">
-          Striped across the seed order, so each pool holds one entrant from each quarter of the division.
+          Balanced pools of three to five players, striped across seed order. Top two advance; everyone else enters consolation.
         </span>
       </div>
       {view.divisions.map((division) => (
-        <DivisionPools key={division.division} planId={view.plan.id} division={division} onChanged={onChanged} />
+        <DivisionPools key={division.division} planId={view.plan.id} division={division} locked={!['pools_ready', 'underway'].includes(view.plan.status) || view.brackets.some((bracket) => bracket.division === division.division && bracket.stage === 'consolation' && bracket.challongeSlug !== null)} onChanged={onChanged} />
       ))}
     </div>
   );
@@ -33,10 +33,12 @@ export function PoolsStep({ view, onChanged }: { view: EventPlanView; onChanged:
 function DivisionPools({
   planId,
   division,
+  locked,
   onChanged,
 }: {
   planId: string;
   division: EventPlanDivision;
+  locked: boolean;
   onChanged: () => void;
 }) {
   if (division.pools.length === 0) {
@@ -54,10 +56,13 @@ function DivisionPools({
         <h4>
           {DIVISION_LABEL[division.division]}{' '}
           <span className="muted">
-            {division.poolCount} pools of {division.pools[0]!.members.length}
+            {division.poolCount} pools · sizes {division.pools.map((pool) => pool.members.length).join(' / ')}
           </span>
         </h4>
       </div>
+      <p className="muted">{division.pools.filter((pool) => pool.members.every((member) => member.place !== null)).length}/{division.poolCount} pools confirmed. Resolve ties using the event rules before confirming.</p>
+      {locked && <p className="muted">Placements are read-only while the event is closed or consolation is attached. Reconcile and detach consolation before changing qualifiers.</p>}
+      {division.championship.length > 0 && <div className="consolation-preview"><h5>Championship qualifiers</h5><ul>{division.championship.map((entrant) => <li key={entrant.playerId}><span className="chip">{entrant.label}</span> {entrant.name}</li>)}</ul></div>}
       <div className="pool-grid">
         {division.pools.map((pool) => (
           <PoolCard
@@ -65,6 +70,7 @@ function DivisionPools({
             planId={planId}
             divisionKey={division.division}
             pool={pool}
+            locked={locked}
             onChanged={onChanged}
           />
         ))}
@@ -90,13 +96,13 @@ function DivisionPools({
           </ol>
           {division.consolation.rematches.length > 0 && (
             <p className="error-text">
-              Unavoidable pool rematch in round one — this division has only one pool.
+              Pool rematch in round one — review the draw before creating consolation.
             </p>
           )}
         </div>
       ) : (
         <p className="muted">
-          Confirm every pool’s 1-4 order to generate the consolation draw and its import list.
+          Confirm every pool’s finishing order to generate the consolation draw and its import list.
         </p>
       )}
     </div>
@@ -120,11 +126,13 @@ function PoolCard({
   planId,
   divisionKey,
   pool,
+  locked,
   onChanged,
 }: {
   planId: string;
   divisionKey: 'upper' | 'lower';
   pool: EventPlanPool;
+  locked: boolean;
   onChanged: () => void;
 }) {
   const saved = useMemo(
@@ -174,6 +182,7 @@ function PoolCard({
           <label key={place} className="pool-place">
             <span>{ordinal(place + 1)}</span>
             <select
+              disabled={locked || save.isPending}
               className="select"
               value={order[place] ?? ''}
               aria-label={`${ordinal(place + 1)} place in pool ${pool.label}`}
@@ -195,7 +204,7 @@ function PoolCard({
         <button
           type="button"
           className="btn btn-small btn-primary"
-          disabled={!complete || save.isPending}
+          disabled={locked || !complete || save.isPending}
           onClick={() => save.mutate()}
           title={complete ? 'Save this pool’s finishing order' : 'Every entrant needs exactly one place'}
         >

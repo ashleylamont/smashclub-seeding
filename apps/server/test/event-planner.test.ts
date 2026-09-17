@@ -20,6 +20,7 @@ import {
   EventPlanStateError,
   attachBracket,
   closePlan,
+  detachBracket,
   createPlan,
   freezeRoster,
   generatePools,
@@ -213,15 +214,15 @@ describe('freezing a plan', () => {
     await expect(freezeRoster(db, planId)).rejects.toBeInstanceOf(EventPlanValidationError);
   });
 
-  it('refuses to freeze a division that does not divide into pools', async () => {
+  it('refuses to freeze a division with fewer than three players', async () => {
     await seedRatedClub();
-    const planId = await createFullPlan({ upperTargetSize: 6 });
-    await expect(freezeRoster(db, planId)).rejects.toThrow(/multiples of 4/);
+    const planId = await createFullPlan({ upperTargetSize: 2 });
+    await expect(freezeRoster(db, planId)).rejects.toThrow(/at least 3/);
   });
 
   it('is transactional: a rejected freeze leaves no half-written snapshot', async () => {
     await seedRatedClub();
-    const planId = await createFullPlan({ upperTargetSize: 6 });
+    const planId = await createFullPlan({ upperTargetSize: 2 });
     await expect(freezeRoster(db, planId)).rejects.toThrow();
 
     const rows = await db.select().from(eventPlanEntries).where(eq(eventPlanEntries.eventPlanId, planId));
@@ -558,6 +559,42 @@ describe('attaching the four brackets', () => {
     const planId = await readyPlan();
     await attachBracket(db, planId, 'upper', 'main', 'june25_upper');
     await expect(attachBracket(db, planId, 'lower', 'main', 'june25_upper')).rejects.toThrow(/already attached/);
+  });
+
+  it('prevents bracket ownership leaking across event plans', async () => {
+    const first = await readyPlan();
+    const second = await createFullPlan();
+    await freezeRoster(db, second);
+    await attachBracket(db, first, 'upper', 'main', 'shared_bracket');
+    await expect(attachBracket(db, second, 'upper', 'main', 'shared_bracket')).rejects.toThrow(/already attached/);
+  });
+
+  it('requires reconciliation before changing placements after consolation handoff', async () => {
+    const planId = await readyPlan();
+    const view = (await getPlan(db, planId))!;
+    const pool = view.divisions[0]!.pools[0]!;
+    const placements = [{ poolIndex: pool.poolIndex, playerIdsInOrder: pool.members.map((member) => member.playerId) }];
+    await savePoolPlacements(db, planId, 'upper', placements);
+    await attachBracket(db, planId, 'upper', 'consolation', 'consolation_handoff');
+    await expect(savePoolPlacements(db, planId, 'upper', placements)).rejects.toThrow(/Detach and reconcile/);
+    await detachBracket(db, planId, 'upper', 'consolation');
+    await savePoolPlacements(db, planId, 'upper', placements);
+    await closePlan(db, planId, 'complete');
+    await expect(detachBracket(db, planId, 'upper', 'main')).rejects.toThrow(/detach a bracket/);
+  });
+
+  it('freezes uneven divisions and advances the full remainder to consolation', async () => {
+    await seedRatedClub();
+    const planId = await createFullPlan({ upperTargetSize: 5 });
+    await freezeRoster(db, planId);
+    await generatePools(db, planId);
+    const view = (await getPlan(db, planId))!;
+    expect(view.divisions[0]!.pools.map((pool) => pool.members.length)).toEqual([5]);
+    const pool = view.divisions[0]!.pools[0]!;
+    await savePoolPlacements(db, planId, 'upper', [{ poolIndex: 0, playerIdsInOrder: pool.members.map((member) => member.playerId) }]);
+    const upper = (await getPlan(db, planId))!.divisions[0]!;
+    expect(upper.championship).toHaveLength(2);
+    expect(upper.consolation!.entrants).toHaveLength(3);
   });
 
   it('refuses to move the event date out from under a registered bracket', async () => {

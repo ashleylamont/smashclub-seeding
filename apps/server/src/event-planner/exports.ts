@@ -66,7 +66,7 @@ export function buildExports(view: PlanView): PlanExports {
       audit: seeded.map((member) => `${member.seed}\t${member.name}`).join('\n'),
       checklist: [
         'Tournament type: Two stage — group stage then single elimination.',
-        `Groups: ${division.poolCount} group(s) of ${view.plan.poolSize}, round robin.`,
+        `Groups: ${division.poolCount} round-robin group(s), sizes ${division.pools.map((pool) => pool.members.length).join(" / ")}. Match the pool cards exactly; do not rely on automatic allocation.`,
         'Advance: top 2 from each group into the final stage.',
         'Participants: paste the list above, in this order, then set seeds 1..n to match.',
         `Check each group against the pool cards before starting — Challonge's own ` +
@@ -106,7 +106,7 @@ export function buildExports(view: PlanView): PlanExports {
                 .map((pair) => (pair.b ? `${pair.a.label} v ${pair.b.label}` : `${pair.a.label} (bye)`))
                 .join(', ')}.`,
             ]
-          : ['Confirm every pool’s 1-4 order first — the field is the third and fourth places.']),
+          : ['Confirm every pool’s finishing order first — everyone below second enters consolation.']),
         `Event date: ${view.plan.eventDate.slice(0, 10)} — the same as the main brackets.`,
         'Do NOT mark this bracket as rookie.',
       ],

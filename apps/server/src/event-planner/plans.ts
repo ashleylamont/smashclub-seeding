@@ -305,7 +305,7 @@ function buildDivisionViews(
     const members = entries
       .filter((entry) => entry.assignedDivision === division && entry.divisionSeed !== null)
       .sort((a, b) => a.divisionSeed! - b.divisionSeed!);
-    if (members.length === 0 || members.length % poolSize !== 0) {
+    if (members.length < Math.max(3, poolSize - 1)) {
       views.push({
         division,
         size: members.length,
@@ -862,6 +862,14 @@ export async function savePoolPlacements(
     }
   }
 
+  const consolation = view?.brackets.find((bracket) => bracket.division === division && bracket.stage === 'consolation');
+  if (consolation?.challongeSlug) {
+    throw new EventPlanStateError('Consolation is already attached. Detach and reconcile that bracket before correcting pool placements; its entrants and seeds may change.');
+  }
+  if (new Set(pools.map((pool) => pool.poolIndex)).size !== pools.length) {
+    throw new EventPlanStateError('Submit each pool only once.');
+  }
+
   const now = new Date();
   await db.transaction(async (tx) => {
     for (const pool of pools) {
@@ -914,12 +922,12 @@ export async function attachBracket(
   const slug = normalizeTournamentId(slugOrUrl);
 
   const conflict = await db
-    .select({ id: eventPlanBrackets.id, division: eventPlanBrackets.division, stage: eventPlanBrackets.stage })
+    .select({ id: eventPlanBrackets.id, eventPlanId: eventPlanBrackets.eventPlanId, division: eventPlanBrackets.division, stage: eventPlanBrackets.stage })
     .from(eventPlanBrackets)
-    .where(and(eq(eventPlanBrackets.eventPlanId, planId), eq(eventPlanBrackets.challongeSlug, slug)));
-  if (conflict.some((row) => row.division !== division || row.stage !== stage)) {
+    .where(eq(eventPlanBrackets.challongeSlug, slug));
+  if (conflict.some((row) => row.eventPlanId !== planId || row.division !== division || row.stage !== stage)) {
     const other = conflict[0]!;
-    throw new EventPlanStateError(`${slug} is already attached to this plan's ${other.division} ${other.stage}.`);
+    throw new EventPlanStateError(`${slug} is already attached to an event plan's ${other.division} ${other.stage}.`);
   }
 
   const [existing] = await db.select().from(tournaments).where(eq(tournaments.challongeSlug, slug));
@@ -966,6 +974,8 @@ export async function detachBracket(
   division: Division,
   stage: BracketStage,
 ): Promise<void> {
+  const plan = await loadPlanRow(db, planId);
+  assertStatus(plan.status, ['roster_frozen', 'pools_ready', 'underway'], 'detach a bracket');
   await db
     .update(eventPlanBrackets)
     .set({ challongeSlug: null, tournamentId: null, externalState: 'draft', lastError: null, updatedAt: new Date() })

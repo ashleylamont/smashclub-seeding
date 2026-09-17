@@ -14,7 +14,7 @@ import { poolLabel } from './pools';
 export interface PoolFinisher {
   playerId: string;
   poolIndex: number;
-  /** 1-4 within the pool. */
+  /** 1-based position within the pool (including fifth in larger pools). */
   place: number;
 }
 
@@ -80,9 +80,9 @@ interface Seeded {
  * needs to be able to check.
  */
 export function buildConsolationBracket(finishers: readonly PoolFinisher[]): ConsolationBracket {
-  const qualifiers = finishers.filter((finisher) => finisher.place === 3 || finisher.place === 4);
+  const qualifiers = finishers.filter((finisher) => finisher.place >= 3);
   if (qualifiers.length === 0) {
-    throw new Error('No third- or fourth-place finishers to build a consolation bracket from.');
+    throw new Error('No consolation finishers to build a consolation bracket from.');
   }
   const seen = new Set<string>();
   for (const qualifier of qualifiers) {

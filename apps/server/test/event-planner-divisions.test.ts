@@ -28,9 +28,9 @@ describe('defaultUpperSize', () => {
     expect(defaultUpperSize(24)).toBe(12);
   });
 
-  it('refuses to choose when the halves are not whole pools', () => {
-    expect(defaultUpperSize(20)).toBeNull();
-    expect(defaultUpperSize(12)).toBeNull();
+  it('balances uneven attendance without requiring multiples of four', () => {
+    expect(defaultUpperSize(20)).toBe(10);
+    expect(defaultUpperSize(13)).toBe(7);
   });
 
   it('refuses a field too small for two divisions', () => {
@@ -40,9 +40,9 @@ describe('defaultUpperSize', () => {
 
 describe('validUpperSizes', () => {
   it('offers every split that leaves both divisions whole pools', () => {
-    expect(validUpperSizes(20)).toEqual([4, 8, 12, 16]);
-    expect(validUpperSizes(8)).toEqual([4]);
-    expect(validUpperSizes(14)).toEqual([]);
+    expect(validUpperSizes(20)).toEqual(Array.from({ length: 15 }, (_, i) => i + 3));
+    expect(validUpperSizes(8)).toEqual([3, 4, 5]);
+    expect(validUpperSizes(5)).toEqual([]);
   });
 });
 
@@ -71,14 +71,12 @@ describe('validateDivisionInput', () => {
     expect(validateDivisionInput(candidates, options)).toEqual([]);
   });
 
-  it('rejects a field that does not divide into pools', () => {
-    expect(codes(validateDivisionInput(ranked(14), options))).toContain('total_not_divisible');
+  it('accepts a field that does not divide into fours', () => {
+    expect(validateDivisionInput(ranked(14), options)).toEqual([]);
   });
 
-  it('rejects a split that leaves a partial pool', () => {
-    expect(codes(validateDivisionInput(ranked(16), { upperTargetSize: 6, poolSize: 4 }))).toContain(
-      'division_not_divisible',
-    );
+  it('accepts balanced smaller pools', () => {
+    expect(validateDivisionInput(ranked(16), { upperTargetSize: 6, poolSize: 4 })).toEqual([]);
   });
 
   it('rejects a division smaller than one pool', () => {
@@ -103,9 +101,9 @@ describe('validateDivisionInput', () => {
   it('reports every problem at once rather than the first', () => {
     const candidates = ranked(15);
     candidates[2] = { ...candidates[2]!, snapshotRank: null };
-    const issues = codes(validateDivisionInput(candidates, options));
+    const issues = codes(validateDivisionInput(candidates, { ...options, upperTargetSize: 15 }));
     expect(issues).toContain('unranked_needs_division');
-    expect(issues).toContain('total_not_divisible');
+    expect(issues).toContain('division_too_small');
   });
 });
 
@@ -170,11 +168,11 @@ describe('assignDivisions', () => {
 
   it('throws with every issue attached rather than guessing', () => {
     try {
-      assignDivisions(ranked(15), options);
+      assignDivisions(ranked(15), { ...options, upperTargetSize: 15 });
       expect.unreachable('should have thrown');
     } catch (error) {
       expect(error).toBeInstanceOf(EventPlanValidationError);
-      expect(codes((error as EventPlanValidationError).issues)).toContain('total_not_divisible');
+      expect(codes((error as EventPlanValidationError).issues)).toContain('division_too_small');
     }
   });
 });

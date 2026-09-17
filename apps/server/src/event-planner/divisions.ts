@@ -47,25 +47,17 @@ export class EventPlanValidationError extends Error {
   }
 }
 
-/**
- * The Upper size to offer by default: half the field, but only when that leaves
- * both divisions a whole number of pools. Otherwise there is a real choice to
- * make — 20 attendees can be 8/12 or 12/8 — and the app should not make it
- * quietly.
- */
+/** Default to an even competitive split, with the extra entrant in Upper. */
 export function defaultUpperSize(total: number, poolSize = 4): number | null {
-  if (total < poolSize * 2 || total % poolSize !== 0) return null;
-  const half = total / 2;
-  if (half % poolSize !== 0) return null;
-  return half;
+  const half = Math.ceil(total / 2);
+  return validUpperSizes(total, poolSize).includes(half) ? half : null;
 }
 
-/** Every Upper size that leaves both divisions a whole number of pools. */
+/** Every split supporting pools of three to five (target four). */
 export function validUpperSizes(total: number, poolSize = 4): number[] {
-  if (total < poolSize * 2 || total % poolSize !== 0) return [];
-  const sizes: number[] = [];
-  for (let size = poolSize; size <= total - poolSize; size += poolSize) sizes.push(size);
-  return sizes;
+  const minimum = Math.max(3, poolSize - 1);
+  if (!Number.isInteger(total) || total < minimum * 2) return [];
+  return Array.from({ length: total - minimum * 2 + 1 }, (_, index) => minimum + index);
 }
 
 /**
@@ -108,20 +100,14 @@ export function validateDivisionInput(
     });
   }
 
-  if (total < poolSize * 2) {
+  const minimum = Math.max(3, poolSize - 1);
+  if (total < minimum * 2) {
     issues.push({
       code: 'too_few_entrants',
-      message: `Two divisions of ${poolSize} need at least ${poolSize * 2} entrants; this roster has ${total}.`,
+      message: `Two divisions need at least ${minimum * 2} entrants; this roster has ${total}.`,
     });
     return issues;
   }
-  if (total % poolSize !== 0) {
-    issues.push({
-      code: 'total_not_divisible',
-      message: `${total} entrants do not divide into pools of ${poolSize}. Add or remove ${total % poolSize} row(s).`,
-    });
-  }
-
   if (upperTargetSize === null) {
     issues.push({
       code: 'upper_size_unset',
@@ -129,19 +115,8 @@ export function validateDivisionInput(
     });
     return issues;
   }
-  if (upperTargetSize % poolSize !== 0 || (total - upperTargetSize) % poolSize !== 0) {
-    issues.push({
-      code: 'division_not_divisible',
-      message:
-        `An Upper division of ${upperTargetSize} leaves ${total - upperTargetSize} in Lower; ` +
-        `both must be whole multiples of ${poolSize}.`,
-    });
-  }
-  if (upperTargetSize < poolSize || total - upperTargetSize < poolSize) {
-    issues.push({
-      code: 'division_too_small',
-      message: `Each division needs at least ${poolSize} players.`,
-    });
+  if (!Number.isInteger(upperTargetSize) || upperTargetSize < minimum || total - upperTargetSize < minimum) {
+    issues.push({ code: 'division_too_small', message: `Each division needs at least ${minimum} players and a whole-number size.` });
   }
 
   const pinnedUpper = candidates.filter((candidate) => candidate.divisionPreference === 'upper');
