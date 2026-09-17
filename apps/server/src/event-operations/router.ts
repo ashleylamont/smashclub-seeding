@@ -1,3 +1,4 @@
+import { eventDeliveryRouter } from './deliveryRouter';
 import { z } from 'zod';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -8,6 +9,7 @@ import { applyAttendance, previewAttendance, resetOperations } from './attendanc
 const attendanceInput = z.object({ planId: z.string().uuid(), action: z.enum(['add', 'withdraw']), playerId: z.string().uuid(), division: z.enum(['upper', 'lower']).optional(), poolIndex: z.number().int().min(0).optional(), reason: z.string().trim().max(200).optional(), acknowledgeExternalChange: z.boolean().optional() });
 const planInput = z.object({ planId: z.string().uuid() });
 export const eventOpsRouter = router({
+    delivery: eventDeliveryRouter,
     previewAttendance: authedProcedure.input(attendanceInput).query(async ({ ctx, input }) => { await requireOperator(ctx.db, input.planId, ctx.user); return previewAttendance(ctx.db, input); }),
     applyAttendance: authedProcedure.input(attendanceInput.extend({ revisionToken: z.string().min(1) })).mutation(({ ctx, input }) => applyAttendance(ctx.db, ctx.user, input)),
     resetOperations: authedProcedure.input(planInput).mutation(({ ctx, input }) => resetOperations(ctx.db, ctx.user, input.planId)),

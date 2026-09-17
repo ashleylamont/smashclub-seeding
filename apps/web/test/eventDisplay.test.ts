@@ -3,7 +3,7 @@ import { liveSections, overlayGeometry, type LiveMatch } from '../src/lib/eventD
 
 describe('spectator event board', () => {
   it('keeps blocked matches out of the ready queue and counts only confirmed results', () => {
-    const matches = ['ready', 'blocked', 'playing', 'complete'].map((status, index) => ({ id: String(index), status }) as LiveMatch);
+    const matches = ['ready', 'blocked', 'playing', 'complete'].map((status, index) => ({ id: String(index), status, division: 'upper', stage: 'group', poolIndex: 0, label: `Match ${index}`, player1Id: `a${index}`, player2Id: `b${index}`, player1Name: `A${index}`, player2Name: `B${index}`, score1: null, score2: null, winnerId: null, stationId: null }) satisfies LiveMatch);
     const sections = liveSections(matches);
     expect(sections.ready.map(m => m.id)).toEqual(['0']);
     expect(sections.playing.map(m => m.id)).toEqual(['2']);
