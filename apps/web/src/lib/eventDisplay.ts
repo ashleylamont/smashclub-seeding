@@ -1,3 +1,4 @@
+import { availableMatches } from './eventQueue';
 export interface LiveMatch {
   id: string; division: string; stage: string; poolIndex: number | null; label: string;
   player1Name: string | null; player2Name: string | null; player1Id: string | null; player2Id: string | null;
@@ -5,7 +6,7 @@ export interface LiveMatch {
   status: string; stationId: string | null;
 }
 export function liveSections(matches: readonly LiveMatch[]) {
-  return { playing: matches.filter(m => m.status === 'playing'), ready: matches.filter(m => m.status === 'ready'),
+  return { playing: matches.filter(m => m.status === 'playing'), ready: availableMatches(matches),
     complete: matches.filter(m => m.status === 'complete'), total: matches.length };
 }
 /** Percentages of the browser source: reserve a transparent, centred capture region. */

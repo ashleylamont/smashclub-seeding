@@ -335,6 +335,7 @@ function PlanWizard({
             {view.plan.name} <span className="chip">{STATUS_LABEL[view.plan.status] ?? view.plan.status}</span>
           </h2>
           <span className="row-actions">
+            <a className="btn btn-small" href={`/admin/event-operations?plan=${planId}`}>Run event →</a>
             {(view.plan.status === 'pools_ready' || view.plan.status === 'underway') && (
               <button
                 type="button"

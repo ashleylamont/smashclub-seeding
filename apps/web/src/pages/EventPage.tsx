@@ -4,6 +4,7 @@ import { trpc } from '../lib/trpc';
 import type { EventOverviewData } from '../lib/apiTypes';
 import { formatDate } from '../lib/format';
 import './EventPage.css';
+import { ResultGraphic } from '../components/ResultGraphic';
 
 
 export function EventPage() {
@@ -32,6 +33,7 @@ function EventOverview({ data }: { data: EventOverviewData }) {
           <p className="muted">Finishing places are within this division. Ties and missing placements remain visible. W-L excludes byes and setup results.</p>
           {division.notice && <p className="banner banner-warning">{division.notice}</p>}
           <Standings players={division.players} />
+          {!division.notice && data.brackets.filter(bracket => bracket.division === division.division).every(bracket => bracket.isComplete) && <ResultGraphic title={`${data.name} · ${division.division === 'upper' ? 'Upper' : 'Lower'}`} results={division.players.filter(player => player.place !== null && !player.provisional).map(player => ({ place: player.place!, alias: player.name, detail: `${player.wins} wins · ${player.losses} losses` }))} />}
         </section>
       ))}
       <section className="section">
@@ -40,6 +42,7 @@ function EventOverview({ data }: { data: EventOverviewData }) {
           {data.brackets.map((bracket) => (
             <article className="card event-bracket-card" key={bracket.tournamentId}>
               <div className="page-header"><h3><Link to="/tournaments/$slug" params={{ slug: bracket.slug }}>{bracket.name}</Link></h3><span className="chip">{bracket.division && bracket.stage ? `${bracket.division} ${bracket.stage}` : 'Standalone bracket'}</span></div>
+              {bracket.isComplete && <ResultGraphic title={bracket.name} results={bracket.players.filter(player => player.place !== null && !player.provisional).map(player => ({ place: player.place!, alias: player.name }))} />}
               {bracket.roleSource === 'unclassified' ? <Standings players={bracket.players} /> : <details><summary>View bracket standings</summary><Standings players={bracket.players} /></details>}
             </article>
           ))}
