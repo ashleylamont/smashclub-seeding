@@ -1,3 +1,4 @@
+import { historicalCandidates, previewHistoricalAdoption, applyHistoricalAdoption } from '../../event-planner/historicalAdoption';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { EventPlanValidationError } from '../../event-planner/divisions';
@@ -36,6 +37,7 @@ import { adminProcedure, router } from '../trpc';
 
 const divisionSchema = z.enum(['upper', 'lower']);
 const stageSchema = z.enum(['main', 'consolation']);
+const historicalSchema = z.object({ planId: z.uuid(), brackets: z.array(z.object({ division: divisionSchema, stage: stageSchema, tournamentId: z.uuid() })).length(4) });
 const preferenceSchema = z.enum(['auto', 'upper', 'lower']);
 
 /** Translate the planner's own errors into the tRPC codes a client can act on. */
@@ -54,6 +56,10 @@ async function guard<T>(run: () => Promise<T>): Promise<T> {
 }
 
 export const eventPlannerRouter = router({
+  historicalCandidates: adminProcedure.input(z.object({ planId: z.uuid() })).query(({ ctx, input }) => historicalCandidates(ctx.db, input.planId)),
+  previewHistoricalAdoption: adminProcedure.input(historicalSchema).mutation(({ ctx, input }) => previewHistoricalAdoption(ctx.db, input)),
+  applyHistoricalAdoption: adminProcedure.input(historicalSchema.extend({ fingerprint: z.string().regex(/^[a-f0-9]{64}$/) })).mutation(({ ctx, input }) => applyHistoricalAdoption(ctx.db, input, ctx.user.id)),
+
   plans: adminProcedure.query(({ ctx }) => listPlans(ctx.db)),
 
   /**

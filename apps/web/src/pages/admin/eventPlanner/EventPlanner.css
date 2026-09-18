@@ -323,3 +323,18 @@
     break-inside: avoid;
   }
 }
+
+/* Historical adoption keeps the played event separate from its archived plan. */
+.historical-adoption { border-left: 3px solid var(--accent, #4a7ebb); }
+.historical-form { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 8px; }
+.historical-slot-grid, .historical-differences { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 16px; margin: 16px 0; }
+.historical-slot-grid label { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.historical-slot-grid select { width: 100%; }
+.historical-bracket-list { list-style: none; padding: 0; margin: 12px 0; }
+.historical-bracket-list li { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 10px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.historical-bracket-list li > :first-child { min-width: 150px; }
+.historical-bracket-list small { flex-basis: 100%; }
+.historical-differences h5 { margin: 0; font-size: 0.85rem; }
+.historical-differences ul { padding-left: 18px; }
+.historical-original-plan > summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+.historical-original-plan .planner-steps { margin-bottom: 16px; }
