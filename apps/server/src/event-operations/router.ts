@@ -4,13 +4,16 @@ import { sourceRefreshRouter } from './sourceRefreshRouter';
 import { z } from 'zod';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
-import { eventAnnouncements, eventMatchAudit, eventOperationSettings, eventOperators, eventPrizes, eventScoreReports, eventStations, eventPlanEntries, eventAttendanceAudit, user } from '@smashclub/db';
+import { eventMatchAudit, eventOperationSettings, eventOperators, eventPrizes, eventScoreReports, eventStations, eventPlanEntries, eventAttendanceAudit, user } from '@smashclub/db';
 import { adminProcedure, authedProcedure, publicProcedure, router } from '../trpc/trpc';
 import { lockEvent, prepare, reportScore, requireOperator, reviewReport, snapshot, updateMatch } from './service';
+import { configurePool, publishAnnouncement, updateLiveScore } from './controls';
 import { applyAttendance, previewAttendance, resetOperations } from './attendance';
 const attendanceInput = z.object({ planId: z.string().uuid(), action: z.enum(['add', 'withdraw']), playerId: z.string().uuid(), division: z.enum(['upper', 'lower']).optional(), poolIndex: z.number().int().min(0).optional(), reason: z.string().trim().max(200).optional(), acknowledgeExternalChange: z.boolean().optional() });
 const planInput = z.object({ planId: z.string().uuid() });
 export const eventOpsRouter = router({
+    updateLiveScore:authedProcedure.input(z.object({matchId:z.string().uuid(),expectedRevision:z.number().int().min(0),score1:z.number().int().min(0).max(5),score2:z.number().int().min(0).max(5)})).mutation(({ctx,input})=>updateLiveScore(ctx.db,ctx.user,input)),
+    configurePool:authedProcedure.input(planInput.extend({division:z.enum(['upper','lower']),poolIndex:z.number().int().min(0),active:z.boolean(),stationIds:z.array(z.string().uuid()).max(64),expectedRevision:z.number().int().min(0).optional()})).mutation(({ctx,input})=>configurePool(ctx.db,ctx.user,input)),
     guests: guestRouter,
     delivery: eventDeliveryRouter,
     sources: sourceRefreshRouter,
@@ -38,7 +41,7 @@ export const eventOpsRouter = router({
         return tx.insert(eventOperators).values({ eventPlanId: input.planId, userId: account.id }).onConflictDoNothing().returning();
     })),
     saveStation: authedProcedure.input(planInput.extend({ id: z.string().uuid().optional(), name: z.string().trim().min(1).max(60) })).mutation(async ({ ctx, input }) => { await requireOperator(ctx.db, input.planId, ctx.user); return ctx.db.transaction(async (tx) => { await lockEvent(tx, input.planId); return input.id ? tx.update(eventStations).set({ name: input.name }).where(and(eq(eventStations.id, input.id), eq(eventStations.eventPlanId, input.planId))).returning() : tx.insert(eventStations).values({ eventPlanId: input.planId, name: input.name }).returning(); }); }),
-    announce: authedProcedure.input(planInput.extend({ message: z.string().trim().min(1).max(500) })).mutation(async ({ ctx, input }) => { await requireOperator(ctx.db, input.planId, ctx.user); return ctx.db.transaction(async (tx) => { await lockEvent(tx, input.planId); return tx.insert(eventAnnouncements).values({ eventPlanId: input.planId, message: input.message }).returning(); }); }),
+    announce: authedProcedure.input(planInput.extend({ message: z.string().trim().min(1).max(500),durationSeconds:z.number().int().min(1).max(86400).nullable().optional() })).mutation(({ctx,input})=>publishAnnouncement(ctx.db,ctx.user,input)),
     savePrize: authedProcedure.input(planInput.extend({ id: z.string().uuid().optional(), title: z.string().trim().min(1).max(100), description: z.string().max(500).nullable().optional(), playerId: z.string().uuid().nullable().optional() })).mutation(async ({ ctx, input }) => {
         await requireOperator(ctx.db, input.planId, ctx.user);
         return ctx.db.transaction(async (tx) => {

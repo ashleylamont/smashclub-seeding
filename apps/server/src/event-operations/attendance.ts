@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { and, eq, or } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
-import { eventAttendanceAudit, eventMatches, eventPlanBrackets, eventPlanEntries, eventPlanPoolPlacements, eventPlans, eventPoolAssignments, eventScoreReports, eventWithdrawals, players, type Db } from '@smashclub/db';
+import { eventAttendanceAudit, eventMatches, eventPlanBrackets, eventPlanEntries, eventPlanPoolPlacements, eventPoolSchedules, eventPlans, eventPoolAssignments, eventScoreReports, eventWithdrawals, players, type Db } from '@smashclub/db';
 import type { SessionUser } from '../auth';
 import { getPlan } from '../event-planner/plans';
 import { lockEvent, prepare, requireOperator } from './service';
@@ -103,10 +103,11 @@ export async function resetOperations(db: Db, actor: SessionUser, planId: string
         const reports = await tx.select().from(eventScoreReports).where(eq(eventScoreReports.eventPlanId, planId)).limit(1);
         const brackets = await tx.select().from(eventPlanBrackets).where(eq(eventPlanBrackets.eventPlanId, planId));
         const withdrawals = await tx.select().from(eventWithdrawals).where(eq(eventWithdrawals.eventPlanId, planId));
-        if (matches.some(m => m.status === 'playing' || m.status === 'complete' || m.score1 !== null || m.score2 !== null) || reports.length || withdrawals.length || brackets.some(b => b.tournamentId || b.challongeSlug))
+        if (matches.some(m => m.status === 'playing' || m.status === 'complete' || m.score1 !== null || m.score2 !== null || m.liveScore1 !== null || m.liveScore2 !== null) || reports.length || withdrawals.length || brackets.some(b => b.tournamentId || b.challongeSlug))
             throw new TRPCError({ code: 'CONFLICT', message: 'Only an unplayed queue with no reports, withdrawals, or linked brackets can be reset.' });
         await tx.delete(eventMatches).where(eq(eventMatches.eventPlanId, planId));
         await tx.delete(eventPoolAssignments).where(eq(eventPoolAssignments.eventPlanId, planId));
+        await tx.delete(eventPoolSchedules).where(eq(eventPoolSchedules.eventPlanId, planId));
         await tx.delete(eventPlanPoolPlacements).where(eq(eventPlanPoolPlacements.eventPlanId, planId));
         await tx.insert(eventAttendanceAudit).values({ eventPlanId: planId, userId: actor.id, action: 'reset_queue', details: { removedMatches: matches.length } });
         return { removedMatches: matches.length };
