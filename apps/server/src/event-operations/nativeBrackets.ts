@@ -102,6 +102,8 @@ export async function assertNativeCorrectionAllowed(db: Db, match: typeof eventM
   if (!match.nativeBracketId) return;
   if (match.outcome === 'bye') reject('Automatic bracket byes are fixed by the draw.');
   const all = await db.select().from(eventMatches).where(eq(eventMatches.nativeBracketId, match.nativeBracketId));
+  const parents = [match.parent1MatchId, match.parent2MatchId].filter((id): id is string => !!id);
+  if (parents.some(id => !all.some(parent => parent.id === id && resolved(parent)))) reject('Previous round matches must be resolved before recording this native result. An unresolved opponent is not a bye.');
   const audit = all.length ? await db.select().from(eventMatchAudit).where(inArray(eventMatchAudit.matchId, all.map(m => m.id))) : [];
   const started = new Set(audit.filter(a => (a.after as {status?:string}).status === 'playing' || (a.before as {status?:string}).status === 'playing').map(a => a.matchId));
   const downstream = new Set([match.id]);

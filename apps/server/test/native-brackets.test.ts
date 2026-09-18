@@ -91,6 +91,21 @@ describe('native brackets', () => {
     await expect(resetNativeBrackets(db, admin, planId, preview.revisionToken)).rejects.toThrow(/started/);
   });
 
+  it('rejects a premature bye and pool-order changes after finals generation', async () => {
+    await finishPools(); await generate();
+    const semi = (await db.select().from(eventMatches)).find(m => m.nativeBracketId && m.division === 'upper' && m.stage === 'main' && m.nativeRound === 1)!;
+    await score(semi);
+    const final = (await db.select().from(eventMatches)).find(m => m.nativeBracketId === semi.nativeBracketId && m.nativeRound === 2)!;
+    expect(final.status).toBe('blocked');
+    await expect(reportScore(db, admin, { matchId: final.id, expectedRevision: final.revision, requestId: crypto.randomUUID(), outcome: 'bye', score1: 0, score2: 0, winnerId: semi.player1Id! })).rejects.toThrow(/Previous round/);
+    expect((await db.select().from(eventMatches).where(eq(eventMatches.id, final.id)))[0]!.winnerId).toBeNull();
+    const view = (await getPlan(db, planId))!;
+    const division = view.divisions.find(d => d.division === 'upper')!;
+    const orders = division.pools.map(pool => ({ poolIndex: pool.poolIndex, playerIdsInOrder: pool.members.map(member => member.playerId).reverse(), expectedMatchRevisions: pool.matchRevisions, expectedPlacementRevision: pool.placementRevision }));
+    await expect(savePoolPlacements(db, planId, 'upper', orders)).rejects.toThrow(/Remove the unplayed finals/);
+    expect((await getPlan(db, planId))!.divisions.find(d => d.division === 'upper')!.pools).toEqual(division.pools);
+  });
+
   it('resolves withdrawn branches without inventing games or a champion', async () => {
     await finishPools(); await generate();
     const withdraw = async (playerId: string) => {
