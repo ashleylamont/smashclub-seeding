@@ -182,11 +182,15 @@ export async function reportScore(db: Db, user: SessionUser, input: ScoreInput) 
         const operator = await isOperator(tx, match.eventPlanId, user);
         if (!operator) {
             const [settings] = await tx.select().from(eventOperationSettings).where(eq(eventOperationSettings.eventPlanId, match.eventPlanId));
-            const [claim] = await tx.select().from(playerClaims).where(and(eq(playerClaims.userId, user.id), eq(playerClaims.status, 'approved')));
-            if (!settings?.playerReports || !claim || ![match.player1Id, match.player2Id].includes(claim.playerId))
-                fail('FORBIDDEN', 'Player reporting is unavailable for this match.');
-            if (match.status === 'complete')
-                fail('CONFLICT', 'Ask an organiser to correct a completed match.');
+            if (!settings?.published || !settings.playerReports)
+                fail('FORBIDDEN', 'Score reporting is unavailable for this event.');
+            if (!['ready', 'playing'].includes(match.status) || input.outcome !== 'played')
+                fail('CONFLICT', 'Ask an organiser to record byes, forfeits, blocked matches or corrections.');
+            const reports = await tx.select().from(eventScoreReports).where(and(eq(eventScoreReports.eventPlanId, match.eventPlanId), eq(eventScoreReports.userId, user.id)));
+            if (reports.some(report => report.matchId === match.id && report.status === 'pending'))
+                fail('CONFLICT', 'Your score is already waiting for organiser approval.');
+            if (reports.filter(report => report.status === 'pending').length >= 30 || reports.filter(report => report.createdAt.getTime() > Date.now() - 60_000).length >= 6)
+                throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many score reports. Please wait or ask an organiser.' });
         }
         if (match.revision !== input.expectedRevision)
             fail('CONFLICT', 'This match changed. Refresh and try again.');

@@ -59,9 +59,8 @@ describe('event operations', () => {
     });
     it('keeps player reports pending and prevents stale approval overwriting TO corrections', async () => {
         const [m] = await ready();
-        await db.update(eventOperationSettings).set({ playerReports: true }).where(eq(eventOperationSettings.eventPlanId, planId));
-        await expect(reportScore(db, member, score(m!))).rejects.toMatchObject({ code: 'FORBIDDEN' });
-        await db.insert(playerClaims).values({ userId: member.id, playerId: m!.player1Id!, status: 'approved' });
+        await db.update(eventOperationSettings).set({ playerReports: true, published: true }).where(eq(eventOperationSettings.eventPlanId, planId));
+        // Signed-in attendees can report any open match without linking a profile.
         const r = await reportScore(db, member, score(m!));
         expect(r.status).toBe('pending');
         expect(await db.select().from(eventMatchAudit)).toHaveLength(0);
@@ -72,7 +71,7 @@ describe('event operations', () => {
     });
     it('approves a valid report and makes closed events read-only', async () => {
         const [m] = await ready();
-        await db.update(eventOperationSettings).set({ playerReports: true }).where(eq(eventOperationSettings.eventPlanId, planId));
+        await db.update(eventOperationSettings).set({ playerReports: true, published: true }).where(eq(eventOperationSettings.eventPlanId, planId));
         await db.insert(playerClaims).values({ userId: member.id, playerId: m!.player1Id!, status: 'approved' });
         const r = await reportScore(db, member, score(m!));
         await reviewReport(db, admin, r.id, true);

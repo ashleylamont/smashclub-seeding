@@ -197,6 +197,8 @@ export const adminRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const [source] = await ctx.db.select({ provider: tournaments.provider }).from(tournaments).where(eq(tournaments.id, input.tournamentId));
+      if (source?.provider === 'native') throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nemesis events use the event control page for live scoring.' });
       const liveUntil = new Date(Date.now() + input.hours * 60 * 60 * 1000);
       await ctx.db
         .update(tournaments)
@@ -227,7 +229,7 @@ export const adminRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const [before] = await ctx.db
-        .select({ resultsMode: tournaments.resultsMode })
+        .select({ resultsMode: tournaments.resultsMode, provider: tournaments.provider })
         .from(tournaments)
         .where(eq(tournaments.id, input.tournamentId));
       if (!before) throw new TRPCError({ code: 'NOT_FOUND', message: 'Tournament not found.' });
@@ -241,7 +243,7 @@ export const adminRouter = router({
       await ctx.db.update(tournaments).set(patch).where(eq(tournaments.id, input.tournamentId));
       // A mode change must re-read the bracket so older imports gain stage
       // metadata before the recompute is queued. The sync remains idempotent.
-      if (input.resultsMode !== undefined && input.resultsMode !== before?.resultsMode) {
+      if (before.provider !== 'native' && input.resultsMode !== undefined && input.resultsMode !== before.resultsMode) {
         try {
           await syncTournament(ctx.db, ctx.challonge, input.tournamentId, { source: 'public' });
         } catch (error) {

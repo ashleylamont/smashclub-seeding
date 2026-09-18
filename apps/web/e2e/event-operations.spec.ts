@@ -51,7 +51,7 @@ test('rehearsal: two TOs, score approval, station safety, public board and OBS',
 
     await page.goto(`/admin/event-operations?plan=${planId}`);
     const scoreCard = page.locator('article.ops-match').filter({ hasText: ready.label });
-    await scoreCard.getByRole('button', { name: 'Record score', exact: true }).click();
+    await scoreCard.getByRole('button', { name: 'Finish match', exact: true }).click();
     await scoreCard.locator('input[type="number"]').nth(0).fill('2');
     await scoreCard.locator('input[type="number"]').nth(1).fill('1');
     await scoreCard.getByRole('button', { name: 'Confirm result', exact: true }).click();
@@ -218,7 +218,7 @@ test('assigned TO can score on a 390px phone without horizontal overflow', async
     await toPage.goto(`/operate/${planId}`);
     const match = snapshot.matches[0]!;
     const card = toPage.locator('article.ops-match').filter({ hasText: match.label });
-    await card.getByRole('button', { name: 'Record score', exact: true }).click();
+    await card.getByRole('button', { name: 'Finish match', exact: true }).click();
     await card.locator('input[type="number"]').nth(0).fill('2');
     await card.locator('input[type="number"]').nth(1).fill('0');
     await expect.poll(() => toPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);

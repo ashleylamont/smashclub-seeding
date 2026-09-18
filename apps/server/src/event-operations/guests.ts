@@ -5,7 +5,10 @@ import { eventGuestRateLimits, eventGuestSessions, eventGuestSettings, eventMatc
 import type { SessionUser } from '../auth';
 import { lockEvent, requireOperator, snapshot, validateScore } from './service';
 
-const INVITATION_MS = 15 * 60_000;
+// Rotate the displayed code every 15 minutes, but keep every issued code valid
+// for at least a full hour. A photo of the previous code remains usable.
+const INVITATION_ROTATION_MS = 15 * 60_000;
+const INVITATION_MS = 75 * 60_000;
 const SESSION_MS = 60 * 60_000;
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const randomToken = () => randomBytes(32).toString('base64url');
@@ -43,7 +46,7 @@ async function available(db: Db, planId: string) {
     return settings;
 }
 function invitation(settings: typeof eventGuestSettings.$inferSelect, now: number) {
-    const expires = (Math.floor(now / INVITATION_MS) + 1) * INVITATION_MS;
+    const expires = Math.floor(now / INVITATION_ROTATION_MS) * INVITATION_ROTATION_MS + INVITATION_MS;
     const signature = createHmac('sha256', settings.secret).update(`${settings.eventPlanId}:${expires}`).digest('base64url');
     return { token: `${expires}.${signature}`, expiresAt: new Date(expires).toISOString() };
 }
@@ -80,7 +83,10 @@ export async function redeemGuest(db: Db, input: { planId: string; token: string
     await consumeRedemptionLimit(db, input.planId, ip, now);
     return db.transaction(async tx => {
         const settings = await available(tx, input.planId);
-        const expected = invitation(settings, now).token;
+        const expires = Number(input.token.split('.')[0]);
+        if (!Number.isSafeInteger(expires) || expires <= now || expires > now + INVITATION_MS) return deny();
+        const signature = createHmac('sha256', settings.secret).update(`${settings.eventPlanId}:${expires}`).digest('base64url');
+        const expected = `${expires}.${signature}`;
         const supplied = Buffer.from(input.token);
         if (supplied.length !== expected.length || !timingSafeEqual(supplied, Buffer.from(expected))) return deny();
         const sessionToken = randomToken();

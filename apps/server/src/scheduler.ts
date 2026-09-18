@@ -69,7 +69,7 @@ export class SyncScheduler {
     const liveRows = await this.db
       .select({ id: tournaments.id })
       .from(tournaments)
-      .where(gt(tournaments.liveUntil, new Date()));
+      .where(and(eq(tournaments.provider, 'challonge'), gt(tournaments.liveUntil, new Date())));
     for (const row of liveRows) {
       await this.syncOne(row.id, true);
     }
@@ -94,6 +94,7 @@ export class SyncScheduler {
       .from(tournaments)
       .where(
         and(
+          eq(tournaments.provider, 'challonge'),
           or(
             inArray(tournaments.syncState, ['registered', 'error']),
             isNull(tournaments.challongeState),

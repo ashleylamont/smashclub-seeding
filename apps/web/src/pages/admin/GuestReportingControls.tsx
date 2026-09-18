@@ -20,7 +20,7 @@ export function GuestReportingControls({ planId, closed, published }: { planId: 
   };
   const valid = invitation && Date.parse(invitation.expiresAt) > now && settings.data?.enabled && !closed && published;
   const link = valid ? guestInvitationUrl(planId, invitation.token) : '';
-  return <section className="card guest-controls"><h3>Guest score reporting</h3><p className="muted">A temporary QR pass lets anyone report a match without signing in or linking a player. Every report needs TO approval.</p>
+  return <section className="card guest-controls"><h3>Guest score reporting</h3><p className="muted">Each QR link works for at least an hour, even after the screen rotates to a new code. Scanning it gives an hour of reporting access. Every report needs TO approval.</p>
     {settings.data && <><label className="ops-check"><input type="checkbox" checked={settings.data.enabled} disabled={pending || closed} onChange={e => void act(async () => { await trpc.eventOps.guests.configure.mutate({ planId, enabled: e.target.checked, showOnOverlay: settings.data!.showOnOverlay }); setInvitation(null); })} /> Allow guest score reports</label>
       <label className="ops-check"><input type="checkbox" checked={settings.data.showOnOverlay} disabled={pending || closed || !settings.data.enabled} onChange={e => void act(() => trpc.eventOps.guests.configure.mutate({ planId, enabled: settings.data!.enabled, showOnOverlay: e.target.checked }))} /> Show a rotating QR on the OBS overlay</label><p className="muted">Stream viewers can scan the overlay too. Keep this off for an in-person-only invitation.</p>
       {!published && <p>Publish the event to issue guest passes.</p>}

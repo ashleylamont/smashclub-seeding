@@ -51,6 +51,7 @@ export async function syncTournament(
 ): Promise<SyncResult> {
   const [tournament] = await db.select().from(tournaments).where(eq(tournaments.id, tournamentId));
   if (!tournament) throw new Error(`Unknown tournament ${tournamentId}`);
+  if (tournament.provider === 'native') throw new Error('Nemesis results cannot be refreshed from Challonge.');
 
   const [job] = await db
     .insert(syncJobs)
