@@ -80,7 +80,7 @@ export async function prepare(db: Db, planId: string) {
         for (const row of rows) {
             const previous = existing.find(m => m.sourceKey === row.sourceKey);
             if (!previous) {
-                await tx.insert(eventMatches).values(row);
+                await tx.insert(eventMatches).values({ ...row, resultUpdatedAt: row.status === 'complete' ? new Date() : null });
                 continue;
             }
             if (!row.sourceSetId)
@@ -105,7 +105,8 @@ export async function prepare(db: Db, planId: string) {
                         await tx.update(eventPlanBrackets).set({externalState:'error',lastError:reconciliationReason,updatedAt:new Date()}).where(eq(eventPlanBrackets.id,bracket.id));
                     }
                 }
-                await tx.update(eventMatches).set({ ...fields, status: nextStatus, blockedReason: reconciliationReason??(!fields.player1Id || !fields.player2Id ? 'Waiting for bracket participants' : nextStatus === 'blocked' ? previous.blockedReason : null), revision: previous.revision + 1 }).where(eq(eventMatches.id, previous.id));
+                const newResult = nextStatus === 'complete' && (previous.status !== 'complete' || resultChanged || previous.player1Id !== fields.player1Id || previous.player2Id !== fields.player2Id);
+                await tx.update(eventMatches).set({ ...fields, resultUpdatedAt: newResult ? new Date() : nextStatus === 'complete' ? previous.resultUpdatedAt : null, status: nextStatus, blockedReason: reconciliationReason??(!fields.player1Id || !fields.player2Id ? 'Waiting for bracket participants' : nextStatus === 'blocked' ? previous.blockedReason : null), revision: previous.revision + 1 }).where(eq(eventMatches.id, previous.id));
             }
         }
         const withdrawn = await tx.select().from(eventWithdrawals).where(eq(eventWithdrawals.eventPlanId, planId));
@@ -161,7 +162,7 @@ async function applyScore(db: Db, match: typeof eventMatches.$inferSelect, input
         if (match.poolIndex !== null)
             await db.delete(eventPlanPoolPlacements).where(and(eq(eventPlanPoolPlacements.eventPlanId, match.eventPlanId), eq(eventPlanPoolPlacements.division, match.division), eq(eventPlanPoolPlacements.poolIndex, match.poolIndex)));
     }
-    const [updated] = await db.update(eventMatches).set({ score1: input.score1, score2: input.score2, winnerId, outcome: input.outcome, status: 'complete', blockedReason: null, revision: match.revision + 1, syncState: match.sourceSetId ? 'pending' : 'local' }).where(and(eq(eventMatches.id, match.id), eq(eventMatches.revision, input.expectedRevision))).returning();
+    const [updated] = await db.update(eventMatches).set({ score1: input.score1, score2: input.score2, winnerId, outcome: input.outcome, status: 'complete', resultUpdatedAt: new Date(), blockedReason: null, revision: match.revision + 1, syncState: match.sourceSetId ? 'pending' : 'local' }).where(and(eq(eventMatches.id, match.id), eq(eventMatches.revision, input.expectedRevision))).returning();
     if (!updated)
         return fail('CONFLICT', 'Another organiser updated this match.');
     await db.insert(eventMatchAudit).values({ eventPlanId: match.eventPlanId, matchId: match.id, userId: actor, action: match.status === 'complete' ? 'score_corrected' : 'score_recorded', before: match, after: updated });

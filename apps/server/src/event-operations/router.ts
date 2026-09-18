@@ -1,3 +1,4 @@
+import { guestRouter } from './guestRouter';
 import { eventDeliveryRouter } from './deliveryRouter';
 import { sourceRefreshRouter } from './sourceRefreshRouter';
 import { z } from 'zod';
@@ -10,6 +11,7 @@ import { applyAttendance, previewAttendance, resetOperations } from './attendanc
 const attendanceInput = z.object({ planId: z.string().uuid(), action: z.enum(['add', 'withdraw']), playerId: z.string().uuid(), division: z.enum(['upper', 'lower']).optional(), poolIndex: z.number().int().min(0).optional(), reason: z.string().trim().max(200).optional(), acknowledgeExternalChange: z.boolean().optional() });
 const planInput = z.object({ planId: z.string().uuid() });
 export const eventOpsRouter = router({
+    guests: guestRouter,
     delivery: eventDeliveryRouter,
     sources: sourceRefreshRouter,
     previewAttendance: authedProcedure.input(attendanceInput).query(async ({ ctx, input }) => { await requireOperator(ctx.db, input.planId, ctx.user); return previewAttendance(ctx.db, input); }),
@@ -19,7 +21,7 @@ export const eventOpsRouter = router({
     snapshot: publicProcedure.input(planInput).query(({ ctx, input }) => snapshot(ctx.db, input.planId)),
     overview: authedProcedure.input(planInput).query(async ({ ctx, input }) => {
         await requireOperator(ctx.db, input.planId, ctx.user);
-        return { ...await snapshot(ctx.db, input.planId, true), reports: await ctx.db.select().from(eventScoreReports).where(eq(eventScoreReports.eventPlanId, input.planId)).orderBy(desc(eventScoreReports.createdAt)), audit: await ctx.db.select().from(eventMatchAudit).where(eq(eventMatchAudit.eventPlanId, input.planId)).orderBy(desc(eventMatchAudit.createdAt)).limit(100), tos: await ctx.db.select({ id: eventOperators.id, userId: eventOperators.userId, eventPlanId: eventOperators.eventPlanId, name: user.name, email: user.email }).from(eventOperators).innerJoin(user, eq(eventOperators.userId, user.id)).where(eq(eventOperators.eventPlanId, input.planId)), attendanceAudit: await ctx.db.select().from(eventAttendanceAudit).where(eq(eventAttendanceAudit.eventPlanId, input.planId)).orderBy(desc(eventAttendanceAudit.createdAt)).limit(100) };
+        return { ...await snapshot(ctx.db, input.planId, true), reports: (await ctx.db.select().from(eventScoreReports).where(eq(eventScoreReports.eventPlanId, input.planId)).orderBy(desc(eventScoreReports.createdAt))).map(report => ({ ...report, reporterLabel: report.guestSessionId ? 'Guest' : 'Player' })), audit: await ctx.db.select().from(eventMatchAudit).where(eq(eventMatchAudit.eventPlanId, input.planId)).orderBy(desc(eventMatchAudit.createdAt)).limit(100), tos: await ctx.db.select({ id: eventOperators.id, userId: eventOperators.userId, eventPlanId: eventOperators.eventPlanId, name: user.name, email: user.email }).from(eventOperators).innerJoin(user, eq(eventOperators.userId, user.id)).where(eq(eventOperators.eventPlanId, input.planId)), attendanceAudit: await ctx.db.select().from(eventAttendanceAudit).where(eq(eventAttendanceAudit.eventPlanId, input.planId)).orderBy(desc(eventAttendanceAudit.createdAt)).limit(100) };
     }),
     prepare: authedProcedure.input(planInput).mutation(async ({ ctx, input }) => { await requireOperator(ctx.db, input.planId, ctx.user); return prepare(ctx.db, input.planId); }),
     reportScore: authedProcedure.input(z.object({ matchId: z.string().uuid(), expectedRevision: z.number().int().min(0), requestId: z.string().min(1).max(100), score1: z.number().int().min(0).max(99), score2: z.number().int().min(0).max(99), outcome: z.enum(['played', 'bye', 'forfeit']), winnerId: z.string().uuid().optional() })).mutation(({ ctx, input }) => reportScore(ctx.db, ctx.user, input)),

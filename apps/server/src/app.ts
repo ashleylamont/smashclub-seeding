@@ -60,7 +60,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       router: appRouter,
       createContext: async ({ req }: { req: FastifyRequest }): Promise<TrpcContext> => {
         const user = await getSessionUser(auth, db, env, toWebHeaders(req));
-        return { db, env, user, challonge, recomputeTrigger };
+        return { db, env, user, challonge, recomputeTrigger, clientIp: req.ip };
       },
     },
   });

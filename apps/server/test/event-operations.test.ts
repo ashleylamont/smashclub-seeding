@@ -100,6 +100,10 @@ describe('event operations', () => {
         await prepare(db, planId);
         let row = (await db.select().from(eventMatches).where(eq(eventMatches.id, group.id)))[0]!;
         expect(row).toMatchObject({ score1: 1, score2: 2, status: 'complete', winnerId: group.player2Id, syncState: 'synced' });
+        const importedAt = row.resultUpdatedAt;
+        expect(importedAt).toBeInstanceOf(Date);
+        await prepare(db, planId);
+        expect((await db.select().from(eventMatches).where(eq(eventMatches.id, group.id)))[0]!.resultUpdatedAt).toEqual(importedAt);
         await reportScore(db, admin, { ...score(row), score1: 2, score2: 0 });
         await db.update(sets).set({ p1PlayerId: ids[0], p2PlayerId: ids[1], state: 'open' }).where(eq(sets.id, final!.id));
         await prepare(db, planId);
