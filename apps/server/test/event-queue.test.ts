@@ -27,6 +27,32 @@ describe('pure station queue',()=>{
     const queued=result.stationQueues.flatMap(q=>[q.nextMatchId,...q.upcoming.map(m=>m.matchId)].filter(Boolean));
     expect(new Set(queued).size).toBe(matches.length);
   });
+  it('runs 104 sets across twelve pool banks with uneven finishes and no TO assignments', () => {
+    const matches = Array.from({ length: 12 }, (_, poolIndex) => pool(poolIndex < 8 ? 5 : 4).map(match => ({
+      ...match, poolIndex, id: `${poolIndex}-${match.id}`, player1Id: `${poolIndex}-${match.player1Id}`, player2Id: `${poolIndex}-${match.player2Id}`,
+    }))).flat();
+    const desks = Array.from({ length: 24 }, (_, index) => ({ id: `desk-${index}`, name: `Station ${index + 1}` }));
+    const banks = Array.from({ length: 12 }, (_, poolIndex) => ({ ...schedule, poolIndex, stationIds: desks.slice(poolIndex * 2, poolIndex * 2 + 2).map(station => station.id) }));
+    expect(matches).toHaveLength(104);
+    for (let finished = 0; finished < matches.length; finished++) {
+      const projection = buildStationQueues(matches, desks, banks);
+      for (const queue of projection.stationQueues) {
+        if (!queue.nextMatchId) continue;
+        const next = matches.find(match => match.id === queue.nextMatchId)!;
+        expect(banks[next.poolIndex]!.stationIds).toContain(queue.stationId);
+        next.status = 'playing'; next.stationId = queue.stationId;
+      }
+      const playing = matches.filter(match => match.status === 'playing');
+      expect(playing.length).toBeGreaterThan(0);
+      const participants = playing.flatMap(match => [match.player1Id, match.player2Id]);
+      expect(new Set(participants).size).toBe(participants.length);
+      expect(new Set(playing.map(match => match.stationId)).size).toBe(playing.length);
+      playing[finished % 2 ? playing.length - 1 : 0]!.status = 'complete';
+    }
+    const end = buildStationQueues(matches, desks, banks);
+    expect(matches.every(match => match.status === 'complete')).toBe(true);
+    expect(end.stationQueues.every(queue => !queue.nextMatchId && !queue.currentMatchId && !queue.upcoming.length && !queue.poolKey)).toBe(true);
+  });
   it('fills two stations for four-player rounds and advances after completion',()=>{
     const matches=pool(4);const first=buildStationQueues(matches,stations,[schedule]);
     const next=first.stationQueues.map(q=>q.nextMatchId!);expect(next.filter(Boolean)).toHaveLength(2);
