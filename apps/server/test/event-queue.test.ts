@@ -98,7 +98,7 @@ describe('station bank integration',()=>{
   it('protects reserved banks from unallocated matches and playing matches from reassignment',async()=>{
     const desk=await station();await configurePool(db,admin,{planId,division:'upper',poolIndex:0,active:true,stationIds:[desk.id]});
     const matches=await db.select().from(eventMatches);const lower=matches.find(m=>m.division==='lower')!;
-    await expect(updateMatch(db,admin,{matchId:lower.id,expectedRevision:0,status:'playing',stationId:desk.id})).rejects.toThrow(/not allocated/);
+    await expect(updateMatch(db,admin,{matchId:lower.id,expectedRevision:0,status:'playing',stationId:desk.id})).rejects.toThrow(/reserved for another pool/);
     const next=(await loadStationQueues(db,planId)).stationQueues[0]!.nextMatchId!;
     const started=await updateMatch(db,admin,{matchId:next,expectedRevision:0,status:'playing',stationId:desk.id});
     await expect(configurePools(db,admin,{planId,pools:[{division:'upper',poolIndex:0,active:false,stationIds:[desk.id],expectedRevision:1},{division:'lower',poolIndex:0,active:true,stationIds:[desk.id],expectedRevision:0}]})).rejects.toThrow(/playing matches/);

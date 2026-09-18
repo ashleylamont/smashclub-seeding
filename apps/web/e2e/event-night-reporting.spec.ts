@@ -38,6 +38,7 @@ test('an unlinked signed-in attendee reports different players and loses the for
     expect(claims.some(claim => claim.status === 'approved')).toBe(false);
     const reporting = await attendee.newPage();
     await reporting.goto(`/play/${planId}`);
+    await reporting.getByRole('combobox', { name: 'Match view', exact: true }).selectOption('all');
     const chosen = ['upper', 'lower'].map(division => snapshot.matches.find(match => match.division === division)!);
     for (const match of chosen) {
       const card = reporting.locator('article.ops-match').filter({ hasText: match.label });
