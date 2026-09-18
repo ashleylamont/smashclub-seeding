@@ -1,9 +1,11 @@
+import { canAutoAcceptPoolScore } from './selfService';
+import { loadStationQueues } from './queue';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { and, desc, eq, lt, sql } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { eventGuestRateLimits, eventGuestSessions, eventGuestSettings, eventMatches, eventOperationSettings, eventScoreReports, eventWithdrawals, type Db } from '@smashclub/db';
 import type { SessionUser } from '../auth';
-import { lockEvent, requireOperator, snapshot, validateScore } from './service';
+import { lockEvent, requireOperator, snapshot, validateScore, applyScore } from './service';
 
 // Rotate the displayed code every 15 minutes, but keep every issued code valid
 // for at least a full hour. A photo of the previous code remains usable.
@@ -95,7 +97,7 @@ export async function redeemGuest(db: Db, input: { planId: string; token: string
         return { sessionToken, expiresAt: expiresAt.toISOString() };
     });
 }
-async function session(db: Db, input: { planId: string; sessionToken: string }, now: number) {
+export async function validateGuestSession(db: Db, input: { planId: string; sessionToken: string }, now: number) {
     const settings = await available(db, input.planId);
     const [guest] = await db.select().from(eventGuestSessions).where(and(eq(eventGuestSessions.eventPlanId, input.planId), eq(eventGuestSessions.tokenHash, hash(input.sessionToken))));
     if (!guest || guest.expiresAt.getTime() <= now || guest.generation !== hash(settings.secret)) return deny();
@@ -103,15 +105,15 @@ async function session(db: Db, input: { planId: string; sessionToken: string }, 
 }
 export async function guestMatches(db: Db, input: { planId: string; sessionToken: string }, now = Date.now()) {
     return db.transaction(async tx => {
-        const guest = await session(tx, input, now);
+        const guest = await validateGuestSession(tx, input, now);
         const data = await snapshot(tx, input.planId);
         const reports = await tx.select({ id: eventScoreReports.id, matchId: eventScoreReports.matchId, status: eventScoreReports.status, score1: eventScoreReports.score1, score2: eventScoreReports.score2 }).from(eventScoreReports).where(eq(eventScoreReports.guestSessionId, guest.id)).orderBy(desc(eventScoreReports.createdAt), desc(eventScoreReports.id));
-        return { matches: data.matches, reports, expiresAt: guest.expiresAt.toISOString() };
+        return { plan: data.plan, stations: data.stations, poolSchedules: data.poolSchedules, ...await loadStationQueues(tx, input.planId), matches: data.matches, reports, expiresAt: guest.expiresAt.toISOString() };
     });
 }
 export async function submitGuest(db: Db, input: { planId: string; sessionToken: string; matchId: string; expectedRevision: number; requestId: string; score1: number; score2: number }, now = Date.now()) {
     return db.transaction(async tx => {
-        const guest = await session(tx, input, now);
+        const guest = await validateGuestSession(tx, input, now);
         const reports = await tx.select().from(eventScoreReports).where(eq(eventScoreReports.guestSessionId, guest.id));
         const prior = reports.find(r => r.requestId === input.requestId);
         if (prior) {
@@ -127,7 +129,9 @@ export async function submitGuest(db: Db, input: { planId: string; sessionToken:
         const [eventCount] = await tx.select({ count: sql<number>`count(*)::integer` }).from(eventScoreReports).where(and(eq(eventScoreReports.eventPlanId, input.planId), eq(eventScoreReports.status, 'pending')));
         // Durable caps remain in force across processes and restarts. Valid retries cost nothing.
         if (reports.length >= 30 || reports.filter(r => r.createdAt.getTime() > now - 60_000).length >= 6 || (eventCount?.count ?? 0) >= 200) limited();
-        const [report] = await tx.insert(eventScoreReports).values({ eventPlanId: input.planId, guestSessionId: guest.id, matchId: match.id, expectedRevision: input.expectedRevision, requestId: input.requestId, score1: input.score1, score2: input.score2, outcome: 'played', winnerId, status: 'pending' }).returning();
+        const accepted = await canAutoAcceptPoolScore(tx, match);
+        if (accepted) await applyScore(tx, match, { ...input, outcome: 'played' }, winnerId, null, guest.id);
+        const [report] = await tx.insert(eventScoreReports).values({ eventPlanId: input.planId, guestSessionId: guest.id, matchId: match.id, expectedRevision: input.expectedRevision, requestId: input.requestId, score1: input.score1, score2: input.score2, outcome: 'played', winnerId, status: accepted ? 'approved' : 'pending' }).returning();
         return { reportId: report!.id, status: report!.status };
     });
 }

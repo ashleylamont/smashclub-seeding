@@ -1,3 +1,4 @@
+import { startPoolMatch } from './selfService';
 import { nativeBracketRouter } from './nativeRouter';
 import { guestRouter } from './guestRouter';
 import { eventDeliveryRouter } from './deliveryRouter';
@@ -13,6 +14,7 @@ import { applyAttendance, previewAttendance, resetOperations } from './attendanc
 const attendanceInput = z.object({ planId: z.string().uuid(), action: z.enum(['add', 'withdraw']), playerId: z.string().uuid(), division: z.enum(['upper', 'lower']).optional(), poolIndex: z.number().int().min(0).optional(), reason: z.string().trim().max(200).optional(), acknowledgeExternalChange: z.boolean().optional() });
 const planInput = z.object({ planId: z.string().uuid() });
 export const eventOpsRouter = router({
+    startPoolMatch: authedProcedure.input(z.object({ planId: z.string().uuid(), matchId: z.string().uuid(), stationId: z.string().uuid(), expectedRevision: z.number().int().min(0) })).mutation(({ ctx, input }) => startPoolMatch(ctx.db, ctx.user, input)),
     updateLiveScore:authedProcedure.input(z.object({matchId:z.string().uuid(),expectedRevision:z.number().int().min(0),score1:z.number().int().min(0).max(5),score2:z.number().int().min(0).max(5)})).mutation(({ctx,input})=>updateLiveScore(ctx.db,ctx.user,input)),
     configurePool:authedProcedure.input(planInput.extend({division:z.enum(['upper','lower']),poolIndex:z.number().int().min(0),active:z.boolean(),stationIds:z.array(z.string().uuid()).max(64),expectedRevision:z.number().int().min(0).optional()})).mutation(({ctx,input})=>configurePool(ctx.db,ctx.user,input)),
     native: nativeBracketRouter,

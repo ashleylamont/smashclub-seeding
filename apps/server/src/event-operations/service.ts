@@ -1,3 +1,4 @@
+import { canAutoAcceptPoolScore } from './selfService';
 import { advanceNativeBrackets, assertNativeCorrectionAllowed, nativeBracketViews } from './nativeBrackets';
 import { and, asc, desc, eq, inArray, gt, isNull, or } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -174,7 +175,7 @@ async function matchForUpdate(db: Db, id: string) {
     // Refresh after acquiring event lock: another TO may have written while we waited.
     return (await db.select().from(eventMatches).where(eq(eventMatches.id, id)))[0]!;
 }
-async function applyScore(db: Db, match: typeof eventMatches.$inferSelect, input: ScoreInput, winnerId: string, actor: string) {
+export async function applyScore(db: Db, match: typeof eventMatches.$inferSelect, input: ScoreInput, winnerId: string, actor: string | null, guestSessionId: string | null = null) {
     await assertNativeCorrectionAllowed(db, match);
     if (match.revision !== input.expectedRevision)
         fail('CONFLICT', 'This match changed. Refresh before recording a correction.');
@@ -188,7 +189,7 @@ async function applyScore(db: Db, match: typeof eventMatches.$inferSelect, input
     const [updated] = await db.update(eventMatches).set({ score1: input.score1, score2: input.score2, liveScore1:null,liveScore2:null, winnerId, outcome: input.outcome, status: 'complete', resultUpdatedAt: new Date(), blockedReason: null, revision: match.revision + 1, syncState: match.sourceSetId ? 'pending' : 'local' }).where(and(eq(eventMatches.id, match.id), eq(eventMatches.revision, input.expectedRevision))).returning();
     if (!updated)
         return fail('CONFLICT', 'Another organiser updated this match.');
-    await db.insert(eventMatchAudit).values({ eventPlanId: match.eventPlanId, matchId: match.id, userId: actor, action: match.status === 'complete' ? 'score_corrected' : 'score_recorded', before: match, after: updated });
+    await db.insert(eventMatchAudit).values({ eventPlanId: match.eventPlanId, matchId: match.id, userId: actor, guestSessionId, action: match.status === 'complete' ? 'score_corrected' : 'score_recorded', before: match, after: updated });
     await advanceNativeBrackets(db, match.eventPlanId);
     return updated;
 }
@@ -224,9 +225,10 @@ export async function reportScore(db: Db, user: SessionUser, input: ScoreInput) 
             fail('CONFLICT', 'A player has withdrawn. Record an explicit forfeit rather than a played result.');
         const winnerId = validateScore(match, input);
         if(match.status!=='complete'&&withdrawn.some(w=>w.playerId===winnerId))fail('BAD_REQUEST','A withdrawn entrant cannot win an outstanding match. Select the active opponent for the forfeit.');
-        if (operator)
+        const accepted = operator || (input.outcome === 'played' && await canAutoAcceptPoolScore(tx, match));
+        if (accepted)
             await applyScore(tx, match, input, winnerId, user.id);
-        const [report] = await tx.insert(eventScoreReports).values({ ...input, eventPlanId: match.eventPlanId, userId: user.id, winnerId, status: operator ? 'approved' : 'pending' }).returning();
+        const [report] = await tx.insert(eventScoreReports).values({ ...input, eventPlanId: match.eventPlanId, userId: user.id, winnerId, status: accepted ? 'approved' : 'pending' }).returning();
         return report!;
     });
 }
