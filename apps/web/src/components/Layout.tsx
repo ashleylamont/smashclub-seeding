@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { authClient, sessionRole } from '../lib/auth';
 import { BUILD_COMMIT_URL, BUILD_LABEL, BUILD_SHA } from '../lib/build';
 import { useEventSource } from '../lib/useEventSource';
+import { NemesisMark } from './NemesisMark';
 import { ThemeToggle } from './ThemeToggle';
 import '../App.css';
 
@@ -70,9 +71,9 @@ export function Layout() {
       </a>
 
       <nav className="app-nav" ref={nav}>
-        {/* The marquee block is drawn in CSS, so the wordmark is text only. */}
+        {/* The event screens and site navigation share the Nemesis mark. */}
         <Link to="/" className="logo">
-          Smash Club
+          <NemesisMark /> Smash Club
         </Link>
         <div className="nav-links">
           <Link to="/" className="nav-link" activeProps={{ className: 'nav-link active' }} activeOptions={{ exact: true }}>

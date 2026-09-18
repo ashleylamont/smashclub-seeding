@@ -23,3 +23,9 @@ it('does not put the same challenger into several broadcast on-deck slots', () =
   expect(broadcastQueue(matches).map(match => match.id)).toEqual(['0', '2', '3']);
   expect(overlayGeometry('?captureWidth=100&captureHeight=100')).toEqual({ width: 78, height: 78 });
 });
+
+it('respects server scheduling holds even when both players are idle', () => {
+  const match: LiveMatch = { id: 'held', status: 'ready', division: 'upper', stage: 'group', poolIndex: 0, label: 'A1', player1Id: 'a', player2Id: 'b', player1Name: 'A', player2Name: 'B', score1: null, score2: null, winnerId: null, stationId: null, availability: { canStart: false, reasons: [{ code: 'pool_held', message: 'Pool is on hold' }], eligibleStationIds: [] } };
+  expect(liveSections([match]).ready).toEqual([]);
+  expect(liveSections([{ ...match, availability: { ...match.availability!, canStart: true } }]).ready).toHaveLength(1);
+});

@@ -4,9 +4,14 @@ export interface LiveMatch {
   player1Name: string | null; player2Name: string | null; player1Id: string | null; player2Id: string | null;
   score1: number | null; score2: number | null; winnerId: string | null;
   status: string; stationId: string | null;
+  outcome?: string | null;
+  player1Characters?: string[]; player2Characters?: string[];
+  availability?: { canStart: boolean; reasons: { code: string; message: string }[]; eligibleStationIds: string[] };
+  nativeBracketId?: string | null; nativeRound?: number | null; nativeSlot?: number | null;
+  parent1MatchId?: string | null; parent2MatchId?: string | null;
 }
 export function liveSections(matches: readonly LiveMatch[]) {
-  return { playing: matches.filter(m => m.status === 'playing'), ready: availableMatches(matches),
+  return { playing: matches.filter(m => m.status === 'playing'), ready: availableMatches(matches).filter(match => match.availability?.canStart !== false),
     complete: matches.filter(m => m.status === 'complete'), total: matches.length };
 }
 /** Percentages of the browser source: reserve a transparent aperture inside the 20% rail and 13% header. */
