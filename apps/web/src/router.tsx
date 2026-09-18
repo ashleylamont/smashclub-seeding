@@ -10,6 +10,7 @@ import { EventLivePage, EventOverlayPage } from './pages/EventLivePage';
 import { AdminEventOperationsPage } from './pages/admin/AdminEventOperationsPage';
 import { EventOperatorPage } from './pages/EventOperatorPage';
 import { PlayerEventPage } from './pages/PlayerEventPage';
+import { GuestEventPage } from './pages/GuestEventPage';
 import { VenuePage } from './pages/VenuePage';
 import { LoginPage } from './pages/LoginPage';
 import { MePage } from './pages/MePage';
@@ -163,6 +164,7 @@ const adminSettingsRoute = createRoute({
 
 const eventLiveRoute = createRoute({ getParentRoute: () => rootRoute, path: '/live/$planId', component: EventLivePage });
 const eventOverlayRoute = createRoute({ getParentRoute: () => rootRoute, path: '/overlay/$planId', component: EventOverlayPage });
+const eventGuestRoute = createRoute({ getParentRoute: () => rootRoute, path: '/guest/$planId', component: GuestEventPage });
 const eventPlayRoute = createRoute({ getParentRoute: () => rootRoute, path: '/play/$planId', component: PlayerEventPage });
 const eventOperateRoute = createRoute({ getParentRoute: () => rootRoute, path: '/operate/$planId', component: EventOperatorPage });
 const adminEventOperationsRoute = createRoute({ getParentRoute: () => adminRoute, path: '/event-operations', component: AdminEventOperationsPage,
@@ -170,7 +172,7 @@ const adminEventOperationsRoute = createRoute({ getParentRoute: () => adminRoute
 });
 
 const routeTree = rootRoute.addChildren([
-  eventLiveRoute, eventOverlayRoute, eventPlayRoute, eventOperateRoute,
+  eventLiveRoute, eventOverlayRoute, eventPlayRoute, eventOperateRoute, eventGuestRoute,
   indexRoute,
   playerRoute,
   tournamentsRoute,

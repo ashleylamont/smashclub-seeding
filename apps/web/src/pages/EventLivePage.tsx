@@ -5,6 +5,8 @@ import { useParams } from '@tanstack/react-router';
 import { trpc } from '../lib/trpc';
 import './EventLive.css';
 import { ResultGraphic } from '../components/ResultGraphic';
+import { GuestOverlayQr } from '../components/GuestOverlayQr';
+import { useGuestClock } from '../lib/guestReporting';
 import { confirmedPoolGraphics } from '../lib/resultGraphic';
 
 import { broadcastQueue, liveSections, overlayGeometry, type LiveMatch } from '../lib/eventDisplay';
@@ -19,6 +21,9 @@ export function EventOverlayPage() {
 function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: boolean }) {
   const query = useQuery({ queryKey: ['eventOps', 'snapshot', planId], queryFn: () => trpc.eventOps.snapshot.query({ planId }),
     refetchInterval: 5000, refetchIntervalInBackground: true, retry: 1 });
+  const now = useGuestClock();
+  const guestInvitation = useQuery({ queryKey: ['overlayGuestInvitation', planId], queryFn: () => trpc.eventOps.guests.overlayInvitation.query({ planId }), enabled: overlay, refetchInterval: 10000, refetchIntervalInBackground: true, retry: false });
+  const guestQr = !guestInvitation.isError && guestInvitation.data && Date.parse(guestInvitation.data.expiresAt) > now ? guestInvitation.data : null;
   useEffect(() => {
     if (!overlay) return;
     document.documentElement.classList.add('event-overlay-document');
@@ -41,12 +46,13 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
   const onDeck = broadcastQueue(sections.ready.filter(match => !focus || !match.stationId || match.stationId === focusedStation?.id));
   const showName = data.plan.name.split(' · ')[0]!;
   if (overlay) return <div className="event-display event-overlay" style={variables}>
-    <aside className="broadcast-rail">
+    <aside className={`broadcast-rail${guestQr ? ' has-guest-pass' : ''}`}>
       <div className="broadcast-club"><BroadcastMark /><span>SMASH<br />CLUB</span></div>
       <div className="broadcast-identity"><span className="event-eyebrow">THE CLUB NIGHT</span><h1 title={data.plan.name}>{showName}</h1><span className="broadcast-edition">{data.plan.name.includes(' · ') ? data.plan.name.split(' · ').slice(1).join(' · ') : 'Find your rival.'}</span></div>
       <div className="broadcast-rail-rule"><span>ON DECK</span><span>↗</span></div>
-      <div className="broadcast-deck">{onDeck.length ? onDeck.slice(0, 3).map((match, index) => <article key={match.id}><span className="broadcast-queue-index">0{index + 1}</span><div><small>{match.division} / {match.stage === 'group' ? `POOL ${String.fromCharCode(65 + (match.poolIndex ?? 0))}` : match.stage}</small><strong>{match.player1Name || 'TBD'}</strong><span className="broadcast-versus">vs</span><strong>{match.player2Name || 'TBD'}</strong></div></article>) : <p className="broadcast-wait">Next challengers<br />coming up.</p>}</div>
+      <div className="broadcast-deck">{onDeck.length ? onDeck.slice(0, guestQr ? 2 : 3).map((match, index) => <article key={match.id}><span className="broadcast-queue-index">0{index + 1}</span><div><small>{match.division} / {match.stage === 'group' ? `POOL ${String.fromCharCode(65 + (match.poolIndex ?? 0))}` : match.stage}</small><strong>{match.player1Name || 'TBD'}</strong><span className="broadcast-versus">vs</span><strong>{match.player2Name || 'TBD'}</strong></div></article>) : <p className="broadcast-wait">Next challengers<br />coming up.</p>}</div>
       <div className="broadcast-progress"><span>THE NIGHT SO FAR</span><strong>{String(sections.complete.length).padStart(2, '0')}<i>/{String(sections.total).padStart(2, '0')}</i></strong><progress value={sections.complete.length} max={Math.max(1, sections.total)} aria-label="Sets completed" /><small>SETS IN THE BOOKS</small></div>
+      {guestQr && <GuestOverlayQr planId={planId} invitation={guestQr} />}
       <span className="broadcast-rail-footer">GOOD GAMES. GREAT RIVALS.</span>
     </aside>
     <header className="broadcast-topline"><span><i /> {onStream ? 'ON AIR' : 'STAND BY'}</span><span>{focusedStation?.name ?? (onStream ? station(onStream) : null) ?? (focus ? 'Selected station' : 'Main broadcast')} / {onStream?.stage === 'group' ? 'ROUND ROBIN' : onStream?.stage?.toUpperCase() ?? 'NEXT SET SOON'}</span><span>nemesis.ashl.dev</span></header>

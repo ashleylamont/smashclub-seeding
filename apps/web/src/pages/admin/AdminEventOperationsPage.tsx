@@ -6,6 +6,7 @@ import { authClient, sessionRole } from '../../lib/auth';
 import './EventOperations.css';
 import { ScoreHandoff } from './ScoreHandoff';
 import { AttendanceControls } from './AttendanceControls';
+import { GuestReportingControls } from './GuestReportingControls';
 import { availableMatches, poolStandings } from '../../lib/eventQueue';
 
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
@@ -73,6 +74,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
     {matches.length === 0 && <p className="card muted">{data.matches.length === 0 ? 'Generate pools in the planner, then prepare the match queue here.' : 'No matches in this view.'}</p>}
     {pools.length > 0 && <section className="card"><h3>Pool standings</h3><p className="muted">Ordered by wins, then game difference for review. Ties and final advancement must be confirmed in the planner.</p><div className="ops-bottom-grid">{pools.map(pool => <div key={`${pool.division}:${pool.poolIndex}`}><h4>{pool.division} · Pool {String.fromCharCode(65 + pool.poolIndex)} <span className="muted">{pool.complete}/{pool.total} sets</span></h4><table className="ops-standings"><thead><tr><th>Player</th><th>W–L</th><th>Games ±</th><th>To play</th></tr></thead><tbody>{pool.players.map(player => <tr key={player.id}><td>{player.name}</td><td>{player.wins}–{player.losses}</td><td>{player.differential > 0 ? '+' : ''}{player.differential}</td><td>{player.remaining}</td></tr>)}</tbody></table></div>)}</div>{admin ? <a href={`/admin/event-planner?plan=${planId}&step=pools`}>Review and confirm advancement →</a> : <p className="muted">Ask an event administrator to confirm advancement in the planner.</p>}</section>}
     <PlayerReports data={data} disabled={pending || closed} act={act} />
+    <GuestReportingControls planId={planId} closed={closed} published={data.settings.published} />
     <ScoreHandoff planId={planId} data={data} disabled={pending || closed} />
     <AttendanceControls planId={planId} data={data} disabled={pending || closed} />
     <div className="ops-bottom-grid">
@@ -112,13 +114,13 @@ function MatchCard({ match, stations, disabled, canStart, act }: { match: Match;
 
 function PlayerReports({ data, disabled, act }: { data: Overview; disabled: boolean; act: Action }) {
   // The backend returns reports separately from confirmed matches, so an unreviewed score never appears live.
-  return <section className="card"><h3>Player submissions</h3><p className="muted">Reports await TO review before becoming confirmed results.</p><ReportRows data={data} disabled={disabled} act={act} /></section>;
+  return <section className="card"><h3>Score submissions</h3><p className="muted">Reports await TO review before becoming confirmed results.</p><ReportRows data={data} disabled={disabled} act={act} /></section>;
 }
 function ReportRows({ data, disabled, act }: { data: Overview; disabled: boolean; act: Action }) {
   const reports = data.reports.filter(report => report.status === 'pending');
   return reports.length ? <div>{reports.map(report => {
     const match = data.matches.find(match => match.id === report.matchId);
-    return <div className="ops-report" key={report.id}><div><strong>{match?.player1Name ?? 'Player'} {report.score1} – {report.score2} {match?.player2Name ?? 'Player'}</strong><p className="muted">{match?.label} · {report.outcome}{match && match.revision !== report.expectedRevision ? ' · stale: match has changed' : ''}</p></div><button className="btn btn-small" disabled={disabled || match?.revision !== report.expectedRevision} onClick={() => void act(() => trpc.eventOps.reviewReport.mutate({ reportId: report.id, approve: true }), 'Player score approved')}>Approve</button><button className="btn btn-small" disabled={disabled} onClick={() => void act(() => trpc.eventOps.reviewReport.mutate({ reportId: report.id, approve: false }), 'Player report rejected')}>Reject</button></div>;
+    return <div className="ops-report" key={report.id}><div><strong>{match?.player1Name ?? 'Player'} {report.score1} – {report.score2} {match?.player2Name ?? 'Player'}</strong><p className="muted">{match?.label} · {report.reporterLabel} report · {report.outcome}{match && match.revision !== report.expectedRevision ? ' · stale: match has changed' : ''}</p></div><button className="btn btn-small" disabled={disabled || match?.revision !== report.expectedRevision} onClick={() => void act(() => trpc.eventOps.reviewReport.mutate({ reportId: report.id, approve: true }), 'Player score approved')}>Approve</button><button className="btn btn-small" disabled={disabled} onClick={() => void act(() => trpc.eventOps.reviewReport.mutate({ reportId: report.id, approve: false }), 'Player report rejected')}>Reject</button></div>;
   })}</div> : <p className="muted">No scores awaiting review.</p>;
 }
 function AuditList({ data }: { data: Overview }) {
