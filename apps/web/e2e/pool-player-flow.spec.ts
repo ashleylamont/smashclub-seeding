@@ -78,3 +78,69 @@ test('guests and signed-in attendees run a pool station and immediately advance 
     await expect(page.getByRole('button', { name: 'We’re here — start match' })).toHaveCount(0);
   } finally { await guest.close(); await attendee.close(); }
 });
+
+test('a selected pool keeps its last next match visible on an unreserved station', async ({ page }) => {
+  await signIn(page.request, 'admin@smashclub.dev');
+  const plans = await query<{ id: string; name: string }[]>(page.request, 'admin.eventPlanner.plans');
+  const planId = plans.find(plan => plan.name === 'Nemesis · Rehearsal Night')!.id;
+  let stationName = '';
+  let playerName = '';
+  await page.route('**/api/trpc/eventOps.snapshot*', async route => {
+    const remote = await route.fetch();
+    const payload = await remote.json();
+    for (const item of Array.isArray(payload) ? payload : [payload]) {
+      const data = item.result?.data;
+      if (!data?.matches || !data.stations?.length) continue;
+      const match = data.matches.find((candidate: Match) => candidate.division === 'upper' && candidate.poolIndex === 0 && candidate.status === 'ready');
+      stationName = data.stations[0].name;
+      playerName = match.player1Name;
+      data.poolSchedules = [];
+      data.stations = data.stations.map((station: { id: string; name: string }) => ({ ...station, status: 'free', currentMatchId: null }));
+      data.stationQueues = data.stations.map((station: { id: string }, index: number) => ({ stationId: station.id, poolKey: null, currentMatchId: null, nextMatchId: index === 0 ? match.id : null, upcoming: [], waitingReason: null }));
+    }
+    await route.fulfill({ response: remote, json: payload });
+  });
+  await page.goto(`/live/${planId}?pool=upper%3A0`);
+  const queues = page.getByRole('region', { name: 'Pool station queues' });
+  await expect(queues.locator('article.pool-flow-station')).toHaveCount(1);
+  await expect(queues.getByRole('heading', { name: stationName, exact: true })).toBeVisible();
+  await expect(queues.locator('.pool-flow-next')).toContainText(playerName);
+  await expect(queues).toContainText('PLAY NEXT');
+  await expect(queues).not.toContainText('No station is assigned');
+});
+
+test('idle automatic overlay uses the Stage queue and labels later pairings as provisional', async ({ page }) => {
+  await signIn(page.request, 'admin@smashclub.dev');
+  const plans = await query<{ id: string; name: string }[]>(page.request, 'admin.eventPlanner.plans');
+  const planId = plans.find(plan => plan.name === 'Nemesis · Rehearsal Night')!.id;
+  await page.route('**/api/trpc/eventOps.snapshot*', async route => {
+    const remote = await route.fetch();
+    const payload = await remote.json();
+    for (const item of Array.isArray(payload) ? payload : [payload]) {
+      const data = item.result?.data;
+      if (!data?.matches || !data.stations?.length) continue;
+      const candidates = data.matches.filter((match: Match) => match.division === 'upper' && match.status === 'ready');
+      const next = candidates[candidates.length - 1], later = candidates[candidates.length - 2];
+      next.player1Name = 'Queued Alpha'; next.player2Name = 'Queued Beta';
+      later.player1Name = 'Later Gamma'; later.player2Name = 'Later Delta';
+      const stage = data.stations.find((station: { name: string }) => station.name === 'Stage');
+      for (const match of data.matches) if (match.status === 'playing') { match.status = 'ready'; match.stationId = null; }
+      data.stations = data.stations.map((station: { id: string; name: string }) => ({ ...station, status: 'free', currentMatchId: null }));
+      data.stationQueues = data.stations.map((station: { id: string }) => ({ stationId: station.id, poolKey: null, currentMatchId: null, nextMatchId: station.id === stage.id ? next.id : null, upcoming: station.id === stage.id ? [{ matchId: later.id, round: 2 }] : [], waitingReason: null }));
+    }
+    await route.fulfill({ response: remote, json: payload });
+  });
+  await page.goto(`/overlay/${planId}?controls=0`);
+  await expect(page.locator('.broadcast-topline')).toContainText('Stage');
+  const pairings = page.locator('.broadcast-deck article');
+  await expect(pairings).toHaveCount(2);
+  await expect(pairings.nth(0)).toContainText('Queued Alpha');
+  await expect(pairings.nth(0)).toContainText('Queued Beta');
+  await expect(pairings.nth(0).locator('small')).toContainText('PLAY NEXT');
+  await expect(pairings.nth(0)).not.toContainText('provisional');
+  await expect(pairings.nth(1)).toContainText('Later Gamma');
+  await expect(pairings.nth(1).locator('small')).toContainText('COMING UP · provisional');
+  await page.goto(`/overlay/${planId}?station=missing-station&controls=0`);
+  await expect(page.locator('.broadcast-wait')).toBeVisible();
+  await expect(page.locator('.broadcast-deck article')).toHaveCount(0);
+});

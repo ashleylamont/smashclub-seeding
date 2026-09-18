@@ -15,7 +15,7 @@ export function PoolStationQueue({ data, selectedPool = '', onStart, onReport, d
     if (!selectedPool) return true;
     const schedule = data.poolSchedules.find(pool => `${pool.division}:${pool.poolIndex}` === selectedPool);
     const queue = queues.find(item => item.stationId === station.id);
-    return schedule?.stationIds.includes(station.id) || queue?.poolKey === selectedPool || queue?.upcoming.some(item => data.matches.some(match => match.id === item.matchId && matchesPool(match, selectedPool))) || data.matches.some(match => match.id === queue?.currentMatchId && matchesPool(match, selectedPool));
+    return schedule?.stationIds.includes(station.id) || queue?.poolKey === selectedPool || data.matches.some(match => match.id === queue?.nextMatchId && matchesPool(match, selectedPool)) || queue?.upcoming.some(item => data.matches.some(match => match.id === item.matchId && matchesPool(match, selectedPool))) || data.matches.some(match => match.id === queue?.currentMatchId && matchesPool(match, selectedPool));
   });
   return <section className="pool-flow-stations" aria-label="Pool station queues"><div className="pool-flow-heading"><h2>Find your station</h2><span>{selectedPool ? poolTitle(selectedPool) : 'Playing now · play next'}</span></div>
     {selectedSchedule?.active === false && <p className="pool-flow-selected-note">{poolTitle(selectedPool)} is scheduled for a later wave. These stations may be serving another pool now; wait for your pool to be called.</p>}

@@ -64,10 +64,12 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
   const variables = (customGeometry ? { '--capture-width': `${geometry.width}vw`, '--capture-height': `${geometry.height}vh` } : {}) as CSSProperties;
   const station = (match: LiveMatch) => data.stations.find(s => s.id === match.stationId)?.name;
   const focusedStation = focus ? data.stations.find(item => item.id === focus || item.name.toLowerCase() === focus.toLowerCase()) : undefined;
-  const onStream = focus ? sections.playing.find(match => match.stationId === focusedStation?.id) :
-    sections.playing.find(match => station(match)?.toLowerCase() === 'stage') ?? sections.playing[0];
-  const stationQueue = data.stationQueues?.find(queue => queue.stationId === (focusedStation?.id ?? onStream?.stationId));
-  const onDeck = stationQueue ? stationPreview(stationQueue, data.matches).filter(match => matchesPool(match, selectedPool)) : broadcastQueue(sections.ready);
+  // Keep the broadcast tied to its station between sets, so the next pairing
+  // comes from the same authoritative queue attendees use to start a match.
+  const broadcastStation = focus ? focusedStation : data.stations.find(item => item.name.toLowerCase() === 'stage') ?? data.stations[0];
+  const onStream = broadcastStation ? sections.playing.find(match => match.stationId === broadcastStation.id) : focus ? undefined : sections.playing[0];
+  const stationQueue = data.stationQueues?.find(queue => queue.stationId === (broadcastStation?.id ?? onStream?.stationId));
+  const onDeck = stationQueue ? stationPreview(stationQueue, data.matches).filter(match => matchesPool(match, selectedPool)) : focus ? [] : broadcastQueue(sections.ready);
   const provisionalNext = !!stationQueue && (!stationQueue.nextMatchId || !!stationQueue.currentMatchId);
   const otherPlaying = sections.playing.filter(match => match.id !== onStream?.id);
   const showName = data.plan.name.split(' · ')[0]!;
@@ -76,13 +78,13 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
       <div className="broadcast-club"><NemesisMark /><span>SMASH<br />CLUB</span></div>
       <div className="broadcast-identity"><span className="event-eyebrow">THE CLUB NIGHT</span><h1 title={data.plan.name}>{showName}</h1><span className="broadcast-edition">{data.plan.name.includes(' · ') ? data.plan.name.split(' · ').slice(1).join(' · ') : 'Find your rival.'}</span></div>
       <div className="broadcast-rail-rule"><span>{provisionalNext ? 'COMING UP' : 'PLAY NEXT'}</span><span>↗</span></div>
-      <div className="broadcast-deck">{onDeck.length ? onDeck.slice(0, otherPlaying.length ? 1 : guestQr ? 2 : 3).map((match, index) => <article key={match.id}><span className="broadcast-queue-index">0{index + 1}</span><div><small>{match.division} / {match.stage === 'group' ? `POOL ${String.fromCharCode(65 + (match.poolIndex ?? 0))}` : match.stage}{provisionalNext ? ' / provisional' : ''}</small><strong>{match.player1Name || 'TBD'}</strong><span className="broadcast-versus">vs</span><strong>{match.player2Name || 'TBD'}</strong></div></article>) : <p className="broadcast-wait">Next challengers<br />coming up.</p>}</div>
+      <div className="broadcast-deck">{onDeck.length ? onDeck.slice(0, otherPlaying.length ? 1 : guestQr ? 2 : 3).map((match, index) => <article key={match.id}><span className="broadcast-queue-index">0{index + 1}</span><div><small>{match.division} / {match.stage === 'group' ? `POOL ${String.fromCharCode(65 + (match.poolIndex ?? 0))}` : match.stage}{stationQueue ? match.id === stationQueue.nextMatchId ? ' / PLAY NEXT' : ' / COMING UP · provisional' : ''}</small><strong>{match.player1Name || 'TBD'}</strong><span className="broadcast-versus">vs</span><strong>{match.player2Name || 'TBD'}</strong></div></article>) : <p className="broadcast-wait">Next challengers<br />coming up.</p>}</div>
       {otherPlaying.length > 0 && <div className="broadcast-other-stations" aria-label="Other stations playing"><span>OTHER STATIONS / PLAYING NOW</span>{otherPlaying.slice(0, guestQr ? 1 : 2).map(match => <article key={match.id}><small>{station(match) ?? 'Unassigned setup'}</small><strong>{match.player1Name} <b>{match.score1 ?? '–'}:{match.score2 ?? '–'}</b> {match.player2Name}</strong></article>)}{otherPlaying.length > (guestQr ? 1 : 2) && <small>+ {otherPlaying.length - (guestQr ? 1 : 2)} more playing</small>}</div>}
       <div className="broadcast-progress"><span>{selectedPool ? 'THIS POOL SO FAR' : 'THE NIGHT SO FAR'}</span><strong>{String(sections.complete.length).padStart(2, '0')}<i>/{String(sections.total).padStart(2, '0')}</i></strong><progress value={sections.complete.length} max={Math.max(1, sections.total)} aria-label="Sets completed" /><small>SETS IN THE BOOKS</small></div>
       {guestQr && <GuestOverlayQr planId={planId} invitation={guestQr} />}
       <span className="broadcast-rail-footer">GOOD GAMES. GREAT RIVALS.</span>
     </aside>
-    <header className="broadcast-topline"><span><i /> {closed ? 'EVENT FINISHED' : onStream ? 'PLAYING NOW' : 'WAITING FOR A MATCH'}</span><span>{focusedStation?.name ?? (onStream ? station(onStream) : null) ?? (focus ? 'Selected station' : 'Main broadcast')} / {onStream?.stage === 'group' ? 'ROUND ROBIN' : onStream?.stage?.toUpperCase() ?? 'NEXT SET SOON'}</span><span>nemesis.ashl.dev</span></header>
+    <header className="broadcast-topline"><span><i /> {closed ? 'EVENT FINISHED' : onStream ? 'PLAYING NOW' : 'WAITING FOR A MATCH'}</span><span>{broadcastStation?.name ?? (onStream ? station(onStream) : null) ?? (focus ? 'Selected station' : 'Main broadcast')} / {onStream?.stage === 'group' ? 'ROUND ROBIN' : onStream?.stage?.toUpperCase() ?? 'NEXT SET SOON'}</span><span>nemesis.ashl.dev</span></header>
     <div className="broadcast-matchup" aria-label="Current match">
       <div className="broadcast-fighter broadcast-fighter-one"><span className="broadcast-side">P1</span><strong>{onStream?.player1Name || (closed ? 'GOOD GAMES' : 'NEXT CHALLENGER')}</strong><CharacterIcons slugs={onStream?.player1Characters ?? []} /><b>{onStream?.score1 ?? '—'}</b></div>
       <span className="broadcast-match-versus">VS</span>
