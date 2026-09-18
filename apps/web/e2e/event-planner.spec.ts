@@ -72,6 +72,7 @@ test.describe('event planner', () => {
     await settle(page);
 
     await page.getByLabel(/Event name/i).fill(planName);
+    await page.getByLabel('Bracket system').selectOption('challonge');
     await page.locator('textarea.planner-textarea').first().fill([pasted, '---', ''].join('\n'));
     await page.getByRole('button', { name: /Preview roster/i }).click();
     await settle(page);
@@ -147,6 +148,7 @@ test.describe('event planner', () => {
     await page.goto('/admin/event-planner');
     await settle(page);
     await page.getByLabel(/Event name/i).fill(planName);
+    await page.getByLabel('Bracket system').selectOption('challonge');
     await page.locator('textarea.planner-textarea').first().fill(names.join('\n'));
     await page.getByRole('button', { name: /Preview roster/i }).click();
     await settle(page);

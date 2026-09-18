@@ -5,6 +5,7 @@ export interface LiveMatch {
   score1: number | null; score2: number | null; winnerId: string | null;
   status: string; stationId: string | null;
   outcome?: string | null;
+  blockedReason?: string | null;
   player1Characters?: string[]; player2Characters?: string[];
   availability?: { canStart: boolean; reasons: { code: string; message: string }[]; eligibleStationIds: string[] };
   nativeBracketId?: string | null; nativeRound?: number | null; nativeSlot?: number | null;

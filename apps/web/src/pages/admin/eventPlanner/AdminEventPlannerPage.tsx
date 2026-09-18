@@ -348,7 +348,7 @@ function PlanWizard({
     <nav className="planner-steps" aria-label={adopted ? 'Original plan steps' : 'Planner steps'}>
       {steps.map((entry) => (
         <button key={entry.key} type="button" className={`admin-tab${current === entry.key ? ' active' : ''}`} disabled={!available.has(entry.key)} onClick={() => onStep(entry.key)}>
-          {entry.label}
+          {entry.key === 'handoff' && view.plan.bracketMode === 'native' ? 'Run event' : entry.label}
         </button>
       ))}
     </nav>
@@ -369,7 +369,7 @@ function PlanWizard({
           </h2>
           <span className="row-actions">
             {adopted ? resultsUrl && <a className="btn btn-small" href={resultsUrl}>Imported results →</a> : <a className="btn btn-small" href={`/admin/event-operations?plan=${planId}`}>Run event →</a>}
-            {(view.plan.status === 'pools_ready' || view.plan.status === 'underway') && (
+            {view.plan.bracketMode !== 'native' && (view.plan.status === 'pools_ready' || view.plan.status === 'underway') && (
               <button
                 type="button"
                 className="btn btn-small"

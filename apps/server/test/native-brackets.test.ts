@@ -132,7 +132,7 @@ describe('native brackets', () => {
   it('advances only after a player report is approved', async () => {
     await finishPools(); await generate();
     const match = (await db.select().from(eventMatches)).find(m => m.nativeBracketId && m.stage === 'main' && m.status === 'ready')!;
-    await db.update(eventOperationSettings).set({ playerReports: true }).where(eq(eventOperationSettings.eventPlanId, planId));
+    await db.update(eventOperationSettings).set({ playerReports: true, published: true }).where(eq(eventOperationSettings.eventPlanId, planId));
     await db.insert(playerClaims).values({ userId: member.id, playerId: match.player1Id!, status: 'approved' });
     const report = await reportScore(db, member, { matchId: match.id, expectedRevision: match.revision, requestId: 'player-final', score1: 2, score2: 1, outcome: 'played' });
     expect((await db.select().from(eventMatches).where(eq(eventMatches.id, match.id)))[0]!.status).toBe('ready');
