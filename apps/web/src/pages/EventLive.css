@@ -31,3 +31,5 @@
 .event-display .event-brackets>h2,.event-display .event-bracket-links{grid-column:1/-1}
 .event-display .event-bracket{min-width:0;margin:0}
 @media(max-width:900px){.event-display .event-brackets{grid-template-columns:minmax(0,1fr)}}
+
+.event-extra-matches{border-top:1px solid var(--event-rule);padding:16px 0;margin:24px 0}.event-extra-matches>summary{font-size:12px;cursor:pointer;color:var(--event-muted)}.event-extra-matches>.event-live-columns{margin-top:24px}.event-board .pool-flow-heading h2{border:0;padding:0;margin:0}.event-board .pool-flow-heading>span{font-size:10px}.event-board .pool-flow-station a{color:var(--event-orange)}.event-board .pool-flow-round-group>summary{font-family:'Oswald',Impact,sans-serif;text-transform:uppercase;font-size:22px}.event-board .pool-flow-filter{padding:10px 0;border-top:1px solid var(--event-rule)}

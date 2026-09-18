@@ -7,7 +7,9 @@ import './EventLive.css';
 import { NemesisMark } from '../components/NemesisMark';
 import { CharacterIcons } from '../components/CharacterIcons';
 import { OverlaySetup } from '../components/OverlaySetup';
-import { EventStations, EventPools, EventBrackets, type PoolSchedule, type NativeBracketView } from '../components/EventNightBoard';
+import { EventPools, EventBrackets, type PoolSchedule, type NativeBracketView } from '../components/EventNightBoard';
+import { PoolFilter, PoolRoundSchedule, PoolStationQueue } from '../components/PoolStationQueue';
+import { matchesPool, poolPath, stationPreview, usePoolFilter, type PoolFlowData } from '../lib/poolFlow';
 import { ResultGraphic } from '../components/ResultGraphic';
 import { GuestOverlayQr } from '../components/GuestOverlayQr';
 import { BroadcastResults } from '../components/BroadcastResults';
@@ -28,6 +30,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
   const query = useQuery({ queryKey: ['eventOps', 'snapshot', planId], queryFn: () => trpc.eventOps.snapshot.query({ planId }),
     refetchInterval: 5000, refetchIntervalInBackground: true, retry: 1 });
   const now = useGuestClock();
+  const [selectedPool, setSelectedPool] = usePoolFilter();
   const [focus, setFocus] = useState(() => new URLSearchParams(window.location.search).get('station') ?? '');
   const changeFocus = (stationId: string) => {
     const url = new URL(window.location.href);
@@ -44,7 +47,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
   }, [overlay]);
   const publicationUnavailable = query.error instanceof TRPCClientError && ['NOT_FOUND', 'FORBIDDEN', 'UNAUTHORIZED'].includes(query.error.data?.code ?? '');
   if (!query.data || publicationUnavailable) return <div className={overlay ? 'event-display-message' : 'loading-text'} role="status">{query.isError ? 'This event is unavailable or has not been published.' : 'Loading live event…'}</div>;
-  const data: typeof query.data & { poolSchedules?: PoolSchedule[]; nativeBrackets?: NativeBracketView[] } = query.data;
+  const data: typeof query.data & { poolSchedules?: PoolSchedule[]; nativeBrackets?: NativeBracketView[] } & Partial<Pick<PoolFlowData, 'stationQueues' | 'poolRounds'>> = query.data;
   const announcements = data.announcements.filter(item => !('expiresAt' in item) || !item.expiresAt || Date.parse(String(item.expiresAt)) > now);
   if (data.plan.historicalResultsSlug) return <section className={overlay ? 'event-display-message' : 'card section'}>
     <h1>{data.plan.name}</h1>
@@ -52,8 +55,9 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
     <a href={`/events/${encodeURIComponent(data.plan.historicalResultsSlug)}`}>View historical results →</a>
   </section>;
   const closed = ['complete', 'cancelled'].includes(data.plan.status);
-  const sections = liveSections(data.matches);
-  const poolResults = confirmedPoolGraphics(data.placements, data.entrants);
+  const visibleMatches = data.matches.filter(match => matchesPool(match, selectedPool));
+  const sections = liveSections(visibleMatches);
+  const poolResults = confirmedPoolGraphics(data.placements.filter(place => !selectedPool || `${place.division}:${place.poolIndex}` === selectedPool), data.entrants);
   const geometry = overlayGeometry(window.location.search);
   const search = new URLSearchParams(window.location.search);
   const customGeometry = search.has('captureWidth') || search.has('captureHeight');
@@ -62,17 +66,19 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
   const focusedStation = focus ? data.stations.find(item => item.id === focus || item.name.toLowerCase() === focus.toLowerCase()) : undefined;
   const onStream = focus ? sections.playing.find(match => match.stationId === focusedStation?.id) :
     sections.playing.find(match => station(match)?.toLowerCase() === 'stage') ?? sections.playing[0];
-  const onDeck = broadcastQueue(sections.ready.filter(match => !focus || !!focusedStation && (!match.stationId || match.stationId === focusedStation.id) && (!match.availability || match.availability.eligibleStationIds.includes(focusedStation.id))));
+  const stationQueue = data.stationQueues?.find(queue => queue.stationId === (focusedStation?.id ?? onStream?.stationId));
+  const onDeck = stationQueue ? stationPreview(stationQueue, data.matches).filter(match => matchesPool(match, selectedPool)) : broadcastQueue(sections.ready);
+  const provisionalNext = !!stationQueue && (!stationQueue.nextMatchId || !!stationQueue.currentMatchId);
   const otherPlaying = sections.playing.filter(match => match.id !== onStream?.id);
   const showName = data.plan.name.split(' · ')[0]!;
   if (overlay) return <div className="event-display event-overlay" style={variables}>
     <aside className={`broadcast-rail${guestQr ? ' has-guest-pass' : ''}`}>
       <div className="broadcast-club"><NemesisMark /><span>SMASH<br />CLUB</span></div>
       <div className="broadcast-identity"><span className="event-eyebrow">THE CLUB NIGHT</span><h1 title={data.plan.name}>{showName}</h1><span className="broadcast-edition">{data.plan.name.includes(' · ') ? data.plan.name.split(' · ').slice(1).join(' · ') : 'Find your rival.'}</span></div>
-      <div className="broadcast-rail-rule"><span>READY TO PLAY</span><span>↗</span></div>
-      <div className="broadcast-deck">{onDeck.length ? onDeck.slice(0, otherPlaying.length ? 1 : guestQr ? 2 : 3).map((match, index) => <article key={match.id}><span className="broadcast-queue-index">0{index + 1}</span><div><small>{match.division} / {match.stage === 'group' ? `POOL ${String.fromCharCode(65 + (match.poolIndex ?? 0))}` : match.stage}</small><strong>{match.player1Name || 'TBD'}</strong><span className="broadcast-versus">vs</span><strong>{match.player2Name || 'TBD'}</strong></div></article>) : <p className="broadcast-wait">Next challengers<br />coming up.</p>}</div>
+      <div className="broadcast-rail-rule"><span>{provisionalNext ? 'COMING UP' : 'PLAY NEXT'}</span><span>↗</span></div>
+      <div className="broadcast-deck">{onDeck.length ? onDeck.slice(0, otherPlaying.length ? 1 : guestQr ? 2 : 3).map((match, index) => <article key={match.id}><span className="broadcast-queue-index">0{index + 1}</span><div><small>{match.division} / {match.stage === 'group' ? `POOL ${String.fromCharCode(65 + (match.poolIndex ?? 0))}` : match.stage}{provisionalNext ? ' / provisional' : ''}</small><strong>{match.player1Name || 'TBD'}</strong><span className="broadcast-versus">vs</span><strong>{match.player2Name || 'TBD'}</strong></div></article>) : <p className="broadcast-wait">Next challengers<br />coming up.</p>}</div>
       {otherPlaying.length > 0 && <div className="broadcast-other-stations" aria-label="Other stations playing"><span>OTHER STATIONS / PLAYING NOW</span>{otherPlaying.slice(0, guestQr ? 1 : 2).map(match => <article key={match.id}><small>{station(match) ?? 'Unassigned setup'}</small><strong>{match.player1Name} <b>{match.score1 ?? '–'}:{match.score2 ?? '–'}</b> {match.player2Name}</strong></article>)}{otherPlaying.length > (guestQr ? 1 : 2) && <small>+ {otherPlaying.length - (guestQr ? 1 : 2)} more playing</small>}</div>}
-      <div className="broadcast-progress"><span>THE NIGHT SO FAR</span><strong>{String(sections.complete.length).padStart(2, '0')}<i>/{String(sections.total).padStart(2, '0')}</i></strong><progress value={sections.complete.length} max={Math.max(1, sections.total)} aria-label="Sets completed" /><small>SETS IN THE BOOKS</small></div>
+      <div className="broadcast-progress"><span>{selectedPool ? 'THIS POOL SO FAR' : 'THE NIGHT SO FAR'}</span><strong>{String(sections.complete.length).padStart(2, '0')}<i>/{String(sections.total).padStart(2, '0')}</i></strong><progress value={sections.complete.length} max={Math.max(1, sections.total)} aria-label="Sets completed" /><small>SETS IN THE BOOKS</small></div>
       {guestQr && <GuestOverlayQr planId={planId} invitation={guestQr} />}
       <span className="broadcast-rail-footer">GOOD GAMES. GREAT RIVALS.</span>
     </aside>
@@ -88,12 +94,14 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
   </div>;
   return <div className="event-display event-board" style={variables}>
     <header className="event-live-header"><div className="event-board-brand"><NemesisMark /><span>SMASH CLUB<br />TOURNAMENT NIGHT</span></div><div className="event-board-title"><span className="event-eyebrow">FIND YOUR RIVAL.</span><h1>{data.plan.name}</h1></div>
-      <div className="event-live-progress"><span>THE NIGHT SO FAR</span><strong>{String(sections.complete.length).padStart(2, '0')}<span> / {sections.total}</span></strong><span>sets in the books</span><progress value={sections.complete.length} max={Math.max(1, sections.total)} aria-label="Sets completed" /></div>
+      <div className="event-live-progress"><span>{selectedPool ? 'THIS POOL SO FAR' : 'THE NIGHT SO FAR'}</span><strong>{String(sections.complete.length).padStart(2, '0')}<span> / {sections.total}</span></strong><span>sets in the books</span><progress value={sections.complete.length} max={Math.max(1, sections.total)} aria-label="Sets completed" /></div>
     </header>
     <div className="event-connection" role="status"><span><i className="event-live-dot" />{sections.playing.length ? 'LIVE FROM THE CLUB' : 'THE EVENT BOARD'}</span><span>{query.isError ? 'Connection interrupted · showing last received results' : 'Results refresh every 5 seconds'}</span></div>
     {data.plan.resultsSlug && <p><a className="btn" href={`/events/${encodeURIComponent(data.plan.resultsSlug)}`}>Final standings and club results →</a></p>}
-    <EventStations stations={data.stations} matches={data.matches} />
-    <div className="event-live-columns">
+    <PoolFilter data={data} value={selectedPool} onChange={setSelectedPool} />
+    <PoolStationQueue data={data} selectedPool={selectedPool} />
+    <PoolRoundSchedule data={data} selectedPool={selectedPool} />
+    <details className="event-extra-matches"><summary>More playing and ready matches</summary><div className="event-live-columns">
       <section className="event-now"><h2><span>01 /</span> Playing now <span>{sections.playing.length} LIVE</span></h2>
         {sections.playing.length ? sections.playing.map(match => <MatchCard key={match.id} match={match} station={station(match)} />) : <p className="event-empty">{closed ? <>The event has ended.<br /><strong>Good games, everyone.</strong></> : <>A little breather.<br /><strong>The next set is coming.</strong></>}</p>}
       </section>
@@ -101,12 +109,13 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
         {sections.ready.length ? sections.ready.slice(0, 6).map(match => <MatchCard key={match.id} match={match} station={station(match)} />) : <p className="event-empty">{closed ? "There are no more matches scheduled." : "Stay close. Your next matchup lands here."}</p>}
       </section>
     </div>
+    </details>
     <aside className="event-announcements" aria-label="Announcements"><strong>FROM THE FLOOR ↗</strong><div>{announcements.length ? announcements.slice(0, 2).map(a => <p key={a.id}>{a.message}</p>) : <p>Good games. Great rivals. Welcome to the club.</p>}</div></aside>
     <>
-      {!closed && data.settings.playerReports && <p><a className="btn" href={`/play/${planId}`}>Report your match score →</a></p>}
-      <EventPools matches={data.matches} schedules={data.poolSchedules ?? []} stations={data.stations} />
+      {!closed && data.settings.playerReports && <p><a className="btn" href={poolPath(`/play/${planId}`, selectedPool)}>Report your match score →</a></p>}
+      <EventPools matches={visibleMatches} schedules={data.poolSchedules ?? []} stations={data.stations} />
       <EventBrackets brackets={data.nativeBrackets ?? []} matches={data.matches} entrants={data.entrants} linked={data.plan.bracketMode === 'native' ? [] : data.brackets} />
-      <section className="event-recent"><h2>Recorded results</h2>{sections.complete.length ? <div className="event-results-grid">{recentResults(data.matches, 12).map(match => <MatchCard key={match.id} match={match} station={station(match)} />)}</div> : <p className="event-empty">Results appear here once confirmed.</p>}<p className="event-live-note">Set results are shown as recorded. They do not imply final tournament placements.</p></section>
+      <section className="event-recent"><h2>Recorded results</h2>{sections.complete.length ? <div className="event-results-grid">{recentResults(visibleMatches, 12).map(match => <MatchCard key={match.id} match={match} station={station(match)} />)}</div> : <p className="event-empty">Results appear here once confirmed.</p>}<p className="event-live-note">Set results are shown as recorded. They do not imply final tournament placements.</p></section>
       {poolResults.length > 0 && <section className="event-pool-results"><h2>Confirmed pool standings</h2><p className="event-live-note">Places are within each pool, as confirmed by the organisers.</p><div className="event-results-grid">{poolResults.map(pool => <article className="event-prize" key={pool.title}><h3>{pool.title}</h3><ol className="event-pool-ranking">{pool.results.map(result => <li key={result.alias}><span>{result.place}</span> {result.alias}</li>)}</ol><ResultGraphic title={`${data.plan.name} · ${pool.title}`} results={pool.results} /></article>)}</div></section>}
       {data.prizes.length > 0 && <section className="event-prizes"><h2>On the line</h2><div className="event-results-grid">{data.prizes.map(prize => <article className="event-prize" key={prize.id}><span className="event-eyebrow">PRIZE</span><h3>{prize.title}</h3><p>{prize.description}</p>{prize.playerName && <strong>{prize.playerName}</strong>}</article>)}</div></section>}
     </>
