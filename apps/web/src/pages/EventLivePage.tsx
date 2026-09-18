@@ -51,6 +51,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
     <p>Historical event — results come from the imported brackets.</p>
     <a href={`/events/${encodeURIComponent(data.plan.historicalResultsSlug)}`}>View historical results →</a>
   </section>;
+  const closed = ['complete', 'cancelled'].includes(data.plan.status);
   const sections = liveSections(data.matches);
   const poolResults = confirmedPoolGraphics(data.placements, data.entrants);
   const geometry = overlayGeometry(window.location.search);
@@ -75,11 +76,11 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
       {guestQr && <GuestOverlayQr planId={planId} invitation={guestQr} />}
       <span className="broadcast-rail-footer">GOOD GAMES. GREAT RIVALS.</span>
     </aside>
-    <header className="broadcast-topline"><span><i /> {onStream ? 'PLAYING NOW' : 'WAITING FOR A MATCH'}</span><span>{focusedStation?.name ?? (onStream ? station(onStream) : null) ?? (focus ? 'Selected station' : 'Main broadcast')} / {onStream?.stage === 'group' ? 'ROUND ROBIN' : onStream?.stage?.toUpperCase() ?? 'NEXT SET SOON'}</span><span>nemesis.ashl.dev</span></header>
+    <header className="broadcast-topline"><span><i /> {closed ? 'EVENT FINISHED' : onStream ? 'PLAYING NOW' : 'WAITING FOR A MATCH'}</span><span>{focusedStation?.name ?? (onStream ? station(onStream) : null) ?? (focus ? 'Selected station' : 'Main broadcast')} / {onStream?.stage === 'group' ? 'ROUND ROBIN' : onStream?.stage?.toUpperCase() ?? 'NEXT SET SOON'}</span><span>nemesis.ashl.dev</span></header>
     <div className="broadcast-matchup" aria-label="Current match">
-      <div className="broadcast-fighter broadcast-fighter-one"><span className="broadcast-side">P1</span><strong>{onStream?.player1Name || 'NEXT CHALLENGER'}</strong><CharacterIcons slugs={onStream?.player1Characters ?? []} /><b>{onStream?.score1 ?? '—'}</b></div>
+      <div className="broadcast-fighter broadcast-fighter-one"><span className="broadcast-side">P1</span><strong>{onStream?.player1Name || (closed ? 'GOOD GAMES' : 'NEXT CHALLENGER')}</strong><CharacterIcons slugs={onStream?.player1Characters ?? []} /><b>{onStream?.score1 ?? '—'}</b></div>
       <span className="broadcast-match-versus">VS</span>
-      <div className="broadcast-fighter broadcast-fighter-two"><b>{onStream?.score2 ?? '—'}</b><strong>{onStream?.player2Name || 'NEXT CHALLENGER'}</strong><CharacterIcons slugs={onStream?.player2Characters ?? []} /><span className="broadcast-side">P2</span></div>
+      <div className="broadcast-fighter broadcast-fighter-two"><b>{onStream?.score2 ?? '—'}</b><strong>{onStream?.player2Name || (closed ? 'GOOD GAMES' : 'NEXT CHALLENGER')}</strong><CharacterIcons slugs={onStream?.player2Characters ?? []} /><span className="broadcast-side">P2</span></div>
     </div>
     <OverlaySetup stations={data.stations} focus={focusedStation?.id ?? focus} onFocus={changeFocus} />
     <footer className="broadcast-footer"><BroadcastResults key={planId} matches={data.matches} announcement={announcements[0]?.message ?? 'Grab a setup. Find your rival. Make it a good set.'} /></footer>
@@ -90,18 +91,19 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
       <div className="event-live-progress"><span>THE NIGHT SO FAR</span><strong>{String(sections.complete.length).padStart(2, '0')}<span> / {sections.total}</span></strong><span>sets in the books</span><progress value={sections.complete.length} max={Math.max(1, sections.total)} aria-label="Sets completed" /></div>
     </header>
     <div className="event-connection" role="status"><span><i className="event-live-dot" />{sections.playing.length ? 'LIVE FROM THE CLUB' : 'THE EVENT BOARD'}</span><span>{query.isError ? 'Connection interrupted · showing last received results' : 'Results refresh every 5 seconds'}</span></div>
+    {data.plan.resultsSlug && <p><a className="btn" href={`/events/${encodeURIComponent(data.plan.resultsSlug)}`}>Final standings and club results →</a></p>}
     <EventStations stations={data.stations} matches={data.matches} />
     <div className="event-live-columns">
       <section className="event-now"><h2><span>01 /</span> Playing now <span>{sections.playing.length} LIVE</span></h2>
-        {sections.playing.length ? sections.playing.map(match => <MatchCard key={match.id} match={match} station={station(match)} />) : <p className="event-empty">A little breather.<br /><strong>The next set is coming.</strong></p>}
+        {sections.playing.length ? sections.playing.map(match => <MatchCard key={match.id} match={match} station={station(match)} />) : <p className="event-empty">{closed ? <>The event has ended.<br /><strong>Good games, everyone.</strong></> : <>A little breather.<br /><strong>The next set is coming.</strong></>}</p>}
       </section>
       <section className="event-next"><h2><span>02 /</span> Ready to play <span>{sections.ready.length} READY</span></h2>
-        {sections.ready.length ? sections.ready.slice(0, 6).map(match => <MatchCard key={match.id} match={match} station={station(match)} />) : <p className="event-empty">Stay close. Your next matchup lands here.</p>}
+        {sections.ready.length ? sections.ready.slice(0, 6).map(match => <MatchCard key={match.id} match={match} station={station(match)} />) : <p className="event-empty">{closed ? "There are no more matches scheduled." : "Stay close. Your next matchup lands here."}</p>}
       </section>
     </div>
     <aside className="event-announcements" aria-label="Announcements"><strong>FROM THE FLOOR ↗</strong><div>{announcements.length ? announcements.slice(0, 2).map(a => <p key={a.id}>{a.message}</p>) : <p>Good games. Great rivals. Welcome to the club.</p>}</div></aside>
     <>
-      {data.settings.playerReports && <p><a className="btn" href={`/play/${planId}`}>Report your match score →</a></p>}
+      {!closed && data.settings.playerReports && <p><a className="btn" href={`/play/${planId}`}>Report your match score →</a></p>}
       <EventPools matches={data.matches} schedules={data.poolSchedules ?? []} stations={data.stations} />
       <EventBrackets brackets={data.nativeBrackets ?? []} matches={data.matches} entrants={data.entrants} linked={data.plan.bracketMode === 'native' ? [] : data.brackets} />
       <section className="event-recent"><h2>Recorded results</h2>{sections.complete.length ? <div className="event-results-grid">{recentResults(data.matches, 12).map(match => <MatchCard key={match.id} match={match} station={station(match)} />)}</div> : <p className="event-empty">Results appear here once confirmed.</p>}<p className="event-live-note">Set results are shown as recorded. They do not imply final tournament placements.</p></section>

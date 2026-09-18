@@ -22,7 +22,7 @@ test('native event progresses from pools through reviewed finals to public club 
   const name = `Native finals rehearsal ${Date.now()}`;
   const { planId } = await mutate<{ planId: string }>(page.request, 'admin.eventPlanner.createPlan', {
     name, bracketMode: 'native', eventDate: new Date().toISOString(), upperTargetSize: 7,
-    rows: roster.entries.slice(0, 14).map((entry, index) => ({ lineNumber: index + 1, rawInput: entry.playerName, cleanedName: entry.playerName, playerId: entry.playerId, companyId: entry.companyId, resolutionMethod: 'manual', divisionPreference: 'auto' })),
+    rows: roster.entries.slice(0, 14).map((entry, index) => ({ lineNumber: index + 1, rawInput: entry.playerName, cleanedName: entry.playerName, playerId: entry.playerId, companyId: entry.companyId ?? null, resolutionMethod: 'manual', divisionPreference: 'auto' })),
   });
   for (const procedure of ['admin.eventPlanner.freezeRoster', 'admin.eventPlanner.generatePools', 'eventOps.prepare']) await mutate(page.request, procedure, { planId });
   await mutate(page.request, 'eventOps.settings', { planId, published: true, playerReports: true });
@@ -60,13 +60,19 @@ test('native event progresses from pools through reviewed finals to public club 
   await expect(page.getByText('Event closed · read only', { exact: true })).toBeVisible();
   await page.goto(`/live/${planId}`);
   await expect(page.locator('.event-bracket')).toHaveCount(4);
+  await expect(page.getByText('The next set is coming.', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Report your match score →' })).toHaveCount(0);
   await expect(page.locator('.event-bracket').first()).toContainText('Winner');
   await expect(page.locator('a[href*="challonge.com"]')).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('native-completed-night.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('native-completed-night-mobile.png'), fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/admin/tournaments');
   const resultRow = page.getByRole('row').filter({ hasText: `${name} Upper Main` });
   await expect(resultRow).toContainText('Saved in Nemesis');
-  await resultRow.getByRole('link', { name: 'View results' }).click();
+  await resultRow.getByRole('link', { name: 'Nemesis event results →' }).click();
   await expect(page).toHaveURL(/\/events\/nemesis_/);
   await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
 });
