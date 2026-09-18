@@ -7,7 +7,7 @@ export async function seedHistoricalEvent(db: Db): Promise<string> {
   const [admin] = await db.select().from(user).where(eq(user.email, 'admin@smashclub.dev'));
   const roster = (await db.select().from(players)).filter(player => player.status === 'active').slice(0, 9);
   if (!admin || roster.length < 9) throw new Error('Historical rehearsal needs its development accounts and players.');
-  const planId = await createPlan(db, {
+  const planId = await createPlan(db, { bracketMode: 'challonge',
     name: 'Nemesis · Historical Rehearsal', eventDate: new Date('2026-08-25T08:30:00Z'), upperTargetSize: 4,
     rows: roster.slice(0, 8).map((player, index) => ({ lineNumber: index + 1, rawInput: player.canonicalName,
       cleanedName: player.canonicalName, companyId: player.companyId, playerId: player.id,

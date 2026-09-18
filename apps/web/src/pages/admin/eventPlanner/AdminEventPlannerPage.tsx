@@ -129,6 +129,7 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
   const [text, setText] = useState('');
   const [preview, setPreview] = useState<RosterPreviewRow[] | null>(null);
   const [upperSize, setUpperSize] = useState<number | null>(null);
+  const [bracketMode, setBracketMode] = useState<'native' | 'challonge'>('native');
 
   const previewRoster = useMutation({
     mutationFn: () => trpc.admin.eventPlanner.previewRoster.mutate({ text }),
@@ -143,6 +144,7 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
       const rows = preview ?? [];
       return trpc.admin.eventPlanner.createPlan.mutate({
         name: name.trim(),
+        bracketMode,
         eventDate: new Date(eventDate).toISOString(),
         slugPrefix: slugPrefix.trim() === '' ? null : slugPrefix.trim(),
         upperTargetSize: upperSize,
@@ -235,6 +237,15 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
         </button>
         {previewRoster.isError && <span className="error-text">{previewRoster.error.message}</span>}
       </div>
+
+      <label className="form-field">
+        <span className="form-label">Bracket system</span>
+        <select className="select" value={bracketMode} onChange={event => setBracketMode(event.target.value as 'native' | 'challonge')}>
+          <option value="native">Nemesis — run the whole event here</option>
+          <option value="challonge">Challonge — manage external brackets</option>
+        </select>
+        <span className="form-hint">Nemesis runs pools, championship and consolation, then records the finished night in club ratings. Existing Challonge events stay linked to Challonge.</span>
+      </label>
 
       {preview && (
         <div className="preview-summary">

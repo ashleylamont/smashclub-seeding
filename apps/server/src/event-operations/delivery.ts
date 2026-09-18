@@ -41,6 +41,7 @@ export async function deliverMatchScore(
     const [linked] = await tx.select().from(eventPlanBrackets).where(and(eq(eventPlanBrackets.eventPlanId, match.eventPlanId), eq(eventPlanBrackets.tournamentId, source.tournamentId), eq(eventPlanBrackets.division, match.division), eq(eventPlanBrackets.stage, match.stage === 'consolation' ? 'consolation' : 'main')));
     if (!linked) return conflict('The imported match is not attached to this event division and stage.');
     const [tournament] = await tx.select().from(tournaments).where(eq(tournaments.id, source.tournamentId));
+    if (tournament?.provider === 'native') return conflict('Native matches are recorded in Nemesis and cannot be sent to Challonge.');
     if (!tournament || source.resultStage !== (match.stage === 'group' ? 'group' : 'final')) return conflict('The imported match stage no longer matches.');
     const participants = await tx.select().from(tournamentParticipants).where(and(eq(tournamentParticipants.tournamentId, source.tournamentId), inArray(tournamentParticipants.id, [source.p1ParticipantId, source.p2ParticipantId].filter((value): value is string => value !== null))));
     const map = (playerId: string, score: number) => {

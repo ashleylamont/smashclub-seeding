@@ -74,6 +74,7 @@ export const eventPlannerRouter = router({
   createPlan: adminProcedure
     .input(
       z.object({
+        bracketMode: z.enum(['native', 'challonge']).default('native'),
         name: z.string().trim().min(1).max(120),
         eventDate: z.iso.datetime(),
         slugPrefix: z.string().trim().max(60).nullable().default(null),

@@ -1,3 +1,4 @@
+import { nativeBracketRouter } from './nativeRouter';
 import { guestRouter } from './guestRouter';
 import { eventDeliveryRouter } from './deliveryRouter';
 import { sourceRefreshRouter } from './sourceRefreshRouter';
@@ -14,6 +15,7 @@ const planInput = z.object({ planId: z.string().uuid() });
 export const eventOpsRouter = router({
     updateLiveScore:authedProcedure.input(z.object({matchId:z.string().uuid(),expectedRevision:z.number().int().min(0),score1:z.number().int().min(0).max(5),score2:z.number().int().min(0).max(5)})).mutation(({ctx,input})=>updateLiveScore(ctx.db,ctx.user,input)),
     configurePool:authedProcedure.input(planInput.extend({division:z.enum(['upper','lower']),poolIndex:z.number().int().min(0),active:z.boolean(),stationIds:z.array(z.string().uuid()).max(64),expectedRevision:z.number().int().min(0).optional()})).mutation(({ctx,input})=>configurePool(ctx.db,ctx.user,input)),
+    native: nativeBracketRouter,
     guests: guestRouter,
     delivery: eventDeliveryRouter,
     sources: sourceRefreshRouter,

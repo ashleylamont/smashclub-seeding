@@ -8,6 +8,7 @@ import {
   eventPoolAssignments,
   eventWithdrawals,
   eventPlanEntries,
+  eventNativeBrackets,
   eventPlanPoolPlacements,
   eventPlans,
   playerRatings,
@@ -152,6 +153,7 @@ export interface PlanView {
     eventDate: string;
     slugPrefix: string | null;
     status: PlanStatus;
+    bracketMode: 'native' | 'challonge';
     historicalAdoption: typeof eventPlans.$inferSelect.historicalAdoption;
     upperTargetSize: number | null;
     poolSize: number;
@@ -278,6 +280,7 @@ export async function getPlan(db: Db, planId: string): Promise<PlanView | null> 
       eventDate: plan.eventDate.toISOString(),
       slugPrefix: plan.slugPrefix,
       status: plan.status,
+      bracketMode: plan.bracketMode,
       historicalAdoption: plan.historicalAdoption,
       upperTargetSize: plan.upperTargetSize,
       poolSize: plan.poolSize,
@@ -485,6 +488,7 @@ async function loadLastPlayed(db: Db, playerIds: readonly string[]): Promise<Map
 // ---------------------------------------------------------------------------
 
 export interface CreatePlanInput {
+  bracketMode?: 'native' | 'challonge';
   name: string;
   eventDate: Date;
   slugPrefix?: string | null;
@@ -506,6 +510,7 @@ export async function createPlan(db: Db, input: CreatePlanInput, createdBy: stri
       .insert(eventPlans)
       .values({
         name: input.name,
+        bracketMode: input.bracketMode ?? 'native',
         eventDate: input.eventDate,
         slugPrefix: input.slugPrefix ?? null,
         upperTargetSize: input.upperTargetSize ?? null,
@@ -866,6 +871,8 @@ async function savePoolPlacementsUnlocked(
 ): Promise<void> {
   const plan = await loadPlanRow(db, planId);
   assertStatus(plan.status, ['pools_ready', 'underway'], 'record pool results');
+  const native = await db.select().from(eventNativeBrackets).where(and(eq(eventNativeBrackets.eventPlanId, planId), eq(eventNativeBrackets.division, division)));
+  if (native.length) throw new EventPlanStateError('Native finals already use these qualifiers. Remove the unplayed finals before changing pool placements.');
   const view = await getPlan(db, planId);
   const divisionView = view?.divisions.find((entry) => entry.division === division);
   if (!divisionView || divisionView.pools.length === 0) {
@@ -952,6 +959,7 @@ async function attachBracketUnlocked(
   slugOrUrl: string,
 ): Promise<{ tournamentId: string; slug: string }> {
   const plan = await loadPlanRow(db, planId);
+  if (plan.bracketMode === 'native') throw new EventPlanStateError('This event runs its brackets in Nemesis; external brackets cannot be attached.');
   assertStatus(plan.status, ['roster_frozen', 'pools_ready', 'underway'], 'attach a bracket');
   const slug = normalizeTournamentId(slugOrUrl);
 
@@ -1031,6 +1039,7 @@ async function detachBracketUnlocked(
  */
 async function closePlanUnlocked(db: Db, planId: string, status: 'complete' | 'cancelled'): Promise<void> {
   const plan = await loadPlanRow(db, planId);
+  if (status === 'complete' && plan.bracketMode === 'native') throw new EventPlanStateError('Finalize native results from the event desk so they enter ratings and history.');
   assertStatus(
     plan.status,
     status === 'complete' ? ['pools_ready', 'underway'] : ['draft', 'roster_frozen', 'pools_ready', 'underway'],
