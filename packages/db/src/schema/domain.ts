@@ -186,6 +186,7 @@ export type TournamentResultsMode = 'auto' | 'final_stage_only';
 export type SetResultStage = 'group' | 'final';
 
 export const tournaments = pgTable('tournaments', {
+  provider: text('provider').$type<'challonge' | 'native'>().notNull().default('challonge'),
   id: uuid('id').primaryKey().defaultRandom(),
   challongeSlug: text('challonge_slug').notNull().unique(),
   challongeId: bigint('challonge_id', { mode: 'number' }),
@@ -543,6 +544,7 @@ export interface HistoricalAdoption extends HistoricalAdoptionRecord {
 }
 
 export const eventPlans = pgTable('event_plans', {
+  bracketMode: text('bracket_mode').$type<'challonge' | 'native'>().notNull().default('challonge'),
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   eventDate: timestamp('event_date', { withTimezone: true }).notNull(),

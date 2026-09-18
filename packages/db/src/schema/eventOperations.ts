@@ -1,4 +1,4 @@
-import { boolean, check, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { eventPlans, players, sets } from './domain';
 import { user } from './auth';
@@ -10,7 +10,16 @@ export const eventOperators = pgTable('event_operators', {
     id: uuid('id').primaryKey().defaultRandom(), eventPlanId: planId(), userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
 }, t => [uniqueIndex('event_operators_user_idx').on(t.eventPlanId, t.userId)]);
 export const eventStations = pgTable('event_stations', { id: uuid('id').primaryKey().defaultRandom(), eventPlanId: planId(), name: text('name').notNull() });
+export const eventNativeBrackets = pgTable('event_native_brackets', {
+    id: uuid('id').primaryKey().defaultRandom(), eventPlanId: planId(),
+    division: text('division').$type<'upper' | 'lower'>().notNull(), stage: text('stage').$type<'main' | 'consolation'>().notNull(),
+    entrantIds: jsonb('entrant_ids').$type<string[]>().notNull(), createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => [uniqueIndex('event_native_brackets_slot_idx').on(t.eventPlanId, t.division, t.stage)]);
 export const eventMatches = pgTable('event_matches', {
+    nativeBracketId: uuid('native_bracket_id').references(() => eventNativeBrackets.id, { onDelete: 'cascade' }),
+    nativeRound: integer('native_round'), nativeSlot: integer('native_slot'),
+    parent1MatchId: uuid('parent1_match_id').references((): AnyPgColumn => eventMatches.id),
+    parent2MatchId: uuid('parent2_match_id').references((): AnyPgColumn => eventMatches.id),
     id: uuid('id').primaryKey().defaultRandom(), eventPlanId: planId(), sourceKey: text('source_key').notNull(), sourceSetId: uuid('source_set_id').references(() => sets.id, { onDelete: 'set null' }),
     division: text('division').$type<'upper' | 'lower'>().notNull(), stage: text('stage').$type<'group' | 'main' | 'consolation'>().notNull(), poolIndex: integer('pool_index'), label: text('label').notNull(),
     player1Id: uuid('player1_id').references(() => players.id), player2Id: uuid('player2_id').references(() => players.id),
