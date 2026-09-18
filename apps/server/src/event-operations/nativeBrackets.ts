@@ -34,6 +34,8 @@ export async function previewNativeBrackets(db: Db, planId: string) {
   if (matches.some(m => m.nativeBracketId && (m.status === 'playing' || (m.status === 'complete' && m.outcome !== 'bye') || m.score1 !== null || m.score2 !== null || m.liveScore1 !== null || m.liveScore2 !== null))) issues.push('Finals have started. Existing play cannot be rebuilt.');
   if (nativeAudit.some(a => (a.after as { status?: string }).status === 'playing' || (a.before as { status?: string }).status === 'playing')) issues.push('A finals match has previously started; it cannot be reset.');
   if (reports.length) issues.push('Review pending score reports before generating finals.');
+  const resetIssues = [...issues];
+  if (!existing.length) resetIssues.push('There are no native finals to remove.');
   if (!matches.some(m => m.stage === 'group')) issues.push('Prepare and play the pool matches first.');
   if (matches.some(m => m.stage === 'group' && m.status !== 'complete' && m.blockedReason !== 'Both players withdrawn: no contest; no winner or score recorded')) issues.push('Resolve every pool match before generating finals.');
   const brackets = view.divisions.flatMap(division => {
@@ -48,7 +50,7 @@ export async function previewNativeBrackets(db: Db, planId: string) {
       { division: division.division, stage: 'consolation' as const, entrantIds: division.consolation?.entrants.map(p => p.playerId) ?? [] },
     ].map(bracket => ({ ...bracket, roundOne: pairSlots(nativeDraw(bracket.entrantIds)) }));
   });
-  return { allowed: issues.length === 0, issues, replacing: existing.length > 0, brackets,
+  return { allowed: issues.length === 0, issues, resetAllowed: resetIssues.length === 0, resetIssues, replacing: existing.length > 0, brackets,
     revisionToken: digest({ plan: view.plan.status, brackets, assignments: view.divisions.map(d => d.pools), matches: matches.map(m => [m.id, m.revision, m.status]), reports, existing: existing.map(b => b.id) }) };
 }
 function pairSlots(slots: Array<string | null>) { return Array.from({ length: slots.length / 2 }, (_, i) => ({ player1Id: slots[i * 2]!, player2Id: slots[i * 2 + 1]! })); }
@@ -156,7 +158,7 @@ export async function resetNativeBrackets(db: Db, user: SessionUser, planId: str
     await lockEvent(tx, planId); await requireOperator(tx, planId, user);
     const preview = await previewNativeBrackets(tx, planId);
     if (revisionToken !== preview.revisionToken) reject('The event changed; preview again before removing finals.');
-    if (!preview.allowed) reject(preview.issues.join(' '));
+    if (!preview.resetAllowed) reject(preview.resetIssues.join(' '));
     const brackets = await tx.select().from(eventNativeBrackets).where(eq(eventNativeBrackets.eventPlanId, planId));
     if (brackets.length) {
       await tx.update(eventMatches).set({ parent1MatchId: null, parent2MatchId: null }).where(inArray(eventMatches.nativeBracketId, brackets.map(b => b.id)));

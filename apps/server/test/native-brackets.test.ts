@@ -91,6 +91,27 @@ describe('native brackets', () => {
     await expect(resetNativeBrackets(db, admin, planId, preview.revisionToken)).rejects.toThrow(/started/);
   });
 
+  it('removes unplayed finals after a withdrawal so pool orders can be reconfirmed', async () => {
+    await finishPools(); await generate();
+    const before = await nativeBracketViews(db, planId);
+    const playerId = before.find(b => b.division === 'upper' && b.stage === 'main')!.entrantIds[0]!;
+    const input = { planId, action: 'withdraw' as const, playerId };
+    const attendance = await previewAttendance(db, input);
+    await applyAttendance(db, admin, { ...input, revisionToken: attendance.revisionToken });
+    const preview = await previewNativeBrackets(db, planId);
+    expect(preview.allowed).toBe(false);
+    expect(preview.issues.join(' ')).toMatch(/Confirm every upper pool order/);
+    expect(preview.resetAllowed).toBe(true);
+    await resetNativeBrackets(db, admin, planId, preview.revisionToken);
+    const view = (await getPlan(db, planId))!;
+    const upper = view.divisions.find(d => d.division === 'upper')!;
+    await savePoolPlacements(db, planId, 'upper', upper.pools.map(pool => ({ poolIndex: pool.poolIndex, playerIdsInOrder: pool.members.map(member => member.playerId), expectedMatchRevisions: pool.matchRevisions, expectedPlacementRevision: pool.placementRevision })));
+    await generate();
+    const after = await nativeBracketViews(db, planId);
+    expect(after.every(b => !b.entrantIds.includes(playerId))).toBe(true);
+    expect(after.reduce((n, b) => n + b.entrantIds.length, 0)).toBe(13);
+  });
+
   it('rejects a premature bye and pool-order changes after finals generation', async () => {
     await finishPools(); await generate();
     const semi = (await db.select().from(eventMatches)).find(m => m.nativeBracketId && m.division === 'upper' && m.stage === 'main' && m.nativeRound === 1)!;
