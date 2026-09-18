@@ -152,6 +152,7 @@ export interface PlanView {
     eventDate: string;
     slugPrefix: string | null;
     status: PlanStatus;
+    historicalAdoption: typeof eventPlans.$inferSelect.historicalAdoption;
     upperTargetSize: number | null;
     poolSize: number;
     rankingSnapshotAt: string | null;
@@ -277,6 +278,7 @@ export async function getPlan(db: Db, planId: string): Promise<PlanView | null> 
       eventDate: plan.eventDate.toISOString(),
       slugPrefix: plan.slugPrefix,
       status: plan.status,
+      historicalAdoption: plan.historicalAdoption,
       upperTargetSize: plan.upperTargetSize,
       poolSize: plan.poolSize,
       rankingSnapshotAt: plan.rankingSnapshotAt?.toISOString() ?? null,
@@ -1050,7 +1052,7 @@ export async function listPlans(db: Db) {
       status: eventPlans.status,
       createdAt: eventPlans.createdAt,
       entryCount: sql<number>`(
-        select count(*) from ${eventPlanEntries} where ${eventPlanEntries.eventPlanId} = ${eventPlans.id}
+        select count(*) from ${eventPlanEntries} where "event_plan_entries"."event_plan_id" = "event_plans"."id"
       )`,
     })
     .from(eventPlans)
