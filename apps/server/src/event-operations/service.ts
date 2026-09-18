@@ -113,7 +113,9 @@ export async function prepare(db: Db, planId: string) {
             // Refresh only imported facts; preserve local station/queue decisions. Changed facts
             // invalidate forms and pending player reports by advancing the revision.
             const importedStatus = row.status ?? 'ready';
-            const nextStatus = importedStatus === 'complete' ? 'complete' : !row.player1Id || !row.player2Id ? 'blocked' : previous.status === 'playing' ? 'playing' : previous.status === 'blocked' && previous.blockedReason !== 'Waiting for bracket participants' ? 'blocked' : 'ready';
+            const participantsChanged = previous.player1Id !== (row.player1Id ?? null) || previous.player2Id !== (row.player2Id ?? null);
+            const requiresParticipantReview = importedStatus !== 'complete' && participantsChanged && (previous.status === 'playing' || previous.liveScore1 !== null || previous.liveScore2 !== null || !!previous.player1Id && previous.player1Id !== row.player1Id || !!previous.player2Id && previous.player2Id !== row.player2Id);
+            const nextStatus = importedStatus === 'complete' ? 'complete' : requiresParticipantReview ? 'blocked' : !row.player1Id || !row.player2Id ? 'blocked' : previous.status === 'playing' ? 'playing' : previous.status === 'blocked' && previous.blockedReason !== 'Waiting for bracket participants' ? 'blocked' : 'ready';
             const fields = { sourceSetId: row.sourceSetId, player1Id: row.player1Id ?? null, player2Id: row.player2Id ?? null, score1: row.score1 ?? null, score2: row.score2 ?? null, winnerId: row.winnerId ?? null, outcome: row.outcome ?? null, syncState: 'synced' as const };
             if (Object.entries(fields).some(([key, value]) => previous[key as keyof typeof previous] !== value) || nextStatus !== previous.status) {
                 let reconciliationReason:string|null=null;
@@ -126,7 +128,7 @@ export async function prepare(db: Db, planId: string) {
                     }
                 }
                 const newResult = nextStatus === 'complete' && (previous.status !== 'complete' || resultChanged || previous.player1Id !== fields.player1Id || previous.player2Id !== fields.player2Id);
-                await tx.update(eventMatches).set({ ...fields, ...(nextStatus==='complete'?{liveScore1:null,liveScore2:null}:{}), resultUpdatedAt: newResult ? new Date() : nextStatus === 'complete' ? previous.resultUpdatedAt : null, status: nextStatus, blockedReason: reconciliationReason??(!fields.player1Id || !fields.player2Id ? 'Waiting for bracket participants' : nextStatus === 'blocked' ? previous.blockedReason : null), revision: previous.revision + 1 }).where(eq(eventMatches.id, previous.id));
+                await tx.update(eventMatches).set({ ...fields, ...(nextStatus==='complete'||requiresParticipantReview?{liveScore1:null,liveScore2:null}:{}), resultUpdatedAt: newResult ? new Date() : nextStatus === 'complete' ? previous.resultUpdatedAt : null, status: nextStatus, blockedReason: requiresParticipantReview ? 'Imported bracket participants changed. Previous live scores were cleared; review the players before releasing this match.' : reconciliationReason??(!fields.player1Id || !fields.player2Id ? 'Waiting for bracket participants' : nextStatus === 'blocked' ? previous.blockedReason : null), revision: previous.revision + 1 }).where(eq(eventMatches.id, previous.id));
             }
         }
         const withdrawn = await tx.select().from(eventWithdrawals).where(eq(eventWithdrawals.eventPlanId, planId));
