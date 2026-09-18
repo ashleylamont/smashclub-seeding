@@ -4,7 +4,7 @@ Everything is on `codex/event-operations` in `.worktrees/codex-event-operations`
 
 ## Open the rehearsal
 
-The local rehearsal server is running at http://127.0.0.1:3311.
+Start the local rehearsal at http://127.0.0.1:3311 using the command below. The server prints fresh event links on startup. The links below refer to the last local review session and may change after restart.
 
 - [Event control](http://127.0.0.1:3311/admin/event-operations?plan=cc77a595-1e27-47f4-8051-e7a81bfe9f91)
 - [Public event board](http://127.0.0.1:3311/live/cc77a595-1e27-47f4-8051-e7a81bfe9f91)
@@ -56,7 +56,18 @@ PORT=3311 WEB_DIST_DIR="$PWD/apps/web/dist" pnpm dev:harness
 - Before play, reset an unplayed queue and reopen the roster to reshuffle. Once play has started, additions and withdrawals preserve pool membership; moving a played entrant between pools is not supported.
 - Late arrivals use existing active player records. Create a new player through the existing admin workflow first if needed.
 - Tie resolution and final pool order remain explicit TO decisions.
-- Player score submission is optional and requires a claimed player identity and TO approval.
+- Linked-player reporting and guest reporting are separate opt-in settings. Guest reporting needs no login or player link; all guest submissions require TO approval.
 - The broadcast does not capture video itself; OBS composites it.
 
 See [implementation evidence](event-operations-progress.md) for the review and test record.
+
+
+## Guest reporting and live outcomes
+
+In event control, enable **Allow guest score reports**, then **Generate guest QR**. Anyone holding the invitation can propose a played match score, including logged-out visitors and logged-in accounts without a player claim. Byes, forfeits and corrections remain TO actions.
+
+Invitations rotate on 15-minute boundaries. Scanning exchanges the invitation for a one-hour event-scoped guest pass stored in that browser tab. **Revoke all guest passes** invalidates invitations and existing passes immediately; disabling guest reporting also revokes them. Only hashes of guest session credentials are stored in the database. Bearer values travel in URL fragments and POST bodies, not query strings. Guest reports are labelled separately in the approval queue and have duplicate, stale-revision and submission-limit protection.
+
+**Show a rotating QR on the OBS overlay** is a separate option. Stream viewers can scan it too. Keep it off to share invitations only at the venue. The demo enables both options on its synthetic event, while newly created events default to off. QR links use the site's current origin; for an actual phone scan, open the site at an address reachable from that phone.
+
+The overlay's bottom strip now lists the three most recent confirmed results. A new result triggers an eight-second animated `GG!` banner confined to that strip. Corrections use `CORRECTED`; byes and forfeits are described as such. Several arriving results are queued, opening/reloading the overlay does not replay old wins, and reduced-motion preferences remove the animation. The announcement returns after the result banner.

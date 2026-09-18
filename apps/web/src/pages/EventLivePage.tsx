@@ -6,6 +6,8 @@ import { trpc } from '../lib/trpc';
 import './EventLive.css';
 import { ResultGraphic } from '../components/ResultGraphic';
 import { GuestOverlayQr } from '../components/GuestOverlayQr';
+import { BroadcastResults } from '../components/BroadcastResults';
+import { recentResults } from '../lib/broadcastResults';
 import { useGuestClock } from '../lib/guestReporting';
 import { confirmedPoolGraphics } from '../lib/resultGraphic';
 
@@ -62,7 +64,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
       <div className="broadcast-fighter broadcast-fighter-two"><b>{onStream?.score2 ?? '—'}</b><strong>{onStream?.player2Name || 'NEXT CHALLENGER'}</strong><span className="broadcast-side">P2</span></div>
     </div>
     <div className="event-capture" aria-label="Transparent game capture area"><span className="capture-corner capture-corner-tl" /><span className="capture-corner capture-corner-br" /></div>
-    <footer className="broadcast-footer"><div className="broadcast-footer-label"><span>FROM THE</span><strong>FLOOR ↗</strong></div><aside className="event-announcements" aria-label="Announcements"><p>{data.announcements[0]?.message ?? 'Grab a setup. Find your rival. Make it a good set.'}</p></aside><div className="broadcast-footer-mark"><BroadcastMark /></div></footer>
+    <footer className="broadcast-footer"><BroadcastResults key={planId} matches={data.matches} announcement={data.announcements[0]?.message ?? 'Grab a setup. Find your rival. Make it a good set.'} /></footer>
     {query.isError && <div className="broadcast-offline" role="status">Connection interrupted · last received scores</div>}
   </div>;
   return <div className="event-display event-board" style={variables}>
@@ -81,7 +83,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
     <aside className="event-announcements" aria-label="Announcements"><strong>FROM THE FLOOR ↗</strong><div>{data.announcements.length ? data.announcements.slice(0, 2).map(a => <p key={a.id}>{a.message}</p>) : <p>Good games. Great rivals. Welcome to the club.</p>}</div></aside>
     <>
       {data.settings.playerReports && <p><a className="btn" href={`/play/${planId}`}>Report your match score →</a></p>}
-      <section className="event-recent"><h2>Recorded results</h2>{sections.complete.length ? <div className="event-results-grid">{sections.complete.slice(-12).reverse().map(match => <MatchCard key={match.id} match={match} station={station(match)} />)}</div> : <p className="event-empty">Results appear here once confirmed.</p>}<p className="event-live-note">Set results are shown as recorded. They do not imply final tournament placements.</p></section>
+      <section className="event-recent"><h2>Recorded results</h2>{sections.complete.length ? <div className="event-results-grid">{recentResults(data.matches, 12).map(match => <MatchCard key={match.id} match={match} station={station(match)} />)}</div> : <p className="event-empty">Results appear here once confirmed.</p>}<p className="event-live-note">Set results are shown as recorded. They do not imply final tournament placements.</p></section>
       {poolResults.length > 0 && <section className="event-pool-results"><h2>Confirmed pool standings</h2><p className="event-live-note">Places are within each pool, as confirmed by the organisers.</p><div className="event-results-grid">{poolResults.map(pool => <article className="event-prize" key={pool.title}><h3>{pool.title}</h3><ol className="event-pool-ranking">{pool.results.map(result => <li key={result.alias}><span>{result.place}</span> {result.alias}</li>)}</ol><ResultGraphic title={`${data.plan.name} · ${pool.title}`} results={pool.results} /></article>)}</div></section>}
       {data.prizes.length > 0 && <section className="event-prizes"><h2>On the line</h2><div className="event-results-grid">{data.prizes.map(prize => <article className="event-prize" key={prize.id}><span className="event-eyebrow">PRIZE</span><h3>{prize.title}</h3><p>{prize.description}</p>{prize.playerName && <strong>{prize.playerName}</strong>}</article>)}</div></section>}
     </>

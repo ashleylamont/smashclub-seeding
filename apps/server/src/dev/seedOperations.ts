@@ -3,6 +3,7 @@ import { eventAnnouncements, eventOperationSettings, eventOperators, eventPrizes
 import { createPlan, freezeRoster, generatePools, getPlan, loadRanking, savePoolPlacements } from '../event-planner/plans';
 import { prepare, reportScore, snapshot, updateMatch } from '../event-operations/service';
 import type { SessionUser } from '../auth';
+import { configureGuests } from '../event-operations/guests';
 
 /** Real services, fake event: an immediately usable local rehearsal, never production startup. */
 export async function seedOperations(db: Db): Promise<string> {
@@ -23,6 +24,7 @@ export async function seedOperations(db: Db): Promise<string> {
   await generatePools(db, planId);
   await prepare(db, planId);
   await db.update(eventOperationSettings).set({ published: true, playerReports: true }).where(eq(eventOperationSettings.eventPlanId, planId));
+  await configureGuests(db, actor, { planId, enabled: true, showOnOverlay: true });
   const stations = await db.insert(eventStations).values([{ eventPlanId: planId, name: 'Stage' }, { eventPlanId: planId, name: 'Setup 2' }]).returning();
   await db.insert(eventOperators).values({ eventPlanId: planId, userId: organiser.id });
   const plan = (await getPlan(db, planId))!;

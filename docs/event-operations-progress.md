@@ -74,3 +74,12 @@ Read-only upstream API investigation: Challonge's official v1 documentation expl
 - Final workspace typecheck and lint pass. Web production build passes (existing large-bundle warning remains).
 - All agent changes were inspected and integrated on the local worktree branch. No merge into the original checkout and no deployment.
 - The rehearsal server is left running at port3311. See `docs/event-operations-review.md` for exact links, synthetic accounts, OBS setup and the remaining operating limits.
+
+
+### Guest reporting and broadcast result follow-up
+- Added optional anonymous/unlinked guest submissions using 15-minute QR invitations and revocable one-hour guest passes. Every guest report stays pending until a TO approves it.
+- Added hashed session storage, per-event scope, expiry/revocation checks, durable redemption/submission limits and idempotency. Guest credentials use fragments and POST bodies; public snapshots do not expose secrets.
+- Optional overlay QR, independently enabled from guest reporting, preserves the gameplay aperture and on-deck list. QR codes are generated locally with no external service.
+- Official results have timestamps, enabling a chronological recent-results strip and eight-second animated outcome banners. Corrections are distinguished, old results do not replay on reload, and reduced-motion disables movement.
+- Independent review identified report-history ordering and cross-event notification state; both were addressed before integration.
+- Full suite: 743 passed, with the two opt-in PostgreSQL cases then run separately and passing against the new migrations. Workspace build, typecheck and lint pass. Browser rehearsal additionally covers real QR decoding at display size, anonymous/unlinked reporting, rejection and retry, approval, revocation, reduced motion and separation from the capture area.
