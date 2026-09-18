@@ -4,6 +4,7 @@ export interface QueueMatch {
   division: string; stage: string; poolIndex: number | null;
   score1: number | null; score2: number | null; winnerId: string | null;
   outcome?: string | null;
+  blockedReason?: string | null;
 }
 /** A ready bracket match is not callable while either player is on another setup. */
 export function availableMatches<T extends QueueMatch>(matches: readonly T[]): T[] {
@@ -21,11 +22,12 @@ export function poolStandings(matches: readonly QueueMatch[]) {
     if (m.stage !== 'group' || m.poolIndex === null) continue;
     const key = `${m.division}:${m.poolIndex}`;
     const pool = pools.get(key) ?? { division: m.division, poolIndex: m.poolIndex, complete: 0, total: 0, players: new Map() };
-    pool.total++; if (m.status === 'complete') pool.complete++;
+    const resolved = m.status === 'complete' || m.blockedReason === 'Both players withdrawn: no contest; no winner or score recorded';
+    pool.total++; if (resolved) pool.complete++;
     for (const [id, name, own, opponent] of [[m.player1Id, m.player1Name, m.score1, m.score2], [m.player2Id, m.player2Name, m.score2, m.score1]] as const) {
       if (!id) continue;
       const player = pool.players.get(id) ?? { id, name: name ?? 'Player', wins: 0, losses: 0, differential: 0, remaining: 0 };
-      if (m.status !== 'complete') player.remaining++;
+      if (!resolved) player.remaining++;
       else if (m.winnerId && m.outcome !== 'bye') {
         if (m.winnerId === id) player.wins++; else player.losses++;
         if (m.outcome !== 'forfeit' && own !== null && opponent !== null) player.differential += own - opponent;

@@ -320,10 +320,11 @@ function TournamentRow({
       </td>
       <td>{tournament.challongeState ?? 'pending'}</td>
       <td>
-        {tournament.syncState}
+        {tournament.provider === 'native' ? 'Saved in Nemesis' : tournament.syncState}
         {tournament.lastSyncedAt && <div className="muted">{timeAgo(tournament.lastSyncedAt)}</div>}
       </td>
       <td>
+        {tournament.provider === 'native' ? <a href={`/events/${encodeURIComponent(tournament.slug)}`}>Nemesis event results →</a> : <>
         <button
           type="button"
           className="btn btn-small"
@@ -362,7 +363,7 @@ function TournamentRow({
           >
             {setLive.isPending ? 'Starting…' : `Go live (${LIVE_HOURS}h)`}
           </button>
-        )}
+        )}</>}
       </td>
     </tr>
   );

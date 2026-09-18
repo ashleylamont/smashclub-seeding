@@ -20,3 +20,9 @@ describe('event queue', () => {
     expect(pools[1]!.players).toHaveLength(2);
   });
 });
+
+it('counts a resolved double-withdrawal as finished without inventing wins or losses', () => {
+  const [pool] = poolStandings([match('vacant', 'a', 'b', { status: 'blocked', blockedReason: 'Both players withdrawn: no contest; no winner or score recorded' })]);
+  expect(pool).toMatchObject({ complete: 1, total: 1 });
+  expect(pool!.players.every(player => player.remaining === 0 && player.wins === 0 && player.losses === 0)).toBe(true);
+});

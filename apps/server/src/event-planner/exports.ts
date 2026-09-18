@@ -1,4 +1,4 @@
-import { divisionLabel, type PlanView } from './plans';
+import { divisionLabel, EventPlanStateError, type PlanView } from './plans';
 import type { Division } from './divisions';
 
 /**
@@ -46,6 +46,7 @@ export interface PlanExports {
 }
 
 export function buildExports(view: PlanView): PlanExports {
+  if (view.plan.bracketMode === 'native') throw new EventPlanStateError('This event runs in Nemesis; Challonge handoff exports are unavailable.');
   const brackets: BracketExport[] = [];
   const poolCards: PlanExports['poolCards'] = [];
 

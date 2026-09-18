@@ -31,6 +31,16 @@ async function join() {
 }
 const input = (sessionToken: string, requestId = 'guest-score') => ({ planId, sessionToken, matchId: match.id, expectedRevision: match.revision, requestId, score1: 2, score2: 1 });
 describe('guest reporting', () => {
+    it('keeps a QR link usable for at least an hour across displayed code rotations', async () => {
+        await enable();
+        const issuedAt = Math.floor(now / 900_000) * 900_000 + 899_999;
+        const invite = (await guestInvitation(db, planId, admin, issuedAt))!;
+        expect(Date.parse(invite.expiresAt) - issuedAt).toBeGreaterThanOrEqual(60 * 60_000);
+        const next = (await guestInvitation(db, planId, admin, issuedAt + 15 * 60_000))!;
+        expect(next.token).not.toBe(invite.token);
+        const guest = await redeemGuest(db, { planId, token: invite.token }, 'later-guest', issuedAt + 60 * 60_000);
+        expect(Date.parse(guest.expiresAt)).toBe(issuedAt + 120 * 60_000);
+    });
     it('is opt-in and keeps overlay sharing separate, with no secrets in snapshot', async () => {
         expect(await guestInvitation(db, planId)).toBeNull();
         await expect(guestInvitation(db, planId, admin)).rejects.toMatchObject({ code: 'FORBIDDEN' });

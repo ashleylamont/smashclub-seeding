@@ -1,9 +1,11 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { advanceNativeBrackets, assertNativeCorrectionAllowed, nativeBracketViews } from './nativeBrackets';
+import { and, asc, desc, eq, inArray, gt, isNull, or } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
-import { eventAnnouncements, eventMatchAudit, eventMatches, eventOperationSettings, eventOperators, eventPlanBrackets, eventPlanEntries, eventPlanPoolPlacements, eventPlans, eventPrizes, eventScoreReports, eventStations, eventWithdrawals, playerClaims, players, sets, type Db } from '@smashclub/db';
+import { eventAnnouncements, eventMatchAudit, eventMatches, eventOperationSettings, eventOperators, eventPlanBrackets, eventPlanEntries, eventPlanPoolPlacements, eventPlans, eventPrizes, eventScoreReports, eventStations, eventWithdrawals, eventPoolSchedules, playerCharacters, players, sets, tournaments, type Db } from '@smashclub/db';
 import { publicPlayerName, scoresIndicateBye, scoresIndicateForfeit } from '@smashclub/shared';
 import type { SessionUser } from '../auth';
 import { getPlan } from '../event-planner/plans';
+import { matchAvailability, stationAvailability } from './availability';
 const fail = (code: 'BAD_REQUEST' | 'CONFLICT' | 'FORBIDDEN' | 'NOT_FOUND', message: string): never => { throw new TRPCError({ code, message }); };
 export async function isOperator(db: Db, planId: string, user: SessionUser) {
     if (user.role === 'admin')
@@ -30,14 +32,30 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
     if (!privateView && !settings?.published)
         fail('NOT_FOUND', 'This event is not published.');
     const names = new Map((await db.select().from(players)).map(p => [p.id, publicPlayerName(p)]));
-    const matches = (await db.select().from(eventMatches).where(eq(eventMatches.eventPlanId, planId)).orderBy(asc(eventMatches.label))).map(m => ({ ...m, player1Name: m.player1Id ? names.get(m.player1Id) ?? 'Player' : 'TBD', player2Name: m.player2Id ? names.get(m.player2Id) ?? 'Player' : 'TBD' }));
+    const rows = await db.select().from(eventMatches).where(eq(eventMatches.eventPlanId, planId)).orderBy(asc(eventMatches.label));
+    const stations = await db.select().from(eventStations).where(eq(eventStations.eventPlanId,planId));
+    const poolSchedules = await db.select().from(eventPoolSchedules).where(eq(eventPoolSchedules.eventPlanId,planId));
+    const participantIds=[...new Set(rows.flatMap(match=>[match.player1Id,match.player2Id].filter((id):id is string=>!!id)))];
+    const characters=participantIds.length?await db.select().from(playerCharacters).where(inArray(playerCharacters.playerId,participantIds)).orderBy(asc(playerCharacters.position)):[];
+    const matches = rows.map(m => ({ ...m,
+        score1:m.status==='playing'?(m.liveScore1??m.score1):m.score1,score2:m.status==='playing'?(m.liveScore2??m.score2):m.score2,
+        player1Name: m.player1Id ? names.get(m.player1Id) ?? 'Player' : 'TBD', player2Name: m.player2Id ? names.get(m.player2Id) ?? 'Player' : 'TBD',
+        player1Characters:characters.filter(c=>c.playerId===m.player1Id).map(c=>c.characterSlug),player2Characters:characters.filter(c=>c.playerId===m.player2Id).map(c=>c.characterSlug),
+        availability:matchAvailability(m,rows,stations,poolSchedules,false,!['complete','cancelled'].includes(plan.status)),
+    }));
     const historicalResultsSlug = plan.historicalAdoption?.brackets.find(bracket => bracket.division === 'upper' && bracket.stage === 'main')?.slug ?? null;
+    const [nativeResult] = plan.bracketMode === 'native' && plan.status === 'complete'
+        ? await db.select({ slug: tournaments.challongeSlug }).from(eventPlanBrackets)
+            .innerJoin(tournaments, eq(eventPlanBrackets.tournamentId, tournaments.id))
+            .where(and(eq(eventPlanBrackets.eventPlanId, planId), eq(eventPlanBrackets.division, 'upper'), eq(eventPlanBrackets.stage, 'main')))
+        : [];
+    const resultsSlug = nativeResult?.slug ?? historicalResultsSlug;
     // Archived plans are planning intent, not evidence of attendance or finishes.
     const entrants = plan.historicalAdoption ? [] : (await db.select({ id: eventPlanEntries.playerId }).from(eventPlanEntries).where(eq(eventPlanEntries.eventPlanId, planId))).flatMap(p => p.id ? [{ id: p.id, name: names.get(p.id) ?? 'Player' }] : []);
     const prizes = (await db.select().from(eventPrizes).where(eq(eventPrizes.eventPlanId, planId))).map(p => ({ ...p, playerName: p.playerId ? names.get(p.playerId) ?? 'Player' : null }));
-    return { plan: { id: plan.id, name: plan.name, eventDate: plan.eventDate.toISOString(), status: plan.status, historicalResultsSlug }, brackets: (await db.select({ division: eventPlanBrackets.division, stage: eventPlanBrackets.stage, slug: eventPlanBrackets.challongeSlug }).from(eventPlanBrackets).where(eq(eventPlanBrackets.eventPlanId, planId))), settings: { published: settings?.published ?? false, playerReports: settings?.playerReports ?? false }, matches, entrants, prizes,
-        stations: await db.select().from(eventStations).where(eq(eventStations.eventPlanId, planId)),
-        announcements: (await db.select().from(eventAnnouncements).where(eq(eventAnnouncements.eventPlanId, planId)).orderBy(desc(eventAnnouncements.createdAt))).map(a => ({ ...a, createdAt: a.createdAt.toISOString() })),
+    return { nativeBrackets: await nativeBracketViews(db, planId), plan: { id: plan.id, name: plan.name, eventDate: plan.eventDate.toISOString(), status: plan.status, bracketMode: plan.bracketMode, historicalResultsSlug, resultsSlug }, brackets: (await db.select({ division: eventPlanBrackets.division, stage: eventPlanBrackets.stage, slug: eventPlanBrackets.challongeSlug }).from(eventPlanBrackets).where(eq(eventPlanBrackets.eventPlanId, planId))), settings: { published: settings?.published ?? false, playerReports: settings?.playerReports ?? false }, matches, entrants, prizes,
+        stations: stations.map(station=>stationAvailability(station,rows)), poolSchedules,
+        announcements: (await db.select().from(eventAnnouncements).where(and(eq(eventAnnouncements.eventPlanId, planId),or(isNull(eventAnnouncements.expiresAt),gt(eventAnnouncements.expiresAt,new Date())))).orderBy(desc(eventAnnouncements.createdAt))).map(a => ({ ...a, createdAt: a.createdAt.toISOString(),expiresAt:a.expiresAt?.toISOString()??null })),
         withdrawals: await db.select({ playerId: eventWithdrawals.playerId }).from(eventWithdrawals).where(eq(eventWithdrawals.eventPlanId, planId)),
         placements: plan.historicalAdoption ? [] : await db.select().from(eventPlanPoolPlacements).where(eq(eventPlanPoolPlacements.eventPlanId, planId)) };
 }
@@ -61,7 +79,7 @@ export async function prepare(db: Db, planId: string) {
             return fail('NOT_FOUND', 'Event not found.');
         const existing = await tx.select().from(eventMatches).where(eq(eventMatches.eventPlanId, planId));
         const linked = await tx.select().from(eventPlanBrackets).where(eq(eventPlanBrackets.eventPlanId, planId));
-        const imported = linked.length ? await tx.select().from(sets).where(inArray(sets.tournamentId, linked.flatMap(b => b.tournamentId ? [b.tournamentId] : []))) : [];
+        const imported = row.bracketMode !== 'native' && linked.length ? await tx.select().from(sets).where(inArray(sets.tournamentId, linked.flatMap(b => b.tournamentId ? [b.tournamentId] : []))) : [];
         const rows: Array<typeof eventMatches.$inferInsert> = [];
         for (const d of plan.divisions)
             for (const pool of d.pools)
@@ -77,7 +95,7 @@ export async function prepare(db: Db, planId: string) {
             rows.push({ eventPlanId: planId, sourceKey: `set:${s.id}`, sourceSetId: s.id, outcome: importedOutcome(s), division: b.division, stage: b.stage, poolIndex: null, label: `${b.division} ${b.stage} · ${s.identifier ?? s.suggestedPlayOrder ?? s.challongeMatchId}`, player1Id: s.p1PlayerId, player2Id: s.p2PlayerId, status: s.state === 'complete' ? 'complete' : s.p1PlayerId && s.p2PlayerId ? 'ready' : 'blocked', blockedReason: s.p1PlayerId && s.p2PlayerId ? null : 'Waiting for bracket participants', score1: scores ? Number(scores[1]) : null, score2: scores ? Number(scores[2]) : null, winnerId: s.winner === 1 ? s.p1PlayerId : s.winner === 2 ? s.p2PlayerId : null, syncState: 'synced' });
         }
         const desired = new Set(rows.map(r => r.sourceKey));
-        if (existing.some(m => !desired.has(m.sourceKey)))
+        if (existing.some(m => !m.nativeBracketId && !desired.has(m.sourceKey)))
             fail('CONFLICT', 'Pool assignments changed. Existing operational matches must be reconciled before preparing again.');
         for (const row of rows) {
             const previous = existing.find(m => m.sourceKey === row.sourceKey);
@@ -87,7 +105,7 @@ export async function prepare(db: Db, planId: string) {
             }
             if (!row.sourceSetId)
                 continue;
-            if (previous.syncState === 'pending' || previous.syncState === 'error' || (previous.revision > 0 && previous.syncState === 'local')) {
+            if (previous.status === 'complete' && (previous.syncState === 'pending' || previous.syncState === 'error' || (previous.revision > 0 && previous.syncState === 'local'))) {
                 const agrees = row.status === 'complete' && row.player1Id === previous.player1Id && row.player2Id === previous.player2Id && row.score1 === previous.score1 && row.score2 === previous.score2 && row.winnerId === previous.winnerId && row.outcome === previous.outcome;
                 await tx.update(eventMatches).set({ sourceSetId: row.sourceSetId, syncState: agrees ? 'synced' : 'error', blockedReason: agrees ? null : 'Local result differs from the imported Challonge result. Copy the correction to Challonge, sync that bracket, then refresh matches.' }).where(eq(eventMatches.id, previous.id));
                 continue;
@@ -95,7 +113,9 @@ export async function prepare(db: Db, planId: string) {
             // Refresh only imported facts; preserve local station/queue decisions. Changed facts
             // invalidate forms and pending player reports by advancing the revision.
             const importedStatus = row.status ?? 'ready';
-            const nextStatus = importedStatus === 'complete' ? 'complete' : !row.player1Id || !row.player2Id ? 'blocked' : previous.status === 'playing' ? 'playing' : previous.status === 'blocked' && previous.blockedReason !== 'Waiting for bracket participants' ? 'blocked' : 'ready';
+            const participantsChanged = previous.player1Id !== (row.player1Id ?? null) || previous.player2Id !== (row.player2Id ?? null);
+            const requiresParticipantReview = importedStatus !== 'complete' && participantsChanged && (previous.status === 'playing' || previous.liveScore1 !== null || previous.liveScore2 !== null || !!previous.player1Id && previous.player1Id !== row.player1Id || !!previous.player2Id && previous.player2Id !== row.player2Id);
+            const nextStatus = importedStatus === 'complete' ? 'complete' : requiresParticipantReview ? 'blocked' : !row.player1Id || !row.player2Id ? 'blocked' : previous.status === 'playing' ? 'playing' : previous.status === 'blocked' && previous.blockedReason !== 'Waiting for bracket participants' ? 'blocked' : 'ready';
             const fields = { sourceSetId: row.sourceSetId, player1Id: row.player1Id ?? null, player2Id: row.player2Id ?? null, score1: row.score1 ?? null, score2: row.score2 ?? null, winnerId: row.winnerId ?? null, outcome: row.outcome ?? null, syncState: 'synced' as const };
             if (Object.entries(fields).some(([key, value]) => previous[key as keyof typeof previous] !== value) || nextStatus !== previous.status) {
                 let reconciliationReason:string|null=null;
@@ -108,7 +128,7 @@ export async function prepare(db: Db, planId: string) {
                     }
                 }
                 const newResult = nextStatus === 'complete' && (previous.status !== 'complete' || resultChanged || previous.player1Id !== fields.player1Id || previous.player2Id !== fields.player2Id);
-                await tx.update(eventMatches).set({ ...fields, resultUpdatedAt: newResult ? new Date() : nextStatus === 'complete' ? previous.resultUpdatedAt : null, status: nextStatus, blockedReason: reconciliationReason??(!fields.player1Id || !fields.player2Id ? 'Waiting for bracket participants' : nextStatus === 'blocked' ? previous.blockedReason : null), revision: previous.revision + 1 }).where(eq(eventMatches.id, previous.id));
+                await tx.update(eventMatches).set({ ...fields, ...(nextStatus==='complete'||requiresParticipantReview?{liveScore1:null,liveScore2:null}:{}), resultUpdatedAt: newResult ? new Date() : nextStatus === 'complete' ? previous.resultUpdatedAt : null, status: nextStatus, blockedReason: requiresParticipantReview ? 'Imported bracket participants changed. Previous live scores were cleared; review the players before releasing this match.' : reconciliationReason??(!fields.player1Id || !fields.player2Id ? 'Waiting for bracket participants' : nextStatus === 'blocked' ? previous.blockedReason : null), revision: previous.revision + 1 }).where(eq(eventMatches.id, previous.id));
             }
         }
         const withdrawn = await tx.select().from(eventWithdrawals).where(eq(eventWithdrawals.eventPlanId, planId));
@@ -155,6 +175,7 @@ async function matchForUpdate(db: Db, id: string) {
     return (await db.select().from(eventMatches).where(eq(eventMatches.id, id)))[0]!;
 }
 async function applyScore(db: Db, match: typeof eventMatches.$inferSelect, input: ScoreInput, winnerId: string, actor: string) {
+    await assertNativeCorrectionAllowed(db, match);
     if (match.revision !== input.expectedRevision)
         fail('CONFLICT', 'This match changed. Refresh before recording a correction.');
     if (match.stage === 'group' && match.status === 'complete' && (match.score1 !== input.score1 || match.score2 !== input.score2 || match.winnerId !== winnerId || match.outcome !== input.outcome)) {
@@ -164,10 +185,11 @@ async function applyScore(db: Db, match: typeof eventMatches.$inferSelect, input
         if (match.poolIndex !== null)
             await db.delete(eventPlanPoolPlacements).where(and(eq(eventPlanPoolPlacements.eventPlanId, match.eventPlanId), eq(eventPlanPoolPlacements.division, match.division), eq(eventPlanPoolPlacements.poolIndex, match.poolIndex)));
     }
-    const [updated] = await db.update(eventMatches).set({ score1: input.score1, score2: input.score2, winnerId, outcome: input.outcome, status: 'complete', resultUpdatedAt: new Date(), blockedReason: null, revision: match.revision + 1, syncState: match.sourceSetId ? 'pending' : 'local' }).where(and(eq(eventMatches.id, match.id), eq(eventMatches.revision, input.expectedRevision))).returning();
+    const [updated] = await db.update(eventMatches).set({ score1: input.score1, score2: input.score2, liveScore1:null,liveScore2:null, winnerId, outcome: input.outcome, status: 'complete', resultUpdatedAt: new Date(), blockedReason: null, revision: match.revision + 1, syncState: match.sourceSetId ? 'pending' : 'local' }).where(and(eq(eventMatches.id, match.id), eq(eventMatches.revision, input.expectedRevision))).returning();
     if (!updated)
         return fail('CONFLICT', 'Another organiser updated this match.');
     await db.insert(eventMatchAudit).values({ eventPlanId: match.eventPlanId, matchId: match.id, userId: actor, action: match.status === 'complete' ? 'score_corrected' : 'score_recorded', before: match, after: updated });
+    await advanceNativeBrackets(db, match.eventPlanId);
     return updated;
 }
 export async function reportScore(db: Db, user: SessionUser, input: ScoreInput) {
@@ -182,11 +204,15 @@ export async function reportScore(db: Db, user: SessionUser, input: ScoreInput) 
         const operator = await isOperator(tx, match.eventPlanId, user);
         if (!operator) {
             const [settings] = await tx.select().from(eventOperationSettings).where(eq(eventOperationSettings.eventPlanId, match.eventPlanId));
-            const [claim] = await tx.select().from(playerClaims).where(and(eq(playerClaims.userId, user.id), eq(playerClaims.status, 'approved')));
-            if (!settings?.playerReports || !claim || ![match.player1Id, match.player2Id].includes(claim.playerId))
-                fail('FORBIDDEN', 'Player reporting is unavailable for this match.');
-            if (match.status === 'complete')
-                fail('CONFLICT', 'Ask an organiser to correct a completed match.');
+            if (!settings?.published || !settings.playerReports)
+                fail('FORBIDDEN', 'Score reporting is unavailable for this event.');
+            if (!['ready', 'playing'].includes(match.status) || input.outcome !== 'played')
+                fail('CONFLICT', 'Ask an organiser to record byes, forfeits, blocked matches or corrections.');
+            const reports = await tx.select().from(eventScoreReports).where(and(eq(eventScoreReports.eventPlanId, match.eventPlanId), eq(eventScoreReports.userId, user.id)));
+            if (reports.some(report => report.matchId === match.id && report.status === 'pending'))
+                fail('CONFLICT', 'Your score is already waiting for organiser approval.');
+            if (reports.filter(report => report.status === 'pending').length >= 30 || reports.filter(report => report.createdAt.getTime() > Date.now() - 60_000).length >= 6)
+                throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many score reports. Please wait or ask an organiser.' });
         }
         if (match.revision !== input.expectedRevision)
             fail('CONFLICT', 'This match changed. Refresh and try again.');
@@ -232,7 +258,7 @@ export async function updateMatch(db: Db, user: SessionUser, input: {
         await requireOperator(tx, match.eventPlanId, user);
         if (match.revision !== input.expectedRevision || match.status === 'complete')
             fail('CONFLICT', 'Match changed or completed; refresh before editing.');
-        const stationId = input.stationId === undefined ? match.stationId : input.stationId;
+        let stationId = input.stationId === undefined ? match.stationId : input.stationId;
         if (stationId && !(await tx.select().from(eventStations).where(and(eq(eventStations.id, stationId), eq(eventStations.eventPlanId, match.eventPlanId))))[0])
             fail('BAD_REQUEST', 'Station belongs to another event.');
         if (input.status === 'playing') {
@@ -241,9 +267,12 @@ export async function updateMatch(db: Db, user: SessionUser, input: {
                 fail('CONFLICT', 'A withdrawn player cannot start another match.');
             if (!match.player1Id || !match.player2Id)
                 fail('BAD_REQUEST', 'Both players must be known before starting.');
-            const playing = await tx.select().from(eventMatches).where(and(eq(eventMatches.eventPlanId, match.eventPlanId), eq(eventMatches.status, 'playing')));
-            if (playing.some(m => m.id !== match.id && ((stationId && m.stationId === stationId) || [m.player1Id, m.player2Id].some(id => id && [match.player1Id, match.player2Id].includes(id)))))
-                fail('CONFLICT', 'Station or player is already in a playing match.');
+            const allMatches=await tx.select().from(eventMatches).where(eq(eventMatches.eventPlanId,match.eventPlanId));
+            const stations=await tx.select().from(eventStations).where(eq(eventStations.eventPlanId,match.eventPlanId));
+            const schedules=await tx.select().from(eventPoolSchedules).where(eq(eventPoolSchedules.eventPlanId,match.eventPlanId));
+            const availability=matchAvailability({...match,stationId},allMatches,stations,schedules,true);
+            if(!availability.canStart)fail('CONFLICT',availability.reasons.map(reason=>reason.message).join(' '));
+            if (!stationId && stations.length) stationId = availability.eligibleStationIds[0] ?? null;
         }
         const [updated] = await tx.update(eventMatches).set({ status: input.status, stationId, blockedReason: input.status === 'blocked' ? input.blockedReason ?? 'Organiser hold' : null, revision: match.revision + 1 }).where(eq(eventMatches.id, match.id)).returning();
         await tx.insert(eventMatchAudit).values({ eventPlanId: match.eventPlanId, matchId: match.id, userId: user.id, action: 'match_updated', before: match, after: updated });

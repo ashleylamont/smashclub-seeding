@@ -19,8 +19,15 @@ import { DIVISION_LABEL } from './labels';
 export function HandoffStep({ view, onChanged }: { view: EventPlanView; onChanged: () => void }) {
   const exportsQuery = useQuery({
     queryKey: ['admin', 'eventPlanner', 'exports', view.plan.id],
+    enabled: view.plan.bracketMode !== 'native',
     queryFn: () => trpc.admin.eventPlanner.exports.query({ planId: view.plan.id }),
   });
+
+  if (view.plan.bracketMode === 'native') return <div className="card section">
+    <h3>Run this event in Nemesis</h3>
+    <p>Record pool results in the event desk, confirm pool finishing orders, then preview championship and consolation draws. Winners advance automatically and byes are shown explicitly.</p>
+    <a className="btn btn-primary" href={`/admin/event-operations?plan=${view.plan.id}`}>Open event desk</a>
+  </div>;
 
   if (exportsQuery.isPending) return <p className="loading-text">Building exports…</p>;
   if (exportsQuery.isError) return <p className="error-text">{exportsQuery.error.message}</p>;

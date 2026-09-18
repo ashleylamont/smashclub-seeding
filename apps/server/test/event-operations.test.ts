@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { eventMatches, eventMatchAudit, eventOperationSettings, eventOperators, eventPlanBrackets, eventPlanEntries, eventPlanPoolPlacements, eventPlans, eventScoreReports, eventStations, eventPoolAssignments, eventWithdrawals, playerClaims, players, sets, tournaments, user, type Db } from '@smashclub/db';
 import { prepare, reportScore, reviewReport, snapshot, updateMatch, requireOperator } from '../src/event-operations/service';
+import { updateLiveScore } from '../src/event-operations/controls';
 import { applyAttendance, previewAttendance, resetOperations } from '../src/event-operations/attendance';
 import { getPlan, unfreezeRoster, reorderDivision, generatePools, savePoolPlacements } from '../src/event-planner/plans';
 import { createTestDb } from './helpers/testDb';
@@ -59,9 +60,8 @@ describe('event operations', () => {
     });
     it('keeps player reports pending and prevents stale approval overwriting TO corrections', async () => {
         const [m] = await ready();
-        await db.update(eventOperationSettings).set({ playerReports: true }).where(eq(eventOperationSettings.eventPlanId, planId));
-        await expect(reportScore(db, member, score(m!))).rejects.toMatchObject({ code: 'FORBIDDEN' });
-        await db.insert(playerClaims).values({ userId: member.id, playerId: m!.player1Id!, status: 'approved' });
+        await db.update(eventOperationSettings).set({ playerReports: true, published: true }).where(eq(eventOperationSettings.eventPlanId, planId));
+        // Signed-in attendees can report any open match without linking a profile.
         const r = await reportScore(db, member, score(m!));
         expect(r.status).toBe('pending');
         expect(await db.select().from(eventMatchAudit)).toHaveLength(0);
@@ -72,7 +72,7 @@ describe('event operations', () => {
     });
     it('approves a valid report and makes closed events read-only', async () => {
         const [m] = await ready();
-        await db.update(eventOperationSettings).set({ playerReports: true }).where(eq(eventOperationSettings.eventPlanId, planId));
+        await db.update(eventOperationSettings).set({ playerReports: true, published: true }).where(eq(eventOperationSettings.eventPlanId, planId));
         await db.insert(playerClaims).values({ userId: member.id, playerId: m!.player1Id!, status: 'approved' });
         const r = await reportScore(db, member, score(m!));
         await reviewReport(db, admin, r.id, true);
@@ -244,4 +244,30 @@ it('invalidates confirmed placements when imported pool results change, includin
  expect((await getPlan(db,planId))!.divisions[0]!.championship).toHaveLength(0);
  expect((await db.select().from(eventPlanBrackets)).find(b=>b.stage==='consolation')).toMatchObject({externalState:'error'});
  expect((await db.select().from(eventMatches)).find(m=>m.sourceSetId===remote!.id)).toMatchObject({score1:0,score2:2,syncState:'synced'});
+});
+
+
+it('holds changed imported participants and clears live games without erasing the audit', async () => {
+    const matches = await ready();
+    const [t] = await db.insert(tournaments).values({ challongeSlug: 'changing-final', name: 'Finals' }).returning();
+    await db.insert(eventPlanBrackets).values({ eventPlanId: planId, division: 'upper', stage: 'main', tournamentId: t!.id });
+    const [remote] = await db.insert(sets).values({ tournamentId: t!.id, challongeMatchId: 300, state: 'open', resultStage: 'final', p1PlayerId: ids[0], p2PlayerId: ids[1] }).returning();
+    await prepare(db, planId);
+    const [final] = await db.select().from(eventMatches).where(eq(eventMatches.sourceSetId, remote!.id));
+    const playing = await updateMatch(db, admin, { matchId: final!.id, expectedRevision: final!.revision, status: 'playing' });
+    await updateLiveScore(db, admin, { matchId: final!.id, expectedRevision: playing.revision, score1: 1, score2: 0 });
+    const other = matches.find(m => m.player1Id === ids[2] && m.player2Id === ids[3])!;
+    await updateMatch(db, admin, { matchId: other.id, expectedRevision: other.revision, status: 'playing' });
+    await db.update(sets).set({ p1PlayerId: ids[2] }).where(eq(sets.id, remote!.id));
+    await prepare(db, planId);
+    const [held] = await db.select().from(eventMatches).where(eq(eventMatches.id, final!.id));
+    expect(held).toMatchObject({ player1Id: ids[2], status: 'blocked', liveScore1: null, liveScore2: null, winnerId: null, score1: null });
+    expect(held!.blockedReason).toContain('participants changed');
+    const audit = await db.select().from(eventMatchAudit).where(eq(eventMatchAudit.matchId, final!.id));
+    expect(audit.find(a => a.action === 'live_score_updated')!.after).toMatchObject({ player1Id: ids[0], liveScore1: 1 });
+    await prepare(db, planId);
+    expect((await db.select().from(eventMatches).where(eq(eventMatches.id, final!.id)))[0]).toEqual(held);
+    await expect(updateMatch(db, admin, { matchId: held!.id, expectedRevision: held!.revision, status: 'playing' })).rejects.toMatchObject({ code: 'CONFLICT' });
+    const readyAgain = await updateMatch(db, admin, { matchId: held!.id, expectedRevision: held!.revision, status: 'ready' });
+    await expect(updateMatch(db, admin, { matchId: readyAgain.id, expectedRevision: readyAgain.revision, status: 'playing' })).rejects.toThrow('already playing');
 });

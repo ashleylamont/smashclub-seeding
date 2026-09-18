@@ -105,6 +105,7 @@ async function createFullPlan(overrides: { upperTargetSize?: number | null } = {
   return createPlan(
     db,
     {
+      bracketMode: 'challonge',
       name: 'June Club Night',
       eventDate: new Date(EVENT_DATE),
       slugPrefix: 'june25',

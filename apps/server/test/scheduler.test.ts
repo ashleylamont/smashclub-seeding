@@ -140,3 +140,18 @@ describe('SyncScheduler sweep cadence', () => {
     expect(stored!.syncState).toBe('synced');
   });
 });
+
+it('never polls Nemesis-native history through either scheduler', async () => {
+  await rowFor('nemesis-final', { provider: 'native', syncState: 'synced', challongeState: 'complete', eventDate: new Date(), lastSyncedAt: null });
+  await rowFor('nemesis-live-window', { provider: 'native', liveUntil: new Date(Date.now() + DAY) });
+  const client = fixtureClient([]);
+  const publicFetch = vi.spyOn(client, 'fetchPublicTournamentBundle');
+  const apiFetch = vi.spyOn(client, 'fetchTournamentBundle');
+  const { scheduler: instance, request } = scheduler(client);
+  await sweep(instance);
+  await (instance as unknown as { pollLive(): Promise<void> }).pollLive();
+  expect(publicFetch).not.toHaveBeenCalled();
+  expect(apiFetch).not.toHaveBeenCalled();
+  expect(request).not.toHaveBeenCalled();
+  expect((await db.select().from(tournaments)).find(row => row.challongeSlug === 'nemesis-final')).toMatchObject({ syncState: 'synced', lastSyncedAt: null });
+});
