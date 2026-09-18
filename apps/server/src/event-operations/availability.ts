@@ -37,8 +37,8 @@ export function matchAvailability(
     const station = stations.find(candidate => candidate.id === match.stationId);
     if (!station || !permitted.includes(match.stationId)) add('station_not_allocated', 'This station is not allocated to the pool.');
     else if (otherPlaying.some(other => other.stationId === match.stationId)) add('station_busy', `${station.name} is occupied by another match.`);
-  } else if (schedule?.stationIds.length && !eligibleStationIds.length) {
-    add('station_busy', 'All stations allocated to this pool are occupied.');
+  } else if (stations.length && !eligibleStationIds.length) {
+    add('station_busy', schedule?.stationIds.length ? 'All stations allocated to this pool are occupied.' : 'All stations are occupied.');
   }
   return { canStart: reasons.length === 0, reasons, eligibleStationIds };
 }

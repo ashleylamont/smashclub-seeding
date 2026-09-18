@@ -100,6 +100,21 @@ describe('pool waves and station allocation', () => {
     expect(await db.select().from(eventPoolSchedules)).toHaveLength(1);
   });
 
+  it('uses free stations without a pool allocation and waits when every station is occupied', async () => {
+    const desk = await station('Stage');
+    const matches = await allMatches();
+    const upper = matches.find(row => row.division === 'upper')!;
+    const lower = matches.find(row => row.division === 'lower')!;
+    const playing = await updateMatch(db, admin, { matchId: upper.id, expectedRevision: 0, status: 'playing' });
+    expect(playing.stationId).toBe(desk.id);
+    const waiting = (await snapshot(db, planId, true)).matches.find(row => row.id === lower.id)!;
+    expect(waiting.availability).toMatchObject({ canStart: false, eligibleStationIds: [] });
+    expect(waiting.availability.reasons).toContainEqual({ code: 'station_busy', message: 'All stations are occupied.' });
+    await expect(updateMatch(db, admin, { matchId: lower.id, expectedRevision: 0, status: 'playing' })).rejects.toThrow('occupied');
+    const second = await station('Side');
+    expect((await updateMatch(db, admin, { matchId: lower.id, expectedRevision: 0, status: 'playing' })).stationId).toBe(second.id);
+  });
+
   it('preserves unrestricted defaults for existing events', async () => {
     const [match] = await allMatches();
     const view = await snapshot(db, planId, true);

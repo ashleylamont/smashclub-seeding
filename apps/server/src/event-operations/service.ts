@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray, gt, isNull, or } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
-import { eventAnnouncements, eventMatchAudit, eventMatches, eventOperationSettings, eventOperators, eventPlanBrackets, eventPlanEntries, eventPlanPoolPlacements, eventPlans, eventPrizes, eventScoreReports, eventStations, eventWithdrawals, eventPoolSchedules, playerCharacters, playerClaims, players, sets, type Db } from '@smashclub/db';
+import { eventAnnouncements, eventMatchAudit, eventMatches, eventOperationSettings, eventOperators, eventPlanBrackets, eventPlanEntries, eventPlanPoolPlacements, eventPlans, eventPrizes, eventScoreReports, eventStations, eventWithdrawals, eventPoolSchedules, playerCharacters, players, sets, type Db } from '@smashclub/db';
 import { publicPlayerName, scoresIndicateBye, scoresIndicateForfeit } from '@smashclub/shared';
 import type { SessionUser } from '../auth';
 import { getPlan } from '../event-planner/plans';
@@ -261,8 +261,7 @@ export async function updateMatch(db: Db, user: SessionUser, input: {
             const schedules=await tx.select().from(eventPoolSchedules).where(eq(eventPoolSchedules.eventPlanId,match.eventPlanId));
             const availability=matchAvailability({...match,stationId},allMatches,stations,schedules,true);
             if(!availability.canStart)fail('CONFLICT',availability.reasons.map(reason=>reason.message).join(' '));
-            const schedule=match.stage==='group'?schedules.find(pool=>pool.division===match.division&&pool.poolIndex===match.poolIndex):undefined;
-            if(!stationId&&schedule?.stationIds.length)stationId=availability.eligibleStationIds[0]??null;
+            if (!stationId && stations.length) stationId = availability.eligibleStationIds[0] ?? null;
         }
         const [updated] = await tx.update(eventMatches).set({ status: input.status, stationId, blockedReason: input.status === 'blocked' ? input.blockedReason ?? 'Organiser hold' : null, revision: match.revision + 1 }).where(eq(eventMatches.id, match.id)).returning();
         await tx.insert(eventMatchAudit).values({ eventPlanId: match.eventPlanId, matchId: match.id, userId: user.id, action: 'match_updated', before: match, after: updated });
