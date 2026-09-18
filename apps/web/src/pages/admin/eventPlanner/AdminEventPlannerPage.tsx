@@ -8,6 +8,7 @@ import { RosterStep } from './RosterStep';
 import { DivisionsStep } from './DivisionsStep';
 import { PoolsStep } from './PoolsStep';
 import { HandoffStep } from './HandoffStep';
+import { HistoricalAdoption } from './HistoricalAdoption';
 import { STATUS_LABEL } from './labels';
 import './EventPlanner.css';
 
@@ -310,7 +311,8 @@ function PlanWizard({
   });
 
   const view = planQuery.data ?? null;
-  const current = isStepKey(step) ? step : furthestStep(view);
+  const requestedStep = isStepKey(step) ? step : furthestStep(view);
+  const current = view?.plan.historicalAdoption && requestedStep === 'handoff' ? 'roster' : requestedStep;
 
   if (planQuery.isPending) return <p className="loading-text">Loading plan…</p>;
   if (planQuery.isError) return <p className="error-text">{planQuery.error.message}</p>;
@@ -326,6 +328,26 @@ function PlanWizard({
   }
 
   const available = availableSteps(view);
+  const adopted = view.plan.historicalAdoption;
+  const resultsSlug = view.brackets.find((bracket) => bracket.division === 'upper' && bracket.stage === 'main')?.challongeSlug;
+  const resultsUrl = resultsSlug ? `/events/${encodeURIComponent(resultsSlug)}` : null;
+  const steps = adopted ? STEPS.filter((entry) => entry.key !== 'handoff') : STEPS;
+  const originalPlan = (<>
+    <PlanSummary view={view} />
+    <nav className="planner-steps" aria-label={adopted ? 'Original plan steps' : 'Planner steps'}>
+      {steps.map((entry) => (
+        <button key={entry.key} type="button" className={`admin-tab${current === entry.key ? ' active' : ''}`} disabled={!available.has(entry.key)} onClick={() => onStep(entry.key)}>
+          {entry.label}
+        </button>
+      ))}
+    </nav>
+  </>);
+  const stepContent = (<>
+    {current === 'roster' && <RosterStep view={view} onChanged={invalidate} />}
+    {current === 'divisions' && <DivisionsStep view={view} onChanged={invalidate} />}
+    {current === 'pools' && <PoolsStep view={view} onChanged={invalidate} />}
+    {current === 'handoff' && <HandoffStep view={view} onChanged={invalidate} />}
+  </>);
 
   return (
     <div>
@@ -335,7 +357,7 @@ function PlanWizard({
             {view.plan.name} <span className="chip">{STATUS_LABEL[view.plan.status] ?? view.plan.status}</span>
           </h2>
           <span className="row-actions">
-            <a className="btn btn-small" href={`/admin/event-operations?plan=${planId}`}>Run event →</a>
+            {adopted ? resultsUrl && <a className="btn btn-small" href={resultsUrl}>Imported results →</a> : <a className="btn btn-small" href={`/admin/event-operations?plan=${planId}`}>Run event →</a>}
             {(view.plan.status === 'pools_ready' || view.plan.status === 'underway') && (
               <button
                 type="button"
@@ -367,30 +389,20 @@ function PlanWizard({
           </span>
         </div>
         <p className="muted">
-          {formatDateTime(view.plan.eventDate)} · {view.entries.length} entrants
+          {formatDateTime(view.plan.eventDate)} · {view.entries.length} {adopted ? 'planned entrants' : 'entrants'}
           {view.plan.rankingSnapshotAt && ` · ranking snapshot ${formatDateTime(view.plan.rankingSnapshotAt)}`}
         </p>
         {close.isError && <p className="error-text">{close.error.message}</p>}
-        <PlanSummary view={view} />
-        <nav className="planner-steps" aria-label="Planner steps">
-          {STEPS.map((entry) => (
-            <button
-              key={entry.key}
-              type="button"
-              className={`admin-tab${current === entry.key ? ' active' : ''}`}
-              disabled={!available.has(entry.key)}
-              onClick={() => onStep(entry.key)}
-            >
-              {entry.label}
-            </button>
-          ))}
-        </nav>
+        {!adopted && originalPlan}
       </div>
 
-      {current === 'roster' && <RosterStep view={view} onChanged={invalidate} />}
-      {current === 'divisions' && <DivisionsStep view={view} onChanged={invalidate} />}
-      {current === 'pools' && <PoolsStep view={view} onChanged={invalidate} />}
-      {current === 'handoff' && <HandoffStep view={view} onChanged={invalidate} />}
+      {view.plan.status !== 'cancelled' && <HistoricalAdoption view={view} onChanged={invalidate} />}
+      {adopted ? <details className="historical-original-plan card section">
+        <summary>Original plan — may differ from the event played</summary>
+        <p className="muted">These are the saved roster, seeds and proposed pools. Use the imported results above for the matches and placements that actually happened.</p>
+        {originalPlan}
+        {stepContent}
+      </details> : stepContent}
     </div>
   );
 }
