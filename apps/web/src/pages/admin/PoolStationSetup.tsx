@@ -11,7 +11,8 @@ export function PoolStationSetup({ data, disabled, act }: { data: Overview; disa
   const [autoAcceptScores, setAutoAcceptScores] = useState(true);
   const [preview, setPreview] = useState<ReturnType<typeof distributePoolStations> | null>(null);
   const pools = poolStandings(data.matches);
-  const proposed = distributePoolStations(pools, selected, perPool, data.poolSchedules, { selfRun, autoAcceptScores });
+  const stationOptions = [...data.stations].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }) || a.id.localeCompare(b.id));
+  const proposed = distributePoolStations(pools, stationOptions.filter(station => selected.includes(station.id)).map(station => station.id), perPool, data.poolSchedules, { selfRun, autoAcceptScores });
   const nextWave = nextPoolWave(pools, data.poolSchedules, data.stations.filter(station => station.status === 'occupied').map(station => station.id));
   const playing = data.matches.some(match => match.status === 'playing');
   const stationNames = (ids: string[]) => ids.map(id => data.stations.find(station => station.id === id)?.name ?? 'Station').join(' + ');
@@ -19,7 +20,7 @@ export function PoolStationSetup({ data, disabled, act }: { data: Overview; disa
     <details><summary>Divide stations between pools</summary>
       <p>Give each pool its own stations and a round-robin queue. Extra pools wait for a later wave on the same stations. Review the assignments before applying.</p>
       {playing && <p className="muted">Finish or return playing matches to the queue before redistributing all stations. Individual pool settings remain available below.</p>}
-      <fieldset disabled={disabled || playing}><legend>Stations to use</legend>{data.stations.map(station => <label className="ops-check" key={station.id}><input type="checkbox" checked={selected.includes(station.id)} onChange={event => { setSelected(event.target.checked ? [...selected, station.id] : selected.filter(id => id !== station.id)); setPreview(null); }} />{station.name}</label>)}</fieldset>
+      <fieldset disabled={disabled || playing}><legend>Stations to use</legend>{stationOptions.map(station => <label className="ops-check" key={station.id}><input type="checkbox" checked={selected.includes(station.id)} onChange={event => { setSelected(event.target.checked ? [...selected, station.id] : selected.filter(id => id !== station.id)); setPreview(null); }} />{station.name}</label>)}</fieldset>
       <label>Stations per pool<select className="select" value={perPool} disabled={disabled || playing} onChange={event => { setPerPool(Number(event.target.value)); setPreview(null); }}>{[1, 2, 3, 4].map(count => <option key={count} value={count}>{count}</option>)}</select></label>
       <p className="muted">A four- or five-player pool can play two matches at once. An odd player rests each round.</p>
       <label className="ops-check"><input type="checkbox" checked={selfRun} disabled={disabled || playing || data.plan.bracketMode !== 'native'} onChange={event => { setSelfRun(event.target.checked); setPreview(null); }} />Let players start their pool’s next matches</label>

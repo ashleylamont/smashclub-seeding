@@ -17,7 +17,7 @@ test('TO divides stations once, players see pool queues, and the next wave reuse
  rows: roster.entries.map((entry, index) => ({ lineNumber: index + 1, rawInput: entry.playerName, cleanedName: entry.playerName, playerId: entry.playerId, companyId: null, resolutionMethod: 'manual', divisionPreference: 'auto' })) });
  for (const procedure of ['admin.eventPlanner.freezeRoster', 'admin.eventPlanner.generatePools', 'eventOps.prepare']) await mutate(page.request, procedure, { planId });
  await mutate(page.request, 'eventOps.settings', { planId, published: true, playerReports: true });
- for (const name of ['Station 1', 'Station 2', 'Station 3', 'Station 4']) await mutate(page.request, 'eventOps.saveStation', { planId, name });
+ for (const name of ['Station 10', 'Station 1', 'Station 11', 'Station 2']) await mutate(page.request, 'eventOps.saveStation', { planId, name });
  await page.goto(`/admin/event-operations?plan=${planId}`);
  await page.getByText('Divide stations between pools', { exact: true }).click();
  const setup = page.locator('.ops-pool-setup');
