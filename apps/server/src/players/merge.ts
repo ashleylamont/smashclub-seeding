@@ -1,6 +1,10 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { TRPCError } from '@trpc/server';
+import { and, eq, inArray, or } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
 import {
+  eventMatches,
+  eventPlanEntries,
+  eventPlans,
   identityDecisions,
   playerAliases,
   playerClaims,
@@ -22,6 +26,28 @@ export async function mergePlayers(db: Db, fromPlayerId: string, intoPlayerId: s
   if (!from || !into) throw new Error('Both players must exist.');
   if (from.status === 'merged') throw new Error(`${from.canonicalName} is already merged.`);
   if (into.status === 'merged') throw new Error(`Cannot merge into a tombstoned player.`);
+
+  // Neither side may change identity while an event still uses its frozen IDs.
+  // Include imported match participants, which need not appear in the planned roster.
+  const involvedIds = [fromPlayerId, intoPlayerId];
+  const activeStatuses = ['roster_frozen', 'pools_ready', 'underway'] as const;
+  const [rosterEvent] = await db.select({ name: eventPlans.name }).from(eventPlans)
+    .innerJoin(eventPlanEntries, eq(eventPlanEntries.eventPlanId, eventPlans.id))
+    .where(and(inArray(eventPlans.status, [...activeStatuses]), inArray(eventPlanEntries.playerId, involvedIds)))
+    .limit(1);
+  const [matchEvent] = rosterEvent ? [] : await db.select({ name: eventPlans.name }).from(eventPlans)
+    .innerJoin(eventMatches, eq(eventMatches.eventPlanId, eventPlans.id))
+    .where(and(inArray(eventPlans.status, [...activeStatuses]), or(
+      inArray(eventMatches.player1Id, involvedIds), inArray(eventMatches.player2Id, involvedIds),
+    )))
+    .limit(1);
+  const activeEvent = rosterEvent ?? matchEvent;
+  if (activeEvent) {
+    throw new TRPCError({
+      code: 'CONFLICT',
+      message: `Cannot merge players while either identity is used by active event "${activeEvent.name}". Finish or cancel the event, or reset and unfreeze its roster before merging.`,
+    });
+  }
 
   // Move aliases; drop those that would collide with an existing alias of B.
   const aliases = await db.select().from(playerAliases).where(eq(playerAliases.playerId, fromPlayerId));
