@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { PoolStationSetup } from './PoolStationSetup';
 import { trpc } from '../../lib/trpc';
 import { poolStandings } from '../../lib/eventQueue';
+import { poolLabel } from '../../lib/poolStationPlan';
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 type Action = (work: () => Promise<unknown>, message?: string) => Promise<void>;
 
@@ -17,7 +18,7 @@ export function StationPoolControls({ data, disabled, act, onPool }: { data: Ove
         const next = data.matches.find(match => match.id === queue?.nextMatchId);
         const upcoming = queue?.upcoming.slice(0, 2).flatMap(item => { const match = data.matches.find(match => match.id === item.matchId); return match ? [{ ...item, match }] : []; }) ?? [];
         return <article className={`ops-station-tile ${match ? 'is-playing' : 'is-free'}`} key={station.id}>
-          <strong>{station.name}</strong><span className="chip">{match ? 'Playing now' : 'Free'}</span>
+          <strong>{station.name}</strong>{queue?.poolKey && <p className="ops-station-owner">{poolLabel({ division: queue.poolKey.split(':')[0]!, poolIndex: Number(queue.poolKey.split(':')[1]) })}</p>}<span className="chip">{match ? 'Playing now' : 'Free'}</span>
           {match ? <><p>{match.player1Name} <b>{match.score1 ?? 0}–{match.score2 ?? 0}</b> {match.player2Name}</p><small>{match.label}</small></> : <p>Available for the next match</p>}
           {next && <div className="ops-station-next"><small>PLAY NEXT</small><p><strong>{next.player1Name} vs {next.player2Name}</strong></p><small>{next.label}</small><button className="btn btn-small" disabled={disabled} onClick={() => void act(() => trpc.eventOps.updateMatch.mutate({ matchId: next.id, expectedRevision: next.revision, status: 'playing', stationId: station.id }), 'Next pool match started')}>Start next match</button></div>}
           {queue?.waitingReason && !next && <p className="muted">{queue.waitingReason}</p>}
@@ -61,7 +62,7 @@ function PoolSchedule({ planId, native, pool, schedule, stations, playing, disab
     <p>{pool.complete} / {pool.total} matches complete{playing > 0 && ` · ${playing} playing`}</p>
     <label className="ops-check"><input type="checkbox" checked={active} disabled={disabled || done} onChange={event => setActive(event.target.checked)} />Allow this pool to play now</label>
     <fieldset disabled={disabled || done}><legend>Stations for {label}</legend>{stations.map(station => <label className="ops-check" key={station.id}><input type="checkbox" checked={selected.includes(station.id)} onChange={event => setSelected(event.target.checked ? [...selected, station.id] : selected.filter(id => id !== station.id))} />{station.name}</label>)}</fieldset>
-    <label className="ops-check"><input type="checkbox" checked={selfRun} disabled={disabled || done || !native} onChange={event => setSelfRun(event.target.checked)} />Players can start queued matches</label>
+    <label className="ops-check"><input type="checkbox" checked={selfRun} disabled={disabled || done || !native} onChange={event => { setSelfRun(event.target.checked); if (event.target.checked) setAutoAcceptScores(true); }} />Players can start queued matches</label>
     <label className="ops-check"><input type="checkbox" checked={selfRun && autoAcceptScores} disabled={disabled || done || !selfRun} onChange={event => setAutoAcceptScores(event.target.checked)} />Accept scores immediately, without TO approval</label>
     {selfRun && !selected.length && <p className="error-text">Assign stations before allowing players to run this pool.</p>}
     <p><a href={`/live/${planId}?pool=${pool.division}:${pool.poolIndex}`} target="_blank" rel="noreferrer">Open this pool’s player board ↗</a></p>

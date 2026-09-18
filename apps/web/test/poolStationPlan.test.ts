@@ -18,7 +18,7 @@ describe('pool station setup', () => {
     expect(distributePoolStations(pools, [], 2, [], policy)).toEqual([]);
   });
   it('opens the next pool only on a completed free bank without interrupting another pool', () => {
-    const saved = distributePoolStations(pools, ['s1', 's2', 's3', 's4'], 2, [], policy).map(({ expectedRevision: _revision, wave: _wave, ...pool }) => ({ ...pool, revision: 1 }));
+    const saved = distributePoolStations(pools, ['s1', 's2', 's3', 's4'], 2, [], policy).map(pool => ({ division: pool.division, poolIndex: pool.poolIndex, active: pool.active, stationIds: pool.stationIds, selfRun: pool.selfRun, autoAcceptScores: pool.autoAcceptScores, revision: 1 }));
     const progress = pools.map(pool => ({ ...pool, complete: pool.poolIndex === 0 ? 6 : 0 }));
     const wave = nextPoolWave(progress, saved, ['s3']);
     expect(wave.map(pool => [pool.poolIndex, pool.active])).toEqual([[0, false], [2, true]]);

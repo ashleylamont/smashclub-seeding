@@ -8,7 +8,7 @@ export function PoolStationSetup({ data, disabled, act }: { data: Overview; disa
   const [perPool, setPerPool] = useState(2);
   const [selected, setSelected] = useState(data.stations.map(station => station.id));
   const [selfRun, setSelfRun] = useState(data.plan.bracketMode === 'native');
-  const [autoAcceptScores, setAutoAcceptScores] = useState(false);
+  const [autoAcceptScores, setAutoAcceptScores] = useState(true);
   const [preview, setPreview] = useState<ReturnType<typeof distributePoolStations> | null>(null);
   const pools = poolStandings(data.matches);
   const proposed = distributePoolStations(pools, selected, perPool, data.poolSchedules, { selfRun, autoAcceptScores });

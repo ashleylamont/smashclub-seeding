@@ -38,10 +38,12 @@ export function matchAvailability(
   if (busy) add('player_busy', `A player is already playing in ${busy.label}.`);
   if (match.stationId) {
     const station = stations.find(candidate => candidate.id === match.stationId);
-    if (!station || !permitted.includes(match.stationId)) add('station_not_allocated', 'This station is not allocated to the pool.');
+    if (reservedElsewhere.has(match.stationId)) add('station_not_allocated', 'This station is reserved for another pool.');
+    else if (!station || !permitted.includes(match.stationId)) add('station_not_allocated', 'This station is not allocated to the pool.');
     else if (otherPlaying.some(other => other.stationId === match.stationId)) add('station_busy', `${station.name} is occupied by another match.`);
   } else if (stations.length && !eligibleStationIds.length) {
-    add('station_busy', schedule?.stationIds.length ? 'All stations allocated to this pool are occupied.' : 'All stations are occupied.');
+    if (!permitted.length && reservedElsewhere.size) add('station_reserved', 'The stations are reserved for other pools. Wait for a free station group or ask a TO to assign this pool.');
+    else add('station_busy', schedule?.stationIds.length ? 'All stations allocated to this pool are occupied.' : 'All stations are occupied.');
   }
   return { canStart: reasons.length === 0, reasons, eligibleStationIds };
 }
