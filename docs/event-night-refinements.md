@@ -44,3 +44,11 @@ Announcements default to five minutes in the TO form, with one-, ten- and thirty
 Migration `0016_broken_zarda.sql` adds native draw dependencies, native provider/mode markers, live scores, pool schedules and announcement expiry. Existing rows default to Challonge; no result data is rewritten. Migration and all rehearsals were run on disposable local databases, not production.
 
 Implementation was split across local Worktrunk branches for event controls, native brackets and displays. Each branch was reviewed before integration into `codex/event-night-refinements`; independent review also covered withdrawals, feeder corrections, native sync protection and identity merges.
+
+## Verification
+
+- Full suite: 785 passed, 2 existing skipped, across 62 passing test files.
+- Workspace typecheck, production build and lint pass. Vite retains the existing bundle-size warning.
+- Thirteen browser scenarios passed across targeted runs: planner and URL recovery, uneven-pool confirmation, two TOs, player approval, stale/rejected drafts, 390px TO scoring, guest QR/revocation, historical adoption, public display/capture, native draw presentation, unlinked attendee reporting, station/live-score/pool holds, and native finalization into public club results.
+- Native finalization also passed at 390px with no page-level horizontal overflow; desktop, mobile and overlay screenshots were inspected.
+- Independent review fixes include reset after withdrawal, premature feeder byes, paused downstream correction safety, no-contest progression, imported participant changes retaining old live scores, and initial pool-schedule conflicts.
