@@ -42,12 +42,13 @@ export function buildStationQueues(matches: readonly Match[], stations: readonly
     return {poolKey,rounds};
   });
   const reservations = new Map<string,string>();
-  for(const schedule of activePoolReservations(matches,schedules).sort((a,b)=>scheduleKey(a).localeCompare(scheduleKey(b)))) for(const id of schedule.stationIds) reservations.set(id,scheduleKey(schedule));
-  const stationQueues = [...stations].sort((a,b)=>(a.name??'').localeCompare(b.name??'',undefined,{numeric:true})||a.id.localeCompare(b.id)).map(station=>({stationId:station.id,poolKey:reservations.get(station.id)??null,currentMatchId:ordered.find(m=>m.status==='playing'&&m.stationId===station.id)?.id??null,nextMatchId:null as string|null,upcoming:[] as Array<{matchId:string;round:number}>,waitingReason:null as string|null}));
+  const conflicts = new Set<string>();
+  for(const schedule of activePoolReservations(matches,schedules).sort((a,b)=>scheduleKey(a).localeCompare(scheduleKey(b)))) for(const id of schedule.stationIds) { if(reservations.has(id)) conflicts.add(id); reservations.set(id,scheduleKey(schedule)); }
+  const stationQueues = [...stations].sort((a,b)=>(a.name??'').localeCompare(b.name??'',undefined,{numeric:true})||a.id.localeCompare(b.id)).map(station=>({stationId:station.id,poolKey:conflicts.has(station.id)?null:reservations.get(station.id)??null,currentMatchId:ordered.find(m=>m.status==='playing'&&m.stationId===station.id)?.id??null,nextMatchId:null as string|null,upcoming:[] as Array<{matchId:string;round:number}>,waitingReason:null as string|null}));
   const candidates=ordered.filter(m=>eventOpen && m.status==='ready' && m.player1Id&&m.player2Id&&!withdrawnIds.includes(m.player1Id)&&!withdrawnIds.includes(m.player2Id)&&!schedules.some(s=>scheduleKey(s)===matchPoolKey(m)&&!s.active));
   const eligible = (m:Match, stationId:string) => {
     const key=matchPoolKey(m), schedule=schedules.find(s=>scheduleKey(s)===key), owner=reservations.get(stationId);
-    return (!m.stationId||m.stationId===stationId)&&(!owner||owner===key)&&(!schedule?.stationIds.length||schedule.stationIds.includes(stationId));
+    return !conflicts.has(stationId)&&(!m.stationId||m.stationId===stationId)&&(!owner||owner===key)&&(!schedule?.stationIds.length||schedule.stationIds.includes(stationId));
   };
   const used=new Set<string>();
   let previousPlayers=new Set(ordered.filter(m=>m.status==='playing').flatMap(m=>[m.player1Id,m.player2Id].filter((id):id is string=>!!id)));
@@ -66,7 +67,7 @@ export function buildStationQueues(matches: readonly Match[], stations: readonly
     if(wave>0&&!allocated) break;
     previousPlayers=busy;
   }
-  for(const queue of stationQueues) if(!queue.currentMatchId&&!queue.nextMatchId) queue.waitingReason=!eventOpen?'Event closed':queue.poolKey?'Waiting for available pool opponents':'No available match';
+  for(const queue of stationQueues) if(!queue.currentMatchId&&!queue.nextMatchId) queue.waitingReason=!eventOpen?'Event closed':conflicts.has(queue.stationId)?'Conflicting active pool reservations; an organiser must review station allocation':queue.poolKey?'Waiting for available pool opponents':'No available match';
   return {stationQueues,poolRounds};
 }
 

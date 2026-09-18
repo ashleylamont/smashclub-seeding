@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { eventMatches,eventPlans,eventPlanEntries,eventPoolSchedules,eventStations,players,user,type Db } from '@smashclub/db';
 import { buildStationQueues,loadStationQueues } from '../src/event-operations/queue';
+import { applyAttendance,previewAttendance } from '../src/event-operations/attendance';
 import { configurePool,configurePools } from '../src/event-operations/controls';
 import { prepare,updateMatch,reportScore,snapshot } from '../src/event-operations/service';
 import { createTestDb } from './helpers/testDb';
@@ -49,6 +50,13 @@ describe('pure station queue',()=>{
     expect(buildStationQueues(matches,stations,[schedule]).stationQueues[0]!.poolKey).toBe('upper:0');
     matches[0]!.blockedReason='Both players withdrawn: no contest; no winner or score recorded';
     expect(buildStationQueues(matches,stations,[schedule]).stationQueues.every(q=>q.poolKey===null)).toBe(true);
+  });
+  it('never advertises matches on a legacy conflicting bank',()=>{
+    const matches=[...pool(4),...pool(4,'lower')];
+    const projection=buildStationQueues(matches,stations,[schedule,{division:'lower',poolIndex:0,active:true,stationIds:['a']}]);
+    expect(projection.stationQueues[0]).toMatchObject({poolKey:null,nextMatchId:null,upcoming:[]});
+    expect(projection.stationQueues[0]!.waitingReason).toMatch(/Conflicting/);
+    expect(projection.stationQueues[1]!.nextMatchId).toMatch(/^upper/);
   });
   it('honors pins, globally busy players, withdrawals and closed events',()=>{
     const matches=pool(4);matches[0]!.stationId='b';
@@ -111,6 +119,31 @@ describe('station bank integration',()=>{
     expect((await snapshot(db,planId,true)).matches.find(m=>m.id===final!.id)!.availability.canStart).toBe(true);
     expect((await updateMatch(db,admin,{matchId:final!.id,expectedRevision:0,status:'playing',stationId:desk.id})).stationId).toBe(desk.id);
     expect((await db.select().from(eventPoolSchedules)).every(s=>s.active)).toBe(true);
+  });
+  it('holds a reopened completed pool without reclaiming the next wave bank',async()=>{
+    const desk=await station();
+    await configurePool(db,admin,{planId,division:'upper',poolIndex:0,active:true,stationIds:[desk.id],selfRun:true});
+    const upper=(await db.select().from(eventMatches)).filter(m=>m.division==='upper');
+    for(const match of upper)await reportScore(db,admin,{matchId:match.id,expectedRevision:0,requestId:match.id,score1:2,score2:0,outcome:'played'});
+    await configurePool(db,admin,{planId,division:'lower',poolIndex:0,active:true,stationIds:[desk.id]});
+    const [late]=await db.insert(players).values({canonicalName:'Late arrival'}).returning();
+    const input={planId,action:'add' as const,playerId:late!.id,division:'upper' as const,poolIndex:0};
+    const stale=await previewAttendance(db,input);expect(stale.warnings.join(' ')).toMatch(/reopen on hold/);
+    await configurePool(db,admin,{planId,division:'lower',poolIndex:0,active:true,stationIds:[desk.id],selfRun:true,expectedRevision:1});
+    await expect(applyAttendance(db,admin,{...input,revisionToken:stale.revisionToken})).rejects.toThrow(/changed since/);
+    const preview=await previewAttendance(db,input);await applyAttendance(db,admin,{...input,revisionToken:preview.revisionToken});
+    const schedules=await db.select().from(eventPoolSchedules);expect(schedules.find(s=>s.division==='upper')).toMatchObject({active:false,revision:2,selfRun:true});
+    expect((await loadStationQueues(db,planId)).stationQueues[0]!.poolKey).toBe('lower:0');
+    const view=await snapshot(db,planId,true);expect(view.matches.filter(m=>m.division==='upper'&&m.status==='ready').every(m=>m.availability.reasons.some(r=>r.code==='pool_held'))).toBe(true);
+    expect(view.matches.filter(m=>upper.some(before=>before.id===m.id)).every(m=>m.status==='complete')).toBe(true);
+  });
+  it('leaves an ongoing pool allocation active when adding a late entrant',async()=>{
+    const desk=await station();await configurePool(db,admin,{planId,division:'upper',poolIndex:0,active:true,stationIds:[desk.id]});
+    const [late]=await db.insert(players).values({canonicalName:'Ongoing arrival'}).returning();
+    const input={planId,action:'add' as const,playerId:late!.id,division:'upper' as const,poolIndex:0};
+    const preview=await previewAttendance(db,input);expect(preview.holdReopenedPool).toBe(false);
+    await applyAttendance(db,admin,{...input,revisionToken:preview.revisionToken});
+    expect((await db.select().from(eventPoolSchedules))[0]).toMatchObject({active:true,revision:1});
   });
   it('requires native mode and a station for self-running pools and preserves omitted policy',async()=>{
     const desk=await station();const input={planId,division:'upper' as const,poolIndex:0,active:true,stationIds:[desk.id]};
