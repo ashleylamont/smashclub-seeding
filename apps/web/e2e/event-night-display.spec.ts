@@ -72,7 +72,7 @@ test('public bracket rounds show byes, dependencies, mains and scheduling holds'
       if (!data?.matches || !data.entrants) continue;
       const first = data.entrants[0], second = data.entrants[1];
       const base = { ...data.matches[0], division: 'upper', stage: 'main', poolIndex: null, nativeBracketId: 'native-demo', score1: null, score2: null, winnerId: null, stationId: null, player1Characters: ['mario'], player2Characters: [], parent1MatchId: null, parent2MatchId: null };
-      data.nativeBrackets = [{ id: 'native-demo', division: 'upper', stage: 'main', entrantIds: [first.id, second.id], complete: false, winnerId: null, standings: [] }];
+      data.nativeBrackets = [{ id: 'native-demo', division: 'upper', stage: 'main', entrantIds: [first.id, second.id], complete: false, winnerId: null, standings: [] }, { id: 'no-contest', division: 'lower', stage: 'main', entrantIds: [first.id, second.id], complete: true, winnerId: null, standings: [] }, { id: 'empty', division: 'lower', stage: 'consolation', entrantIds: [], complete: true, winnerId: null, standings: [] }];
       data.poolSchedules = [{ division: 'upper', poolIndex: 0, active: false, stationIds: [] }];
       for (const match of data.matches) if (match.division === 'upper' && match.poolIndex === 0 && match.status === 'ready') match.availability = { canStart: false, reasons: [{ code: 'pool_held', message: 'Pool on hold' }], eligibleStationIds: [] };
       data.matches.push(
@@ -89,6 +89,8 @@ test('public bracket rounds show byes, dependencies, mains and scheduling holds'
   await expect(brackets.getByRole('heading', { name: 'Semi-finals', exact: true })).toBeVisible();
   await expect(brackets.getByRole('heading', { name: 'Final', exact: true })).toBeVisible();
   await expect(brackets).toContainText('Winner of Upper semi B');
+  await expect(brackets).toContainText('No champion — remaining entrants withdrew; no contest.');
+  await expect(brackets).toContainText('Empty bracket — no entrants.');
   await expect(brackets).toContainText('Upper semi A · Bye');
   await expect(brackets.getByRole('img', { name: 'Mains Mario', exact: true }).first()).toBeVisible();
   const heldPool = page.locator('.event-pool').filter({ hasText: 'upper · Pool A' });

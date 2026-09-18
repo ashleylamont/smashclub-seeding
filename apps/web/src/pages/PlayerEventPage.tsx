@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { TRPCClientError } from '@trpc/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { authClient } from '../lib/auth';
@@ -10,14 +11,15 @@ type Match = Snapshot['matches'][number];
 export function PlayerEventPage() {
   const { planId } = useParams({ strict: false }) as { planId: string };
   const { data: session, isPending } = authClient.useSession();
-  const event = useQuery({ queryKey: ['eventOpsPublic', planId], queryFn: () => trpc.eventOps.snapshot.query({ planId }), refetchInterval: 2500 });
+  const event = useQuery({ queryKey: ['eventOpsPublic', planId], queryFn: () => trpc.eventOps.snapshot.query({ planId }), refetchInterval: 2500, retry: false });
   const reports = useQuery({ queryKey: ['eventOpsReports', planId], queryFn: () => trpc.eventOps.myReports.query({ planId }), enabled: !!session, refetchInterval: 2500 });
   const claims = useQuery({ queryKey: ['me', 'claims'], queryFn: () => trpc.me.claims.query(), enabled: !!session });
   const [view, setView] = useState('all');
   const [search, setSearch] = useState('');
   if (isPending || event.isPending) return <p>Loading your event…</p>;
   if (!session) return <section className="card"><h1>Report a score</h1><p>Sign in to report any match, or scan the current event QR code to report as a guest. Linking a player profile is optional.</p><a href="/login">Sign in</a></section>;
-  if (!event.data) return <p role="alert">{event.error?.message ?? 'Event unavailable'}</p>;
+  const publicationUnavailable = event.error instanceof TRPCClientError && ['NOT_FOUND', 'FORBIDDEN', 'UNAUTHORIZED'].includes(event.error.data?.code ?? '');
+  if (!event.data || publicationUnavailable) return <p role="alert">This event is unavailable or has not been published.</p>;
   const claim = claims.data?.find(claim => claim.status === 'approved');
   const reported = new Set(reports.data?.map(report => report.matchId));
   const visible = event.data.matches.filter(match => (view === 'mine' ? claim && [match.player1Id, match.player2Id].includes(claim.playerId) : view === 'reports' ? reported.has(match.id) : ['ready', 'playing'].includes(match.status) || reported.has(match.id)) &&
