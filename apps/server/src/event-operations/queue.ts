@@ -1,12 +1,21 @@
 import { eq } from 'drizzle-orm';
 import { eventMatches, eventPoolSchedules, eventStations, eventWithdrawals, eventPlans, type Db } from '@smashclub/db';
 
-type Match = Pick<typeof eventMatches.$inferSelect, 'id'|'stage'|'division'|'poolIndex'|'player1Id'|'player2Id'|'stationId'|'status'>;
+type Match = Pick<typeof eventMatches.$inferSelect, 'id'|'stage'|'division'|'poolIndex'|'player1Id'|'player2Id'|'stationId'|'status'> & Partial<Pick<typeof eventMatches.$inferSelect,'blockedReason'>>;
 type Station = Pick<typeof eventStations.$inferSelect, 'id'> & Partial<Pick<typeof eventStations.$inferSelect, 'name'>>;
 type Schedule = Pick<typeof eventPoolSchedules.$inferSelect, 'division'|'poolIndex'|'active'|'stationIds'>;
 export const matchPoolKey = (m: Pick<Match,'stage'|'division'|'poolIndex'>) => m.stage === 'group' && m.poolIndex !== null ? `${m.division}:${m.poolIndex}` : null;
 const scheduleKey = (s: Schedule) => `${s.division}:${s.poolIndex}`;
 const pairKey = (a: string, b: string) => JSON.stringify([a,b].sort());
+
+/** Finished pools release their banks without mutating the organiser's saved schedule. */
+export function activePoolReservations(matches: readonly Match[], schedules: readonly Schedule[]) {
+  return schedules.filter(schedule => {
+    if (!schedule.active) return false;
+    const pool = matches.filter(match => matchPoolKey(match) === scheduleKey(schedule));
+    return !pool.length || !pool.every(match => match.status === 'complete' || match.blockedReason === 'Both players withdrawn: no contest; no winner or score recorded');
+  });
+}
 
 /** Circle rounds depend on stable player IDs, never query order or match completion. */
 export function buildStationQueues(matches: readonly Match[], stations: readonly Station[], schedules: readonly Schedule[], withdrawnIds: readonly string[] = [], eventOpen = true) {
@@ -33,7 +42,7 @@ export function buildStationQueues(matches: readonly Match[], stations: readonly
     return {poolKey,rounds};
   });
   const reservations = new Map<string,string>();
-  for(const schedule of [...schedules].sort((a,b)=>scheduleKey(a).localeCompare(scheduleKey(b)))) if(schedule.active) for(const id of schedule.stationIds) reservations.set(id,scheduleKey(schedule));
+  for(const schedule of activePoolReservations(matches,schedules).sort((a,b)=>scheduleKey(a).localeCompare(scheduleKey(b)))) for(const id of schedule.stationIds) reservations.set(id,scheduleKey(schedule));
   const stationQueues = [...stations].sort((a,b)=>(a.name??'').localeCompare(b.name??'',undefined,{numeric:true})||a.id.localeCompare(b.id)).map(station=>({stationId:station.id,poolKey:reservations.get(station.id)??null,currentMatchId:ordered.find(m=>m.status==='playing'&&m.stationId===station.id)?.id??null,nextMatchId:null as string|null,upcoming:[] as Array<{matchId:string;round:number}>,waitingReason:null as string|null}));
   const candidates=ordered.filter(m=>eventOpen && m.status==='ready' && m.player1Id&&m.player2Id&&!withdrawnIds.includes(m.player1Id)&&!withdrawnIds.includes(m.player2Id)&&!schedules.some(s=>scheduleKey(s)===matchPoolKey(m)&&!s.active));
   const eligible = (m:Match, stationId:string) => {

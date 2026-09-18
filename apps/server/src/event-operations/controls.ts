@@ -1,4 +1,5 @@
-import { and, eq } from 'drizzle-orm';
+import { activePoolReservations } from './queue';
+import { eq } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { eventAnnouncements, eventAttendanceAudit, eventMatchAudit, eventMatches, eventPoolSchedules, eventStations, type Db } from '@smashclub/db';
 import type { SessionUser } from '../auth';
@@ -34,32 +35,55 @@ export interface ConfigurePoolInput {
   active: boolean;
   stationIds: string[];
   expectedRevision?: number;
+  selfRun?: boolean;
+  autoAcceptScores?: boolean;
 }
 
 export async function configurePool(db: Db, actor: SessionUser, input: ConfigurePoolInput) {
+  return (await configurePools(db, actor, { planId: input.planId, pools: [input] }))[0]!;
+}
+
+/** Validate the final bank allocation once, then apply the entire reviewed wave atomically. */
+export async function configurePools(db: Db, actor: SessionUser, input: { planId: string; pools: Array<Omit<ConfigurePoolInput, 'planId'>> }) {
   return db.transaction(async tx => {
     await lockEvent(tx, input.planId);
     await requireOperator(tx, input.planId, actor);
     const view = await getPlan(tx, input.planId);
-    if (!view?.divisions.find(division => division.division === input.division)?.pools.some(pool => pool.poolIndex === input.poolIndex)) {
-      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Choose an existing pool.' });
-    }
     const stations = await tx.select().from(eventStations).where(eq(eventStations.eventPlanId, input.planId));
-    if (new Set(input.stationIds).size !== input.stationIds.length || input.stationIds.some(id => !stations.some(station => station.id === id))) {
-      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Each station must belong to this event and appear only once.' });
+    const previous = await tx.select().from(eventPoolSchedules).where(eq(eventPoolSchedules.eventPlanId, input.planId));
+    const key = (pool: { division: string; poolIndex: number }) => `${pool.division}:${pool.poolIndex}`;
+    if (new Set(input.pools.map(key)).size !== input.pools.length) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Choose each pool only once.' });
+    const changes = input.pools.map(pool => {
+      if (!view?.divisions.find(d => d.division === pool.division)?.pools.some(p => p.poolIndex === pool.poolIndex)) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Choose an existing pool.' });
+      if (new Set(pool.stationIds).size !== pool.stationIds.length || pool.stationIds.some(id => !stations.some(s => s.id === id))) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Each station must belong to this event and appear only once.' });
+      const before = previous.find(p => key(p) === key(pool));
+      if (pool.expectedRevision !== undefined && pool.expectedRevision !== (before?.revision ?? 0)) throw new TRPCError({ code: 'CONFLICT', message: 'Another organiser changed this pool schedule. Refresh before saving.' });
+      const selfRun = pool.selfRun ?? before?.selfRun ?? false;
+      const autoAcceptScores = pool.autoAcceptScores ?? before?.autoAcceptScores ?? false;
+      if (selfRun && (view.plan.bracketMode !== 'native' || !pool.stationIds.length)) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Self-running pools require a native event and at least one allocated station.' });
+      if (autoAcceptScores && !selfRun) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Automatic score acceptance requires a self-running pool.' });
+      return { eventPlanId: input.planId, division: pool.division, poolIndex: pool.poolIndex, active: pool.active, stationIds: pool.stationIds, selfRun, autoAcceptScores, revision: (before?.revision ?? 0) + 1 };
+    });
+    const final = [...previous.filter(p => !changes.some(c => key(c) === key(p))), ...changes];
+    const matches = await tx.select().from(eventMatches).where(eq(eventMatches.eventPlanId, input.planId));
+    const reservations = new Map<string, string>();
+    for (const pool of activePoolReservations(matches, final)) for (const stationId of pool.stationIds) {
+      if (reservations.has(stationId)) throw new TRPCError({ code: 'CONFLICT', message: 'Active pools cannot reserve the same station. Release or hold the other pool in this update.' });
+      reservations.set(stationId, key(pool));
     }
-    const [previous] = await tx.select().from(eventPoolSchedules).where(and(eq(eventPoolSchedules.eventPlanId, input.planId), eq(eventPoolSchedules.division, input.division), eq(eventPoolSchedules.poolIndex, input.poolIndex)));
-    if (input.expectedRevision !== undefined && input.expectedRevision !== (previous?.revision ?? 0)) {
-      throw new TRPCError({ code: 'CONFLICT', message: 'Another organiser changed this pool schedule. Refresh before saving.' });
+    const playing = matches.filter(match => match.status === 'playing');
+    for (const match of playing) {
+      const poolKey = match.stage === 'group' && match.poolIndex !== null ? key({ division: match.division, poolIndex: match.poolIndex }) : null;
+      const schedule = final.find(p => key(p) === poolKey);
+      if (schedule && (!schedule.active || schedule.stationIds.length > 0 && (!match.stationId || !schedule.stationIds.includes(match.stationId))) || match.stationId && reservations.has(match.stationId) && reservations.get(match.stationId) !== poolKey) throw new TRPCError({ code: 'CONFLICT', message: 'Finish or stop the playing matches before changing their allocated stations or reserving an occupied station.' });
     }
-    const playing = await tx.select().from(eventMatches).where(and(eq(eventMatches.eventPlanId, input.planId), eq(eventMatches.division, input.division), eq(eventMatches.poolIndex, input.poolIndex), eq(eventMatches.stage, 'group'), eq(eventMatches.status, 'playing')));
-    if (playing.some(match => !input.active || (input.stationIds.length > 0 && (!match.stationId || !input.stationIds.includes(match.stationId))))) {
-      throw new TRPCError({ code: 'CONFLICT', message: 'Finish or stop the playing matches before holding this pool or changing their allocated stations.' });
+    const saved: Array<typeof eventPoolSchedules.$inferSelect> = [];
+    for (const change of changes) {
+      const [updated] = await tx.insert(eventPoolSchedules).values(change).onConflictDoUpdate({ target: [eventPoolSchedules.eventPlanId, eventPoolSchedules.division, eventPoolSchedules.poolIndex], set: change }).returning();
+      saved.push(updated!);
+      await tx.insert(eventAttendanceAudit).values({ eventPlanId: input.planId, userId: actor.id, action: 'pool_schedule_changed', details: { before: previous.find(p => key(p) === key(change)) ?? null, after: updated } });
     }
-    const [updated] = await tx.insert(eventPoolSchedules).values({ eventPlanId: input.planId, division: input.division, poolIndex: input.poolIndex, active: input.active, stationIds: input.stationIds, revision: (previous?.revision ?? 0) + 1 })
-      .onConflictDoUpdate({ target: [eventPoolSchedules.eventPlanId, eventPoolSchedules.division, eventPoolSchedules.poolIndex], set: { active: input.active, stationIds: input.stationIds, revision: (previous?.revision ?? 0) + 1 } }).returning();
-    await tx.insert(eventAttendanceAudit).values({ eventPlanId: input.planId, userId: actor.id, action: 'pool_schedule_changed', details: { before: previous ?? null, after: updated } });
-    return updated!;
+    return saved;
   });
 }
 

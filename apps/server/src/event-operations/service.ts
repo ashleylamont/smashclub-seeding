@@ -1,4 +1,5 @@
 import { canAutoAcceptPoolScore } from './selfService';
+import { loadStationQueues } from './queue';
 import { advanceNativeBrackets, assertNativeCorrectionAllowed, nativeBracketViews } from './nativeBrackets';
 import { and, asc, desc, eq, inArray, gt, isNull, or } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -54,7 +55,7 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
     // Archived plans are planning intent, not evidence of attendance or finishes.
     const entrants = plan.historicalAdoption ? [] : (await db.select({ id: eventPlanEntries.playerId }).from(eventPlanEntries).where(eq(eventPlanEntries.eventPlanId, planId))).flatMap(p => p.id ? [{ id: p.id, name: names.get(p.id) ?? 'Player' }] : []);
     const prizes = (await db.select().from(eventPrizes).where(eq(eventPrizes.eventPlanId, planId))).map(p => ({ ...p, playerName: p.playerId ? names.get(p.playerId) ?? 'Player' : null }));
-    return { nativeBrackets: await nativeBracketViews(db, planId), plan: { id: plan.id, name: plan.name, eventDate: plan.eventDate.toISOString(), status: plan.status, bracketMode: plan.bracketMode, historicalResultsSlug, resultsSlug }, brackets: (await db.select({ division: eventPlanBrackets.division, stage: eventPlanBrackets.stage, slug: eventPlanBrackets.challongeSlug }).from(eventPlanBrackets).where(eq(eventPlanBrackets.eventPlanId, planId))), settings: { published: settings?.published ?? false, playerReports: settings?.playerReports ?? false }, matches, entrants, prizes,
+    return { ...await loadStationQueues(db, planId), nativeBrackets: await nativeBracketViews(db, planId), plan: { id: plan.id, name: plan.name, eventDate: plan.eventDate.toISOString(), status: plan.status, bracketMode: plan.bracketMode, historicalResultsSlug, resultsSlug }, brackets: (await db.select({ division: eventPlanBrackets.division, stage: eventPlanBrackets.stage, slug: eventPlanBrackets.challongeSlug }).from(eventPlanBrackets).where(eq(eventPlanBrackets.eventPlanId, planId))), settings: { published: settings?.published ?? false, playerReports: settings?.playerReports ?? false }, matches, entrants, prizes,
         stations: stations.map(station=>stationAvailability(station,rows)), poolSchedules,
         announcements: (await db.select().from(eventAnnouncements).where(and(eq(eventAnnouncements.eventPlanId, planId),or(isNull(eventAnnouncements.expiresAt),gt(eventAnnouncements.expiresAt,new Date())))).orderBy(desc(eventAnnouncements.createdAt))).map(a => ({ ...a, createdAt: a.createdAt.toISOString(),expiresAt:a.expiresAt?.toISOString()??null })),
         withdrawals: await db.select({ playerId: eventWithdrawals.playerId }).from(eventWithdrawals).where(eq(eventWithdrawals.eventPlanId, planId)),

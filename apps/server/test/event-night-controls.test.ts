@@ -87,12 +87,14 @@ describe('pool waves and station allocation', () => {
     const matches = await allMatches();
     const upper = matches.find(row => row.division === 'upper')!;
     const lower = matches.find(row => row.division === 'lower')!;
-    await updateMatch(db, admin, { matchId: lower.id, expectedRevision: 0, status: 'playing', stationId: desk.id });
-    const schedule = await configurePool(db, admin, { planId, division: 'upper', poolIndex: 0, active: true, stationIds: [desk.id], expectedRevision: 0 });
+    const lowerPlaying = await updateMatch(db, admin, { matchId: lower.id, expectedRevision: 0, status: 'playing', stationId: desk.id });
+    await expect(configurePool(db, admin, { planId, division: 'upper', poolIndex: 0, active: true, stationIds: [desk.id], expectedRevision: 0 })).rejects.toThrow('playing matches');
     const availability = (await snapshot(db, planId, true)).matches.find(row => row.id === upper.id)!.availability;
     expect(availability).toMatchObject({ canStart: false, eligibleStationIds: [] });
     expect(availability.reasons.some(reason => reason.code === 'station_busy')).toBe(true);
     await expect(updateMatch(db, admin, { matchId: upper.id, expectedRevision: 0, status: 'playing' })).rejects.toThrow('occupied');
+    await updateMatch(db, admin, { matchId: lower.id, expectedRevision: lowerPlaying.revision, status: 'ready' });
+    const schedule = await configurePool(db, admin, { planId, division: 'upper', poolIndex: 0, active: true, stationIds: [desk.id], expectedRevision: 0 });
     await expect(configurePool(db, admin, { planId, division: 'upper', poolIndex: 0, active: false, stationIds: [], expectedRevision: schedule.revision - 1 })).rejects.toThrow('Another organiser');
     const [otherPlan] = await db.insert(eventPlans).values({ name: 'Another event', eventDate: new Date() }).returning();
     const [foreign] = await db.insert(eventStations).values({ eventPlanId: otherPlan!.id, name: 'Elsewhere' }).returning();

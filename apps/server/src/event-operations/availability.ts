@@ -1,3 +1,4 @@
+import { activePoolReservations } from './queue';
 import type { eventMatches, eventPoolSchedules, eventStations } from '@smashclub/db';
 
 type Match = typeof eventMatches.$inferSelect;
@@ -21,7 +22,9 @@ export function matchAvailability(
   const reasons: MatchAvailability['reasons'] = [];
   const add = (code: string, message: string) => reasons.push({ code, message });
   const schedule = match.stage === 'group' ? schedules.find(pool => pool.division === match.division && pool.poolIndex === match.poolIndex) : undefined;
-  const permitted = schedule?.stationIds.length ? schedule.stationIds : stations.map(station => station.id);
+  const ownKey = schedule ? `${schedule.division}:${schedule.poolIndex}` : null;
+  const reservedElsewhere = new Set(activePoolReservations(matches, schedules).filter(pool => `${pool.division}:${pool.poolIndex}` !== ownKey).flatMap(pool => pool.stationIds));
+  const permitted = (schedule?.stationIds.length ? schedule.stationIds : stations.map(station => station.id)).filter(id => !reservedElsewhere.has(id));
   const otherPlaying = matches.filter(other => other.status === 'playing' && other.id !== match.id);
   const eligibleStationIds = stations.filter(station => permitted.includes(station.id) && !otherPlaying.some(other => other.stationId === station.id)).map(station => station.id);
 
