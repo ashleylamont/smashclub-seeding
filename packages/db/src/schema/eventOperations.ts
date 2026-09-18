@@ -35,7 +35,7 @@ export const eventScoreReports = pgTable('event_score_reports', {
     status: text('status').$type<'pending' | 'approved' | 'rejected'>().notNull(), createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [uniqueIndex('event_score_reports_request_idx').on(t.userId, t.requestId), uniqueIndex('event_score_reports_guest_request_idx').on(t.guestSessionId, t.requestId), check('event_score_reports_one_reporter', sql`(${t.userId} IS NULL) <> (${t.guestSessionId} IS NULL)`)]);
 export const eventMatchAudit = pgTable('event_match_audit', {
-    id: uuid('id').primaryKey().defaultRandom(), eventPlanId: planId(), matchId: uuid('match_id').notNull().references(() => eventMatches.id, { onDelete: 'cascade' }), userId: text('user_id').notNull().references(() => user.id), action: text('action').notNull(), before: jsonb('before').notNull(), after: jsonb('after').notNull(), createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    id: uuid('id').primaryKey().defaultRandom(), eventPlanId: planId(), matchId: uuid('match_id').notNull().references(() => eventMatches.id, { onDelete: 'cascade' }), userId: text('user_id').references(() => user.id), guestSessionId: uuid('guest_session_id').references(() => eventGuestSessions.id), action: text('action').notNull(), before: jsonb('before').notNull(), after: jsonb('after').notNull(), createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 export const eventAnnouncements = pgTable('event_announcements', { id: uuid('id').primaryKey().defaultRandom(), eventPlanId: planId(), message: text('message').notNull(), createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(), expiresAt:timestamp('expires_at',{withTimezone:true}) });
 export const eventPrizes = pgTable('event_prizes', { id: uuid('id').primaryKey().defaultRandom(), eventPlanId: planId(), title: text('title').notNull(), description: text('description'), playerId: uuid('player_id').references(() => players.id) });
@@ -65,5 +65,6 @@ export const eventGuestRateLimits = pgTable('event_guest_rate_limits', {
 export const eventPoolSchedules = pgTable('event_pool_schedules', {
     id:uuid('id').primaryKey().defaultRandom(), eventPlanId:planId(),
     division:text('division').$type<'upper'|'lower'>().notNull(),poolIndex:integer('pool_index').notNull(),
+    selfRun:boolean('self_run').notNull().default(false),autoAcceptScores:boolean('auto_accept_scores').notNull().default(false),
     active:boolean('active').notNull().default(true),stationIds:jsonb('station_ids').$type<string[]>().notNull().default([]),revision:integer('revision').notNull().default(1),
 },t=>[uniqueIndex('event_pool_schedules_pool_idx').on(t.eventPlanId,t.division,t.poolIndex)]);
