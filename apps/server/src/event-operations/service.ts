@@ -31,13 +31,15 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
         fail('NOT_FOUND', 'This event is not published.');
     const names = new Map((await db.select().from(players)).map(p => [p.id, publicPlayerName(p)]));
     const matches = (await db.select().from(eventMatches).where(eq(eventMatches.eventPlanId, planId)).orderBy(asc(eventMatches.label))).map(m => ({ ...m, player1Name: m.player1Id ? names.get(m.player1Id) ?? 'Player' : 'TBD', player2Name: m.player2Id ? names.get(m.player2Id) ?? 'Player' : 'TBD' }));
-    const entrants = (await db.select({ id: eventPlanEntries.playerId }).from(eventPlanEntries).where(eq(eventPlanEntries.eventPlanId, planId))).flatMap(p => p.id ? [{ id: p.id, name: names.get(p.id) ?? 'Player' }] : []);
+    const historicalResultsSlug = plan.historicalAdoption?.brackets.find(bracket => bracket.division === 'upper' && bracket.stage === 'main')?.slug ?? null;
+    // Archived plans are planning intent, not evidence of attendance or finishes.
+    const entrants = plan.historicalAdoption ? [] : (await db.select({ id: eventPlanEntries.playerId }).from(eventPlanEntries).where(eq(eventPlanEntries.eventPlanId, planId))).flatMap(p => p.id ? [{ id: p.id, name: names.get(p.id) ?? 'Player' }] : []);
     const prizes = (await db.select().from(eventPrizes).where(eq(eventPrizes.eventPlanId, planId))).map(p => ({ ...p, playerName: p.playerId ? names.get(p.playerId) ?? 'Player' : null }));
-    return { plan: { id: plan.id, name: plan.name, eventDate: plan.eventDate.toISOString(), status: plan.status }, brackets: (await db.select({ division: eventPlanBrackets.division, stage: eventPlanBrackets.stage, slug: eventPlanBrackets.challongeSlug }).from(eventPlanBrackets).where(eq(eventPlanBrackets.eventPlanId, planId))), settings: { published: settings?.published ?? false, playerReports: settings?.playerReports ?? false }, matches, entrants, prizes,
+    return { plan: { id: plan.id, name: plan.name, eventDate: plan.eventDate.toISOString(), status: plan.status, historicalResultsSlug }, brackets: (await db.select({ division: eventPlanBrackets.division, stage: eventPlanBrackets.stage, slug: eventPlanBrackets.challongeSlug }).from(eventPlanBrackets).where(eq(eventPlanBrackets.eventPlanId, planId))), settings: { published: settings?.published ?? false, playerReports: settings?.playerReports ?? false }, matches, entrants, prizes,
         stations: await db.select().from(eventStations).where(eq(eventStations.eventPlanId, planId)),
         announcements: (await db.select().from(eventAnnouncements).where(eq(eventAnnouncements.eventPlanId, planId)).orderBy(desc(eventAnnouncements.createdAt))).map(a => ({ ...a, createdAt: a.createdAt.toISOString() })),
         withdrawals: await db.select({ playerId: eventWithdrawals.playerId }).from(eventWithdrawals).where(eq(eventWithdrawals.eventPlanId, planId)),
-        placements: await db.select().from(eventPlanPoolPlacements).where(eq(eventPlanPoolPlacements.eventPlanId, planId)) };
+        placements: plan.historicalAdoption ? [] : await db.select().from(eventPlanPoolPlacements).where(eq(eventPlanPoolPlacements.eventPlanId, planId)) };
 }
 function importedOutcome(s: typeof sets.$inferSelect): 'played' | 'bye' | 'forfeit' | null {
     if (s.state !== 'complete')

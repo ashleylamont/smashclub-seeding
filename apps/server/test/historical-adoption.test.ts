@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { asc, eq } from 'drizzle-orm';
-import { eventMatches, eventPlanBrackets, eventPlanEntries, eventPlanPoolPlacements, eventPlans, eventPoolAssignments, players, sets, tournamentParticipants, tournaments, type Db } from '@smashclub/db';
+import { eventMatches, eventOperationSettings, eventPlanBrackets, eventPlanEntries, eventPlanPoolPlacements, eventPlans, eventPoolAssignments, players, sets, tournamentParticipants, tournaments, type Db } from '@smashclub/db';
 import { createTestDb } from './helpers/testDb';
 import { importRegistryPlayers } from '../src/bootstrap/importRegistry';
 import { applyHistoricalAdoption, historicalCandidates, previewHistoricalAdoption, type HistoricalAdoptionInput } from '../src/event-planner/historicalAdoption';
 import { attachBracket, getPlan, listPlans } from '../src/event-planner/plans';
-import { prepare } from '../src/event-operations/service';
+import { prepare, snapshot } from '../src/event-operations/service';
 import { loadEventOverview } from '../src/events/overview';
 import { loadRecap } from '../src/recap/recap';
 import { eventPlannerRouter } from '../src/trpc/routers/eventPlanner';
@@ -70,6 +70,29 @@ describe('historical result adoption', () => {
     }
     await expect(prepare(db, input.planId)).rejects.toThrow('closed');
     await expect(attachBracket(db, input.planId, 'upper', 'main', 'historic-0')).rejects.toThrow();
+  });
+
+  it('publishes a historical result link without presenting archived intent as attendance or confirmed placements', async () => {
+    await db.insert(eventOperationSettings).values({ eventPlanId: input.planId, published: true });
+    for (const privateView of [false, true]) {
+      const normal = await snapshot(db, input.planId, privateView);
+      expect(normal.plan.historicalResultsSlug).toBeNull();
+      expect(normal.entrants).toHaveLength(8);
+      expect(normal.placements).toHaveLength(8);
+    }
+    const preview = await previewHistoricalAdoption(db, input);
+    await applyHistoricalAdoption(db, { ...input, fingerprint: preview.fingerprint }, 'admin');
+    for (const privateView of [false, true]) {
+      const historical = await snapshot(db, input.planId, privateView);
+      expect(historical.plan.historicalResultsSlug).toBe('historic-0');
+      expect(historical.entrants).toEqual([]);
+      expect(historical.placements).toEqual([]);
+    }
+    expect((await getPlan(db, input.planId))!.entries).toHaveLength(8);
+    expect(await db.select().from(eventPlanPoolPlacements)).toHaveLength(8);
+    await db.update(eventOperationSettings).set({ published: false }).where(eq(eventOperationSettings.eventPlanId, input.planId));
+    await expect(snapshot(db, input.planId)).rejects.toThrow('not published');
+    expect((await snapshot(db, input.planId, true)).plan.historicalResultsSlug).toBe('historic-0');
   });
 
   it('preserves an audit history when correcting an adopted event', async () => {
