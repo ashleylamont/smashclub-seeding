@@ -107,7 +107,7 @@ describe('buildConsolationBracket', () => {
   });
 
   it('rejects a field with nobody to seed', () => {
-    expect(() => buildConsolationBracket([{ playerId: 'a', poolIndex: 0, place: 1 }])).toThrow(/No third-/);
+    expect(() => buildConsolationBracket([{ playerId: 'a', poolIndex: 0, place: 1 }])).toThrow(/No consolation/);
   });
 });
 
@@ -120,4 +120,11 @@ describe('championshipQualifiers', () => {
       'B2',
     ]);
   });
+});
+
+it('includes fifth places in consolation and handles a sole consolation entrant', () => {
+  const finishers = [3, 4, 5].map((place) => ({ playerId: `p${place}`, poolIndex: 0, place }));
+  expect(buildConsolationBracket(finishers).entrants.map((entry) => entry.playerId).sort()).toEqual(['p3', 'p4', 'p5']);
+  expect(buildConsolationBracket([finishers[0]!]).roundOne).toHaveLength(1);
+  expect(buildConsolationBracket([finishers[0]!]).roundOne[0]!.b).toBeNull();
 });

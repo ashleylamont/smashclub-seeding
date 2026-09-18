@@ -33,20 +33,14 @@ export function stripeIntoPools<T>(ordered: readonly T[], poolSize = 4): T[][] {
   if (ordered.length === 0) {
     throw new Error('Cannot build pools from an empty division.');
   }
-  if (ordered.length % poolSize !== 0) {
-    throw new Error(`${ordered.length} entrants do not divide into pools of ${poolSize}.`);
-  }
-
-  const poolCount = ordered.length / poolSize;
+  const poolCount = poolCountFor(ordered.length, poolSize);
   const pools: T[][] = Array.from({ length: poolCount }, () => []);
-  for (let row = 0; row < poolSize; row++) {
-    for (let column = 0; column < poolCount; column++) {
-      // Odd rows run right-to-left, so the pool that took the best entrant of
-      // the previous row takes the worst of this one.
-      const poolIndex = row % 2 === 0 ? column : poolCount - 1 - column;
-      pools[poolIndex]!.push(ordered[row * poolCount + column]!);
-    }
-  }
+  ordered.forEach((entrant, index) => {
+    const row = Math.floor(index / poolCount);
+    const column = index % poolCount;
+    const poolIndex = row % 2 === 0 ? column : poolCount - 1 - column;
+    pools[poolIndex]!.push(entrant);
+  });
   return pools;
 }
 
@@ -63,5 +57,12 @@ export function poolLabel(poolIndex: number): string {
 
 /** How many pools a division of this size makes. */
 export function poolCountFor(divisionSize: number, poolSize = 4): number {
-  return divisionSize / poolSize;
+  const minimum = Math.max(3, poolSize - 1);
+  if (!Number.isInteger(divisionSize) || divisionSize < minimum) {
+    throw new Error(`A division needs at least ${minimum} entrants.`);
+  }
+  if (!Number.isInteger(poolSize) || poolSize < 3) throw new Error('Pool size must be at least 3.');
+  const leastPools = Math.ceil(divisionSize / (poolSize + 1));
+  const mostPools = Math.floor(divisionSize / minimum);
+  return Math.max(leastPools, Math.min(mostPools, Math.round(divisionSize / poolSize)));
 }

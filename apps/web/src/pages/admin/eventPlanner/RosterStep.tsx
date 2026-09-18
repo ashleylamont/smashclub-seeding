@@ -82,7 +82,7 @@ export function RosterStep({
             <button
               type="button"
               className="btn"
-              disabled={unfreeze.isPending}
+              disabled={unfreeze.isPending || !['roster_frozen', 'pools_ready'].includes(view.plan.status) || view.brackets.some((bracket) => bracket.challongeSlug !== null)}
               onClick={() => {
                 if (window.confirm('Reopen the roster? The ranking snapshot and every seed is discarded.')) {
                   unfreeze.mutate();
@@ -97,6 +97,7 @@ export function RosterStep({
       {freeze.isError && <p className="error-text">{freeze.error.message}</p>}
       {unfreeze.isError && <p className="error-text">{unfreeze.error.message}</p>}
 
+      {editable && <DraftSettings key={`${planId}:${view.plan.name}:${view.plan.upperTargetSize}:${view.entries.length}`} view={view} onChanged={onChanged} />}
       {editable && (
         <IssueList issues={view.issues.blocking} kind="blocking" onFocusRows={(ids) => setHighlighted(new Set(ids))} />
       )}
@@ -391,4 +392,24 @@ function RosterRow({
       )}
     </div>
   );
+}
+
+function DraftSettings({ view, onChanged }: { view: EventPlanView; onChanged: () => void }) {
+  const [name, setName] = useState(view.plan.name);
+  const [prefix, setPrefix] = useState(view.plan.slugPrefix ?? '');
+  const [upper, setUpper] = useState(view.plan.upperTargetSize ?? Math.ceil(view.entries.length / 2));
+  const total = view.entries.length;
+  const update = useMutation({
+    mutationFn: () => trpc.admin.eventPlanner.updatePlan.mutate({ planId: view.plan.id, name, slugPrefix: prefix || null, upperTargetSize: upper }),
+    onSuccess: onChanged,
+  });
+  return <form className="card section" onSubmit={(event) => { event.preventDefault(); update.mutate(); }}>
+    <h4>Draft settings</h4>
+    <label className="form-field">Event name<input className="input" value={name} onChange={(event) => setName(event.target.value)} /></label>
+    <label className="form-field">Bracket slug prefix<input className="input" value={prefix} onChange={(event) => setPrefix(event.target.value)} /></label>
+    <label className="form-field">Upper division size<input className="input" type="number" min={3} max={Math.max(3, total - 3)} value={upper} onChange={(event) => setUpper(Number(event.target.value))} /></label>
+    <p className="muted">{upper} Upper / {total - upper} Lower. Pools contain three to five players; the top two in each pool advance to championship and everyone else to consolation. Save a new split after attendance changes.</p>
+    <button className="btn btn-primary" disabled={update.isPending || !name.trim() || upper < 3 || upper > total - 3}>Save settings</button>
+    {update.isError && <p className="error-text">{update.error.message}</p>}
+  </form>;
 }

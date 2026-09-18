@@ -44,13 +44,27 @@ type StoredSet = typeof sets.$inferSelect;
 const sortPlayers = (a: EventOverviewPlayer, b: EventOverviewPlayer) => (a.place ?? Infinity) - (b.place ?? Infinity) || a.name.localeCompare(b.name);
 const validResult = (s: StoredSet) => s.state === 'complete' && (s.winner === 1 || s.winner === 2) && s.p1ParticipantId && s.p2ParticipantId && s.p1ParticipantId !== s.p2ParticipantId;
 
-/** All brackets on the same event date, using actual results rather than planned rosters. */
+/** Explicit plan membership first; historical unlinked brackets fall back to event date. */
 export async function loadEventOverview(db: Db, slug: string): Promise<EventOverview | null> {
   const [anchor] = await db.select().from(tournaments).where(eq(tournaments.challongeSlug, slug));
   if (!anchor) return null;
+  const memberships = await db.select().from(eventPlanBrackets).where(isNotNull(eventPlanBrackets.tournamentId));
+  const anchorPlanIds = new Set(memberships.filter(link => link.tournamentId === anchor.id).map(link => link.eventPlanId));
   const key = anchor.eventDate ? eventKeyOf(anchor.eventDate.toISOString()) : null;
-  const rows = key === null ? [anchor] : await db.select().from(tournaments).where(isNotNull(tournaments.eventDate)).orderBy(asc(tournaments.eventDate));
-  const eventRows = rows.filter(row => key === null || (row.eventDate && eventKeyOf(row.eventDate.toISOString()) === key));
+  let eventRows: Array<typeof tournaments.$inferSelect>;
+  if (anchorPlanIds.size === 1) {
+    // A saved event is an explicit identity, even if another club night or an
+    // unrelated bracket happens on the same calendar day.
+    const planId = [...anchorPlanIds][0]!;
+    const linkedIds = memberships.filter(link => link.eventPlanId === planId).flatMap(link => link.tournamentId ? [link.tournamentId] : []);
+    eventRows = await db.select().from(tournaments).where(inArray(tournaments.id, linkedIds)).orderBy(asc(tournaments.eventDate));
+  } else if (anchorPlanIds.size > 1 || key === null) {
+    eventRows = [anchor];
+  } else {
+    const explicitlyLinked = new Set(memberships.map(link => link.tournamentId));
+    const rows = await db.select().from(tournaments).where(isNotNull(tournaments.eventDate)).orderBy(asc(tournaments.eventDate));
+    eventRows = rows.filter(row => !explicitlyLinked.has(row.id) && row.eventDate && eventKeyOf(row.eventDate.toISOString()) === key);
+  }
   const ids = eventRows.map(row => row.id);
   const planRows = await db.select({ tournamentId: eventPlanBrackets.tournamentId, division: eventPlanBrackets.division, stage: eventPlanBrackets.stage })
     .from(eventPlanBrackets).where(inArray(eventPlanBrackets.tournamentId, ids));
@@ -60,7 +74,7 @@ export async function loadEventOverview(db: Db, slug: string): Promise<EventOver
     .from(tournamentParticipants).leftJoin(players, eq(tournamentParticipants.playerId, players.id)).leftJoin(companies, eq(players.companyId, companies.id))
     .where(inArray(tournamentParticipants.tournamentId, ids));
   const setRows = await db.select().from(sets).where(inArray(sets.tournamentId, ids));
-  const warnings: string[] = [];
+  const warnings: string[] = anchorPlanIds.size > 1 ? ['This bracket belongs to conflicting event plans; only its own results are shown.'] : [];
   if (eventRows.some(t => t.syncState !== 'synced')) warnings.push('Some brackets have not finished syncing; results may be incomplete.');
   if (participants.some(p => !p.playerId)) warnings.push('Unlinked entrants remain separate across brackets until their player identities are resolved.');
   const brackets: EventOverviewBracket[] = eventRows.map(t => {

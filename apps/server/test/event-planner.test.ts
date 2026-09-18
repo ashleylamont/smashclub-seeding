@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq, inArray } from 'drizzle-orm';
 import {
   eventPlanEntries,
+  eventPlanBrackets,
   eventPlans,
   playerRatings,
   players,
@@ -20,6 +21,7 @@ import {
   EventPlanStateError,
   attachBracket,
   closePlan,
+  detachBracket,
   createPlan,
   freezeRoster,
   generatePools,
@@ -213,15 +215,15 @@ describe('freezing a plan', () => {
     await expect(freezeRoster(db, planId)).rejects.toBeInstanceOf(EventPlanValidationError);
   });
 
-  it('refuses to freeze a division that does not divide into pools', async () => {
+  it('refuses to freeze a division with fewer than three players', async () => {
     await seedRatedClub();
-    const planId = await createFullPlan({ upperTargetSize: 6 });
-    await expect(freezeRoster(db, planId)).rejects.toThrow(/multiples of 4/);
+    const planId = await createFullPlan({ upperTargetSize: 2 });
+    await expect(freezeRoster(db, planId)).rejects.toThrow(/at least 3/);
   });
 
   it('is transactional: a rejected freeze leaves no half-written snapshot', async () => {
     await seedRatedClub();
-    const planId = await createFullPlan({ upperTargetSize: 6 });
+    const planId = await createFullPlan({ upperTargetSize: 2 });
     await expect(freezeRoster(db, planId)).rejects.toThrow();
 
     const rows = await db.select().from(eventPlanEntries).where(eq(eventPlanEntries.eventPlanId, planId));
@@ -560,6 +562,54 @@ describe('attaching the four brackets', () => {
     await expect(attachBracket(db, planId, 'lower', 'main', 'june25_upper')).rejects.toThrow(/already attached/);
   });
 
+  it('prevents bracket ownership leaking across event plans', async () => {
+    const first = await readyPlan();
+    const second = await createFullPlan();
+    await freezeRoster(db, second);
+    await attachBracket(db, first, 'upper', 'main', 'shared_bracket');
+    await expect(attachBracket(db, second, 'upper', 'main', 'shared_bracket')).rejects.toThrow(/already attached/);
+  });
+
+  it('preserves ownership of historical tournament links without a stored slug', async () => {
+    const first = await readyPlan();
+    const second = await createFullPlan();
+    await freezeRoster(db, second);
+    const [historical] = await db.insert(tournaments).values({challongeSlug:'historical_owner',name:'Historical bracket',eventDate:new Date('2024-01-01T00:00:00Z')}).returning();
+    const [slot] = await db.select().from(eventPlanBrackets).where(eq(eventPlanBrackets.eventPlanId,first));
+    await db.update(eventPlanBrackets).set({tournamentId:historical!.id,challongeSlug:null}).where(eq(eventPlanBrackets.id,slot!.id));
+    await expect(attachBracket(db, second, 'upper', 'main', 'historical_owner')).rejects.toThrow(/already attached/);
+    expect((await db.select().from(tournaments).where(eq(tournaments.id,historical!.id)))[0]!.eventDate!.toISOString()).toBe('2024-01-01T00:00:00.000Z');
+    expect((await db.select().from(eventPlanBrackets).where(eq(eventPlanBrackets.id,slot!.id)))[0]!.challongeSlug).toBeNull();
+  });
+
+  it('requires reconciliation before changing placements after consolation handoff', async () => {
+    const planId = await readyPlan();
+    const view = (await getPlan(db, planId))!;
+    const pool = view.divisions[0]!.pools[0]!;
+    const placements = [{ poolIndex: pool.poolIndex, playerIdsInOrder: pool.members.map((member) => member.playerId) }];
+    await savePoolPlacements(db, planId, 'upper', placements);
+    await attachBracket(db, planId, 'upper', 'consolation', 'consolation_handoff');
+    await expect(savePoolPlacements(db, planId, 'upper', placements)).rejects.toThrow(/Detach and reconcile/);
+    await detachBracket(db, planId, 'upper', 'consolation');
+    await savePoolPlacements(db, planId, 'upper', placements);
+    await closePlan(db, planId, 'complete');
+    await expect(detachBracket(db, planId, 'upper', 'main')).rejects.toThrow(/detach a bracket/);
+  });
+
+  it('freezes uneven divisions and advances the full remainder to consolation', async () => {
+    await seedRatedClub();
+    const planId = await createFullPlan({ upperTargetSize: 5 });
+    await freezeRoster(db, planId);
+    await generatePools(db, planId);
+    const view = (await getPlan(db, planId))!;
+    expect(view.divisions[0]!.pools.map((pool) => pool.members.length)).toEqual([5]);
+    const pool = view.divisions[0]!.pools[0]!;
+    await savePoolPlacements(db, planId, 'upper', [{ poolIndex: 0, playerIdsInOrder: pool.members.map((member) => member.playerId) }]);
+    const upper = (await getPlan(db, planId))!.divisions[0]!;
+    expect(upper.championship).toHaveLength(2);
+    expect(upper.consolation!.entrants).toHaveLength(3);
+  });
+
   it('refuses to move the event date out from under a registered bracket', async () => {
     const planId = await readyPlan();
     await attachBracket(db, planId, 'upper', 'main', 'june25_upper');
@@ -601,7 +651,7 @@ describe('the four brackets rate as one club night', () => {
     for (const pool of [participants.slice(0, 4), participants.slice(4)]) {
       for (let i = 0; i < pool.length; i++) {
         for (let j = i + 1; j < pool.length; j++) {
-          matches.push({ id: matchId++, p1: pool[i]!.id, p2: pool[j]!.id, winner: pool[i]!.id, order: order++ });
+          matches.push({ id: matchId++, p1: pool[i]!.id, p2: pool[j]!.id, winner: pool[i]!.id, order: order++, stage: 'group' as const });
         }
       }
     }
@@ -644,16 +694,17 @@ describe('the four brackets rate as one club night', () => {
     await generatePools(db, planId);
 
     const view = (await getPlan(db, planId))!;
-    const nameFor = (division: 'upper' | 'lower', seed: number) =>
-      view.entries.find((entry) => entry.assignedDivision === division && entry.divisionSeed === seed)!.playerName!;
-    const upperNames = Array.from({ length: 8 }, (_, index) => nameFor('upper', index + 1));
-    const lowerNames = Array.from({ length: 8 }, (_, index) => nameFor('lower', index + 1));
+    // Match the frozen planner pool membership, not adjacent ranking seeds.
+    const namesFor = (division: 'upper' | 'lower') => view.divisions.find(item => item.division === division)!.pools
+      .flatMap(pool => pool.members.map(member => view.entries.find(entry => entry.playerId === member.playerId)!.playerName!));
+    const upperNames = namesFor('upper');
+    const lowerNames = namesFor('lower');
 
     const fixtures = [
       mainBracket('june25_upper', upperNames, 1000),
-      consolationBracket('june25_upper_consolation', upperNames.slice(4), 2000),
+      consolationBracket('june25_upper_consolation', [upperNames[2]!, upperNames[3]!, upperNames[6]!, upperNames[7]!], 2000),
       mainBracket('june25_lower', lowerNames, 3000),
-      consolationBracket('june25_lower_consolation', lowerNames.slice(4), 4000),
+      consolationBracket('june25_lower_consolation', [lowerNames[2]!, lowerNames[3]!, lowerNames[6]!, lowerNames[7]!], 4000),
     ];
     const client = fixtureClient(fixtures);
 
@@ -689,6 +740,8 @@ describe('the four brackets rate as one club night', () => {
     const nightSets = await db.select().from(sets).where(inArray(sets.tournamentId, nightIds));
     const expectedMatches = fixtures.reduce((total, fixture) => total + fixture.matches.length, 0);
     expect(nightSets).toHaveLength(expectedMatches);
+    expect(nightSets.filter(set => set.resultStage === 'group')).toHaveLength(24);
+    expect(nightSets.filter(set => set.resultStage === 'final')).toHaveLength(12);
     expect(new Set(nightSets.map((row) => `${row.tournamentId}:${row.challongeMatchId}`)).size).toBe(
       expectedMatches,
     );

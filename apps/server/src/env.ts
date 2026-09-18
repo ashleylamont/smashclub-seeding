@@ -4,6 +4,8 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(3000),
   DATABASE_URL: z.string().min(1),
+  /** Explicit opt-in for organiser-triggered score writes; never enabled by local defaults. */
+  CHALLONGE_SCORE_WRITES: z.string().default('false').transform(value => value === 'true' || value === '1'),
   CHALLONGE_API_KEY: z.string().optional(),
   CHALLONGE_USERNAME: z.string().optional(),
   BETTER_AUTH_SECRET: z.string().optional(),

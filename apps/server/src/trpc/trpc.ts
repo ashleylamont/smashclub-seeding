@@ -6,6 +6,7 @@ import type { Env } from '../env';
 import type { RecomputeTrigger } from '../recompute/trigger';
 
 export interface TrpcContext {
+  clientIp?: string;
   db: Db;
   env: Env;
   user: SessionUser | null;

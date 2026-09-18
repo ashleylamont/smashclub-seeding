@@ -137,7 +137,8 @@ test.describe('public browsing', () => {
   test('a board row opens that player, who leads with the ranked figure and its band', async ({ page }) => {
     await page.goto('/');
     await settle(page);
-    const name = (await page.locator('.board-row .identity-name').first().innerText()).trim();
+    const name = await page.locator('.board-row .identity-name').first().evaluate(element =>
+      Array.from(element.childNodes).filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent).join('').trim());
 
     await page.locator('.board-row .board-link').first().click();
     await expect(page).toHaveURL(/\/players\//);

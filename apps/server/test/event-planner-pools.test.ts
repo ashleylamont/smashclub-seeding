@@ -65,8 +65,7 @@ describe('stripeIntoPools', () => {
     expect(stripeIntoPools(seeds(20))).toEqual(stripeIntoPools(seeds(20)));
   });
 
-  it('rejects a division that does not divide into whole pools', () => {
-    expect(() => stripeIntoPools(seeds(14))).toThrow(/do not divide/);
+  it('rejects an empty division', () => {
     expect(() => stripeIntoPools([])).toThrow(/empty division/);
   });
 
@@ -92,4 +91,13 @@ describe('poolCountFor', () => {
     expect(poolCountFor(16)).toBe(4);
     expect(poolCountFor(12)).toBe(3);
   });
+});
+
+it.each(Array.from({ length: 98 }, (_, i) => i + 3))('balances all entrants into 3–5 player pools (%i)', (size) => {
+  const pools = stripeIntoPools(seeds(size));
+  expect(pools.flat().sort((a, b) => a - b)).toEqual(seeds(size));
+  const sizes = pools.map((pool) => pool.length);
+  expect(Math.min(...sizes)).toBeGreaterThanOrEqual(3);
+  expect(Math.max(...sizes)).toBeLessThanOrEqual(5);
+  expect(Math.max(...sizes) - Math.min(...sizes)).toBeLessThanOrEqual(1);
 });

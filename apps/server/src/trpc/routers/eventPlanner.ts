@@ -191,6 +191,8 @@ export const eventPlannerRouter = router({
             z.object({
               poolIndex: z.number().int().nonnegative(),
               playerIdsInOrder: z.array(z.uuid()).min(2).max(16),
+              expectedPlacementRevision:z.string().optional(),
+              expectedMatchRevisions:z.array(z.object({id:z.uuid(),revision:z.number().int().nonnegative()})).optional(),
             }),
           )
           .max(64),
