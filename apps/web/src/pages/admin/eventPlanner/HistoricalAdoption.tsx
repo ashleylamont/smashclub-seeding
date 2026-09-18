@@ -89,7 +89,7 @@ function AdoptionForm({ view, onApplied }: { view: EventPlanView; onApplied: () 
         <div className="historical-slot-grid">
           {SLOTS.map((slot, index) => <label key={slot.label}>
             <span>{slot.label}</span>
-            <select className="select" value={selection[index]} disabled={pending} onChange={(event) => {
+            <select className="select" aria-label={slot.label} value={selection[index]} disabled={pending} onChange={(event) => {
               setSelection(selection.map((value, position) => position === index ? event.target.value : value));
               setPreview(null);
               previewMutation.reset();

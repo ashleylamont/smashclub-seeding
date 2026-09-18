@@ -34,6 +34,11 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
   const publicationUnavailable = query.error instanceof TRPCClientError && ['NOT_FOUND', 'FORBIDDEN', 'UNAUTHORIZED'].includes(query.error.data?.code ?? '');
   if (!query.data || publicationUnavailable) return <div className={overlay ? 'event-display-message' : 'loading-text'} role="status">{query.isError ? 'This event is unavailable or has not been published.' : 'Loading live event…'}</div>;
   const data = query.data;
+  if (data.plan.historicalResultsSlug) return <section className={overlay ? 'event-display-message' : 'card section'}>
+    <h1>{data.plan.name}</h1>
+    <p>Historical event — results come from the imported brackets.</p>
+    <a href={`/events/${encodeURIComponent(data.plan.historicalResultsSlug)}`}>View historical results →</a>
+  </section>;
   const sections = liveSections(data.matches);
   const poolResults = confirmedPoolGraphics(data.placements, data.entrants);
   const geometry = overlayGeometry(window.location.search);

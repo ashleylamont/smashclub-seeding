@@ -27,6 +27,7 @@ import { loadEnv } from '../env';
 import { RecomputeTrigger } from '../recompute/trigger';
 import { seedDevData } from './seedFixtures';
 import { seedOperations } from './seedOperations';
+import { seedHistoricalEvent } from './seedHistoricalEvent';
 
 const migrationsFolder = fileURLToPath(new URL('../../../../packages/db/migrations', import.meta.url));
 
@@ -94,6 +95,7 @@ export async function startDevHarness(
   // provider would have done before these accounts ever reached us.
   await db.update(user).set({ emailVerified: true }).where(inArray(user.email, [adminEmail, userEmail, 'rehearsal-player@smashclub.dev', 'organiser@smashclub.dev']));
   const rehearsalPlanId = await seedOperations(db);
+  const historicalPlanId = await seedHistoricalEvent(db);
 
   await app.listen({ port, host: '127.0.0.1' });
   const url = `http://127.0.0.1:${port}`;
@@ -104,6 +106,7 @@ export async function startDevHarness(
   log(`  event TO: organiser@smashclub.dev / ${password}`);
   log(`  rehearsal: ${url}/live/${rehearsalPlanId}`);
   log(`  control: ${url}/admin/event-operations?plan=${rehearsalPlanId}`);
+  log(`  historical repair: ${url}/admin/event-planner?plan=${historicalPlanId}`);
 
   return {
     url,
