@@ -107,8 +107,8 @@ export async function guestMatches(db: Db, input: { planId: string; sessionToken
     return db.transaction(async tx => {
         const guest = await validateGuestSession(tx, input, now);
         const data = await snapshot(tx, input.planId);
-        const reports = await tx.select({ id: eventScoreReports.id, matchId: eventScoreReports.matchId, status: eventScoreReports.status, score1: eventScoreReports.score1, score2: eventScoreReports.score2 }).from(eventScoreReports).where(eq(eventScoreReports.guestSessionId, guest.id)).orderBy(desc(eventScoreReports.createdAt), desc(eventScoreReports.id));
-        return { plan: data.plan, stations: data.stations, poolSchedules: data.poolSchedules, ...await loadStationQueues(tx, input.planId), matches: data.matches, reports, expiresAt: guest.expiresAt.toISOString() };
+        const reports = await tx.select({ id: eventScoreReports.id, matchId: eventScoreReports.matchId, status: eventScoreReports.status, isDispute: eventScoreReports.isDispute, score1: eventScoreReports.score1, score2: eventScoreReports.score2 }).from(eventScoreReports).where(eq(eventScoreReports.guestSessionId, guest.id)).orderBy(desc(eventScoreReports.createdAt), desc(eventScoreReports.id));
+        return { settings: data.settings, plan: data.plan, stations: data.stations, poolSchedules: data.poolSchedules, ...await loadStationQueues(tx, input.planId), matches: data.matches, reports, expiresAt: guest.expiresAt.toISOString() };
     });
 }
 export async function submitGuest(db: Db, input: { planId: string; sessionToken: string; matchId: string; expectedRevision: number; requestId: string; score1: number; score2: number }, now = Date.now()) {
@@ -118,7 +118,7 @@ export async function submitGuest(db: Db, input: { planId: string; sessionToken:
         const prior = reports.find(r => r.requestId === input.requestId);
         if (prior) {
             if (prior.matchId !== input.matchId || prior.expectedRevision !== input.expectedRevision || prior.score1 !== input.score1 || prior.score2 !== input.score2) throw new TRPCError({ code: 'CONFLICT', message: 'Request identifier already used for a different score.' });
-            return { reportId: prior.id, status: prior.status };
+            return { reportId: prior.id, status: prior.status, isDispute: prior.isDispute };
         }
         const [match] = await tx.select().from(eventMatches).where(and(eq(eventMatches.id, input.matchId), eq(eventMatches.eventPlanId, input.planId)));
         if (!match || !['ready', 'playing'].includes(match.status) || match.revision !== input.expectedRevision) throw new TRPCError({ code: 'CONFLICT', message: 'This match changed or is unavailable. Refresh the match list.' });
@@ -132,6 +132,6 @@ export async function submitGuest(db: Db, input: { planId: string; sessionToken:
         const accepted = await canAutoAcceptPoolScore(tx, match);
         if (accepted) await applyScore(tx, match, { ...input, outcome: 'played' }, winnerId, null, guest.id);
         const [report] = await tx.insert(eventScoreReports).values({ eventPlanId: input.planId, guestSessionId: guest.id, matchId: match.id, expectedRevision: input.expectedRevision, requestId: input.requestId, score1: input.score1, score2: input.score2, outcome: 'played', winnerId, status: accepted ? 'approved' : 'pending' }).returning();
-        return { reportId: report!.id, status: report!.status };
+        return { reportId: report!.id, status: report!.status, isDispute: report!.isDispute };
     });
 }
