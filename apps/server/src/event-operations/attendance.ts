@@ -20,6 +20,7 @@ export async function previewAttendance(db: Db, input: AttendanceInput) {
     if (!view)
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Event not found.' });
     const matches = await db.select().from(eventMatches).where(eq(eventMatches.eventPlanId, input.planId));
+    const schedules = await db.select().from(eventPoolSchedules).where(eq(eventPoolSchedules.eventPlanId, input.planId));
     const withdrawals = await db.select().from(eventWithdrawals).where(eq(eventWithdrawals.eventPlanId, input.planId));
     const [player] = await db.select().from(players).where(eq(players.id, input.playerId));
     const entrant = view.entries.find(e => e.playerId === input.playerId);
@@ -51,9 +52,13 @@ export async function previewAttendance(db: Db, input: AttendanceInput) {
         warnings.push('Completed results stay recorded. Outstanding matches are held for explicit forfeit decisions. Reconfirm the pool order afterwards: first two active entrants advance to championship and remaining active entrants enter consolation.');
     if (pool?.members.some(m => m.place !== null))
         warnings.push('Confirmed placements for this pool will be cleared and need reconfirmation.');
+    const schedule = schedules.find(s => s.division === division && s.poolIndex === pool?.poolIndex);
+    const poolMatches = matches.filter(m => m.stage === 'group' && m.division === division && m.poolIndex === pool?.poolIndex);
+    const holdReopenedPool = input.action === 'add' && !!schedule?.active && !!schedule.stationIds.length && poolMatches.length > 0 && poolMatches.every(m => m.status === 'complete' || m.blockedReason === 'Both players withdrawn: no contest; no winner or score recorded');
+    if (holdReopenedPool) warnings.push('This completed pool will reopen on hold. Its former station bank may have been reused; an organiser must review and reactivate its allocation.');
     const affected = matches.filter(m => m.player1Id === input.playerId || m.player2Id === input.playerId);
-    const revisionToken = createHash('sha256').update(JSON.stringify({ status: view.plan.status, entries: view.entries.map(e => [e.id, e.playerId, e.assignedDivision, e.divisionSeed]), pools: view.divisions.map(d => d.pools.map(p => p.members.map(m => [m.playerId, m.place]))), matches: matches.map(m => [m.id, m.revision, m.status]), brackets: view.brackets.map(b => [b.tournamentId, b.challongeSlug]), withdrawals: withdrawals.map(w => w.playerId) })).digest('hex');
-    return { allowed: issues.length === 0, issues, warnings, requiresExternalAcknowledgement: attached.length > 0, division: division ?? null, poolIndex: pool?.poolIndex ?? null, poolSize: pool?.members.length ?? 0, addedMatches: input.action === 'add' ? (pool?.members.length ?? 0) : 0, affectedMatches: affected.map(m => ({ id: m.id, label: m.label, status: m.status })), revisionToken };
+    const revisionToken = createHash('sha256').update(JSON.stringify({ schedules: schedules.map(s => [s.id,s.revision,s.active,s.stationIds]).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))), status: view.plan.status, entries: view.entries.map(e => [e.id, e.playerId, e.assignedDivision, e.divisionSeed]), pools: view.divisions.map(d => d.pools.map(p => p.members.map(m => [m.playerId, m.place]))), matches: matches.map(m => [m.id, m.revision, m.status]), brackets: view.brackets.map(b => [b.tournamentId, b.challongeSlug]), withdrawals: withdrawals.map(w => w.playerId) })).digest('hex');
+    return { allowed: issues.length === 0, issues, warnings, holdReopenedPool, requiresExternalAcknowledgement: attached.length > 0, division: division ?? null, poolIndex: pool?.poolIndex ?? null, poolSize: pool?.members.length ?? 0, addedMatches: input.action === 'add' ? (pool?.members.length ?? 0) : 0, affectedMatches: affected.map(m => ({ id: m.id, label: m.label, status: m.status })), revisionToken };
 }
 export async function applyAttendance(db: Db, actor: SessionUser, input: AttendanceInput & {
     revisionToken: string;
@@ -81,6 +86,11 @@ export async function applyAttendance(db: Db, actor: SessionUser, input: Attenda
             const line = Math.max(0, ...view.entries.map(e => e.sourceLineNumber)) + 1;
             await tx.insert(eventPlanEntries).values({ eventPlanId: input.planId, playerId: input.playerId, sourceLineNumber: line, rawInput: player!.canonicalName, cleanedName: player!.canonicalName, resolutionMethod: 'manual', divisionPreference: division, assignedDivision: division, divisionSeed: seed });
             await tx.insert(eventPoolAssignments).values({ eventPlanId: input.planId, playerId: input.playerId, division, poolIndex });
+            if (preview.holdReopenedPool) {
+                const [previous] = await tx.select().from(eventPoolSchedules).where(and(eq(eventPoolSchedules.eventPlanId,input.planId),eq(eventPoolSchedules.division,division),eq(eventPoolSchedules.poolIndex,poolIndex)));
+                const [held] = await tx.update(eventPoolSchedules).set({active:false,revision:previous!.revision+1}).where(eq(eventPoolSchedules.id,previous!.id)).returning();
+                await tx.insert(eventAttendanceAudit).values({eventPlanId:input.planId,userId:actor.id,action:'pool_schedule_changed',details:{before:previous,after:held,reason:'Completed pool reopened by late attendance'}});
+            }
             await prepare(tx, input.planId);
         }
         else {

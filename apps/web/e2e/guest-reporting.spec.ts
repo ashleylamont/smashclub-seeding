@@ -57,6 +57,7 @@ test('scannable guest QR accepts anonymous and unlinked reports, keeps approval 
     const requestUrls:string[]=[];
     guest.on('request',request=>requestUrls.push(request.url()));
     await guest.goto(invitationUrl);
+    await guest.getByRole('combobox', { name: 'Match view', exact: true }).selectOption('matches');
     await expect(guest.getByRole('heading',{name:'Good games. Get them counted.'})).toBeVisible();
     await expect(guest.locator('article.ops-match').first()).toBeVisible();
     expect(new URL(guest.url()).hash).toBe('');
@@ -82,6 +83,7 @@ test('scannable guest QR accepts anonymous and unlinked reports, keeps approval 
     expect((await query<Array<{status:string}>>(unlinked.request,'me.claims')).filter(claim=>claim.status==='approved')).toHaveLength(0);
     const unlinkedPage=await unlinked.newPage();
     await unlinkedPage.goto(invitationUrl);
+    await unlinkedPage.getByRole('combobox', { name: 'Match view', exact: true }).selectOption('matches');
     const otherCard=unlinkedPage.locator('article.ops-match').filter({has:unlinkedPage.getByRole('heading',{name:`${second.player1Name} vs ${second.player2Name}`,exact:true})});
     await otherCard.getByLabel(second.player1Name,{exact:true}).fill('0');
     await otherCard.getByLabel(second.player2Name,{exact:true}).fill('2');
@@ -132,7 +134,7 @@ test('scannable guest QR accepts anonymous and unlinked reports, keeps approval 
     await expect(overlay.getByLabel('Recent match outcomes')).toContainText(`${first.player2Name} 2–1 ${first.player1Name}`);
     await mutate(page.request,'eventOps.reviewReport',{reportId:retry.id,approve:true});
     await unlinkedPage.getByRole('combobox',{name:'Match view',exact:true}).selectOption('reports');
-    await expect(otherCard).toContainText('Approved by a TO');
+    await expect(otherCard).toContainText('Confirmed result');
     // Revocation is checked server-side on each poll, even with cached session data.
     page.once('dialog',dialog=>void dialog.accept());
     await controls.getByRole('button',{name:'Revoke all guest passes',exact:true}).click();

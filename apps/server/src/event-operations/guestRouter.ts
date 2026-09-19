@@ -1,9 +1,11 @@
+import { startPoolMatch } from './selfService';
 import { z } from 'zod';
 import { authedProcedure, publicProcedure, router } from '../trpc/trpc';
 import { configureGuests, guestInvitation, guestMatches, guestSettings, redeemGuest, rotateGuests, submitGuest } from './guests';
 const plan = z.object({ planId: z.string().uuid() });
 const session = plan.extend({ sessionToken: z.string().min(32).max(100) });
 export const guestRouter = router({
+    startPoolMatch: publicProcedure.input(session.extend({ matchId: z.string().uuid(), stationId: z.string().uuid(), expectedRevision: z.number().int().min(0) })).mutation(({ ctx, input }) => startPoolMatch(ctx.db, null, input)),
     settings: authedProcedure.input(plan).query(({ ctx, input }) => guestSettings(ctx.db, ctx.user, input.planId)),
     configure: authedProcedure.input(plan.extend({ enabled: z.boolean(), showOnOverlay: z.boolean() })).mutation(({ ctx, input }) => configureGuests(ctx.db, ctx.user, input)),
     rotate: authedProcedure.input(plan).mutation(({ ctx, input }) => rotateGuests(ctx.db, ctx.user, input.planId)),

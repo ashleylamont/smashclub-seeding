@@ -9,8 +9,9 @@ test('public night board and user-initiated overlay capture controls', async ({ 
   expect(plan).toBeTruthy();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/live/${plan.id}`);
-  await expect(page.getByRole('heading', { name: 'Stations', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Find your station', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Pool progress & standings' })).toBeVisible();
+  await page.getByText('More playing and ready matches', { exact: true }).click();
   await expect(page.getByRole('heading', { name: /Ready to play/ })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('event-board-mobile.png'), fullPage: true });

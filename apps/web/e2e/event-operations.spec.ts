@@ -61,6 +61,7 @@ test('rehearsal: two TOs, score approval, station safety, public board and OBS',
     await signIn(playerContext.request, 'rehearsal-player@smashclub.dev');
     const playerPage = await playerContext.newPage();
     await playerPage.goto(`/play/${planId}`);
+    await playerPage.getByRole('combobox', { name: 'Match view', exact: true }).selectOption('all');
     const playerCard = playerPage.locator('article.ops-match').filter({ hasText: playing.label });
     await playerCard.locator('input[type="number"]').nth(0).fill('2');
     await playerCard.locator('input[type="number"]').nth(1).fill('0');
@@ -146,6 +147,7 @@ test('player draft requires an explicit reload after another TO changes the matc
     const match = snapshot.matches.find(match => [match.player1Id, match.player2Id].includes(playerId))!;
     const playerPage = await playerContext.newPage();
     await playerPage.goto(`/play/${planId}`);
+    await playerPage.getByRole('combobox', { name: 'Match view', exact: true }).selectOption('all');
     const card = playerPage.locator('article.ops-match').filter({ hasText: match.label });
     await card.locator('input[type="number"]').nth(0).fill('2');
     await card.locator('input[type="number"]').nth(1).fill('1');
@@ -179,6 +181,7 @@ test('a rejected player score starts a new request even when its scores are unch
     const match = snapshot.matches.find(match => [match.player1Id, match.player2Id].includes(playerId))!;
     const playerPage = await playerContext.newPage();
     await playerPage.goto(`/play/${planId}`);
+    await playerPage.getByRole('combobox', { name: 'Match view', exact: true }).selectOption('all');
     const card = playerPage.locator('article.ops-match').filter({ hasText: match.label });
     await card.locator('input[type="number"]').nth(0).fill('2');
     await card.locator('input[type="number"]').nth(1).fill('1');
