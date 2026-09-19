@@ -58,6 +58,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
   if (!event.data) return <section className="card"><h2>Event control</h2><p role="alert">{event.error?.message ?? 'Event unavailable'}</p><a href="/login">Sign in</a></section>;
   const data = event.data;
   const closed = ['complete', 'cancelled'].includes(data.plan.status);
+  const disputes = data.reports.filter(report => report.status === 'pending' && report.isDispute).length;
   const available = availableMatches(data.matches).filter(match => match.availability.canStart);
   const callable = new Set(available.map(match => match.id));
   const pools = poolStandings(data.matches);
@@ -72,6 +73,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
       <nav className="ops-links">{data.plan.resultsSlug && <a href={`/events/${encodeURIComponent(data.plan.resultsSlug)}`}>Final results</a>}{admin && <a href={`/admin/event-planner?plan=${planId}`}>Planner</a>}<a href={`/live/${planId}`} target="_blank" rel="noreferrer">Public screen ↗</a><a href={`/overlay/${planId}`} target="_blank" rel="noreferrer">OBS overlay ↗</a><a href={`/play/${planId}`}>Player reporting</a></nav></header>
     {event.isError && <div className="banner banner-warning" role="alert">Live updates interrupted. Last loaded data is shown. {event.error.message}</div>}
     {error && <div className="banner banner-danger" role="alert">{error}</div>}{notice && <p className="ops-notice" role="status">{notice}</p>}
+    {disputes > 0 && <p className="banner banner-warning" role="status"><strong>{disputes} conflicting {disputes === 1 ? 'score needs' : 'scores need'} TO review.</strong> Recorded results stay in place. <a href="#score-submissions">Review disagreements →</a></p>}
     <StationPoolControls data={data} disabled={pending || closed} act={act} onPool={key => { setPoolFilter(key); setDivision('all'); setFilter('active'); document.getElementById('match-desk')?.scrollIntoView({ behavior: 'smooth' }); }} />
     <div className="ops-stats">{(['playing', 'ready', 'waiting', 'complete'] as const).map(status => <button key={status} className={`ops-stat ${filter === status ? 'selected' : ''}`} onClick={() => setFilter(status)}><strong>{status === 'ready' ? available.length : status === 'waiting' ? data.matches.filter(m => m.status === 'blocked' || (m.status === 'ready' && !callable.has(m.id))).length : data.matches.filter(m => m.status === status).length}</strong><span>{status === 'playing' ? 'Playing now' : status === 'ready' ? 'Ready to start' : status === 'waiting' ? 'Waiting' : 'Finished'}</span></button>)}</div>
     <section className="card ops-setup" id="match-desk"><div><h3>Match desk</h3><p className="muted">Build or refresh the match list. Ready matches have available players and stations; waiting matches explain what needs to happen first.</p></div><button className="btn" disabled={pending || closed} onClick={() => void act(() => trpc.eventOps.prepare.mutate({ planId }), 'Match queue refreshed')}>Prepare / refresh matches</button></section>
