@@ -56,6 +56,7 @@ test('TO finds an entrant, follows their current station call, and opens the exa
   await expect(finder).toContainText('On hold for a later wave');
   await finder.getByRole('button', { name: 'Lower Pool A', exact: true }).click();
   await expect(page.locator('.ops-toolbar').getByRole('combobox', { name: /^Pool/ })).toHaveValue('lower:0');
+  await expect(page.locator('#match-desk')).toBeFocused();
   await expect(page.locator('.ops-match-grid')).toContainText('lower Pool A');
   await finder.getByLabel('Player name', { exact: true }).fill('definitely-no-entrant');
   await expect(finder).toContainText('No event players match that name.');
