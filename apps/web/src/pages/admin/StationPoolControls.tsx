@@ -40,6 +40,7 @@ export function StationPoolControls({ data, disabled, act, onPool }: { data: Ove
       </details>
     </section>
     {pools.length > 0 && <section className="card"><h3>Pool queues and stations</h3><p className="muted">Reserve a set of stations for each pool. Players follow their round-robin queue while other pools wait for the next wave. Pools without assigned stations use unreserved stations.</p>
+      {data.settings.scoreReportingMode === 'approve_unless_disputed' && <p className="muted">Event policy: played scores are accepted immediately; conflicting reports go to TO review. This overrides the per-pool approval preference.</p>}
       <PoolStationSetup key={data.stations.map(station => station.id).join(':')} data={data} disabled={disabled} act={act} />
       <div className="ops-pool-controls">{pools.map(pool => {
         const schedule = data.poolSchedules.find(schedule => schedule.division === pool.division && schedule.poolIndex === pool.poolIndex);
