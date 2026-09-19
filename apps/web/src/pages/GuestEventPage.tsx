@@ -89,7 +89,7 @@ export function GuestEvent({ planId }: { planId: string }) {
       <div className="ops-match-grid">{visible.map(match => <GuestScoreCard key={`${match.id}:${poolPolicy(data, match)?.selfRun && match.status === 'playing' ? 'playing' : 'regular'}`} planId={planId} session={canWrite && !['complete', 'cancelled'].includes(data.plan.status) ? session : null} disputeMode={disputeMode} match={match as Match} report={matches.data?.reports.find(report => report.matchId === match.id)} selfRun={!!poolPolicy(data, match)?.selfRun} autoAccept={!!poolPolicy(data, match)?.autoAcceptScores} />)}</div>
       {!visible.length && <p className="card">{view === 'reports' ? 'Your submitted scores will appear here.' : 'No matches in this view yet. Choose a pool, search a player, or select All open matches.'}</p>}</section>
     </>}
-    {error && <p className="error-text" role="alert">{error}</p>}
+    {error && !matches.isError && <p className="error-text" role="alert">{error}</p>}
   </div>;
 }
 
