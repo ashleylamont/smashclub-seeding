@@ -62,6 +62,31 @@ describe('native brackets', () => {
     await expect(score(rounds[0]!)).rejects.toMatchObject({ code: 'CONFLICT' });
   });
 
+  it('keeps disputes reviewable after downstream play and blocks finalization until resolved', async () => {
+    await finishPools(); await generate();
+    await db.update(eventOperationSettings).set({ published: true, playerReports: true, scoreReportingMode: 'approve_unless_disputed' }).where(eq(eventOperationSettings.eventPlanId, planId));
+    const semifinal = (await db.select().from(eventMatches)).find(m => m.nativeBracketId && m.division === 'upper' && m.stage === 'main' && m.nativeRound === 1)!;
+    const input = { matchId: semifinal.id, expectedRevision: semifinal.revision, requestId: crypto.randomUUID(), score1: 2, score2: 0, outcome: 'played' as const };
+    expect((await reportScore(db, member, input)).status).toBe('approved');
+    const other = (await db.select().from(eventMatches)).find(m => m.nativeBracketId === semifinal.nativeBracketId && m.nativeRound === 1 && m.id !== semifinal.id)!;
+    await score(other);
+    const final = (await db.select().from(eventMatches)).find(m => m.nativeBracketId === semifinal.nativeBracketId && m.nativeRound === 2)!;
+    await updateMatch(db, admin, { matchId: final.id, expectedRevision: final.revision, status: 'playing' });
+    // Same result remains harmless even after the downstream guard activates.
+    expect((await reportScore(db, member, { ...input, requestId: crypto.randomUUID() })).status).toBe('approved');
+    const dispute = await reportScore(db, member, { ...input, requestId: crypto.randomUUID(), score1: 0, score2: 2 });
+    expect(dispute).toMatchObject({ status: 'pending', isDispute: true });
+    await expect(reviewReport(db, admin, dispute.id, true)).rejects.toThrow(/downstream/);
+    let rounds = (await db.select().from(eventMatches)).filter(m => m.nativeBracketId);
+    while (rounds.some(m => ['ready', 'playing'].includes(m.status))) {
+      for (const match of rounds.filter(m => ['ready', 'playing'].includes(m.status))) await score(match);
+      rounds = (await db.select().from(eventMatches)).filter(m => m.nativeBracketId);
+    }
+    await expect(finalizeNativeEvent(db, admin, planId)).rejects.toThrow(/pending player reports/);
+    expect((await reviewReport(db, admin, dispute.id, false)).status).toBe('rejected');
+    await finalizeNativeEvent(db, admin, planId);
+  });
+
   it('uses preview revisions, only rebuilds unplayed draws, and protects downstream play', async () => {
     await finishPools();
     const stale = await previewNativeBrackets(db, planId);
