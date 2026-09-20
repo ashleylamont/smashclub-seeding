@@ -11,7 +11,7 @@ export function StationPoolControls({ data, disabled, act, onPool }: { data: Ove
   const [stationCount, setStationCount] = useState(4);
   const pools = poolStandings(data.matches);
   return <>
-    <section className="card"><div className="ops-section-heading"><h3>Stations</h3><span>{data.stations.filter(station => station.status === 'free').length} of {data.stations.length} free</span></div>
+    <section className="card" id="station-controls" tabIndex={-1}><div className="ops-section-heading"><h3>Stations</h3><span>{data.stations.filter(station => station.status === 'free').length} of {data.stations.length} free</span></div>
       <div className="ops-station-board">{data.stations.map(station => {
         const match = data.matches.find(match => match.id === station.currentMatchId);
         const queue = data.stationQueues.find(queue => queue.stationId === station.id);
