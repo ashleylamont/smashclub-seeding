@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { PoolStationSetup } from './PoolStationSetup';
+import { PoolFloorSheets } from './PoolFloorSheets';
 import { trpc } from '../../lib/trpc';
 import { poolStandings } from '../../lib/eventQueue';
 import { poolLabel } from '../../lib/poolStationPlan';
@@ -40,6 +41,7 @@ export function StationPoolControls({ data, disabled, act, onPool }: { data: Ove
       </details>
     </section>
     {pools.length > 0 && <section className="card"><h3>Pool queues and stations</h3><p className="muted">Reserve a set of stations for each pool. Players follow their round-robin queue while other pools wait for the next wave. Pools without assigned stations use unreserved stations.</p>
+      <PoolFloorSheets data={data} />
       <PoolStationSetup key={data.stations.map(station => station.id).join(':')} data={data} disabled={disabled} act={act} />
       <div className="ops-pool-controls">{pools.map(pool => {
         const schedule = data.poolSchedules.find(schedule => schedule.division === pool.division && schedule.poolIndex === pool.poolIndex);
