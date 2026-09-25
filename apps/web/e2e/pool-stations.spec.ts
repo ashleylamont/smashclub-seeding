@@ -19,6 +19,15 @@ test('TO divides stations once, players see pool queues, and the next wave reuse
  await mutate(page.request, 'eventOps.settings', { planId, published: true, playerReports: true });
  for (const name of ['Station 10', 'Station 1', 'Station 11', 'Station 2']) await mutate(page.request, 'eventOps.saveStation', { planId, name });
  await page.goto(`/admin/event-operations?plan=${planId}`);
+ const stationTile = page.locator('.ops-station-tile').filter({ hasText: 'Station 11' });
+ await stationTile.getByRole('button', { name: 'Rename' }).click();
+ await stationTile.getByRole('textbox', { name: 'New name for Station 11' }).fill('Side stage');
+ await stationTile.getByRole('button', { name: 'Save name' }).click();
+ const renamedTile = page.locator('.ops-station-tile').filter({ hasText: 'Side stage' });
+ await expect(renamedTile).toBeVisible();
+ page.once('dialog', dialog => void dialog.accept());
+ await renamedTile.getByRole('button', { name: 'Delete' }).click();
+ await expect(page.locator('.ops-station-tile').filter({ hasText: 'Side stage' })).toHaveCount(0);
  await page.getByText('Divide stations between pools', { exact: true }).click();
  const setup = page.locator('.ops-pool-setup');
  await setup.getByRole('checkbox', { name: 'Accept player scores immediately in these pools' }).check();

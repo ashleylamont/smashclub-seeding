@@ -6,11 +6,12 @@ import { sourceRefreshRouter } from './sourceRefreshRouter';
 import { z } from 'zod';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
-import { eventMatchAudit, eventOperationSettings, eventOperators, eventPrizes, eventScoreReports, eventStations, eventPlanEntries, eventAttendanceAudit, user } from '@smashclub/db';
+import { eventMatchAudit, eventOperationSettings, eventOperators, eventPrizes, eventScoreReports, eventPlanEntries, eventAttendanceAudit, user } from '@smashclub/db';
 import { adminProcedure, authedProcedure, publicProcedure, router } from '../trpc/trpc';
 import { lockEvent, prepare, reportScore, requireOperator, reviewReport, snapshot, updateMatch } from './service';
 import { configurePools, configurePool, publishAnnouncement, updateLiveScore } from './controls';
 import { applyAttendance, previewAttendance, resetOperations } from './attendance';
+import { deleteStation, saveStation } from './stations';
 const attendanceInput = z.object({ planId: z.string().uuid(), action: z.enum(['add', 'withdraw']), playerId: z.string().uuid(), division: z.enum(['upper', 'lower']).optional(), poolIndex: z.number().int().min(0).optional(), reason: z.string().trim().max(200).optional(), acknowledgeExternalChange: z.boolean().optional() });
 const planInput = z.object({ planId: z.string().uuid() });
 export const eventOpsRouter = router({
@@ -45,7 +46,8 @@ export const eventOpsRouter = router({
             return tx.delete(eventOperators).where(and(eq(eventOperators.eventPlanId, input.planId), eq(eventOperators.userId, account.id))).returning();
         return tx.insert(eventOperators).values({ eventPlanId: input.planId, userId: account.id }).onConflictDoNothing().returning();
     })),
-    saveStation: authedProcedure.input(planInput.extend({ id: z.string().uuid().optional(), name: z.string().trim().min(1).max(60) })).mutation(async ({ ctx, input }) => { await requireOperator(ctx.db, input.planId, ctx.user); return ctx.db.transaction(async (tx) => { await lockEvent(tx, input.planId); return input.id ? tx.update(eventStations).set({ name: input.name }).where(and(eq(eventStations.id, input.id), eq(eventStations.eventPlanId, input.planId))).returning() : tx.insert(eventStations).values({ eventPlanId: input.planId, name: input.name }).returning(); }); }),
+    saveStation: authedProcedure.input(planInput.extend({ id: z.string().uuid().optional(), name: z.string().trim().min(1).max(60) })).mutation(({ ctx, input }) => saveStation(ctx.db, ctx.user, input)),
+    deleteStation: authedProcedure.input(planInput.extend({ id: z.string().uuid() })).mutation(({ ctx, input }) => deleteStation(ctx.db, ctx.user, input)),
     announce: authedProcedure.input(planInput.extend({ message: z.string().trim().min(1).max(500),durationSeconds:z.number().int().min(1).max(86400).nullable().optional() })).mutation(({ctx,input})=>publishAnnouncement(ctx.db,ctx.user,input)),
     savePrize: authedProcedure.input(planInput.extend({ id: z.string().uuid().optional(), title: z.string().trim().min(1).max(100), description: z.string().max(500).nullable().optional(), playerId: z.string().uuid().nullable().optional() })).mutation(async ({ ctx, input }) => {
         await requireOperator(ctx.db, input.planId, ctx.user);
