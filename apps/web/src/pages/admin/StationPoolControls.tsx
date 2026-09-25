@@ -10,6 +10,8 @@ type Action = (work: () => Promise<unknown>, message?: string) => Promise<void>;
 export function StationPoolControls({ data, disabled, act, onPool }: { data: Overview; disabled: boolean; act: Action; onPool: (key: string) => void }) {
   const [stationName, setStationName] = useState('');
   const [stationCount, setStationCount] = useState(4);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
   const pools = poolStandings(data.matches);
   return <>
     <section className="card" id="station-controls" tabIndex={-1}><div className="ops-section-heading"><h3>Stations</h3><span>{data.stations.filter(station => station.status === 'free').length} of {data.stations.length} free</span></div>
@@ -25,6 +27,16 @@ export function StationPoolControls({ data, disabled, act, onPool }: { data: Ove
           {queue?.waitingReason && !next && <p className="muted">{queue.waitingReason}</p>}
           {upcoming.length > 0 && <div className="ops-station-coming"><small>COMING UP · PROJECTED ORDER</small><ol>{upcoming.map(item => <li key={item.matchId}>{item.match.player1Name} vs {item.match.player2Name} <small>· Round {item.round}</small></li>)}</ol></div>}
           <a href={`/overlay/${data.plan.id}?station=${encodeURIComponent(station.id)}`} target="_blank" rel="noreferrer">Open this station’s display ↗</a>
+          <div className="ops-station-actions">
+            <button type="button" className="btn btn-small" disabled={disabled} onClick={() => { setEditingId(station.id); setEditName(station.name); }}>Rename</button>
+            <button type="button" className="btn btn-small" disabled={disabled || !!match} title={match ? 'Return the playing match to the queue first' : undefined} onClick={() => {
+              if (window.confirm(`Delete ${station.name}? Its idle match assignments and pool reservations will be cleared.`)) void act(() => trpc.eventOps.deleteStation.mutate({ planId: data.plan.id, id: station.id }), 'Station deleted');
+            }}>Delete</button>
+          </div>
+          {editingId === station.id && <form className="ops-station-rename" onSubmit={event => { event.preventDefault(); void act(async () => { await trpc.eventOps.saveStation.mutate({ planId: data.plan.id, id: station.id, name: editName }); setEditingId(null); }, 'Station renamed'); }}>
+            <label>New name for {station.name}<input className="input" value={editName} onChange={event => setEditName(event.target.value)} maxLength={60} required /></label>
+            <div className="ops-match-actions"><button className="btn btn-small" disabled={disabled || !editName.trim()}>Save name</button><button type="button" className="btn btn-small" onClick={() => setEditingId(null)}>Cancel</button></div>
+          </form>}
         </article>;
       })}</div>
       {!data.stations.length && <p>Add the stations available tonight. Matches can then be assigned to a free station.</p>}
