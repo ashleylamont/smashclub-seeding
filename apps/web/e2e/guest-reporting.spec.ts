@@ -58,7 +58,7 @@ test('scannable guest QR accepts anonymous and unlinked reports, keeps approval 
     guest.on('request',request=>requestUrls.push(request.url()));
     await guest.goto(invitationUrl);
     await guest.getByRole('combobox', { name: 'Match view', exact: true }).selectOption('matches');
-    await expect(guest.getByRole('heading',{name:'Good games. Get them counted.'})).toBeVisible();
+    await expect(guest.locator('header h1')).toContainText('Guest rehearsal');
     await expect(guest.locator('article.ops-match').first()).toBeVisible();
     expect(new URL(guest.url()).hash).toBe('');
     expect(requestUrls.some(url=>url.includes(invitationToken))).toBe(false);

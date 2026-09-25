@@ -1,4 +1,4 @@
-import { canAutoAcceptPoolScore } from './selfService';
+import { attendeeScoreDecision, samePlayedScore } from './scorePolicy';
 import { loadStationQueues } from './queue';
 import { advanceNativeBrackets, assertNativeCorrectionAllowed, nativeBracketViews } from './nativeBrackets';
 import { and, asc, desc, eq, inArray, gt, isNull, or } from 'drizzle-orm';
@@ -39,7 +39,8 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
     const poolSchedules = await db.select().from(eventPoolSchedules).where(eq(eventPoolSchedules.eventPlanId,planId));
     const participantIds=[...new Set(rows.flatMap(match=>[match.player1Id,match.player2Id].filter((id):id is string=>!!id)))];
     const characters=participantIds.length?await db.select().from(playerCharacters).where(inArray(playerCharacters.playerId,participantIds)).orderBy(asc(playerCharacters.position)):[];
-    const matches = rows.map(m => ({ ...m,
+    const disputes = await db.select({ matchId: eventScoreReports.matchId }).from(eventScoreReports).where(and(eq(eventScoreReports.eventPlanId, planId), eq(eventScoreReports.status, 'pending'), eq(eventScoreReports.isDispute, true)));
+    const matches = rows.map(m => ({ ...m, pendingDisputeCount: disputes.filter(report => report.matchId === m.id).length,
         score1:m.status==='playing'?(m.liveScore1??m.score1):m.score1,score2:m.status==='playing'?(m.liveScore2??m.score2):m.score2,
         player1Name: m.player1Id ? names.get(m.player1Id) ?? 'Player' : 'TBD', player2Name: m.player2Id ? names.get(m.player2Id) ?? 'Player' : 'TBD',
         player1Characters:characters.filter(c=>c.playerId===m.player1Id).map(c=>c.characterSlug),player2Characters:characters.filter(c=>c.playerId===m.player2Id).map(c=>c.characterSlug),
@@ -55,7 +56,7 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
     // Archived plans are planning intent, not evidence of attendance or finishes.
     const entrants = plan.historicalAdoption ? [] : (await db.select({ id: eventPlanEntries.playerId }).from(eventPlanEntries).where(eq(eventPlanEntries.eventPlanId, planId))).flatMap(p => p.id ? [{ id: p.id, name: names.get(p.id) ?? 'Player' }] : []);
     const prizes = (await db.select().from(eventPrizes).where(eq(eventPrizes.eventPlanId, planId))).map(p => ({ ...p, playerName: p.playerId ? names.get(p.playerId) ?? 'Player' : null }));
-    return { ...await loadStationQueues(db, planId), nativeBrackets: await nativeBracketViews(db, planId), plan: { id: plan.id, name: plan.name, eventDate: plan.eventDate.toISOString(), status: plan.status, bracketMode: plan.bracketMode, historicalResultsSlug, resultsSlug }, brackets: (await db.select({ division: eventPlanBrackets.division, stage: eventPlanBrackets.stage, slug: eventPlanBrackets.challongeSlug }).from(eventPlanBrackets).where(eq(eventPlanBrackets.eventPlanId, planId))), settings: { published: settings?.published ?? false, playerReports: settings?.playerReports ?? false }, matches, entrants, prizes,
+    return { ...await loadStationQueues(db, planId), nativeBrackets: await nativeBracketViews(db, planId), plan: { id: plan.id, name: plan.name, eventDate: plan.eventDate.toISOString(), status: plan.status, bracketMode: plan.bracketMode, historicalResultsSlug, resultsSlug }, brackets: (await db.select({ division: eventPlanBrackets.division, stage: eventPlanBrackets.stage, slug: eventPlanBrackets.challongeSlug }).from(eventPlanBrackets).where(eq(eventPlanBrackets.eventPlanId, planId))), settings: { scoreReportingMode: settings?.scoreReportingMode ?? 'to_review', published: settings?.published ?? false, playerReports: settings?.playerReports ?? false }, matches, entrants, prizes,
         stations: stations.map(station=>stationAvailability(station,rows)), poolSchedules,
         announcements: (await db.select().from(eventAnnouncements).where(and(eq(eventAnnouncements.eventPlanId, planId),or(isNull(eventAnnouncements.expiresAt),gt(eventAnnouncements.expiresAt,new Date())))).orderBy(desc(eventAnnouncements.createdAt))).map(a => ({ ...a, createdAt: a.createdAt.toISOString(),expiresAt:a.expiresAt?.toISOString()??null })),
         withdrawals: await db.select({ playerId: eventWithdrawals.playerId }).from(eventWithdrawals).where(eq(eventWithdrawals.eventPlanId, planId)),
@@ -199,7 +200,7 @@ export async function reportScore(db: Db, user: SessionUser, input: ScoreInput) 
         const match = await matchForUpdate(tx, input.matchId);
         const [prior] = await tx.select().from(eventScoreReports).where(and(eq(eventScoreReports.userId, user.id), eq(eventScoreReports.requestId, input.requestId)));
         if (prior) {
-            if (prior.matchId !== input.matchId || prior.expectedRevision !== input.expectedRevision || prior.score1 !== input.score1 || prior.score2 !== input.score2 || prior.outcome !== input.outcome || (input.winnerId && input.winnerId !== prior.winnerId))
+            if (prior.matchId !== input.matchId || (prior.submittedRevision ?? prior.expectedRevision) !== input.expectedRevision || prior.score1 !== input.score1 || prior.score2 !== input.score2 || prior.outcome !== input.outcome || (input.winnerId && input.winnerId !== prior.winnerId))
                 fail('CONFLICT', 'Request identifier already used for a different score.');
             return prior;
         }
@@ -208,7 +209,7 @@ export async function reportScore(db: Db, user: SessionUser, input: ScoreInput) 
             const [settings] = await tx.select().from(eventOperationSettings).where(eq(eventOperationSettings.eventPlanId, match.eventPlanId));
             if (!settings?.published || !settings.playerReports)
                 fail('FORBIDDEN', 'Score reporting is unavailable for this event.');
-            if (!['ready', 'playing'].includes(match.status) || input.outcome !== 'played')
+            if (input.outcome !== 'played')
                 fail('CONFLICT', 'Ask an organiser to record byes, forfeits, blocked matches or corrections.');
             const reports = await tx.select().from(eventScoreReports).where(and(eq(eventScoreReports.eventPlanId, match.eventPlanId), eq(eventScoreReports.userId, user.id)));
             if (reports.some(report => report.matchId === match.id && report.status === 'pending'))
@@ -216,7 +217,7 @@ export async function reportScore(db: Db, user: SessionUser, input: ScoreInput) 
             if (reports.filter(report => report.status === 'pending').length >= 30 || reports.filter(report => report.createdAt.getTime() > Date.now() - 60_000).length >= 6)
                 throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many score reports. Please wait or ask an organiser.' });
         }
-        if (match.revision !== input.expectedRevision)
+        if (operator && match.revision !== input.expectedRevision)
             fail('CONFLICT', 'This match changed. Refresh and try again.');
         if (input.outcome === 'bye' && match.sourceSetId && match.status === 'blocked')
             fail('BAD_REQUEST', 'An unresolved bracket opponent is not a confirmed bye. Resolve it in Challonge first.');
@@ -224,12 +225,13 @@ export async function reportScore(db: Db, user: SessionUser, input: ScoreInput) 
         if(match.player1Id&&match.player2Id&&[match.player1Id,match.player2Id].every(id=>withdrawn.some(w=>w.playerId===id))&&match.status!=='complete')fail('CONFLICT','Both players withdrew. This is an unplayed no contest with no winner.');
         if (input.outcome === 'played' && withdrawn.some(w => [match.player1Id, match.player2Id].includes(w.playerId)) && match.status !== 'complete')
             fail('CONFLICT', 'A player has withdrawn. Record an explicit forfeit rather than a played result.');
+        if (!operator && withdrawn.some(w => [match.player1Id, match.player2Id].includes(w.playerId))) fail('CONFLICT', 'A player withdrew. Ask an organiser to resolve this match.');
         const winnerId = validateScore(match, input);
         if(match.status!=='complete'&&withdrawn.some(w=>w.playerId===winnerId))fail('BAD_REQUEST','A withdrawn entrant cannot win an outstanding match. Select the active opponent for the forfeit.');
-        const accepted = operator || (input.outcome === 'played' && await canAutoAcceptPoolScore(tx, match));
-        if (accepted)
-            await applyScore(tx, match, input, winnerId, user.id);
-        const [report] = await tx.insert(eventScoreReports).values({ ...input, eventPlanId: match.eventPlanId, userId: user.id, winnerId, status: accepted ? 'approved' : 'pending' }).returning();
+        const decision = operator ? { apply: true, status: 'approved' as const, autoApproved: false, isDispute: false, expectedRevision: input.expectedRevision } : await attendeeScoreDecision(tx, match, input, winnerId);
+        if (decision.apply) await applyScore(tx, match, input, winnerId, user.id);
+        const reportDecision = { status: decision.status, expectedRevision: decision.expectedRevision, autoApproved: decision.autoApproved, isDispute: decision.isDispute };
+        const [report] = await tx.insert(eventScoreReports).values({ ...input, ...reportDecision, submittedRevision: input.expectedRevision, eventPlanId: match.eventPlanId, userId: user.id, winnerId }).returning();
         return report!;
     });
 }
@@ -243,8 +245,8 @@ export async function reviewReport(db: Db, user: SessionUser, reportId: string, 
         const [fresh] = await tx.select().from(eventScoreReports).where(eq(eventScoreReports.id, reportId));
         if (fresh!.status !== 'pending')
             return fresh!;
-        if (approve)
-            await applyScore(tx, match, { ...report }, report.winnerId, user.id);
+        if (approve && !(fresh!.isDispute && fresh!.expectedRevision === match.revision && samePlayedScore(match, fresh!, fresh!.winnerId)))
+            await applyScore(tx, match, { ...fresh! }, fresh!.winnerId, user.id);
         const [updated] = await tx.update(eventScoreReports).set({ status: approve ? 'approved' : 'rejected' }).where(eq(eventScoreReports.id, reportId)).returning();
         return updated!;
     });

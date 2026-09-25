@@ -4,6 +4,7 @@ import { eventPlans, players, sets } from './domain';
 import { user } from './auth';
 const planId = () => uuid('event_plan_id').notNull().references(() => eventPlans.id, { onDelete: 'cascade' });
 export const eventOperationSettings = pgTable('event_operation_settings', {
+    scoreReportingMode: text('score_reporting_mode').$type<'to_review' | 'approve_unless_disputed'>().notNull().default('to_review'),
     eventPlanId: planId().primaryKey(), published: boolean('published').notNull().default(false), playerReports: boolean('player_reports').notNull().default(false),
 });
 export const eventOperators = pgTable('event_operators', {
@@ -31,6 +32,7 @@ export const eventMatches = pgTable('event_matches', {
 }, t => [uniqueIndex('event_matches_source_idx').on(t.eventPlanId, t.sourceKey)]);
 export const eventScoreReports = pgTable('event_score_reports', {
     id: uuid('id').primaryKey().defaultRandom(), eventPlanId: planId(), matchId: uuid('match_id').notNull().references(() => eventMatches.id, { onDelete: 'cascade' }), userId: text('user_id').references(() => user.id), guestSessionId: uuid('guest_session_id').references(() => eventGuestSessions.id), requestId: text('request_id').notNull(),
+    autoApproved: boolean('auto_approved').notNull().default(false), submittedRevision: integer('submitted_revision'), isDispute: boolean('is_dispute').notNull().default(false),
     expectedRevision: integer('expected_revision').notNull(), score1: integer('score1').notNull(), score2: integer('score2').notNull(), winnerId: uuid('winner_id').notNull().references(() => players.id), outcome: text('outcome').$type<'played' | 'bye' | 'forfeit'>().notNull(),
     status: text('status').$type<'pending' | 'approved' | 'rejected'>().notNull(), createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [uniqueIndex('event_score_reports_request_idx').on(t.userId, t.requestId), uniqueIndex('event_score_reports_guest_request_idx').on(t.guestSessionId, t.requestId), check('event_score_reports_one_reporter', sql`(${t.userId} IS NULL) <> (${t.guestSessionId} IS NULL)`)]);
