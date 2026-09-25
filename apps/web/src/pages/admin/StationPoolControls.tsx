@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { PoolStationSetup } from './PoolStationSetup';
+import { PoolFloorSheets } from './PoolFloorSheets';
 import { trpc } from '../../lib/trpc';
 import { poolStandings } from '../../lib/eventQueue';
 import { poolLabel } from '../../lib/poolStationPlan';
@@ -11,7 +12,7 @@ export function StationPoolControls({ data, disabled, act, onPool }: { data: Ove
   const [stationCount, setStationCount] = useState(4);
   const pools = poolStandings(data.matches);
   return <>
-    <section className="card"><div className="ops-section-heading"><h3>Stations</h3><span>{data.stations.filter(station => station.status === 'free').length} of {data.stations.length} free</span></div>
+    <section className="card" id="station-controls" tabIndex={-1}><div className="ops-section-heading"><h3>Stations</h3><span>{data.stations.filter(station => station.status === 'free').length} of {data.stations.length} free</span></div>
       <div className="ops-station-board">{data.stations.map(station => {
         const match = data.matches.find(match => match.id === station.currentMatchId);
         const queue = data.stationQueues.find(queue => queue.stationId === station.id);
@@ -41,6 +42,7 @@ export function StationPoolControls({ data, disabled, act, onPool }: { data: Ove
     </section>
     {pools.length > 0 && <section className="card"><h3>Pool queues and stations</h3><p className="muted">Reserve a set of stations for each pool. Players follow their round-robin queue while other pools wait for the next wave. Pools without assigned stations use unreserved stations.</p>
       {data.settings.scoreReportingMode === 'approve_unless_disputed' && <p className="muted">Event policy: played scores are accepted immediately; conflicting reports go to TO review. This overrides the per-pool approval preference.</p>}
+      <PoolFloorSheets data={data} />
       <PoolStationSetup key={data.stations.map(station => station.id).join(':')} data={data} disabled={disabled} act={act} />
       <div className="ops-pool-controls">{pools.map(pool => {
         const schedule = data.poolSchedules.find(schedule => schedule.division === pool.division && schedule.poolIndex === pool.poolIndex);
