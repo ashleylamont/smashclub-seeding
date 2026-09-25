@@ -2,6 +2,7 @@ import { ScorePolicyControls } from './ScorePolicyControls';
 import { StationPoolControls } from './StationPoolControls';
 import { NativeBracketControls } from './NativeBracketControls';
 import { useState } from 'react';
+import { ToPlayerFinder } from './ToPlayerFinder';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearch, useParams } from '@tanstack/react-router';
 import { trpc } from '../../lib/trpc';
@@ -78,6 +79,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
     {event.isError && <div className="banner banner-warning" role="alert">Live updates interrupted. Last loaded data is shown. {event.error.message}</div>}
     {error && <div className="banner banner-danger" role="alert">{error}</div>}{notice && <p className="ops-notice" role="status">{notice}</p>}
     {disputes > 0 && <p className="banner banner-warning" role="status"><strong>{disputes} conflicting {disputes === 1 ? 'score needs' : 'scores need'} TO review.</strong> Recorded results stay in place. <a href="#score-submissions">Review disagreements →</a></p>}
+    <ToPlayerFinder data={data} onMatch={id => { setFocusedMatchId(id); setSearch(''); setDivision('all'); setPoolFilter('all'); setFilter('all'); requestAnimationFrame(() => { const desk = document.getElementById('match-desk'); desk?.scrollIntoView({ behavior: 'smooth', block: 'center' }); desk?.focus({ preventScroll: true }); }); }} onPool={key => { setFocusedMatchId(null); setSearch(''); setPoolFilter(key); setDivision('all'); setFilter('all'); requestAnimationFrame(() => { const desk = document.getElementById('match-desk'); desk?.scrollIntoView({ behavior: 'smooth', block: 'center' }); desk?.focus({ preventScroll: true }); }); }} />
     <StationPoolControls data={data} disabled={pending || closed} act={act} onPool={key => { setFocusedMatchId(null); setSearch(''); setPoolFilter(key); setDivision('all'); setFilter('active'); document.getElementById('match-desk')?.scrollIntoView({ behavior: 'smooth' }); }} />
     <div className="ops-stats">{(['playing', 'ready', 'waiting', 'complete'] as const).map(status => <button key={status} className={`ops-stat ${filter === status ? 'selected' : ''}`} onClick={() => { setFocusedMatchId(null); setFilter(status); }}><strong>{status === 'ready' ? available.length : status === 'waiting' ? data.matches.filter(m => m.status === 'blocked' || (m.status === 'ready' && !callable.has(m.id))).length : data.matches.filter(m => m.status === status).length}</strong><span>{status === 'playing' ? 'Playing now' : status === 'ready' ? 'Ready to start' : status === 'waiting' ? 'Waiting' : 'Finished'}</span></button>)}</div>
     <section className="card ops-setup" id="match-desk" tabIndex={-1}><div><h3>Match desk</h3><p className="muted">Build or refresh the match list. Ready matches have available players and stations; waiting matches explain what needs to happen first.</p></div><button className="btn" disabled={pending || closed} onClick={() => void act(() => trpc.eventOps.prepare.mutate({ planId }), 'Match queue refreshed')}>Prepare / refresh matches</button></section>
