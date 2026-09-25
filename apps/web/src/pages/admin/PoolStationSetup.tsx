@@ -17,7 +17,7 @@ export function PoolStationSetup({ data, disabled, act }: { data: Overview; disa
   const playing = data.matches.some(match => match.status === 'playing');
   const stationNames = (ids: string[]) => ids.map(id => data.stations.find(station => station.id === id)?.name ?? 'Station').join(' + ');
   return <div className="ops-pool-setup">
-    <details><summary>Divide stations between pools</summary>
+    <details><summary>Divide stations between pools</summary>{data.settings.scoreReportingMode === 'approve_unless_disputed' && <p>The event’s approve-unless-disputed policy accepts played scores immediately. Pool approval preferences below apply when the event uses TO approval.</p>}
       <p>Give each pool its own stations and a round-robin queue. Extra pools wait for a later wave on the same stations. Review the assignments before applying.</p>
       {playing && <p className="muted">Finish or return playing matches to the queue before redistributing all stations. Individual pool settings remain available below.</p>}
       <fieldset disabled={disabled || playing}><legend>Stations to use</legend>{stationOptions.map(station => <label className="ops-check" key={station.id}><input type="checkbox" checked={selected.includes(station.id)} onChange={event => { setSelected(event.target.checked ? [...selected, station.id] : selected.filter(id => id !== station.id)); setPreview(null); }} />{station.name}</label>)}</fieldset>

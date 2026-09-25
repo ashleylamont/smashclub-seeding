@@ -1,4 +1,4 @@
-import { canAutoAcceptPoolScore } from './selfService';
+import { attendeeScoreDecision } from './scorePolicy';
 import { loadStationQueues } from './queue';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { and, desc, eq, lt, sql } from 'drizzle-orm';
@@ -107,8 +107,8 @@ export async function guestMatches(db: Db, input: { planId: string; sessionToken
     return db.transaction(async tx => {
         const guest = await validateGuestSession(tx, input, now);
         const data = await snapshot(tx, input.planId);
-        const reports = await tx.select({ id: eventScoreReports.id, matchId: eventScoreReports.matchId, status: eventScoreReports.status, score1: eventScoreReports.score1, score2: eventScoreReports.score2 }).from(eventScoreReports).where(eq(eventScoreReports.guestSessionId, guest.id)).orderBy(desc(eventScoreReports.createdAt), desc(eventScoreReports.id));
-        return { plan: data.plan, stations: data.stations, poolSchedules: data.poolSchedules, ...await loadStationQueues(tx, input.planId), matches: data.matches, reports, expiresAt: guest.expiresAt.toISOString() };
+        const reports = await tx.select({ id: eventScoreReports.id, matchId: eventScoreReports.matchId, status: eventScoreReports.status, isDispute: eventScoreReports.isDispute, score1: eventScoreReports.score1, score2: eventScoreReports.score2 }).from(eventScoreReports).where(eq(eventScoreReports.guestSessionId, guest.id)).orderBy(desc(eventScoreReports.createdAt), desc(eventScoreReports.id));
+        return { settings: data.settings, plan: data.plan, stations: data.stations, poolSchedules: data.poolSchedules, ...await loadStationQueues(tx, input.planId), matches: data.matches, reports, expiresAt: guest.expiresAt.toISOString() };
     });
 }
 export async function submitGuest(db: Db, input: { planId: string; sessionToken: string; matchId: string; expectedRevision: number; requestId: string; score1: number; score2: number }, now = Date.now()) {
@@ -117,11 +117,11 @@ export async function submitGuest(db: Db, input: { planId: string; sessionToken:
         const reports = await tx.select().from(eventScoreReports).where(eq(eventScoreReports.guestSessionId, guest.id));
         const prior = reports.find(r => r.requestId === input.requestId);
         if (prior) {
-            if (prior.matchId !== input.matchId || prior.expectedRevision !== input.expectedRevision || prior.score1 !== input.score1 || prior.score2 !== input.score2) throw new TRPCError({ code: 'CONFLICT', message: 'Request identifier already used for a different score.' });
-            return { reportId: prior.id, status: prior.status };
+            if (prior.matchId !== input.matchId || (prior.submittedRevision ?? prior.expectedRevision) !== input.expectedRevision || prior.score1 !== input.score1 || prior.score2 !== input.score2) throw new TRPCError({ code: 'CONFLICT', message: 'Request identifier already used for a different score.' });
+            return { reportId: prior.id, status: prior.status, isDispute: prior.isDispute };
         }
         const [match] = await tx.select().from(eventMatches).where(and(eq(eventMatches.id, input.matchId), eq(eventMatches.eventPlanId, input.planId)));
-        if (!match || !['ready', 'playing'].includes(match.status) || match.revision !== input.expectedRevision) throw new TRPCError({ code: 'CONFLICT', message: 'This match changed or is unavailable. Refresh the match list.' });
+        if (!match) throw new TRPCError({ code: 'CONFLICT', message: 'This match changed or is unavailable. Refresh the match list.' });
         const withdrawn = await tx.select().from(eventWithdrawals).where(eq(eventWithdrawals.eventPlanId, input.planId));
         if (withdrawn.some(w => [match.player1Id, match.player2Id].includes(w.playerId))) throw new TRPCError({ code: 'CONFLICT', message: 'A player withdrew. Ask an organiser to record this match.' });
         const winnerId = validateScore(match, { ...input, outcome: 'played' });
@@ -129,9 +129,10 @@ export async function submitGuest(db: Db, input: { planId: string; sessionToken:
         const [eventCount] = await tx.select({ count: sql<number>`count(*)::integer` }).from(eventScoreReports).where(and(eq(eventScoreReports.eventPlanId, input.planId), eq(eventScoreReports.status, 'pending')));
         // Durable caps remain in force across processes and restarts. Valid retries cost nothing.
         if (reports.length >= 30 || reports.filter(r => r.createdAt.getTime() > now - 60_000).length >= 6 || (eventCount?.count ?? 0) >= 200) limited();
-        const accepted = await canAutoAcceptPoolScore(tx, match);
-        if (accepted) await applyScore(tx, match, { ...input, outcome: 'played' }, winnerId, null, guest.id);
-        const [report] = await tx.insert(eventScoreReports).values({ eventPlanId: input.planId, guestSessionId: guest.id, matchId: match.id, expectedRevision: input.expectedRevision, requestId: input.requestId, score1: input.score1, score2: input.score2, outcome: 'played', winnerId, status: accepted ? 'approved' : 'pending' }).returning();
-        return { reportId: report!.id, status: report!.status };
+        const decision = await attendeeScoreDecision(tx, match, { ...input, outcome: 'played' }, winnerId);
+        if (decision.apply) await applyScore(tx, match, { ...input, outcome: 'played' }, winnerId, null, guest.id);
+        const reportDecision = { status: decision.status, expectedRevision: decision.expectedRevision, autoApproved: decision.autoApproved, isDispute: decision.isDispute };
+        const [report] = await tx.insert(eventScoreReports).values({ eventPlanId: input.planId, guestSessionId: guest.id, matchId: match.id, ...reportDecision, submittedRevision: input.expectedRevision, requestId: input.requestId, score1: input.score1, score2: input.score2, outcome: 'played', winnerId }).returning();
+        return { reportId: report!.id, status: report!.status, isDispute: report!.isDispute };
     });
 }

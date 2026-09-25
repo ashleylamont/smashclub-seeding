@@ -82,6 +82,7 @@ export function Layout() {
           <Link to="/tournaments" className="nav-link" activeProps={{ className: 'nav-link active' }}>
             Tournaments
           </Link>
+          <Link to="/play" className="nav-link" activeProps={{ className: 'nav-link active' }}>Event night</Link>
           {role === 'admin' && (
             <Link to="/admin" className="nav-link" activeProps={{ className: 'nav-link active' }}>
               Admin

@@ -100,6 +100,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
     </header>
     <div className="event-connection" role="status"><span><i className="event-live-dot" />{sections.playing.length ? 'LIVE FROM THE CLUB' : 'THE EVENT BOARD'}</span><span>{query.isError ? 'Connection interrupted · showing last received results' : 'Results refresh every 5 seconds'}</span></div>
     {data.plan.resultsSlug && <p><a className="btn" href={`/events/${encodeURIComponent(data.plan.resultsSlug)}`}>Final standings and club results →</a></p>}
+    <p><a className="btn" href={poolPath(`/play/${planId}`, selectedPool)}>Player area · my matches & scores →</a></p>
     <PoolFilter data={data} value={selectedPool} onChange={setSelectedPool} />
     <PoolStationQueue data={data} selectedPool={selectedPool} />
     <PoolRoundSchedule data={data} selectedPool={selectedPool} />
@@ -114,7 +115,6 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
     </details>
     <aside className="event-announcements" aria-label="Announcements"><strong>FROM THE FLOOR ↗</strong><div>{announcements.length ? announcements.slice(0, 2).map(a => <p key={a.id}>{a.message}</p>) : <p>Good games. Great rivals. Welcome to the club.</p>}</div></aside>
     <>
-      {!closed && data.settings.playerReports && <p><a className="btn" href={poolPath(`/play/${planId}`, selectedPool)}>Report your match score →</a></p>}
       <EventPools matches={visibleMatches} schedules={data.poolSchedules ?? []} stations={data.stations} />
       <EventBrackets brackets={data.nativeBrackets ?? []} matches={data.matches} entrants={data.entrants} linked={data.plan.bracketMode === 'native' ? [] : data.brackets} />
       <section className="event-recent"><h2>Recorded results</h2>{sections.complete.length ? <div className="event-results-grid">{recentResults(visibleMatches, 12).map(match => <MatchCard key={match.id} match={match} station={station(match)} />)}</div> : <p className="event-empty">Results appear here once confirmed.</p>}<p className="event-live-note">Set results are shown as recorded. They do not imply final tournament placements.</p></section>

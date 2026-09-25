@@ -7,6 +7,7 @@ export type StationQueue = { stationId: string; poolKey: string | null; currentM
 export type PoolRounds = { poolKey: string; rounds: { round: number; matchIds: string[]; restingPlayerIds: string[] }[] };
 export type PoolFlowData = {
   plan: { id: string; status: string };
+  settings?: { scoreReportingMode?: 'to_review' | 'approve_unless_disputed' };
   matches: PoolFlowMatch[];
   stations: { id: string; name: string; currentMatchId?: string | null }[];
   poolSchedules: PoolPolicy[];
