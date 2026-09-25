@@ -5,6 +5,7 @@ import './Admin.css';
 
 const TABS = [
   { to: '/admin/tournaments', label: 'Tournaments' },
+  { to: '/admin/breakthroughs', label: 'Breakthroughs' },
   { to: '/admin/review', label: 'Review' },
   { to: '/admin/players', label: 'Players' },
   { to: '/admin/companies', label: 'Companies' },

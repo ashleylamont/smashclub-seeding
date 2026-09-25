@@ -18,6 +18,8 @@ import { AdminImportPage } from './pages/admin/AdminImportPage';
 import { AdminSeedingPage } from './pages/admin/AdminSeedingPage';
 import { AdminEventPlannerPage } from './pages/admin/eventPlanner/AdminEventPlannerPage';
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
+import { AdminBreakthroughPage } from './pages/admin/AdminBreakthroughPage';
+import { breakthroughSearch } from './lib/breakthrough';
 
 const rootRoute = createRootRoute({ component: Layout });
 
@@ -157,6 +159,13 @@ const adminSettingsRoute = createRoute({
   component: AdminSettingsPage,
 });
 
+const adminBreakthroughRoute = createRoute({
+  getParentRoute: () => adminRoute,
+  path: '/breakthroughs',
+  component: AdminBreakthroughPage,
+  validateSearch: breakthroughSearch,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   playerRoute,
@@ -170,6 +179,7 @@ const routeTree = rootRoute.addChildren([
   adminRoute.addChildren([
     adminIndexRoute,
     adminTournamentsRoute,
+    adminBreakthroughRoute,
     adminReviewRoute,
     adminPlayersRoute,
     adminCompaniesRoute,
