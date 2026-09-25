@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { eventMatches, eventMatchAudit, eventOperationSettings, eventOperators, eventPlanBrackets, eventPlanEntries, eventPlanPoolPlacements, eventPlans, eventScoreReports, eventStations, eventPoolAssignments, eventWithdrawals, playerClaims, players, sets, tournaments, user, type Db } from '@smashclub/db';
+import { eventMatches, eventMatchAudit, eventOperationSettings, eventOperators, eventPlanBrackets, eventPlanEntries, eventPlanPoolPlacements, eventPlans, eventScoreReports, eventStations, eventPoolAssignments, eventPoolSchedules, eventWithdrawals, playerClaims, players, sets, tournaments, user, type Db } from '@smashclub/db';
 import { prepare, reportScore, reviewReport, snapshot, updateMatch, requireOperator } from '../src/event-operations/service';
 import { updateLiveScore } from '../src/event-operations/controls';
+import { deleteStation, saveStation } from '../src/event-operations/stations';
 import { applyAttendance, previewAttendance, resetOperations } from '../src/event-operations/attendance';
 import { getPlan, unfreezeRoster, reorderDivision, generatePools, savePoolPlacements } from '../src/event-planner/plans';
 import { createTestDb } from './helpers/testDb';
@@ -24,6 +25,27 @@ afterEach(async () => close());
 const score = (m: typeof eventMatches.$inferSelect, requestId = 'r1') => ({ matchId: m.id, expectedRevision: m.revision, requestId, score1: 2, score2: 0, outcome: 'played' as const });
 async function ready() { await prepare(db, planId); return (await db.select().from(eventMatches).where(eq(eventMatches.eventPlanId, planId))); }
 describe('event operations', () => {
+    it('renames stations and deletes idle stations without leaving match or pool references', async () => {
+        const [station] = await saveStation(db, admin, { planId, name: 'Stage' });
+        const [renamed] = await saveStation(db, admin, { planId, id: station!.id, name: 'Main stage' });
+        expect(renamed!.name).toBe('Main stage');
+        const matches = await ready();
+        await db.update(eventMatches).set({ stationId: station!.id }).where(eq(eventMatches.id, matches[0]!.id));
+        await db.insert(eventPoolSchedules).values({ eventPlanId: planId, division: 'upper', poolIndex: 0, stationIds: [station!.id], selfRun: true, autoAcceptScores: true });
+        await expect(deleteStation(db, member, { planId, id: station!.id })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+        await deleteStation(db, admin, { planId, id: station!.id });
+        expect(await db.select().from(eventStations)).toHaveLength(0);
+        expect((await db.select().from(eventMatches).where(eq(eventMatches.id, matches[0]!.id)))[0]).toMatchObject({ stationId: null, revision: 1 });
+        expect((await db.select().from(eventPoolSchedules))[0]).toMatchObject({ stationIds: [], selfRun: false, autoAcceptScores: false, revision: 2 });
+        await expect(saveStation(db, admin, { planId, id: station!.id, name: 'Gone' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+    it('keeps a station while its match is playing', async () => {
+        const [station] = await saveStation(db, admin, { planId, name: 'Stage' });
+        const [match] = await ready();
+        await updateMatch(db, admin, { matchId: match!.id, expectedRevision: 0, status: 'playing', stationId: station!.id });
+        await expect(deleteStation(db, admin, { planId, id: station!.id })).rejects.toMatchObject({ code: 'CONFLICT' });
+        expect(await db.select().from(eventStations)).toHaveLength(1);
+    });
     it('prepares all pairs idempotently, gates publication, exposes safe aliases', async () => {
         expect(await prepare(db, planId)).toEqual({ created: 12 });
         expect(await prepare(db, planId)).toEqual({ created: 0 });
