@@ -5,6 +5,7 @@ export * from './setOrder';
 export * from './replay';
 export * from './score';
 export * from './recap';
+export * from './breakthrough';
 export * from './whr';
 export * from './whrRun';
 export * from './evaluate';

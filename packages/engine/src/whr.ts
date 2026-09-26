@@ -28,6 +28,14 @@
 export const NATURAL_TO_DISPLAY = 400 / Math.LN10; // 173.7178…
 export const DISPLAY_CENTRE = 1500;
 
+/** Shared evidence weighting for production fits and pre-night analysis. */
+export function whrSetTrials(set: { winner: 1 | 2; p1Games?: number | null; p2Games?: number | null }, gamesWeight: number): number {
+  const winnerGames = set.winner === 1 ? set.p1Games : set.p2Games;
+  const loserGames = set.winner === 1 ? set.p2Games : set.p1Games;
+  if (winnerGames == null || loserGames == null || loserGames < 0 || winnerGames <= loserGames) return 1;
+  return Math.max(1, Math.min(2, 1 + gamesWeight * (winnerGames - loserGames - 1)));
+}
+
 export interface WhrConfig {
   /**
    * Skill drift: variance added per day, in natural units. Larger means

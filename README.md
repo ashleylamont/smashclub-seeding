@@ -310,6 +310,25 @@ can surface alongside upsets, breakthroughs and other notable moments; reseeded
 two-stage brackets do not produce misleading seed-versus-finish claims. Share
 images label each bracket's champion separately.
 
+**TO breakthrough analysis (Admin → Breakthroughs).** Select a club night to
+compare actual wins with pre-night expectations, with per-set evidence and
+adjustable history/sample thresholds. Criteria and the selected night are in
+the URL for sharing between organisers. The optional small-sample adjustment
+shows `100 × surplus wins / (comparable sets + adjustment)` in percentage
+points; this is an explicit comparison aid, not an automatic award or a
+statistical confidence claim. Sets involving a player with no prior history
+remain visible but do not receive an expectation.
+
+The view refreshes every 15 seconds while open, reads synced sets without
+waiting for a rating recompute, and labels unfinished nights provisional.
+Enable Live on all the night's brackets in Admin → Tournaments to import
+results automatically; the view shows monitoring coverage and sync times.
+Expectations use a fit of strictly earlier nights with the current model and
+settings, so tonight's results and later events cannot change the baseline.
+Historical corrections and rating-settings changes can change it. Played
+pools and consolation count once, with the same stage and exclusion rules as
+ratings. Attendance penalties and seeds do not affect the comparison.
+
 Not in this version, on purpose: creating the brackets through the Challonge
 API. The v2.1 write adapter is additive and comes after a disposable
 rehearsal proves Challonge's seed-to-group allocation matches the preview; the
