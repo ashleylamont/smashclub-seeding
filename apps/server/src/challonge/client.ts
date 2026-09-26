@@ -114,6 +114,13 @@ export class ChallongeClient {
     const meta = (payload as { tournament?: Record<string, unknown> }).tournament ?? {};
 
     const rawState = typeof meta.state === 'string' ? meta.state : null;
+    const groupStageEnabled = meta.group_stage_enabled === true || bracket.matches.some(match => match.stage === 'group') ||
+      (Array.isArray((payload as Record<string, unknown>).groups) && ((payload as Record<string, unknown>).groups as unknown[]).length > 0);
+    // Finished pools are not a finished tournament: finals may not have been
+    // generated yet. Keep the organiser's live-poll lease until finals exist
+    // or authoritative tournament metadata explicitly declares completion.
+    const inferredComplete = bracket.allComplete && (!groupStageEnabled || bracket.matches.some(match => match.stage === 'final'));
+    const state = rawState ?? (inferredComplete ? 'complete' : 'unknown');
     const tournament: ChallongeTournament = {
       id: typeof meta.id === 'number' ? meta.id : 0,
       // The payload has no name; it lives in the page title. Empty string when
@@ -121,15 +128,14 @@ export class ChallongeClient {
       // overwriting it with the slug (`name || existing`).
       name: extractModuleTournamentName(html) ?? '',
       url: slug,
-      state: rawState ?? (bracket.allComplete ? 'complete' : 'unknown'),
+      state,
       // The module payload carries no tournament-level timestamps; the latest
       // match time is the best available anchor.
       startedAt: null,
-      completedAt: bracket.allComplete ? bracket.latestMatchDate : null,
+      completedAt: state === 'complete' ? bracket.latestMatchDate : null,
       updatedAt: bracket.latestMatchDate,
       tournamentType: typeof meta.tournament_type === 'string' ? meta.tournament_type : null,
-      groupStageEnabled: Array.isArray((payload as Record<string, unknown>).groups) &&
-        ((payload as Record<string, unknown>).groups as unknown[]).length > 0,
+      groupStageEnabled,
     };
     return { tournament, participants: bracket.participants, matches: bracket.matches, source: 'public' };
   }

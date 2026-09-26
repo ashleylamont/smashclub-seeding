@@ -72,6 +72,7 @@ test.describe('event planner', () => {
     await settle(page);
 
     await page.getByLabel(/Event name/i).fill(planName);
+    await page.getByLabel('Bracket system').selectOption('challonge');
     await page.locator('textarea.planner-textarea').first().fill([pasted, '---', ''].join('\n'));
     await page.getByRole('button', { name: /Preview roster/i }).click();
     await settle(page);
@@ -138,7 +139,7 @@ test.describe('event planner', () => {
     await expect(page.locator('.bracket-card')).toHaveCount(4);
   });
 
-  test('records pool results and draws a consolation bracket with no rematches', async ({ page }) => {
+  test('records pool results and warns about unavoidable single-pool consolation rematches', async ({ page }) => {
     await signInAsAdmin(page.request);
     const names = await rankedNames(page.request, 8);
     test.skip(names.length < 8, 'the harness seeded fewer than 8 ranked players');
@@ -147,6 +148,7 @@ test.describe('event planner', () => {
     await page.goto('/admin/event-planner');
     await settle(page);
     await page.getByLabel(/Event name/i).fill(planName);
+    await page.getByLabel('Bracket system').selectOption('challonge');
     await page.locator('textarea.planner-textarea').first().fill(names.join('\n'));
     await page.getByRole('button', { name: /Preview roster/i }).click();
     await settle(page);
@@ -177,8 +179,9 @@ test.describe('event planner', () => {
 
     // Each division has one pool, so its consolation final is the unavoidable
     // rematch — and the app says so rather than pretending otherwise.
-    await expect(page.locator('.consolation-preview')).toHaveCount(2);
+    await expect(page.getByRole('heading', { name: 'Consolation draw', exact: true })).toHaveCount(2);
+    await expect(page.getByRole('heading', { name: 'Championship qualifiers', exact: true })).toHaveCount(2);
     await expect(page.locator('.consolation-list li').first()).toContainText('A3');
-    await expect(page.getByText(/Unavoidable pool rematch/i).first()).toBeVisible();
+    await expect(page.getByText(/Pool rematch in round one/i)).toHaveCount(2);
   });
 });

@@ -31,7 +31,7 @@ import { DIVISION_LABEL } from './labels';
 export function DivisionsStep({ view, onChanged }: { view: EventPlanView; onChanged: () => void }) {
   const planId = view.plan.id;
   const attached = view.brackets.some((bracket) => bracket.challongeSlug !== null);
-  const locked = attached || view.plan.status === 'underway' || view.plan.status === 'complete';
+  const locked = attached || view.plan.status === 'underway' || view.plan.status === 'complete' || view.plan.status === 'cancelled';
 
   const generate = useMutation({
     mutationFn: () => trpc.admin.eventPlanner.generatePools.mutate({ planId }),
@@ -47,7 +47,7 @@ export function DivisionsStep({ view, onChanged }: { view: EventPlanView; onChan
           <button
             type="button"
             className="btn btn-primary"
-            disabled={generate.isPending || view.divisions.some((division) => division.pools.length === 0)}
+            disabled={locked || generate.isPending || view.divisions.some((division) => division.pools.length === 0)}
             onClick={() => generate.mutate()}
           >
             {generate.isPending ? 'Generating…' : view.plan.status === 'roster_frozen' ? 'Generate pools' : 'Regenerate pools'}
@@ -57,8 +57,7 @@ export function DivisionsStep({ view, onChanged }: { view: EventPlanView; onChan
       {generate.isError && <p className="error-text">{generate.error.message}</p>}
       {locked && (
         <div className="banner banner-warning">
-          Seeds are locked: {attached ? 'a Challonge bracket is attached' : 'the event is underway'}. Detach the
-          bracket to change them.
+          Seeds are locked: {attached ? 'a Challonge bracket is attached' : 'the event is underway or closed'}. Completed play is preserved.
         </div>
       )}
 

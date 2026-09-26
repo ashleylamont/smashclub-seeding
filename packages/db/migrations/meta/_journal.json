@@ -85,6 +85,55 @@
       "when": 1788742028457,
       "tag": "0011_backfill_group_stage_results",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1789684626659,
+      "tag": "0012_event_operations",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789685048393,
+      "tag": "0013_attendance_operations",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1789715811715,
+      "tag": "0014_crazy_drax",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1789719254335,
+      "tag": "0015_polite_ares",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1789723282993,
+      "tag": "0016_broken_zarda",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1789770411511,
+      "tag": "0017_pale_morlun",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1789796743053,
+      "tag": "0018_mean_runaways",
+      "breakpoints": true
     }
   ]
 }

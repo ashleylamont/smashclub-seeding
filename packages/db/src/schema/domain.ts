@@ -186,6 +186,7 @@ export type TournamentResultsMode = 'auto' | 'final_stage_only';
 export type SetResultStage = 'group' | 'final';
 
 export const tournaments = pgTable('tournaments', {
+  provider: text('provider').$type<'challonge' | 'native'>().notNull().default('challonge'),
   id: uuid('id').primaryKey().defaultRandom(),
   challongeSlug: text('challonge_slug').notNull().unique(),
   challongeId: bigint('challonge_id', { mode: 'number' }),
@@ -515,10 +516,40 @@ export const eventPlanStatusEnum = pgEnum('event_plan_status', [
   'cancelled',
 ]);
 
+export interface HistoricalAdoptionBracket {
+  division: 'upper' | 'lower';
+  stage: 'main' | 'consolation';
+  tournamentId: string;
+  name: string;
+  slug: string;
+  participantCount: number;
+  previousSlug: string | null;
+}
+export interface HistoricalAdoptionDifferences {
+  plannedOnly: Array<{ name: string; playerId: string | null }>;
+  actualOnly: Array<{ name: string; playerId: string | null }>;
+  divisionChanges: Array<{ name: string; playerId: string; plannedDivision: 'upper' | 'lower'; actualDivision: 'upper' | 'lower' }>;
+}
+export interface HistoricalAdoptionRecord {
+  adoptedAt: string;
+  adoptedBy: string;
+  previousStatus: string;
+  previousBrackets: Array<{ division: 'upper' | 'lower'; stage: 'main' | 'consolation'; tournamentId: string | null; challongeSlug: string | null }>;
+  brackets: HistoricalAdoptionBracket[];
+  differences: HistoricalAdoptionDifferences;
+  warnings: string[];
+}
+export interface HistoricalAdoption extends HistoricalAdoptionRecord {
+  history: HistoricalAdoptionRecord[];
+}
+
 export const eventPlans = pgTable('event_plans', {
+  bracketMode: text('bracket_mode').$type<'challonge' | 'native'>().notNull().default('challonge'),
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   eventDate: timestamp('event_date', { withTimezone: true }).notNull(),
+  /** Actual imported results supersede this plan; original planning tables remain intact. */
+  historicalAdoption: jsonb('historical_adoption').$type<HistoricalAdoption>(),
   /** Prefix suggested for the four Challonge slugs; purely advisory. */
   slugPrefix: text('slug_prefix'),
   status: eventPlanStatusEnum('status').notNull().default('draft'),

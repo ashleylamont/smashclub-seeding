@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { ratingEvents, reviewItems, sets, tournamentParticipants, tournaments, type Db } from '@smashclub/db';
+import { ratingEvents, reviewItems, sets, syncJobs, tournamentParticipants, tournaments, type Db } from '@smashclub/db';
 import { importRegistryPlayers, registerTournamentSlugs } from '../src/bootstrap/importRegistry';
 import { syncTournament } from '../src/sync/sync';
 import { runRecompute, latestRecomputeId } from '../src/recompute/recompute';
@@ -362,4 +362,18 @@ describe('syncTournament', () => {
     // Without this the poller would keep going until the window ran out.
     expect(tournament!.liveUntil).toBeNull();
   });
+});
+
+it('rejects native tournaments before fetching, creating sync jobs or changing saved results', async () => {
+  const [native] = await db.insert(tournaments).values({ provider: 'native', challongeSlug: 'nemesis-local', name: 'Local final', syncState: 'synced', challongeState: 'complete' }).returning();
+  const client = fixtureClient([]);
+  const publicFetch = vi.spyOn(client, 'fetchPublicTournamentBundle');
+  const apiFetch = vi.spyOn(client, 'fetchTournamentBundle');
+  for (const source of ['public', 'api'] as const) {
+    await expect(syncTournament(db, client, native!.id, { source })).rejects.toThrow('Nemesis');
+  }
+  expect(publicFetch).not.toHaveBeenCalled();
+  expect(apiFetch).not.toHaveBeenCalled();
+  expect(await db.select().from(syncJobs)).toHaveLength(0);
+  expect((await db.select().from(tournaments).where(eq(tournaments.id, native!.id)))[0]).toMatchObject({ syncState: 'synced', lastSyncedAt: null });
 });

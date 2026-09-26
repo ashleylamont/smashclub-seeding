@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react';
-import { Link, Outlet, useNavigate } from '@tanstack/react-router';
+import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { authClient, sessionRole } from '../lib/auth';
 import { BUILD_COMMIT_URL, BUILD_LABEL, BUILD_SHA } from '../lib/build';
 import { useEventSource } from '../lib/useEventSource';
+import { NemesisMark } from './NemesisMark';
 import { ThemeToggle } from './ThemeToggle';
 import '../App.css';
 
@@ -14,6 +15,8 @@ export function Layout() {
   const role = sessionRole(session);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const pathname = useRouterState({ select: state => state.location.pathname });
+  const standaloneDisplay = /^\/(live|overlay)\/[^/]+\/?$/.test(pathname);
   const nav = useRef<HTMLElement>(null);
 
   /*
@@ -36,7 +39,7 @@ export function Layout() {
     const observer = new ResizeObserver(publish);
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+  }, [standaloneDisplay]);
 
   useEventSource('/api/live', (type) => {
     if (type === 'recompute_completed') {
@@ -57,6 +60,8 @@ export function Layout() {
   const userName = session?.user.name ?? '';
   const userImage = session?.user.image ?? null;
 
+  if (standaloneDisplay) return <main id="main"><Outlet /></main>;
+
   return (
     <div className="app-shell">
       {/* The nav is sticky and, on a phone, two rows deep — so a keyboard user
@@ -66,9 +71,9 @@ export function Layout() {
       </a>
 
       <nav className="app-nav" ref={nav}>
-        {/* The marquee block is drawn in CSS, so the wordmark is text only. */}
+        {/* The event screens and site navigation share the Nemesis mark. */}
         <Link to="/" className="logo">
-          Smash Club
+          <NemesisMark /> Smash Club
         </Link>
         <div className="nav-links">
           <Link to="/" className="nav-link" activeProps={{ className: 'nav-link active' }} activeOptions={{ exact: true }}>
@@ -77,6 +82,7 @@ export function Layout() {
           <Link to="/tournaments" className="nav-link" activeProps={{ className: 'nav-link active' }}>
             Tournaments
           </Link>
+          <Link to="/play" className="nav-link" activeProps={{ className: 'nav-link active' }}>Event night</Link>
           {role === 'admin' && (
             <Link to="/admin" className="nav-link" activeProps={{ className: 'nav-link active' }}>
               Admin

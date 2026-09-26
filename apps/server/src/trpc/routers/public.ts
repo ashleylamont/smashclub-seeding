@@ -376,6 +376,7 @@ export const publicRouter = router({
     return rows.map((row) => ({
       id: row.id,
       slug: row.challongeSlug,
+      provider: row.provider,
       name: row.name,
       eventDate: row.eventDate?.toISOString() ?? null,
       isRookie: row.isRookie,
@@ -424,6 +425,7 @@ export const publicRouter = router({
     return {
       id: tournament.id,
       slug: tournament.challongeSlug,
+      provider: tournament.provider,
       name: tournament.name,
       resultsMode: tournament.resultsMode,
       eventDate: tournament.eventDate?.toISOString() ?? null,

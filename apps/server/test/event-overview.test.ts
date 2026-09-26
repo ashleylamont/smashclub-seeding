@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { players, sets, tournamentParticipants, tournaments, type Db } from '@smashclub/db';
+import { eventPlans, eventPlanBrackets, players, sets, tournamentParticipants, tournaments, type Db } from '@smashclub/db';
 import { importRegistryPlayers } from '../src/bootstrap/importRegistry';
 import { loadEventOverview } from '../src/events/overview';
+import { loadRecap } from '../src/recap/recap';
 import { createTestDb } from './helpers/testDb';
 
 let db: Db;
@@ -126,4 +127,29 @@ it('shares an event title and canonical slug across bracket entry points', async
   expect(upper.canonicalSlug).toBe('upper');
   expect(lower.canonicalSlug).toBe(upper.canonicalSlug);
   expect(lower.name).toBe('Event');
+});
+
+
+it('isolates same-date saved plans and leaves historical unlinked brackets together', async () => {
+  const date = new Date('2026-08-25T00:00:00Z');
+  const plans = await db.insert(eventPlans).values([
+    { name: 'First Event', eventDate: date }, { name: 'Second Event', eventDate: date },
+  ]).returning();
+  const first = await bracket('first-upper', 'First Upper Main');
+  const firstCons = await bracket('first-cons', 'First Upper Consolation');
+  const second = await bracket('second-upper', 'Second Upper Main');
+  const historic = await bracket('historic-upper', 'Historic Upper Main');
+  const historicCons = await bracket('historic-cons', 'Historic Upper Consolation');
+  await db.insert(eventPlanBrackets).values([
+    { eventPlanId: plans[0]!.id, division: 'upper', stage: 'main', tournamentId: first },
+    { eventPlanId: plans[0]!.id, division: 'upper', stage: 'consolation', tournamentId: firstCons },
+    { eventPlanId: plans[1]!.id, division: 'upper', stage: 'main', tournamentId: second },
+  ]);
+  expect((await loadEventOverview(db, 'first-upper'))!.brackets.map(b => b.tournamentId).sort()).toEqual([first, firstCons].sort());
+  expect((await loadEventOverview(db, 'first-cons'))!.brackets.map(b => b.tournamentId).sort()).toEqual([first, firstCons].sort());
+  expect((await loadEventOverview(db, 'second-upper'))!.brackets.map(b => b.tournamentId)).toEqual([second]);
+  expect((await loadEventOverview(db, 'historic-upper'))!.brackets.map(b => b.tournamentId).sort()).toEqual([historic, historicCons].sort());
+  expect((await loadRecap(db, 'first-upper'))!.tournaments.map(t => t.id).sort()).toEqual([first, firstCons].sort());
+  expect((await loadRecap(db, 'second-upper'))!.tournaments.map(t => t.id)).toEqual([second]);
+  expect((await loadRecap(db, 'historic-upper'))!.tournaments.map(t => t.id).sort()).toEqual([historic, historicCons].sort());
 });

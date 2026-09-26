@@ -19,8 +19,15 @@ import { DIVISION_LABEL } from './labels';
 export function HandoffStep({ view, onChanged }: { view: EventPlanView; onChanged: () => void }) {
   const exportsQuery = useQuery({
     queryKey: ['admin', 'eventPlanner', 'exports', view.plan.id],
+    enabled: view.plan.bracketMode !== 'native',
     queryFn: () => trpc.admin.eventPlanner.exports.query({ planId: view.plan.id }),
   });
+
+  if (view.plan.bracketMode === 'native') return <div className="card section">
+    <h3>Run this event in Nemesis</h3>
+    <p>Record pool results in the event desk, confirm pool finishing orders, then preview championship and consolation draws. Winners advance automatically and byes are shown explicitly.</p>
+    <a className="btn btn-primary" href={`/admin/event-operations?plan=${view.plan.id}`}>Open event desk</a>
+  </div>;
 
   if (exportsQuery.isPending) return <p className="loading-text">Building exports…</p>;
   if (exportsQuery.isError) return <p className="error-text">{exportsQuery.error.message}</p>;
@@ -58,6 +65,7 @@ export function HandoffStep({ view, onChanged }: { view: EventPlanView; onChange
             key={`${bracketExport.division}-${bracketExport.stage}`}
             planId={view.plan.id}
             bracket={bracket}
+            closed={view.plan.status === 'complete' || view.plan.status === 'cancelled'}
             payload={bracketExport}
             onChanged={onChanged}
           />
@@ -82,11 +90,13 @@ export function HandoffStep({ view, onChanged }: { view: EventPlanView; onChange
 function BracketCard({
   planId,
   bracket,
+  closed,
   payload,
   onChanged,
 }: {
   planId: string;
   bracket: EventPlanBracket;
+  closed: boolean;
   payload: EventPlanBracketExport;
   onChanged: () => void;
 }) {
@@ -172,19 +182,19 @@ function BracketCard({
         <button
           type="button"
           className="btn btn-primary"
-          disabled={slug.trim() === '' || attach.isPending}
+          disabled={closed || slug.trim() === '' || attach.isPending}
           onClick={() => attach.mutate()}
           title="Register this bracket against the plan’s event date"
         >
           {attach.isPending ? 'Registering…' : bracket.challongeSlug ? 'Re-attach' : 'Register & attach'}
         </button>
         {bracket.tournamentId && (
-          <button type="button" className="btn" disabled={sync.isPending} onClick={() => sync.mutate()}>
+          <button type="button" className="btn" disabled={closed || sync.isPending} onClick={() => sync.mutate()}>
             {sync.isPending ? 'Syncing…' : 'Sync (API)'}
           </button>
         )}
         {bracket.challongeSlug && (
-          <button type="button" className="btn" disabled={detach.isPending} onClick={() => detach.mutate()}>
+          <button type="button" className="btn" disabled={closed || detach.isPending} onClick={() => detach.mutate()}>
             Detach
           </button>
         )}

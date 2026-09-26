@@ -39,7 +39,7 @@ describe('ChallongeClient public bracket requests', () => {
     const bundle = await client.fetchTournamentBundle('example');
     expect(requests).toContain('/example/module');
     expect(bundle.matches.map((match) => match.stage)).toEqual(['group', 'final']);
-    expect(bundle.matches[0]).toMatchObject({ player1Id: 1, player2Id: 2, winnerId: 2 });
+    expect(bundle.matches[0]).toMatchObject({ player1Id: 1, player2Id: 2, winnerId: 2, sourcePlayer1Id: 101, sourcePlayer2Id: 102 });
     expect(bundle.participants.find((p) => p.id === 1)).toMatchObject({ displayName: 'Alpha API', finalRank: 1 });
     expect(bundle.participants.find((p) => p.id === 2)).toBeDefined();
   });
@@ -95,4 +95,23 @@ describe('ChallongeClient public bracket requests', () => {
     await expect(client.fetchTournamentBundle('example')).rejects.toThrow(/quota is exhausted/i);
     expect(calls).toBe(1);
   });
+});
+
+it.each([undefined, 'underway', 'complete'])('does not infer completion from finished pools (metadata %s)', async (state) => {
+  const store = {
+    tournament: { id: 7, ...(state ? { state } : {}) },
+    matches_by_round: {},
+    groups: [{ tournament: { id: 70 }, matches_by_round: { '1': [{
+      id: 10, state: 'complete', winner_id: 101, scores: [2, 1], underway_at: '2026-08-25T12:00:00Z',
+      player1: { id: 101, participant_id: 1, display_name: 'Alpha' },
+      player2: { id: 102, participant_id: 2, display_name: 'Bravo' },
+    }] } }],
+  };
+  const client = new ChallongeClient({ minRequestSpacingMs: 0, fetchImpl: async () =>
+    new Response(`<script>window._initialStoreState['TournamentStore'] = ${JSON.stringify(store)};</script>`) });
+  const bundle = await client.fetchPublicTournamentBundle('pool-night');
+  expect(bundle.tournament.state).toBe(state ?? 'unknown');
+  expect(bundle.tournament.groupStageEnabled).toBe(true);
+  if (state !== 'complete') expect(bundle.tournament.completedAt).toBeNull();
+  expect(bundle.matches).toHaveLength(1);
 });

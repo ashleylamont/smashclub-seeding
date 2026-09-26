@@ -1,0 +1,19 @@
+.ops-attention h3 { margin: 0; display: flex; align-items: center; gap: .6rem; }
+.ops-attention-heading p { margin: .6rem 0; }
+.ops-attention-groups { display: grid; gap: .7rem; }
+.ops-attention summary { cursor: pointer; font-weight: 650; padding: .6rem 0; }
+.ops-attention-group { border-top: 1px solid var(--border); }
+.ops-attention ul { list-style: none; padding: 0; margin: 0; }
+.ops-attention li, .ops-attention-setup { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .7rem 0; }
+.ops-attention li + li { border-top: 1px solid var(--border); }
+.ops-attention li div { min-width: 0; }
+.ops-attention li span { display: block; color: var(--text); font-size: .85rem; margin-top: .2rem; overflow-wrap: anywhere; }
+.ops-attention li strong { overflow-wrap: anywhere; }
+.ops-attention .btn { flex-shrink: 0; }
+.ops-attention-dispatch { margin-top: .7rem; border-top: 1px solid var(--border); }
+.ops-attention-dispatch p { margin: .2rem 0; }
+.ops-focus-match { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; }
+.ops-report:focus, #station-controls:focus, #match-desk:focus { outline: 2px solid var(--accent); outline-offset: 4px; }
+@media (max-width: 520px) {
+  .ops-attention li, .ops-attention-setup { align-items: flex-start; flex-direction: column; gap: .5rem; }
+}

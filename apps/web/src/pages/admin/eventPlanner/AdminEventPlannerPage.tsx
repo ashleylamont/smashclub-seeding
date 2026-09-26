@@ -8,6 +8,7 @@ import { RosterStep } from './RosterStep';
 import { DivisionsStep } from './DivisionsStep';
 import { PoolsStep } from './PoolsStep';
 import { HandoffStep } from './HandoffStep';
+import { HistoricalAdoption } from './HistoricalAdoption';
 import { STATUS_LABEL } from './labels';
 import './EventPlanner.css';
 
@@ -59,7 +60,7 @@ export function AdminEventPlannerPage() {
         <h2>Event planner</h2>
         <p className="muted">
           Paste the attendance list, resolve everybody against the registry, split Upper and Lower off a frozen
-          ranking snapshot, and stripe each division into pools of four. The plan then hands you exactly what
+          ranking snapshot, and stripe each division into balanced pools of three to five. The plan then hands you exactly what
           Challonge needs for the four brackets of the night.
         </p>
       </div>
@@ -128,6 +129,7 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
   const [text, setText] = useState('');
   const [preview, setPreview] = useState<RosterPreviewRow[] | null>(null);
   const [upperSize, setUpperSize] = useState<number | null>(null);
+  const [bracketMode, setBracketMode] = useState<'native' | 'challonge'>('native');
 
   const previewRoster = useMutation({
     mutationFn: () => trpc.admin.eventPlanner.previewRoster.mutate({ text }),
@@ -142,6 +144,7 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
       const rows = preview ?? [];
       return trpc.admin.eventPlanner.createPlan.mutate({
         name: name.trim(),
+        bracketMode,
         eventDate: new Date(eventDate).toISOString(),
         slugPrefix: slugPrefix.trim() === '' ? null : slugPrefix.trim(),
         upperTargetSize: upperSize,
@@ -235,6 +238,15 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
         {previewRoster.isError && <span className="error-text">{previewRoster.error.message}</span>}
       </div>
 
+      <label className="form-field">
+        <span className="form-label">Bracket system</span>
+        <select className="select" value={bracketMode} onChange={event => setBracketMode(event.target.value as 'native' | 'challonge')}>
+          <option value="native">Nemesis — run the whole event here</option>
+          <option value="challonge">Challonge — manage external brackets</option>
+        </select>
+        <span className="form-hint">Nemesis runs pools, championship and consolation, then records the finished night in club ratings. Existing Challonge events stay linked to Challonge.</span>
+      </label>
+
       {preview && (
         <div className="preview-summary">
           <p>
@@ -247,7 +259,7 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
             <span className="form-label">Upper division size</span>
             {sizes.length === 0 ? (
               <span className="error-text">
-                {total} entrants do not divide into two divisions of whole pools of four. Add or remove names.
+                At least six entrants are needed for two divisions.
               </span>
             ) : (
               <select
@@ -264,8 +276,7 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
               </select>
             )}
             <span className="form-hint">
-              Half the field is the default when both halves are whole pools; otherwise it is a real choice and
-              the app will not make it for you.
+              The default splits attendance evenly. Each pool advances two players; all remaining players enter consolation.
             </span>
           </label>
           <button
@@ -311,7 +322,8 @@ function PlanWizard({
   });
 
   const view = planQuery.data ?? null;
-  const current = isStepKey(step) ? step : furthestStep(view);
+  const requestedStep = isStepKey(step) ? step : furthestStep(view);
+  const current = view?.plan.historicalAdoption && requestedStep === 'handoff' ? 'roster' : requestedStep;
 
   if (planQuery.isPending) return <p className="loading-text">Loading plan…</p>;
   if (planQuery.isError) return <p className="error-text">{planQuery.error.message}</p>;
@@ -327,6 +339,26 @@ function PlanWizard({
   }
 
   const available = availableSteps(view);
+  const adopted = view.plan.historicalAdoption;
+  const resultsSlug = view.brackets.find((bracket) => bracket.division === 'upper' && bracket.stage === 'main')?.challongeSlug;
+  const resultsUrl = resultsSlug ? `/events/${encodeURIComponent(resultsSlug)}` : null;
+  const steps = adopted ? STEPS.filter((entry) => entry.key !== 'handoff') : STEPS;
+  const originalPlan = (<>
+    <PlanSummary view={view} />
+    <nav className="planner-steps" aria-label={adopted ? 'Original plan steps' : 'Planner steps'}>
+      {steps.map((entry) => (
+        <button key={entry.key} type="button" className={`admin-tab${current === entry.key ? ' active' : ''}`} disabled={!available.has(entry.key)} onClick={() => onStep(entry.key)}>
+          {entry.key === 'handoff' && view.plan.bracketMode === 'native' ? 'Run event' : entry.label}
+        </button>
+      ))}
+    </nav>
+  </>);
+  const stepContent = (<>
+    {current === 'roster' && <RosterStep view={view} onChanged={invalidate} />}
+    {current === 'divisions' && <DivisionsStep view={view} onChanged={invalidate} />}
+    {current === 'pools' && <PoolsStep view={view} onChanged={invalidate} />}
+    {current === 'handoff' && <HandoffStep view={view} onChanged={invalidate} />}
+  </>);
 
   return (
     <div>
@@ -336,7 +368,8 @@ function PlanWizard({
             {view.plan.name} <span className="chip">{STATUS_LABEL[view.plan.status] ?? view.plan.status}</span>
           </h2>
           <span className="row-actions">
-            {(view.plan.status === 'pools_ready' || view.plan.status === 'underway') && (
+            {adopted ? resultsUrl && <a className="btn btn-small" href={resultsUrl}>Imported results →</a> : <a className="btn btn-small" href={`/admin/event-operations?plan=${planId}`}>Run event →</a>}
+            {view.plan.bracketMode !== 'native' && (view.plan.status === 'pools_ready' || view.plan.status === 'underway') && (
               <button
                 type="button"
                 className="btn btn-small"
@@ -367,30 +400,20 @@ function PlanWizard({
           </span>
         </div>
         <p className="muted">
-          {formatDateTime(view.plan.eventDate)} · {view.entries.length} entrants
+          {formatDateTime(view.plan.eventDate)} · {view.entries.length} {adopted ? 'planned entrants' : 'entrants'}
           {view.plan.rankingSnapshotAt && ` · ranking snapshot ${formatDateTime(view.plan.rankingSnapshotAt)}`}
         </p>
         {close.isError && <p className="error-text">{close.error.message}</p>}
-        <PlanSummary view={view} />
-        <nav className="planner-steps" aria-label="Planner steps">
-          {STEPS.map((entry) => (
-            <button
-              key={entry.key}
-              type="button"
-              className={`admin-tab${current === entry.key ? ' active' : ''}`}
-              disabled={!available.has(entry.key)}
-              onClick={() => onStep(entry.key)}
-            >
-              {entry.label}
-            </button>
-          ))}
-        </nav>
+        {!adopted && originalPlan}
       </div>
 
-      {current === 'roster' && <RosterStep view={view} onChanged={invalidate} />}
-      {current === 'divisions' && <DivisionsStep view={view} onChanged={invalidate} />}
-      {current === 'pools' && <PoolsStep view={view} onChanged={invalidate} />}
-      {current === 'handoff' && <HandoffStep view={view} onChanged={invalidate} />}
+      {view.plan.status !== 'cancelled' && <HistoricalAdoption view={view} onChanged={invalidate} />}
+      {adopted ? <details className="historical-original-plan card section">
+        <summary>Original plan — may differ from the event played</summary>
+        <p className="muted">These are the saved roster, seeds and proposed pools. Use the imported results above for the matches and placements that actually happened.</p>
+        {originalPlan}
+        {stepContent}
+      </details> : stepContent}
     </div>
   );
 }
@@ -461,13 +484,12 @@ function defaultEventDate(): string {
  * what to *offer*.
  */
 function validUpperSizes(total: number, poolSize = 4): number[] {
-  if (total < poolSize * 2 || total % poolSize !== 0) return [];
-  const sizes: number[] = [];
-  for (let size = poolSize; size <= total - poolSize; size += poolSize) sizes.push(size);
-  return sizes;
+  const minimum = Math.max(3, poolSize - 1);
+  if (total < minimum * 2) return [];
+  return Array.from({ length: total - minimum * 2 + 1 }, (_, index) => minimum + index);
 }
 
 function defaultUpperSize(total: number, poolSize = 4): number | null {
-  const half = total / 2;
+  const half = Math.ceil(total / 2);
   return validUpperSizes(total, poolSize).includes(half) ? half : null;
 }
