@@ -11,7 +11,7 @@ import { eventMatchAudit, eventOperationSettings, eventOperators, eventPrizes, e
 import { adminProcedure, authedProcedure, publicProcedure, router } from '../trpc/trpc';
 import { lockEvent, prepare, reportScore, requireOperator, reviewReport, snapshot, updateMatch } from './service';
 import { configurePools, configurePool, publishAnnouncement, updateLiveScore } from './controls';
-import { applyAttendance, previewAttendance, resetOperations, softLockPools } from './attendance';
+import { applyAttendance, previewAttendance, resetOperations, softLockPools, unlockPools } from './attendance';
 import { deleteStation, saveStation } from './stations';
 const attendanceInput = z.object({ planId: z.string().uuid(), action: z.enum(['add', 'withdraw', 'no_show', 'redistribute']), playerId: z.string().uuid(), division: z.enum(['upper', 'lower']).optional(), poolIndex: z.number().int().min(0).optional(), reason: z.string().trim().max(200).optional(), acknowledgeExternalChange: z.boolean().optional(), approveRedistribution: z.boolean().optional() });
 const planInput = z.object({ planId: z.string().uuid() });
@@ -26,7 +26,8 @@ export const eventOpsRouter = router({
     delivery: eventDeliveryRouter,
     sources: sourceRefreshRouter,
     previewAttendance: authedProcedure.input(attendanceInput).query(async ({ ctx, input }) => { await requireOperator(ctx.db, input.planId, ctx.user); return previewAttendance(ctx.db, input); }),
-    softLockPools: authedProcedure.input(planInput).mutation(({ ctx, input }) => softLockPools(ctx.db, ctx.user, input.planId)),
+    softLockPools: authedProcedure.input(planInput.extend({ confirm: z.literal(true) })).mutation(({ ctx, input }) => softLockPools(ctx.db, ctx.user, input.planId)),
+    unlockPools: authedProcedure.input(planInput.extend({ confirm: z.literal(true) })).mutation(({ ctx, input }) => unlockPools(ctx.db, ctx.user, input.planId)),
     applyAttendance: authedProcedure.input(attendanceInput.extend({ revisionToken: z.string().min(1) })).mutation(({ ctx, input }) => applyAttendance(ctx.db, ctx.user, input)),
     resetOperations: authedProcedure.input(planInput).mutation(({ ctx, input }) => resetOperations(ctx.db, ctx.user, input.planId)),
     myReports: authedProcedure.input(planInput).query(({ ctx, input }) => ctx.db.select().from(eventScoreReports).where(and(eq(eventScoreReports.eventPlanId, input.planId), eq(eventScoreReports.userId, ctx.user.id))).orderBy(desc(eventScoreReports.createdAt))),

@@ -141,6 +141,13 @@
       "when": 1790555493910,
       "tag": "0019_soft_locked_pools",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790560000000,
+      "tag": "0020_reopen_unplayed_pool_draws",
+      "breakpoints": true
     }
   ]
 }
