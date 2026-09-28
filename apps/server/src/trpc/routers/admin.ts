@@ -22,6 +22,7 @@ import { ensureAlias } from '../../identity/matching';
 import { charactersByPlayer, characterSlugsSchema, setPlayerCharacters } from '../../players/characters';
 import { mergePlayers } from '../../players/merge';
 import { compareModels } from '../../recompute/compareModels';
+import { loadBreakthrough } from '../../recap/breakthrough';
 import {
   RegistryValidationError,
   applyRegistryYaml,
@@ -131,6 +132,9 @@ export const adminRouter = router({
    * or settings this file otherwise administers.
    */
   eventPlanner: eventPlannerRouter,
+
+  breakthrough: adminProcedure.input(z.object({ eventKey: z.iso.date() }))
+    .query(({ ctx, input }) => loadBreakthrough(ctx.db, input.eventKey)),
 
   // --- tournaments ---
   registerTournament: adminProcedure

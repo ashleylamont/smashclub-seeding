@@ -1,6 +1,6 @@
 import type { GlickoSettings } from '@smashclub/shared';
 import { attendanceOf, eventKeyOf } from './events';
-import { DISPLAY_CENTRE, NATURAL_TO_DISPLAY, fitWhr, type WhrFit } from './whr';
+import { DISPLAY_CENTRE, NATURAL_TO_DISPLAY, fitWhr, whrSetTrials, type WhrFit } from './whr';
 import { compareNullableNumbers, compareSetsInBracket, compareStrings } from './setOrder';
 import { activityPenaltyFor, rankScores, type LeaderboardRow, type PlayerScore } from './score';
 import type { EngineSet, EngineTournament, RatingEvent } from './types';
@@ -131,10 +131,7 @@ export function runWhrModel(input: {
    * fewer games than the loser (a DQ artefact) reads as unknown.
    */
   const trialsOf = (set: EngineSet): number => {
-    const winnerGames = set.winner === 1 ? set.p1Games : set.p2Games;
-    const loserGames = set.winner === 1 ? set.p2Games : set.p1Games;
-    if (winnerGames == null || loserGames == null || loserGames < 0 || winnerGames <= loserGames) return 1;
-    return Math.max(1, Math.min(2, 1 + settings.whrGamesWeight * (winnerGames - loserGames - 1)));
+    return whrSetTrials(set, settings.whrGamesWeight);
   };
 
   // Rateable sets only, in the same deterministic chronological order the
