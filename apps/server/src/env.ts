@@ -15,11 +15,9 @@ const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   /**
-   * Comma-separated emails promoted to admin at login. Matched against the
-   * account's primary email — the address of the provider used to sign up.
-   * Providers linked afterwards may carry different addresses (that is
-   * supported and expected) but those addresses are not checked here, so list
-   * the one the admin originally signed up with.
+   * Bootstrap only: verified primary emails allowed to become the first admin
+   * when no verified admin exists in the database. After that, admins manage roles in
+   * the UI and changes here do not alter existing accounts.
    */
   ADMIN_EMAILS: z.string().default(''),
   /**

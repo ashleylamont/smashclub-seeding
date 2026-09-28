@@ -136,26 +136,21 @@ and the `SSE_MAX_*` live-feed limits.
 
 ### Administrators
 
-`ADMIN_EMAILS` is the **single source of truth** for admin access. The
-`user.role` column is a cache of it: every request reconciles the two in both
-directions, so
+The stored `user.role` controls admin access. Open **Admin → Admins** to search
+accounts, promote a verified account, or remove an admin. A role change takes
+effect on that account's next API request, even if its session remains open.
+The final verified admin cannot be removed until another account is promoted.
 
-- adding an address grants admin on that account's next call, and
-- **removing one revokes it just as promptly** — including for a session that
-  is already signed in, and for every provider linked to that account.
+An account must sign in before it appears in search. Only accounts with an
+email verified by their sign-in provider can be promoted. Admin rights follow
+the account across linked providers, which may use different email addresses.
 
-There is deliberately no way to pin an admin in the database that the
-allowlist will not take back; a role nothing can revoke is a role nobody can
-offboard. Offboarding is exactly "remove the address and redeploy" — no SQL,
-no session invalidation step to forget.
-
-`ADMIN_EMAILS` is matched against the account's primary email — the address
-from whichever provider was used to *sign up*. Linking a second provider
-later does not add its address to that check, so list the one the admin
-signed up with. The address must also be one the provider reports as
-**verified**: Discord hands out unverified addresses for accounts that never
-confirmed their email, and an unverified address is not evidence that whoever
-is signing in controls the allowlisted mailbox.
+`ADMIN_EMAILS` is only for the first admin on a new installation: if the
+database has no verified admins, a signed-in account with one of these verified primary
+emails receives the admin role. Once an admin exists, changing this setting
+does not promote or remove anyone; use the UI. Existing stored admin roles are
+preserved when upgrading. The setting can be removed after the first admin has
+signed in.
 
 ### Accounts and providers
 
@@ -358,7 +353,7 @@ cosmetic gap rather than a broken page.
    DATABASE_URL=... pnpm --filter @smashclub/import-registry start \
      --players players.yaml --tournaments legacy/challonge_tournaments.txt
    ```
-3. Log in with an `ADMIN_EMAILS` account, open **Admin → Tournaments**, and
+3. Log in with an `ADMIN_EMAILS` bootstrap account, open **Admin → Tournaments**, and
    sync the registered tournaments (the scheduler will also pick them up).
 4. Work through **Admin → Review** once — the initial sync queues every name
    the registry aliases don't cover. Ratings recompute automatically as

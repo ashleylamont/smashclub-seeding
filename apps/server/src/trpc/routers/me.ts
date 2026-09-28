@@ -32,7 +32,7 @@ export const meRouter = router({
   /**
    * Authoritative identity and role for the signed-in caller. The client gates
    * admin navigation on this rather than on the auth session, because role
-   * promotion from ADMIN_EMAILS is applied server-side.
+   * changes are read from the database on every request.
    */
   whoami: authedProcedure.query(({ ctx }) => ({
     id: ctx.user.id,

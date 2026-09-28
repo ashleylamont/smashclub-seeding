@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { and, asc, count, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, ne, or, sql } from 'drizzle-orm';
 import {
   companies,
   companyAliases,
@@ -126,6 +126,53 @@ const playerDetailsSchema = z.object({
 });
 
 export const adminRouter = router({
+  /** Existing accounts only: a person signs in before an admin can promote them. */
+  admins: adminProcedure.query(({ ctx }) => ctx.db
+    .select({ id: user.id, name: user.name, email: user.email, emailVerified: user.emailVerified })
+    .from(user).where(eq(user.role, 'admin')).orderBy(asc(user.name))),
+
+  findAccounts: adminProcedure.input(z.object({ search: z.string().trim().min(2).max(100) }))
+    .query(({ ctx, input }) => {
+      const escaped = input.search.replace(/[\\%_]/g, '\\$&');
+      const pattern = `%${escaped}%`;
+      return ctx.db
+        .select({ id: user.id, name: user.name, email: user.email,
+          emailVerified: user.emailVerified, role: user.role })
+        .from(user)
+        .where(or(ilike(user.name, pattern), ilike(user.email, pattern)))
+        .orderBy(asc(user.name)).limit(25);
+    }),
+
+  setAdminRole: adminProcedure.input(z.object({ userId: z.string().min(1), admin: z.boolean() }))
+    .mutation(async ({ ctx, input }) => ctx.db.transaction(async (tx) => {
+      // Serialize role changes against the same admin rows so two concurrent
+      // removals cannot each leave the other as the last administrator.
+      const admins = await tx.select({ id: user.id, emailVerified: user.emailVerified }).from(user)
+        .where(eq(user.role, 'admin')).orderBy(asc(user.id)).for('update');
+      if (!admins.some((row) => row.id === ctx.user.id && row.emailVerified)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Your admin access has been removed.' });
+      }
+      const [target] = await tx.select({ id: user.id, role: user.role, emailVerified: user.emailVerified })
+        .from(user).where(eq(user.id, input.userId));
+      if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Account not found.' });
+      if (input.admin && !target.emailVerified) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'The account email must be verified before promotion.' });
+      }
+      if (!input.admin && target.role === 'admin' && target.emailVerified &&
+        admins.filter((row) => row.emailVerified).length <= 1) {
+        throw new TRPCError({ code: 'CONFLICT', message: 'Promote another admin before removing the last one.' });
+      }
+      if (target.role !== (input.admin ? 'admin' : 'user')) {
+        const [updated] = await tx.update(user).set({ role: input.admin ? 'admin' : 'user', updatedAt: new Date() })
+          .where(and(eq(user.id, input.userId), input.admin ? eq(user.emailVerified, true) : undefined))
+          .returning({ id: user.id });
+        if (!updated) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'The account email must be verified before promotion.' });
+        }
+      }
+      return { ok: true };
+    })),
+
   /**
    * The two-division club-night planner. Its own router: the flow has a dozen
    * procedures of its own and none of them are about the tournaments, players
