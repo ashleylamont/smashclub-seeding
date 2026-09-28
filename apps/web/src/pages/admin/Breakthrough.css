@@ -1,0 +1,36 @@
+.breakthrough-page { min-width: 0; }
+.breakthrough-page h2, .breakthrough-page h3 { margin-bottom: var(--s2); }
+.breakthrough-page p { margin-bottom: var(--s3); }
+.breakthrough-toolbar { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: flex-end; margin: var(--s3) 0; }
+.breakthrough-toolbar label:not(.checkbox-label), .breakthrough-controls label { display: flex; flex-direction: column; gap: var(--s1); font-size: var(--fs-sm); }
+.breakthrough-toolbar select { max-width: 100%; }
+.breakthrough-toolbar label { min-width: 0; max-width: 100%; }
+.breakthrough-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--s3); margin: var(--s4) 0 var(--s2); }
+.breakthrough-controls .input { width: 100%; min-width: 0; }
+.breakthrough-status { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: var(--s2); }
+.breakthrough-status strong { color: var(--accent); font-size: var(--fs-sm); }
+.breakthrough-notice { padding: var(--s3); border-left: 3px solid var(--accent); background: var(--bg); }
+.breakthrough-sources { margin: var(--s3) 0; font-size: var(--fs-sm); }
+.breakthrough-page summary { cursor: pointer; padding: var(--s2) 0; }
+.breakthrough-page ul { padding-left: var(--s4); }
+.breakthrough-page li { margin: var(--s2) 0; }
+.breakthrough-table-wrap { overflow-x: auto; margin-top: var(--s4); }
+.breakthrough-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.breakthrough-table caption { text-align: left; color: var(--text-soft); margin-bottom: var(--s2); }
+.breakthrough-table th, .breakthrough-table td { padding: var(--s3); text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+.breakthrough-table thead th { font-family: var(--display); text-transform: uppercase; font-weight: 500; }
+.breakthrough-table td { font-variant-numeric: tabular-nums; }
+.breakthrough-table .breakthrough-detail { padding-top: 0; padding-bottom: var(--s2); }
+.breakthrough-criteria { display: block; font-size: var(--fs-xs); font-weight: 400; color: var(--text-soft); margin-top: var(--s1); }
+.breakthrough-score { font-weight: 600; white-space: nowrap; }
+@media (max-width: 600px) {
+  .breakthrough-controls { grid-template-columns: 1fr 1fr; }
+  .breakthrough-table, .breakthrough-table tbody, .breakthrough-table caption { display: block; }
+  .breakthrough-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .breakthrough-summary-row { display: grid; grid-template-columns: 1fr 1fr; }
+  .breakthrough-summary-row th { grid-column: 1 / -1; padding-top: var(--s4); }
+  .breakthrough-summary-row td::before { content: attr(data-label); display: block; font-size: var(--fs-xs); color: var(--text-soft); font-weight: 400; margin-bottom: var(--s1); }
+  .breakthrough-detail-row, .breakthrough-table .breakthrough-detail { display: block; }
+  .breakthrough-table th, .breakthrough-table td { padding-left: 0; padding-right: var(--s2); }
+  .breakthrough-toolbar .checkbox-label { white-space: normal; }
+}
