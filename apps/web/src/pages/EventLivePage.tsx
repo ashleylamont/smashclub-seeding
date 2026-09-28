@@ -39,7 +39,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
     setFocus(stationId);
   };
   const guestInvitation = useQuery({ queryKey: ['overlayGuestInvitation', planId], queryFn: () => trpc.eventOps.guests.overlayInvitation.query({ planId }), enabled: overlay, refetchInterval: 10000, refetchIntervalInBackground: true, retry: false });
-  const guestQr = !guestInvitation.isError && guestInvitation.data && Date.parse(guestInvitation.data.expiresAt) > now ? guestInvitation.data : null;
+  const guestQr = !guestInvitation.isError && guestInvitation.data && (!guestInvitation.data.expiresAt || Date.parse(guestInvitation.data.expiresAt) > now) ? guestInvitation.data : null;
   useEffect(() => {
     if (!overlay) return;
     document.documentElement.classList.add('event-overlay-document');

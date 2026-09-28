@@ -1,0 +1,1 @@
+ALTER TABLE "event_guest_settings" ADD COLUMN "rotate_invitations" boolean DEFAULT true NOT NULL;
