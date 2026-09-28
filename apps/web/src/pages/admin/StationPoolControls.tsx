@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { PoolStationSetup } from './PoolStationSetup';
 import { PoolFloorSheets } from './PoolFloorSheets';
+import { BracketBackupSheets } from './BracketBackupSheets';
 import { trpc } from '../../lib/trpc';
 import { poolStandings } from '../../lib/eventQueue';
 import { poolLabel } from '../../lib/poolStationPlan';
@@ -281,6 +282,7 @@ export function StationPoolControls({
             </p>
           )}
           <PoolFloorSheets data={data} />
+          <BracketBackupSheets data={data} />
           <PoolStationSetup
             key={data.stations.map((station) => station.id).join(':')}
             data={data}
