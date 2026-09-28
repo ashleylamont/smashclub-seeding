@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { eventGuestRateLimits, eventGuestSessions, eventGuestSettings, eventMatchAudit, eventMatches, eventOperationSettings, eventPlanEntries, eventPlans, eventScoreReports, players, user, type Db } from '@smashclub/db';
-import { configureGuests, guestInvitation, guestMatches, redeemGuest, submitGuest } from '../src/event-operations/guests';
+import { configureGuests, guestInvitation, guestMatches, redeemGuest, rotateGuests, submitGuest } from '../src/event-operations/guests';
 import { prepare, reportScore, reviewReport, snapshot } from '../src/event-operations/service';
 import { createTestDb } from './helpers/testDb';
 import type { SessionUser } from '../src/auth';
@@ -31,11 +31,34 @@ async function join() {
 }
 const input = (sessionToken: string, requestId = 'guest-score') => ({ planId, sessionToken, matchId: match.id, expectedRevision: match.revision, requestId, score1: 2, score2: 1 });
 describe('guest reporting', () => {
+    it('lets organisers print persistent codes before publishing and redeem them throughout the event', async () => {
+        await db.update(eventOperationSettings).set({ published: false }).where(eq(eventOperationSettings.eventPlanId, planId));
+        await configureGuests(db, admin, { planId, enabled: true, showOnOverlay: false, rotateInvitations: false });
+        const invite = (await guestInvitation(db, planId, admin, now))!;
+        expect(invite.expiresAt).toBeNull();
+        expect((await guestInvitation(db, planId, admin, now + 24 * 60 * 60_000))!.token).toBe(invite.token);
+        expect(await guestInvitation(db, planId, undefined, now)).toBeNull();
+        await expect(redeemGuest(db, { planId, token: invite.token }, 'before-publication', now)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+        await db.update(eventOperationSettings).set({ published: true }).where(eq(eventOperationSettings.eventPlanId, planId));
+        const guest = await redeemGuest(db, { planId, token: invite.token }, 'during-event', now + 24 * 60 * 60_000);
+        expect(Date.parse(guest.expiresAt)).toBe(now + 25 * 60 * 60_000);
+        expect((await guestMatches(db, { planId, sessionToken: guest.sessionToken }, now + 24 * 60 * 60_000)).matches.length).toBeGreaterThan(0);
+        await rotateGuests(db, admin, planId);
+        await expect(redeemGuest(db, { planId, token: invite.token }, 'after-revocation', now + 24 * 60 * 60_000)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+        await expect(guestMatches(db, { planId, sessionToken: guest.sessionToken }, now + 24 * 60 * 60_000)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+    it('revokes persistent invitations when rotation is enabled again', async () => {
+        await configureGuests(db, admin, { planId, enabled: true, showOnOverlay: false, rotateInvitations: false });
+        const invite = (await guestInvitation(db, planId, admin, now))!;
+        await configureGuests(db, admin, { planId, enabled: true, showOnOverlay: false, rotateInvitations: true });
+        await expect(redeemGuest(db, { planId, token: invite.token }, 'changed-mode', now)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+        expect((await guestInvitation(db, planId, admin, now))!.expiresAt).not.toBeNull();
+    });
     it('keeps a QR link usable for at least an hour across displayed code rotations', async () => {
         await enable();
         const issuedAt = Math.floor(now / 900_000) * 900_000 + 899_999;
         const invite = (await guestInvitation(db, planId, admin, issuedAt))!;
-        expect(Date.parse(invite.expiresAt) - issuedAt).toBeGreaterThanOrEqual(60 * 60_000);
+        expect(Date.parse(invite.expiresAt!) - issuedAt).toBeGreaterThanOrEqual(60 * 60_000);
         const next = (await guestInvitation(db, planId, admin, issuedAt + 15 * 60_000))!;
         expect(next.token).not.toBe(invite.token);
         const guest = await redeemGuest(db, { planId, token: invite.token }, 'later-guest', issuedAt + 60 * 60_000);
@@ -88,7 +111,7 @@ describe('guest reporting', () => {
         const invite = (await guestInvitation(db, planId, admin, now))!;
         const guest = await join();
         await expect(redeemGuest(db, { planId, token: `${invite.token}x` }, 'test', now)).rejects.toMatchObject({ code: 'FORBIDDEN' });
-        await expect(redeemGuest(db, { planId, token: invite.token }, 'test', Date.parse(invite.expiresAt))).rejects.toMatchObject({ code: 'FORBIDDEN' });
+        await expect(redeemGuest(db, { planId, token: invite.token }, 'test', Date.parse(invite.expiresAt!))).rejects.toMatchObject({ code: 'FORBIDDEN' });
         await expect(guestMatches(db, { planId, sessionToken: guest.sessionToken }, Date.parse(guest.expiresAt))).rejects.toMatchObject({ code: 'FORBIDDEN' });
         const [other] = await db.insert(eventPlans).values({ name: 'Other', eventDate: new Date(), status: 'pools_ready' }).returning();
         await db.insert(eventOperationSettings).values({ eventPlanId: other!.id, published: true });
