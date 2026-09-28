@@ -4,7 +4,7 @@ import { eventMatches, eventMatchAudit, eventOperationSettings, eventOperators, 
 import { prepare, reportScore, reviewReport, snapshot, updateMatch, requireOperator } from '../src/event-operations/service';
 import { updateLiveScore } from '../src/event-operations/controls';
 import { deleteStation, saveStation } from '../src/event-operations/stations';
-import { applyAttendance, previewAttendance, resetOperations, softLockPools } from '../src/event-operations/attendance';
+import { applyAttendance, previewAttendance, resetOperations, softLockPools, unlockPools } from '../src/event-operations/attendance';
 import { getPlan, unfreezeRoster, reorderDivision, generatePools, savePoolPlacements } from '../src/event-planner/plans';
 import { createTestDb } from './helpers/testDb';
 import type { SessionUser } from '../src/auth';
@@ -268,6 +268,39 @@ describe('late attendance and protected pools', () => {
         await resetOperations(db, admin, planId);
         expect(await db.select().from(eventPoolAssignments)).toHaveLength(8);
         expect((await getPlan(db, planId))!.divisions).toEqual(before.divisions);
+    });
+    it('lets a TO return an unplayed soft-locked draw to draft and rebalance it', async () => {
+        await db.update(eventPlans).set({ softLockedBy: admin.id }).where(eq(eventPlans.id, planId));
+        await ready();
+        await db.insert(eventPoolAssignments).values(ids.map((playerId, i) => ({ eventPlanId: planId, playerId, division: i < 4 ? 'upper' as const : 'lower' as const, poolIndex: 0 })));
+        await db.insert(eventPoolSchedules).values({ eventPlanId: planId, division: 'upper', poolIndex: 0, stationIds: [] });
+        await expect(unlockPools(db, member, planId)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+        expect(await unlockPools(db, admin, planId)).toEqual({ removedMatches: 12 });
+        expect(await db.select().from(eventMatches)).toHaveLength(0);
+        expect(await db.select().from(eventPoolAssignments)).toHaveLength(0);
+        expect(await db.select().from(eventPoolSchedules)).toHaveLength(0);
+        const view = (await getPlan(db, planId))!;
+        expect(view.plan).toMatchObject({ status: 'pools_ready', softLockedAt: null, softLockedBy: null });
+        await reorderDivision(db, planId, 'upper', view.entries.filter(e => e.assignedDivision === 'upper').map(e => e.id).reverse());
+        await generatePools(db, planId);
+        expect((await softLockPools(db, admin, planId)).softLockedAt).toBeTruthy();
+    });
+    it('requires soft-locking before play begins', async () => {
+        await db.update(eventPlans).set({ softLockedAt: null }).where(eq(eventPlans.id, planId));
+        const [match] = await ready();
+        await reportScore(db, admin, score(match!));
+        await expect(softLockPools(db, admin, planId)).rejects.toMatchObject({ code: 'CONFLICT' });
+        expect((await getPlan(db, planId))!.plan.softLockedAt).toBeNull();
+    });
+    it('refuses to reopen a draw after play or a bracket handoff', async () => {
+        const [match] = await ready();
+        await reportScore(db, admin, score(match!));
+        await expect(unlockPools(db, admin, planId)).rejects.toMatchObject({ code: 'CONFLICT' });
+        expect((await db.select().from(eventMatches))).toHaveLength(12);
+        expect((await getPlan(db, planId))!.plan.softLockedAt).toBeTruthy();
+        await db.delete(eventMatches).where(eq(eventMatches.eventPlanId, planId));
+        await db.insert(eventPlanBrackets).values({ eventPlanId: planId, division: 'upper', stage: 'main', challongeSlug: 'linked-draw' });
+        await expect(unlockPools(db, admin, planId)).rejects.toMatchObject({ code: 'CONFLICT' });
     });
     it('replaces an active place without adding matches against an earlier withdrawal', async () => {
         await ready();
