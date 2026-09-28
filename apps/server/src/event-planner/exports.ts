@@ -1,5 +1,5 @@
-import { divisionLabel, EventPlanStateError, type PlanView } from './plans';
-import type { Division } from './divisions';
+import { divisionLabel, EventPlanStateError, type PlanView } from './plans'
+import type { Division } from './divisions'
 
 /**
  * The copy-and-paste handoff to Challonge.
@@ -19,46 +19,49 @@ import type { Division } from './divisions';
  */
 
 export interface BracketExport {
-  division: Division;
-  stage: 'main' | 'consolation';
-  title: string;
+  division: Division
+  stage: 'main' | 'consolation'
+  title: string
   /** Newline-separated names, in seed order: Challonge's bulk-add box. */
-  participants: string;
+  participants: string
   /** `seed<TAB>name`, for checking the bracket against the plan afterwards. */
-  audit: string;
+  audit: string
   /** Setup steps that are not expressible as a participant list. */
-  checklist: string[];
+  checklist: string[]
   /** Null unless the plan already knows the slug. */
-  challongeSlug: string | null;
-  suggestedSlug: string;
+  challongeSlug: string | null
+  suggestedSlug: string
 }
 
 export interface PlanExports {
-  eventDate: string;
-  rankingSnapshotAt: string | null;
-  brackets: BracketExport[];
+  eventDate: string
+  rankingSnapshotAt: string | null
+  brackets: BracketExport[]
   /** Pool cards, ready to print for a venue with no connectivity. */
-  poolCards: Array<{
-    division: Division;
-    label: string;
-    lines: string[];
-  }>;
+  poolCards: {
+    division: Division
+    label: string
+    lines: string[]
+  }[]
 }
 
 export function buildExports(view: PlanView): PlanExports {
-  if (view.plan.bracketMode === 'native') throw new EventPlanStateError('This event runs in Nemesis; Challonge handoff exports are unavailable.');
-  const brackets: BracketExport[] = [];
-  const poolCards: PlanExports['poolCards'] = [];
+  if (view.plan.bracketMode === 'native')
+    throw new EventPlanStateError(
+      'This event runs in Nemesis; Challonge handoff exports are unavailable.',
+    )
+  const brackets: BracketExport[] = []
+  const poolCards: PlanExports['poolCards'] = []
 
   for (const division of view.divisions) {
-    if (division.size === 0) continue;
+    if (division.size === 0) continue
     const slot = (stage: 'main' | 'consolation') =>
-      view.brackets.find((bracket) => bracket.division === division.division && bracket.stage === stage);
+      view.brackets.find(
+        (bracket) => bracket.division === division.division && bracket.stage === stage,
+      )
 
-    const seeded = division.pools
-      .flatMap((pool) => pool.members)
-      .sort((a, b) => a.seed - b.seed);
-    const mainSlot = slot('main');
+    const seeded = division.pools.flatMap((pool) => pool.members).sort((a, b) => a.seed - b.seed)
+    const mainSlot = slot('main')
     brackets.push({
       division: division.division,
       stage: 'main',
@@ -67,7 +70,7 @@ export function buildExports(view: PlanView): PlanExports {
       audit: seeded.map((member) => `${member.seed}\t${member.name}`).join('\n'),
       checklist: [
         'Tournament type: Two stage — group stage then single elimination.',
-        `Groups: ${division.poolCount} round-robin group(s), sizes ${division.pools.map((pool) => pool.members.length).join(" / ")}. Match the pool cards exactly; do not rely on automatic allocation.`,
+        `Groups: ${division.poolCount} round-robin group(s), sizes ${division.pools.map((pool) => pool.members.length).join(' / ')}. Match the pool cards exactly; do not rely on automatic allocation.`,
         'Advance: top 2 from each group into the final stage.',
         'Participants: paste the list above, in this order, then set seeds 1..n to match.',
         `Check each group against the pool cards before starting — Challonge's own ` +
@@ -77,22 +80,23 @@ export function buildExports(view: PlanView): PlanExports {
       ],
       challongeSlug: mainSlot?.challongeSlug ?? null,
       suggestedSlug: mainSlot?.suggestedSlug ?? '',
-    });
+    })
 
-    const consolationSlot = slot('consolation');
-    const consolation = division.consolation;
+    const consolationSlot = slot('consolation')
+    const consolation = division.consolation
     brackets.push({
       division: division.division,
       stage: 'consolation',
       title: `${divisionLabel(division.division)} Consolation`,
       participants: consolation
-        ? consolation.entrants
-            .map((entrant) => nameFor(division, entrant.playerId))
-            .join('\n')
+        ? consolation.entrants.map((entrant) => nameFor(division, entrant.playerId)).join('\n')
         : '',
       audit: consolation
         ? consolation.entrants
-            .map((entrant) => `${entrant.bracketSeed}\t${entrant.label}\t${nameFor(division, entrant.playerId)}`)
+            .map(
+              (entrant) =>
+                `${entrant.bracketSeed}\t${entrant.label}\t${nameFor(division, entrant.playerId)}`,
+            )
             .join('\n')
         : '',
       checklist: [
@@ -104,23 +108,27 @@ export function buildExports(view: PlanView): PlanExports {
               'Tournament type: Single elimination.',
               'Participants: paste the list above, in this order, then set seeds 1..n to match.',
               `Round one should be: ${consolation.roundOne
-                .map((pair) => (pair.b ? `${pair.a.label} v ${pair.b.label}` : `${pair.a.label} (bye)`))
+                .map((pair) =>
+                  pair.b ? `${pair.a.label} v ${pair.b.label}` : `${pair.a.label} (bye)`,
+                )
                 .join(', ')}.`,
             ]
-          : ['Confirm every pool’s finishing order first — everyone below second enters consolation.']),
+          : [
+              'Confirm every pool’s finishing order first — everyone below second enters consolation.',
+            ]),
         `Event date: ${view.plan.eventDate.slice(0, 10)} — the same as the main brackets.`,
         'Do NOT mark this bracket as rookie.',
       ],
       challongeSlug: consolationSlot?.challongeSlug ?? null,
       suggestedSlug: consolationSlot?.suggestedSlug ?? '',
-    });
+    })
 
     for (const pool of division.pools) {
       poolCards.push({
         division: division.division,
         label: `${divisionLabel(division.division)} — Pool ${pool.label}`,
         lines: pool.members.map((member) => `#${member.seed}  ${member.name}`),
-      });
+      })
     }
   }
 
@@ -129,13 +137,13 @@ export function buildExports(view: PlanView): PlanExports {
     rankingSnapshotAt: view.plan.rankingSnapshotAt,
     brackets,
     poolCards,
-  };
+  }
 
   function nameFor(division: PlanView['divisions'][number], playerId: string): string {
     for (const pool of division.pools) {
-      const member = pool.members.find((entry) => entry.playerId === playerId);
-      if (member) return member.name;
+      const member = pool.members.find((entry) => entry.playerId === playerId)
+      if (member) return member.name
     }
-    return '?';
+    return '?'
   }
 }

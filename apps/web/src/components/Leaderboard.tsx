@@ -1,11 +1,11 @@
-import { useId, useMemo, useState } from 'react';
-import { Link } from '@tanstack/react-router';
-import type { LeaderboardRow } from '../lib/apiTypes';
-import { Sparkline } from './Sparkline';
-import { CharacterIcons } from './CharacterIcons';
-import { BoardLegend } from './BoardLegend';
-import { tierClass } from '../lib/format';
-import './Leaderboard.css';
+import { useId, useMemo, useState } from 'react'
+import { Link } from '@tanstack/react-router'
+import type { LeaderboardRow } from '../lib/apiTypes'
+import { Sparkline } from './Sparkline'
+import { CharacterIcons } from './CharacterIcons'
+import { BoardLegend } from './BoardLegend'
+import { tierClass } from '../lib/format'
+import './Leaderboard.css'
 
 /**
  * The ranking board.
@@ -24,30 +24,36 @@ import './Leaderboard.css';
 
 export interface PlayerTrend {
   /** Conservative-of-skill trace for the sparkline, oldest first. */
-  points: number[];
+  points: number[]
   /** Most recent results, oldest first; true = win. */
-  form: boolean[];
+  form: boolean[]
 }
 
 interface Props {
   /** Already filtered and re-ranked by the page; see lib/activity. */
-  rows: LeaderboardRow[];
-  trends: Map<string, PlayerTrend>;
+  rows: LeaderboardRow[]
+  trends: Map<string, PlayerTrend>
   /** Whether players with no event in the last six months are excluded. */
-  hideInactive: boolean;
-  onHideInactiveChange: (next: boolean) => void;
+  hideInactive: boolean
+  onHideInactiveChange: (next: boolean) => void
   /** How many players the inactivity filter drops (or would drop). */
-  inactiveCount: number;
+  inactiveCount: number
 }
 
-type SortField = 'rank' | 'rating' | 'wins' | 'eventCount' | 'certainty' | 'lastSeen';
+type SortField = 'rank' | 'rating' | 'wins' | 'eventCount' | 'certainty' | 'lastSeen'
 
 /**
  * The board's columns. Every sortable measure has its own column, so the header
  * row *is* the sort control — a separate button strip would name the same fields
  * twice. `field: null` marks a column that carries no orderable measure.
  */
-const COLUMNS: { key: string; label: string; field: SortField | null; name: string; title?: string }[] = [
+const COLUMNS: {
+  key: string
+  label: string
+  field: SortField | null
+  name: string
+  title?: string
+}[] = [
   { key: 'rank', label: '#', field: 'rank', name: 'rank' },
   {
     key: 'movement',
@@ -88,7 +94,7 @@ const COLUMNS: { key: string; label: string; field: SortField | null; name: stri
     name: 'last seen',
     title: 'Which club night this player was last at',
   },
-];
+]
 
 /**
  * The same measures, for the select that replaces the header row on a phone.
@@ -102,7 +108,7 @@ const SORT_OPTIONS: { field: SortField; label: string }[] = [
   { field: 'wins', label: 'Sets won' },
   { field: 'eventCount', label: 'Events' },
   { field: 'lastSeen', label: 'Last seen' },
-];
+]
 
 /**
  * How long ago someone was last at the club, in club nights rather than in days.
@@ -114,17 +120,15 @@ const SORT_OPTIONS: { field: SortField; label: string }[] = [
  */
 function lastSeenChip(row: LeaderboardRow): { text: string; className: string; title: string } {
   if (row.missedEvents === 0) {
-    const streak = row.attendanceStreak;
+    const streak = row.attendanceStreak
     return {
       text: streak > 1 ? `${streak} in a row` : 'Latest',
       className: streak > 2 ? 'seen-streak' : 'seen-current',
       title:
-        streak > 1
-          ? `At the last ${streak} club nights in a row`
-          : 'At the most recent club night',
-    };
+        streak > 1 ? `At the last ${streak} club nights in a row` : 'At the most recent club night',
+    }
   }
-  const missed = `${row.missedEvents} missed`;
+  const missed = `${row.missedEvents} missed`
   return {
     text: missed,
     className: row.activityPenalty > 0 ? 'seen-lapsed' : 'seen-away',
@@ -132,7 +136,7 @@ function lastSeenChip(row: LeaderboardRow): { text: string; className: string; t
       row.activityPenalty > 0
         ? `Last seen ${row.lastPlayedDate}. ${row.missedEvents} club nights missed, costing ${Math.round(row.activityPenalty)} points.`
         : `Last seen ${row.lastPlayedDate}. Inside the grace window, so nothing has been docked.`,
-  };
+  }
 }
 
 /**
@@ -146,20 +150,20 @@ function lastSeenChip(row: LeaderboardRow): { text: string; className: string; t
  * not re-derived here from a hardcoded Glicko constant.
  */
 function confidenceWidth(sampleConfidence: number): number {
-  return Math.max(4, Math.min(100, sampleConfidence * 100));
+  return Math.max(4, Math.min(100, sampleConfidence * 100))
 }
 
 /** "▲2" / "▼1" / "–" — the movement column, spelled out for a screen reader. */
 function movementLabel(delta: number | null): string {
-  if (delta === null) return 'no movement recorded';
-  if (delta === 0) return 'unchanged';
-  return delta > 0 ? `up ${delta}` : `down ${Math.abs(delta)}`;
+  if (delta === null) return 'no movement recorded'
+  if (delta === 0) return 'unchanged'
+  return delta > 0 ? `up ${delta}` : `down ${Math.abs(delta)}`
 }
 
 /** The form pips, whose whole meaning is height and colour, as words. */
 function formLabel(form: boolean[]): string {
-  if (form.length === 0) return 'no results yet';
-  return form.map((won) => (won ? 'win' : 'loss')).join(', ');
+  if (form.length === 0) return 'no results yet'
+  return form.map((won) => (won ? 'win' : 'loss')).join(', ')
 }
 
 /**
@@ -174,64 +178,71 @@ function formLabel(form: boolean[]): string {
 function sortKeyNote(row: LeaderboardRow, field: SortField): string | null {
   switch (field) {
     case 'certainty':
-      return `${Math.round(confidenceWidth(row.sampleConfidence))}% conf`;
+      return `${Math.round(confidenceWidth(row.sampleConfidence))}% conf`
     case 'eventCount':
-      return `${row.eventCount} event${row.eventCount === 1 ? '' : 's'}`;
+      return `${row.eventCount} event${row.eventCount === 1 ? '' : 's'}`
     default:
       // Rank, rating and record are all on the row already.
-      return null;
+      return null
   }
 }
 
-export function Leaderboard({ rows, trends, hideInactive, onHideInactiveChange, inactiveCount }: Props) {
-  const [sortField, setSortField] = useState<SortField>('rank');
-  const [descending, setDescending] = useState(false);
-  const [companyFilter, setCompanyFilter] = useState('all');
-  const [query, setQuery] = useState('');
-  const sortLabelId = useId();
+export function Leaderboard({
+  rows,
+  trends,
+  hideInactive,
+  onHideInactiveChange,
+  inactiveCount,
+}: Props) {
+  const [sortField, setSortField] = useState<SortField>('rank')
+  const [descending, setDescending] = useState(false)
+  const [companyFilter, setCompanyFilter] = useState('all')
+  const [query, setQuery] = useState('')
+  const sortLabelId = useId()
 
   const companies = useMemo(
-    () => [...new Set(rows.map((r) => r.companyCode).filter((c): c is string => Boolean(c)))].sort(),
+    () =>
+      [...new Set(rows.map((r) => r.companyCode).filter((c): c is string => Boolean(c)))].sort(),
     [rows],
-  );
+  )
 
-  const leagues = useMemo(() => [...new Set(rows.map((r) => r.league))], [rows]);
+  const leagues = useMemo(() => [...new Set(rows.map((r) => r.league))], [rows])
 
   const visible = useMemo(() => {
-    let list = rows;
-    if (companyFilter !== 'all') list = list.filter((r) => r.companyCode === companyFilter);
-    const q = query.trim().toLowerCase();
-    if (q) list = list.filter((r) => r.name.toLowerCase().includes(q));
+    let list = rows
+    if (companyFilter !== 'all') list = list.filter((r) => r.companyCode === companyFilter)
+    const q = query.trim().toLowerCase()
+    if (q) list = list.filter((r) => r.name.toLowerCase().includes(q))
 
     const value = (row: LeaderboardRow): number => {
       switch (sortField) {
         case 'rank':
-          return row.rank;
+          return row.rank
         case 'rating':
-          return row.clubRating;
+          return row.clubRating
         case 'wins':
-          return row.wins;
+          return row.wins
         case 'eventCount':
-          return row.eventCount;
+          return row.eventCount
         case 'certainty':
-          return -row.skillSd;
+          return -row.skillSd
         case 'lastSeen':
           // Fewer missed nights sorts as "more recent".
-          return -row.missedEvents;
+          return -row.missedEvents
       }
-    };
-    return [...list].sort((a, b) => (descending ? value(b) - value(a) : value(a) - value(b)));
-  }, [rows, companyFilter, query, sortField, descending]);
+    }
+    return [...list].sort((a, b) => (descending ? value(b) - value(a) : value(a) - value(b)))
+  }, [rows, companyFilter, query, sortField, descending])
 
   const sortBy = (field: SortField): void => {
     if (field === sortField) {
-      setDescending(!descending);
+      setDescending(!descending)
     } else {
-      setSortField(field);
+      setSortField(field)
       // Rank reads best ascending; every other measure reads best descending.
-      setDescending(field !== 'rank');
+      setDescending(field !== 'rank')
     }
-  };
+  }
 
   return (
     <section className="board">
@@ -280,6 +291,7 @@ export function Leaderboard({ rows, trends, hideInactive, onHideInactiveChange, 
             <input
               type="checkbox"
               role="switch"
+              aria-checked={hideInactive}
               className="switch-input"
               checked={hideInactive}
               onChange={(event) => onHideInactiveChange(event.target.checked)}
@@ -376,12 +388,15 @@ export function Leaderboard({ rows, trends, hideInactive, onHideInactiveChange, 
 
       <ol className="board-list">
         {visible.map((row) => {
-          const trend = trends.get(row.playerId);
-          const podium = sortField === 'rank' && !descending && row.rank <= 3;
-          const seen = lastSeenChip(row);
-          const sortNote = sortKeyNote(row, sortField);
+          const trend = trends.get(row.playerId)
+          const podium = sortField === 'rank' && !descending && row.rank <= 3
+          const seen = lastSeenChip(row)
+          const sortNote = sortKeyNote(row, sortField)
           return (
-            <li key={row.playerId} className={`board-row ${tierClass(row.league)}${podium ? ' is-podium' : ''}`}>
+            <li
+              key={row.playerId}
+              className={`board-row ${tierClass(row.league)}${podium ? ' is-podium' : ''}`}
+            >
               <Link
                 to="/players/$playerId"
                 params={{ playerId: row.playerId }}
@@ -397,7 +412,9 @@ export function Leaderboard({ rows, trends, hideInactive, onHideInactiveChange, 
                   `${row.league}`,
                   `rating ${Math.round(row.clubRating)}`,
                   ...(row.activityPenalty > 0
-                    ? [`${Math.round(row.activityPenalty)} docked for ${row.missedEvents} missed club nights`]
+                    ? [
+                        `${Math.round(row.activityPenalty)} docked for ${row.missedEvents} missed club nights`,
+                      ]
                     : []),
                   movementLabel(row.rankDelta),
                   `${row.wins} won, ${row.losses} lost`,
@@ -428,7 +445,10 @@ export function Leaderboard({ rows, trends, hideInactive, onHideInactiveChange, 
                         that makes them weak — the number itself is already
                         shrunk toward the middle for exactly that reason. */}
                     {row.isProvisional && (
-                      <span className="provisional" title="Provisional — too few sets for this rating to have settled">
+                      <span
+                        className="provisional"
+                        title="Provisional — too few sets for this rating to have settled"
+                      >
                         P
                       </span>
                     )}
@@ -470,7 +490,10 @@ export function Leaderboard({ rows, trends, hideInactive, onHideInactiveChange, 
                   aria-hidden="true"
                   title={`Confidence ${Math.round(confidenceWidth(row.sampleConfidence))}% — fuller means more sets against more opponents`}
                 >
-                  <span className="certainty-fill" style={{ width: `${confidenceWidth(row.sampleConfidence)}%` }} />
+                  <span
+                    className="certainty-fill"
+                    style={{ width: `${confidenceWidth(row.sampleConfidence)}%` }}
+                  />
                 </span>
 
                 <span className="form" aria-hidden="true">
@@ -492,20 +515,35 @@ export function Leaderboard({ rows, trends, hideInactive, onHideInactiveChange, 
                 </span>
               </Link>
             </li>
-          );
+          )
         })}
       </ol>
 
       {visible.length === 0 && (
         <p className="board-empty">
-          No players match those filters. <button type="button" className="link-button" onClick={() => { setQuery(''); setCompanyFilter('all'); }}>Clear them</button>
+          No players match those filters.{' '}
+          <button
+            type="button"
+            className="link-button"
+            onClick={() => {
+              setQuery('')
+              setCompanyFilter('all')
+            }}
+          >
+            Clear them
+          </button>
           {/* Offered separately from "clear": the inactivity setting is on by
               default, so folding it into the same button would quietly undo a
               default the member never chose to change. */}
           {hideInactive && inactiveCount > 0 && (
             <>
-              {' '}or{' '}
-              <button type="button" className="link-button" onClick={() => onHideInactiveChange(false)}>
+              {' '}
+              or{' '}
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => onHideInactiveChange(false)}
+              >
                 include the {inactiveCount} inactive
               </button>
             </>
@@ -513,5 +551,5 @@ export function Leaderboard({ rows, trends, hideInactive, onHideInactiveChange, 
         </p>
       )}
     </section>
-  );
+  )
 }

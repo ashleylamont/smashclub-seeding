@@ -1,10 +1,10 @@
-import { useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { trpc } from '../../../lib/trpc';
-import type { EventPlanBracket, EventPlanBracketExport, EventPlanView } from '../../../lib/apiTypes';
-import { formatDate } from '../../../lib/format';
-import { CopyBlock } from './shared';
-import { DIVISION_LABEL } from './labels';
+import { useState } from 'react'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { trpc } from '../../../lib/trpc'
+import type { EventPlanBracket, EventPlanBracketExport, EventPlanView } from '../../../lib/apiTypes'
+import { formatDate } from '../../../lib/format'
+import { CopyBlock } from './shared'
+import { DIVISION_LABEL } from './labels'
 
 /**
  * Step 6: the handoff to Challonge.
@@ -21,20 +21,31 @@ export function HandoffStep({ view, onChanged }: { view: EventPlanView; onChange
     queryKey: ['admin', 'eventPlanner', 'exports', view.plan.id],
     enabled: view.plan.bracketMode !== 'native',
     queryFn: () => trpc.admin.eventPlanner.exports.query({ planId: view.plan.id }),
-  });
+  })
 
-  if (view.plan.bracketMode === 'native') return <div className="card section">
-    <h3>Run this event in Nemesis</h3>
-    <p>Record pool results in the event desk, confirm pool finishing orders, then preview championship and consolation draws. Winners advance automatically and byes are shown explicitly.</p>
-    <a className="btn btn-primary" href={`/admin/event-operations?plan=${view.plan.id}`}>Open event desk</a>
-  </div>;
+  if (view.plan.bracketMode === 'native')
+    return (
+      <div className="card section">
+        <h3>Run this event in Nemesis</h3>
+        <p>
+          Record pool results in the event desk, confirm pool finishing orders, then preview
+          championship and consolation draws. Winners advance automatically and byes are shown
+          explicitly.
+        </p>
+        <a className="btn btn-primary" href={`/admin/event-operations?plan=${view.plan.id}`}>
+          Open event desk
+        </a>
+      </div>
+    )
 
-  if (exportsQuery.isPending) return <p className="loading-text">Building exports…</p>;
-  if (exportsQuery.isError) return <p className="error-text">{exportsQuery.error.message}</p>;
+  if (exportsQuery.isPending) return <p className="loading-text">Building exports…</p>
+  if (exportsQuery.isError) return <p className="error-text">{exportsQuery.error.message}</p>
 
   const eventDates = new Set(
-    view.brackets.filter((bracket) => bracket.tournamentEventDate).map((bracket) => bracket.tournamentEventDate),
-  );
+    view.brackets
+      .filter((bracket) => bracket.tournamentEventDate)
+      .map((bracket) => bracket.tournamentEventDate),
+  )
 
   return (
     <div>
@@ -45,21 +56,22 @@ export function HandoffStep({ view, onChanged }: { view: EventPlanView; onChange
 
       {eventDates.size > 1 && (
         <div className="banner banner-danger">
-          The attached brackets do not all carry the same event date, so the ratings engine will read them as
-          more than one club night. Re-attach them from here to fix it.
+          The attached brackets do not all carry the same event date, so the ratings engine will
+          read them as more than one club night. Re-attach them from here to fix it.
         </div>
       )}
       {view.brackets.some((bracket) => bracket.tournamentIsRookie) && (
         <div className="banner banner-danger">
-          One of these brackets is flagged as the rookie bracket. Upper and Lower are competitive divisions —
-          clear the flag in Admin → Tournaments.
+          One of these brackets is flagged as the rookie bracket. Upper and Lower are competitive
+          divisions — clear the flag in Admin → Tournaments.
         </div>
       )}
 
       {exportsQuery.data.brackets.map((bracketExport) => {
         const bracket = view.brackets.find(
-          (entry) => entry.division === bracketExport.division && entry.stage === bracketExport.stage,
-        )!;
+          (entry) =>
+            entry.division === bracketExport.division && entry.stage === bracketExport.stage,
+        )!
         return (
           <BracketCard
             key={`${bracketExport.division}-${bracketExport.stage}`}
@@ -69,12 +81,14 @@ export function HandoffStep({ view, onChanged }: { view: EventPlanView; onChange
             payload={bracketExport}
             onChanged={onChanged}
           />
-        );
+        )
       })}
 
       <div className="card section">
         <h4>Pool cards</h4>
-        <p className="muted">Print or save these — they are the fallback if the venue’s connection drops.</p>
+        <p className="muted">
+          Print or save these — they are the fallback if the venue’s connection drops.
+        </p>
         <CopyBlock
           label="All pools"
           rows={Math.min(24, exportsQuery.data.poolCards.length * 6)}
@@ -84,7 +98,7 @@ export function HandoffStep({ view, onChanged }: { view: EventPlanView; onChange
         />
       </div>
     </div>
-  );
+  )
 }
 
 function BracketCard({
@@ -94,13 +108,13 @@ function BracketCard({
   payload,
   onChanged,
 }: {
-  planId: string;
-  bracket: EventPlanBracket;
-  closed: boolean;
-  payload: EventPlanBracketExport;
-  onChanged: () => void;
+  planId: string
+  bracket: EventPlanBracket
+  closed: boolean
+  payload: EventPlanBracketExport
+  onChanged: () => void
 }) {
-  const [slug, setSlug] = useState(bracket.challongeSlug ?? '');
+  const [slug, setSlug] = useState(bracket.challongeSlug ?? '')
 
   const attach = useMutation({
     mutationFn: () =>
@@ -111,7 +125,7 @@ function BracketCard({
         challongeSlug: slug.trim(),
       }),
     onSuccess: onChanged,
-  });
+  })
 
   const detach = useMutation({
     mutationFn: () =>
@@ -121,17 +135,18 @@ function BracketCard({
         stage: bracket.stage,
       }),
     onSuccess: () => {
-      setSlug('');
-      onChanged();
+      setSlug('')
+      onChanged()
     },
-  });
+  })
 
   const sync = useMutation({
-    mutationFn: () => trpc.admin.syncNow.mutate({ tournamentId: bracket.tournamentId!, useApi: true }),
+    mutationFn: () =>
+      trpc.admin.syncNow.mutate({ tournamentId: bracket.tournamentId!, useApi: true }),
     onSuccess: onChanged,
-  });
+  })
 
-  const ready = payload.participants !== '';
+  const ready = payload.participants !== ''
 
   return (
     <div className="card section bracket-card">
@@ -186,15 +201,29 @@ function BracketCard({
           onClick={() => attach.mutate()}
           title="Register this bracket against the plan’s event date"
         >
-          {attach.isPending ? 'Registering…' : bracket.challongeSlug ? 'Re-attach' : 'Register & attach'}
+          {attach.isPending
+            ? 'Registering…'
+            : bracket.challongeSlug
+              ? 'Re-attach'
+              : 'Register & attach'}
         </button>
         {bracket.tournamentId && (
-          <button type="button" className="btn" disabled={closed || sync.isPending} onClick={() => sync.mutate()}>
+          <button
+            type="button"
+            className="btn"
+            disabled={closed || sync.isPending}
+            onClick={() => sync.mutate()}
+          >
             {sync.isPending ? 'Syncing…' : 'Sync (API)'}
           </button>
         )}
         {bracket.challongeSlug && (
-          <button type="button" className="btn" disabled={closed || detach.isPending} onClick={() => detach.mutate()}>
+          <button
+            type="button"
+            className="btn"
+            disabled={closed || detach.isPending}
+            onClick={() => detach.mutate()}
+          >
             Detach
           </button>
         )}
@@ -204,10 +233,11 @@ function BracketCard({
       {detach.isError && <p className="error-text">{detach.error.message}</p>}
       {bracket.tournamentEventDate && (
         <p className="muted">
-          Registered for {formatDate(bracket.tournamentEventDate)} · sync {bracket.tournamentSyncState}
+          Registered for {formatDate(bracket.tournamentEventDate)} · sync{' '}
+          {bracket.tournamentSyncState}
         </p>
       )}
       {bracket.lastError && <p className="error-text">{bracket.lastError}</p>}
     </div>
-  );
+  )
 }

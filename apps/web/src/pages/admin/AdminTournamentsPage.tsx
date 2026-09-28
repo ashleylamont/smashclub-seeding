@@ -1,42 +1,42 @@
-import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
-import { trpc } from '../../lib/trpc';
-import type { TournamentListItem } from '../../lib/apiTypes';
-import { formatDateTime, timeAgo } from '../../lib/format';
-import { useNow } from '../../lib/useNow';
+import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
+import { trpc } from '../../lib/trpc'
+import type { TournamentListItem } from '../../lib/apiTypes'
+import { formatDateTime, timeAgo } from '../../lib/format'
+import { useNow } from '../../lib/useNow'
 
 /**
  * Default live-monitoring window. Deliberately bounded: the previous behaviour
  * inferred "live" from Challonge's sticky `underway` state and polled dead
  * brackets forever. An event running longer than this can simply be re-armed.
  */
-const LIVE_HOURS = 6;
+const LIVE_HOURS = 6
 
 function formatClock(date: Date): string {
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 export function AdminTournamentsPage() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryClient()
   const tournaments = useQuery({
     queryKey: ['tournaments'],
     queryFn: () => trpc.public.tournaments.query(),
-  });
+  })
   const jobs = useQuery({
     queryKey: ['admin', 'jobs'],
     queryFn: () => trpc.admin.jobs.query(),
     refetchInterval: 15_000,
-  });
+  })
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['tournaments'] });
-    void queryClient.invalidateQueries({ queryKey: ['admin', 'jobs'] });
-  };
+    void queryClient.invalidateQueries({ queryKey: ['tournaments'] })
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'jobs'] })
+  }
 
   // One clock for the whole table, passed down: each row only needs it to tell
   // whether its live window has expired, and a timer per row would be waste.
-  const now = useNow();
+  const now = useNow()
 
   return (
     <div>
@@ -90,11 +90,11 @@ export function AdminTournamentsPage() {
               </thead>
               <tbody>
                 {jobs.data.map((job) => {
-                  const tournament = tournaments.data?.find((t) => t.id === job.tournamentId);
+                  const tournament = tournaments.data?.find((t) => t.id === job.tournamentId)
                   const duration =
                     job.finishedAt != null
                       ? `${((new Date(job.finishedAt).getTime() - new Date(job.startedAt).getTime()) / 1000).toFixed(1)}s`
-                      : '…';
+                      : '…'
                   return (
                     <tr key={job.id}>
                       <td>
@@ -104,7 +104,11 @@ export function AdminTournamentsPage() {
                       <td>
                         <span
                           className={`chip ${
-                            job.status === 'complete' ? 'chip-success' : job.status === 'failed' ? 'chip-danger' : 'chip-warning'
+                            job.status === 'complete'
+                              ? 'chip-success'
+                              : job.status === 'failed'
+                                ? 'chip-danger'
+                                : 'chip-warning'
                           }`}
                         >
                           {job.status}
@@ -114,7 +118,7 @@ export function AdminTournamentsPage() {
                       <td>{duration}</td>
                       <td className="error-text">{job.error ?? ''}</td>
                     </tr>
-                  );
+                  )
                 })}
               </tbody>
             </table>
@@ -122,27 +126,31 @@ export function AdminTournamentsPage() {
         )}
       </div>
     </div>
-  );
+  )
 }
 
 function RegisterForm({ onDone }: { onDone: () => void }) {
-  const [slugOrUrl, setSlugOrUrl] = useState('');
-  const [isRookie, setIsRookie] = useState(false);
-  const [resultsMode, setResultsMode] = useState<'auto' | 'final_stage_only'>('auto');
+  const [slugOrUrl, setSlugOrUrl] = useState('')
+  const [isRookie, setIsRookie] = useState(false)
+  const [resultsMode, setResultsMode] = useState<'auto' | 'final_stage_only'>('auto')
 
   const register = useMutation({
     mutationFn: async () => {
-      const { tournamentId } = await trpc.admin.registerTournament.mutate({ slugOrUrl, isRookie, resultsMode });
-      await trpc.admin.syncNow.mutate({ tournamentId });
+      const { tournamentId } = await trpc.admin.registerTournament.mutate({
+        slugOrUrl,
+        isRookie,
+        resultsMode,
+      })
+      await trpc.admin.syncNow.mutate({ tournamentId })
     },
     onSuccess: () => {
-      setSlugOrUrl('');
-      setIsRookie(false);
-      setResultsMode('auto');
-      onDone();
+      setSlugOrUrl('')
+      setIsRookie(false)
+      setResultsMode('auto')
+      onDone()
     },
     onError: onDone,
-  });
+  })
 
   return (
     <div className="card section">
@@ -155,12 +163,20 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
           onChange={(e) => setSlugOrUrl(e.target.value)}
         />
         <label className="checkbox-label">
-          <input type="checkbox" checked={isRookie} onChange={(e) => setIsRookie(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={isRookie}
+            onChange={(e) => setIsRookie(e.target.checked)}
+          />
           Rookie bracket
         </label>
         <label className="form-field">
           <span className="form-label">Results</span>
-          <select className="select" value={resultsMode} onChange={(e) => setResultsMode(e.target.value as typeof resultsMode)}>
+          <select
+            className="select"
+            value={resultsMode}
+            onChange={(e) => setResultsMode(e.target.value as typeof resultsMode)}
+          >
             <option value="auto">Auto (pools + finals when present)</option>
             <option value="final_stage_only">Final stage only</option>
           </select>
@@ -175,11 +191,12 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
         </button>
       </div>
       <p className="muted">
-        Auto counts pools and finals when present. Use Final stage only when recorded groups were only used for setup.
+        Auto counts pools and finals when present. Use Final stage only when recorded groups were
+        only used for setup.
       </p>
       {register.isError && <p className="error-text">{register.error.message}</p>}
     </div>
-  );
+  )
 }
 
 function TournamentRow({
@@ -187,64 +204,68 @@ function TournamentRow({
   now,
   onChanged,
 }: {
-  tournament: TournamentListItem;
+  tournament: TournamentListItem
   /** Ticking clock from the page; see lib/useNow.ts. */
-  now: number;
-  onChanged: () => void;
+  now: number
+  onChanged: () => void
 }) {
-  const [editingDate, setEditingDate] = useState(false);
-  const [dateValue, setDateValue] = useState('');
+  const [editingDate, setEditingDate] = useState(false)
+  const [dateValue, setDateValue] = useState('')
 
   const sync = useMutation({
     mutationFn: () => trpc.admin.syncNow.mutate({ tournamentId: tournament.id }),
     onSuccess: onChanged,
-  });
+  })
   // Opt-in metered sync. The default reads the free public bracket; the API is
   // only worth spending quota on for a tournament the club owns, since it is
   // the sole source of final placements.
   const syncApi = useMutation({
     mutationFn: () => trpc.admin.syncNow.mutate({ tournamentId: tournament.id, useApi: true }),
     onSuccess: onChanged,
-  });
+  })
   const update = useMutation({
-    mutationFn: (patch: { isRookie?: boolean; resultsMode?: 'auto' | 'final_stage_only'; eventDate?: string | null }) =>
-      trpc.admin.updateTournament.mutate({ tournamentId: tournament.id, ...patch }),
+    mutationFn: (patch: {
+      isRookie?: boolean
+      resultsMode?: 'auto' | 'final_stage_only'
+      eventDate?: string | null
+    }) => trpc.admin.updateTournament.mutate({ tournamentId: tournament.id, ...patch }),
     onSuccess: () => {
-      setEditingDate(false);
-      onChanged();
+      setEditingDate(false)
+      onChanged()
     },
     // The mode is saved even if the following refresh fails.
     onError: onChanged,
-  });
+  })
   // Live monitoring is opt-in and time-boxed: it is never inferred from
   // Challonge's state, which stays "underway" on abandoned brackets forever.
   const setLive = useMutation({
-    mutationFn: () => trpc.admin.setTournamentLive.mutate({ tournamentId: tournament.id, hours: LIVE_HOURS }),
+    mutationFn: () =>
+      trpc.admin.setTournamentLive.mutate({ tournamentId: tournament.id, hours: LIVE_HOURS }),
     onSuccess: onChanged,
-  });
+  })
   const endLive = useMutation({
     mutationFn: () => trpc.admin.endTournamentLive.mutate({ tournamentId: tournament.id }),
     onSuccess: onChanged,
-  });
+  })
 
-  const liveUntil = tournament.liveUntil ? new Date(tournament.liveUntil) : null;
-  const isLive = liveUntil !== null && liveUntil.getTime() > now;
+  const liveUntil = tournament.liveUntil ? new Date(tournament.liveUntil) : null
+  const isLive = liveUntil !== null && liveUntil.getTime() > now
 
   const startEditDate = () => {
     if (tournament.eventDate) {
       // datetime-local wants "YYYY-MM-DDTHH:mm" in local time
-      const d = new Date(tournament.eventDate);
-      const pad = (n: number) => String(n).padStart(2, '0');
+      const d = new Date(tournament.eventDate)
+      const pad = (n: number) => String(n).padStart(2, '0')
       setDateValue(
         `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`,
-      );
+      )
     } else {
-      setDateValue('');
+      setDateValue('')
     }
-    setEditingDate(true);
-  };
+    setEditingDate(true)
+  }
 
-  const error = sync.error ?? syncApi.error ?? update.error ?? setLive.error ?? endLive.error;
+  const error = sync.error ?? syncApi.error ?? update.error ?? setLive.error ?? endLive.error
 
   return (
     <tr>
@@ -260,7 +281,9 @@ function TournamentRow({
           aria-label={`Results mode for ${tournament.name}`}
           value={tournament.resultsMode}
           disabled={update.isPending}
-          onChange={(e) => update.mutate({ resultsMode: e.target.value as 'auto' | 'final_stage_only' })}
+          onChange={(e) =>
+            update.mutate({ resultsMode: e.target.value as 'auto' | 'final_stage_only' })
+          }
         >
           <option value="auto">Auto</option>
           <option value="final_stage_only">Final stage only</option>
@@ -280,7 +303,9 @@ function TournamentRow({
               className="btn btn-small"
               disabled={update.isPending}
               onClick={() =>
-                update.mutate({ eventDate: dateValue === '' ? null : new Date(dateValue).toISOString() })
+                update.mutate({
+                  eventDate: dateValue === '' ? null : new Date(dateValue).toISOString(),
+                })
               }
             >
               Save
@@ -324,47 +349,52 @@ function TournamentRow({
         {tournament.lastSyncedAt && <div className="muted">{timeAgo(tournament.lastSyncedAt)}</div>}
       </td>
       <td>
-        {tournament.provider === 'native' ? <a href={`/events/${encodeURIComponent(tournament.slug)}`}>Nemesis event results →</a> : <>
-        <button
-          type="button"
-          className="btn btn-small"
-          disabled={sync.isPending}
-          title="Sync from the free public bracket. No API quota used."
-          onClick={() => sync.mutate()}
-        >
-          {sync.isPending ? 'Syncing…' : 'Sync now'}
-        </button>{' '}
-        <button
-          type="button"
-          className="btn btn-small"
-          disabled={syncApi.isPending}
-          title="Sync via the Challonge API — SPENDS ~3 of the 500 requests/month allowance. Only useful for tournaments the club owns; it is the only way to get final placements."
-          onClick={() => syncApi.mutate()}
-        >
-          {syncApi.isPending ? 'Syncing…' : 'Sync (API)'}
-        </button>{' '}
-        {isLive ? (
-          <button
-            type="button"
-            className="btn btn-small"
-            disabled={endLive.isPending}
-            title={`Live until ${liveUntil!.toLocaleString()} — polling the public bracket every 60s`}
-            onClick={() => endLive.mutate()}
-          >
-            {endLive.isPending ? 'Stopping…' : `Stop live (until ${formatClock(liveUntil!)})`}
-          </button>
+        {tournament.provider === 'native' ? (
+          <a href={`/events/${encodeURIComponent(tournament.slug)}`}>Nemesis event results →</a>
         ) : (
-          <button
-            type="button"
-            className="btn btn-small"
-            disabled={setLive.isPending}
-            title={`Poll this bracket every 60s for ${LIVE_HOURS}h, then stop automatically. Uses the public bracket, not the rate-limited API.`}
-            onClick={() => setLive.mutate()}
-          >
-            {setLive.isPending ? 'Starting…' : `Go live (${LIVE_HOURS}h)`}
-          </button>
-        )}</>}
+          <>
+            <button
+              type="button"
+              className="btn btn-small"
+              disabled={sync.isPending}
+              title="Sync from the free public bracket. No API quota used."
+              onClick={() => sync.mutate()}
+            >
+              {sync.isPending ? 'Syncing…' : 'Sync now'}
+            </button>{' '}
+            <button
+              type="button"
+              className="btn btn-small"
+              disabled={syncApi.isPending}
+              title="Sync via the Challonge API — SPENDS ~3 of the 500 requests/month allowance. Only useful for tournaments the club owns; it is the only way to get final placements."
+              onClick={() => syncApi.mutate()}
+            >
+              {syncApi.isPending ? 'Syncing…' : 'Sync (API)'}
+            </button>{' '}
+            {isLive ? (
+              <button
+                type="button"
+                className="btn btn-small"
+                disabled={endLive.isPending}
+                title={`Live until ${liveUntil!.toLocaleString()} — polling the public bracket every 60s`}
+                onClick={() => endLive.mutate()}
+              >
+                {endLive.isPending ? 'Stopping…' : `Stop live (until ${formatClock(liveUntil!)})`}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-small"
+                disabled={setLive.isPending}
+                title={`Poll this bracket every 60s for ${LIVE_HOURS}h, then stop automatically. Uses the public bracket, not the rate-limited API.`}
+                onClick={() => setLive.mutate()}
+              >
+                {setLive.isPending ? 'Starting…' : `Go live (${LIVE_HOURS}h)`}
+              </button>
+            )}
+          </>
+        )}
       </td>
     </tr>
-  );
+  )
 }

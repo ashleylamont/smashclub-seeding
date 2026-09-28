@@ -1,7 +1,7 @@
-import { useRef, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { trpc } from '../../lib/trpc';
-import type { RegistryEntryPlan, RegistryImportPlan } from '../../lib/apiTypes';
+import { useRef, useState } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { trpc } from '../../lib/trpc'
+import type { RegistryEntryPlan, RegistryImportPlan } from '../../lib/apiTypes'
 
 /**
  * players.yaml import, as a wizard: paste or upload, look at exactly what it
@@ -11,56 +11,56 @@ import type { RegistryEntryPlan, RegistryImportPlan } from '../../lib/apiTypes';
  * genuine no-op instead of a pile of writes.
  */
 
-type Step = 'input' | 'preview' | 'done';
+type Step = 'input' | 'preview' | 'done'
 
 const ACTION_LABEL: Record<RegistryEntryPlan['action'], string> = {
   create: 'create',
   update: 'update',
   unchanged: 'unchanged',
-};
+}
 
 export function AdminImportPage() {
-  const queryClient = useQueryClient();
-  const [yaml, setYaml] = useState('');
-  const [step, setStep] = useState<Step>('input');
-  const [showUnchanged, setShowUnchanged] = useState(false);
-  const fileInput = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient()
+  const [yaml, setYaml] = useState('')
+  const [step, setStep] = useState<Step>('input')
+  const [showUnchanged, setShowUnchanged] = useState(false)
+  const fileInput = useRef<HTMLInputElement>(null)
 
   const preview = useMutation({
     mutationFn: (document: string) => trpc.admin.previewRegistryImport.mutate({ yaml: document }),
     onSuccess: () => setStep('preview'),
-  });
+  })
 
   const apply = useMutation({
     mutationFn: (document: string) => trpc.admin.applyRegistryImport.mutate({ yaml: document }),
     onSuccess: () => {
-      setStep('done');
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'players'] });
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'companies'] });
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'reviewQueue'] });
-      void queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+      setStep('done')
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'players'] })
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'companies'] })
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'reviewQueue'] })
+      void queryClient.invalidateQueries({ queryKey: ['leaderboard'] })
     },
-  });
+  })
 
   const onFile = async (file: File | undefined) => {
-    if (!file) return;
-    const text = await file.text();
-    setYaml(text);
-    setStep('input');
-    apply.reset();
-    preview.mutate(text);
-  };
+    if (!file) return
+    const text = await file.text()
+    setYaml(text)
+    setStep('input')
+    apply.reset()
+    preview.mutate(text)
+  }
 
   const restart = () => {
-    setStep('input');
-    preview.reset();
-    apply.reset();
-  };
+    setStep('input')
+    preview.reset()
+    apply.reset()
+  }
 
-  const plan = preview.data ?? null;
-  const blocked = (plan?.issues.length ?? 0) > 0;
+  const plan = preview.data ?? null
+  const blocked = (plan?.issues.length ?? 0) > 0
   /** Nothing to write: a re-import of an unchanged file, which is the norm. */
-  const noop = plan !== null && plan.counts.create + plan.counts.update === 0;
+  const noop = plan !== null && plan.counts.create + plan.counts.update === 0
 
   return (
     <div className="section">
@@ -70,21 +70,23 @@ export function AdminImportPage() {
       </div>
 
       <p className="muted import-intro">
-        The same file the CLI importer takes. Players are keyed on their registry <code>id</code>, so re-importing
-        updates rather than duplicating. <code>numeric_id</code> is ignored (nothing reads it) and{' '}
-        <code>past_companies</code> only widens which company tags a player's names resolve under — neither is stored
-        as a column.
+        The same file the CLI importer takes. Players are keyed on their registry <code>id</code>,
+        so re-importing updates rather than duplicating. <code>numeric_id</code> is ignored (nothing
+        reads it) and <code>past_companies</code> only widens which company tags a player's names
+        resolve under — neither is stored as a column.
       </p>
 
       <div className="import-input">
         <textarea
           className="textarea import-textarea"
-          placeholder={'players:\n  - id: sample-player\n    canonical_name: Sample Player\n    company: Atlassian\n    aliases: [Sample P, Sample]\n    main_character: Ness'}
+          placeholder={
+            'players:\n  - id: sample-player\n    canonical_name: Sample Player\n    company: Atlassian\n    aliases: [Sample P, Sample]\n    main_character: Ness'
+          }
           value={yaml}
           spellCheck={false}
           onChange={(event) => {
-            setYaml(event.target.value);
-            if (step !== 'input') restart();
+            setYaml(event.target.value)
+            if (step !== 'input') restart()
           }}
         />
         <div className="import-actions">
@@ -96,7 +98,11 @@ export function AdminImportPage() {
           >
             {preview.isPending ? 'Reading…' : 'Preview'}
           </button>
-          <button type="button" className="btn btn-small" onClick={() => fileInput.current?.click()}>
+          <button
+            type="button"
+            className="btn btn-small"
+            onClick={() => fileInput.current?.click()}
+          >
             Upload file…
           </button>
           <input
@@ -105,8 +111,8 @@ export function AdminImportPage() {
             accept=".yaml,.yml,.txt,text/yaml"
             className="visually-hidden"
             onChange={(event) => {
-              void onFile(event.target.files?.[0]);
-              event.target.value = '';
+              void onFile(event.target.files?.[0])
+              event.target.value = ''
             }}
           />
           {yaml !== '' && (
@@ -114,8 +120,8 @@ export function AdminImportPage() {
               type="button"
               className="btn btn-small"
               onClick={() => {
-                setYaml('');
-                restart();
+                setYaml('')
+                restart()
               }}
             >
               Clear
@@ -127,8 +133,10 @@ export function AdminImportPage() {
 
       {step === 'done' && apply.data && (
         <div className="banner banner-success">
-          Imported: {apply.data.created} created, {apply.data.updated} updated, {apply.data.unchanged} unchanged.
-          {apply.data.companiesCreated > 0 && ` ${apply.data.companiesCreated} new compan${apply.data.companiesCreated === 1 ? 'y' : 'ies'}.`}
+          Imported: {apply.data.created} created, {apply.data.updated} updated,{' '}
+          {apply.data.unchanged} unchanged.
+          {apply.data.companiesCreated > 0 &&
+            ` ${apply.data.companiesCreated} new compan${apply.data.companiesCreated === 1 ? 'y' : 'ies'}.`}
           {` ${apply.data.aliasesAdded} aliases and ${apply.data.charactersAdded} characters added.`}
           {apply.data.candidates.changed > 0 &&
             ` ${apply.data.candidates.changed} review item${apply.data.candidates.changed === 1 ? '' : 's'} picked up new candidates.`}
@@ -164,7 +172,7 @@ export function AdminImportPage() {
         </div>
       )}
     </div>
-  );
+  )
 }
 
 function PlanView({
@@ -172,18 +180,21 @@ function PlanView({
   showUnchanged,
   onToggleUnchanged,
 }: {
-  plan: RegistryImportPlan;
-  showUnchanged: boolean;
-  onToggleUnchanged: () => void;
+  plan: RegistryImportPlan
+  showUnchanged: boolean
+  onToggleUnchanged: () => void
 }) {
-  const visible = showUnchanged ? plan.entries : plan.entries.filter((entry) => entry.action !== 'unchanged');
+  const visible = showUnchanged
+    ? plan.entries
+    : plan.entries.filter((entry) => entry.action !== 'unchanged')
 
   return (
     <div className="import-plan">
       {plan.issues.length > 0 && (
         <div className="banner banner-danger">
           <strong>
-            {plan.issues.length} problem{plan.issues.length === 1 ? '' : 's'} — fix these and preview again:
+            {plan.issues.length} problem{plan.issues.length === 1 ? '' : 's'} — fix these and
+            preview again:
           </strong>
           <ul className="import-issues">
             {plan.issues.map((issue, index) => (
@@ -201,12 +212,15 @@ function PlanView({
         <span className="chip">{plan.counts.unchanged} unchanged</span>
         <span className="chip">+{plan.counts.aliases} aliases</span>
         <span className="chip">+{plan.counts.characters} characters</span>
-        {plan.counts.companies > 0 && <span className="chip chip-warning">+{plan.counts.companies} companies</span>}
+        {plan.counts.companies > 0 && (
+          <span className="chip chip-warning">+{plan.counts.companies} companies</span>
+        )}
       </div>
 
       {plan.companiesToCreate.length > 0 && (
         <div className="banner banner-warning">
-          New companies will be created: {plan.companiesToCreate.map((company) => `${company.name} (${company.code})`).join(', ')}.
+          New companies will be created:{' '}
+          {plan.companiesToCreate.map((company) => `${company.name} (${company.code})`).join(', ')}.
           Rename or re-code them on the Companies tab afterwards if the generated code is wrong.
         </div>
       )}
@@ -239,7 +253,7 @@ function PlanView({
         </>
       )}
     </div>
-  );
+  )
 }
 
 /**
@@ -249,14 +263,14 @@ function PlanView({
  * near-identical chips if listed flat. The scopes live in the tooltip and the
  * summary's alias count still reflects the real number of writes.
  */
-function groupAliases(aliases: RegistryEntryPlan['aliasesToAdd']): Array<[string, string[]]> {
-  const byAlias = new Map<string, string[]>();
+function groupAliases(aliases: RegistryEntryPlan['aliasesToAdd']): [string, string[]][] {
+  const byAlias = new Map<string, string[]>()
   for (const entry of aliases) {
-    const scopes = byAlias.get(entry.alias) ?? [];
-    scopes.push(entry.companyCode ?? 'no company');
-    byAlias.set(entry.alias, scopes);
+    const scopes = byAlias.get(entry.alias) ?? []
+    scopes.push(entry.companyCode ?? 'no company')
+    byAlias.set(entry.alias, scopes)
   }
-  return [...byAlias];
+  return [...byAlias]
 }
 
 function PlanRow({ entry }: { entry: RegistryEntryPlan }) {
@@ -300,5 +314,5 @@ function PlanRow({ entry }: { entry: RegistryEntryPlan }) {
         <span className={`chip import-action-${entry.action}`}>{ACTION_LABEL[entry.action]}</span>
       </td>
     </tr>
-  );
+  )
 }

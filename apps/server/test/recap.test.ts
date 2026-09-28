@@ -1,16 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { eq } from 'drizzle-orm';
-import { sets, tournaments, type Db } from '@smashclub/db';
-import type { RecapFact, RecapFactKind } from '@smashclub/engine';
-import { importRegistryPlayers, registerTournamentSlugs } from '../src/bootstrap/importRegistry';
-import { syncTournament } from '../src/sync/sync';
-import { runRecompute } from '../src/recompute/recompute';
-import { RecomputeTrigger } from '../src/recompute/trigger';
-import { loadEnv } from '../src/env';
-import { getGlickoSettings, updateGlickoSettings } from '../src/settings';
-import { appRouter } from '../src/trpc/router';
-import { createTestDb } from './helpers/testDb';
-import { fixtureClient, type FixtureTournament } from './helpers/challongeFixtures';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { eq } from 'drizzle-orm'
+import { sets, tournaments, type Db } from '@smashclub/db'
+import type { RecapFact, RecapFactKind } from '@smashclub/engine'
+import { importRegistryPlayers, registerTournamentSlugs } from '../src/bootstrap/importRegistry'
+import { syncTournament } from '../src/sync/sync'
+import { runRecompute } from '../src/recompute/recompute'
+import { RecomputeTrigger } from '../src/recompute/trigger'
+import { loadEnv } from '../src/env'
+import { getGlickoSettings, updateGlickoSettings } from '../src/settings'
+import { appRouter } from '../src/trpc/router'
+import { createTestDb } from './helpers/testDb'
+import { fixtureClient, type FixtureTournament } from './helpers/challongeFixtures'
 
 /**
  * The recap end to end, over the real sync and recompute pipelines.
@@ -21,8 +21,8 @@ import { fixtureClient, type FixtureTournament } from './helpers/challongeFixtur
  * that "before tonight" is computed against the right slice of history.
  */
 
-let db: Db;
-let close: () => Promise<void>;
+let db: Db
+let close: () => Promise<void>
 
 const march: FixtureTournament = {
   slug: 'march-main',
@@ -39,7 +39,7 @@ const march: FixtureTournament = {
     { id: 12, p1: 2, p2: 3, winner: 2, order: 2, round: -1, scores: '3-1' },
     { id: 13, p1: 1, p2: 2, winner: 2, order: 3, round: 2, scores: '3-2' },
   ],
-};
+}
 
 /** The same evening's rookie bracket — a separate Challonge tournament. */
 const marchRookie: FixtureTournament = {
@@ -52,7 +52,7 @@ const marchRookie: FixtureTournament = {
     { id: 5, name: '[ATL] Lucas', seed: 2, finalRank: 1 },
   ],
   matches: [{ id: 21, p1: 4, p2: 5, winner: 5, order: 1, round: 1, scores: '1-3' }],
-};
+}
 
 /** A later night, so March has history behind it when we ask about April. */
 const april: FixtureTournament = {
@@ -70,7 +70,7 @@ const april: FixtureTournament = {
     { id: 32, p1: 2, p2: 3, winner: 2, order: 2, round: -1, scores: '3-0' },
     { id: 33, p1: 1, p2: 2, winner: 1, order: 3, round: 2, scores: '3-2' },
   ],
-};
+}
 
 /**
  * A night with one newcomer and one regular, which is what a debut fact has to
@@ -87,12 +87,12 @@ const june: FixtureTournament = {
     { id: 6, name: '[ATL] Yoshi', seed: 2, finalRank: 2 },
   ],
   matches: [{ id: 51, p1: 1, p2: 6, winner: 1, order: 1, round: 1, scores: '2-0' }],
-};
+}
 
-const ALL = [march, marchRookie, april, june];
+const ALL = [march, marchRookie, april, june]
 
 beforeEach(async () => {
-  ({ db, close } = await createTestDb());
+  ;({ db, close } = await createTestDb())
   await importRegistryPlayers(db, [
     { id: 'fox-mccloud', canonical_name: 'Fox McCloud', company: 'ATL' },
     { id: 'samus-aran', canonical_name: 'Samus Aran', company: 'ATL' },
@@ -100,22 +100,25 @@ beforeEach(async () => {
     { id: 'ness', canonical_name: 'Ness', company: 'ATL' },
     { id: 'lucas', canonical_name: 'Lucas', company: 'ATL' },
     { id: 'yoshi', canonical_name: 'Yoshi', company: 'ATL' },
-  ]);
-  await registerTournamentSlugs(db, ALL.map((t) => t.slug));
-});
+  ])
+  await registerTournamentSlugs(
+    db,
+    ALL.map((t) => t.slug),
+  )
+})
 
 afterEach(async () => {
-  await close();
-});
+  await close()
+})
 
 async function sync(slugs: string[]): Promise<void> {
-  const client = fixtureClient(ALL);
+  const client = fixtureClient(ALL)
   for (const slug of slugs) {
     const [row] = await db
       .select({ id: tournaments.id })
       .from(tournaments)
-      .where(eq(tournaments.challongeSlug, slug));
-    await syncTournament(db, client, row!.id);
+      .where(eq(tournaments.challongeSlug, slug))
+    await syncTournament(db, client, row!.id)
   }
 }
 
@@ -124,119 +127,126 @@ function caller() {
     NODE_ENV: 'test',
     DATABASE_URL: 'postgres://unused',
     BETTER_AUTH_SECRET: 'test-secret-test-secret-test',
-  });
+  })
   return appRouter.createCaller({
     db,
     env,
     user: null,
     challonge: fixtureClient(ALL),
     recomputeTrigger: new RecomputeTrigger(db, 1_000_000),
-  });
+  })
 }
 
-type Recap = NonNullable<Awaited<ReturnType<ReturnType<typeof caller>['public']['recap']>>>;
+type Recap = NonNullable<Awaited<ReturnType<ReturnType<typeof caller>['public']['recap']>>>
 
-function factsOfKind<K extends RecapFactKind>(recap: Recap, kind: K): Array<Extract<RecapFact, { kind: K }>> {
+function factsOfKind<K extends RecapFactKind>(
+  recap: Recap,
+  kind: K,
+): Extract<RecapFact, { kind: K }>[] {
   return recap.facts
     .map((f) => f.fact as RecapFact)
-    .filter((f): f is Extract<RecapFact, { kind: K }> => f.kind === kind);
+    .filter((f): f is Extract<RecapFact, { kind: K }> => f.kind === kind)
 }
 
 describe('public.recap', () => {
   it('keeps ignored groups visible as excluded but leaves them out of recap results', async () => {
-    await sync(['march-main']);
-    await db.update(sets).set({ resultStage: 'group' }).where(eq(sets.challongeMatchId, 11));
-    const before = (await caller().public.recap({ slug: 'march-main' }))!;
-    await db.update(tournaments).set({ resultsMode: 'final_stage_only' })
-      .where(eq(tournaments.challongeSlug, 'march-main'));
+    await sync(['march-main'])
+    await db.update(sets).set({ resultStage: 'group' }).where(eq(sets.challongeMatchId, 11))
+    const before = (await caller().public.recap({ slug: 'march-main' }))!
+    await db
+      .update(tournaments)
+      .set({ resultsMode: 'final_stage_only' })
+      .where(eq(tournaments.challongeSlug, 'march-main'))
 
-    const view = (await caller().public.tournament({ slug: 'march-main' }))!;
-    const group = view.sets.find((set) => set.resultStage === 'group')!;
-    expect(view.resultsMode).toBe('final_stage_only');
-    expect(group.excludedByResultsMode).toBe(true);
-    expect(group.excludedFromRatings).toBe(true);
-    expect(view.sets).toHaveLength(3);
-    const after = (await caller().public.recap({ slug: 'march-main' }))!;
-    expect(after.setsPlayed).toBe(before.setsPlayed - 1);
+    const view = (await caller().public.tournament({ slug: 'march-main' }))!
+    const group = view.sets.find((set) => set.resultStage === 'group')!
+    expect(view.resultsMode).toBe('final_stage_only')
+    expect(group.excludedByResultsMode).toBe(true)
+    expect(group.excludedFromRatings).toBe(true)
+    expect(view.sets).toHaveLength(3)
+    const after = (await caller().public.recap({ slug: 'march-main' }))!
+    expect(after.setsPlayed).toBe(before.setsPlayed - 1)
 
     // The tournament policy is separate from per-match admin exclusions.
-    const [stored] = await db.select().from(sets).where(eq(sets.id, group.id));
-    expect(stored!.excludedFromRatings).toBe(false);
-  });
+    const [stored] = await db.select().from(sets).where(eq(sets.id, group.id))
+    expect(stored!.excludedFromRatings).toBe(false)
+  })
 
   it('returns null for a slug that does not exist', async () => {
-    expect(await caller().public.recap({ slug: 'nope' })).toBeNull();
-  });
+    expect(await caller().public.recap({ slug: 'nope' })).toBeNull()
+  })
 
   it('folds both brackets of one evening into a single recap', async () => {
-    await sync(['march-main', 'march-rookie']);
-    const recap = (await caller().public.recap({ slug: 'march-rookie' }))!;
+    await sync(['march-main', 'march-rookie'])
+    const recap = (await caller().public.recap({ slug: 'march-rookie' }))!
 
-    expect(recap.tournaments.map((t) => t.slug)).toEqual(['march-main', 'march-rookie']);
-    expect(recap.eventKey).toBe('2025-03-01');
+    expect(recap.tournaments.map((t) => t.slug)).toEqual(['march-main', 'march-rookie'])
+    expect(recap.eventKey).toBe('2025-03-01')
     // Reached via the rookie slug, but a shared link should carry the main one.
-    expect(recap.slug).toBe('march-main');
-    expect(factsOfKind(recap, 'podium')).toHaveLength(2);
-    expect(recap.entrants).toBe(5);
-  });
+    expect(recap.slug).toBe('march-main')
+    expect(factsOfKind(recap, 'podium')).toHaveLength(2)
+    expect(recap.entrants).toBe(5)
+  })
 
   it('produces facts before any recompute has run', async () => {
     // The whole reason seed- and score-based facts exist: a bracket that just
     // finished has unresolved identities and no ratings yet.
-    await sync(['march-main']);
-    const recap = (await caller().public.recap({ slug: 'march-main' }))!;
+    await sync(['march-main'])
+    const recap = (await caller().public.recap({ slug: 'march-main' }))!
 
-    expect(recap.facts.length).toBeGreaterThan(0);
-    expect(factsOfKind(recap, 'podium')[0]?.places[0]?.player.name).toBe('Samus A');
-    expect(factsOfKind(recap, 'rating_upset')).toHaveLength(0);
-    expect(factsOfKind(recap, 'biggest_climb')).toHaveLength(0);
-  });
+    expect(recap.facts.length).toBeGreaterThan(0)
+    expect(factsOfKind(recap, 'podium')[0]?.places[0]?.player.name).toBe('Samus A')
+    expect(factsOfKind(recap, 'rating_upset')).toHaveLength(0)
+    expect(factsOfKind(recap, 'biggest_climb')).toHaveLength(0)
+  })
 
   it('publishes the shortened public alias, not the canonical name', async () => {
-    await sync(['march-main']);
-    const recap = (await caller().public.recap({ slug: 'march-main' }))!;
-    const names = factsOfKind(recap, 'podium').flatMap((p) => p.places.map((place) => place.player.name));
-    expect(names).toContain('Fox M');
-    expect(names).not.toContain('Fox McCloud');
-  });
+    await sync(['march-main'])
+    const recap = (await caller().public.recap({ slug: 'march-main' }))!
+    const names = factsOfKind(recap, 'podium').flatMap((p) =>
+      p.places.map((place) => place.player.name),
+    )
+    expect(names).toContain('Fox M')
+    expect(names).not.toContain('Fox McCloud')
+  })
 
   it('carries the company code for each player', async () => {
-    await sync(['march-main']);
-    const recap = (await caller().public.recap({ slug: 'march-main' }))!;
-    const [podium] = factsOfKind(recap, 'podium');
-    expect(podium?.places.every((p) => p.player.companyCode === 'ATL')).toBe(true);
-  });
+    await sync(['march-main'])
+    const recap = (await caller().public.recap({ slug: 'march-main' }))!
+    const [podium] = factsOfKind(recap, 'podium')
+    expect(podium?.places.every((p) => p.player.companyCode === 'ATL')).toBe(true)
+  })
 
   it('gains rating facts once a recompute lands', async () => {
-    await sync(['march-main', 'march-rookie', 'april-main']);
-    await runRecompute(db);
-    const recap = (await caller().public.recap({ slug: 'april-main' }))!;
+    await sync(['march-main', 'march-rookie', 'april-main'])
+    await runRecompute(db)
+    const recap = (await caller().public.recap({ slug: 'april-main' }))!
 
     // Fox beat Samus in the April final; both had March ratings going in.
-    expect(factsOfKind(recap, 'biggest_climb')).toHaveLength(1);
-    expect(recap.facts.length).toBeGreaterThan(0);
-  });
+    expect(factsOfKind(recap, 'biggest_climb')).toHaveLength(1)
+    expect(recap.facts.length).toBeGreaterThan(0)
+  })
 
   it('counts head-to-head history only from nights before this one', async () => {
-    await sync(['march-main', 'march-rookie', 'april-main']);
-    await runRecompute(db);
+    await sync(['march-main', 'march-rookie', 'april-main'])
+    await runRecompute(db)
 
     // Fox and Samus met once in March and once in April. March's recap must
     // not see April's meeting; April's must see March's.
-    const marchRecap = (await caller().public.recap({ slug: 'march-main' }))!;
-    const aprilRecap = (await caller().public.recap({ slug: 'april-main' }))!;
+    const marchRecap = (await caller().public.recap({ slug: 'march-main' }))!
+    const aprilRecap = (await caller().public.recap({ slug: 'april-main' }))!
 
     // Two meetings is below the rivalry threshold, so neither reports one —
     // what matters is that neither *inflates* the count from the other night.
-    expect(factsOfKind(marchRecap, 'rivalry')).toHaveLength(0);
-    expect(factsOfKind(aprilRecap, 'rivalry')).toHaveLength(0);
+    expect(factsOfKind(marchRecap, 'rivalry')).toHaveLength(0)
+    expect(factsOfKind(aprilRecap, 'rivalry')).toHaveLength(0)
 
     // The observable proxy for the same slice: March is nobody's second night,
     // so all five of the evening's entrants are debutants, and nobody is by
     // April.
-    expect(factsOfKind(marchRecap, 'debut')[0]?.players).toHaveLength(5);
-    expect(factsOfKind(aprilRecap, 'debut')).toHaveLength(0);
-  });
+    expect(factsOfKind(marchRecap, 'debut')[0]?.players).toHaveLength(5)
+    expect(factsOfKind(aprilRecap, 'debut')).toHaveLength(0)
+  })
 
   /**
    * The same slice, under the model production actually runs.
@@ -250,29 +260,29 @@ describe('public.recap', () => {
    * and passed the test above throughout.
    */
   it('reads the same history under WHR as under Glicko-2', async () => {
-    const { glicko } = await getGlickoSettings(db);
-    await updateGlickoSettings(db, { ...glicko, activeModel: 'whr' });
-    await sync(['march-main', 'march-rookie', 'april-main', 'june-main']);
-    await runRecompute(db);
+    const { glicko } = await getGlickoSettings(db)
+    await updateGlickoSettings(db, { ...glicko, activeModel: 'whr' })
+    await sync(['march-main', 'march-rookie', 'april-main', 'june-main'])
+    await runRecompute(db)
 
     // June is Yoshi's first night and Fox's third. One debutant, not two —
     // with a per-player `seq`, Yoshi's first event was numbered 1, which put
     // the whole of club history *after* the boundary and made everyone new.
-    const [debut] = factsOfKind((await caller().public.recap({ slug: 'june-main' }))!, 'debut');
-    expect(debut?.players.map((p) => p.name)).toEqual(['Yoshi']);
-  });
+    const [debut] = factsOfKind((await caller().public.recap({ slug: 'june-main' }))!, 'debut')
+    expect(debut?.players.map((p) => p.name)).toEqual(['Yoshi'])
+  })
 
   it('compares turnout only against earlier nights', async () => {
-    await sync(['march-main', 'march-rookie', 'april-main']);
-    const marchRecap = (await caller().public.recap({ slug: 'march-main' }))!;
-    const aprilRecap = (await caller().public.recap({ slug: 'april-main' }))!;
+    await sync(['march-main', 'march-rookie', 'april-main'])
+    const marchRecap = (await caller().public.recap({ slug: 'march-main' }))!
+    const aprilRecap = (await caller().public.recap({ slug: 'april-main' }))!
 
     // March is the club's first night, so it has nothing to compare against.
-    expect(factsOfKind(marchRecap, 'turnout')).toHaveLength(0);
+    expect(factsOfKind(marchRecap, 'turnout')).toHaveLength(0)
     // April has three entrants against March's five, so it is not a record.
-    const [aprilTurnout] = factsOfKind(aprilRecap, 'turnout');
-    expect(aprilTurnout).toMatchObject({ entrants: 3, previousBest: 5, isRecord: false });
-  });
+    const [aprilTurnout] = factsOfKind(aprilRecap, 'turnout')
+    expect(aprilTurnout).toMatchObject({ entrants: 3, previousBest: 5, isRecord: false })
+  })
 
   /** An unfinished bracket, dated `hoursAgo`, synced and recapped. */
   const recapUnfinished = async (hoursAgo: number) => {
@@ -286,25 +296,25 @@ describe('public.recap', () => {
         { id: 2, name: '[ATL] Samus Aran', seed: 2 },
       ],
       matches: [{ id: 41, p1: 1, p2: 2, winner: 2, order: 1, round: 1, scores: '3-1' }],
-    };
-    await registerTournamentSlugs(db, [underway.slug]);
+    }
+    await registerTournamentSlugs(db, [underway.slug])
     const [row] = await db
       .select({ id: tournaments.id })
       .from(tournaments)
-      .where(eq(tournaments.challongeSlug, underway.slug));
-    await syncTournament(db, fixtureClient([...ALL, underway]), row!.id);
-    return (await caller().public.recap({ slug: 'may-main' }))!;
-  };
+      .where(eq(tournaments.challongeSlug, underway.slug))
+    await syncTournament(db, fixtureClient([...ALL, underway]), row!.id)
+    return (await caller().public.recap({ slug: 'may-main' }))!
+  }
 
   it('reports a bracket still being played as incomplete, without inventing a podium', async () => {
-    const recap = await recapUnfinished(2);
-    expect(recap.isComplete).toBe(false);
-    expect(recap.isAbandoned).toBe(false);
-    expect(factsOfKind(recap, 'podium')).toHaveLength(0);
-    expect(factsOfKind(recap, 'grand_finals')).toHaveLength(0);
+    const recap = await recapUnfinished(2)
+    expect(recap.isComplete).toBe(false)
+    expect(recap.isAbandoned).toBe(false)
+    expect(factsOfKind(recap, 'podium')).toHaveLength(0)
+    expect(factsOfKind(recap, 'grand_finals')).toHaveLength(0)
     // The set that was played is still a fact worth having.
-    expect(recap.setsPlayed).toBe(1);
-  });
+    expect(recap.setsPlayed).toBe(1)
+  })
 
   /**
    * The night the room ran out of time. Challonge's `underway` is sticky, so
@@ -313,12 +323,12 @@ describe('public.recap', () => {
    * it is not going to finish.
    */
   it('treats a long-unfinished bracket as over, but still crowns nobody', async () => {
-    const recap = await recapUnfinished(30 * 24);
-    expect(recap.isComplete).toBe(true);
-    expect(recap.isAbandoned).toBe(true);
+    const recap = await recapUnfinished(30 * 24)
+    expect(recap.isComplete).toBe(true)
+    expect(recap.isAbandoned).toBe(true)
     // Over is not won: the bracket never reached a final, so it has no podium.
-    expect(factsOfKind(recap, 'podium')).toHaveLength(0);
-    expect(factsOfKind(recap, 'grand_finals')).toHaveLength(0);
-    expect(recap.setsPlayed).toBe(1);
-  });
-});
+    expect(factsOfKind(recap, 'podium')).toHaveLength(0)
+    expect(factsOfKind(recap, 'grand_finals')).toHaveLength(0)
+    expect(recap.setsPlayed).toBe(1)
+  })
+})

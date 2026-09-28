@@ -11,24 +11,24 @@
  * A game count no real set can reach. Club sets are best-of-three, occasionally
  * best-of-five; five is the ceiling with room to spare.
  */
-const MAX_PLAUSIBLE_GAMES = 5;
+const MAX_PLAUSIBLE_GAMES = 5
 
-const GAME_PATTERN = /^(-?\d+)-(-?\d+)$/;
+const GAME_PATTERN = /^(-?\d+)-(-?\d+)$/
 
 function eachGame(scoresCsv: string, predicate: (a: number, b: number) => boolean): boolean {
   return scoresCsv.split(',').some((game) => {
-    const match = game.trim().match(GAME_PATTERN);
-    if (!match) return false;
-    return predicate(Number(match[1]), Number(match[2]));
-  });
+    const match = game.trim().match(GAME_PATTERN)
+    if (!match) return false
+    return predicate(Number(match[1]), Number(match[2]))
+  })
 }
 
 /**
  * Challonge marks forfeits and DQs with a negative game score (e.g. "-1-0").
  */
 export function scoresIndicateForfeit(scoresCsv: string | null | undefined): boolean {
-  if (!scoresCsv) return false;
-  return eachGame(scoresCsv, (a, b) => a < 0 || b < 0);
+  if (!scoresCsv) return false
+  return eachGame(scoresCsv, (a, b) => a < 0 || b < 0)
 }
 
 /**
@@ -44,11 +44,11 @@ export function scoresIndicateForfeit(scoresCsv: string | null | undefined): boo
  * other placeholder number the room reaches for lands the same way.
  */
 export function scoresIndicateBye(scoresCsv: string | null | undefined): boolean {
-  if (!scoresCsv) return false;
-  return eachGame(scoresCsv, (a, b) => a > MAX_PLAUSIBLE_GAMES || b > MAX_PLAUSIBLE_GAMES);
+  if (!scoresCsv) return false
+  return eachGame(scoresCsv, (a, b) => a > MAX_PLAUSIBLE_GAMES || b > MAX_PLAUSIBLE_GAMES)
 }
 
 /** A "result" that was never played: a walkover, a DQ, or a bye. */
 export function scoresIndicateUnplayed(scoresCsv: string | null | undefined): boolean {
-  return scoresIndicateForfeit(scoresCsv) || scoresIndicateBye(scoresCsv);
+  return scoresIndicateForfeit(scoresCsv) || scoresIndicateBye(scoresCsv)
 }

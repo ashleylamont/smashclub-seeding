@@ -1,0 +1,11 @@
+node_modules/
+dist/
+legacy/
+docs/
+.idea/
+README.md
+apps/web/README.md
+apps/web/public/
+pnpm-lock.yaml
+packages/db/migrations/meta/
+packages/engine/test/fixtures/

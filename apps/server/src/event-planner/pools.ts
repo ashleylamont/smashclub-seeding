@@ -28,41 +28,41 @@
  */
 export function stripeIntoPools<T>(ordered: readonly T[], poolSize = 4): T[][] {
   if (!Number.isInteger(poolSize) || poolSize < 2) {
-    throw new Error(`Pool size must be an integer of at least 2, got ${poolSize}.`);
+    throw new Error(`Pool size must be an integer of at least 2, got ${poolSize}.`)
   }
   if (ordered.length === 0) {
-    throw new Error('Cannot build pools from an empty division.');
+    throw new Error('Cannot build pools from an empty division.')
   }
-  const poolCount = poolCountFor(ordered.length, poolSize);
-  const pools: T[][] = Array.from({ length: poolCount }, () => []);
+  const poolCount = poolCountFor(ordered.length, poolSize)
+  const pools: T[][] = Array.from({ length: poolCount }, () => [])
   ordered.forEach((entrant, index) => {
-    const row = Math.floor(index / poolCount);
-    const column = index % poolCount;
-    const poolIndex = row % 2 === 0 ? column : poolCount - 1 - column;
-    pools[poolIndex]!.push(entrant);
-  });
-  return pools;
+    const row = Math.floor(index / poolCount)
+    const column = index % poolCount
+    const poolIndex = row % 2 === 0 ? column : poolCount - 1 - column
+    pools[poolIndex]!.push(entrant)
+  })
+  return pools
 }
 
 /** Pool A, B, ... Z, then AA, AB — the club will never need the second case. */
 export function poolLabel(poolIndex: number): string {
-  let label = '';
-  let index = poolIndex;
+  let label = ''
+  let index = poolIndex
   do {
-    label = String.fromCharCode(65 + (index % 26)) + label;
-    index = Math.floor(index / 26) - 1;
-  } while (index >= 0);
-  return label;
+    label = String.fromCharCode(65 + (index % 26)) + label
+    index = Math.floor(index / 26) - 1
+  } while (index >= 0)
+  return label
 }
 
 /** How many pools a division of this size makes. */
 export function poolCountFor(divisionSize: number, poolSize = 4): number {
-  const minimum = Math.max(3, poolSize - 1);
+  const minimum = Math.max(3, poolSize - 1)
   if (!Number.isInteger(divisionSize) || divisionSize < minimum) {
-    throw new Error(`A division needs at least ${minimum} entrants.`);
+    throw new Error(`A division needs at least ${minimum} entrants.`)
   }
-  if (!Number.isInteger(poolSize) || poolSize < 3) throw new Error('Pool size must be at least 3.');
-  const leastPools = Math.ceil(divisionSize / (poolSize + 1));
-  const mostPools = Math.floor(divisionSize / minimum);
-  return Math.max(leastPools, Math.min(mostPools, Math.round(divisionSize / poolSize)));
+  if (!Number.isInteger(poolSize) || poolSize < 3) throw new Error('Pool size must be at least 3.')
+  const leastPools = Math.ceil(divisionSize / (poolSize + 1))
+  const mostPools = Math.floor(divisionSize / minimum)
+  return Math.max(leastPools, Math.min(mostPools, Math.round(divisionSize / poolSize)))
 }

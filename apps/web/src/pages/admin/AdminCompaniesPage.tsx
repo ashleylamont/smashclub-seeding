@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { trpc } from '../../lib/trpc';
-import type { AdminCompany } from '../../lib/apiTypes';
+import { useEffect, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { trpc } from '../../lib/trpc'
+import type { AdminCompany } from '../../lib/apiTypes'
 
 /**
  * Company taxonomy management.
@@ -14,33 +14,37 @@ import type { AdminCompany } from '../../lib/apiTypes';
  */
 
 export function AdminCompaniesPage() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryClient()
   const companies = useQuery({
     queryKey: ['admin', 'companies'],
     queryFn: () => trpc.admin.companies.query(),
-  });
+  })
 
-  const [editing, setEditing] = useState<AdminCompany | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<AdminCompany | null>(null)
+  const [creating, setCreating] = useState(false)
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['admin', 'companies'] });
-    void queryClient.invalidateQueries({ queryKey: ['admin', 'players'] });
-  };
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'companies'] })
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'players'] })
+  }
 
   return (
     <div className="section">
       <div className="page-header">
         <h2>Companies</h2>
-        <button type="button" className="btn btn-small btn-primary" onClick={() => setCreating(true)}>
+        <button
+          type="button"
+          className="btn btn-small btn-primary"
+          onClick={() => setCreating(true)}
+        >
           New company
         </button>
       </div>
 
       <p className="muted">
-        Codes tag players on the leaderboard. Aliases are the other spellings that appear in bracket entries —
-        every alias listed here is matched automatically on import, so adding one is usually cheaper than
-        resolving the same name in the review queue every event.
+        Codes tag players on the leaderboard. Aliases are the other spellings that appear in bracket
+        entries — every alias listed here is matched automatically on import, so adding one is
+        usually cheaper than resolving the same name in the review queue every event.
       </p>
 
       {companies.isPending && <p className="loading-text">Loading companies…</p>}
@@ -83,14 +87,14 @@ export function AdminCompaniesPage() {
         <CompanyFormModal
           company={editing}
           onClose={() => {
-            setCreating(false);
-            setEditing(null);
+            setCreating(false)
+            setEditing(null)
           }}
           onSaved={invalidate}
         />
       )}
     </div>
-  );
+  )
 }
 
 function CompanyRow({
@@ -98,26 +102,27 @@ function CompanyRow({
   onEdit,
   onChanged,
 }: {
-  company: AdminCompany;
-  onEdit: () => void;
-  onChanged: () => void;
+  company: AdminCompany
+  onEdit: () => void
+  onChanged: () => void
 }) {
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const removeAlias = useMutation({
-    mutationFn: (alias: string) => trpc.admin.removeCompanyAlias.mutate({ companyId: company.id, alias }),
+    mutationFn: (alias: string) =>
+      trpc.admin.removeCompanyAlias.mutate({ companyId: company.id, alias }),
     onSuccess: onChanged,
-  });
+  })
 
   const remove = useMutation({
     mutationFn: () => trpc.admin.deleteCompany.mutate({ companyId: company.id }),
     onSuccess: () => {
-      setConfirmingDelete(false);
-      onChanged();
+      setConfirmingDelete(false)
+      onChanged()
     },
-  });
+  })
 
-  const error = removeAlias.error ?? remove.error;
+  const error = removeAlias.error ?? remove.error
 
   return (
     <tr>
@@ -149,23 +154,33 @@ function CompanyRow({
           <button type="button" className="btn btn-small" onClick={onEdit}>
             Edit
           </button>
-          <button type="button" className="btn btn-small btn-danger" onClick={() => setConfirmingDelete(true)}>
+          <button
+            type="button"
+            className="btn btn-small btn-danger"
+            onClick={() => setConfirmingDelete(true)}
+          >
             Delete
           </button>
         </span>
 
         {confirmingDelete && (
-          <div className="modal-overlay" onClick={() => setConfirmingDelete(false)}>
-            <div className="modal" onClick={(event) => event.stopPropagation()}>
+          <div className="modal-overlay">
+            <button
+              type="button"
+              className="modal-backdrop"
+              aria-label="Close dialog"
+              onClick={() => setConfirmingDelete(false)}
+            />
+            <div className="modal">
               <h3>Delete {company.code}?</h3>
               <p>
                 {company.playerCount === 0
                   ? 'No players are tagged with this company.'
                   : `${company.playerCount} player${company.playerCount === 1 ? '' : 's'} tagged with this company will
                      become untagged.`}{' '}
-                Its {company.aliases.length} alias{company.aliases.length === 1 ? '' : 'es'} will also be removed, so
-                bracket entries carrying this tag will go to the review queue instead of matching automatically.
-                Ratings and match history are unaffected.
+                Its {company.aliases.length} alias{company.aliases.length === 1 ? '' : 'es'} will
+                also be removed, so bracket entries carrying this tag will go to the review queue
+                instead of matching automatically. Ratings and match history are unaffected.
               </p>
               <div className="modal-actions">
                 <button type="button" className="btn" onClick={() => setConfirmingDelete(false)}>
@@ -185,7 +200,7 @@ function CompanyRow({
         )}
       </td>
     </tr>
-  );
+  )
 }
 
 function CompanyFormModal({
@@ -193,22 +208,22 @@ function CompanyFormModal({
   onClose,
   onSaved,
 }: {
-  company: AdminCompany | null;
-  onClose: () => void;
-  onSaved: () => void;
+  company: AdminCompany | null
+  onClose: () => void
+  onSaved: () => void
 }) {
-  const [code, setCode] = useState(company?.code ?? '');
-  const [name, setName] = useState(company?.name ?? '');
-  const [aliases, setAliases] = useState<string[]>([]);
-  const [aliasInput, setAliasInput] = useState('');
+  const [code, setCode] = useState(company?.code ?? '')
+  const [name, setName] = useState(company?.name ?? '')
+  const [aliases, setAliases] = useState<string[]>([])
+  const [aliasInput, setAliasInput] = useState('')
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
 
   const save = useMutation({
     mutationFn: () =>
@@ -221,23 +236,29 @@ function CompanyFormModal({
         aliases: aliasInput.trim() === '' ? aliases : [...aliases, aliasInput.trim()],
       }),
     onSuccess: () => {
-      onSaved();
-      onClose();
+      onSaved()
+      onClose()
     },
-  });
+  })
 
   const addAlias = () => {
-    const value = aliasInput.trim();
-    if (value === '' || aliases.includes(value)) return;
-    setAliases([...aliases, value]);
-    setAliasInput('');
-  };
+    const value = aliasInput.trim()
+    if (value === '' || aliases.includes(value)) return
+    setAliases([...aliases, value])
+    setAliasInput('')
+  }
 
-  const valid = code.trim() !== '' && name.trim() !== '';
+  const valid = code.trim() !== '' && name.trim() !== ''
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(event) => event.stopPropagation()}>
+    <div className="modal-overlay">
+      <button
+        type="button"
+        className="modal-backdrop"
+        aria-label="Close dialog"
+        onClick={onClose}
+      />
+      <div className="modal">
         <h3>{company ? `Edit ${company.code}` : 'New company'}</h3>
 
         <div className="form-grid">
@@ -289,12 +310,17 @@ function CompanyFormModal({
                 onChange={(event) => setAliasInput(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
-                    event.preventDefault();
-                    addAlias();
+                    event.preventDefault()
+                    addAlias()
                   }
                 }}
               />
-              <button type="button" className="btn btn-small" disabled={aliasInput.trim() === ''} onClick={addAlias}>
+              <button
+                type="button"
+                className="btn btn-small"
+                disabled={aliasInput.trim() === ''}
+                onClick={addAlias}
+              >
                 Add
               </button>
             </div>
@@ -322,5 +348,5 @@ function CompanyFormModal({
         </div>
       </div>
     </div>
-  );
+  )
 }

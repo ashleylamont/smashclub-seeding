@@ -1,4 +1,4 @@
-import { boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core'
 
 /**
  * Auth tables in better-auth's expected shape (Drizzle adapter). better-auth
@@ -16,7 +16,7 @@ export const user = pgTable('user', {
   role: text('role').notNull().default('user'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+})
 
 export const session = pgTable('session', {
   id: text('id').primaryKey(),
@@ -29,7 +29,7 @@ export const session = pgTable('session', {
     .references(() => user.id, { onDelete: 'cascade' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+})
 
 export const account = pgTable('account', {
   id: text('id').primaryKey(),
@@ -47,7 +47,7 @@ export const account = pgTable('account', {
   password: text('password'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+})
 
 export const verification = pgTable('verification', {
   id: text('id').primaryKey(),
@@ -56,4 +56,4 @@ export const verification = pgTable('verification', {
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+})

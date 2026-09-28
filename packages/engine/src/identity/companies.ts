@@ -5,9 +5,9 @@
  */
 export interface CompanyTaxonomy {
   /** code -> full display name, e.g. ATL -> Atlassian */
-  codes: Record<string, string>;
+  codes: Record<string, string>
   /** alias (any casing) -> code, e.g. Atlas -> ATL */
-  aliases: Record<string, string>;
+  aliases: Record<string, string>
 }
 
 export const DEFAULT_COMPANY_TAXONOMY: CompanyTaxonomy = {
@@ -61,28 +61,31 @@ export const DEFAULT_COMPANY_TAXONOMY: CompanyTaxonomy = {
     Commbank: 'CBA',
     Oracle: 'ORC',
   },
-};
+}
 
 /**
  * Labels that appear where a company would but are not employers — the club's
  * sign-up sheets use them as markers. Recognised so they are not mistaken for
  * a new company, and not reported as unknown.
  */
-export const NON_COMPANY_LABELS = new Set(['n/a', 'na', 'unknown', 'none', 'dq', 'tbd', 'guest']);
+export const NON_COMPANY_LABELS = new Set(['n/a', 'na', 'unknown', 'none', 'dq', 'tbd', 'guest'])
 
 export function isNonCompanyLabel(text: string): boolean {
-  return NON_COMPANY_LABELS.has(text.trim().toLowerCase());
+  return NON_COMPANY_LABELS.has(text.trim().toLowerCase())
 }
 
 /** Resolve free text (a code, full name, or alias) to a company code, if known. */
-export function resolveCompanyCode(text: string, taxonomy: CompanyTaxonomy = DEFAULT_COMPANY_TAXONOMY): string | null {
-  const trimmed = text.trim();
-  if (!trimmed) return null;
-  const upper = trimmed.toUpperCase();
-  if (upper in taxonomy.codes) return upper;
-  const lower = trimmed.toLowerCase();
+export function resolveCompanyCode(
+  text: string,
+  taxonomy: CompanyTaxonomy = DEFAULT_COMPANY_TAXONOMY,
+): string | null {
+  const trimmed = text.trim()
+  if (!trimmed) return null
+  const upper = trimmed.toUpperCase()
+  if (upper in taxonomy.codes) return upper
+  const lower = trimmed.toLowerCase()
   for (const [alias, code] of Object.entries(taxonomy.aliases)) {
-    if (alias.toLowerCase() === lower) return code;
+    if (alias.toLowerCase() === lower) return code
   }
-  return null;
+  return null
 }

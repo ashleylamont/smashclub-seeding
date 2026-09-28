@@ -1,5 +1,5 @@
-import { LEAGUE_CATCH_ALL, type GlickoSettings } from '@smashclub/shared';
-import type { PlayerFinalState } from './types';
+import { LEAGUE_CATCH_ALL, type GlickoSettings } from '@smashclub/shared'
+import type { PlayerFinalState } from './types'
 
 /**
  * The conservative seeding score and its confidence breakdown, ported from
@@ -13,21 +13,21 @@ import type { PlayerFinalState } from './types';
  * - conservative = effectiveRating - 2 * effectiveRd.
  */
 export interface PlayerScore {
-  playerId: string;
-  rating: number;
-  rd: number;
-  vol: number;
-  effectiveRating: number;
-  effectiveRd: number;
+  playerId: string
+  rating: number
+  rd: number
+  vol: number
+  effectiveRating: number
+  effectiveRd: number
   /**
    * Best estimate of skill: the shrunk point estimate (a posterior mean),
    * pulled toward 1500 in proportion to how little we know but *not*
    * additionally penalised by uncertainty. Shown alongside `skillSd` as a ±
    * band, so doubt stays visible next to the ranked number.
    */
-  skillRating: number;
+  skillRating: number
   /** One standard deviation of uncertainty on `skillRating`, for a ± band. */
-  skillSd: number;
+  skillSd: number
   /**
    * Deliberately pessimistic estimate — skill minus two standard deviations —
    * and what **bracket seeding** ranks on.
@@ -46,25 +46,25 @@ export interface PlayerScore {
    * disagreeing is the design, not a bug: this one answers "who should get the
    * top seed", `clubRating` answers "who is best right now".
    */
-  conservativeRating: number;
+  conservativeRating: number
   /**
    * Consecutive club events missed since this player last appeared.
    */
-  missedEvents: number;
+  missedEvents: number
   /** Unbroken run of events attended up to the club's latest; 0 once broken. */
-  attendanceStreak: number;
+  attendanceStreak: number
   /**
    * Rating points subtracted for missed events — the club's attendance policy,
    * stated as a number rather than inferred from a widened error bar. Zero for
    * anyone inside the grace window, and reset in full the moment they play.
    */
-  activityPenalty: number;
+  activityPenalty: number
   /**
    * What one *more* missed event would add to `activityPenalty`. Published so a
    * member can be told what skipping the next club night costs them before they
    * skip it, which is the whole point of having a legible policy.
    */
-  nextMissPenalty: number;
+  nextMissPenalty: number
   /**
    * **What the public board ranks on**: the skill estimate less the activity
    * penalty.
@@ -76,37 +76,37 @@ export interface PlayerScore {
    * conservative rating was really being used for — without also punishing the
    * newcomer and the every-other-event regular, who were only ever collateral.
    */
-  clubRating: number;
+  clubRating: number
   /**
    * Too little history to have earned the number yet. Badged rather than sunk:
    * shrinkage has already pulled them toward the middle, which is the honest
    * treatment of someone we have barely seen.
    */
-  isProvisional: boolean;
-  matchCount: number;
-  wins: number;
-  losses: number;
-  mainMatchCount: number;
-  rookieMatchCount: number;
+  isProvisional: boolean
+  matchCount: number
+  wins: number
+  losses: number
+  mainMatchCount: number
+  rookieMatchCount: number
   /** Brackets entered. */
-  tournamentCount: number;
+  tournamentCount: number
   /**
    * Events (occasions) attended — what a member means by "how many have I been
    * to". Lower than `tournamentCount` for anyone who played both the main and
    * the rookie bracket on one evening.
    */
-  eventCount: number;
-  uniqueOpponentCount: number;
-  bridgeOpponentCount: number;
-  rookieRatio: number;
-  isolationFactor: number;
-  sampleConfidence: number;
-  lastPlayedDate: string;
+  eventCount: number
+  uniqueOpponentCount: number
+  bridgeOpponentCount: number
+  rookieRatio: number
+  isolationFactor: number
+  sampleConfidence: number
+  lastPlayedDate: string
 }
 
 export interface LeaderboardRow extends PlayerScore {
-  rank: number;
-  league: string;
+  rank: number
+  league: string
 }
 
 /**
@@ -120,8 +120,8 @@ export interface LeaderboardRow extends PlayerScore {
  * active board entirely rather than by driving their rating to nothing).
  */
 export function activityPenaltyFor(missedEvents: number, settings: GlickoSettings): number {
-  const charged = Math.max(0, missedEvents - settings.activityGraceEvents);
-  return Math.min(settings.activityPenaltyCap, charged * settings.activityPenaltyPerEvent);
+  const charged = Math.max(0, missedEvents - settings.activityGraceEvents)
+  return Math.min(settings.activityPenaltyCap, charged * settings.activityPenaltyPerEvent)
 }
 
 export function computePlayerScore(
@@ -129,24 +129,24 @@ export function computePlayerScore(
   finalStates: ReadonlyMap<string, PlayerFinalState>,
   settings: GlickoSettings,
 ): PlayerScore {
-  const rookieRatio = state.matchCount ? state.rookieMatchCount / state.matchCount : 0;
-  const mainExperienceFactor = state.matchCount ? Math.min(state.mainMatchCount, 5) / 5 : 0;
-  let bridgeOpponentCount = 0;
+  const rookieRatio = state.matchCount ? state.rookieMatchCount / state.matchCount : 0
+  const mainExperienceFactor = state.matchCount ? Math.min(state.mainMatchCount, 5) / 5 : 0
+  let bridgeOpponentCount = 0
   for (const opponentId of state.opponentIds) {
-    if ((finalStates.get(opponentId)?.mainMatchCount ?? 0) > 0) bridgeOpponentCount += 1;
+    if ((finalStates.get(opponentId)?.mainMatchCount ?? 0) > 0) bridgeOpponentCount += 1
   }
-  const bridgeFactor = state.matchCount ? Math.min(bridgeOpponentCount, 5) / 5 : 0;
-  const isolationFactor = rookieRatio * (1 - Math.max(mainExperienceFactor, bridgeFactor));
+  const bridgeFactor = state.matchCount ? Math.min(bridgeOpponentCount, 5) / 5 : 0
+  const isolationFactor = rookieRatio * (1 - Math.max(mainExperienceFactor, bridgeFactor))
   const rookieOnlyIsland =
-    state.mainMatchCount === 0 && bridgeOpponentCount === 0 && state.rookieMatchCount >= 3;
+    state.mainMatchCount === 0 && bridgeOpponentCount === 0 && state.rookieMatchCount >= 3
 
-  const rookieRdMultiplier = 1 + 0.9 * isolationFactor + (rookieOnlyIsland ? 0.5 : 0);
-  const effectiveRd = Math.min(settings.rdCap, state.rd * rookieRdMultiplier);
+  const rookieRdMultiplier = 1 + 0.9 * isolationFactor + (rookieOnlyIsland ? 0.5 : 0)
+  const effectiveRd = Math.min(settings.rdCap, state.rd * rookieRdMultiplier)
 
-  const anchorFactor = Math.max(0.25, 1 - 0.65 * isolationFactor - (rookieOnlyIsland ? 0.2 : 0));
-  const tournamentFactor = Math.min(state.tournamentIds.size, 3) / 3;
-  const opponentFactor = Math.min(state.opponentIds.size, 8) / 8;
-  const matchFactor = Math.min(state.matchCount, 10) / 10;
+  const anchorFactor = Math.max(0.25, 1 - 0.65 * isolationFactor - (rookieOnlyIsland ? 0.2 : 0))
+  const tournamentFactor = Math.min(state.tournamentIds.size, 3) / 3
+  const opponentFactor = Math.min(state.opponentIds.size, 8) / 8
+  const matchFactor = Math.min(state.matchCount, 10) / 10
   const baseSampleConfidence = Math.max(
     settings.confidenceFloor,
     Math.min(
@@ -155,21 +155,26 @@ export function computePlayerScore(
         settings.confidenceOpponentWeight * opponentFactor +
         settings.confidenceMatchWeight * matchFactor,
     ),
-  );
-  const overlapConfidence = Math.max(mainExperienceFactor, bridgeFactor, settings.anchorFloor);
+  )
+  const overlapConfidence = Math.max(mainExperienceFactor, bridgeFactor, settings.anchorFloor)
   const sampleConfidence =
     rookieRatio > 0
-      ? Math.max(settings.anchorFloor, Math.min(baseSampleConfidence, overlapConfidence + 0.25 * (1 - rookieRatio)))
-      : baseSampleConfidence;
+      ? Math.max(
+          settings.anchorFloor,
+          Math.min(baseSampleConfidence, overlapConfidence + 0.25 * (1 - rookieRatio)),
+        )
+      : baseSampleConfidence
 
   const effectiveRating =
-    settings.initialRating + (state.rating - settings.initialRating) * anchorFactor * sampleConfidence;
-  const conservativeRating = effectiveRating - 2 * effectiveRd;
+    settings.initialRating +
+    (state.rating - settings.initialRating) * anchorFactor * sampleConfidence
+  const conservativeRating = effectiveRating - 2 * effectiveRd
 
-  const activityPenalty = activityPenaltyFor(state.missedEvents, settings);
-  const nextMissPenalty = activityPenaltyFor(state.missedEvents + 1, settings) - activityPenalty;
+  const activityPenalty = activityPenaltyFor(state.missedEvents, settings)
+  const nextMissPenalty = activityPenaltyFor(state.missedEvents + 1, settings) - activityPenalty
   const isProvisional =
-    state.eventKeys.size < settings.provisionalEventCount || state.matchCount < settings.provisionalMatchCount;
+    state.eventKeys.size < settings.provisionalEventCount ||
+    state.matchCount < settings.provisionalMatchCount
 
   return {
     playerId: state.playerId,
@@ -200,7 +205,7 @@ export function computePlayerScore(
     isolationFactor,
     sampleConfidence,
     lastPlayedDate: state.lastPlayedDate,
-  };
+  }
 }
 
 /**
@@ -214,13 +219,13 @@ export function computePlayerScore(
  */
 export function leagueForRating(
   rating: number,
-  bands: ReadonlyArray<{ name: string; minRating: number }>,
+  bands: readonly { name: string; minRating: number }[],
 ): string {
-  const ordered = [...bands].sort((a, b) => b.minRating - a.minRating);
+  const ordered = [...bands].sort((a, b) => b.minRating - a.minRating)
   for (const band of ordered) {
-    if (rating >= band.minRating) return band.name;
+    if (rating >= band.minRating) return band.name
   }
-  return ordered[ordered.length - 1]?.name ?? 'Unranked';
+  return ordered[ordered.length - 1]?.name ?? 'Unranked'
 }
 
 /**
@@ -234,20 +239,26 @@ export function leagueForRating(
  */
 export function calibrateLeagueBands(
   ratings: readonly number[],
-  names: readonly string[] = ['🏆 Champions', '💼 Smashclub Full-Timers', '🎓 Smashclub Grads', '👶 Smashclub Interns'],
-): Array<{ name: string; minRating: number }> {
+  names: readonly string[] = [
+    '🏆 Champions',
+    '💼 Smashclub Full-Timers',
+    '🎓 Smashclub Grads',
+    '👶 Smashclub Interns',
+  ],
+): { name: string; minRating: number }[] {
   if (ratings.length === 0) {
     return names.map((name, index) => ({
       name,
-      minRating: index === names.length - 1 ? LEAGUE_CATCH_ALL : 1500 + (names.length - 1 - index) * 100,
-    }));
+      minRating:
+        index === names.length - 1 ? LEAGUE_CATCH_ALL : 1500 + (names.length - 1 - index) * 100,
+    }))
   }
-  const sorted = [...ratings].sort((a, b) => b - a);
+  const sorted = [...ratings].sort((a, b) => b - a)
   return names.map((name, index) => {
-    if (index === names.length - 1) return { name, minRating: LEAGUE_CATCH_ALL };
-    const cut = Math.floor((sorted.length * (index + 1)) / names.length);
-    return { name, minRating: Math.round(sorted[Math.min(cut, sorted.length - 1)]!) };
-  });
+    if (index === names.length - 1) return { name, minRating: LEAGUE_CATCH_ALL }
+    const cut = Math.floor((sorted.length * (index + 1)) / names.length)
+    return { name, minRating: Math.round(sorted[Math.min(cut, sorted.length - 1)]!) }
+  })
 }
 
 /**
@@ -268,20 +279,25 @@ export function computeLeaderboard(
   finalStates: ReadonlyMap<string, PlayerFinalState>,
   settings: GlickoSettings,
 ): LeaderboardRow[] {
-  const scores = [...finalStates.values()].map((state) => computePlayerScore(state, finalStates, settings));
-  return rankScores(scores, settings);
+  const scores = [...finalStates.values()].map((state) =>
+    computePlayerScore(state, finalStates, settings),
+  )
+  return rankScores(scores, settings)
 }
 
 /**
  * Rank an already-computed set of scores. Shared with the WHR model so both
  * models order the board the same way.
  */
-export function rankScores(scores: readonly PlayerScore[], settings: GlickoSettings): LeaderboardRow[] {
+export function rankScores(
+  scores: readonly PlayerScore[],
+  settings: GlickoSettings,
+): LeaderboardRow[] {
   return boardOrder(scores).map((score, index) => ({
     ...score,
     rank: index + 1,
     league: leagueForRating(score.clubRating, settings.leagueBands),
-  }));
+  }))
 }
 
 /**
@@ -294,7 +310,7 @@ export function boardOrder(scores: readonly PlayerScore[]): PlayerScore[] {
       b.skillRating - a.skillRating ||
       a.skillSd - b.skillSd ||
       (a.playerId < b.playerId ? -1 : a.playerId > b.playerId ? 1 : 0),
-  );
+  )
 }
 
 /**
@@ -316,5 +332,5 @@ export function seedingOrder(scores: readonly PlayerScore[]): PlayerScore[] {
       b.skillRating - a.skillRating ||
       a.skillSd - b.skillSd ||
       (a.playerId < b.playerId ? -1 : a.playerId > b.playerId ? 1 : 0),
-  );
+  )
 }

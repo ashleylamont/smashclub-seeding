@@ -1,5 +1,5 @@
-import { and, asc, eq, inArray, isNotNull, lt } from 'drizzle-orm';
-import type { Db } from '@smashclub/db';
+import { and, asc, eq, inArray, isNotNull, lt } from 'drizzle-orm'
+import type { Db } from '@smashclub/db'
 import {
   companies,
   eventPlanBrackets,
@@ -10,7 +10,7 @@ import {
   sets,
   tournamentParticipants,
   tournaments,
-} from '@smashclub/db';
+} from '@smashclub/db'
 import {
   buildRecap,
   eventKeyOf,
@@ -22,10 +22,17 @@ import {
   type RecapResult,
   type RecapSet,
   type RecapTournament,
-} from '@smashclub/engine';
-import { compareEventBrackets, eventCanonicalSlug, eventNameOf, includesResultStage, publicParticipantName, scoresIndicateUnplayed } from '@smashclub/shared';
-import { latestRecomputeId } from '../recompute/recompute';
-import { charactersByPlayer } from '../players/characters';
+} from '@smashclub/engine'
+import {
+  compareEventBrackets,
+  eventCanonicalSlug,
+  eventNameOf,
+  includesResultStage,
+  publicParticipantName,
+  scoresIndicateUnplayed,
+} from '@smashclub/shared'
+import { latestRecomputeId } from '../recompute/recompute'
+import { charactersByPlayer } from '../players/characters'
 
 /**
  * Assembles a night's recap: resolves a slug to every bracket that ran that
@@ -48,29 +55,29 @@ import { charactersByPlayer } from '../players/characters';
  * future chat post all describe a night identically.
  */
 export interface LoadedRecapFact extends RankedRecapFact {
-  headline: string;
-  detail: string;
+  headline: string
+  detail: string
 }
 
 export interface LoadedRecap extends Omit<RecapResult, 'tournaments' | 'facts' | 'highlights'> {
   /** The night's brackets, main first, each addressable by its own slug. */
-  tournaments: Array<RecapTournament & { slug: string }>;
-  name: string;
-  facts: LoadedRecapFact[];
-  highlights: LoadedRecapFact[];
+  tournaments: (RecapTournament & { slug: string })[]
+  name: string
+  facts: LoadedRecapFact[]
+  highlights: LoadedRecapFact[]
   coverage: {
-    unsyncedBrackets: number;
-    unresolvedEntrants: number;
-    unlinkedPlayedSets: number;
-    ignoredGroupSets: number;
-  };
+    unsyncedBrackets: number
+    unresolvedEntrants: number
+    unlinkedPlayedSets: number
+    ignoredGroupSets: number
+  }
   /** Canonical slug for this night — the main bracket's. */
-  slug: string;
+  slug: string
 }
 
 export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | null> {
-  const [anchor] = await db.select().from(tournaments).where(eq(tournaments.challongeSlug, slug));
-  if (!anchor) return null;
+  const [anchor] = await db.select().from(tournaments).where(eq(tournaments.challongeSlug, slug))
+  if (!anchor) return null
 
   /*
    * Explicit plan membership owns the event identity. Historical unlinked
@@ -90,22 +97,39 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
     })
     .from(tournaments)
     .where(isNotNull(tournaments.eventDate))
-    .orderBy(asc(tournaments.eventDate));
+    .orderBy(asc(tournaments.eventDate))
 
-  const anchorKey = anchor.eventDate ? eventKeyOf(anchor.eventDate.toISOString()) : null;
-  const memberships = await db.select().from(eventPlanBrackets).where(isNotNull(eventPlanBrackets.tournamentId));
-  const anchorPlans = new Set(memberships.filter(link => link.tournamentId === anchor.id).map(link => link.eventPlanId));
-  const linkedTournamentIds = new Set(memberships.map(link => link.tournamentId));
-  let nightRows = anchorKey === null ? [] : allDated.filter(t =>
-    !linkedTournamentIds.has(t.id) && eventKeyOf(t.eventDate!.toISOString()) === anchorKey);
+  const anchorKey = anchor.eventDate ? eventKeyOf(anchor.eventDate.toISOString()) : null
+  const memberships = await db
+    .select()
+    .from(eventPlanBrackets)
+    .where(isNotNull(eventPlanBrackets.tournamentId))
+  const anchorPlans = new Set(
+    memberships.filter((link) => link.tournamentId === anchor.id).map((link) => link.eventPlanId),
+  )
+  const linkedTournamentIds = new Set(memberships.map((link) => link.tournamentId))
+  let nightRows =
+    anchorKey === null
+      ? []
+      : allDated.filter(
+          (t) =>
+            !linkedTournamentIds.has(t.id) && eventKeyOf(t.eventDate!.toISOString()) === anchorKey,
+        )
   if (anchorPlans.size === 1) {
-    const planId = [...anchorPlans][0]!;
-    const ids = memberships.filter(link => link.eventPlanId === planId).flatMap(link => link.tournamentId ? [link.tournamentId] : []);
-    nightRows = (await db.select().from(tournaments).where(inArray(tournaments.id, ids)).orderBy(asc(tournaments.eventDate)))
-      .map(t => ({ ...t, slug: t.challongeSlug }));
+    const planId = [...anchorPlans][0]!
+    const ids = memberships
+      .filter((link) => link.eventPlanId === planId)
+      .flatMap((link) => (link.tournamentId ? [link.tournamentId] : []))
+    nightRows = (
+      await db
+        .select()
+        .from(tournaments)
+        .where(inArray(tournaments.id, ids))
+        .orderBy(asc(tournaments.eventDate))
+    ).map((t) => ({ ...t, slug: t.challongeSlug }))
   } else if (anchorPlans.size > 1) {
     // Ambiguous legacy ownership must not merge unrelated event recaps.
-    nightRows = [];
+    nightRows = []
   }
 
   const nightTournaments: RecapTournament[] =
@@ -127,12 +151,12 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
             challongeState: anchor.challongeState,
             tournamentType: tournamentTypeOf(anchor.raw),
           },
-        ];
-  const nightIds = nightTournaments.map((t) => t.id);
-  const modes = new Map(nightRows.map((t) => [t.id, t.resultsMode]));
-  modes.set(anchor.id, anchor.resultsMode);
-  const slugById = new Map(nightRows.map((t) => [t.id, t.slug]));
-  slugById.set(anchor.id, anchor.challongeSlug);
+        ]
+  const nightIds = nightTournaments.map((t) => t.id)
+  const modes = new Map(nightRows.map((t) => [t.id, t.resultsMode]))
+  modes.set(anchor.id, anchor.resultsMode)
+  const slugById = new Map(nightRows.map((t) => [t.id, t.slug]))
+  slugById.set(anchor.id, anchor.challongeSlug)
 
   // --- participants -------------------------------------------------------
 
@@ -151,12 +175,12 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
     .from(tournamentParticipants)
     .leftJoin(players, eq(tournamentParticipants.playerId, players.id))
     .leftJoin(companies, eq(players.companyId, companies.id))
-    .where(inArray(tournamentParticipants.tournamentId, nightIds));
+    .where(inArray(tournamentParticipants.tournamentId, nightIds))
 
   const characters = await charactersByPlayer(
     db,
     participantRows.flatMap((p) => (p.playerId ? [p.playerId] : [])),
-  );
+  )
 
   const participants: RecapParticipant[] = participantRows.map((p) => ({
     id: p.id,
@@ -169,7 +193,7 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
     characters: p.playerId ? (characters.get(p.playerId) ?? []) : [],
     seed: p.seed,
     finalRank: p.finalRank,
-  }));
+  }))
 
   // --- sets ---------------------------------------------------------------
 
@@ -179,7 +203,7 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
     .where(inArray(sets.tournamentId, nightIds))
     // Play order, matching the engine's `compareSetsInBracket`. The recap's own
     // tie-break is this array's index, so this ordering is load-bearing.
-    .orderBy(asc(sets.suggestedPlayOrder), asc(sets.completedAt), asc(sets.challongeMatchId));
+    .orderBy(asc(sets.suggestedPlayOrder), asc(sets.completedAt), asc(sets.challongeMatchId))
 
   const recapSets: RecapSet[] = setRows
     .filter((row) => includesResultStage(modes.get(row.tournamentId) ?? 'auto', row.resultStage))
@@ -197,21 +221,24 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
       scoresCsv: row.scoresCsv,
       excludedFromRatings: row.excludedFromRatings,
       completedAt: row.completedAt?.toISOString() ?? null,
-    }));
+    }))
 
   // --- ratings (optional) -------------------------------------------------
 
-  const recomputeId = await latestRecomputeId(db);
+  const recomputeId = await latestRecomputeId(db)
   const { nightEvents, history, rankMovement } = recomputeId
     ? await loadRatingContext(db, recomputeId, nightIds)
-    : { nightEvents: [], history: undefined, rankMovement: [] };
+    : { nightEvents: [], history: undefined, rankMovement: [] }
   const [recomputeRow] = recomputeId
-    ? await db.select({ model: recomputes.model }).from(recomputes).where(eq(recomputes.id, recomputeId))
-    : [];
+    ? await db
+        .select({ model: recomputes.model })
+        .from(recomputes)
+        .where(eq(recomputes.id, recomputeId))
+    : []
 
   // --- turnout comparison -------------------------------------------------
 
-  const priorTurnouts = await loadPriorTurnouts(db, allDated, anchorKey);
+  const priorTurnouts = await loadPriorTurnouts(db, allDated, anchorKey)
 
   const result = buildRecap({
     tournaments: nightTournaments,
@@ -225,48 +252,62 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
     // Lets the engine call a bracket nobody ever closed on Challonge finished,
     // once its night is far enough behind us.
     now: Date.now(),
-  });
+  })
 
   // The engine orders brackets main-first, so the night's canonical slug — the
   // one a shared link should carry — is the first one back.
-  const withSlugs = result.tournaments.map((t) => ({ ...t, slug: slugById.get(t.id) ?? slug })).sort(compareEventBrackets);
+  const withSlugs = result.tournaments
+    .map((t) => ({ ...t, slug: slugById.get(t.id) ?? slug }))
+    .sort(compareEventBrackets)
   return {
     ...result,
-    name: eventNameOf(withSlugs.map(t => t.name)),
+    name: eventNameOf(withSlugs.map((t) => t.name)),
     tournaments: withSlugs,
     facts: result.facts.map((entry) => ({ ...entry, ...formatFact(entry.fact) })),
     highlights: result.highlights.map((entry) => ({ ...entry, ...formatFact(entry.fact) })),
     coverage: {
-      unsyncedBrackets: (nightRows.length ? nightRows : [anchor]).filter((t) => t.syncState !== 'synced').length,
-      unresolvedEntrants: participants.filter((p) => p.playerId === null).length,
-      unlinkedPlayedSets: setRows.filter((s) =>
-        s.state === 'complete' && (s.winner === 1 || s.winner === 2) && !s.excludedFromRatings && !scoresIndicateUnplayed(s.scoresCsv) &&
-        includesResultStage(modes.get(s.tournamentId) ?? 'auto', s.resultStage) &&
-        (!s.p1PlayerId || !s.p2PlayerId),
+      unsyncedBrackets: (nightRows.length ? nightRows : [anchor]).filter(
+        (t) => t.syncState !== 'synced',
       ).length,
-      ignoredGroupSets: setRows.filter((s) => !includesResultStage(modes.get(s.tournamentId) ?? 'auto', s.resultStage)).length,
+      unresolvedEntrants: participants.filter((p) => p.playerId === null).length,
+      unlinkedPlayedSets: setRows.filter(
+        (s) =>
+          s.state === 'complete' &&
+          (s.winner === 1 || s.winner === 2) &&
+          !s.excludedFromRatings &&
+          !scoresIndicateUnplayed(s.scoresCsv) &&
+          includesResultStage(modes.get(s.tournamentId) ?? 'auto', s.resultStage) &&
+          (!s.p1PlayerId || !s.p2PlayerId),
+      ).length,
+      ignoredGroupSets: setRows.filter(
+        (s) => !includesResultStage(modes.get(s.tournamentId) ?? 'auto', s.resultStage),
+      ).length,
     },
     slug: eventCanonicalSlug(withSlugs, slug),
-  };
+  }
 }
 
 interface RatingContext {
-  nightEvents: Array<{
-    playerId: string;
-    setId: string | null;
-    tournamentId: string;
-    isDecay: boolean;
-    won: boolean | null;
-    preRating: number;
-    postRating: number;
-    preRd: number;
-    postRd: number;
-  }>;
-  history: RecapHistory | undefined;
-  rankMovement: Array<{ playerId: string; rank: number; previousRank: number | null }>;
+  nightEvents: {
+    playerId: string
+    setId: string | null
+    tournamentId: string
+    isDecay: boolean
+    won: boolean | null
+    preRating: number
+    postRating: number
+    preRd: number
+    postRd: number
+  }[]
+  history: RecapHistory | undefined
+  rankMovement: { playerId: string; rank: number; previousRank: number | null }[]
 }
 
-async function loadRatingContext(db: Db, recomputeId: string, nightIds: string[]): Promise<RatingContext> {
+async function loadRatingContext(
+  db: Db,
+  recomputeId: string,
+  nightIds: string[],
+): Promise<RatingContext> {
   const nightRows = await db
     .select({
       playerId: ratingEvents.playerId,
@@ -281,14 +322,16 @@ async function loadRatingContext(db: Db, recomputeId: string, nightIds: string[]
       postRd: ratingEvents.postRd,
     })
     .from(ratingEvents)
-    .where(and(eq(ratingEvents.recomputeId, recomputeId), inArray(ratingEvents.tournamentId, nightIds)))
-    .orderBy(asc(ratingEvents.seq));
+    .where(
+      and(eq(ratingEvents.recomputeId, recomputeId), inArray(ratingEvents.tournamentId, nightIds)),
+    )
+    .orderBy(asc(ratingEvents.seq))
 
-  const nightEvents = nightRows.map(({ seq: _seq, ...event }) => event);
+  const nightEvents = nightRows.map(({ seq: _seq, ...event }) => event)
 
   // The night may not be in this recompute yet (it runs debounced), in which
   // case there is no rating context to build and the recap stays seed-based.
-  if (nightRows.length === 0) return { nightEvents, history: undefined, rankMovement: [] };
+  if (nightRows.length === 0) return { nightEvents, history: undefined, rankMovement: [] }
 
   /*
    * Everything the replay processed before this night's first event. Using
@@ -296,7 +339,7 @@ async function loadRatingContext(db: Db, recomputeId: string, nightIds: string[]
    * the ratings were computed in, so "before" here means the same thing it
    * meant to the engine.
    */
-  const firstSeq = nightRows[0]!.seq;
+  const firstSeq = nightRows[0]!.seq
   const priorRows = await db
     .select({
       playerId: ratingEvents.playerId,
@@ -308,56 +351,57 @@ async function loadRatingContext(db: Db, recomputeId: string, nightIds: string[]
     })
     .from(ratingEvents)
     .where(and(eq(ratingEvents.recomputeId, recomputeId), lt(ratingEvents.seq, firstSeq)))
-    .orderBy(asc(ratingEvents.seq));
+    .orderBy(asc(ratingEvents.seq))
 
-  const priorTournamentIds = new Set(priorRows.map((row) => row.tournamentId));
+  const priorTournamentIds = new Set(priorRows.map((row) => row.tournamentId))
   const tournamentDates =
     priorTournamentIds.size > 0
       ? await db
           .select({ id: tournaments.id, eventDate: tournaments.eventDate })
           .from(tournaments)
           .where(inArray(tournaments.id, [...priorTournamentIds]))
-      : [];
+      : []
   const eventKeyByTournament = new Map(
     tournamentDates.map((t) => [t.id, t.eventDate ? eventKeyOf(t.eventDate.toISOString()) : t.id]),
-  );
+  )
 
-  const priorSetCounts = new Map<string, number>();
-  const priorPeakRating = new Map<string, number>();
-  const priorMeetings = new Map<string, { aWins: number; bWins: number }>();
-  const nightsByPlayer = new Map<string, Set<string>>();
+  const priorSetCounts = new Map<string, number>()
+  const priorPeakRating = new Map<string, number>()
+  const priorMeetings = new Map<string, { aWins: number; bWins: number }>()
+  const nightsByPlayer = new Map<string, Set<string>>()
 
   for (const row of priorRows) {
     // Peaks count decay events too — decay moves RD, not the rating, so it
     // cannot manufacture a peak, and skipping them would drop the tail of an
     // inactive player's history for no reason.
-    const peak = priorPeakRating.get(row.playerId);
-    if (peak === undefined || row.postRating > peak) priorPeakRating.set(row.playerId, row.postRating);
-    if (row.isDecay) continue;
+    const peak = priorPeakRating.get(row.playerId)
+    if (peak === undefined || row.postRating > peak)
+      priorPeakRating.set(row.playerId, row.postRating)
+    if (row.isDecay) continue
 
-    priorSetCounts.set(row.playerId, (priorSetCounts.get(row.playerId) ?? 0) + 1);
+    priorSetCounts.set(row.playerId, (priorSetCounts.get(row.playerId) ?? 0) + 1)
 
-    const nights = nightsByPlayer.get(row.playerId) ?? new Set<string>();
-    nights.add(eventKeyByTournament.get(row.tournamentId) ?? row.tournamentId);
-    nightsByPlayer.set(row.playerId, nights);
+    const nights = nightsByPlayer.get(row.playerId) ?? new Set<string>()
+    nights.add(eventKeyByTournament.get(row.tournamentId) ?? row.tournamentId)
+    nightsByPlayer.set(row.playerId, nights)
 
     /*
      * A set produces one rating event per player, so counting a meeting from
      * both sides would double it. Count only the winner's row — `won` is null
      * only for decay, already skipped above.
      */
-    if (row.won !== true || !row.opponentPlayerId) continue;
-    const key = pairKey(row.playerId, row.opponentPlayerId);
-    const record = priorMeetings.get(key) ?? { aWins: 0, bWins: 0 };
+    if (row.won !== true || !row.opponentPlayerId) continue
+    const key = pairKey(row.playerId, row.opponentPlayerId)
+    const record = priorMeetings.get(key) ?? { aWins: 0, bWins: 0 }
     // `aWins` belongs to the lexicographically smaller id, matching `pairKey`.
-    if (row.playerId < row.opponentPlayerId) record.aWins += 1;
-    else record.bWins += 1;
-    priorMeetings.set(key, record);
+    if (row.playerId < row.opponentPlayerId) record.aWins += 1
+    else record.bWins += 1
+    priorMeetings.set(key, record)
   }
 
   const priorEventCounts = new Map<string, number>(
     [...nightsByPlayer].map(([playerId, nights]) => [playerId, nights.size]),
-  );
+  )
 
   const rankMovement = await db
     .select({
@@ -366,13 +410,13 @@ async function loadRatingContext(db: Db, recomputeId: string, nightIds: string[]
       previousRank: playerRatings.previousRank,
     })
     .from(playerRatings)
-    .where(eq(playerRatings.recomputeId, recomputeId));
+    .where(eq(playerRatings.recomputeId, recomputeId))
 
   return {
     nightEvents,
     history: { priorSetCounts, priorEventCounts, priorPeakRating, priorMeetings },
     rankMovement,
-  };
+  }
 }
 
 /**
@@ -382,14 +426,14 @@ async function loadRatingContext(db: Db, recomputeId: string, nightIds: string[]
  */
 async function loadPriorTurnouts(
   db: Db,
-  allDated: Array<{ id: string; eventDate: Date | null }>,
+  allDated: { id: string; eventDate: Date | null }[],
   anchorKey: string | null,
-): Promise<Array<{ eventKey: string; entrants: number }>> {
-  if (anchorKey === null) return [];
+): Promise<{ eventKey: string; entrants: number }[]> {
+  if (anchorKey === null) return []
   const earlier = allDated.filter(
     (t) => t.eventDate !== null && eventKeyOf(t.eventDate.toISOString()) < anchorKey,
-  );
-  if (earlier.length === 0) return [];
+  )
+  if (earlier.length === 0) return []
 
   const rows = await db
     .select({
@@ -403,27 +447,27 @@ async function loadPriorTurnouts(
         tournamentParticipants.tournamentId,
         earlier.map((t) => t.id),
       ),
-    );
+    )
 
   const keyByTournament = new Map(
     earlier.map((t) => [t.id, eventKeyOf(t.eventDate!.toISOString())]),
-  );
+  )
   // Unresolved entries have no player id to dedupe on, so they count as
   // themselves — the same rule the engine applies to tonight.
-  const byNight = new Map<string, Set<string>>();
+  const byNight = new Map<string, Set<string>>()
   for (const row of rows) {
-    const key = keyByTournament.get(row.tournamentId);
-    if (!key) continue;
-    const seen = byNight.get(key) ?? new Set<string>();
-    seen.add(row.playerId ?? `unresolved:${row.participantId}`);
-    byNight.set(key, seen);
+    const key = keyByTournament.get(row.tournamentId)
+    if (!key) continue
+    const seen = byNight.get(key) ?? new Set<string>()
+    seen.add(row.playerId ?? `unresolved:${row.participantId}`)
+    byNight.set(key, seen)
   }
-  return [...byNight].map(([eventKey, seen]) => ({ eventKey, entrants: seen.size }));
+  return [...byNight].map(([eventKey, seen]) => ({ eventKey, entrants: seen.size }))
 }
 
 function tournamentTypeOf(raw: unknown): string | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const value = raw as { tournamentType?: unknown; tournament_type?: unknown };
-  const type = value.tournamentType ?? value.tournament_type;
-  return typeof type === 'string' ? type : null;
+  if (!raw || typeof raw !== 'object') return null
+  const value = raw as { tournamentType?: unknown; tournament_type?: unknown }
+  const type = value.tournamentType ?? value.tournament_type
+  return typeof type === 'string' ? type : null
 }

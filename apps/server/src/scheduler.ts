@@ -1,19 +1,19 @@
-import { and, eq, gte, gt, inArray, isNull, lte, ne, or } from 'drizzle-orm';
-import { Cron } from 'croner';
-import type { Db } from '@smashclub/db';
-import { tournaments } from '@smashclub/db';
-import type { ChallongeClient } from './challonge/client';
-import type { RecomputeTrigger } from './recompute/trigger';
-import { syncTournament } from './sync/sync';
+import { and, eq, gte, gt, inArray, isNull, lte, ne, or } from 'drizzle-orm'
+import { Cron } from 'croner'
+import type { Db } from '@smashclub/db'
+import { tournaments } from '@smashclub/db'
+import type { ChallongeClient } from './challonge/client'
+import type { RecomputeTrigger } from './recompute/trigger'
+import { syncTournament } from './sync/sync'
 
 /**
  * 60s, not the original 15s. Live polls now go to the unmetered public bracket
  * rather than the API, but they are still requests to someone else's service,
  * and a club leaderboard gains nothing from refreshing four times a minute.
  */
-const LIVE_POLL_MS = 60_000;
-const DAY_MS = 24 * 60 * 60 * 1000;
-const COMPLETED_REFRESH_WINDOW_MS = 30 * DAY_MS;
+const LIVE_POLL_MS = 60_000
+const DAY_MS = 24 * 60 * 60 * 1000
+const COMPLETED_REFRESH_WINDOW_MS = 30 * DAY_MS
 
 /**
  * In-process sync scheduler (single replica; a pg advisory lock in index.ts
@@ -39,9 +39,9 @@ const COMPLETED_REFRESH_WINDOW_MS = 30 * DAY_MS;
  * about 40 minutes.
  */
 export class SyncScheduler {
-  private liveTimer: ReturnType<typeof setInterval> | null = null;
-  private sweepJob: Cron | null = null;
-  private syncing = new Set<string>();
+  private liveTimer: ReturnType<typeof setInterval> | null = null
+  private sweepJob: Cron | null = null
+  private syncing = new Set<string>()
 
   constructor(
     private readonly db: Db,
@@ -51,15 +51,15 @@ export class SyncScheduler {
   ) {}
 
   start(): void {
-    this.liveTimer = setInterval(() => void this.pollLive(), LIVE_POLL_MS);
+    this.liveTimer = setInterval(() => void this.pollLive(), LIVE_POLL_MS)
     // Sweep every 10 minutes; per-tournament cadence is applied inside.
-    this.sweepJob = new Cron('*/10 * * * *', () => void this.sweep());
-    void this.sweep();
+    this.sweepJob = new Cron('*/10 * * * *', () => void this.sweep())
+    void this.sweep()
   }
 
   stop(): void {
-    if (this.liveTimer) clearInterval(this.liveTimer);
-    this.sweepJob?.stop();
+    if (this.liveTimer) clearInterval(this.liveTimer)
+    this.sweepJob?.stop()
   }
 
   private async pollLive(): Promise<void> {
@@ -69,9 +69,9 @@ export class SyncScheduler {
     const liveRows = await this.db
       .select({ id: tournaments.id })
       .from(tournaments)
-      .where(and(eq(tournaments.provider, 'challonge'), gt(tournaments.liveUntil, new Date())));
+      .where(and(eq(tournaments.provider, 'challonge'), gt(tournaments.liveUntil, new Date())))
     for (const row of liveRows) {
-      await this.syncOne(row.id, true);
+      await this.syncOne(row.id, true)
     }
   }
 
@@ -88,7 +88,7 @@ export class SyncScheduler {
      * made one column mean both "have we pulled it" and "is it finished", and
      * the pages that printed the first got the second.
      */
-    const now = Date.now();
+    const now = Date.now()
     const rows = await this.db
       .select()
       .from(tournaments)
@@ -109,25 +109,25 @@ export class SyncScheduler {
           // window falls back to the sweep automatically.
           or(isNull(tournaments.liveUntil), lte(tournaments.liveUntil, new Date())),
         ),
-      );
+      )
     for (const row of rows) {
-      const last = row.lastSyncedAt?.getTime() ?? 0;
-      const eventTime = row.eventDate?.getTime();
-      let interval = DAY_MS;
+      const last = row.lastSyncedAt?.getTime() ?? 0
+      const eventTime = row.eventDate?.getTime()
+      let interval = DAY_MS
       if (row.lastSyncedAt === null) {
-        interval = 0;
+        interval = 0
       } else if (row.challongeState === 'complete' && row.syncState === 'synced') {
-        interval = DAY_MS;
+        interval = DAY_MS
       } else if (eventTime !== undefined) {
-        const distance = Math.abs(eventTime - now);
-        if (distance < 24 * 60 * 60 * 1000) interval = 10 * 60 * 1000;
-        else if (distance < 7 * 24 * 60 * 60 * 1000) interval = 60 * 60 * 1000;
+        const distance = Math.abs(eventTime - now)
+        if (distance < 24 * 60 * 60 * 1000) interval = 10 * 60 * 1000
+        else if (distance < 7 * 24 * 60 * 60 * 1000) interval = 60 * 60 * 1000
       } else {
         // Never synced (no event date yet): sync promptly.
-        interval = 0;
+        interval = 0
       }
       if (now - last >= interval) {
-        await this.syncOne(row.id, false);
+        await this.syncOne(row.id, false)
       }
     }
   }
@@ -137,20 +137,20 @@ export class SyncScheduler {
     isLivePoll: boolean,
     options: { source?: 'api' | 'public' } = {},
   ): Promise<void> {
-    if (this.syncing.has(tournamentId)) return;
-    this.syncing.add(tournamentId);
+    if (this.syncing.has(tournamentId)) return
+    this.syncing.add(tournamentId)
     try {
-      const result = await syncTournament(this.db, this.client, tournamentId, options);
+      const result = await syncTournament(this.db, this.client, tournamentId, options)
       if (result.setsChanged > 0) {
-        this.recomputeTrigger.request();
+        this.recomputeTrigger.request()
       }
       if (!isLivePoll && result.setsChanged > 0) {
-        this.log(`synced ${tournamentId}: ${result.setsChanged} sets changed`);
+        this.log(`synced ${tournamentId}: ${result.setsChanged} sets changed`)
       }
     } catch (error) {
-      this.log(`sync failed for ${tournamentId}: ${String(error)}`);
+      this.log(`sync failed for ${tournamentId}: ${String(error)}`)
     } finally {
-      this.syncing.delete(tournamentId);
+      this.syncing.delete(tournamentId)
     }
   }
 }
@@ -160,7 +160,7 @@ export async function acquireSchedulerLock(db: Db): Promise<boolean> {
   const result = await db.execute<{ locked: boolean }>(
     // Fixed app-specific lock key.
     `select pg_try_advisory_lock(824361002) as locked`,
-  );
-  const rows = (result as unknown as { rows?: Array<{ locked: boolean }> }).rows ?? [];
-  return rows[0]?.locked === true;
+  )
+  const rows = (result as unknown as { rows?: { locked: boolean }[] }).rows ?? []
+  return rows[0]?.locked === true
 }

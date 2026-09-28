@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
-import { trpc } from '../../lib/trpc';
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
+import { trpc } from '../../lib/trpc'
 
 /**
  * Side-by-side of what each rating model would publish.
@@ -11,22 +11,22 @@ import { trpc } from '../../lib/trpc';
  * wants it when they are actually considering a switch.
  */
 export function ModelComparison({ activeModel }: { activeModel: string }) {
-  const [enabled, setEnabled] = useState(false);
-  const [showAll, setShowAll] = useState(false);
+  const [enabled, setEnabled] = useState(false)
+  const [showAll, setShowAll] = useState(false)
 
   const comparison = useQuery({
     queryKey: ['admin', 'compareModels'],
     queryFn: () => trpc.admin.compareModels.query(),
     enabled,
     staleTime: 5 * 60 * 1000,
-  });
+  })
 
   return (
     <section className="section model-comparison">
       <h3>Compare models</h3>
       <p className="muted">
-        Fits Glicko-2 and WHR over the same history and shows where they disagree. Read-only — nothing is
-        published until the active model is saved above.
+        Fits Glicko-2 and WHR over the same history and shows where they disagree. Read-only —
+        nothing is published until the active model is saved above.
       </p>
 
       {!enabled && (
@@ -61,8 +61,8 @@ export function ModelComparison({ activeModel }: { activeModel: string }) {
 
           {!comparison.data.whrConverged && (
             <p className="banner banner-warning">
-              The WHR fit did not converge in {comparison.data.whrIterations} iterations — treat its numbers as
-              provisional.
+              The WHR fit did not converge in {comparison.data.whrIterations} iterations — treat its
+              numbers as provisional.
             </p>
           )}
 
@@ -91,13 +91,19 @@ export function ModelComparison({ activeModel }: { activeModel: string }) {
                     <td className="num">{row.matchCount}</td>
                     <td className="num">{row.glicko ? `#${row.glicko.rank}` : '—'}</td>
                     <td className="num">
-                      {row.glicko ? `${row.glicko.skillRating.toFixed(0)} ±${row.glicko.skillSd.toFixed(0)}` : '—'}
+                      {row.glicko
+                        ? `${row.glicko.skillRating.toFixed(0)} ±${row.glicko.skillSd.toFixed(0)}`
+                        : '—'}
                     </td>
                     <td className="num">{row.whr ? `#${row.whr.rank}` : '—'}</td>
                     <td className="num">
-                      {row.whr ? `${row.whr.skillRating.toFixed(0)} ±${row.whr.skillSd.toFixed(0)}` : '—'}
+                      {row.whr
+                        ? `${row.whr.skillRating.toFixed(0)} ±${row.whr.skillSd.toFixed(0)}`
+                        : '—'}
                     </td>
-                    <td className={`num ${(row.rankDelta ?? 0) > 0 ? 'seed-up' : (row.rankDelta ?? 0) < 0 ? 'seed-down' : ''}`}>
+                    <td
+                      className={`num ${(row.rankDelta ?? 0) > 0 ? 'seed-up' : (row.rankDelta ?? 0) < 0 ? 'seed-down' : ''}`}
+                    >
                       {row.rankDelta === null
                         ? '—'
                         : row.rankDelta === 0
@@ -112,16 +118,20 @@ export function ModelComparison({ activeModel }: { activeModel: string }) {
             </table>
           </div>
           {comparison.data.rows.length > 25 && (
-            <button type="button" className="btn btn-small" onClick={() => setShowAll((prev) => !prev)}>
+            <button
+              type="button"
+              className="btn btn-small"
+              onClick={() => setShowAll((prev) => !prev)}
+            >
               {showAll ? 'Show biggest 25 only' : `Show all ${comparison.data.rows.length}`}
             </button>
           )}
           <p className="muted comparison-note">
-            Rows are ordered by biggest disagreement. &ldquo;Move&rdquo; is places gained going from Glicko-2 to
-            WHR. Currently publishing <code>{activeModel}</code>.
+            Rows are ordered by biggest disagreement. &ldquo;Move&rdquo; is places gained going from
+            Glicko-2 to WHR. Currently publishing <code>{activeModel}</code>.
           </p>
         </>
       )}
     </section>
-  );
+  )
 }

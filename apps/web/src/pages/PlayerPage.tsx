@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate, useParams } from '@tanstack/react-router';
+import { useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import {
   Area,
   CartesianGrid,
@@ -12,43 +12,44 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-} from 'recharts';
-import { trpc } from '../lib/trpc';
-import type { PlayerData, PlayerEventView } from '../lib/apiTypes';
-import { CharacterIcons } from '../components/CharacterIcons';
-import { InfoTip } from '../components/InfoTip';
-import { formatDate, tierClass } from '../lib/format';
-import './PlayerPage.css';
+} from 'recharts'
+import { trpc } from '../lib/trpc'
+import type { PlayerData, PlayerEventView } from '../lib/apiTypes'
+import { CharacterIcons } from '../components/CharacterIcons'
+import { InfoTip } from '../components/InfoTip'
+import { formatDate, tierClass } from '../lib/format'
+import './PlayerPage.css'
 
 export function PlayerPage() {
-  const { playerId } = useParams({ from: '/players/$playerId' });
-  const navigate = useNavigate();
+  const { playerId } = useParams({ from: '/players/$playerId' })
+  const navigate = useNavigate()
 
   const query = useQuery({
     queryKey: ['player', playerId],
     queryFn: () => trpc.public.player.query({ playerId }),
-  });
+  })
 
   // Merged players redirect to their canonical record.
-  const redirectTo = query.data && 'redirectTo' in query.data ? query.data.redirectTo : null;
+  const redirectTo = query.data && 'redirectTo' in query.data ? query.data.redirectTo : null
   useEffect(() => {
     if (redirectTo) {
-      void navigate({ to: '/players/$playerId', params: { playerId: redirectTo }, replace: true });
+      void navigate({ to: '/players/$playerId', params: { playerId: redirectTo }, replace: true })
     }
-  }, [redirectTo, navigate]);
+  }, [redirectTo, navigate])
 
-  if (query.isPending) return <p className="loading-text">Loading player…</p>;
-  if (query.isError) return <p className="error-text">Failed to load player: {query.error.message}</p>;
-  if (query.data === null) return <p className="error-text">Player not found.</p>;
-  if (redirectTo) return <p className="loading-text">Redirecting…</p>;
+  if (query.isPending) return <p className="loading-text">Loading player…</p>
+  if (query.isError)
+    return <p className="error-text">Failed to load player: {query.error.message}</p>
+  if (query.data === null) return <p className="error-text">Player not found.</p>
+  if (redirectTo) return <p className="loading-text">Redirecting…</p>
 
-  return <PlayerProfile data={query.data as PlayerData} />;
+  return <PlayerProfile data={query.data as PlayerData} />
 }
 
 function PlayerProfile({ data }: { data: PlayerData }) {
-  const { player, rating } = data;
+  const { player, rating } = data
   // The server types these rows loosely (Record<string, unknown>); see PlayerEventView.
-  const events = data.events as unknown as PlayerEventView[];
+  const events = data.events as unknown as PlayerEventView[]
   /**
    * Which model produced the events changes how they should be read. Glicko
    * is sequential: each set moved the rating then and there, once, forever.
@@ -57,7 +58,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
    * the model more about the past. The profile shows the ledger as the
    * primary record and the hindsight track alongside it, labelled.
    */
-  const isWhr = data.model === 'whr';
+  const isWhr = data.model === 'whr'
 
   /**
    * The trajectory. One series — the skill estimate — inside a shaded ±2 SD
@@ -76,13 +77,16 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           : `${event.resultStage === 'group' ? 'Pool' : event.resultStage === 'final' ? 'Bracket' : '—'} · ${event.won ? 'W' : 'L'}`,
         opponent: event.opponentName,
         rating: event.postRating,
-        band: [event.postRating - 2 * event.postRd, event.postRating + 2 * event.postRd] as [number, number],
+        band: [event.postRating - 2 * event.postRd, event.postRating + 2 * event.postRd] as [
+          number,
+          number,
+        ],
         decayRating: event.isDecay ? event.postRating : null,
         rd: event.postRd,
         revised: isWhr ? event.revisedRating : null,
       })),
     [events, isWhr],
-  );
+  )
 
   /**
    * Only draw the hindsight series when it actually disagrees somewhere —
@@ -92,57 +96,69 @@ function PlayerProfile({ data }: { data: PlayerData }) {
   const showRevised = useMemo(
     () =>
       isWhr &&
-      chartData.some((point) => point.revised !== null && Math.abs(point.revised - point.rating) >= 1),
+      chartData.some(
+        (point) => point.revised !== null && Math.abs(point.revised - point.rating) >= 1,
+      ),
     [isWhr, chartData],
-  );
+  )
 
   /** Event indices where a new tournament starts, drawn as vertical rules. */
   const eventBoundaries = useMemo(() => {
-    const marks: number[] = [];
+    const marks: number[] = []
     events.forEach((event, idx) => {
-      if (idx > 0 && event.tournamentId !== events[idx - 1]!.tournamentId) marks.push(idx + 1);
-    });
-    return marks;
-  }, [events]);
+      if (idx > 0 && event.tournamentId !== events[idx - 1]!.tournamentId) marks.push(idx + 1)
+    })
+    return marks
+  }, [events])
 
-  const matches = useMemo(() => events.filter((e) => !e.isDecay), [events]);
-  const [stageFilter, setStageFilter] = useState<'all' | 'group' | 'final'>('all');
+  const matches = useMemo(() => events.filter((e) => !e.isDecay), [events])
+  const [stageFilter, setStageFilter] = useState<'all' | 'group' | 'final'>('all')
   const hasBothStages = useMemo(
-    () => new Set(matches.map((event) => event.resultStage).filter((stage): stage is 'group' | 'final' => stage !== null)).size > 1,
+    () =>
+      new Set(
+        matches
+          .map((event) => event.resultStage)
+          .filter((stage): stage is 'group' | 'final' => stage !== null),
+      ).size > 1,
     [matches],
-  );
-  const effectiveStage = hasBothStages ? stageFilter : 'all';
-  const wins = matches.filter((e) => e.won).length;
-  const winRate = matches.length > 0 ? ((wins / matches.length) * 100).toFixed(0) : null;
+  )
+  const effectiveStage = hasBothStages ? stageFilter : 'all'
+  const wins = matches.filter((e) => e.won).length
+  const winRate = matches.length > 0 ? ((wins / matches.length) * 100).toFixed(0) : null
 
   const confidenceExplainer = useMemo(() => {
-    if (!rating) return 'No rated match history yet.';
+    if (!rating) return 'No rated match history yet.'
     const parts: string[] = [
       `${rating.tournamentCount} bracket(s), ${rating.uniqueOpponentCount} unique opponent(s), ${rating.matchCount} set(s).`,
-    ];
+    ]
     if (rating.rookieRatio > 0) {
-      parts.push(`${(rating.rookieRatio * 100).toFixed(0)}% of sets in rookie brackets.`);
+      parts.push(`${(rating.rookieRatio * 100).toFixed(0)}% of sets in rookie brackets.`)
       if (isWhr) {
         // WHR has no isolation correction: thin linkage between the rookie and
         // main pools simply comes out as a wider band, which this meter reads.
-        parts.push('Where the rookie and main pools barely overlap, the uncertainty band stays wider.');
+        parts.push(
+          'Where the rookie and main pools barely overlap, the uncertainty band stays wider.',
+        )
       } else if (rating.isolationFactor > 0) {
         parts.push(
           `Isolation ${(rating.isolationFactor * 100).toFixed(0)}% — rookie-only players with little main-bracket exposure carry more uncertainty.`,
-        );
+        )
       }
     }
     if (isWhr && rating.missedEvents > 0) {
-      parts.push('Confidence also fades a little for time away, until results firm it up again.');
+      parts.push('Confidence also fades a little for time away, until results firm it up again.')
     }
-    return parts.join(' ');
-  }, [rating, isWhr]);
+    return parts.join(' ')
+  }, [rating, isWhr])
 
   // Most recent first for the table.
   const tableEvents = useMemo(
-    () => [...events].reverse().filter((event) => effectiveStage === 'all' || event.resultStage === effectiveStage),
+    () =>
+      [...events]
+        .reverse()
+        .filter((event) => effectiveStage === 'all' || event.resultStage === effectiveStage),
     [events, effectiveStage],
-  );
+  )
 
   /**
    * Where this player stands with the attendance policy, and — the part worth
@@ -155,28 +171,28 @@ function PlayerProfile({ data }: { data: PlayerData }) {
    * be shown before the decision rather than explained after it.
    */
   const activity = useMemo(() => {
-    if (!rating) return null;
-    const { missedEvents, attendanceStreak, activityPenalty, nextMissPenalty } = rating;
+    if (!rating) return null
+    const { missedEvents, attendanceStreak, activityPenalty, nextMissPenalty } = rating
     const standing =
       missedEvents === 0
         ? attendanceStreak > 1
           ? `At the last ${attendanceStreak} club nights in a row.`
           : 'At the most recent club night.'
-        : `${missedEvents} club night${missedEvents === 1 ? '' : 's'} missed since ${formatDate(rating.lastPlayedDate)}.`;
+        : `${missedEvents} club night${missedEvents === 1 ? '' : 's'} missed since ${formatDate(rating.lastPlayedDate)}.`
 
     const now =
       activityPenalty > 0
         ? `${activityPenalty.toFixed(0)} points are currently docked. Playing once puts all of them back.`
         : missedEvents > 0
           ? 'Still inside the grace window, so nothing is docked yet.'
-          : 'Nothing docked.';
+          : 'Nothing docked.'
 
     const next =
       nextMissPenalty > 0
         ? `Missing the next one would cost ${nextMissPenalty.toFixed(0)}${activityPenalty > 0 ? ' more' : ''}.`
         : activityPenalty > 0
           ? 'Missing the next one costs nothing further — the penalty is already at its cap.'
-          : 'Missing the next one would still cost nothing.';
+          : 'Missing the next one would still cost nothing.'
 
     /**
      * The tile's headline. Deliberately never "−0": inside the grace window
@@ -190,10 +206,10 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           ? `${missedEvents} missed`
           : attendanceStreak > 1
             ? `${attendanceStreak} in a row`
-            : 'Up to date';
+            : 'Up to date'
 
-    return { headline, standing, now, next, penalised: activityPenalty > 0 };
-  }, [rating]);
+    return { headline, standing, now, next, penalised: activityPenalty > 0 }
+  }, [rating])
 
   return (
     <div className="player-page">
@@ -237,16 +253,19 @@ function PlayerProfile({ data }: { data: PlayerData }) {
             <span className="headline-label">
               Rating
               <InfoTip label="Rating" align="end">
-                The board ranks on this: the skill estimate below, less a penalty for missed club nights. Results
-                move the estimate; turning up — or not — moves the penalty. Bracket seeding uses a different,
-                more cautious number, so a seed and a rank need not agree.
+                The board ranks on this: the skill estimate below, less a penalty for missed club
+                nights. Results move the estimate; turning up — or not — moves the penalty. Bracket
+                seeding uses a different, more cautious number, so a seed and a rank need not agree.
               </InfoTip>
             </span>
             <span className="headline-value num">{rating.clubRating.toFixed(0)}</span>
             <span className="headline-band num">
               skill {rating.skillRating.toFixed(0)} ± {rating.skillSd.toFixed(0)}
               {rating.activityPenalty > 0 && (
-                <span className="headline-penalty"> · −{rating.activityPenalty.toFixed(0)} away</span>
+                <span className="headline-penalty">
+                  {' '}
+                  · −{rating.activityPenalty.toFixed(0)} away
+                </span>
               )}
             </span>
           </div>
@@ -258,8 +277,8 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           <dt>Skill estimate</dt>
           <dd className="num">{rating ? rating.skillRating.toFixed(0) : '—'}</dd>
           <p className="stat-detail">
-            Best guess at how good you are, from results alone. The rating above is this number less any
-            penalty for missed club nights — with none owing, the two are the same.
+            Best guess at how good you are, from results alone. The rating above is this number less
+            any penalty for missed club nights — with none owing, the two are the same.
           </p>
         </div>
         <div className="stat">
@@ -267,7 +286,9 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           <dd className="num">
             {rating ? `${rating.wins}–${rating.losses}` : `${wins}–${matches.length - wins}`}
           </dd>
-          <p className="stat-detail">{winRate != null ? `${winRate}% of sets won` : 'No sets played'}</p>
+          <p className="stat-detail">
+            {winRate != null ? `${winRate}% of sets won` : 'No sets played'}
+          </p>
         </div>
         <div className="stat">
           <dt>Events</dt>
@@ -305,8 +326,9 @@ function PlayerProfile({ data }: { data: PlayerData }) {
 
       {rating?.isProvisional && (
         <p className="banner banner-info provisional-note">
-          Provisional — too few sets so far for this rating to have settled, so it is held near the middle of
-          the field rather than swinging on a handful of results. It firms up as the sets come in.
+          Provisional — too few sets so far for this rating to have settled, so it is held near the
+          middle of the field rather than swinging on a handful of results. It firms up as the sets
+          come in.
         </p>
       )}
 
@@ -316,16 +338,16 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           <p className="muted chart-caption">
             {isWhr ? (
               <>
-                Published rating after every set — the solid line is what the board showed at the time, and it
-                never rewrites. The shaded band is ±2 standard deviations.
+                Published rating after every set — the solid line is what the board showed at the
+                time, and it never rewrites. The shaded band is ±2 standard deviations.
                 {showRevised &&
                   ' The dashed line is hindsight: with everything played since, the model’s revised estimate of how good this player was on each night.'}{' '}
                 Vertical rules mark the start of each event.
               </>
             ) : (
               <>
-                Skill estimate after every set. The shaded band is ±2 standard deviations — it narrows as we
-                see more results. Vertical rules mark the start of each event.
+                Skill estimate after every set. The shaded band is ±2 standard deviations — it
+                narrows as we see more results. Vertical rules mark the start of each event.
               </>
             )}
           </p>
@@ -350,14 +372,16 @@ function PlayerProfile({ data }: { data: PlayerData }) {
               />
               <Tooltip
                 content={({ active, payload }) => {
-                  if (!active || !payload || payload.length === 0) return null;
-                  const d = payload[0]!.payload as (typeof chartData)[number];
+                  if (!active || !payload || payload.length === 0) return null
+                  const d = payload[0]!.payload as (typeof chartData)[number]
                   return (
                     <div className="custom-tooltip">
                       <p className="tooltip-label">{d.tournament}</p>
                       <p>
                         {d.date} —{' '}
-                        {d.result === 'decay' ? 'inactivity decay' : `${d.result} vs ${d.opponent ?? 'unknown'}`}
+                        {d.result === 'decay'
+                          ? 'inactivity decay'
+                          : `${d.result} vs ${d.opponent ?? 'unknown'}`}
                       </p>
                       <p className="num">
                         {d.rating.toFixed(0)} ± {d.rd.toFixed(0)}
@@ -366,7 +390,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                         <p className="num">now revised to {d.revised.toFixed(0)}</p>
                       )}
                     </div>
-                  );
+                  )
                 }}
               />
               {/* Band first so the line draws over it. */}
@@ -403,14 +427,25 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                 />
               )}
               {/* Decay is a different kind of event, so it gets its own mark. */}
-              <Scatter dataKey="decayRating" fill="var(--warn)" shape="square" name="Inactivity decay" />
+              <Scatter
+                dataKey="decayRating"
+                fill="var(--warn)"
+                shape="square"
+                name="Inactivity decay"
+              />
             </ComposedChart>
           </ResponsiveContainer>
         </section>
       )}
 
       <section className="section match-history">
-        <h3>Match log ({effectiveStage === 'all' ? matches.length : `${tableEvents.filter((event) => !event.isDecay).length} of ${matches.length}`} sets)</h3>
+        <h3>
+          Match log (
+          {effectiveStage === 'all'
+            ? matches.length
+            : `${tableEvents.filter((event) => !event.isDecay).length} of ${matches.length}`}{' '}
+          sets)
+        </h3>
         {hasBothStages && (
           <label className="history-stage-filter">
             <span>Show</span>
@@ -428,9 +463,10 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         )}
         {isWhr && events.length > 0 && (
           <p className="muted chart-caption">
-            Ratings here move once per club night, so each set’s Δ is its share of that night’s movement —
-            bigger for surprising results, smaller for expected ones, adding up to exactly what the night
-            changed. These numbers are what the board published at the time and never rewrite.
+            Ratings here move once per club night, so each set’s Δ is its share of that night’s
+            movement — bigger for surprising results, smaller for expected ones, adding up to
+            exactly what the night changed. These numbers are what the board published at the time
+            and never rewrite.
           </p>
         )}
         {events.length === 0 ? (
@@ -459,36 +495,55 @@ function PlayerProfile({ data }: { data: PlayerData }) {
               </thead>
               <tbody>
                 {tableEvents.map((event) => {
-                  const ratingChange = event.postRating - event.preRating;
-                  const rdChange = event.postRd - event.preRd;
+                  const ratingChange = event.postRating - event.preRating
+                  const rdChange = event.postRd - event.preRd
                   return (
-                    <tr key={event.seq} className={event.isDecay ? 'decay' : event.won ? 'win' : 'loss'}>
+                    <tr
+                      key={event.seq}
+                      className={event.isDecay ? 'decay' : event.won ? 'win' : 'loss'}
+                    >
                       <td className="mono">{formatDate(event.tournamentDate)}</td>
                       <td>
                         {event.tournamentName}
-                        {event.isRookie && <span className="chip chip-warning rookie-chip">rookie</span>}
+                        {event.isRookie && (
+                          <span className="chip chip-warning rookie-chip">rookie</span>
+                        )}
                       </td>
-                      <td>{event.isDecay ? '—' : event.resultStage === 'group' ? 'Pool' : 'Bracket'}</td>
+                      <td>
+                        {event.isDecay ? '—' : event.resultStage === 'group' ? 'Pool' : 'Bracket'}
+                      </td>
                       <td>
                         {event.isDecay ? (
                           <em>Inactivity decay</em>
                         ) : event.opponentPlayerId ? (
-                          <Link to="/players/$playerId" params={{ playerId: event.opponentPlayerId }}>
+                          <Link
+                            to="/players/$playerId"
+                            params={{ playerId: event.opponentPlayerId }}
+                          >
                             {event.opponentName ?? 'Unknown'}
                           </Link>
                         ) : (
                           (event.opponentName ?? 'Unknown')
                         )}
                       </td>
-                      <td className={event.isDecay ? 'result-decay' : event.won ? 'result-win' : 'result-loss'}>
+                      <td
+                        className={
+                          event.isDecay ? 'result-decay' : event.won ? 'result-win' : 'result-loss'
+                        }
+                      >
                         {event.isDecay ? '—' : event.won ? 'W' : 'L'}
                       </td>
                       <td className={`num ${ratingChange >= 0 ? 'rating-up' : 'rating-down'}`}>
                         {ratingChange >= 0 ? '+' : ''}
                         {ratingChange.toFixed(1)}
-                        {event.isDecay && rdChange > 0 && <span className="rd-decay"> (RD +{rdChange.toFixed(1)})</span>}
+                        {event.isDecay && rdChange > 0 && (
+                          <span className="rd-decay"> (RD +{rdChange.toFixed(1)})</span>
+                        )}
                         {!event.isDecay && event.weight != null && event.weight < 0.99 && (
-                          <span className="weight-indicator" title={`Match weight: ${(event.weight * 100).toFixed(0)}%`}>
+                          <span
+                            className="weight-indicator"
+                            title={`Match weight: ${(event.weight * 100).toFixed(0)}%`}
+                          >
                             {' '}
                             ×{event.weight.toFixed(2)}
                           </span>
@@ -506,7 +561,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                         )}
                       </td>
                     </tr>
-                  );
+                  )
                 })}
               </tbody>
             </table>
@@ -514,5 +569,5 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         )}
       </section>
     </div>
-  );
+  )
 }

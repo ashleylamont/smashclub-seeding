@@ -19,13 +19,13 @@
 
 /** Only the fields the filter reads; leaderboard rows carry far more. */
 export interface RankableRow {
-  playerId: string;
-  rank: number;
+  playerId: string
+  rank: number
   /** Rank before the club's most recent night; null if unrated then. */
-  previousRank: number | null;
-  rankDelta: number | null;
+  previousRank: number | null
+  rankDelta: number | null
   /** ISO date of the player's most recent event. */
-  lastPlayedDate: string;
+  lastPlayedDate: string
 }
 
 export interface ActivityFilterResult<T> {
@@ -33,9 +33,9 @@ export interface ActivityFilterResult<T> {
    * The rows to show, rank-ascending. Re-ranked when the filter dropped
    * anyone; the input rows untouched when it did not.
    */
-  rows: T[];
+  rows: T[]
   /** How many rows are inactive, whether or not they are currently hidden. */
-  inactiveCount: number;
+  inactiveCount: number
 }
 
 /**
@@ -48,7 +48,7 @@ export interface ActivityFilterResult<T> {
  * the one question the ranking screen is asked. Half a year still carries
  * someone who took a season off.
  */
-export const INACTIVE_MONTHS = 6;
+export const INACTIVE_MONTHS = 6
 
 /**
  * The instant that divides active from inactive: the same day of the month, six
@@ -63,17 +63,17 @@ export const INACTIVE_MONTHS = 6;
  * day, and to flip it differently for readers in different timezones.
  */
 export function inactiveBefore(now: number): number {
-  const cutoff = new Date(now);
-  const dayOfMonth = cutoff.getUTCDate();
-  cutoff.setUTCMonth(cutoff.getUTCMonth() - INACTIVE_MONTHS);
+  const cutoff = new Date(now)
+  const dayOfMonth = cutoff.getUTCDate()
+  cutoff.setUTCMonth(cutoff.getUTCMonth() - INACTIVE_MONTHS)
   /*
    * Stepping back off the end of a longer month overflows into the following
    * one — 31 August minus six months lands on 3 March, not 28 February — which
    * would drag the cutoff *forward* and age players out days early.
    * `setUTCDate(0)` walks back to the last day of the month that was meant.
    */
-  if (cutoff.getUTCDate() !== dayOfMonth) cutoff.setUTCDate(0);
-  return cutoff.getTime();
+  if (cutoff.getUTCDate() !== dayOfMonth) cutoff.setUTCDate(0)
+  return cutoff.getTime()
 }
 
 /**
@@ -85,9 +85,9 @@ export function inactiveBefore(now: number): number {
  * failure than showing one row too many.
  */
 export function isActive(lastPlayedDate: string, now: number): boolean {
-  const played = Date.parse(lastPlayedDate);
-  if (Number.isNaN(played)) return true;
-  return played > inactiveBefore(now);
+  const played = Date.parse(lastPlayedDate)
+  if (Number.isNaN(played)) return true
+  return played > inactiveBefore(now)
 }
 
 /**
@@ -99,26 +99,26 @@ export function isActive(lastPlayedDate: string, now: number): boolean {
  * count against your movement.
  */
 function reRank<T extends RankableRow>(rows: readonly T[]): T[] {
-  const byRank = [...rows].sort((a, b) => a.rank - b.rank);
+  const byRank = [...rows].sort((a, b) => a.rank - b.rank)
 
-  const previously = new Map<string, number>();
+  const previously = new Map<string, number>()
   byRank
     .filter((row) => row.previousRank !== null)
     .sort((a, b) => a.previousRank! - b.previousRank!)
-    .forEach((row, index) => previously.set(row.playerId, index + 1));
+    .forEach((row, index) => previously.set(row.playerId, index + 1))
 
   return byRank.map((row, index) => {
-    const rank = index + 1;
+    const rank = index + 1
     // Null previousRank means "had no rating before the last night", which is
     // still true of the smaller field — they get no arrow, not a ▲.
-    const previousRank = previously.get(row.playerId) ?? null;
+    const previousRank = previously.get(row.playerId) ?? null
     return {
       ...row,
       rank,
       previousRank,
       rankDelta: previousRank === null ? null : previousRank - rank,
-    };
-  });
+    }
+  })
 }
 
 /**
@@ -133,11 +133,11 @@ export function filterInactive<T extends RankableRow>(
   now: number,
   hideInactive: boolean,
 ): ActivityFilterResult<T> {
-  const active = rows.filter((row) => isActive(row.lastPlayedDate, now));
-  const inactiveCount = rows.length - active.length;
-  if (!hideInactive) return { rows: [...rows], inactiveCount };
+  const active = rows.filter((row) => isActive(row.lastPlayedDate, now))
+  const inactiveCount = rows.length - active.length
+  if (!hideInactive) return { rows: [...rows], inactiveCount }
   // Nobody dropped out, so nothing needs renumbering — and the server's ranks
   // are already the answer.
-  if (inactiveCount === 0) return { rows: [...rows], inactiveCount };
-  return { rows: reRank(active), inactiveCount };
+  if (inactiveCount === 0) return { rows: [...rows], inactiveCount }
+  return { rows: reRank(active), inactiveCount }
 }

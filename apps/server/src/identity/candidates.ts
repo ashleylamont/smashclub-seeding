@@ -1,7 +1,7 @@
-import { and, eq, inArray } from 'drizzle-orm';
-import type { Db } from '@smashclub/db';
-import { companies, identityDecisions, playerAliases, players, reviewItems } from '@smashclub/db';
-import { rankReviewCandidates } from '@smashclub/engine';
+import { and, eq, inArray } from 'drizzle-orm'
+import type { Db } from '@smashclub/db'
+import { companies, identityDecisions, playerAliases, players, reviewItems } from '@smashclub/db'
+import { rankReviewCandidates } from '@smashclub/engine'
 
 /**
  * Review-queue candidate scoring, split out of the sync-time matching pipeline
@@ -20,25 +20,25 @@ import { rankReviewCandidates } from '@smashclub/engine';
  */
 
 export interface ReviewCandidateSnapshot {
-  playerId: string;
-  name: string;
-  companyCode: string | null;
-  score: number;
-  reason: 'fuzzy' | 'structured' | 'name-shape';
+  playerId: string
+  name: string
+  companyCode: string | null
+  score: number
+  reason: 'fuzzy' | 'structured' | 'name-shape'
   /**
    * Set when the score came from one of the player's aliases rather than their
    * registry name, so the queue can say *why* an apparently unrelated name is
    * being offered.
    */
-  matchedAlias: string | null;
+  matchedAlias: string | null
 }
 
 export interface CandidatePlayer {
-  name: string;
-  companyCode: string | null;
+  name: string
+  companyCode: string | null
   /** Every other spelling the player already answers to (`alias_norm`). */
-  aliases: string[];
-  playerId: string;
+  aliases: string[]
+  playerId: string
 }
 
 /**
@@ -57,18 +57,18 @@ export async function loadCandidatePool(db: Db): Promise<CandidatePlayer[]> {
     })
     .from(players)
     .leftJoin(companies, eq(players.companyId, companies.id))
-    .where(eq(players.status, 'active'));
+    .where(eq(players.status, 'active'))
 
   const aliasRows = await db
     .select({ playerId: playerAliases.playerId, aliasNorm: playerAliases.aliasNorm })
     .from(playerAliases)
     .innerJoin(players, eq(playerAliases.playerId, players.id))
-    .where(eq(players.status, 'active'));
-  const aliasesByPlayer = new Map<string, string[]>();
+    .where(eq(players.status, 'active'))
+  const aliasesByPlayer = new Map<string, string[]>()
   for (const row of aliasRows) {
-    const list = aliasesByPlayer.get(row.playerId) ?? [];
-    list.push(row.aliasNorm);
-    aliasesByPlayer.set(row.playerId, list);
+    const list = aliasesByPlayer.get(row.playerId) ?? []
+    list.push(row.aliasNorm)
+    aliasesByPlayer.set(row.playerId, list)
   }
 
   return rows.map((row) => ({
@@ -76,7 +76,7 @@ export async function loadCandidatePool(db: Db): Promise<CandidatePlayer[]> {
     companyCode: row.companyCode ?? null,
     aliases: aliasesByPlayer.get(row.id) ?? [],
     playerId: row.id,
-  }));
+  }))
 }
 
 /**
@@ -99,8 +99,10 @@ export function scoreCandidates(
       score: entry.score,
       reason: entry.reason,
       matchedAlias:
-        entry.matchedName.toLowerCase() === entry.candidate.name.toLowerCase() ? null : entry.matchedName,
-    }));
+        entry.matchedName.toLowerCase() === entry.candidate.name.toLowerCase()
+          ? null
+          : entry.matchedName,
+    }))
 }
 
 /** Players a given alias has explicitly been kept separate from. */
@@ -108,15 +110,19 @@ export async function rejectedPlayerIdsFor(db: Db, aliasNorm: string): Promise<S
   const rows = await db
     .select()
     .from(identityDecisions)
-    .where(and(eq(identityDecisions.aliasNorm, aliasNorm), eq(identityDecisions.kind, 'keep_separate')));
-  return new Set(rows.map((row) => row.keptSeparateFromPlayerId).filter((id): id is string => id !== null));
+    .where(
+      and(eq(identityDecisions.aliasNorm, aliasNorm), eq(identityDecisions.kind, 'keep_separate')),
+    )
+  return new Set(
+    rows.map((row) => row.keptSeparateFromPlayerId).filter((id): id is string => id !== null),
+  )
 }
 
 export interface RecomputeCandidatesResult {
   /** Pending items considered. */
-  scanned: number;
+  scanned: number
   /** Items whose ranked list actually changed. */
-  changed: number;
+  changed: number
 }
 
 /**
@@ -130,8 +136,8 @@ export async function recomputePendingCandidates(
   db: Db,
   options: { reviewItemIds?: string[] } = {},
 ): Promise<RecomputeCandidatesResult> {
-  const { reviewItemIds } = options;
-  if (reviewItemIds && reviewItemIds.length === 0) return { scanned: 0, changed: 0 };
+  const { reviewItemIds } = options
+  if (reviewItemIds && reviewItemIds.length === 0) return { scanned: 0, changed: 0 }
 
   const items = await db
     .select({
@@ -147,38 +153,43 @@ export async function recomputePendingCandidates(
         eq(reviewItems.status, 'pending'),
         reviewItemIds ? inArray(reviewItems.id, reviewItemIds) : undefined,
       ),
-    );
-  if (items.length === 0) return { scanned: 0, changed: 0 };
+    )
+  if (items.length === 0) return { scanned: 0, changed: 0 }
 
-  const pool = await loadCandidatePool(db);
-  const aliasNorms = [...new Set(items.map((item) => item.cleanedName.toLowerCase()))];
+  const pool = await loadCandidatePool(db)
+  const aliasNorms = [...new Set(items.map((item) => item.cleanedName.toLowerCase()))]
   const rejections = await db
     .select()
     .from(identityDecisions)
-    .where(and(eq(identityDecisions.kind, 'keep_separate'), inArray(identityDecisions.aliasNorm, aliasNorms)));
-  const rejectedByAlias = new Map<string, Set<string>>();
+    .where(
+      and(
+        eq(identityDecisions.kind, 'keep_separate'),
+        inArray(identityDecisions.aliasNorm, aliasNorms),
+      ),
+    )
+  const rejectedByAlias = new Map<string, Set<string>>()
   for (const row of rejections) {
-    if (!row.keptSeparateFromPlayerId) continue;
-    const set = rejectedByAlias.get(row.aliasNorm) ?? new Set<string>();
-    set.add(row.keptSeparateFromPlayerId);
-    rejectedByAlias.set(row.aliasNorm, set);
+    if (!row.keptSeparateFromPlayerId) continue
+    const set = rejectedByAlias.get(row.aliasNorm) ?? new Set<string>()
+    set.add(row.keptSeparateFromPlayerId)
+    rejectedByAlias.set(row.aliasNorm, set)
   }
 
-  const now = new Date();
-  let changed = 0;
+  const now = new Date()
+  let changed = 0
   for (const item of items) {
     const next = scoreCandidates(
       item.cleanedName,
       item.companyCode ?? null,
       pool,
       rejectedByAlias.get(item.cleanedName.toLowerCase()),
-    );
-    if (sameCandidates(item.candidates, next)) continue;
-    changed += 1;
+    )
+    if (sameCandidates(item.candidates, next)) continue
+    changed += 1
     await db
       .update(reviewItems)
       .set({ candidates: next, candidatesComputedAt: now, updatedAt: now })
-      .where(eq(reviewItems.id, item.id));
+      .where(eq(reviewItems.id, item.id))
   }
 
   // Stamp everything that was re-scored, including the items whose list did not
@@ -192,17 +203,17 @@ export async function recomputePendingCandidates(
         eq(reviewItems.status, 'pending'),
         reviewItemIds ? inArray(reviewItems.id, reviewItemIds) : undefined,
       ),
-    );
+    )
 
-  return { scanned: items.length, changed };
+  return { scanned: items.length, changed }
 }
 
 /** Compare two ranked lists for equality, ignoring float noise in the scores. */
 function sameCandidates(stored: unknown, next: ReviewCandidateSnapshot[]): boolean {
-  const previous = Array.isArray(stored) ? (stored as ReviewCandidateSnapshot[]) : [];
-  if (previous.length !== next.length) return false;
+  const previous = Array.isArray(stored) ? (stored as ReviewCandidateSnapshot[]) : []
+  if (previous.length !== next.length) return false
   return previous.every((entry, index) => {
-    const candidate = next[index]!;
+    const candidate = next[index]!
     return (
       entry.playerId === candidate.playerId &&
       entry.reason === candidate.reason &&
@@ -210,6 +221,6 @@ function sameCandidates(stored: unknown, next: ReviewCandidateSnapshot[]): boole
       entry.name === candidate.name &&
       (entry.companyCode ?? null) === candidate.companyCode &&
       (entry.matchedAlias ?? null) === candidate.matchedAlias
-    );
-  });
+    )
+  })
 }

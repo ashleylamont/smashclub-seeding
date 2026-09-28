@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
-import { CHARACTERS, MAX_CHARACTERS_PER_PLAYER, characterName } from '@smashclub/shared';
-import { CharacterIcons } from './CharacterIcons';
-import './CharacterPicker.css';
+import { useMemo, useState } from 'react'
+import { CHARACTERS, MAX_CHARACTERS_PER_PLAYER, characterName } from '@smashclub/shared'
+import { CharacterIcons } from './CharacterIcons'
+import './CharacterPicker.css'
 
 /**
  * Pick the fighters a player mains.
@@ -14,39 +14,39 @@ import './CharacterPicker.css';
  */
 
 interface Props {
-  value: string[];
-  onChange: (slugs: string[]) => void;
-  max?: number;
+  value: string[]
+  onChange: (slugs: string[]) => void
+  max?: number
 }
 
 export function CharacterPicker({ value, onChange, max = MAX_CHARACTERS_PER_PLAYER }: Props) {
-  const [filter, setFilter] = useState('');
+  const [filter, setFilter] = useState('')
 
   const matches = useMemo(() => {
-    const query = filter.trim().toLowerCase();
-    if (!query) return CHARACTERS;
+    const query = filter.trim().toLowerCase()
+    if (!query) return CHARACTERS
     return CHARACTERS.filter(
       (character) =>
         character.name.toLowerCase().includes(query) ||
         character.slug.includes(query) ||
         (character.aka ?? []).some((alt) => alt.toLowerCase().includes(query)),
-    );
-  }, [filter]);
+    )
+  }, [filter])
 
-  const full = value.length >= max;
+  const full = value.length >= max
 
   const toggle = (slug: string) => {
     if (value.includes(slug)) {
-      onChange(value.filter((entry) => entry !== slug));
+      onChange(value.filter((entry) => entry !== slug))
     } else if (!full) {
-      onChange([...value, slug]);
+      onChange([...value, slug])
     }
-  };
+  }
 
   /** Promote to main — the quickest fix for "right characters, wrong order". */
   const makeMain = (slug: string) => {
-    onChange([slug, ...value.filter((entry) => entry !== slug)]);
-  };
+    onChange([slug, ...value.filter((entry) => entry !== slug)])
+  }
 
   return (
     <div className="character-picker">
@@ -92,7 +92,7 @@ export function CharacterPicker({ value, onChange, max = MAX_CHARACTERS_PER_PLAY
 
       <div className="character-grid">
         {matches.map((character) => {
-          const selected = value.includes(character.slug);
+          const selected = value.includes(character.slug)
           return (
             <button
               key={character.slug}
@@ -108,7 +108,7 @@ export function CharacterPicker({ value, onChange, max = MAX_CHARACTERS_PER_PLAY
               <CharacterIcons slugs={[character.slug]} loading="eager" />
               <span className="character-option-name">{character.name}</span>
             </button>
-          );
+          )
         })}
         {matches.length === 0 && <p className="muted">No characters match “{filter}”.</p>}
       </div>
@@ -117,5 +117,5 @@ export function CharacterPicker({ value, onChange, max = MAX_CHARACTERS_PER_PLAY
         {value.length}/{max} selected. The first is shown as the main.
       </p>
     </div>
-  );
+  )
 }

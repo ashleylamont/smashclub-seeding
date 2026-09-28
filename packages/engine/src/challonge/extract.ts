@@ -4,66 +4,66 @@
  * testable against recorded payload fixtures.
  */
 
-import { compareSetsInBracket } from '../setOrder';
+import { compareSetsInBracket } from '../setOrder'
 
 export class ChallongePayloadError extends Error {}
 
 export interface ChallongeTournament {
-  id: number;
-  name: string;
-  url: string;
-  state: string;
-  startedAt: string | null;
-  completedAt: string | null;
-  updatedAt: string | null;
-  tournamentType: string | null;
-  groupStageEnabled?: boolean;
+  id: number
+  name: string
+  url: string
+  state: string
+  startedAt: string | null
+  completedAt: string | null
+  updatedAt: string | null
+  tournamentType: string | null
+  groupStageEnabled?: boolean
 }
 
 export interface ChallongeParticipant {
-  id: number;
-  displayName: string;
-  seed: number | null;
-  finalRank: number | null;
+  id: number
+  displayName: string
+  seed: number | null
+  finalRank: number | null
 }
 
 export interface ChallongeMatch {
-  id: number;
-  state: string;
-  round: number | null;
-  suggestedPlayOrder: number | null;
-  identifier: string | null;
-  player1Id: number | null;
-  player2Id: number | null;
-  winnerId: number | null;
-  scoresCsv: string | null;
-  completedAt: string | null;
-  updatedAt: string | null;
-  stage?: 'group' | 'final';
-  groupId?: number | null;
+  id: number
+  state: string
+  round: number | null
+  suggestedPlayOrder: number | null
+  identifier: string | null
+  player1Id: number | null
+  player2Id: number | null
+  winnerId: number | null
+  scoresCsv: string | null
+  completedAt: string | null
+  updatedAt: string | null
+  stage?: 'group' | 'final'
+  groupId?: number | null
   /** Original group participant IDs retained for verified score delivery. */
-  sourcePlayer1Id?: number | null;
-  sourcePlayer2Id?: number | null;
+  sourcePlayer1Id?: number | null
+  sourcePlayer2Id?: number | null
 }
 
 function asRecord(value: unknown, description: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new ChallongePayloadError(`Unexpected ${description} format from Challonge API.`);
+    throw new ChallongePayloadError(`Unexpected ${description} format from Challonge API.`)
   }
-  return value as Record<string, unknown>;
+  return value as Record<string, unknown>
 }
 
 function unwrap(value: unknown, key: string, description: string): Record<string, unknown> {
-  const record = asRecord(value, description);
-  return asRecord(record[key], description);
+  const record = asRecord(value, description)
+  return asRecord(record[key], description)
 }
 
 function num(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
 function str(value: unknown): string | null {
-  return typeof value === 'string' && value.length > 0 ? value : null;
+  return typeof value === 'string' && value.length > 0 ? value : null
 }
 
 /**
@@ -74,14 +74,15 @@ function str(value: unknown): string | null {
  * payload silently stored null for every set.
  */
 function identifierOf(m: Record<string, unknown>): string | null {
-  return str(m.raw_identifier) ?? str(m.identifier) ?? num(m.identifier)?.toString() ?? null;
+  return str(m.raw_identifier) ?? str(m.identifier) ?? num(m.identifier)?.toString() ?? null
 }
 
 /** `GET /tournaments/{id}.json` → typed tournament. */
 export function extractTournament(payload: unknown): ChallongeTournament {
-  const t = unwrap(payload, 'tournament', 'tournament');
-  const id = num(t.id);
-  if (id === null) throw new ChallongePayloadError('Challonge tournament payload missing numeric id.');
+  const t = unwrap(payload, 'tournament', 'tournament')
+  const id = num(t.id)
+  if (id === null)
+    throw new ChallongePayloadError('Challonge tournament payload missing numeric id.')
   return {
     id,
     name: (str(t.name) ?? str(t.url) ?? String(id)).trim(),
@@ -92,39 +93,39 @@ export function extractTournament(payload: unknown): ChallongeTournament {
     updatedAt: str(t.updated_at),
     tournamentType: str(t.tournament_type),
     groupStageEnabled: t.group_stage_enabled === true,
-  };
+  }
 }
 
 /** `GET /tournaments/{id}/participants.json` → typed participants. */
 export function extractParticipants(payload: unknown): ChallongeParticipant[] {
   if (!Array.isArray(payload)) {
-    throw new ChallongePayloadError('Unexpected participants format from Challonge API.');
+    throw new ChallongePayloadError('Unexpected participants format from Challonge API.')
   }
-  const participants: ChallongeParticipant[] = [];
+  const participants: ChallongeParticipant[] = []
   for (const item of payload) {
-    const p = unwrap(item, 'participant', 'participant');
-    const id = num(p.id);
-    const displayName = (str(p.display_name) ?? str(p.name) ?? '').trim();
-    if (id === null || !displayName) continue;
+    const p = unwrap(item, 'participant', 'participant')
+    const id = num(p.id)
+    const displayName = (str(p.display_name) ?? str(p.name) ?? '').trim()
+    if (id === null || !displayName) continue
     participants.push({
       id,
       displayName,
       seed: num(p.seed),
       finalRank: num(p.final_rank),
-    });
+    })
   }
-  return participants;
+  return participants
 }
 
 /** `GET /tournaments/{id}/matches.json` → typed matches (all states). */
 export function extractMatches(payload: unknown): ChallongeMatch[] {
   if (!Array.isArray(payload)) {
-    throw new ChallongePayloadError('Unexpected matches format from Challonge API.');
+    throw new ChallongePayloadError('Unexpected matches format from Challonge API.')
   }
   return payload.map((item) => {
-    const m = unwrap(item, 'match', 'match');
-    const id = num(m.id);
-    if (id === null) throw new ChallongePayloadError('Challonge match payload missing numeric id.');
+    const m = unwrap(item, 'match', 'match')
+    const id = num(m.id)
+    if (id === null) throw new ChallongePayloadError('Challonge match payload missing numeric id.')
     return {
       id,
       state: str(m.state) ?? 'unknown',
@@ -139,8 +140,8 @@ export function extractMatches(payload: unknown): ChallongeMatch[] {
       updatedAt: str(m.updated_at),
       stage: m.group_id != null || m.is_group_match === true ? 'group' : 'final',
       groupId: num(m.group_id),
-    };
-  });
+    }
+  })
 }
 
 /**
@@ -155,7 +156,7 @@ export function isRateableMatch(match: ChallongeMatch): boolean {
     match.player2Id !== null &&
     match.winnerId !== null &&
     (match.winnerId === match.player1Id || match.winnerId === match.player2Id)
-  );
+  )
 }
 
 /*
@@ -166,15 +167,15 @@ export function isRateableMatch(match: ChallongeMatch): boolean {
  * Challonge-facing callers keep importing their Challonge vocabulary from one
  * place.
  */
-export { scoresIndicateBye, scoresIndicateForfeit, scoresIndicateUnplayed } from '@smashclub/shared';
+export { scoresIndicateBye, scoresIndicateForfeit, scoresIndicateUnplayed } from '@smashclub/shared'
 
 export interface PublicBracket {
-  participants: ChallongeParticipant[];
-  matches: ChallongeMatch[];
+  participants: ChallongeParticipant[]
+  matches: ChallongeMatch[]
   /** True when every listed match is complete. */
-  allComplete: boolean;
+  allComplete: boolean
   /** Latest underway_at across completed matches, if any. */
-  latestMatchDate: string | null;
+  latestMatchDate: string | null
 }
 
 /**
@@ -194,45 +195,45 @@ export interface PublicBracket {
  * API can see is fetched through the API instead.
  */
 export function extractModuleBracketPayload(html: string): unknown {
-  const marker = /window\._initialStoreState\[['"]TournamentStore['"]\]\s*=\s*/.exec(html);
+  const marker = /window\._initialStoreState\[['"]TournamentStore['"]\]\s*=\s*/.exec(html)
   if (!marker) {
     throw new ChallongePayloadError(
       'Challonge bracket page did not contain an embedded TournamentStore payload.',
-    );
+    )
   }
-  const start = html.indexOf('{', marker.index + marker[0].length);
+  const start = html.indexOf('{', marker.index + marker[0].length)
   if (start === -1) {
-    throw new ChallongePayloadError('Challonge TournamentStore assignment was not an object.');
+    throw new ChallongePayloadError('Challonge TournamentStore assignment was not an object.')
   }
   // Brace-match past strings so braces inside player names/URLs do not end it early.
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
+  let depth = 0
+  let inString = false
+  let escaped = false
   for (let i = start; i < html.length; i += 1) {
-    const ch = html[i]!;
+    const ch = html[i]!
     if (inString) {
-      if (escaped) escaped = false;
-      else if (ch === '\\') escaped = true;
-      else if (ch === '"') inString = false;
-      continue;
+      if (escaped) escaped = false
+      else if (ch === '\\') escaped = true
+      else if (ch === '"') inString = false
+      continue
     }
-    if (ch === '"') inString = true;
-    else if (ch === '{') depth += 1;
+    if (ch === '"') inString = true
+    else if (ch === '{') depth += 1
     else if (ch === '}') {
-      depth -= 1;
+      depth -= 1
       if (depth === 0) {
-        const raw = html.slice(start, i + 1);
+        const raw = html.slice(start, i + 1)
         try {
-          return JSON.parse(raw);
+          return JSON.parse(raw)
         } catch (error) {
           throw new ChallongePayloadError(
             `Challonge TournamentStore payload was not valid JSON: ${String(error)}`,
-          );
+          )
         }
       }
     }
   }
-  throw new ChallongePayloadError('Challonge TournamentStore payload was truncated.');
+  throw new ChallongePayloadError('Challonge TournamentStore payload was truncated.')
 }
 
 /**
@@ -243,11 +244,11 @@ export function extractModuleBracketPayload(html: string): unknown {
  * already hold rather than overwriting it with a slug.
  */
 export function extractModuleTournamentName(html: string): string | null {
-  const match = /<title>([\s\S]*?)<\/title>/i.exec(html);
-  if (!match) return null;
-  const title = match[1]!.replace(/\s+/g, ' ').trim();
-  const name = title.replace(/\s*-\s*Challonge\s*$/i, '').trim();
-  return name.length > 0 ? name : null;
+  const match = /<title>([\s\S]*?)<\/title>/i.exec(html)
+  if (!match) return null
+  const title = match[1]!.replace(/\s+/g, ' ').trim()
+  const name = title.replace(/\s*-\s*Challonge\s*$/i, '').trim()
+  return name.length > 0 ? name : null
 }
 
 /**
@@ -258,11 +259,11 @@ export function extractModuleTournamentName(html: string): string | null {
  * excluding forfeited sets from ratings.
  */
 function scoresCsvFrom(value: unknown): string | null {
-  if (!Array.isArray(value) || value.length !== 2) return null;
-  const [a, b] = value;
-  if (typeof a !== 'number' || typeof b !== 'number') return null;
-  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
-  return `${a}-${b}`;
+  if (!Array.isArray(value) || value.length !== 2) return null
+  const [a, b] = value
+  if (typeof a !== 'number' || typeof b !== 'number') return null
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null
+  return `${a}-${b}`
 }
 
 /**
@@ -273,23 +274,30 @@ function scoresCsvFrom(value: unknown): string | null {
  * agree on `matches_by_round`.
  */
 export function extractPublicBracket(payload: unknown): PublicBracket {
-  const record = asRecord(payload, 'public bracket');
-  const byRound = record.matches_by_round;
+  const record = asRecord(payload, 'public bracket')
+  const byRound = record.matches_by_round
   if (typeof byRound !== 'object' || byRound === null || Array.isArray(byRound)) {
-    throw new ChallongePayloadError('Public Challonge bracket JSON did not include matches_by_round data.');
+    throw new ChallongePayloadError(
+      'Public Challonge bracket JSON did not include matches_by_round data.',
+    )
   }
 
-  const rawMatches: Array<{ value: Record<string, unknown>; stage: 'group' | 'final'; groupId: number | null }> = [];
+  const rawMatches: {
+    value: Record<string, unknown>
+    stage: 'group' | 'final'
+    groupId: number | null
+  }[] = []
   for (const roundMatches of Object.values(byRound as Record<string, unknown>)) {
     if (Array.isArray(roundMatches)) {
       for (const m of roundMatches) {
         if (typeof m === 'object' && m !== null && !Array.isArray(m)) {
-          const match = m as Record<string, unknown>;
+          const match = m as Record<string, unknown>
           rawMatches.push({
             value: match,
-            stage: match.is_group_match === true || num(match.group_id) !== null ? 'group' : 'final',
+            stage:
+              match.is_group_match === true || num(match.group_id) !== null ? 'group' : 'final',
             groupId: num(match.group_id),
-          });
+          })
         }
       }
     }
@@ -297,50 +305,59 @@ export function extractPublicBracket(payload: unknown): PublicBracket {
 
   // Two-stage module payloads keep group rounds under nested group stores.
   // Flatten those rounds before extracting so the group results are retained.
-  const groups = record.groups;
+  const groups = record.groups
   if (Array.isArray(groups)) {
     groups.forEach((group, index) => {
-      if (typeof group !== 'object' || group === null || Array.isArray(group)) return;
-      const g = group as Record<string, unknown>;
-      const gt = typeof g.tournament === 'object' && g.tournament !== null ? (g.tournament as Record<string, unknown>) : {};
-      const groupId = num(gt.id) ?? index;
-      const rounds = g.matches_by_round;
-      if (typeof rounds !== 'object' || rounds === null || Array.isArray(rounds)) return;
+      if (typeof group !== 'object' || group === null || Array.isArray(group)) return
+      const g = group as Record<string, unknown>
+      const gt =
+        typeof g.tournament === 'object' && g.tournament !== null
+          ? (g.tournament as Record<string, unknown>)
+          : {}
+      const groupId = num(gt.id) ?? index
+      const rounds = g.matches_by_round
+      if (typeof rounds !== 'object' || rounds === null || Array.isArray(rounds)) return
       for (const roundMatches of Object.values(rounds as Record<string, unknown>)) {
-        if (!Array.isArray(roundMatches)) continue;
+        if (!Array.isArray(roundMatches)) continue
         for (const m of roundMatches) {
           if (typeof m === 'object' && m !== null && !Array.isArray(m)) {
-            rawMatches.push({ value: m as Record<string, unknown>, stage: 'group', groupId });
+            rawMatches.push({ value: m as Record<string, unknown>, stage: 'group', groupId })
           }
         }
       }
-    });
+    })
   }
 
-  const byMatchId = new Map<number, { stage: 'group' | 'final'; value: Record<string, unknown> }>();
-  const uniqueMatches: typeof rawMatches = [];
+  const byMatchId = new Map<number, { stage: 'group' | 'final'; value: Record<string, unknown> }>()
+  const uniqueMatches: typeof rawMatches = []
   for (const entry of rawMatches) {
-    const id = num(entry.value.id);
+    const id = num(entry.value.id)
     if (id === null) {
-      uniqueMatches.push(entry);
-      continue;
+      uniqueMatches.push(entry)
+      continue
     }
-    const prior = byMatchId.get(id);
+    const prior = byMatchId.get(id)
     if (prior) {
-      const signature = (m: Record<string, unknown>) => JSON.stringify([
-        m.state, m.round, m.winner_id, m.scores_csv ?? m.scores,
-        (m.player1 as Record<string, unknown> | undefined)?.id,
-        (m.player2 as Record<string, unknown> | undefined)?.id,
-      ]);
+      const signature = (m: Record<string, unknown>) =>
+        JSON.stringify([
+          m.state,
+          m.round,
+          m.winner_id,
+          m.scores_csv ?? m.scores,
+          (m.player1 as Record<string, unknown> | undefined)?.id,
+          (m.player2 as Record<string, unknown> | undefined)?.id,
+        ])
       if (prior.stage !== entry.stage || signature(prior.value) !== signature(entry.value)) {
-        throw new ChallongePayloadError(`Public bracket contains conflicting entries for match ${id}.`);
+        throw new ChallongePayloadError(
+          `Public bracket contains conflicting entries for match ${id}.`,
+        )
       }
-      continue;
+      continue
     }
-    byMatchId.set(id, entry);
-    uniqueMatches.push(entry);
+    byMatchId.set(id, entry)
+    uniqueMatches.push(entry)
   }
-  const hasGroups = uniqueMatches.some((entry) => entry.stage === 'group');
+  const hasGroups = uniqueMatches.some((entry) => entry.stage === 'group')
   // Both stages restart their numbering. Order within each group/bracket using
   // the same rules as replay, then assign one continuous order across stages.
   if (hasGroups) {
@@ -349,47 +366,60 @@ export function extractPublicBracket(payload: unknown): PublicBracket {
       suggestedPlayOrder: num(m.suggested_play_order) ?? num(m.identifier),
       completedAt: str(m.completed_at) ?? str(m.underway_at),
       challongeMatchId: num(m.id),
-    });
-    uniqueMatches.sort((a, b) =>
-      Number(a.stage === 'final') - Number(b.stage === 'final') ||
-      (a.stage === 'group' ? (a.groupId ?? 0) - (b.groupId ?? 0) : 0) ||
-      compareSetsInBracket(orderable(a.value), orderable(b.value)),
-    );
+    })
+    uniqueMatches.sort(
+      (a, b) =>
+        Number(a.stage === 'final') - Number(b.stage === 'final') ||
+        (a.stage === 'group' ? (a.groupId ?? 0) - (b.groupId ?? 0) : 0) ||
+        compareSetsInBracket(orderable(a.value), orderable(b.value)),
+    )
   }
 
-  const participantsById = new Map<number, ChallongeParticipant>();
+  const participantsById = new Map<number, ChallongeParticipant>()
   // Final-stage metadata contains the tournament seed. Group-stage seeds are
   // pool-local positions and must not overwrite it (or create it for a group-only entrant).
   const participantEntries = [...uniqueMatches].sort(
     (a, b) => Number(a.stage === 'group') - Number(b.stage === 'group'),
-  );
+  )
   for (const { value: m, stage } of participantEntries) {
-    const player1 = typeof m.player1 === 'object' && m.player1 !== null ? (m.player1 as Record<string, unknown>) : {};
-    const player2 = typeof m.player2 === 'object' && m.player2 !== null ? (m.player2 as Record<string, unknown>) : {};
+    const player1 =
+      typeof m.player1 === 'object' && m.player1 !== null
+        ? (m.player1 as Record<string, unknown>)
+        : {}
+    const player2 =
+      typeof m.player2 === 'object' && m.player2 !== null
+        ? (m.player2 as Record<string, unknown>)
+        : {}
     for (const p of [player1, player2]) {
-      const pid = num(p.id);
-      const displayName = (str(p.display_name) ?? str(p.name) ?? '').trim();
-      const participantId = num(p.participant_id) ?? pid;
+      const pid = num(p.id)
+      const displayName = (str(p.display_name) ?? str(p.name) ?? '').trim()
+      const participantId = num(p.participant_id) ?? pid
       if (participantId !== null && displayName && !participantsById.has(participantId)) {
         participantsById.set(participantId, {
           id: participantId,
           displayName,
           seed: stage === 'group' ? null : num(p.seed),
           finalRank: null,
-        });
+        })
       }
     }
   }
 
-  const matches: ChallongeMatch[] = [];
-  const completedDates: string[] = [];
+  const matches: ChallongeMatch[] = []
+  const completedDates: string[] = []
   for (const [orderIndex, { value: m, stage, groupId }] of uniqueMatches.entries()) {
-    const player1 = typeof m.player1 === 'object' && m.player1 !== null ? (m.player1 as Record<string, unknown>) : {};
-    const player2 = typeof m.player2 === 'object' && m.player2 !== null ? (m.player2 as Record<string, unknown>) : {};
-    const id = num(m.id);
-    if (id === null) continue;
-    const state = str(m.state) ?? 'unknown';
-    if (state === 'complete' && str(m.underway_at)) completedDates.push(str(m.underway_at)!);
+    const player1 =
+      typeof m.player1 === 'object' && m.player1 !== null
+        ? (m.player1 as Record<string, unknown>)
+        : {}
+    const player2 =
+      typeof m.player2 === 'object' && m.player2 !== null
+        ? (m.player2 as Record<string, unknown>)
+        : {}
+    const id = num(m.id)
+    if (id === null) continue
+    const state = str(m.state) ?? 'unknown'
+    if (state === 'complete' && str(m.underway_at)) completedDates.push(str(m.underway_at)!)
     matches.push({
       id,
       state,
@@ -415,51 +445,54 @@ export function extractPublicBracket(payload: unknown): PublicBracket {
       winnerId:
         num(m.winner_id) !== null &&
         (num(m.winner_id) === num(player1.id) || num(m.winner_id) === num(player1.participant_id))
-          ? num(player1.participant_id) ?? num(player1.id)
+          ? (num(player1.participant_id) ?? num(player1.id))
           : num(m.winner_id) !== null &&
-              (num(m.winner_id) === num(player2.id) || num(m.winner_id) === num(player2.participant_id))
-            ? num(player2.participant_id) ?? num(player2.id)
+              (num(m.winner_id) === num(player2.id) ||
+                num(m.winner_id) === num(player2.participant_id))
+            ? (num(player2.participant_id) ?? num(player2.id))
             : num(m.winner_id),
       scoresCsv: str(m.scores_csv) ?? scoresCsvFrom(m.scores),
       completedAt: str(m.completed_at) ?? str(m.underway_at),
       updatedAt: str(m.updated_at),
-      suggestedPlayOrder: hasGroups ? orderIndex + 1 : num(m.suggested_play_order) ?? num(m.identifier),
+      suggestedPlayOrder: hasGroups
+        ? orderIndex + 1
+        : (num(m.suggested_play_order) ?? num(m.identifier)),
       stage,
       groupId,
-    });
+    })
   }
 
-  completedDates.sort();
+  completedDates.sort()
   return {
     participants: [...participantsById.values()],
     matches,
     allComplete: matches.length > 0 && matches.every((m) => m.state === 'complete'),
     latestMatchDate: completedDates[completedDates.length - 1] ?? null,
-  };
+  }
 }
 
 /** Accepts a bare slug or any challonge.com URL and returns the slug. */
 export function normalizeTournamentId(tournamentId: string): string {
-  const raw = tournamentId.trim();
-  if (!raw) throw new ChallongePayloadError('Tournament ID cannot be empty.');
-  if (!raw.includes('://')) return raw.replace(/^\/+|\/+$/g, '');
-  const urlMatch = raw.match(/^[a-z]+:\/\/([^/?#]+)([^?#]*)/i);
+  const raw = tournamentId.trim()
+  if (!raw) throw new ChallongePayloadError('Tournament ID cannot be empty.')
+  if (!raw.includes('://')) return raw.replace(/^\/+|\/+$/g, '')
+  const urlMatch = raw.match(/^[a-z]+:\/\/([^/?#]+)([^?#]*)/i)
   if (!urlMatch) {
-    throw new ChallongePayloadError(`Could not extract a tournament ID from '${tournamentId}'.`);
+    throw new ChallongePayloadError(`Could not extract a tournament ID from '${tournamentId}'.`)
   }
-  const host = urlMatch[1]!.toLowerCase();
-  const parts = (urlMatch[2] ?? '').split('/').filter(Boolean);
+  const host = urlMatch[1]!.toLowerCase()
+  const parts = (urlMatch[2] ?? '').split('/').filter(Boolean)
   if (parts.length === 0) {
-    throw new ChallongePayloadError(`Could not extract a tournament ID from '${tournamentId}'.`);
+    throw new ChallongePayloadError(`Could not extract a tournament ID from '${tournamentId}'.`)
   }
-  if (parts[0] === 'tournaments' && parts.length > 1) return parts[1]!;
+  if (parts[0] === 'tournaments' && parts.length > 1) return parts[1]!
   // Subdomain-hosted tournaments (e.g. org.challonge.com/slug) need the
   // subdomain prefix for API lookups.
-  const subdomainMatch = host.match(/^([^.]+)\.challonge\.com$/);
+  const subdomainMatch = host.match(/^([^.]+)\.challonge\.com$/)
   if (subdomainMatch && subdomainMatch[1] !== 'www' && subdomainMatch[1] !== 'api') {
-    return `${subdomainMatch[1]}-${parts[0]}`;
+    return `${subdomainMatch[1]}-${parts[0]}`
   }
-  return parts[0]!;
+  return parts[0]!
 }
 
 /** Human-readable tournament name from a slug (legacy special-cases kept). */
@@ -475,24 +508,24 @@ export function humanizeTournamentSlug(slug: string): string {
     teamkken24: 'Team KKEN 24',
     pavethepath: 'Pave the Path',
     devprodpunchout: 'DevProd Punch Out',
-  };
-  const lowered = slug.toLowerCase();
-  if (lowered.startsWith('techinplace')) {
-    const suffix = lowered.slice('techinplace'.length);
-    const parts = suffix.match(/[a-zA-Z]+|\d+/g) ?? [];
-    return ['Tech', 'In', 'Place', ...parts.map(capitalize)].join(' ').trim();
   }
-  if (lowered in special) return special[lowered]!;
-  let value = slug.replace(/([a-z])([A-Z])/g, '$1 $2');
-  value = value.replace(/([A-Za-z])(\d)/g, '$1 $2');
-  value = value.replace(/(\d)([A-Za-z])/g, '$1 $2');
-  value = value.replaceAll('_', ' ').replaceAll('-', ' ');
-  const humanized = value.split(/\s+/).filter(Boolean).map(capitalize).join(' ');
-  return humanized || slug;
+  const lowered = slug.toLowerCase()
+  if (lowered.startsWith('techinplace')) {
+    const suffix = lowered.slice('techinplace'.length)
+    const parts = suffix.match(/[a-zA-Z]+|\d+/g) ?? []
+    return ['Tech', 'In', 'Place', ...parts.map(capitalize)].join(' ').trim()
+  }
+  if (lowered in special) return special[lowered]!
+  let value = slug.replace(/([a-z])([A-Z])/g, '$1 $2')
+  value = value.replace(/([A-Za-z])(\d)/g, '$1 $2')
+  value = value.replace(/(\d)([A-Za-z])/g, '$1 $2')
+  value = value.replaceAll('_', ' ').replaceAll('-', ' ')
+  const humanized = value.split(/\s+/).filter(Boolean).map(capitalize).join(' ')
+  return humanized || slug
 }
 
 function capitalize(part: string): string {
-  return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+  return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
 }
 
 /**
@@ -500,17 +533,19 @@ function capitalize(part: string): string {
  * as data instead of printed.
  */
 export function likely2v2Warning(participantNames: readonly string[]): string | null {
-  const names = participantNames.map((n) => n.trim()).filter(Boolean);
-  if (names.length < 8) return null;
-  const pipeLike = names.filter((n) => n.includes('|') || n.includes(' / ') || n.includes(' & ')).length;
-  const longNames = names.filter((n) => n.split(/\s+/).length >= 4).length;
-  const suspiciousRatio = Math.max(pipeLike / names.length, longNames / names.length);
+  const names = participantNames.map((n) => n.trim()).filter(Boolean)
+  if (names.length < 8) return null
+  const pipeLike = names.filter(
+    (n) => n.includes('|') || n.includes(' / ') || n.includes(' & '),
+  ).length
+  const longNames = names.filter((n) => n.split(/\s+/).length >= 4).length
+  const suspiciousRatio = Math.max(pipeLike / names.length, longNames / names.length)
   if (
     pipeLike >= Math.max(3, Math.floor(names.length / 4)) ||
     longNames >= Math.max(4, Math.floor(names.length / 3)) ||
     suspiciousRatio >= 0.4
   ) {
-    return `${pipeLike}/${names.length} names contain team separators, ${longNames}/${names.length} have 4+ words — this may be a 2v2/team tournament.`;
+    return `${pipeLike}/${names.length} names contain team separators, ${longNames}/${names.length} have 4+ words — this may be a 2v2/team tournament.`
   }
-  return null;
+  return null
 }

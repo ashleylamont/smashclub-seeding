@@ -235,7 +235,10 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   cursor: pointer;
-  transition: color 0.12s, border-color 0.12s, background-color 0.12s;
+  transition:
+    color 0.12s,
+    border-color 0.12s,
+    background-color 0.12s;
 }
 
 .btn:hover:not(:disabled) {
@@ -594,7 +597,16 @@
   padding: var(--s5);
 }
 
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+
 .modal {
+  position: relative;
   background: var(--bg);
   border: 1px solid var(--accent-border);
   padding: var(--s5);

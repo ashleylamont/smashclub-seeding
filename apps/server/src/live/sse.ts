@@ -1,5 +1,5 @@
-import type { FastifyReply, FastifyRequest } from 'fastify';
-import { liveBus, type LiveEvent } from './bus';
+import type { FastifyReply, FastifyRequest } from 'fastify'
+import { liveBus, type LiveEvent } from './bus'
 
 /**
  * Server-sent-event streams with admission control.
@@ -24,31 +24,31 @@ import { liveBus, type LiveEvent } from './bus';
 
 export interface SseLimits {
   /** Concurrent streams across the whole process. */
-  maxConnections: number;
+  maxConnections: number
   /** Concurrent streams from one client address. */
-  maxConnectionsPerIp: number;
+  maxConnectionsPerIp: number
   /** Server-initiated close after this long, regardless of client behaviour. */
-  maxStreamMs: number;
+  maxStreamMs: number
   /** Close a stream whose unflushed write buffer exceeds this. */
-  maxBufferedBytes: number;
+  maxBufferedBytes: number
   /** Heartbeat comment interval, keeping proxies from idling the stream out. */
-  heartbeatMs: number;
+  heartbeatMs: number
 }
 
 export class SseRegistry {
-  private total = 0;
-  private readonly perIp = new Map<string, number>();
+  private total = 0
+  private readonly perIp = new Map<string, number>()
 
   constructor(private readonly limits: SseLimits) {
     // One listener per open stream is by design; the cap is what bounds it, so
     // raise Node's warning threshold to match rather than letting a healthy
     // full house look like a leak.
-    liveBus.setMaxListeners(Math.max(limits.maxConnections * 2, 20));
+    liveBus.setMaxListeners(Math.max(limits.maxConnections * 2, 20))
   }
 
   /** Open streams right now — exposed for tests and diagnostics. */
   get openConnections(): number {
-    return this.total;
+    return this.total
   }
 
   /**
@@ -56,36 +56,42 @@ export class SseRegistry {
    * in which case nothing has been allocated for it.
    */
   start(request: FastifyRequest, reply: FastifyReply, tournamentId?: string): boolean {
-    const ip = request.ip;
-    if (this.total >= this.limits.maxConnections || (this.perIp.get(ip) ?? 0) >= this.limits.maxConnectionsPerIp) {
-      void reply.status(503).header('Retry-After', '30').send({ error: 'too many live connections' });
-      return false;
+    const ip = request.ip
+    if (
+      this.total >= this.limits.maxConnections ||
+      (this.perIp.get(ip) ?? 0) >= this.limits.maxConnectionsPerIp
+    ) {
+      void reply
+        .status(503)
+        .header('Retry-After', '30')
+        .send({ error: 'too many live connections' })
+      return false
     }
 
-    this.total += 1;
-    this.perIp.set(ip, (this.perIp.get(ip) ?? 0) + 1);
+    this.total += 1
+    this.perIp.set(ip, (this.perIp.get(ip) ?? 0) + 1)
 
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
-    });
-    reply.raw.write(': connected\n\n');
+    })
+    reply.raw.write(': connected\n\n')
 
-    let closed = false;
+    let closed = false
     const close = (): void => {
-      if (closed) return;
-      closed = true;
-      clearInterval(heartbeat);
-      clearTimeout(lifetime);
-      unsubscribe();
-      this.total -= 1;
-      const remaining = (this.perIp.get(ip) ?? 1) - 1;
-      if (remaining > 0) this.perIp.set(ip, remaining);
-      else this.perIp.delete(ip);
-      reply.raw.end();
-    };
+      if (closed) return
+      closed = true
+      clearInterval(heartbeat)
+      clearTimeout(lifetime)
+      unsubscribe()
+      this.total -= 1
+      const remaining = (this.perIp.get(ip) ?? 1) - 1
+      if (remaining > 0) this.perIp.set(ip, remaining)
+      else this.perIp.delete(ip)
+      reply.raw.end()
+    }
 
     /**
      * Write, unless the peer has stopped draining. `writableLength` is what is
@@ -93,29 +99,29 @@ export class SseRegistry {
      * further writes only cost us memory.
      */
     const write = (chunk: string): void => {
-      if (closed) return;
+      if (closed) return
       if (reply.raw.writableLength > this.limits.maxBufferedBytes) {
-        close();
-        return;
+        close()
+        return
       }
-      reply.raw.write(chunk);
-    };
+      reply.raw.write(chunk)
+    }
 
     const send = (event: LiveEvent): void => {
-      write(`event: ${event.type}\ndata: ${JSON.stringify(event.payload ?? {})}\n\n`);
-    };
+      write(`event: ${event.type}\ndata: ${JSON.stringify(event.payload ?? {})}\n\n`)
+    }
 
-    const unsubscribe = liveBus.subscribe(send, tournamentId);
-    const heartbeat = setInterval(() => write(': heartbeat\n\n'), this.limits.heartbeatMs);
-    const lifetime = setTimeout(close, this.limits.maxStreamMs);
+    const unsubscribe = liveBus.subscribe(send, tournamentId)
+    const heartbeat = setInterval(() => write(': heartbeat\n\n'), this.limits.heartbeatMs)
+    const lifetime = setTimeout(close, this.limits.maxStreamMs)
     // Neither timer should hold the process open on shutdown.
-    heartbeat.unref?.();
-    lifetime.unref?.();
+    heartbeat.unref?.()
+    lifetime.unref?.()
 
-    request.raw.on('close', close);
-    reply.raw.on('close', close);
-    reply.raw.on('error', close);
+    request.raw.on('close', close)
+    reply.raw.on('close', close)
+    reply.raw.on('error', close)
 
-    return true;
+    return true
   }
 }

@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { defaultGlickoSettings } from '@smashclub/shared';
-import { compareSetsInBracket } from '../src/setOrder';
-import { runWhrModel } from '../src/whrRun';
-import { replayRatings } from '../src/replay';
-import type { EngineSet, EngineTournament } from '../src/types';
+import { describe, expect, it } from 'vitest'
+import { defaultGlickoSettings } from '@smashclub/shared'
+import { compareSetsInBracket } from '../src/setOrder'
+import { runWhrModel } from '../src/whrRun'
+import { replayRatings } from '../src/replay'
+import type { EngineSet, EngineTournament } from '../src/types'
 
 /**
  * One bracket's sets must come out in the order they were played, and every
@@ -11,48 +11,48 @@ import type { EngineSet, EngineTournament } from '../src/types';
  * disagreed and the WHR path was ordering a bracket by random uuid.
  */
 
-const settings = defaultGlickoSettings;
+const settings = defaultGlickoSettings
 
 const base = {
   id: 'x',
   suggestedPlayOrder: null as number | null,
   completedAt: null as string | null,
   challongeMatchId: null as number | null,
-};
+}
 
 describe('compareSetsInBracket', () => {
   it('orders by the play-order hint first', () => {
-    const a = { ...base, id: 'zzz', suggestedPlayOrder: 1 };
-    const b = { ...base, id: 'aaa', suggestedPlayOrder: 2 };
-    expect(compareSetsInBracket(a, b)).toBeLessThan(0);
-  });
+    const a = { ...base, id: 'zzz', suggestedPlayOrder: 1 }
+    const b = { ...base, id: 'aaa', suggestedPlayOrder: 2 }
+    expect(compareSetsInBracket(a, b)).toBeLessThan(0)
+  })
 
   it('falls back to completedAt when the hint is absent on both', () => {
-    const a = { ...base, id: 'zzz', completedAt: '2025-01-01T10:00:00.000Z' };
-    const b = { ...base, id: 'aaa', completedAt: '2025-01-01T11:00:00.000Z' };
-    expect(compareSetsInBracket(a, b)).toBeLessThan(0);
-  });
+    const a = { ...base, id: 'zzz', completedAt: '2025-01-01T10:00:00.000Z' }
+    const b = { ...base, id: 'aaa', completedAt: '2025-01-01T11:00:00.000Z' }
+    expect(compareSetsInBracket(a, b)).toBeLessThan(0)
+  })
 
   it('falls back to the challonge match id, then the uuid', () => {
-    const a = { ...base, id: 'zzz', challongeMatchId: 1 };
-    const b = { ...base, id: 'aaa', challongeMatchId: 2 };
-    expect(compareSetsInBracket(a, b)).toBeLessThan(0);
+    const a = { ...base, id: 'zzz', challongeMatchId: 1 }
+    const b = { ...base, id: 'aaa', challongeMatchId: 2 }
+    expect(compareSetsInBracket(a, b)).toBeLessThan(0)
 
-    const c = { ...base, id: 'aaa' };
-    const d = { ...base, id: 'zzz' };
-    expect(compareSetsInBracket(c, d)).toBeLessThan(0);
-  });
+    const c = { ...base, id: 'aaa' }
+    const d = { ...base, id: 'zzz' }
+    expect(compareSetsInBracket(c, d)).toBeLessThan(0)
+  })
 
   it('sorts a set missing a key after one that has it, at every level', () => {
-    const withOrder = { ...base, id: 'zzz', suggestedPlayOrder: 99 };
-    const without = { ...base, id: 'aaa', completedAt: '2025-01-01T00:00:00.000Z' };
+    const withOrder = { ...base, id: 'zzz', suggestedPlayOrder: 99 }
+    const without = { ...base, id: 'aaa', completedAt: '2025-01-01T00:00:00.000Z' }
     // Not the `?? 0` the WHR path used, which sent the null to the front.
-    expect(compareSetsInBracket(withOrder, without)).toBeLessThan(0);
+    expect(compareSetsInBracket(withOrder, without)).toBeLessThan(0)
 
-    const timed = { ...base, id: 'zzz', completedAt: '2025-01-01T00:00:00.000Z' };
-    const untimed = { ...base, id: 'aaa', challongeMatchId: 1 };
-    expect(compareSetsInBracket(timed, untimed)).toBeLessThan(0);
-  });
+    const timed = { ...base, id: 'zzz', completedAt: '2025-01-01T00:00:00.000Z' }
+    const untimed = { ...base, id: 'aaa', challongeMatchId: 1 }
+    expect(compareSetsInBracket(timed, untimed)).toBeLessThan(0)
+  })
 
   it('is a total order — no pair compares equal unless it is the same set', () => {
     const sets = [
@@ -60,15 +60,14 @@ describe('compareSetsInBracket', () => {
       { ...base, id: 'b', suggestedPlayOrder: 1, completedAt: '2025-01-01T00:00:00.000Z' },
       { ...base, id: 'c' },
       { ...base, id: 'd', challongeMatchId: 7 },
-    ];
+    ]
     for (const x of sets) {
       for (const y of sets) {
-        if (x.id === y.id) expect(compareSetsInBracket(x, y)).toBe(0);
-        else expect(compareSetsInBracket(x, y)).not.toBe(0);
+        expect(compareSetsInBracket(x, y) === 0).toBe(x.id === y.id)
       }
     }
-  });
-});
+  })
+})
 
 /**
  * A double-elimination bracket as the club's data actually arrives: the play
@@ -85,9 +84,11 @@ function doubleElim(): { tournaments: EngineTournament[]; sets: EngineSet[] } {
     [4, 'alice', 'carol', 1, '2025-01-10T10:30:00.000Z'],
     [5, 'bob', 'carol', 2, '2025-01-10T10:45:00.000Z'],
     [6, 'alice', 'carol', 1, null], // grand final, never timestamped
-  ];
+  ]
   return {
-    tournaments: [{ id: 't1', eventDate: '2025-01-10T18:00:00.000Z', isRookie: false, challongeId: 1 }],
+    tournaments: [
+      { id: 't1', eventDate: '2025-01-10T18:00:00.000Z', isRookie: false, challongeId: 1 },
+    ],
     sets: plan.map(([order, p1, p2, winner, completedAt]) => ({
       // Deliberately reverse-correlated with play order, so any path that falls
       // through to the uuid produces exactly the wrong answer.
@@ -100,44 +101,46 @@ function doubleElim(): { tournaments: EngineTournament[]; sets: EngineSet[] } {
       completedAt,
       challongeMatchId: order,
     })),
-  };
+  }
 }
 
 describe('a bracket comes out in play order', () => {
   it('WHR emits each player their sets in the order they were played', () => {
-    const { tournaments, sets } = doubleElim();
-    const { events } = runWhrModel({ sets, tournaments, settings });
+    const { tournaments, sets } = doubleElim()
+    const { events } = runWhrModel({ sets, tournaments, settings })
 
-    const alice = events.filter((e) => e.playerId === 'alice').sort((a, b) => a.seq - b.seq);
-    expect(alice.map((e) => e.setId)).toEqual(['set-099', 'set-096', 'set-094']);
-  });
+    const alice = events.filter((e) => e.playerId === 'alice').sort((a, b) => a.seq - b.seq)
+    expect(alice.map((e) => e.setId)).toEqual(['set-099', 'set-096', 'set-094'])
+  })
 
   it('WHR and the Glicko replay agree on the order of a bracket', () => {
-    const { tournaments, sets } = doubleElim();
-    const whr = runWhrModel({ sets, tournaments, settings });
-    const glicko = replayRatings({ sets, tournaments, settings });
+    const { tournaments, sets } = doubleElim()
+    const whr = runWhrModel({ sets, tournaments, settings })
+    const glicko = replayRatings({ sets, tournaments, settings })
 
-    const orderOf = (events: { playerId: string; setId: string | null; seq: number; isDecay: boolean }[]) =>
+    const orderOf = (
+      events: { playerId: string; setId: string | null; seq: number; isDecay: boolean }[],
+    ) =>
       events
         .filter((e) => !e.isDecay && e.playerId === 'carol')
         .sort((a, b) => a.seq - b.seq)
-        .map((e) => e.setId);
+        .map((e) => e.setId)
 
-    expect(orderOf(whr.events)).toEqual(orderOf(glicko.events));
-  });
+    expect(orderOf(whr.events)).toEqual(orderOf(glicko.events))
+  })
 
   it('shuffling the input array does not change the order sets are processed in', () => {
-    const { tournaments, sets } = doubleElim();
-    const reversed = [...sets].reverse();
+    const { tournaments, sets } = doubleElim()
+    const reversed = [...sets].reverse()
 
-    const straight = runWhrModel({ sets, tournaments, settings });
-    const shuffled = runWhrModel({ sets: reversed, tournaments, settings });
+    const straight = runWhrModel({ sets, tournaments, settings })
+    const shuffled = runWhrModel({ sets: reversed, tournaments, settings })
 
     const seqOf = (events: { playerId: string; setId: string | null; seq: number }[]) =>
-      events.filter((e) => e.playerId === 'alice').map((e) => `${e.seq}:${e.setId}`);
+      events.filter((e) => e.playerId === 'alice').map((e) => `${e.seq}:${e.setId}`)
 
-    expect(seqOf(shuffled.events)).toEqual(seqOf(straight.events));
-  });
+    expect(seqOf(shuffled.events)).toEqual(seqOf(straight.events))
+  })
 
   /**
    * Production's actual state before the extractor was fixed: the default sync
@@ -146,23 +149,23 @@ describe('a bracket comes out in play order', () => {
    * fell through to the uuid, which is what shuffled a player's match history.
    */
   it('orders on completedAt when no set carries a play order at all', () => {
-    const { tournaments, sets } = doubleElim();
-    const unhinted = sets.map((s) => ({ ...s, suggestedPlayOrder: null, challongeMatchId: null }));
-    const { events } = runWhrModel({ sets: unhinted, tournaments, settings });
+    const { tournaments, sets } = doubleElim()
+    const unhinted = sets.map((s) => ({ ...s, suggestedPlayOrder: null, challongeMatchId: null }))
+    const { events } = runWhrModel({ sets: unhinted, tournaments, settings })
 
     // alice: set-099 @10:00, set-096 @10:30, set-094 untimed (the grand final).
     // Ordering on the uuid would invert the first two.
-    const alice = events.filter((e) => e.playerId === 'alice').sort((a, b) => a.seq - b.seq);
-    expect(alice.map((e) => e.setId)).toEqual(['set-099', 'set-096', 'set-094']);
-  });
+    const alice = events.filter((e) => e.playerId === 'alice').sort((a, b) => a.seq - b.seq)
+    expect(alice.map((e) => e.setId)).toEqual(['set-099', 'set-096', 'set-094'])
+  })
 
   it('keeps a set with no timestamp in its bracket position rather than at an end', () => {
-    const { tournaments, sets } = doubleElim();
-    const { events } = runWhrModel({ sets, tournaments, settings });
+    const { tournaments, sets } = doubleElim()
+    const { events } = runWhrModel({ sets, tournaments, settings })
 
     // set-097 (the untimed losers round) is bob's second set, not his first or
     // last: `?? 0` would have pulled it to the front, nulls-last to the back.
-    const bob = events.filter((e) => e.playerId === 'bob').sort((a, b) => a.seq - b.seq);
-    expect(bob.map((e) => e.setId)).toEqual(['set-099', 'set-097', 'set-095']);
-  });
-});
+    const bob = events.filter((e) => e.playerId === 'bob').sort((a, b) => a.seq - b.seq)
+    expect(bob.map((e) => e.setId)).toEqual(['set-099', 'set-097', 'set-095'])
+  })
+})

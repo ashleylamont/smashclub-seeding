@@ -1,4 +1,4 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test'
 
 /**
  * E2E runs against the dev harness, which serves the built SPA and the real API
@@ -8,8 +8,8 @@ import { defineConfig, devices } from '@playwright/test';
  * The harness seeds and recomputes before listening, which takes a while, hence
  * the generous server timeout.
  */
-const PORT = Number(process.env.E2E_PORT ?? 3310);
-const baseURL = `http://127.0.0.1:${PORT}`;
+const PORT = Number(process.env.E2E_PORT ?? 3310)
+const baseURL = `http://127.0.0.1:${PORT}`
 
 export default defineConfig({
   testDir: './e2e',
@@ -51,4 +51,4 @@ export default defineConfig({
       ...(process.env.DEV_CACHE_DIR ? { DEV_CACHE_DIR: process.env.DEV_CACHE_DIR } : {}),
     },
   },
-});
+})

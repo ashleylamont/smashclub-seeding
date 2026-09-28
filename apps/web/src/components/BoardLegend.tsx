@@ -1,4 +1,4 @@
-import { tierClass } from '../lib/format';
+import { tierClass } from '../lib/format'
 
 /**
  * The board's key.
@@ -19,16 +19,16 @@ import { tierClass } from '../lib/format';
 
 interface Props {
   /** The leagues actually present on the board, so the ramp is never invented. */
-  leagues: string[];
+  leagues: string[]
 }
 
 /** Highest rung first — `tierClass` is already ordered, so sort on it. */
 function orderLeagues(leagues: string[]): string[] {
-  return [...leagues].sort((a, b) => tierClass(a).localeCompare(tierClass(b)) || a.localeCompare(b));
+  return [...leagues].sort((a, b) => tierClass(a).localeCompare(tierClass(b)) || a.localeCompare(b))
 }
 
 export function BoardLegend({ leagues }: Props) {
-  const ordered = orderLeagues(leagues);
+  const ordered = orderLeagues(leagues)
 
   return (
     <details className="board-legend">
@@ -41,9 +41,9 @@ export function BoardLegend({ leagues }: Props) {
               <span className="legend-sample num legend-sample-rating">1684</span> Rating
             </dt>
             <dd>
-              What the board is ordered on: the skill estimate, less any penalty for missed club nights. So a
-              place is held by turning up as well as by winning. Bracket seeding uses a more cautious number
-              instead, which is why a seed and a rank can differ.
+              What the board is ordered on: the skill estimate, less any penalty for missed club
+              nights. So a place is held by turning up as well as by winning. Bracket seeding uses a
+              more cautious number instead, which is why a seed and a rank can differ.
             </dd>
           </div>
 
@@ -52,19 +52,20 @@ export function BoardLegend({ leagues }: Props) {
               <span className="legend-sample num">1961±138</span> Skill ± band
             </dt>
             <dd>
-              The estimate itself, and how sure of it we are. Play more and the band narrows. With no penalty
-              owing, the rating on the left is exactly this number.
+              The estimate itself, and how sure of it we are. Play more and the band narrows. With
+              no penalty owing, the rating on the left is exactly this number.
             </dd>
           </div>
 
           <div className="legend-term">
             <dt>
-              <span className="legend-sample num legend-sample-penalty">−80 away</span> Missed nights
+              <span className="legend-sample num legend-sample-penalty">−80 away</span> Missed
+              nights
             </dt>
             <dd>
-              Points docked for missing club nights. The first miss is free; after that it is a flat charge a
-              night up to a cap, and playing once puts all of it back. The <strong>Seen</strong> column counts
-              the same thing in nights.
+              Points docked for missing club nights. The first miss is free; after that it is a flat
+              charge a night up to a cap, and playing once puts all of it back. The{' '}
+              <strong>Seen</strong> column counts the same thing in nights.
             </dd>
           </div>
 
@@ -76,10 +77,10 @@ export function BoardLegend({ leagues }: Props) {
               Movement
             </dt>
             <dd>
-              Places gained or lost over the last club night — compared against a replay with that night withheld,
-              so it reports what the games did rather than what the last recompute happened to change. Counted
-              among the players currently shown, so ▲2 means you passed two of them rather than that two dropped
-              off the board.
+              Places gained or lost over the last club night — compared against a replay with that
+              night withheld, so it reports what the games did rather than what the last recompute
+              happened to change. Counted among the players currently shown, so ▲2 means you passed
+              two of them rather than that two dropped off the board.
             </dd>
           </div>
 
@@ -114,8 +115,8 @@ export function BoardLegend({ leagues }: Props) {
           <div className="legend-term">
             <dt>Trend · W–L · Ev</dt>
             <dd>
-              Recent rating trajectory, sets won and lost, and events attended — a main and a rookie bracket on one
-              evening count as one event.
+              Recent rating trajectory, sets won and lost, and events attended — a main and a rookie
+              bracket on one evening count as one event.
             </dd>
           </div>
         </dl>
@@ -131,10 +132,12 @@ export function BoardLegend({ leagues }: Props) {
                 </li>
               ))}
             </ul>
-            <p className="legend-leagues-note muted">Each row carries its league on its left edge.</p>
+            <p className="legend-leagues-note muted">
+              Each row carries its league on its left edge.
+            </p>
           </div>
         )}
       </div>
     </details>
-  );
+  )
 }

@@ -9,25 +9,25 @@
  */
 
 /** Open Graph's 1.91:1, which is what chat clients crop to. */
-const WIDTH = 1200;
-const HEIGHT = 630;
-const PAD = 64;
+const WIDTH = 1200
+const HEIGHT = 630
+const PAD = 64
 
 export interface ShareCardInput {
-  title: string;
-  date: string;
-  podium: Array<{ place: number; name: string; companyCode: string | null }>;
+  title: string
+  date: string
+  podium: { place: number; name: string; companyCode: string | null }[]
   /** A couple of headlines from the night, already formatted. */
-  facts: string[];
-  entrants: number;
-  setsPlayed: number;
+  facts: string[]
+  entrants: number
+  setsPlayed: number
   /** Champions labelled by bracket for multi-bracket evenings. */
-  champions?: Array<{ name: string; bracket: string }>;
+  champions?: { name: string; bracket: string }[]
 }
 
 function token(name: string, fallback: string): string {
-  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return value || fallback;
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  return value || fallback
 }
 
 /**
@@ -36,12 +36,12 @@ function token(name: string, fallback: string): string {
  * edge of the card.
  */
 function fitText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
-  if (ctx.measureText(text).width <= maxWidth) return text;
-  let cut = text;
+  if (ctx.measureText(text).width <= maxWidth) return text
+  let cut = text
   while (cut.length > 1 && ctx.measureText(`${cut}…`).width > maxWidth) {
-    cut = cut.slice(0, -1);
+    cut = cut.slice(0, -1)
   }
-  return `${cut.trimEnd()}…`;
+  return `${cut.trimEnd()}…`
 }
 
 /**
@@ -50,139 +50,141 @@ function fitText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number):
  * share of a session renders in the wrong typeface.
  */
 async function ensureFonts(): Promise<void> {
-  const faces = ['700 72px Oswald', '600 34px Oswald', '400 22px "JetBrains Mono"', '700 22px "JetBrains Mono"'];
+  const faces = [
+    '700 72px Oswald',
+    '600 34px Oswald',
+    '400 22px "JetBrains Mono"',
+    '700 22px "JetBrains Mono"',
+  ]
   try {
-    await Promise.all(faces.map((face) => document.fonts.load(face)));
-    await document.fonts.ready;
+    await Promise.all(faces.map((face) => document.fonts.load(face)))
+    await document.fonts.ready
   } catch {
     // Fonts are a nicety here; a card in a fallback face still beats no card.
   }
 }
 
 export async function renderShareCard(input: ShareCardInput): Promise<Blob | null> {
-  await ensureFonts();
+  await ensureFonts()
 
-  const canvas = document.createElement('canvas');
+  const canvas = document.createElement('canvas')
   // Render at 2x so the text stays crisp when a chat client scales it up.
-  const scale = 2;
-  canvas.width = WIDTH * scale;
-  canvas.height = HEIGHT * scale;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return null;
-  ctx.scale(scale, scale);
+  const scale = 2
+  canvas.width = WIDTH * scale
+  canvas.height = HEIGHT * scale
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+  ctx.scale(scale, scale)
 
-  const bg = token('--bg', '#07090a');
-  const surface = token('--surface', '#0f1213');
-  const textH = token('--text-h', '#f1f0ee');
-  const text = token('--text', '#9a9895');
-  const soft = token('--text-soft', '#64625f');
-  const accent = token('--accent', '#ff3b30');
-  const border = token('--border', '#24262a');
+  const bg = token('--bg', '#07090a')
+  const surface = token('--surface', '#0f1213')
+  const textH = token('--text-h', '#f1f0ee')
+  const text = token('--text', '#9a9895')
+  const soft = token('--text-soft', '#64625f')
+  const accent = token('--accent', '#ff3b30')
+  const border = token('--border', '#24262a')
 
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  ctx.fillStyle = bg
+  ctx.fillRect(0, 0, WIDTH, HEIGHT)
 
   // The one red, as a hard edge down the left — the same device the app uses
   // for an active row.
-  ctx.fillStyle = accent;
-  ctx.fillRect(0, 0, 10, HEIGHT);
+  ctx.fillStyle = accent
+  ctx.fillRect(0, 0, 10, HEIGHT)
 
-  ctx.textBaseline = 'alphabetic';
+  ctx.textBaseline = 'alphabetic'
 
   // Eyebrow.
-  ctx.font = '700 22px "JetBrains Mono", monospace';
-  ctx.fillStyle = accent;
-  ctx.fillText('SMASH CLUB — THE NIGHT IN REVIEW', PAD, PAD + 22);
+  ctx.font = '700 22px "JetBrains Mono", monospace'
+  ctx.fillStyle = accent
+  ctx.fillText('SMASH CLUB — THE NIGHT IN REVIEW', PAD, PAD + 22)
 
   // Title.
-  ctx.font = '700 72px Oswald, sans-serif';
-  ctx.fillStyle = textH;
-  ctx.fillText(fitText(ctx, input.title.toUpperCase(), WIDTH - PAD * 2), PAD, PAD + 108);
+  ctx.font = '700 72px Oswald, sans-serif'
+  ctx.fillStyle = textH
+  ctx.fillText(fitText(ctx, input.title.toUpperCase(), WIDTH - PAD * 2), PAD, PAD + 108)
 
   // Date.
-  ctx.font = '400 22px "JetBrains Mono", monospace';
-  ctx.fillStyle = soft;
-  ctx.fillText(input.date, PAD, PAD + 146);
+  ctx.font = '400 22px "JetBrains Mono", monospace'
+  ctx.fillStyle = soft
+  ctx.fillText(input.date, PAD, PAD + 146)
 
-  ctx.fillStyle = border;
-  ctx.fillRect(PAD, PAD + 176, WIDTH - PAD * 2, 2);
+  ctx.fillStyle = border
+  ctx.fillRect(PAD, PAD + 176, WIDTH - PAD * 2, 2)
 
   // Podium — the headline of any recap. Multi-bracket cards identify each
   // champion explicitly so the first bracket is never implied to represent
   // the whole evening.
-  let y = PAD + 240;
-  const placeColours = [accent, textH, text];
-  const champions = input.champions?.slice(0, 4);
+  let y = PAD + 240
+  const placeColours = [accent, textH, text]
+  const champions = input.champions?.slice(0, 4)
   if (champions?.length) {
-    ctx.font = '700 18px "JetBrains Mono", monospace';
-    ctx.fillStyle = soft;
+    ctx.font = '700 18px "JetBrains Mono", monospace'
+    ctx.fillStyle = soft
     for (const champion of champions) {
-      ctx.fillText(fitText(ctx, champion.bracket.toUpperCase(), 520), PAD, y);
-      y += 24;
-      ctx.font = '600 30px Oswald, sans-serif';
-      ctx.fillStyle = textH;
-      ctx.fillText(fitText(ctx, champion.name.toUpperCase(), 520), PAD + 20, y);
-      y += 48;
-      ctx.font = '700 18px "JetBrains Mono", monospace';
-      ctx.fillStyle = soft;
+      ctx.fillText(fitText(ctx, champion.bracket.toUpperCase(), 520), PAD, y)
+      y += 24
+      ctx.font = '600 30px Oswald, sans-serif'
+      ctx.fillStyle = textH
+      ctx.fillText(fitText(ctx, champion.name.toUpperCase(), 520), PAD + 20, y)
+      y += 48
+      ctx.font = '700 18px "JetBrains Mono", monospace'
+      ctx.fillStyle = soft
     }
-  } else for (const entry of input.podium.slice(0, 4)) {
-    const index = entry.place - 1;
-    ctx.font = '700 48px Oswald, sans-serif';
-    ctx.fillStyle = placeColours[index] ?? text;
-    ctx.fillText(`${entry.place}`, PAD, y);
+  } else
+    for (const entry of input.podium.slice(0, 4)) {
+      const index = entry.place - 1
+      ctx.font = '700 48px Oswald, sans-serif'
+      ctx.fillStyle = placeColours[index] ?? text
+      ctx.fillText(`${entry.place}`, PAD, y)
 
-    ctx.font = '600 34px Oswald, sans-serif';
-    ctx.fillStyle = index === 0 ? textH : text;
-    const name = entry.companyCode ? `${entry.name}  ${entry.companyCode}` : entry.name;
-    ctx.fillText(fitText(ctx, name.toUpperCase(), 520), PAD + 56, y);
-    y += 56;
-  }
+      ctx.font = '600 34px Oswald, sans-serif'
+      ctx.fillStyle = index === 0 ? textH : text
+      const name = entry.companyCode ? `${entry.name}  ${entry.companyCode}` : entry.name
+      ctx.fillText(fitText(ctx, name.toUpperCase(), 520), PAD + 56, y)
+      y += 56
+    }
 
   // Facts, in a column beside the podium.
-  const factX = PAD + 620;
-  let factY = PAD + 214;
-  ctx.font = '700 18px "JetBrains Mono", monospace';
-  ctx.fillStyle = soft;
-  ctx.fillText('HIGHLIGHTS', factX, factY);
-  factY += 34;
-  ctx.font = '400 22px "JetBrains Mono", monospace';
+  const factX = PAD + 620
+  let factY = PAD + 214
+  ctx.font = '700 18px "JetBrains Mono", monospace'
+  ctx.fillStyle = soft
+  ctx.fillText('HIGHLIGHTS', factX, factY)
+  factY += 34
+  ctx.font = '400 22px "JetBrains Mono", monospace'
   for (const fact of input.facts.slice(0, 4)) {
-    ctx.fillStyle = accent;
-    ctx.fillText('▸', factX, factY);
-    ctx.fillStyle = text;
-    ctx.fillText(fitText(ctx, fact, WIDTH - factX - PAD - 28), factX + 28, factY);
-    factY += 40;
+    ctx.fillStyle = accent
+    ctx.fillText('▸', factX, factY)
+    ctx.fillStyle = text
+    ctx.fillText(fitText(ctx, fact, WIDTH - factX - PAD - 28), factX + 28, factY)
+    factY += 40
   }
 
   // Footer strip.
-  ctx.fillStyle = surface;
-  ctx.fillRect(0, HEIGHT - 76, WIDTH, 76);
-  ctx.fillStyle = border;
-  ctx.fillRect(0, HEIGHT - 76, WIDTH, 1);
-  ctx.font = '400 22px "JetBrains Mono", monospace';
-  ctx.fillStyle = soft;
-  ctx.fillText(
-    `${input.entrants} entrants · ${input.setsPlayed} sets`,
-    PAD,
-    HEIGHT - 30,
-  );
-  const host = window.location.host;
-  const hostWidth = ctx.measureText(host).width;
-  ctx.fillText(host, WIDTH - PAD - hostWidth, HEIGHT - 30);
+  ctx.fillStyle = surface
+  ctx.fillRect(0, HEIGHT - 76, WIDTH, 76)
+  ctx.fillStyle = border
+  ctx.fillRect(0, HEIGHT - 76, WIDTH, 1)
+  ctx.font = '400 22px "JetBrains Mono", monospace'
+  ctx.fillStyle = soft
+  ctx.fillText(`${input.entrants} entrants · ${input.setsPlayed} sets`, PAD, HEIGHT - 30)
+  const host = window.location.host
+  const hostWidth = ctx.measureText(host).width
+  ctx.fillText(host, WIDTH - PAD - hostWidth, HEIGHT - 30)
 
-  return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), 'image/png'));
+  return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), 'image/png'))
 }
 
 /** Save a rendered card to the user's downloads. */
 export function downloadBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
   // Revoking synchronously can cancel the download in some browsers.
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  setTimeout(() => URL.revokeObjectURL(url), 10_000)
 }

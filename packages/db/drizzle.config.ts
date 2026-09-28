@@ -1,4 +1,4 @@
-import { defineConfig } from 'drizzle-kit';
+import { defineConfig } from 'drizzle-kit'
 
 export default defineConfig({
   dialect: 'postgresql',
@@ -8,4 +8,4 @@ export default defineConfig({
     // eslint-disable-next-line no-restricted-globals
     url: process.env.DATABASE_URL ?? 'postgres://localhost:5432/smashclub',
   },
-});
+})

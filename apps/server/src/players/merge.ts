@@ -1,6 +1,6 @@
-import { TRPCError } from '@trpc/server';
-import { and, eq, inArray, or } from 'drizzle-orm';
-import type { Db } from '@smashclub/db';
+import { TRPCError } from '@trpc/server'
+import { and, eq, inArray, or } from 'drizzle-orm'
+import type { Db } from '@smashclub/db'
 import {
   eventMatches,
   eventPlanEntries,
@@ -10,8 +10,8 @@ import {
   playerClaims,
   players,
   tournamentParticipants,
-} from '@smashclub/db';
-import { backfillPlayerEverywhere } from '../identity/matching';
+} from '@smashclub/db'
+import { backfillPlayerEverywhere } from '../identity/matching'
 
 /**
  * Merge player A into player B (admin action): A becomes a tombstone
@@ -19,50 +19,76 @@ import { backfillPlayerEverywhere } from '../identity/matching';
  * with per-user dedupe, and affected sets are backfilled. Caller triggers a
  * recompute.
  */
-export async function mergePlayers(db: Db, fromPlayerId: string, intoPlayerId: string): Promise<void> {
-  if (fromPlayerId === intoPlayerId) throw new Error('Cannot merge a player into themselves.');
-  const [from] = await db.select().from(players).where(eq(players.id, fromPlayerId));
-  const [into] = await db.select().from(players).where(eq(players.id, intoPlayerId));
-  if (!from || !into) throw new Error('Both players must exist.');
-  if (from.status === 'merged') throw new Error(`${from.canonicalName} is already merged.`);
-  if (into.status === 'merged') throw new Error(`Cannot merge into a tombstoned player.`);
+export async function mergePlayers(
+  db: Db,
+  fromPlayerId: string,
+  intoPlayerId: string,
+): Promise<void> {
+  if (fromPlayerId === intoPlayerId) throw new Error('Cannot merge a player into themselves.')
+  const [from] = await db.select().from(players).where(eq(players.id, fromPlayerId))
+  const [into] = await db.select().from(players).where(eq(players.id, intoPlayerId))
+  if (!from || !into) throw new Error('Both players must exist.')
+  if (from.status === 'merged') throw new Error(`${from.canonicalName} is already merged.`)
+  if (into.status === 'merged') throw new Error(`Cannot merge into a tombstoned player.`)
 
   // Neither side may change identity while an event still uses its frozen IDs.
   // Include imported match participants, which need not appear in the planned roster.
-  const involvedIds = [fromPlayerId, intoPlayerId];
-  const activeStatuses = ['roster_frozen', 'pools_ready', 'underway'] as const;
-  const [rosterEvent] = await db.select({ name: eventPlans.name }).from(eventPlans)
+  const involvedIds = [fromPlayerId, intoPlayerId]
+  const activeStatuses = ['roster_frozen', 'pools_ready', 'underway'] as const
+  const [rosterEvent] = await db
+    .select({ name: eventPlans.name })
+    .from(eventPlans)
     .innerJoin(eventPlanEntries, eq(eventPlanEntries.eventPlanId, eventPlans.id))
-    .where(and(inArray(eventPlans.status, [...activeStatuses]), inArray(eventPlanEntries.playerId, involvedIds)))
-    .limit(1);
-  const [matchEvent] = rosterEvent ? [] : await db.select({ name: eventPlans.name }).from(eventPlans)
-    .innerJoin(eventMatches, eq(eventMatches.eventPlanId, eventPlans.id))
-    .where(and(inArray(eventPlans.status, [...activeStatuses]), or(
-      inArray(eventMatches.player1Id, involvedIds), inArray(eventMatches.player2Id, involvedIds),
-    )))
-    .limit(1);
-  const activeEvent = rosterEvent ?? matchEvent;
+    .where(
+      and(
+        inArray(eventPlans.status, [...activeStatuses]),
+        inArray(eventPlanEntries.playerId, involvedIds),
+      ),
+    )
+    .limit(1)
+  const [matchEvent] = rosterEvent
+    ? []
+    : await db
+        .select({ name: eventPlans.name })
+        .from(eventPlans)
+        .innerJoin(eventMatches, eq(eventMatches.eventPlanId, eventPlans.id))
+        .where(
+          and(
+            inArray(eventPlans.status, [...activeStatuses]),
+            or(
+              inArray(eventMatches.player1Id, involvedIds),
+              inArray(eventMatches.player2Id, involvedIds),
+            ),
+          ),
+        )
+        .limit(1)
+  const activeEvent = rosterEvent ?? matchEvent
   if (activeEvent) {
     throw new TRPCError({
       code: 'CONFLICT',
       message: `Cannot merge players while either identity is used by active event "${activeEvent.name}". Finish or cancel the event, or reset and unfreeze its roster before merging.`,
-    });
+    })
   }
 
   // Move aliases; drop those that would collide with an existing alias of B.
-  const aliases = await db.select().from(playerAliases).where(eq(playerAliases.playerId, fromPlayerId));
+  const aliases = await db
+    .select()
+    .from(playerAliases)
+    .where(eq(playerAliases.playerId, fromPlayerId))
   for (const alias of aliases) {
     const conflict = await db
       .select({ id: playerAliases.id })
       .from(playerAliases)
-      .where(and(eq(playerAliases.aliasNorm, alias.aliasNorm), eq(playerAliases.playerId, intoPlayerId)));
+      .where(
+        and(eq(playerAliases.aliasNorm, alias.aliasNorm), eq(playerAliases.playerId, intoPlayerId)),
+      )
     if (conflict.length > 0) {
-      await db.delete(playerAliases).where(eq(playerAliases.id, alias.id));
+      await db.delete(playerAliases).where(eq(playerAliases.id, alias.id))
     } else {
       await db
         .update(playerAliases)
         .set({ playerId: intoPlayerId, source: 'merge_decision', updatedAt: new Date() })
-        .where(eq(playerAliases.id, alias.id));
+        .where(eq(playerAliases.id, alias.id))
     }
   }
 
@@ -75,25 +101,30 @@ export async function mergePlayers(db: Db, fromPlayerId: string, intoPlayerId: s
       companyId: from.companyId,
       source: 'merge_decision',
     })
-    .onConflictDoNothing();
+    .onConflictDoNothing()
 
   // Redirect merge decisions that pointed at A.
   await db
     .update(identityDecisions)
     .set({ playerId: intoPlayerId, updatedAt: new Date() })
-    .where(eq(identityDecisions.playerId, fromPlayerId));
+    .where(eq(identityDecisions.playerId, fromPlayerId))
 
   // Move tournament participation.
   await db
     .update(tournamentParticipants)
     .set({ playerId: intoPlayerId, updatedAt: new Date() })
-    .where(eq(tournamentParticipants.playerId, fromPlayerId));
+    .where(eq(tournamentParticipants.playerId, fromPlayerId))
 
   // Move live claims, deduping per user (one live claim per user invariant).
   const liveClaims = await db
     .select()
     .from(playerClaims)
-    .where(and(eq(playerClaims.playerId, fromPlayerId), inArray(playerClaims.status, ['pending', 'approved'])));
+    .where(
+      and(
+        eq(playerClaims.playerId, fromPlayerId),
+        inArray(playerClaims.status, ['pending', 'approved']),
+      ),
+    )
   for (const claim of liveClaims) {
     const existing = await db
       .select({ id: playerClaims.id })
@@ -104,17 +135,17 @@ export async function mergePlayers(db: Db, fromPlayerId: string, intoPlayerId: s
           eq(playerClaims.playerId, intoPlayerId),
           inArray(playerClaims.status, ['pending', 'approved']),
         ),
-      );
+      )
     if (existing.length > 0) {
       await db
         .update(playerClaims)
         .set({ status: 'revoked', resolvedAt: new Date(), updatedAt: new Date() })
-        .where(eq(playerClaims.id, claim.id));
+        .where(eq(playerClaims.id, claim.id))
     } else {
       await db
         .update(playerClaims)
         .set({ playerId: intoPlayerId, updatedAt: new Date() })
-        .where(eq(playerClaims.id, claim.id));
+        .where(eq(playerClaims.id, claim.id))
     }
   }
 
@@ -122,7 +153,7 @@ export async function mergePlayers(db: Db, fromPlayerId: string, intoPlayerId: s
   await db
     .update(players)
     .set({ status: 'merged', mergedIntoPlayerId: intoPlayerId, updatedAt: new Date() })
-    .where(eq(players.id, fromPlayerId));
+    .where(eq(players.id, fromPlayerId))
 
-  await backfillPlayerEverywhere(db, [intoPlayerId]);
+  await backfillPlayerEverywhere(db, [intoPlayerId])
 }

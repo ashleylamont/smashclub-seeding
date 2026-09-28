@@ -119,6 +119,8 @@ Requirements: Node 22+, pnpm 10, a Postgres (or use PGlite-backed tests).
 pnpm install
 pnpm test                 # engine unit tests + server integration tests (PGlite)
 pnpm typecheck
+pnpm lint                 # Oxlint across apps, packages, and tools
+pnpm format:check         # Prettier check for the active project
 pnpm -r build
 
 # Run the server (needs DATABASE_URL; migrations apply at startup)
@@ -127,6 +129,18 @@ DATABASE_URL=postgres://localhost:5432/smashclub pnpm dev
 # Run the web app with API proxy to :3000
 pnpm --filter @smashclub/web dev
 ```
+
+`pnpm lint:fix` applies safe Oxlint fixes, and `pnpm format` writes Prettier
+formatting. CI runs lint and format as separate required checks. The Oxlint
+config enforces import direction between workspace layers, rejects dependency
+cycles, and checks correctness, suspicious code, React hooks, accessibility,
+style, function size, nesting, and complexity. Its default source limits are
+600 nonblank lines per file and 300 per function. Named overrides in
+`.oxlintrc.json` set bounded ceilings for existing large modules; keep new
+modules within the defaults and reduce those ceilings when splitting an old
+module. Prettier covers the active TypeScript, JavaScript, CSS, HTML, JSON,
+and YAML files; the legacy Python reference and prose docs are outside that
+formatting pass.
 
 Environment variables (see `apps/server/src/env.ts`): `DATABASE_URL`
 (required), `CHALLONGE_API_KEY` + `CHALLONGE_USERNAME`,

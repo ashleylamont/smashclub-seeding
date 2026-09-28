@@ -1,11 +1,11 @@
-import { betterAuth } from 'better-auth';
-import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { eq } from 'drizzle-orm';
-import type { Db } from '@smashclub/db';
-import { account, session, user, verification } from '@smashclub/db';
-import type { Env } from './env';
+import { betterAuth } from 'better-auth'
+import { drizzleAdapter } from 'better-auth/adapters/drizzle'
+import { eq } from 'drizzle-orm'
+import type { Db } from '@smashclub/db'
+import { account, session, user, verification } from '@smashclub/db'
+import type { Env } from './env'
 
-export type Auth = ReturnType<typeof createAuth>;
+export type Auth = ReturnType<typeof createAuth>
 
 /**
  * better-auth with Discord + Google and multi-provider account linking: a
@@ -13,12 +13,18 @@ export type Auth = ReturnType<typeof createAuth>;
  * land on the same user row.
  */
 export function createAuth(db: Db, env: Env, options: { enableCredentials?: boolean } = {}) {
-  const socialProviders: Record<string, { clientId: string; clientSecret: string }> = {};
+  const socialProviders: Record<string, { clientId: string; clientSecret: string }> = {}
   if (env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET) {
-    socialProviders.discord = { clientId: env.DISCORD_CLIENT_ID, clientSecret: env.DISCORD_CLIENT_SECRET };
+    socialProviders.discord = {
+      clientId: env.DISCORD_CLIENT_ID,
+      clientSecret: env.DISCORD_CLIENT_SECRET,
+    }
   }
   if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
-    socialProviders.google = { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET };
+    socialProviders.google = {
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+    }
   }
 
   return betterAuth({
@@ -70,20 +76,20 @@ export function createAuth(db: Db, env: Env, options: { enableCredentials?: bool
            */
           before: async (user: { email?: string; emailVerified?: boolean }) => {
             if (isAdminIdentity(user, env)) {
-              return { data: { ...user, role: 'admin' } };
+              return { data: { ...user, role: 'admin' } }
             }
-            return undefined;
+            return undefined
           },
         },
       },
     },
-  });
+  })
 }
 
 function adminEmails(env: Env): string[] {
   return env.ADMIN_EMAILS.split(',')
     .map((entry) => entry.trim().toLowerCase())
-    .filter(Boolean);
+    .filter(Boolean)
 }
 
 /**
@@ -95,16 +101,19 @@ function adminEmails(env: Env): string[] {
  * `emailVerified`), and an unverified address is not proof that the person
  * signing in controls the mailbox the club allowlisted.
  */
-function isAdminIdentity(account: { email?: string | null; emailVerified?: boolean | null }, env: Env): boolean {
-  if (!account.email || account.emailVerified !== true) return false;
-  return adminEmails(env).includes(account.email.toLowerCase());
+function isAdminIdentity(
+  account: { email?: string | null; emailVerified?: boolean | null },
+  env: Env,
+): boolean {
+  if (!account.email || account.emailVerified !== true) return false
+  return adminEmails(env).includes(account.email.toLowerCase())
 }
 
 export interface SessionUser {
-  id: string;
-  email: string;
-  name: string;
-  role: 'admin' | 'user';
+  id: string
+  email: string
+  name: string
+  role: 'admin' | 'user'
 }
 
 /**
@@ -126,15 +135,15 @@ export async function getSessionUser(
   env: Env,
   headers: Headers,
 ): Promise<SessionUser | null> {
-  const sessionData = await auth.api.getSession({ headers });
-  if (!sessionData?.user) return null;
-  const { id, email, name } = sessionData.user;
-  const persisted = (sessionData.user as { role?: string }).role === 'admin' ? 'admin' : 'user';
-  const role: 'admin' | 'user' = isAdminIdentity(sessionData.user, env) ? 'admin' : 'user';
+  const sessionData = await auth.api.getSession({ headers })
+  if (!sessionData?.user) return null
+  const { id, email, name } = sessionData.user
+  const persisted = (sessionData.user as { role?: string }).role === 'admin' ? 'admin' : 'user'
+  const role: 'admin' | 'user' = isAdminIdentity(sessionData.user, env) ? 'admin' : 'user'
 
   if (role !== persisted) {
-    await db.update(user).set({ role, updatedAt: new Date() }).where(eq(user.id, id));
+    await db.update(user).set({ role, updatedAt: new Date() }).where(eq(user.id, id))
   }
 
-  return { id, email, name, role };
+  return { id, email, name, role }
 }

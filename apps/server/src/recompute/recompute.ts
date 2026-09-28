@@ -1,6 +1,6 @@
-import { and, eq, inArray, isNotNull, ne, notInArray, sql } from 'drizzle-orm';
-import type { Db } from '@smashclub/db';
-import { playerRatings, ratingEvents, recomputes, sets, tournaments } from '@smashclub/db';
+import { and, eq, inArray, isNotNull, ne, notInArray, sql } from 'drizzle-orm'
+import type { Db } from '@smashclub/db'
+import { playerRatings, ratingEvents, recomputes, sets, tournaments } from '@smashclub/db'
 import {
   calibrateLeagueBands,
   computeLeaderboard,
@@ -12,13 +12,13 @@ import {
   type EngineTournament,
   type LeaderboardRow,
   type RatingEvent,
-} from '@smashclub/engine';
-import { includesResultStage, scoresIndicateUnplayed, type GlickoSettings } from '@smashclub/shared';
-import { getGlickoSettings, updateGlickoSettings } from '../settings';
+} from '@smashclub/engine'
+import { includesResultStage, scoresIndicateUnplayed, type GlickoSettings } from '@smashclub/shared'
+import { getGlickoSettings, updateGlickoSettings } from '../settings'
 
-export const ENGINE_VERSION = '1.0.0';
-const KEEP_RECOMPUTES = 5;
-const EVENT_INSERT_CHUNK = 500;
+export const ENGINE_VERSION = '1.0.0'
+const KEEP_RECOMPUTES = 5
+const EVENT_INSERT_CHUNK = 500
 
 /**
  * Full rating recompute: loads every rateable set (complete, both players
@@ -30,7 +30,7 @@ const EVENT_INSERT_CHUNK = 500;
 export async function runRecompute(
   db: Db,
 ): Promise<{ recomputeId: string; model: string; players: number; sets: number; events: number }> {
-  const { glicko, version } = await getGlickoSettings(db);
+  const { glicko, version } = await getGlickoSettings(db)
 
   const tournamentRows = await db
     .select({
@@ -41,16 +41,16 @@ export async function runRecompute(
       resultsMode: tournaments.resultsMode,
     })
     .from(tournaments)
-    .where(isNotNull(tournaments.eventDate));
+    .where(isNotNull(tournaments.eventDate))
 
   const engineTournaments: EngineTournament[] = tournamentRows.map((row) => ({
     id: row.id,
     eventDate: row.eventDate!.toISOString(),
     isRookie: row.isRookie,
     challongeId: row.challongeId,
-  }));
-  const tournamentIds = engineTournaments.map((t) => t.id);
-  const modes = new Map(tournamentRows.map((t) => [t.id, t.resultsMode]));
+  }))
+  const tournamentIds = engineTournaments.map((t) => t.id)
+  const modes = new Map(tournamentRows.map((t) => [t.id, t.resultsMode]))
 
   const setRows = tournamentIds.length
     ? await db
@@ -66,7 +66,7 @@ export async function runRecompute(
             isNotNull(sets.winner),
           ),
         )
-    : [];
+    : []
 
   const engineSets: EngineSet[] = setRows
     .filter((row) => includesResultStage(modes.get(row.tournamentId) ?? 'auto', row.resultStage))
@@ -84,7 +84,7 @@ export async function runRecompute(
       // Game counts feed WHR's evidence weighting (a 3-0 outrates a 3-2);
       // forfeits and unreadable scorelines come back `unknown` and rate as a
       // plain set. The Glicko replay ignores these fields.
-      const score = parseScoresCsv(row.scoresCsv);
+      const score = parseScoresCsv(row.scoresCsv)
       return {
         id: row.id,
         tournamentId: row.tournamentId,
@@ -96,10 +96,10 @@ export async function runRecompute(
         challongeMatchId: row.challongeMatchId,
         p1Games: score.unknown ? null : score.p1,
         p2Games: score.unknown ? null : score.p2,
-      };
-    });
+      }
+    })
 
-  const model = glicko.activeModel;
+  const model = glicko.activeModel
   const [recompute] = await db
     .insert(recomputes)
     .values({
@@ -107,8 +107,8 @@ export async function runRecompute(
       model,
       settingsSnapshot: { glicko, version } as unknown as Record<string, unknown>,
     })
-    .returning({ id: recomputes.id });
-  const recomputeId = recompute!.id;
+    .returning({ id: recomputes.id })
+  const recomputeId = recompute!.id
 
   try {
     /**
@@ -118,17 +118,17 @@ export async function runRecompute(
      * admin comparison view meaningful — a rank move between models is a real
      * difference in the model, not a difference in how leagues were cut.
      */
-    let ratingEventRows: RatingEvent[];
-    let leaderboard: LeaderboardRow[];
-    let effectiveSettings = glicko;
+    let ratingEventRows: RatingEvent[]
+    let leaderboard: LeaderboardRow[]
+    let effectiveSettings = glicko
     /** WHR fit diagnostics, recorded in the recompute's stats. */
-    let modelStats: Record<string, unknown> = {};
+    let modelStats: Record<string, unknown> = {}
     /**
      * Where everyone ranked before the latest night. The WHR run derives this
      * from the same history prefix its ledger is built on; the Glicko path
      * re-replays with the night withheld.
      */
-    let previousRanks: Map<string, number>;
+    let previousRanks: Map<string, number>
 
     /**
      * Fit the bands to the club's real distribution once, then leave them be —
@@ -138,44 +138,60 @@ export async function runRecompute(
      * league the moment the ranking basis moved.
      */
     const calibrateOnce = async (provisional: LeaderboardRow[]): Promise<void> => {
-      const basisChanged = glicko.leagueBandBasis !== 'club';
-      if ((glicko.leagueBandsCalibrated && !basisChanged) || provisional.length < 8) return;
-      const bands = calibrateLeagueBands(provisional.map((row) => row.clubRating));
+      const basisChanged = glicko.leagueBandBasis !== 'club'
+      if ((glicko.leagueBandsCalibrated && !basisChanged) || provisional.length < 8) return
+      const bands = calibrateLeagueBands(provisional.map((row) => row.clubRating))
       effectiveSettings = {
         ...glicko,
         leagueBands: bands,
         leagueBandsCalibrated: true,
         leagueBandBasis: 'club',
-      };
-      await updateGlickoSettings(db, effectiveSettings);
-    };
+      }
+      await updateGlickoSettings(db, effectiveSettings)
+    }
 
     if (model === 'whr') {
-      const first = runWhrModel({ sets: engineSets, tournaments: engineTournaments, settings: glicko });
-      await calibrateOnce(first.leaderboard);
+      const first = runWhrModel({
+        sets: engineSets,
+        tournaments: engineTournaments,
+        settings: glicko,
+      })
+      await calibrateOnce(first.leaderboard)
       // Re-derive leagues if calibration changed the bands. The fit itself does
       // not depend on them, so only the labels are recomputed.
       const run =
         effectiveSettings === glicko
           ? first
-          : runWhrModel({ sets: engineSets, tournaments: engineTournaments, settings: effectiveSettings });
-      ratingEventRows = run.events;
-      leaderboard = run.leaderboard;
-      previousRanks = run.previousRanks;
-      modelStats = { whr: { converged: run.converged, iterations: run.iterations, periods: run.periods } };
+          : runWhrModel({
+              sets: engineSets,
+              tournaments: engineTournaments,
+              settings: effectiveSettings,
+            })
+      ratingEventRows = run.events
+      leaderboard = run.leaderboard
+      previousRanks = run.previousRanks
+      modelStats = {
+        whr: { converged: run.converged, iterations: run.iterations, periods: run.periods },
+      }
       if (!run.converged) {
-        console.warn(`WHR fit did not converge in ${run.iterations} iterations; ratings may be unstable`);
+        console.warn(
+          `WHR fit did not converge in ${run.iterations} iterations; ratings may be unstable`,
+        )
       }
     } else {
-      const replay = replayRatings({ sets: engineSets, tournaments: engineTournaments, settings: glicko });
-      await calibrateOnce(computeLeaderboard(replay.finalStates, glicko));
-      ratingEventRows = replay.events;
-      leaderboard = computeLeaderboard(replay.finalStates, effectiveSettings);
-      previousRanks = ranksBeforeLastEvent(engineSets, engineTournaments, effectiveSettings);
+      const replay = replayRatings({
+        sets: engineSets,
+        tournaments: engineTournaments,
+        settings: glicko,
+      })
+      await calibrateOnce(computeLeaderboard(replay.finalStates, glicko))
+      ratingEventRows = replay.events
+      leaderboard = computeLeaderboard(replay.finalStates, effectiveSettings)
+      previousRanks = ranksBeforeLastEvent(engineSets, engineTournaments, effectiveSettings)
     }
 
     for (let offset = 0; offset < ratingEventRows.length; offset += EVENT_INSERT_CHUNK) {
-      const chunk = ratingEventRows.slice(offset, offset + EVENT_INSERT_CHUNK);
+      const chunk = ratingEventRows.slice(offset, offset + EVENT_INSERT_CHUNK)
       await db.insert(ratingEvents).values(
         chunk.map((event) => ({
           recomputeId,
@@ -196,7 +212,7 @@ export async function runRecompute(
           revisedRating: event.revisedRating ?? null,
           revisedSd: event.revisedSd ?? null,
         })),
-      );
+      )
     }
 
     if (leaderboard.length > 0) {
@@ -235,7 +251,7 @@ export async function runRecompute(
           sampleConfidence: row.sampleConfidence,
           lastPlayedDate: row.lastPlayedDate,
         })),
-      );
+      )
     }
 
     const stats = {
@@ -243,20 +259,20 @@ export async function runRecompute(
       sets: engineSets.length,
       events: ratingEventRows.length,
       ...modelStats,
-    };
+    }
     await db
       .update(recomputes)
       .set({ status: 'complete', finishedAt: new Date(), stats })
-      .where(eq(recomputes.id, recomputeId));
+      .where(eq(recomputes.id, recomputeId))
 
-    await pruneOldRecomputes(db);
-    return { recomputeId, model, ...stats };
+    await pruneOldRecomputes(db)
+    return { recomputeId, model, ...stats }
   } catch (error) {
     await db
       .update(recomputes)
       .set({ status: 'failed', finishedAt: new Date(), stats: { error: String(error) } })
-      .where(eq(recomputes.id, recomputeId));
-    throw error;
+      .where(eq(recomputes.id, recomputeId))
+    throw error
   }
 }
 
@@ -283,26 +299,26 @@ function ranksBeforeLastEvent(
   engineTournaments: readonly EngineTournament[],
   settings: GlickoSettings,
 ): Map<string, number> {
-  const ranks = new Map<string, number>();
-  if (engineSets.length === 0) return ranks;
+  const ranks = new Map<string, number>()
+  if (engineSets.length === 0) return ranks
 
   // Only brackets with rateable sets count: a registered-but-empty tournament
   // is not a night anyone could have moved on.
-  const dateById = new Map(engineTournaments.map((t) => [t.id, t.eventDate]));
-  const eventKeyOfSet = (set: EngineSet): string => eventKeyOf(dateById.get(set.tournamentId)!);
-  const latestEventKey = engineSets.map(eventKeyOfSet).reduce((a, b) => (b > a ? b : a));
+  const dateById = new Map(engineTournaments.map((t) => [t.id, t.eventDate]))
+  const eventKeyOfSet = (set: EngineSet): string => eventKeyOf(dateById.get(set.tournamentId)!)
+  const latestEventKey = engineSets.map(eventKeyOfSet).reduce((a, b) => (b > a ? b : a))
 
-  const priorSets = engineSets.filter((set) => eventKeyOfSet(set) !== latestEventKey);
+  const priorSets = engineSets.filter((set) => eventKeyOfSet(set) !== latestEventKey)
   // The club's first night has nothing behind it; every delta is null, which
   // the board renders as "–" rather than as a climb from nowhere.
-  if (priorSets.length === 0) return ranks;
+  if (priorSets.length === 0) return ranks
 
   const leaderboard = computeLeaderboard(
     replayRatings({ sets: priorSets, tournaments: engineTournaments, settings }).finalStates,
     settings,
-  );
-  for (const row of leaderboard) ranks.set(row.playerId, row.rank);
-  return ranks;
+  )
+  for (const row of leaderboard) ranks.set(row.playerId, row.rank)
+  return ranks
 }
 
 /** Latest complete recompute ID, or null before the first recompute. */
@@ -312,8 +328,8 @@ export async function latestRecomputeId(db: Db): Promise<string | null> {
     .from(recomputes)
     .where(eq(recomputes.status, 'complete'))
     .orderBy(sql`${recomputes.startedAt} desc`)
-    .limit(1);
-  return row?.id ?? null;
+    .limit(1)
+  return row?.id ?? null
 }
 
 async function pruneOldRecomputes(db: Db): Promise<void> {
@@ -322,8 +338,10 @@ async function pruneOldRecomputes(db: Db): Promise<void> {
     .from(recomputes)
     .where(eq(recomputes.status, 'complete'))
     .orderBy(sql`${recomputes.startedAt} desc`)
-    .limit(KEEP_RECOMPUTES);
-  const keepIds = keep.map((row) => row.id);
-  if (keepIds.length === 0) return;
-  await db.delete(recomputes).where(and(notInArray(recomputes.id, keepIds), ne(recomputes.status, 'running')));
+    .limit(KEEP_RECOMPUTES)
+  const keepIds = keep.map((row) => row.id)
+  if (keepIds.length === 0) return
+  await db
+    .delete(recomputes)
+    .where(and(notInArray(recomputes.id, keepIds), ne(recomputes.status, 'running')))
 }

@@ -28,72 +28,72 @@ import {
   isBracketFinalised,
   isBracketOver,
   scoresIndicateUnplayed,
-} from '@smashclub/shared';
-import { eventKeyOf } from './events';
-import { winProbability } from './glicko2';
-import { DISPLAY_CENTRE, NATURAL_TO_DISPLAY, probabilityFromRatings } from './whr';
+} from '@smashclub/shared'
+import { eventKeyOf } from './events'
+import { winProbability } from './glicko2'
+import { DISPLAY_CENTRE, NATURAL_TO_DISPLAY, probabilityFromRatings } from './whr'
 
 // ---------------------------------------------------------------------------
 // Input
 // ---------------------------------------------------------------------------
 
 export interface RecapTournament {
-  id: string;
-  name: string;
+  id: string
+  name: string
   /** ISO 8601. Brackets sharing an `eventKeyOf` are one night. */
-  eventDate: string | null;
-  isRookie: boolean;
+  eventDate: string | null
+  isRookie: boolean
   /**
    * Challonge's own state. Placement facts need a bracket that is over, which
    * is not the same as one Challonge calls complete — see `isBracketOver` and
    * the `now` input below.
    */
-  challongeState: string | null;
-  tournamentType?: string | null;
+  challongeState: string | null
+  tournamentType?: string | null
 }
 
 export interface RecapParticipant {
-  id: string;
-  tournamentId: string;
+  id: string
+  tournamentId: string
   /** Null while identity is unresolved; seed-based facts still work. */
-  playerId: string | null;
+  playerId: string | null
   /** Already public-formatted by the caller. */
-  name: string;
-  companyCode: string | null;
-  characters: readonly string[];
-  seed: number | null;
-  finalRank: number | null;
+  name: string
+  companyCode: string | null
+  characters: readonly string[]
+  seed: number | null
+  finalRank: number | null
 }
 
 export interface RecapSet {
-  id: string;
-  tournamentId: string;
+  id: string
+  tournamentId: string
   /** Positive = winners bracket, negative = losers. */
-  round: number | null;
+  round: number | null
   /** Challonge's bracket ordering hint; the tie-break for elimination order. */
-  suggestedPlayOrder?: number | null;
-  identifier: string | null;
-  state: string;
-  p1ParticipantId: string | null;
-  p2ParticipantId: string | null;
-  winner: 1 | 2 | null;
-  scoresCsv: string | null;
-  excludedFromRatings: boolean;
-  completedAt: string | null;
+  suggestedPlayOrder?: number | null
+  identifier: string | null
+  state: string
+  p1ParticipantId: string | null
+  p2ParticipantId: string | null
+  winner: 1 | 2 | null
+  scoresCsv: string | null
+  excludedFromRatings: boolean
+  completedAt: string | null
   /** Two-stage tournament result classification; omitted means final-stage. */
-  resultStage?: 'group' | 'final';
+  resultStage?: 'group' | 'final'
 }
 
 export interface RecapRatingEvent {
-  playerId: string;
-  setId: string | null;
-  tournamentId: string;
-  isDecay: boolean;
-  won: boolean | null;
-  preRating: number;
-  postRating: number;
-  preRd: number;
-  postRd: number;
+  playerId: string
+  setId: string | null
+  tournamentId: string
+  isDecay: boolean
+  won: boolean | null
+  preRating: number
+  postRating: number
+  preRd: number
+  postRd: number
 }
 
 /**
@@ -102,36 +102,36 @@ export interface RecapRatingEvent {
  */
 export interface RecapHistory {
   /** Rated sets played before tonight, per player. */
-  priorSetCounts: ReadonlyMap<string, number>;
+  priorSetCounts: ReadonlyMap<string, number>
   /** Nights attended before tonight, per player. */
-  priorEventCounts: ReadonlyMap<string, number>;
+  priorEventCounts: ReadonlyMap<string, number>
   /** Highest rating ever held before tonight, per player. */
-  priorPeakRating: ReadonlyMap<string, number>;
+  priorPeakRating: ReadonlyMap<string, number>
   /**
    * Head-to-head record before tonight, keyed by {@link pairKey}. Wins are
    * recorded for the lexicographically smaller player id (`aWins`).
    */
-  priorMeetings: ReadonlyMap<string, { aWins: number; bWins: number }>;
+  priorMeetings: ReadonlyMap<string, { aWins: number; bWins: number }>
 }
 
 export interface RecapRankMovement {
-  playerId: string;
-  rank: number;
+  playerId: string
+  rank: number
   /** Null when the player had no rating before this night. */
-  previousRank: number | null;
+  previousRank: number | null
 }
 
 export interface RecapInput {
-  tournaments: readonly RecapTournament[];
-  participants: readonly RecapParticipant[];
-  sets: readonly RecapSet[];
+  tournaments: readonly RecapTournament[]
+  participants: readonly RecapParticipant[]
+  sets: readonly RecapSet[]
   /** May be empty — see the module note on optional ratings. */
-  ratingEvents?: readonly RecapRatingEvent[];
-  history?: RecapHistory;
+  ratingEvents?: readonly RecapRatingEvent[]
+  history?: RecapHistory
   /** Rank movement recorded by the recompute (already night-aware). */
-  rankMovement?: readonly RecapRankMovement[];
+  rankMovement?: readonly RecapRankMovement[]
   /** Entrant counts for earlier nights, for the turnout comparison. */
-  priorTurnouts?: readonly { eventKey: string; entrants: number }[];
+  priorTurnouts?: readonly { eventKey: string; entrants: number }[]
   /**
    * Which rating model produced `ratingEvents`. Upset odds are computed with
    * that model's own probability formula — Glicko attenuates by the
@@ -139,7 +139,7 @@ export interface RecapInput {
    * recap's "had a 12% chance" is the number the active model would actually
    * have quoted before the set. Defaults to Glicko for older callers.
    */
-  model?: string;
+  model?: string
   /**
    * The clock, as epoch milliseconds — an input rather than a `Date.now()`
    * read, so a recap of a given night is reproducible and testable.
@@ -150,7 +150,7 @@ export interface RecapInput {
    * reads as "still in progress" forever. Omit it and only Challonge's own
    * `complete` counts, which is the safe reading for a night that just ran.
    */
-  now?: number;
+  now?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -159,10 +159,10 @@ export interface RecapInput {
 
 /** A player as a fact refers to them — enough to render a chip or a link. */
 export interface RecapPlayerRef {
-  playerId: string | null;
-  name: string;
-  companyCode: string | null;
-  characters: readonly string[];
+  playerId: string | null
+  name: string
+  companyCode: string | null
+  characters: readonly string[]
 }
 
 export type RecapFact =
@@ -170,59 +170,159 @@ export type RecapFact =
    * `derived` marks a podium worked out from elimination order rather than
    * reported by Challonge — see {@link deriveBracketOutcome}.
    */
-  | { kind: 'podium'; tournamentId: string; derived: boolean; places: Array<{ player: RecapPlayerRef; place: number; seed: number | null }> }
+  | {
+      kind: 'podium'
+      tournamentId: string
+      derived: boolean
+      places: { player: RecapPlayerRef; place: number; seed: number | null }[]
+    }
   /** `stage` is the set's place in the bracket as words ("the winners final"). */
-  | { kind: 'seed_upset'; tournamentId: string; winner: RecapPlayerRef; loser: RecapPlayerRef; winnerSeed: number; loserSeed: number; stage: string | null; score: string | null }
-  | { kind: 'rating_upset'; tournamentId: string; winner: RecapPlayerRef; loser: RecapPlayerRef; probability: number; ratingGap: number; stage: string | null; score: string | null }
-  | { kind: 'losers_run'; tournamentId: string; player: RecapPlayerRef; wins: number; finalRank: number | null }
-  | { kind: 'overperformer'; tournamentId: string; player: RecapPlayerRef; seed: number; finalRank: number; placesGained: number }
-  | { kind: 'nailbiter'; tournamentId: string; winner: RecapPlayerRef; loser: RecapPlayerRef; score: string; stage: string | null }
+  | {
+      kind: 'seed_upset'
+      tournamentId: string
+      winner: RecapPlayerRef
+      loser: RecapPlayerRef
+      winnerSeed: number
+      loserSeed: number
+      stage: string | null
+      score: string | null
+    }
+  | {
+      kind: 'rating_upset'
+      tournamentId: string
+      winner: RecapPlayerRef
+      loser: RecapPlayerRef
+      probability: number
+      ratingGap: number
+      stage: string | null
+      score: string | null
+    }
+  | {
+      kind: 'losers_run'
+      tournamentId: string
+      player: RecapPlayerRef
+      wins: number
+      finalRank: number | null
+    }
+  | {
+      kind: 'overperformer'
+      tournamentId: string
+      player: RecapPlayerRef
+      seed: number
+      finalRank: number
+      placesGained: number
+    }
+  | {
+      kind: 'nailbiter'
+      tournamentId: string
+      winner: RecapPlayerRef
+      loser: RecapPlayerRef
+      score: string
+      stage: string | null
+    }
   | { kind: 'clean_sweep'; tournamentId: string; player: RecapPlayerRef; sets: number }
-  | { kind: 'biggest_climb'; tournamentId: string; player: RecapPlayerRef; gained: number; from: number; to: number }
-  | { kind: 'mover'; tournamentId: null; player: RecapPlayerRef; rank: number; previousRank: number; placesGained: number }
+  | {
+      kind: 'biggest_climb'
+      tournamentId: string
+      player: RecapPlayerRef
+      gained: number
+      from: number
+      to: number
+    }
+  | {
+      kind: 'mover'
+      tournamentId: null
+      player: RecapPlayerRef
+      rank: number
+      previousRank: number
+      placesGained: number
+    }
   /** `a` is always the winner of tonight's meeting, and `aWins` includes it. */
-  | { kind: 'rivalry'; tournamentId: string; a: RecapPlayerRef; b: RecapPlayerRef; meetings: number; aWins: number; bWins: number }
+  | {
+      kind: 'rivalry'
+      tournamentId: string
+      a: RecapPlayerRef
+      b: RecapPlayerRef
+      meetings: number
+      aWins: number
+      bWins: number
+    }
   /** Tonight's winner had never beaten this opponent — 0 for `priorLosses`. */
-  | { kind: 'breakthrough'; tournamentId: string; winner: RecapPlayerRef; loser: RecapPlayerRef; priorLosses: number; stage: string | null; score: string | null }
+  | {
+      kind: 'breakthrough'
+      tournamentId: string
+      winner: RecapPlayerRef
+      loser: RecapPlayerRef
+      priorLosses: number
+      stage: string | null
+      score: string | null
+    }
   | { kind: 'debut'; tournamentId: string; players: RecapPlayerRef[] }
-  | { kind: 'milestone'; tournamentId: string; player: RecapPlayerRef; milestone: 'sets' | 'events' | 'peak_rating'; value: number }
-  | { kind: 'turnout'; tournamentId: null; entrants: number; previousBest: number | null; isRecord: boolean }
-  | { kind: 'runback'; tournamentId: string; winner: RecapPlayerRef; loser: RecapPlayerRef; score: string | null }
+  | {
+      kind: 'milestone'
+      tournamentId: string
+      player: RecapPlayerRef
+      milestone: 'sets' | 'events' | 'peak_rating'
+      value: number
+    }
+  | {
+      kind: 'turnout'
+      tournamentId: null
+      entrants: number
+      previousBest: number | null
+      isRecord: boolean
+    }
+  | {
+      kind: 'runback'
+      tournamentId: string
+      winner: RecapPlayerRef
+      loser: RecapPlayerRef
+      score: string | null
+    }
   /** `runSets`/`gamesDropped` describe the champion's whole night, when known. */
-  | { kind: 'grand_finals'; tournamentId: string; winner: RecapPlayerRef; loser: RecapPlayerRef; score: string | null; bracketReset: boolean; runSets: number; gamesDropped: number | null };
+  | {
+      kind: 'grand_finals'
+      tournamentId: string
+      winner: RecapPlayerRef
+      loser: RecapPlayerRef
+      score: string | null
+      bracketReset: boolean
+      runSets: number
+      gamesDropped: number | null
+    }
 
-export type RecapFactKind = RecapFact['kind'];
+export type RecapFactKind = RecapFact['kind']
 
 /** A fact plus the metadata every surface needs to order and key it. */
 export interface RankedRecapFact {
   /** Stable across recomputes — safe as a React key. */
-  id: string;
+  id: string
   /** 0..1. Surfaces take the top N. */
-  notability: number;
-  fact: RecapFact;
+  notability: number
+  fact: RecapFact
 }
 
 export interface RecapResult {
-  eventKey: string | null;
+  eventKey: string | null
   /** Every bracket that ran on this night, main first. */
-  tournaments: readonly RecapTournament[];
-  entrants: number;
-  setsPlayed: number;
+  tournaments: readonly RecapTournament[]
+  entrants: number
+  setsPlayed: number
   /**
    * True once nothing more is coming: every bracket of the night either
    * finished on Challonge or was abandoned long enough ago to count as over.
    */
-  isComplete: boolean;
+  isComplete: boolean
   /**
    * True when the night is over but at least one bracket never actually
    * finished — the room ran out of time and nobody closed it upstream. The
    * distinction matters to a reader: "still being played" and "never finished"
    * are different things, and only one of them is worth waiting for.
    */
-  isAbandoned: boolean;
-  facts: RankedRecapFact[];
+  isAbandoned: boolean
+  facts: RankedRecapFact[]
   /** A compact, diverse highlight reel for cards; podium facts remain in facts. */
-  highlights: RankedRecapFact[];
+  highlights: RankedRecapFact[]
 }
 
 // ---------------------------------------------------------------------------
@@ -231,10 +331,10 @@ export interface RecapResult {
 
 export interface ParsedScore {
   /** Games won by player 1 and player 2. */
-  p1: number;
-  p2: number;
+  p1: number
+  p2: number
   /** True when the format could not be read at all. */
-  unknown: boolean;
+  unknown: boolean
 }
 
 /**
@@ -253,35 +353,35 @@ export interface ParsedScore {
  * is exactly the shape every "one-sided" fact goes looking for.
  */
 export function parseScoresCsv(scoresCsv: string | null | undefined): ParsedScore {
-  const unknown: ParsedScore = { p1: 0, p2: 0, unknown: true };
-  if (!scoresCsv || scoresIndicateUnplayed(scoresCsv)) return unknown;
+  const unknown: ParsedScore = { p1: 0, p2: 0, unknown: true }
+  if (!scoresCsv || scoresIndicateUnplayed(scoresCsv)) return unknown
 
-  const pairs: Array<[number, number]> = [];
+  const pairs: [number, number][] = []
   for (const part of scoresCsv.split(',')) {
-    const match = part.trim().match(/^(-?\d+)-(-?\d+)$/);
-    if (!match) return unknown;
-    const a = Number(match[1]);
-    const b = Number(match[2]);
-    if (a < 0 || b < 0) return unknown;
-    pairs.push([a, b]);
+    const match = part.trim().match(/^(-?\d+)-(-?\d+)$/)
+    if (!match) return unknown
+    const a = Number(match[1])
+    const b = Number(match[2])
+    if (a < 0 || b < 0) return unknown
+    pairs.push([a, b])
   }
-  if (pairs.length === 0) return unknown;
+  if (pairs.length === 0) return unknown
   if (pairs.length === 1) {
-    const [a, b] = pairs[0]!;
-    return { p1: a, p2: b, unknown: false };
+    const [a, b] = pairs[0]!
+    return { p1: a, p2: b, unknown: false }
   }
-  let p1 = 0;
-  let p2 = 0;
+  let p1 = 0
+  let p2 = 0
   for (const [a, b] of pairs) {
-    if (a > b) p1 += 1;
-    else if (b > a) p2 += 1;
+    if (a > b) p1 += 1
+    else if (b > a) p2 += 1
   }
-  return { p1, p2, unknown: false };
+  return { p1, p2, unknown: false }
 }
 
 /** Head-to-head map key: player ids sorted, so the pair is order-independent. */
 export function pairKey(a: string, b: string): string {
-  return a < b ? `${a}|${b}` : `${b}|${a}`;
+  return a < b ? `${a}|${b}` : `${b}|${a}`
 }
 
 // ---------------------------------------------------------------------------
@@ -296,20 +396,20 @@ export function pairKey(a: string, b: string): string {
  * re-sync having happened to stop calling a `99-0` bye a result.
  */
 function wasPlayed(set: RecapSet): boolean {
-  return !set.excludedFromRatings && !scoresIndicateUnplayed(set.scoresCsv);
+  return !set.excludedFromRatings && !scoresIndicateUnplayed(set.scoresCsv)
 }
 
-const isGroupSet = (set: RecapSet): boolean => set.resultStage === 'group';
+const isGroupSet = (set: RecapSet): boolean => set.resultStage === 'group'
 
 /** A completed, rateable set with both sides resolved to participants. */
 interface PlayedSet {
-  set: RecapSet;
-  winner: RecapParticipant;
-  loser: RecapParticipant;
+  set: RecapSet
+  winner: RecapParticipant
+  loser: RecapParticipant
   /** Games, from the winner's perspective. */
-  winnerGames: number;
-  loserGames: number;
-  scoreKnown: boolean;
+  winnerGames: number
+  loserGames: number
+  scoreKnown: boolean
 }
 
 const refOf = (p: RecapParticipant): RecapPlayerRef => ({
@@ -317,16 +417,16 @@ const refOf = (p: RecapParticipant): RecapPlayerRef => ({
   name: p.name,
   companyCode: p.companyCode,
   characters: p.characters,
-});
+})
 
 /** Winner's score as it should be shown: always "3-1", never "1-3". */
 const scoreText = (played: PlayedSet): string | null =>
-  played.scoreKnown ? `${played.winnerGames}-${played.loserGames}` : null;
+  played.scoreKnown ? `${played.winnerGames}-${played.loserGames}` : null
 
 /** The extent of one bracket's rounds: deepest winners and losers round. */
 interface BracketRounds {
-  maxRound: number;
-  minRound: number;
+  maxRound: number
+  minRound: number
 }
 
 /**
@@ -335,9 +435,9 @@ interface BracketRounds {
  * outrank a winners-side set of the same depth.
  */
 function stageWeight(round: number | null, maxRound: number): number {
-  if (round == null || maxRound <= 0) return 0.5;
-  if (round < 0) return Math.min(1, 0.55 + (0.45 * -round) / Math.max(1, maxRound));
-  return Math.min(1, 0.35 + (0.5 * round) / Math.max(1, maxRound));
+  if (round == null || maxRound <= 0) return 0.5
+  if (round < 0) return Math.min(1, 0.55 + (0.45 * -round) / Math.max(1, maxRound))
+  return Math.min(1, 0.35 + (0.5 * round) / Math.max(1, maxRound))
 }
 
 /**
@@ -350,26 +450,30 @@ function stageWeight(round: number | null, maxRound: number): number {
  * Approximate below the last three rounds, which is where names stop existing
  * anyway.
  */
-export function stageName(round: number | null, rounds: BracketRounds, tournamentType?: string | null): string | null {
-  if (round == null) return null;
+export function stageName(
+  round: number | null,
+  rounds: BracketRounds,
+  tournamentType?: string | null,
+): string | null {
+  if (round == null) return null
   if (round > 0) {
     if (tournamentType === 'single elimination') {
-      if (round === rounds.maxRound) return 'the final';
-      return `round ${round}`;
+      if (round === rounds.maxRound) return 'the final'
+      return `round ${round}`
     }
-    if (round === rounds.maxRound) return 'the grand final';
-    if (round === rounds.maxRound - 1) return 'the winners final';
-    if (round === rounds.maxRound - 2) return 'the winners semis';
-    return `winners round ${round}`;
+    if (round === rounds.maxRound) return 'the grand final'
+    if (round === rounds.maxRound - 1) return 'the winners final'
+    if (round === rounds.maxRound - 2) return 'the winners semis'
+    return `winners round ${round}`
   }
-  if (round === rounds.minRound) return 'the losers final';
-  if (round === rounds.minRound + 1) return 'the losers semis';
-  return `losers round ${-round}`;
+  if (round === rounds.minRound) return 'the losers final'
+  if (round === rounds.minRound + 1) return 'the losers semis'
+  return `losers round ${-round}`
 }
 
 /** Squash an unbounded magnitude into 0..1 without a hard ceiling. */
 const saturate = (value: number, scale: number): number =>
-  value <= 0 ? 0 : value / (value + scale);
+  value <= 0 ? 0 : value / (value + scale)
 
 /**
  * Where a set sits in the order a bracket was played: Challonge's play-order
@@ -388,24 +492,24 @@ const saturate = (value: number, scale: number): number =>
  * "which set decided this bracket" could and did disagree, so a recap could
  * name one player on its podium and a different one as the grand-final winner.
  */
-type OrderKey = [number, string, number];
+type OrderKey = [number, string, number]
 
 function setOrderKey(set: RecapSet, index: number): OrderKey {
-  return [set.suggestedPlayOrder ?? 0, set.completedAt ?? '', index];
+  return [set.suggestedPlayOrder ?? 0, set.completedAt ?? '', index]
 }
 
 function compareOrderKeys(a: OrderKey, b: OrderKey): number {
-  return a[0] - b[0] || a[1].localeCompare(b[1]) || a[2] - b[2];
+  return a[0] - b[0] || a[1].localeCompare(b[1]) || a[2] - b[2]
 }
 
 /** What a bracket, read on its own terms, says happened. */
 export interface BracketOutcome {
   /** Placement per participant id, champion first. */
-  placements: Map<string, number>;
+  placements: Map<string, number>
   /** The set that decided the bracket. */
-  decider: RecapSet;
+  decider: RecapSet
   /** True when the final needed more than one set — a bracket reset. */
-  bracketReset: boolean;
+  bracketReset: boolean
 }
 
 /**
@@ -442,40 +546,48 @@ export interface BracketOutcome {
  * not one. Naming its winner would put a player on a podium they never won —
  * so an undecided bracket gets no placement facts at all.
  */
-export function deriveBracketOutcome(sets: readonly RecapSet[], tournamentType?: string | null): BracketOutcome | null {
-  if (tournamentType && tournamentType !== 'single elimination' && tournamentType !== 'double elimination') return null;
-  const lastLoss = new Map<string, OrderKey>();
-  const lastLossRound = new Map<string, number>();
-  let final: { set: RecapSet; winner: string; key: OrderKey } | null = null;
-  let finalRoundSets = 0;
+export function deriveBracketOutcome(
+  sets: readonly RecapSet[],
+  tournamentType?: string | null,
+): BracketOutcome | null {
+  if (
+    tournamentType &&
+    tournamentType !== 'single elimination' &&
+    tournamentType !== 'double elimination'
+  )
+    return null
+  const lastLoss = new Map<string, OrderKey>()
+  const lastLossRound = new Map<string, number>()
+  let final: { set: RecapSet; winner: string; key: OrderKey } | null = null
+  let finalRoundSets = 0
 
   /** Deepest round still waiting to be played, if any. */
   const unplayedRound = sets.reduce<number | null>((deepest, set) => {
-    if (isGroupSet(set)) return deepest;
-    if (set.state === 'complete' && set.winner != null) return deepest;
-    const round = set.round ?? 0;
-    return deepest === null || round > deepest ? round : deepest;
-  }, null);
+    if (isGroupSet(set)) return deepest
+    if (set.state === 'complete' && set.winner != null) return deepest
+    const round = set.round ?? 0
+    return deepest === null || round > deepest ? round : deepest
+  }, null)
 
   sets.forEach((set, index) => {
-    if (isGroupSet(set)) return;
+    if (isGroupSet(set)) return
     // Structural bracket advancement still includes a completed walkover: it
     // tells us who advanced, even though it must not count as a played set or
     // create a grand-finals story.
-    if (set.state !== 'complete' || (set.winner !== 1 && set.winner !== 2)) return;
-    const p1 = set.p1ParticipantId;
-    const p2 = set.p2ParticipantId;
-    if (!p1 || !p2 || p1 === p2) return;
-    const winner = set.winner === 1 ? p1 : p2;
-    const loser = set.winner === 1 ? p2 : p1;
+    if (set.state !== 'complete' || (set.winner !== 1 && set.winner !== 2)) return
+    const p1 = set.p1ParticipantId
+    const p2 = set.p2ParticipantId
+    if (!p1 || !p2 || p1 === p2) return
+    const winner = set.winner === 1 ? p1 : p2
+    const loser = set.winner === 1 ? p2 : p1
 
-    const key = setOrderKey(set, index);
-    const round = set.round ?? 0;
+    const key = setOrderKey(set, index)
+    const round = set.round ?? 0
     if (wasPlayed(set) || tournamentType === 'single elimination') {
-      const existing = lastLoss.get(loser);
+      const existing = lastLoss.get(loser)
       if (!existing || compareOrderKeys(key, existing) > 0) {
-        lastLoss.set(loser, key);
-        lastLossRound.set(loser, round);
+        lastLoss.set(loser, key)
+        lastLossRound.set(loser, round)
       }
     }
 
@@ -484,51 +596,55 @@ export function deriveBracketOutcome(sets: readonly RecapSet[], tournamentType?:
      * the later one decides it. Round rather than raw time, because a bracket
      * can finish out a lower-round set after the final has been played.
      */
-    const bestRound = final?.set.round ?? 0;
+    const bestRound = final?.set.round ?? 0
     if (final === null || round > bestRound) {
-      final = { set, winner, key };
-      finalRoundSets = 1;
+      final = { set, winner, key }
+      finalRoundSets = 1
     } else if (round === bestRound) {
-      finalRoundSets += 1;
-      if (compareOrderKeys(key, final.key) > 0) final = { set, winner, key };
+      finalRoundSets += 1
+      if (compareOrderKeys(key, final.key) > 0) final = { set, winner, key }
     }
-  });
+  })
 
-  if (final === null) return null;
-  const decided = final as { set: RecapSet; winner: string; key: OrderKey };
+  if (final === null) return null
+  const decided = final as { set: RecapSet; winner: string; key: OrderKey }
   // A set still waiting at or beyond the deepest round played means the bracket
   // never got to its final, so nothing here is a placement.
-  if (unplayedRound !== null && unplayedRound >= (decided.set.round ?? 0)) return null;
+  if (unplayedRound !== null && unplayedRound >= (decided.set.round ?? 0)) return null
 
-  const placements = new Map<string, number>([[decided.winner, 1]]);
+  const placements = new Map<string, number>([[decided.winner, 1]])
   if (!wasPlayed(decided.set)) {
-    const finalLoser = decided.set.winner === 1 ? decided.set.p2ParticipantId : decided.set.p1ParticipantId;
-    if (finalLoser) placements.set(finalLoser, 2);
+    const finalLoser =
+      decided.set.winner === 1 ? decided.set.p2ParticipantId : decided.set.p1ParticipantId
+    if (finalLoser) placements.set(finalLoser, 2)
   }
   const eliminated = [...lastLoss.entries()]
     .filter(([participantId]) => participantId !== decided.winner)
-    .sort((a, b) => tournamentType === 'single elimination'
-      ? (lastLossRound.get(b[0]) ?? 0) - (lastLossRound.get(a[0]) ?? 0) || compareOrderKeys(b[1], a[1])
-      : compareOrderKeys(b[1], a[1]));
-  const singleElimination = tournamentType === 'single elimination';
+    .sort((a, b) =>
+      tournamentType === 'single elimination'
+        ? (lastLossRound.get(b[0]) ?? 0) - (lastLossRound.get(a[0]) ?? 0) ||
+          compareOrderKeys(b[1], a[1])
+        : compareOrderKeys(b[1], a[1]),
+    )
+  const singleElimination = tournamentType === 'single elimination'
   if (singleElimination) {
-    let place = 2;
+    let place = 2
     for (let i = 0; i < eliminated.length;) {
-      const round = lastLossRound.get(eliminated[i]![0]) ?? 0;
-      let j = i;
-      while (j < eliminated.length && (lastLossRound.get(eliminated[j]![0]) ?? 0) === round) j += 1;
-      for (let k = i; k < j; k += 1) placements.set(eliminated[k]![0], place);
-      place += j - i;
-      i = j;
+      const round = lastLossRound.get(eliminated[i]![0]) ?? 0
+      let j = i
+      while (j < eliminated.length && (lastLossRound.get(eliminated[j]![0]) ?? 0) === round) j += 1
+      for (let k = i; k < j; k += 1) placements.set(eliminated[k]![0], place)
+      place += j - i
+      i = j
     }
   } else {
-    eliminated.forEach(([participantId], index) => placements.set(participantId, index + 2));
+    eliminated.forEach(([participantId], index) => placements.set(participantId, index + 2))
   }
 
-  return { placements, decider: decided.set, bracketReset: finalRoundSets > 1 };
+  return { placements, decider: decided.set, bracketReset: finalRoundSets > 1 }
 }
 
-export const RECAP_ENGINE_VERSION = '1';
+export const RECAP_ENGINE_VERSION = '1'
 
 /**
  * How many facts of each kind a recap may carry.
@@ -559,68 +675,82 @@ const FACT_LIMITS: Record<RecapFactKind, number> = {
   overperformer: 2,
   rivalry: 2,
   breakthrough: 2,
-};
+}
 
 /** Keep the most notable few of each kind; assumes `facts` is already sorted. */
 function limitByKind(facts: readonly RankedRecapFact[]): RankedRecapFact[] {
-  const kept: RankedRecapFact[] = [];
-  const seen = new Map<RecapFactKind, number>();
+  const kept: RankedRecapFact[] = []
+  const seen = new Map<RecapFactKind, number>()
   for (const entry of facts) {
-    const count = seen.get(entry.fact.kind) ?? 0;
-    if (count >= FACT_LIMITS[entry.fact.kind]) continue;
-    seen.set(entry.fact.kind, count + 1);
-    kept.push(entry);
+    const count = seen.get(entry.fact.kind) ?? 0
+    if (count >= FACT_LIMITS[entry.fact.kind]) continue
+    seen.set(entry.fact.kind, count + 1)
+    kept.push(entry)
   }
-  return kept;
+  return kept
 }
 
 function factPeople(fact: RecapFact): string[] {
-  const people: string[] = [];
+  const people: string[] = []
   const visit = (value: unknown): void => {
-    if (Array.isArray(value)) return value.forEach(visit);
-    if (!value || typeof value !== 'object') return;
-    const record = value as Record<string, unknown>;
-    if (typeof record.playerId === 'string') people.push(record.playerId);
-    Object.values(record).forEach(visit);
-  };
-  visit(fact);
-  return [...new Set(people)];
+    if (Array.isArray(value)) return value.forEach(visit)
+    if (!value || typeof value !== 'object') return
+    const record = value as Record<string, unknown>
+    if (typeof record.playerId === 'string') people.push(record.playerId)
+    Object.values(record).forEach(visit)
+  }
+  visit(fact)
+  return [...new Set(people)]
 }
 
 /** Keep a short, diverse highlight reel while retaining every podium fact. */
 function selectFacts(facts: readonly RankedRecapFact[]): RankedRecapFact[] {
   const candidates = limitByKind(facts.filter((entry) => entry.fact.kind !== 'podium')).sort(
     (a, b) => b.notability - a.notability || a.id.localeCompare(b.id),
-  );
-  const kept: RankedRecapFact[] = [];
-  const people = new Map<string, number>();
-  const stories = new Set<string>();
-  const categories = new Map<RecapFactKind, number>();
-  let upsetCount = 0;
+  )
+  const kept: RankedRecapFact[] = []
+  const people = new Map<string, number>()
+  const stories = new Set<string>()
+  const categories = new Map<RecapFactKind, number>()
+  let upsetCount = 0
   for (const entry of candidates) {
-    if (kept.length >= 6 || entry.notability < 0.45) continue;
-    const fact = entry.fact as Record<string, unknown>;
-    const winner = (fact.winner as { playerId?: string } | undefined)?.playerId;
-    const loser = (fact.loser as { playerId?: string } | undefined)?.playerId;
-    const story = winner && loser && typeof fact.tournamentId === 'string' &&
-      (entry.fact.kind === 'seed_upset' || entry.fact.kind === 'rating_upset' || entry.fact.kind === 'nailbiter')
-      ? `${fact.tournamentId}:${[winner, loser].sort().join(':')}`
-      : null;
-    if (story && stories.has(story)) continue;
-    if (entry.fact.kind === 'rivalry' && Math.min(entry.fact.aWins, entry.fact.bWins) === 0) continue;
-    const category = entry.fact.kind;
-    const cap = category === 'grand_finals' ? 2 : category === 'milestone' || category === 'mover' || category === 'nailbiter' || category === 'rivalry' ? 1 : 2;
-    if ((categories.get(category) ?? 0) >= cap) continue;
-    if ((category === 'seed_upset' || category === 'rating_upset') && upsetCount >= 2) continue;
-    const ids = factPeople(entry.fact);
-    if (ids.some((id) => (people.get(id) ?? 0) >= 2)) continue;
-    kept.push(entry);
-    categories.set(category, (categories.get(category) ?? 0) + 1);
-    if (category === 'seed_upset' || category === 'rating_upset') upsetCount += 1;
-    if (story) stories.add(story);
-    for (const id of ids) people.set(id, (people.get(id) ?? 0) + 1);
+    if (kept.length >= 6 || entry.notability < 0.45) continue
+    const fact = entry.fact as Record<string, unknown>
+    const winner = (fact.winner as { playerId?: string } | undefined)?.playerId
+    const loser = (fact.loser as { playerId?: string } | undefined)?.playerId
+    const story =
+      winner &&
+      loser &&
+      typeof fact.tournamentId === 'string' &&
+      (entry.fact.kind === 'seed_upset' ||
+        entry.fact.kind === 'rating_upset' ||
+        entry.fact.kind === 'nailbiter')
+        ? `${fact.tournamentId}:${[winner, loser].sort().join(':')}`
+        : null
+    if (story && stories.has(story)) continue
+    if (entry.fact.kind === 'rivalry' && Math.min(entry.fact.aWins, entry.fact.bWins) === 0)
+      continue
+    const category = entry.fact.kind
+    const cap =
+      category === 'grand_finals'
+        ? 2
+        : category === 'milestone' ||
+            category === 'mover' ||
+            category === 'nailbiter' ||
+            category === 'rivalry'
+          ? 1
+          : 2
+    if ((categories.get(category) ?? 0) >= cap) continue
+    if ((category === 'seed_upset' || category === 'rating_upset') && upsetCount >= 2) continue
+    const ids = factPeople(entry.fact)
+    if (ids.some((id) => (people.get(id) ?? 0) >= 2)) continue
+    kept.push(entry)
+    categories.set(category, (categories.get(category) ?? 0) + 1)
+    if (category === 'seed_upset' || category === 'rating_upset') upsetCount += 1
+    if (story) stories.add(story)
+    for (const id of ids) people.set(id, (people.get(id) ?? 0) + 1)
   }
-  return kept;
+  return kept
 }
 
 // ---------------------------------------------------------------------------
@@ -628,35 +758,35 @@ function selectFacts(facts: readonly RankedRecapFact[]): RankedRecapFact[] {
 // ---------------------------------------------------------------------------
 
 export function buildRecap(input: RecapInput): RecapResult {
-  const { tournaments, participants, sets } = input;
-  const ratingEvents = input.ratingEvents ?? [];
+  const { tournaments, participants, sets } = input
+  const ratingEvents = input.ratingEvents ?? []
   // No clock supplied: nothing can be stale, so only Challonge's own `complete`
   // counts as over — the conservative reading, and the one the old code had.
-  const now = input.now ?? Number.NEGATIVE_INFINITY;
+  const now = input.now ?? Number.NEGATIVE_INFINITY
 
-  const byId = new Map(participants.map((p) => [p.id, p]));
+  const byId = new Map(participants.map((p) => [p.id, p]))
   /**
    * Main bracket first, then rookie: a night's headline result is the main
    * bracket's, and `eventDate` alone does not order them reliably.
    */
   const orderedTournaments = [...tournaments].sort(
     (a, b) => Number(a.isRookie) - Number(b.isRookie) || a.name.localeCompare(b.name),
-  );
-  const eventKey = orderedTournaments.find((t) => t.eventDate)?.eventDate ?? null;
+  )
+  const eventKey = orderedTournaments.find((t) => t.eventDate)?.eventDate ?? null
 
-  const played: PlayedSet[] = [];
+  const played: PlayedSet[] = []
   for (const set of sets) {
-    if (set.state !== 'complete' || set.winner == null || !wasPlayed(set)) continue;
-    const p1 = set.p1ParticipantId ? byId.get(set.p1ParticipantId) : undefined;
-    const p2 = set.p2ParticipantId ? byId.get(set.p2ParticipantId) : undefined;
-    if (!p1 || !p2) continue;
-    const winner = set.winner === 1 ? p1 : p2;
-    const loser = set.winner === 1 ? p2 : p1;
-    const score = parseScoresCsv(set.scoresCsv);
+    if (set.state !== 'complete' || set.winner == null || !wasPlayed(set)) continue
+    const p1 = set.p1ParticipantId ? byId.get(set.p1ParticipantId) : undefined
+    const p2 = set.p2ParticipantId ? byId.get(set.p2ParticipantId) : undefined
+    if (!p1 || !p2) continue
+    const winner = set.winner === 1 ? p1 : p2
+    const loser = set.winner === 1 ? p2 : p1
+    const score = parseScoresCsv(set.scoresCsv)
     // scores_csv is always player1-first; flip it when player 2 won.
-    const winnerGames = set.winner === 1 ? score.p1 : score.p2;
-    const loserGames = set.winner === 1 ? score.p2 : score.p1;
-    played.push({ set, winner, loser, winnerGames, loserGames, scoreKnown: !score.unknown });
+    const winnerGames = set.winner === 1 ? score.p1 : score.p2
+    const loserGames = set.winner === 1 ? score.p2 : score.p1
+    played.push({ set, winner, loser, winnerGames, loserGames, scoreKnown: !score.unknown })
   }
 
   /*
@@ -667,10 +797,10 @@ export function buildRecap(input: RecapInput): RecapResult {
    * which brackets were worked out rather than reported, so facts that need a
    * precise placement can decline to use one.
    */
-  const outcomes = new Map<string, BracketOutcome>();
-  const placement = new Map<string, number>();
-  const derivedFor = new Set<string>();
-  const groupedTournamentIds = new Set(sets.filter(isGroupSet).map((set) => set.tournamentId));
+  const outcomes = new Map<string, BracketOutcome>()
+  const placement = new Map<string, number>()
+  const derivedFor = new Set<string>()
+  const groupedTournamentIds = new Set(sets.filter(isGroupSet).map((set) => set.tournamentId))
   for (const tournament of orderedTournaments) {
     /*
      * Finalised, not merely over. An abandoned bracket is done in the sense
@@ -682,10 +812,10 @@ export function buildRecap(input: RecapInput): RecapResult {
       const outcome = deriveBracketOutcome(
         sets.filter((s) => s.tournamentId === tournament.id),
         tournament.tournamentType,
-      );
-      if (outcome) outcomes.set(tournament.id, outcome);
+      )
+      if (outcome) outcomes.set(tournament.id, outcome)
     }
-    const entries = participants.filter((p) => p.tournamentId === tournament.id);
+    const entries = participants.filter((p) => p.tournamentId === tournament.id)
     const finalParticipantIds = groupedTournamentIds.has(tournament.id)
       ? new Set(
           sets
@@ -693,18 +823,18 @@ export function buildRecap(input: RecapInput): RecapResult {
             .flatMap((set) => [set.p1ParticipantId, set.p2ParticipantId])
             .filter((id): id is string => id !== null),
         )
-      : null;
+      : null
     const reported = entries.filter(
       (p) => p.finalRank != null && (finalParticipantIds === null || finalParticipantIds.has(p.id)),
-    );
+    )
     if (reported.length > 0) {
-      for (const p of reported) placement.set(p.id, p.finalRank!);
-      continue;
+      for (const p of reported) placement.set(p.id, p.finalRank!)
+      continue
     }
-    const outcome = outcomes.get(tournament.id);
-    if (!outcome) continue;
-    derivedFor.add(tournament.id);
-    for (const [participantId, place] of outcome.placements) placement.set(participantId, place);
+    const outcome = outcomes.get(tournament.id)
+    if (!outcome) continue
+    derivedFor.add(tournament.id)
+    for (const [participantId, place] of outcome.placements) placement.set(participantId, place)
   }
 
   /*
@@ -712,15 +842,17 @@ export function buildRecap(input: RecapInput): RecapResult {
    * the bracket a set was actually in — a rookie bracket's final is its final,
    * however deep the main bracket ran the same night.
    */
-  const roundsByTournament = new Map<string, BracketRounds>();
-  const tournamentTypeById = new Map(orderedTournaments.map((tournament) => [tournament.id, tournament.tournamentType ?? null]));
+  const roundsByTournament = new Map<string, BracketRounds>()
+  const tournamentTypeById = new Map(
+    orderedTournaments.map((tournament) => [tournament.id, tournament.tournamentType ?? null]),
+  )
   for (const set of sets) {
-    if (isGroupSet(set)) continue;
-    const round = set.round ?? 0;
-    const extent = roundsByTournament.get(set.tournamentId) ?? { maxRound: 0, minRound: 0 };
-    extent.maxRound = Math.max(extent.maxRound, round);
-    extent.minRound = Math.min(extent.minRound, round);
-    roundsByTournament.set(set.tournamentId, extent);
+    if (isGroupSet(set)) continue
+    const round = set.round ?? 0
+    const extent = roundsByTournament.get(set.tournamentId) ?? { maxRound: 0, minRound: 0 }
+    extent.maxRound = Math.max(extent.maxRound, round)
+    extent.minRound = Math.min(extent.minRound, round)
+    roundsByTournament.set(set.tournamentId, extent)
   }
   const stageOf = (playedSet: PlayedSet): string | null =>
     isGroupSet(playedSet.set)
@@ -729,51 +861,63 @@ export function buildRecap(input: RecapInput): RecapResult {
           playedSet.set.round,
           roundsByTournament.get(playedSet.set.tournamentId) ?? { maxRound: 0, minRound: 0 },
           tournamentTypeById.get(playedSet.set.tournamentId),
-        );
+        )
   const weightOf = (playedSet: PlayedSet): number => {
-    const extent = roundsByTournament.get(playedSet.set.tournamentId);
-    const depth = extent ? Math.max(extent.maxRound, -extent.minRound) : 0;
-    return stageWeight(playedSet.set.round, depth);
-  };
+    const extent = roundsByTournament.get(playedSet.set.tournamentId)
+    const depth = extent ? Math.max(extent.maxRound, -extent.minRound) : 0
+    return stageWeight(playedSet.set.round, depth)
+  }
 
-  const facts: RankedRecapFact[] = [];
+  const facts: RankedRecapFact[] = []
   const push = (id: string, notability: number, fact: RecapFact): void => {
-    facts.push({ id, notability: Math.max(0, Math.min(1, notability)), fact });
-  };
+    facts.push({ id, notability: Math.max(0, Math.min(1, notability)), fact })
+  }
 
-  collectPodiums(orderedTournaments, participants, placement, derivedFor, push);
-  collectGrandFinals(played, outcomes, push);
-  const deciderSetIds = new Set([...outcomes.values()].map((o) => o.decider.id));
-  collectSeedUpsets(played.filter((set) => !groupedTournamentIds.has(set.set.tournamentId)), stageOf, weightOf, push);
-  collectRatingUpsets(played, ratingEvents, input.model === 'whr', stageOf, weightOf, push);
-  collectNailbiters(played, deciderSetIds, stageOf, weightOf, push);
-  collectLosersRuns(played, placement, push);
-  collectOverperformers(orderedTournaments.filter((tournament) => !groupedTournamentIds.has(tournament.id)), participants, push);
-  collectCleanSweeps(played, participants, placement, push);
-  collectClimbs(played, ratingEvents, participants, push);
-  collectMovers(input.rankMovement ?? [], participants, push);
-  collectRivalries(played, input.history, push);
-  collectBreakthroughs(played, input.history, stageOf, weightOf, push);
-  collectRunbacks(played, push);
-  collectDebutsAndMilestones(played, participants, ratingEvents, input.history, push);
-  collectTurnout(participants, orderedTournaments, input.priorTurnouts ?? [], push);
+  collectPodiums(orderedTournaments, participants, placement, derivedFor, push)
+  collectGrandFinals(played, outcomes, push)
+  const deciderSetIds = new Set([...outcomes.values()].map((o) => o.decider.id))
+  collectSeedUpsets(
+    played.filter((set) => !groupedTournamentIds.has(set.set.tournamentId)),
+    stageOf,
+    weightOf,
+    push,
+  )
+  collectRatingUpsets(played, ratingEvents, input.model === 'whr', stageOf, weightOf, push)
+  collectNailbiters(played, deciderSetIds, stageOf, weightOf, push)
+  collectLosersRuns(played, placement, push)
+  collectOverperformers(
+    orderedTournaments.filter((tournament) => !groupedTournamentIds.has(tournament.id)),
+    participants,
+    push,
+  )
+  collectCleanSweeps(played, participants, placement, push)
+  collectClimbs(played, ratingEvents, participants, push)
+  collectMovers(input.rankMovement ?? [], participants, push)
+  collectRivalries(played, input.history, push)
+  collectBreakthroughs(played, input.history, stageOf, weightOf, push)
+  collectRunbacks(played, push)
+  collectDebutsAndMilestones(played, participants, ratingEvents, input.history, push)
+  collectTurnout(participants, orderedTournaments, input.priorTurnouts ?? [], push)
 
-  facts.sort((a, b) => b.notability - a.notability || a.id.localeCompare(b.id));
+  facts.sort((a, b) => b.notability - a.notability || a.id.localeCompare(b.id))
 
-  const entrantIds = new Set(participants.map((participant) => participant.playerId ?? `participant:${participant.id}`));
+  const entrantIds = new Set(
+    participants.map((participant) => participant.playerId ?? `participant:${participant.id}`),
+  )
   return {
     eventKey: eventKey ? eventKeyOf(eventKey) : null,
     tournaments: orderedTournaments,
     entrants: entrantIds.size,
     setsPlayed: played.length,
-    isComplete: orderedTournaments.length > 0 && orderedTournaments.every((t) => isBracketOver(t, now)),
+    isComplete:
+      orderedTournaments.length > 0 && orderedTournaments.every((t) => isBracketOver(t, now)),
     isAbandoned: orderedTournaments.some((t) => isBracketAbandoned(t, now)),
     facts: limitByKind(facts),
     highlights: selectFacts(facts),
-  };
+  }
 }
 
-type Push = (id: string, notability: number, fact: RecapFact) => void;
+type Push = (id: string, notability: number, fact: RecapFact) => void
 
 function collectPodiums(
   tournaments: readonly RecapTournament[],
@@ -786,8 +930,8 @@ function collectPodiums(
     const placed = participants
       .filter((p) => p.tournamentId === tournament.id && placement.has(p.id))
       .sort((a, b) => placement.get(a.id)! - placement.get(b.id)!)
-      .filter((p) => placement.get(p.id)! <= 3);
-    if (placed.length === 0) continue;
+      .filter((p) => placement.get(p.id)! <= 3)
+    if (placed.length === 0) continue
     // The main bracket's podium is the night's headline; the rookie one sits
     // just below it rather than competing with the drama facts.
     push(`podium:${tournament.id}`, tournament.isRookie ? 0.9 : 1, {
@@ -795,7 +939,7 @@ function collectPodiums(
       tournamentId: tournament.id,
       derived: derivedFor.has(tournament.id),
       places: placed.map((p) => ({ player: refOf(p), place: placement.get(p.id)!, seed: p.seed })),
-    });
+    })
   }
 }
 
@@ -812,14 +956,14 @@ function collectGrandFinals(
   outcomes: ReadonlyMap<string, BracketOutcome>,
   push: Push,
 ): void {
-  const playedById = new Map(played.map((p) => [p.set.id, p]));
+  const playedById = new Map(played.map((p) => [p.set.id, p]))
   for (const [tournamentId, outcome] of outcomes) {
     // A bracket whose rounds are all zero or negative has no final worth
     // naming — that is not a shape the club's brackets take, but the guard
     // keeps a malformed one from producing a nonsense card.
-    if ((outcome.decider.round ?? 0) <= 0) continue;
-    const decider = playedById.get(outcome.decider.id);
-    if (!decider) continue;
+    if ((outcome.decider.round ?? 0) <= 0) continue
+    const decider = playedById.get(outcome.decider.id)
+    if (!decider) continue
 
     /*
      * The champion's whole night, so the card can tell the run and not just
@@ -831,14 +975,14 @@ function collectGrandFinals(
         p.set.tournamentId === tournamentId &&
         !isGroupSet(p.set) &&
         (p.winner.id === decider.winner.id || p.loser.id === decider.winner.id),
-    );
-    const runSets = run.length;
+    )
+    const runSets = run.length
     const gamesDropped = run.every((p) => p.scoreKnown)
       ? run.reduce(
           (sum, p) => sum + (p.winner.id === decider.winner.id ? p.loserGames : p.winnerGames),
           0,
         )
-      : null;
+      : null
 
     push(`grand_finals:${tournamentId}`, outcome.bracketReset ? 0.95 : 0.7, {
       kind: 'grand_finals',
@@ -849,7 +993,7 @@ function collectGrandFinals(
       bracketReset: outcome.bracketReset,
       runSets,
       gamesDropped,
-    });
+    })
   }
 }
 
@@ -867,11 +1011,11 @@ function collectSeedUpsets(
   push: Push,
 ): void {
   for (const p of played) {
-    const winnerSeed = p.winner.seed;
-    const loserSeed = p.loser.seed;
-    if (winnerSeed == null || loserSeed == null || winnerSeed <= loserSeed) continue;
-    const ratio = Math.log2(winnerSeed / loserSeed);
-    const notability = 0.45 * saturate(ratio, 1.6) + 0.35 * weightOf(p) + 0.1;
+    const winnerSeed = p.winner.seed
+    const loserSeed = p.loser.seed
+    if (winnerSeed == null || loserSeed == null || winnerSeed <= loserSeed) continue
+    const ratio = Math.log2(winnerSeed / loserSeed)
+    const notability = 0.45 * saturate(ratio, 1.6) + 0.35 * weightOf(p) + 0.1
     push(`seed_upset:${p.set.id}`, notability, {
       kind: 'seed_upset',
       tournamentId: p.set.tournamentId,
@@ -881,7 +1025,7 @@ function collectSeedUpsets(
       loserSeed,
       stage: stageOf(p),
       score: scoreText(p),
-    });
+    })
   }
 }
 
@@ -900,35 +1044,36 @@ function collectRatingUpsets(
   weightOf: (p: PlayedSet) => number,
   push: Push,
 ): void {
-  if (ratingEvents.length === 0) return;
-  const bySet = new Map<string, RecapRatingEvent[]>();
+  if (ratingEvents.length === 0) return
+  const bySet = new Map<string, RecapRatingEvent[]>()
   for (const event of ratingEvents) {
-    if (event.isDecay || !event.setId) continue;
-    const list = bySet.get(event.setId);
-    if (list) list.push(event);
-    else bySet.set(event.setId, [event]);
+    if (event.isDecay || !event.setId) continue
+    const list = bySet.get(event.setId)
+    if (list) list.push(event)
+    else bySet.set(event.setId, [event])
   }
 
   for (const p of played) {
-    const events = bySet.get(p.set.id);
-    if (!events || events.length < 2) continue;
-    const winnerEvent = events.find((e) => e.playerId === p.winner.playerId);
-    const loserEvent = events.find((e) => e.playerId === p.loser.playerId);
-    if (!winnerEvent || !loserEvent) continue;
+    const events = bySet.get(p.set.id)
+    if (!events || events.length < 2) continue
+    const winnerEvent = events.find((e) => e.playerId === p.winner.playerId)
+    const loserEvent = events.find((e) => e.playerId === p.loser.playerId)
+    if (!winnerEvent || !loserEvent) continue
 
     const probability = isWhr
       ? probabilityFromRatings(
           (winnerEvent.preRating - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY,
           (loserEvent.preRating - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY,
-          (winnerEvent.preRd / NATURAL_TO_DISPLAY) ** 2 + (loserEvent.preRd / NATURAL_TO_DISPLAY) ** 2,
+          (winnerEvent.preRd / NATURAL_TO_DISPLAY) ** 2 +
+            (loserEvent.preRd / NATURAL_TO_DISPLAY) ** 2,
         )
       : winProbability(
           { rating: winnerEvent.preRating, rd: winnerEvent.preRd, vol: 0 },
           { rating: loserEvent.preRating, rd: loserEvent.preRd, vol: 0 },
-        );
+        )
     // Only genuine longshots; an even set is not an upset.
-    if (probability > 0.35) continue;
-    const notability = 0.6 * (1 - probability / 0.35) + 0.3 * weightOf(p) + 0.1;
+    if (probability > 0.35) continue
+    const notability = 0.6 * (1 - probability / 0.35) + 0.3 * weightOf(p) + 0.1
     push(`rating_upset:${p.set.id}`, notability, {
       kind: 'rating_upset',
       tournamentId: p.set.tournamentId,
@@ -938,7 +1083,7 @@ function collectRatingUpsets(
       ratingGap: loserEvent.preRating - winnerEvent.preRating,
       stage: stageOf(p),
       score: scoreText(p),
-    });
+    })
   }
 }
 
@@ -951,11 +1096,11 @@ function collectNailbiters(
   push: Push,
 ): void {
   for (const p of played) {
-    if (!p.scoreKnown) continue;
+    if (!p.scoreKnown) continue
     // The set that decided a bracket already has its own card; a nailbiter
     // card for the same set tells the same story twice.
-    if (deciderSetIds.has(p.set.id)) continue;
-    if (p.winnerGames < 2 || p.loserGames !== p.winnerGames - 1) continue;
+    if (deciderSetIds.has(p.set.id)) continue
+    if (p.winnerGames < 2 || p.loserGames !== p.winnerGames - 1) continue
     push(`nailbiter:${p.set.id}`, 0.25 + 0.5 * weightOf(p), {
       kind: 'nailbiter',
       tournamentId: p.set.tournamentId,
@@ -963,7 +1108,7 @@ function collectNailbiters(
       loser: refOf(p.loser),
       score: `${p.winnerGames}-${p.loserGames}`,
       stage: stageOf(p),
-    });
+    })
   }
 }
 
@@ -977,24 +1122,24 @@ function collectLosersRuns(
   placement: ReadonlyMap<string, number>,
   push: Push,
 ): void {
-  const runs = new Map<string, { participant: RecapParticipant; wins: number }>();
+  const runs = new Map<string, { participant: RecapParticipant; wins: number }>()
   for (const p of played) {
-    if (isGroupSet(p.set)) continue;
-    if ((p.set.round ?? 0) >= 0) continue;
-    const key = `${p.set.tournamentId}:${p.winner.id}`;
-    const existing = runs.get(key);
-    if (existing) existing.wins += 1;
-    else runs.set(key, { participant: p.winner, wins: 1 });
+    if (isGroupSet(p.set)) continue
+    if ((p.set.round ?? 0) >= 0) continue
+    const key = `${p.set.tournamentId}:${p.winner.id}`
+    const existing = runs.get(key)
+    if (existing) existing.wins += 1
+    else runs.set(key, { participant: p.winner, wins: 1 })
   }
   for (const [key, run] of runs) {
-    if (run.wins < 3) continue;
+    if (run.wins < 3) continue
     push(`losers_run:${key}`, Math.min(0.9, 0.4 + 0.12 * run.wins), {
       kind: 'losers_run',
       tournamentId: run.participant.tournamentId,
       player: refOf(run.participant),
       wins: run.wins,
       finalRank: placement.get(run.participant.id) ?? null,
-    });
+    })
   }
 }
 
@@ -1002,33 +1147,38 @@ function collectLosersRuns(
 function collectRunbacks(played: readonly PlayedSet[], push: Push): void {
   const orderOf = (a: PlayedSet, b: PlayedSet): number => {
     if (a.set.tournamentId === b.set.tournamentId) {
-      return compareOrderKeys(setOrderKey(a.set, 0), setOrderKey(b.set, 0));
+      return compareOrderKeys(setOrderKey(a.set, 0), setOrderKey(b.set, 0))
     }
     // Match identifiers/play-order values restart per bracket. Cross-bracket
     // chronology is only factual when both sets carry timestamps.
-    if (a.set.completedAt && b.set.completedAt) return a.set.completedAt.localeCompare(b.set.completedAt);
-    return 0;
-  };
-  const ordered = [...played].sort((a, b) => orderOf(a, b));
-  const seen = new Set<string>();
+    if (a.set.completedAt && b.set.completedAt)
+      return a.set.completedAt.localeCompare(b.set.completedAt)
+    return 0
+  }
+  const ordered = [...played].sort((a, b) => orderOf(a, b))
+  const seen = new Set<string>()
   for (let i = 0; i < ordered.length; i += 1) {
-    const later = ordered[i]!;
-    if (!later.winner.playerId || !later.loser.playerId) continue;
+    const later = ordered[i]!
+    if (!later.winner.playerId || !later.loser.playerId) continue
     for (let j = 0; j < i; j += 1) {
-      const earlier = ordered[j]!;
-      if (orderOf(earlier, later) >= 0) continue;
-      if (earlier.winner.playerId !== later.loser.playerId || earlier.loser.playerId !== later.winner.playerId) continue;
-      const key = `${later.winner.playerId}:${later.loser.playerId}`;
-      if (seen.has(key)) break;
-      seen.add(key);
+      const earlier = ordered[j]!
+      if (orderOf(earlier, later) >= 0) continue
+      if (
+        earlier.winner.playerId !== later.loser.playerId ||
+        earlier.loser.playerId !== later.winner.playerId
+      )
+        continue
+      const key = `${later.winner.playerId}:${later.loser.playerId}`
+      if (seen.has(key)) break
+      seen.add(key)
       push(`runback:${key}:${later.set.id}`, 0.55, {
         kind: 'runback',
         tournamentId: later.set.tournamentId,
         winner: refOf(later.winner),
         loser: refOf(later.loser),
         score: scoreText(later),
-      });
-      break;
+      })
+      break
     }
   }
 }
@@ -1049,14 +1199,14 @@ function collectOverperformers(
   push: Push,
 ): void {
   for (const tournament of tournaments) {
-    if (tournament.challongeState !== 'complete') continue;
+    if (tournament.challongeState !== 'complete') continue
     for (const p of participants) {
-      if (p.tournamentId !== tournament.id) continue;
-      if (p.seed == null || p.finalRank == null || p.finalRank >= p.seed) continue;
-      const placesGained = p.seed - p.finalRank;
+      if (p.tournamentId !== tournament.id) continue
+      if (p.seed == null || p.finalRank == null || p.finalRank >= p.seed) continue
+      const placesGained = p.seed - p.finalRank
       // A winner's story is already told by the podium fact.
-      if (p.finalRank === 1) continue;
-      const ratio = Math.log2(p.seed / p.finalRank);
+      if (p.finalRank === 1) continue
+      const ratio = Math.log2(p.seed / p.finalRank)
       push(`overperformer:${tournament.id}:${p.id}`, 0.25 + 0.45 * saturate(ratio, 1.4), {
         kind: 'overperformer',
         tournamentId: tournament.id,
@@ -1064,7 +1214,7 @@ function collectOverperformers(
         seed: p.seed,
         finalRank: p.finalRank,
         placesGained,
-      });
+      })
     }
   }
 }
@@ -1080,21 +1230,23 @@ function collectCleanSweeps(
   placement: ReadonlyMap<string, number>,
   push: Push,
 ): void {
-  const champions = participants.filter((p) => placement.get(p.id) === 1);
+  const champions = participants.filter((p) => placement.get(p.id) === 1)
   for (const champion of champions) {
-    const theirs = played.filter(
-      (p) => p.winner.id === champion.id || p.loser.id === champion.id,
-    );
-    if (theirs.length < 3) continue;
-    if (theirs.some((p) => !p.scoreKnown)) continue;
-    const dropped = theirs.some((p) => p.loser.id === champion.id || p.loserGames > 0);
-    if (dropped) continue;
-    push(`clean_sweep:${champion.tournamentId}:${champion.id}`, Math.min(0.92, 0.6 + 0.05 * theirs.length), {
-      kind: 'clean_sweep',
-      tournamentId: champion.tournamentId,
-      player: refOf(champion),
-      sets: theirs.length,
-    });
+    const theirs = played.filter((p) => p.winner.id === champion.id || p.loser.id === champion.id)
+    if (theirs.length < 3) continue
+    if (theirs.some((p) => !p.scoreKnown)) continue
+    const dropped = theirs.some((p) => p.loser.id === champion.id || p.loserGames > 0)
+    if (dropped) continue
+    push(
+      `clean_sweep:${champion.tournamentId}:${champion.id}`,
+      Math.min(0.92, 0.6 + 0.05 * theirs.length),
+      {
+        kind: 'clean_sweep',
+        tournamentId: champion.tournamentId,
+        player: refOf(champion),
+        sets: theirs.length,
+      },
+    )
   }
 }
 
@@ -1105,30 +1257,30 @@ function collectClimbs(
   participants: readonly RecapParticipant[],
   push: Push,
 ): void {
-  if (ratingEvents.length === 0 || played.length === 0) return;
-  const playedSetIds = new Set(played.map((p) => p.set.id));
-  const byPlayer = new Map<string, { first: RecapRatingEvent; last: RecapRatingEvent }>();
+  if (ratingEvents.length === 0 || played.length === 0) return
+  const playedSetIds = new Set(played.map((p) => p.set.id))
+  const byPlayer = new Map<string, { first: RecapRatingEvent; last: RecapRatingEvent }>()
   for (const event of ratingEvents) {
-    if (event.isDecay || !event.setId || !playedSetIds.has(event.setId)) continue;
-    const existing = byPlayer.get(event.playerId);
-    if (existing) existing.last = event;
-    else byPlayer.set(event.playerId, { first: event, last: event });
+    if (event.isDecay || !event.setId || !playedSetIds.has(event.setId)) continue
+    const existing = byPlayer.get(event.playerId)
+    if (existing) existing.last = event
+    else byPlayer.set(event.playerId, { first: event, last: event })
   }
 
-  const participantByPlayer = new Map<string, RecapParticipant>();
-  for (const p of participants) if (p.playerId) participantByPlayer.set(p.playerId, p);
+  const participantByPlayer = new Map<string, RecapParticipant>()
+  for (const p of participants) if (p.playerId) participantByPlayer.set(p.playerId, p)
 
-  let best: { player: RecapParticipant; gained: number; from: number; to: number } | null = null;
+  let best: { player: RecapParticipant; gained: number; from: number; to: number } | null = null
   for (const [playerId, span] of byPlayer) {
-    const participant = participantByPlayer.get(playerId);
-    if (!participant) continue;
-    const gained = span.last.postRating - span.first.preRating;
-    if (gained <= 0) continue;
+    const participant = participantByPlayer.get(playerId)
+    if (!participant) continue
+    const gained = span.last.postRating - span.first.preRating
+    if (gained <= 0) continue
     if (!best || gained > best.gained) {
-      best = { player: participant, gained, from: span.first.preRating, to: span.last.postRating };
+      best = { player: participant, gained, from: span.first.preRating, to: span.last.postRating }
     }
   }
-  if (!best) return;
+  if (!best) return
   push(`biggest_climb:${best.player.id}`, 0.3 + 0.5 * saturate(best.gained, 60), {
     kind: 'biggest_climb',
     tournamentId: best.player.tournamentId,
@@ -1136,7 +1288,7 @@ function collectClimbs(
     gained: best.gained,
     from: best.from,
     to: best.to,
-  });
+  })
 }
 
 /**
@@ -1148,17 +1300,17 @@ function collectMovers(
   participants: readonly RecapParticipant[],
   push: Push,
 ): void {
-  const participantByPlayer = new Map<string, RecapParticipant>();
-  for (const p of participants) if (p.playerId) participantByPlayer.set(p.playerId, p);
+  const participantByPlayer = new Map<string, RecapParticipant>()
+  for (const p of participants) if (p.playerId) participantByPlayer.set(p.playerId, p)
 
   const climbers = movement
     .filter((m) => m.previousRank != null && m.previousRank > m.rank)
     .map((m) => ({ ...m, gained: m.previousRank! - m.rank }))
-    .sort((a, b) => b.gained - a.gained);
+    .sort((a, b) => b.gained - a.gained)
 
   for (const mover of climbers.slice(0, 3)) {
-    const participant = participantByPlayer.get(mover.playerId);
-    if (!participant) continue;
+    const participant = participantByPlayer.get(mover.playerId)
+    if (!participant) continue
     push(`mover:${mover.playerId}`, 0.2 + 0.4 * saturate(mover.gained, 4), {
       kind: 'mover',
       tournamentId: null,
@@ -1166,30 +1318,34 @@ function collectMovers(
       rank: mover.rank,
       previousRank: mover.previousRank!,
       placesGained: mover.gained,
-    });
+    })
   }
 }
 
 /** Repeat meetings — the club's running head-to-heads. */
-function collectRivalries(played: readonly PlayedSet[], history: RecapHistory | undefined, push: Push): void {
-  if (!history) return;
+function collectRivalries(
+  played: readonly PlayedSet[],
+  history: RecapHistory | undefined,
+  push: Push,
+): void {
+  if (!history) return
   for (const p of played) {
-    const winnerId = p.winner.playerId;
-    const loserId = p.loser.playerId;
-    if (!winnerId || !loserId) continue;
-    const key = pairKey(winnerId, loserId);
-    const prior = history.priorMeetings.get(key);
-    if (!prior) continue;
-    const meetings = prior.aWins + prior.bWins + 1;
-    if (meetings < 3) continue;
+    const winnerId = p.winner.playerId
+    const loserId = p.loser.playerId
+    if (!winnerId || !loserId) continue
+    const key = pairKey(winnerId, loserId)
+    const prior = history.priorMeetings.get(key)
+    if (!prior) continue
+    const meetings = prior.aWins + prior.bWins + 1
+    if (meetings < 3) continue
     // `aWins` belongs to the lexicographically smaller id; resolve it to the
     // set's winner so the caller never has to redo the comparison.
-    const winnerIsA = winnerId < loserId;
-    const winnerPriorWins = winnerIsA ? prior.aWins : prior.bWins;
-    const loserPriorWins = winnerIsA ? prior.bWins : prior.aWins;
+    const winnerIsA = winnerId < loserId
+    const winnerPriorWins = winnerIsA ? prior.aWins : prior.bWins
+    const loserPriorWins = winnerIsA ? prior.bWins : prior.aWins
     // A first-ever win over a long-time tormentor is the breakthrough fact's
     // story; telling it here too would put the same set on two cards.
-    if (winnerPriorWins === 0 && loserPriorWins >= 2) continue;
+    if (winnerPriorWins === 0 && loserPriorWins >= 2) continue
     push(`rivalry:${p.set.id}`, Math.min(0.85, 0.3 + 0.08 * meetings), {
       kind: 'rivalry',
       tournamentId: p.set.tournamentId,
@@ -1198,7 +1354,7 @@ function collectRivalries(played: readonly PlayedSet[], history: RecapHistory | 
       meetings,
       aWins: winnerPriorWins + 1,
       bWins: loserPriorWins,
-    });
+    })
   }
 }
 
@@ -1214,32 +1370,36 @@ function collectBreakthroughs(
   weightOf: (p: PlayedSet) => number,
   push: Push,
 ): void {
-  if (!history) return;
+  if (!history) return
   // One breakthrough per pairing per night: beating them twice tonight is
   // still one story.
-  const claimed = new Set<string>();
+  const claimed = new Set<string>()
   for (const p of played) {
-    const winnerId = p.winner.playerId;
-    const loserId = p.loser.playerId;
-    if (!winnerId || !loserId) continue;
-    const key = pairKey(winnerId, loserId);
-    if (claimed.has(key)) continue;
-    const prior = history.priorMeetings.get(key);
-    if (!prior) continue;
-    const winnerIsA = winnerId < loserId;
-    const winnerPriorWins = winnerIsA ? prior.aWins : prior.bWins;
-    const priorLosses = winnerIsA ? prior.bWins : prior.aWins;
-    if (winnerPriorWins > 0 || priorLosses < 2) continue;
-    claimed.add(key);
-    push(`breakthrough:${p.set.id}`, Math.min(0.85, 0.4 + 0.08 * priorLosses + 0.15 * weightOf(p)), {
-      kind: 'breakthrough',
-      tournamentId: p.set.tournamentId,
-      winner: refOf(p.winner),
-      loser: refOf(p.loser),
-      priorLosses,
-      stage: stageOf(p),
-      score: scoreText(p),
-    });
+    const winnerId = p.winner.playerId
+    const loserId = p.loser.playerId
+    if (!winnerId || !loserId) continue
+    const key = pairKey(winnerId, loserId)
+    if (claimed.has(key)) continue
+    const prior = history.priorMeetings.get(key)
+    if (!prior) continue
+    const winnerIsA = winnerId < loserId
+    const winnerPriorWins = winnerIsA ? prior.aWins : prior.bWins
+    const priorLosses = winnerIsA ? prior.bWins : prior.aWins
+    if (winnerPriorWins > 0 || priorLosses < 2) continue
+    claimed.add(key)
+    push(
+      `breakthrough:${p.set.id}`,
+      Math.min(0.85, 0.4 + 0.08 * priorLosses + 0.15 * weightOf(p)),
+      {
+        kind: 'breakthrough',
+        tournamentId: p.set.tournamentId,
+        winner: refOf(p.winner),
+        loser: refOf(p.loser),
+        priorLosses,
+        stage: stageOf(p),
+        score: scoreText(p),
+      },
+    )
   }
 }
 
@@ -1251,88 +1411,91 @@ function collectDebutsAndMilestones(
   history: RecapHistory | undefined,
   push: Push,
 ): void {
-  if (!history) return;
+  if (!history) return
 
   // Someone who entered both brackets is two participants but one person, so
   // every per-player tally below folds on player id first.
-  const firstParticipantPerPlayer = new Map<string, RecapParticipant>();
+  const firstParticipantPerPlayer = new Map<string, RecapParticipant>()
   for (const p of participants) {
     if (p.playerId && !firstParticipantPerPlayer.has(p.playerId)) {
-      firstParticipantPerPlayer.set(p.playerId, p);
+      firstParticipantPerPlayer.set(p.playerId, p)
     }
   }
 
   const debutants = [...firstParticipantPerPlayer.values()].filter(
     (p) => (history.priorEventCounts.get(p.playerId!) ?? 0) === 0,
-  );
+  )
   if (debutants.length > 0) {
-    const tournamentId = debutants[0]!.tournamentId;
+    const tournamentId = debutants[0]!.tournamentId
     push(`debut:${tournamentId}`, Math.min(0.6, 0.3 + 0.06 * debutants.length), {
       kind: 'debut',
       tournamentId,
       players: debutants.map(refOf),
-    });
+    })
   }
 
-  const setsPlayedTonight = new Map<string, number>();
+  const setsPlayedTonight = new Map<string, number>()
   for (const p of played) {
     for (const side of [p.winner, p.loser]) {
-      if (!side.playerId) continue;
-      setsPlayedTonight.set(side.playerId, (setsPlayedTonight.get(side.playerId) ?? 0) + 1);
+      if (!side.playerId) continue
+      setsPlayedTonight.set(side.playerId, (setsPlayedTonight.get(side.playerId) ?? 0) + 1)
     }
   }
 
   // Round-number set counts crossed tonight.
   for (const [playerId, tonight] of setsPlayedTonight) {
-    const participant = firstParticipantPerPlayer.get(playerId);
-    if (!participant) continue;
-    const before = history.priorSetCounts.get(playerId) ?? 0;
-    const after = before + tonight;
-    const milestone = [500, 250, 100, 50, 25].find((m) => before < m && after >= m);
-    if (milestone === undefined) continue;
+    const participant = firstParticipantPerPlayer.get(playerId)
+    if (!participant) continue
+    const before = history.priorSetCounts.get(playerId) ?? 0
+    const after = before + tonight
+    const milestone = [500, 250, 100, 50, 25].find((m) => before < m && after >= m)
+    if (milestone === undefined) continue
     push(`milestone_sets:${playerId}`, Math.min(0.75, 0.35 + milestone / 1000), {
       kind: 'milestone',
       tournamentId: participant.tournamentId,
       player: refOf(participant),
       milestone: 'sets',
       value: milestone,
-    });
+    })
   }
 
   // Round-number attendance counts crossed tonight. Everyone present tonight
   // is one night further along, so this needs no per-player tally.
   for (const participant of firstParticipantPerPlayer.values()) {
-    const before = history.priorEventCounts.get(participant.playerId!) ?? 0;
-    const milestone = [100, 50, 25, 10].find((m) => before === m - 1);
-    if (milestone === undefined) continue;
+    const before = history.priorEventCounts.get(participant.playerId!) ?? 0
+    const milestone = [100, 50, 25, 10].find((m) => before === m - 1)
+    if (milestone === undefined) continue
     push(`milestone_events:${participant.playerId!}`, Math.min(0.7, 0.3 + milestone / 200), {
       kind: 'milestone',
       tournamentId: participant.tournamentId,
       player: refOf(participant),
       milestone: 'events',
       value: milestone,
-    });
+    })
   }
 
   // Career-high rating, from tonight's own events.
-  const peakTonight = new Map<string, number>();
+  const peakTonight = new Map<string, number>()
   for (const event of ratingEvents) {
-    if (event.isDecay) continue;
-    peakTonight.set(event.playerId, Math.max(peakTonight.get(event.playerId) ?? 0, event.postRating));
+    if (event.isDecay) continue
+    peakTonight.set(
+      event.playerId,
+      Math.max(peakTonight.get(event.playerId) ?? 0, event.postRating),
+    )
   }
   for (const [playerId, peak] of peakTonight) {
-    const participant = firstParticipantPerPlayer.get(playerId);
-    const priorPeak = history.priorPeakRating.get(playerId);
+    const participant = firstParticipantPerPlayer.get(playerId)
+    const priorPeak = history.priorPeakRating.get(playerId)
     // A player with no history has no career high to beat — that is a debut,
     // not a peak.
-    if (!participant || priorPeak === undefined || peak <= priorPeak) continue;
+    if (!participant || priorPeak === undefined || peak <= priorPeak) continue
     push(`milestone_peak:${playerId}`, 0.3 + 0.35 * saturate(peak - priorPeak, 40), {
       kind: 'milestone',
       tournamentId: participant.tournamentId,
       player: refOf(participant),
       milestone: 'peak_rating',
       value: peak,
-    });
+    })
   }
 }
 
@@ -1343,30 +1506,30 @@ function collectTurnout(
   priorTurnouts: readonly { eventKey: string; entrants: number }[],
   push: Push,
 ): void {
-  if (participants.length === 0 || tournaments.length === 0) return;
+  if (participants.length === 0 || tournaments.length === 0) return
   // One person entering both brackets of a night is one entrant. Unresolved
   // entries have no player id to dedupe on, so they count individually.
-  const distinct = new Set<string>();
-  let unresolved = 0;
+  const distinct = new Set<string>()
+  let unresolved = 0
   for (const p of participants) {
-    if (p.playerId) distinct.add(p.playerId);
-    else unresolved += 1;
+    if (p.playerId) distinct.add(p.playerId)
+    else unresolved += 1
   }
-  const entrants = distinct.size + unresolved;
+  const entrants = distinct.size + unresolved
   const previousBest = priorTurnouts.reduce<number | null>(
     (max, t) => (max === null || t.entrants > max ? t.entrants : max),
     null,
-  );
-  const isRecord = previousBest !== null && entrants > previousBest;
+  )
+  const isRecord = previousBest !== null && entrants > previousBest
   // Only worth a card when there is something to compare against.
-  if (previousBest === null) return;
+  if (previousBest === null) return
   push('turnout', isRecord ? 0.75 : 0.15, {
     kind: 'turnout',
     tournamentId: null,
     entrants,
     previousBest,
     isRecord,
-  });
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -1374,12 +1537,12 @@ function collectTurnout(
 // ---------------------------------------------------------------------------
 
 const ordinal = (n: number): string => {
-  const suffix = n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th';
-  return `${n}${suffix}`;
-};
+  const suffix = n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')
+  return `${n}${suffix}`
+}
 
 /** "in the winners final" / "" — stages read as a trailing clause or vanish. */
-const inStage = (stage: string | null): string => (stage ? ` in ${stage}` : '');
+const inStage = (stage: string | null): string => (stage ? ` in ${stage}` : '')
 
 /**
  * Fact copy, kept beside the facts themselves so the page, the share image and
@@ -1392,81 +1555,81 @@ const inStage = (stage: string | null): string => (stage ? ` in ${stage}` : '');
 export function formatFact(fact: RecapFact): { headline: string; detail: string } {
   switch (fact.kind) {
     case 'podium': {
-      const [first, second, third] = fact.places;
-      const runnersUp = [second, third].filter(Boolean).map((p) => p!.player.name);
+      const [first, second, third] = fact.places
+      const runnersUp = [second, third].filter(Boolean).map((p) => p!.player.name)
       return {
         headline: first ? `${first.player.name} takes it` : 'Podium',
         detail:
           (first?.seed != null ? `Seeded ${ordinal(first.seed)}. ` : '') +
           (runnersUp.length > 0 ? `Ahead of ${runnersUp.join(' and ')}.` : ''),
-      };
+      }
     }
     case 'seed_upset': {
       // A four-fold seed gap reads as a shock; anything less is a scalp.
-      const shock = fact.winnerSeed >= fact.loserSeed * 4;
+      const shock = fact.winnerSeed >= fact.loserSeed * 4
       return {
         headline: shock
           ? `${fact.winner.name} shocks ${fact.loser.name}`
           : `${fact.winner.name} takes down ${fact.loser.name}`,
         detail: `In as the ${ordinal(fact.winnerSeed)} seed against the ${ordinal(fact.loserSeed)}${inStage(fact.stage)}${fact.score ? ` — won ${fact.score}` : ''}.`,
-      };
+      }
     }
     case 'rating_upset': {
-      const oneIn = Math.max(2, Math.round(1 / Math.max(fact.probability, 0.01)));
+      const oneIn = Math.max(2, Math.round(1 / Math.max(fact.probability, 0.01)))
       return {
         headline: `${fact.winner.name} beats the odds`,
         detail: `The ratings gave them one chance in ${oneIn} against ${fact.loser.name} — ${Math.round(fact.ratingGap)} points apart${inStage(fact.stage)}${fact.score ? `. Won ${fact.score}` : ''}.`,
-      };
+      }
     }
     case 'losers_run':
       return {
         headline: `${fact.player.name}'s long road back`,
         detail: `Sent to the losers bracket, then won ${fact.wins} straight elimination sets${fact.finalRank != null ? ` to finish ${ordinal(fact.finalRank)}` : ''}.`,
-      };
+      }
     case 'runback':
       return {
         headline: `${fact.winner.name} gets the runback`,
         detail: `After losing to ${fact.loser.name} earlier tonight, they won the rematch${fact.score ? ` ${fact.score}` : ''}.`,
-      };
+      }
     case 'overperformer':
       return {
         headline: `${fact.player.name} outruns the seeding`,
         detail: `In as the ${ordinal(fact.seed)} seed, out in ${ordinal(fact.finalRank)} — ${fact.placesGained} places clear of expectations.`,
-      };
+      }
     case 'nailbiter':
       return {
         headline: `${fact.winner.name} holds off ${fact.loser.name}`,
         detail: `${fact.score}${inStage(fact.stage)}, down to the last game.`,
-      };
+      }
     case 'clean_sweep':
       return {
         headline: `${fact.player.name} drops nothing`,
         detail: `${fact.sets} sets, not a single game lost, bracket closed.`,
-      };
+      }
     case 'biggest_climb':
       return {
         headline: `${fact.player.name} owns the night`,
         detail: `Up ${Math.round(fact.gained)} rating in one evening, ${Math.round(fact.from)} → ${Math.round(fact.to)} — the biggest move on the board.`,
-      };
+      }
     case 'mover':
       return {
         headline: `${fact.player.name} climbs to #${fact.rank}`,
         detail: `Up ${fact.placesGained} ${fact.placesGained === 1 ? 'place' : 'places'} from #${fact.previousRank} on tonight's games.`,
-      };
+      }
     case 'rivalry': {
-      const level = fact.aWins === fact.bWins;
+      const level = fact.aWins === fact.bWins
       return {
         headline: `${fact.a.name} vs ${fact.b.name}, chapter ${fact.meetings}`,
         detail: level
           ? `${fact.a.name} took tonight's meeting, and the series is level at ${fact.aWins}–${fact.bWins}.`
           : `${fact.a.name} took tonight's meeting; ${fact.aWins > fact.bWins ? fact.a.name : fact.b.name} leads the series ${fact.aWins}–${fact.bWins}.`,
-      };
+      }
     }
     case 'breakthrough':
       return {
         headline: `${fact.winner.name} finally gets one`,
         detail: `${fact.priorLosses} career losses to ${fact.loser.name} and never a win — until tonight${inStage(fact.stage)}${fact.score ? `, ${fact.score}` : ''}.`,
-      };
+      }
     case 'debut':
       return {
         headline:
@@ -1477,28 +1640,30 @@ export function formatFact(fact: RecapFact): { headline: string; detail: string 
           fact.players.length === 1
             ? 'Welcome to the club.'
             : `First club night for ${fact.players.map((p) => p.name).join(', ')}.`,
-      };
+      }
     case 'milestone':
       if (fact.milestone === 'peak_rating') {
         return {
           headline: `${fact.player.name} has never been rated higher`,
           detail: `A new career-high rating of ${Math.round(fact.value)}.`,
-        };
+        }
       }
       if (fact.milestone === 'events') {
         return {
           headline: `${fact.player.name}'s ${ordinal(fact.value)} club night`,
           detail: `${fact.value} evenings of showing up.`,
-        };
+        }
       }
       return {
         headline: `${fact.player.name}'s ${ordinal(fact.value)} career set`,
         detail: `Crossed ${fact.value} sets played tonight.`,
-      };
+      }
     case 'turnout': {
-      const tied = fact.previousBest != null && fact.entrants === fact.previousBest;
+      const tied = fact.previousBest != null && fact.entrants === fact.previousBest
       return {
-        headline: fact.isRecord ? 'The biggest night the club has run' : `${fact.entrants} in the building`,
+        headline: fact.isRecord
+          ? 'The biggest night the club has run'
+          : `${fact.entrants} in the building`,
         detail:
           fact.previousBest == null
             ? ''
@@ -1507,17 +1672,17 @@ export function formatFact(fact: RecapFact): { headline: string; detail: string 
               : tied
                 ? `Ties the club's best night.`
                 : `Best turnout is still ${fact.previousBest}.`,
-      };
+      }
     }
     case 'grand_finals': {
       const run =
         fact.gamesDropped != null && fact.gamesDropped > 0
           ? ` Played ${fact.runSets} sets on the way, with ${fact.gamesDropped} ${fact.gamesDropped === 1 ? 'game' : 'games'} dropped along the way.`
-          : '';
+          : ''
       return {
         headline: `${fact.winner.name} wins the bracket`,
         detail: `${fact.bracketReset ? 'It took a bracket reset. ' : ''}Beat ${fact.loser.name}${fact.score ? ` ${fact.score}` : ''} in the decider.${run}`,
-      };
+      }
     }
   }
 }

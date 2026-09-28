@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { trpc } from '../lib/trpc';
-import { searchPlayers } from '../lib/playerSearch';
-import './PlayerLookupModal.css';
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { trpc } from '../lib/trpc'
+import { searchPlayers } from '../lib/playerSearch'
+import './PlayerLookupModal.css'
 
 /**
  * Free-text player lookup for the review queue. The ranked candidate list only
@@ -13,23 +13,30 @@ import './PlayerLookupModal.css';
  */
 
 interface Props {
-  title: string;
+  title: string
   /** Context for the reviewer — which bracket entry they are resolving. */
-  children?: ReactNode;
+  children?: ReactNode
   /** Players already offered as candidates, marked so the list is not confusing. */
-  candidatePlayerIds?: readonly string[];
-  busy?: boolean;
-  error?: string | null;
-  onPick: (playerId: string) => void;
-  onCancel: () => void;
+  candidatePlayerIds?: readonly string[]
+  busy?: boolean
+  error?: string | null
+  onPick: (playerId: string) => void
+  onCancel: () => void
 }
 
-const RESULT_LIMIT = 25;
+const RESULT_LIMIT = 25
 
 /** Aliases worth showing: the ones that are not just the names already in the row. */
-function otherAliases(player: { canonicalName: string; displayName: string | null; aliases: string[] }): string[] {
-  const shown = new Set([player.canonicalName.toLowerCase(), (player.displayName ?? '').toLowerCase()]);
-  return player.aliases.filter((alias) => !shown.has(alias.toLowerCase()));
+function otherAliases(player: {
+  canonicalName: string
+  displayName: string | null
+  aliases: string[]
+}): string[] {
+  const shown = new Set([
+    player.canonicalName.toLowerCase(),
+    (player.displayName ?? '').toLowerCase(),
+  ])
+  return player.aliases.filter((alias) => !shown.has(alias.toLowerCase()))
 }
 
 export function PlayerLookupModal({
@@ -41,30 +48,36 @@ export function PlayerLookupModal({
   onPick,
   onCancel,
 }: Props) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState('')
 
   const players = useQuery({
     queryKey: ['admin', 'players'],
     queryFn: () => trpc.admin.players.query(),
-  });
+  })
 
   // Escape closes, matching every other dismissable surface in the app.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onCancel();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onCancel]);
+      if (event.key === 'Escape') onCancel()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onCancel])
 
-  const all = useMemo(() => players.data ?? [], [players.data]);
-  const results = useMemo(() => searchPlayers(all, query, RESULT_LIMIT), [all, query]);
-  const alreadyOffered = new Set(candidatePlayerIds);
-  const activeCount = all.filter((player) => player.status === 'active').length;
+  const all = useMemo(() => players.data ?? [], [players.data])
+  const results = useMemo(() => searchPlayers(all, query, RESULT_LIMIT), [all, query])
+  const alreadyOffered = new Set(candidatePlayerIds)
+  const activeCount = all.filter((player) => player.status === 'active').length
 
   return (
-    <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal modal-wide" onClick={(event) => event.stopPropagation()}>
+    <div className="modal-overlay">
+      <button
+        type="button"
+        className="modal-backdrop"
+        aria-label="Close dialog"
+        onClick={onCancel}
+      />
+      <div className="modal modal-wide">
         <h3>{title}</h3>
         {children}
 
@@ -77,7 +90,8 @@ export function PlayerLookupModal({
           onKeyDown={(event) => {
             // Enter on a single unambiguous hit is the whole point of typing a
             // name you already know; anything else needs a deliberate click.
-            if (event.key === 'Enter' && results.length === 1 && !busy) onPick(results[0]!.player.id);
+            if (event.key === 'Enter' && results.length === 1 && !busy)
+              onPick(results[0]!.player.id)
           }}
         />
 
@@ -96,7 +110,9 @@ export function PlayerLookupModal({
                   {player.canonicalName}
                   {player.displayName && <span className="muted"> aka “{player.displayName}”</span>}
                   {player.companyCode && <span className="chip">{player.companyCode}</span>}
-                  {alreadyOffered.has(player.id) && <span className="chip chip-warning">already suggested</span>}
+                  {alreadyOffered.has(player.id) && (
+                    <span className="chip chip-warning">already suggested</span>
+                  )}
                 </span>
                 <span className="lookup-aliases">
                   {matchedAlias ? (
@@ -112,7 +128,12 @@ export function PlayerLookupModal({
                     )
                   )}
                 </span>
-                <button type="button" className="btn btn-small" disabled={busy} onClick={() => onPick(player.id)}>
+                <button
+                  type="button"
+                  className="btn btn-small"
+                  disabled={busy}
+                  onClick={() => onPick(player.id)}
+                >
                   Link
                 </button>
               </li>
@@ -122,7 +143,8 @@ export function PlayerLookupModal({
 
         {players.data && results.length === RESULT_LIMIT && activeCount > RESULT_LIMIT && (
           <p className="muted">
-            Showing the first {RESULT_LIMIT} of {activeCount} players — keep typing to narrow it down.
+            Showing the first {RESULT_LIMIT} of {activeCount} players — keep typing to narrow it
+            down.
           </p>
         )}
 
@@ -135,5 +157,5 @@ export function PlayerLookupModal({
         </div>
       </div>
     </div>
-  );
+  )
 }

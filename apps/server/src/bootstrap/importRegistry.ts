@@ -1,8 +1,16 @@
-import type { Db } from '@smashclub/db';
-import { tournaments } from '@smashclub/db';
-import { DEFAULT_COMPANY_TAXONOMY, normalizeTournamentId, type CompanyTaxonomy } from '@smashclub/engine';
-import { applyRegistryEntries, importCompanyTaxonomy, type RegistryImportResult } from '../registry/import';
-import type { RegistryPlayerInput } from '../registry/parse';
+import type { Db } from '@smashclub/db'
+import { tournaments } from '@smashclub/db'
+import {
+  DEFAULT_COMPANY_TAXONOMY,
+  normalizeTournamentId,
+  type CompanyTaxonomy,
+} from '@smashclub/engine'
+import {
+  applyRegistryEntries,
+  importCompanyTaxonomy,
+  type RegistryImportResult,
+} from '../registry/import'
+import type { RegistryPlayerInput } from '../registry/parse'
 
 /**
  * One-off bootstrap import, idempotent (safe to re-run):
@@ -17,30 +25,30 @@ import type { RegistryPlayerInput } from '../registry/parse';
  * admin's back.
  */
 
-export type { RegistryPlayerInput };
-export { importCompanyTaxonomy };
-export { parseRegistryYaml } from '../registry/parse';
+export type { RegistryPlayerInput }
+export { importCompanyTaxonomy }
+export { parseRegistryYaml } from '../registry/parse'
 
 export async function importRegistryPlayers(
   db: Db,
   registryPlayers: RegistryPlayerInput[],
   taxonomy: CompanyTaxonomy = DEFAULT_COMPANY_TAXONOMY,
 ): Promise<RegistryImportResult> {
-  return applyRegistryEntries(db, registryPlayers, { seedTaxonomy: taxonomy });
+  return applyRegistryEntries(db, registryPlayers, { seedTaxonomy: taxonomy })
 }
 
 export async function registerTournamentSlugs(db: Db, slugsOrUrls: string[]): Promise<number> {
-  let registered = 0;
+  let registered = 0
   for (const raw of slugsOrUrls) {
-    const trimmed = raw.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const slug = normalizeTournamentId(trimmed);
+    const trimmed = raw.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const slug = normalizeTournamentId(trimmed)
     const result = await db
       .insert(tournaments)
       .values({ challongeSlug: slug, name: slug, isRookie: slug.toLowerCase().includes('rookie') })
       .onConflictDoNothing()
-      .returning({ id: tournaments.id });
-    if (result.length > 0) registered += 1;
+      .returning({ id: tournaments.id })
+    if (result.length > 0) registered += 1
   }
-  return registered;
+  return registered
 }

@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useSyncExternalStore } from 'react'
 import {
   THEME_GLYPHS,
   THEME_LABELS,
@@ -6,7 +6,7 @@ import {
   nextThemeMode,
   setThemeMode,
   subscribeTheme,
-} from '../lib/theme';
+} from '../lib/theme'
 
 /**
  * Colour-scheme control: one button that names its *current* state and cycles
@@ -19,8 +19,8 @@ import {
  * name stay.
  */
 export function ThemeToggle() {
-  const mode = useSyncExternalStore(subscribeTheme, getThemeMode, () => 'system' as const);
-  const next = nextThemeMode(mode);
+  const mode = useSyncExternalStore(subscribeTheme, getThemeMode, () => 'system' as const)
+  const next = nextThemeMode(mode)
 
   return (
     <button
@@ -35,5 +35,5 @@ export function ThemeToggle() {
         {THEME_LABELS[mode]}
       </span>
     </button>
-  );
+  )
 }

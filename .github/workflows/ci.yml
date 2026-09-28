@@ -42,6 +42,14 @@ jobs:
       - uses: ./.github/actions/setup-node-pnpm
       - run: pnpm lint
 
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-node-pnpm
+      - run: pnpm format:check
+
   test:
     name: Unit tests
     runs-on: ubuntu-latest
@@ -145,7 +153,7 @@ jobs:
   all-checks:
     name: All checks
     if: always()
-    needs: [typecheck, lint, test, build, bundle-smoke, legacy-python]
+    needs: [typecheck, lint, format, test, build, bundle-smoke, legacy-python]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results

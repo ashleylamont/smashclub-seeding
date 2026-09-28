@@ -1,7 +1,7 @@
-import { useEffect, useRef } from 'react';
-import { Link, Navigate, Outlet, useRouterState } from '@tanstack/react-router';
-import { authClient, sessionRole } from '../../lib/auth';
-import './Admin.css';
+import { useEffect, useRef } from 'react'
+import { Link, Navigate, Outlet, useRouterState } from '@tanstack/react-router'
+import { authClient, sessionRole } from '../../lib/auth'
+import './Admin.css'
 
 const TABS = [
   { to: '/admin/tournaments', label: 'Tournaments' },
@@ -14,12 +14,12 @@ const TABS = [
   { to: '/admin/event-planner', label: 'Event planner' },
   { to: '/admin/event-operations', label: 'Run event' },
   { to: '/admin/settings', label: 'Settings' },
-] as const;
+] as const
 
 export function AdminLayout() {
-  const { data: session, isPending } = authClient.useSession();
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const tabs = useRef<HTMLElement>(null);
+  const { data: session, isPending } = authClient.useSession()
+  const pathname = useRouterState({ select: (state) => state.location.pathname })
+  const tabs = useRef<HTMLElement>(null)
 
   /*
    * Keeps the current section visible in the tab strip.
@@ -32,19 +32,20 @@ export function AdminLayout() {
    * on screen.
    */
   useEffect(() => {
-    const strip = tabs.current;
-    const active = strip?.querySelector<HTMLElement>('.admin-tab.active');
-    if (!strip || !active) return;
-    const overflowsRight = active.offsetLeft + active.offsetWidth > strip.scrollLeft + strip.clientWidth;
-    const overflowsLeft = active.offsetLeft < strip.scrollLeft;
+    const strip = tabs.current
+    const active = strip?.querySelector<HTMLElement>('.admin-tab.active')
+    if (!strip || !active) return
+    const overflowsRight =
+      active.offsetLeft + active.offsetWidth > strip.scrollLeft + strip.clientWidth
+    const overflowsLeft = active.offsetLeft < strip.scrollLeft
     if (overflowsRight || overflowsLeft) {
-      strip.scrollTo({ left: Math.max(0, active.offsetLeft - 16), behavior: 'auto' });
+      strip.scrollTo({ left: Math.max(0, active.offsetLeft - 16), behavior: 'auto' })
     }
-  }, [pathname]);
+  }, [pathname])
 
-  if (isPending) return <p className="loading-text">Checking access…</p>;
-  if (!session) return <Navigate to="/login" />;
-  if (sessionRole(session) !== 'admin') return <Navigate to="/" />;
+  if (isPending) return <p className="loading-text">Checking access…</p>
+  if (!session) return <Navigate to="/login" />
+  if (sessionRole(session) !== 'admin') return <Navigate to="/" />
 
   return (
     <div className="admin-layout">
@@ -52,7 +53,12 @@ export function AdminLayout() {
         <h1>Admin</h1>
         <nav className="admin-tabs" aria-label="Admin sections" ref={tabs}>
           {TABS.map((tab) => (
-            <Link key={tab.to} to={tab.to} className="admin-tab" activeProps={{ className: 'admin-tab active' }}>
+            <Link
+              key={tab.to}
+              to={tab.to}
+              className="admin-tab"
+              activeProps={{ className: 'admin-tab active' }}
+            >
               {tab.label}
             </Link>
           ))}
@@ -60,5 +66,5 @@ export function AdminLayout() {
       </div>
       <Outlet />
     </div>
-  );
+  )
 }

@@ -1,10 +1,10 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { defaultPublicAlias } from '@smashclub/shared';
-import { trpc } from '../lib/trpc';
-import type { AdminCompany } from '../lib/apiTypes';
-import { CharacterPicker } from './CharacterPicker';
-import './PlayerFormModal.css';
+import { useEffect, useState, type ReactNode } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { defaultPublicAlias } from '@smashclub/shared'
+import { trpc } from '../lib/trpc'
+import type { AdminCompany } from '../lib/apiTypes'
+import { CharacterPicker } from './CharacterPicker'
+import './PlayerFormModal.css'
 
 /**
  * The one form for a player's details, used wherever a player is created or
@@ -16,35 +16,35 @@ import './PlayerFormModal.css';
  */
 
 export interface PlayerFormValues {
-  canonicalName: string;
+  canonicalName: string
   /** Empty string means "no alias"; callers map it to null. */
-  displayName: string;
+  displayName: string
   /** Empty string means "no company". */
-  companyCode: string;
-  characters: string[];
+  companyCode: string
+  characters: string[]
   /** Extra spellings to match on. Only offered when creating. */
-  aliases: string[];
+  aliases: string[]
 }
 
 interface Props {
-  title: string;
-  submitLabel: string;
-  initial?: Partial<PlayerFormValues>;
-  companies: AdminCompany[];
+  title: string
+  submitLabel: string
+  initial?: Partial<PlayerFormValues>
+  companies: AdminCompany[]
   /** Alias entry is only meaningful when minting a player. */
-  showAliases?: boolean;
+  showAliases?: boolean
   /**
    * An escape hatch that commits without the form — the review queue uses it
    * for "create as-is", so working a long queue never costs more clicks than
    * it did before details existed.
    */
-  secondary?: { label: string; onClick: () => void };
-  busy?: boolean;
-  error?: string | null;
+  secondary?: { label: string; onClick: () => void }
+  busy?: boolean
+  error?: string | null
   /** Context for the reviewer — the raw bracket entry, candidates, etc. */
-  children?: ReactNode;
-  onSubmit: (values: PlayerFormValues) => void;
-  onCancel: () => void;
+  children?: ReactNode
+  onSubmit: (values: PlayerFormValues) => void
+  onCancel: () => void
 }
 
 export function PlayerFormModal({
@@ -60,26 +60,26 @@ export function PlayerFormModal({
   onSubmit,
   onCancel,
 }: Props) {
-  const [canonicalName, setCanonicalName] = useState(initial?.canonicalName ?? '');
-  const [displayName, setDisplayName] = useState(initial?.displayName ?? '');
-  const [companyCode, setCompanyCode] = useState(initial?.companyCode ?? '');
-  const [characters, setCharacters] = useState<string[]>(initial?.characters ?? []);
-  const [aliases, setAliases] = useState<string[]>(initial?.aliases ?? []);
-  const [aliasInput, setAliasInput] = useState('');
+  const [canonicalName, setCanonicalName] = useState(initial?.canonicalName ?? '')
+  const [displayName, setDisplayName] = useState(initial?.displayName ?? '')
+  const [companyCode, setCompanyCode] = useState(initial?.companyCode ?? '')
+  const [characters, setCharacters] = useState<string[]>(initial?.characters ?? [])
+  const [aliases, setAliases] = useState<string[]>(initial?.aliases ?? [])
+  const [aliasInput, setAliasInput] = useState('')
 
   // Escape closes, matching every other dismissable surface in the app.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onCancel();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onCancel]);
+      if (event.key === 'Escape') onCancel()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onCancel])
 
-  const valid = canonicalName.trim() !== '';
+  const valid = canonicalName.trim() !== ''
 
   const submit = () => {
-    if (!valid || busy) return;
+    if (!valid || busy) return
     onSubmit({
       canonicalName: canonicalName.trim(),
       displayName: displayName.trim(),
@@ -87,19 +87,25 @@ export function PlayerFormModal({
       characters,
       // A half-typed alias would otherwise be silently discarded on save.
       aliases: aliasInput.trim() === '' ? aliases : [...aliases, aliasInput.trim()],
-    });
-  };
+    })
+  }
 
   const addAlias = () => {
-    const value = aliasInput.trim();
-    if (value === '' || aliases.includes(value)) return;
-    setAliases([...aliases, value]);
-    setAliasInput('');
-  };
+    const value = aliasInput.trim()
+    if (value === '' || aliases.includes(value)) return
+    setAliases([...aliases, value])
+    setAliasInput('')
+  }
 
   return (
-    <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal modal-wide" onClick={(event) => event.stopPropagation()}>
+    <div className="modal-overlay">
+      <button
+        type="button"
+        className="modal-backdrop"
+        aria-label="Close dialog"
+        onClick={onCancel}
+      />
+      <div className="modal modal-wide">
         <h3>{title}</h3>
         {children}
 
@@ -114,8 +120,8 @@ export function PlayerFormModal({
               placeholder="e.g. Ashley Lamont"
             />
             <span className="form-hint">
-              The club's own record of who this is. Used for identity matching, not shown publicly when an
-              alias is set.
+              The club's own record of who this is. Used for identity matching, not shown publicly
+              when an alias is set.
             </span>
           </label>
 
@@ -125,11 +131,16 @@ export function PlayerFormModal({
               className="input"
               value={displayName}
               onChange={(event) => setDisplayName(event.target.value)}
-              placeholder={canonicalName.trim() ? defaultPublicAlias(canonicalName) : 'optional username'}
+              placeholder={
+                canonicalName.trim() ? defaultPublicAlias(canonicalName) : 'optional username'
+              }
             />
             <span className="form-hint">
               The tag shown on the leaderboard. Leave blank to go by{' '}
-              {canonicalName.trim() ? `“${defaultPublicAlias(canonicalName)}”` : 'the shortened registry name'}.
+              {canonicalName.trim()
+                ? `“${defaultPublicAlias(canonicalName)}”`
+                : 'the shortened registry name'}
+              .
             </span>
           </label>
 
@@ -169,18 +180,23 @@ export function PlayerFormModal({
                   onChange={(event) => setAliasInput(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') {
-                      event.preventDefault();
-                      addAlias();
+                      event.preventDefault()
+                      addAlias()
                     }
                   }}
                 />
-                <button type="button" className="btn btn-small" disabled={aliasInput.trim() === ''} onClick={addAlias}>
+                <button
+                  type="button"
+                  className="btn btn-small"
+                  disabled={aliasInput.trim() === ''}
+                  onClick={addAlias}
+                >
                   Add
                 </button>
               </div>
               <span className="form-hint">
-                Other names this player enters brackets under. Future imports of these match silently instead of
-                queueing for review.
+                Other names this player enters brackets under. Future imports of these match
+                silently instead of queueing for review.
               </span>
             </div>
           )}
@@ -197,13 +213,18 @@ export function PlayerFormModal({
               {secondary.label}
             </button>
           )}
-          <button type="button" className="btn btn-primary" disabled={!valid || busy} onClick={submit}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={!valid || busy}
+            onClick={submit}
+          >
             {busy ? 'Saving…' : submitLabel}
           </button>
         </div>
       </div>
     </div>
-  );
+  )
 }
 
 /**
@@ -216,25 +237,26 @@ function CompanySelect({
   value,
   onChange,
 }: {
-  companies: AdminCompany[];
-  value: string;
-  onChange: (code: string) => void;
+  companies: AdminCompany[]
+  value: string
+  onChange: (code: string) => void
 }) {
-  const queryClient = useQueryClient();
-  const [creating, setCreating] = useState(false);
-  const [code, setCode] = useState('');
-  const [name, setName] = useState('');
+  const queryClient = useQueryClient()
+  const [creating, setCreating] = useState(false)
+  const [code, setCode] = useState('')
+  const [name, setName] = useState('')
 
   const create = useMutation({
-    mutationFn: () => trpc.admin.upsertCompany.mutate({ code: code.trim(), name: name.trim(), aliases: [] }),
+    mutationFn: () =>
+      trpc.admin.upsertCompany.mutate({ code: code.trim(), name: name.trim(), aliases: [] }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'companies'] });
-      onChange(code.trim().toUpperCase());
-      setCreating(false);
-      setCode('');
-      setName('');
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'companies'] })
+      onChange(code.trim().toUpperCase())
+      setCreating(false)
+      setCode('')
+      setName('')
     },
-  });
+  })
 
   return (
     <div className="company-select">
@@ -279,5 +301,5 @@ function CompanySelect({
       )}
       {create.isError && <p className="error-text">{create.error.message}</p>}
     </div>
-  );
+  )
 }

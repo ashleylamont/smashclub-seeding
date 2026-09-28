@@ -1,8 +1,8 @@
-import type { Db } from '@smashclub/db';
-import { loadEnv } from '../../src/env';
-import { RecomputeTrigger } from '../../src/recompute/trigger';
-import { appRouter } from '../../src/trpc/router';
-import { fixtureClient } from './challongeFixtures';
+import type { Db } from '@smashclub/db'
+import { loadEnv } from '../../src/env'
+import { RecomputeTrigger } from '../../src/recompute/trigger'
+import { appRouter } from '../../src/trpc/router'
+import { fixtureClient } from './challongeFixtures'
 
 /**
  * The admin API as an admin actually reaches it, without an HTTP round trip.
@@ -16,7 +16,7 @@ export function adminCaller(db: Db) {
     NODE_ENV: 'test',
     DATABASE_URL: 'postgres://unused',
     BETTER_AUTH_SECRET: 'test-secret-test-secret-test',
-  });
+  })
   const caller = appRouter.createCaller({
     db,
     env,
@@ -25,6 +25,6 @@ export function adminCaller(db: Db) {
     // timer must not outlive the test's database.
     recomputeTrigger: new RecomputeTrigger(db, 60_000, () => {}),
     user: { id: 'test-admin', email: 'admin@example.com', name: 'Test Admin', role: 'admin' },
-  });
-  return caller.admin;
+  })
+  return caller.admin
 }

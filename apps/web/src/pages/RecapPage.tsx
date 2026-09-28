@@ -1,12 +1,12 @@
-import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Link, useParams } from '@tanstack/react-router';
-import { trpc } from '../lib/trpc';
-import type { RecapData, RecapFact, RecapFactEntry, RecapPlayer } from '../lib/apiTypes';
-import { CharacterIcons } from '../components/CharacterIcons';
-import { formatDate } from '../lib/format';
-import { downloadBlob, renderShareCard } from '../lib/shareCard';
-import './Recap.css';
+import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Link, useParams } from '@tanstack/react-router'
+import { trpc } from '../lib/trpc'
+import type { RecapData, RecapFact, RecapFactEntry, RecapPlayer } from '../lib/apiTypes'
+import { CharacterIcons } from '../components/CharacterIcons'
+import { formatDate } from '../lib/format'
+import { downloadBlob, renderShareCard } from '../lib/shareCard'
+import './Recap.css'
 
 /**
  * The night in review.
@@ -17,22 +17,23 @@ import './Recap.css';
  * watching.
  */
 export function RecapPage() {
-  const { slug } = useParams({ from: '/recaps/$slug' });
+  const { slug } = useParams({ from: '/recaps/$slug' })
 
   const query = useQuery({
     queryKey: ['recap', slug],
     queryFn: () => trpc.public.recap.query({ slug }),
-  });
+  })
 
-  if (query.isPending) return <p className="loading-text">Loading recap…</p>;
-  if (query.isError) return <p className="error-text">Failed to load recap: {query.error.message}</p>;
-  if (query.data == null) return <p className="error-text">No recap found for this tournament.</p>;
+  if (query.isPending) return <p className="loading-text">Loading recap…</p>
+  if (query.isError)
+    return <p className="error-text">Failed to load recap: {query.error.message}</p>
+  if (query.data == null) return <p className="error-text">No recap found for this tournament.</p>
 
-  return <Recap data={query.data} />;
+  return <Recap data={query.data} />
 }
 
 /** Facts that head the page rather than sitting in the grid with the rest. */
-const HERO_KINDS = new Set<RecapFact['kind']>(['podium']);
+const HERO_KINDS = new Set<RecapFact['kind']>(['podium'])
 
 function Recap({ data }: { data: RecapData }) {
   const podiums = useMemo(
@@ -41,20 +42,20 @@ function Recap({ data }: { data: RecapData }) {
         .map((entry) => entry.fact)
         .filter((fact): fact is Extract<RecapFact, { kind: 'podium' }> => fact.kind === 'podium'),
     [data.facts],
-  );
+  )
 
   const storyFacts = useMemo(
     () => data.highlights.filter((entry) => !HERO_KINDS.has(entry.fact.kind)).slice(0, 6),
     [data.highlights],
-  );
+  )
 
   const tournamentName = useMemo(
     () => new Map(data.tournaments.map((t) => [t.id, t.name])),
     [data.tournaments],
-  );
+  )
 
-  const headline = data.name;
-  const eventDate = data.tournaments[0]?.eventDate ?? null;
+  const headline = data.name
+  const eventDate = data.tournaments[0]?.eventDate ?? null
 
   return (
     <div className="recap-page">
@@ -69,23 +70,44 @@ function Recap({ data }: { data: RecapData }) {
       <p className="muted recap-subtitle">
         {formatDate(eventDate)} · {data.entrants} entrants · {data.setsPlayed} sets
         {data.tournaments.length > 1 && ` · ${data.tournaments.length} brackets`}
-        {data.slug && <Link to="/events/$slug" params={{ slug: data.slug }}>Event results →</Link>}
+        {data.slug && (
+          <Link to="/events/$slug" params={{ slug: data.slug }}>
+            Event results →
+          </Link>
+        )}
         {/* Two different things a reader would otherwise conflate: a night
             still being played is worth coming back to, a bracket the room ran
             out of time on is not. */}
-        {!data.isComplete && <span className="chip chip-warning recap-progress-chip">still in progress</span>}
+        {!data.isComplete && (
+          <span className="chip chip-warning recap-progress-chip">still in progress</span>
+        )}
         {data.isComplete && data.isAbandoned && (
-          <span className="chip chip-warning recap-progress-chip" title="The bracket was never played out to a final">
+          <span
+            className="chip chip-warning recap-progress-chip"
+            title="The bracket was never played out to a final"
+          >
             bracket unfinished
           </span>
         )}
       </p>
-      {(data.coverage.unsyncedBrackets || data.coverage.unresolvedEntrants || data.coverage.unlinkedPlayedSets || data.coverage.ignoredGroupSets) ? (
+      {data.coverage.unsyncedBrackets ||
+      data.coverage.unresolvedEntrants ||
+      data.coverage.unlinkedPlayedSets ||
+      data.coverage.ignoredGroupSets ? (
         <div className="banner banner-warning recap-coverage">
-          Coverage: {data.coverage.unsyncedBrackets ? `${data.coverage.unsyncedBrackets} bracket(s) not synced. ` : ''}
-          {data.coverage.unresolvedEntrants ? `${data.coverage.unresolvedEntrants} entrant(s) unresolved. ` : ''}
-          {data.coverage.unlinkedPlayedSets ? `${data.coverage.unlinkedPlayedSets} played set(s) lack linked identities. ` : ''}
-          {data.coverage.ignoredGroupSets ? `${data.coverage.ignoredGroupSets} group/setup result(s) are shown separately.` : ''}
+          Coverage:{' '}
+          {data.coverage.unsyncedBrackets
+            ? `${data.coverage.unsyncedBrackets} bracket(s) not synced. `
+            : ''}
+          {data.coverage.unresolvedEntrants
+            ? `${data.coverage.unresolvedEntrants} entrant(s) unresolved. `
+            : ''}
+          {data.coverage.unlinkedPlayedSets
+            ? `${data.coverage.unlinkedPlayedSets} played set(s) lack linked identities. `
+            : ''}
+          {data.coverage.ignoredGroupSets
+            ? `${data.coverage.ignoredGroupSets} group/setup result(s) are shown separately.`
+            : ''}
         </div>
       ) : null}
 
@@ -125,7 +147,9 @@ function Recap({ data }: { data: RecapData }) {
                 <FactCard
                   key={entry.id}
                   entry={entry}
-                  bracket={entry.fact.tournamentId ? tournamentName.get(entry.fact.tournamentId) : null}
+                  bracket={
+                    entry.fact.tournamentId ? tournamentName.get(entry.fact.tournamentId) : null
+                  }
                   multiBracket={data.tournaments.length > 1}
                 />
               ))}
@@ -148,16 +172,25 @@ function Recap({ data }: { data: RecapData }) {
         </ul>
       </section>
     </div>
-  );
+  )
 }
 
-function Podium({ podium, name }: { podium: Extract<RecapFact, { kind: 'podium' }>; name: string }) {
+function Podium({
+  podium,
+  name,
+}: {
+  podium: Extract<RecapFact, { kind: 'podium' }>
+  name: string
+}) {
   return (
     <div className="podium card">
       <h3 className="podium-title">{name}</h3>
       <ol className="podium-list">
         {podium.places.map((place) => (
-          <li key={`${place.place}-${place.player.name}`} className={`podium-place place-${place.place}`}>
+          <li
+            key={`${place.place}-${place.player.name}`}
+            className={`podium-place place-${place.place}`}
+          >
             <span className="podium-rank num">{place.place}</span>
             <span className="podium-player">
               <PlayerName player={place.player} />
@@ -172,7 +205,7 @@ function Podium({ podium, name }: { podium: Extract<RecapFact, { kind: 'podium' 
         </p>
       )}
     </div>
-  );
+  )
 }
 
 /**
@@ -183,56 +216,70 @@ function Podium({ podium, name }: { podium: Extract<RecapFact, { kind: 'podium' 
 function statOf(fact: RecapFact): { value: string; label: string } | null {
   switch (fact.kind) {
     case 'seed_upset':
-      return { value: `#${fact.winnerSeed}`, label: `beat seed #${fact.loserSeed}` };
+      return { value: `#${fact.winnerSeed}`, label: `beat seed #${fact.loserSeed}` }
     case 'rating_upset':
-      return { value: `${Math.max(1, Math.round(fact.probability * 100))}%`, label: 'win chance' };
+      return { value: `${Math.max(1, Math.round(fact.probability * 100))}%`, label: 'win chance' }
     case 'losers_run':
-      return { value: String(fact.wins), label: 'elimination wins in a row' };
+      return { value: String(fact.wins), label: 'elimination wins in a row' }
     case 'overperformer':
-      return { value: `+${fact.placesGained}`, label: 'places over seed' };
+      return { value: `+${fact.placesGained}`, label: 'places over seed' }
     case 'nailbiter':
-      return { value: fact.score, label: 'went the distance' };
+      return { value: fact.score, label: 'went the distance' }
     case 'clean_sweep':
-      return { value: '0', label: 'games dropped' };
+      return { value: '0', label: 'games dropped' }
     case 'biggest_climb':
-      return { value: `+${Math.round(fact.gained)}`, label: 'rating overnight' };
+      return { value: `+${Math.round(fact.gained)}`, label: 'rating overnight' }
     case 'mover':
-      return { value: `▲${fact.placesGained}`, label: `now #${fact.rank}` };
+      return { value: `▲${fact.placesGained}`, label: `now #${fact.rank}` }
     case 'rivalry':
-      return { value: `${fact.aWins}–${fact.bWins}`, label: 'the series so far' };
+      return { value: `${fact.aWins}–${fact.bWins}`, label: 'the series so far' }
     case 'breakthrough':
-      return { value: `0–${fact.priorLosses}`, label: 'the record coming in' };
+      return { value: `0–${fact.priorLosses}`, label: 'the record coming in' }
     case 'debut':
-      return fact.players.length > 1 ? { value: String(fact.players.length), label: 'first-timers' } : null;
+      return fact.players.length > 1
+        ? { value: String(fact.players.length), label: 'first-timers' }
+        : null
     case 'milestone':
-      if (fact.milestone === 'peak_rating') return { value: String(Math.round(fact.value)), label: 'career high' };
-      return { value: String(fact.value), label: fact.milestone === 'sets' ? 'career sets' : 'club nights' };
+      if (fact.milestone === 'peak_rating')
+        return { value: String(Math.round(fact.value)), label: 'career high' }
+      return {
+        value: String(fact.value),
+        label: fact.milestone === 'sets' ? 'career sets' : 'club nights',
+      }
     case 'turnout':
-      return { value: String(fact.entrants), label: fact.isRecord ? 'entrants — a record' : 'entrants' };
+      return {
+        value: String(fact.entrants),
+        label: fact.isRecord ? 'entrants — a record' : 'entrants',
+      }
     case 'grand_finals':
       return fact.score
-        ? { value: fact.score, label: fact.bracketReset ? 'after a bracket reset' : 'in the decider' }
-        : null;
+        ? {
+            value: fact.score,
+            label: fact.bracketReset ? 'after a bracket reset' : 'in the decider',
+          }
+        : null
     case 'runback':
-      return fact.score ? { value: fact.score, label: 'the runback' } : null;
+      return fact.score ? { value: fact.score, label: 'the runback' } : null
     case 'podium':
-      return null;
+      return null
   }
 }
 
 /** Faces for a fact, at a size that reads: the lead gets big heads. */
 function FactFaces({ players, size }: { players: RecapPlayer[]; size: 'sm' | 'lg' }) {
-  if (players.length === 0) return null;
+  if (players.length === 0) return null
   return (
     <div className="fact-players">
       {players.map((player, index) => (
         <span className="fact-player" key={`${player.playerId ?? player.name}-${index}`}>
-          {player.characters.length > 0 && <CharacterIcons slugs={[...player.characters]} size={size} />}
+          {player.characters.length > 0 && (
+            <CharacterIcons slugs={[...player.characters]} size={size} />
+          )}
           <PlayerName player={player} />
         </span>
       ))}
     </div>
-  );
+  )
 }
 
 /**
@@ -244,12 +291,12 @@ function LeadStory({
   bracket,
   multiBracket,
 }: {
-  entry: RecapFactEntry;
-  bracket: string | null | undefined;
-  multiBracket: boolean;
+  entry: RecapFactEntry
+  bracket: string | null | undefined
+  multiBracket: boolean
 }) {
-  const { fact, headline, detail } = entry;
-  const stat = statOf(fact);
+  const { fact, headline, detail } = entry
+  const stat = statOf(fact)
   return (
     <article className={`lead-story fact-${fact.kind}`}>
       <div className="lead-story-main">
@@ -268,7 +315,7 @@ function LeadStory({
         </div>
       )}
     </article>
-  );
+  )
 }
 
 /**
@@ -281,12 +328,12 @@ function FactCard({
   bracket,
   multiBracket,
 }: {
-  entry: RecapFactEntry;
-  bracket: string | null | undefined;
-  multiBracket: boolean;
+  entry: RecapFactEntry
+  bracket: string | null | undefined
+  multiBracket: boolean
 }) {
-  const { fact, headline, detail } = entry;
-  const stat = statOf(fact);
+  const { fact, headline, detail } = entry
+  const stat = statOf(fact)
 
   return (
     <li className={`fact-card fact-${fact.kind}`}>
@@ -305,7 +352,7 @@ function FactCard({
       {/* Only worth saying which bracket when the night had more than one. */}
       {multiBracket && bracket && <p className="fact-bracket">{bracket}</p>}
     </li>
-  );
+  )
 }
 
 function PlayerName({ player }: { player: RecapPlayer }) {
@@ -314,42 +361,42 @@ function PlayerName({ player }: { player: RecapPlayer }) {
       {player.name}
       {player.companyCode && <span className="fact-company"> {player.companyCode}</span>}
     </>
-  );
-  if (!player.playerId) return <span className="fact-name">{label}</span>;
+  )
+  if (!player.playerId) return <span className="fact-name">{label}</span>
   return (
     <Link className="fact-name" to="/players/$playerId" params={{ playerId: player.playerId }}>
       {label}
     </Link>
-  );
+  )
 }
 
 /** Every player a fact refers to, for the faces strip. */
 function playersOf(fact: RecapFact): RecapPlayer[] {
   switch (fact.kind) {
     case 'podium':
-      return fact.places.map((place) => place.player);
+      return fact.places.map((place) => place.player)
     case 'seed_upset':
     case 'rating_upset':
     case 'nailbiter':
     case 'grand_finals':
-      return [fact.winner, fact.loser];
+      return [fact.winner, fact.loser]
     case 'runback':
-      return [fact.winner, fact.loser];
+      return [fact.winner, fact.loser]
     case 'rivalry':
-      return [fact.a, fact.b];
+      return [fact.a, fact.b]
     case 'breakthrough':
-      return [fact.winner, fact.loser];
+      return [fact.winner, fact.loser]
     case 'debut':
-      return fact.players;
+      return fact.players
     case 'losers_run':
     case 'overperformer':
     case 'clean_sweep':
     case 'biggest_climb':
     case 'mover':
     case 'milestone':
-      return [fact.player];
+      return [fact.player]
     case 'turnout':
-      return [];
+      return []
   }
 }
 
@@ -370,7 +417,7 @@ const KIND_LABELS: Record<RecapFact['kind'], string> = {
   turnout: 'Turnout',
   grand_finals: 'The final',
   runback: 'Runback',
-};
+}
 
 /** Copy a link, or save the night as an image. */
 function ShareBar({
@@ -379,25 +426,25 @@ function ShareBar({
   podium,
   podiums,
 }: {
-  data: RecapData;
-  headline: string;
-  podium: Extract<RecapFact, { kind: 'podium' }> | null;
-  podiums: Array<Extract<RecapFact, { kind: 'podium' }>>;
+  data: RecapData
+  headline: string
+  podium: Extract<RecapFact, { kind: 'podium' }> | null
+  podiums: Extract<RecapFact, { kind: 'podium' }>[]
 }) {
-  const [status, setStatus] = useState<'idle' | 'copied' | 'rendering' | 'failed'>('idle');
+  const [status, setStatus] = useState<'idle' | 'copied' | 'rendering' | 'failed'>('idle')
 
   const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/recaps/${data.slug}`);
-      setStatus('copied');
-      setTimeout(() => setStatus('idle'), 2000);
+      await navigator.clipboard.writeText(`${window.location.origin}/recaps/${data.slug}`)
+      setStatus('copied')
+      setTimeout(() => setStatus('idle'), 2000)
     } catch {
-      setStatus('failed');
+      setStatus('failed')
     }
-  };
+  }
 
   const saveImage = async () => {
-    setStatus('rendering');
+    setStatus('rendering')
     try {
       const blob = await renderShareCard({
         title: headline,
@@ -412,22 +459,26 @@ function ShareBar({
           .filter((entry) => entry.fact.kind !== 'podium')
           .slice(0, 6)
           .map((entry) => entry.headline),
-        champions: data.tournaments.length > 1
-          ? podiums.map((p) => ({ name: p.places[0]?.player.name ?? 'Unknown', bracket: data.tournaments.find((t) => t.id === p.tournamentId)?.name ?? 'Bracket' }))
-          : undefined,
+        champions:
+          data.tournaments.length > 1
+            ? podiums.map((p) => ({
+                name: p.places[0]?.player.name ?? 'Unknown',
+                bracket: data.tournaments.find((t) => t.id === p.tournamentId)?.name ?? 'Bracket',
+              }))
+            : undefined,
         entrants: data.entrants,
         setsPlayed: data.setsPlayed,
-      });
+      })
       if (!blob) {
-        setStatus('failed');
-        return;
+        setStatus('failed')
+        return
       }
-      downloadBlob(blob, `${data.slug}-recap.png`);
-      setStatus('idle');
+      downloadBlob(blob, `${data.slug}-recap.png`)
+      setStatus('idle')
     } catch {
-      setStatus('failed');
+      setStatus('failed')
     }
-  };
+  }
 
   return (
     <div className="recap-share">
@@ -444,5 +495,5 @@ function ShareBar({
       </button>
       {status === 'failed' && <span className="error-text">Could not share — try again.</span>}
     </div>
-  );
+  )
 }
