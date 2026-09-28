@@ -129,9 +129,16 @@ describe('championshipQualifiers', () => {
       'A2',
       'B1',
       'B2',
-    ])
-  })
-})
+    ]);
+  });
+  it('rounds up the winners bracket from a five-player pool', () => {
+    const five = Array.from({ length: 5 }, (_, index) => ({ playerId: `five-${index + 1}`, poolIndex: 0, place: index + 1 }));
+    const four = finishers(1).map(row => ({ ...row, poolIndex: 1 }));
+    const field = [...five, ...four];
+    expect(championshipQualifiers(field).map(row => row.label)).toEqual(['A1', 'A2', 'A3', 'B1', 'B2']);
+    expect(buildConsolationBracket(field).entrants.map(row => row.label).sort()).toEqual(['A4', 'A5', 'B3', 'B4']);
+  });
+});
 
 it('includes fifth places in consolation and handles a sole consolation entrant', () => {
   const finishers = [3, 4, 5].map((place) => ({ playerId: `p${place}`, poolIndex: 0, place }))

@@ -28,14 +28,10 @@ import {
   type DivisionPreference,
   type PlanIssue,
   EventPlanValidationError,
-} from './divisions'
-import { poolLabel, stripeIntoPools } from './pools'
-import {
-  buildConsolationBracket,
-  championshipQualifiers,
-  type ConsolationBracket,
-} from './advancement'
-import { parseRosterText, resolveRoster, type RosterResolution } from './roster'
+} from './divisions';
+import { poolLabel, stripeIntoPools } from './pools';
+import { buildConsolationBracket, championshipQualifiers, consolationQualifiers, type ConsolationBracket } from './advancement';
+import { parseRosterText, resolveRoster, type RosterResolution } from './roster';
 
 /**
  * Event-plan persistence: the durable half of the planner.
@@ -154,28 +150,30 @@ export interface DivisionView {
 
 export interface PlanView {
   plan: {
-    id: string
-    name: string
-    eventDate: string
-    slugPrefix: string | null
-    status: PlanStatus
-    bracketMode: 'native' | 'challonge'
-    historicalAdoption: typeof eventPlans.$inferSelect.historicalAdoption
-    upperTargetSize: number | null
-    poolSize: number
-    rankingSnapshotAt: string | null
-    createdAt: string
-  }
-  entries: PlanEntryView[]
-  divisions: DivisionView[]
-  brackets: {
-    id: string
-    division: Division
-    stage: BracketStage
-    challongeSlug: string | null
-    tournamentId: string | null
-    externalState: string
-    lastError: string | null
+    id: string;
+    name: string;
+    eventDate: string;
+    slugPrefix: string | null;
+    status: PlanStatus;
+    softLockedAt: string | null;
+    softLockedBy: string | null;
+    bracketMode: 'native' | 'challonge';
+    historicalAdoption: typeof eventPlans.$inferSelect.historicalAdoption;
+    upperTargetSize: number | null;
+    poolSize: number;
+    rankingSnapshotAt: string | null;
+    createdAt: string;
+  };
+  entries: PlanEntryView[];
+  divisions: DivisionView[];
+  brackets: Array<{
+    id: string;
+    division: Division;
+    stage: BracketStage;
+    challongeSlug: string | null;
+    tournamentId: string | null;
+    externalState: string;
+    lastError: string | null;
     /** The tournament row's event date, so a mismatch is visible not implied. */
     tournamentEventDate: string | null
     tournamentSyncState: string | null
@@ -312,6 +310,8 @@ export async function getPlan(db: Db, planId: string): Promise<PlanView | null> 
       eventDate: plan.eventDate.toISOString(),
       slugPrefix: plan.slugPrefix,
       status: plan.status,
+      softLockedAt: plan.softLockedAt?.toISOString() ?? null,
+      softLockedBy: plan.softLockedBy,
       bracketMode: plan.bracketMode,
       historicalAdoption: plan.historicalAdoption,
       upperTargetSize: plan.upperTargetSize,
@@ -337,17 +337,8 @@ export async function getPlan(db: Db, planId: string): Promise<PlanView | null> 
         suggestedSlug: suggestedSlug(plan.slugPrefix ?? plan.name, slot.division, slot.stage),
       }
     }),
-    issues: (() => {
-      const issues = planIssues(entries, plan.upperTargetSize, plan.poolSize)
-      if (withdrawals.length)
-        issues.warnings.push({
-          code: 'withdrawal_advancement',
-          message:
-            'Withdrawn entrants stay in the recorded finishing order but are excluded from advancement. Reconfirm affected pools: the first two active entrants advance to championship, and remaining active entrants enter consolation. Reconcile linked Challonge brackets manually.',
-        })
-      return issues
-    })(),
-  }
+    issues: (()=>{const issues=planIssues(entries, plan.upperTargetSize, plan.poolSize);if(withdrawals.some(w => entries.some(e => e.playerId === w.playerId)))issues.warnings.push({code:'withdrawal_advancement',message:'Withdrawn entrants stay in the recorded finishing order but are excluded from advancement. Reconfirm affected pools: the upper half of active entrants, rounded up, advance to championship. Reconcile linked Challonge brackets manually.'});return issues;})(),
+  };
 }
 
 /** `<prefix>-upper-consolation`, and friends. Advisory: Challonge owns the name. */
@@ -389,19 +380,13 @@ function buildDivisionViews(
       continue
     }
 
-    const divisionPlacements = placements.filter((placement) => placement.division === division)
-    const placeByPlayer = new Map(
-      divisionPlacements.map((placement) => [placement.playerId, placement.place]),
-    )
-    const saved = assignments.filter((a) => a.division === division)
-    const poolMembers = saved.length
-      ? Array.from({ length: Math.max(...saved.map((a) => a.poolIndex)) + 1 }, (_, index) =>
-          members.filter((m) =>
-            saved.some((a) => a.poolIndex === index && a.playerId === m.playerId),
-          ),
-        )
-      : stripeIntoPools(members, poolSize)
-    const pools: PoolView[] = poolMembers.map((poolMembers, poolIndex) => ({
+    const divisionPlacements = placements.filter((placement) => placement.division === division);
+    const placeByPlayer = new Map(divisionPlacements.map((placement) => [placement.playerId, placement.place]));
+    const saved = assignments.filter(a => a.division === division);
+    const poolGroups = saved.length
+      ? [...new Set(saved.map(a => a.poolIndex))].sort((a, b) => a - b).map(poolIndex => ({ poolIndex, poolMembers: members.filter(m => saved.some(a => a.poolIndex === poolIndex && a.playerId === m.playerId)) }))
+      : stripeIntoPools(members, poolSize).map((poolMembers, poolIndex) => ({ poolIndex, poolMembers }));
+    const pools: PoolView[] = poolGroups.filter(group => group.poolMembers.length > 0).map(({ poolMembers, poolIndex }) => ({
       poolIndex,
       label: poolLabel(poolIndex),
       members: poolMembers.map((entry) => ({
@@ -439,8 +424,7 @@ function buildDivisionViews(
       size: members.length,
       poolCount: pools.length,
       pools,
-      consolation:
-        complete && finishers.some((f) => f.place >= 3) ? buildConsolationBracket(finishers) : null,
+      consolation: complete && consolationQualifiers(finishers).length ? buildConsolationBracket(finishers) : null,
       championship: complete
         ? championshipQualifiers(finishers).map((qualifier) => ({
             playerId: qualifier.playerId,
@@ -843,8 +827,9 @@ export async function freezeRoster(db: Db, planId: string): Promise<void> {
  * the plan disagreeing with the bracket people are actually playing.
  */
 async function unfreezeRosterUnlocked(db: Db, planId: string): Promise<void> {
-  const plan = await loadPlanRow(db, planId)
-  assertStatus(plan.status, ['roster_frozen', 'pools_ready'], 'unfreeze the roster')
+  const plan = await loadPlanRow(db, planId);
+  if (plan.softLockedAt) throw new EventPlanStateError('The TO soft-locked these pools. Use attendance changes to preserve existing opponents.');
+  assertStatus(plan.status, ['roster_frozen', 'pools_ready'], 'unfreeze the roster');
   await assertNoAttachedBracket(
     db,
     planId,
@@ -878,8 +863,9 @@ async function reorderDivisionUnlocked(
   division: Division,
   orderedEntryIds: readonly string[],
 ): Promise<void> {
-  const plan = await loadPlanRow(db, planId)
-  assertStatus(plan.status, ['roster_frozen', 'pools_ready'], 'reorder a division')
+  const plan = await loadPlanRow(db, planId);
+  if (plan.softLockedAt) throw new EventPlanStateError('The TO soft-locked these pools. Seeds and opponents must stay stable.');
+  assertStatus(plan.status, ['roster_frozen', 'pools_ready'], 'reorder a division');
   await assertNoAttachedBracket(
     db,
     planId,
@@ -931,10 +917,11 @@ async function reorderDivisionUnlocked(
  * exports and the placement worksheet key off.
  */
 async function generatePoolsUnlocked(db: Db, planId: string): Promise<void> {
-  const plan = await loadPlanRow(db, planId)
-  assertStatus(plan.status, ['roster_frozen', 'pools_ready'], 'generate pools')
-  const view = await getPlan(db, planId)
-  if (!view) throw new EventPlanStateError('That event plan no longer exists.')
+  const plan = await loadPlanRow(db, planId);
+  if (plan.softLockedAt) throw new EventPlanStateError('The TO soft-locked these pools. Regeneration would change existing opponents.');
+  assertStatus(plan.status, ['roster_frozen', 'pools_ready'], 'generate pools');
+  const view = await getPlan(db, planId);
+  if (!view) throw new EventPlanStateError('That event plan no longer exists.');
   for (const division of view.divisions) {
     if (division.size === 0 || division.pools.length === 0) {
       throw new EventPlanStateError(
@@ -1284,65 +1271,30 @@ export async function deletePlan(db: Db, planId: string): Promise<void> {
 }
 
 export async function unfreezeRoster(db: Db, planId: string): Promise<void> {
-  return db.transaction(async (tx) => {
-    await tx.select().from(eventPlans).where(eq(eventPlans.id, planId)).for('update')
-    if (
-      (
-        await tx
-          .select({ id: eventMatches.id })
-          .from(eventMatches)
-          .where(eq(eventMatches.eventPlanId, planId))
-          .limit(1)
-      ).length
-    )
-      throw new EventPlanStateError(
-        'Operational matches already exist. Use attendance changes, or reset an unplayed queue before changing pools.',
-      )
-    await unfreezeRosterUnlocked(tx, planId)
-  })
+  return db.transaction(async tx => {
+    const [plan] = await tx.select().from(eventPlans).where(eq(eventPlans.id, planId)).for('update');
+    if (plan?.softLockedAt) throw new EventPlanStateError('The TO soft-locked these pools. Use attendance changes to preserve existing opponents.');
+    if ((await tx.select({id:eventMatches.id}).from(eventMatches).where(eq(eventMatches.eventPlanId, planId)).limit(1)).length) throw new EventPlanStateError('Operational matches already exist. Use attendance changes, or reset an unplayed queue before changing pools.');
+    await unfreezeRosterUnlocked(tx, planId);
+  });
 }
 
 export async function generatePools(db: Db, planId: string): Promise<void> {
-  return db.transaction(async (tx) => {
-    await tx.select().from(eventPlans).where(eq(eventPlans.id, planId)).for('update')
-    if (
-      (
-        await tx
-          .select({ id: eventMatches.id })
-          .from(eventMatches)
-          .where(eq(eventMatches.eventPlanId, planId))
-          .limit(1)
-      ).length
-    )
-      throw new EventPlanStateError(
-        'Operational matches already exist. Use attendance changes, or reset an unplayed queue before changing pools.',
-      )
-    await generatePoolsUnlocked(tx, planId)
-  })
+  return db.transaction(async tx => {
+    const [plan] = await tx.select().from(eventPlans).where(eq(eventPlans.id, planId)).for('update');
+    if (plan?.softLockedAt) throw new EventPlanStateError('The TO soft-locked these pools. Regeneration would change existing opponents.');
+    if ((await tx.select({id:eventMatches.id}).from(eventMatches).where(eq(eventMatches.eventPlanId, planId)).limit(1)).length) throw new EventPlanStateError('Operational matches already exist. Use attendance changes, or reset an unplayed queue before changing pools.');
+    await generatePoolsUnlocked(tx, planId);
+  });
 }
 
-export async function reorderDivision(
-  db: Db,
-  planId: string,
-  division: Division,
-  orderedEntryIds: readonly string[],
-): Promise<void> {
-  return db.transaction(async (tx) => {
-    await tx.select().from(eventPlans).where(eq(eventPlans.id, planId)).for('update')
-    if (
-      (
-        await tx
-          .select({ id: eventMatches.id })
-          .from(eventMatches)
-          .where(eq(eventMatches.eventPlanId, planId))
-          .limit(1)
-      ).length
-    )
-      throw new EventPlanStateError(
-        'Operational matches already exist. Use attendance changes, or reset an unplayed queue before changing pools.',
-      )
-    await reorderDivisionUnlocked(tx, planId, division, orderedEntryIds)
-  })
+export async function reorderDivision(db: Db, planId: string, division: Division, orderedEntryIds: readonly string[]): Promise<void> {
+  return db.transaction(async tx => {
+    const [plan] = await tx.select().from(eventPlans).where(eq(eventPlans.id, planId)).for('update');
+    if (plan?.softLockedAt) throw new EventPlanStateError('The TO soft-locked these pools. Seeds and opponents must stay stable.');
+    if ((await tx.select({id:eventMatches.id}).from(eventMatches).where(eq(eventMatches.eventPlanId, planId)).limit(1)).length) throw new EventPlanStateError('Operational matches already exist. Use attendance changes, or reset an unplayed queue before changing pools.');
+    await reorderDivisionUnlocked(tx, planId, division, orderedEntryIds);
+  });
 }
 
 export async function savePoolPlacements(

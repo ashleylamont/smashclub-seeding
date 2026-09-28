@@ -79,11 +79,7 @@ export function RosterStep({ view, onChanged }: { view: EventPlanView; onChanged
             <button
               type="button"
               className="btn"
-              disabled={
-                unfreeze.isPending ||
-                !['roster_frozen', 'pools_ready'].includes(view.plan.status) ||
-                view.brackets.some((bracket) => bracket.challongeSlug !== null)
-              }
+              disabled={unfreeze.isPending || !!view.plan.softLockedAt || !['roster_frozen', 'pools_ready'].includes(view.plan.status) || view.brackets.some((bracket) => bracket.challongeSlug !== null)}
               onClick={() => {
                 if (
                   window.confirm(
@@ -101,6 +97,7 @@ export function RosterStep({ view, onChanged }: { view: EventPlanView; onChanged
       </div>
       {freeze.isError && <p className="error-text">{freeze.error.message}</p>}
       {unfreeze.isError && <p className="error-text">{unfreeze.error.message}</p>}
+      {view.plan.softLockedAt && <p className="muted">Pools were soft-locked by a TO. Use late arrivals and withdrawals in event control to preserve existing opponents.</p>}
 
       {editable && (
         <DraftSettings
@@ -435,51 +432,14 @@ function DraftSettings({ view, onChanged }: { view: EventPlanView; onChanged: ()
         upperTargetSize: upper,
       }),
     onSuccess: onChanged,
-  })
-  return (
-    <form
-      className="card section"
-      onSubmit={(event) => {
-        event.preventDefault()
-        update.mutate()
-      }}
-    >
-      <h4>Draft settings</h4>
-      <label className="form-field">
-        Event name
-        <input className="input" value={name} onChange={(event) => setName(event.target.value)} />
-      </label>
-      <label className="form-field">
-        Bracket slug prefix
-        <input
-          className="input"
-          value={prefix}
-          onChange={(event) => setPrefix(event.target.value)}
-        />
-      </label>
-      <label className="form-field">
-        Upper division size
-        <input
-          className="input"
-          type="number"
-          min={3}
-          max={Math.max(3, total - 3)}
-          value={upper}
-          onChange={(event) => setUpper(Number(event.target.value))}
-        />
-      </label>
-      <p className="muted">
-        {upper} Upper / {total - upper} Lower. Pools contain three to five players; the top two in
-        each pool advance to championship and everyone else to consolation. Save a new split after
-        attendance changes.
-      </p>
-      <button
-        className="btn btn-primary"
-        disabled={update.isPending || !name.trim() || upper < 3 || upper > total - 3}
-      >
-        Save settings
-      </button>
-      {update.isError && <p className="error-text">{update.error.message}</p>}
-    </form>
-  )
+  });
+  return <form className="card section" onSubmit={(event) => { event.preventDefault(); update.mutate(); }}>
+    <h4>Draft settings</h4>
+    <label className="form-field">Event name<input className="input" value={name} onChange={(event) => setName(event.target.value)} /></label>
+    <label className="form-field">Bracket slug prefix<input className="input" value={prefix} onChange={(event) => setPrefix(event.target.value)} /></label>
+    <label className="form-field">Upper division size<input className="input" type="number" min={3} max={Math.max(3, total - 3)} value={upper} onChange={(event) => setUpper(Number(event.target.value))} /></label>
+    <p className="muted">{upper} Upper / {total - upper} Lower. Pools contain three to five players; the upper half, rounded up, advance to championship and everyone else to consolation. Save a new split after attendance changes.</p>
+    <button className="btn btn-primary" disabled={update.isPending || !name.trim() || upper < 3 || upper > total - 3}>Save settings</button>
+    {update.isError && <p className="error-text">{update.error.message}</p>}
+  </form>;
 }

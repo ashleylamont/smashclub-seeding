@@ -40,161 +40,40 @@ const fail = (
   throw new TRPCError({ code, message })
 }
 export async function snapshot(db: Db, planId: string, privateView = false) {
-  const [plan] = await db.select().from(eventPlans).where(eq(eventPlans.id, planId))
-  if (!plan) return fail('NOT_FOUND', 'Event not found.')
-  const [settings] = await db
-    .select()
-    .from(eventOperationSettings)
-    .where(eq(eventOperationSettings.eventPlanId, planId))
-  if (!privateView && !settings?.published) fail('NOT_FOUND', 'This event is not published.')
-  const names = new Map((await db.select().from(players)).map((p) => [p.id, publicPlayerName(p)]))
-  const rows = await db
-    .select()
-    .from(eventMatches)
-    .where(eq(eventMatches.eventPlanId, planId))
-    .orderBy(asc(eventMatches.label))
-  const stations = await db
-    .select()
-    .from(eventStations)
-    .where(eq(eventStations.eventPlanId, planId))
-  const poolSchedules = await db
-    .select()
-    .from(eventPoolSchedules)
-    .where(eq(eventPoolSchedules.eventPlanId, planId))
-  const participantIds = [
-    ...new Set(
-      rows.flatMap((match) =>
-        [match.player1Id, match.player2Id].filter((id): id is string => Boolean(id)),
-      ),
-    ),
-  ]
-  const characters = participantIds.length
-    ? await db
-        .select()
-        .from(playerCharacters)
-        .where(inArray(playerCharacters.playerId, participantIds))
-        .orderBy(asc(playerCharacters.position))
-    : []
-  const disputes = await db
-    .select({ matchId: eventScoreReports.matchId })
-    .from(eventScoreReports)
-    .where(
-      and(
-        eq(eventScoreReports.eventPlanId, planId),
-        eq(eventScoreReports.status, 'pending'),
-        eq(eventScoreReports.isDispute, true),
-      ),
-    )
-  const matches = rows.map((m) => ({
-    ...m,
-    pendingDisputeCount: disputes.filter((report) => report.matchId === m.id).length,
-    score1: m.status === 'playing' ? (m.liveScore1 ?? m.score1) : m.score1,
-    score2: m.status === 'playing' ? (m.liveScore2 ?? m.score2) : m.score2,
-    player1Name: m.player1Id ? (names.get(m.player1Id) ?? 'Player') : 'TBD',
-    player2Name: m.player2Id ? (names.get(m.player2Id) ?? 'Player') : 'TBD',
-    player1Characters: characters
-      .filter((c) => c.playerId === m.player1Id)
-      .map((c) => c.characterSlug),
-    player2Characters: characters
-      .filter((c) => c.playerId === m.player2Id)
-      .map((c) => c.characterSlug),
-    availability: matchAvailability(
-      m,
-      rows,
-      stations,
-      poolSchedules,
-      false,
-      !['complete', 'cancelled'].includes(plan.status),
-    ),
-  }))
-  const historicalResultsSlug =
-    plan.historicalAdoption?.brackets.find(
-      (bracket) => bracket.division === 'upper' && bracket.stage === 'main',
-    )?.slug ?? null
-  const [nativeResult] =
-    plan.bracketMode === 'native' && plan.status === 'complete'
-      ? await db
-          .select({ slug: tournaments.challongeSlug })
-          .from(eventPlanBrackets)
-          .innerJoin(tournaments, eq(eventPlanBrackets.tournamentId, tournaments.id))
-          .where(
-            and(
-              eq(eventPlanBrackets.eventPlanId, planId),
-              eq(eventPlanBrackets.division, 'upper'),
-              eq(eventPlanBrackets.stage, 'main'),
-            ),
-          )
-      : []
-  const resultsSlug = nativeResult?.slug ?? historicalResultsSlug
-  // Archived plans are planning intent, not evidence of attendance or finishes.
-  const entrants = plan.historicalAdoption
-    ? []
-    : (
-        await db
-          .select({ id: eventPlanEntries.playerId })
-          .from(eventPlanEntries)
-          .where(eq(eventPlanEntries.eventPlanId, planId))
-      ).flatMap((p) => (p.id ? [{ id: p.id, name: names.get(p.id) ?? 'Player' }] : []))
-  const prizes = (
-    await db.select().from(eventPrizes).where(eq(eventPrizes.eventPlanId, planId))
-  ).map((p) => ({ ...p, playerName: p.playerId ? (names.get(p.playerId) ?? 'Player') : null }))
-  return {
-    ...(await loadStationQueues(db, planId)),
-    nativeBrackets: await nativeBracketViews(db, planId),
-    plan: {
-      id: plan.id,
-      name: plan.name,
-      eventDate: plan.eventDate.toISOString(),
-      status: plan.status,
-      bracketMode: plan.bracketMode,
-      historicalResultsSlug,
-      resultsSlug,
-    },
-    brackets: await db
-      .select({
-        division: eventPlanBrackets.division,
-        stage: eventPlanBrackets.stage,
-        slug: eventPlanBrackets.challongeSlug,
-      })
-      .from(eventPlanBrackets)
-      .where(eq(eventPlanBrackets.eventPlanId, planId)),
-    settings: {
-      scoreReportingMode: settings?.scoreReportingMode ?? 'to_review',
-      published: settings?.published ?? false,
-      playerReports: settings?.playerReports ?? false,
-    },
-    matches,
-    entrants,
-    prizes,
-    stations: stations.map((station) => stationAvailability(station, rows)),
-    poolSchedules,
-    announcements: (
-      await db
-        .select()
-        .from(eventAnnouncements)
-        .where(
-          and(
-            eq(eventAnnouncements.eventPlanId, planId),
-            or(isNull(eventAnnouncements.expiresAt), gt(eventAnnouncements.expiresAt, new Date())),
-          ),
-        )
-        .orderBy(desc(eventAnnouncements.createdAt))
-    ).map((a) => ({
-      ...a,
-      createdAt: a.createdAt.toISOString(),
-      expiresAt: a.expiresAt?.toISOString() ?? null,
-    })),
-    withdrawals: await db
-      .select({ playerId: eventWithdrawals.playerId })
-      .from(eventWithdrawals)
-      .where(eq(eventWithdrawals.eventPlanId, planId)),
-    placements: plan.historicalAdoption
-      ? []
-      : await db
-          .select()
-          .from(eventPlanPoolPlacements)
-          .where(eq(eventPlanPoolPlacements.eventPlanId, planId)),
-  }
+    const [plan] = await db.select().from(eventPlans).where(eq(eventPlans.id, planId));
+    if (!plan)
+        return fail('NOT_FOUND', 'Event not found.');
+    const [settings] = await db.select().from(eventOperationSettings).where(eq(eventOperationSettings.eventPlanId, planId));
+    if (!privateView && !settings?.published)
+        fail('NOT_FOUND', 'This event is not published.');
+    const names = new Map((await db.select().from(players)).map(p => [p.id, publicPlayerName(p)]));
+    const rows = await db.select().from(eventMatches).where(eq(eventMatches.eventPlanId, planId)).orderBy(asc(eventMatches.label));
+    const stations = await db.select().from(eventStations).where(eq(eventStations.eventPlanId,planId));
+    const poolSchedules = await db.select().from(eventPoolSchedules).where(eq(eventPoolSchedules.eventPlanId,planId));
+    const participantIds=[...new Set(rows.flatMap(match=>[match.player1Id,match.player2Id].filter((id):id is string=>!!id)))];
+    const characters=participantIds.length?await db.select().from(playerCharacters).where(inArray(playerCharacters.playerId,participantIds)).orderBy(asc(playerCharacters.position)):[];
+    const disputes = await db.select({ matchId: eventScoreReports.matchId }).from(eventScoreReports).where(and(eq(eventScoreReports.eventPlanId, planId), eq(eventScoreReports.status, 'pending'), eq(eventScoreReports.isDispute, true)));
+    const matches = rows.map(m => ({ ...m, pendingDisputeCount: disputes.filter(report => report.matchId === m.id).length,
+        score1:m.status==='playing'?(m.liveScore1??m.score1):m.score1,score2:m.status==='playing'?(m.liveScore2??m.score2):m.score2,
+        player1Name: m.player1Id ? names.get(m.player1Id) ?? 'Player' : 'TBD', player2Name: m.player2Id ? names.get(m.player2Id) ?? 'Player' : 'TBD',
+        player1Characters:characters.filter(c=>c.playerId===m.player1Id).map(c=>c.characterSlug),player2Characters:characters.filter(c=>c.playerId===m.player2Id).map(c=>c.characterSlug),
+        availability:matchAvailability(m,rows,stations,poolSchedules,false,!['complete','cancelled'].includes(plan.status)),
+    }));
+    const historicalResultsSlug = plan.historicalAdoption?.brackets.find(bracket => bracket.division === 'upper' && bracket.stage === 'main')?.slug ?? null;
+    const [nativeResult] = plan.bracketMode === 'native' && plan.status === 'complete'
+        ? await db.select({ slug: tournaments.challongeSlug }).from(eventPlanBrackets)
+            .innerJoin(tournaments, eq(eventPlanBrackets.tournamentId, tournaments.id))
+            .where(and(eq(eventPlanBrackets.eventPlanId, planId), eq(eventPlanBrackets.division, 'upper'), eq(eventPlanBrackets.stage, 'main')))
+        : [];
+    const resultsSlug = nativeResult?.slug ?? historicalResultsSlug;
+    // Archived plans are planning intent, not evidence of attendance or finishes.
+    const entrants = plan.historicalAdoption ? [] : (await db.select({ id: eventPlanEntries.playerId }).from(eventPlanEntries).where(eq(eventPlanEntries.eventPlanId, planId))).flatMap(p => p.id ? [{ id: p.id, name: names.get(p.id) ?? 'Player' }] : []);
+    const prizes = (await db.select().from(eventPrizes).where(eq(eventPrizes.eventPlanId, planId))).map(p => ({ ...p, playerName: p.playerId ? names.get(p.playerId) ?? 'Player' : null }));
+    return { ...await loadStationQueues(db, planId), nativeBrackets: await nativeBracketViews(db, planId), plan: { id: plan.id, name: plan.name, eventDate: plan.eventDate.toISOString(), status: plan.status, softLockedAt: plan.softLockedAt?.toISOString() ?? null, bracketMode: plan.bracketMode, historicalResultsSlug, resultsSlug }, brackets: (await db.select({ division: eventPlanBrackets.division, stage: eventPlanBrackets.stage, slug: eventPlanBrackets.challongeSlug }).from(eventPlanBrackets).where(eq(eventPlanBrackets.eventPlanId, planId))), settings: { scoreReportingMode: settings?.scoreReportingMode ?? 'to_review', published: settings?.published ?? false, playerReports: settings?.playerReports ?? false }, matches, entrants, prizes,
+        stations: stations.map(station=>stationAvailability(station,rows)), poolSchedules,
+        announcements: (await db.select().from(eventAnnouncements).where(and(eq(eventAnnouncements.eventPlanId, planId),or(isNull(eventAnnouncements.expiresAt),gt(eventAnnouncements.expiresAt,new Date())))).orderBy(desc(eventAnnouncements.createdAt))).map(a => ({ ...a, createdAt: a.createdAt.toISOString(),expiresAt:a.expiresAt?.toISOString()??null })),
+        withdrawals: await db.select({ playerId: eventWithdrawals.playerId }).from(eventWithdrawals).where(eq(eventWithdrawals.eventPlanId, planId)),
+        placements: plan.historicalAdoption ? [] : await db.select().from(eventPlanPoolPlacements).where(eq(eventPlanPoolPlacements.eventPlanId, planId)) };
 }
 function importedOutcome(s: typeof sets.$inferSelect): 'played' | 'bye' | 'forfeit' | null {
   if (s.state !== 'complete') return null
@@ -220,205 +99,34 @@ function remoteValues(s: typeof sets.$inferSelect, firstPlayerId: string) {
   }
 }
 export async function prepare(db: Db, planId: string) {
-  return db.transaction(async (tx) => {
-    const row = await lockEvent(tx, planId)
-    if (!['pools_ready', 'underway'].includes(row.status))
-      fail('CONFLICT', 'Generate and freeze pools before preparing matches.')
-    const plan = await getPlan(tx, planId)
-    if (!plan) return fail('NOT_FOUND', 'Event not found.')
-    const existing = await tx
-      .select()
-      .from(eventMatches)
-      .where(eq(eventMatches.eventPlanId, planId))
-    const linked = await tx
-      .select()
-      .from(eventPlanBrackets)
-      .where(eq(eventPlanBrackets.eventPlanId, planId))
-    const imported =
-      row.bracketMode !== 'native' && linked.length
-        ? await tx
-            .select()
-            .from(sets)
-            .where(
-              inArray(
-                sets.tournamentId,
-                linked.flatMap((b) => (b.tournamentId ? [b.tournamentId] : [])),
-              ),
-            )
-        : []
-    const rows: (typeof eventMatches.$inferInsert)[] = []
-    for (const d of plan.divisions)
-      for (const pool of d.pools)
-        for (let i = 0; i < pool.members.length; i++)
-          for (let j = i + 1; j < pool.members.length; j++) {
-            const a = pool.members[i]!,
-              b = pool.members[j]!
-            const remote = imported.find(
-              (s) =>
-                linked.some(
-                  (b) =>
-                    b.tournamentId === s.tournamentId &&
-                    b.division === d.division &&
-                    b.stage === 'main',
-                ) &&
-                s.resultStage === 'group' &&
-                ((s.p1PlayerId === a.playerId && s.p2PlayerId === b.playerId) ||
-                  (s.p2PlayerId === a.playerId && s.p1PlayerId === b.playerId)),
-            )
-            rows.push({
-              eventPlanId: planId,
-              sourceKey: `group:${d.division}:${pool.poolIndex}:${[a.playerId, b.playerId].sort().join(':')}`,
-              division: d.division,
-              stage: 'group',
-              poolIndex: pool.poolIndex,
-              label: `${d.division} Pool ${pool.label} · ${i + 1} v ${j + 1}`,
-              player1Id: a.playerId,
-              player2Id: b.playerId,
-              ...(remote ? remoteValues(remote, a.playerId) : {}),
-            })
-          }
-    for (const s of imported.filter((s) => s.resultStage !== 'group')) {
-      const b = linked.find((b) => b.tournamentId === s.tournamentId)!
-      const scores = s.scoresCsv?.match(/^(-?\d+)-(-?\d+)$/)
-      rows.push({
-        eventPlanId: planId,
-        sourceKey: `set:${s.id}`,
-        sourceSetId: s.id,
-        outcome: importedOutcome(s),
-        division: b.division,
-        stage: b.stage,
-        poolIndex: null,
-        label: `${b.division} ${b.stage} · ${s.identifier ?? s.suggestedPlayOrder ?? s.challongeMatchId}`,
-        player1Id: s.p1PlayerId,
-        player2Id: s.p2PlayerId,
-        status:
-          s.state === 'complete' ? 'complete' : s.p1PlayerId && s.p2PlayerId ? 'ready' : 'blocked',
-        blockedReason: s.p1PlayerId && s.p2PlayerId ? null : 'Waiting for bracket participants',
-        score1: scores ? Number(scores[1]) : null,
-        score2: scores ? Number(scores[2]) : null,
-        winnerId: s.winner === 1 ? s.p1PlayerId : s.winner === 2 ? s.p2PlayerId : null,
-        syncState: 'synced',
-      })
-    }
-    const desired = new Set(rows.map((r) => r.sourceKey))
-    if (existing.some((m) => !m.nativeBracketId && !desired.has(m.sourceKey)))
-      fail(
-        'CONFLICT',
-        'Pool assignments changed. Existing operational matches must be reconciled before preparing again.',
-      )
-    for (const row of rows) {
-      const previous = existing.find((m) => m.sourceKey === row.sourceKey)
-      if (!previous) {
-        await tx
-          .insert(eventMatches)
-          .values({ ...row, resultUpdatedAt: row.status === 'complete' ? new Date() : null })
-        continue
-      }
-      if (!row.sourceSetId) continue
-      if (
-        previous.status === 'complete' &&
-        (previous.syncState === 'pending' ||
-          previous.syncState === 'error' ||
-          (previous.revision > 0 && previous.syncState === 'local'))
-      ) {
-        const agrees =
-          row.status === 'complete' &&
-          row.player1Id === previous.player1Id &&
-          row.player2Id === previous.player2Id &&
-          row.score1 === previous.score1 &&
-          row.score2 === previous.score2 &&
-          row.winnerId === previous.winnerId &&
-          row.outcome === previous.outcome
-        await tx
-          .update(eventMatches)
-          .set({
-            sourceSetId: row.sourceSetId,
-            syncState: agrees ? 'synced' : 'error',
-            blockedReason: agrees
-              ? null
-              : 'Local result differs from the imported Challonge result. Copy the correction to Challonge, sync that bracket, then refresh matches.',
-          })
-          .where(eq(eventMatches.id, previous.id))
-        continue
-      }
-      // Refresh only imported facts; preserve local station/queue decisions. Changed facts
-      // invalidate forms and pending player reports by advancing the revision.
-      const importedStatus = row.status ?? 'ready'
-      const participantsChanged =
-        previous.player1Id !== (row.player1Id ?? null) ||
-        previous.player2Id !== (row.player2Id ?? null)
-      const requiresParticipantReview =
-        importedStatus !== 'complete' &&
-        participantsChanged &&
-        (previous.status === 'playing' ||
-          previous.liveScore1 !== null ||
-          previous.liveScore2 !== null ||
-          (Boolean(previous.player1Id) && previous.player1Id !== row.player1Id) ||
-          (Boolean(previous.player2Id) && previous.player2Id !== row.player2Id))
-      const nextStatus =
-        importedStatus === 'complete'
-          ? 'complete'
-          : requiresParticipantReview
-            ? 'blocked'
-            : !row.player1Id || !row.player2Id
-              ? 'blocked'
-              : previous.status === 'playing'
-                ? 'playing'
-                : previous.status === 'blocked' &&
-                    previous.blockedReason !== 'Waiting for bracket participants'
-                  ? 'blocked'
-                  : 'ready'
-      const fields = {
-        sourceSetId: row.sourceSetId,
-        player1Id: row.player1Id ?? null,
-        player2Id: row.player2Id ?? null,
-        score1: row.score1 ?? null,
-        score2: row.score2 ?? null,
-        winnerId: row.winnerId ?? null,
-        outcome: row.outcome ?? null,
-        syncState: 'synced' as const,
-      }
-      if (
-        Object.entries(fields).some(
-          ([key, value]) => previous[key as keyof typeof previous] !== value,
-        ) ||
-        nextStatus !== previous.status
-      ) {
-        let reconciliationReason: string | null = null
-        const resultChanged =
-          previous.status === 'complete' &&
-          (nextStatus !== 'complete' ||
-            previous.score1 !== fields.score1 ||
-            previous.score2 !== fields.score2 ||
-            previous.winnerId !== fields.winnerId ||
-            previous.outcome !== fields.outcome)
-        if (previous.stage === 'group' && previous.poolIndex !== null && resultChanged) {
-          await tx
-            .delete(eventPlanPoolPlacements)
-            .where(
-              and(
-                eq(eventPlanPoolPlacements.eventPlanId, planId),
-                eq(eventPlanPoolPlacements.division, previous.division),
-                eq(eventPlanPoolPlacements.poolIndex, previous.poolIndex),
-              ),
-            )
-          reconciliationReason =
-            'Imported pool result changed. Reconfirm this pool order and reconcile any downstream bracket entrants.'
-          for (const bracket of linked.filter(
-            (b) =>
-              b.division === previous.division &&
-              b.stage === 'consolation' &&
-              (b.challongeSlug || b.tournamentId),
-          )) {
-            await tx
-              .update(eventPlanBrackets)
-              .set({
-                externalState: 'error',
-                lastError: reconciliationReason,
-                updatedAt: new Date(),
-              })
-              .where(eq(eventPlanBrackets.id, bracket.id))
-          }
+    return db.transaction(async (tx) => {
+        const row = await lockEvent(tx, planId);
+        if (!['pools_ready', 'underway'].includes(row.status))
+            fail('CONFLICT', 'Generate and freeze pools before preparing matches.');
+        const plan = await getPlan(tx, planId);
+        if (!plan)
+            return fail('NOT_FOUND', 'Event not found.');
+        const existing = await tx.select().from(eventMatches).where(eq(eventMatches.eventPlanId, planId));
+        const withdrawnForDraw = new Set((await tx.select({ playerId: eventWithdrawals.playerId }).from(eventWithdrawals).where(eq(eventWithdrawals.eventPlanId, planId))).map(w => w.playerId));
+        const linked = await tx.select().from(eventPlanBrackets).where(eq(eventPlanBrackets.eventPlanId, planId));
+        const imported = row.bracketMode !== 'native' && linked.length ? await tx.select().from(sets).where(inArray(sets.tournamentId, linked.flatMap(b => b.tournamentId ? [b.tournamentId] : []))) : [];
+        const rows: Array<typeof eventMatches.$inferInsert> = [];
+        for (const d of plan.divisions)
+            for (const pool of d.pools)
+                for (let i = 0; i < pool.members.length; i++)
+                    for (let j = i + 1; j < pool.members.length; j++) {
+                        const a = pool.members[i]!, b = pool.members[j]!;
+                        const sourceKey = `group:${d.division}:${pool.poolIndex}:${[a.playerId, b.playerId].sort().join(':')}`;
+                        // Keep old matches for audit and forfeits. A newcomer has no match to
+                        // play against somebody who had already withdrawn.
+                        if ((withdrawnForDraw.has(a.playerId) || withdrawnForDraw.has(b.playerId)) && !existing.some(m => m.sourceKey === sourceKey)) continue;
+                        const remote = imported.find(s => linked.some(b => b.tournamentId === s.tournamentId && b.division === d.division && b.stage === 'main') && s.resultStage === 'group' && ((s.p1PlayerId === a.playerId && s.p2PlayerId === b.playerId) || (s.p2PlayerId === a.playerId && s.p1PlayerId === b.playerId)));
+                        rows.push({ eventPlanId: planId, sourceKey, division: d.division, stage: 'group', poolIndex: pool.poolIndex, label: `${d.division} Pool ${pool.label} · ${i + 1} v ${j + 1}`, player1Id: a.playerId, player2Id: b.playerId, ...(remote ? remoteValues(remote, a.playerId) : {}) });
+                    }
+        for (const s of imported.filter(s => s.resultStage !== 'group')) {
+            const b = linked.find(b => b.tournamentId === s.tournamentId)!;
+            const scores = s.scoresCsv?.match(/^(-?\d+)-(-?\d+)$/);
+            rows.push({ eventPlanId: planId, sourceKey: `set:${s.id}`, sourceSetId: s.id, outcome: importedOutcome(s), division: b.division, stage: b.stage, poolIndex: null, label: `${b.division} ${b.stage} · ${s.identifier ?? s.suggestedPlayOrder ?? s.challongeMatchId}`, player1Id: s.p1PlayerId, player2Id: s.p2PlayerId, status: s.state === 'complete' ? 'complete' : s.p1PlayerId && s.p2PlayerId ? 'ready' : 'blocked', blockedReason: s.p1PlayerId && s.p2PlayerId ? null : 'Waiting for bracket participants', score1: scores ? Number(scores[1]) : null, score2: scores ? Number(scores[2]) : null, winnerId: s.winner === 1 ? s.p1PlayerId : s.winner === 2 ? s.p2PlayerId : null, syncState: 'synced' });
         }
         const newResult =
           nextStatus === 'complete' &&

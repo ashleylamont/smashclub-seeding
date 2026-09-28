@@ -1,30 +1,10 @@
-import { test, expect, type APIRequestContext } from '@playwright/test'
-import jsQR from 'jsqr'
-test.use({ actionTimeout: 15_000 })
+import { test, expect, type APIRequestContext } from '@playwright/test';
+import jsQR from 'jsqr';
+import { writeFile } from 'node:fs/promises';
+test.use({actionTimeout:15_000});
 
-type Match = {
-  id: string
-  player1Id: string
-  player2Id: string
-  player1Name: string
-  player2Name: string
-  status: string
-  revision: number
-  score1: number | null
-  score2: number | null
-}
-type Overview = {
-  matches: Match[]
-  stations: { id: string }[]
-  reports: {
-    id: string
-    matchId: string
-    status: string
-    userId: string | null
-    guestSessionId: string | null
-    reporterLabel: string
-  }[]
-}
+type Match = { id: string; player1Id: string; player2Id: string; player1Name: string; player2Name: string; status: string; revision: number; score1: number | null; score2: number | null };
+type Overview = { matches: Match[]; stations: Array<{id:string;name:string}>; reports: Array<{id:string;matchId:string;status:string;userId:string|null;guestSessionId:string|null;reporterLabel:string}> };
 async function signIn(request: APIRequestContext, email = 'admin@smashclub.dev') {
   const response = await request.post('/api/auth/sign-in/email', {
     data: { email, password: 'devpassword123' },
@@ -263,14 +243,60 @@ test('scannable guest QR accepts anonymous and unlinked reports, keeps approval 
       .selectOption('reports')
     await expect(otherCard).toContainText('Confirmed result')
     // Revocation is checked server-side on each poll, even with cached session data.
-    page.once('dialog', (dialog) => void dialog.accept())
-    await controls.getByRole('button', { name: 'Revoke all guest passes', exact: true }).click()
-    await expect(guest.getByRole('alert')).toContainText(/revoked|expired|invalid/i)
-    await unlinkedPage.goto(invitationUrl)
-    await expect(unlinkedPage.getByRole('alert')).toContainText(/revoked|expired|invalid/i)
-  } finally {
-    await anonymous.close()
-    await unlinked.close()
-    await broadcast.close()
-  }
-})
+    page.once('dialog',dialog=>void dialog.accept());
+    await controls.getByRole('button',{name:'Revoke all guest passes',exact:true}).click();
+    await expect(guest.getByRole('alert')).toContainText(/revoked|expired|invalid/i);
+    await unlinkedPage.goto(invitationUrl);
+    await expect(unlinkedPage.getByRole('alert')).toContainText(/revoked|expired|invalid/i);
+  } finally {await anonymous.close();await unlinked.close();await broadcast.close();}
+});
+
+test('organisers print a permanent station QR before publication', async ({ page, browser, baseURL }, testInfo) => {
+  test.setTimeout(120_000);
+  const planId = await event(page.request);
+  await mutate(page.request, 'eventOps.settings', { planId, published: false, playerReports: false });
+  await mutate(page.request, 'eventOps.saveStation', { planId, name: 'Station 2' });
+  const overview = await query<Overview>(page.request, 'eventOps.overview', { planId });
+  const stationId = overview.stations.find(station => station.name === 'Stage')!.id;
+  await page.goto(`/admin/event-operations?plan=${planId}`);
+  const controls = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Guest score reporting', exact: true }) }).last();
+  await controls.getByLabel('Allow guest score reports', { exact: true }).click();
+  await expect(controls.getByLabel('Allow guest score reports', { exact: true })).toBeChecked();
+  await controls.getByLabel('Keep QR invitations valid until revoked').click();
+  await expect(controls.getByLabel('Keep QR invitations valid until revoked')).toBeChecked();
+  await controls.getByRole('button', { name: 'Print station signs' }).click();
+  const preview = page.getByRole('dialog', { name: 'Print station signs' });
+  await expect(preview.getByRole('button', { name: 'Print selected signs' })).toBeEnabled();
+  await expect(preview.locator('.station-sign-page')).toHaveCount(2);
+  const image = preview.getByRole('img', { name: 'Guest score reporting QR for Stage' });
+  const pixels = await image.evaluate(async node => {
+    const img = node as HTMLImageElement; await img.decode();
+    const canvas = document.createElement('canvas'); canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+    const context = canvas.getContext('2d')!; context.drawImage(img, 0, 0);
+    return { bytes: [...context.getImageData(0, 0, canvas.width, canvas.height).data], width: canvas.width, height: canvas.height };
+  });
+  const link = jsQR(Uint8ClampedArray.from(pixels.bytes), pixels.width, pixels.height)?.data;
+  expect(link).toContain(`/guest/${planId}?station=${stationId}#token=persistent.`);
+  await page.emulateMedia({ media: 'print' });
+  const allPdf = await page.pdf({ format: 'A4', preferCSSPageSize: true });
+  expect(allPdf.toString('latin1').match(/\/Type \/Page\b/g)).toHaveLength(2);
+  await page.emulateMedia({ media: 'screen' });
+  await preview.getByRole('checkbox', { name: 'Station 2' }).uncheck();
+  await expect(preview.locator('.station-sign-page')).toHaveCount(1);
+  await page.emulateMedia({ media: 'print' });
+  const pdf = await page.pdf({ format: 'A4', preferCSSPageSize: true });
+  await writeFile(testInfo.outputPath('station-sign.pdf'), pdf);
+  expect(pdf.toString('latin1').match(/\/Type \/Page\b/g)).toHaveLength(1);
+  await page.screenshot({ path: testInfo.outputPath('station-sign-print.png'), fullPage: true });
+  await page.emulateMedia({ media: 'screen' });
+  await preview.getByRole('button', { name: 'Close preview' }).click();
+  await mutate(page.request, 'eventOps.settings', { planId, published: true, playerReports: false });
+  const anonymous = await browser.newContext({ baseURL });
+  try {
+    const guest = await anonymous.newPage();
+    await guest.goto(link!);
+    await expect(guest.getByRole('combobox', { name: 'Station', exact: true })).toHaveValue(stationId);
+    await expect(guest.locator('article.pool-flow-station')).toHaveCount(1);
+    await expect(guest.locator('.guest-pass-expiry')).toContainText('remaining');
+  } finally { await anonymous.close(); }
+});
