@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { authClient, sessionRole } from '../lib/auth';
+import { authClient, useCurrentUser } from '../lib/auth';
 import { BUILD_COMMIT_URL, BUILD_LABEL, BUILD_SHA } from '../lib/build';
 import { useEventSource } from '../lib/useEventSource';
 import { NemesisMark } from './NemesisMark';
@@ -12,7 +12,8 @@ import '../App.css';
  *  subscription that keeps cached queries fresh across the whole app. */
 export function Layout() {
   const { data: session, isPending } = authClient.useSession();
-  const role = sessionRole(session);
+  const currentUser = useCurrentUser(session);
+  const role = currentUser.data?.role;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: state => state.location.pathname });

@@ -21,12 +21,14 @@ Individual pool settings remain available. Batch changes validate the complete p
 
 New station plans for native events enable player starts and immediate score acceptance. Existing schedules retain their previous TO approval policy until explicitly changed. Both options are visible in the setup preview and can be controlled per pool.
 
-1. Open the pool’s player board or scan the existing event QR code and choose a pool. The pool selection stays in the URL for sharing.
+1. Open the pool’s player board or scan a guest QR code and choose a pool. A printed station sign opens the reporting page focused on that station. The pool selection stays in the URL for sharing.
 2. Find the station marked **Play next**. When both players are there, press **We’re here — start match** from the reporting page.
 3. Play the set and submit its final score. In a self-running pool with immediate acceptance enabled, that result is recorded immediately and the queue advances.
 4. Follow **Play next** for the newly free station. No per-match TO start or approval is needed.
 
 Signed-in attendees do not need a player profile link. Guests need a valid event QR session. Both routes enforce the same event, pool, station, availability and revision checks. Only the current queued match can be started. Two devices cannot claim the same match or double-book a player/station. Starts and results record the actual signed-in account or guest session in the audit history.
+
+For pre-event printing, see [Permanent station QR signs](station-signs.md). Select persistent invitations before printing; the default rotating invitations expire too soon for paper signs.
 
 TOs can still correct completed pool results. Existing safeguards prevent changing advancement once downstream finals have started. Forfeits, withdrawals and other exceptional decisions remain TO actions. If immediate acceptance is disabled, a submitted score waits for TO approval and the station remains occupied until approval.
 

@@ -4,7 +4,7 @@ From the event operations desk, **Print pool sheets** opens a separate preview f
 
 Each pool starts on a new page, with the event and pool name, assigned station bank, open/later/finished status, roster (including withdrawn players), round pairings, odd-player rests, and space to write unplayed scores. Results already recorded appear with their status; byes and forfeits identify the winner without inventing game scores. Large pools or long names can continue onto further pages with repeated column headers and unsplit match rows.
 
-The QR opens the stable public pool board on the current site origin. It contains no reporting credential and does not expire like a guest reporting invitation. Unpublished events omit the QR and explain that the board is unavailable. The sheet explains that guests still need the current reporting QR to submit scores.
+The QR opens the stable public pool board on the current site origin. It contains no reporting credential. Unpublished events omit the QR and explain that the board is unavailable. Guests need a separate reporting QR to submit scores; organisers can print [permanent station signs](station-signs.md) when invitation rotation is disabled.
 
 Pairing rounds are a reference, not a promised station assignment or start time. The online station queue remains authoritative. Paper entries are a fallback: enter each result online once, and ask a TO to correct an existing result.
 

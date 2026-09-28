@@ -1,0 +1,27 @@
+.station-sign-dialog { width: min(850px, calc(100vw - 24px)); max-height: 92vh; padding: 0; border: 1px solid #aaa; border-radius: 8px; background: #e8e8e8; color: #111; }
+.station-sign-dialog::backdrop { background: #0009; }
+.station-sign-toolbar { padding: 20px; background: #fff; }
+.station-sign-toolbar h2 { margin: 0; }
+.station-sign-toolbar fieldset { display: flex; flex-wrap: wrap; gap: 12px; margin: 14px 0; }
+.station-sign-toolbar label { display: flex; align-items: center; gap: 6px; }
+.station-sign-toolbar button { margin-right: 8px; }
+.station-sign-page { box-sizing: border-box; width: min(100%, 794px); min-height: 1123px; margin: 20px auto; padding: 44px; background: white; color: #111; text-align: center; font-family: Arial, sans-serif; overflow-wrap: anywhere; }
+.station-sign-brand { margin: 0; font-size: 13px; font-weight: 800; letter-spacing: .16em; }
+.station-sign-event { margin: 24px 0 5px; font-size: 22px; }
+.station-sign-page h1 { margin: 0; font-size: 64px; line-height: 1.1; }
+.station-sign-callout { margin: 28px 0 0; font-size: 20px; font-weight: 800; letter-spacing: .12em; }
+.station-sign-page img { display: block; width: min(100%, 480px); height: auto; margin: 14px auto; }
+.station-sign-page h2 { margin: 14px 0; font-size: 24px; }
+.station-sign-page ol { display: inline-block; margin: 0 auto; padding-left: 25px; text-align: left; font-size: 16px; line-height: 1.8; }
+.station-sign-note { max-width: 560px; margin: 24px auto 0; font-size: 14px; line-height: 1.5; }
+@media print {
+  @page { size: A4 portrait; margin: 12mm; }
+  body.printing-station-signs > :not(.station-sign-dialog) { display: none !important; }
+  body.printing-station-signs { background: white !important; margin: 0 !important; overflow: visible !important; }
+  .station-sign-dialog { display: block; position: static; width: auto; max-width: none; height: auto; max-height: none; margin: 0; padding: 0; border: 0; overflow: visible; background: white; }
+  .station-sign-dialog::backdrop, .station-sign-toolbar { display: none !important; }
+  .station-sign-page { width: 186mm; min-height: 273mm; margin: 0; padding: 9mm 3mm; break-after: page; }
+  .station-sign-page h1 { font-size: 48px; }
+  .station-sign-page img { width: 120mm; }
+  .station-sign-page:last-child { break-after: auto; }
+}
