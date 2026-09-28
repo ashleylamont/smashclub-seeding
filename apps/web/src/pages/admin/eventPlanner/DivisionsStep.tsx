@@ -29,9 +29,14 @@ import { DIVISION_LABEL } from './labels'
  */
 
 export function DivisionsStep({ view, onChanged }: { view: EventPlanView; onChanged: () => void }) {
-  const planId = view.plan.id;
-  const attached = view.brackets.some((bracket) => bracket.challongeSlug !== null);
-  const locked = !!view.plan.softLockedAt || attached || view.plan.status === 'underway' || view.plan.status === 'complete' || view.plan.status === 'cancelled';
+  const planId = view.plan.id
+  const attached = view.brackets.some((bracket) => bracket.challongeSlug !== null)
+  const locked =
+    Boolean(view.plan.softLockedAt) ||
+    attached ||
+    view.plan.status === 'underway' ||
+    view.plan.status === 'complete' ||
+    view.plan.status === 'cancelled'
 
   const generate = useMutation({
     mutationFn: () => trpc.admin.eventPlanner.generatePools.mutate({ planId }),
@@ -67,7 +72,13 @@ export function DivisionsStep({ view, onChanged }: { view: EventPlanView; onChan
       {generate.isError && <p className="error-text">{generate.error.message}</p>}
       {locked && (
         <div className="banner banner-warning">
-          Seeds are locked: {view.plan.softLockedAt ? 'a TO soft-locked these pools' : attached ? 'a Challonge bracket is attached' : 'the event is underway or closed'}. Completed play is preserved.
+          Seeds are locked:{' '}
+          {view.plan.softLockedAt
+            ? 'a TO soft-locked these pools'
+            : attached
+              ? 'a Challonge bracket is attached'
+              : 'the event is underway or closed'}
+          . Completed play is preserved.
         </div>
       )}
 

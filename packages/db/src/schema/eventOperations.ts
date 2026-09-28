@@ -195,11 +195,24 @@ export const eventAttendanceAudit = pgTable('event_attendance_audit', {
 
 /** Never expose the event secret, session digest or request fingerprints publicly. */
 export const eventGuestSettings = pgTable('event_guest_settings', {
-    eventPlanId: planId().primaryKey(), enabled: boolean('enabled').notNull().default(false), showOnOverlay: boolean('show_on_overlay').notNull().default(false), rotateInvitations: boolean('rotate_invitations').notNull().default(true), secret: text('secret').notNull(),
-});
-export const eventGuestSessions = pgTable('event_guest_sessions', {
-    id: uuid('id').primaryKey().defaultRandom(), eventPlanId: planId(), tokenHash: text('token_hash').notNull(), generation: text('generation').notNull(), expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(), createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, t => [uniqueIndex('event_guest_sessions_token_idx').on(t.tokenHash)]);
+  eventPlanId: planId().primaryKey(),
+  enabled: boolean('enabled').notNull().default(false),
+  showOnOverlay: boolean('show_on_overlay').notNull().default(false),
+  rotateInvitations: boolean('rotate_invitations').notNull().default(true),
+  secret: text('secret').notNull(),
+})
+export const eventGuestSessions = pgTable(
+  'event_guest_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    eventPlanId: planId(),
+    tokenHash: text('token_hash').notNull(),
+    generation: text('generation').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('event_guest_sessions_token_idx').on(t.tokenHash)],
+)
 export const eventGuestRateLimits = pgTable('event_guest_rate_limits', {
   key: text('key').primaryKey(),
   eventPlanId: planId(),

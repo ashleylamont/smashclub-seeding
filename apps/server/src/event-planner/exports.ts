@@ -1,6 +1,6 @@
-import { divisionLabel, EventPlanStateError, type PlanView } from './plans';
-import type { Division } from './divisions';
-import { winnersCount } from './advancement';
+import { divisionLabel, EventPlanStateError, type PlanView } from './plans'
+import type { Division } from './divisions'
+import { winnersCount } from './advancement'
 
 /**
  * The copy-and-paste handoff to Challonge.
@@ -55,9 +55,11 @@ export function buildExports(view: PlanView): PlanExports {
   const poolCards: PlanExports['poolCards'] = []
 
   for (const division of view.divisions) {
-    if (division.size === 0) continue;
-    const advanceCounts = division.pools.map(pool => winnersCount(pool.members.filter(member => !member.withdrawn).length));
-    const mixedAdvanceCounts = new Set(advanceCounts).size > 1;
+    if (division.size === 0) continue
+    const advanceCounts = division.pools.map((pool) =>
+      winnersCount(pool.members.filter((member) => !member.withdrawn).length),
+    )
+    const mixedAdvanceCounts = new Set(advanceCounts).size > 1
     const slot = (stage: 'main' | 'consolation') =>
       view.brackets.find(
         (bracket) => bracket.division === division.division && bracket.stage === stage,
@@ -73,7 +75,7 @@ export function buildExports(view: PlanView): PlanExports {
       audit: seeded.map((member) => `${member.seed}\t${member.name}`).join('\n'),
       checklist: [
         'Tournament type: Two stage — group stage then single elimination.',
-        `Groups: ${division.poolCount} round-robin group(s), sizes ${division.pools.map((pool) => pool.members.length).join(" / ")}. Match the pool cards exactly; do not rely on automatic allocation.`,
+        `Groups: ${division.poolCount} round-robin group(s), sizes ${division.pools.map((pool) => pool.members.length).join(' / ')}. Match the pool cards exactly; do not rely on automatic allocation.`,
         mixedAdvanceCounts
           ? 'Advance 2 from each 3/4-player group and 3 from each 5-player group. Challonge uses one advance count for all groups, so manually reconcile the final-stage entrants before play, or use native brackets.'
           : `Advance ${advanceCounts[0]} from each group into the final stage (the upper half, rounded up).`,
@@ -118,7 +120,9 @@ export function buildExports(view: PlanView): PlanExports {
                 )
                 .join(', ')}.`,
             ]
-          : ['Confirm every pool’s finishing order first — everyone below the rounded-up upper half enters consolation.']),
+          : [
+              'Confirm every pool’s finishing order first — everyone below the rounded-up upper half enters consolation.',
+            ]),
         `Event date: ${view.plan.eventDate.slice(0, 10)} — the same as the main brackets.`,
         'Do NOT mark this bracket as rookie.',
       ],

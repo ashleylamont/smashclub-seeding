@@ -51,13 +51,26 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
     () => new URLSearchParams(window.location.search).get('station') ?? '',
   )
   const changeFocus = (stationId: string) => {
-    const url = new URL(window.location.href);
-    if (stationId) url.searchParams.set('station', stationId); else url.searchParams.delete('station');
-    window.history.replaceState(window.history.state, '', url);
-    setFocus(stationId);
-  };
-  const guestInvitation = useQuery({ queryKey: ['overlayGuestInvitation', planId], queryFn: () => trpc.eventOps.guests.overlayInvitation.query({ planId }), enabled: overlay, refetchInterval: 10000, refetchIntervalInBackground: true, retry: false });
-  const guestQr = !guestInvitation.isError && guestInvitation.data && (!guestInvitation.data.expiresAt || Date.parse(guestInvitation.data.expiresAt) > now) ? guestInvitation.data : null;
+    const url = new URL(window.location.href)
+    if (stationId) url.searchParams.set('station', stationId)
+    else url.searchParams.delete('station')
+    window.history.replaceState(window.history.state, '', url)
+    setFocus(stationId)
+  }
+  const guestInvitation = useQuery({
+    queryKey: ['overlayGuestInvitation', planId],
+    queryFn: () => trpc.eventOps.guests.overlayInvitation.query({ planId }),
+    enabled: overlay,
+    refetchInterval: 10000,
+    refetchIntervalInBackground: true,
+    retry: false,
+  })
+  const guestQr =
+    !guestInvitation.isError &&
+    guestInvitation.data &&
+    (!guestInvitation.data.expiresAt || Date.parse(guestInvitation.data.expiresAt) > now)
+      ? guestInvitation.data
+      : null
   useEffect(() => {
     if (!overlay) return
     document.documentElement.classList.add('event-overlay-document')

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 /** The bearer invitation lives only in a fragment, which browsers never send to the server. */
 export function guestInvitationUrl(planId: string, token: string, stationId?: string) {
-  return `${window.location.origin}/guest/${encodeURIComponent(planId)}${stationId ? `?station=${encodeURIComponent(stationId)}` : ''}#token=${encodeURIComponent(token)}`;
+  return `${window.location.origin}/guest/${encodeURIComponent(planId)}${stationId ? `?station=${encodeURIComponent(stationId)}` : ''}#token=${encodeURIComponent(token)}`
 }
 
 export function useGuestClock() {

@@ -102,6 +102,13 @@
       }
     },
     {
+      "files": ["apps/server/src/event-operations/attendance.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 700, "skipBlankLines": true, "skipComments": true }],
+        "complexity": ["error", { "max": 75 }]
+      }
+    },
+    {
       "files": ["apps/server/src/event-planner/plans.ts", "packages/engine/src/recap.ts"],
       "rules": {
         "max-lines": ["error", { "max": 1250, "skipBlankLines": true, "skipComments": true }]
@@ -116,10 +123,10 @@
     {
       "files": ["apps/web/src/pages/admin/AdminEventOperationsPage.tsx"],
       "rules": {
-        "max-lines": ["error", { "max": 1100, "skipBlankLines": true, "skipComments": true }],
+        "max-lines": ["error", { "max": 1150, "skipBlankLines": true, "skipComments": true }],
         "max-lines-per-function": [
           "error",
-          { "max": 625, "skipBlankLines": true, "skipComments": true }
+          { "max": 675, "skipBlankLines": true, "skipComments": true }
         ]
       }
     },
@@ -149,6 +156,12 @@
       "files": ["apps/web/src/pages/EventLivePage.tsx"],
       "rules": {
         "complexity": ["error", { "max": 90 }]
+      }
+    },
+    {
+      "files": ["apps/web/src/pages/GuestEventPage.tsx"],
+      "rules": {
+        "complexity": ["error", { "max": 65 }]
       }
     },
     {

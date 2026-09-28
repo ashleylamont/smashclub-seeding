@@ -20,13 +20,16 @@ export interface PoolFinisher {
 
 /** Keep two qualifiers in a two-player pool; a five-player pool advances three. */
 export function winnersCount(poolSize: number): number {
-  return Math.min(poolSize, Math.max(2, Math.ceil(poolSize / 2)));
+  return Math.min(poolSize, Math.max(2, Math.ceil(poolSize / 2)))
 }
 
 export function consolationQualifiers(finishers: readonly PoolFinisher[]): PoolFinisher[] {
-  const counts = new Map<number, number>();
-  for (const finisher of finishers) counts.set(finisher.poolIndex, (counts.get(finisher.poolIndex) ?? 0) + 1);
-  return finishers.filter(finisher => finisher.place > winnersCount(counts.get(finisher.poolIndex)!));
+  const counts = new Map<number, number>()
+  for (const finisher of finishers)
+    counts.set(finisher.poolIndex, (counts.get(finisher.poolIndex) ?? 0) + 1)
+  return finishers.filter(
+    (finisher) => finisher.place > winnersCount(counts.get(finisher.poolIndex)!),
+  )
 }
 
 export interface ConsolationEntrant {
@@ -91,7 +94,7 @@ interface Seeded {
  * needs to be able to check.
  */
 export function buildConsolationBracket(finishers: readonly PoolFinisher[]): ConsolationBracket {
-  const qualifiers = consolationQualifiers(finishers);
+  const qualifiers = consolationQualifiers(finishers)
   if (qualifiers.length === 0) {
     throw new Error('No consolation finishers to build a consolation bracket from.')
   }
@@ -233,9 +236,12 @@ function nextPowerOfTwo(value: number): number {
 }
 
 /** Upper half of each pool, rounded up, in pool then place order. */
-export function championshipQualifiers(finishers: readonly PoolFinisher[]): Array<PoolFinisher & { label: string }> {
-  const counts = new Map<number, number>();
-  for (const finisher of finishers) counts.set(finisher.poolIndex, (counts.get(finisher.poolIndex) ?? 0) + 1);
+export function championshipQualifiers(
+  finishers: readonly PoolFinisher[],
+): (PoolFinisher & { label: string })[] {
+  const counts = new Map<number, number>()
+  for (const finisher of finishers)
+    counts.set(finisher.poolIndex, (counts.get(finisher.poolIndex) ?? 0) + 1)
   return finishers
     .filter((finisher) => finisher.place <= winnersCount(counts.get(finisher.poolIndex)!))
     .sort((a, b) => a.poolIndex - b.poolIndex || a.place - b.place)

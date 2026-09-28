@@ -393,7 +393,9 @@ function PlanWizard({
       <div className="card section">
         <div className="page-header">
           <h2>
-            {view.plan.name} <span className="chip">{STATUS_LABEL[view.plan.status] ?? view.plan.status}</span> {view.plan.softLockedAt && <span className="chip">Pools soft-locked</span>}
+            {view.plan.name}{' '}
+            <span className="chip">{STATUS_LABEL[view.plan.status] ?? view.plan.status}</span>{' '}
+            {view.plan.softLockedAt && <span className="chip">Pools soft-locked</span>}
           </h2>
           <span className="row-actions">
             {adopted ? (

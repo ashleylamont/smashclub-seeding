@@ -551,14 +551,16 @@ describe('exports', () => {
   })
 
   it('warns when mixed pool sizes need different Challonge advancement counts', async () => {
-    await seedRatedClub();
-    const planId = await createFullPlan({ upperTargetSize: 9 });
-    await freezeRoster(db, planId);
-    await generatePools(db, planId);
-    const exports = buildExports((await getPlan(db, planId))!);
-    const upper = exports.brackets.find(bracket => bracket.division === 'upper' && bracket.stage === 'main')!;
-    expect(upper.checklist.join(' ')).toMatch(/manually reconcile the final-stage entrants/);
-  });
+    await seedRatedClub()
+    const planId = await createFullPlan({ upperTargetSize: 9 })
+    await freezeRoster(db, planId)
+    await generatePools(db, planId)
+    const exports = buildExports((await getPlan(db, planId))!)
+    const upper = exports.brackets.find(
+      (bracket) => bracket.division === 'upper' && bracket.stage === 'main',
+    )!
+    expect(upper.checklist.join(' ')).toMatch(/manually reconcile the final-stage entrants/)
+  })
 
   it('prints pool cards for a venue with no connectivity', async () => {
     await seedRatedClub()
@@ -689,18 +691,20 @@ describe('attaching the four brackets', () => {
   })
 
   it('advances three from a five-player pool and sends the remaining two to consolation', async () => {
-    await seedRatedClub();
-    const planId = await createFullPlan({ upperTargetSize: 5 });
-    await freezeRoster(db, planId);
-    await generatePools(db, planId);
-    const view = (await getPlan(db, planId))!;
-    expect(view.divisions[0]!.pools.map((pool) => pool.members.length)).toEqual([5]);
-    const pool = view.divisions[0]!.pools[0]!;
-    await savePoolPlacements(db, planId, 'upper', [{ poolIndex: 0, playerIdsInOrder: pool.members.map((member) => member.playerId) }]);
-    const upper = (await getPlan(db, planId))!.divisions[0]!;
-    expect(upper.championship.map(row => row.label)).toEqual(['A1', 'A2', 'A3']);
-    expect(upper.consolation!.entrants.map(row => row.label)).toEqual(['A4', 'A5']);
-  });
+    await seedRatedClub()
+    const planId = await createFullPlan({ upperTargetSize: 5 })
+    await freezeRoster(db, planId)
+    await generatePools(db, planId)
+    const view = (await getPlan(db, planId))!
+    expect(view.divisions[0]!.pools.map((pool) => pool.members.length)).toEqual([5])
+    const pool = view.divisions[0]!.pools[0]!
+    await savePoolPlacements(db, planId, 'upper', [
+      { poolIndex: 0, playerIdsInOrder: pool.members.map((member) => member.playerId) },
+    ])
+    const upper = (await getPlan(db, planId))!.divisions[0]!
+    expect(upper.championship.map((row) => row.label)).toEqual(['A1', 'A2', 'A3'])
+    expect(upper.consolation!.entrants.map((row) => row.label)).toEqual(['A4', 'A5'])
+  })
 
   it('refuses to move the event date out from under a registered bracket', async () => {
     const planId = await readyPlan()

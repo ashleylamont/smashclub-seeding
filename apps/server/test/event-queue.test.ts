@@ -192,83 +192,319 @@ describe('pure station queue', () => {
   })
 })
 
-let db:Db,close:()=>Promise<void>,planId:string;
-const admin:SessionUser={id:'admin',role:'admin',name:'TO',email:'to@example.test'};
-describe('station bank integration',()=>{
-  beforeEach(async()=>{
-    ({db,close}=await createTestDb());await db.insert(user).values(admin);
-    const ids=(await db.insert(players).values(Array.from({length:8},(_,i)=>({canonicalName:`Player ${i}`}))).returning()).map(p=>p.id);
-    planId=(await db.insert(eventPlans).values({name:'Queues',eventDate:new Date(),status:'pools_ready',bracketMode:'native',softLockedAt:new Date()}).returning())[0]!.id;
-    await db.insert(eventPlanEntries).values(ids.map((playerId,i)=>({eventPlanId:planId,playerId,sourceLineNumber:i+1,rawInput:'name',cleanedName:'name',assignedDivision:i<4?'upper' as const:'lower' as const,divisionSeed:i%4+1})));
-    await prepare(db,planId);
-  });
-  afterEach(async()=>close());
-  const station=async()=> (await db.insert(eventStations).values({eventPlanId:planId,name:'Desk'}).returning())[0]!;
-  it('atomically releases a bank and starts the next wave; stale batches roll back',async()=>{
-    const desk=await station();const upper={division:'upper' as const,poolIndex:0,active:true,stationIds:[desk.id],expectedRevision:0,selfRun:true,autoAcceptScores:true};
-    await configurePool(db,admin,{planId,...upper});
-    await expect(configurePool(db,admin,{planId,...upper,division:'lower'})).rejects.toThrow(/same station/);
-    await configurePools(db,admin,{planId,pools:[{...upper,active:false,expectedRevision:1},{...upper,division:'lower'}]});
-    const rows=await db.select().from(eventPoolSchedules);expect(rows.find(p=>p.division==='upper')).toMatchObject({active:false,selfRun:true,autoAcceptScores:true,revision:2});
-    await expect(configurePools(db,admin,{planId,pools:[{...upper,expectedRevision:2},{...upper,division:'lower',active:false,expectedRevision:0}]})).rejects.toThrow(/Another organiser/);
-    expect(await db.select().from(eventPoolSchedules)).toEqual(rows);
-    const projection=await loadStationQueues(db,planId);expect(projection.stationQueues[0]!.poolKey).toBe('lower:0');
-    const state=await snapshot(db,planId,true);expect(state.stationQueues).toEqual(projection.stationQueues);
-    expect(await db.select().from(eventPoolSchedules)).toEqual(rows);
-  });
-  it('protects reserved banks from unallocated matches and playing matches from reassignment',async()=>{
-    const desk=await station();await configurePool(db,admin,{planId,division:'upper',poolIndex:0,active:true,stationIds:[desk.id]});
-    const matches=await db.select().from(eventMatches);const lower=matches.find(m=>m.division==='lower')!;
-    await expect(updateMatch(db,admin,{matchId:lower.id,expectedRevision:0,status:'playing',stationId:desk.id})).rejects.toThrow(/reserved for another pool/);
-    const next=(await loadStationQueues(db,planId)).stationQueues[0]!.nextMatchId!;
-    const started=await updateMatch(db,admin,{matchId:next,expectedRevision:0,status:'playing',stationId:desk.id});
-    await expect(configurePools(db,admin,{planId,pools:[{division:'upper',poolIndex:0,active:false,stationIds:[desk.id],expectedRevision:1},{division:'lower',poolIndex:0,active:true,stationIds:[desk.id],expectedRevision:0}]})).rejects.toThrow(/playing matches/);
-    await reportScore(db,admin,{matchId:next,expectedRevision:started.revision,requestId:'finish',score1:2,score2:0,outcome:'played'});
-    expect((await loadStationQueues(db,planId)).stationQueues[0]!.nextMatchId).not.toBe(next);
-    await db.update(eventPlans).set({status:'complete'}).where(eq(eventPlans.id,planId));expect((await loadStationQueues(db,planId)).stationQueues[0]!.nextMatchId).toBeNull();
-  });
-  it('releases completed pool banks for finals and permits allocating a later pool',async()=>{
-    const desk=await station();
-    await configurePool(db,admin,{planId,division:'upper',poolIndex:0,active:true,stationIds:[desk.id]});
-    const matches=await db.select().from(eventMatches);
-    for(const match of matches.filter(m=>m.division==='upper'))await reportScore(db,admin,{matchId:match.id,expectedRevision:match.revision,requestId:match.id,score1:2,score2:0,outcome:'played'});
-    await configurePool(db,admin,{planId,division:'lower',poolIndex:0,active:true,stationIds:[desk.id]});
-    for(const match of matches.filter(m=>m.division==='lower'))await reportScore(db,admin,{matchId:match.id,expectedRevision:match.revision,requestId:match.id,score1:2,score2:0,outcome:'played'});
-    const upper=matches.find(m=>m.division==='upper')!;
-    const [final]=await db.insert(eventMatches).values({eventPlanId:planId,sourceKey:'final-test',division:'upper',stage:'main',label:'Championship',player1Id:upper.player1Id,player2Id:upper.player2Id,status:'ready'}).returning();
-    const projection=await loadStationQueues(db,planId);expect(projection.stationQueues[0]).toMatchObject({poolKey:null,nextMatchId:final!.id});
-    expect((await snapshot(db,planId,true)).matches.find(m=>m.id===final!.id)!.availability.canStart).toBe(true);
-    expect((await updateMatch(db,admin,{matchId:final!.id,expectedRevision:0,status:'playing',stationId:desk.id})).stationId).toBe(desk.id);
-    expect((await db.select().from(eventPoolSchedules)).every(s=>s.active)).toBe(true);
-  });
-  it('does not reopen a completed pool or reclaim its former station bank for a late entrant',async()=>{
-    const desk=await station();
-    await configurePool(db,admin,{planId,division:'upper',poolIndex:0,active:true,stationIds:[desk.id],selfRun:true});
-    const upper=(await db.select().from(eventMatches)).filter(m=>m.division==='upper');
-    for(const match of upper)await reportScore(db,admin,{matchId:match.id,expectedRevision:0,requestId:match.id,score1:2,score2:0,outcome:'played'});
-    await configurePool(db,admin,{planId,division:'lower',poolIndex:0,active:true,stationIds:[desk.id]});
-    const [late]=await db.insert(players).values({canonicalName:'Late arrival'}).returning();
-    const input={planId,action:'add' as const,playerId:late!.id,division:'upper' as const,poolIndex:0};
-    const preview=await previewAttendance(db,input);expect(preview).toMatchObject({allowed:false,poolIndex:null});
-    await expect(applyAttendance(db,admin,{...input,revisionToken:preview.revisionToken})).rejects.toMatchObject({code:'BAD_REQUEST'});
-    const schedules=await db.select().from(eventPoolSchedules);expect(schedules.find(s=>s.division==='upper')).toMatchObject({active:true,revision:1,selfRun:true});
-    expect((await loadStationQueues(db,planId)).stationQueues[0]!.poolKey).toBe('lower:0');
-    const view=await snapshot(db,planId,true);expect(view.matches.some(m=>m.player1Id===late!.id||m.player2Id===late!.id)).toBe(false);
-    expect(view.matches.filter(m=>upper.some(before=>before.id===m.id)).every(m=>m.status==='complete')).toBe(true);
-  });
-  it('leaves an ongoing pool allocation active when adding a late entrant',async()=>{
-    const desk=await station();await configurePool(db,admin,{planId,division:'upper',poolIndex:0,active:true,stationIds:[desk.id]});
-    const [late]=await db.insert(players).values({canonicalName:'Ongoing arrival'}).returning();
-    const input={planId,action:'add' as const,playerId:late!.id,division:'upper' as const,poolIndex:0};
-    const preview=await previewAttendance(db,input);expect(preview.allowed).toBe(true);
-    await applyAttendance(db,admin,{...input,revisionToken:preview.revisionToken});
-    expect((await db.select().from(eventPoolSchedules))[0]).toMatchObject({active:true,revision:1});
-  });
-  it('requires native mode and a station for self-running pools and preserves omitted policy',async()=>{
-    const desk=await station();const input={planId,division:'upper' as const,poolIndex:0,active:true,stationIds:[desk.id]};
-    await expect(configurePool(db,admin,{...input,stationIds:[],selfRun:true})).rejects.toThrow(/allocated station/);
-    await db.update(eventPlans).set({bracketMode:'challonge'}).where(eq(eventPlans.id,planId));await expect(configurePool(db,admin,{...input,selfRun:true})).rejects.toThrow(/native event/);
-    await db.update(eventPlans).set({bracketMode:'native'}).where(eq(eventPlans.id,planId));await configurePool(db,admin,{...input,selfRun:true,autoAcceptScores:true});
-    expect(await configurePool(db,admin,{...input,active:false,expectedRevision:1})).toMatchObject({selfRun:true,autoAcceptScores:true});
-  });
-});
+let db: Db, close: () => Promise<void>, planId: string
+const admin: SessionUser = { id: 'admin', role: 'admin', name: 'TO', email: 'to@example.test' }
+describe('station bank integration', () => {
+  beforeEach(async () => {
+    ;({ db, close } = await createTestDb())
+    await db.insert(user).values(admin)
+    const ids = (
+      await db
+        .insert(players)
+        .values(Array.from({ length: 8 }, (_, i) => ({ canonicalName: `Player ${i}` })))
+        .returning()
+    ).map((p) => p.id)
+    planId = (
+      await db
+        .insert(eventPlans)
+        .values({
+          name: 'Queues',
+          eventDate: new Date(),
+          status: 'pools_ready',
+          bracketMode: 'native',
+          softLockedAt: new Date(),
+        })
+        .returning()
+    )[0]!.id
+    await db.insert(eventPlanEntries).values(
+      ids.map((playerId, i) => ({
+        eventPlanId: planId,
+        playerId,
+        sourceLineNumber: i + 1,
+        rawInput: 'name',
+        cleanedName: 'name',
+        assignedDivision: i < 4 ? ('upper' as const) : ('lower' as const),
+        divisionSeed: (i % 4) + 1,
+      })),
+    )
+    await prepare(db, planId)
+  })
+  afterEach(async () => close())
+  const station = async () =>
+    (await db.insert(eventStations).values({ eventPlanId: planId, name: 'Desk' }).returning())[0]!
+  it('atomically releases a bank and starts the next wave; stale batches roll back', async () => {
+    const desk = await station()
+    const upper = {
+      division: 'upper' as const,
+      poolIndex: 0,
+      active: true,
+      stationIds: [desk.id],
+      expectedRevision: 0,
+      selfRun: true,
+      autoAcceptScores: true,
+    }
+    await configurePool(db, admin, { planId, ...upper })
+    await expect(configurePool(db, admin, { planId, ...upper, division: 'lower' })).rejects.toThrow(
+      /same station/,
+    )
+    await configurePools(db, admin, {
+      planId,
+      pools: [
+        { ...upper, active: false, expectedRevision: 1 },
+        { ...upper, division: 'lower' },
+      ],
+    })
+    const rows = await db.select().from(eventPoolSchedules)
+    expect(rows.find((p) => p.division === 'upper')).toMatchObject({
+      active: false,
+      selfRun: true,
+      autoAcceptScores: true,
+      revision: 2,
+    })
+    await expect(
+      configurePools(db, admin, {
+        planId,
+        pools: [
+          { ...upper, expectedRevision: 2 },
+          { ...upper, division: 'lower', active: false, expectedRevision: 0 },
+        ],
+      }),
+    ).rejects.toThrow(/Another organiser/)
+    expect(await db.select().from(eventPoolSchedules)).toEqual(rows)
+    const projection = await loadStationQueues(db, planId)
+    expect(projection.stationQueues[0]!.poolKey).toBe('lower:0')
+    const state = await snapshot(db, planId, true)
+    expect(state.stationQueues).toEqual(projection.stationQueues)
+    expect(await db.select().from(eventPoolSchedules)).toEqual(rows)
+  })
+  it('protects reserved banks from unallocated matches and playing matches from reassignment', async () => {
+    const desk = await station()
+    await configurePool(db, admin, {
+      planId,
+      division: 'upper',
+      poolIndex: 0,
+      active: true,
+      stationIds: [desk.id],
+    })
+    const matches = await db.select().from(eventMatches)
+    const lower = matches.find((m) => m.division === 'lower')!
+    await expect(
+      updateMatch(db, admin, {
+        matchId: lower.id,
+        expectedRevision: 0,
+        status: 'playing',
+        stationId: desk.id,
+      }),
+    ).rejects.toThrow(/reserved for another pool/)
+    const next = (await loadStationQueues(db, planId)).stationQueues[0]!.nextMatchId!
+    const started = await updateMatch(db, admin, {
+      matchId: next,
+      expectedRevision: 0,
+      status: 'playing',
+      stationId: desk.id,
+    })
+    await expect(
+      configurePools(db, admin, {
+        planId,
+        pools: [
+          {
+            division: 'upper',
+            poolIndex: 0,
+            active: false,
+            stationIds: [desk.id],
+            expectedRevision: 1,
+          },
+          {
+            division: 'lower',
+            poolIndex: 0,
+            active: true,
+            stationIds: [desk.id],
+            expectedRevision: 0,
+          },
+        ],
+      }),
+    ).rejects.toThrow(/playing matches/)
+    await reportScore(db, admin, {
+      matchId: next,
+      expectedRevision: started.revision,
+      requestId: 'finish',
+      score1: 2,
+      score2: 0,
+      outcome: 'played',
+    })
+    expect((await loadStationQueues(db, planId)).stationQueues[0]!.nextMatchId).not.toBe(next)
+    await db.update(eventPlans).set({ status: 'complete' }).where(eq(eventPlans.id, planId))
+    expect((await loadStationQueues(db, planId)).stationQueues[0]!.nextMatchId).toBeNull()
+  })
+  it('releases completed pool banks for finals and permits allocating a later pool', async () => {
+    const desk = await station()
+    await configurePool(db, admin, {
+      planId,
+      division: 'upper',
+      poolIndex: 0,
+      active: true,
+      stationIds: [desk.id],
+    })
+    const matches = await db.select().from(eventMatches)
+    for (const match of matches.filter((m) => m.division === 'upper'))
+      await reportScore(db, admin, {
+        matchId: match.id,
+        expectedRevision: match.revision,
+        requestId: match.id,
+        score1: 2,
+        score2: 0,
+        outcome: 'played',
+      })
+    await configurePool(db, admin, {
+      planId,
+      division: 'lower',
+      poolIndex: 0,
+      active: true,
+      stationIds: [desk.id],
+    })
+    for (const match of matches.filter((m) => m.division === 'lower'))
+      await reportScore(db, admin, {
+        matchId: match.id,
+        expectedRevision: match.revision,
+        requestId: match.id,
+        score1: 2,
+        score2: 0,
+        outcome: 'played',
+      })
+    const upper = matches.find((m) => m.division === 'upper')!
+    const [final] = await db
+      .insert(eventMatches)
+      .values({
+        eventPlanId: planId,
+        sourceKey: 'final-test',
+        division: 'upper',
+        stage: 'main',
+        label: 'Championship',
+        player1Id: upper.player1Id,
+        player2Id: upper.player2Id,
+        status: 'ready',
+      })
+      .returning()
+    const projection = await loadStationQueues(db, planId)
+    expect(projection.stationQueues[0]).toMatchObject({ poolKey: null, nextMatchId: final!.id })
+    expect(
+      (await snapshot(db, planId, true)).matches.find((m) => m.id === final!.id)!.availability
+        .canStart,
+    ).toBe(true)
+    expect(
+      (
+        await updateMatch(db, admin, {
+          matchId: final!.id,
+          expectedRevision: 0,
+          status: 'playing',
+          stationId: desk.id,
+        })
+      ).stationId,
+    ).toBe(desk.id)
+    expect((await db.select().from(eventPoolSchedules)).every((s) => s.active)).toBe(true)
+  })
+  it('does not reopen a completed pool or reclaim its former station bank for a late entrant', async () => {
+    const desk = await station()
+    await configurePool(db, admin, {
+      planId,
+      division: 'upper',
+      poolIndex: 0,
+      active: true,
+      stationIds: [desk.id],
+      selfRun: true,
+    })
+    const upper = (await db.select().from(eventMatches)).filter((m) => m.division === 'upper')
+    for (const match of upper)
+      await reportScore(db, admin, {
+        matchId: match.id,
+        expectedRevision: 0,
+        requestId: match.id,
+        score1: 2,
+        score2: 0,
+        outcome: 'played',
+      })
+    await configurePool(db, admin, {
+      planId,
+      division: 'lower',
+      poolIndex: 0,
+      active: true,
+      stationIds: [desk.id],
+    })
+    const [late] = await db.insert(players).values({ canonicalName: 'Late arrival' }).returning()
+    const input = {
+      planId,
+      action: 'add' as const,
+      playerId: late!.id,
+      division: 'upper' as const,
+      poolIndex: 0,
+    }
+    const preview = await previewAttendance(db, input)
+    expect(preview).toMatchObject({ allowed: false, poolIndex: null })
+    await expect(
+      applyAttendance(db, admin, { ...input, revisionToken: preview.revisionToken }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    const schedules = await db.select().from(eventPoolSchedules)
+    expect(schedules.find((s) => s.division === 'upper')).toMatchObject({
+      active: true,
+      revision: 1,
+      selfRun: true,
+    })
+    expect((await loadStationQueues(db, planId)).stationQueues[0]!.poolKey).toBe('lower:0')
+    const view = await snapshot(db, planId, true)
+    expect(view.matches.some((m) => m.player1Id === late!.id || m.player2Id === late!.id)).toBe(
+      false,
+    )
+    expect(
+      view.matches
+        .filter((m) => upper.some((before) => before.id === m.id))
+        .every((m) => m.status === 'complete'),
+    ).toBe(true)
+  })
+  it('leaves an ongoing pool allocation active when adding a late entrant', async () => {
+    const desk = await station()
+    await configurePool(db, admin, {
+      planId,
+      division: 'upper',
+      poolIndex: 0,
+      active: true,
+      stationIds: [desk.id],
+    })
+    const [late] = await db.insert(players).values({ canonicalName: 'Ongoing arrival' }).returning()
+    const input = {
+      planId,
+      action: 'add' as const,
+      playerId: late!.id,
+      division: 'upper' as const,
+      poolIndex: 0,
+    }
+    const preview = await previewAttendance(db, input)
+    expect(preview.allowed).toBe(true)
+    await applyAttendance(db, admin, { ...input, revisionToken: preview.revisionToken })
+    expect((await db.select().from(eventPoolSchedules))[0]).toMatchObject({
+      active: true,
+      revision: 1,
+    })
+  })
+  it('requires native mode and a station for self-running pools and preserves omitted policy', async () => {
+    const desk = await station()
+    const input = {
+      planId,
+      division: 'upper' as const,
+      poolIndex: 0,
+      active: true,
+      stationIds: [desk.id],
+    }
+    await expect(
+      configurePool(db, admin, { ...input, stationIds: [], selfRun: true }),
+    ).rejects.toThrow(/allocated station/)
+    await db.update(eventPlans).set({ bracketMode: 'challonge' }).where(eq(eventPlans.id, planId))
+    await expect(configurePool(db, admin, { ...input, selfRun: true })).rejects.toThrow(
+      /native event/,
+    )
+    await db.update(eventPlans).set({ bracketMode: 'native' }).where(eq(eventPlans.id, planId))
+    await configurePool(db, admin, { ...input, selfRun: true, autoAcceptScores: true })
+    expect(
+      await configurePool(db, admin, { ...input, active: false, expectedRevision: 1 }),
+    ).toMatchObject({ selfRun: true, autoAcceptScores: true })
+  })
+})
