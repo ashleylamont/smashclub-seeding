@@ -7,28 +7,29 @@ import { eventGuestRateLimits, eventGuestSessions, eventGuestSettings, eventMatc
 import type { SessionUser } from '../auth';
 import { lockEvent, requireOperator, snapshot, validateScore, applyScore } from './service';
 
-// Rotate the displayed code every 15 minutes, but keep every issued code valid
-// for at least a full hour. A photo of the previous code remains usable.
+// In rotating mode, change the displayed code every 15 minutes while keeping
+// each issued code valid for at least an hour.
 const INVITATION_ROTATION_MS = 15 * 60_000;
 const INVITATION_MS = 75 * 60_000;
 const SESSION_MS = 60 * 60_000;
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const randomToken = () => randomBytes(32).toString('base64url');
-const deny = () => { throw new TRPCError({ code: 'FORBIDDEN', message: 'Guest access expired or is unavailable. Scan the current event QR code.' }); };
+const deny = () => { throw new TRPCError({ code: 'FORBIDDEN', message: 'Guest access expired or is unavailable. Scan an active event QR code.' }); };
 const limited = () => { throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: 'Too many guest requests. Please wait before trying again or ask an organiser.' }); };
-const publicSettings = (s?: typeof eventGuestSettings.$inferSelect) => ({ enabled: s?.enabled ?? false, showOnOverlay: s?.showOnOverlay ?? false });
+const publicSettings = (s?: typeof eventGuestSettings.$inferSelect) => ({ enabled: s?.enabled ?? false, showOnOverlay: s?.showOnOverlay ?? false, rotateInvitations: s?.rotateInvitations ?? true });
 
 export async function guestSettings(db: Db, actor: SessionUser, planId: string) {
     await requireOperator(db, planId, actor);
     return publicSettings((await db.select().from(eventGuestSettings).where(eq(eventGuestSettings.eventPlanId, planId)))[0]);
 }
-export async function configureGuests(db: Db, actor: SessionUser, input: { planId: string; enabled: boolean; showOnOverlay: boolean }, rotate = false) {
+export async function configureGuests(db: Db, actor: SessionUser, input: { planId: string; enabled: boolean; showOnOverlay: boolean; rotateInvitations?: boolean }, rotate = false) {
     return db.transaction(async tx => {
         await lockEvent(tx, input.planId);
         await requireOperator(tx, input.planId, actor);
         const [previous] = await tx.select().from(eventGuestSettings).where(eq(eventGuestSettings.eventPlanId, input.planId));
-        const secret = !previous || rotate || !input.enabled || !previous.enabled ? randomToken() : previous.secret;
-        const [settings] = await tx.insert(eventGuestSettings).values({ eventPlanId: input.planId, enabled: input.enabled, showOnOverlay: input.showOnOverlay, secret }).onConflictDoUpdate({ target: eventGuestSettings.eventPlanId, set: { enabled: input.enabled, showOnOverlay: input.showOnOverlay, secret } }).returning();
+        const rotateInvitations = input.rotateInvitations ?? previous?.rotateInvitations ?? true;
+        const secret = !previous || rotate || !input.enabled || !previous.enabled || previous.rotateInvitations !== rotateInvitations ? randomToken() : previous.secret;
+        const [settings] = await tx.insert(eventGuestSettings).values({ eventPlanId: input.planId, enabled: input.enabled, showOnOverlay: input.showOnOverlay, rotateInvitations, secret }).onConflictDoUpdate({ target: eventGuestSettings.eventPlanId, set: { enabled: input.enabled, showOnOverlay: input.showOnOverlay, rotateInvitations, secret } }).returning();
         return publicSettings(settings);
     });
 }
@@ -40,14 +41,18 @@ export async function rotateGuests(db: Db, actor: SessionUser, planId: string) {
         return publicSettings(settings);
     });
 }
-async function available(db: Db, planId: string) {
+async function available(db: Db, planId: string, requirePublished = true) {
     await lockEvent(db, planId);
     const [settings] = await db.select().from(eventGuestSettings).where(eq(eventGuestSettings.eventPlanId, planId));
     const [ops] = await db.select().from(eventOperationSettings).where(eq(eventOperationSettings.eventPlanId, planId));
-    if (!settings?.enabled || !ops?.published) return deny();
+    if (!settings?.enabled || requirePublished && !ops?.published) return deny();
     return settings;
 }
 function invitation(settings: typeof eventGuestSettings.$inferSelect, now: number) {
+    if (!settings.rotateInvitations) {
+        const signature = createHmac('sha256', settings.secret).update(`${settings.eventPlanId}:persistent`).digest('base64url');
+        return { token: `persistent.${signature}`, expiresAt: null };
+    }
     const expires = Math.floor(now / INVITATION_ROTATION_MS) * INVITATION_ROTATION_MS + INVITATION_MS;
     const signature = createHmac('sha256', settings.secret).update(`${settings.eventPlanId}:${expires}`).digest('base64url');
     return { token: `${expires}.${signature}`, expiresAt: new Date(expires).toISOString() };
@@ -56,7 +61,7 @@ export async function guestInvitation(db: Db, planId: string, actor?: SessionUse
     return db.transaction(async tx => {
         if (actor) await requireOperator(tx, planId, actor);
         try {
-            const settings = await available(tx, planId);
+            const settings = await available(tx, planId, !actor);
             if (!actor && !settings.showOnOverlay) return null;
             return invitation(settings, now);
         } catch (error) {
@@ -85,10 +90,15 @@ export async function redeemGuest(db: Db, input: { planId: string; token: string
     await consumeRedemptionLimit(db, input.planId, ip, now);
     return db.transaction(async tx => {
         const settings = await available(tx, input.planId);
-        const expires = Number(input.token.split('.')[0]);
-        if (!Number.isSafeInteger(expires) || expires <= now || expires > now + INVITATION_MS) return deny();
-        const signature = createHmac('sha256', settings.secret).update(`${settings.eventPlanId}:${expires}`).digest('base64url');
-        const expected = `${expires}.${signature}`;
+        let expected: string;
+        if (settings.rotateInvitations) {
+            const expires = Number(input.token.split('.')[0]);
+            if (!Number.isSafeInteger(expires) || expires <= now || expires > now + INVITATION_MS) return deny();
+            const signature = createHmac('sha256', settings.secret).update(`${settings.eventPlanId}:${expires}`).digest('base64url');
+            expected = `${expires}.${signature}`;
+        } else {
+            expected = invitation(settings, now).token;
+        }
         const supplied = Buffer.from(input.token);
         if (supplied.length !== expected.length || !timingSafeEqual(supplied, Buffer.from(expected))) return deny();
         const sessionToken = randomToken();

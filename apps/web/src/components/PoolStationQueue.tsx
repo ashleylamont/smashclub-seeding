@@ -7,11 +7,12 @@ export function PoolFilter({ data, value, onChange }: { data: Pick<PoolFlowData,
   if (!keys.length) return null;
   return <label className="pool-flow-filter">Your pool<select className="select" value={value} onChange={event => onChange(event.target.value)}><option value="">All pools & finals</option>{value && !keys.includes(value) && <option value={value}>{poolTitle(value)} · unavailable</option>}{keys.map(key => <option key={key} value={key}>{poolTitle(key)}</option>)}</select></label>;
 }
-export function PoolStationQueue({ data, selectedPool = '', onStart, onReport, disabled = false, pendingMatchId }: { data: PoolFlowData; selectedPool?: string; onStart?: (input: StartPoolMatch) => void; onReport?: (matchId: string) => void; disabled?: boolean; pendingMatchId?: string | null }) {
+export function PoolStationQueue({ data, selectedPool = '', stationId = '', onStart, onReport, disabled = false, pendingMatchId }: { data: PoolFlowData; selectedPool?: string; stationId?: string; onStart?: (input: StartPoolMatch) => void; onReport?: (matchId: string) => void; disabled?: boolean; pendingMatchId?: string | null }) {
   const closed = ['complete', 'cancelled'].includes(data.plan.status);
   const queues = data.stationQueues ?? [];
   const selectedSchedule = data.poolSchedules.find(pool => `${pool.division}:${pool.poolIndex}` === selectedPool);
   const visible = data.stations.filter(station => {
+    if (stationId && station.id !== stationId) return false;
     if (!selectedPool) return true;
     const schedule = data.poolSchedules.find(pool => `${pool.division}:${pool.poolIndex}` === selectedPool);
     const queue = queues.find(item => item.stationId === station.id);

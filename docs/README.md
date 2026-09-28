@@ -11,6 +11,7 @@ Start with the [project README](../README.md) for a quick start and repository m
 - [Guest event night and score approval](guest-event-night.md): public player hub, guest passes and dispute policy.
 - [Station waves and self-running pools](pool-station-flow.md): pool reservations, queue rules and attendee starts.
 - [Pool floor sheets](pool-floor-sheets.md): printable snapshots and QR links.
+- [Permanent station QR signs](station-signs.md): printable guest reporting invitations for stations.
 - [Historical event adoption](historical-event-adoption.md): associating completed imported brackets with a saved plan.
 - [Whole-History Rating design](whr-design.md): how WHR fits and explains the history.
 

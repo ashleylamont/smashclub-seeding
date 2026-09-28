@@ -8,6 +8,8 @@ Players can find their pool, station queues, round schedule, standings and recor
 
 Starting eligible self-running matches or reporting scores anonymously still requires the event's QR guest pass. A pass already redeemed on this browser is reused in the player hub. Expiry or revocation removes reporting access while leaving a published event browseable; scan the current QR to renew access. Private QR invitations are not exposed by the public event directory. The TO controls whether a QR appears on the overlay.
 
+The default invitation rotates during an event. Organisers who need signs printed ahead of time can [keep invitations valid until revoked and print station signs](station-signs.md). A guest pass still lasts one hour; scanning the same sign can renew it while the event and invitation remain valid.
+
 ## Approve unless disputed
 
 For native Nemesis events, an admin can choose **Score approval → Event score policy → Approve unless disputed** in the event operations page. Existing events retain their previous TO approval / per-pool settings until this is enabled.

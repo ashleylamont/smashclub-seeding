@@ -9,7 +9,7 @@ The planner at **Admin → Event planner** saves the night's roster, seed snapsh
 3. **Freeze seeds and divisions.** The planner snapshots the current ranking and fills Upper and Lower, respecting explicit division choices. Review unranked entrants before freezing. Later rating changes do not reorder the saved draw.
 4. **Build pools.** The planner stripes entrants across pools, balancing sizes around the selected target (normally four; divisions can have three- to five-player pools). Review allocations and publish the event when attendees should see it.
 
-The plan and its step live in the URL, so an organiser can resume it on another device. Once external brackets are attached or play has begun, roster and seed changes have safeguards; use the attendance controls for late arrivals and withdrawals. [Station waves](pool-station-flow.md) and [pool sheets](pool-floor-sheets.md) cover venue setup.
+The plan and its step live in the URL, so an organiser can resume it on another device. Once external brackets are attached or play has begun, roster and seed changes have safeguards; use the attendance controls for late arrivals and withdrawals. [Station waves](pool-station-flow.md), [pool sheets](pool-floor-sheets.md) and [permanent station QR signs](station-signs.md) cover venue setup.
 
 ## Nemesis path
 
