@@ -9,6 +9,7 @@ import {
   type StartPoolMatch,
 } from '../lib/poolFlow';
 import { CharacterIcons } from './CharacterIcons';
+import { includesPlayer } from '../lib/playerMatchView';
 import './PoolStationQueue.css';
 
 export function PoolFilter({
@@ -45,6 +46,7 @@ export function PoolStationQueue({
   data,
   selectedPool = '',
   stationId = '',
+  playerId = '',
   onStart,
   onReport,
   disabled = false,
@@ -53,6 +55,7 @@ export function PoolStationQueue({
   data: PoolFlowData;
   selectedPool?: string;
   stationId?: string;
+  playerId?: string;
   onStart?: (input: StartPoolMatch) => void;
   onReport?: (matchId: string) => void;
   disabled?: boolean;
@@ -63,15 +66,31 @@ export function PoolStationQueue({
   const selectedSchedule = data.poolSchedules.find(
     (pool) => `${pool.division}:${pool.poolIndex}` === selectedPool,
   );
+  const playerMatchIds = new Set(
+    data.matches
+      .filter(
+        (match) => playerId && includesPlayer(match, playerId) && matchesPool(match, selectedPool),
+      )
+      .map((match) => match.id),
+  );
   const visible = data.stations.filter((station) => {
     if (stationId && station.id !== stationId) return false;
-    if (!selectedPool) return true;
-    const schedule = data.poolSchedules.find(
-      (pool) => `${pool.division}:${pool.poolIndex}` === selectedPool,
-    );
     const queue = queues.find((item) => item.stationId === station.id);
+    if (playerId)
+      return (
+        playerMatchIds.has(queue?.currentMatchId ?? '') ||
+        playerMatchIds.has(queue?.nextMatchId ?? '') ||
+        Boolean(queue?.upcoming.some((item) => playerMatchIds.has(item.matchId))) ||
+        data.matches.some(
+          (match) =>
+            match.stationId === station.id &&
+            playerMatchIds.has(match.id) &&
+            match.status === 'playing',
+        )
+      );
+    if (!selectedPool) return true;
     return (
-      schedule?.stationIds.includes(station.id) ||
+      selectedSchedule?.stationIds.includes(station.id) ||
       queue?.poolKey === selectedPool ||
       data.matches.some(
         (match) => match.id === queue?.nextMatchId && matchesPool(match, selectedPool),
@@ -85,9 +104,13 @@ export function PoolStationQueue({
     );
   });
   return (
-    <section className="pool-flow-stations" aria-label="Pool station queues">
+    <section
+      className="pool-flow-stations"
+      id="pool-station-queues"
+      aria-label="Pool station queues"
+    >
       <div className="pool-flow-heading">
-        <h2>Find your station</h2>
+        <h2>{playerId ? 'Your stations' : 'Find your station'}</h2>
         <span>{selectedPool ? poolTitle(selectedPool) : 'Playing now · play next'}</span>
       </div>
       {selectedSchedule?.active === false && (
@@ -97,8 +120,9 @@ export function PoolStationQueue({
         </p>
       )}
       <p className="pool-flow-note">
-        Wait for the station and both players to be free. Coming up is a suggested order; it can
-        change as matches finish.
+        {playerId
+          ? 'Only stations with your match in their queue are shown. Current and next matches give timing context; the order can change.'
+          : 'Wait for the station and both players to be free. Coming up is a suggested order; it can change as matches finish.'}
       </p>
       <div className="pool-flow-grid">
         {visible.map((station) => {
@@ -114,8 +138,13 @@ export function PoolStationQueue({
               )
             : undefined;
           const upcoming = queue
-            ? stationPreview(queue, data.matches, 4)
-                .filter((match) => match.id !== next?.id && matchesPool(match, selectedPool))
+            ? stationPreview(queue, data.matches, playerId ? Infinity : 4)
+                .filter(
+                  (match) =>
+                    match.id !== next?.id &&
+                    matchesPool(match, selectedPool) &&
+                    (!playerId || includesPlayer(match, playerId)),
+                )
                 .slice(0, 2)
             : [];
           const policy = next && poolPolicy(data, next);
@@ -147,15 +176,17 @@ export function PoolStationQueue({
                     <CharacterIcons slugs={current.player2Characters ?? []} />
                   </strong>
                   <small>{current.label}</small>
-                  {onReport && matchesPool(current, selectedPool) && (
-                    <button
-                      className="btn btn-small"
-                      disabled={disabled}
-                      onClick={() => onReport(current.id)}
-                    >
-                      Report this result
-                    </button>
-                  )}
+                  {onReport &&
+                    matchesPool(current, selectedPool) &&
+                    (!playerId || includesPlayer(current, playerId)) && (
+                      <button
+                        className="btn btn-small"
+                        disabled={disabled}
+                        onClick={() => onReport(current.id)}
+                      >
+                        Report this result
+                      </button>
+                    )}
                 </div>
               ) : (
                 <p className="pool-flow-note">
@@ -173,7 +204,7 @@ export function PoolStationQueue({
                     {next.player1Name} <i>vs</i> {next.player2Name}
                   </strong>
                   <span>{next.label}</span>
-                  {onStart && policy?.selfRun && (
+                  {onStart && policy?.selfRun && (!playerId || includesPlayer(next, playerId)) && (
                     <button
                       className="btn btn-primary"
                       disabled={
@@ -198,15 +229,17 @@ export function PoolStationQueue({
                       Open pool & report →
                     </a>
                   )}
-                  {onReport && !policy?.selfRun && (
-                    <button
-                      className="btn btn-small"
-                      disabled={disabled}
-                      onClick={() => onReport(next.id)}
-                    >
-                      Report a played result
-                    </button>
-                  )}
+                  {onReport &&
+                    !policy?.selfRun &&
+                    (!playerId || includesPlayer(next, playerId)) && (
+                      <button
+                        className="btn btn-small"
+                        disabled={disabled}
+                        onClick={() => onReport(next.id)}
+                      >
+                        Report a played result
+                      </button>
+                    )}
                   {policy?.selfRun && (
                     <p className="pool-flow-note">
                       {data.settings?.scoreReportingMode === 'approve_unless_disputed'
@@ -239,9 +272,11 @@ export function PoolStationQueue({
       </div>
       {!visible.length && (
         <p className="pool-flow-note">
-          {selectedPool
-            ? 'No station is assigned to this pool yet. Ask a TO where to play.'
-            : 'Station assignments will appear here.'}
+          {playerId
+            ? 'No station call for this player yet. Check their matches above for updates.'
+            : selectedPool
+              ? 'No station is assigned to this pool yet. Ask a TO where to play.'
+              : 'Station assignments will appear here.'}
         </p>
       )}
     </section>
@@ -250,13 +285,29 @@ export function PoolStationQueue({
 export function PoolRoundSchedule({
   data,
   selectedPool = '',
+  playerId = '',
 }: {
   data: PoolFlowData;
   selectedPool?: string;
+  playerId?: string;
 }) {
-  const groups = (data.poolRounds ?? []).filter(
-    (pool) => !selectedPool || pool.poolKey === selectedPool,
-  );
+  const groups = (data.poolRounds ?? [])
+    .filter((pool) => !selectedPool || pool.poolKey === selectedPool)
+    .map((pool) => ({
+      ...pool,
+      rounds: playerId
+        ? pool.rounds
+            .map((round) => ({
+              ...round,
+              matchIds: round.matchIds.filter((id) =>
+                data.matches.some((match) => match.id === id && includesPlayer(match, playerId)),
+              ),
+              restingPlayerIds: round.restingPlayerIds.filter((id) => id === playerId),
+            }))
+            .filter((round) => round.matchIds.length || round.restingPlayerIds.length)
+        : pool.rounds,
+    }))
+    .filter((pool) => pool.rounds.length);
   const names = new Map(
     data.matches.flatMap(
       (match) =>
@@ -270,7 +321,7 @@ export function PoolRoundSchedule({
   return (
     <section className="pool-flow-rounds">
       <div className="pool-flow-heading">
-        <h2>Pool rounds</h2>
+        <h2>{playerId ? 'Your pool rounds' : 'Pool rounds'}</h2>
         <span>Everyone meets once</span>
       </div>
       <p className="pool-flow-note">

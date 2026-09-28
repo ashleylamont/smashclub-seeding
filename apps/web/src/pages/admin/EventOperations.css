@@ -378,6 +378,101 @@
   }
 }
 
+.player-match-filter {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 320px) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px 16px;
+  margin: 0 !important;
+}
+.player-match-filter label {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.player-match-filter .muted {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.ops-page .pool-score-selection {
+  margin: 0;
+}
+.player-matches-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+}
+.player-matches-heading h2 {
+  margin: 0;
+}
+.player-matches-heading p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.8rem;
+}
+.player-match-refine {
+  margin: 14px 0 18px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.player-match-refine > summary {
+  cursor: pointer;
+  padding: 10px 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-h);
+}
+.player-match-controls {
+  display: grid;
+  gap: 12px;
+  padding: 4px 0 16px;
+}
+.player-match-controls .pool-flow-filter {
+  margin: 0;
+}
+.player-match-secondary-filters {
+  display: flex;
+  gap: 12px 24px;
+  flex-wrap: wrap;
+}
+.player-match-refine .ops-toolbar {
+  align-items: end;
+}
+.player-match-refine .ops-toolbar > label {
+  min-width: min(100%, 220px);
+}
+.pool-score-selection .ops-match-meta {
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.pool-score-selection .ops-match-meta > span:last-child {
+  color: var(--accent);
+}
+@media (max-width: 700px) {
+  .player-match-filter {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .player-match-filter select {
+    width: 100%;
+  }
+  .player-match-secondary-filters {
+    display: grid;
+    gap: 12px;
+  }
+  .player-match-refine .ops-toolbar > label {
+    width: 100%;
+  }
+  .player-matches-heading {
+    display: block;
+  }
+  .player-matches-heading p {
+    margin-top: 6px;
+  }
+}
+
 .ops-pool-setup {
   margin: 20px 0;
   padding: 18px;
