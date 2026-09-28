@@ -36,7 +36,7 @@ spec:
             # global one. Do not set this if the pod is ever reachable
             # directly — clients would get to pick their own address.
             - name: TRUST_PROXY
-              value: "true"
+              value: 'true'
           readinessProbe:
             httpGet:
               path: /healthz

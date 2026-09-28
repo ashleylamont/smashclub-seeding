@@ -40,15 +40,28 @@ export function CopyBlock({
     <div className="copy-block">
       <div className="copy-block-header">
         <span className="form-label">{label}</span>
-        <button type="button" className="btn btn-small" onClick={() => void copy()} disabled={text === ''}>
+        <button
+          type="button"
+          className="btn btn-small"
+          onClick={() => void copy()}
+          disabled={text === ''}
+        >
           {state === 'copied' ? 'Copied ✓' : 'Copy'}
         </button>
       </div>
       {state === 'failed' && (
-        <p className="error-text">Clipboard unavailable — select the text below and copy it by hand.</p>
+        <p className="error-text">
+          Clipboard unavailable — select the text below and copy it by hand.
+        </p>
       )}
       {hint && <p className="form-hint">{hint}</p>}
-      <textarea className="input copy-block-text" readOnly rows={rows} value={text} spellCheck={false} />
+      <textarea
+        className="input copy-block-text"
+        readOnly
+        rows={rows}
+        value={text}
+        spellCheck={false}
+      />
     </div>
   );
 }

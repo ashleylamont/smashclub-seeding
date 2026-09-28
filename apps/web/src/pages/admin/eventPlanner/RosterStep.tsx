@@ -24,13 +24,7 @@ const METHOD_LABEL: Record<string, string> = {
   unresolved: 'Unresolved',
 };
 
-export function RosterStep({
-  view,
-  onChanged,
-}: {
-  view: EventPlanView;
-  onChanged: () => void;
-}) {
+export function RosterStep({ view, onChanged }: { view: EventPlanView; onChanged: () => void }) {
   const planId = view.plan.id;
   const [highlighted, setHighlighted] = useState<Set<string>>(new Set());
   const [addingText, setAddingText] = useState('');
@@ -61,7 +55,10 @@ export function RosterStep({
     <div>
       <div className="page-header">
         <h3>
-          Roster <span className="muted">{resolved}/{view.entries.length} matched</span>
+          Roster{' '}
+          <span className="muted">
+            {resolved}/{view.entries.length} matched
+          </span>
         </h3>
         <span className="row-actions">
           {editable ? (
@@ -82,9 +79,18 @@ export function RosterStep({
             <button
               type="button"
               className="btn"
-              disabled={unfreeze.isPending || !!view.plan.softLockedAt || !['roster_frozen', 'pools_ready'].includes(view.plan.status) || view.brackets.some((bracket) => bracket.challongeSlug !== null)}
+              disabled={
+                unfreeze.isPending ||
+                Boolean(view.plan.softLockedAt) ||
+                !['roster_frozen', 'pools_ready'].includes(view.plan.status) ||
+                view.brackets.some((bracket) => bracket.challongeSlug !== null)
+              }
               onClick={() => {
-                if (window.confirm('Reopen the roster? The ranking snapshot and every seed is discarded.')) {
+                if (
+                  window.confirm(
+                    'Reopen the roster? The ranking snapshot and every seed is discarded.',
+                  )
+                ) {
                   unfreeze.mutate();
                 }
               }}
@@ -96,13 +102,32 @@ export function RosterStep({
       </div>
       {freeze.isError && <p className="error-text">{freeze.error.message}</p>}
       {unfreeze.isError && <p className="error-text">{unfreeze.error.message}</p>}
-      {view.plan.softLockedAt && <p className="muted">Pools were soft-locked by a TO. Use late arrivals and withdrawals in event control to preserve existing opponents.</p>}
-
-      {editable && <DraftSettings key={`${planId}:${view.plan.name}:${view.plan.upperTargetSize}:${view.entries.length}`} view={view} onChanged={onChanged} />}
-      {editable && (
-        <IssueList issues={view.issues.blocking} kind="blocking" onFocusRows={(ids) => setHighlighted(new Set(ids))} />
+      {view.plan.softLockedAt && (
+        <p className="muted">
+          Pools were soft-locked by a TO. Use late arrivals and withdrawals in event control to
+          preserve existing opponents.
+        </p>
       )}
-      <IssueList issues={view.issues.warnings} kind="warning" onFocusRows={(ids) => setHighlighted(new Set(ids))} />
+
+      {editable && (
+        <DraftSettings
+          key={`${planId}:${view.plan.name}:${view.plan.upperTargetSize}:${view.entries.length}`}
+          view={view}
+          onChanged={onChanged}
+        />
+      )}
+      {editable && (
+        <IssueList
+          issues={view.issues.blocking}
+          kind="blocking"
+          onFocusRows={(ids) => setHighlighted(new Set(ids))}
+        />
+      )}
+      <IssueList
+        issues={view.issues.warnings}
+        kind="warning"
+        onFocusRows={(ids) => setHighlighted(new Set(ids))}
+      />
       {highlighted.size > 0 && (
         <p className="muted">
           Highlighting {highlighted.size} row(s).{' '}
@@ -265,7 +290,9 @@ function RosterRow({
           <>
             <strong>{entry.playerName}</strong>
             <span className="muted"> → {entry.publicName}</span>
-            <span className={`chip method-${entry.resolutionMethod}`}>{METHOD_LABEL[entry.resolutionMethod]}</span>
+            <span className={`chip method-${entry.resolutionMethod}`}>
+              {METHOD_LABEL[entry.resolutionMethod]}
+            </span>
           </>
         ) : candidates.length > 0 ? (
           <span className="roster-candidates">
@@ -276,7 +303,9 @@ function RosterRow({
                 type="button"
                 className="btn btn-small"
                 disabled={!editable || update.isPending}
-                onClick={() => update.mutate({ playerId: candidate.playerId, resolutionMethod: 'manual' })}
+                onClick={() =>
+                  update.mutate({ playerId: candidate.playerId, resolutionMethod: 'manual' })
+                }
                 title={`${Math.round(candidate.score * 100)}% — ${candidate.reason}`}
               >
                 {candidate.name}
@@ -293,12 +322,14 @@ function RosterRow({
         ) : (
           <>
             #{rank}
-            {entry.snapshotRank !== null && entry.currentRank !== null && entry.snapshotRank !== entry.currentRank && (
-              <span className="muted" title="The live board has moved since the snapshot">
-                {' '}
-                (now #{entry.currentRank})
-              </span>
-            )}
+            {entry.snapshotRank !== null &&
+              entry.currentRank !== null &&
+              entry.snapshotRank !== entry.currentRank && (
+                <span className="muted" title="The live board has moved since the snapshot">
+                  {' '}
+                  (now #{entry.currentRank})
+                </span>
+              )}
           </>
         )}
       </span>
@@ -386,8 +417,8 @@ function RosterRow({
           onCancel={() => setCreating(false)}
         >
           <p className="muted">
-            They have no ranking, so they will need an explicit Upper or Lower and will seed at the bottom of
-            it.
+            They have no ranking, so they will need an explicit Upper or Lower and will seed at the
+            bottom of it.
           </p>
         </PlayerFormModal>
       )}
@@ -398,19 +429,64 @@ function RosterRow({
 function DraftSettings({ view, onChanged }: { view: EventPlanView; onChanged: () => void }) {
   const [name, setName] = useState(view.plan.name);
   const [prefix, setPrefix] = useState(view.plan.slugPrefix ?? '');
-  const [upper, setUpper] = useState(view.plan.upperTargetSize ?? Math.ceil(view.entries.length / 2));
+  const [upper, setUpper] = useState(
+    view.plan.upperTargetSize ?? Math.ceil(view.entries.length / 2),
+  );
   const total = view.entries.length;
   const update = useMutation({
-    mutationFn: () => trpc.admin.eventPlanner.updatePlan.mutate({ planId: view.plan.id, name, slugPrefix: prefix || null, upperTargetSize: upper }),
+    mutationFn: () =>
+      trpc.admin.eventPlanner.updatePlan.mutate({
+        planId: view.plan.id,
+        name,
+        slugPrefix: prefix || null,
+        upperTargetSize: upper,
+      }),
     onSuccess: onChanged,
   });
-  return <form className="card section" onSubmit={(event) => { event.preventDefault(); update.mutate(); }}>
-    <h4>Draft settings</h4>
-    <label className="form-field">Event name<input className="input" value={name} onChange={(event) => setName(event.target.value)} /></label>
-    <label className="form-field">Bracket slug prefix<input className="input" value={prefix} onChange={(event) => setPrefix(event.target.value)} /></label>
-    <label className="form-field">Upper division size<input className="input" type="number" min={3} max={Math.max(3, total - 3)} value={upper} onChange={(event) => setUpper(Number(event.target.value))} /></label>
-    <p className="muted">{upper} Upper / {total - upper} Lower. Pools contain three to five players; the upper half, rounded up, advance to championship and everyone else to consolation. Save a new split after attendance changes.</p>
-    <button className="btn btn-primary" disabled={update.isPending || !name.trim() || upper < 3 || upper > total - 3}>Save settings</button>
-    {update.isError && <p className="error-text">{update.error.message}</p>}
-  </form>;
+  return (
+    <form
+      className="card section"
+      onSubmit={(event) => {
+        event.preventDefault();
+        update.mutate();
+      }}
+    >
+      <h4>Draft settings</h4>
+      <label className="form-field">
+        Event name
+        <input className="input" value={name} onChange={(event) => setName(event.target.value)} />
+      </label>
+      <label className="form-field">
+        Bracket slug prefix
+        <input
+          className="input"
+          value={prefix}
+          onChange={(event) => setPrefix(event.target.value)}
+        />
+      </label>
+      <label className="form-field">
+        Upper division size
+        <input
+          className="input"
+          type="number"
+          min={3}
+          max={Math.max(3, total - 3)}
+          value={upper}
+          onChange={(event) => setUpper(Number(event.target.value))}
+        />
+      </label>
+      <p className="muted">
+        {upper} Upper / {total - upper} Lower. Pools contain three to five players; the upper half,
+        rounded up, advance to championship and everyone else to consolation. Save a new split after
+        attendance changes.
+      </p>
+      <button
+        className="btn btn-primary"
+        disabled={update.isPending || !name.trim() || upper < 3 || upper > total - 3}
+      >
+        Save settings
+      </button>
+      {update.isError && <p className="error-text">{update.error.message}</p>}
+    </form>
+  );
 }

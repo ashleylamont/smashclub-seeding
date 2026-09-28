@@ -96,7 +96,9 @@ describe('legacy Python engine parity', () => {
       rating: pre.rating + (updated.rating - pre.rating) * 1.25,
       rd: pre.rd + (updated.rd - pre.rd) * 1.25,
     };
-    expect(Math.abs(overshoot.rating - pre.rating)).toBeGreaterThan(Math.abs(updated.rating - pre.rating));
+    expect(Math.abs(overshoot.rating - pre.rating)).toBeGreaterThan(
+      Math.abs(updated.rating - pre.rating),
+    );
     expect(overshoot.rd).toBeLessThan(updated.rd);
   });
 });

@@ -11,7 +11,7 @@ export function useCurrentUser(session: Session) {
   return useQuery({
     queryKey: ['me', 'whoami', session?.user.id],
     queryFn: () => trpc.me.whoami.query(),
-    enabled: !!session,
+    enabled: Boolean(session),
     refetchInterval: 30_000,
   });
 }

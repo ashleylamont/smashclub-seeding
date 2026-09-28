@@ -25,8 +25,8 @@ export function ModelComparison({ activeModel }: { activeModel: string }) {
     <section className="section model-comparison">
       <h3>Compare models</h3>
       <p className="muted">
-        Fits Glicko-2 and WHR over the same history and shows where they disagree. Read-only — nothing is
-        published until the active model is saved above.
+        Fits Glicko-2 and WHR over the same history and shows where they disagree. Read-only —
+        nothing is published until the active model is saved above.
       </p>
 
       {!enabled && (
@@ -61,8 +61,8 @@ export function ModelComparison({ activeModel }: { activeModel: string }) {
 
           {!comparison.data.whrConverged && (
             <p className="banner banner-warning">
-              The WHR fit did not converge in {comparison.data.whrIterations} iterations — treat its numbers as
-              provisional.
+              The WHR fit did not converge in {comparison.data.whrIterations} iterations — treat its
+              numbers as provisional.
             </p>
           )}
 
@@ -91,13 +91,19 @@ export function ModelComparison({ activeModel }: { activeModel: string }) {
                     <td className="num">{row.matchCount}</td>
                     <td className="num">{row.glicko ? `#${row.glicko.rank}` : '—'}</td>
                     <td className="num">
-                      {row.glicko ? `${row.glicko.skillRating.toFixed(0)} ±${row.glicko.skillSd.toFixed(0)}` : '—'}
+                      {row.glicko
+                        ? `${row.glicko.skillRating.toFixed(0)} ±${row.glicko.skillSd.toFixed(0)}`
+                        : '—'}
                     </td>
                     <td className="num">{row.whr ? `#${row.whr.rank}` : '—'}</td>
                     <td className="num">
-                      {row.whr ? `${row.whr.skillRating.toFixed(0)} ±${row.whr.skillSd.toFixed(0)}` : '—'}
+                      {row.whr
+                        ? `${row.whr.skillRating.toFixed(0)} ±${row.whr.skillSd.toFixed(0)}`
+                        : '—'}
                     </td>
-                    <td className={`num ${(row.rankDelta ?? 0) > 0 ? 'seed-up' : (row.rankDelta ?? 0) < 0 ? 'seed-down' : ''}`}>
+                    <td
+                      className={`num ${(row.rankDelta ?? 0) > 0 ? 'seed-up' : (row.rankDelta ?? 0) < 0 ? 'seed-down' : ''}`}
+                    >
                       {row.rankDelta === null
                         ? '—'
                         : row.rankDelta === 0
@@ -112,13 +118,17 @@ export function ModelComparison({ activeModel }: { activeModel: string }) {
             </table>
           </div>
           {comparison.data.rows.length > 25 && (
-            <button type="button" className="btn btn-small" onClick={() => setShowAll((prev) => !prev)}>
+            <button
+              type="button"
+              className="btn btn-small"
+              onClick={() => setShowAll((prev) => !prev)}
+            >
               {showAll ? 'Show biggest 25 only' : `Show all ${comparison.data.rows.length}`}
             </button>
           )}
           <p className="muted comparison-note">
-            Rows are ordered by biggest disagreement. &ldquo;Move&rdquo; is places gained going from Glicko-2 to
-            WHR. Currently publishing <code>{activeModel}</code>.
+            Rows are ordered by biggest disagreement. &ldquo;Move&rdquo; is places gained going from
+            Glicko-2 to WHR. Currently publishing <code>{activeModel}</code>.
           </p>
         </>
       )}

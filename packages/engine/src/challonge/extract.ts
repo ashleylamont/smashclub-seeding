@@ -81,7 +81,8 @@ function identifierOf(m: Record<string, unknown>): string | null {
 export function extractTournament(payload: unknown): ChallongeTournament {
   const t = unwrap(payload, 'tournament', 'tournament');
   const id = num(t.id);
-  if (id === null) throw new ChallongePayloadError('Challonge tournament payload missing numeric id.');
+  if (id === null)
+    throw new ChallongePayloadError('Challonge tournament payload missing numeric id.');
   return {
     id,
     name: (str(t.name) ?? str(t.url) ?? String(id)).trim(),
@@ -166,7 +167,11 @@ export function isRateableMatch(match: ChallongeMatch): boolean {
  * Challonge-facing callers keep importing their Challonge vocabulary from one
  * place.
  */
-export { scoresIndicateBye, scoresIndicateForfeit, scoresIndicateUnplayed } from '@smashclub/shared';
+export {
+  scoresIndicateBye,
+  scoresIndicateForfeit,
+  scoresIndicateUnplayed,
+} from '@smashclub/shared';
 
 export interface PublicBracket {
   participants: ChallongeParticipant[];
@@ -276,10 +281,16 @@ export function extractPublicBracket(payload: unknown): PublicBracket {
   const record = asRecord(payload, 'public bracket');
   const byRound = record.matches_by_round;
   if (typeof byRound !== 'object' || byRound === null || Array.isArray(byRound)) {
-    throw new ChallongePayloadError('Public Challonge bracket JSON did not include matches_by_round data.');
+    throw new ChallongePayloadError(
+      'Public Challonge bracket JSON did not include matches_by_round data.',
+    );
   }
 
-  const rawMatches: Array<{ value: Record<string, unknown>; stage: 'group' | 'final'; groupId: number | null }> = [];
+  const rawMatches: {
+    value: Record<string, unknown>;
+    stage: 'group' | 'final';
+    groupId: number | null;
+  }[] = [];
   for (const roundMatches of Object.values(byRound as Record<string, unknown>)) {
     if (Array.isArray(roundMatches)) {
       for (const m of roundMatches) {
@@ -287,7 +298,8 @@ export function extractPublicBracket(payload: unknown): PublicBracket {
           const match = m as Record<string, unknown>;
           rawMatches.push({
             value: match,
-            stage: match.is_group_match === true || num(match.group_id) !== null ? 'group' : 'final',
+            stage:
+              match.is_group_match === true || num(match.group_id) !== null ? 'group' : 'final',
             groupId: num(match.group_id),
           });
         }
@@ -302,7 +314,10 @@ export function extractPublicBracket(payload: unknown): PublicBracket {
     groups.forEach((group, index) => {
       if (typeof group !== 'object' || group === null || Array.isArray(group)) return;
       const g = group as Record<string, unknown>;
-      const gt = typeof g.tournament === 'object' && g.tournament !== null ? (g.tournament as Record<string, unknown>) : {};
+      const gt =
+        typeof g.tournament === 'object' && g.tournament !== null
+          ? (g.tournament as Record<string, unknown>)
+          : {};
       const groupId = num(gt.id) ?? index;
       const rounds = g.matches_by_round;
       if (typeof rounds !== 'object' || rounds === null || Array.isArray(rounds)) return;
@@ -327,13 +342,19 @@ export function extractPublicBracket(payload: unknown): PublicBracket {
     }
     const prior = byMatchId.get(id);
     if (prior) {
-      const signature = (m: Record<string, unknown>) => JSON.stringify([
-        m.state, m.round, m.winner_id, m.scores_csv ?? m.scores,
-        (m.player1 as Record<string, unknown> | undefined)?.id,
-        (m.player2 as Record<string, unknown> | undefined)?.id,
-      ]);
+      const signature = (m: Record<string, unknown>) =>
+        JSON.stringify([
+          m.state,
+          m.round,
+          m.winner_id,
+          m.scores_csv ?? m.scores,
+          (m.player1 as Record<string, unknown> | undefined)?.id,
+          (m.player2 as Record<string, unknown> | undefined)?.id,
+        ]);
       if (prior.stage !== entry.stage || signature(prior.value) !== signature(entry.value)) {
-        throw new ChallongePayloadError(`Public bracket contains conflicting entries for match ${id}.`);
+        throw new ChallongePayloadError(
+          `Public bracket contains conflicting entries for match ${id}.`,
+        );
       }
       continue;
     }
@@ -350,10 +371,11 @@ export function extractPublicBracket(payload: unknown): PublicBracket {
       completedAt: str(m.completed_at) ?? str(m.underway_at),
       challongeMatchId: num(m.id),
     });
-    uniqueMatches.sort((a, b) =>
-      Number(a.stage === 'final') - Number(b.stage === 'final') ||
-      (a.stage === 'group' ? (a.groupId ?? 0) - (b.groupId ?? 0) : 0) ||
-      compareSetsInBracket(orderable(a.value), orderable(b.value)),
+    uniqueMatches.sort(
+      (a, b) =>
+        Number(a.stage === 'final') - Number(b.stage === 'final') ||
+        (a.stage === 'group' ? (a.groupId ?? 0) - (b.groupId ?? 0) : 0) ||
+        compareSetsInBracket(orderable(a.value), orderable(b.value)),
     );
   }
 
@@ -364,8 +386,14 @@ export function extractPublicBracket(payload: unknown): PublicBracket {
     (a, b) => Number(a.stage === 'group') - Number(b.stage === 'group'),
   );
   for (const { value: m, stage } of participantEntries) {
-    const player1 = typeof m.player1 === 'object' && m.player1 !== null ? (m.player1 as Record<string, unknown>) : {};
-    const player2 = typeof m.player2 === 'object' && m.player2 !== null ? (m.player2 as Record<string, unknown>) : {};
+    const player1 =
+      typeof m.player1 === 'object' && m.player1 !== null
+        ? (m.player1 as Record<string, unknown>)
+        : {};
+    const player2 =
+      typeof m.player2 === 'object' && m.player2 !== null
+        ? (m.player2 as Record<string, unknown>)
+        : {};
     for (const p of [player1, player2]) {
       const pid = num(p.id);
       const displayName = (str(p.display_name) ?? str(p.name) ?? '').trim();
@@ -384,8 +412,14 @@ export function extractPublicBracket(payload: unknown): PublicBracket {
   const matches: ChallongeMatch[] = [];
   const completedDates: string[] = [];
   for (const [orderIndex, { value: m, stage, groupId }] of uniqueMatches.entries()) {
-    const player1 = typeof m.player1 === 'object' && m.player1 !== null ? (m.player1 as Record<string, unknown>) : {};
-    const player2 = typeof m.player2 === 'object' && m.player2 !== null ? (m.player2 as Record<string, unknown>) : {};
+    const player1 =
+      typeof m.player1 === 'object' && m.player1 !== null
+        ? (m.player1 as Record<string, unknown>)
+        : {};
+    const player2 =
+      typeof m.player2 === 'object' && m.player2 !== null
+        ? (m.player2 as Record<string, unknown>)
+        : {};
     const id = num(m.id);
     if (id === null) continue;
     const state = str(m.state) ?? 'unknown';
@@ -415,15 +449,18 @@ export function extractPublicBracket(payload: unknown): PublicBracket {
       winnerId:
         num(m.winner_id) !== null &&
         (num(m.winner_id) === num(player1.id) || num(m.winner_id) === num(player1.participant_id))
-          ? num(player1.participant_id) ?? num(player1.id)
+          ? (num(player1.participant_id) ?? num(player1.id))
           : num(m.winner_id) !== null &&
-              (num(m.winner_id) === num(player2.id) || num(m.winner_id) === num(player2.participant_id))
-            ? num(player2.participant_id) ?? num(player2.id)
+              (num(m.winner_id) === num(player2.id) ||
+                num(m.winner_id) === num(player2.participant_id))
+            ? (num(player2.participant_id) ?? num(player2.id))
             : num(m.winner_id),
       scoresCsv: str(m.scores_csv) ?? scoresCsvFrom(m.scores),
       completedAt: str(m.completed_at) ?? str(m.underway_at),
       updatedAt: str(m.updated_at),
-      suggestedPlayOrder: hasGroups ? orderIndex + 1 : num(m.suggested_play_order) ?? num(m.identifier),
+      suggestedPlayOrder: hasGroups
+        ? orderIndex + 1
+        : (num(m.suggested_play_order) ?? num(m.identifier)),
       stage,
       groupId,
     });
@@ -502,7 +539,9 @@ function capitalize(part: string): string {
 export function likely2v2Warning(participantNames: readonly string[]): string | null {
   const names = participantNames.map((n) => n.trim()).filter(Boolean);
   if (names.length < 8) return null;
-  const pipeLike = names.filter((n) => n.includes('|') || n.includes(' / ') || n.includes(' & ')).length;
+  const pipeLike = names.filter(
+    (n) => n.includes('|') || n.includes(' / ') || n.includes(' & '),
+  ).length;
   const longNames = names.filter((n) => n.split(/\s+/).length >= 4).length;
   const suspiciousRatio = Math.max(pipeLike / names.length, longNames / names.length);
   if (

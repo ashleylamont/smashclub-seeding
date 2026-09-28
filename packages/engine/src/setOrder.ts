@@ -40,7 +40,10 @@ export interface OrderableSet {
   challongeMatchId?: number | null;
 }
 
-export function compareNullableNumbers(a: number | null | undefined, b: number | null | undefined): number {
+export function compareNullableNumbers(
+  a: number | null | undefined,
+  b: number | null | undefined,
+): number {
   const aVal = a ?? Number.POSITIVE_INFINITY;
   const bVal = b ?? Number.POSITIVE_INFINITY;
   return aVal - bVal || 0;
@@ -50,7 +53,10 @@ export function compareStrings(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-export function compareNullableStrings(a: string | null | undefined, b: string | null | undefined): number {
+export function compareNullableStrings(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): number {
   if (a == null && b == null) return 0;
   if (a == null) return 1;
   if (b == null) return -1;

@@ -13,7 +13,11 @@ import {
   type LeaderboardRow,
   type RatingEvent,
 } from '@smashclub/engine';
-import { includesResultStage, scoresIndicateUnplayed, type GlickoSettings } from '@smashclub/shared';
+import {
+  includesResultStage,
+  scoresIndicateUnplayed,
+  type GlickoSettings,
+} from '@smashclub/shared';
 import { getGlickoSettings, updateGlickoSettings } from '../settings';
 
 export const ENGINE_VERSION = '1.0.0';
@@ -151,23 +155,39 @@ export async function runRecompute(
     };
 
     if (model === 'whr') {
-      const first = runWhrModel({ sets: engineSets, tournaments: engineTournaments, settings: glicko });
+      const first = runWhrModel({
+        sets: engineSets,
+        tournaments: engineTournaments,
+        settings: glicko,
+      });
       await calibrateOnce(first.leaderboard);
       // Re-derive leagues if calibration changed the bands. The fit itself does
       // not depend on them, so only the labels are recomputed.
       const run =
         effectiveSettings === glicko
           ? first
-          : runWhrModel({ sets: engineSets, tournaments: engineTournaments, settings: effectiveSettings });
+          : runWhrModel({
+              sets: engineSets,
+              tournaments: engineTournaments,
+              settings: effectiveSettings,
+            });
       ratingEventRows = run.events;
       leaderboard = run.leaderboard;
       previousRanks = run.previousRanks;
-      modelStats = { whr: { converged: run.converged, iterations: run.iterations, periods: run.periods } };
+      modelStats = {
+        whr: { converged: run.converged, iterations: run.iterations, periods: run.periods },
+      };
       if (!run.converged) {
-        console.warn(`WHR fit did not converge in ${run.iterations} iterations; ratings may be unstable`);
+        console.warn(
+          `WHR fit did not converge in ${run.iterations} iterations; ratings may be unstable`,
+        );
       }
     } else {
-      const replay = replayRatings({ sets: engineSets, tournaments: engineTournaments, settings: glicko });
+      const replay = replayRatings({
+        sets: engineSets,
+        tournaments: engineTournaments,
+        settings: glicko,
+      });
       await calibrateOnce(computeLeaderboard(replay.finalStates, glicko));
       ratingEventRows = replay.events;
       leaderboard = computeLeaderboard(replay.finalStates, effectiveSettings);
@@ -325,5 +345,7 @@ async function pruneOldRecomputes(db: Db): Promise<void> {
     .limit(KEEP_RECOMPUTES);
   const keepIds = keep.map((row) => row.id);
   if (keepIds.length === 0) return;
-  await db.delete(recomputes).where(and(notInArray(recomputes.id, keepIds), ne(recomputes.status, 'running')));
+  await db
+    .delete(recomputes)
+    .where(and(notInArray(recomputes.id, keepIds), ne(recomputes.status, 'running')));
 }

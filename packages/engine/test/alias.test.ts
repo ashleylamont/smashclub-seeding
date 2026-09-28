@@ -22,11 +22,15 @@ describe('no-cross-merge invariants (ported from legacy pytest suite)', () => {
     // Fuzzy: similarity exists but only as a review-queue candidate, and well
     // below any historical auto-merge threshold.
     const fuzzy = findSimilarPlayer('Jack Morrison', 'ATL', pool);
-    if (fuzzy) expect(fuzzy.score).toBeLessThan(0.85);
+    expect(fuzzy === null || fuzzy.score < 0.85).toBe(true);
   });
 
   it('keeps distinct Matthews separate', () => {
-    const pool = [candidate('Matthew Jakeman'), candidate('Matthew Chen'), candidate('Matthew Kokolich')];
+    const pool = [
+      candidate('Matthew Jakeman'),
+      candidate('Matthew Chen'),
+      candidate('Matthew Kokolich'),
+    ];
     // "Matthew" alone is ambiguous across three candidates -> no auto-link.
     expect(resolveStructuredAlias('Matthew', 'ATL', pool)).toBeNull();
     expect(resolveStructuredAlias('Matthew Jakeman', 'ATL', pool)).toBeNull();
@@ -43,7 +47,9 @@ describe('no-cross-merge invariants (ported from legacy pytest suite)', () => {
   });
 
   it('resolves Josh C to Josh Cortese only when unambiguous', () => {
-    expect(resolveStructuredAlias('Josh C', 'ATL', [candidate('Josh Cortese')])?.name).toBe('Josh Cortese');
+    expect(resolveStructuredAlias('Josh C', 'ATL', [candidate('Josh Cortese')])?.name).toBe(
+      'Josh Cortese',
+    );
     expect(
       resolveStructuredAlias('Josh C', 'ATL', [candidate('Josh Cortese'), candidate('Josh Chen')]),
     ).toBeNull();
@@ -126,7 +132,9 @@ describe('rankReviewCandidates', () => {
   });
 
   it('returns an empty list when nothing is plausible', () => {
-    expect(rankReviewCandidates('Zaphod Beeblebrox', 'ATL', [candidate('Fox McCloud')])).toEqual([]);
+    expect(rankReviewCandidates('Zaphod Beeblebrox', 'ATL', [candidate('Fox McCloud')])).toEqual(
+      [],
+    );
   });
 });
 

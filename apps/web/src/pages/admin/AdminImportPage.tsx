@@ -70,16 +70,18 @@ export function AdminImportPage() {
       </div>
 
       <p className="muted import-intro">
-        The same file the CLI importer takes. Players are keyed on their registry <code>id</code>, so re-importing
-        updates rather than duplicating. <code>numeric_id</code> is ignored (nothing reads it) and{' '}
-        <code>past_companies</code> only widens which company tags a player's names resolve under — neither is stored
-        as a column.
+        The same file the CLI importer takes. Players are keyed on their registry <code>id</code>,
+        so re-importing updates rather than duplicating. <code>numeric_id</code> is ignored (nothing
+        reads it) and <code>past_companies</code> only widens which company tags a player's names
+        resolve under — neither is stored as a column.
       </p>
 
       <div className="import-input">
         <textarea
           className="textarea import-textarea"
-          placeholder={'players:\n  - id: sample-player\n    canonical_name: Sample Player\n    company: Atlassian\n    aliases: [Sample P, Sample]\n    main_character: Ness'}
+          placeholder={
+            'players:\n  - id: sample-player\n    canonical_name: Sample Player\n    company: Atlassian\n    aliases: [Sample P, Sample]\n    main_character: Ness'
+          }
           value={yaml}
           spellCheck={false}
           onChange={(event) => {
@@ -96,7 +98,11 @@ export function AdminImportPage() {
           >
             {preview.isPending ? 'Reading…' : 'Preview'}
           </button>
-          <button type="button" className="btn btn-small" onClick={() => fileInput.current?.click()}>
+          <button
+            type="button"
+            className="btn btn-small"
+            onClick={() => fileInput.current?.click()}
+          >
             Upload file…
           </button>
           <input
@@ -127,8 +133,10 @@ export function AdminImportPage() {
 
       {step === 'done' && apply.data && (
         <div className="banner banner-success">
-          Imported: {apply.data.created} created, {apply.data.updated} updated, {apply.data.unchanged} unchanged.
-          {apply.data.companiesCreated > 0 && ` ${apply.data.companiesCreated} new compan${apply.data.companiesCreated === 1 ? 'y' : 'ies'}.`}
+          Imported: {apply.data.created} created, {apply.data.updated} updated,{' '}
+          {apply.data.unchanged} unchanged.
+          {apply.data.companiesCreated > 0 &&
+            ` ${apply.data.companiesCreated} new compan${apply.data.companiesCreated === 1 ? 'y' : 'ies'}.`}
           {` ${apply.data.aliasesAdded} aliases and ${apply.data.charactersAdded} characters added.`}
           {apply.data.candidates.changed > 0 &&
             ` ${apply.data.candidates.changed} review item${apply.data.candidates.changed === 1 ? '' : 's'} picked up new candidates.`}
@@ -176,14 +184,17 @@ function PlanView({
   showUnchanged: boolean;
   onToggleUnchanged: () => void;
 }) {
-  const visible = showUnchanged ? plan.entries : plan.entries.filter((entry) => entry.action !== 'unchanged');
+  const visible = showUnchanged
+    ? plan.entries
+    : plan.entries.filter((entry) => entry.action !== 'unchanged');
 
   return (
     <div className="import-plan">
       {plan.issues.length > 0 && (
         <div className="banner banner-danger">
           <strong>
-            {plan.issues.length} problem{plan.issues.length === 1 ? '' : 's'} — fix these and preview again:
+            {plan.issues.length} problem{plan.issues.length === 1 ? '' : 's'} — fix these and
+            preview again:
           </strong>
           <ul className="import-issues">
             {plan.issues.map((issue, index) => (
@@ -201,12 +212,15 @@ function PlanView({
         <span className="chip">{plan.counts.unchanged} unchanged</span>
         <span className="chip">+{plan.counts.aliases} aliases</span>
         <span className="chip">+{plan.counts.characters} characters</span>
-        {plan.counts.companies > 0 && <span className="chip chip-warning">+{plan.counts.companies} companies</span>}
+        {plan.counts.companies > 0 && (
+          <span className="chip chip-warning">+{plan.counts.companies} companies</span>
+        )}
       </div>
 
       {plan.companiesToCreate.length > 0 && (
         <div className="banner banner-warning">
-          New companies will be created: {plan.companiesToCreate.map((company) => `${company.name} (${company.code})`).join(', ')}.
+          New companies will be created:{' '}
+          {plan.companiesToCreate.map((company) => `${company.name} (${company.code})`).join(', ')}.
           Rename or re-code them on the Companies tab afterwards if the generated code is wrong.
         </div>
       )}
@@ -249,7 +263,7 @@ function PlanView({
  * near-identical chips if listed flat. The scopes live in the tooltip and the
  * summary's alias count still reflects the real number of writes.
  */
-function groupAliases(aliases: RegistryEntryPlan['aliasesToAdd']): Array<[string, string[]]> {
+function groupAliases(aliases: RegistryEntryPlan['aliasesToAdd']): [string, string[]][] {
   const byAlias = new Map<string, string[]>();
   for (const entry of aliases) {
     const scopes = byAlias.get(entry.alias) ?? [];

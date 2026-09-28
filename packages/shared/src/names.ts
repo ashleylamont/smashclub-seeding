@@ -34,7 +34,10 @@ export function defaultPublicAlias(canonicalName: string): string {
  * unauthenticated route, so public payloads carry the output of this function
  * instead of the columns it was derived from.
  */
-export function publicPlayerName(row: { displayName: string | null; canonicalName: string }): string {
+export function publicPlayerName(row: {
+  displayName: string | null;
+  canonicalName: string;
+}): string {
   return row.displayName ?? defaultPublicAlias(row.canonicalName);
 }
 

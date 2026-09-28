@@ -1,4 +1,8 @@
-import { historicalCandidates, previewHistoricalAdoption, applyHistoricalAdoption } from '../../event-planner/historicalAdoption';
+import {
+  historicalCandidates,
+  previewHistoricalAdoption,
+  applyHistoricalAdoption,
+} from '../../event-planner/historicalAdoption';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { EventPlanValidationError } from '../../event-planner/divisions';
@@ -37,7 +41,12 @@ import { adminProcedure, router } from '../trpc';
 
 const divisionSchema = z.enum(['upper', 'lower']);
 const stageSchema = z.enum(['main', 'consolation']);
-const historicalSchema = z.object({ planId: z.uuid(), brackets: z.array(z.object({ division: divisionSchema, stage: stageSchema, tournamentId: z.uuid() })).length(4) });
+const historicalSchema = z.object({
+  planId: z.uuid(),
+  brackets: z
+    .array(z.object({ division: divisionSchema, stage: stageSchema, tournamentId: z.uuid() }))
+    .length(4),
+});
 const preferenceSchema = z.enum(['auto', 'upper', 'lower']);
 
 /** Translate the planner's own errors into the tRPC codes a client can act on. */
@@ -56,9 +65,15 @@ async function guard<T>(run: () => Promise<T>): Promise<T> {
 }
 
 export const eventPlannerRouter = router({
-  historicalCandidates: adminProcedure.input(z.object({ planId: z.uuid() })).query(({ ctx, input }) => historicalCandidates(ctx.db, input.planId)),
-  previewHistoricalAdoption: adminProcedure.input(historicalSchema).mutation(({ ctx, input }) => previewHistoricalAdoption(ctx.db, input)),
-  applyHistoricalAdoption: adminProcedure.input(historicalSchema.extend({ fingerprint: z.string().regex(/^[a-f0-9]{64}$/) })).mutation(({ ctx, input }) => applyHistoricalAdoption(ctx.db, input, ctx.user.id)),
+  historicalCandidates: adminProcedure
+    .input(z.object({ planId: z.uuid() }))
+    .query(({ ctx, input }) => historicalCandidates(ctx.db, input.planId)),
+  previewHistoricalAdoption: adminProcedure
+    .input(historicalSchema)
+    .mutation(({ ctx, input }) => previewHistoricalAdoption(ctx.db, input)),
+  applyHistoricalAdoption: adminProcedure
+    .input(historicalSchema.extend({ fingerprint: z.string().regex(/^[a-f0-9]{64}$/) }))
+    .mutation(({ ctx, input }) => applyHistoricalAdoption(ctx.db, input, ctx.user.id)),
 
   plans: adminProcedure.query(({ ctx }) => listPlans(ctx.db)),
 
@@ -87,7 +102,14 @@ export const eventPlannerRouter = router({
               cleanedName: z.string().max(200),
               companyId: z.uuid().nullable(),
               playerId: z.uuid().nullable(),
-              resolutionMethod: z.enum(['alias', 'decision', 'structured', 'manual', 'new', 'unresolved']),
+              resolutionMethod: z.enum([
+                'alias',
+                'decision',
+                'structured',
+                'manual',
+                'new',
+                'unresolved',
+              ]),
               divisionPreference: preferenceSchema.default('auto'),
             }),
           )
@@ -97,16 +119,14 @@ export const eventPlannerRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const planId = await guard(() =>
-        createPlan(
-          ctx.db,
-          { ...input, eventDate: new Date(input.eventDate) },
-          ctx.user.id,
-        ),
+        createPlan(ctx.db, { ...input, eventDate: new Date(input.eventDate) }, ctx.user.id),
       );
       return { planId };
     }),
 
-  plan: adminProcedure.input(z.object({ planId: z.uuid() })).query(({ ctx, input }) => getPlan(ctx.db, input.planId)),
+  plan: adminProcedure
+    .input(z.object({ planId: z.uuid() }))
+    .query(({ ctx, input }) => getPlan(ctx.db, input.planId)),
 
   updatePlan: adminProcedure
     .input(
@@ -160,15 +180,19 @@ export const eventPlannerRouter = router({
       return { ok: true };
     }),
 
-  freezeRoster: adminProcedure.input(z.object({ planId: z.uuid() })).mutation(async ({ ctx, input }) => {
-    await guard(() => freezeRoster(ctx.db, input.planId));
-    return { ok: true };
-  }),
+  freezeRoster: adminProcedure
+    .input(z.object({ planId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await guard(() => freezeRoster(ctx.db, input.planId));
+      return { ok: true };
+    }),
 
-  unfreezeRoster: adminProcedure.input(z.object({ planId: z.uuid() })).mutation(async ({ ctx, input }) => {
-    await guard(() => unfreezeRoster(ctx.db, input.planId));
-    return { ok: true };
-  }),
+  unfreezeRoster: adminProcedure
+    .input(z.object({ planId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await guard(() => unfreezeRoster(ctx.db, input.planId));
+      return { ok: true };
+    }),
 
   reorderDivision: adminProcedure
     .input(
@@ -179,14 +203,18 @@ export const eventPlannerRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await guard(() => reorderDivision(ctx.db, input.planId, input.division, input.orderedEntryIds));
+      await guard(() =>
+        reorderDivision(ctx.db, input.planId, input.division, input.orderedEntryIds),
+      );
       return { ok: true };
     }),
 
-  generatePools: adminProcedure.input(z.object({ planId: z.uuid() })).mutation(async ({ ctx, input }) => {
-    await guard(() => generatePools(ctx.db, input.planId));
-    return { ok: true };
-  }),
+  generatePools: adminProcedure
+    .input(z.object({ planId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await guard(() => generatePools(ctx.db, input.planId));
+      return { ok: true };
+    }),
 
   savePoolPlacements: adminProcedure
     .input(
@@ -198,8 +226,10 @@ export const eventPlannerRouter = router({
             z.object({
               poolIndex: z.number().int().nonnegative(),
               playerIdsInOrder: z.array(z.uuid()).min(2).max(16),
-              expectedPlacementRevision:z.string().optional(),
-              expectedMatchRevisions:z.array(z.object({id:z.uuid(),revision:z.number().int().nonnegative()})).optional(),
+              expectedPlacementRevision: z.string().optional(),
+              expectedMatchRevisions: z
+                .array(z.object({ id: z.uuid(), revision: z.number().int().nonnegative() }))
+                .optional(),
             }),
           )
           .max(64),
@@ -220,7 +250,9 @@ export const eventPlannerRouter = router({
       }),
     )
     .mutation(({ ctx, input }) =>
-      guard(() => attachBracket(ctx.db, input.planId, input.division, input.stage, input.challongeSlug)),
+      guard(() =>
+        attachBracket(ctx.db, input.planId, input.division, input.stage, input.challongeSlug),
+      ),
     ),
 
   detachBracket: adminProcedure
@@ -237,7 +269,8 @@ export const eventPlannerRouter = router({
    */
   exports: adminProcedure.input(z.object({ planId: z.uuid() })).query(async ({ ctx, input }) => {
     const view = await getPlan(ctx.db, input.planId);
-    if (!view) throw new TRPCError({ code: 'NOT_FOUND', message: 'That event plan no longer exists.' });
+    if (!view)
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'That event plan no longer exists.' });
     return buildExports(view);
   }),
 
@@ -249,8 +282,10 @@ export const eventPlannerRouter = router({
       return { ok: true };
     }),
 
-  deletePlan: adminProcedure.input(z.object({ planId: z.uuid() })).mutation(async ({ ctx, input }) => {
-    await guard(() => deletePlan(ctx.db, input.planId));
-    return { ok: true };
-  }),
+  deletePlan: adminProcedure
+    .input(z.object({ planId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await guard(() => deletePlan(ctx.db, input.planId));
+      return { ok: true };
+    }),
 });

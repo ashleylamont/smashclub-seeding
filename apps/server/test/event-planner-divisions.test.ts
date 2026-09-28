@@ -80,9 +80,9 @@ describe('validateDivisionInput', () => {
   });
 
   it('rejects a division smaller than one pool', () => {
-    expect(codes(validateDivisionInput(ranked(16), { upperTargetSize: 16, poolSize: 4 }))).toContain(
-      'division_too_small',
-    );
+    expect(
+      codes(validateDivisionInput(ranked(16), { upperTargetSize: 16, poolSize: 4 })),
+    ).toContain('division_too_small');
   });
 
   it('rejects pins that cannot fit the division they ask for', () => {
@@ -93,9 +93,9 @@ describe('validateDivisionInput', () => {
   });
 
   it('asks for an Upper size before anything else about the split', () => {
-    expect(codes(validateDivisionInput(ranked(16), { upperTargetSize: null, poolSize: 4 }))).toContain(
-      'upper_size_unset',
-    );
+    expect(
+      codes(validateDivisionInput(ranked(16), { upperTargetSize: null, poolSize: 4 })),
+    ).toContain('upper_size_unset');
   });
 
   it('reports every problem at once rather than the first', () => {
@@ -113,14 +113,23 @@ describe('assignDivisions', () => {
   it('fills Upper from the top of the ranking', () => {
     const placements = assignDivisions(ranked(16), options);
     const upper = placements.filter((placement) => placement.division === 'upper');
-    expect(upper.map((placement) => placement.playerId)).toEqual(
-      ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'],
-    );
+    expect(upper.map((placement) => placement.playerId)).toEqual([
+      'p1',
+      'p2',
+      'p3',
+      'p4',
+      'p5',
+      'p6',
+      'p7',
+      'p8',
+    ]);
     expect(upper.map((placement) => placement.seed)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
   });
 
   it('seeds Lower from 1 again', () => {
-    const lower = assignDivisions(ranked(16), options).filter((placement) => placement.division === 'lower');
+    const lower = assignDivisions(ranked(16), options).filter(
+      (placement) => placement.division === 'lower',
+    );
     expect(lower.map((placement) => placement.seed)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     expect(lower[0]!.playerId).toBe('p9');
   });
@@ -141,22 +150,38 @@ describe('assignDivisions', () => {
   it('seeds a pinned player by rank within their division, not at the top', () => {
     const candidates = ranked(16);
     candidates[0] = { ...candidates[0]!, divisionPreference: 'lower' };
-    const lower = assignDivisions(candidates, options).filter((placement) => placement.division === 'lower');
-    expect(lower[0]!.playerId).toBe('p1');
+    const lower = assignDivisions(candidates, options).find(
+      (placement) => placement.division === 'lower',
+    );
+    expect(lower?.playerId).toBe('p1');
   });
 
   it('seeds an unranked entrant below every ranked one in their division', () => {
     const candidates = ranked(16);
     candidates[1] = { ...candidates[1]!, snapshotRank: null, divisionPreference: 'upper' };
-    const upper = assignDivisions(candidates, options).filter((placement) => placement.division === 'upper');
+    const upper = assignDivisions(candidates, options).filter(
+      (placement) => placement.division === 'upper',
+    );
     expect(upper[upper.length - 1]!.playerId).toBe('p2');
   });
 
   it('orders two unranked entrants by the line they were pasted on', () => {
     const candidates = ranked(16);
-    candidates[1] = { ...candidates[1]!, snapshotRank: null, divisionPreference: 'upper', sourceLineNumber: 9 };
-    candidates[2] = { ...candidates[2]!, snapshotRank: null, divisionPreference: 'upper', sourceLineNumber: 3 };
-    const upper = assignDivisions(candidates, options).filter((placement) => placement.division === 'upper');
+    candidates[1] = {
+      ...candidates[1]!,
+      snapshotRank: null,
+      divisionPreference: 'upper',
+      sourceLineNumber: 9,
+    };
+    candidates[2] = {
+      ...candidates[2]!,
+      snapshotRank: null,
+      divisionPreference: 'upper',
+      sourceLineNumber: 3,
+    };
+    const upper = assignDivisions(candidates, options).filter(
+      (placement) => placement.division === 'upper',
+    );
     expect(upper.slice(-2).map((placement) => placement.playerId)).toEqual(['p3', 'p2']);
   });
 
@@ -167,13 +192,15 @@ describe('assignDivisions', () => {
   });
 
   it('throws with every issue attached rather than guessing', () => {
-    try {
-      assignDivisions(ranked(15), { ...options, upperTargetSize: 15 });
-      expect.unreachable('should have thrown');
-    } catch (error) {
-      expect(error).toBeInstanceOf(EventPlanValidationError);
-      expect(codes((error as EventPlanValidationError).issues)).toContain('division_too_small');
-    }
+    const result = (() => {
+      try {
+        return assignDivisions(ranked(15), { ...options, upperTargetSize: 15 });
+      } catch (error) {
+        return error;
+      }
+    })();
+    expect(result).toBeInstanceOf(EventPlanValidationError);
+    expect(codes((result as EventPlanValidationError).issues)).toContain('division_too_small');
   });
 });
 
@@ -203,7 +230,9 @@ describe('parseRosterText', () => {
   });
 
   it('leaves company tags and @ conventions for the cleaner to handle', () => {
-    expect(parseRosterText('- [Atlas]@Lucina - ready to taunt')[0]!.input).toBe('[Atlas]@Lucina - ready to taunt');
+    expect(parseRosterText('- [Atlas]@Lucina - ready to taunt')[0]!.input).toBe(
+      '[Atlas]@Lucina - ready to taunt',
+    );
   });
 
   it('keeps a name that legitimately starts with a digit', () => {

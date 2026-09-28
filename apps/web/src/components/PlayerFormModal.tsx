@@ -98,8 +98,14 @@ export function PlayerFormModal({
   };
 
   return (
-    <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal modal-wide" onClick={(event) => event.stopPropagation()}>
+    <div className="modal-overlay">
+      <button
+        type="button"
+        className="modal-backdrop"
+        aria-label="Close dialog"
+        onClick={onCancel}
+      />
+      <div className="modal modal-wide">
         <h3>{title}</h3>
         {children}
 
@@ -114,8 +120,8 @@ export function PlayerFormModal({
               placeholder="e.g. Ashley Lamont"
             />
             <span className="form-hint">
-              The club's own record of who this is. Used for identity matching, not shown publicly when an
-              alias is set.
+              The club's own record of who this is. Used for identity matching, not shown publicly
+              when an alias is set.
             </span>
           </label>
 
@@ -125,11 +131,16 @@ export function PlayerFormModal({
               className="input"
               value={displayName}
               onChange={(event) => setDisplayName(event.target.value)}
-              placeholder={canonicalName.trim() ? defaultPublicAlias(canonicalName) : 'optional username'}
+              placeholder={
+                canonicalName.trim() ? defaultPublicAlias(canonicalName) : 'optional username'
+              }
             />
             <span className="form-hint">
               The tag shown on the leaderboard. Leave blank to go by{' '}
-              {canonicalName.trim() ? `“${defaultPublicAlias(canonicalName)}”` : 'the shortened registry name'}.
+              {canonicalName.trim()
+                ? `“${defaultPublicAlias(canonicalName)}”`
+                : 'the shortened registry name'}
+              .
             </span>
           </label>
 
@@ -174,13 +185,18 @@ export function PlayerFormModal({
                     }
                   }}
                 />
-                <button type="button" className="btn btn-small" disabled={aliasInput.trim() === ''} onClick={addAlias}>
+                <button
+                  type="button"
+                  className="btn btn-small"
+                  disabled={aliasInput.trim() === ''}
+                  onClick={addAlias}
+                >
                   Add
                 </button>
               </div>
               <span className="form-hint">
-                Other names this player enters brackets under. Future imports of these match silently instead of
-                queueing for review.
+                Other names this player enters brackets under. Future imports of these match
+                silently instead of queueing for review.
               </span>
             </div>
           )}
@@ -197,7 +213,12 @@ export function PlayerFormModal({
               {secondary.label}
             </button>
           )}
-          <button type="button" className="btn btn-primary" disabled={!valid || busy} onClick={submit}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={!valid || busy}
+            onClick={submit}
+          >
             {busy ? 'Saving…' : submitLabel}
           </button>
         </div>
@@ -226,7 +247,8 @@ function CompanySelect({
   const [name, setName] = useState('');
 
   const create = useMutation({
-    mutationFn: () => trpc.admin.upsertCompany.mutate({ code: code.trim(), name: name.trim(), aliases: [] }),
+    mutationFn: () =>
+      trpc.admin.upsertCompany.mutate({ code: code.trim(), name: name.trim(), aliases: [] }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['admin', 'companies'] });
       onChange(code.trim().toUpperCase());

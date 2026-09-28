@@ -104,7 +104,11 @@ export function AdminTournamentsPage() {
                       <td>
                         <span
                           className={`chip ${
-                            job.status === 'complete' ? 'chip-success' : job.status === 'failed' ? 'chip-danger' : 'chip-warning'
+                            job.status === 'complete'
+                              ? 'chip-success'
+                              : job.status === 'failed'
+                                ? 'chip-danger'
+                                : 'chip-warning'
                           }`}
                         >
                           {job.status}
@@ -132,7 +136,11 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
 
   const register = useMutation({
     mutationFn: async () => {
-      const { tournamentId } = await trpc.admin.registerTournament.mutate({ slugOrUrl, isRookie, resultsMode });
+      const { tournamentId } = await trpc.admin.registerTournament.mutate({
+        slugOrUrl,
+        isRookie,
+        resultsMode,
+      });
       await trpc.admin.syncNow.mutate({ tournamentId });
     },
     onSuccess: () => {
@@ -155,12 +163,20 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
           onChange={(e) => setSlugOrUrl(e.target.value)}
         />
         <label className="checkbox-label">
-          <input type="checkbox" checked={isRookie} onChange={(e) => setIsRookie(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={isRookie}
+            onChange={(e) => setIsRookie(e.target.checked)}
+          />
           Rookie bracket
         </label>
         <label className="form-field">
           <span className="form-label">Results</span>
-          <select className="select" value={resultsMode} onChange={(e) => setResultsMode(e.target.value as typeof resultsMode)}>
+          <select
+            className="select"
+            value={resultsMode}
+            onChange={(e) => setResultsMode(e.target.value as typeof resultsMode)}
+          >
             <option value="auto">Auto (pools + finals when present)</option>
             <option value="final_stage_only">Final stage only</option>
           </select>
@@ -175,7 +191,8 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
         </button>
       </div>
       <p className="muted">
-        Auto counts pools and finals when present. Use Final stage only when recorded groups were only used for setup.
+        Auto counts pools and finals when present. Use Final stage only when recorded groups were
+        only used for setup.
       </p>
       {register.isError && <p className="error-text">{register.error.message}</p>}
     </div>
@@ -207,8 +224,11 @@ function TournamentRow({
     onSuccess: onChanged,
   });
   const update = useMutation({
-    mutationFn: (patch: { isRookie?: boolean; resultsMode?: 'auto' | 'final_stage_only'; eventDate?: string | null }) =>
-      trpc.admin.updateTournament.mutate({ tournamentId: tournament.id, ...patch }),
+    mutationFn: (patch: {
+      isRookie?: boolean;
+      resultsMode?: 'auto' | 'final_stage_only';
+      eventDate?: string | null;
+    }) => trpc.admin.updateTournament.mutate({ tournamentId: tournament.id, ...patch }),
     onSuccess: () => {
       setEditingDate(false);
       onChanged();
@@ -219,7 +239,8 @@ function TournamentRow({
   // Live monitoring is opt-in and time-boxed: it is never inferred from
   // Challonge's state, which stays "underway" on abandoned brackets forever.
   const setLive = useMutation({
-    mutationFn: () => trpc.admin.setTournamentLive.mutate({ tournamentId: tournament.id, hours: LIVE_HOURS }),
+    mutationFn: () =>
+      trpc.admin.setTournamentLive.mutate({ tournamentId: tournament.id, hours: LIVE_HOURS }),
     onSuccess: onChanged,
   });
   const endLive = useMutation({
@@ -260,7 +281,9 @@ function TournamentRow({
           aria-label={`Results mode for ${tournament.name}`}
           value={tournament.resultsMode}
           disabled={update.isPending}
-          onChange={(e) => update.mutate({ resultsMode: e.target.value as 'auto' | 'final_stage_only' })}
+          onChange={(e) =>
+            update.mutate({ resultsMode: e.target.value as 'auto' | 'final_stage_only' })
+          }
         >
           <option value="auto">Auto</option>
           <option value="final_stage_only">Final stage only</option>
@@ -280,7 +303,9 @@ function TournamentRow({
               className="btn btn-small"
               disabled={update.isPending}
               onClick={() =>
-                update.mutate({ eventDate: dateValue === '' ? null : new Date(dateValue).toISOString() })
+                update.mutate({
+                  eventDate: dateValue === '' ? null : new Date(dateValue).toISOString(),
+                })
               }
             >
               Save
@@ -324,46 +349,51 @@ function TournamentRow({
         {tournament.lastSyncedAt && <div className="muted">{timeAgo(tournament.lastSyncedAt)}</div>}
       </td>
       <td>
-        {tournament.provider === 'native' ? <a href={`/events/${encodeURIComponent(tournament.slug)}`}>Nemesis event results →</a> : <>
-        <button
-          type="button"
-          className="btn btn-small"
-          disabled={sync.isPending}
-          title="Sync from the free public bracket. No API quota used."
-          onClick={() => sync.mutate()}
-        >
-          {sync.isPending ? 'Syncing…' : 'Sync now'}
-        </button>{' '}
-        <button
-          type="button"
-          className="btn btn-small"
-          disabled={syncApi.isPending}
-          title="Sync via the Challonge API — SPENDS ~3 of the 500 requests/month allowance. Only useful for tournaments the club owns; it is the only way to get final placements."
-          onClick={() => syncApi.mutate()}
-        >
-          {syncApi.isPending ? 'Syncing…' : 'Sync (API)'}
-        </button>{' '}
-        {isLive ? (
-          <button
-            type="button"
-            className="btn btn-small"
-            disabled={endLive.isPending}
-            title={`Live until ${liveUntil!.toLocaleString()} — polling the public bracket every 60s`}
-            onClick={() => endLive.mutate()}
-          >
-            {endLive.isPending ? 'Stopping…' : `Stop live (until ${formatClock(liveUntil!)})`}
-          </button>
+        {tournament.provider === 'native' ? (
+          <a href={`/events/${encodeURIComponent(tournament.slug)}`}>Nemesis event results →</a>
         ) : (
-          <button
-            type="button"
-            className="btn btn-small"
-            disabled={setLive.isPending}
-            title={`Poll this bracket every 60s for ${LIVE_HOURS}h, then stop automatically. Uses the public bracket, not the rate-limited API.`}
-            onClick={() => setLive.mutate()}
-          >
-            {setLive.isPending ? 'Starting…' : `Go live (${LIVE_HOURS}h)`}
-          </button>
-        )}</>}
+          <>
+            <button
+              type="button"
+              className="btn btn-small"
+              disabled={sync.isPending}
+              title="Sync from the free public bracket. No API quota used."
+              onClick={() => sync.mutate()}
+            >
+              {sync.isPending ? 'Syncing…' : 'Sync now'}
+            </button>{' '}
+            <button
+              type="button"
+              className="btn btn-small"
+              disabled={syncApi.isPending}
+              title="Sync via the Challonge API — SPENDS ~3 of the 500 requests/month allowance. Only useful for tournaments the club owns; it is the only way to get final placements."
+              onClick={() => syncApi.mutate()}
+            >
+              {syncApi.isPending ? 'Syncing…' : 'Sync (API)'}
+            </button>{' '}
+            {isLive ? (
+              <button
+                type="button"
+                className="btn btn-small"
+                disabled={endLive.isPending}
+                title={`Live until ${liveUntil!.toLocaleString()} — polling the public bracket every 60s`}
+                onClick={() => endLive.mutate()}
+              >
+                {endLive.isPending ? 'Stopping…' : `Stop live (until ${formatClock(liveUntil!)})`}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-small"
+                disabled={setLive.isPending}
+                title={`Poll this bracket every 60s for ${LIVE_HOURS}h, then stop automatically. Uses the public bracket, not the rate-limited API.`}
+                onClick={() => setLive.mutate()}
+              >
+                {setLive.isPending ? 'Starting…' : `Go live (${LIVE_HOURS}h)`}
+              </button>
+            )}
+          </>
+        )}
       </td>
     </tr>
   );

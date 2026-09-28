@@ -63,8 +63,7 @@ describe('compareSetsInBracket', () => {
     ];
     for (const x of sets) {
       for (const y of sets) {
-        if (x.id === y.id) expect(compareSetsInBracket(x, y)).toBe(0);
-        else expect(compareSetsInBracket(x, y)).not.toBe(0);
+        expect(compareSetsInBracket(x, y) === 0).toBe(x.id === y.id);
       }
     }
   });
@@ -87,7 +86,9 @@ function doubleElim(): { tournaments: EngineTournament[]; sets: EngineSet[] } {
     [6, 'alice', 'carol', 1, null], // grand final, never timestamped
   ];
   return {
-    tournaments: [{ id: 't1', eventDate: '2025-01-10T18:00:00.000Z', isRookie: false, challongeId: 1 }],
+    tournaments: [
+      { id: 't1', eventDate: '2025-01-10T18:00:00.000Z', isRookie: false, challongeId: 1 },
+    ],
     sets: plan.map(([order, p1, p2, winner, completedAt]) => ({
       // Deliberately reverse-correlated with play order, so any path that falls
       // through to the uuid produces exactly the wrong answer.
@@ -117,7 +118,9 @@ describe('a bracket comes out in play order', () => {
     const whr = runWhrModel({ sets, tournaments, settings });
     const glicko = replayRatings({ sets, tournaments, settings });
 
-    const orderOf = (events: { playerId: string; setId: string | null; seq: number; isDecay: boolean }[]) =>
+    const orderOf = (
+      events: { playerId: string; setId: string | null; seq: number; isDecay: boolean }[],
+    ) =>
       events
         .filter((e) => !e.isDecay && e.playerId === 'carol')
         .sort((a, b) => a.seq - b.seq)

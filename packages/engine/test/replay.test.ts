@@ -6,7 +6,12 @@ import type { EngineSet, EngineTournament } from '../src/types';
 
 const settings = defaultGlickoSettings;
 
-const tournament = (id: string, eventDate: string, isRookie = false, challongeId?: number): EngineTournament => ({
+const tournament = (
+  id: string,
+  eventDate: string,
+  isRookie = false,
+  challongeId?: number,
+): EngineTournament => ({
   id,
   eventDate,
   isRookie,
@@ -39,9 +44,14 @@ const makeSet = (
  * already past it at ~290 — there is no more doubt to add about a player we
  * barely know, so a single-set fixture produces no decay at all.
  */
-const clubNight = (tournamentId: string, player: string, opponentPrefix: string, count = 5): EngineSet[] =>
+const clubNight = (
+  tournamentId: string,
+  player: string,
+  opponentPrefix: string,
+  count = 5,
+): EngineSet[] =>
   Array.from({ length: count }, (_, i) =>
-    makeSet(tournamentId, player, `${opponentPrefix}${i}`, ((i % 2 === 0 ? 1 : 2) as 1 | 2)),
+    makeSet(tournamentId, player, `${opponentPrefix}${i}`, (i % 2 === 0 ? 1 : 2) as 1 | 2),
   );
 
 describe('replayRatings', () => {
@@ -74,9 +84,16 @@ describe('replayRatings', () => {
     const expectedWeight = (1 / 2) ** settings.inverseDiminishingExponent;
     expect(firstAliceEvent.weight).toBeCloseTo(expectedWeight, 12);
 
-    const pre = { rating: settings.initialRating, rd: settings.initialRd, vol: settings.initialVol };
+    const pre = {
+      rating: settings.initialRating,
+      rd: settings.initialRd,
+      vol: settings.initialVol,
+    };
     const full = updateRating(pre, [{ rating: pre.rating, rd: pre.rd, outcome: 1 }], settings.tau);
-    expect(firstAliceEvent.postRating).toBeCloseTo(pre.rating + (full.rating - pre.rating) * expectedWeight, 9);
+    expect(firstAliceEvent.postRating).toBeCloseTo(
+      pre.rating + (full.rating - pre.rating) * expectedWeight,
+      9,
+    );
     expect(firstAliceEvent.postRd).toBeCloseTo(pre.rd + (full.rd - pre.rd) * expectedWeight, 9);
     // Volatility keeps the full update (legacy behaviour, preserved deliberately).
     expect(firstAliceEvent.postVol).toBeCloseTo(full.vol, 12);
@@ -106,7 +123,10 @@ describe('replayRatings', () => {
     const t1 = tournament('t1', '2025-01-01', true);
     const set = makeSet('t1', 'alice', 'bob', 1);
     const { events } = replayRatings({ sets: [set], tournaments: [t1], settings: low });
-    expect(events.find((e) => e.playerId === 'alice')!.weight).toBeCloseTo(low.rookieBracketBaseScale, 12);
+    expect(events.find((e) => e.playerId === 'alice')!.weight).toBeCloseTo(
+      low.rookieBracketBaseScale,
+      12,
+    );
   });
 
   it('grows RD by a flat quadrature step per missed event, uniform across players', () => {
@@ -131,7 +151,8 @@ describe('replayRatings', () => {
     expect(aliceDecay[1]!.tournamentId).toBe('t3');
 
     const growth = settings.missedEventRdGrowth;
-    const step = (rd: number): number => Math.min(Math.sqrt(rd * rd + growth * growth), settings.decayRdCap);
+    const step = (rd: number): number =>
+      Math.min(Math.sqrt(rd * rd + growth * growth), settings.decayRdCap);
 
     const expectedFirst = step(aliceDecay[0]!.preRd);
     expect(aliceDecay[0]!.postRd).toBeCloseTo(expectedFirst, 9);
@@ -143,7 +164,9 @@ describe('replayRatings', () => {
     expect(aliceDecay[1]!.postRd).toBeCloseTo(expectedSecond, 9);
 
     // Decay is reflected in the pre-RD of alice's t4 set.
-    const aliceT4 = events.find((e) => e.playerId === 'alice' && e.tournamentId === 't4' && !e.isDecay)!;
+    const aliceT4 = events.find(
+      (e) => e.playerId === 'alice' && e.tournamentId === 't4' && !e.isDecay,
+    )!;
     expect(aliceT4.preRd).toBeCloseTo(expectedSecond, 9);
   });
 
@@ -268,7 +291,8 @@ describe('replayRatings', () => {
     const vol = decay[0]!.preVol;
     const legacyStep = (rd: number, missIndex: number): number =>
       Math.min(
-        Math.sqrt((rd / GLICKO2_SCALE) ** 2 + 20 * (1 + missIndex * 0.2) * vol * vol) * GLICKO2_SCALE,
+        Math.sqrt((rd / GLICKO2_SCALE) ** 2 + 20 * (1 + missIndex * 0.2) * vol * vol) *
+          GLICKO2_SCALE,
         settings.rdCap,
       );
     expect(decay[0]!.postRd).toBeCloseTo(legacyStep(decay[0]!.preRd, 0), 9);
@@ -276,7 +300,11 @@ describe('replayRatings', () => {
   });
 
   it('applies trailing decay through the latest tournament to the FINAL state (legacy bug fix)', () => {
-    const tournaments = [tournament('t1', '2025-01-01'), tournament('t2', '2025-02-01'), tournament('t3', '2025-03-01')];
+    const tournaments = [
+      tournament('t1', '2025-01-01'),
+      tournament('t2', '2025-02-01'),
+      tournament('t3', '2025-03-01'),
+    ];
     // Carol plays only t1, then goes dark for t2 and t3.
     const sets = [
       ...clubNight('t1', 'carol', 'c'),
@@ -395,7 +423,11 @@ describe('replayRatings', () => {
       const j = (i * 7919 + 13) % (i + 1);
       [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
     }
-    const permuted = replayRatings({ sets: shuffled, tournaments: [...tournaments].reverse(), settings });
+    const permuted = replayRatings({
+      sets: shuffled,
+      tournaments: [...tournaments].reverse(),
+      settings,
+    });
 
     expect(permuted.events).toEqual(baseline.events);
     for (const [playerId, state] of baseline.finalStates) {

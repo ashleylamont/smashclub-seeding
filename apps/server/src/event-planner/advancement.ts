@@ -25,8 +25,11 @@ export function winnersCount(poolSize: number): number {
 
 export function consolationQualifiers(finishers: readonly PoolFinisher[]): PoolFinisher[] {
   const counts = new Map<number, number>();
-  for (const finisher of finishers) counts.set(finisher.poolIndex, (counts.get(finisher.poolIndex) ?? 0) + 1);
-  return finishers.filter(finisher => finisher.place > winnersCount(counts.get(finisher.poolIndex)!));
+  for (const finisher of finishers)
+    counts.set(finisher.poolIndex, (counts.get(finisher.poolIndex) ?? 0) + 1);
+  return finishers.filter(
+    (finisher) => finisher.place > winnersCount(counts.get(finisher.poolIndex)!),
+  );
 }
 
 export interface ConsolationEntrant {
@@ -45,9 +48,9 @@ export interface ConsolationBracket {
   /** Next power of two at or above the entrant count. */
   bracketSize: number;
   /** Round one as Challonge's standard bracket will draw it. `b` null = bye. */
-  roundOne: Array<{ a: ConsolationEntrant; b: ConsolationEntrant | null }>;
+  roundOne: { a: ConsolationEntrant; b: ConsolationEntrant | null }[];
   /** Pairs that are a pool rematch anyway — only possible with a single pool. */
-  rematches: Array<{ a: ConsolationEntrant; b: ConsolationEntrant }>;
+  rematches: { a: ConsolationEntrant; b: ConsolationEntrant }[];
 }
 
 /**
@@ -99,7 +102,9 @@ export function buildConsolationBracket(finishers: readonly PoolFinisher[]): Con
   for (const qualifier of qualifiers) {
     const key = `${qualifier.poolIndex}:${qualifier.place}`;
     if (seen.has(key)) {
-      throw new Error(`Pool ${poolLabel(qualifier.poolIndex)} has two players in place ${qualifier.place}.`);
+      throw new Error(
+        `Pool ${poolLabel(qualifier.poolIndex)} has two players in place ${qualifier.place}.`,
+      );
     }
     seen.add(key);
   }
@@ -110,7 +115,7 @@ export function buildConsolationBracket(finishers: readonly PoolFinisher[]): Con
 
   // Slot i holds the qualifier whose provisional seed is seedOrder[i]; slots
   // whose seed is past the end of the field are byes.
-  const slots: Array<Seeded | null> = seedOrder.map((seed) =>
+  const slots: (Seeded | null)[] = seedOrder.map((seed) =>
     ordered[seed - 1] ? { finisher: ordered[seed - 1]!, provisionalSeed: seed } : null,
   );
   repairPairings(slots, seedOrder);
@@ -152,7 +157,7 @@ export function buildConsolationBracket(finishers: readonly PoolFinisher[]): Con
  * lowest slot indices, and byes never move — a bye is not a participant, so
  * moving one would mean handing Challonge a seed it has nobody for.
  */
-function repairPairings(slots: Array<Seeded | null>, seedOrder: readonly number[]): void {
+function repairPairings(slots: (Seeded | null)[], seedOrder: readonly number[]): void {
   const occupied = slots.map((slot, index) => (slot ? index : -1)).filter((index) => index !== -1);
   // Each pass applies the single best strictly-improving swap, so the total
   // cost falls monotonically; the bound is belt and braces.
@@ -163,7 +168,7 @@ function repairPairings(slots: Array<Seeded | null>, seedOrder: readonly number[
       for (const j of occupied) {
         if (j <= i) continue;
         // Swapping within a pairing changes who is drawn on top, nothing else.
-        if ((i >> 1) === (j >> 1)) continue;
+        if (i >> 1 === j >> 1) continue;
         const before = pairCost(slots, seedOrder, i) + pairCost(slots, seedOrder, j);
         swap(slots, i, j);
         const after = pairCost(slots, seedOrder, i) + pairCost(slots, seedOrder, j);
@@ -181,7 +186,7 @@ function repairPairings(slots: Array<Seeded | null>, seedOrder: readonly number[
 
 /** Cost of the pairing `index` belongs to, plus its occupants' displacement. */
 function pairCost(
-  slots: ReadonlyArray<Seeded | null>,
+  slots: readonly (Seeded | null)[],
   seedOrder: readonly number[],
   index: number,
 ): number {
@@ -231,11 +236,17 @@ function nextPowerOfTwo(value: number): number {
 }
 
 /** Upper half of each pool, rounded up, in pool then place order. */
-export function championshipQualifiers(finishers: readonly PoolFinisher[]): Array<PoolFinisher & { label: string }> {
+export function championshipQualifiers(
+  finishers: readonly PoolFinisher[],
+): (PoolFinisher & { label: string })[] {
   const counts = new Map<number, number>();
-  for (const finisher of finishers) counts.set(finisher.poolIndex, (counts.get(finisher.poolIndex) ?? 0) + 1);
+  for (const finisher of finishers)
+    counts.set(finisher.poolIndex, (counts.get(finisher.poolIndex) ?? 0) + 1);
   return finishers
     .filter((finisher) => finisher.place <= winnersCount(counts.get(finisher.poolIndex)!))
     .sort((a, b) => a.poolIndex - b.poolIndex || a.place - b.place)
-    .map((finisher) => ({ ...finisher, label: `${poolLabel(finisher.poolIndex)}${finisher.place}` }));
+    .map((finisher) => ({
+      ...finisher,
+      label: `${poolLabel(finisher.poolIndex)}${finisher.place}`,
+    }));
 }

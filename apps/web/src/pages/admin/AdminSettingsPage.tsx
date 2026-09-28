@@ -9,11 +9,11 @@ import { ModelComparison } from './ModelComparison';
  * bands) get their own controls below, because a bare number input cannot
  * express them.
  */
-const GROUPS: Array<{
+const GROUPS: {
   title: string;
   note?: string;
-  fields: Array<{ key: keyof GlickoSettings; label: string; hint?: string }>;
-}> = [
+  fields: { key: keyof GlickoSettings; label: string; hint?: string }[];
+}[] = [
   {
     title: 'Core Glicko-2',
     fields: [
@@ -175,7 +175,11 @@ export function AdminSettingsPage() {
      * setting it has no input for — including the calibrated league bands, which
      * would silently revert to the arbitrary shipped defaults on any save.
      */
-    const parsed: GlickoSettings = { ...settings.data.glicko, activeModel: model, leagueBands: bands };
+    const parsed: GlickoSettings = {
+      ...settings.data.glicko,
+      activeModel: model,
+      leagueBands: bands,
+    };
     for (const group of GROUPS) {
       for (const field of group.fields) {
         const raw = values[field.key];
@@ -211,15 +215,26 @@ export function AdminSettingsPage() {
           >
             {recompute.isPending ? 'Recomputing…' : 'Recompute now'}
           </button>
-          <button type="button" className="btn btn-primary" disabled={save.isPending} onClick={handleSave}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={save.isPending}
+            onClick={handleSave}
+          >
             {save.isPending ? 'Saving…' : 'Save settings'}
           </button>
         </span>
       </div>
-      <p className="banner banner-warning">Saving changed settings triggers a full recompute of all ratings.</p>
+      <p className="banner banner-warning">
+        Saving changed settings triggers a full recompute of all ratings.
+      </p>
       {formError && <p className="error-text">{formError}</p>}
       {save.isError && <p className="error-text">{save.error.message}</p>}
-      {save.isSuccess && <p className="banner banner-success">Saved (settings v{save.data.version}) — recompute queued.</p>}
+      {save.isSuccess && (
+        <p className="banner banner-success">
+          Saved (settings v{save.data.version}) — recompute queued.
+        </p>
+      )}
       {recompute.isError && <p className="error-text">{recompute.error.message}</p>}
       {recompute.isSuccess && <p className="banner banner-success">Recompute finished.</p>}
 
@@ -229,7 +244,8 @@ export function AdminSettingsPage() {
           <span>
             Authoritative ratings
             <span className="muted settings-hint">
-              Both models are fitted from the same history. This chooses which one the public site publishes.
+              Both models are fitted from the same history. This chooses which one the public site
+              publishes.
             </span>
           </span>
           <select
@@ -246,7 +262,8 @@ export function AdminSettingsPage() {
         </label>
         {modelChanged && (
           <p className="banner banner-warning">
-            Switching the model changes every member&apos;s published number. Compare the two below before saving.
+            Switching the model changes every member&apos;s published number. Compare the two below
+            before saving.
           </p>
         )}
       </section>
@@ -254,12 +271,14 @@ export function AdminSettingsPage() {
       <section className="section">
         <h3>
           Leagues{' '}
-          <span className="chip">{settings.data.glicko.leagueBandsCalibrated ? 'calibrated' : 'not yet calibrated'}</span>
+          <span className="chip">
+            {settings.data.glicko.leagueBandsCalibrated ? 'calibrated' : 'not yet calibrated'}
+          </span>
         </h3>
         <p className="muted">
-          Absolute thresholds on the club rating — the number the board ranks on — so a league label means the
-          same thing over time. The first recompute fits these to the club&apos;s distribution; after that they
-          only change here. The bottom band is the catch-all.
+          Absolute thresholds on the club rating — the number the board ranks on — so a league label
+          means the same thing over time. The first recompute fits these to the club&apos;s
+          distribution; after that they only change here. The bottom band is the catch-all.
         </p>
         {bands.map((band, index) => (
           <label key={index} className="settings-field">
@@ -268,7 +287,9 @@ export function AdminSettingsPage() {
               type="text"
               value={band.name}
               onChange={(event) =>
-                setBands((prev) => prev.map((b, i) => (i === index ? { ...b, name: event.target.value } : b)))
+                setBands((prev) =>
+                  prev.map((b, i) => (i === index ? { ...b, name: event.target.value } : b)),
+                )
               }
             />
             {index === bands.length - 1 ? (
@@ -281,7 +302,9 @@ export function AdminSettingsPage() {
                 value={band.minRating}
                 onChange={(event) =>
                   setBands((prev) =>
-                    prev.map((b, i) => (i === index ? { ...b, minRating: Number(event.target.value) } : b)),
+                    prev.map((b, i) =>
+                      i === index ? { ...b, minRating: Number(event.target.value) } : b,
+                    ),
                   )
                 }
               />

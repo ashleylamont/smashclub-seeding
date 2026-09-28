@@ -101,7 +101,10 @@ beforeEach(async () => {
     { id: 'lucas', canonical_name: 'Lucas', company: 'ATL' },
     { id: 'yoshi', canonical_name: 'Yoshi', company: 'ATL' },
   ]);
-  await registerTournamentSlugs(db, ALL.map((t) => t.slug));
+  await registerTournamentSlugs(
+    db,
+    ALL.map((t) => t.slug),
+  );
 });
 
 afterEach(async () => {
@@ -136,7 +139,10 @@ function caller() {
 
 type Recap = NonNullable<Awaited<ReturnType<ReturnType<typeof caller>['public']['recap']>>>;
 
-function factsOfKind<K extends RecapFactKind>(recap: Recap, kind: K): Array<Extract<RecapFact, { kind: K }>> {
+function factsOfKind<K extends RecapFactKind>(
+  recap: Recap,
+  kind: K,
+): Extract<RecapFact, { kind: K }>[] {
   return recap.facts
     .map((f) => f.fact as RecapFact)
     .filter((f): f is Extract<RecapFact, { kind: K }> => f.kind === kind);
@@ -147,7 +153,9 @@ describe('public.recap', () => {
     await sync(['march-main']);
     await db.update(sets).set({ resultStage: 'group' }).where(eq(sets.challongeMatchId, 11));
     const before = (await caller().public.recap({ slug: 'march-main' }))!;
-    await db.update(tournaments).set({ resultsMode: 'final_stage_only' })
+    await db
+      .update(tournaments)
+      .set({ resultsMode: 'final_stage_only' })
       .where(eq(tournaments.challongeSlug, 'march-main'));
 
     const view = (await caller().public.tournament({ slug: 'march-main' }))!;
@@ -195,7 +203,9 @@ describe('public.recap', () => {
   it('publishes the shortened public alias, not the canonical name', async () => {
     await sync(['march-main']);
     const recap = (await caller().public.recap({ slug: 'march-main' }))!;
-    const names = factsOfKind(recap, 'podium').flatMap((p) => p.places.map((place) => place.player.name));
+    const names = factsOfKind(recap, 'podium').flatMap((p) =>
+      p.places.map((place) => place.player.name),
+    );
     expect(names).toContain('Fox M');
     expect(names).not.toContain('Fox McCloud');
   });

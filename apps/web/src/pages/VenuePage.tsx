@@ -70,10 +70,7 @@ const IDLE_ROTATE_MS = 7000;
 
 function Venue({ data }: { data: TournamentData }) {
   const now = useNow();
-  const byId = useMemo(
-    () => new Map(data.participants.map((p) => [p.id, p])),
-    [data.participants],
-  );
+  const byId = useMemo(() => new Map(data.participants.map((p) => [p.id, p])), [data.participants]);
 
   const sideOf = useCallback(
     (set: TournamentSet, side: 1 | 2): TournamentParticipant | null => {
@@ -86,7 +83,14 @@ function Venue({ data }: { data: TournamentData }) {
   const completed = useMemo(
     () =>
       data.sets
-        .filter((s) => s.state === 'complete' && s.winner != null && s.completedAt != null && !s.excludedFromRatings && !scoresIndicateUnplayed(s.scoresCsv))
+        .filter(
+          (s) =>
+            s.state === 'complete' &&
+            s.winner != null &&
+            s.completedAt != null &&
+            !s.excludedFromRatings &&
+            !scoresIndicateUnplayed(s.scoresCsv),
+        )
         .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? '')),
     [data.sets],
   );
@@ -104,15 +108,22 @@ function Venue({ data }: { data: TournamentData }) {
    * bracket rather than a flag, so it needs no admin action on the night.
    */
   const finalRound = useMemo(
-    () => data.sets.filter((s) => s.resultStage === 'final').reduce((max, s) => Math.max(max, s.round ?? 0), 0),
+    () =>
+      data.sets
+        .filter((s) => s.resultStage === 'final')
+        .reduce((max, s) => Math.max(max, s.round ?? 0), 0),
     [data.sets],
   );
   const remaining = useMemo(() => data.sets.filter((s) => s.state !== 'complete'), [data.sets]);
   const inFinals =
-    finalRound > 0 && remaining.length > 0 && remaining.every((s) => s.resultStage === 'final' && (s.round ?? 0) === finalRound);
+    finalRound > 0 &&
+    remaining.length > 0 &&
+    remaining.every((s) => s.resultStage === 'final' && (s.round ?? 0) === finalRound);
 
   const setsDone = completed.length;
-  const setsTotal = data.sets.filter(s => !s.excludedFromRatings && !scoresIndicateUnplayed(s.scoresCsv)).length;
+  const setsTotal = data.sets.filter(
+    (s) => !s.excludedFromRatings && !scoresIndicateUnplayed(s.scoresCsv),
+  ).length;
   /*
    * Over, not merely finalised. A bracket the room abandoned still reports
    * `underway` upstream forever, and a projector announcing LIVE over a night
@@ -145,11 +156,7 @@ function Venue({ data }: { data: TournamentData }) {
         </div>
       </header>
 
-      {inFinals && (
-        <p className="venue-finals-banner">
-          Final round
-        </p>
-      )}
+      {inFinals && <p className="venue-finals-banner">Final round</p>}
 
       <div className="venue-body">
         <section className="venue-panel venue-now">
@@ -164,8 +171,12 @@ function Venue({ data }: { data: TournamentData }) {
                     {set.resultStage === 'group' ? 'Pool' : 'Bracket'}
                     {' · '}
                     {set.resultStage === 'group'
-                      ? set.round != null ? `Round ${set.round}` : '—'
-                      : set.round != null ? roundLabel(set.round) : '—'}
+                      ? set.round != null
+                        ? `Round ${set.round}`
+                        : '—'
+                      : set.round != null
+                        ? roundLabel(set.round)
+                        : '—'}
                   </span>
                   <span className="venue-match-players">
                     <VenuePlayer participant={sideOf(set, 1)} />
@@ -190,8 +201,16 @@ function Venue({ data }: { data: TournamentData }) {
                 return (
                   <li key={set.id} className="venue-result">
                     <span className="venue-result-winner">{winner?.name ?? 'TBD'}</span>
-                    <span className="venue-result-score">{orientScore(set.scoresCsv, set.winner) ?? ''}</span>
-                    <span className="venue-result-stage">{set.resultStage === 'group' ? 'Pool' : set.resultStage === 'final' ? 'Bracket' : '—'}</span>
+                    <span className="venue-result-score">
+                      {orientScore(set.scoresCsv, set.winner) ?? ''}
+                    </span>
+                    <span className="venue-result-stage">
+                      {set.resultStage === 'group'
+                        ? 'Pool'
+                        : set.resultStage === 'final'
+                          ? 'Bracket'
+                          : '—'}
+                    </span>
                     <span className="venue-result-loser">{loser?.name ?? 'TBD'}</span>
                   </li>
                 );
@@ -241,7 +260,7 @@ function IdlePanel({
   byId: ReadonlyMap<string, TournamentParticipant>;
 }) {
   const cards = useMemo(() => {
-    const items: Array<{ label: string; value: string }> = [];
+    const items: { label: string; value: string }[] = [];
 
     const wins = new Map<string, number>();
     for (const set of completed) {
@@ -250,7 +269,10 @@ function IdlePanel({
     }
     const best = [...wins.entries()].sort((a, b) => b[1] - a[1])[0];
     if (best) {
-      items.push({ label: 'Most sets won tonight', value: `${byId.get(best[0])?.name ?? '—'} — ${best[1]}` });
+      items.push({
+        label: 'Most sets won tonight',
+        value: `${byId.get(best[0])?.name ?? '—'} — ${best[1]}`,
+      });
     }
 
     // Sets decided by a single game. Read off the oriented score so a walkover
@@ -348,17 +370,25 @@ function Takeover({ announcement }: { announcement: Announcement }) {
   return (
     // aria-live so the announcement is not purely visual, even though the
     // audience is mostly a room looking at a projector.
-    <div className={`venue-takeover${upset ? ' venue-takeover-upset' : ''}`} role="status" aria-live="polite">
+    <div
+      className={`venue-takeover${upset ? ' venue-takeover-upset' : ''}`}
+      role="status"
+      aria-live="polite"
+    >
       <div className="venue-takeover-inner" key={set.id}>
         <p className="venue-takeover-kind">{upset ? 'UPSET' : 'WINNER'}</p>
         {/* The space before the company code is load-bearing: without it the
             accessible name runs the two together ("Young LATL"). */}
         <p className="venue-takeover-name">
           {winner?.name ?? 'TBD'}
-          {winner?.companyCode && <span className="venue-takeover-company"> {winner.companyCode}</span>}
+          {winner?.companyCode && (
+            <span className="venue-takeover-company"> {winner.companyCode}</span>
+          )}
         </p>
         <p className="venue-takeover-detail">
-          <span className="venue-takeover-stage">{set.resultStage === 'group' ? 'Pool' : set.resultStage === 'final' ? 'Bracket' : '—'}</span>
+          <span className="venue-takeover-stage">
+            {set.resultStage === 'group' ? 'Pool' : set.resultStage === 'final' ? 'Bracket' : '—'}
+          </span>
           {score && <span className="venue-takeover-score">{score}</span>}
           <span>
             over {loser?.name ?? 'TBD'}
@@ -380,7 +410,9 @@ function VenuePlayer({ participant }: { participant: TournamentParticipant | nul
     <span className="venue-player">
       <span className="venue-player-name">{participant?.name ?? 'TBD'}</span>
       <span className="venue-player-meta">
-        {participant?.companyCode && <span className="venue-player-company">{participant.companyCode}</span>}
+        {participant?.companyCode && (
+          <span className="venue-player-company">{participant.companyCode}</span>
+        )}
         {participant?.challongeSeed != null && (
           <span className="venue-player-seed">seed {participant.challongeSeed}</span>
         )}
@@ -415,7 +447,11 @@ function FullscreenButton() {
   };
 
   return (
-    <button type="button" className="venue-footer-link venue-fullscreen" onClick={() => void toggle()}>
+    <button
+      type="button"
+      className="venue-footer-link venue-fullscreen"
+      onClick={() => void toggle()}
+    >
       {active ? 'Exit fullscreen' : 'Fullscreen'}
     </button>
   );

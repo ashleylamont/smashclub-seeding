@@ -1,9 +1,15 @@
 import { eq } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
 import { settings } from '@smashclub/db';
-import { defaultGlickoSettings, glickoSettingsSchema, type GlickoSettings } from '@smashclub/shared';
+import {
+  defaultGlickoSettings,
+  glickoSettingsSchema,
+  type GlickoSettings,
+} from '@smashclub/shared';
 
-export async function getGlickoSettings(db: Db): Promise<{ glicko: GlickoSettings; version: number }> {
+export async function getGlickoSettings(
+  db: Db,
+): Promise<{ glicko: GlickoSettings; version: number }> {
   const [row] = await db.select().from(settings).where(eq(settings.id, 1));
   if (!row) {
     await db

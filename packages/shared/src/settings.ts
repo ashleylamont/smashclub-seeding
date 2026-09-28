@@ -164,14 +164,12 @@ export const glickoSettingsSchema = z.object({
    */
   leagueBandBasis: z.enum(['skill', 'conservative', 'club']).default('skill'),
 
-  leagueBands: z
-    .array(z.object({ name: z.string(), minRating: z.number() }))
-    .default([
-      { name: '🏆 Champions', minRating: 1650 },
-      { name: '💼 Smashclub Full-Timers', minRating: 1525 },
-      { name: '🎓 Smashclub Grads', minRating: 1425 },
-      { name: '👶 Smashclub Interns', minRating: LEAGUE_CATCH_ALL },
-    ]),
+  leagueBands: z.array(z.object({ name: z.string(), minRating: z.number() })).default([
+    { name: '🏆 Champions', minRating: 1650 },
+    { name: '💼 Smashclub Full-Timers', minRating: 1525 },
+    { name: '🎓 Smashclub Grads', minRating: 1425 },
+    { name: '👶 Smashclub Interns', minRating: LEAGUE_CATCH_ALL },
+  ]),
 });
 
 export type GlickoSettings = z.output<typeof glickoSettingsSchema>;

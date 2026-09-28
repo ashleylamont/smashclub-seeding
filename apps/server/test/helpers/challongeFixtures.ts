@@ -26,7 +26,7 @@ export interface FixtureTournament {
   state?: string;
   startedAt?: string | null;
   completedAt?: string | null;
-  participants: Array<{ id: number; name: string; seed?: number; finalRank?: number | null }>;
+  participants: { id: number; name: string; seed?: number; finalRank?: number | null }[];
   matches: FixtureMatch[];
 }
 
@@ -57,7 +57,9 @@ export function apiPayloads(fixture: FixtureTournament): {
         url: fixture.slug,
         state: fixture.state ?? 'complete',
         started_at: fixture.startedAt ?? '2025-01-10T18:00:00.000+11:00',
-        completed_at: fixture.completedAt ?? (fixture.state === 'underway' ? null : '2025-01-10T21:00:00.000+11:00'),
+        completed_at:
+          fixture.completedAt ??
+          (fixture.state === 'underway' ? null : '2025-01-10T21:00:00.000+11:00'),
         updated_at: '2025-01-10T21:05:00.000+11:00',
         tournament_type: 'double elimination',
       },
@@ -181,8 +183,15 @@ export function fixtureClient(fixtures: FixtureTournament[]): ChallongeClient {
     if (!fixture) return new Response('not found', { status: 404 });
     const payloads = apiPayloads(fixture);
     const body =
-      match[2] === 'participants' ? payloads.participants : match[2] === 'matches' ? payloads.matches : payloads.tournament;
-    return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      match[2] === 'participants'
+        ? payloads.participants
+        : match[2] === 'matches'
+          ? payloads.matches
+          : payloads.tournament;
+    return new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
   };
   return new ChallongeClient({
     apiKey: 'test-key',

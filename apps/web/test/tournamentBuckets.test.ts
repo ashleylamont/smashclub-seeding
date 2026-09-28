@@ -39,7 +39,10 @@ describe('bucketFor', () => {
   });
 
   it('does NOT treat a stale awaiting_review bracket as live', () => {
-    const stale = item({ challongeState: 'awaiting_review', eventDate: '2024-06-28T00:00:00.000Z' });
+    const stale = item({
+      challongeState: 'awaiting_review',
+      eventDate: '2024-06-28T00:00:00.000Z',
+    });
     expect(bucketFor(stale, NOW)).toBe('completed');
   });
 

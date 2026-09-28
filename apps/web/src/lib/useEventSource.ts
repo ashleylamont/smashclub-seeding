@@ -7,7 +7,10 @@ const EVENT_TYPES = ['set_updated', 'sync_completed', 'recompute_completed'] as 
  * `/api/live/:tournamentId`). Pass `null` to disconnect. Reconnection is
  * handled natively by EventSource.
  */
-export function useEventSource(url: string | null, onEvent: (type: string, data: unknown) => void): void {
+export function useEventSource(
+  url: string | null,
+  onEvent: (type: string, data: unknown) => void,
+): void {
   const handlerRef = useRef(onEvent);
   useEffect(() => {
     handlerRef.current = onEvent;

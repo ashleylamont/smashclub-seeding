@@ -1,7 +1,15 @@
 import type { Db } from '@smashclub/db';
 import { tournaments } from '@smashclub/db';
-import { DEFAULT_COMPANY_TAXONOMY, normalizeTournamentId, type CompanyTaxonomy } from '@smashclub/engine';
-import { applyRegistryEntries, importCompanyTaxonomy, type RegistryImportResult } from '../registry/import';
+import {
+  DEFAULT_COMPANY_TAXONOMY,
+  normalizeTournamentId,
+  type CompanyTaxonomy,
+} from '@smashclub/engine';
+import {
+  applyRegistryEntries,
+  importCompanyTaxonomy,
+  type RegistryImportResult,
+} from '../registry/import';
 import type { RegistryPlayerInput } from '../registry/parse';
 
 /**

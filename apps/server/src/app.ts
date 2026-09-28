@@ -100,7 +100,12 @@ function toWebHeaders(request: FastifyRequest): Headers {
 function toWebRequest(request: FastifyRequest): Request {
   const url = `${request.protocol}://${request.headers.host ?? 'localhost'}${request.url}`;
   const init: RequestInit = { method: request.method, headers: toWebHeaders(request) };
-  if (request.method !== 'GET' && request.method !== 'HEAD' && request.body !== undefined && request.body !== null) {
+  if (
+    request.method !== 'GET' &&
+    request.method !== 'HEAD' &&
+    request.body !== undefined &&
+    request.body !== null
+  ) {
     init.body = typeof request.body === 'string' ? request.body : JSON.stringify(request.body);
   }
   return new Request(url, init);

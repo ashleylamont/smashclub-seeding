@@ -104,7 +104,10 @@ export function RatingsOverTime({ history, tournamentNames }: RatingsOverTimePro
     });
   }, []);
 
-  const nameById = useMemo(() => new Map(history.players.map((p) => [p.playerId, p.name])), [history.players]);
+  const nameById = useMemo(
+    () => new Map(history.players.map((p) => [p.playerId, p.name])),
+    [history.players],
+  );
 
   const searchResults = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -142,7 +145,7 @@ export function RatingsOverTime({ history, tournamentNames }: RatingsOverTimePro
           state.set(event.playerId, { rating: event.postRating, rd: event.postRd });
         }
         const name = tournamentNames.get(tournamentId) ?? `Event ${index + 1}`;
-        takeSnapshot(name.length > 24 ? name.slice(0, 21) + '…' : name, index);
+        takeSnapshot(name.length > 24 ? `${name.slice(0, 21)}…` : name, index);
         index += 1;
       }
     } else {
@@ -182,8 +185,8 @@ export function RatingsOverTime({ history, tournamentNames }: RatingsOverTimePro
     <section className="ratings-over-time section">
       <h2>Ratings over time</h2>
       <p className="muted chart-caption">
-        Compare up to {MAX_SERIES} players. Each keeps its colour and dash pattern while selected, so removing
-        one never recolours the rest.
+        Compare up to {MAX_SERIES} players. Each keeps its colour and dash pattern while selected,
+        so removing one never recolours the rest.
       </p>
 
       <div className="chart-controls">
@@ -200,7 +203,11 @@ export function RatingsOverTime({ history, tournamentNames }: RatingsOverTimePro
         </label>
         <label className="chart-control">
           <span className="control-label">Y-axis</span>
-          <select className="select" value={yMode} onChange={(e) => setYMode(e.target.value as YMode)}>
+          <select
+            className="select"
+            value={yMode}
+            onChange={(e) => setYMode(e.target.value as YMode)}
+          >
             <option value="rating">Skill estimate</option>
             {/* The seeding basis, not the board's — labelled as such so the
                 chart is not read as disagreeing with the rankings. */}
@@ -276,7 +283,10 @@ export function RatingsOverTime({ history, tournamentNames }: RatingsOverTimePro
         <p className="no-data">No players selected.</p>
       ) : (
         <ResponsiveContainer width="100%" height={380}>
-          <LineChart data={chartData} margin={{ top: 8, right: directLabels ? 96 : 16, bottom: 4, left: 0 }}>
+          <LineChart
+            data={chartData}
+            margin={{ top: 8, right: directLabels ? 96 : 16, bottom: 4, left: 0 }}
+          >
             <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
             <XAxis
               dataKey="label"
@@ -309,7 +319,9 @@ export function RatingsOverTime({ history, tournamentNames }: RatingsOverTimePro
                     {sorted.map((entry) => (
                       <p key={entry.dataKey as string} className="tooltip-row">
                         <span className="tooltip-swatch" style={{ background: entry.color }} />
-                        <span className="tooltip-name">{nameById.get(entry.dataKey as string) ?? '?'}</span>
+                        <span className="tooltip-name">
+                          {nameById.get(entry.dataKey as string) ?? '?'}
+                        </span>
                         <span className="num">{(entry.value as number).toFixed(0)}</span>
                       </p>
                     ))}
@@ -334,7 +346,11 @@ export function RatingsOverTime({ history, tournamentNames }: RatingsOverTimePro
                 {directLabels && (
                   <LabelList
                     dataKey={playerId}
-                    content={(props: { index?: number; x?: number | string; y?: number | string }) => {
+                    content={(props: {
+                      index?: number;
+                      x?: number | string;
+                      y?: number | string;
+                    }) => {
                       if (props.index !== lastIndexOf.get(playerId)) return null;
                       return (
                         <text

@@ -16,7 +16,7 @@ export function Layout() {
   const role = currentUser.data?.role;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const pathname = useRouterState({ select: state => state.location.pathname });
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const standaloneDisplay = /^\/(live|overlay)\/[^/]+\/?$/.test(pathname);
   const nav = useRef<HTMLElement>(null);
 
@@ -34,7 +34,10 @@ export function Layout() {
     const element = nav.current;
     if (!element) return;
     const publish = () => {
-      document.documentElement.style.setProperty('--nav-h', `${Math.round(element.offsetHeight)}px`);
+      document.documentElement.style.setProperty(
+        '--nav-h',
+        `${Math.round(element.offsetHeight)}px`,
+      );
     };
     publish();
     const observer = new ResizeObserver(publish);
@@ -61,7 +64,12 @@ export function Layout() {
   const userName = session?.user.name ?? '';
   const userImage = session?.user.image ?? null;
 
-  if (standaloneDisplay) return <main id="main"><Outlet /></main>;
+  if (standaloneDisplay)
+    return (
+      <main id="main">
+        <Outlet />
+      </main>
+    );
 
   return (
     <div className="app-shell">
@@ -77,13 +85,24 @@ export function Layout() {
           <NemesisMark /> Smash Club
         </Link>
         <div className="nav-links">
-          <Link to="/" className="nav-link" activeProps={{ className: 'nav-link active' }} activeOptions={{ exact: true }}>
+          <Link
+            to="/"
+            className="nav-link"
+            activeProps={{ className: 'nav-link active' }}
+            activeOptions={{ exact: true }}
+          >
             Home
           </Link>
-          <Link to="/tournaments" className="nav-link" activeProps={{ className: 'nav-link active' }}>
+          <Link
+            to="/tournaments"
+            className="nav-link"
+            activeProps={{ className: 'nav-link active' }}
+          >
             Tournaments
           </Link>
-          <Link to="/play" className="nav-link" activeProps={{ className: 'nav-link active' }}>Event night</Link>
+          <Link to="/play" className="nav-link" activeProps={{ className: 'nav-link active' }}>
+            Event night
+          </Link>
           {role === 'admin' && (
             <Link to="/admin" className="nav-link" activeProps={{ className: 'nav-link active' }}>
               Admin
@@ -130,7 +149,12 @@ export function Layout() {
         <span className="build-tag">
           build{' '}
           {BUILD_COMMIT_URL ? (
-            <a href={BUILD_COMMIT_URL} target="_blank" rel="noreferrer" title={BUILD_SHA ?? undefined}>
+            <a
+              href={BUILD_COMMIT_URL}
+              target="_blank"
+              rel="noreferrer"
+              title={BUILD_SHA ?? undefined}
+            >
               {BUILD_LABEL}
             </a>
           ) : (

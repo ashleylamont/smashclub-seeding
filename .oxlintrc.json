@@ -1,0 +1,188 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error"
+  },
+  "plugins": ["eslint", "typescript", "unicorn", "oxc", "import", "react", "vitest", "jsx-a11y"],
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "unicorn/no-array-sort": "off",
+    "unicorn/no-array-reverse": "off",
+    "unicorn/consistent-function-scoping": "off",
+    "import/no-unassigned-import": "off",
+    "eqeqeq": ["error", "always", { "null": "ignore" }],
+    "no-var": "error",
+    "prefer-const": "error",
+    "object-shorthand": "error",
+    "no-duplicate-imports": ["error", { "allowSeparateTypeImports": true }],
+    "no-implicit-coercion": "error",
+    "prefer-template": "error",
+    "typescript/array-type": "error",
+    "typescript/consistent-type-imports": "error",
+    "unicorn/prefer-array-find": "error",
+    "eslint/no-shadow": "off",
+    "eslint/no-underscore-dangle": "off",
+    "vitest/require-mock-type-parameters": "off",
+    "vitest/valid-expect": "off",
+    "jsx-a11y/prefer-tag-over-role": "off",
+    "jsx-a11y/no-autofocus": "off",
+    "jsx-a11y/no-noninteractive-tabindex": "off",
+    "react/no-unstable-nested-components": ["error", { "allowAsProps": true }],
+    "react/exhaustive-effect-dependencies": "off",
+    "react/exhaustive-deps": "error",
+    "import/no-cycle": "error",
+    "import/first": "error",
+    "import/no-duplicates": "error",
+    "max-lines": ["error", { "max": 600, "skipBlankLines": true, "skipComments": true }],
+    "max-lines-per-function": [
+      "error",
+      { "max": 300, "skipBlankLines": true, "skipComments": true }
+    ],
+    "max-depth": ["error", { "max": 5 }],
+    "complexity": ["error", { "max": 50 }]
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
+      "rules": {
+        "max-lines": ["error", { "max": 1000, "skipBlankLines": true, "skipComments": true }],
+        "max-lines-per-function": [
+          "error",
+          { "max": 800, "skipBlankLines": true, "skipComments": true }
+        ],
+        "complexity": "off"
+      }
+    },
+    {
+      "files": ["apps/server/test/event-operations.test.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 1100, "skipBlankLines": true, "skipComments": true }]
+      }
+    },
+    {
+      "files": ["packages/shared/**/*.{ts,tsx}"],
+      "rules": {
+        "no-restricted-imports": ["error", { "patterns": ["@smashclub/*"] }]
+      }
+    },
+    {
+      "files": ["packages/engine/**/*.{ts,tsx}", "packages/db/**/*.{ts,tsx}"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              "@smashclub/engine",
+              "@smashclub/db",
+              "@smashclub/server",
+              "@smashclub/web"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["apps/web/**/*.{ts,tsx}"],
+      "rules": {
+        "no-restricted-imports": ["error", { "patterns": ["@smashclub/db", "@smashclub/engine"] }]
+      }
+    },
+    {
+      "files": ["apps/web/src/**/*.{tsx,jsx}"],
+      "rules": {
+        "react/only-export-components": ["error", { "allowConstantExport": true }]
+      }
+    },
+    {
+      "files": ["apps/server/**/*.{ts,tsx}"],
+      "rules": {
+        "no-restricted-imports": ["error", { "patterns": ["@smashclub/web"] }]
+      }
+    },
+    {
+      "files": ["apps/server/src/event-operations/service.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 900, "skipBlankLines": true, "skipComments": true }],
+        "complexity": ["error", { "max": 100 }]
+      }
+    },
+    {
+      "files": ["apps/server/src/event-operations/attendance.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 850, "skipBlankLines": true, "skipComments": true }],
+        "complexity": ["error", { "max": 75 }]
+      }
+    },
+    {
+      "files": ["packages/engine/src/recap.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 1250, "skipBlankLines": true, "skipComments": true }]
+      }
+    },
+    {
+      "files": ["apps/server/src/event-planner/plans.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 1300, "skipBlankLines": true, "skipComments": true }]
+      }
+    },
+    {
+      "files": ["apps/server/src/trpc/routers/admin.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 700, "skipBlankLines": true, "skipComments": true }]
+      }
+    },
+    {
+      "files": ["apps/web/src/pages/admin/AdminEventOperationsPage.tsx"],
+      "rules": {
+        "max-lines": ["error", { "max": 1200, "skipBlankLines": true, "skipComments": true }],
+        "max-lines-per-function": [
+          "error",
+          { "max": 700, "skipBlankLines": true, "skipComments": true }
+        ],
+        "complexity": ["error", { "max": 60 }]
+      }
+    },
+    {
+      "files": [
+        "apps/web/src/pages/admin/StationPoolControls.tsx",
+        "apps/web/src/components/Leaderboard.tsx",
+        "apps/web/src/pages/GuestEventPage.tsx"
+      ],
+      "rules": {
+        "max-lines-per-function": [
+          "error",
+          { "max": 350, "skipBlankLines": true, "skipComments": true }
+        ]
+      }
+    },
+    {
+      "files": ["apps/web/src/pages/EventLivePage.tsx", "apps/web/src/pages/PlayerPage.tsx"],
+      "rules": {
+        "max-lines-per-function": [
+          "error",
+          { "max": 480, "skipBlankLines": true, "skipComments": true }
+        ]
+      }
+    },
+    {
+      "files": ["apps/web/src/pages/EventLivePage.tsx"],
+      "rules": {
+        "complexity": ["error", { "max": 90 }]
+      }
+    },
+    {
+      "files": ["apps/web/src/pages/GuestEventPage.tsx"],
+      "rules": {
+        "complexity": ["error", { "max": 65 }]
+      }
+    },
+    {
+      "files": ["packages/engine/src/challonge/extract.ts"],
+      "rules": {
+        "complexity": ["error", { "max": 60 }]
+      }
+    }
+  ],
+  "ignorePatterns": ["**/dist/**", "**/node_modules/**", "legacy/**"]
+}

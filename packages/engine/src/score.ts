@@ -159,17 +159,22 @@ export function computePlayerScore(
   const overlapConfidence = Math.max(mainExperienceFactor, bridgeFactor, settings.anchorFloor);
   const sampleConfidence =
     rookieRatio > 0
-      ? Math.max(settings.anchorFloor, Math.min(baseSampleConfidence, overlapConfidence + 0.25 * (1 - rookieRatio)))
+      ? Math.max(
+          settings.anchorFloor,
+          Math.min(baseSampleConfidence, overlapConfidence + 0.25 * (1 - rookieRatio)),
+        )
       : baseSampleConfidence;
 
   const effectiveRating =
-    settings.initialRating + (state.rating - settings.initialRating) * anchorFactor * sampleConfidence;
+    settings.initialRating +
+    (state.rating - settings.initialRating) * anchorFactor * sampleConfidence;
   const conservativeRating = effectiveRating - 2 * effectiveRd;
 
   const activityPenalty = activityPenaltyFor(state.missedEvents, settings);
   const nextMissPenalty = activityPenaltyFor(state.missedEvents + 1, settings) - activityPenalty;
   const isProvisional =
-    state.eventKeys.size < settings.provisionalEventCount || state.matchCount < settings.provisionalMatchCount;
+    state.eventKeys.size < settings.provisionalEventCount ||
+    state.matchCount < settings.provisionalMatchCount;
 
   return {
     playerId: state.playerId,
@@ -214,7 +219,7 @@ export function computePlayerScore(
  */
 export function leagueForRating(
   rating: number,
-  bands: ReadonlyArray<{ name: string; minRating: number }>,
+  bands: readonly { name: string; minRating: number }[],
 ): string {
   const ordered = [...bands].sort((a, b) => b.minRating - a.minRating);
   for (const band of ordered) {
@@ -234,12 +239,18 @@ export function leagueForRating(
  */
 export function calibrateLeagueBands(
   ratings: readonly number[],
-  names: readonly string[] = ['🏆 Champions', '💼 Smashclub Full-Timers', '🎓 Smashclub Grads', '👶 Smashclub Interns'],
-): Array<{ name: string; minRating: number }> {
+  names: readonly string[] = [
+    '🏆 Champions',
+    '💼 Smashclub Full-Timers',
+    '🎓 Smashclub Grads',
+    '👶 Smashclub Interns',
+  ],
+): { name: string; minRating: number }[] {
   if (ratings.length === 0) {
     return names.map((name, index) => ({
       name,
-      minRating: index === names.length - 1 ? LEAGUE_CATCH_ALL : 1500 + (names.length - 1 - index) * 100,
+      minRating:
+        index === names.length - 1 ? LEAGUE_CATCH_ALL : 1500 + (names.length - 1 - index) * 100,
     }));
   }
   const sorted = [...ratings].sort((a, b) => b - a);
@@ -268,7 +279,9 @@ export function computeLeaderboard(
   finalStates: ReadonlyMap<string, PlayerFinalState>,
   settings: GlickoSettings,
 ): LeaderboardRow[] {
-  const scores = [...finalStates.values()].map((state) => computePlayerScore(state, finalStates, settings));
+  const scores = [...finalStates.values()].map((state) =>
+    computePlayerScore(state, finalStates, settings),
+  );
   return rankScores(scores, settings);
 }
 
@@ -276,7 +289,10 @@ export function computeLeaderboard(
  * Rank an already-computed set of scores. Shared with the WHR model so both
  * models order the board the same way.
  */
-export function rankScores(scores: readonly PlayerScore[], settings: GlickoSettings): LeaderboardRow[] {
+export function rankScores(
+  scores: readonly PlayerScore[],
+  settings: GlickoSettings,
+): LeaderboardRow[] {
   return boardOrder(scores).map((score, index) => ({
     ...score,
     rank: index + 1,

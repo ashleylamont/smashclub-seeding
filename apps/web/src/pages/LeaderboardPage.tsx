@@ -115,8 +115,8 @@ export function LeaderboardPage() {
       <div className="page">
         <p className="error-text">Failed to load rankings: {leaderboard.error.message}</p>
         <p className="muted">
-          The board is served by the club's own API — if this keeps happening the server is probably down rather
-          than your connection.{' '}
+          The board is served by the club's own API — if this keeps happening the server is probably
+          down rather than your connection.{' '}
           <button type="button" className="link-button" onClick={() => void leaderboard.refetch()}>
             Try again
           </button>
@@ -150,7 +150,9 @@ export function LeaderboardPage() {
     if (rows.length === 0) return null;
     const rated = rows.filter((r) => r.matchCount > 0);
     const sets = rated.reduce((sum, r) => sum + r.matchCount, 0) / 2;
-    const median = [...rated].sort((a, b) => a.clubRating - b.clubRating)[Math.floor(rated.length / 2)];
+    const median = [...rated].sort((a, b) => a.clubRating - b.clubRating)[
+      Math.floor(rated.length / 2)
+    ];
     const climber = [...rows]
       .filter((r) => r.rankDelta !== null && r.rankDelta > 0)
       .sort((a, b) => (b.rankDelta ?? 0) - (a.rankDelta ?? 0))[0];
@@ -177,8 +179,8 @@ export function LeaderboardPage() {
           <p className="hero-eyebrow">{coverage}</p>
           <h1 className="hero-title">Rankings</h1>
           <p className="hero-sub muted">
-            Ranked on your skill estimate, less a penalty for missed club nights. {policyLine} The smaller
-            figure is the estimate and its ± band — play more and the band narrows.
+            Ranked on your skill estimate, less a penalty for missed club nights. {policyLine} The
+            smaller figure is the estimate and its ± band — play more and the band narrows.
           </p>
         </div>
 
@@ -194,7 +196,9 @@ export function LeaderboardPage() {
             </div>
             <div className="stat">
               <dt>Median rating</dt>
-              <dd className="num">{summary.median ? Math.round(summary.median.clubRating) : '—'}</dd>
+              <dd className="num">
+                {summary.median ? Math.round(summary.median.clubRating) : '—'}
+              </dd>
             </div>
             {summary.climber && (
               <div className="stat stat-climber">
@@ -210,7 +214,10 @@ export function LeaderboardPage() {
                 <dt>Longest streak</dt>
                 <dd>
                   <span className="stat-climber-name">{summary.streak.name}</span>
-                  <span className="stat-streak-count num"> {summary.streak.attendanceStreak} in a row</span>
+                  <span className="stat-streak-count num">
+                    {' '}
+                    {summary.streak.attendanceStreak} in a row
+                  </span>
                 </dd>
               </div>
             )}
@@ -218,16 +225,19 @@ export function LeaderboardPage() {
         )}
 
         <p className="hero-meta muted">
-          {computedAt ? `Updated ${timeAgo(computedAt)}` : 'No recompute yet'} · model <code>{model}</code>
+          {computedAt ? `Updated ${timeAgo(computedAt)}` : 'No recompute yet'} · model{' '}
+          <code>{model}</code>
           <InfoTip label="Rating model">
-            Which rating system produced these numbers. Every recompute replays the club's whole set history
-            through it, so ratings are derived from the results rather than adjusted after them — and switching
-            model re-derives the entire board.
+            Which rating system produced these numbers. Every recompute replays the club's whole set
+            history through it, so ratings are derived from the results rather than adjusted after
+            them — and switching model re-derives the entire board.
           </InfoTip>
           {/* Says so here as well as on the control, because the stats above
               count this field and would otherwise look simply wrong to anyone
               who knows how many people are in the club. */}
-          {hideInactive && board.inactiveCount > 0 && ` · ${board.inactiveCount} inactive not counted`}
+          {hideInactive &&
+            board.inactiveCount > 0 &&
+            ` · ${board.inactiveCount} inactive not counted`}
         </p>
       </header>
 
@@ -235,8 +245,8 @@ export function LeaderboardPage() {
         <div className="empty-state">
           <h2>Nothing ranked yet</h2>
           <p className="muted">
-            Register a Challonge tournament in the admin area and sync it — ratings appear here once the first
-            recompute finishes.
+            Register a Challonge tournament in the admin area and sync it — ratings appear here once
+            the first recompute finishes.
           </p>
         </div>
       ) : (

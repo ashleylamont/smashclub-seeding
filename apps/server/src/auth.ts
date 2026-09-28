@@ -15,10 +15,16 @@ export type Auth = ReturnType<typeof createAuth>;
 export function createAuth(db: Db, env: Env, options: { enableCredentials?: boolean } = {}) {
   const socialProviders: Record<string, { clientId: string; clientSecret: string }> = {};
   if (env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET) {
-    socialProviders.discord = { clientId: env.DISCORD_CLIENT_ID, clientSecret: env.DISCORD_CLIENT_SECRET };
+    socialProviders.discord = {
+      clientId: env.DISCORD_CLIENT_ID,
+      clientSecret: env.DISCORD_CLIENT_SECRET,
+    };
   }
   if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
-    socialProviders.google = { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET };
+    socialProviders.google = {
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+    };
   }
 
   return betterAuth({
@@ -75,7 +81,10 @@ function adminEmails(env: Env): string[] {
  * `emailVerified`), and an unverified address is not proof that the person
  * signing in controls the mailbox the club allowlisted.
  */
-function isAdminIdentity(account: { email?: string | null; emailVerified?: boolean | null }, env: Env): boolean {
+function isAdminIdentity(
+  account: { email?: string | null; emailVerified?: boolean | null },
+  env: Env,
+): boolean {
   if (!account.email || account.emailVerified !== true) return false;
   return adminEmails(env).includes(account.email.toLowerCase());
 }
@@ -101,22 +110,37 @@ export async function getSessionUser(
 ): Promise<SessionUser | null> {
   const sessionData = await auth.api.getSession({ headers });
   if (!sessionData?.user) return null;
-  const [current] = await db.select({
-    id: user.id, email: user.email, name: user.name,
-    emailVerified: user.emailVerified, role: user.role,
-  }).from(user).where(eq(user.id, sessionData.user.id));
+  const [current] = await db
+    .select({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      emailVerified: user.emailVerified,
+      role: user.role,
+    })
+    .from(user)
+    .where(eq(user.id, sessionData.user.id));
   if (!current) return null;
 
   if (current.role !== 'admin' && isAdminIdentity(current, env)) {
-    const [existingAdmin] = await db.select({ id: user.id }).from(user)
-      .where(and(eq(user.role, 'admin'), eq(user.emailVerified, true))).limit(1);
+    const [existingAdmin] = await db
+      .select({ id: user.id })
+      .from(user)
+      .where(and(eq(user.role, 'admin'), eq(user.emailVerified, true)))
+      .limit(1);
     if (!existingAdmin) {
-      const [promoted] = await db.update(user).set({ role: 'admin', updatedAt: new Date() })
+      const [promoted] = await db
+        .update(user)
+        .set({ role: 'admin', updatedAt: new Date() })
         .where(and(eq(user.id, current.id), eq(user.role, 'user'), eq(user.emailVerified, true)))
         .returning({ id: user.id });
       if (promoted) current.role = 'admin';
     }
   }
-  return { id: current.id, email: current.email, name: current.name,
-    role: current.role === 'admin' && current.emailVerified ? 'admin' : 'user' };
+  return {
+    id: current.id,
+    email: current.email,
+    name: current.name,
+    role: current.role === 'admin' && current.emailVerified ? 'admin' : 'user',
+  };
 }

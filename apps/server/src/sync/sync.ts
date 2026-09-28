@@ -51,7 +51,8 @@ export async function syncTournament(
 ): Promise<SyncResult> {
   const [tournament] = await db.select().from(tournaments).where(eq(tournaments.id, tournamentId));
   if (!tournament) throw new Error(`Unknown tournament ${tournamentId}`);
-  if (tournament.provider === 'native') throw new Error('Nemesis results cannot be refreshed from Challonge.');
+  if (tournament.provider === 'native')
+    throw new Error('Nemesis results cannot be refreshed from Challonge.');
 
   const [job] = await db
     .insert(syncJobs)
@@ -59,7 +60,10 @@ export async function syncTournament(
     .returning({ id: syncJobs.id });
 
   try {
-    await db.update(tournaments).set({ syncState: 'syncing', updatedAt: new Date() }).where(eq(tournaments.id, tournamentId));
+    await db
+      .update(tournaments)
+      .set({ syncState: 'syncing', updatedAt: new Date() })
+      .where(eq(tournaments.id, tournamentId));
 
     const bundle =
       options.source === 'api'
@@ -68,8 +72,11 @@ export async function syncTournament(
 
     const eventDate = tournament.eventDateManual
       ? tournament.eventDate
-      : parseDate(bundle.tournament.startedAt ?? bundle.tournament.completedAt ?? bundle.tournament.updatedAt) ??
-        tournament.eventDate;
+      : (parseDate(
+          bundle.tournament.startedAt ??
+            bundle.tournament.completedAt ??
+            bundle.tournament.updatedAt,
+        ) ?? tournament.eventDate);
 
     await db
       .update(tournaments)
@@ -103,7 +110,10 @@ export async function syncTournament(
           finalRank: participant.finalRank,
         })
         .onConflictDoUpdate({
-          target: [tournamentParticipants.tournamentId, tournamentParticipants.challongeParticipantId],
+          target: [
+            tournamentParticipants.tournamentId,
+            tournamentParticipants.challongeParticipantId,
+          ],
           set: {
             rawName: participant.displayName,
             challongeSeed: participant.seed,
@@ -124,7 +134,9 @@ export async function syncTournament(
       })
       .from(tournamentParticipants)
       .where(eq(tournamentParticipants.tournamentId, tournamentId));
-    const participantIdByChallongeId = new Map(participantRows.map((row) => [row.challongeParticipantId, row.id]));
+    const participantIdByChallongeId = new Map(
+      participantRows.map((row) => [row.challongeParticipantId, row.id]),
+    );
     if (participantRows.length !== beforeCount) {
       // Roster changed: any draft seeding run no longer reflects reality.
       await markDraftRunsStale(db, tournamentId);
@@ -171,7 +183,9 @@ export async function syncTournament(
           .set({
             ...values,
             // Respect an admin's manual exclusion override.
-            excludedFromRatings: current.exclusionManual ? current.excludedFromRatings : values.excludedFromRatings,
+            excludedFromRatings: current.exclusionManual
+              ? current.excludedFromRatings
+              : values.excludedFromRatings,
             exclusionManual: current.exclusionManual,
             updatedAt: new Date(),
           })
@@ -218,7 +232,13 @@ export async function syncTournament(
     const liveUntil = bundle.tournament.state === 'complete' ? null : tournament.liveUntil;
     await db
       .update(tournaments)
-      .set({ syncState, liveUntil, lastSyncedAt: new Date(), syncError: null, updatedAt: new Date() })
+      .set({
+        syncState,
+        liveUntil,
+        lastSyncedAt: new Date(),
+        syncError: null,
+        updatedAt: new Date(),
+      })
       .where(eq(tournaments.id, tournamentId));
 
     const result: SyncResult = {
@@ -231,7 +251,11 @@ export async function syncTournament(
     };
     await db
       .update(syncJobs)
-      .set({ status: 'complete', finishedAt: new Date(), stats: result as unknown as Record<string, unknown> })
+      .set({
+        status: 'complete',
+        finishedAt: new Date(),
+        stats: result as unknown as Record<string, unknown>,
+      })
       .where(eq(syncJobs.id, job!.id));
     if (setsChanged > 0) {
       liveBus.publish({ type: 'set_updated', tournamentId, payload: { setsChanged } });
@@ -270,8 +294,10 @@ function buildSetValues(
     suggestedPlayOrder: match.suggestedPlayOrder,
     identifier: match.identifier,
     state: match.state,
-    p1ParticipantId: match.player1Id !== null ? (participantIdByChallongeId.get(match.player1Id) ?? null) : null,
-    p2ParticipantId: match.player2Id !== null ? (participantIdByChallongeId.get(match.player2Id) ?? null) : null,
+    p1ParticipantId:
+      match.player1Id !== null ? (participantIdByChallongeId.get(match.player1Id) ?? null) : null,
+    p2ParticipantId:
+      match.player2Id !== null ? (participantIdByChallongeId.get(match.player2Id) ?? null) : null,
     winner,
     scoresCsv: match.scoresCsv,
     excludedFromRatings: scoresIndicateUnplayed(match.scoresCsv),

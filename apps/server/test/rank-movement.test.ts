@@ -69,7 +69,10 @@ beforeEach(async () => {
     { id: 'samus-aran', canonical_name: 'Samus Aran', company: 'ATL' },
     { id: 'kirby', canonical_name: 'Kirby', company: 'ATL' },
   ]);
-  await registerTournamentSlugs(db, ALL.map((t) => t.slug));
+  await registerTournamentSlugs(
+    db,
+    ALL.map((t) => t.slug),
+  );
 });
 
 afterEach(async () => {
@@ -79,18 +82,26 @@ afterEach(async () => {
 async function sync(slugs: string[]): Promise<void> {
   const client = fixtureClient(ALL);
   for (const slug of slugs) {
-    const [row] = await db.select({ id: tournaments.id }).from(tournaments).where(eq(tournaments.challongeSlug, slug));
+    const [row] = await db
+      .select({ id: tournaments.id })
+      .from(tournaments)
+      .where(eq(tournaments.challongeSlug, slug));
     await syncTournament(db, client, row!.id);
   }
 }
 
 async function playerId(canonicalName: string): Promise<string> {
-  const [row] = await db.select({ id: players.id }).from(players).where(eq(players.canonicalName, canonicalName));
+  const [row] = await db
+    .select({ id: players.id })
+    .from(players)
+    .where(eq(players.canonicalName, canonicalName));
   return row!.id;
 }
 
 /** rank and previousRank by player name, from a recompute's stored board. */
-async function board(recomputeId: string): Promise<Map<string, { rank: number; previousRank: number | null }>> {
+async function board(
+  recomputeId: string,
+): Promise<Map<string, { rank: number; previousRank: number | null }>> {
   const rows = await db
     .select({
       canonicalName: players.canonicalName,
@@ -100,7 +111,9 @@ async function board(recomputeId: string): Promise<Map<string, { rank: number; p
     .from(playerRatings)
     .innerJoin(players, eq(playerRatings.playerId, players.id))
     .where(eq(playerRatings.recomputeId, recomputeId));
-  return new Map(rows.map((row) => [row.canonicalName, { rank: row.rank, previousRank: row.previousRank }]));
+  return new Map(
+    rows.map((row) => [row.canonicalName, { rank: row.rank, previousRank: row.previousRank }]),
+  );
 }
 
 /** What the board actually publishes, through the real router. */
@@ -123,10 +136,9 @@ async function publicDeltas(): Promise<Map<string, number | null>> {
   // and the canonical one never leaves the server on a public route, so the
   // ids are mapped back through the database rather than read off the response.
   const canonicalById = new Map(
-    (await db.select({ id: players.id, canonicalName: players.canonicalName }).from(players)).map((row) => [
-      row.id,
-      row.canonicalName,
-    ]),
+    (await db.select({ id: players.id, canonicalName: players.canonicalName }).from(players)).map(
+      (row) => [row.id, row.canonicalName],
+    ),
   );
   return new Map(rows.map((row) => [canonicalById.get(row.playerId)!, row.rankDelta]));
 }

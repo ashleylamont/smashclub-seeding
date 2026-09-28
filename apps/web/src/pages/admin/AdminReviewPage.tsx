@@ -126,7 +126,9 @@ function ReviewCard({ item, onResolved }: { item: ReviewItem; onResolved: () => 
         <div>
           <span className="review-name">{item.cleanedName}</span>
           {item.companyCode && <span className="chip">{item.companyCode}</span>}
-          {item.rawName !== item.cleanedName && <span className="muted"> raw: “{item.rawName}”</span>}
+          {item.rawName !== item.cleanedName && (
+            <span className="muted"> raw: “{item.rawName}”</span>
+          )}
         </div>
         <span className="muted">
           {item.tournamentName} · queued {timeAgo(item.createdAt)}
@@ -154,18 +156,25 @@ function ReviewCard({ item, onResolved }: { item: ReviewItem; onResolved: () => 
               <span className="candidate-name">
                 {candidate.name}
                 {candidate.companyCode && <span className="muted"> ({candidate.companyCode})</span>}
-                {candidate.matchedAlias && <span className="muted"> via “{candidate.matchedAlias}”</span>}
+                {candidate.matchedAlias && (
+                  <span className="muted"> via “{candidate.matchedAlias}”</span>
+                )}
               </span>
               <span className={`chip reason-${candidate.reason}`}>{candidate.reason}</span>
               <span className="score-bar" title={`score ${(candidate.score * 100).toFixed(0)}%`}>
-                <span className="score-bar-fill" style={{ width: `${Math.min(100, candidate.score * 100)}%` }} />
+                <span
+                  className="score-bar-fill"
+                  style={{ width: `${Math.min(100, candidate.score * 100)}%` }}
+                />
               </span>
               <span className="score-value">{(candidate.score * 100).toFixed(0)}%</span>
               <button
                 type="button"
                 className="btn btn-small"
                 disabled={resolve.isPending}
-                onClick={() => resolve.mutate({ kind: 'linked_existing', playerId: candidate.playerId })}
+                onClick={() =>
+                  resolve.mutate({ kind: 'linked_existing', playerId: candidate.playerId })
+                }
               >
                 Link
               </button>
@@ -218,8 +227,8 @@ function ReviewCard({ item, onResolved }: { item: ReviewItem; onResolved: () => 
           onCancel={() => setLookingUp(false)}
         >
           <p className="muted">
-            From “{item.rawName}” in {item.tournamentName}. Linking records the decision and aliases this
-            spelling to the player you pick, so the same entry matches silently next time.
+            From “{item.rawName}” in {item.tournamentName}. Linking records the decision and aliases
+            this spelling to the player you pick, so the same entry matches silently next time.
           </p>
         </PlayerLookupModal>
       )}

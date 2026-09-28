@@ -170,26 +170,126 @@ export type RecapFact =
    * `derived` marks a podium worked out from elimination order rather than
    * reported by Challonge — see {@link deriveBracketOutcome}.
    */
-  | { kind: 'podium'; tournamentId: string; derived: boolean; places: Array<{ player: RecapPlayerRef; place: number; seed: number | null }> }
+  | {
+      kind: 'podium';
+      tournamentId: string;
+      derived: boolean;
+      places: { player: RecapPlayerRef; place: number; seed: number | null }[];
+    }
   /** `stage` is the set's place in the bracket as words ("the winners final"). */
-  | { kind: 'seed_upset'; tournamentId: string; winner: RecapPlayerRef; loser: RecapPlayerRef; winnerSeed: number; loserSeed: number; stage: string | null; score: string | null }
-  | { kind: 'rating_upset'; tournamentId: string; winner: RecapPlayerRef; loser: RecapPlayerRef; probability: number; ratingGap: number; stage: string | null; score: string | null }
-  | { kind: 'losers_run'; tournamentId: string; player: RecapPlayerRef; wins: number; finalRank: number | null }
-  | { kind: 'overperformer'; tournamentId: string; player: RecapPlayerRef; seed: number; finalRank: number; placesGained: number }
-  | { kind: 'nailbiter'; tournamentId: string; winner: RecapPlayerRef; loser: RecapPlayerRef; score: string; stage: string | null }
+  | {
+      kind: 'seed_upset';
+      tournamentId: string;
+      winner: RecapPlayerRef;
+      loser: RecapPlayerRef;
+      winnerSeed: number;
+      loserSeed: number;
+      stage: string | null;
+      score: string | null;
+    }
+  | {
+      kind: 'rating_upset';
+      tournamentId: string;
+      winner: RecapPlayerRef;
+      loser: RecapPlayerRef;
+      probability: number;
+      ratingGap: number;
+      stage: string | null;
+      score: string | null;
+    }
+  | {
+      kind: 'losers_run';
+      tournamentId: string;
+      player: RecapPlayerRef;
+      wins: number;
+      finalRank: number | null;
+    }
+  | {
+      kind: 'overperformer';
+      tournamentId: string;
+      player: RecapPlayerRef;
+      seed: number;
+      finalRank: number;
+      placesGained: number;
+    }
+  | {
+      kind: 'nailbiter';
+      tournamentId: string;
+      winner: RecapPlayerRef;
+      loser: RecapPlayerRef;
+      score: string;
+      stage: string | null;
+    }
   | { kind: 'clean_sweep'; tournamentId: string; player: RecapPlayerRef; sets: number }
-  | { kind: 'biggest_climb'; tournamentId: string; player: RecapPlayerRef; gained: number; from: number; to: number }
-  | { kind: 'mover'; tournamentId: null; player: RecapPlayerRef; rank: number; previousRank: number; placesGained: number }
+  | {
+      kind: 'biggest_climb';
+      tournamentId: string;
+      player: RecapPlayerRef;
+      gained: number;
+      from: number;
+      to: number;
+    }
+  | {
+      kind: 'mover';
+      tournamentId: null;
+      player: RecapPlayerRef;
+      rank: number;
+      previousRank: number;
+      placesGained: number;
+    }
   /** `a` is always the winner of tonight's meeting, and `aWins` includes it. */
-  | { kind: 'rivalry'; tournamentId: string; a: RecapPlayerRef; b: RecapPlayerRef; meetings: number; aWins: number; bWins: number }
+  | {
+      kind: 'rivalry';
+      tournamentId: string;
+      a: RecapPlayerRef;
+      b: RecapPlayerRef;
+      meetings: number;
+      aWins: number;
+      bWins: number;
+    }
   /** Tonight's winner had never beaten this opponent — 0 for `priorLosses`. */
-  | { kind: 'breakthrough'; tournamentId: string; winner: RecapPlayerRef; loser: RecapPlayerRef; priorLosses: number; stage: string | null; score: string | null }
+  | {
+      kind: 'breakthrough';
+      tournamentId: string;
+      winner: RecapPlayerRef;
+      loser: RecapPlayerRef;
+      priorLosses: number;
+      stage: string | null;
+      score: string | null;
+    }
   | { kind: 'debut'; tournamentId: string; players: RecapPlayerRef[] }
-  | { kind: 'milestone'; tournamentId: string; player: RecapPlayerRef; milestone: 'sets' | 'events' | 'peak_rating'; value: number }
-  | { kind: 'turnout'; tournamentId: null; entrants: number; previousBest: number | null; isRecord: boolean }
-  | { kind: 'runback'; tournamentId: string; winner: RecapPlayerRef; loser: RecapPlayerRef; score: string | null }
+  | {
+      kind: 'milestone';
+      tournamentId: string;
+      player: RecapPlayerRef;
+      milestone: 'sets' | 'events' | 'peak_rating';
+      value: number;
+    }
+  | {
+      kind: 'turnout';
+      tournamentId: null;
+      entrants: number;
+      previousBest: number | null;
+      isRecord: boolean;
+    }
+  | {
+      kind: 'runback';
+      tournamentId: string;
+      winner: RecapPlayerRef;
+      loser: RecapPlayerRef;
+      score: string | null;
+    }
   /** `runSets`/`gamesDropped` describe the champion's whole night, when known. */
-  | { kind: 'grand_finals'; tournamentId: string; winner: RecapPlayerRef; loser: RecapPlayerRef; score: string | null; bracketReset: boolean; runSets: number; gamesDropped: number | null };
+  | {
+      kind: 'grand_finals';
+      tournamentId: string;
+      winner: RecapPlayerRef;
+      loser: RecapPlayerRef;
+      score: string | null;
+      bracketReset: boolean;
+      runSets: number;
+      gamesDropped: number | null;
+    };
 
 export type RecapFactKind = RecapFact['kind'];
 
@@ -256,7 +356,7 @@ export function parseScoresCsv(scoresCsv: string | null | undefined): ParsedScor
   const unknown: ParsedScore = { p1: 0, p2: 0, unknown: true };
   if (!scoresCsv || scoresIndicateUnplayed(scoresCsv)) return unknown;
 
-  const pairs: Array<[number, number]> = [];
+  const pairs: [number, number][] = [];
   for (const part of scoresCsv.split(',')) {
     const match = part.trim().match(/^(-?\d+)-(-?\d+)$/);
     if (!match) return unknown;
@@ -350,7 +450,11 @@ function stageWeight(round: number | null, maxRound: number): number {
  * Approximate below the last three rounds, which is where names stop existing
  * anyway.
  */
-export function stageName(round: number | null, rounds: BracketRounds, tournamentType?: string | null): string | null {
+export function stageName(
+  round: number | null,
+  rounds: BracketRounds,
+  tournamentType?: string | null,
+): string | null {
   if (round == null) return null;
   if (round > 0) {
     if (tournamentType === 'single elimination') {
@@ -442,8 +546,16 @@ export interface BracketOutcome {
  * not one. Naming its winner would put a player on a podium they never won —
  * so an undecided bracket gets no placement facts at all.
  */
-export function deriveBracketOutcome(sets: readonly RecapSet[], tournamentType?: string | null): BracketOutcome | null {
-  if (tournamentType && tournamentType !== 'single elimination' && tournamentType !== 'double elimination') return null;
+export function deriveBracketOutcome(
+  sets: readonly RecapSet[],
+  tournamentType?: string | null,
+): BracketOutcome | null {
+  if (
+    tournamentType &&
+    tournamentType !== 'single elimination' &&
+    tournamentType !== 'double elimination'
+  )
+    return null;
   const lastLoss = new Map<string, OrderKey>();
   const lastLossRound = new Map<string, number>();
   let final: { set: RecapSet; winner: string; key: OrderKey } | null = null;
@@ -502,14 +614,18 @@ export function deriveBracketOutcome(sets: readonly RecapSet[], tournamentType?:
 
   const placements = new Map<string, number>([[decided.winner, 1]]);
   if (!wasPlayed(decided.set)) {
-    const finalLoser = decided.set.winner === 1 ? decided.set.p2ParticipantId : decided.set.p1ParticipantId;
+    const finalLoser =
+      decided.set.winner === 1 ? decided.set.p2ParticipantId : decided.set.p1ParticipantId;
     if (finalLoser) placements.set(finalLoser, 2);
   }
   const eliminated = [...lastLoss.entries()]
     .filter(([participantId]) => participantId !== decided.winner)
-    .sort((a, b) => tournamentType === 'single elimination'
-      ? (lastLossRound.get(b[0]) ?? 0) - (lastLossRound.get(a[0]) ?? 0) || compareOrderKeys(b[1], a[1])
-      : compareOrderKeys(b[1], a[1]));
+    .sort((a, b) =>
+      tournamentType === 'single elimination'
+        ? (lastLossRound.get(b[0]) ?? 0) - (lastLossRound.get(a[0]) ?? 0) ||
+          compareOrderKeys(b[1], a[1])
+        : compareOrderKeys(b[1], a[1]),
+    );
   const singleElimination = tournamentType === 'single elimination';
   if (singleElimination) {
     let place = 2;
@@ -602,14 +718,28 @@ function selectFacts(facts: readonly RankedRecapFact[]): RankedRecapFact[] {
     const fact = entry.fact as Record<string, unknown>;
     const winner = (fact.winner as { playerId?: string } | undefined)?.playerId;
     const loser = (fact.loser as { playerId?: string } | undefined)?.playerId;
-    const story = winner && loser && typeof fact.tournamentId === 'string' &&
-      (entry.fact.kind === 'seed_upset' || entry.fact.kind === 'rating_upset' || entry.fact.kind === 'nailbiter')
-      ? `${fact.tournamentId}:${[winner, loser].sort().join(':')}`
-      : null;
+    const story =
+      winner &&
+      loser &&
+      typeof fact.tournamentId === 'string' &&
+      (entry.fact.kind === 'seed_upset' ||
+        entry.fact.kind === 'rating_upset' ||
+        entry.fact.kind === 'nailbiter')
+        ? `${fact.tournamentId}:${[winner, loser].sort().join(':')}`
+        : null;
     if (story && stories.has(story)) continue;
-    if (entry.fact.kind === 'rivalry' && Math.min(entry.fact.aWins, entry.fact.bWins) === 0) continue;
+    if (entry.fact.kind === 'rivalry' && Math.min(entry.fact.aWins, entry.fact.bWins) === 0)
+      continue;
     const category = entry.fact.kind;
-    const cap = category === 'grand_finals' ? 2 : category === 'milestone' || category === 'mover' || category === 'nailbiter' || category === 'rivalry' ? 1 : 2;
+    const cap =
+      category === 'grand_finals'
+        ? 2
+        : category === 'milestone' ||
+            category === 'mover' ||
+            category === 'nailbiter' ||
+            category === 'rivalry'
+          ? 1
+          : 2;
     if ((categories.get(category) ?? 0) >= cap) continue;
     if ((category === 'seed_upset' || category === 'rating_upset') && upsetCount >= 2) continue;
     const ids = factPeople(entry.fact);
@@ -713,7 +843,9 @@ export function buildRecap(input: RecapInput): RecapResult {
    * however deep the main bracket ran the same night.
    */
   const roundsByTournament = new Map<string, BracketRounds>();
-  const tournamentTypeById = new Map(orderedTournaments.map((tournament) => [tournament.id, tournament.tournamentType ?? null]));
+  const tournamentTypeById = new Map(
+    orderedTournaments.map((tournament) => [tournament.id, tournament.tournamentType ?? null]),
+  );
   for (const set of sets) {
     if (isGroupSet(set)) continue;
     const round = set.round ?? 0;
@@ -744,11 +876,20 @@ export function buildRecap(input: RecapInput): RecapResult {
   collectPodiums(orderedTournaments, participants, placement, derivedFor, push);
   collectGrandFinals(played, outcomes, push);
   const deciderSetIds = new Set([...outcomes.values()].map((o) => o.decider.id));
-  collectSeedUpsets(played.filter((set) => !groupedTournamentIds.has(set.set.tournamentId)), stageOf, weightOf, push);
+  collectSeedUpsets(
+    played.filter((set) => !groupedTournamentIds.has(set.set.tournamentId)),
+    stageOf,
+    weightOf,
+    push,
+  );
   collectRatingUpsets(played, ratingEvents, input.model === 'whr', stageOf, weightOf, push);
   collectNailbiters(played, deciderSetIds, stageOf, weightOf, push);
   collectLosersRuns(played, placement, push);
-  collectOverperformers(orderedTournaments.filter((tournament) => !groupedTournamentIds.has(tournament.id)), participants, push);
+  collectOverperformers(
+    orderedTournaments.filter((tournament) => !groupedTournamentIds.has(tournament.id)),
+    participants,
+    push,
+  );
   collectCleanSweeps(played, participants, placement, push);
   collectClimbs(played, ratingEvents, participants, push);
   collectMovers(input.rankMovement ?? [], participants, push);
@@ -760,13 +901,16 @@ export function buildRecap(input: RecapInput): RecapResult {
 
   facts.sort((a, b) => b.notability - a.notability || a.id.localeCompare(b.id));
 
-  const entrantIds = new Set(participants.map((participant) => participant.playerId ?? `participant:${participant.id}`));
+  const entrantIds = new Set(
+    participants.map((participant) => participant.playerId ?? `participant:${participant.id}`),
+  );
   return {
     eventKey: eventKey ? eventKeyOf(eventKey) : null,
     tournaments: orderedTournaments,
     entrants: entrantIds.size,
     setsPlayed: played.length,
-    isComplete: orderedTournaments.length > 0 && orderedTournaments.every((t) => isBracketOver(t, now)),
+    isComplete:
+      orderedTournaments.length > 0 && orderedTournaments.every((t) => isBracketOver(t, now)),
     isAbandoned: orderedTournaments.some((t) => isBracketAbandoned(t, now)),
     facts: limitByKind(facts),
     highlights: selectFacts(facts),
@@ -920,7 +1064,8 @@ function collectRatingUpsets(
       ? probabilityFromRatings(
           (winnerEvent.preRating - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY,
           (loserEvent.preRating - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY,
-          (winnerEvent.preRd / NATURAL_TO_DISPLAY) ** 2 + (loserEvent.preRd / NATURAL_TO_DISPLAY) ** 2,
+          (winnerEvent.preRd / NATURAL_TO_DISPLAY) ** 2 +
+            (loserEvent.preRd / NATURAL_TO_DISPLAY) ** 2,
         )
       : winProbability(
           { rating: winnerEvent.preRating, rd: winnerEvent.preRd, vol: 0 },
@@ -1006,7 +1151,8 @@ function collectRunbacks(played: readonly PlayedSet[], push: Push): void {
     }
     // Match identifiers/play-order values restart per bracket. Cross-bracket
     // chronology is only factual when both sets carry timestamps.
-    if (a.set.completedAt && b.set.completedAt) return a.set.completedAt.localeCompare(b.set.completedAt);
+    if (a.set.completedAt && b.set.completedAt)
+      return a.set.completedAt.localeCompare(b.set.completedAt);
     return 0;
   };
   const ordered = [...played].sort((a, b) => orderOf(a, b));
@@ -1017,7 +1163,11 @@ function collectRunbacks(played: readonly PlayedSet[], push: Push): void {
     for (let j = 0; j < i; j += 1) {
       const earlier = ordered[j]!;
       if (orderOf(earlier, later) >= 0) continue;
-      if (earlier.winner.playerId !== later.loser.playerId || earlier.loser.playerId !== later.winner.playerId) continue;
+      if (
+        earlier.winner.playerId !== later.loser.playerId ||
+        earlier.loser.playerId !== later.winner.playerId
+      )
+        continue;
       const key = `${later.winner.playerId}:${later.loser.playerId}`;
       if (seen.has(key)) break;
       seen.add(key);
@@ -1082,19 +1232,21 @@ function collectCleanSweeps(
 ): void {
   const champions = participants.filter((p) => placement.get(p.id) === 1);
   for (const champion of champions) {
-    const theirs = played.filter(
-      (p) => p.winner.id === champion.id || p.loser.id === champion.id,
-    );
+    const theirs = played.filter((p) => p.winner.id === champion.id || p.loser.id === champion.id);
     if (theirs.length < 3) continue;
     if (theirs.some((p) => !p.scoreKnown)) continue;
     const dropped = theirs.some((p) => p.loser.id === champion.id || p.loserGames > 0);
     if (dropped) continue;
-    push(`clean_sweep:${champion.tournamentId}:${champion.id}`, Math.min(0.92, 0.6 + 0.05 * theirs.length), {
-      kind: 'clean_sweep',
-      tournamentId: champion.tournamentId,
-      player: refOf(champion),
-      sets: theirs.length,
-    });
+    push(
+      `clean_sweep:${champion.tournamentId}:${champion.id}`,
+      Math.min(0.92, 0.6 + 0.05 * theirs.length),
+      {
+        kind: 'clean_sweep',
+        tournamentId: champion.tournamentId,
+        player: refOf(champion),
+        sets: theirs.length,
+      },
+    );
   }
 }
 
@@ -1171,7 +1323,11 @@ function collectMovers(
 }
 
 /** Repeat meetings — the club's running head-to-heads. */
-function collectRivalries(played: readonly PlayedSet[], history: RecapHistory | undefined, push: Push): void {
+function collectRivalries(
+  played: readonly PlayedSet[],
+  history: RecapHistory | undefined,
+  push: Push,
+): void {
   if (!history) return;
   for (const p of played) {
     const winnerId = p.winner.playerId;
@@ -1231,15 +1387,19 @@ function collectBreakthroughs(
     const priorLosses = winnerIsA ? prior.bWins : prior.aWins;
     if (winnerPriorWins > 0 || priorLosses < 2) continue;
     claimed.add(key);
-    push(`breakthrough:${p.set.id}`, Math.min(0.85, 0.4 + 0.08 * priorLosses + 0.15 * weightOf(p)), {
-      kind: 'breakthrough',
-      tournamentId: p.set.tournamentId,
-      winner: refOf(p.winner),
-      loser: refOf(p.loser),
-      priorLosses,
-      stage: stageOf(p),
-      score: scoreText(p),
-    });
+    push(
+      `breakthrough:${p.set.id}`,
+      Math.min(0.85, 0.4 + 0.08 * priorLosses + 0.15 * weightOf(p)),
+      {
+        kind: 'breakthrough',
+        tournamentId: p.set.tournamentId,
+        winner: refOf(p.winner),
+        loser: refOf(p.loser),
+        priorLosses,
+        stage: stageOf(p),
+        score: scoreText(p),
+      },
+    );
   }
 }
 
@@ -1318,7 +1478,10 @@ function collectDebutsAndMilestones(
   const peakTonight = new Map<string, number>();
   for (const event of ratingEvents) {
     if (event.isDecay) continue;
-    peakTonight.set(event.playerId, Math.max(peakTonight.get(event.playerId) ?? 0, event.postRating));
+    peakTonight.set(
+      event.playerId,
+      Math.max(peakTonight.get(event.playerId) ?? 0, event.postRating),
+    );
   }
   for (const [playerId, peak] of peakTonight) {
     const participant = firstParticipantPerPlayer.get(playerId);
@@ -1374,7 +1537,7 @@ function collectTurnout(
 // ---------------------------------------------------------------------------
 
 const ordinal = (n: number): string => {
-  const suffix = n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th';
+  const suffix = n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th');
   return `${n}${suffix}`;
 };
 
@@ -1498,7 +1661,9 @@ export function formatFact(fact: RecapFact): { headline: string; detail: string 
     case 'turnout': {
       const tied = fact.previousBest != null && fact.entrants === fact.previousBest;
       return {
-        headline: fact.isRecord ? 'The biggest night the club has run' : `${fact.entrants} in the building`,
+        headline: fact.isRecord
+          ? 'The biggest night the club has run'
+          : `${fact.entrants} in the building`,
         detail:
           fact.previousBest == null
             ? ''

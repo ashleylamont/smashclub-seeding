@@ -4,7 +4,7 @@ import { cleanPlayerEntry, preparePlayerEntry } from '../src/identity/clean';
 // These cases are ported verbatim from legacy tests/test_smart_parsing.py —
 // they encode real messy sign-up-sheet inputs the pipeline must survive.
 describe('cleanPlayerEntry', () => {
-  const cases: Array<[input: string, name: string, company: string | null]> = [
+  const cases: [input: string, name: string, company: string | null][] = [
     ['1 [Atlas]@Lucina', 'Lucina', 'ATL'],
     ['[Atlas]@Robin', 'Robin', 'ATL'],
     // @ inside parentheses is someone else's handle (their host), so no company

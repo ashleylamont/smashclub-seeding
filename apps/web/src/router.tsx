@@ -179,18 +179,51 @@ const adminBreakthroughRoute = createRoute({
   validateSearch: breakthroughSearch,
 });
 
-const eventLiveRoute = createRoute({ getParentRoute: () => rootRoute, path: '/live/$planId', component: EventLivePage });
-const eventOverlayRoute = createRoute({ getParentRoute: () => rootRoute, path: '/overlay/$planId', component: EventOverlayPage });
-const eventGuestRoute = createRoute({ getParentRoute: () => rootRoute, path: '/guest/$planId', component: GuestEventPage });
-const eventNightsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/play', component: EventNightsPage });
-const eventPlayRoute = createRoute({ getParentRoute: () => rootRoute, path: '/play/$planId', component: PlayerEventPage });
-const eventOperateRoute = createRoute({ getParentRoute: () => rootRoute, path: '/operate/$planId', component: EventOperatorPage });
-const adminEventOperationsRoute = createRoute({ getParentRoute: () => adminRoute, path: '/event-operations', component: AdminEventOperationsPage,
-  validateSearch: (search: Record<string, unknown>): { plan?: string } => typeof search.plan === 'string' ? { plan: search.plan } : {},
+const eventLiveRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/live/$planId',
+  component: EventLivePage,
+});
+const eventOverlayRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/$planId',
+  component: EventOverlayPage,
+});
+const eventGuestRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/guest/$planId',
+  component: GuestEventPage,
+});
+const eventNightsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/play',
+  component: EventNightsPage,
+});
+const eventPlayRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/play/$planId',
+  component: PlayerEventPage,
+});
+const eventOperateRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/operate/$planId',
+  component: EventOperatorPage,
+});
+const adminEventOperationsRoute = createRoute({
+  getParentRoute: () => adminRoute,
+  path: '/event-operations',
+  component: AdminEventOperationsPage,
+  validateSearch: (search: Record<string, unknown>): { plan?: string } =>
+    typeof search.plan === 'string' ? { plan: search.plan } : {},
 });
 
 const routeTree = rootRoute.addChildren([
-  eventNightsRoute, eventLiveRoute, eventOverlayRoute, eventPlayRoute, eventOperateRoute, eventGuestRoute,
+  eventNightsRoute,
+  eventLiveRoute,
+  eventOverlayRoute,
+  eventPlayRoute,
+  eventOperateRoute,
+  eventGuestRoute,
   indexRoute,
   playerRoute,
   tournamentsRoute,

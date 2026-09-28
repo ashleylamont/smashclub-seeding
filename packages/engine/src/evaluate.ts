@@ -107,7 +107,10 @@ export function walkForward(input: {
     setsByEvent.set(set.tournamentId, list);
   }
 
-  const accumulator = new Map<string, { losses: number[]; briers: number[]; correct: number; probs: number[]; outcomes: number[] }>();
+  const accumulator = new Map<
+    string,
+    { losses: number[]; briers: number[]; correct: number; probs: number[]; outcomes: number[] }
+  >();
   for (const model of input.models) {
     accumulator.set(model.name, { losses: [], briers: [], correct: 0, probs: [], outcomes: [] });
   }
@@ -172,7 +175,9 @@ export function walkForward(input: {
 function calibrate(probs: number[], outcomes: number[], bins = 5): CalibrationBin[] {
   // Predictions are symmetric (p and 1−p describe the same set from either
   // side), so fold onto [0.5, 1] where the bins are interpretable.
-  const folded = probs.map((p, i) => (p >= 0.5 ? { p, o: outcomes[i]! } : { p: 1 - p, o: 1 - outcomes[i]! }));
+  const folded = probs.map((p, i) =>
+    p >= 0.5 ? { p, o: outcomes[i]! } : { p: 1 - p, o: 1 - outcomes[i]! },
+  );
   const out: CalibrationBin[] = [];
   for (let b = 0; b < bins; b++) {
     const lower = 0.5 + (0.5 * b) / bins;

@@ -110,7 +110,8 @@ export async function resolvePlayerInputs(
   const cleaned = rawInputs.map((rawInput) => {
     const prepared = preparePlayerEntry(rawInput, taxonomy);
     const entry = cleanPlayerEntry(prepared, taxonomy);
-    const companyCode = entry.companyCode && taxonomy.codes[entry.companyCode] ? entry.companyCode : null;
+    const companyCode =
+      entry.companyCode && taxonomy.codes[entry.companyCode] ? entry.companyCode : null;
     return {
       rawInput,
       cleanedName: entry.name,
@@ -129,13 +130,20 @@ export async function resolvePlayerInputs(
     ? await db
         .select()
         .from(identityDecisions)
-        .where(and(eq(identityDecisions.kind, 'merge'), inArray(identityDecisions.aliasNorm, norms)))
+        .where(
+          and(eq(identityDecisions.kind, 'merge'), inArray(identityDecisions.aliasNorm, norms)),
+        )
     : [];
   const rejectionRows = norms.length
     ? await db
         .select()
         .from(identityDecisions)
-        .where(and(eq(identityDecisions.kind, 'keep_separate'), inArray(identityDecisions.aliasNorm, norms)))
+        .where(
+          and(
+            eq(identityDecisions.kind, 'keep_separate'),
+            inArray(identityDecisions.aliasNorm, norms),
+          ),
+        )
     : [];
 
   const aliasesByNorm = groupBy(aliasRows, (row) => row.aliasNorm);
@@ -170,7 +178,12 @@ export async function resolvePlayerInputs(
       aliases.find((alias) => alias.companyId === null) ??
       (row.companyId === null && aliases.length === 1 ? aliases[0] : undefined);
     if (aliasHit) {
-      return { ...base, playerId: aliasHit.playerId, method: 'alias' as const, candidates: candidatesFor(aliasHit.playerId) };
+      return {
+        ...base,
+        playerId: aliasHit.playerId,
+        method: 'alias' as const,
+        candidates: candidatesFor(aliasHit.playerId),
+      };
     }
 
     // 3. Prior human decision.
@@ -179,17 +192,32 @@ export async function resolvePlayerInputs(
       (row.companyId ? decisions.find((entry) => entry.companyId === row.companyId) : undefined) ??
       decisions.find((entry) => entry.companyId === null);
     if (decision?.playerId) {
-      return { ...base, playerId: decision.playerId, method: 'decision' as const, candidates: candidatesFor(decision.playerId) };
+      return {
+        ...base,
+        playerId: decision.playerId,
+        method: 'decision' as const,
+        candidates: candidatesFor(decision.playerId),
+      };
     }
 
     // 4. Structured short form, unambiguous within the pool as it stands now.
     const structured = resolveStructuredAlias(row.cleanedName, row.companyCode, pool);
     if (structured) {
-      return { ...base, playerId: structured.playerId, method: 'structured' as const, candidates: candidatesFor(structured.playerId) };
+      return {
+        ...base,
+        playerId: structured.playerId,
+        method: 'structured' as const,
+        candidates: candidatesFor(structured.playerId),
+      };
     }
 
     // 5. A human decides.
-    return { ...base, playerId: null, method: 'unresolved' as const, candidates: candidatesFor(null) };
+    return {
+      ...base,
+      playerId: null,
+      method: 'unresolved' as const,
+      candidates: candidatesFor(null),
+    };
   });
 }
 

@@ -37,14 +37,16 @@ export function AdminLayout() {
     const strip = tabs.current;
     const active = strip?.querySelector<HTMLElement>('.admin-tab.active');
     if (!strip || !active) return;
-    const overflowsRight = active.offsetLeft + active.offsetWidth > strip.scrollLeft + strip.clientWidth;
+    const overflowsRight =
+      active.offsetLeft + active.offsetWidth > strip.scrollLeft + strip.clientWidth;
     const overflowsLeft = active.offsetLeft < strip.scrollLeft;
     if (overflowsRight || overflowsLeft) {
       strip.scrollTo({ left: Math.max(0, active.offsetLeft - 16), behavior: 'auto' });
     }
   }, [pathname]);
 
-  if (isPending || (session && currentUser.isPending)) return <p className="loading-text">Checking access…</p>;
+  if (isPending || (session && currentUser.isPending))
+    return <p className="loading-text">Checking access…</p>;
   if (!session) return <Navigate to="/login" />;
   if (currentUser.isError) return <p className="error-text">{currentUser.error.message}</p>;
   if (currentUser.data?.role !== 'admin') return <Navigate to="/" />;
@@ -55,7 +57,12 @@ export function AdminLayout() {
         <h1>Admin</h1>
         <nav className="admin-tabs" aria-label="Admin sections" ref={tabs}>
           {TABS.map((tab) => (
-            <Link key={tab.to} to={tab.to} className="admin-tab" activeProps={{ className: 'admin-tab active' }}>
+            <Link
+              key={tab.to}
+              to={tab.to}
+              className="admin-tab"
+              activeProps={{ className: 'admin-tab active' }}
+            >
               {tab.label}
             </Link>
           ))}

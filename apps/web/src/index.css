@@ -145,60 +145,6 @@
   :root:where(:not([data-theme='dark'])) {
     color-scheme: light;
 
-      /* Warm paper, so the red reads as ink rather than as a signal light. */
-      --bg: #eeece4;
-      --bg-elev: #f6f5ef;
-      --surface: #fbfaf5;
-      --surface-2: #eeece4;
-      --surface-hover: #e6e1d6;
-      --border: #d2cec0;
-      --border-strong: #a8a493;
-
-      --text-h: #14160f;
-      --text: #4c5348;
-      --text-soft: #767d70;
-
-      /* 5.06:1 on paper as ink; 5.55:1 for a label on the fill. */
-      --accent: #c22014;
-      --accent-strong: #9c1409;
-      --accent-bg: rgba(194, 32, 20, 0.1);
-      --accent-border: rgba(194, 32, 20, 0.4);
-      --accent-contrast: #fff4f2;
-
-      --good: #0f7a3d;
-      --good-bg: rgba(15, 122, 61, 0.12);
-      /* Same red as the accent, as in dark mode. */
-      --bad: #c22014;
-      --bad-bg: rgba(194, 32, 20, 0.1);
-      --warn: #8a5a00;
-      --warn-bg: rgba(138, 90, 0, 0.12);
-      --live: #c22014;
-      --live-bg: rgba(194, 32, 20, 0.12);
-
-      --tier-1: #005a7c;
-      --tier-1-bg: rgba(0, 90, 124, 0.14);
-      --tier-2: #227ba2;
-      --tier-2-bg: rgba(34, 123, 162, 0.12);
-      --tier-3: #5b94b2;
-      --tier-3-bg: rgba(91, 148, 178, 0.12);
-      --tier-4: #8ca6b4;
-      --tier-4-bg: rgba(140, 166, 180, 0.16);
-
-      --series-1: #2a77d3;
-      --series-2: #e25c23;
-      --series-3: #29996d;
-      --series-4: #93640c;
-      --series-5: #cd648d;
-      --series-6: #018301;
-      --series-7: #4c3bab;
-      --series-8: #e24948;
-      --chart-grid: #d2cec0;
-  }
-}
-
-:root[data-theme='light'] {
-  color-scheme: light;
-
     /* Warm paper, so the red reads as ink rather than as a signal light. */
     --bg: #eeece4;
     --bg-elev: #f6f5ef;
@@ -247,6 +193,60 @@
     --series-7: #4c3bab;
     --series-8: #e24948;
     --chart-grid: #d2cec0;
+  }
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* Warm paper, so the red reads as ink rather than as a signal light. */
+  --bg: #eeece4;
+  --bg-elev: #f6f5ef;
+  --surface: #fbfaf5;
+  --surface-2: #eeece4;
+  --surface-hover: #e6e1d6;
+  --border: #d2cec0;
+  --border-strong: #a8a493;
+
+  --text-h: #14160f;
+  --text: #4c5348;
+  --text-soft: #767d70;
+
+  /* 5.06:1 on paper as ink; 5.55:1 for a label on the fill. */
+  --accent: #c22014;
+  --accent-strong: #9c1409;
+  --accent-bg: rgba(194, 32, 20, 0.1);
+  --accent-border: rgba(194, 32, 20, 0.4);
+  --accent-contrast: #fff4f2;
+
+  --good: #0f7a3d;
+  --good-bg: rgba(15, 122, 61, 0.12);
+  /* Same red as the accent, as in dark mode. */
+  --bad: #c22014;
+  --bad-bg: rgba(194, 32, 20, 0.1);
+  --warn: #8a5a00;
+  --warn-bg: rgba(138, 90, 0, 0.12);
+  --live: #c22014;
+  --live-bg: rgba(194, 32, 20, 0.12);
+
+  --tier-1: #005a7c;
+  --tier-1-bg: rgba(0, 90, 124, 0.14);
+  --tier-2: #227ba2;
+  --tier-2-bg: rgba(34, 123, 162, 0.12);
+  --tier-3: #5b94b2;
+  --tier-3-bg: rgba(91, 148, 178, 0.12);
+  --tier-4: #8ca6b4;
+  --tier-4-bg: rgba(140, 166, 180, 0.16);
+
+  --series-1: #2a77d3;
+  --series-2: #e25c23;
+  --series-3: #29996d;
+  --series-4: #93640c;
+  --series-5: #cd648d;
+  --series-6: #018301;
+  --series-7: #4c3bab;
+  --series-8: #e24948;
+  --chart-grid: #d2cec0;
 }
 
 * {

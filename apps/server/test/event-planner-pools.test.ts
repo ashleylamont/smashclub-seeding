@@ -57,7 +57,9 @@ describe('stripeIntoPools', () => {
   });
 
   it('gives every pool the same seed total, which is the point of striping', () => {
-    const totals = stripeIntoPools(seeds(16)).map((pool) => pool.reduce((sum, seed) => sum + seed, 0));
+    const totals = stripeIntoPools(seeds(16)).map((pool) =>
+      pool.reduce((sum, seed) => sum + seed, 0),
+    );
     expect(new Set(totals).size).toBe(1);
   });
 
@@ -93,11 +95,14 @@ describe('poolCountFor', () => {
   });
 });
 
-it.each(Array.from({ length: 98 }, (_, i) => i + 3))('balances all entrants into 3–5 player pools (%i)', (size) => {
-  const pools = stripeIntoPools(seeds(size));
-  expect(pools.flat().sort((a, b) => a - b)).toEqual(seeds(size));
-  const sizes = pools.map((pool) => pool.length);
-  expect(Math.min(...sizes)).toBeGreaterThanOrEqual(3);
-  expect(Math.max(...sizes)).toBeLessThanOrEqual(5);
-  expect(Math.max(...sizes) - Math.min(...sizes)).toBeLessThanOrEqual(1);
-});
+it.each(Array.from({ length: 98 }, (_, i) => i + 3))(
+  'balances all entrants into 3–5 player pools (%i)',
+  (size) => {
+    const pools = stripeIntoPools(seeds(size));
+    expect(pools.flat().sort((a, b) => a - b)).toEqual(seeds(size));
+    const sizes = pools.map((pool) => pool.length);
+    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(3);
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(5);
+    expect(Math.max(...sizes) - Math.min(...sizes)).toBeLessThanOrEqual(1);
+  },
+);

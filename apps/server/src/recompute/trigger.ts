@@ -15,7 +15,8 @@ export class RecomputeTrigger {
   constructor(
     private readonly db: Db,
     private readonly debounceMs = 5000,
-    private readonly onError: (error: unknown) => void = (error) => console.error('recompute failed', error),
+    private readonly onError: (error: unknown) => void = (error) =>
+      console.error('recompute failed', error),
   ) {}
 
   request(): void {

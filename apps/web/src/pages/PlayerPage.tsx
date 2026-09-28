@@ -38,7 +38,8 @@ export function PlayerPage() {
   }, [redirectTo, navigate]);
 
   if (query.isPending) return <p className="loading-text">Loading player…</p>;
-  if (query.isError) return <p className="error-text">Failed to load player: {query.error.message}</p>;
+  if (query.isError)
+    return <p className="error-text">Failed to load player: {query.error.message}</p>;
   if (query.data === null) return <p className="error-text">Player not found.</p>;
   if (redirectTo) return <p className="loading-text">Redirecting…</p>;
 
@@ -76,7 +77,10 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           : `${event.resultStage === 'group' ? 'Pool' : event.resultStage === 'final' ? 'Bracket' : '—'} · ${event.won ? 'W' : 'L'}`,
         opponent: event.opponentName,
         rating: event.postRating,
-        band: [event.postRating - 2 * event.postRd, event.postRating + 2 * event.postRd] as [number, number],
+        band: [event.postRating - 2 * event.postRd, event.postRating + 2 * event.postRd] as [
+          number,
+          number,
+        ],
         decayRating: event.isDecay ? event.postRating : null,
         rd: event.postRd,
         revised: isWhr ? event.revisedRating : null,
@@ -92,7 +96,9 @@ function PlayerProfile({ data }: { data: PlayerData }) {
   const showRevised = useMemo(
     () =>
       isWhr &&
-      chartData.some((point) => point.revised !== null && Math.abs(point.revised - point.rating) >= 1),
+      chartData.some(
+        (point) => point.revised !== null && Math.abs(point.revised - point.rating) >= 1,
+      ),
     [isWhr, chartData],
   );
 
@@ -108,7 +114,12 @@ function PlayerProfile({ data }: { data: PlayerData }) {
   const matches = useMemo(() => events.filter((e) => !e.isDecay), [events]);
   const [stageFilter, setStageFilter] = useState<'all' | 'group' | 'final'>('all');
   const hasBothStages = useMemo(
-    () => new Set(matches.map((event) => event.resultStage).filter((stage): stage is 'group' | 'final' => stage !== null)).size > 1,
+    () =>
+      new Set(
+        matches
+          .map((event) => event.resultStage)
+          .filter((stage): stage is 'group' | 'final' => stage !== null),
+      ).size > 1,
     [matches],
   );
   const effectiveStage = hasBothStages ? stageFilter : 'all';
@@ -125,7 +136,9 @@ function PlayerProfile({ data }: { data: PlayerData }) {
       if (isWhr) {
         // WHR has no isolation correction: thin linkage between the rookie and
         // main pools simply comes out as a wider band, which this meter reads.
-        parts.push('Where the rookie and main pools barely overlap, the uncertainty band stays wider.');
+        parts.push(
+          'Where the rookie and main pools barely overlap, the uncertainty band stays wider.',
+        );
       } else if (rating.isolationFactor > 0) {
         parts.push(
           `Isolation ${(rating.isolationFactor * 100).toFixed(0)}% — rookie-only players with little main-bracket exposure carry more uncertainty.`,
@@ -140,7 +153,10 @@ function PlayerProfile({ data }: { data: PlayerData }) {
 
   // Most recent first for the table.
   const tableEvents = useMemo(
-    () => [...events].reverse().filter((event) => effectiveStage === 'all' || event.resultStage === effectiveStage),
+    () =>
+      [...events]
+        .reverse()
+        .filter((event) => effectiveStage === 'all' || event.resultStage === effectiveStage),
     [events, effectiveStage],
   );
 
@@ -237,16 +253,19 @@ function PlayerProfile({ data }: { data: PlayerData }) {
             <span className="headline-label">
               Rating
               <InfoTip label="Rating" align="end">
-                The board ranks on this: the skill estimate below, less a penalty for missed club nights. Results
-                move the estimate; turning up — or not — moves the penalty. Bracket seeding uses a different,
-                more cautious number, so a seed and a rank need not agree.
+                The board ranks on this: the skill estimate below, less a penalty for missed club
+                nights. Results move the estimate; turning up — or not — moves the penalty. Bracket
+                seeding uses a different, more cautious number, so a seed and a rank need not agree.
               </InfoTip>
             </span>
             <span className="headline-value num">{rating.clubRating.toFixed(0)}</span>
             <span className="headline-band num">
               skill {rating.skillRating.toFixed(0)} ± {rating.skillSd.toFixed(0)}
               {rating.activityPenalty > 0 && (
-                <span className="headline-penalty"> · −{rating.activityPenalty.toFixed(0)} away</span>
+                <span className="headline-penalty">
+                  {' '}
+                  · −{rating.activityPenalty.toFixed(0)} away
+                </span>
               )}
             </span>
           </div>
@@ -258,8 +277,8 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           <dt>Skill estimate</dt>
           <dd className="num">{rating ? rating.skillRating.toFixed(0) : '—'}</dd>
           <p className="stat-detail">
-            Best guess at how good you are, from results alone. The rating above is this number less any
-            penalty for missed club nights — with none owing, the two are the same.
+            Best guess at how good you are, from results alone. The rating above is this number less
+            any penalty for missed club nights — with none owing, the two are the same.
           </p>
         </div>
         <div className="stat">
@@ -267,7 +286,9 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           <dd className="num">
             {rating ? `${rating.wins}–${rating.losses}` : `${wins}–${matches.length - wins}`}
           </dd>
-          <p className="stat-detail">{winRate != null ? `${winRate}% of sets won` : 'No sets played'}</p>
+          <p className="stat-detail">
+            {winRate != null ? `${winRate}% of sets won` : 'No sets played'}
+          </p>
         </div>
         <div className="stat">
           <dt>Events</dt>
@@ -305,8 +326,9 @@ function PlayerProfile({ data }: { data: PlayerData }) {
 
       {rating?.isProvisional && (
         <p className="banner banner-info provisional-note">
-          Provisional — too few sets so far for this rating to have settled, so it is held near the middle of
-          the field rather than swinging on a handful of results. It firms up as the sets come in.
+          Provisional — too few sets so far for this rating to have settled, so it is held near the
+          middle of the field rather than swinging on a handful of results. It firms up as the sets
+          come in.
         </p>
       )}
 
@@ -316,16 +338,16 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           <p className="muted chart-caption">
             {isWhr ? (
               <>
-                Published rating after every set — the solid line is what the board showed at the time, and it
-                never rewrites. The shaded band is ±2 standard deviations.
+                Published rating after every set — the solid line is what the board showed at the
+                time, and it never rewrites. The shaded band is ±2 standard deviations.
                 {showRevised &&
                   ' The dashed line is hindsight: with everything played since, the model’s revised estimate of how good this player was on each night.'}{' '}
                 Vertical rules mark the start of each event.
               </>
             ) : (
               <>
-                Skill estimate after every set. The shaded band is ±2 standard deviations — it narrows as we
-                see more results. Vertical rules mark the start of each event.
+                Skill estimate after every set. The shaded band is ±2 standard deviations — it
+                narrows as we see more results. Vertical rules mark the start of each event.
               </>
             )}
           </p>
@@ -357,7 +379,9 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                       <p className="tooltip-label">{d.tournament}</p>
                       <p>
                         {d.date} —{' '}
-                        {d.result === 'decay' ? 'inactivity decay' : `${d.result} vs ${d.opponent ?? 'unknown'}`}
+                        {d.result === 'decay'
+                          ? 'inactivity decay'
+                          : `${d.result} vs ${d.opponent ?? 'unknown'}`}
                       </p>
                       <p className="num">
                         {d.rating.toFixed(0)} ± {d.rd.toFixed(0)}
@@ -403,14 +427,25 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                 />
               )}
               {/* Decay is a different kind of event, so it gets its own mark. */}
-              <Scatter dataKey="decayRating" fill="var(--warn)" shape="square" name="Inactivity decay" />
+              <Scatter
+                dataKey="decayRating"
+                fill="var(--warn)"
+                shape="square"
+                name="Inactivity decay"
+              />
             </ComposedChart>
           </ResponsiveContainer>
         </section>
       )}
 
       <section className="section match-history">
-        <h3>Match log ({effectiveStage === 'all' ? matches.length : `${tableEvents.filter((event) => !event.isDecay).length} of ${matches.length}`} sets)</h3>
+        <h3>
+          Match log (
+          {effectiveStage === 'all'
+            ? matches.length
+            : `${tableEvents.filter((event) => !event.isDecay).length} of ${matches.length}`}{' '}
+          sets)
+        </h3>
         {hasBothStages && (
           <label className="history-stage-filter">
             <span>Show</span>
@@ -428,9 +463,10 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         )}
         {isWhr && events.length > 0 && (
           <p className="muted chart-caption">
-            Ratings here move once per club night, so each set’s Δ is its share of that night’s movement —
-            bigger for surprising results, smaller for expected ones, adding up to exactly what the night
-            changed. These numbers are what the board published at the time and never rewrite.
+            Ratings here move once per club night, so each set’s Δ is its share of that night’s
+            movement — bigger for surprising results, smaller for expected ones, adding up to
+            exactly what the night changed. These numbers are what the board published at the time
+            and never rewrite.
           </p>
         )}
         {events.length === 0 ? (
@@ -462,33 +498,52 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                   const ratingChange = event.postRating - event.preRating;
                   const rdChange = event.postRd - event.preRd;
                   return (
-                    <tr key={event.seq} className={event.isDecay ? 'decay' : event.won ? 'win' : 'loss'}>
+                    <tr
+                      key={event.seq}
+                      className={event.isDecay ? 'decay' : event.won ? 'win' : 'loss'}
+                    >
                       <td className="mono">{formatDate(event.tournamentDate)}</td>
                       <td>
                         {event.tournamentName}
-                        {event.isRookie && <span className="chip chip-warning rookie-chip">rookie</span>}
+                        {event.isRookie && (
+                          <span className="chip chip-warning rookie-chip">rookie</span>
+                        )}
                       </td>
-                      <td>{event.isDecay ? '—' : event.resultStage === 'group' ? 'Pool' : 'Bracket'}</td>
+                      <td>
+                        {event.isDecay ? '—' : event.resultStage === 'group' ? 'Pool' : 'Bracket'}
+                      </td>
                       <td>
                         {event.isDecay ? (
                           <em>Inactivity decay</em>
                         ) : event.opponentPlayerId ? (
-                          <Link to="/players/$playerId" params={{ playerId: event.opponentPlayerId }}>
+                          <Link
+                            to="/players/$playerId"
+                            params={{ playerId: event.opponentPlayerId }}
+                          >
                             {event.opponentName ?? 'Unknown'}
                           </Link>
                         ) : (
                           (event.opponentName ?? 'Unknown')
                         )}
                       </td>
-                      <td className={event.isDecay ? 'result-decay' : event.won ? 'result-win' : 'result-loss'}>
+                      <td
+                        className={
+                          event.isDecay ? 'result-decay' : event.won ? 'result-win' : 'result-loss'
+                        }
+                      >
                         {event.isDecay ? '—' : event.won ? 'W' : 'L'}
                       </td>
                       <td className={`num ${ratingChange >= 0 ? 'rating-up' : 'rating-down'}`}>
                         {ratingChange >= 0 ? '+' : ''}
                         {ratingChange.toFixed(1)}
-                        {event.isDecay && rdChange > 0 && <span className="rd-decay"> (RD +{rdChange.toFixed(1)})</span>}
+                        {event.isDecay && rdChange > 0 && (
+                          <span className="rd-decay"> (RD +{rdChange.toFixed(1)})</span>
+                        )}
                         {!event.isDecay && event.weight != null && event.weight < 0.99 && (
-                          <span className="weight-indicator" title={`Match weight: ${(event.weight * 100).toFixed(0)}%`}>
+                          <span
+                            className="weight-indicator"
+                            title={`Match weight: ${(event.weight * 100).toFixed(0)}%`}
+                          >
                             {' '}
                             ×{event.weight.toFixed(2)}
                           </span>

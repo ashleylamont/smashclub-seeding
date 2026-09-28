@@ -24,13 +24,22 @@ export function LoginPage() {
       <div className="login-card card">
         <h1>Sign in</h1>
         <p className="muted">
-          Sign in to claim your player, track your results, and set your public alias and characters.
+          Sign in to claim your player, track your results, and set your public alias and
+          characters.
         </p>
         <div className="login-buttons">
-          <button type="button" className="btn provider-btn discord" onClick={() => void signIn('discord')}>
+          <button
+            type="button"
+            className="btn provider-btn discord"
+            onClick={() => void signIn('discord')}
+          >
             <span className="provider-mark">D</span> Continue with Discord
           </button>
-          <button type="button" className="btn provider-btn google" onClick={() => void signIn('google')}>
+          <button
+            type="button"
+            className="btn provider-btn google"
+            onClick={() => void signIn('google')}
+          >
             <span className="provider-mark">G</span> Continue with Google
           </button>
         </div>
@@ -40,8 +49,8 @@ export function LoginPage() {
             you own both. Linking from /me is what joins them, and it works
             regardless of whether the two addresses match. */}
         <p className="muted login-note">
-          Already signed up with the other one? Sign in with it first, then link this one from your account page —
-          that keeps one account. The two can use different email addresses.
+          Already signed up with the other one? Sign in with it first, then link this one from your
+          account page — that keeps one account. The two can use different email addresses.
         </p>
       </div>
     </div>

@@ -66,7 +66,10 @@ afterEach(async () => {
 async function syncBoth(): Promise<void> {
   const client = fixtureClient([main, rookie]);
   for (const slug of ['main1', 'rookie1']) {
-    const [row] = await db.select({ id: tournaments.id }).from(tournaments).where(eq(tournaments.challongeSlug, slug));
+    const [row] = await db
+      .select({ id: tournaments.id })
+      .from(tournaments)
+      .where(eq(tournaments.challongeSlug, slug));
     await syncTournament(db, client, row!.id);
   }
 }
@@ -75,7 +78,9 @@ describe('parallel rating models', () => {
   it('uses the same final-stage-only results for model comparison and both published models', async () => {
     await syncBoth();
     await db.update(sets).set({ resultStage: 'group' }).where(eq(sets.challongeMatchId, 11));
-    await db.update(tournaments).set({ resultsMode: 'final_stage_only' })
+    await db
+      .update(tournaments)
+      .set({ resultsMode: 'final_stage_only' })
       .where(eq(tournaments.challongeSlug, 'main1'));
     expect((await compareModels(db)).sets).toBe(5);
     expect((await runRecompute(db)).sets).toBe(5);
@@ -88,7 +93,10 @@ describe('parallel rating models', () => {
     await syncBoth();
     const first = await runRecompute(db);
     expect(first.model).toBe('glicko2');
-    const [row] = await db.select({ model: recomputes.model }).from(recomputes).where(eq(recomputes.id, first.recomputeId));
+    const [row] = await db
+      .select({ model: recomputes.model })
+      .from(recomputes)
+      .where(eq(recomputes.id, first.recomputeId));
     expect(row!.model).toBe('glicko2');
   });
 
@@ -101,10 +109,13 @@ describe('parallel rating models', () => {
     expect(run.model).toBe('whr');
     expect(run.players).toBe(5);
 
-    const ratings = await db.select().from(playerRatings).where(eq(playerRatings.recomputeId, run.recomputeId));
+    const ratings = await db
+      .select()
+      .from(playerRatings)
+      .where(eq(playerRatings.recomputeId, run.recomputeId));
     expect(ratings).toHaveLength(5);
     // Ranks are dense and start at 1.
-    expect([...ratings.map((r) => r.rank)].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5]);
+    expect(ratings.map((r) => r.rank).sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5]);
     for (const rating of ratings) {
       expect(Number.isFinite(rating.skillRating)).toBe(true);
       expect(rating.skillSd).toBeGreaterThan(0);
@@ -120,7 +131,10 @@ describe('parallel rating models', () => {
     await updateGlickoSettings(db, { ...glicko, activeModel: 'whr' });
     const run = await runRecompute(db);
 
-    const events = await db.select().from(ratingEvents).where(eq(ratingEvents.recomputeId, run.recomputeId));
+    const events = await db
+      .select()
+      .from(ratingEvents)
+      .where(eq(ratingEvents.recomputeId, run.recomputeId));
     // 6 sets across both brackets, two players each.
     expect(events).toHaveLength(12);
 

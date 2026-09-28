@@ -55,7 +55,10 @@ afterEach(async () => {
 });
 
 async function syncOnce(): Promise<string> {
-  const [row] = await db.select({ id: tournaments.id }).from(tournaments).where(eq(tournaments.challongeSlug, 'weekly1'));
+  const [row] = await db
+    .select({ id: tournaments.id })
+    .from(tournaments)
+    .where(eq(tournaments.challongeSlug, 'weekly1'));
   await syncTournament(db, fixtureClient([fixture]), row!.id);
   return row!.id;
 }
@@ -69,7 +72,10 @@ describe('review resolution -> recompute', () => {
     expect(first.sets).toBe(1);
     expect(first.players).toBe(2);
 
-    const [queueItem] = await db.select().from(reviewItems).where(eq(reviewItems.status, 'pending'));
+    const [queueItem] = await db
+      .select()
+      .from(reviewItems)
+      .where(eq(reviewItems.status, 'pending'));
     expect(queueItem).toBeDefined();
     const { playerId } = await resolveReviewItem(db, queueItem!.id, { kind: 'created_new' }, null);
 
@@ -88,19 +94,35 @@ describe('review resolution -> recompute', () => {
     expect(falcoRow.rank).toBe(3);
     expect(rows.find((r) => r.rank === 1)!.wins).toBe(2); // Fox won both
 
-    const events = await db.select().from(ratingEvents).where(eq(ratingEvents.recomputeId, second.recomputeId));
+    const events = await db
+      .select()
+      .from(ratingEvents)
+      .where(eq(ratingEvents.recomputeId, second.recomputeId));
     expect(events).toHaveLength(6); // 3 sets x 2 player views, no decay in one tournament
   });
 
   it('records durable identity decisions on linked_existing', async () => {
     await syncOnce();
-    const [queueItem] = await db.select().from(reviewItems).where(eq(reviewItems.status, 'pending'));
+    const [queueItem] = await db
+      .select()
+      .from(reviewItems)
+      .where(eq(reviewItems.status, 'pending'));
     const [fox] = await db.select().from(players).where(eq(players.legacyId, 'fox-mccloud'));
 
-    await resolveReviewItem(db, queueItem!.id, { kind: 'linked_existing', playerId: fox!.id }, null);
+    await resolveReviewItem(
+      db,
+      queueItem!.id,
+      { kind: 'linked_existing', playerId: fox!.id },
+      null,
+    );
 
-    const decisions = await db.select().from(identityDecisions).where(eq(identityDecisions.kind, 'merge'));
-    expect(decisions.some((d) => d.aliasNorm === 'falco lombardi' && d.playerId === fox!.id)).toBe(true);
+    const decisions = await db
+      .select()
+      .from(identityDecisions)
+      .where(eq(identityDecisions.kind, 'merge'));
+    expect(decisions.some((d) => d.aliasNorm === 'falco lombardi' && d.playerId === fox!.id)).toBe(
+      true,
+    );
 
     // Set 12 (Fox vs Falco) now maps both sides to the same player and is
     // dropped from rating input (self-play guard).
@@ -110,14 +132,22 @@ describe('review resolution -> recompute', () => {
 
   it('links to a player who was never offered as a candidate', async () => {
     await syncOnce();
-    const [queueItem] = await db.select().from(reviewItems).where(eq(reviewItems.status, 'pending'));
+    const [queueItem] = await db
+      .select()
+      .from(reviewItems)
+      .where(eq(reviewItems.status, 'pending'));
     const [samus] = await db.select().from(players).where(eq(players.legacyId, 'samus-aran'));
     // Nothing links "Falco Lombardi" to Samus Aran — this is the manual-lookup
     // path, where the reviewer knows something the scoring cannot.
-    const offered = (queueItem!.candidates as Array<{ playerId: string }> | null) ?? [];
+    const offered = (queueItem!.candidates as { playerId: string }[] | null) ?? [];
     expect(offered.map((candidate) => candidate.playerId)).not.toContain(samus!.id);
 
-    const result = await resolveReviewItem(db, queueItem!.id, { kind: 'linked_existing', playerId: samus!.id }, null);
+    const result = await resolveReviewItem(
+      db,
+      queueItem!.id,
+      { kind: 'linked_existing', playerId: samus!.id },
+      null,
+    );
     expect(result.playerId).toBe(samus!.id);
 
     const [participant] = await db
@@ -126,13 +156,19 @@ describe('review resolution -> recompute', () => {
       .where(eq(tournamentParticipants.id, queueItem!.tournamentParticipantId));
     expect(participant!.playerId).toBe(samus!.id);
     // The bracket's spelling is now aliased, so the next import matches silently.
-    const aliases = await db.select().from(playerAliases).where(eq(playerAliases.playerId, samus!.id));
+    const aliases = await db
+      .select()
+      .from(playerAliases)
+      .where(eq(playerAliases.playerId, samus!.id));
     expect(aliases.map((alias) => alias.aliasNorm)).toContain('falco lombardi');
   });
 
   it('refuses to link to a player that is gone or merged away', async () => {
     await syncOnce();
-    const [queueItem] = await db.select().from(reviewItems).where(eq(reviewItems.status, 'pending'));
+    const [queueItem] = await db
+      .select()
+      .from(reviewItems)
+      .where(eq(reviewItems.status, 'pending'));
     const [fox] = await db.select().from(players).where(eq(players.legacyId, 'fox-mccloud'));
     await db.update(players).set({ status: 'merged' }).where(eq(players.id, fox!.id));
 
@@ -140,7 +176,12 @@ describe('review resolution -> recompute', () => {
       resolveReviewItem(db, queueItem!.id, { kind: 'linked_existing', playerId: fox!.id }, null),
     ).rejects.toThrow(/merged/);
     await expect(
-      resolveReviewItem(db, queueItem!.id, { kind: 'linked_existing', playerId: MISSING_PLAYER_ID }, null),
+      resolveReviewItem(
+        db,
+        queueItem!.id,
+        { kind: 'linked_existing', playerId: MISSING_PLAYER_ID },
+        null,
+      ),
     ).rejects.toThrow(/Unknown player/);
 
     const [item] = await db.select().from(reviewItems).where(eq(reviewItems.id, queueItem!.id));
@@ -149,7 +190,10 @@ describe('review resolution -> recompute', () => {
 
   it('kept_separate records rejections so candidates are never re-suggested', async () => {
     await syncOnce();
-    const [queueItem] = await db.select().from(reviewItems).where(eq(reviewItems.status, 'pending'));
+    const [queueItem] = await db
+      .select()
+      .from(reviewItems)
+      .where(eq(reviewItems.status, 'pending'));
     await resolveReviewItem(db, queueItem!.id, { kind: 'kept_separate' }, null);
 
     const [item] = await db.select().from(reviewItems).where(eq(reviewItems.id, queueItem!.id));
@@ -161,7 +205,10 @@ describe('review resolution -> recompute', () => {
 
   it('prunes old recomputes, keeping the most recent five', async () => {
     await syncOnce();
-    const [queueItem] = await db.select().from(reviewItems).where(eq(reviewItems.status, 'pending'));
+    const [queueItem] = await db
+      .select()
+      .from(reviewItems)
+      .where(eq(reviewItems.status, 'pending'));
     await resolveReviewItem(db, queueItem!.id, { kind: 'created_new' }, null);
 
     for (let i = 0; i < 7; i++) {
@@ -174,7 +221,10 @@ describe('review resolution -> recompute', () => {
 
   it('rating math in the DB matches a direct engine replay', async () => {
     await syncOnce();
-    const [queueItem] = await db.select().from(reviewItems).where(eq(reviewItems.status, 'pending'));
+    const [queueItem] = await db
+      .select()
+      .from(reviewItems)
+      .where(eq(reviewItems.status, 'pending'));
     await resolveReviewItem(db, queueItem!.id, { kind: 'created_new' }, null);
     const { recomputeId } = await runRecompute(db);
 
@@ -205,7 +255,10 @@ describe('review resolution -> recompute', () => {
     });
     const expected = computeLeaderboard(replay.finalStates, defaultGlickoSettings);
 
-    const stored = await db.select().from(playerRatings).where(eq(playerRatings.recomputeId, recomputeId));
+    const stored = await db
+      .select()
+      .from(playerRatings)
+      .where(eq(playerRatings.recomputeId, recomputeId));
     expect(stored).toHaveLength(expected.length);
     for (const row of expected) {
       const dbRow = stored.find((s) => s.playerId === row.playerId)!;

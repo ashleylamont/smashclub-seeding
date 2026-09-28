@@ -5,7 +5,14 @@
  */
 import type { GlickoSettings } from '@smashclub/shared';
 import { updateRating, type Rating } from './glicko2';
-import { DISPLAY_CENTRE, NATURAL_TO_DISPLAY, defaultWhrConfig, fitWhr, probabilityFromRatings, type WhrConfig } from './whr';
+import {
+  DISPLAY_CENTRE,
+  NATURAL_TO_DISPLAY,
+  defaultWhrConfig,
+  fitWhr,
+  probabilityFromRatings,
+  type WhrConfig,
+} from './whr';
 import type { EvalModel, EvalSet } from './evaluate';
 
 /** Always 50/50 — the floor any useful model must beat. */
@@ -47,7 +54,7 @@ export const winRateModel: EvalModel = {
       for (const [id, won] of [
         [set.p1PlayerId, set.winner === 1],
         [set.p2PlayerId, set.winner === 2],
-      ] as Array<[string, boolean]>) {
+      ] as [string, boolean][]) {
         games.set(id, (games.get(id) ?? 0) + 1);
         if (won) wins.set(id, (wins.get(id) ?? 0) + 1);
       }
@@ -103,7 +110,9 @@ function sequentialGlickoModel(options: SequentialOptions): EvalModel {
       // Group into rating periods.
       const periods = new Map<string, EvalSet[]>();
       for (const set of training) {
-        const key = options.batchByTournament ? set.tournamentId : `${set.tournamentId}|${periods.size}`;
+        const key = options.batchByTournament
+          ? set.tournamentId
+          : `${set.tournamentId}|${periods.size}`;
         const list = periods.get(key) ?? [];
         list.push(set);
         periods.set(key, list);
@@ -126,13 +135,16 @@ function sequentialGlickoModel(options: SequentialOptions): EvalModel {
         const snapshot = new Map<string, Rating>();
         for (const id of totals.keys()) snapshot.set(id, { ...get(id) });
 
-        const samples = new Map<string, Array<{ rating: number; rd: number; outcome: number; weight: number }>>();
+        const samples = new Map<
+          string,
+          { rating: number; rd: number; outcome: number; weight: number }[]
+        >();
         const seen = new Map<string, number>();
         for (const set of periodSets) {
           for (const [id, opponentId, won] of [
             [set.p1PlayerId, set.p2PlayerId, set.winner === 1],
             [set.p2PlayerId, set.p1PlayerId, set.winner === 2],
-          ] as Array<[string, string, boolean]>) {
+          ] as [string, string, boolean][]) {
             const index = (seen.get(id) ?? 0) + 1;
             seen.set(id, index);
             let weight = 1;
@@ -164,7 +176,7 @@ function sequentialGlickoModel(options: SequentialOptions): EvalModel {
       return (set) => {
         const a = states.get(set.p1PlayerId) ?? initial();
         const b = states.get(set.p2PlayerId) ?? initial();
-        const varianceSum = ((a.rd / naturalScale) ** 2 + (b.rd / naturalScale) ** 2);
+        const varianceSum = (a.rd / naturalScale) ** 2 + (b.rd / naturalScale) ** 2;
         return probabilityFromRatings(
           (a.rating - settings.initialRating) / naturalScale,
           (b.rating - settings.initialRating) / naturalScale,
@@ -220,9 +232,15 @@ export interface WhrModelOptions {
   isRookieTournament?: (tournamentId: string) => boolean;
 }
 
-export function whrModel(config?: Partial<WhrConfig>, label = 'whr', options?: WhrModelOptions): EvalModel {
+export function whrModel(
+  config?: Partial<WhrConfig>,
+  label = 'whr',
+  options?: WhrModelOptions,
+): EvalModel {
   const rookiePriorNatural =
-    options?.rookieDebutPrior === undefined ? 0 : (options.rookieDebutPrior - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY;
+    options?.rookieDebutPrior === undefined
+      ? 0
+      : (options.rookieDebutPrior - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY;
   const isRookie = options?.isRookieTournament ?? (() => false);
   return {
     name: label,
@@ -248,7 +266,8 @@ export function whrModel(config?: Partial<WhrConfig>, label = 'whr', options?: W
         priorMeans,
       });
       return (set) => {
-        if (rookiePriorNatural === 0) return fit.winProbability(set.p1PlayerId, set.p2PlayerId, set.time);
+        if (rookiePriorNatural === 0)
+          return fit.winProbability(set.p1PlayerId, set.p2PlayerId, set.time);
         // A player unseen in training debuts in the predicted set: give them
         // the same prior the fit would have.
         const debutMean = isRookie(set.tournamentId) ? rookiePriorNatural : 0;

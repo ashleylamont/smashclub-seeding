@@ -26,7 +26,10 @@ export interface CleanedPlayerEntry {
  * - "[Atlas] @Pit Switch"                             -> Pit, ATL
  * - "[Atlas]@Lucina - Ready to taunt"                 -> Lucina, ATL
  */
-export function cleanPlayerEntry(line: string, taxonomy: CompanyTaxonomy = DEFAULT_COMPANY_TAXONOMY): CleanedPlayerEntry {
+export function cleanPlayerEntry(
+  line: string,
+  taxonomy: CompanyTaxonomy = DEFAULT_COMPANY_TAXONOMY,
+): CleanedPlayerEntry {
   // Remove leading numbers (like "1 ", "12 ")
   let working = line.replace(/^\s*\d+\s*/, '');
 
@@ -105,7 +108,9 @@ export function cleanPlayerEntry(line: string, taxonomy: CompanyTaxonomy = DEFAU
     company = 'ATL';
   }
 
-  return unknownCompanyLabel ? { name, companyCode: company, unknownCompanyLabel } : { name, companyCode: company };
+  return unknownCompanyLabel
+    ? { name, companyCode: company, unknownCompanyLabel }
+    : { name, companyCode: company };
 }
 
 /**
@@ -113,7 +118,10 @@ export function cleanPlayerEntry(line: string, taxonomy: CompanyTaxonomy = DEFAU
  * form cleanPlayerEntry understands: "ATL|Name", "(ATL) Name" and
  * "Name (ATL)" all become "[ATL] Name". Ported from _prepare_player_entry.
  */
-export function preparePlayerEntry(rawName: string, taxonomy: CompanyTaxonomy = DEFAULT_COMPANY_TAXONOMY): string {
+export function preparePlayerEntry(
+  rawName: string,
+  taxonomy: CompanyTaxonomy = DEFAULT_COMPANY_TAXONOMY,
+): string {
   const stripped = rawName.trim();
 
   const pipeMatch = stripped.match(/^([^|]+)\|\s*(.+)$/);

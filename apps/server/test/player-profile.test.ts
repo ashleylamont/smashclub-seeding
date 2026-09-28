@@ -62,8 +62,15 @@ beforeEach(async () => {
     { id: 'samus', canonical_name: 'Samus Aran', company: 'ATL' },
   ]);
   // Resolutions stamp `resolvedBy`, which is a FK onto user.
-  await db.insert(user).values({ id: 'admin-1', name: 'Admin', email: 'admin@example.com', role: 'admin' });
-  admin = callerFor({ id: 'admin-1', email: 'admin@example.com', name: 'Admin', role: 'admin' }).admin;
+  await db
+    .insert(user)
+    .values({ id: 'admin-1', name: 'Admin', email: 'admin@example.com', role: 'admin' });
+  admin = callerFor({
+    id: 'admin-1',
+    email: 'admin@example.com',
+    name: 'Admin',
+    role: 'admin',
+  }).admin;
 });
 
 afterEach(async () => {
@@ -84,16 +91,25 @@ describe('player characters', () => {
     expect(await charactersForPlayer(db, fox!.id)).toEqual(['wolf']);
 
     await setPlayerCharacters(db, fox!.id, []);
-    expect(await db.select().from(playerCharacters).where(eq(playerCharacters.playerId, fox!.id))).toHaveLength(0);
+    expect(
+      await db.select().from(playerCharacters).where(eq(playerCharacters.playerId, fox!.id)),
+    ).toHaveLength(0);
   });
 
   it('rejects unknown slugs, duplicates and over-long lists', async () => {
     const [fox] = await db.select().from(players).where(eq(players.legacyId, 'fox'));
-    await expect(admin.updatePlayer({ playerId: fox!.id, characters: ['not-a-fighter'] })).rejects.toThrow();
-    await expect(admin.updatePlayer({ playerId: fox!.id, characters: ['fox', 'fox'] })).rejects.toThrow();
     await expect(
-      admin.updatePlayer({ playerId: fox!.id, characters: ['fox', 'falco', 'wolf', 'ike', 'marth'] }),
-    ).rejects.toThrow();
+      admin.updatePlayer({ playerId: fox!.id, characters: ['not-a-fighter'] }),
+    ).rejects.toBeInstanceOf(Error);
+    await expect(
+      admin.updatePlayer({ playerId: fox!.id, characters: ['fox', 'fox'] }),
+    ).rejects.toBeInstanceOf(Error);
+    await expect(
+      admin.updatePlayer({
+        playerId: fox!.id,
+        characters: ['fox', 'falco', 'wolf', 'ike', 'marth'],
+      }),
+    ).rejects.toBeInstanceOf(Error);
   });
 });
 
@@ -113,20 +129,41 @@ describe('admin.createPlayer', () => {
     expect(player!.companyId).not.toBeNull();
     expect(await charactersForPlayer(db, playerId)).toEqual(['pyra', 'mythra']);
 
-    const aliases = await db.select().from(playerAliases).where(eq(playerAliases.playerId, playerId));
+    const aliases = await db
+      .select()
+      .from(playerAliases)
+      .where(eq(playerAliases.playerId, playerId));
     expect(aliases.map((row) => row.aliasNorm).sort()).toEqual(['ash l', 'ashley lamont']);
   });
 
   it('refuses a public alias another player already publishes', async () => {
-    await admin.createPlayer({ canonicalName: 'One', displayName: 'Wolf', companyCode: null, characters: [], aliases: [] });
+    await admin.createPlayer({
+      canonicalName: 'One',
+      displayName: 'Wolf',
+      companyCode: null,
+      characters: [],
+      aliases: [],
+    });
     await expect(
-      admin.createPlayer({ canonicalName: 'Two', displayName: 'wolf', companyCode: null, characters: [], aliases: [] }),
+      admin.createPlayer({
+        canonicalName: 'Two',
+        displayName: 'wolf',
+        companyCode: null,
+        characters: [],
+        aliases: [],
+      }),
     ).rejects.toThrow(/already taken/i);
   });
 
   it('rejects an unknown company rather than silently dropping it', async () => {
     await expect(
-      admin.createPlayer({ canonicalName: 'Three', displayName: null, companyCode: 'NOPE', characters: [], aliases: [] }),
+      admin.createPlayer({
+        canonicalName: 'Three',
+        displayName: null,
+        companyCode: 'NOPE',
+        characters: [],
+        aliases: [],
+      }),
     ).rejects.toThrow(/Unknown company/);
   });
 });
@@ -134,7 +171,10 @@ describe('admin.createPlayer', () => {
 describe('review queue details', () => {
   async function queueFalco(): Promise<string> {
     await registerTournamentSlugs(db, ['weekly1']);
-    const [row] = await db.select({ id: tournaments.id }).from(tournaments).where(eq(tournaments.challongeSlug, 'weekly1'));
+    const [row] = await db
+      .select({ id: tournaments.id })
+      .from(tournaments)
+      .where(eq(tournaments.challongeSlug, 'weekly1'));
     await syncTournament(db, fixtureClient([fixture]), row!.id);
     const [item] = await db.select().from(reviewItems).where(eq(reviewItems.status, 'pending'));
     return item!.id;
@@ -162,14 +202,20 @@ describe('review queue details', () => {
 
     // The bracket's own spelling stays aliased, so the next import of
     // "Falco Lombardi" links silently instead of queueing again.
-    const aliases = await db.select().from(playerAliases).where(eq(playerAliases.playerId, playerId));
+    const aliases = await db
+      .select()
+      .from(playerAliases)
+      .where(eq(playerAliases.playerId, playerId));
     expect(aliases.map((row) => row.aliasNorm)).toContain('falco lombardi');
     expect(aliases.map((row) => row.aliasNorm)).toContain('falco l');
   });
 
   it('still resolves with no details at all', async () => {
     const reviewItemId = await queueFalco();
-    const { playerId } = await admin.resolveReview({ reviewItemId, resolution: { kind: 'created_new' } });
+    const { playerId } = await admin.resolveReview({
+      reviewItemId,
+      resolution: { kind: 'created_new' },
+    });
 
     const [player] = await db.select().from(players).where(eq(players.id, playerId));
     expect(player!.canonicalName).toBe('Falco Lombardi');
@@ -182,7 +228,11 @@ describe('review queue details', () => {
 // these use codes that no default holds.
 describe('company management', () => {
   it('creates, renames its code, and reports player counts', async () => {
-    const { companyId } = await admin.upsertCompany({ code: 'zed', name: 'Zed Corp', aliases: ['Zedd'] });
+    const { companyId } = await admin.upsertCompany({
+      code: 'zed',
+      name: 'Zed Corp',
+      aliases: ['Zedd'],
+    });
 
     let list = await admin.companies();
     const zed = list.find((row) => row.code === 'ZED')!;
@@ -197,7 +247,13 @@ describe('company management', () => {
     expect(list.find((row) => row.code === 'ZED')).toBeUndefined();
     expect(list.find((row) => row.code === 'ZDC')!.name).toBe('Zed Corp Pty');
 
-    await admin.createPlayer({ canonicalName: 'Someone', displayName: null, companyCode: 'ZDC', characters: [], aliases: [] });
+    await admin.createPlayer({
+      canonicalName: 'Someone',
+      displayName: null,
+      companyCode: 'ZDC',
+      characters: [],
+      aliases: [],
+    });
     list = await admin.companies();
     expect(list.find((row) => row.code === 'ZDC')!.playerCount).toBe(1);
   });
@@ -205,13 +261,17 @@ describe('company management', () => {
   it('refuses to take a code another company already holds', async () => {
     const { companyId } = await admin.upsertCompany({ code: 'ZED', name: 'Zed Corp' });
     await admin.upsertCompany({ code: 'ZAP', name: 'Zap Ltd' });
-    await expect(admin.upsertCompany({ id: companyId, code: 'ZAP', name: 'Zed Corp' })).rejects.toThrow(
-      /already in use/,
-    );
+    await expect(
+      admin.upsertCompany({ id: companyId, code: 'ZAP', name: 'Zed Corp' }),
+    ).rejects.toThrow(/already in use/);
   });
 
   it('removes an alias without touching the company', async () => {
-    const { companyId } = await admin.upsertCompany({ code: 'ZIG', name: 'Zig Inc', aliases: ['ziggy', 'zig inc'] });
+    const { companyId } = await admin.upsertCompany({
+      code: 'ZIG',
+      name: 'Zig Inc',
+      aliases: ['ziggy', 'zig inc'],
+    });
     await admin.removeCompanyAlias({ companyId, alias: 'ziggy' });
     const list = await admin.companies();
     expect(list.find((row) => row.code === 'ZIG')!.aliases).toEqual(['zig inc']);
@@ -239,9 +299,14 @@ describe('company management', () => {
 describe('self-service profile edits', () => {
   it('refuses character edits from a user without an approved claim', async () => {
     const [fox] = await db.select().from(players).where(eq(players.legacyId, 'fox'));
-    const stranger = callerFor({ id: 'user-1', email: 'user@example.com', name: 'User', role: 'user' }).me;
-    await expect(stranger.updateCharacters({ playerId: fox!.id, characters: ['fox'] })).rejects.toThrow(
-      /not claimed/i,
-    );
+    const stranger = callerFor({
+      id: 'user-1',
+      email: 'user@example.com',
+      name: 'User',
+      role: 'user',
+    }).me;
+    await expect(
+      stranger.updateCharacters({ playerId: fox!.id, characters: ['fox'] }),
+    ).rejects.toThrow(/not claimed/i);
   });
 });

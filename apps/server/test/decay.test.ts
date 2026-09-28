@@ -106,7 +106,10 @@ beforeEach(async () => {
     { id: 'kirby', canonical_name: 'Kirby', company: 'ATL' },
     { id: 'yoshi', canonical_name: 'Yoshi', company: 'ATL' },
   ]);
-  await registerTournamentSlugs(db, ALL.map((t) => t.slug));
+  await registerTournamentSlugs(
+    db,
+    ALL.map((t) => t.slug),
+  );
 });
 
 afterEach(async () => {
@@ -116,13 +119,19 @@ afterEach(async () => {
 async function syncAll(slugs: string[] = ALL.map((t) => t.slug)): Promise<void> {
   const client = fixtureClient(ALL);
   for (const slug of slugs) {
-    const [row] = await db.select({ id: tournaments.id }).from(tournaments).where(eq(tournaments.challongeSlug, slug));
+    const [row] = await db
+      .select({ id: tournaments.id })
+      .from(tournaments)
+      .where(eq(tournaments.challongeSlug, slug));
     await syncTournament(db, client, row!.id);
   }
 }
 
 async function playerId(canonicalName: string): Promise<string> {
-  const [row] = await db.select({ id: players.id }).from(players).where(eq(players.canonicalName, canonicalName));
+  const [row] = await db
+    .select({ id: players.id })
+    .from(players)
+    .where(eq(players.canonicalName, canonicalName));
   return row!.id;
 }
 
@@ -187,12 +196,20 @@ describe('inactivity decay through sync and recompute', () => {
     await syncAll();
     const run = await runRecompute(db);
 
-    const counts = async (name: string): Promise<{ eventCount: number; tournamentCount: number }> => {
+    const counts = async (
+      name: string,
+    ): Promise<{ eventCount: number; tournamentCount: number }> => {
       const [row] = await db
-        .select({ eventCount: playerRatings.eventCount, tournamentCount: playerRatings.tournamentCount })
+        .select({
+          eventCount: playerRatings.eventCount,
+          tournamentCount: playerRatings.tournamentCount,
+        })
         .from(playerRatings)
         .where(
-          and(eq(playerRatings.recomputeId, run.recomputeId), eq(playerRatings.playerId, await playerId(name))),
+          and(
+            eq(playerRatings.recomputeId, run.recomputeId),
+            eq(playerRatings.playerId, await playerId(name)),
+          ),
         );
       return row!;
     };
@@ -207,7 +224,10 @@ describe('inactivity decay through sync and recompute', () => {
     // The invariant, for the whole field: you cannot attend more occasions than
     // the brackets you entered.
     const all = await db
-      .select({ eventCount: playerRatings.eventCount, tournamentCount: playerRatings.tournamentCount })
+      .select({
+        eventCount: playerRatings.eventCount,
+        tournamentCount: playerRatings.tournamentCount,
+      })
       .from(playerRatings)
       .where(eq(playerRatings.recomputeId, run.recomputeId));
     expect(all).toHaveLength(4);
@@ -226,7 +246,12 @@ describe('inactivity decay through sync and recompute', () => {
       const [row] = await db
         .select()
         .from(playerRatings)
-        .where(and(eq(playerRatings.recomputeId, run.recomputeId), eq(playerRatings.playerId, await playerId(name))));
+        .where(
+          and(
+            eq(playerRatings.recomputeId, run.recomputeId),
+            eq(playerRatings.playerId, await playerId(name)),
+          ),
+        );
       return row!;
     };
 

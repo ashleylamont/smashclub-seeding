@@ -18,9 +18,9 @@ function modulePage(tournamentStore: string): string {
   return [
     '<!DOCTYPE html><html><head><title>Bracket</title></head><body>',
     '<script>',
-    "window._initialStoreState = {}; window._initialStoreState['CurrentUserStore'] = {\"locale\":\"en\"};",
+    'window._initialStoreState = {}; window._initialStoreState[\'CurrentUserStore\'] = {"locale":"en"};',
     `window._initialStoreState['TournamentStore'] = ${tournamentStore};`,
-    "window._initialStoreState['AfterStore'] = {\"trailing\":true};",
+    'window._initialStoreState[\'AfterStore\'] = {"trailing":true};',
     '</script></body></html>',
   ].join('\n');
 }
@@ -88,7 +88,8 @@ describe('extractModuleBracketPayload', () => {
   });
 
   it('rejects a truncated payload rather than returning a partial bracket', () => {
-    const truncated = "<script>window._initialStoreState['TournamentStore'] = {\"matches_by_round\":{";
+    const truncated =
+      '<script>window._initialStoreState[\'TournamentStore\'] = {"matches_by_round":{';
     expect(() => extractModuleBracketPayload(truncated)).toThrow(/truncated/i);
   });
 });
@@ -113,19 +114,36 @@ describe('extractPublicBracket over a module payload', () => {
     const first = { id: 5001, display_name: 'Alpha', seed: 8 };
     const second = { id: 5002, display_name: 'Bravo', seed: 7 };
     const match = (id: number, identifier: number) => ({
-      id, identifier, state: 'complete', winner_id: 5001, player1: first, player2: second,
+      id,
+      identifier,
+      state: 'complete',
+      winner_id: 5001,
+      player1: first,
+      player2: second,
     });
     const bracket = extractPublicBracket({
       matches_by_round: { '1': [match(20, 2), match(10, 1)] },
-      groups: [{
-        tournament: { id: 70 },
-        matches_by_round: { '1': [
-          { ...match(40, 2), player1: { ...first, id: 101, participant_id: 5001, seed: 1 } },
-          { ...match(30, 1), player2: { id: 103, participant_id: 5003, display_name: 'Charlie', seed: 2 } },
-        ] },
-      }],
+      groups: [
+        {
+          tournament: { id: 70 },
+          matches_by_round: {
+            '1': [
+              { ...match(40, 2), player1: { ...first, id: 101, participant_id: 5001, seed: 1 } },
+              {
+                ...match(30, 1),
+                player2: { id: 103, participant_id: 5003, display_name: 'Charlie', seed: 2 },
+              },
+            ],
+          },
+        },
+      ],
     });
-    expect(bracket.matches.map((m) => [m.id, m.suggestedPlayOrder])).toEqual([[30, 1], [40, 2], [10, 3], [20, 4]]);
+    expect(bracket.matches.map((m) => [m.id, m.suggestedPlayOrder])).toEqual([
+      [30, 1],
+      [40, 2],
+      [10, 3],
+      [20, 4],
+    ]);
     expect(bracket.participants.find((p) => p.id === 5001)?.seed).toBe(8);
     expect(bracket.participants.find((p) => p.id === 5003)?.seed).toBeNull();
   });
@@ -136,24 +154,40 @@ describe('extractPublicBracket over a module payload', () => {
       {
         tournament: { id: 222 },
         matches_by_round: {
-          '1': [{
-            id: 9010,
-            identifier: 1,
-            raw_identifier: 'A',
-            round: 1,
-            state: 'complete',
-            underway_at: '2025-08-14T16:00:00.000+10:00',
-            scores: [2, 0],
-            winner_id: 6001,
-            player1: { id: 6001, participant_id: 5001, display_name: 'Alpha { brace } "quote"', seed: 1 },
-            player2: { id: 6002, participant_id: 5002, display_name: 'Bravo', seed: 2 },
-          }],
+          '1': [
+            {
+              id: 9010,
+              identifier: 1,
+              raw_identifier: 'A',
+              round: 1,
+              state: 'complete',
+              underway_at: '2025-08-14T16:00:00.000+10:00',
+              scores: [2, 0],
+              winner_id: 6001,
+              player1: {
+                id: 6001,
+                participant_id: 5001,
+                display_name: 'Alpha { brace } "quote"',
+                seed: 1,
+              },
+              player2: { id: 6002, participant_id: 5002, display_name: 'Bravo', seed: 2 },
+            },
+          ],
         },
       },
     ];
-    const bracket = extractPublicBracket(extractModuleBracketPayload(modulePage(JSON.stringify(store))));
+    const bracket = extractPublicBracket(
+      extractModuleBracketPayload(modulePage(JSON.stringify(store))),
+    );
     expect(bracket.matches).toHaveLength(3);
-    expect(bracket.matches[0]).toMatchObject({ id: 9010, stage: 'group', groupId: 222, player1Id: 5001, player2Id: 5002, winnerId: 5001 });
+    expect(bracket.matches[0]).toMatchObject({
+      id: 9010,
+      stage: 'group',
+      groupId: 222,
+      player1Id: 5001,
+      player2Id: 5002,
+      winnerId: 5001,
+    });
     expect(bracket.matches[1]!.stage).toBe('final');
     expect(bracket.participants.map((p) => p.id).sort()).toEqual([5001, 5002, 5003]);
   });
@@ -178,18 +212,33 @@ describe('extractPublicBracket over a module payload', () => {
   it('does not turn a missing winner into player one', () => {
     const store = JSON.parse(STORE) as Record<string, any>;
     delete store.matches_by_round['1'][0].winner_id;
-    const bracket = extractPublicBracket(extractModuleBracketPayload(modulePage(JSON.stringify(store))));
+    const bracket = extractPublicBracket(
+      extractModuleBracketPayload(modulePage(JSON.stringify(store))),
+    );
     expect(bracket.matches[0]!.winnerId).toBeNull();
   });
 
   it('rejects conflicting duplicate match IDs across stages', () => {
     const store = JSON.parse(STORE) as Record<string, any>;
-    store.groups = [{ tournament: { id: 222 }, matches_by_round: { '1': [{
-      ...store.matches_by_round['1'][0], id: 9001, winner_id: 5002,
-      player1: { id: 5001, participant_id: 5001, display_name: 'Alpha' },
-      player2: { id: 5002, participant_id: 5002, display_name: 'Bravo' },
-    }] } }];
-    expect(() => extractPublicBracket(extractModuleBracketPayload(modulePage(JSON.stringify(store))))).toThrow(/conflicting entries/i);
+    store.groups = [
+      {
+        tournament: { id: 222 },
+        matches_by_round: {
+          '1': [
+            {
+              ...store.matches_by_round['1'][0],
+              id: 9001,
+              winner_id: 5002,
+              player1: { id: 5001, participant_id: 5001, display_name: 'Alpha' },
+              player2: { id: 5002, participant_id: 5002, display_name: 'Bravo' },
+            },
+          ],
+        },
+      },
+    ];
+    expect(() =>
+      extractPublicBracket(extractModuleBracketPayload(modulePage(JSON.stringify(store)))),
+    ).toThrow(/conflicting entries/i);
   });
 
   it('still prefers scores_csv when the payload provides it', () => {
@@ -198,7 +247,9 @@ describe('extractPublicBracket over a module payload', () => {
       matches_by_round: Record<string, Record<string, unknown>[]>;
     };
     withCsv.matches_by_round['1']![0]!.scores_csv = '3-0';
-    const bracket = extractPublicBracket(extractModuleBracketPayload(modulePage(JSON.stringify(withCsv))));
+    const bracket = extractPublicBracket(
+      extractModuleBracketPayload(modulePage(JSON.stringify(withCsv))),
+    );
     expect(bracket.matches.find((m) => m.id === 9001)?.scoresCsv).toBe('3-0');
   });
 });

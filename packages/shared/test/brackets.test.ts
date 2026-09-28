@@ -13,24 +13,34 @@ const daysAgo = (days: number): string => new Date(NOW - days * 24 * 60 * 60 * 1
 
 describe('isBracketAbandoned', () => {
   it('is false for a bracket still being played tonight', () => {
-    expect(isBracketAbandoned({ challongeState: 'underway', eventDate: daysAgo(0) }, NOW)).toBe(false);
+    expect(isBracketAbandoned({ challongeState: 'underway', eventDate: daysAgo(0) }, NOW)).toBe(
+      false,
+    );
   });
 
   it('is false the morning after — results are often reported late', () => {
-    expect(isBracketAbandoned({ challongeState: 'underway', eventDate: daysAgo(1) }, NOW)).toBe(false);
+    expect(isBracketAbandoned({ challongeState: 'underway', eventDate: daysAgo(1) }, NOW)).toBe(
+      false,
+    );
   });
 
   it('is true for a bracket left unfinished for years', () => {
-    expect(isBracketAbandoned({ challongeState: 'underway', eventDate: daysAgo(600) }, NOW)).toBe(true);
+    expect(isBracketAbandoned({ challongeState: 'underway', eventDate: daysAgo(600) }, NOW)).toBe(
+      true,
+    );
   });
 
   it('is never true of a bracket that actually finished', () => {
-    expect(isBracketAbandoned({ challongeState: 'complete', eventDate: daysAgo(600) }, NOW)).toBe(false);
+    expect(isBracketAbandoned({ challongeState: 'complete', eventDate: daysAgo(600) }, NOW)).toBe(
+      false,
+    );
   });
 
   it('needs a date to measure against', () => {
     expect(isBracketAbandoned({ challongeState: 'underway', eventDate: null }, NOW)).toBe(false);
-    expect(isBracketAbandoned({ challongeState: 'pending', eventDate: 'not a date' }, NOW)).toBe(false);
+    expect(isBracketAbandoned({ challongeState: 'pending', eventDate: 'not a date' }, NOW)).toBe(
+      false,
+    );
   });
 
   it('does not call an upcoming bracket abandoned', () => {

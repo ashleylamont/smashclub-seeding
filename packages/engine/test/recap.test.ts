@@ -72,7 +72,7 @@ function completedSet(
 function factsOfKind<K extends RecapFactKind>(
   result: ReturnType<typeof buildRecap>,
   kind: K,
-): Array<Extract<RecapFact, { kind: K }>> {
+): Extract<RecapFact, { kind: K }>[] {
   return result.facts
     .map((f) => f.fact)
     .filter((f): f is Extract<RecapFact, { kind: K }> => f.kind === kind);
@@ -263,8 +263,16 @@ describe('placements when Challonge reports none', () => {
         completedSet(a, c, 1, { round: 2, resultStage: 'final' }),
       ],
     });
-    const places = factsOfKind(result, 'podium')[0]?.places.map((place) => [place.player.name, place.place]);
-    expect(places).toEqual([['A', 1], ['C', 2], ['B', 3], ['D', 3]]);
+    const places = factsOfKind(result, 'podium')[0]?.places.map((place) => [
+      place.player.name,
+      place.place,
+    ]);
+    expect(places).toEqual([
+      ['A', 1],
+      ['C', 2],
+      ['B', 3],
+      ['D', 3],
+    ]);
   });
 
   it('uses a completed final walkover for structure without counting it as played', () => {
@@ -348,10 +356,19 @@ describe('placements when Challonge reports none', () => {
       participants: [fromLosers, fromWinners, third],
       sets: [
         // Una is sent to losers, beats Wren there, then wins grand finals twice.
-        completedSet(fromWinners, fromLosers, 1, { round: 1, completedAt: '2025-03-01T09:00:00.000Z' }),
+        completedSet(fromWinners, fromLosers, 1, {
+          round: 1,
+          completedAt: '2025-03-01T09:00:00.000Z',
+        }),
         completedSet(fromLosers, third, 1, { round: -1, completedAt: '2025-03-01T09:30:00.000Z' }),
-        completedSet(fromWinners, fromLosers, 2, { round: 3, completedAt: '2025-03-01T10:00:00.000Z' }),
-        completedSet(fromWinners, fromLosers, 2, { round: 3, completedAt: '2025-03-01T10:30:00.000Z' }),
+        completedSet(fromWinners, fromLosers, 2, {
+          round: 3,
+          completedAt: '2025-03-01T10:00:00.000Z',
+        }),
+        completedSet(fromWinners, fromLosers, 2, {
+          round: 3,
+          completedAt: '2025-03-01T10:30:00.000Z',
+        }),
       ],
     });
     const [podium] = factsOfKind(result, 'podium');
@@ -398,13 +415,20 @@ describe('placements when Challonge reports none', () => {
   });
 
   it('still finds the champion for a clean sweep', () => {
-    const opponents = [participant({ name: 'Bo' }), participant({ name: 'Cy' }), participant({ name: 'Di' })];
+    const opponents = [
+      participant({ name: 'Bo' }),
+      participant({ name: 'Cy' }),
+      participant({ name: 'Di' }),
+    ];
     const sweeper = participant({ name: 'Ada' });
     const result = buildRecap({
       tournaments: [MAIN],
       participants: [sweeper, ...opponents],
       sets: opponents.map((o, i) =>
-        completedSet(sweeper, o, 1, { scoresCsv: '3-0', completedAt: `2025-03-01T0${i + 1}:00:00.000Z` }),
+        completedSet(sweeper, o, 1, {
+          scoresCsv: '3-0',
+          completedAt: `2025-03-01T0${i + 1}:00:00.000Z`,
+        }),
       ),
     });
     expect(factsOfKind(result, 'clean_sweep')[0]?.player.name).toBe('Ada');
@@ -528,7 +552,11 @@ describe('a bracket that never reached its final', () => {
 
 describe('clean sweeps', () => {
   const champion = participant({ name: 'Ada', finalRank: 1 });
-  const others = [participant({ name: 'Bo' }), participant({ name: 'Cy' }), participant({ name: 'Di' })];
+  const others = [
+    participant({ name: 'Bo' }),
+    participant({ name: 'Cy' }),
+    participant({ name: 'Di' }),
+  ];
 
   it('are claimed when no game was dropped', () => {
     const result = buildRecap({
@@ -606,7 +634,11 @@ describe('nailbiters', () => {
   const b = participant({ name: 'Bo' });
   const c = participant({ name: 'Cy' });
   const decider = (winner: RecapParticipant): RecapSet =>
-    completedSet(winner, c, 1, { round: 5, scoresCsv: '3-0', completedAt: '2025-03-01T11:00:00.000Z' });
+    completedSet(winner, c, 1, {
+      round: 5,
+      scoresCsv: '3-0',
+      completedAt: '2025-03-01T11:00:00.000Z',
+    });
 
   it('are sets that went to a deciding game', () => {
     const result = buildRecap({
@@ -618,7 +650,7 @@ describe('nailbiters', () => {
     expect(fact?.score).toBe('3-2');
   });
 
-  it('report the score from the winner\'s side even when player two won', () => {
+  it("report the score from the winner's side even when player two won", () => {
     const result = buildRecap({
       tournaments: [MAIN],
       participants: [a, b, c],
@@ -786,7 +818,7 @@ describe('history-derived facts', () => {
   const b = participant({ name: 'Bo' });
   const set = completedSet(a, b, 1);
 
-  it('report a rivalry with the series to the night\'s winner', () => {
+  it("report a rivalry with the series to the night's winner", () => {
     const prior = { aWins: 3, bWins: 3 };
     const result = buildRecap({
       tournaments: [MAIN],
@@ -823,7 +855,10 @@ describe('history-derived facts', () => {
       sets: [set],
       history: emptyHistory({
         priorMeetings: new Map([
-          [pairKey(a.playerId!, b.playerId!), a.playerId! < b.playerId! ? { aWins: 0, bWins: 3 } : { aWins: 3, bWins: 0 }],
+          [
+            pairKey(a.playerId!, b.playerId!),
+            a.playerId! < b.playerId! ? { aWins: 0, bWins: 3 } : { aWins: 3, bWins: 0 },
+          ],
         ]),
       }),
     });
@@ -888,7 +923,9 @@ describe('history-derived facts', () => {
       ],
       history: emptyHistory(),
     });
-    expect(factsOfKind(noHistory, 'milestone').filter((m) => m.milestone === 'peak_rating')).toHaveLength(0);
+    expect(
+      factsOfKind(noHistory, 'milestone').filter((m) => m.milestone === 'peak_rating'),
+    ).toHaveLength(0);
   });
 
   it('mark a round-number career set count crossed tonight', () => {
@@ -994,23 +1031,73 @@ describe('formatFact', () => {
     const player = { playerId: 'x', name: 'Ada', companyCode: 'ACME', characters: [] };
     const other = { playerId: 'y', name: 'Bo', companyCode: null, characters: [] };
     const facts: RecapFact[] = [
-      { kind: 'podium', tournamentId: 't', derived: false, places: [{ player, place: 1, seed: 3 }, { player: other, place: 2, seed: 1 }] },
-      { kind: 'seed_upset', tournamentId: 't', winner: player, loser: other, winnerSeed: 8, loserSeed: 1, stage: 'the winners final', score: '3-1' },
-      { kind: 'rating_upset', tournamentId: 't', winner: player, loser: other, probability: 0.12, ratingGap: 320, stage: 'the losers semis', score: '3-2' },
+      {
+        kind: 'podium',
+        tournamentId: 't',
+        derived: false,
+        places: [
+          { player, place: 1, seed: 3 },
+          { player: other, place: 2, seed: 1 },
+        ],
+      },
+      {
+        kind: 'seed_upset',
+        tournamentId: 't',
+        winner: player,
+        loser: other,
+        winnerSeed: 8,
+        loserSeed: 1,
+        stage: 'the winners final',
+        score: '3-1',
+      },
+      {
+        kind: 'rating_upset',
+        tournamentId: 't',
+        winner: player,
+        loser: other,
+        probability: 0.12,
+        ratingGap: 320,
+        stage: 'the losers semis',
+        score: '3-2',
+      },
       { kind: 'losers_run', tournamentId: 't', player, wins: 5, finalRank: 2 },
       { kind: 'overperformer', tournamentId: 't', player, seed: 12, finalRank: 4, placesGained: 8 },
-      { kind: 'nailbiter', tournamentId: 't', winner: player, loser: other, score: '3-2', stage: null },
+      {
+        kind: 'nailbiter',
+        tournamentId: 't',
+        winner: player,
+        loser: other,
+        score: '3-2',
+        stage: null,
+      },
       { kind: 'runback', tournamentId: 't', winner: player, loser: other, score: '2-1' },
       { kind: 'clean_sweep', tournamentId: 't', player, sets: 5 },
       { kind: 'biggest_climb', tournamentId: 't', player, gained: 62.4, from: 1500, to: 1562.4 },
       { kind: 'mover', tournamentId: null, player, rank: 7, previousRank: 11, placesGained: 4 },
       { kind: 'rivalry', tournamentId: 't', a: player, b: other, meetings: 7, aWins: 4, bWins: 3 },
-      { kind: 'breakthrough', tournamentId: 't', winner: player, loser: other, priorLosses: 4, stage: 'the losers final', score: '2-1' },
+      {
+        kind: 'breakthrough',
+        tournamentId: 't',
+        winner: player,
+        loser: other,
+        priorLosses: 4,
+        stage: 'the losers final',
+        score: '2-1',
+      },
       { kind: 'debut', tournamentId: 't', players: [player] },
       { kind: 'milestone', tournamentId: 't', player, milestone: 'sets', value: 100 },
       { kind: 'milestone', tournamentId: 't', player, milestone: 'peak_rating', value: 1712.8 },
       { kind: 'turnout', tournamentId: null, entrants: 24, previousBest: 21, isRecord: true },
-      { kind: 'grand_finals', tournamentId: 't', winner: player, loser: other, score: '3-2', bracketReset: true, runSets: 6, gamesDropped: 4 },
+      {
+        kind: 'grand_finals',
+        tournamentId: 't',
+        winner: player,
+        loser: other,
+        score: '3-2',
+        bracketReset: true,
+        runSets: 6,
+        gamesDropped: 4,
+      },
     ];
 
     for (const fact of facts) {
@@ -1028,13 +1115,29 @@ describe('formatFact', () => {
      * need bumping.
      */
     const covered: Record<RecapFactKind, boolean> = {
-      podium: false, seed_upset: false, rating_upset: false, losers_run: false,
-      overperformer: false, nailbiter: false, clean_sweep: false, biggest_climb: false,
-      mover: false, rivalry: false, breakthrough: false, debut: false, milestone: false, turnout: false,
-      grand_finals: false, runback: false,
+      podium: false,
+      seed_upset: false,
+      rating_upset: false,
+      losers_run: false,
+      overperformer: false,
+      nailbiter: false,
+      clean_sweep: false,
+      biggest_climb: false,
+      mover: false,
+      rivalry: false,
+      breakthrough: false,
+      debut: false,
+      milestone: false,
+      turnout: false,
+      grand_finals: false,
+      runback: false,
     };
     for (const fact of facts) covered[fact.kind] = true;
-    expect(Object.entries(covered).filter(([, seen]) => !seen).map(([kind]) => kind)).toEqual([]);
+    expect(
+      Object.entries(covered)
+        .filter(([, seen]) => !seen)
+        .map(([kind]) => kind),
+    ).toEqual([]);
   });
 
   it('uses the right ordinal suffixes', () => {

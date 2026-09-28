@@ -168,7 +168,14 @@ export function runWhrModel(input: {
     );
 
   if (rateable.length === 0) {
-    return { events: [], leaderboard: [], converged: true, iterations: 0, periods: 0, previousRanks: new Map() };
+    return {
+      events: [],
+      leaderboard: [],
+      converged: true,
+      iterations: 0,
+      periods: 0,
+      previousRanks: new Map(),
+    };
   }
 
   const originDay = rateable[0]!.day;
@@ -182,7 +189,8 @@ export function runWhrModel(input: {
    * every history prefix that contains the player, so one map computed over
    * the full history serves every prefix fit.
    */
-  const rookieDebutPriorNatural = (settings.whrRookieDebutPrior - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY;
+  const rookieDebutPriorNatural =
+    (settings.whrRookieDebutPrior - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY;
   const priorMeans = new Map<string, number>();
   if (rookieDebutPriorNatural !== 0) {
     const seen = new Set<string>();
@@ -237,7 +245,7 @@ export function runWhrModel(input: {
     const preFit = eventIndex > 0 ? fits[eventIndex - 1]! : null;
 
     // The player's results tonight, in play order.
-    const results = new Map<string, Array<{ opponentId: string; won: boolean; trials: number }>>();
+    const results = new Map<string, { opponentId: string; won: boolean; trials: number }[]>();
     for (const { set, trials } of nightSets) {
       for (const [playerId, opponentId, won] of [
         [set.p1PlayerId, set.p2PlayerId, set.winner === 1],
@@ -252,7 +260,10 @@ export function runWhrModel(input: {
     const nightPlans = new Map<string, NightPlan>();
     for (const [playerId, played] of results) {
       const current = nightFit.display(playerId, time);
-      const previous = ledger.get(playerId) ?? { rating: settings.initialRating, sd: priorDisplaySd };
+      const previous = ledger.get(playerId) ?? {
+        rating: settings.initialRating,
+        sd: priorDisplaySd,
+      };
       const nightDelta = current.rating - previous.rating;
 
       /**
@@ -492,10 +503,13 @@ function buildLeaderboard(
     let displayedRating = latest.rating;
     if (settings.whrIsolationAnchor) {
       const mainExperienceFactor = Math.min(row.mainMatchCount, 5) / 5;
-      const bridgeExposure = row.matchCount ? (bridgeMatchCounts.get(row.playerId) ?? 0) / row.matchCount : 0;
+      const bridgeExposure = row.matchCount
+        ? (bridgeMatchCounts.get(row.playerId) ?? 0) / row.matchCount
+        : 0;
       isolationFactor = rookieRatio * (1 - Math.max(mainExperienceFactor, bridgeExposure));
       const anchorFactor = Math.max(0.25, 1 - 0.65 * isolationFactor);
-      const priorDisplay = DISPLAY_CENTRE + (priorMeans.get(row.playerId) ?? 0) * NATURAL_TO_DISPLAY;
+      const priorDisplay =
+        DISPLAY_CENTRE + (priorMeans.get(row.playerId) ?? 0) * NATURAL_TO_DISPLAY;
       displayedRating = priorDisplay + (latest.rating - priorDisplay) * anchorFactor;
     }
 

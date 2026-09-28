@@ -23,7 +23,14 @@ import {
   type RecapSet,
   type RecapTournament,
 } from '@smashclub/engine';
-import { compareEventBrackets, eventCanonicalSlug, eventNameOf, includesResultStage, publicParticipantName, scoresIndicateUnplayed } from '@smashclub/shared';
+import {
+  compareEventBrackets,
+  eventCanonicalSlug,
+  eventNameOf,
+  includesResultStage,
+  publicParticipantName,
+  scoresIndicateUnplayed,
+} from '@smashclub/shared';
 import { latestRecomputeId } from '../recompute/recompute';
 import { charactersByPlayer } from '../players/characters';
 
@@ -54,7 +61,7 @@ export interface LoadedRecapFact extends RankedRecapFact {
 
 export interface LoadedRecap extends Omit<RecapResult, 'tournaments' | 'facts' | 'highlights'> {
   /** The night's brackets, main first, each addressable by its own slug. */
-  tournaments: Array<RecapTournament & { slug: string }>;
+  tournaments: (RecapTournament & { slug: string })[];
   name: string;
   facts: LoadedRecapFact[];
   highlights: LoadedRecapFact[];
@@ -93,16 +100,33 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
     .orderBy(asc(tournaments.eventDate));
 
   const anchorKey = anchor.eventDate ? eventKeyOf(anchor.eventDate.toISOString()) : null;
-  const memberships = await db.select().from(eventPlanBrackets).where(isNotNull(eventPlanBrackets.tournamentId));
-  const anchorPlans = new Set(memberships.filter(link => link.tournamentId === anchor.id).map(link => link.eventPlanId));
-  const linkedTournamentIds = new Set(memberships.map(link => link.tournamentId));
-  let nightRows = anchorKey === null ? [] : allDated.filter(t =>
-    !linkedTournamentIds.has(t.id) && eventKeyOf(t.eventDate!.toISOString()) === anchorKey);
+  const memberships = await db
+    .select()
+    .from(eventPlanBrackets)
+    .where(isNotNull(eventPlanBrackets.tournamentId));
+  const anchorPlans = new Set(
+    memberships.filter((link) => link.tournamentId === anchor.id).map((link) => link.eventPlanId),
+  );
+  const linkedTournamentIds = new Set(memberships.map((link) => link.tournamentId));
+  let nightRows =
+    anchorKey === null
+      ? []
+      : allDated.filter(
+          (t) =>
+            !linkedTournamentIds.has(t.id) && eventKeyOf(t.eventDate!.toISOString()) === anchorKey,
+        );
   if (anchorPlans.size === 1) {
     const planId = [...anchorPlans][0]!;
-    const ids = memberships.filter(link => link.eventPlanId === planId).flatMap(link => link.tournamentId ? [link.tournamentId] : []);
-    nightRows = (await db.select().from(tournaments).where(inArray(tournaments.id, ids)).orderBy(asc(tournaments.eventDate)))
-      .map(t => ({ ...t, slug: t.challongeSlug }));
+    const ids = memberships
+      .filter((link) => link.eventPlanId === planId)
+      .flatMap((link) => (link.tournamentId ? [link.tournamentId] : []));
+    nightRows = (
+      await db
+        .select()
+        .from(tournaments)
+        .where(inArray(tournaments.id, ids))
+        .orderBy(asc(tournaments.eventDate))
+    ).map((t) => ({ ...t, slug: t.challongeSlug }));
   } else if (anchorPlans.size > 1) {
     // Ambiguous legacy ownership must not merge unrelated event recaps.
     nightRows = [];
@@ -206,7 +230,10 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
     ? await loadRatingContext(db, recomputeId, nightIds)
     : { nightEvents: [], history: undefined, rankMovement: [] };
   const [recomputeRow] = recomputeId
-    ? await db.select({ model: recomputes.model }).from(recomputes).where(eq(recomputes.id, recomputeId))
+    ? await db
+        .select({ model: recomputes.model })
+        .from(recomputes)
+        .where(eq(recomputes.id, recomputeId))
     : [];
 
   // --- turnout comparison -------------------------------------------------
@@ -229,29 +256,39 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
 
   // The engine orders brackets main-first, so the night's canonical slug — the
   // one a shared link should carry — is the first one back.
-  const withSlugs = result.tournaments.map((t) => ({ ...t, slug: slugById.get(t.id) ?? slug })).sort(compareEventBrackets);
+  const withSlugs = result.tournaments
+    .map((t) => ({ ...t, slug: slugById.get(t.id) ?? slug }))
+    .sort(compareEventBrackets);
   return {
     ...result,
-    name: eventNameOf(withSlugs.map(t => t.name)),
+    name: eventNameOf(withSlugs.map((t) => t.name)),
     tournaments: withSlugs,
     facts: result.facts.map((entry) => ({ ...entry, ...formatFact(entry.fact) })),
     highlights: result.highlights.map((entry) => ({ ...entry, ...formatFact(entry.fact) })),
     coverage: {
-      unsyncedBrackets: (nightRows.length ? nightRows : [anchor]).filter((t) => t.syncState !== 'synced').length,
-      unresolvedEntrants: participants.filter((p) => p.playerId === null).length,
-      unlinkedPlayedSets: setRows.filter((s) =>
-        s.state === 'complete' && (s.winner === 1 || s.winner === 2) && !s.excludedFromRatings && !scoresIndicateUnplayed(s.scoresCsv) &&
-        includesResultStage(modes.get(s.tournamentId) ?? 'auto', s.resultStage) &&
-        (!s.p1PlayerId || !s.p2PlayerId),
+      unsyncedBrackets: (nightRows.length ? nightRows : [anchor]).filter(
+        (t) => t.syncState !== 'synced',
       ).length,
-      ignoredGroupSets: setRows.filter((s) => !includesResultStage(modes.get(s.tournamentId) ?? 'auto', s.resultStage)).length,
+      unresolvedEntrants: participants.filter((p) => p.playerId === null).length,
+      unlinkedPlayedSets: setRows.filter(
+        (s) =>
+          s.state === 'complete' &&
+          (s.winner === 1 || s.winner === 2) &&
+          !s.excludedFromRatings &&
+          !scoresIndicateUnplayed(s.scoresCsv) &&
+          includesResultStage(modes.get(s.tournamentId) ?? 'auto', s.resultStage) &&
+          (!s.p1PlayerId || !s.p2PlayerId),
+      ).length,
+      ignoredGroupSets: setRows.filter(
+        (s) => !includesResultStage(modes.get(s.tournamentId) ?? 'auto', s.resultStage),
+      ).length,
     },
     slug: eventCanonicalSlug(withSlugs, slug),
   };
 }
 
 interface RatingContext {
-  nightEvents: Array<{
+  nightEvents: {
     playerId: string;
     setId: string | null;
     tournamentId: string;
@@ -261,12 +298,16 @@ interface RatingContext {
     postRating: number;
     preRd: number;
     postRd: number;
-  }>;
+  }[];
   history: RecapHistory | undefined;
-  rankMovement: Array<{ playerId: string; rank: number; previousRank: number | null }>;
+  rankMovement: { playerId: string; rank: number; previousRank: number | null }[];
 }
 
-async function loadRatingContext(db: Db, recomputeId: string, nightIds: string[]): Promise<RatingContext> {
+async function loadRatingContext(
+  db: Db,
+  recomputeId: string,
+  nightIds: string[],
+): Promise<RatingContext> {
   const nightRows = await db
     .select({
       playerId: ratingEvents.playerId,
@@ -281,7 +322,9 @@ async function loadRatingContext(db: Db, recomputeId: string, nightIds: string[]
       postRd: ratingEvents.postRd,
     })
     .from(ratingEvents)
-    .where(and(eq(ratingEvents.recomputeId, recomputeId), inArray(ratingEvents.tournamentId, nightIds)))
+    .where(
+      and(eq(ratingEvents.recomputeId, recomputeId), inArray(ratingEvents.tournamentId, nightIds)),
+    )
     .orderBy(asc(ratingEvents.seq));
 
   const nightEvents = nightRows.map(({ seq: _seq, ...event }) => event);
@@ -332,7 +375,8 @@ async function loadRatingContext(db: Db, recomputeId: string, nightIds: string[]
     // cannot manufacture a peak, and skipping them would drop the tail of an
     // inactive player's history for no reason.
     const peak = priorPeakRating.get(row.playerId);
-    if (peak === undefined || row.postRating > peak) priorPeakRating.set(row.playerId, row.postRating);
+    if (peak === undefined || row.postRating > peak)
+      priorPeakRating.set(row.playerId, row.postRating);
     if (row.isDecay) continue;
 
     priorSetCounts.set(row.playerId, (priorSetCounts.get(row.playerId) ?? 0) + 1);
@@ -382,9 +426,9 @@ async function loadRatingContext(db: Db, recomputeId: string, nightIds: string[]
  */
 async function loadPriorTurnouts(
   db: Db,
-  allDated: Array<{ id: string; eventDate: Date | null }>,
+  allDated: { id: string; eventDate: Date | null }[],
   anchorKey: string | null,
-): Promise<Array<{ eventKey: string; entrants: number }>> {
+): Promise<{ eventKey: string; entrants: number }[]> {
   if (anchorKey === null) return [];
   const earlier = allDated.filter(
     (t) => t.eventDate !== null && eventKeyOf(t.eventDate.toISOString()) < anchorKey,

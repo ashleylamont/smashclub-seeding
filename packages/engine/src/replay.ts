@@ -1,11 +1,7 @@
 import type { GlickoSettings } from '@smashclub/shared';
 import { attendanceOf, eventKeyOf } from './events';
 import { GLICKO2_SCALE, updateRating, type Rating } from './glicko2';
-import {
-  compareNullableNumbers,
-  compareSetsInBracket,
-  compareStrings,
-} from './setOrder';
+import { compareNullableNumbers, compareSetsInBracket, compareStrings } from './setOrder';
 import type {
   EngineSet,
   EngineTournament,
@@ -248,7 +244,10 @@ export function replayRatings(input: {
     const phi = rd / GLICKO2_SCALE;
     if (compat?.legacyVolatilityDecay) {
       const multiplier = LEGACY_DECAY.rdScale * (1 + missIndex * LEGACY_DECAY.escalation);
-      return Math.min(Math.sqrt(phi * phi + multiplier * vol * vol) * GLICKO2_SCALE, settings.rdCap);
+      return Math.min(
+        Math.sqrt(phi * phi + multiplier * vol * vol) * GLICKO2_SCALE,
+        settings.rdCap,
+      );
     }
     const grown = Math.sqrt(rd * rd + settings.missedEventRdGrowth * settings.missedEventRdGrowth);
     // Already past the ceiling (a newcomer decaying from 350) must not be
@@ -323,8 +322,10 @@ export function replayRatings(input: {
     const index2 = (indicesByPlayerTournament.get(key2) ?? 0) + 1;
     indicesByPlayerTournament.set(key1, index1);
     indicesByPlayerTournament.set(key2, index2);
-    let weight1 = (index1 / totalsByPlayerTournament.get(key1)!) ** settings.inverseDiminishingExponent;
-    let weight2 = (index2 / totalsByPlayerTournament.get(key2)!) ** settings.inverseDiminishingExponent;
+    let weight1 =
+      (index1 / totalsByPlayerTournament.get(key1)!) ** settings.inverseDiminishingExponent;
+    let weight2 =
+      (index2 / totalsByPlayerTournament.get(key2)!) ** settings.inverseDiminishingExponent;
 
     if (tournament.isRookie) {
       weight1 *= rookieScale(state1.rating.rating, scaleWinnerFlag);
@@ -334,8 +335,16 @@ export function replayRatings(input: {
     // Symmetric update from both players' pre-set values.
     const pre1 = state1.rating;
     const pre2 = state2.rating;
-    const updated1 = updateRating(pre1, [{ rating: pre2.rating, rd: pre2.rd, outcome: p1Won ? 1 : 0 }], settings.tau);
-    const updated2 = updateRating(pre2, [{ rating: pre1.rating, rd: pre1.rd, outcome: p1Won ? 0 : 1 }], settings.tau);
+    const updated1 = updateRating(
+      pre1,
+      [{ rating: pre2.rating, rd: pre2.rd, outcome: p1Won ? 1 : 0 }],
+      settings.tau,
+    );
+    const updated2 = updateRating(
+      pre2,
+      [{ rating: pre1.rating, rd: pre1.rd, outcome: p1Won ? 0 : 1 }],
+      settings.tau,
+    );
 
     // Weight is applied by lerping rating and RD toward the pre-update
     // values; volatility keeps the full update (legacy behaviour).
@@ -392,7 +401,9 @@ export function replayRatings(input: {
   // going dark did not affect seeding.
   const lastPeriod = tournamentIdByPeriod.length - 1;
   if (lastPeriod >= 0 && !compat?.skipTrailingDecay) {
-    for (const [playerId, state] of [...states.entries()].sort(([a], [b]) => compareStrings(a, b))) {
+    for (const [playerId, state] of [...states.entries()].sort(([a], [b]) =>
+      compareStrings(a, b),
+    )) {
       applyDecay(playerId, state, lastPeriod + 1);
     }
   }
@@ -406,7 +417,9 @@ export function replayRatings(input: {
    * Sorted explicitly rather than relying on tournament order, which under
    * `legacyOrdering` is input order and not chronological.
    */
-  const orderedEventKeys = dedupe(orderedTournaments.map((t) => eventKeyOf(t.eventDate))).sort(compareStrings);
+  const orderedEventKeys = dedupe(orderedTournaments.map((t) => eventKeyOf(t.eventDate))).sort(
+    compareStrings,
+  );
 
   const finalStates = new Map<string, PlayerFinalState>();
   for (const [playerId, state] of states) {
@@ -435,4 +448,3 @@ export function replayRatings(input: {
 function dedupe(values: readonly string[]): string[] {
   return [...new Set(values)];
 }
-

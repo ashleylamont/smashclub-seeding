@@ -20,7 +20,9 @@ let close: () => Promise<void>;
 
 beforeEach(async () => {
   ({ db, close } = await createTestDb());
-  await importRegistryPlayers(db, [{ id: 'jackson', canonical_name: 'Jackson Lin', company: 'ATL' }]);
+  await importRegistryPlayers(db, [
+    { id: 'jackson', canonical_name: 'Jackson Lin', company: 'ATL' },
+  ]);
   await registerTournamentSlugs(db, ['devprod-punchout']);
 });
 
@@ -65,9 +67,9 @@ describe('review-queue candidates stay current', () => {
       aliases: [],
     });
 
-    const [item] = (await caller.reviewQueue()).filter((row) => row.cleanedName === 'Anthy');
+    const item = (await caller.reviewQueue()).find((row) => row.cleanedName === 'Anthy');
     expect(item!.candidates).toHaveLength(1);
-    expect((item!.candidates as Array<{ playerId: string }>)[0]!.playerId).toBe(playerId);
+    expect((item!.candidates as { playerId: string }[])[0]!.playerId).toBe(playerId);
     expect(new Date(item!.candidatesComputedAt).getTime()).toBeGreaterThanOrEqual(
       new Date(item!.createdAt).getTime(),
     );
@@ -82,7 +84,9 @@ describe('review-queue candidates stay current', () => {
 
     const after = await anthyItem();
     expect(after.candidates).toEqual([]);
-    expect(after.candidatesComputedAt.getTime()).toBeGreaterThanOrEqual(before.candidatesComputedAt.getTime());
+    expect(after.candidatesComputedAt.getTime()).toBeGreaterThanOrEqual(
+      before.candidatesComputedAt.getTime(),
+    );
   });
 
   it('picks up a rename of an existing player', async () => {
@@ -92,7 +96,7 @@ describe('review-queue candidates stay current', () => {
     await adminCaller(db).updatePlayer({ playerId: jackson!.id, canonicalName: 'Anthy Lin' });
 
     const item = await anthyItem();
-    const candidates = item.candidates as Array<{ playerId: string; name: string }>;
+    const candidates = item.candidates as { playerId: string; name: string }[];
     expect(candidates.map((candidate) => candidate.playerId)).toContain(jackson!.id);
   });
 
@@ -126,7 +130,9 @@ describe('review-queue candidates stay current', () => {
     const after = await db.select().from(reviewItems).where(eq(reviewItems.id, queued.id));
     expect(after[0]!.status).toBe('resolved');
     expect(after[0]!.resolvedPlayerId).toBe(before[0]!.resolvedPlayerId);
-    expect(after[0]!.candidatesComputedAt.getTime()).toBe(before[0]!.candidatesComputedAt.getTime());
+    expect(after[0]!.candidatesComputedAt.getTime()).toBe(
+      before[0]!.candidatesComputedAt.getTime(),
+    );
   });
 
   it('drops a merged player and offers the survivor instead', async () => {
@@ -150,7 +156,7 @@ describe('review-queue candidates stay current', () => {
     await caller.mergePlayers({ fromPlayerId: anthyId, intoPlayerId: survivorId });
 
     const item = await anthyItem();
-    const candidates = item.candidates as Array<{ playerId: string }>;
+    const candidates = item.candidates as { playerId: string }[];
     expect(candidates.map((candidate) => candidate.playerId)).not.toContain(anthyId);
     expect(candidates.map((candidate) => candidate.playerId)).toContain(survivorId);
   });
@@ -163,11 +169,11 @@ describe('review-queue candidates stay current', () => {
 
     await adminCaller(db).addAlias({ playerId: jackson!.id, alias: 'Anthea', companyCode: null });
 
-    const candidates = (await anthyItem()).candidates as Array<{
+    const candidates = (await anthyItem()).candidates as {
       playerId: string;
       name: string;
       matchedAlias: string | null;
-    }>;
+    }[];
     expect(candidates.map((candidate) => candidate.playerId)).toContain(jackson!.id);
     const hit = candidates.find((candidate) => candidate.playerId === jackson!.id)!;
     expect(hit.name).toBe('Jackson Lin');
@@ -179,8 +185,13 @@ describe('review-queue candidates stay current', () => {
     const [jackson] = await db.select().from(players).where(eq(players.legacyId, 'jackson'));
     await adminCaller(db).updatePlayer({ playerId: jackson!.id, canonicalName: 'Anthy Lin' });
 
-    const candidates = (await anthyItem()).candidates as Array<{ playerId: string; matchedAlias: string | null }>;
-    expect(candidates.find((candidate) => candidate.playerId === jackson!.id)?.matchedAlias).toBeNull();
+    const candidates = (await anthyItem()).candidates as {
+      playerId: string;
+      matchedAlias: string | null;
+    }[];
+    expect(
+      candidates.find((candidate) => candidate.playerId === jackson!.id)?.matchedAlias,
+    ).toBeNull();
   });
 
   it('refreshes open items when a registry import adds the missing player', async () => {
@@ -195,6 +206,6 @@ describe('review-queue candidates stay current', () => {
 
     const [anthy] = await db.select().from(players).where(eq(players.legacyId, 'anthy'));
     const item = await anthyItem();
-    expect((item.candidates as Array<{ playerId: string }>).map((c) => c.playerId)).toContain(anthy!.id);
+    expect((item.candidates as { playerId: string }[]).map((c) => c.playerId)).toContain(anthy!.id);
   });
 });

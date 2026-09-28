@@ -18,7 +18,11 @@ import { latestRecomputeId } from '../recompute/recompute';
  * Challonge sequentially and verifies by re-fetching.
  */
 
-export async function createSeedingRun(db: Db, tournamentId: string, createdBy: string | null): Promise<string> {
+export async function createSeedingRun(
+  db: Db,
+  tournamentId: string,
+  createdBy: string | null,
+): Promise<string> {
   const recomputeId = await latestRecomputeId(db);
   const participants = await db
     .select({
@@ -40,9 +44,15 @@ export async function createSeedingRun(db: Db, tournamentId: string, createdBy: 
     );
   }
 
-  const ratingByPlayer = new Map<string, { conservativeRating: number; rating: number; rd: number }>();
+  const ratingByPlayer = new Map<
+    string,
+    { conservativeRating: number; rating: number; rd: number }
+  >();
   if (recomputeId) {
-    const ratingRows = await db.select().from(playerRatings).where(eq(playerRatings.recomputeId, recomputeId));
+    const ratingRows = await db
+      .select()
+      .from(playerRatings)
+      .where(eq(playerRatings.recomputeId, recomputeId));
     for (const row of ratingRows) {
       ratingByPlayer.set(row.playerId, {
         conservativeRating: row.conservativeRating,
@@ -90,7 +100,9 @@ export async function createSeedingRun(db: Db, tournamentId: string, createdBy: 
       runId: run!.id,
       participantId: participant.id,
       playerId: participant.playerId,
-      autoScore: participant.playerId ? (ratingByPlayer.get(participant.playerId)?.conservativeRating ?? null) : null,
+      autoScore: participant.playerId
+        ? (ratingByPlayer.get(participant.playerId)?.conservativeRating ?? null)
+        : null,
       autoSeed: index + 1,
     })),
   );
@@ -98,11 +110,17 @@ export async function createSeedingRun(db: Db, tournamentId: string, createdBy: 
 }
 
 /** Replace the run's manual order: participantIds in final seed order. */
-export async function reorderSeedingRun(db: Db, runId: string, participantIdsInOrder: string[]): Promise<void> {
+export async function reorderSeedingRun(
+  db: Db,
+  runId: string,
+  participantIdsInOrder: string[],
+): Promise<void> {
   const entries = await db.select().from(seedingEntries).where(eq(seedingEntries.runId, runId));
   const byParticipant = new Map(entries.map((entry) => [entry.participantId, entry]));
   if (participantIdsInOrder.length !== entries.length) {
-    throw new Error(`Expected ${entries.length} participants, got ${participantIdsInOrder.length}.`);
+    throw new Error(
+      `Expected ${entries.length} participants, got ${participantIdsInOrder.length}.`,
+    );
   }
   for (const [index, participantId] of participantIdsInOrder.entries()) {
     const entry = byParticipant.get(participantId);
@@ -110,26 +128,45 @@ export async function reorderSeedingRun(db: Db, runId: string, participantIdsInO
     const overrideSeed = index + 1;
     await db
       .update(seedingEntries)
-      .set({ overrideSeed: overrideSeed === entry.autoSeed ? null : overrideSeed, updatedAt: new Date() })
+      .set({
+        overrideSeed: overrideSeed === entry.autoSeed ? null : overrideSeed,
+        updatedAt: new Date(),
+      })
       .where(eq(seedingEntries.id, entry.id));
   }
 }
 
 export async function setEntryLocked(db: Db, entryId: string, locked: boolean): Promise<void> {
-  await db.update(seedingEntries).set({ locked, updatedAt: new Date() }).where(eq(seedingEntries.id, entryId));
+  await db
+    .update(seedingEntries)
+    .set({ locked, updatedAt: new Date() })
+    .where(eq(seedingEntries.id, entryId));
 }
 
 export interface SeedPushResult {
   pushed: number;
   verified: boolean;
-  log: Array<{ participantId: string; challongeParticipantId: number; seed: number; ok: boolean; error?: string }>;
+  log: {
+    participantId: string;
+    challongeParticipantId: number;
+    seed: number;
+    ok: boolean;
+    error?: string;
+  }[];
 }
 
-export async function pushSeedingRun(db: Db, client: ChallongeClient, runId: string): Promise<SeedPushResult> {
+export async function pushSeedingRun(
+  db: Db,
+  client: ChallongeClient,
+  runId: string,
+): Promise<SeedPushResult> {
   const [run] = await db.select().from(seedingRuns).where(eq(seedingRuns.id, runId));
   if (!run) throw new Error(`Unknown seeding run ${runId}`);
   if (run.status === 'pushed') throw new Error('This run has already been pushed.');
-  const [tournament] = await db.select().from(tournaments).where(eq(tournaments.id, run.tournamentId));
+  const [tournament] = await db
+    .select()
+    .from(tournaments)
+    .where(eq(tournaments.id, run.tournamentId));
   if (!tournament) throw new Error('Seeding run tournament no longer exists.');
 
   const entries = await db.select().from(seedingEntries).where(eq(seedingEntries.runId, runId));
@@ -140,7 +177,8 @@ export async function pushSeedingRun(db: Db, client: ChallongeClient, runId: str
   const participantById = new Map(participants.map((p) => [p.id, p]));
 
   const finalOrder = [...entries].sort(
-    (a, b) => (a.overrideSeed ?? a.autoSeed) - (b.overrideSeed ?? b.autoSeed) || a.autoSeed - b.autoSeed,
+    (a, b) =>
+      (a.overrideSeed ?? a.autoSeed) - (b.overrideSeed ?? b.autoSeed) || a.autoSeed - b.autoSeed,
   );
 
   const [job] = await db
@@ -154,12 +192,27 @@ export async function pushSeedingRun(db: Db, client: ChallongeClient, runId: str
       const participant = participantById.get(entry.participantId);
       const seed = index + 1;
       if (!participant) {
-        log.push({ participantId: entry.participantId, challongeParticipantId: -1, seed, ok: false, error: 'participant missing' });
+        log.push({
+          participantId: entry.participantId,
+          challongeParticipantId: -1,
+          seed,
+          ok: false,
+          error: 'participant missing',
+        });
         continue;
       }
       try {
-        await client.updateParticipantSeed(tournament.challongeSlug, participant.challongeParticipantId, seed);
-        log.push({ participantId: entry.participantId, challongeParticipantId: participant.challongeParticipantId, seed, ok: true });
+        await client.updateParticipantSeed(
+          tournament.challongeSlug,
+          participant.challongeParticipantId,
+          seed,
+        );
+        log.push({
+          participantId: entry.participantId,
+          challongeParticipantId: participant.challongeParticipantId,
+          seed,
+          ok: true,
+        });
       } catch (error) {
         log.push({
           participantId: entry.participantId,
@@ -193,7 +246,11 @@ export async function pushSeedingRun(db: Db, client: ChallongeClient, runId: str
       .where(eq(seedingRuns.id, runId));
     await db
       .update(syncJobs)
-      .set({ status: pushedOk ? 'complete' : 'failed', finishedAt: new Date(), stats: { log, verified } })
+      .set({
+        status: pushedOk ? 'complete' : 'failed',
+        finishedAt: new Date(),
+        stats: { log, verified },
+      })
       .where(eq(syncJobs.id, job!.id));
 
     return { pushed: log.filter((row) => row.ok).length, verified, log };
@@ -241,6 +298,9 @@ export async function latestSeedingRun(db: Db, tournamentId: string) {
     .innerJoin(tournamentParticipants, eq(seedingEntries.participantId, tournamentParticipants.id))
     .leftJoin(players, eq(seedingEntries.playerId, players.id))
     .where(eq(seedingEntries.runId, run.id));
-  entries.sort((a, b) => (a.overrideSeed ?? a.autoSeed) - (b.overrideSeed ?? b.autoSeed) || a.autoSeed - b.autoSeed);
+  entries.sort(
+    (a, b) =>
+      (a.overrideSeed ?? a.autoSeed) - (b.overrideSeed ?? b.autoSeed) || a.autoSeed - b.autoSeed,
+  );
   return { run, entries };
 }

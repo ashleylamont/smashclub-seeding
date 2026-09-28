@@ -19,7 +19,11 @@ import { normalizeTournamentId } from '@smashclub/engine';
 import { glickoSettingsSchema } from '@smashclub/shared';
 import { recomputePendingCandidates } from '../../identity/candidates';
 import { ensureAlias } from '../../identity/matching';
-import { charactersByPlayer, characterSlugsSchema, setPlayerCharacters } from '../../players/characters';
+import {
+  charactersByPlayer,
+  characterSlugsSchema,
+  setPlayerCharacters,
+} from '../../players/characters';
 import { mergePlayers } from '../../players/merge';
 import { compareModels } from '../../recompute/compareModels';
 import { loadBreakthrough } from '../../recap/breakthrough';
@@ -59,7 +63,11 @@ async function resolveCompanyId(db: Db, code: string | null): Promise<string | n
  * collide (two real people can share a name); it is only the chosen public
  * alias that should be unambiguous.
  */
-async function assertDisplayNameFree(db: Db, displayName: string | null, playerId?: string): Promise<void> {
+async function assertDisplayNameFree(
+  db: Db,
+  displayName: string | null,
+  playerId?: string,
+): Promise<void> {
   if (!displayName) return;
   const clash = await db
     .select({ id: players.id })
@@ -72,7 +80,10 @@ async function assertDisplayNameFree(db: Db, displayName: string | null, playerI
       ),
     );
   if (clash.length > 0) {
-    throw new TRPCError({ code: 'CONFLICT', message: `“${displayName}” is already taken by another player.` });
+    throw new TRPCError({
+      code: 'CONFLICT',
+      message: `“${displayName}” is already taken by another player.`,
+    });
   }
 }
 
@@ -127,51 +138,99 @@ const playerDetailsSchema = z.object({
 
 export const adminRouter = router({
   /** Existing accounts only: a person signs in before an admin can promote them. */
-  admins: adminProcedure.query(({ ctx }) => ctx.db
-    .select({ id: user.id, name: user.name, email: user.email, emailVerified: user.emailVerified })
-    .from(user).where(eq(user.role, 'admin')).orderBy(asc(user.name))),
+  admins: adminProcedure.query(({ ctx }) =>
+    ctx.db
+      .select({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        emailVerified: user.emailVerified,
+      })
+      .from(user)
+      .where(eq(user.role, 'admin'))
+      .orderBy(asc(user.name)),
+  ),
 
-  findAccounts: adminProcedure.input(z.object({ search: z.string().trim().min(2).max(100) }))
+  findAccounts: adminProcedure
+    .input(z.object({ search: z.string().trim().min(2).max(100) }))
     .query(({ ctx, input }) => {
       const escaped = input.search.replace(/[\\%_]/g, '\\$&');
       const pattern = `%${escaped}%`;
       return ctx.db
-        .select({ id: user.id, name: user.name, email: user.email,
-          emailVerified: user.emailVerified, role: user.role })
+        .select({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          role: user.role,
+        })
         .from(user)
         .where(or(ilike(user.name, pattern), ilike(user.email, pattern)))
-        .orderBy(asc(user.name)).limit(25);
+        .orderBy(asc(user.name))
+        .limit(25);
     }),
 
-  setAdminRole: adminProcedure.input(z.object({ userId: z.string().min(1), admin: z.boolean() }))
-    .mutation(async ({ ctx, input }) => ctx.db.transaction(async (tx) => {
-      // Serialize role changes against the same admin rows so two concurrent
-      // removals cannot each leave the other as the last administrator.
-      const admins = await tx.select({ id: user.id, emailVerified: user.emailVerified }).from(user)
-        .where(eq(user.role, 'admin')).orderBy(asc(user.id)).for('update');
-      if (!admins.some((row) => row.id === ctx.user.id && row.emailVerified)) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Your admin access has been removed.' });
-      }
-      const [target] = await tx.select({ id: user.id, role: user.role, emailVerified: user.emailVerified })
-        .from(user).where(eq(user.id, input.userId));
-      if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Account not found.' });
-      if (input.admin && !target.emailVerified) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'The account email must be verified before promotion.' });
-      }
-      if (!input.admin && target.role === 'admin' && target.emailVerified &&
-        admins.filter((row) => row.emailVerified).length <= 1) {
-        throw new TRPCError({ code: 'CONFLICT', message: 'Promote another admin before removing the last one.' });
-      }
-      if (target.role !== (input.admin ? 'admin' : 'user')) {
-        const [updated] = await tx.update(user).set({ role: input.admin ? 'admin' : 'user', updatedAt: new Date() })
-          .where(and(eq(user.id, input.userId), input.admin ? eq(user.emailVerified, true) : undefined))
-          .returning({ id: user.id });
-        if (!updated) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'The account email must be verified before promotion.' });
+  setAdminRole: adminProcedure
+    .input(z.object({ userId: z.string().min(1), admin: z.boolean() }))
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        // Serialize role changes against the same admin rows so two concurrent
+        // removals cannot each leave the other as the last administrator.
+        const admins = await tx
+          .select({ id: user.id, emailVerified: user.emailVerified })
+          .from(user)
+          .where(eq(user.role, 'admin'))
+          .orderBy(asc(user.id))
+          .for('update');
+        if (!admins.some((row) => row.id === ctx.user.id && row.emailVerified)) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Your admin access has been removed.',
+          });
         }
-      }
-      return { ok: true };
-    })),
+        const [target] = await tx
+          .select({ id: user.id, role: user.role, emailVerified: user.emailVerified })
+          .from(user)
+          .where(eq(user.id, input.userId));
+        if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Account not found.' });
+        if (input.admin && !target.emailVerified) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'The account email must be verified before promotion.',
+          });
+        }
+        if (
+          !input.admin &&
+          target.role === 'admin' &&
+          target.emailVerified &&
+          admins.filter((row) => row.emailVerified).length <= 1
+        ) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Promote another admin before removing the last one.',
+          });
+        }
+        if (target.role !== (input.admin ? 'admin' : 'user')) {
+          const [updated] = await tx
+            .update(user)
+            .set({ role: input.admin ? 'admin' : 'user', updatedAt: new Date() })
+            .where(
+              and(
+                eq(user.id, input.userId),
+                input.admin ? eq(user.emailVerified, true) : undefined,
+              ),
+            )
+            .returning({ id: user.id });
+          if (!updated) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'The account email must be verified before promotion.',
+            });
+          }
+        }
+        return { ok: true };
+      }),
+    ),
 
   /**
    * The two-division club-night planner. Its own router: the flow has a dozen
@@ -180,7 +239,8 @@ export const adminRouter = router({
    */
   eventPlanner: eventPlannerRouter,
 
-  breakthrough: adminProcedure.input(z.object({ eventKey: z.iso.date() }))
+  breakthrough: adminProcedure
+    .input(z.object({ eventKey: z.iso.date() }))
     .query(({ ctx, input }) => loadBreakthrough(ctx.db, input.eventKey)),
 
   // --- tournaments ---
@@ -204,7 +264,11 @@ export const adminRouter = router({
         })
         .onConflictDoNothing()
         .returning({ id: tournaments.id });
-      if (!row) throw new TRPCError({ code: 'CONFLICT', message: `Tournament ${slug} is already registered.` });
+      if (!row)
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: `Tournament ${slug} is already registered.`,
+        });
       return { tournamentId: row.id, slug };
     }),
 
@@ -248,8 +312,15 @@ export const adminRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [source] = await ctx.db.select({ provider: tournaments.provider }).from(tournaments).where(eq(tournaments.id, input.tournamentId));
-      if (source?.provider === 'native') throw new TRPCError({ code: 'BAD_REQUEST', message: 'Nemesis events use the event control page for live scoring.' });
+      const [source] = await ctx.db
+        .select({ provider: tournaments.provider })
+        .from(tournaments)
+        .where(eq(tournaments.id, input.tournamentId));
+      if (source?.provider === 'native')
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Nemesis events use the event control page for live scoring.',
+        });
       const liveUntil = new Date(Date.now() + input.hours * 60 * 60 * 1000);
       await ctx.db
         .update(tournaments)
@@ -294,7 +365,11 @@ export const adminRouter = router({
       await ctx.db.update(tournaments).set(patch).where(eq(tournaments.id, input.tournamentId));
       // A mode change must re-read the bracket so older imports gain stage
       // metadata before the recompute is queued. The sync remains idempotent.
-      if (before.provider !== 'native' && input.resultsMode !== undefined && input.resultsMode !== before.resultsMode) {
+      if (
+        before.provider !== 'native' &&
+        input.resultsMode !== undefined &&
+        input.resultsMode !== before.resultsMode
+      ) {
         try {
           await syncTournament(ctx.db, ctx.challonge, input.tournamentId, { source: 'public' });
         } catch (error) {
@@ -359,7 +434,10 @@ export const adminRouter = router({
         tournamentId: tournaments.id,
       })
       .from(reviewItems)
-      .innerJoin(tournamentParticipants, eq(reviewItems.tournamentParticipantId, tournamentParticipants.id))
+      .innerJoin(
+        tournamentParticipants,
+        eq(reviewItems.tournamentParticipantId, tournamentParticipants.id),
+      )
       .innerJoin(tournaments, eq(tournamentParticipants.tournamentId, tournaments.id))
       .leftJoin(companies, eq(reviewItems.companyId, companies.id))
       .where(eq(reviewItems.status, 'pending'))
@@ -378,9 +456,10 @@ export const adminRouter = router({
   recomputeReviewCandidates: adminProcedure
     .input(z.object({ reviewItemId: z.uuid().optional() }).optional())
     .mutation(async ({ ctx, input }) => {
-      return recomputePendingCandidates(ctx.db, {
-        ...(input?.reviewItemId ? { reviewItemIds: [input.reviewItemId] } : {}),
-      });
+      return recomputePendingCandidates(
+        ctx.db,
+        input?.reviewItemId ? { reviewItemIds: [input.reviewItemId] } : {},
+      );
     }),
 
   resolveReview: adminProcedure
@@ -496,7 +575,13 @@ export const adminRouter = router({
     }),
 
   addAlias: adminProcedure
-    .input(z.object({ playerId: z.uuid(), alias: z.string().trim().min(1).max(120), companyCode: z.string().nullable() }))
+    .input(
+      z.object({
+        playerId: z.uuid(),
+        alias: z.string().trim().min(1).max(120),
+        companyCode: z.string().nullable(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const companyId = await resolveCompanyId(ctx.db, input.companyCode);
       await ensureAlias(ctx.db, input.playerId, input.alias.toLowerCase(), companyId, 'manual');
@@ -589,9 +674,15 @@ export const adminRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const code = input.code.toUpperCase();
-      const clash = await ctx.db.select({ id: companies.id }).from(companies).where(eq(companies.code, code));
+      const clash = await ctx.db
+        .select({ id: companies.id })
+        .from(companies)
+        .where(eq(companies.code, code));
       if (clash.some((row) => row.id !== input.id)) {
-        throw new TRPCError({ code: 'CONFLICT', message: `Company code ${code} is already in use.` });
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: `Company code ${code} is already in use.`,
+        });
       }
 
       let companyId: string;
@@ -628,7 +719,12 @@ export const adminRouter = router({
     .mutation(async ({ ctx, input }) => {
       await ctx.db
         .delete(companyAliases)
-        .where(and(eq(companyAliases.companyId, input.companyId), eq(companyAliases.aliasNorm, input.alias)));
+        .where(
+          and(
+            eq(companyAliases.companyId, input.companyId),
+            eq(companyAliases.aliasNorm, input.alias),
+          ),
+        );
       return { ok: true };
     }),
 
@@ -638,12 +734,17 @@ export const adminRouter = router({
    * re-creating the company and re-tagging — but it does drop the aliases that
    * let sync recognise the tag, hence the count in the confirmation UI.
    */
-  deleteCompany: adminProcedure.input(z.object({ companyId: z.uuid() })).mutation(async ({ ctx, input }) => {
-    const [company] = await ctx.db.select().from(companies).where(eq(companies.id, input.companyId));
-    if (!company) throw new TRPCError({ code: 'NOT_FOUND', message: 'Company not found.' });
-    await ctx.db.delete(companies).where(eq(companies.id, input.companyId));
-    return { ok: true };
-  }),
+  deleteCompany: adminProcedure
+    .input(z.object({ companyId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const [company] = await ctx.db
+        .select()
+        .from(companies)
+        .where(eq(companies.id, input.companyId));
+      if (!company) throw new TRPCError({ code: 'NOT_FOUND', message: 'Company not found.' });
+      await ctx.db.delete(companies).where(eq(companies.id, input.companyId));
+      return { ok: true };
+    }),
 
   // --- claims ---
   claims: adminProcedure.query(async ({ ctx }) => {
@@ -674,11 +775,19 @@ export const adminRouter = router({
   resolveClaim: adminProcedure
     .input(z.object({ claimId: z.uuid(), action: z.enum(['approved', 'rejected', 'revoked']) }))
     .mutation(async ({ ctx, input }) => {
-      const [claim] = await ctx.db.select().from(playerClaims).where(eq(playerClaims.id, input.claimId));
+      const [claim] = await ctx.db
+        .select()
+        .from(playerClaims)
+        .where(eq(playerClaims.id, input.claimId));
       if (!claim) throw new TRPCError({ code: 'NOT_FOUND' });
       await ctx.db
         .update(playerClaims)
-        .set({ status: input.action, resolvedBy: ctx.user.id, resolvedAt: new Date(), updatedAt: new Date() })
+        .set({
+          status: input.action,
+          resolvedBy: ctx.user.id,
+          resolvedAt: new Date(),
+          updatedAt: new Date(),
+        })
         .where(eq(playerClaims.id, input.claimId));
       return { ok: true };
     }),
@@ -691,23 +800,27 @@ export const adminRouter = router({
       return { runId };
     }),
 
-  seedingRun: adminProcedure.input(z.object({ tournamentId: z.uuid() })).query(async ({ ctx, input }) => {
-    const result = await latestSeedingRun(ctx.db, input.tournamentId);
-    if (!result) return null;
-    return {
-      run: {
-        id: result.run.id,
-        status: result.run.status,
-        createdAt: result.run.createdAt.toISOString(),
-        pushedAt: result.run.pushedAt?.toISOString() ?? null,
-        pushLog: result.run.pushLog,
-      },
-      entries: result.entries.map((entry) => ({
-        ...entry,
-        name: entry.canonicalName ? (entry.displayName ?? entry.canonicalName) : entry.cleanedName,
-      })),
-    };
-  }),
+  seedingRun: adminProcedure
+    .input(z.object({ tournamentId: z.uuid() }))
+    .query(async ({ ctx, input }) => {
+      const result = await latestSeedingRun(ctx.db, input.tournamentId);
+      if (!result) return null;
+      return {
+        run: {
+          id: result.run.id,
+          status: result.run.status,
+          createdAt: result.run.createdAt.toISOString(),
+          pushedAt: result.run.pushedAt?.toISOString() ?? null,
+          pushLog: result.run.pushLog,
+        },
+        entries: result.entries.map((entry) => ({
+          ...entry,
+          name: entry.canonicalName
+            ? (entry.displayName ?? entry.canonicalName)
+            : entry.cleanedName,
+        })),
+      };
+    }),
 
   reorderSeedingRun: adminProcedure
     .input(z.object({ runId: z.uuid(), participantIdsInOrder: z.array(z.uuid()) }))
@@ -723,9 +836,11 @@ export const adminRouter = router({
       return { ok: true };
     }),
 
-  pushSeedingRun: adminProcedure.input(z.object({ runId: z.uuid() })).mutation(async ({ ctx, input }) => {
-    return pushSeedingRun(ctx.db, ctx.challonge, input.runId);
-  }),
+  pushSeedingRun: adminProcedure
+    .input(z.object({ runId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      return pushSeedingRun(ctx.db, ctx.challonge, input.runId);
+    }),
 
   // --- settings / recompute ---
   settings: adminProcedure.query(async ({ ctx }) => getGlickoSettings(ctx.db)),

@@ -1,7 +1,15 @@
 /** Public aliases only: callers must use the public event snapshot. */
-export interface GraphicResult { place: number; alias: string; detail?: string }
+export interface GraphicResult {
+  place: number;
+  alias: string;
+  detail?: string;
+}
 export function escapeSvg(value: string): string {
-  return value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[character]!);
+  return value.replace(
+    /[&<>"']/g,
+    (character) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[character]!,
+  );
 }
 export function resultsSvg(title: string, results: readonly GraphicResult[]): string {
   const rows = results.slice(0, 8);
@@ -13,8 +21,8 @@ export function resultsSvg(title: string, results: readonly GraphicResult[]): st
 export function confirmedPoolGraphics(
   placements: readonly { division: string; poolIndex: number; playerId: string; place: number }[],
   entrants: readonly { id: string; name: string }[],
-): Array<{ title: string; results: GraphicResult[] }> {
-  const names = new Map(entrants.map(entrant => [entrant.id, entrant.name]));
+): { title: string; results: GraphicResult[] }[] {
+  const names = new Map(entrants.map((entrant) => [entrant.id, entrant.name]));
   const pools = new Map<string, GraphicResult[]>();
   for (const placement of placements) {
     const alias = names.get(placement.playerId);
@@ -24,5 +32,7 @@ export function confirmedPoolGraphics(
     rows.push({ place: placement.place, alias, detail: 'Confirmed pool placement' });
     pools.set(title, rows);
   }
-  return [...pools].sort(([a], [b]) => a.localeCompare(b)).map(([title, results]) => ({ title, results: results.sort((a, b) => a.place - b.place) }));
+  return [...pools]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([title, results]) => ({ title, results: results.sort((a, b) => a.place - b.place) }));
 }

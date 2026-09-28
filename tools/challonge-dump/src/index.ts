@@ -26,7 +26,11 @@ const API_BASE = 'https://api.challonge.com/v1';
 
 async function requestJson(url: string, auth: string): Promise<unknown> {
   const response = await fetch(url, {
-    headers: { Accept: 'application/json', Authorization: `Basic ${auth}`, 'User-Agent': 'smashclub-dump/1.0' },
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Basic ${auth}`,
+      'User-Agent': 'smashclub-dump/1.0',
+    },
   });
   if (!response.ok) {
     const body = (await response.text().catch(() => '')).slice(0, 200);
@@ -65,7 +69,9 @@ async function main(): Promise<void> {
   ].map((slug) => normalizeTournamentId(slug));
 
   if (slugs.length === 0) {
-    console.error('Pass tournament slugs as arguments, or --slugs <file> (one per line, # comments allowed).');
+    console.error(
+      'Pass tournament slugs as arguments, or --slugs <file> (one per line, # comments allowed).',
+    );
     process.exit(1);
   }
 
@@ -79,7 +85,10 @@ async function main(): Promise<void> {
       // Polite spacing: Challonge's v1 rate limits are undocumented.
       const tournament = await requestJson(`${API_BASE}/tournaments/${slug}.json`, auth);
       await sleep(600);
-      const participants = await requestJson(`${API_BASE}/tournaments/${slug}/participants.json`, auth);
+      const participants = await requestJson(
+        `${API_BASE}/tournaments/${slug}/participants.json`,
+        auth,
+      );
       await sleep(600);
       const matches = await requestJson(`${API_BASE}/tournaments/${slug}/matches.json`, auth);
       await sleep(600);

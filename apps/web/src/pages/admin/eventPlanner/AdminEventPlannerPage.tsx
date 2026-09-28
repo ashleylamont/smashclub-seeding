@@ -59,9 +59,10 @@ export function AdminEventPlannerPage() {
       <div className="card section">
         <h2>Event planner</h2>
         <p className="muted">
-          Paste the attendance list, resolve everybody against the registry, split Upper and Lower off a frozen
-          ranking snapshot, and stripe each division into balanced pools of three to five. The plan then hands you exactly what
-          Challonge needs for the four brackets of the night.
+          Paste the attendance list, resolve everybody against the registry, split Upper and Lower
+          off a frozen ranking snapshot, and stripe each division into balanced pools of three to
+          five. The plan then hands you exactly what Challonge needs for the four brackets of the
+          night.
         </p>
       </div>
 
@@ -191,8 +192,8 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
             onChange={(event) => setEventDate(event.target.value)}
           />
           <span className="form-hint">
-            All four brackets are registered under this date, which is what makes them one club night for
-            ratings.
+            All four brackets are registered under this date, which is what makes them one club
+            night for ratings.
           </span>
         </label>
         <label className="form-field">
@@ -219,7 +220,9 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
           rows={10}
           value={text}
           onChange={(event) => setText(event.target.value)}
-          placeholder={'One person per line — bullets and numbering are fine.\n- [Atlas] Fox McCloud\n2. Samus Aran'}
+          placeholder={
+            'One person per line — bullets and numbering are fine.\n- [Atlas] Fox McCloud\n2. Samus Aran'
+          }
         />
         <span className="form-hint">
           Lines are never split on commas: a display name may legitimately contain one.
@@ -240,11 +243,18 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
 
       <label className="form-field">
         <span className="form-label">Bracket system</span>
-        <select className="select" value={bracketMode} onChange={event => setBracketMode(event.target.value as 'native' | 'challonge')}>
+        <select
+          className="select"
+          value={bracketMode}
+          onChange={(event) => setBracketMode(event.target.value as 'native' | 'challonge')}
+        >
           <option value="native">Nemesis — run the whole event here</option>
           <option value="challonge">Challonge — manage external brackets</option>
         </select>
-        <span className="form-hint">Nemesis runs pools, championship and consolation, then records the finished night in club ratings. Existing Challonge events stay linked to Challonge.</span>
+        <span className="form-hint">
+          Nemesis runs pools, championship and consolation, then records the finished night in club
+          ratings. Existing Challonge events stay linked to Challonge.
+        </span>
       </label>
 
       {preview && (
@@ -265,7 +275,9 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
               <select
                 className="select"
                 value={upperSize ?? ''}
-                onChange={(event) => setUpperSize(event.target.value === '' ? null : Number(event.target.value))}
+                onChange={(event) =>
+                  setUpperSize(event.target.value === '' ? null : Number(event.target.value))
+                }
               >
                 <option value="">Choose…</option>
                 {sizes.map((size) => (
@@ -276,7 +288,8 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
               </select>
             )}
             <span className="form-hint">
-              The default splits attendance evenly. Each pool advances two players; all remaining players enter consolation.
+              The default splits attendance evenly. Each pool advances two players; all remaining
+              players enter consolation.
             </span>
           </label>
           <button
@@ -323,7 +336,8 @@ function PlanWizard({
 
   const view = planQuery.data ?? null;
   const requestedStep = isStepKey(step) ? step : furthestStep(view);
-  const current = view?.plan.historicalAdoption && requestedStep === 'handoff' ? 'roster' : requestedStep;
+  const current =
+    view?.plan.historicalAdoption && requestedStep === 'handoff' ? 'roster' : requestedStep;
 
   if (planQuery.isPending) return <p className="loading-text">Loading plan…</p>;
   if (planQuery.isError) return <p className="error-text">{planQuery.error.message}</p>;
@@ -340,53 +354,88 @@ function PlanWizard({
 
   const available = availableSteps(view);
   const adopted = view.plan.historicalAdoption;
-  const resultsSlug = view.brackets.find((bracket) => bracket.division === 'upper' && bracket.stage === 'main')?.challongeSlug;
+  const resultsSlug = view.brackets.find(
+    (bracket) => bracket.division === 'upper' && bracket.stage === 'main',
+  )?.challongeSlug;
   const resultsUrl = resultsSlug ? `/events/${encodeURIComponent(resultsSlug)}` : null;
   const steps = adopted ? STEPS.filter((entry) => entry.key !== 'handoff') : STEPS;
-  const originalPlan = (<>
-    <PlanSummary view={view} />
-    <nav className="planner-steps" aria-label={adopted ? 'Original plan steps' : 'Planner steps'}>
-      {steps.map((entry) => (
-        <button key={entry.key} type="button" className={`admin-tab${current === entry.key ? ' active' : ''}`} disabled={!available.has(entry.key)} onClick={() => onStep(entry.key)}>
-          {entry.key === 'handoff' && view.plan.bracketMode === 'native' ? 'Run event' : entry.label}
-        </button>
-      ))}
-    </nav>
-  </>);
-  const stepContent = (<>
-    {current === 'roster' && <RosterStep view={view} onChanged={invalidate} />}
-    {current === 'divisions' && <DivisionsStep view={view} onChanged={invalidate} />}
-    {current === 'pools' && <PoolsStep view={view} onChanged={invalidate} />}
-    {current === 'handoff' && <HandoffStep view={view} onChanged={invalidate} />}
-  </>);
+  const originalPlan = (
+    <>
+      <PlanSummary view={view} />
+      <nav className="planner-steps" aria-label={adopted ? 'Original plan steps' : 'Planner steps'}>
+        {steps.map((entry) => (
+          <button
+            key={entry.key}
+            type="button"
+            className={`admin-tab${current === entry.key ? ' active' : ''}`}
+            disabled={!available.has(entry.key)}
+            onClick={() => onStep(entry.key)}
+          >
+            {entry.key === 'handoff' && view.plan.bracketMode === 'native'
+              ? 'Run event'
+              : entry.label}
+          </button>
+        ))}
+      </nav>
+    </>
+  );
+  const stepContent = (
+    <>
+      {current === 'roster' && <RosterStep view={view} onChanged={invalidate} />}
+      {current === 'divisions' && <DivisionsStep view={view} onChanged={invalidate} />}
+      {current === 'pools' && <PoolsStep view={view} onChanged={invalidate} />}
+      {current === 'handoff' && <HandoffStep view={view} onChanged={invalidate} />}
+    </>
+  );
 
   return (
     <div>
       <div className="card section">
         <div className="page-header">
           <h2>
-            {view.plan.name} <span className="chip">{STATUS_LABEL[view.plan.status] ?? view.plan.status}</span> {['pools_ready', 'underway'].includes(view.plan.status) && <span className="chip">Pool draw: {view.plan.softLockedAt ? 'soft-locked' : 'draft'}</span>}
+            {view.plan.name}{' '}
+            <span className="chip">{STATUS_LABEL[view.plan.status] ?? view.plan.status}</span>{' '}
+            {['pools_ready', 'underway'].includes(view.plan.status) && (
+              <span className="chip">
+                Pool draw: {view.plan.softLockedAt ? 'soft-locked' : 'draft'}
+              </span>
+            )}
           </h2>
           <span className="row-actions">
-            {adopted ? resultsUrl && <a className="btn btn-small" href={resultsUrl}>Imported results →</a> : <a className="btn btn-small" href={`/admin/event-operations?plan=${planId}`}>Run event →</a>}
-            {view.plan.bracketMode !== 'native' && (view.plan.status === 'pools_ready' || view.plan.status === 'underway') && (
-              <button
-                type="button"
-                className="btn btn-small"
-                disabled={close.isPending}
-                title="The night is played and synced"
-                onClick={() => close.mutate('complete')}
-              >
-                Mark complete
-              </button>
+            {adopted ? (
+              resultsUrl && (
+                <a className="btn btn-small" href={resultsUrl}>
+                  Imported results →
+                </a>
+              )
+            ) : (
+              <a className="btn btn-small" href={`/admin/event-operations?plan=${planId}`}>
+                Run event →
+              </a>
             )}
+            {view.plan.bracketMode !== 'native' &&
+              (view.plan.status === 'pools_ready' || view.plan.status === 'underway') && (
+                <button
+                  type="button"
+                  className="btn btn-small"
+                  disabled={close.isPending}
+                  title="The night is played and synced"
+                  onClick={() => close.mutate('complete')}
+                >
+                  Mark complete
+                </button>
+              )}
             {view.plan.status !== 'complete' && view.plan.status !== 'cancelled' && (
               <button
                 type="button"
                 className="btn btn-small"
                 disabled={close.isPending}
                 onClick={() => {
-                  if (window.confirm('Cancel this plan? It stays as a record but can no longer be run.')) {
+                  if (
+                    window.confirm(
+                      'Cancel this plan? It stays as a record but can no longer be run.',
+                    )
+                  ) {
                     close.mutate('cancelled');
                   }
                 }}
@@ -400,20 +449,31 @@ function PlanWizard({
           </span>
         </div>
         <p className="muted">
-          {formatDateTime(view.plan.eventDate)} · {view.entries.length} {adopted ? 'planned entrants' : 'entrants'}
-          {view.plan.rankingSnapshotAt && ` · ranking snapshot ${formatDateTime(view.plan.rankingSnapshotAt)}`}
+          {formatDateTime(view.plan.eventDate)} · {view.entries.length}{' '}
+          {adopted ? 'planned entrants' : 'entrants'}
+          {view.plan.rankingSnapshotAt &&
+            ` · ranking snapshot ${formatDateTime(view.plan.rankingSnapshotAt)}`}
         </p>
         {close.isError && <p className="error-text">{close.error.message}</p>}
         {!adopted && originalPlan}
       </div>
 
-      {view.plan.status !== 'cancelled' && <HistoricalAdoption view={view} onChanged={invalidate} />}
-      {adopted ? <details className="historical-original-plan card section">
-        <summary>Original plan — may differ from the event played</summary>
-        <p className="muted">These are the saved roster, seeds and proposed pools. Use the imported results above for the matches and placements that actually happened.</p>
-        {originalPlan}
-        {stepContent}
-      </details> : stepContent}
+      {view.plan.status !== 'cancelled' && (
+        <HistoricalAdoption view={view} onChanged={invalidate} />
+      )}
+      {adopted ? (
+        <details className="historical-original-plan card section">
+          <summary>Original plan — may differ from the event played</summary>
+          <p className="muted">
+            These are the saved roster, seeds and proposed pools. Use the imported results above for
+            the matches and placements that actually happened.
+          </p>
+          {originalPlan}
+          {stepContent}
+        </details>
+      ) : (
+        stepContent
+      )}
     </div>
   );
 }
@@ -427,7 +487,8 @@ function PlanSummary({ view }: { view: EventPlanView }) {
         <div key={division.division} className="stat">
           <dt>{division.division === 'upper' ? 'Upper' : 'Lower'}</dt>
           <dd>
-            {division.size} {division.poolCount > 0 && <span className="muted">· {division.poolCount} pools</span>}
+            {division.size}{' '}
+            {division.poolCount > 0 && <span className="muted">· {division.poolCount} pools</span>}
           </dd>
         </div>
       ))}

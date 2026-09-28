@@ -4,7 +4,11 @@ import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
 import { companies, playerClaims, players } from '@smashclub/db';
 import { defaultPublicAlias, publicPlayerName } from '@smashclub/shared';
-import { charactersByPlayer, characterSlugsSchema, setPlayerCharacters } from '../../players/characters';
+import {
+  charactersByPlayer,
+  characterSlugsSchema,
+  setPlayerCharacters,
+} from '../../players/characters';
 import { authedProcedure, router } from '../trpc';
 
 /**
@@ -92,7 +96,12 @@ export const meRouter = router({
       const live = await ctx.db
         .select({ id: playerClaims.id })
         .from(playerClaims)
-        .where(and(eq(playerClaims.userId, ctx.user.id), inArray(playerClaims.status, ['pending', 'approved'])));
+        .where(
+          and(
+            eq(playerClaims.userId, ctx.user.id),
+            inArray(playerClaims.status, ['pending', 'approved']),
+          ),
+        );
       if (live.length > 0) {
         throw new TRPCError({
           code: 'CONFLICT',
@@ -107,21 +116,23 @@ export const meRouter = router({
       return { claimId: claim!.id };
     }),
 
-  withdrawClaim: authedProcedure.input(z.object({ claimId: z.uuid() })).mutation(async ({ ctx, input }) => {
-    const [claim] = await ctx.db
-      .select()
-      .from(playerClaims)
-      .where(and(eq(playerClaims.id, input.claimId), eq(playerClaims.userId, ctx.user.id)));
-    if (!claim) throw new TRPCError({ code: 'NOT_FOUND' });
-    if (claim.status !== 'pending' && claim.status !== 'approved') {
-      throw new TRPCError({ code: 'CONFLICT', message: 'Only live claims can be withdrawn.' });
-    }
-    await ctx.db
-      .update(playerClaims)
-      .set({ status: 'revoked', resolvedAt: new Date(), updatedAt: new Date() })
-      .where(eq(playerClaims.id, input.claimId));
-    return { ok: true };
-  }),
+  withdrawClaim: authedProcedure
+    .input(z.object({ claimId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const [claim] = await ctx.db
+        .select()
+        .from(playerClaims)
+        .where(and(eq(playerClaims.id, input.claimId), eq(playerClaims.userId, ctx.user.id)));
+      if (!claim) throw new TRPCError({ code: 'NOT_FOUND' });
+      if (claim.status !== 'pending' && claim.status !== 'approved') {
+        throw new TRPCError({ code: 'CONFLICT', message: 'Only live claims can be withdrawn.' });
+      }
+      await ctx.db
+        .update(playerClaims)
+        .set({ status: 'revoked', resolvedAt: new Date(), updatedAt: new Date() })
+        .where(eq(playerClaims.id, input.claimId));
+      return { ok: true };
+    }),
 
   /**
    * Any approved claimant may set the player's public alias — the name the
@@ -129,7 +140,9 @@ export const meRouter = router({
    * and falls back to the canonical name.
    */
   updateDisplayName: authedProcedure
-    .input(z.object({ playerId: z.uuid(), displayName: z.string().trim().min(1).max(80).nullable() }))
+    .input(
+      z.object({ playerId: z.uuid(), displayName: z.string().trim().min(1).max(80).nullable() }),
+    )
     .mutation(async ({ ctx, input }) => {
       await assertApprovedClaim(ctx.db, ctx.user.id, input.playerId);
 
@@ -148,7 +161,10 @@ export const meRouter = router({
             ),
           );
         if (clash.length > 0) {
-          throw new TRPCError({ code: 'CONFLICT', message: `“${input.displayName}” is already taken.` });
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: `“${input.displayName}” is already taken.`,
+          });
         }
       }
 

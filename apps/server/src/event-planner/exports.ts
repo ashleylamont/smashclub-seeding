@@ -39,28 +39,33 @@ export interface PlanExports {
   rankingSnapshotAt: string | null;
   brackets: BracketExport[];
   /** Pool cards, ready to print for a venue with no connectivity. */
-  poolCards: Array<{
+  poolCards: {
     division: Division;
     label: string;
     lines: string[];
-  }>;
+  }[];
 }
 
 export function buildExports(view: PlanView): PlanExports {
-  if (view.plan.bracketMode === 'native') throw new EventPlanStateError('This event runs in Nemesis; Challonge handoff exports are unavailable.');
+  if (view.plan.bracketMode === 'native')
+    throw new EventPlanStateError(
+      'This event runs in Nemesis; Challonge handoff exports are unavailable.',
+    );
   const brackets: BracketExport[] = [];
   const poolCards: PlanExports['poolCards'] = [];
 
   for (const division of view.divisions) {
     if (division.size === 0) continue;
-    const advanceCounts = division.pools.map(pool => winnersCount(pool.members.filter(member => !member.withdrawn).length));
+    const advanceCounts = division.pools.map((pool) =>
+      winnersCount(pool.members.filter((member) => !member.withdrawn).length),
+    );
     const mixedAdvanceCounts = new Set(advanceCounts).size > 1;
     const slot = (stage: 'main' | 'consolation') =>
-      view.brackets.find((bracket) => bracket.division === division.division && bracket.stage === stage);
+      view.brackets.find(
+        (bracket) => bracket.division === division.division && bracket.stage === stage,
+      );
 
-    const seeded = division.pools
-      .flatMap((pool) => pool.members)
-      .sort((a, b) => a.seed - b.seed);
+    const seeded = division.pools.flatMap((pool) => pool.members).sort((a, b) => a.seed - b.seed);
     const mainSlot = slot('main');
     brackets.push({
       division: division.division,
@@ -70,7 +75,7 @@ export function buildExports(view: PlanView): PlanExports {
       audit: seeded.map((member) => `${member.seed}\t${member.name}`).join('\n'),
       checklist: [
         'Tournament type: Two stage — group stage then single elimination.',
-        `Groups: ${division.poolCount} round-robin group(s), sizes ${division.pools.map((pool) => pool.members.length).join(" / ")}. Match the pool cards exactly; do not rely on automatic allocation.`,
+        `Groups: ${division.poolCount} round-robin group(s), sizes ${division.pools.map((pool) => pool.members.length).join(' / ')}. Match the pool cards exactly; do not rely on automatic allocation.`,
         mixedAdvanceCounts
           ? 'Advance 2 from each 3/4-player group and 3 from each 5-player group. Challonge uses one advance count for all groups, so manually reconcile the final-stage entrants before play, or use native brackets.'
           : `Advance ${advanceCounts[0]} from each group into the final stage (the upper half, rounded up).`,
@@ -91,13 +96,14 @@ export function buildExports(view: PlanView): PlanExports {
       stage: 'consolation',
       title: `${divisionLabel(division.division)} Consolation`,
       participants: consolation
-        ? consolation.entrants
-            .map((entrant) => nameFor(division, entrant.playerId))
-            .join('\n')
+        ? consolation.entrants.map((entrant) => nameFor(division, entrant.playerId)).join('\n')
         : '',
       audit: consolation
         ? consolation.entrants
-            .map((entrant) => `${entrant.bracketSeed}\t${entrant.label}\t${nameFor(division, entrant.playerId)}`)
+            .map(
+              (entrant) =>
+                `${entrant.bracketSeed}\t${entrant.label}\t${nameFor(division, entrant.playerId)}`,
+            )
             .join('\n')
         : '',
       checklist: [
@@ -109,10 +115,14 @@ export function buildExports(view: PlanView): PlanExports {
               'Tournament type: Single elimination.',
               'Participants: paste the list above, in this order, then set seeds 1..n to match.',
               `Round one should be: ${consolation.roundOne
-                .map((pair) => (pair.b ? `${pair.a.label} v ${pair.b.label}` : `${pair.a.label} (bye)`))
+                .map((pair) =>
+                  pair.b ? `${pair.a.label} v ${pair.b.label}` : `${pair.a.label} (bye)`,
+                )
                 .join(', ')}.`,
             ]
-          : ['Confirm every pool’s finishing order first — everyone below the rounded-up upper half enters consolation.']),
+          : [
+              'Confirm every pool’s finishing order first — everyone below the rounded-up upper half enters consolation.',
+            ]),
         `Event date: ${view.plan.eventDate.slice(0, 10)} — the same as the main brackets.`,
         'Do NOT mark this bracket as rookie.',
       ],

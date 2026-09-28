@@ -35,12 +35,12 @@ async function syncWithParticipants(names: string[]): Promise<void> {
     slug: 'weekly1',
     state: 'complete',
     participants: names.map((name, index) => ({ id: index + 1, name })),
-    matches:
-      names.length >= 2
-        ? [{ id: 11, p1: 1, p2: 2, winner: 1, order: 1 }]
-        : [],
+    matches: names.length >= 2 ? [{ id: 11, p1: 1, p2: 2, winner: 1, order: 1 }] : [],
   };
-  const [row] = await db.select({ id: tournaments.id }).from(tournaments).where(eq(tournaments.challongeSlug, 'weekly1'));
+  const [row] = await db
+    .select({ id: tournaments.id })
+    .from(tournaments)
+    .where(eq(tournaments.challongeSlug, 'weekly1'));
   await syncTournament(db, fixtureClient([fixture]), row!.id);
 }
 
@@ -59,7 +59,10 @@ describe('participant matching pipeline', () => {
     // The link is an inference from today's pool, not a club record: writing it
     // to player_aliases would keep resolving it silently once a second Josh C.
     // exists. Only registry/manual/decision sources mint aliases.
-    const aliases = await db.select().from(playerAliases).where(eq(playerAliases.aliasNorm, 'josh c'));
+    const aliases = await db
+      .select()
+      .from(playerAliases)
+      .where(eq(playerAliases.aliasNorm, 'josh c'));
     expect(aliases).toHaveLength(0);
   });
 
@@ -68,7 +71,9 @@ describe('participant matching pipeline', () => {
     expect(await db.select().from(reviewItems)).toHaveLength(0);
 
     // A second matching Josh joins the club, so "Josh C" stops being provable.
-    await importRegistryPlayers(db, [{ id: 'josh-chen', canonical_name: 'Josh Chen', company: 'ATL' }]);
+    await importRegistryPlayers(db, [
+      { id: 'josh-chen', canonical_name: 'Josh Chen', company: 'ATL' },
+    ]);
     await registerTournamentSlugs(db, ['weekly2']);
     const fixture: FixtureTournament = {
       slug: 'weekly2',
@@ -79,7 +84,10 @@ describe('participant matching pipeline', () => {
       ],
       matches: [{ id: 11, p1: 1, p2: 2, winner: 1, order: 1 }],
     };
-    const [row] = await db.select({ id: tournaments.id }).from(tournaments).where(eq(tournaments.challongeSlug, 'weekly2'));
+    const [row] = await db
+      .select({ id: tournaments.id })
+      .from(tournaments)
+      .where(eq(tournaments.challongeSlug, 'weekly2'));
     await syncTournament(db, fixtureClient([fixture]), row!.id);
 
     const queue = await db.select().from(reviewItems);
@@ -94,7 +102,11 @@ describe('participant matching pipeline', () => {
 
     const queue = await db.select().from(reviewItems);
     expect(queue).toHaveLength(1);
-    const candidates = queue[0]!.candidates as Array<{ name: string; score: number; reason: string }>;
+    const candidates = queue[0]!.candidates as {
+      name: string;
+      score: number;
+      reason: string;
+    }[];
     expect(candidates.some((c) => c.name === 'Josh Cortese')).toBe(true);
   });
 
@@ -126,7 +138,7 @@ describe('participant matching pipeline', () => {
     await syncWithParticipants(['[ATL] Jackson Chen', '[ATL] Josh Cortese']);
     const queue = await db.select().from(reviewItems);
     expect(queue).toHaveLength(1);
-    const candidates = queue[0]!.candidates as Array<{ playerId: string }>;
+    const candidates = queue[0]!.candidates as { playerId: string }[];
     expect(candidates.some((c) => c.playerId === jacksonLin!.id)).toBe(false);
   });
 

@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import pg from 'pg';
+import { Pool } from 'pg';
 import { schema, type Db } from '@smashclub/db';
 import { buildApp } from './app';
 import { createAuth } from './auth';
@@ -12,7 +12,7 @@ import { acquireSchedulerLock, SyncScheduler } from './scheduler';
 
 async function main(): Promise<void> {
   const env = loadEnv();
-  const pool = new pg.Pool({ connectionString: env.DATABASE_URL });
+  const pool = new Pool({ connectionString: env.DATABASE_URL });
   const nodeDb = drizzle(pool, { schema });
 
   // Single replica + Recreate strategy makes startup migrations race-free.
@@ -28,7 +28,9 @@ async function main(): Promise<void> {
 
   const app = await buildApp({ db, env, auth, challonge, recomputeTrigger });
 
-  const scheduler = new SyncScheduler(db, challonge, recomputeTrigger, (message) => app.log.info(message));
+  const scheduler = new SyncScheduler(db, challonge, recomputeTrigger, (message) =>
+    app.log.info(message),
+  );
   if (await acquireSchedulerLock(db)) {
     scheduler.start();
     app.log.info('sync scheduler started');

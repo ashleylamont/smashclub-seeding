@@ -16,13 +16,13 @@ const PAD = 64;
 export interface ShareCardInput {
   title: string;
   date: string;
-  podium: Array<{ place: number; name: string; companyCode: string | null }>;
+  podium: { place: number; name: string; companyCode: string | null }[];
   /** A couple of headlines from the night, already formatted. */
   facts: string[];
   entrants: number;
   setsPlayed: number;
   /** Champions labelled by bracket for multi-bracket evenings. */
-  champions?: Array<{ name: string; bracket: string }>;
+  champions?: { name: string; bracket: string }[];
 }
 
 function token(name: string, fallback: string): string {
@@ -50,7 +50,12 @@ function fitText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number):
  * share of a session renders in the wrong typeface.
  */
 async function ensureFonts(): Promise<void> {
-  const faces = ['700 72px Oswald', '600 34px Oswald', '400 22px "JetBrains Mono"', '700 22px "JetBrains Mono"'];
+  const faces = [
+    '700 72px Oswald',
+    '600 34px Oswald',
+    '400 22px "JetBrains Mono"',
+    '700 22px "JetBrains Mono"',
+  ];
   try {
     await Promise.all(faces.map((face) => document.fonts.load(face)));
     await document.fonts.ready;
@@ -126,18 +131,19 @@ export async function renderShareCard(input: ShareCardInput): Promise<Blob | nul
       ctx.font = '700 18px "JetBrains Mono", monospace';
       ctx.fillStyle = soft;
     }
-  } else for (const entry of input.podium.slice(0, 4)) {
-    const index = entry.place - 1;
-    ctx.font = '700 48px Oswald, sans-serif';
-    ctx.fillStyle = placeColours[index] ?? text;
-    ctx.fillText(`${entry.place}`, PAD, y);
+  } else
+    for (const entry of input.podium.slice(0, 4)) {
+      const index = entry.place - 1;
+      ctx.font = '700 48px Oswald, sans-serif';
+      ctx.fillStyle = placeColours[index] ?? text;
+      ctx.fillText(`${entry.place}`, PAD, y);
 
-    ctx.font = '600 34px Oswald, sans-serif';
-    ctx.fillStyle = index === 0 ? textH : text;
-    const name = entry.companyCode ? `${entry.name}  ${entry.companyCode}` : entry.name;
-    ctx.fillText(fitText(ctx, name.toUpperCase(), 520), PAD + 56, y);
-    y += 56;
-  }
+      ctx.font = '600 34px Oswald, sans-serif';
+      ctx.fillStyle = index === 0 ? textH : text;
+      const name = entry.companyCode ? `${entry.name}  ${entry.companyCode}` : entry.name;
+      ctx.fillText(fitText(ctx, name.toUpperCase(), 520), PAD + 56, y);
+      y += 56;
+    }
 
   // Facts, in a column beside the podium.
   const factX = PAD + 620;
@@ -162,11 +168,7 @@ export async function renderShareCard(input: ShareCardInput): Promise<Blob | nul
   ctx.fillRect(0, HEIGHT - 76, WIDTH, 1);
   ctx.font = '400 22px "JetBrains Mono", monospace';
   ctx.fillStyle = soft;
-  ctx.fillText(
-    `${input.entrants} entrants · ${input.setsPlayed} sets`,
-    PAD,
-    HEIGHT - 30,
-  );
+  ctx.fillText(`${input.entrants} entrants · ${input.setsPlayed} sets`, PAD, HEIGHT - 30);
   const host = window.location.host;
   const hostWidth = ctx.measureText(host).width;
   ctx.fillText(host, WIDTH - PAD - hostWidth, HEIGHT - 30);

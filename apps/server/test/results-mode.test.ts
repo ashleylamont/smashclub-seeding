@@ -25,21 +25,35 @@ describe('tournament results mode', () => {
   it('refreshes all stages and queues recalculation when a saved mode changes', async () => {
     const caller = appRouter.createCaller({
       db,
-      env: loadEnv({ NODE_ENV: 'test', DATABASE_URL: 'postgres://unused', BETTER_AUTH_SECRET: 'test-secret-test-secret-test' }),
+      env: loadEnv({
+        NODE_ENV: 'test',
+        DATABASE_URL: 'postgres://unused',
+        BETTER_AUTH_SECRET: 'test-secret-test-secret-test',
+      }),
       user: { id: 'admin', email: 'admin@example.com', name: 'Admin', role: 'admin' },
       recomputeTrigger: new RecomputeTrigger(db),
-      challonge: fixtureClient([{
-        slug: 'staged', state: 'complete', completedAt: '2026-08-25T10:00:00Z',
-        participants: [{ id: 1, name: 'Alpha' }, { id: 2, name: 'Bravo' }],
-        matches: [
-          { id: 10, p1: 1, p2: 2, winner: 1, stage: 'group' },
-          { id: 20, p1: 1, p2: 2, winner: 2, stage: 'final' },
-        ],
-      }]),
+      challonge: fixtureClient([
+        {
+          slug: 'staged',
+          state: 'complete',
+          completedAt: '2026-08-25T10:00:00Z',
+          participants: [
+            { id: 1, name: 'Alpha' },
+            { id: 2, name: 'Bravo' },
+          ],
+          matches: [
+            { id: 10, p1: 1, p2: 2, winner: 1, stage: 'group' },
+            { id: 20, p1: 1, p2: 2, winner: 2, stage: 'final' },
+          ],
+        },
+      ]),
     }).admin;
     const { tournamentId } = await caller.registerTournament({ slugOrUrl: 'staged' });
     await caller.updateTournament({ tournamentId, resultsMode: 'final_stage_only' });
-    expect((await db.select().from(sets)).map((set) => set.resultStage).sort()).toEqual(['final', 'group']);
+    expect((await db.select().from(sets)).map((set) => set.resultStage).sort()).toEqual([
+      'final',
+      'group',
+    ]);
     expect(RecomputeTrigger.prototype.request).toHaveBeenCalledOnce();
   });
 
@@ -49,7 +63,10 @@ describe('tournament results mode', () => {
       slugOrUrl: 'finals-only',
       resultsMode: 'final_stage_only',
     });
-    const [row] = await db.select().from(tournaments).where(eq(tournaments.id, result.tournamentId));
+    const [row] = await db
+      .select()
+      .from(tournaments)
+      .where(eq(tournaments.id, result.tournamentId));
     expect(row?.resultsMode).toBe('final_stage_only');
   });
 
@@ -57,16 +74,16 @@ describe('tournament results mode', () => {
     const caller = adminCaller(db);
     await expect(
       caller.registerTournament({ slugOrUrl: 'bad-mode', resultsMode: 'groups_only' as never }),
-    ).rejects.toThrow();
+    ).rejects.toBeInstanceOf(Error);
   });
 
   it('keeps a saved mode change and reports sync failure', async () => {
     const caller = adminCaller(db);
     const { tournamentId } = await caller.registerTournament({ slugOrUrl: 'missing-fixture' });
 
-    await expect(caller.updateTournament({ tournamentId, resultsMode: 'final_stage_only' })).rejects.toThrow(
-      /Results setting saved.*Existing results will be recalculated.*retry Sync/i,
-    );
+    await expect(
+      caller.updateTournament({ tournamentId, resultsMode: 'final_stage_only' }),
+    ).rejects.toThrow(/Results setting saved.*Existing results will be recalculated.*retry Sync/i);
 
     const [row] = await db.select().from(tournaments).where(eq(tournaments.id, tournamentId));
     expect(row?.resultsMode).toBe('final_stage_only');

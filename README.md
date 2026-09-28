@@ -23,6 +23,7 @@ The Vite dev server proxies `/api` to port 3000. The harness prints fresh links 
 pnpm test
 pnpm typecheck
 pnpm lint
+pnpm format:check
 pnpm build
 ```
 

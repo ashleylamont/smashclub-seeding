@@ -88,7 +88,11 @@ function nextVolatility(phi: number, v: number, delta: number, vol: number, tau:
  * Rate one player against a set of opponents forming a single rating period.
  * Returns the new rating; inputs are not mutated.
  */
-export function updateRating(current: Rating, opponents: readonly OpponentSample[], tau: number): Rating {
+export function updateRating(
+  current: Rating,
+  opponents: readonly OpponentSample[],
+  tau: number,
+): Rating {
   if (opponents.length === 0) {
     return applyRatingPeriodWithoutGames(current);
   }

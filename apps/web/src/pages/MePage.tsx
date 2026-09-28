@@ -28,7 +28,9 @@ export function MePage() {
           {session.user.image ? (
             <img className="avatar" src={session.user.image} alt="" />
           ) : (
-            <span className="avatar-fallback">{session.user.name.charAt(0).toUpperCase() || '?'}</span>
+            <span className="avatar-fallback">
+              {session.user.name.charAt(0).toUpperCase() || '?'}
+            </span>
           )}
           <div>
             <div className="account-name">
@@ -85,7 +87,12 @@ function LinkedProviders() {
               ✓ {provider === 'discord' ? 'Discord' : 'Google'} linked
             </span>
           ) : (
-            <button key={provider} type="button" className="btn btn-small" onClick={() => void link(provider)}>
+            <button
+              key={provider}
+              type="button"
+              className="btn btn-small"
+              onClick={() => void link(provider)}
+            >
               Link {provider === 'discord' ? 'Discord' : 'Google'}
             </button>
           ),
@@ -98,8 +105,12 @@ function LinkedProviders() {
           account instead of this one. */}
       {accounts.data && unlinked.length > 0 && (
         <p className="muted">
-          Link {unlinked.map((provider) => (provider === 'discord' ? 'Discord' : 'Google')).join(' and ')} so you can
-          sign in either way and still land on this account. A different email address on the other provider is fine.
+          Link{' '}
+          {unlinked
+            .map((provider) => (provider === 'discord' ? 'Discord' : 'Google'))
+            .join(' and ')}{' '}
+          so you can sign in either way and still land on this account. A different email address on
+          the other provider is fine.
         </p>
       )}
     </>
@@ -120,9 +131,11 @@ function ClaimSection() {
   };
 
   if (claims.isPending) return <p className="loading-text">Loading claim…</p>;
-  if (claims.isError) return <p className="error-text">Failed to load claims: {claims.error.message}</p>;
+  if (claims.isError)
+    return <p className="error-text">Failed to load claims: {claims.error.message}</p>;
 
-  const liveClaim = claims.data.find((c) => c.status === 'pending' || c.status === 'approved') ?? null;
+  const liveClaim =
+    claims.data.find((c) => c.status === 'pending' || c.status === 'approved') ?? null;
   const pastClaims = claims.data.filter((c) => c !== liveClaim);
 
   return (
@@ -142,7 +155,9 @@ function ClaimSection() {
                 <span>
                   {c.playerName} <span className="muted">({formatDate(c.createdAt)})</span>
                 </span>
-                <span className={`chip ${c.status === 'rejected' ? 'chip-danger' : ''}`}>{c.status}</span>
+                <span className={`chip ${c.status === 'rejected' ? 'chip-danger' : ''}`}>
+                  {c.status}
+                </span>
               </li>
             ))}
           </ul>
@@ -203,7 +218,8 @@ function ProfileEditor({ claim, onChanged }: { claim: MyClaim; onChanged: () => 
   });
 
   const updateCharacters = useMutation({
-    mutationFn: (slugs: string[]) => trpc.me.updateCharacters.mutate({ playerId: claim.playerId, characters: slugs }),
+    mutationFn: (slugs: string[]) =>
+      trpc.me.updateCharacters.mutate({ playerId: claim.playerId, characters: slugs }),
     onSuccess: onChanged,
   });
 
@@ -248,8 +264,12 @@ function ProfileEditor({ claim, onChanged }: { claim: MyClaim; onChanged: () => 
           >
             Save
           </button>
-          {updateCharacters.isSuccess && !dirtyCharacters && <span className="chip chip-success">saved</span>}
-          {updateCharacters.isError && <span className="error-text">{updateCharacters.error.message}</span>}
+          {updateCharacters.isSuccess && !dirtyCharacters && (
+            <span className="chip chip-success">saved</span>
+          )}
+          {updateCharacters.isError && (
+            <span className="error-text">{updateCharacters.error.message}</span>
+          )}
         </div>
         <CharacterPicker value={characters} onChange={setCharacters} />
       </div>
@@ -296,7 +316,11 @@ function ClaimSearch({ onChanged }: { onChanged: () => void }) {
       {search.isFetching && <p className="loading-text">Searching…</p>}
       {search.isError && <p className="error-text">{search.error.message}</p>}
       {request.isError && <p className="error-text">{request.error.message}</p>}
-      {search.data && search.data.length === 0 && <p className="muted" style={{ marginTop: 10 }}>No players found.</p>}
+      {search.data && search.data.length === 0 && (
+        <p className="muted" style={{ marginTop: 10 }}>
+          No players found.
+        </p>
+      )}
       {search.data && search.data.length > 0 && (
         <ul className="claim-search-results">
           {search.data.map((player) => (
