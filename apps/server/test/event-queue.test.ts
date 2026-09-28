@@ -103,7 +103,7 @@ describe('station bank integration',()=>{
   beforeEach(async()=>{
     ({db,close}=await createTestDb());await db.insert(user).values(admin);
     const ids=(await db.insert(players).values(Array.from({length:8},(_,i)=>({canonicalName:`Player ${i}`}))).returning()).map(p=>p.id);
-    planId=(await db.insert(eventPlans).values({name:'Queues',eventDate:new Date(),status:'pools_ready',bracketMode:'native'}).returning())[0]!.id;
+    planId=(await db.insert(eventPlans).values({name:'Queues',eventDate:new Date(),status:'pools_ready',bracketMode:'native',softLockedAt:new Date()}).returning())[0]!.id;
     await db.insert(eventPlanEntries).values(ids.map((playerId,i)=>({eventPlanId:planId,playerId,sourceLineNumber:i+1,rawInput:'name',cleanedName:'name',assignedDivision:i<4?'upper' as const:'lower' as const,divisionSeed:i%4+1})));
     await prepare(db,planId);
   });
@@ -146,7 +146,7 @@ describe('station bank integration',()=>{
     expect((await updateMatch(db,admin,{matchId:final!.id,expectedRevision:0,status:'playing',stationId:desk.id})).stationId).toBe(desk.id);
     expect((await db.select().from(eventPoolSchedules)).every(s=>s.active)).toBe(true);
   });
-  it('holds a reopened completed pool without reclaiming the next wave bank',async()=>{
+  it('does not reopen a completed pool or reclaim its former station bank for a late entrant',async()=>{
     const desk=await station();
     await configurePool(db,admin,{planId,division:'upper',poolIndex:0,active:true,stationIds:[desk.id],selfRun:true});
     const upper=(await db.select().from(eventMatches)).filter(m=>m.division==='upper');
@@ -154,20 +154,18 @@ describe('station bank integration',()=>{
     await configurePool(db,admin,{planId,division:'lower',poolIndex:0,active:true,stationIds:[desk.id]});
     const [late]=await db.insert(players).values({canonicalName:'Late arrival'}).returning();
     const input={planId,action:'add' as const,playerId:late!.id,division:'upper' as const,poolIndex:0};
-    const stale=await previewAttendance(db,input);expect(stale.warnings.join(' ')).toMatch(/reopen on hold/);
-    await configurePool(db,admin,{planId,division:'lower',poolIndex:0,active:true,stationIds:[desk.id],selfRun:true,expectedRevision:1});
-    await expect(applyAttendance(db,admin,{...input,revisionToken:stale.revisionToken})).rejects.toThrow(/changed since/);
-    const preview=await previewAttendance(db,input);await applyAttendance(db,admin,{...input,revisionToken:preview.revisionToken});
-    const schedules=await db.select().from(eventPoolSchedules);expect(schedules.find(s=>s.division==='upper')).toMatchObject({active:false,revision:2,selfRun:true});
+    const preview=await previewAttendance(db,input);expect(preview).toMatchObject({allowed:false,poolIndex:null});
+    await expect(applyAttendance(db,admin,{...input,revisionToken:preview.revisionToken})).rejects.toMatchObject({code:'BAD_REQUEST'});
+    const schedules=await db.select().from(eventPoolSchedules);expect(schedules.find(s=>s.division==='upper')).toMatchObject({active:true,revision:1,selfRun:true});
     expect((await loadStationQueues(db,planId)).stationQueues[0]!.poolKey).toBe('lower:0');
-    const view=await snapshot(db,planId,true);expect(view.matches.filter(m=>m.division==='upper'&&m.status==='ready').every(m=>m.availability.reasons.some(r=>r.code==='pool_held'))).toBe(true);
+    const view=await snapshot(db,planId,true);expect(view.matches.some(m=>m.player1Id===late!.id||m.player2Id===late!.id)).toBe(false);
     expect(view.matches.filter(m=>upper.some(before=>before.id===m.id)).every(m=>m.status==='complete')).toBe(true);
   });
   it('leaves an ongoing pool allocation active when adding a late entrant',async()=>{
     const desk=await station();await configurePool(db,admin,{planId,division:'upper',poolIndex:0,active:true,stationIds:[desk.id]});
     const [late]=await db.insert(players).values({canonicalName:'Ongoing arrival'}).returning();
     const input={planId,action:'add' as const,playerId:late!.id,division:'upper' as const,poolIndex:0};
-    const preview=await previewAttendance(db,input);expect(preview.holdReopenedPool).toBe(false);
+    const preview=await previewAttendance(db,input);expect(preview.allowed).toBe(true);
     await applyAttendance(db,admin,{...input,revisionToken:preview.revisionToken});
     expect((await db.select().from(eventPoolSchedules))[0]).toMatchObject({active:true,revision:1});
   });

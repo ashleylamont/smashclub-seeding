@@ -179,7 +179,7 @@ function PoolCard({
 
       <div className="pool-worksheet">
         <span className="form-label">Final order</span>
-        {pool.members.some(member=>member.withdrawn) && <p className="muted">Include withdrawn entrants in the recorded finishing order. On confirmation, they are excluded from advancement: the first two active entrants advance to championship and remaining active entrants enter consolation. Update linked Challonge brackets to match.</p>}
+        {pool.members.some(member=>member.withdrawn) && <p className="muted">Include withdrawn entrants in the recorded finishing order. On confirmation, they are excluded from advancement: the upper half of active entrants, rounded up, advance to championship. Update linked Challonge brackets to match.</p>}
         {pool.members.map((_, place) => (
           <label key={place} className="pool-place">
             <span>{ordinal(place + 1)}</span>

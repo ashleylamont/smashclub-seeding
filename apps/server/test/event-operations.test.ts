@@ -4,7 +4,7 @@ import { eventMatches, eventMatchAudit, eventOperationSettings, eventOperators, 
 import { prepare, reportScore, reviewReport, snapshot, updateMatch, requireOperator } from '../src/event-operations/service';
 import { updateLiveScore } from '../src/event-operations/controls';
 import { deleteStation, saveStation } from '../src/event-operations/stations';
-import { applyAttendance, previewAttendance, resetOperations } from '../src/event-operations/attendance';
+import { applyAttendance, previewAttendance, resetOperations, softLockPools } from '../src/event-operations/attendance';
 import { getPlan, unfreezeRoster, reorderDivision, generatePools, savePoolPlacements } from '../src/event-planner/plans';
 import { createTestDb } from './helpers/testDb';
 import type { SessionUser } from '../src/auth';
@@ -18,7 +18,7 @@ beforeEach(async () => {
     ({ db, close } = await createTestDb());
     await db.insert(user).values([admin, member]);
     ids = (await db.insert(players).values(Array.from({ length: 8 }, (_, i) => ({ canonicalName: `Private Name ${i}`, displayName: `Alias${i}` }))).returning()).map(p => p.id);
-    planId = (await db.insert(eventPlans).values({ name: 'Rehearsal', eventDate: new Date(), status: 'pools_ready' }).returning())[0]!.id;
+    planId = (await db.insert(eventPlans).values({ name: 'Rehearsal', eventDate: new Date(), status: 'pools_ready', softLockedAt: new Date() }).returning())[0]!.id;
     await db.insert(eventPlanEntries).values(ids.map((id, i) => ({ eventPlanId: planId, sourceLineNumber: i + 1, rawInput: 'Private', cleanedName: 'Private', playerId: id, assignedDivision: i < 4 ? 'upper' as const : 'lower' as const, divisionSeed: i % 4 + 1 })));
 });
 afterEach(async () => close());
@@ -141,24 +141,80 @@ describe('event operations', () => {
     });
 });
 describe('late attendance and protected pools', () => {
-    it('appends a late player without moving existing members or losing completed scores', async () => {
+    it('does not reopen a played pool for a late arrival', async () => {
         const matches = await ready();
         const match = matches.find(m => m.division === 'upper')!;
         await reportScore(db, admin, score(match));
-        const before = (await getPlan(db, planId))!;
         const [late] = await db.insert(players).values({ canonicalName: 'Late Arrival', displayName: 'Late' }).returning();
-        const input = { planId, action: 'add' as const, playerId: late!.id, division: 'upper' as const, poolIndex: 0 };
+        const input = { planId, action: 'add' as const, playerId: late!.id, division: 'upper' as const };
         const preview = await previewAttendance(db, input);
-        expect(preview).toMatchObject({ allowed: true, addedMatches: 4, poolSize: 4 });
-        await applyAttendance(db, admin, { ...input, revisionToken: preview.revisionToken });
-        const after = (await getPlan(db, planId))!;
-        expect(after.divisions[0]!.pools[0]!.members.map(m => m.playerId)).toEqual([...before.divisions[0]!.pools[0]!.members.map(m => m.playerId), late!.id]);
-        expect(after.divisions[1]!.pools).toEqual(before.divisions[1]!.pools);
-        expect(await db.select().from(eventMatches)).toHaveLength(16);
+        expect(preview).toMatchObject({ allowed: false, poolIndex: null });
+        await expect(applyAttendance(db, admin, { ...input, revisionToken: preview.revisionToken })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
         expect((await db.select().from(eventMatches).where(eq(eventMatches.id, match.id)))[0]).toMatchObject({ score1: 2, status: 'complete' });
-        expect(await db.select().from(eventPoolAssignments)).toHaveLength(9);
-        const [extra] = await db.insert(players).values({ canonicalName: 'Too many' }).returning();
-        expect((await previewAttendance(db, { ...input, playerId: extra!.id })).allowed).toBe(false);
+        expect(await db.select().from(eventMatches)).toHaveLength(12);
+    });
+    it('automatically chooses the smallest open pool in the selected division', async () => {
+        await db.update(eventPlans).set({ softLockedAt: null });
+        const extra = await db.insert(players).values(Array.from({ length: 3 }, (_, i) => ({ canonicalName: `Upper extra ${i}` }))).returning();
+        await db.insert(eventPlanEntries).values(extra.map((p, i) => ({ eventPlanId: planId, playerId: p.id, sourceLineNumber: 9 + i, rawInput: p.canonicalName, cleanedName: p.canonicalName, assignedDivision: 'upper' as const, divisionSeed: 5 + i })));
+        await softLockPools(db, admin, planId);
+        const before = (await getPlan(db, planId))!.divisions.find(d => d.division === 'upper')!;
+        const smallest = [...before.pools].sort((a, b) => a.members.length - b.members.length || a.poolIndex - b.poolIndex)[0]!;
+        const [late] = await db.insert(players).values({ canonicalName: 'Late arrival' }).returning();
+        const input = { planId, action: 'add' as const, playerId: late!.id, division: 'upper' as const };
+        const preview = await previewAttendance(db, input);
+        expect(preview).toMatchObject({ allowed: true, poolIndex: smallest.poolIndex, addedMatches: smallest.members.length });
+        await applyAttendance(db, admin, { ...input, revisionToken: preview.revisionToken });
+        const after = (await getPlan(db, planId))!.divisions.find(d => d.division === 'upper')!;
+        expect(after.pools.find(p => p.poolIndex === smallest.poolIndex)!.members.map(m => m.playerId)).toEqual([...smallest.members.map(m => m.playerId), late!.id]);
+        for (const pool of before.pools.filter(p => p.poolIndex !== smallest.poolIndex)) expect(after.pools.find(p => p.poolIndex === pool.poolIndex)!.members).toEqual(pool.members);
+    });
+    it('removes a no-show and only their unplayed matches when three players remain', async () => {
+        const before = await ready();
+        const input = { planId, action: 'no_show' as const, playerId: ids[0]! };
+        const preview = await previewAttendance(db, input);
+        expect(preview).toMatchObject({ allowed: true, requiresRedistributionApproval: false, relocations: [] });
+        await applyAttendance(db, admin, { ...input, revisionToken: preview.revisionToken });
+        const after = await db.select().from(eventMatches);
+        expect(after.some(m => m.player1Id === ids[0] || m.player2Id === ids[0])).toBe(false);
+        expect(after.map(m => m.id).sort()).toEqual(before.filter(m => m.player1Id !== ids[0] && m.player2Id !== ids[0]).map(m => m.id).sort());
+        expect((await getPlan(db, planId))!.divisions.find(d => d.division === 'upper')!.pools[0]!.members).toHaveLength(3);
+        expect((await db.select().from(eventPlanEntries)).some(e => e.playerId === ids[0])).toBe(false);
+        const arrived = { planId, action: 'add' as const, playerId: ids[0]!, division: 'upper' as const };
+        const arrivalPreview = await previewAttendance(db, arrived);
+        expect(arrivalPreview).toMatchObject({ allowed: true, poolIndex: 0, addedMatches: 3 });
+        await applyAttendance(db, admin, { ...arrived, revisionToken: arrivalPreview.revisionToken });
+        expect((await getPlan(db, planId))!.divisions.find(d => d.division === 'upper')!.pools[0]!.members).toHaveLength(4);
+    });
+    it('requires TO approval before dissolving a two-player pool into the smallest open pool', async () => {
+        await db.update(eventPlans).set({ softLockedAt: null });
+        const extra = await db.insert(players).values([{ canonicalName: 'Upper extra A' }, { canonicalName: 'Upper extra B' }]).returning();
+        await db.insert(eventPlanEntries).values(extra.map((p, i) => ({ eventPlanId: planId, playerId: p.id, sourceLineNumber: 9 + i, rawInput: p.canonicalName, cleanedName: p.canonicalName, assignedDivision: 'upper' as const, divisionSeed: 5 + i })));
+        await softLockPools(db, admin, planId);
+        const before = (await getPlan(db, planId))!.divisions.find(d => d.division === 'upper')!;
+        expect(before.pools.map(p => p.members.length)).toEqual([3, 3]);
+        const source = before.pools[0]!, target = before.pools[1]!;
+        const input = { planId, action: 'no_show' as const, playerId: source.members[0]!.playerId };
+        const preview = await previewAttendance(db, input);
+        expect(preview).toMatchObject({ allowed: true, requiresRedistributionApproval: true, relocations: [
+            { playerId: source.members[1]!.playerId, fromPoolIndex: source.poolIndex, toPoolIndex: target.poolIndex },
+            { playerId: source.members[2]!.playerId, fromPoolIndex: source.poolIndex, toPoolIndex: target.poolIndex },
+        ] });
+        await applyAttendance(db, admin, { ...input, revisionToken: preview.revisionToken });
+        const waiting = (await getPlan(db, planId))!.divisions.find(d => d.division === 'upper')!;
+        expect(waiting.pools.find(p => p.poolIndex === source.poolIndex)!.members).toHaveLength(2);
+        const moveInput = { planId, action: 'redistribute' as const, playerId: source.members[1]!.playerId };
+        const movePreview = await previewAttendance(db, moveInput);
+        expect(movePreview).toMatchObject({ allowed: true, requiresRedistributionApproval: true, relocations: preview.relocations });
+        await expect(applyAttendance(db, admin, { ...moveInput, revisionToken: movePreview.revisionToken })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+        const targetMatchIds = (await db.select().from(eventMatches)).filter(m => m.division === 'upper' && m.poolIndex === target.poolIndex).map(m => m.id);
+        await applyAttendance(db, admin, { ...moveInput, revisionToken: movePreview.revisionToken, approveRedistribution: true });
+        const after = (await getPlan(db, planId))!.divisions.find(d => d.division === 'upper')!;
+        expect(after.pools.map(p => p.poolIndex)).toEqual([target.poolIndex]);
+        expect(after.pools[0]!.members).toHaveLength(5);
+        const matches = await db.select().from(eventMatches);
+        expect(targetMatchIds.every(id => matches.some(m => m.id === id))).toBe(true);
+        expect(matches.some(m => m.stage === 'group' && m.division === 'upper' && m.poolIndex === source.poolIndex)).toBe(false);
     });
     it('rejects stale attendance previews when another TO changes a match', async () => {
         const [m] = await ready();
@@ -185,6 +241,7 @@ describe('late attendance and protected pools', () => {
         expect((await getPlan(db, planId))!.issues.warnings.some(i => i.code === 'withdrawal_advancement')).toBe(true);
     });
     it('guards pool mutations until a genuinely unplayed queue is explicitly reset', async () => {
+        await db.update(eventPlans).set({ softLockedAt: null });
         await ready();
         await expect(unfreezeRoster(db, planId)).rejects.toThrow('Operational matches');
         await expect(generatePools(db, planId)).rejects.toThrow('Operational matches');
@@ -193,6 +250,39 @@ describe('late attendance and protected pools', () => {
         expect(await resetOperations(db, admin, planId)).toEqual({ removedMatches: 12 });
         await unfreezeRoster(db, planId);
         expect((await getPlan(db, planId))!.plan.status).toBe('draft');
+    });
+    it('soft-locks a draft draw, keeps assignments after queue reset, and blocks full rebalance', async () => {
+        await db.update(eventPlans).set({ softLockedAt: null });
+        const before = (await getPlan(db, planId))!;
+        const arrival = (await db.insert(players).values({ canonicalName: 'Arrival' }).returning())[0]!;
+        expect((await previewAttendance(db, { planId, action: 'add', playerId: arrival.id, division: 'upper', poolIndex: 0 })).allowed).toBe(false);
+        const locked = await softLockPools(db, admin, planId);
+        expect(locked.softLockedAt).toBeTruthy();
+        expect((await getPlan(db, planId))!.plan.softLockedBy).toBe(admin.id);
+        expect(await db.select().from(eventPoolAssignments)).toHaveLength(8);
+        expect(await db.select().from(eventMatches)).toHaveLength(12);
+        await expect(unfreezeRoster(db, planId)).rejects.toThrow(/soft-locked/);
+        await expect(generatePools(db, planId)).rejects.toThrow(/soft-locked/);
+        await expect(reorderDivision(db, planId, 'upper', before.entries.filter(e => e.assignedDivision === 'upper').map(e => e.id))).rejects.toThrow(/soft-locked/);
+        await ready();
+        await resetOperations(db, admin, planId);
+        expect(await db.select().from(eventPoolAssignments)).toHaveLength(8);
+        expect((await getPlan(db, planId))!.divisions).toEqual(before.divisions);
+    });
+    it('replaces an active place without adding matches against an earlier withdrawal', async () => {
+        await ready();
+        const [first, replacement] = await db.insert(players).values([{ canonicalName: 'First arrival' }, { canonicalName: 'Replacement' }]).returning();
+        const add = { planId, action: 'add' as const, playerId: first!.id, division: 'upper' as const, poolIndex: 0 };
+        await applyAttendance(db, admin, { ...add, revisionToken: (await previewAttendance(db, add)).revisionToken });
+        const withdraw = { planId, action: 'withdraw' as const, playerId: ids[0]! };
+        await applyAttendance(db, admin, { ...withdraw, revisionToken: (await previewAttendance(db, withdraw)).revisionToken });
+        const next = { ...add, playerId: replacement!.id };
+        const preview = await previewAttendance(db, next);
+        expect(preview).toMatchObject({ allowed: true, poolSize: 4, addedMatches: 4 });
+        await applyAttendance(db, admin, { ...next, revisionToken: preview.revisionToken });
+        const matches = await db.select().from(eventMatches);
+        expect(matches.filter(m => m.player1Id === replacement!.id || m.player2Id === replacement!.id)).toHaveLength(4);
+        expect(matches.some(m => [m.player1Id, m.player2Id].includes(replacement!.id) && [m.player1Id, m.player2Id].includes(ids[0]!))).toBe(false);
     });
     it('requires acknowledgement for linked roster changes and refuses reset after scoring', async () => {
         const [m] = await ready();
