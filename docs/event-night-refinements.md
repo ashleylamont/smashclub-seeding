@@ -15,7 +15,7 @@ TOs share the event desk using their assigned account. Revision checks reject co
 
 ## Pools to finals and club results
 
-Resolve all pool matches and confirm finishing orders in the planner. Ties need an explicit organiser decision. The top two active entrants per pool qualify for championship; the remaining active entrants enter consolation.
+Resolve all pool matches and confirm finishing orders in the planner. Ties need an explicit organiser decision. The top half of active entrants in each pool, rounded up (at least two), qualify for championship; the remaining active entrants enter consolation. This sends three players from a five-player pool to championship.
 
 **Preview finals** displays the four single-elimination draws before creation. Byes advance automatically without inventing played scores. Confirmed results advance winners; pending player reports do not. Unplayed draws can be removed and rebuilt; downstream play prevents unsafe feeder corrections.
 
@@ -35,11 +35,11 @@ For a standalone browser screen, explicitly choose a shared window/screen or cam
 
 ## Invitations and announcements
 
-A displayed QR invitation remains valid for 60–75 minutes. It rotates every 15 minutes while earlier invitations continue to work until their own expiry. Scanning creates a separate one-hour guest reporting session. Expired or revoked passes direct the attendee to scan the current screen's QR code. Turning guest reporting off or rotating access revokes existing passes.
+By default, a displayed QR invitation remains valid for 60–75 minutes. It rotates every 15 minutes while earlier invitations continue to work until their own expiry. Organisers can instead keep invitations valid until revoked and [print permanent station signs](station-signs.md). Scanning either invitation creates a separate one-hour guest reporting session. Expired or revoked passes direct the attendee to scan a valid QR code. Turning guest reporting off or revoking access invalidates existing passes.
 
 Announcements default to five minutes in the TO form, with one-, ten- and thirty-minute options. Expired messages leave the public feed automatically.
 
-## Migration and review
+## Implementation record
 
 Migration `0016_broken_zarda.sql` adds native draw dependencies, native provider/mode markers, live scores, pool schedules and announcement expiry. Existing rows default to Challonge; no result data is rewritten. Migration and all rehearsals were run on disposable local databases, not production.
 

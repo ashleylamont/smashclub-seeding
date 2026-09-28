@@ -1,5 +1,7 @@
 # Tournament operations implementation
 
+> Historical implementation and verification record. Branch names, test totals and local sessions below describe that development period. Use the [documentation index](README.md) for current operating instructions.
+
 ## Objective
 Build the agreed local event-running hub: flexible attendance and pools; four-bracket control; concurrent TO scoring; optional player reports; match queue and stations; live public/OBS display; prizes and results graphics; safe stage handover and integration with Challonge.
 
