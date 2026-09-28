@@ -67,7 +67,12 @@ export class SequenceMatcher {
 
     // Extend the match over adjacent equal non-junk elements, then over
     // adjacent equal junk elements (matters only when autojunk kicked in).
-    while (besti > alo && bestj > blo && !this.bJunk.has(b[bestj - 1]!) && a[besti - 1] === b[bestj - 1]) {
+    while (
+      besti > alo &&
+      bestj > blo &&
+      !this.bJunk.has(b[bestj - 1]!) &&
+      a[besti - 1] === b[bestj - 1]
+    ) {
       besti -= 1;
       bestj -= 1;
       bestsize += 1;
@@ -80,7 +85,12 @@ export class SequenceMatcher {
     ) {
       bestsize += 1;
     }
-    while (besti > alo && bestj > blo && this.bJunk.has(b[bestj - 1]!) && a[besti - 1] === b[bestj - 1]) {
+    while (
+      besti > alo &&
+      bestj > blo &&
+      this.bJunk.has(b[bestj - 1]!) &&
+      a[besti - 1] === b[bestj - 1]
+    ) {
       besti -= 1;
       bestj -= 1;
       bestsize += 1;
@@ -100,7 +110,7 @@ export class SequenceMatcher {
   getMatchingBlocks(): MatchingBlock[] {
     const la = this.a.length;
     const lb = this.b.length;
-    const queue: Array<[number, number, number, number]> = [[0, la, 0, lb]];
+    const queue: [number, number, number, number][] = [[0, la, 0, lb]];
     const blocks: MatchingBlock[] = [];
     while (queue.length > 0) {
       const [alo, ahi, blo, bhi] = queue.pop()!;

@@ -38,7 +38,8 @@ export async function resolveReviewItem(
 ): Promise<{ playerId: string }> {
   const [item] = await db.select().from(reviewItems).where(eq(reviewItems.id, reviewItemId));
   if (!item) throw new Error(`Unknown review item ${reviewItemId}`);
-  if (item.status !== 'pending') throw new Error(`Review item ${reviewItemId} is already ${item.status}`);
+  if (item.status !== 'pending')
+    throw new Error(`Review item ${reviewItemId} is already ${item.status}`);
 
   const [participant] = await db
     .select()
@@ -54,13 +55,20 @@ export async function resolveReviewItem(
     // candidates, so the target is no longer guaranteed to be a live player.
     const [target] = await db.select().from(players).where(eq(players.id, input.playerId));
     if (!target) throw new Error(`Unknown player ${input.playerId}`);
-    if (target.status !== 'active') throw new Error(`Player ${target.canonicalName} is ${target.status}`);
+    if (target.status !== 'active')
+      throw new Error(`Player ${target.canonicalName} is ${target.status}`);
 
     playerId = input.playerId;
     await ensureAlias(db, playerId, aliasNorm, item.companyId, 'manual');
     await db
       .insert(identityDecisions)
-      .values({ kind: 'merge', aliasNorm, companyId: item.companyId, playerId, decidedBy: resolvedBy })
+      .values({
+        kind: 'merge',
+        aliasNorm,
+        companyId: item.companyId,
+        playerId,
+        decidedBy: resolvedBy,
+      })
       .onConflictDoNothing();
   } else {
     // created_new and kept_separate both mint a new player; kept_separate
@@ -91,7 +99,7 @@ export async function resolveReviewItem(
     if (details?.characters) await setPlayerCharacters(db, playerId, details.characters);
 
     if (input.kind === 'kept_separate') {
-      const candidates = (item.candidates as Array<{ playerId: string }> | null) ?? [];
+      const candidates = (item.candidates as { playerId: string }[] | null) ?? [];
       for (const candidate of candidates) {
         await db
           .insert(identityDecisions)

@@ -111,9 +111,17 @@ export async function compareModels(db: Db): Promise<ModelComparison> {
       };
     });
 
-  const replay = replayRatings({ sets: engineSets, tournaments: engineTournaments, settings: glicko });
+  const replay = replayRatings({
+    sets: engineSets,
+    tournaments: engineTournaments,
+    settings: glicko,
+  });
   const glickoBoard = computeLeaderboard(replay.finalStates, glicko);
-  const whrRun = runWhrModel({ sets: engineSets, tournaments: engineTournaments, settings: glicko });
+  const whrRun = runWhrModel({
+    sets: engineSets,
+    tournaments: engineTournaments,
+    settings: glicko,
+  });
 
   const byId = <T extends LeaderboardRow>(rows: readonly T[]): Map<string, T> =>
     new Map(rows.map((row) => [row.playerId, row]));
@@ -151,7 +159,11 @@ export async function compareModels(db: Db): Promise<ModelComparison> {
   });
 
   // Biggest disagreements first — that is what a reviewer is looking for.
-  rows.sort((a, b) => Math.abs(b.rankDelta ?? 0) - Math.abs(a.rankDelta ?? 0) || (a.glicko?.rank ?? 0) - (b.glicko?.rank ?? 0));
+  rows.sort(
+    (a, b) =>
+      Math.abs(b.rankDelta ?? 0) - Math.abs(a.rankDelta ?? 0) ||
+      (a.glicko?.rank ?? 0) - (b.glicko?.rank ?? 0),
+  );
 
   const deltas = rows
     .map((row) => row.rankDelta)
@@ -161,7 +173,9 @@ export async function compareModels(db: Db): Promise<ModelComparison> {
   const medianAbsRankDelta = deltas.length ? deltas[Math.floor(deltas.length / 2)]! : 0;
 
   const glickoTopTen = new Set(glickoBoard.slice(0, 10).map((row) => row.playerId));
-  const topTenOverlap = whrRun.leaderboard.slice(0, 10).filter((row) => glickoTopTen.has(row.playerId)).length;
+  const topTenOverlap = whrRun.leaderboard
+    .slice(0, 10)
+    .filter((row) => glickoTopTen.has(row.playerId)).length;
 
   return {
     activeModel: glicko.activeModel,

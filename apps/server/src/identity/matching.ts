@@ -35,11 +35,19 @@ export interface MatchOutcome {
  * participant.playerId on auto-links and creates pending review items for the
  * rest. Returns the outcomes for observability/tests.
  */
-export async function matchTournamentParticipants(db: Db, tournamentId: string): Promise<MatchOutcome[]> {
+export async function matchTournamentParticipants(
+  db: Db,
+  tournamentId: string,
+): Promise<MatchOutcome[]> {
   const unresolved = await db
     .select()
     .from(tournamentParticipants)
-    .where(and(eq(tournamentParticipants.tournamentId, tournamentId), isNull(tournamentParticipants.playerId)));
+    .where(
+      and(
+        eq(tournamentParticipants.tournamentId, tournamentId),
+        isNull(tournamentParticipants.playerId),
+      ),
+    );
   if (unresolved.length === 0) return [];
 
   const resolutions = await resolvePlayerInputs(
@@ -63,7 +71,13 @@ export async function matchTournamentParticipants(db: Db, tournamentId: string):
       // back as an alias; a structured short form is an inference and
       // deliberately is not (see the module comment).
       if (resolution.method === 'decision') {
-        await ensureAlias(db, resolution.playerId, cleanedName.toLowerCase(), companyId, 'merge_decision');
+        await ensureAlias(
+          db,
+          resolution.playerId,
+          cleanedName.toLowerCase(),
+          companyId,
+          'merge_decision',
+        );
       }
       outcomes.push({
         participantId: participant.id,
@@ -80,7 +94,12 @@ export async function matchTournamentParticipants(db: Db, tournamentId: string):
     const existingPending = await db
       .select({ id: reviewItems.id })
       .from(reviewItems)
-      .where(and(eq(reviewItems.tournamentParticipantId, participant.id), eq(reviewItems.status, 'pending')));
+      .where(
+        and(
+          eq(reviewItems.tournamentParticipantId, participant.id),
+          eq(reviewItems.status, 'pending'),
+        ),
+      );
     if (existingPending.length === 0) {
       await db.insert(reviewItems).values({
         tournamentParticipantId: participant.id,
@@ -149,7 +168,10 @@ export async function backfillSetPlayers(db: Db, tournamentId: string): Promise<
     const p1 = row.p1ParticipantId ? (byId.get(row.p1ParticipantId) ?? null) : null;
     const p2 = row.p2ParticipantId ? (byId.get(row.p2ParticipantId) ?? null) : null;
     if (p1 !== row.p1PlayerId || p2 !== row.p2PlayerId) {
-      await db.update(sets).set({ p1PlayerId: p1, p2PlayerId: p2, updatedAt: new Date() }).where(eq(sets.id, row.id));
+      await db
+        .update(sets)
+        .set({ p1PlayerId: p1, p2PlayerId: p2, updatedAt: new Date() })
+        .where(eq(sets.id, row.id));
       changedIds.push(row.id);
     }
   }

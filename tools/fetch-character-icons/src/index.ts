@@ -37,9 +37,13 @@ async function api(params: Record<string, string>): Promise<unknown> {
   }
   const response = await fetch(url, {
     // The wiki blocks requests without a descriptive agent.
-    headers: { 'User-Agent': 'smashclub-seeding icon fetcher (one-off, https://github.com/ashleylamont/smashclub-seeding)' },
+    headers: {
+      'User-Agent':
+        'smashclub-seeding icon fetcher (one-off, https://github.com/ashleylamont/smashclub-seeding)',
+    },
   });
-  if (!response.ok) throw new Error(`${url.pathname}${url.search} -> ${response.status} ${response.statusText}`);
+  if (!response.ok)
+    throw new Error(`${url.pathname}${url.search} -> ${response.status} ${response.statusText}`);
   return response.json();
 }
 
@@ -59,7 +63,7 @@ async function listCategoryImages(): Promise<ImageInfo[]> {
       iiprop: 'url',
       ...(cont ? { gcmcontinue: cont } : {}),
     })) as {
-      query?: { pages?: Array<{ title: string; imageinfo?: Array<{ url: string }> }> };
+      query?: { pages?: { title: string; imageinfo?: { url: string }[] }[] };
       continue?: { gcmcontinue?: string };
     };
 

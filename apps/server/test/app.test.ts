@@ -28,7 +28,11 @@ const fixture: FixtureTournament = {
 
 beforeEach(async () => {
   ({ db, close } = await createTestDb());
-  const env = loadEnv({ NODE_ENV: 'test', DATABASE_URL: 'postgres://unused', BETTER_AUTH_SECRET: 'test-secret-test-secret-test' });
+  const env = loadEnv({
+    NODE_ENV: 'test',
+    DATABASE_URL: 'postgres://unused',
+    BETTER_AUTH_SECRET: 'test-secret-test-secret-test',
+  });
   const challonge = fixtureClient([fixture]);
   const auth = createAuth(db, env);
   const recomputeTrigger = new RecomputeTrigger(db);
@@ -39,7 +43,10 @@ beforeEach(async () => {
     { id: 'samus', canonical_name: 'Samus Aran', company: 'ATL' },
   ]);
   await registerTournamentSlugs(db, ['weekly1']);
-  const [row] = await db.select({ id: tournaments.id }).from(tournaments).where(eq(tournaments.challongeSlug, 'weekly1'));
+  const [row] = await db
+    .select({ id: tournaments.id })
+    .from(tournaments)
+    .where(eq(tournaments.challongeSlug, 'weekly1'));
   await syncTournament(db, challonge, row!.id);
   await runRecompute(db);
 });
@@ -62,7 +69,9 @@ describe('HTTP surface', () => {
       url: '/api/trpc/public.leaderboard',
     });
     expect(response.statusCode).toBe(200);
-    const body = response.json() as { result: { data: { rows: Array<{ name: string; rank: number }> } } };
+    const body = response.json() as {
+      result: { data: { rows: { name: string; rank: number }[] } };
+    };
     const rows = body.result.data.rows;
     expect(rows).toHaveLength(2);
     // No display_name set, so the board publishes the default alias — first
@@ -73,9 +82,14 @@ describe('HTTP surface', () => {
 
   it('serves tournament detail over tRPC', async () => {
     const input = encodeURIComponent(JSON.stringify({ slug: 'weekly1' }));
-    const response = await app.inject({ method: 'GET', url: `/api/trpc/public.tournament?input=${input}` });
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/trpc/public.tournament?input=${input}`,
+    });
     expect(response.statusCode).toBe(200);
-    const body = response.json() as { result: { data: { sets: unknown[]; participants: unknown[] } } };
+    const body = response.json() as {
+      result: { data: { sets: unknown[]; participants: unknown[] } };
+    };
     expect(body.result.data.participants).toHaveLength(2);
     expect(body.result.data.sets).toHaveLength(1);
   });

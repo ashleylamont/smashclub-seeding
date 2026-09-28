@@ -27,8 +27,15 @@ interface Props {
 const RESULT_LIMIT = 25;
 
 /** Aliases worth showing: the ones that are not just the names already in the row. */
-function otherAliases(player: { canonicalName: string; displayName: string | null; aliases: string[] }): string[] {
-  const shown = new Set([player.canonicalName.toLowerCase(), (player.displayName ?? '').toLowerCase()]);
+function otherAliases(player: {
+  canonicalName: string;
+  displayName: string | null;
+  aliases: string[];
+}): string[] {
+  const shown = new Set([
+    player.canonicalName.toLowerCase(),
+    (player.displayName ?? '').toLowerCase(),
+  ]);
   return player.aliases.filter((alias) => !shown.has(alias.toLowerCase()));
 }
 
@@ -63,8 +70,14 @@ export function PlayerLookupModal({
   const activeCount = all.filter((player) => player.status === 'active').length;
 
   return (
-    <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal modal-wide" onClick={(event) => event.stopPropagation()}>
+    <div className="modal-overlay">
+      <button
+        type="button"
+        className="modal-backdrop"
+        aria-label="Close dialog"
+        onClick={onCancel}
+      />
+      <div className="modal modal-wide">
         <h3>{title}</h3>
         {children}
 
@@ -77,7 +90,8 @@ export function PlayerLookupModal({
           onKeyDown={(event) => {
             // Enter on a single unambiguous hit is the whole point of typing a
             // name you already know; anything else needs a deliberate click.
-            if (event.key === 'Enter' && results.length === 1 && !busy) onPick(results[0]!.player.id);
+            if (event.key === 'Enter' && results.length === 1 && !busy)
+              onPick(results[0]!.player.id);
           }}
         />
 
@@ -96,7 +110,9 @@ export function PlayerLookupModal({
                   {player.canonicalName}
                   {player.displayName && <span className="muted"> aka “{player.displayName}”</span>}
                   {player.companyCode && <span className="chip">{player.companyCode}</span>}
-                  {alreadyOffered.has(player.id) && <span className="chip chip-warning">already suggested</span>}
+                  {alreadyOffered.has(player.id) && (
+                    <span className="chip chip-warning">already suggested</span>
+                  )}
                 </span>
                 <span className="lookup-aliases">
                   {matchedAlias ? (
@@ -112,7 +128,12 @@ export function PlayerLookupModal({
                     )
                   )}
                 </span>
-                <button type="button" className="btn btn-small" disabled={busy} onClick={() => onPick(player.id)}>
+                <button
+                  type="button"
+                  className="btn btn-small"
+                  disabled={busy}
+                  onClick={() => onPick(player.id)}
+                >
                   Link
                 </button>
               </li>
@@ -122,7 +143,8 @@ export function PlayerLookupModal({
 
         {players.data && results.length === RESULT_LIMIT && activeCount > RESULT_LIMIT && (
           <p className="muted">
-            Showing the first {RESULT_LIMIT} of {activeCount} players — keep typing to narrow it down.
+            Showing the first {RESULT_LIMIT} of {activeCount} players — keep typing to narrow it
+            down.
           </p>
         )}
 

@@ -13,7 +13,10 @@ export interface TournamentEventGroup {
 }
 
 /** Group brackets by calendar event date; undated brackets remain singletons. */
-export function groupTournamentsByEvent(items: TournamentListItem[], now: number): TournamentEventGroup[] {
+export function groupTournamentsByEvent(
+  items: TournamentListItem[],
+  now: number,
+): TournamentEventGroup[] {
   const grouped = new Map<string, TournamentListItem[]>();
   for (const item of items) {
     const key = item.eventDate ? item.eventDate.slice(0, 10) : `undated:${item.id}`;
@@ -23,7 +26,11 @@ export function groupTournamentsByEvent(items: TournamentListItem[], now: number
     const sorted = [...rows].sort((a, b) => compareEventBrackets(a, b));
     const first = sorted[0]!;
     const live = rows.some((row) => bucketFor(row, now) === 'live');
-    const bucket = live ? 'live' : rows.some((row) => bucketFor(row, now) === 'upcoming') ? 'upcoming' : 'completed';
+    const bucket = live
+      ? 'live'
+      : rows.some((row) => bucketFor(row, now) === 'upcoming')
+        ? 'upcoming'
+        : 'completed';
     return {
       key,
       slug: eventCanonicalSlug(rows, first.slug),

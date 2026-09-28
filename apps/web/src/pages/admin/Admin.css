@@ -95,7 +95,9 @@
   border-bottom: 1px solid var(--border);
 }
 
-.admin-account-row .chip { margin-left: var(--s2); }
+.admin-account-row .chip {
+  margin-left: var(--s2);
+}
 
 .date-edit {
   display: inline-flex;

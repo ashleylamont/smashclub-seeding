@@ -40,7 +40,9 @@ describe('updateRating', () => {
       Math.abs(favouriteWins.rating - favourite.rating),
     );
     const underdogWins = updateRating(underdog, [{ rating: 1800, rd: 100, outcome: 1 }], 0.5);
-    expect(underdogWins.rating - underdog.rating).toBeGreaterThan(favouriteWins.rating - favourite.rating);
+    expect(underdogWins.rating - underdog.rating).toBeGreaterThan(
+      favouriteWins.rating - favourite.rating,
+    );
   });
 });
 

@@ -53,7 +53,9 @@ export type TournamentListItem = Awaited<ReturnType<typeof trpc.public.tournamen
 export type TournamentData = NonNullable<Awaited<ReturnType<typeof trpc.public.tournament.query>>>;
 export type TournamentSet = TournamentData['sets'][number];
 export type TournamentParticipant = TournamentData['participants'][number];
-export type EventOverviewData = NonNullable<Awaited<ReturnType<typeof trpc.public.eventOverview.query>>>;
+export type EventOverviewData = NonNullable<
+  Awaited<ReturnType<typeof trpc.public.eventOverview.query>>
+>;
 
 export type RecapData = NonNullable<Awaited<ReturnType<typeof trpc.public.recap.query>>>;
 /** One ranked fact, with the copy the server rendered for it. */
@@ -71,14 +73,20 @@ export type ReviewItem = Awaited<ReturnType<typeof trpc.admin.reviewQueue.query>
 export type AdminPlayer = Awaited<ReturnType<typeof trpc.admin.players.query>>[number];
 export type AdminCompany = Awaited<ReturnType<typeof trpc.admin.companies.query>>[number];
 export type AdminClaim = Awaited<ReturnType<typeof trpc.admin.claims.query>>[number];
-export type RegistryImportPlan = Awaited<ReturnType<typeof trpc.admin.previewRegistryImport.mutate>>;
+export type RegistryImportPlan = Awaited<
+  ReturnType<typeof trpc.admin.previewRegistryImport.mutate>
+>;
 export type RegistryEntryPlan = RegistryImportPlan['entries'][number];
 export type SeedingRunData = NonNullable<Awaited<ReturnType<typeof trpc.admin.seedingRun.query>>>;
 export type SeedingEntry = SeedingRunData['entries'][number];
 
 /** Event planner — the two-division club night. */
-export type EventPlanSummary = Awaited<ReturnType<typeof trpc.admin.eventPlanner.plans.query>>[number];
-export type EventPlanView = NonNullable<Awaited<ReturnType<typeof trpc.admin.eventPlanner.plan.query>>>;
+export type EventPlanSummary = Awaited<
+  ReturnType<typeof trpc.admin.eventPlanner.plans.query>
+>[number];
+export type EventPlanView = NonNullable<
+  Awaited<ReturnType<typeof trpc.admin.eventPlanner.plan.query>>
+>;
 export type EventPlanStatus = EventPlanView['plan']['status'];
 export type EventPlanEntry = EventPlanView['entries'][number];
 export type EventPlanDivision = EventPlanView['divisions'][number];
@@ -87,7 +95,9 @@ export type EventPlanBracket = EventPlanView['brackets'][number];
 export type EventPlanIssue = EventPlanView['issues']['blocking'][number];
 export type EventPlanExports = Awaited<ReturnType<typeof trpc.admin.eventPlanner.exports.query>>;
 export type EventPlanBracketExport = EventPlanExports['brackets'][number];
-export type RosterPreviewRow = Awaited<ReturnType<typeof trpc.admin.eventPlanner.previewRoster.mutate>>[number];
+export type RosterPreviewRow = Awaited<
+  ReturnType<typeof trpc.admin.eventPlanner.previewRoster.mutate>
+>[number];
 export type SettingsData = Awaited<ReturnType<typeof trpc.admin.settings.query>>;
 export type GlickoSettings = SettingsData['glicko'];
 export type ModelComparison = Awaited<ReturnType<typeof trpc.admin.compareModels.query>>;
@@ -107,11 +117,11 @@ export interface ReviewCandidate {
 /** Shape of a seeding run's push log (stored as untyped JSON server-side). */
 export interface SeedingPushLog {
   verified: boolean;
-  log: Array<{
+  log: {
     participantId: string;
     challongeParticipantId: number;
     seed: number;
     ok: boolean;
     error?: string;
-  }>;
+  }[];
 }

@@ -48,7 +48,7 @@ async function companyCodeOf(legacyId: string): Promise<string | null> {
   return row?.code ?? null;
 }
 
-async function aliasesOf(legacyId: string): Promise<Array<{ alias: string; company: string | null }>> {
+async function aliasesOf(legacyId: string): Promise<{ alias: string; company: string | null }[]> {
   const [player] = await db.select().from(players).where(eq(players.legacyId, legacyId));
   const rows = await db
     .select({ alias: playerAliases.aliasNorm, company: companies.code })
@@ -57,7 +57,10 @@ async function aliasesOf(legacyId: string): Promise<Array<{ alias: string; compa
     .where(eq(playerAliases.playerId, player!.id));
   return rows
     .map((row) => ({ alias: row.alias, company: row.company ?? null }))
-    .sort((a, b) => a.alias.localeCompare(b.alias) || String(a.company).localeCompare(String(b.company)));
+    .sort(
+      (a, b) =>
+        a.alias.localeCompare(b.alias) || String(a.company).localeCompare(String(b.company)),
+    );
 }
 
 describe('registry import — preview', () => {
@@ -68,11 +71,18 @@ describe('registry import — preview', () => {
     expect(plan.counts.create).toBe(3);
     expect(plan.counts.update).toBe(0);
     expect(plan.counts.unchanged).toBe(0);
-    expect(plan.entries.map((entry) => entry.id)).toEqual(['vincent', 'sample-player', 'belinda-wong']);
+    expect(plan.entries.map((entry) => entry.id)).toEqual([
+      'vincent',
+      'sample-player',
+      'belinda-wong',
+    ]);
     expect(plan.entries.every((entry) => entry.action === 'create')).toBe(true);
 
     // "N/A" is a marker, not an employer: it must never become a company.
-    expect(plan.companiesToCreate.map((company) => company.name).sort()).toEqual(['AMD', 'Atlassian']);
+    expect(plan.companiesToCreate.map((company) => company.name).sort()).toEqual([
+      'AMD',
+      'Atlassian',
+    ]);
     expect(plan.entries.find((entry) => entry.id === 'sample-player')!.companyCode).toBeNull();
 
     const belinda = plan.entries.find((entry) => entry.id === 'belinda-wong')!;
@@ -103,7 +113,11 @@ describe('registry import — apply', () => {
 
     // id -> legacy_id, the idempotency key.
     const rows = await db.select().from(players);
-    expect(rows.map((row) => row.legacyId).sort()).toEqual(['belinda-wong', 'sample-player', 'vincent']);
+    expect(rows.map((row) => row.legacyId).sort()).toEqual([
+      'belinda-wong',
+      'sample-player',
+      'vincent',
+    ]);
 
     expect(await companyCodeOf('vincent')).toBe('AMD');
     expect(await companyCodeOf('belinda-wong')).toBe('ATL');
@@ -147,7 +161,14 @@ describe('registry import — apply', () => {
     };
 
     const plan = await caller.previewRegistryImport({ yaml: REGISTRY_YAML });
-    expect(plan.counts).toMatchObject({ create: 0, update: 0, unchanged: 3, aliases: 0, characters: 0, companies: 0 });
+    expect(plan.counts).toMatchObject({
+      create: 0,
+      update: 0,
+      unchanged: 3,
+      aliases: 0,
+      characters: 0,
+      companies: 0,
+    });
 
     const second = await caller.applyRegistryImport({ yaml: REGISTRY_YAML });
     expect(second).toMatchObject({
@@ -170,7 +191,10 @@ describe('registry import — apply', () => {
     const caller = adminCaller(db);
     await caller.applyRegistryImport({ yaml: REGISTRY_YAML });
 
-    const renamed = REGISTRY_YAML.replace('canonical_name: Belinda Wong', 'canonical_name: Belinda Wong-Smith');
+    const renamed = REGISTRY_YAML.replace(
+      'canonical_name: Belinda Wong',
+      'canonical_name: Belinda Wong-Smith',
+    );
     const plan = await caller.previewRegistryImport({ yaml: renamed });
     const belinda = plan.entries.find((entry) => entry.id === 'belinda-wong')!;
     expect(belinda.action).toBe('update');
@@ -225,7 +249,11 @@ describe('registry import — validation', () => {
     const caller = adminCaller(db);
     const plan = await caller.previewRegistryImport({ yaml });
 
-    expect(plan.issues.map((issue) => issue.id).sort()).toEqual(['bad-character', 'no-name', 'ok-player']);
+    expect(plan.issues.map((issue) => issue.id).sort()).toEqual([
+      'bad-character',
+      'no-name',
+      'ok-player',
+    ]);
     expect(plan.issues.find((issue) => issue.id === 'ok-player')!.message).toMatch(/Duplicate id/);
     expect(plan.issues.find((issue) => issue.id === 'bad-character')!.message).toMatch(/Waluigi/);
     // The one good entry is still previewed, so the admin sees the whole picture.
@@ -242,7 +270,9 @@ describe('registry import — validation', () => {
   });
 
   it('reports unparseable YAML instead of throwing', async () => {
-    const plan = await adminCaller(db).previewRegistryImport({ yaml: 'players:\n  - id: "unterminated\n' });
+    const plan = await adminCaller(db).previewRegistryImport({
+      yaml: 'players:\n  - id: "unterminated\n',
+    });
     expect(plan.issues).toHaveLength(1);
     expect(plan.issues[0]!.message).toMatch(/YAML could not be parsed/);
   });

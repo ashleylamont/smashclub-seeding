@@ -25,7 +25,9 @@ async function settle(page: Page): Promise<void> {
 
 async function capture(page: Page, name: string): Promise<void> {
   await settle(page);
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  );
   expect(overflow, `${name} has horizontal page overflow`).toBeLessThanOrEqual(1);
   await page.screenshot({ path: path.join(OUT, `${name}.png`), fullPage: true });
 }
@@ -35,7 +37,7 @@ async function completedTournamentSlug(page: Page): Promise<string | null> {
   const response = await page.request.get('/api/trpc/public.tournaments');
   if (!response.ok()) return null;
   const body = (await response.json()) as {
-    result?: { data?: Array<{ slug: string; challongeState: string | null }> };
+    result?: { data?: { slug: string; challongeState: string | null }[] };
   };
   return body.result?.data?.find((t) => t.challongeState === 'complete')?.slug ?? null;
 }
@@ -111,7 +113,6 @@ test.describe('page screenshots', () => {
           await tournamentLink.click();
           await expect(page).toHaveURL(/\/tournaments\/.+/);
           await capture(page, `tournament-${viewport.label}-${scheme}`);
-
         }
 
         /*

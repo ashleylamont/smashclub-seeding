@@ -1,13 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { playerRatings, seedingRuns, tournaments, type Db } from '@smashclub/db';
+import { playerRatings, seedingRuns, tournaments, type Db, reviewItems } from '@smashclub/db';
 import { importRegistryPlayers, registerTournamentSlugs } from '../src/bootstrap/importRegistry';
 import { latestRecomputeId, runRecompute } from '../src/recompute/recompute';
-import { createSeedingRun, latestSeedingRun, pushSeedingRun, reorderSeedingRun } from '../src/seeding/seeding';
+import {
+  createSeedingRun,
+  latestSeedingRun,
+  pushSeedingRun,
+  reorderSeedingRun,
+} from '../src/seeding/seeding';
 import { syncTournament } from '../src/sync/sync';
 import { createTestDb } from './helpers/testDb';
 import { fixtureClient, type FixtureTournament } from './helpers/challongeFixtures';
-import { reviewItems } from '@smashclub/db';
 
 let db: Db;
 let close: () => Promise<void>;
@@ -55,7 +59,11 @@ afterEach(async () => {
   await close();
 });
 
-const entryName = (entry: { canonicalName: string | null; displayName: string | null; cleanedName: string }): string =>
+const entryName = (entry: {
+  canonicalName: string | null;
+  displayName: string | null;
+  cleanedName: string;
+}): string =>
   entry.canonicalName ? (entry.displayName ?? entry.canonicalName) : entry.cleanedName;
 
 async function setupRatedAndUpcoming(): Promise<string> {
@@ -186,5 +194,4 @@ describe('seeding workbench', () => {
       'Zzz Newcomer',
     ]);
   });
-
 });

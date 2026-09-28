@@ -99,7 +99,9 @@ export function scoreCandidates(
       score: entry.score,
       reason: entry.reason,
       matchedAlias:
-        entry.matchedName.toLowerCase() === entry.candidate.name.toLowerCase() ? null : entry.matchedName,
+        entry.matchedName.toLowerCase() === entry.candidate.name.toLowerCase()
+          ? null
+          : entry.matchedName,
     }));
 }
 
@@ -108,8 +110,12 @@ export async function rejectedPlayerIdsFor(db: Db, aliasNorm: string): Promise<S
   const rows = await db
     .select()
     .from(identityDecisions)
-    .where(and(eq(identityDecisions.aliasNorm, aliasNorm), eq(identityDecisions.kind, 'keep_separate')));
-  return new Set(rows.map((row) => row.keptSeparateFromPlayerId).filter((id): id is string => id !== null));
+    .where(
+      and(eq(identityDecisions.aliasNorm, aliasNorm), eq(identityDecisions.kind, 'keep_separate')),
+    );
+  return new Set(
+    rows.map((row) => row.keptSeparateFromPlayerId).filter((id): id is string => id !== null),
+  );
 }
 
 export interface RecomputeCandidatesResult {
@@ -155,7 +161,12 @@ export async function recomputePendingCandidates(
   const rejections = await db
     .select()
     .from(identityDecisions)
-    .where(and(eq(identityDecisions.kind, 'keep_separate'), inArray(identityDecisions.aliasNorm, aliasNorms)));
+    .where(
+      and(
+        eq(identityDecisions.kind, 'keep_separate'),
+        inArray(identityDecisions.aliasNorm, aliasNorms),
+      ),
+    );
   const rejectedByAlias = new Map<string, Set<string>>();
   for (const row of rejections) {
     if (!row.keptSeparateFromPlayerId) continue;

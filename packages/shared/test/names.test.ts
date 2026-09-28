@@ -40,27 +40,43 @@ describe('publicPlayerName', () => {
   });
 
   it('falls back to the shortened canonical name when no alias is set', () => {
-    expect(publicPlayerName({ displayName: null, canonicalName: 'Sample Player' })).toBe('Sample P');
+    expect(publicPlayerName({ displayName: null, canonicalName: 'Sample Player' })).toBe(
+      'Sample P',
+    );
   });
 });
 
 describe('publicParticipantName', () => {
   it('uses the linked player’s public name', () => {
     expect(
-      publicParticipantName({ displayName: 'Zero', canonicalName: 'Sample Player', cleanedName: 'Sample Player' }),
+      publicParticipantName({
+        displayName: 'Zero',
+        canonicalName: 'Sample Player',
+        cleanedName: 'Sample Player',
+      }),
     ).toBe('Zero');
     expect(
-      publicParticipantName({ displayName: null, canonicalName: 'Sample Player', cleanedName: 'sample' }),
+      publicParticipantName({
+        displayName: null,
+        canonicalName: 'Sample Player',
+        cleanedName: 'sample',
+      }),
     ).toBe('Sample P');
   });
 
   it('shortens an unlinked entry rather than publishing what was typed', () => {
     expect(
-      publicParticipantName({ displayName: null, canonicalName: null, cleanedName: 'Sample Player' }),
+      publicParticipantName({
+        displayName: null,
+        canonicalName: null,
+        cleanedName: 'Sample Player',
+      }),
     ).toBe('Sample P');
   });
 
   it('leaves an unlinked handle alone — there is nothing to shorten', () => {
-    expect(publicParticipantName({ displayName: null, canonicalName: null, cleanedName: 'birb' })).toBe('birb');
+    expect(
+      publicParticipantName({ displayName: null, canonicalName: null, cleanedName: 'birb' }),
+    ).toBe('birb');
   });
 });

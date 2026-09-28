@@ -27,7 +27,11 @@ function makeSets(): EvalSet[] {
 
 describe('walkForward', () => {
   it('scores a coin flip at exactly ln 2', () => {
-    const { scores } = walkForward({ sets: makeSets(), models: [coinFlipModel], minTrainingEvents: 1 });
+    const { scores } = walkForward({
+      sets: makeSets(),
+      models: [coinFlipModel],
+      minTrainingEvents: 1,
+    });
     expect(scores[0]!.logLoss).toBeCloseTo(Math.LN2, 10);
     expect(scores[0]!.brier).toBeCloseTo(0.25, 10);
     expect(scores[0]!.accuracy).toBeCloseTo(0.5, 10);
@@ -60,14 +64,22 @@ describe('walkForward', () => {
         return (set) => (seen.has(key(set)) ? (set.winner === 1 ? 0.999 : 0.001) : 0.5);
       },
     };
-    const { scores } = walkForward({ sets: makeSets(), models: [leakDetector], minTrainingEvents: 1 });
+    const { scores } = walkForward({
+      sets: makeSets(),
+      models: [leakDetector],
+      minTrainingEvents: 1,
+    });
     expect(scores[0]!.logLoss).toBeCloseTo(Math.LN2, 9);
     expect(scores[0]!.uninformative).toBe(1);
   });
 
   it('excludes the first events from scoring and counts folds correctly', () => {
     const sets = makeSets(); // 3 events
-    const { folds, evaluatedSets } = walkForward({ sets, models: [coinFlipModel], minTrainingEvents: 2 });
+    const { folds, evaluatedSets } = walkForward({
+      sets,
+      models: [coinFlipModel],
+      minTrainingEvents: 2,
+    });
     expect(folds).toBe(1); // only the third event is predicted
     expect(evaluatedSets).toBe(12);
   });
@@ -93,7 +105,11 @@ describe('accuracy ceiling', () => {
    * the gap between accuracy and ceiling is the room actually left.
    */
   it('is 50% for a coin flip, which therefore has no room to improve', () => {
-    const { scores } = walkForward({ sets: makeSets(), models: [coinFlipModel], minTrainingEvents: 1 });
+    const { scores } = walkForward({
+      sets: makeSets(),
+      models: [coinFlipModel],
+      minTrainingEvents: 1,
+    });
     expect(scores[0]!.accuracyCeiling).toBeCloseTo(0.5, 9);
     expect(scores[0]!.accuracy).toBeCloseTo(0.5, 9);
     expect(scores[0]!.uninformative).toBe(1);
@@ -114,7 +130,10 @@ describe('accuracy ceiling', () => {
 
   it('sits between accuracy and 100% for a hedging model, and bounds it', () => {
     // Always says 60% for p1 — right on this data, but never certain.
-    const hedging: EvalModel = { name: 'hedging', fit: () => (set) => (set.p1PlayerId === 'strong' ? 0.6 : 0.4) };
+    const hedging: EvalModel = {
+      name: 'hedging',
+      fit: () => (set) => (set.p1PlayerId === 'strong' ? 0.6 : 0.4),
+    };
     const { scores } = walkForward({ sets: makeSets(), models: [hedging], minTrainingEvents: 1 });
     expect(scores[0]!.accuracyCeiling).toBeCloseTo(0.6, 9);
     // A hedged-but-correct model can beat its own ceiling on a lucky sample:

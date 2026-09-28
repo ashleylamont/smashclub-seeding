@@ -75,7 +75,10 @@ export function validateDivisionInput(
 
   const duplicates = new Map<string, string[]>();
   for (const candidate of candidates) {
-    duplicates.set(candidate.playerId, [...(duplicates.get(candidate.playerId) ?? []), candidate.entryId]);
+    duplicates.set(candidate.playerId, [
+      ...(duplicates.get(candidate.playerId) ?? []),
+      candidate.entryId,
+    ]);
   }
   for (const [, entryIds] of duplicates) {
     if (entryIds.length > 1) {
@@ -115,8 +118,15 @@ export function validateDivisionInput(
     });
     return issues;
   }
-  if (!Number.isInteger(upperTargetSize) || upperTargetSize < minimum || total - upperTargetSize < minimum) {
-    issues.push({ code: 'division_too_small', message: `Each division needs at least ${minimum} players and a whole-number size.` });
+  if (
+    !Number.isInteger(upperTargetSize) ||
+    upperTargetSize < minimum ||
+    total - upperTargetSize < minimum
+  ) {
+    issues.push({
+      code: 'division_too_small',
+      message: `Each division needs at least ${minimum} players and a whole-number size.`,
+    });
   }
 
   const pinnedUpper = candidates.filter((candidate) => candidate.divisionPreference === 'upper');
@@ -180,13 +190,13 @@ export function assignDivisions(
   upper.push(...byRank.slice(0, upperPlaces));
   lower.push(...byRank.slice(upperPlaces));
 
-  return [
-    ...seedDivision(upper, 'upper'),
-    ...seedDivision(lower, 'lower'),
-  ];
+  return [...seedDivision(upper, 'upper'), ...seedDivision(lower, 'lower')];
 }
 
-function seedDivision(members: readonly DivisionCandidate[], division: Division): DivisionPlacement[] {
+function seedDivision(
+  members: readonly DivisionCandidate[],
+  division: Division,
+): DivisionPlacement[] {
   return [...members].sort(seedOrder).map((candidate, index) => ({
     entryId: candidate.entryId,
     playerId: candidate.playerId,

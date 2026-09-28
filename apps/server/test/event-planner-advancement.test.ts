@@ -36,7 +36,7 @@ describe('buildConsolationBracket', () => {
     const bracket = buildConsolationBracket(finishers(poolCount));
     expect(bracket.rematches).toEqual([]);
     for (const pair of bracket.roundOne) {
-      if (pair.b) expect(pair.a.poolIndex).not.toBe(pair.b.poolIndex);
+      expect(pair.b === null || pair.a.poolIndex !== pair.b.poolIndex).toBe(true);
     }
   });
 
@@ -44,7 +44,9 @@ describe('buildConsolationBracket', () => {
     const bracket = buildConsolationBracket(finishers(poolCount));
     const ids = bracket.entrants.map((entrant) => entrant.playerId);
     expect(new Set(ids).size).toBe(poolCount * 2);
-    const drawn = bracket.roundOne.flatMap((pair) => (pair.b ? [pair.a.playerId, pair.b.playerId] : [pair.a.playerId]));
+    const drawn = bracket.roundOne.flatMap((pair) =>
+      pair.b ? [pair.a.playerId, pair.b.playerId] : [pair.a.playerId],
+    );
     expect(new Set(drawn)).toEqual(new Set(ids));
   });
 
@@ -67,7 +69,9 @@ describe('buildConsolationBracket', () => {
     // A3 and B3 are the two best consolation entrants; they must not meet until
     // the final, so they start in opposite halves of the draw.
     const half = (label: string) => {
-      const index = bracket.roundOne.findIndex((pair) => pair.a.label === label || pair.b?.label === label);
+      const index = bracket.roundOne.findIndex(
+        (pair) => pair.a.label === label || pair.b?.label === label,
+      );
       return index < bracket.roundOne.length / 2 ? 'top' : 'bottom';
     };
     expect(half('A3')).not.toBe(half('B3'));
@@ -75,7 +79,12 @@ describe('buildConsolationBracket', () => {
 
   it('labels entrants by pool and place for the audit trail', () => {
     const bracket = buildConsolationBracket(finishers(2));
-    expect(bracket.entrants.map((entrant) => entrant.label).sort()).toEqual(['A3', 'A4', 'B3', 'B4']);
+    expect(bracket.entrants.map((entrant) => entrant.label).sort()).toEqual([
+      'A3',
+      'A4',
+      'B3',
+      'B4',
+    ]);
   });
 
   it('gives byes to the strongest qualifiers when the field is not a power of two', () => {
@@ -107,7 +116,9 @@ describe('buildConsolationBracket', () => {
   });
 
   it('rejects a field with nobody to seed', () => {
-    expect(() => buildConsolationBracket([{ playerId: 'a', poolIndex: 0, place: 1 }])).toThrow(/No consolation/);
+    expect(() => buildConsolationBracket([{ playerId: 'a', poolIndex: 0, place: 1 }])).toThrow(
+      /No consolation/,
+    );
   });
 });
 
@@ -121,17 +132,35 @@ describe('championshipQualifiers', () => {
     ]);
   });
   it('rounds up the winners bracket from a five-player pool', () => {
-    const five = Array.from({ length: 5 }, (_, index) => ({ playerId: `five-${index + 1}`, poolIndex: 0, place: index + 1 }));
-    const four = finishers(1).map(row => ({ ...row, poolIndex: 1 }));
+    const five = Array.from({ length: 5 }, (_, index) => ({
+      playerId: `five-${index + 1}`,
+      poolIndex: 0,
+      place: index + 1,
+    }));
+    const four = finishers(1).map((row) => ({ ...row, poolIndex: 1 }));
     const field = [...five, ...four];
-    expect(championshipQualifiers(field).map(row => row.label)).toEqual(['A1', 'A2', 'A3', 'B1', 'B2']);
-    expect(buildConsolationBracket(field).entrants.map(row => row.label).sort()).toEqual(['A4', 'A5', 'B3', 'B4']);
+    expect(championshipQualifiers(field).map((row) => row.label)).toEqual([
+      'A1',
+      'A2',
+      'A3',
+      'B1',
+      'B2',
+    ]);
+    expect(
+      buildConsolationBracket(field)
+        .entrants.map((row) => row.label)
+        .sort(),
+    ).toEqual(['A4', 'A5', 'B3', 'B4']);
   });
 });
 
 it('includes fifth places in consolation and handles a sole consolation entrant', () => {
   const finishers = [3, 4, 5].map((place) => ({ playerId: `p${place}`, poolIndex: 0, place }));
-  expect(buildConsolationBracket(finishers).entrants.map((entry) => entry.playerId).sort()).toEqual(['p3', 'p4', 'p5']);
+  expect(
+    buildConsolationBracket(finishers)
+      .entrants.map((entry) => entry.playerId)
+      .sort(),
+  ).toEqual(['p3', 'p4', 'p5']);
   expect(buildConsolationBracket([finishers[0]!]).roundOne).toHaveLength(1);
   expect(buildConsolationBracket([finishers[0]!]).roundOne[0]!.b).toBeNull();
 });

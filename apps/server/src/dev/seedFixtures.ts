@@ -5,7 +5,11 @@ import type { Db } from '@smashclub/db';
 import { players, tournaments } from '@smashclub/db';
 import { cleanPlayerEntry, preparePlayerEntry } from '@smashclub/engine';
 import type { ChallongeClient } from '../challonge/client';
-import { importCompanyTaxonomy, importRegistryPlayers, type RegistryPlayerInput } from '../bootstrap/importRegistry';
+import {
+  importCompanyTaxonomy,
+  importRegistryPlayers,
+  type RegistryPlayerInput,
+} from '../bootstrap/importRegistry';
 import { runRecompute } from '../recompute/recompute';
 import { syncTournament } from '../sync/sync';
 import { createFixtureClient, type FixtureTournament } from './challongeFixture';
@@ -43,7 +47,10 @@ export interface SeedResult {
 }
 
 /** Build Challonge-shaped fixtures from a real cache directory. */
-function fixturesFromCache(cacheDir: string): { fixtures: FixtureTournament[]; registry: RegistryPlayerInput[] } {
+function fixturesFromCache(cacheDir: string): {
+  fixtures: FixtureTournament[];
+  registry: RegistryPlayerInput[];
+} {
   const pseudo = new Pseudonymiser();
   const files = readdirSync(cacheDir).filter((f) => f.endsWith('.json'));
 
@@ -55,7 +62,9 @@ function fixturesFromCache(cacheDir: string): { fixtures: FixtureTournament[]; r
   }
   const events: Event[] = [];
   for (const file of files) {
-    const payload = JSON.parse(readFileSync(path.join(cacheDir, file), 'utf8')) as { rows?: CacheRow[] };
+    const payload = JSON.parse(readFileSync(path.join(cacheDir, file), 'utf8')) as {
+      rows?: CacheRow[];
+    };
     const rows = payload.rows ?? [];
     // Skip the tiny unit-test fixtures that live in the same directory.
     if (rows.length < 5) continue;
@@ -66,7 +75,9 @@ function fixturesFromCache(cacheDir: string): { fixtures: FixtureTournament[]; r
       rows,
     });
   }
-  events.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.slug.localeCompare(b.slug)));
+  events.sort((a, b) =>
+    a.date < b.date ? -1 : a.date > b.date ? 1 : a.slug.localeCompare(b.slug),
+  );
 
   // Pseudonymise by resolved identity so the same person keeps one alias
   // across events, and remember their company for the registry.
@@ -127,7 +138,7 @@ function fixturesFromCache(cacheDir: string): { fixtures: FixtureTournament[]; r
         id,
         name,
         seed: index + 1,
-        finalRank: isLatest ? null : ((index % 8) + 1),
+        finalRank: isLatest ? null : (index % 8) + 1,
       })),
       matches: isLatest ? matches.slice(0, Math.max(1, Math.floor(matches.length * 0.6))) : matches,
     });
@@ -181,7 +192,8 @@ const SYNTHETIC_LATEST_DAYS_AGO = 24;
  */
 function syntheticEventDates(today: Date = new Date()): string[] {
   return Array.from({ length: SYNTHETIC_EVENTS }, (_, index) => {
-    const daysAgo = SYNTHETIC_LATEST_DAYS_AGO + (SYNTHETIC_EVENTS - 1 - index) * SYNTHETIC_EVENT_GAP_DAYS;
+    const daysAgo =
+      SYNTHETIC_LATEST_DAYS_AGO + (SYNTHETIC_EVENTS - 1 - index) * SYNTHETIC_EVENT_GAP_DAYS;
     const date = new Date(today);
     date.setUTCDate(date.getUTCDate() - daysAgo);
     return date.toISOString().slice(0, 10);
@@ -216,7 +228,10 @@ function syntheticFixtures(): { fixtures: FixtureTournament[]; registry: Registr
     ];
     const participantIds = new Map<string, number>();
     entrants.forEach((name, i) => {
-      participantIds.set(`[${companies[i % companies.length]!}] ${name}`, 2000 + eventIndex * 100 + i);
+      participantIds.set(
+        `[${companies[i % companies.length]!}] ${name}`,
+        2000 + eventIndex * 100 + i,
+      );
     });
     const keys = [...participantIds.keys()];
 
@@ -275,7 +290,10 @@ function syntheticFixtures(): { fixtures: FixtureTournament[]; registry: Registr
   return { fixtures, registry };
 }
 
-export async function seedDevData(db: Db, cacheDir?: string): Promise<{ result: SeedResult; client: ChallongeClient }> {
+export async function seedDevData(
+  db: Db,
+  cacheDir?: string,
+): Promise<{ result: SeedResult; client: ChallongeClient }> {
   const useCache = Boolean(cacheDir && existsSync(cacheDir));
   const { fixtures, registry } = useCache ? fixturesFromCache(cacheDir!) : syntheticFixtures();
 
@@ -296,7 +314,14 @@ export async function seedDevData(db: Db, cacheDir?: string): Promise<{ result: 
       })
       .onConflictDoNothing()
       .returning({ id: tournaments.id });
-    const tournamentId = row?.id ?? (await db.select({ id: tournaments.id }).from(tournaments).where(eq(tournaments.challongeSlug, fixture.slug)))[0]!.id;
+    const tournamentId =
+      row?.id ??
+      (
+        await db
+          .select({ id: tournaments.id })
+          .from(tournaments)
+          .where(eq(tournaments.challongeSlug, fixture.slug))
+      )[0]!.id;
     const result = await syncTournament(db, client, tournamentId);
     queuedForReview += result.queuedForReview;
     sets += result.setsUpserted;

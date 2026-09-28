@@ -35,7 +35,8 @@ export function TournamentsPage() {
   }, [query.data, now]);
 
   if (query.isPending) return <p className="loading-text">Loading tournaments…</p>;
-  if (query.isError) return <p className="error-text">Failed to load tournaments: {query.error.message}</p>;
+  if (query.isError)
+    return <p className="error-text">Failed to load tournaments: {query.error.message}</p>;
 
   if (query.data.length === 0) {
     return (
@@ -56,7 +57,9 @@ export function TournamentsPage() {
       </div>
       {groups.live.length > 0 && <TournamentGroup title="Live" items={groups.live} />}
       {groups.upcoming.length > 0 && <TournamentGroup title="Upcoming" items={groups.upcoming} />}
-      {groups.completed.length > 0 && <TournamentGroup title="Completed" items={groups.completed} />}
+      {groups.completed.length > 0 && (
+        <TournamentGroup title="Completed" items={groups.completed} />
+      )}
     </div>
   );
 }
@@ -70,26 +73,56 @@ function TournamentGroup({ title, items }: { title: string; items: TournamentEve
         {title} <span className="group-count num">{items.length}</span>
       </h2>
       <div className="tournament-list">
-          {items.map((event) => {
-            const sync = event.items.every((t) => t.syncState === 'synced') ? syncStateLabel('synced') : syncStateLabel('registered');
-            return (
-              <div key={event.key} className="tournament-event-card">
-                <div className="tournament-row-main">
-                  <Link to="/events/$slug" params={{ slug: event.slug }} className="tournament-name">{event.title}</Link>
-                  <span className="tournament-tags">
-                    {event.live && <span className="live-badge">LIVE</span>}
-                    {event.items.some((t) => t.isRookie) && <span className="chip chip-warning">rookie bracket</span>}
-                  </span>
-                </div>
-                <div className="tournament-row-meta"><span>{formatDate(event.eventDate)}</span><span className="muted">{sync.label}</span></div>
-                <div className="event-brackets">
-                  {event.items.map((t) => <Link key={t.id} to="/tournaments/$slug" params={{ slug: t.slug }} className="event-bracket-link">{t.name}</Link>)}
-                  <Link to="/events/$slug" params={{ slug: event.slug }} className="tournament-recap-link">Event overview →</Link>
-                  <Link to="/recaps/$slug" params={{ slug: event.slug }} className="tournament-recap-link">Recap →</Link>
-                </div>
+        {items.map((event) => {
+          const sync = event.items.every((t) => t.syncState === 'synced')
+            ? syncStateLabel('synced')
+            : syncStateLabel('registered');
+          return (
+            <div key={event.key} className="tournament-event-card">
+              <div className="tournament-row-main">
+                <Link to="/events/$slug" params={{ slug: event.slug }} className="tournament-name">
+                  {event.title}
+                </Link>
+                <span className="tournament-tags">
+                  {event.live && <span className="live-badge">LIVE</span>}
+                  {event.items.some((t) => t.isRookie) && (
+                    <span className="chip chip-warning">rookie bracket</span>
+                  )}
+                </span>
               </div>
-            );
-          })}
+              <div className="tournament-row-meta">
+                <span>{formatDate(event.eventDate)}</span>
+                <span className="muted">{sync.label}</span>
+              </div>
+              <div className="event-brackets">
+                {event.items.map((t) => (
+                  <Link
+                    key={t.id}
+                    to="/tournaments/$slug"
+                    params={{ slug: t.slug }}
+                    className="event-bracket-link"
+                  >
+                    {t.name}
+                  </Link>
+                ))}
+                <Link
+                  to="/events/$slug"
+                  params={{ slug: event.slug }}
+                  className="tournament-recap-link"
+                >
+                  Event overview →
+                </Link>
+                <Link
+                  to="/recaps/$slug"
+                  params={{ slug: event.slug }}
+                  className="tournament-recap-link"
+                >
+                  Recap →
+                </Link>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

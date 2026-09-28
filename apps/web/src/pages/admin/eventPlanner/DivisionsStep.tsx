@@ -31,7 +31,12 @@ import { DIVISION_LABEL } from './labels';
 export function DivisionsStep({ view, onChanged }: { view: EventPlanView; onChanged: () => void }) {
   const planId = view.plan.id;
   const attached = view.brackets.some((bracket) => bracket.challongeSlug !== null);
-  const locked = !!view.plan.softLockedAt || attached || view.plan.status === 'underway' || view.plan.status === 'complete' || view.plan.status === 'cancelled';
+  const locked =
+    Boolean(view.plan.softLockedAt) ||
+    attached ||
+    view.plan.status === 'underway' ||
+    view.plan.status === 'complete' ||
+    view.plan.status === 'cancelled';
 
   const generate = useMutation({
     mutationFn: () => trpc.admin.eventPlanner.generatePools.mutate({ planId }),
@@ -43,21 +48,37 @@ export function DivisionsStep({ view, onChanged }: { view: EventPlanView; onChan
       <div className="page-header">
         <h3>Divisions</h3>
         <span className="row-actions">
-          <span className="muted">Ranking snapshot: {formatDateTime(view.plan.rankingSnapshotAt)}</span>
+          <span className="muted">
+            Ranking snapshot: {formatDateTime(view.plan.rankingSnapshotAt)}
+          </span>
           <button
             type="button"
             className="btn btn-primary"
-            disabled={locked || generate.isPending || view.divisions.some((division) => division.pools.length === 0)}
+            disabled={
+              locked ||
+              generate.isPending ||
+              view.divisions.some((division) => division.pools.length === 0)
+            }
             onClick={() => generate.mutate()}
           >
-            {generate.isPending ? 'Generating…' : view.plan.status === 'roster_frozen' ? 'Generate pools' : 'Regenerate pools'}
+            {generate.isPending
+              ? 'Generating…'
+              : view.plan.status === 'roster_frozen'
+                ? 'Generate pools'
+                : 'Regenerate pools'}
           </button>
         </span>
       </div>
       {generate.isError && <p className="error-text">{generate.error.message}</p>}
       {locked && (
         <div className="banner banner-warning">
-          Seeds are locked: {view.plan.softLockedAt ? 'a TO soft-locked these pools' : attached ? 'a Challonge bracket is attached' : 'the event is underway or closed'}. Completed play is preserved.
+          Seeds are locked:{' '}
+          {view.plan.softLockedAt
+            ? 'a TO soft-locked these pools'
+            : attached
+              ? 'a Challonge bracket is attached'
+              : 'the event is underway or closed'}
+          . Completed play is preserved.
         </div>
       )}
 
@@ -202,7 +223,9 @@ function DivisionRow({
           </span>
         )}
       </span>
-      <span className="muted">{entry.snapshotRank === null ? 'unranked' : `#${entry.snapshotRank}`}</span>
+      <span className="muted">
+        {entry.snapshotRank === null ? 'unranked' : `#${entry.snapshotRank}`}
+      </span>
       <span className="row-actions">
         <button
           type="button"

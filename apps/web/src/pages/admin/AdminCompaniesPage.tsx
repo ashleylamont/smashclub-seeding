@@ -32,15 +32,19 @@ export function AdminCompaniesPage() {
     <div className="section">
       <div className="page-header">
         <h2>Companies</h2>
-        <button type="button" className="btn btn-small btn-primary" onClick={() => setCreating(true)}>
+        <button
+          type="button"
+          className="btn btn-small btn-primary"
+          onClick={() => setCreating(true)}
+        >
           New company
         </button>
       </div>
 
       <p className="muted">
-        Codes tag players on the leaderboard. Aliases are the other spellings that appear in bracket entries —
-        every alias listed here is matched automatically on import, so adding one is usually cheaper than
-        resolving the same name in the review queue every event.
+        Codes tag players on the leaderboard. Aliases are the other spellings that appear in bracket
+        entries — every alias listed here is matched automatically on import, so adding one is
+        usually cheaper than resolving the same name in the review queue every event.
       </p>
 
       {companies.isPending && <p className="loading-text">Loading companies…</p>}
@@ -105,7 +109,8 @@ function CompanyRow({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const removeAlias = useMutation({
-    mutationFn: (alias: string) => trpc.admin.removeCompanyAlias.mutate({ companyId: company.id, alias }),
+    mutationFn: (alias: string) =>
+      trpc.admin.removeCompanyAlias.mutate({ companyId: company.id, alias }),
     onSuccess: onChanged,
   });
 
@@ -149,23 +154,33 @@ function CompanyRow({
           <button type="button" className="btn btn-small" onClick={onEdit}>
             Edit
           </button>
-          <button type="button" className="btn btn-small btn-danger" onClick={() => setConfirmingDelete(true)}>
+          <button
+            type="button"
+            className="btn btn-small btn-danger"
+            onClick={() => setConfirmingDelete(true)}
+          >
             Delete
           </button>
         </span>
 
         {confirmingDelete && (
-          <div className="modal-overlay" onClick={() => setConfirmingDelete(false)}>
-            <div className="modal" onClick={(event) => event.stopPropagation()}>
+          <div className="modal-overlay">
+            <button
+              type="button"
+              className="modal-backdrop"
+              aria-label="Close dialog"
+              onClick={() => setConfirmingDelete(false)}
+            />
+            <div className="modal">
               <h3>Delete {company.code}?</h3>
               <p>
                 {company.playerCount === 0
                   ? 'No players are tagged with this company.'
                   : `${company.playerCount} player${company.playerCount === 1 ? '' : 's'} tagged with this company will
                      become untagged.`}{' '}
-                Its {company.aliases.length} alias{company.aliases.length === 1 ? '' : 'es'} will also be removed, so
-                bracket entries carrying this tag will go to the review queue instead of matching automatically.
-                Ratings and match history are unaffected.
+                Its {company.aliases.length} alias{company.aliases.length === 1 ? '' : 'es'} will
+                also be removed, so bracket entries carrying this tag will go to the review queue
+                instead of matching automatically. Ratings and match history are unaffected.
               </p>
               <div className="modal-actions">
                 <button type="button" className="btn" onClick={() => setConfirmingDelete(false)}>
@@ -236,8 +251,14 @@ function CompanyFormModal({
   const valid = code.trim() !== '' && name.trim() !== '';
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(event) => event.stopPropagation()}>
+    <div className="modal-overlay">
+      <button
+        type="button"
+        className="modal-backdrop"
+        aria-label="Close dialog"
+        onClick={onClose}
+      />
+      <div className="modal">
         <h3>{company ? `Edit ${company.code}` : 'New company'}</h3>
 
         <div className="form-grid">
@@ -294,7 +315,12 @@ function CompanyFormModal({
                   }
                 }}
               />
-              <button type="button" className="btn btn-small" disabled={aliasInput.trim() === ''} onClick={addAlias}>
+              <button
+                type="button"
+                className="btn btn-small"
+                disabled={aliasInput.trim() === ''}
+                onClick={addAlias}
+              >
                 Add
               </button>
             </div>

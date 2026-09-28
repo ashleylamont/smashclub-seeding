@@ -29,7 +29,9 @@ import { seedDevData } from './seedFixtures';
 import { seedOperations } from './seedOperations';
 import { seedHistoricalEvent } from './seedHistoricalEvent';
 
-const migrationsFolder = fileURLToPath(new URL('../../../../packages/db/migrations', import.meta.url));
+const migrationsFolder = fileURLToPath(
+  new URL('../../../../packages/db/migrations', import.meta.url),
+);
 
 export interface DevHarness {
   url: string;
@@ -93,7 +95,17 @@ export async function startDevHarness(
   // Admin promotion requires a provider-verified address (see auth.ts). The
   // harness has no mail server, so stand in for the verification an OAuth
   // provider would have done before these accounts ever reached us.
-  await db.update(user).set({ emailVerified: true }).where(inArray(user.email, [adminEmail, userEmail, 'rehearsal-player@smashclub.dev', 'organiser@smashclub.dev']));
+  await db
+    .update(user)
+    .set({ emailVerified: true })
+    .where(
+      inArray(user.email, [
+        adminEmail,
+        userEmail,
+        'rehearsal-player@smashclub.dev',
+        'organiser@smashclub.dev',
+      ]),
+    );
   const rehearsalPlanId = await seedOperations(db);
   const historicalPlanId = await seedHistoricalEvent(db);
 

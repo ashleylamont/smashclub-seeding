@@ -62,7 +62,10 @@ function callerFor(sessionUser: TrpcContext['user']) {
 const anonymous = () => callerFor(null);
 
 async function playerId(canonicalName: string): Promise<string> {
-  const [row] = await db.select({ id: players.id }).from(players).where(eq(players.canonicalName, canonicalName));
+  const [row] = await db
+    .select({ id: players.id })
+    .from(players)
+    .where(eq(players.canonicalName, canonicalName));
   return row!.id;
 }
 
@@ -81,7 +84,10 @@ beforeEach(async () => {
     { id: 'samus', canonical_name: 'Samus Aran', company: 'ATL' },
   ]);
   await registerTournamentSlugs(db, ['weekly1']);
-  const [row] = await db.select({ id: tournaments.id }).from(tournaments).where(eq(tournaments.challongeSlug, 'weekly1'));
+  const [row] = await db
+    .select({ id: tournaments.id })
+    .from(tournaments)
+    .where(eq(tournaments.challongeSlug, 'weekly1'));
   await syncTournament(db, fixtureClient([fixture]), row!.id);
   await runRecompute(db);
 });
@@ -99,7 +105,8 @@ describe('public routes publish aliases, never canonical names', () => {
 
   it('player profile, including its opponents', async () => {
     const profile = await anonymous().public.player({ playerId: await playerId('Fox McCloud') });
-    if (profile === null || profile.player === undefined) throw new Error('expected a player profile');
+    if (profile === null || profile.player === undefined)
+      throw new Error('expected a player profile');
     expect(profile.player.name).toBe('Fox M');
     // The opponent join is the easy one to miss: it names a *different* player.
     expect(profile.events.map((event) => event.opponentName)).toContain('Samus A');
@@ -130,10 +137,14 @@ describe('public routes publish aliases, never canonical names', () => {
   it('search, which matches the board name rather than the registry one', async () => {
     const caller = anonymous();
 
-    expect((await caller.public.searchPlayers({ query: 'Fox' })).map((row) => row.name)).toEqual(['Fox M']);
+    expect((await caller.public.searchPlayers({ query: 'Fox' })).map((row) => row.name)).toEqual([
+      'Fox M',
+    ]);
     // Case-insensitive, and a partial alias still finds the player, so someone
     // claiming their own profile has something to type.
-    expect((await caller.public.searchPlayers({ query: 'samus a' })).map((row) => row.name)).toEqual(['Samus A']);
+    expect(
+      (await caller.public.searchPlayers({ query: 'samus a' })).map((row) => row.name),
+    ).toEqual(['Samus A']);
 
     // The point of the change: a surname is not a query. Were it still matched,
     // an empty result for one guess and a hit for the next would reconstruct
@@ -145,7 +156,10 @@ describe('public routes publish aliases, never canonical names', () => {
   });
 
   it('finds a player by their chosen alias once they set one', async () => {
-    await db.update(players).set({ displayName: 'starfox' }).where(eq(players.canonicalName, 'Fox McCloud'));
+    await db
+      .update(players)
+      .set({ displayName: 'starfox' })
+      .where(eq(players.canonicalName, 'Fox McCloud'));
     const results = await anonymous().public.searchPlayers({ query: 'starf' });
     expect(results.map((row) => row.name)).toEqual(['starfox']);
     // The derived alias is replaced by the chosen one, not offered alongside it.
@@ -155,13 +169,20 @@ describe('public routes publish aliases, never canonical names', () => {
 
 describe('me.claims', () => {
   beforeEach(async () => {
-    await db.insert(user).values({ id: 'user-1', name: 'A User', email: 'user@example.com', role: 'user' });
+    await db
+      .insert(user)
+      .values({ id: 'user-1', name: 'A User', email: 'user@example.com', role: 'user' });
   });
 
   it('does not name the player a pending claim points at', async () => {
     // Anyone may request a claim on anyone, so this route must not become a
     // lookup: request, read the name, withdraw.
-    const me = callerFor({ id: 'user-1', email: 'user@example.com', name: 'A User', role: 'user' }).me;
+    const me = callerFor({
+      id: 'user-1',
+      email: 'user@example.com',
+      name: 'A User',
+      role: 'user',
+    }).me;
     await me.requestClaim({ playerId: await playerId('Samus Aran') });
 
     const claims = await me.claims();
@@ -171,7 +192,12 @@ describe('me.claims', () => {
   });
 
   it('offers the derived alias as the default an approved claimant falls back to', async () => {
-    const me = callerFor({ id: 'user-1', email: 'user@example.com', name: 'A User', role: 'user' }).me;
+    const me = callerFor({
+      id: 'user-1',
+      email: 'user@example.com',
+      name: 'A User',
+      role: 'user',
+    }).me;
     const { claimId } = await me.requestClaim({ playerId: await playerId('Samus Aran') });
     await db.update(playerClaims).set({ status: 'approved' }).where(eq(playerClaims.id, claimId));
 

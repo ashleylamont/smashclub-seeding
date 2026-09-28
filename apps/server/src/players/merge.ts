@@ -19,7 +19,11 @@ import { backfillPlayerEverywhere } from '../identity/matching';
  * with per-user dedupe, and affected sets are backfilled. Caller triggers a
  * recompute.
  */
-export async function mergePlayers(db: Db, fromPlayerId: string, intoPlayerId: string): Promise<void> {
+export async function mergePlayers(
+  db: Db,
+  fromPlayerId: string,
+  intoPlayerId: string,
+): Promise<void> {
   if (fromPlayerId === intoPlayerId) throw new Error('Cannot merge a player into themselves.');
   const [from] = await db.select().from(players).where(eq(players.id, fromPlayerId));
   const [into] = await db.select().from(players).where(eq(players.id, intoPlayerId));
@@ -31,16 +35,33 @@ export async function mergePlayers(db: Db, fromPlayerId: string, intoPlayerId: s
   // Include imported match participants, which need not appear in the planned roster.
   const involvedIds = [fromPlayerId, intoPlayerId];
   const activeStatuses = ['roster_frozen', 'pools_ready', 'underway'] as const;
-  const [rosterEvent] = await db.select({ name: eventPlans.name }).from(eventPlans)
+  const [rosterEvent] = await db
+    .select({ name: eventPlans.name })
+    .from(eventPlans)
     .innerJoin(eventPlanEntries, eq(eventPlanEntries.eventPlanId, eventPlans.id))
-    .where(and(inArray(eventPlans.status, [...activeStatuses]), inArray(eventPlanEntries.playerId, involvedIds)))
+    .where(
+      and(
+        inArray(eventPlans.status, [...activeStatuses]),
+        inArray(eventPlanEntries.playerId, involvedIds),
+      ),
+    )
     .limit(1);
-  const [matchEvent] = rosterEvent ? [] : await db.select({ name: eventPlans.name }).from(eventPlans)
-    .innerJoin(eventMatches, eq(eventMatches.eventPlanId, eventPlans.id))
-    .where(and(inArray(eventPlans.status, [...activeStatuses]), or(
-      inArray(eventMatches.player1Id, involvedIds), inArray(eventMatches.player2Id, involvedIds),
-    )))
-    .limit(1);
+  const [matchEvent] = rosterEvent
+    ? []
+    : await db
+        .select({ name: eventPlans.name })
+        .from(eventPlans)
+        .innerJoin(eventMatches, eq(eventMatches.eventPlanId, eventPlans.id))
+        .where(
+          and(
+            inArray(eventPlans.status, [...activeStatuses]),
+            or(
+              inArray(eventMatches.player1Id, involvedIds),
+              inArray(eventMatches.player2Id, involvedIds),
+            ),
+          ),
+        )
+        .limit(1);
   const activeEvent = rosterEvent ?? matchEvent;
   if (activeEvent) {
     throw new TRPCError({
@@ -50,12 +71,17 @@ export async function mergePlayers(db: Db, fromPlayerId: string, intoPlayerId: s
   }
 
   // Move aliases; drop those that would collide with an existing alias of B.
-  const aliases = await db.select().from(playerAliases).where(eq(playerAliases.playerId, fromPlayerId));
+  const aliases = await db
+    .select()
+    .from(playerAliases)
+    .where(eq(playerAliases.playerId, fromPlayerId));
   for (const alias of aliases) {
     const conflict = await db
       .select({ id: playerAliases.id })
       .from(playerAliases)
-      .where(and(eq(playerAliases.aliasNorm, alias.aliasNorm), eq(playerAliases.playerId, intoPlayerId)));
+      .where(
+        and(eq(playerAliases.aliasNorm, alias.aliasNorm), eq(playerAliases.playerId, intoPlayerId)),
+      );
     if (conflict.length > 0) {
       await db.delete(playerAliases).where(eq(playerAliases.id, alias.id));
     } else {
@@ -93,7 +119,12 @@ export async function mergePlayers(db: Db, fromPlayerId: string, intoPlayerId: s
   const liveClaims = await db
     .select()
     .from(playerClaims)
-    .where(and(eq(playerClaims.playerId, fromPlayerId), inArray(playerClaims.status, ['pending', 'approved'])));
+    .where(
+      and(
+        eq(playerClaims.playerId, fromPlayerId),
+        inArray(playerClaims.status, ['pending', 'approved']),
+      ),
+    );
   for (const claim of liveClaims) {
     const existing = await db
       .select({ id: playerClaims.id })

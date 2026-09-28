@@ -1,10 +1,42 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
 
-type Match = { id: string; label: string; revision: number; status: string; outcome: string | null; player1Id: string | null; player2Id: string | null; nativeBracketId: string | null; division: string; poolIndex: number | null };
-type Snapshot = { matches: Match[]; nativeBrackets: { complete: boolean; winnerId: string | null }[]; plan: { status: string; bracketMode: string } };
-type Overview = { brackets: { slug: string; isComplete: boolean }[]; divisions: { division: string; players: { place: number | null; wins: number; losses: number; poolWins: number; poolLosses: number; bracketWins: number; bracketLosses: number }[] }[]; warnings: string[] };
+type Match = {
+  id: string;
+  label: string;
+  revision: number;
+  status: string;
+  outcome: string | null;
+  player1Id: string | null;
+  player2Id: string | null;
+  nativeBracketId: string | null;
+  division: string;
+  poolIndex: number | null;
+};
+type Snapshot = {
+  matches: Match[];
+  nativeBrackets: { complete: boolean; winnerId: string | null }[];
+  plan: { status: string; bracketMode: string };
+};
+type Overview = {
+  brackets: { slug: string; isComplete: boolean }[];
+  divisions: {
+    division: string;
+    players: {
+      place: number | null;
+      wins: number;
+      losses: number;
+      poolWins: number;
+      poolLosses: number;
+      bracketWins: number;
+      bracketLosses: number;
+    }[];
+  }[];
+  warnings: string[];
+};
 async function query<T>(request: APIRequestContext, procedure: string, input?: object): Promise<T> {
-  const response = await request.get(`/api/trpc/${procedure}`, { params: input ? { input: JSON.stringify(input) } : {} });
+  const response = await request.get(`/api/trpc/${procedure}`, {
+    params: input ? { input: JSON.stringify(input) } : {},
+  });
   expect(response.ok(), await response.text()).toBe(true);
   return (await response.json()).result.data as T;
 }
@@ -14,70 +46,151 @@ async function mutate<T>(request: APIRequestContext, procedure: string, data: ob
   return (await response.json()).result.data as T;
 }
 
-test('native event progresses from pools through reviewed finals to public club results', async ({ page }, testInfo) => {
+test('native event progresses from pools through reviewed finals to public club results', async ({
+  page,
+}, testInfo) => {
   test.setTimeout(120_000);
-  await page.request.post('/api/auth/sign-in/email', { data: { email: 'admin@smashclub.dev', password: 'devpassword123' } });
-  const plans = await query<{ id: string; name: string }[]>(page.request, 'admin.eventPlanner.plans');
-  const source = plans.find(plan => plan.name === 'Nemesis · Rehearsal Night')!;
-  const roster = await query<{ entries: { playerId: string; playerName: string; companyId: string | null }[] }>(page.request, 'admin.eventPlanner.plan', { planId: source.id });
-  const name = `Native finals rehearsal ${Date.now()}`;
-  const { planId } = await mutate<{ planId: string }>(page.request, 'admin.eventPlanner.createPlan', {
-    name, bracketMode: 'native', eventDate: new Date().toISOString(), upperTargetSize: 7,
-    rows: roster.entries.slice(0, 14).map((entry, index) => ({ lineNumber: index + 1, rawInput: entry.playerName, cleanedName: entry.playerName, playerId: entry.playerId, companyId: entry.companyId ?? null, resolutionMethod: 'manual', divisionPreference: 'auto' })),
+  await page.request.post('/api/auth/sign-in/email', {
+    data: { email: 'admin@smashclub.dev', password: 'devpassword123' },
   });
-  for (const procedure of ['admin.eventPlanner.freezeRoster', 'admin.eventPlanner.generatePools', 'eventOps.prepare']) await mutate(page.request, procedure, { planId });
+  const plans = await query<{ id: string; name: string }[]>(
+    page.request,
+    'admin.eventPlanner.plans',
+  );
+  const source = plans.find((plan) => plan.name === 'Nemesis · Rehearsal Night')!;
+  const roster = await query<{
+    entries: { playerId: string; playerName: string; companyId: string | null }[];
+  }>(page.request, 'admin.eventPlanner.plan', { planId: source.id });
+  const name = `Native finals rehearsal ${Date.now()}`;
+  const { planId } = await mutate<{ planId: string }>(
+    page.request,
+    'admin.eventPlanner.createPlan',
+    {
+      name,
+      bracketMode: 'native',
+      eventDate: new Date().toISOString(),
+      upperTargetSize: 7,
+      rows: roster.entries.slice(0, 14).map((entry, index) => ({
+        lineNumber: index + 1,
+        rawInput: entry.playerName,
+        cleanedName: entry.playerName,
+        playerId: entry.playerId,
+        companyId: entry.companyId ?? null,
+        resolutionMethod: 'manual',
+        divisionPreference: 'auto',
+      })),
+    },
+  );
+  for (const procedure of [
+    'admin.eventPlanner.freezeRoster',
+    'admin.eventPlanner.generatePools',
+    'eventOps.prepare',
+  ])
+    await mutate(page.request, procedure, { planId });
   await mutate(page.request, 'eventOps.settings', { planId, published: true, playerReports: true });
   let snapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
   expect(snapshot.plan.bracketMode).toBe('native');
   await page.goto(`/live/${planId}`);
   await expect(page.getByRole('heading', { name })).toBeVisible();
   await expect(page.locator('.event-pool')).toHaveCount(4);
-  await expect(page.getByRole('link', { name: 'Player area · my matches & scores →' })).toBeVisible();
-  type Pool = { poolIndex: number; members: { playerId: string }[]; matchRevisions: { id: string; revision: number }[]; placementRevision: string };
+  await expect(
+    page.getByRole('link', { name: 'Player area · my matches & scores →' }),
+  ).toBeVisible();
+  type Pool = {
+    poolIndex: number;
+    members: { playerId: string }[];
+    matchRevisions: { id: string; revision: number }[];
+    placementRevision: string;
+  };
   type Planner = { divisions: { division: string; pools: Pool[] }[] };
   const before = await query<Planner>(page.request, 'admin.eventPlanner.plan', { planId });
   const first = snapshot.matches[0]!;
-  const firstOrder = before.divisions.find(division => division.division === first.division)!.pools.find(pool => pool.poolIndex === first.poolIndex)!.members.map(member => member.playerId);
+  const firstOrder = before.divisions
+    .find((division) => division.division === first.division)!
+    .pools.find((pool) => pool.poolIndex === first.poolIndex)!
+    .members.map((member) => member.playerId);
   const firstWins = firstOrder.indexOf(first.player1Id!) < firstOrder.indexOf(first.player2Id!);
   await page.goto(`/admin/event-operations?plan=${planId}`);
   const firstCard = page.locator('article.ops-match').filter({ hasText: first.label });
   await firstCard.getByRole('button', { name: 'Finish match', exact: true }).click();
-  await firstCard.locator('input[type="number"]').nth(0).fill(firstWins ? '2' : '0');
-  await firstCard.locator('input[type="number"]').nth(1).fill(firstWins ? '0' : '2');
+  await firstCard
+    .locator('input[type="number"]')
+    .nth(0)
+    .fill(firstWins ? '2' : '0');
+  await firstCard
+    .locator('input[type="number"]')
+    .nth(1)
+    .fill(firstWins ? '0' : '2');
   await firstCard.getByRole('button', { name: 'Confirm result', exact: true }).click();
   await expect(page.locator('.ops-notice')).toContainText('Score recorded locally');
   snapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
-  expect(snapshot.matches.find(match => match.id === first.id)?.status).toBe('complete');
-  for (const match of snapshot.matches.filter(match => match.status !== 'complete')) {
-    const order = before.divisions.find(division => division.division === match.division)!.pools.find(pool => pool.poolIndex === match.poolIndex)!.members.map(member => member.playerId);
+  expect(snapshot.matches.find((match) => match.id === first.id)?.status).toBe('complete');
+  for (const match of snapshot.matches.filter((match) => match.status !== 'complete')) {
+    const order = before.divisions
+      .find((division) => division.division === match.division)!
+      .pools.find((pool) => pool.poolIndex === match.poolIndex)!
+      .members.map((member) => member.playerId);
     const firstWins = order.indexOf(match.player1Id!) < order.indexOf(match.player2Id!);
-    await mutate(page.request, 'eventOps.reportScore', { matchId: match.id, expectedRevision: match.revision, requestId: crypto.randomUUID(), score1: firstWins ? 2 : 0, score2: firstWins ? 0 : 2, outcome: 'played' });
+    await mutate(page.request, 'eventOps.reportScore', {
+      matchId: match.id,
+      expectedRevision: match.revision,
+      requestId: crypto.randomUUID(),
+      score1: firstWins ? 2 : 0,
+      score2: firstWins ? 0 : 2,
+      outcome: 'played',
+    });
   }
   const scored = await query<Planner>(page.request, 'admin.eventPlanner.plan', { planId });
-  for (const division of scored.divisions) await mutate(page.request, 'admin.eventPlanner.savePoolPlacements', { planId, division: division.division, pools: division.pools.map(pool => ({ poolIndex: pool.poolIndex, playerIdsInOrder: pool.members.map(member => member.playerId), expectedMatchRevisions: pool.matchRevisions, expectedPlacementRevision: pool.placementRevision })) });
+  for (const division of scored.divisions)
+    await mutate(page.request, 'admin.eventPlanner.savePoolPlacements', {
+      planId,
+      division: division.division,
+      pools: division.pools.map((pool) => ({
+        poolIndex: pool.poolIndex,
+        playerIdsInOrder: pool.members.map((member) => member.playerId),
+        expectedMatchRevisions: pool.matchRevisions,
+        expectedPlacementRevision: pool.placementRevision,
+      })),
+    });
   await page.goto(`/live/${planId}`);
   await expect(page.getByRole('heading', { name: 'Confirmed pool standings' })).toBeVisible();
   await expect(page.locator('.event-pool-results .event-prize')).toHaveCount(4);
   await page.goto(`/admin/event-operations?plan=${planId}`);
   await expect(page.getByText('Challonge integration', { exact: true })).toHaveCount(0);
-  const finals = page.locator('section.card').filter({ has: page.getByRole('heading', { name: 'Championship and consolation', exact: true }) });
+  const finals = page.locator('section.card').filter({
+    has: page.getByRole('heading', { name: 'Championship and consolation', exact: true }),
+  });
   await finals.getByRole('button', { name: 'Preview finals', exact: true }).click();
-  await expect(finals.getByRole('heading', { name: 'upper championship · 4 entrants' })).toBeVisible();
+  await expect(
+    finals.getByRole('heading', { name: 'upper championship · 4 entrants' }),
+  ).toBeVisible();
   await expect(finals).toContainText('Bye');
   await finals.getByRole('button', { name: 'Create these finals' }).click();
   await expect(finals.getByRole('status')).toContainText('Finals are ready');
   for (let round = 0; round < 5; round++) {
     snapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
-    const ready = snapshot.matches.filter(match => match.nativeBracketId && match.status === 'ready');
+    const ready = snapshot.matches.filter(
+      (match) => match.nativeBracketId && match.status === 'ready',
+    );
     if (!ready.length) break;
-    for (const match of ready) await mutate(page.request, 'eventOps.reportScore', { matchId: match.id, expectedRevision: match.revision, requestId: crypto.randomUUID(), score1: 2, score2: 1, outcome: 'played' });
+    for (const match of ready)
+      await mutate(page.request, 'eventOps.reportScore', {
+        matchId: match.id,
+        expectedRevision: match.revision,
+        requestId: crypto.randomUUID(),
+        score1: 2,
+        score2: 1,
+        outcome: 'played',
+      });
   }
   expect(snapshot.nativeBrackets).toHaveLength(4);
-  expect(snapshot.nativeBrackets.every(bracket => bracket.complete && bracket.winnerId)).toBe(true);
-  const played = snapshot.matches.filter(match => match.outcome === 'played');
-  const poolGames = played.filter(match => !match.nativeBracketId).length;
+  expect(snapshot.nativeBrackets.every((bracket) => bracket.complete && bracket.winnerId)).toBe(
+    true,
+  );
+  const played = snapshot.matches.filter((match) => match.outcome === 'played');
+  const poolGames = played.filter((match) => !match.nativeBracketId).length;
   const finalsGames = played.length - poolGames;
-  page.once('dialog', dialog => dialog.accept());
+  page.once('dialog', (dialog) => dialog.accept());
   await finals.getByRole('button', { name: 'Finalize native results', exact: true }).click();
   await expect(finals.getByRole('status')).toContainText('Event finalized');
   await expect(page.getByText('Event closed · read only', { exact: true })).toBeVisible();
@@ -87,10 +200,16 @@ test('native event progresses from pools through reviewed finals to public club 
   await expect(page.getByRole('link', { name: 'Report your match score →' })).toHaveCount(0);
   await expect(page.locator('.event-bracket').first()).toContainText('Winner');
   await expect(page.locator('a[href*="challonge.com"]')).toHaveCount(0);
-  await page.screenshot({ path: testInfo.outputPath('native-completed-night.png'), fullPage: true });
+  await page.screenshot({
+    path: testInfo.outputPath('native-completed-night.png'),
+    fullPage: true,
+  });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: testInfo.outputPath('native-completed-night-mobile.png'), fullPage: true });
+  await page.screenshot({
+    path: testInfo.outputPath('native-completed-night-mobile.png'),
+    fullPage: true,
+  });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/admin/tournaments');
   const resultRow = page.getByRole('row').filter({ hasText: `${name} Upper Main` });
@@ -102,10 +221,15 @@ test('native event progresses from pools through reviewed finals to public club 
   const overview = await query<Overview>(page.request, 'public.eventOverview', { slug });
   expect(overview.warnings).toEqual([]);
   expect(overview.brackets).toHaveLength(4);
-  expect(overview.brackets.every(bracket => bracket.isComplete)).toBe(true);
-  expect(overview.divisions.map(division => [division.division, division.players.length])).toEqual([['upper', 7], ['lower', 7]]);
-  const results = overview.divisions.flatMap(division => division.players);
-  expect(results.every(player => player.place !== null)).toBe(true);
+  expect(overview.brackets.every((bracket) => bracket.isComplete)).toBe(true);
+  expect(
+    overview.divisions.map((division) => [division.division, division.players.length]),
+  ).toEqual([
+    ['upper', 7],
+    ['lower', 7],
+  ]);
+  const results = overview.divisions.flatMap((division) => division.players);
+  expect(results.every((player) => player.place !== null)).toBe(true);
   expect(results.reduce((sum, player) => sum + player.wins, 0)).toBe(played.length);
   expect(results.reduce((sum, player) => sum + player.losses, 0)).toBe(played.length);
   expect(results.reduce((sum, player) => sum + player.poolWins, 0)).toBe(poolGames);

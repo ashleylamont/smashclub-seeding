@@ -40,7 +40,7 @@ function tierFor(preRating: number): { win: number; loss: number } | null {
   return null;
 }
 
-function checkPerSetUpdates(allPairs: Array<[LegacyRow, LegacyRow]>): boolean {
+function checkPerSetUpdates(allPairs: [LegacyRow, LegacyRow][]): boolean {
   // Legacy identity resolution over-merged at least one pair of players,
   // producing a set where somebody faced themselves; the legacy engine rated it
   // and handed that player a free RD reduction. The new pipeline filters
@@ -58,7 +58,7 @@ function checkPerSetUpdates(allPairs: Array<[LegacyRow, LegacyRow]>): boolean {
     for (const [self, opp] of [
       [a, b],
       [b, a],
-    ] as Array<[LegacyRow, LegacyRow]>) {
+    ] as [LegacyRow, LegacyRow][]) {
       compared += 1;
       const pre = { rating: self.preRating, rd: self.preRd, vol: self.preVol };
       const updated = updateRating(
@@ -88,13 +88,19 @@ function checkPerSetUpdates(allPairs: Array<[LegacyRow, LegacyRow]>): boolean {
 
       const label = `pi=${self.processingIndex} ${self.playerId.slice(0, 10)}`;
       if (rdDelta > VALUE_TOL) {
-        failures.push(`${label} post_rd: recorded ${self.postRd.toFixed(6)}, implied ${rdPredicted.toFixed(6)}`);
+        failures.push(
+          `${label} post_rd: recorded ${self.postRd.toFixed(6)}, implied ${rdPredicted.toFixed(6)}`,
+        );
       }
       if (volDelta > 1e-6) {
-        failures.push(`${label} post_volatility: recorded ${self.postVol.toFixed(6)}, computed ${updated.vol.toFixed(6)}`);
+        failures.push(
+          `${label} post_volatility: recorded ${self.postVol.toFixed(6)}, computed ${updated.vol.toFixed(6)}`,
+        );
       }
       if (weightDelta > WEIGHT_TOL) {
-        failures.push(`${label} weight: recorded ${self.ratingChangeWeight.toFixed(3)}, implied ${w.toFixed(6)}`);
+        failures.push(
+          `${label} weight: recorded ${self.ratingChangeWeight.toFixed(3)}, implied ${w.toFixed(6)}`,
+        );
       }
     }
   }
@@ -111,7 +117,9 @@ function checkPerSetUpdates(allPairs: Array<[LegacyRow, LegacyRow]>): boolean {
       `volatility ${maxVolDelta.toExponential(2)}, weight ${maxWeightDelta.toExponential(2)}`,
   );
   if (failures.length === 0) {
-    console.log('   ✅ PASS — Glicko-2 update, corrected volatility function, and weight lerp all reproduce exactly');
+    console.log(
+      '   ✅ PASS — Glicko-2 update, corrected volatility function, and weight lerp all reproduce exactly',
+    );
     return true;
   }
   console.log(`   ❌ FAIL — ${failures.length} mismatches. First 10:`);
@@ -142,7 +150,9 @@ function checkWeightFormula(dataset: ReturnType<typeof loadLegacyHistory>): bool
   }
 
   // Winner flag of the preceding processed set, for the defect hypothesis.
-  const orderedPairs = dataset.pairs.slice().sort((a, b) => a[0].processingIndex - b[0].processingIndex);
+  const orderedPairs = dataset.pairs
+    .slice()
+    .sort((a, b) => a[0].processingIndex - b[0].processingIndex);
   const p1WonByIndex = new Map<number, boolean>();
   for (const [a] of orderedPairs) p1WonByIndex.set(a.processingIndex, a.won);
   const indices = [...p1WonByIndex.keys()].sort((a, b) => a - b);
@@ -173,7 +183,9 @@ function checkWeightFormula(dataset: ReturnType<typeof loadLegacyHistory>): bool
         else {
           mainBad += 1;
           if (failures.length < 10) {
-            failures.push(`${key.slice(0, 26)} [${index + 1}/${total}] expected ${base.toFixed(3)}, recorded ${row.ratingChangeWeight.toFixed(3)}`);
+            failures.push(
+              `${key.slice(0, 26)} [${index + 1}/${total}] expected ${base.toFixed(3)}, recorded ${row.ratingChangeWeight.toFixed(3)}`,
+            );
           }
         }
         return;
@@ -181,11 +193,15 @@ function checkWeightFormula(dataset: ReturnType<typeof loadLegacyHistory>): bool
 
       rookieRows += 1;
       const impliedScale = row.ratingChangeWeight / base;
-      const nearest = ROOKIE_SCALES.reduce((best, s) => (Math.abs(s - impliedScale) < Math.abs(best - impliedScale) ? s : best));
+      const nearest = ROOKIE_SCALES.reduce((best, s) =>
+        Math.abs(s - impliedScale) < Math.abs(best - impliedScale) ? s : best,
+      );
       if (Math.abs(nearest - impliedScale) > 8e-3) {
         unexplained += 1;
         if (failures.length < 10) {
-          failures.push(`${key.slice(0, 26)} [${index + 1}/${total}] implied rookie scale ${impliedScale.toFixed(3)} matches no tier`);
+          failures.push(
+            `${key.slice(0, 26)} [${index + 1}/${total}] implied rookie scale ${impliedScale.toFixed(3)} matches no tier`,
+          );
         }
         return;
       }
@@ -198,10 +214,11 @@ function checkWeightFormula(dataset: ReturnType<typeof loadLegacyHistory>): bool
         ambiguousTier += 1;
         return;
       }
-      const impliedWonFlag =
-        Math.abs(nearest - tier.win) < Math.abs(nearest - tier.loss) ? true : false;
+      const impliedWonFlag = Math.abs(nearest - tier.win) < Math.abs(nearest - tier.loss);
       // Player 1's flag is the winner flag; player 2's is its negation.
-      const isPlayer1 = dataset.pairs.some(([a]) => a.processingIndex === row.processingIndex && a.playerId === row.playerId);
+      const isPlayer1 = dataset.pairs.some(
+        ([a]) => a.processingIndex === row.processingIndex && a.playerId === row.playerId,
+      );
       const currentFlag = isPlayer1 ? row.won : !row.won;
       const prev = previousP1Won.get(row.processingIndex);
       const previousFlag = prev === undefined ? undefined : isPlayer1 ? prev : !prev;
@@ -215,22 +232,31 @@ function checkWeightFormula(dataset: ReturnType<typeof loadLegacyHistory>): bool
     `\n── Check 2: match-weight formula (${byPlayerTournament.size} player-events in ` +
       `${new Set(rows.map((r) => r.tournament)).size} fully-exported tournaments) ──`,
   );
-  console.log(`   main-bracket weights matching (matchNum/total)^${settings.inverseDiminishingExponent}: ${mainOk} ok, ${mainBad} bad`);
-  console.log(`   rookie rows: ${rookieRows}, implied scale matches a known tier: ${rookieRows - unexplained}`);
+  console.log(
+    `   main-bracket weights matching (matchNum/total)^${settings.inverseDiminishingExponent}: ${mainOk} ok, ${mainBad} bad`,
+  );
+  console.log(
+    `   rookie rows: ${rookieRows}, implied scale matches a known tier: ${rookieRows - unexplained}`,
+  );
   console.log(
     `   of those, ${ambiguousTier} sit in the base tier (<${settings.rookiePartialPenaltyThreshold}) where win and loss ` +
       `both scale by ${settings.rookieBracketBaseScale} and reveal nothing`,
   );
-  const pct = (n: number) => (discriminating ? `${((100 * n) / discriminating).toFixed(0)}%` : 'n/a');
+  const pct = (n: number) =>
+    discriminating ? `${((100 * n) / discriminating).toFixed(0)}%` : 'n/a';
   console.log(
     `   discriminating rows: ${discriminating} — scale consistent with CURRENT set's winner ` +
       `${matchesCurrentWinner} (${pct(matchesCurrentWinner)}), with PREVIOUS set's winner ` +
       `${matchesPreviousWinner} (${pct(matchesPreviousWinner)})`,
   );
   if (discriminating > 0 && matchesPreviousWinner > matchesCurrentWinner * 1.5) {
-    console.log("   → confirms the use-before-assign defect: rookie scaling read the previous set's winner");
+    console.log(
+      "   → confirms the use-before-assign defect: rookie scaling read the previous set's winner",
+    );
   } else if (discriminating > 0 && matchesCurrentWinner > matchesPreviousWinner * 1.5) {
-    console.log('   → the exported run used the CURRENT winner, so their local Python already fixed this');
+    console.log(
+      '   → the exported run used the CURRENT winner, so their local Python already fixed this',
+    );
   } else {
     console.log(
       '   → inconclusive from weights alone: the two hypotheses agree too often here.\n' +

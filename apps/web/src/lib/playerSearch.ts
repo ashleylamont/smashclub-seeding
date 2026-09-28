@@ -42,7 +42,7 @@ export function searchPlayers<T extends SearchablePlayer>(
   players: readonly T[],
   query: string,
   limit = 25,
-): Array<PlayerMatch<T>> {
+): PlayerMatch<T>[] {
   const active = players.filter((player) => player.status === 'active');
   const normalized = query.trim().toLowerCase();
 
@@ -56,11 +56,14 @@ export function searchPlayers<T extends SearchablePlayer>(
       .slice(0, limit);
   }
 
-  const matches: Array<PlayerMatch<T>> = [];
+  const matches: PlayerMatch<T>[] = [];
   for (const player of active) {
     // Names first, so a hit on a name never gets attributed to an alias that
     // happens to score the same.
-    let score = Math.max(matchScore(player.canonicalName, normalized), matchScore(player.displayName, normalized));
+    let score = Math.max(
+      matchScore(player.canonicalName, normalized),
+      matchScore(player.displayName, normalized),
+    );
     let matchedAlias: string | null = null;
     for (const alias of player.aliases) {
       const aliasScore = matchScore(alias, normalized);

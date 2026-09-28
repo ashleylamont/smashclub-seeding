@@ -1,6 +1,12 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
-import { cleanPlayerEntry, preparePlayerEntry, replayRatings, type EngineSet, type EngineTournament } from '@smashclub/engine';
+import {
+  cleanPlayerEntry,
+  preparePlayerEntry,
+  replayRatings,
+  type EngineSet,
+  type EngineTournament,
+} from '@smashclub/engine';
 import { defaultGlickoSettings } from '@smashclub/shared';
 import type { LegacyDataset, LegacyRow } from './loadLegacyHistory';
 
@@ -61,7 +67,9 @@ export function checkFullReplay(dataset: LegacyDataset, cacheDir: string): boole
   const usable: EngineTournament[] = [];
   for (const tournament of dataset.tournamentOrder) {
     if (!cache.has(tournament.id)) {
-      console.log(`   first gap at "${tournament.id}" — replay limited to the ${usable.length} event(s) before it`);
+      console.log(
+        `   first gap at "${tournament.id}" — replay limited to the ${usable.length} event(s) before it`,
+      );
       break;
     }
     usable.push(tournament);
@@ -105,7 +113,10 @@ export function checkFullReplay(dataset: LegacyDataset, cacheDir: string): boole
 
   // Compare against the export by (tournament, player identity, nth set), since
   // the export keys players by its own opaque ids.
-  const legacyByPlayerTournament = groupLegacy(dataset.matchRowList, usable.map((t) => t.id));
+  const legacyByPlayerTournament = groupLegacy(
+    dataset.matchRowList,
+    usable.map((t) => t.id),
+  );
   const ourByPlayerTournament = new Map<string, number[][]>();
   for (const event of run.events) {
     if (event.isDecay) continue;

@@ -36,7 +36,7 @@ export interface LegacyDataset {
   /** All non-decay rows, in file order. */
   matchRowList: LegacyRow[];
   /** Sets whose both player views were exported. */
-  pairs: Array<[LegacyRow, LegacyRow]>;
+  pairs: [LegacyRow, LegacyRow][];
   /** Rows whose opponent fell outside the exported player list. */
   unpaired: LegacyRow[];
   decayRows: LegacyRow[];
@@ -105,7 +105,8 @@ export function loadLegacyHistory(csvPath: string): LegacyDataset {
     postRd: Number(raw.post_rd),
     preVol: Number(raw.pre_volatility),
     postVol: Number(raw.post_volatility),
-    isDecaySnapshot: raw.is_decay_snapshot === '1' || raw.is_decay_snapshot?.toLowerCase() === 'true',
+    isDecaySnapshot:
+      raw.is_decay_snapshot === '1' || raw.is_decay_snapshot?.toLowerCase() === 'true',
     ratingChangeWeight: Number(raw.rating_change_weight),
   }));
 
@@ -122,9 +123,11 @@ export function loadLegacyHistory(csvPath: string): LegacyDataset {
     byProcessingIndex.set(row.processingIndex, list);
   }
 
-  const pairs: Array<[LegacyRow, LegacyRow]> = [];
+  const pairs: [LegacyRow, LegacyRow][] = [];
   const unpaired: LegacyRow[] = [];
-  for (const [processingIndex, group] of [...byProcessingIndex.entries()].sort((a, b) => a[0] - b[0])) {
+  for (const [processingIndex, group] of [...byProcessingIndex.entries()].sort(
+    (a, b) => a[0] - b[0],
+  )) {
     if (group.length === 2) {
       const [a, b] = group as [LegacyRow, LegacyRow];
       if (a.playerId !== b.opponentId || b.playerId !== a.opponentId || a.won === b.won) {
@@ -158,7 +161,7 @@ export function loadLegacyHistory(csvPath: string): LegacyDataset {
 }
 
 /** Sets rebuilt from fully-recorded pairs, in recorded processing order. */
-export function setsFromPairs(pairs: Array<[LegacyRow, LegacyRow]>): EngineSet[] {
+export function setsFromPairs(pairs: [LegacyRow, LegacyRow][]): EngineSet[] {
   return pairs.map(([a, b]) => ({
     id: `s${a.processingIndex}`,
     tournamentId: a.tournament,

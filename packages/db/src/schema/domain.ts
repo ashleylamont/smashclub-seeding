@@ -111,10 +111,15 @@ export const playerCharacters = pgTable(
     position: integer('position').notNull().default(0),
     ...timestamps,
   },
-  (table) => [uniqueIndex('player_characters_player_slug_idx').on(table.playerId, table.characterSlug)],
+  (table) => [
+    uniqueIndex('player_characters_player_slug_idx').on(table.playerId, table.characterSlug),
+  ],
 );
 
-export const identityDecisionKindEnum = pgEnum('identity_decision_kind', ['merge', 'keep_separate']);
+export const identityDecisionKindEnum = pgEnum('identity_decision_kind', [
+  'merge',
+  'keep_separate',
+]);
 
 /**
  * Durable record of human identity decisions (replaces the legacy alias
@@ -146,7 +151,12 @@ export const identityDecisions = pgTable(
   ],
 );
 
-export const claimStatusEnum = pgEnum('claim_status', ['pending', 'approved', 'rejected', 'revoked']);
+export const claimStatusEnum = pgEnum('claim_status', [
+  'pending',
+  'approved',
+  'rejected',
+  'revoked',
+]);
 
 /**
  * User <-> player links. Many users may hold approved claims on one player
@@ -180,7 +190,13 @@ export const playerClaims = pgTable(
 // Tournaments and sets (the source of truth)
 // ---------------------------------------------------------------------------
 
-export const syncStateEnum = pgEnum('sync_state', ['registered', 'syncing', 'live', 'synced', 'error']);
+export const syncStateEnum = pgEnum('sync_state', [
+  'registered',
+  'syncing',
+  'live',
+  'synced',
+  'error',
+]);
 
 export type TournamentResultsMode = 'auto' | 'final_stage_only';
 export type SetResultStage = 'group' | 'final';
@@ -242,7 +258,10 @@ export const tournamentParticipants = pgTable(
     ...timestamps,
   },
   (table) => [
-    uniqueIndex('tournament_participants_challonge_idx').on(table.tournamentId, table.challongeParticipantId),
+    uniqueIndex('tournament_participants_challonge_idx').on(
+      table.tournamentId,
+      table.challongeParticipantId,
+    ),
   ],
 );
 
@@ -279,7 +298,9 @@ export const sets = pgTable(
     raw: jsonb('raw'),
     ...timestamps,
   },
-  (table) => [uniqueIndex('sets_challonge_match_idx').on(table.tournamentId, table.challongeMatchId)],
+  (table) => [
+    uniqueIndex('sets_challonge_match_idx').on(table.tournamentId, table.challongeMatchId),
+  ],
 );
 
 // ---------------------------------------------------------------------------
@@ -318,7 +339,9 @@ export const ratingEvents = pgTable('rating_events', {
     .references(() => tournaments.id, { onDelete: 'cascade' }),
   isDecay: boolean('is_decay').notNull().default(false),
   won: boolean('won'),
-  opponentPlayerId: uuid('opponent_player_id').references(() => players.id, { onDelete: 'cascade' }),
+  opponentPlayerId: uuid('opponent_player_id').references(() => players.id, {
+    onDelete: 'cascade',
+  }),
   preRating: doublePrecision('pre_rating').notNull(),
   postRating: doublePrecision('post_rating').notNull(),
   preRd: doublePrecision('pre_rd').notNull(),
@@ -406,7 +429,9 @@ export const playerRatings = pgTable(
     sampleConfidence: doublePrecision('sample_confidence').notNull(),
     lastPlayedDate: text('last_played_date').notNull(),
   },
-  (table) => [uniqueIndex('player_ratings_recompute_player_idx').on(table.recomputeId, table.playerId)],
+  (table) => [
+    uniqueIndex('player_ratings_recompute_player_idx').on(table.recomputeId, table.playerId),
+  ],
 );
 
 // ---------------------------------------------------------------------------
@@ -438,10 +463,14 @@ export const reviewItems = pgTable(
      * recomputes — this timestamp is what lets the queue say "no candidates as
      * of 3 weeks ago" rather than the flatly wrong "no candidates".
      */
-    candidatesComputedAt: timestamp('candidates_computed_at', { withTimezone: true }).notNull().defaultNow(),
+    candidatesComputedAt: timestamp('candidates_computed_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
     status: reviewStatusEnum('status').notNull().default('pending'),
     resolution: reviewResolutionEnum('resolution'),
-    resolvedPlayerId: uuid('resolved_player_id').references(() => players.id, { onDelete: 'set null' }),
+    resolvedPlayerId: uuid('resolved_player_id').references(() => players.id, {
+      onDelete: 'set null',
+    }),
     resolvedBy: text('resolved_by').references(() => user.id, { onDelete: 'set null' }),
     resolvedAt: timestamp('resolved_at', { withTimezone: true }),
     ...timestamps,
@@ -489,7 +518,9 @@ export const seedingEntries = pgTable(
     locked: boolean('locked').notNull().default(false),
     ...timestamps,
   },
-  (table) => [uniqueIndex('seeding_entries_run_participant_idx').on(table.runId, table.participantId)],
+  (table) => [
+    uniqueIndex('seeding_entries_run_participant_idx').on(table.runId, table.participantId),
+  ],
 );
 
 // ---------------------------------------------------------------------------
@@ -526,15 +557,25 @@ export interface HistoricalAdoptionBracket {
   previousSlug: string | null;
 }
 export interface HistoricalAdoptionDifferences {
-  plannedOnly: Array<{ name: string; playerId: string | null }>;
-  actualOnly: Array<{ name: string; playerId: string | null }>;
-  divisionChanges: Array<{ name: string; playerId: string; plannedDivision: 'upper' | 'lower'; actualDivision: 'upper' | 'lower' }>;
+  plannedOnly: { name: string; playerId: string | null }[];
+  actualOnly: { name: string; playerId: string | null }[];
+  divisionChanges: {
+    name: string;
+    playerId: string;
+    plannedDivision: 'upper' | 'lower';
+    actualDivision: 'upper' | 'lower';
+  }[];
 }
 export interface HistoricalAdoptionRecord {
   adoptedAt: string;
   adoptedBy: string;
   previousStatus: string;
-  previousBrackets: Array<{ division: 'upper' | 'lower'; stage: 'main' | 'consolation'; tournamentId: string | null; challongeSlug: string | null }>;
+  previousBrackets: {
+    division: 'upper' | 'lower';
+    stage: 'main' | 'consolation';
+    tournamentId: string | null;
+    challongeSlug: string | null;
+  }[];
   brackets: HistoricalAdoptionBracket[];
   differences: HistoricalAdoptionDifferences;
   warnings: string[];
@@ -566,7 +607,9 @@ export const eventPlans = pgTable('event_plans', {
    */
   rankingSnapshotAt: timestamp('ranking_snapshot_at', { withTimezone: true }),
   /** Which recompute the snapshot came from, for audit. */
-  rankingRecomputeId: uuid('ranking_recompute_id').references(() => recomputes.id, { onDelete: 'set null' }),
+  rankingRecomputeId: uuid('ranking_recompute_id').references(() => recomputes.id, {
+    onDelete: 'set null',
+  }),
   createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
   ...timestamps,
 });
@@ -605,7 +648,9 @@ export const eventPlanEntries = pgTable(
     /** Null while the plan is a draft; required to freeze. */
     playerId: uuid('player_id').references(() => players.id, { onDelete: 'set null' }),
     resolutionMethod: eventPlanResolutionEnum('resolution_method').notNull().default('unresolved'),
-    divisionPreference: eventPlanDivisionPreferenceEnum('division_preference').notNull().default('auto'),
+    divisionPreference: eventPlanDivisionPreferenceEnum('division_preference')
+      .notNull()
+      .default('auto'),
     /** Null until the freeze computes it. */
     assignedDivision: eventPlanDivisionEnum('assigned_division'),
     snapshotRank: integer('snapshot_rank'),
@@ -655,10 +700,15 @@ export const eventPlanBrackets = pgTable(
     lastError: text('last_error'),
     ...timestamps,
   },
-  (table) => [uniqueIndex('event_plan_brackets_slot_idx').on(table.eventPlanId, table.division, table.stage)],
+  (table) => [
+    uniqueIndex('event_plan_brackets_slot_idx').on(table.eventPlanId, table.division, table.stage),
+  ],
 );
 
-export const eventPlanPlacementSourceEnum = pgEnum('event_plan_placement_source', ['manual', 'challonge']);
+export const eventPlanPlacementSourceEnum = pgEnum('event_plan_placement_source', [
+  'manual',
+  'challonge',
+]);
 
 /**
  * Confirmed 1-4 order within one pool. Manual for the first event: round-robin

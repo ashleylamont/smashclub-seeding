@@ -28,10 +28,15 @@ interface SimOptions {
 function simulate(options: SimOptions): { sets: WhrSet[]; trueSkill: number[] } {
   const random = makeRandom(options.seed ?? 7);
   // True skills spread across ~600 display points, in natural units.
-  const trueSkill = Array.from({ length: options.players }, (_, i) => (i - options.players / 2) * (300 / options.players / NATURAL_TO_DISPLAY) * 2);
+  const trueSkill = Array.from(
+    { length: options.players },
+    (_, i) => (i - options.players / 2) * (300 / options.players / NATURAL_TO_DISPLAY) * 2,
+  );
   const sets: WhrSet[] = [];
   for (let event = 0; event < options.events; event++) {
-    const [lo, hi] = options.poolFor ? options.poolFor(event, options.players) : [0, options.players];
+    const [lo, hi] = options.poolFor
+      ? options.poolFor(event, options.players)
+      : [0, options.players];
     const time = event * 60; // an event every 60 days
     for (let s = 0; s < options.setsPerEvent; s++) {
       const a = lo + Math.floor(random() * (hi - lo));
@@ -52,7 +57,7 @@ function simulate(options: SimOptions): { sets: WhrSet[]; trueSkill: number[] } 
 function spearman(a: number[], b: number[]): number {
   const rank = (values: number[]): number[] => {
     const order = values.map((v, i) => [v, i] as const).sort((x, y) => x[0] - y[0]);
-    const ranks = new Array<number>(values.length);
+    const ranks = Array<number>(values.length);
     order.forEach(([, index], position) => (ranks[index] = position));
     return ranks;
   };
@@ -151,7 +156,13 @@ describe('per-player prior means', () => {
       { p1PlayerId: 'a', p2PlayerId: 'b', winner: 2, time: 0 },
     ];
     const centred = fitWhr({ sets });
-    const lowered = fitWhr({ sets, priorMeans: new Map([['a', -0.5], ['b', -0.5]]) });
+    const lowered = fitWhr({
+      sets,
+      priorMeans: new Map([
+        ['a', -0.5],
+        ['b', -0.5],
+      ]),
+    });
 
     // An even record carries no relative information, so the pair should sit
     // at whatever their priors say — 1500 by default, lower when told so.

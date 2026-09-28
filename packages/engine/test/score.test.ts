@@ -12,7 +12,9 @@ import type { PlayerFinalState } from '../src/types';
 
 const settings = defaultGlickoSettings;
 
-const makeState = (overrides: Partial<PlayerFinalState> & { playerId: string }): PlayerFinalState => ({
+const makeState = (
+  overrides: Partial<PlayerFinalState> & { playerId: string },
+): PlayerFinalState => ({
   rating: 1600,
   rd: 100,
   vol: 0.06,
@@ -188,7 +190,12 @@ describe('computeLeaderboard', () => {
     // Two identical records; one has sat out four club nights. The board has to
     // separate them, and it is the penalty that does it: skill is untouched.
     const active = makeState({ playerId: 'active', rating: 1600, missedEvents: 0 });
-    const absent = makeState({ playerId: 'absent', rating: 1600, missedEvents: 4, attendanceStreak: 0 });
+    const absent = makeState({
+      playerId: 'absent',
+      rating: 1600,
+      missedEvents: 4,
+      attendanceStreak: 0,
+    });
     const rows = computeLeaderboard(
       new Map([
         ['absent', absent],
@@ -205,7 +212,12 @@ describe('computeLeaderboard', () => {
 
   it('leaves the every-other-event regular alone: one missed night is free', () => {
     const steady = makeState({ playerId: 'steady', rating: 1600, missedEvents: 0 });
-    const irregular = makeState({ playerId: 'irregular', rating: 1600, missedEvents: 1, attendanceStreak: 0 });
+    const irregular = makeState({
+      playerId: 'irregular',
+      rating: 1600,
+      missedEvents: 1,
+      attendanceStreak: 0,
+    });
     const rows = computeLeaderboard(
       new Map([
         ['steady', steady],
@@ -288,7 +300,10 @@ describe('computeLeaderboard', () => {
     const rows = computeLeaderboard(
       new Map([
         ['present', makeState({ playerId: 'present', rating: 1600, missedEvents: 0 })],
-        ['gone', makeState({ playerId: 'gone', rating: 1600, missedEvents: 5, attendanceStreak: 0 })],
+        [
+          'gone',
+          makeState({ playerId: 'gone', rating: 1600, missedEvents: 5, attendanceStreak: 0 }),
+        ],
       ]),
       banded,
     );
@@ -300,7 +315,9 @@ describe('computeLeaderboard', () => {
 describe('activityPenaltyFor', () => {
   it('is free inside the grace window, flat after it, and capped', () => {
     const missed = [0, 1, 2, 3, 4, 5, 12];
-    expect(missed.map((m) => activityPenaltyFor(m, settings))).toEqual([0, 0, 40, 80, 120, 120, 120]);
+    expect(missed.map((m) => activityPenaltyFor(m, settings))).toEqual([
+      0, 0, 40, 80, 120, 120, 120,
+    ]);
   });
 
   it('resets in full — the penalty is a function of the current gap only', () => {

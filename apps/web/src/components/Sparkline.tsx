@@ -26,13 +26,28 @@ export function Sparkline({ points, width = 68, height = 22 }: Props) {
     const y = pad + (1 - (value - min) / span) * (height - pad * 2);
     return [x, y] as const;
   });
-  const path = coords.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
+  const path = coords
+    .map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`)
+    .join(' ');
   const last = coords[coords.length - 1]!;
   const rising = points[points.length - 1]! >= points[0]!;
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="presentation" focusable="false">
-      <path d={path} fill="none" stroke={rising ? 'var(--good)' : 'var(--bad)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      role="presentation"
+      focusable="false"
+    >
+      <path
+        d={path}
+        fill="none"
+        stroke={rising ? 'var(--good)' : 'var(--bad)'}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
       <circle cx={last[0]} cy={last[1]} r="2.5" fill={rising ? 'var(--good)' : 'var(--bad)'} />
     </svg>
   );

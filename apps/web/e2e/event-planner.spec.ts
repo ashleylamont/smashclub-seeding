@@ -31,19 +31,26 @@ async function signInAsAdmin(request: APIRequestContext): Promise<void> {
  */
 async function rankedNames(request: APIRequestContext, count: number): Promise<string[]> {
   const players = await (await request.get('/api/trpc/admin.players')).json();
-  const roster = (players.result?.data ?? players) as Array<{ canonicalName: string; status: string }>;
-  const active = roster.filter((player) => player.status === 'active').map((player) => player.canonicalName);
+  const roster = (players.result?.data ?? players) as {
+    canonicalName: string;
+    status: string;
+  }[];
+  const active = roster
+    .filter((player) => player.status === 'active')
+    .map((player) => player.canonicalName);
 
   const preview = await request.post('/api/trpc/admin.eventPlanner.previewRoster', {
     data: { text: active.join('\n') },
   });
-  expect(preview.ok(), `previewRoster failed: ${preview.status()} ${await preview.text()}`).toBe(true);
+  expect(preview.ok(), `previewRoster failed: ${preview.status()} ${await preview.text()}`).toBe(
+    true,
+  );
   const body = await preview.json();
-  const rows = (body.result?.data ?? body) as Array<{
+  const rows = (body.result?.data ?? body) as {
     cleanedName: string;
     playerId: string | null;
     currentRank: number | null;
-  }>;
+  }[];
   const usable = rows
     .filter((row) => row.playerId !== null && row.currentRank !== null)
     .sort((a, b) => a.currentRank! - b.currentRank!)
@@ -86,7 +93,9 @@ test.describe('event planner', () => {
     // Saving puts the plan in the URL, which is what makes it resumable.
     await expect(page).toHaveURL(/plan=/);
     await expect(page.locator('h2')).toContainText(planName);
-    const rows = page.locator('.roster-table .roster-row').filter({ hasNot: page.locator('.roster-head') });
+    const rows = page
+      .locator('.roster-table .roster-row')
+      .filter({ hasNot: page.locator('.roster-head') });
     await expect(page.locator('.roster-row.roster-head')).toHaveCount(1);
     await expect(page.locator('.roster-row.unresolved')).toHaveCount(0);
 
@@ -100,17 +109,25 @@ test.describe('event planner', () => {
     await expect(page.locator('.division-column')).toHaveCount(2);
     const upper = page.locator('.division-column').first();
     await expect(upper.locator('.division-row')).toHaveCount(8);
-    const seeds = await upper.locator('.division-row .seed-number').evaluateAll((nodes) =>
-      nodes.map((node) => Number(node.textContent)),
-    );
+    const seeds = await upper
+      .locator('.division-row .seed-number')
+      .evaluateAll((nodes) => nodes.map((node) => Number(node.textContent)));
     expect(seeds).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     await expect(page.getByText(/Ranking snapshot:/i)).toBeVisible();
 
     // A keyboard-only reorder: the move buttons, not the drag handle.
-    const secondName = (await upper.locator('.division-row').nth(1).locator('.division-name').innerText()).trim();
-    await upper.locator('.division-row').nth(1).getByRole('button', { name: /Move .* up/i }).click();
+    const secondName = (
+      await upper.locator('.division-row').nth(1).locator('.division-name').innerText()
+    ).trim();
+    await upper
+      .locator('.division-row')
+      .nth(1)
+      .getByRole('button', { name: /Move .* up/i })
+      .click();
     await settle(page);
-    await expect(upper.locator('.division-row').first().locator('.division-name')).toContainText(secondName);
+    await expect(upper.locator('.division-row').first().locator('.division-name')).toContainText(
+      secondName,
+    );
 
     await page.getByRole('button', { name: /Generate pools/i }).click();
     await settle(page);
@@ -132,14 +149,20 @@ test.describe('event planner', () => {
     // The manual handoff is available and carries names, not pasted lines.
     await page.getByRole('button', { name: /^Challonge$/ }).click();
     await settle(page);
-    const participants = page.locator('.bracket-card').first().locator('textarea.copy-block-text').first();
+    const participants = page
+      .locator('.bracket-card')
+      .first()
+      .locator('textarea.copy-block-text')
+      .first();
     const exported = await participants.inputValue();
     expect(exported.split('\n')).toHaveLength(8);
     expect(exported).not.toContain('1. ');
     await expect(page.locator('.bracket-card')).toHaveCount(4);
   });
 
-  test('records pool results and warns about unavoidable single-pool consolation rematches', async ({ page }) => {
+  test('records pool results and warns about unavoidable single-pool consolation rematches', async ({
+    page,
+  }) => {
     await signInAsAdmin(page.request);
     const names = await rankedNames(page.request, 8);
     test.skip(names.length < 8, 'the harness seeded fewer than 8 ranked players');
@@ -169,7 +192,9 @@ test.describe('event planner', () => {
         .locator('.pool-place select')
         .first()
         .locator('option')
-        .evaluateAll((nodes) => nodes.map((node) => (node as HTMLOptionElement).value).filter(Boolean));
+        .evaluateAll((nodes) =>
+          nodes.map((node) => (node as HTMLOptionElement).value).filter(Boolean),
+        );
       for (const [place, value] of options.entries()) {
         await card.locator('.pool-place select').nth(place).selectOption(value);
       }
@@ -179,8 +204,12 @@ test.describe('event planner', () => {
 
     // Each division has one pool, so its consolation final is the unavoidable
     // rematch — and the app says so rather than pretending otherwise.
-    await expect(page.getByRole('heading', { name: 'Consolation draw', exact: true })).toHaveCount(2);
-    await expect(page.getByRole('heading', { name: 'Championship qualifiers', exact: true })).toHaveCount(2);
+    await expect(page.getByRole('heading', { name: 'Consolation draw', exact: true })).toHaveCount(
+      2,
+    );
+    await expect(
+      page.getByRole('heading', { name: 'Championship qualifiers', exact: true }),
+    ).toHaveCount(2);
     await expect(page.locator('.consolation-list li').first()).toContainText('A3');
     await expect(page.getByText(/Pool rematch in round one/i)).toHaveCount(2);
   });

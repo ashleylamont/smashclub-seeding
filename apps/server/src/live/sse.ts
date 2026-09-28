@@ -57,8 +57,14 @@ export class SseRegistry {
    */
   start(request: FastifyRequest, reply: FastifyReply, tournamentId?: string): boolean {
     const ip = request.ip;
-    if (this.total >= this.limits.maxConnections || (this.perIp.get(ip) ?? 0) >= this.limits.maxConnectionsPerIp) {
-      void reply.status(503).header('Retry-After', '30').send({ error: 'too many live connections' });
+    if (
+      this.total >= this.limits.maxConnections ||
+      (this.perIp.get(ip) ?? 0) >= this.limits.maxConnectionsPerIp
+    ) {
+      void reply
+        .status(503)
+        .header('Retry-After', '30')
+        .send({ error: 'too many live connections' });
       return false;
     }
 

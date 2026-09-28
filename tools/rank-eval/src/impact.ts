@@ -51,7 +51,10 @@ function describe(label: string, values: number[]): string {
   );
 }
 
-function toEngineInput(sets: readonly EvalSet[]): { sets: EngineSet[]; tournaments: EngineTournament[] } {
+function toEngineInput(sets: readonly EvalSet[]): {
+  sets: EngineSet[];
+  tournaments: EngineTournament[];
+} {
   const tournaments = new Map<string, EngineTournament>();
   const engineSets: EngineSet[] = [];
   sets.forEach((set, index) => {
@@ -173,7 +176,12 @@ function whrRows(sets: readonly EvalSet[], settings: GlickoSettings): Row[] {
     .playerIds()
     .map((playerId) => {
       const display = fit.display(playerId, latestTime);
-      return { playerId, rating: display.rating, sd: display.sd, sets: setCounts.get(playerId) ?? 0 };
+      return {
+        playerId,
+        rating: display.rating,
+        sd: display.sd,
+        sets: setCounts.get(playerId) ?? 0,
+      };
     })
     .sort((a, b) => b.rating - a.rating || a.sd - b.sd || a.playerId.localeCompare(b.playerId));
   const bands = calibrateLeagueBands(rows.map((r) => r.rating));
@@ -186,10 +194,13 @@ function whrRows(sets: readonly EvalSet[], settings: GlickoSettings): Row[] {
   }));
 }
 
-function movement(before: Row[], after: Row[]): { deltas: number[]; biggest: Array<{ playerId: string; from: number; to: number }> } {
+function movement(
+  before: Row[],
+  after: Row[],
+): { deltas: number[]; biggest: { playerId: string; from: number; to: number }[] } {
   const byId = new Map(before.map((row) => [row.playerId, row]));
   const deltas: number[] = [];
-  const moves: Array<{ playerId: string; from: number; to: number }> = [];
+  const moves: { playerId: string; from: number; to: number }[] = [];
   for (const row of after) {
     const previous = byId.get(row.playerId);
     if (!previous) continue;
@@ -203,7 +214,9 @@ function movement(before: Row[], after: Row[]): { deltas: number[]; biggest: Arr
 function leagueSpread(rows: Row[]): string {
   const counts = new Map<string, number>();
   for (const row of rows) counts.set(row.league, (counts.get(row.league) ?? 0) + 1);
-  return [...counts.entries()].map(([name, n]) => `${name.replace(/[^\w -]/g, '').trim()} ${n}`).join(', ');
+  return [...counts.entries()]
+    .map(([name, n]) => `${name.replace(/[^\w -]/g, '').trim()} ${n}`)
+    .join(', ');
 }
 
 export function impactReport(sets: readonly EvalSet[], anonymise: boolean): void {
@@ -224,9 +237,24 @@ export function impactReport(sets: readonly EvalSet[], anonymise: boolean): void
   console.log(`players ranked: ${current.rows.length}\n`);
 
   console.log('── the number each player sees ──');
-  console.log(describe('A. current (published)', current.rows.map((r) => r.displayed)));
-  console.log(describe('B. shipped (skill)', shipped.rows.map((r) => r.displayed)));
-  console.log(describe('C. whr', whr.map((r) => r.displayed)));
+  console.log(
+    describe(
+      'A. current (published)',
+      current.rows.map((r) => r.displayed),
+    ),
+  );
+  console.log(
+    describe(
+      'B. shipped (skill)',
+      shipped.rows.map((r) => r.displayed),
+    ),
+  );
+  console.log(
+    describe(
+      'C. whr',
+      whr.map((r) => r.displayed),
+    ),
+  );
   const belowStart = (rows: Row[]): number => rows.filter((r) => r.displayed < 1500).length;
   console.log(
     `\n  players shown below the 1500 starting point:  ` +
@@ -239,7 +267,7 @@ export function impactReport(sets: readonly EvalSet[], anonymise: boolean): void
   for (const [name, rows] of [
     ['B. shipped (skill ranking)', shipped.rows],
     ['C. whr', whr],
-  ] as Array<[string, Row[]]>) {
+  ] as [string, Row[]][]) {
     const { deltas, biggest } = movement(current.rows, rows);
     const moved = deltas.filter((d) => d !== 0).length;
     const mean = deltas.reduce((s, d) => s + Math.abs(d), 0) / (deltas.length || 1);
@@ -252,8 +280,9 @@ export function impactReport(sets: readonly EvalSet[], anonymise: boolean): void
     );
     console.log(`     top 10 retained from today's top 10: ${kept}/10`);
     console.log(
-      `     biggest moves: ` +
-        biggest.map((m) => `${label(m.playerId)} ${m.from}→${m.to}`).join(', '),
+      `     biggest moves: ${biggest
+        .map((m) => `${label(m.playerId)} ${m.from}→${m.to}`)
+        .join(', ')}`,
     );
   }
 
@@ -269,7 +298,9 @@ export function impactReport(sets: readonly EvalSet[], anonymise: boolean): void
    * Note the unit either way is *events missed*, never elapsed time — a long gap
    * between club nights costs one step, not one per day.
    */
-  const decayAb = (perBracket: boolean): { events: number; medianRd: number; atCap: number; periods: number } => {
+  const decayAb = (
+    perBracket: boolean,
+  ): { events: number; medianRd: number; atCap: number; periods: number } => {
     const input = toEngineInput(sets);
     const replay = replayRatings({
       sets: input.sets,
@@ -325,7 +356,9 @@ export function impactReport(sets: readonly EvalSet[], anonymise: boolean): void
   );
   for (let i = 0; i < 8; i++) {
     const cells = [current.rows[i], shipped.rows[i], whr[i]].map((row) =>
-      row ? `${i + 1}. ${label(row.playerId)} ${row.displayed.toFixed(0)}`.padEnd(width) : ''.padEnd(width),
+      row
+        ? `${i + 1}. ${label(row.playerId)} ${row.displayed.toFixed(0)}`.padEnd(width)
+        : ''.padEnd(width),
     );
     console.log(`  ${cells.join('')}`);
   }

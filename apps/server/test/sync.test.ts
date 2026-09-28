@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { ratingEvents, reviewItems, sets, syncJobs, tournamentParticipants, tournaments, type Db } from '@smashclub/db';
+import {
+  ratingEvents,
+  reviewItems,
+  sets,
+  syncJobs,
+  tournamentParticipants,
+  tournaments,
+  type Db,
+} from '@smashclub/db';
 import { importRegistryPlayers, registerTournamentSlugs } from '../src/bootstrap/importRegistry';
 import { syncTournament } from '../src/sync/sync';
 import { runRecompute, latestRecomputeId } from '../src/recompute/recompute';
@@ -42,7 +50,10 @@ const baseFixture: FixtureTournament = {
 };
 
 async function tournamentId(): Promise<string> {
-  const [row] = await db.select({ id: tournaments.id }).from(tournaments).where(eq(tournaments.challongeSlug, 'weekly1'));
+  const [row] = await db
+    .select({ id: tournaments.id })
+    .from(tournaments)
+    .where(eq(tournaments.challongeSlug, 'weekly1'));
   return row!.id;
 }
 
@@ -101,7 +112,9 @@ describe('syncTournament', () => {
 
     const amended: FixtureTournament = {
       ...baseFixture,
-      matches: baseFixture.matches.map((m) => (m.id === 11 ? { ...m, winner: 2, scores: '1-2' } : m)),
+      matches: baseFixture.matches.map((m) =>
+        m.id === 11 ? { ...m, winner: 2, scores: '1-2' } : m,
+      ),
     };
     const result = await syncTournament(db, fixtureClient([amended]), id);
     expect(result.setsChanged).toBe(1);
@@ -196,10 +209,20 @@ describe('syncTournament', () => {
 
     await runRecompute(db);
     let recomputeId = await latestRecomputeId(db);
-    let events = await db.select().from(ratingEvents).where(eq(ratingEvents.recomputeId, recomputeId!));
-    expect(events.filter((event) => event.setId === stored.find((row) => row.resultStage === 'group')!.id)).toHaveLength(2);
+    let events = await db
+      .select()
+      .from(ratingEvents)
+      .where(eq(ratingEvents.recomputeId, recomputeId!));
+    expect(
+      events.filter(
+        (event) => event.setId === stored.find((row) => row.resultStage === 'group')!.id,
+      ),
+    ).toHaveLength(2);
 
-    await db.update(tournaments).set({ resultsMode: 'final_stage_only' }).where(eq(tournaments.id, id));
+    await db
+      .update(tournaments)
+      .set({ resultsMode: 'final_stage_only' })
+      .where(eq(tournaments.id, id));
     await runRecompute(db);
     recomputeId = await latestRecomputeId(db);
     events = await db.select().from(ratingEvents).where(eq(ratingEvents.recomputeId, recomputeId!));
@@ -231,7 +254,10 @@ describe('syncTournament', () => {
       .update(sets)
       .set({ excludedFromRatings: true, exclusionManual: true })
       .where(eq(sets.challongeMatchId, 32));
-    await db.update(tournaments).set({ resultsMode: 'final_stage_only' }).where(eq(tournaments.id, id));
+    await db
+      .update(tournaments)
+      .set({ resultsMode: 'final_stage_only' })
+      .where(eq(tournaments.id, id));
     await syncTournament(db, fixtureClient([staged]), id);
 
     const [finalSet] = await db.select().from(sets).where(eq(sets.challongeMatchId, 32));
@@ -239,7 +265,10 @@ describe('syncTournament', () => {
     expect(finalSet!.exclusionManual).toBe(true);
     await runRecompute(db);
     const recomputeId = await latestRecomputeId(db);
-    const events = await db.select().from(ratingEvents).where(eq(ratingEvents.recomputeId, recomputeId!));
+    const events = await db
+      .select()
+      .from(ratingEvents)
+      .where(eq(ratingEvents.recomputeId, recomputeId!));
     expect(events.filter((event) => event.setId === finalSet!.id)).toHaveLength(0);
   });
 
@@ -365,7 +394,16 @@ describe('syncTournament', () => {
 });
 
 it('rejects native tournaments before fetching, creating sync jobs or changing saved results', async () => {
-  const [native] = await db.insert(tournaments).values({ provider: 'native', challongeSlug: 'nemesis-local', name: 'Local final', syncState: 'synced', challongeState: 'complete' }).returning();
+  const [native] = await db
+    .insert(tournaments)
+    .values({
+      provider: 'native',
+      challongeSlug: 'nemesis-local',
+      name: 'Local final',
+      syncState: 'synced',
+      challongeState: 'complete',
+    })
+    .returning();
   const client = fixtureClient([]);
   const publicFetch = vi.spyOn(client, 'fetchPublicTournamentBundle');
   const apiFetch = vi.spyOn(client, 'fetchTournamentBundle');
@@ -375,5 +413,7 @@ it('rejects native tournaments before fetching, creating sync jobs or changing s
   expect(publicFetch).not.toHaveBeenCalled();
   expect(apiFetch).not.toHaveBeenCalled();
   expect(await db.select().from(syncJobs)).toHaveLength(0);
-  expect((await db.select().from(tournaments).where(eq(tournaments.id, native!.id)))[0]).toMatchObject({ syncState: 'synced', lastSyncedAt: null });
+  expect(
+    (await db.select().from(tournaments).where(eq(tournaments.id, native!.id)))[0],
+  ).toMatchObject({ syncState: 'synced', lastSyncedAt: null });
 });

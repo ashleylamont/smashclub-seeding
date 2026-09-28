@@ -21,11 +21,15 @@ test('TOs can inspect evidence, share criteria and refresh a live night', async 
   await expect(page.getByLabel('Minimum prior nights', { exact: true })).toHaveValue('0');
   await expect(page.getByLabel('Small-sample adjustment', { exact: true })).toHaveValue('5');
   await page.locator('.breakthrough-detail summary').first().click();
-  await expect(page.getByText('Adjusted surplus without the strongest comparable set:').first()).toBeVisible();
+  await expect(
+    page.getByText('Adjusted surplus without the strongest comparable set:').first(),
+  ).toBeVisible();
 
   // The real endpoint is used; the subsequent response verifies polling keeps
   // running without navigation or a manual refresh.
-  const automaticRefresh = page.waitForResponse((response) => response.url().includes('admin.breakthrough') && response.ok());
+  const automaticRefresh = page.waitForResponse(
+    (response) => response.url().includes('admin.breakthrough') && response.ok(),
+  );
   await automaticRefresh;
   await expect(evidence).toBeVisible();
   await page.getByRole('button', { name: 'Reset criteria' }).click();
@@ -34,5 +38,7 @@ test('TOs can inspect evidence, share criteria and refresh a live night', async 
   await page.screenshot({ path: '/tmp/breakthrough-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: '/tmp/breakthrough-mobile.png', fullPage: true });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
 });

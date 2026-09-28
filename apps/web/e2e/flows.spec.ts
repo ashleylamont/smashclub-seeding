@@ -38,7 +38,9 @@ async function signInAsAdmin(request: APIRequestContext): Promise<void> {
 }
 
 test.describe('public browsing', () => {
-  test('ranks on skill, shows uncertainty separately, and sorts from the header', async ({ page }) => {
+  test('ranks on skill, shows uncertainty separately, and sorts from the header', async ({
+    page,
+  }) => {
     await page.goto('/');
     await settle(page);
 
@@ -51,30 +53,30 @@ test.describe('public browsing', () => {
     await expect(rows.first().locator('.rating-band')).toContainText('±');
 
     // Descending rating is the default order; ranks run 1, 2, 3…
-    const ranks = await rows.locator('.rank').evaluateAll((nodes) =>
-      nodes.slice(0, 5).map((node) => Number(node.textContent)),
-    );
+    const ranks = await rows
+      .locator('.rank')
+      .evaluateAll((nodes) => nodes.slice(0, 5).map((node) => Number(node.textContent)));
     expect(ranks).toEqual([1, 2, 3, 4, 5]);
 
-    const ratings = await rows.locator('.rating-value').evaluateAll((nodes) =>
-      nodes.slice(0, 5).map((node) => Number(node.textContent)),
-    );
+    const ratings = await rows
+      .locator('.rating-value')
+      .evaluateAll((nodes) => nodes.slice(0, 5).map((node) => Number(node.textContent)));
     expect([...ratings].sort((a, b) => b - a)).toEqual(ratings);
 
     // The column header is the sort control. Sorting by events reorders the board.
     await page.locator('.head-events').click();
     await settle(page);
-    const events = await rows.locator('.events').evaluateAll((nodes) =>
-      nodes.slice(0, 5).map((node) => Number(node.textContent)),
-    );
+    const events = await rows
+      .locator('.events')
+      .evaluateAll((nodes) => nodes.slice(0, 5).map((node) => Number(node.textContent)));
     expect([...events].sort((a, b) => b - a)).toEqual(events);
 
     // Clicking again flips the direction.
     await page.locator('.head-events').click();
     await settle(page);
-    const ascending = await rows.locator('.events').evaluateAll((nodes) =>
-      nodes.slice(0, 5).map((node) => Number(node.textContent)),
-    );
+    const ascending = await rows
+      .locator('.events')
+      .evaluateAll((nodes) => nodes.slice(0, 5).map((node) => Number(node.textContent)));
     expect([...ascending].sort((a, b) => a - b)).toEqual(ascending);
   });
 
@@ -134,11 +136,21 @@ test.describe('public browsing', () => {
     expect(await rows.count()).toBe(total);
   });
 
-  test('a board row opens that player, who leads with the ranked figure and its band', async ({ page }) => {
+  test('a board row opens that player, who leads with the ranked figure and its band', async ({
+    page,
+  }) => {
     await page.goto('/');
     await settle(page);
-    const name = await page.locator('.board-row .identity-name').first().evaluate(element =>
-      Array.from(element.childNodes).filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent).join('').trim());
+    const name = await page
+      .locator('.board-row .identity-name')
+      .first()
+      .evaluate((element) =>
+        Array.from(element.childNodes)
+          .filter((node) => node.nodeType === Node.TEXT_NODE)
+          .map((node) => node.textContent)
+          .join('')
+          .trim(),
+      );
 
     await page.locator('.board-row .board-link').first().click();
     await expect(page).toHaveURL(/\/players\//);
@@ -163,7 +175,9 @@ test.describe('public browsing', () => {
     await expect(page.locator('.match-table tbody tr').first()).toBeVisible();
   });
 
-  test('rating history compares a bounded set of players, each keeping its colour', async ({ page }) => {
+  test('rating history compares a bounded set of players, each keeping its colour', async ({
+    page,
+  }) => {
     await page.goto('/');
     await settle(page);
 
@@ -173,9 +187,9 @@ test.describe('public browsing', () => {
 
     const names = await legend.locator('.legend-name').allInnerTexts();
     const swatchColours = () =>
-      legend.locator('.legend-swatch line').evaluateAll((nodes) =>
-        nodes.map((node) => node.getAttribute('stroke')),
-      );
+      legend
+        .locator('.legend-swatch line')
+        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('stroke')));
     const coloursBefore = await swatchColours();
 
     // Removing one player must not repaint the others — colour follows the
@@ -212,18 +226,22 @@ test.describe('on a phone', () => {
      * Sorting on a measure this layout does not draw would otherwise reorder
      * the board into apparent nonsense, so the row states the sorted figure.
      */
-    const notes = await page.locator('.board-row .identity-sortkey').evaluateAll((nodes) =>
-      nodes.slice(0, 5).map((node) => Number(/\d+/.exec(node.textContent ?? '')?.[0])),
-    );
+    const notes = await page
+      .locator('.board-row .identity-sortkey')
+      .evaluateAll((nodes) =>
+        nodes.slice(0, 5).map((node) => Number(/\d+/.exec(node.textContent ?? '')?.[0])),
+      );
     expect(notes.length).toBe(5);
     expect([...notes].sort((a, b) => b - a)).toEqual(notes);
 
     // And the direction toggle flips it.
     await page.getByRole('button', { name: /Reverse the order/i }).click();
     await settle(page);
-    const ascending = await page.locator('.board-row .identity-sortkey').evaluateAll((nodes) =>
-      nodes.slice(0, 5).map((node) => Number(/\d+/.exec(node.textContent ?? '')?.[0])),
-    );
+    const ascending = await page
+      .locator('.board-row .identity-sortkey')
+      .evaluateAll((nodes) =>
+        nodes.slice(0, 5).map((node) => Number(/\d+/.exec(node.textContent ?? '')?.[0])),
+      );
     expect([...ascending].sort((a, b) => a - b)).toEqual(ascending);
   });
 
@@ -287,7 +305,10 @@ test.describe('auth bridge', () => {
 
     // The same session now satisfies the admin procedure...
     const authorised = await page.request.get('/api/trpc/admin.settings');
-    expect(authorised.ok(), `admin.settings rejected an admin session: ${authorised.status()}`).toBe(true);
+    expect(
+      authorised.ok(),
+      `admin.settings rejected an admin session: ${authorised.status()}`,
+    ).toBe(true);
 
     // ...and the UI reflects the role: the Admin nav entry only exists for admins.
     await page.goto('/');
@@ -323,7 +344,10 @@ test.describe('admin', () => {
     // the one that must never be applied automatically by a fuzzy name match.
     // It opens the detail form; "as-is" is the escape hatch that keeps working a
     // long queue to one extra click, and is what this exercises.
-    await cards.first().getByRole('button', { name: /Keep separate…/i }).click();
+    await cards
+      .first()
+      .getByRole('button', { name: /Keep separate…/i })
+      .click();
     await page.getByRole('button', { name: /Keep separate as-is/i }).click();
     await expect(cards).toHaveCount(before - 1, { timeout: 30_000 });
   });
@@ -339,24 +363,34 @@ test.describe('admin', () => {
 
     // The manual escape hatch: the reviewer names a player the scoring never
     // offered, instead of picking from the ranked candidates.
-    await cards.first().getByRole('button', { name: /Find a player…/i }).click();
+    await cards
+      .first()
+      .getByRole('button', { name: /Find a player…/i })
+      .click();
     const rows = page.locator('.lookup-row');
     await expect(rows.first()).toBeVisible();
     await page.getByPlaceholder(/Search by name/i).fill('a');
     await settle(page);
-    await rows.first().getByRole('button', { name: /^Link$/ }).click();
+    await rows
+      .first()
+      .getByRole('button', { name: /^Link$/ })
+      .click();
     await expect(cards).toHaveCount(before - 1, { timeout: 30_000 });
   });
 
-  test('seeding generates from the leaderboard, reorders, and survives a reload', async ({ page }) => {
+  test('seeding generates from the leaderboard, reorders, and survives a reload', async ({
+    page,
+  }) => {
     await signInAsAdmin(page.request);
     await page.goto('/admin/seeding');
     await settle(page);
 
     const select = page.locator('select.select').first();
-    const values = await select.locator('option').evaluateAll((options) =>
-      options.map((option) => (option as HTMLOptionElement).value).filter(Boolean),
-    );
+    const values = await select
+      .locator('option')
+      .evaluateAll((options) =>
+        options.map((option) => (option as HTMLOptionElement).value).filter(Boolean),
+      );
     test.skip(values.length === 0, 'no tournaments to seed in this seed');
     await select.selectOption(values[0]!);
     await settle(page);
@@ -369,9 +403,9 @@ test.describe('admin', () => {
     await expect(rows.first()).toBeVisible({ timeout: 30_000 });
 
     // Seeds are dense and start at 1.
-    const seeds = await rows.locator('.seed-number').evaluateAll((nodes) =>
-      nodes.map((node) => Number(node.textContent)),
-    );
+    const seeds = await rows
+      .locator('.seed-number')
+      .evaluateAll((nodes) => nodes.map((node) => Number(node.textContent)));
     expect(seeds).toEqual(seeds.map((_, index) => index + 1));
 
     /*
@@ -423,7 +457,9 @@ test.describe('admin', () => {
     expect((after.result?.data ?? after).model).toBe(modelBefore);
   });
 
-  test('switching the active model recomputes and republishes under that model', async ({ page }) => {
+  test('switching the active model recomputes and republishes under that model', async ({
+    page,
+  }) => {
     await signInAsAdmin(page.request);
     await page.goto('/admin/settings');
     await settle(page);
@@ -505,7 +541,7 @@ test.describe('player profiles and companies', () => {
       const response = await page.request.get(
         `/api/trpc/public.searchPlayers?input=${encodeURIComponent(JSON.stringify({ query }))}`,
       );
-      return (await response.json()).result.data as Array<{ name: string }>;
+      return (await response.json()).result.data as { name: string }[];
     };
     expect((await publicSearch('koopz'))[0].name).toBe('koopz');
     expect(await publicSearch('Roy Koopa')).toEqual([]);
@@ -549,7 +585,9 @@ test.describe('registry import wizard', () => {
     numeric_id: 900
 `;
 
-  test('previews a pasted registry, applies it once, and is a no-op the second time', async ({ page }) => {
+  test('previews a pasted registry, applies it once, and is a no-op the second time', async ({
+    page,
+  }) => {
     await signInAsAdmin(page.request);
     await page.goto('/admin/import');
     await settle(page);
@@ -585,14 +623,18 @@ test.describe('registry import wizard', () => {
     await expect(page.getByRole('button', { name: /^Apply / })).toBeDisabled();
   });
 
-  test('names the offending id when an entry is invalid, and refuses to apply', async ({ page }) => {
+  test('names the offending id when an entry is invalid, and refuses to apply', async ({
+    page,
+  }) => {
     await signInAsAdmin(page.request);
     await page.goto('/admin/import');
     await settle(page);
 
-    await page.locator('.import-textarea').fill(
-      'players:\n  - id: e2e-broken\n    canonical_name: Broken Person\n    main_character: Waluigi\n',
-    );
+    await page
+      .locator('.import-textarea')
+      .fill(
+        'players:\n  - id: e2e-broken\n    canonical_name: Broken Person\n    main_character: Waluigi\n',
+      );
     await page.getByRole('button', { name: /^Preview$/ }).click();
 
     const issues = page.locator('.import-issues');

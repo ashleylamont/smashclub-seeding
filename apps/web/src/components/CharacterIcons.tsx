@@ -42,13 +42,26 @@ export function CharacterIcons({ slugs, size = 'sm', loading = 'lazy' }: Props) 
   );
 }
 
-function CharacterIcon({ slug, label, loading }: { slug: string; label: string; loading: 'lazy' | 'eager' }) {
+function CharacterIcon({
+  slug,
+  label,
+  loading,
+}: {
+  slug: string;
+  label: string;
+  loading: 'lazy' | 'eager';
+}) {
   const [failed, setFailed] = useState(false);
   const name = characterName(slug);
 
   if (failed) {
     return (
-      <span className="character-icon character-icon-fallback" title={label} aria-label={label} role="img">
+      <span
+        className="character-icon character-icon-fallback"
+        title={label}
+        aria-label={label}
+        role="img"
+      >
         {abbreviate(name)}
       </span>
     );

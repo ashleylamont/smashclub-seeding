@@ -109,49 +109,49 @@ export const publicRouter = router({
     const rows = !recomputeId
       ? []
       : await ctx.db
-      .select({
-        playerId: playerRatings.playerId,
-        rank: playerRatings.rank,
-        /** Rank before the club's most recent night; null if unrated then. */
-        previousRank: playerRatings.previousRank,
-        league: playerRatings.league,
-        /** Best estimate, shown with its ± band. */
-        skillRating: playerRatings.skillRating,
-        /** Uncertainty on the estimate, for a ± band. */
-        skillSd: playerRatings.skillSd,
-        /** Pessimistic estimate — what bracket seeding is ranked on. */
-        conservativeRating: playerRatings.conservativeRating,
-        /** Skill less the activity penalty — what this board is ranked on. */
-        clubRating: playerRatings.clubRating,
-        /** Points currently docked for missed club nights; 0 for most people. */
-        activityPenalty: playerRatings.activityPenalty,
-        /** What missing the next club night would cost, so it can be shown up front. */
-        nextMissPenalty: playerRatings.nextMissPenalty,
-        missedEvents: playerRatings.missedEvents,
-        attendanceStreak: playerRatings.attendanceStreak,
-        /** Too little history to have earned the number yet. */
-        isProvisional: playerRatings.isProvisional,
-        rating: playerRatings.rating,
-        rd: playerRatings.rd,
-        effectiveRd: playerRatings.effectiveRd,
-        wins: playerRatings.wins,
-        losses: playerRatings.losses,
-        matchCount: playerRatings.matchCount,
-        tournamentCount: playerRatings.tournamentCount,
-        eventCount: playerRatings.eventCount,
-        sampleConfidence: playerRatings.sampleConfidence,
-        rookieRatio: playerRatings.rookieRatio,
-        lastPlayedDate: playerRatings.lastPlayedDate,
-        canonicalName: players.canonicalName,
-        displayName: players.displayName,
-        companyCode: companies.code,
-        companyName: companies.name,
-      })
-      .from(playerRatings)
-      .innerJoin(players, eq(playerRatings.playerId, players.id))
-      .leftJoin(companies, eq(players.companyId, companies.id))
-      .where(eq(playerRatings.recomputeId, recomputeId))
-      .orderBy(asc(playerRatings.rank));
+          .select({
+            playerId: playerRatings.playerId,
+            rank: playerRatings.rank,
+            /** Rank before the club's most recent night; null if unrated then. */
+            previousRank: playerRatings.previousRank,
+            league: playerRatings.league,
+            /** Best estimate, shown with its ± band. */
+            skillRating: playerRatings.skillRating,
+            /** Uncertainty on the estimate, for a ± band. */
+            skillSd: playerRatings.skillSd,
+            /** Pessimistic estimate — what bracket seeding is ranked on. */
+            conservativeRating: playerRatings.conservativeRating,
+            /** Skill less the activity penalty — what this board is ranked on. */
+            clubRating: playerRatings.clubRating,
+            /** Points currently docked for missed club nights; 0 for most people. */
+            activityPenalty: playerRatings.activityPenalty,
+            /** What missing the next club night would cost, so it can be shown up front. */
+            nextMissPenalty: playerRatings.nextMissPenalty,
+            missedEvents: playerRatings.missedEvents,
+            attendanceStreak: playerRatings.attendanceStreak,
+            /** Too little history to have earned the number yet. */
+            isProvisional: playerRatings.isProvisional,
+            rating: playerRatings.rating,
+            rd: playerRatings.rd,
+            effectiveRd: playerRatings.effectiveRd,
+            wins: playerRatings.wins,
+            losses: playerRatings.losses,
+            matchCount: playerRatings.matchCount,
+            tournamentCount: playerRatings.tournamentCount,
+            eventCount: playerRatings.eventCount,
+            sampleConfidence: playerRatings.sampleConfidence,
+            rookieRatio: playerRatings.rookieRatio,
+            lastPlayedDate: playerRatings.lastPlayedDate,
+            canonicalName: players.canonicalName,
+            displayName: players.displayName,
+            companyCode: companies.code,
+            companyName: companies.name,
+          })
+          .from(playerRatings)
+          .innerJoin(players, eq(playerRatings.playerId, players.id))
+          .leftJoin(companies, eq(players.companyId, companies.id))
+          .where(eq(playerRatings.recomputeId, recomputeId))
+          .orderBy(asc(playerRatings.rank));
 
     const verified = await ctx.db
       .select({ playerId: playerClaims.playerId })
@@ -169,9 +169,8 @@ export const publicRouter = router({
       .select({ eventDate: tournaments.eventDate })
       .from(tournaments)
       .where(isNotNull(tournaments.eventDate));
-    const eventCount = new Set(
-      eventDates.map((row) => eventKeyOf(row.eventDate!.toISOString())),
-    ).size;
+    const eventCount = new Set(eventDates.map((row) => eventKeyOf(row.eventDate!.toISOString())))
+      .size;
 
     const characters = await charactersByPlayer(
       ctx.db,
@@ -237,7 +236,7 @@ export const publicRouter = router({
 
     const recomputeId = await latestRecomputeId(ctx.db);
     let ratingRow = null;
-    let events: Array<Record<string, unknown>> = [];
+    let events: Record<string, unknown>[] = [];
     let model = 'glicko2';
     if (recomputeId) {
       const [recompute] = await ctx.db
@@ -248,7 +247,12 @@ export const publicRouter = router({
       const [rating] = await ctx.db
         .select()
         .from(playerRatings)
-        .where(and(eq(playerRatings.recomputeId, recomputeId), eq(playerRatings.playerId, input.playerId)));
+        .where(
+          and(
+            eq(playerRatings.recomputeId, recomputeId),
+            eq(playerRatings.playerId, input.playerId),
+          ),
+        );
       ratingRow = rating ?? null;
 
       const opponents = players; // alias for readability in the join below
@@ -281,7 +285,9 @@ export const publicRouter = router({
         .innerJoin(tournaments, eq(ratingEvents.tournamentId, tournaments.id))
         .leftJoin(sets, eq(ratingEvents.setId, sets.id))
         .leftJoin(opponents, eq(ratingEvents.opponentPlayerId, opponents.id))
-        .where(and(eq(ratingEvents.recomputeId, recomputeId), eq(ratingEvents.playerId, input.playerId)))
+        .where(
+          and(eq(ratingEvents.recomputeId, recomputeId), eq(ratingEvents.playerId, input.playerId)),
+        )
         .orderBy(asc(ratingEvents.seq));
       const nights = await nightsByEventKey(
         ctx.db,
@@ -295,7 +301,9 @@ export const publicRouter = router({
       events = eventRows.map(({ opponentCanonicalName, opponentDisplayName, ...row }) => {
         // Decay is charged for the night, so it is named for the night.
         const night =
-          row.isDecay && row.tournamentDate ? nights.get(eventKeyOf(row.tournamentDate.toISOString())) : undefined;
+          row.isDecay && row.tournamentDate
+            ? nights.get(eventKeyOf(row.tournamentDate.toISOString()))
+            : undefined;
         return {
           ...row,
           tournamentName: night?.name ?? row.tournamentName,
@@ -389,93 +397,106 @@ export const publicRouter = router({
     }));
   }),
 
-  tournament: publicProcedure.input(z.object({ slug: z.string() })).query(async ({ ctx, input }) => {
-    const [tournament] = await ctx.db.select().from(tournaments).where(eq(tournaments.challongeSlug, input.slug));
-    if (!tournament) return null;
+  tournament: publicProcedure
+    .input(z.object({ slug: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const [tournament] = await ctx.db
+        .select()
+        .from(tournaments)
+        .where(eq(tournaments.challongeSlug, input.slug));
+      if (!tournament) return null;
 
-    const participants = await ctx.db
-      .select({
-        id: tournamentParticipants.id,
-        cleanedName: tournamentParticipants.cleanedName,
-        playerId: tournamentParticipants.playerId,
-        challongeSeed: tournamentParticipants.challongeSeed,
-        finalRank: tournamentParticipants.finalRank,
-        canonicalName: players.canonicalName,
-        displayName: players.displayName,
-        companyCode: companies.code,
-      })
-      .from(tournamentParticipants)
-      .leftJoin(players, eq(tournamentParticipants.playerId, players.id))
-      .leftJoin(companies, eq(players.companyId, companies.id))
-      .where(eq(tournamentParticipants.tournamentId, tournament.id));
+      const participants = await ctx.db
+        .select({
+          id: tournamentParticipants.id,
+          cleanedName: tournamentParticipants.cleanedName,
+          playerId: tournamentParticipants.playerId,
+          challongeSeed: tournamentParticipants.challongeSeed,
+          finalRank: tournamentParticipants.finalRank,
+          canonicalName: players.canonicalName,
+          displayName: players.displayName,
+          companyCode: companies.code,
+        })
+        .from(tournamentParticipants)
+        .leftJoin(players, eq(tournamentParticipants.playerId, players.id))
+        .leftJoin(companies, eq(players.companyId, companies.id))
+        .where(eq(tournamentParticipants.tournamentId, tournament.id));
 
-    const participantName = new Map(participants.map((p) => [p.id, publicParticipantName(p)]));
+      const participantName = new Map(participants.map((p) => [p.id, publicParticipantName(p)]));
 
-    const setRows = await ctx.db
-      .select()
-      .from(sets)
-      .where(eq(sets.tournamentId, tournament.id))
-      // Play order — the SQL twin of the engine's `compareSetsInBracket`.
-      // Postgres sorts NULLs last on ASC, which is the nulls-last rule that
-      // comparator applies. Ordering by `challonge_match_id` alone (what this
-      // did while `suggested_play_order` was never populated) is bracket
-      // *creation* order: the whole winners side, then the whole losers side.
-      .orderBy(asc(sets.suggestedPlayOrder), asc(sets.completedAt), asc(sets.challongeMatchId));
+      const setRows = await ctx.db
+        .select()
+        .from(sets)
+        .where(eq(sets.tournamentId, tournament.id))
+        // Play order — the SQL twin of the engine's `compareSetsInBracket`.
+        // Postgres sorts NULLs last on ASC, which is the nulls-last rule that
+        // comparator applies. Ordering by `challonge_match_id` alone (what this
+        // did while `suggested_play_order` was never populated) is bracket
+        // *creation* order: the whole winners side, then the whole losers side.
+        .orderBy(asc(sets.suggestedPlayOrder), asc(sets.completedAt), asc(sets.challongeMatchId));
 
-    return {
-      id: tournament.id,
-      slug: tournament.challongeSlug,
-      provider: tournament.provider,
-      name: tournament.name,
-      resultsMode: tournament.resultsMode,
-      eventDate: tournament.eventDate?.toISOString() ?? null,
-      isRookie: tournament.isRookie,
-      challongeState: tournament.challongeState,
-      syncState: tournament.syncState,
-      lastSyncedAt: tournament.lastSyncedAt?.toISOString() ?? null,
-      /**
-       * Open live-monitoring window, if any. This — not `syncState` — is what
-       * "live" means; the page needs it to know whether a bracket is being
-       * watched right now.
-       */
-      liveUntil: tournament.liveUntil?.toISOString() ?? null,
-      participants: participants
-        .map((p) => ({
-          id: p.id,
-          playerId: p.playerId,
-          name: participantName.get(p.id)!,
-          companyCode: p.companyCode,
-          challongeSeed: p.challongeSeed,
-          finalRank: p.finalRank,
-        }))
-        .sort((a, b) => (a.finalRank ?? 1e9) - (b.finalRank ?? 1e9) || (a.challongeSeed ?? 1e9) - (b.challongeSeed ?? 1e9)),
-      sets: setRows.map((row) => ({
-        id: row.id,
-        round: row.round,
-        identifier: row.identifier,
-        state: row.state,
-        winner: row.winner,
-        scoresCsv: row.scoresCsv,
-        resultStage: row.resultStage,
-        excludedByResultsMode: !includesResultStage(tournament.resultsMode, row.resultStage),
-        excludedFromRatings: row.excludedFromRatings || !includesResultStage(tournament.resultsMode, row.resultStage),
-        completedAt: row.completedAt?.toISOString() ?? null,
-        /* Participant ids as well as names: a screen that wants a player's seed
+      return {
+        id: tournament.id,
+        slug: tournament.challongeSlug,
+        provider: tournament.provider,
+        name: tournament.name,
+        resultsMode: tournament.resultsMode,
+        eventDate: tournament.eventDate?.toISOString() ?? null,
+        isRookie: tournament.isRookie,
+        challongeState: tournament.challongeState,
+        syncState: tournament.syncState,
+        lastSyncedAt: tournament.lastSyncedAt?.toISOString() ?? null,
+        /**
+         * Open live-monitoring window, if any. This — not `syncState` — is what
+         * "live" means; the page needs it to know whether a bracket is being
+         * watched right now.
+         */
+        liveUntil: tournament.liveUntil?.toISOString() ?? null,
+        participants: participants
+          .map((p) => ({
+            id: p.id,
+            playerId: p.playerId,
+            name: participantName.get(p.id)!,
+            companyCode: p.companyCode,
+            challongeSeed: p.challongeSeed,
+            finalRank: p.finalRank,
+          }))
+          .sort(
+            (a, b) =>
+              (a.finalRank ?? 1e9) - (b.finalRank ?? 1e9) ||
+              (a.challongeSeed ?? 1e9) - (b.challongeSeed ?? 1e9),
+          ),
+        sets: setRows.map((row) => ({
+          id: row.id,
+          round: row.round,
+          identifier: row.identifier,
+          state: row.state,
+          winner: row.winner,
+          scoresCsv: row.scoresCsv,
+          resultStage: row.resultStage,
+          excludedByResultsMode: !includesResultStage(tournament.resultsMode, row.resultStage),
+          excludedFromRatings:
+            row.excludedFromRatings ||
+            !includesResultStage(tournament.resultsMode, row.resultStage),
+          completedAt: row.completedAt?.toISOString() ?? null,
+          /* Participant ids as well as names: a screen that wants a player's seed
            or company alongside a set should join on the id rather than match on
            a display name, which is neither unique nor stable. */
-        p1ParticipantId: row.p1ParticipantId,
-        p2ParticipantId: row.p2ParticipantId,
-        p1Name: row.p1ParticipantId ? (participantName.get(row.p1ParticipantId) ?? null) : null,
-        p2Name: row.p2ParticipantId ? (participantName.get(row.p2ParticipantId) ?? null) : null,
-        p1PlayerId: row.p1PlayerId,
-        p2PlayerId: row.p2PlayerId,
-      })),
-    };
-  }),
+          p1ParticipantId: row.p1ParticipantId,
+          p2ParticipantId: row.p2ParticipantId,
+          p1Name: row.p1ParticipantId ? (participantName.get(row.p1ParticipantId) ?? null) : null,
+          p2Name: row.p2ParticipantId ? (participantName.get(row.p2ParticipantId) ?? null) : null,
+          p1PlayerId: row.p1PlayerId,
+          p2PlayerId: row.p2PlayerId,
+        })),
+      };
+    }),
 
-  eventOverview: publicProcedure.input(z.object({ slug: z.string() })).query(async ({ ctx, input }) => {
-    return loadEventOverview(ctx.db, input.slug);
-  }),
+  eventOverview: publicProcedure
+    .input(z.object({ slug: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return loadEventOverview(ctx.db, input.slug);
+    }),
 
   /**
    * The night's recap — every bracket that ran on the same evening as `slug`,

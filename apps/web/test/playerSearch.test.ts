@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { searchPlayers, type SearchablePlayer } from '../src/lib/playerSearch';
 
-const player = (overrides: Partial<SearchablePlayer> & { canonicalName: string }): SearchablePlayer => ({
+const player = (
+  overrides: Partial<SearchablePlayer> & { canonicalName: string },
+): SearchablePlayer => ({
   id: overrides.canonicalName.toLowerCase().replace(/\s+/g, '-'),
   displayName: null,
   companyCode: null,
@@ -27,7 +29,9 @@ describe('searchPlayers', () => {
   });
 
   it('never offers a merged player', () => {
-    expect(searchPlayers(pool, 'fox').map((match) => match.player.canonicalName)).not.toContain('Old Account');
+    expect(searchPlayers(pool, 'fox').map((match) => match.player.canonicalName)).not.toContain(
+      'Old Account',
+    );
     expect(searchPlayers(pool, 'old account')).toEqual([]);
   });
 
@@ -53,11 +57,17 @@ describe('searchPlayers', () => {
       ],
       'falco',
     );
-    expect(ranked.map((match) => match.player.canonicalName)).toEqual(['Falco', 'Falcon Punch', 'Captain Falco']);
+    expect(ranked.map((match) => match.player.canonicalName)).toEqual([
+      'Falco',
+      'Falcon Punch',
+      'Captain Falco',
+    ]);
   });
 
   it('caps the result list', () => {
-    const many = Array.from({ length: 40 }, (_, index) => player({ canonicalName: `Player ${index}` }));
+    const many = Array.from({ length: 40 }, (_, index) =>
+      player({ canonicalName: `Player ${index}` }),
+    );
     expect(searchPlayers(many, 'player', 25)).toHaveLength(25);
   });
 });

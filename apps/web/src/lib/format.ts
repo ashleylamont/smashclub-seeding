@@ -1,6 +1,10 @@
 /** Small formatting helpers shared across pages. */
 
-import { scoresIndicateBye, scoresIndicateForfeit, scoresIndicateUnplayed } from '@smashclub/shared';
+import {
+  scoresIndicateBye,
+  scoresIndicateForfeit,
+  scoresIndicateUnplayed,
+} from '@smashclub/shared';
 
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -70,7 +74,10 @@ export function roundLabel(round: number): string {
  * is a walkover and the other is a match nobody turned up for — and printing
  * "won 99-0" made byes look like the most one-sided sets in club history.
  */
-export function orientScore(scoresCsv: string | null | undefined, winnerSide: number | null): string | null {
+export function orientScore(
+  scoresCsv: string | null | undefined,
+  winnerSide: number | null,
+): string | null {
   if (!scoresCsv || (winnerSide !== 1 && winnerSide !== 2)) return null;
   if (scoresIndicateUnplayed(scoresCsv)) return null;
   const games: string[] = [];

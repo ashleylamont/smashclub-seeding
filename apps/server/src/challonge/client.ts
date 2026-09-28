@@ -71,7 +71,9 @@ export class ChallongeClient {
   async fetchTournamentBundle(slug: string): Promise<TournamentBundle> {
     if (this.hasCredentials) {
       try {
-        const tournament = extractTournament(await this.requestJson(`${this.baseUrl}/tournaments/${slug}.json`, true));
+        const tournament = extractTournament(
+          await this.requestJson(`${this.baseUrl}/tournaments/${slug}.json`, true),
+        );
         const participants = extractParticipants(
           await this.requestJson(`${this.baseUrl}/tournaments/${slug}/participants.json`, true),
         );
@@ -85,7 +87,12 @@ export class ChallongeClient {
           const publicBundle = await this.fetchPublicTournamentBundle(slug);
           const byId = new Map(participants.map((p) => [p.id, p]));
           for (const p of publicBundle.participants) if (!byId.has(p.id)) byId.set(p.id, p);
-          return { tournament, participants: [...byId.values()], matches: publicBundle.matches, source: 'api' };
+          return {
+            tournament,
+            participants: [...byId.values()],
+            matches: publicBundle.matches,
+            source: 'api',
+          };
         }
         return { tournament, participants, matches, source: 'api' };
       } catch (error) {
@@ -114,12 +121,17 @@ export class ChallongeClient {
     const meta = (payload as { tournament?: Record<string, unknown> }).tournament ?? {};
 
     const rawState = typeof meta.state === 'string' ? meta.state : null;
-    const groupStageEnabled = meta.group_stage_enabled === true || bracket.matches.some(match => match.stage === 'group') ||
-      (Array.isArray((payload as Record<string, unknown>).groups) && ((payload as Record<string, unknown>).groups as unknown[]).length > 0);
+    const groupStageEnabled =
+      meta.group_stage_enabled === true ||
+      bracket.matches.some((match) => match.stage === 'group') ||
+      (Array.isArray((payload as Record<string, unknown>).groups) &&
+        ((payload as Record<string, unknown>).groups as unknown[]).length > 0);
     // Finished pools are not a finished tournament: finals may not have been
     // generated yet. Keep the organiser's live-poll lease until finals exist
     // or authoritative tournament metadata explicitly declares completion.
-    const inferredComplete = bracket.allComplete && (!groupStageEnabled || bracket.matches.some(match => match.stage === 'final'));
+    const inferredComplete =
+      bracket.allComplete &&
+      (!groupStageEnabled || bracket.matches.some((match) => match.stage === 'final'));
     const state = rawState ?? (inferredComplete ? 'complete' : 'unknown');
     const tournament: ChallongeTournament = {
       id: typeof meta.id === 'number' ? meta.id : 0,
@@ -137,7 +149,12 @@ export class ChallongeClient {
       tournamentType: typeof meta.tournament_type === 'string' ? meta.tournament_type : null,
       groupStageEnabled,
     };
-    return { tournament, participants: bracket.participants, matches: bracket.matches, source: 'public' };
+    return {
+      tournament,
+      participants: bracket.participants,
+      matches: bracket.matches,
+      source: 'public',
+    };
   }
 
   private async fetchModulePage(slug: string): Promise<string> {
@@ -202,7 +219,11 @@ export class ChallongeClient {
     return run;
   }
 
-  private async requestWithRetries(url: string, useAuth: boolean, init: RequestInit): Promise<Response> {
+  private async requestWithRetries(
+    url: string,
+    useAuth: boolean,
+    init: RequestInit,
+  ): Promise<Response> {
     let attempt = 0;
     for (;;) {
       await this.waitForSpacing();

@@ -47,7 +47,13 @@ type SortField = 'rank' | 'rating' | 'wins' | 'eventCount' | 'certainty' | 'last
  * row *is* the sort control — a separate button strip would name the same fields
  * twice. `field: null` marks a column that carries no orderable measure.
  */
-const COLUMNS: { key: string; label: string; field: SortField | null; name: string; title?: string }[] = [
+const COLUMNS: {
+  key: string;
+  label: string;
+  field: SortField | null;
+  name: string;
+  title?: string;
+}[] = [
   { key: 'rank', label: '#', field: 'rank', name: 'rank' },
   {
     key: 'movement',
@@ -119,9 +125,7 @@ function lastSeenChip(row: LeaderboardRow): { text: string; className: string; t
       text: streak > 1 ? `${streak} in a row` : 'Latest',
       className: streak > 2 ? 'seen-streak' : 'seen-current',
       title:
-        streak > 1
-          ? `At the last ${streak} club nights in a row`
-          : 'At the most recent club night',
+        streak > 1 ? `At the last ${streak} club nights in a row` : 'At the most recent club night',
     };
   }
   const missed = `${row.missedEvents} missed`;
@@ -183,7 +187,13 @@ function sortKeyNote(row: LeaderboardRow, field: SortField): string | null {
   }
 }
 
-export function Leaderboard({ rows, trends, hideInactive, onHideInactiveChange, inactiveCount }: Props) {
+export function Leaderboard({
+  rows,
+  trends,
+  hideInactive,
+  onHideInactiveChange,
+  inactiveCount,
+}: Props) {
   const [sortField, setSortField] = useState<SortField>('rank');
   const [descending, setDescending] = useState(false);
   const [companyFilter, setCompanyFilter] = useState('all');
@@ -191,7 +201,8 @@ export function Leaderboard({ rows, trends, hideInactive, onHideInactiveChange, 
   const sortLabelId = useId();
 
   const companies = useMemo(
-    () => [...new Set(rows.map((r) => r.companyCode).filter((c): c is string => Boolean(c)))].sort(),
+    () =>
+      [...new Set(rows.map((r) => r.companyCode).filter((c): c is string => Boolean(c)))].sort(),
     [rows],
   );
 
@@ -280,6 +291,7 @@ export function Leaderboard({ rows, trends, hideInactive, onHideInactiveChange, 
             <input
               type="checkbox"
               role="switch"
+              aria-checked={hideInactive}
               className="switch-input"
               checked={hideInactive}
               onChange={(event) => onHideInactiveChange(event.target.checked)}
@@ -381,7 +393,10 @@ export function Leaderboard({ rows, trends, hideInactive, onHideInactiveChange, 
           const seen = lastSeenChip(row);
           const sortNote = sortKeyNote(row, sortField);
           return (
-            <li key={row.playerId} className={`board-row ${tierClass(row.league)}${podium ? ' is-podium' : ''}`}>
+            <li
+              key={row.playerId}
+              className={`board-row ${tierClass(row.league)}${podium ? ' is-podium' : ''}`}
+            >
               <Link
                 to="/players/$playerId"
                 params={{ playerId: row.playerId }}
@@ -397,7 +412,9 @@ export function Leaderboard({ rows, trends, hideInactive, onHideInactiveChange, 
                   `${row.league}`,
                   `rating ${Math.round(row.clubRating)}`,
                   ...(row.activityPenalty > 0
-                    ? [`${Math.round(row.activityPenalty)} docked for ${row.missedEvents} missed club nights`]
+                    ? [
+                        `${Math.round(row.activityPenalty)} docked for ${row.missedEvents} missed club nights`,
+                      ]
                     : []),
                   movementLabel(row.rankDelta),
                   `${row.wins} won, ${row.losses} lost`,
@@ -428,7 +445,10 @@ export function Leaderboard({ rows, trends, hideInactive, onHideInactiveChange, 
                         that makes them weak — the number itself is already
                         shrunk toward the middle for exactly that reason. */}
                     {row.isProvisional && (
-                      <span className="provisional" title="Provisional — too few sets for this rating to have settled">
+                      <span
+                        className="provisional"
+                        title="Provisional — too few sets for this rating to have settled"
+                      >
                         P
                       </span>
                     )}
@@ -470,7 +490,10 @@ export function Leaderboard({ rows, trends, hideInactive, onHideInactiveChange, 
                   aria-hidden="true"
                   title={`Confidence ${Math.round(confidenceWidth(row.sampleConfidence))}% — fuller means more sets against more opponents`}
                 >
-                  <span className="certainty-fill" style={{ width: `${confidenceWidth(row.sampleConfidence)}%` }} />
+                  <span
+                    className="certainty-fill"
+                    style={{ width: `${confidenceWidth(row.sampleConfidence)}%` }}
+                  />
                 </span>
 
                 <span className="form" aria-hidden="true">
@@ -498,14 +521,29 @@ export function Leaderboard({ rows, trends, hideInactive, onHideInactiveChange, 
 
       {visible.length === 0 && (
         <p className="board-empty">
-          No players match those filters. <button type="button" className="link-button" onClick={() => { setQuery(''); setCompanyFilter('all'); }}>Clear them</button>
+          No players match those filters.{' '}
+          <button
+            type="button"
+            className="link-button"
+            onClick={() => {
+              setQuery('');
+              setCompanyFilter('all');
+            }}
+          >
+            Clear them
+          </button>
           {/* Offered separately from "clear": the inactivity setting is on by
               default, so folding it into the same button would quietly undo a
               default the member never chose to change. */}
           {hideInactive && inactiveCount > 0 && (
             <>
-              {' '}or{' '}
-              <button type="button" className="link-button" onClick={() => onHideInactiveChange(false)}>
+              {' '}
+              or{' '}
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => onHideInactiveChange(false)}
+              >
                 include the {inactiveCount} inactive
               </button>
             </>

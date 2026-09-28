@@ -1,12 +1,6 @@
 import { eq, inArray } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
-import {
-  companies,
-  companyAliases,
-  playerAliases,
-  playerCharacters,
-  players,
-} from '@smashclub/db';
+import { companies, companyAliases, playerAliases, playerCharacters, players } from '@smashclub/db';
 import {
   DEFAULT_COMPANY_TAXONOMY,
   cleanPlayerEntry,
@@ -14,7 +8,12 @@ import {
   preparePlayerEntry,
   type CompanyTaxonomy,
 } from '@smashclub/engine';
-import { characterSlugFor, parseRegistryYaml, type RegistryIssue, type RegistryPlayerInput } from './parse';
+import {
+  characterSlugFor,
+  parseRegistryYaml,
+  type RegistryIssue,
+  type RegistryPlayerInput,
+} from './parse';
 
 /**
  * players.yaml -> database, as a plan you can look at before it happens.
@@ -59,7 +58,7 @@ export interface RegistryEntryPlan {
 export interface RegistryImportPlan {
   entries: RegistryEntryPlan[];
   /** Employers named by the file that do not exist yet. */
-  companiesToCreate: Array<{ code: string; name: string }>;
+  companiesToCreate: { code: string; name: string }[];
   /** Blocking problems. A plan with issues is never applied. */
   issues: RegistryIssue[];
   counts: {
@@ -206,7 +205,10 @@ function taxonomyFromIndex(index: CompanyIndex): CompanyTaxonomy {
  * Diff the registry against the database. Read-only: safe to run on every
  * keystroke of the wizard's preview if it came to that.
  */
-export async function planRegistryImport(db: Db, entries: RegistryPlayerInput[]): Promise<RegistryImportPlan> {
+export async function planRegistryImport(
+  db: Db,
+  entries: RegistryPlayerInput[],
+): Promise<RegistryImportPlan> {
   const index = await loadCompanyIndex(db);
   const taxonomy = taxonomyFromIndex(index);
   const pendingNew = new Map<string, { code: string; name: string }>();
@@ -221,7 +223,9 @@ export async function planRegistryImport(db: Db, entries: RegistryPlayerInput[])
   const existingCharacters = playerIds.length
     ? await db.select().from(playerCharacters).where(inArray(playerCharacters.playerId, playerIds))
     : [];
-  const characterKeys = new Set(existingCharacters.map((row) => `${row.playerId} ${row.characterSlug}`));
+  const characterKeys = new Set(
+    existingCharacters.map((row) => `${row.playerId} ${row.characterSlug}`),
+  );
 
   const companyIdByCode = new Map<string, string | null>();
   const codeById = new Map<string, string>();
@@ -236,13 +240,18 @@ export async function planRegistryImport(db: Db, entries: RegistryPlayerInput[])
   const allNorms = [
     ...new Set(
       entries.flatMap((entry) =>
-        [entry.canonical_name, ...(entry.aliases ?? [])].map((name) => registryAliasNorm(name, taxonomy)),
+        [entry.canonical_name, ...(entry.aliases ?? [])].map((name) =>
+          registryAliasNorm(name, taxonomy),
+        ),
       ),
     ),
   ].filter((norm) => norm !== '');
   const aliasOwners = new Map<string, string>();
   if (allNorms.length > 0) {
-    const rows = await db.select().from(playerAliases).where(inArray(playerAliases.aliasNorm, allNorms));
+    const rows = await db
+      .select()
+      .from(playerAliases)
+      .where(inArray(playerAliases.aliasNorm, allNorms));
     for (const row of rows) aliasOwners.set(aliasKey(row.aliasNorm, row.companyId), row.playerId);
   }
   /** Pairs claimed by an earlier entry in this same file. */
@@ -253,7 +262,9 @@ export async function planRegistryImport(db: Db, entries: RegistryPlayerInput[])
     const warnings: string[] = [];
     const company = resolveCompany(entry.company, index, pendingNew);
     const existing = playerByLegacyId.get(entry.id);
-    const currentCompanyCode = existing?.companyId ? (codeById.get(existing.companyId) ?? null) : null;
+    const currentCompanyCode = existing?.companyId
+      ? (codeById.get(existing.companyId) ?? null)
+      : null;
 
     // Alias scopes: the player's company, every past employer, and company-less
     // — the legacy alias_map semantics, so short forms resolve whichever tag a
@@ -266,7 +277,9 @@ export async function planRegistryImport(db: Db, entries: RegistryPlayerInput[])
       const resolved = resolveCompany(past, index, pendingNew, false);
       if (resolved.code === null) {
         if (past.trim() && !isNonCompanyLabel(past)) {
-          warnings.push(`Past employer “${past}” is not a known company; no alias scope was added for it.`);
+          warnings.push(
+            `Past employer “${past}” is not a known company; no alias scope was added for it.`,
+          );
         }
         continue;
       }
@@ -375,7 +388,11 @@ export async function planRegistryImport(db: Db, entries: RegistryPlayerInput[])
  * alias. A company that does not exist yet has no id, so its planned code
  * stands in, distinct from the bare null that means "company-less".
  */
-function aliasKey(aliasNorm: string, companyId: string | null, pendingCode?: string | null): string {
+function aliasKey(
+  aliasNorm: string,
+  companyId: string | null,
+  pendingCode?: string | null,
+): string {
   if (companyId === null && pendingCode) return `${aliasNorm} pending:${pendingCode}`;
   return `${aliasNorm} ${companyId ?? ''}`;
 }
@@ -450,10 +467,17 @@ export async function applyRegistryEntries(
       }
 
       for (const alias of entry.aliasesToAdd) {
-        const aliasCompanyId = alias.companyCode ? (companyIdByCode.get(alias.companyCode) ?? null) : null;
+        const aliasCompanyId = alias.companyCode
+          ? (companyIdByCode.get(alias.companyCode) ?? null)
+          : null;
         const inserted = await tx
           .insert(playerAliases)
-          .values({ playerId: playerId!, aliasNorm: alias.alias, companyId: aliasCompanyId, source: 'registry' })
+          .values({
+            playerId: playerId!,
+            aliasNorm: alias.alias,
+            companyId: aliasCompanyId,
+            source: 'registry',
+          })
           .onConflictDoNothing()
           .returning({ id: playerAliases.id });
         if (inserted.length > 0) result.aliasesAdded += 1;
@@ -492,7 +516,8 @@ export async function applyRegistryEntries(
 /** Parse + diff a pasted players.yaml. Writes nothing. */
 export async function previewRegistryYaml(db: Db, text: string): Promise<RegistryImportPlan> {
   const parsed = parseRegistryYaml(text);
-  const plan = parsed.entries.length > 0 ? await planRegistryImport(db, parsed.entries) : emptyPlan();
+  const plan =
+    parsed.entries.length > 0 ? await planRegistryImport(db, parsed.entries) : emptyPlan();
   return { ...plan, issues: parsed.issues };
 }
 

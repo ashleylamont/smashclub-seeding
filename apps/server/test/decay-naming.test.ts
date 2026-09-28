@@ -164,9 +164,12 @@ afterEach(async () => {
 });
 
 async function decayRows(canonicalName: string) {
-  const [player] = await db.select({ id: players.id }).from(players).where(eq(players.canonicalName, canonicalName));
+  const [player] = await db
+    .select({ id: players.id })
+    .from(players)
+    .where(eq(players.canonicalName, canonicalName));
   const result = await anonymous().public.player({ playerId: player!.id });
-  const profile = result as { events: Array<Record<string, unknown>> };
+  const profile = result as { events: Record<string, unknown>[] };
   return profile.events.filter((event) => event.isDecay);
 }
 
@@ -190,12 +193,17 @@ describe('naming an inactivity decay row', () => {
   });
 
   it('leaves the tournament a played set belongs to alone', async () => {
-    const [player] = await db.select({ id: players.id }).from(players).where(eq(players.canonicalName, 'Link'));
+    const [player] = await db
+      .select({ id: players.id })
+      .from(players)
+      .where(eq(players.canonicalName, 'Link'));
     const result = (await anonymous().public.player({ playerId: player!.id })) as {
-      events: Array<Record<string, unknown>>;
+      events: Record<string, unknown>[];
     };
     const played = result.events.filter((event) => !event.isDecay);
     // A set was played in one bracket, and is still reported against that one.
-    expect(new Set(played.map((event) => event.tournamentName))).toEqual(new Set(['main1', 'main3']));
+    expect(new Set(played.map((event) => event.tournamentName))).toEqual(
+      new Set(['main1', 'main3']),
+    );
   });
 });

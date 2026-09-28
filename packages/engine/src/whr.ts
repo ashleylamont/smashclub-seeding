@@ -29,10 +29,14 @@ export const NATURAL_TO_DISPLAY = 400 / Math.LN10; // 173.7178…
 export const DISPLAY_CENTRE = 1500;
 
 /** Shared evidence weighting for production fits and pre-night analysis. */
-export function whrSetTrials(set: { winner: 1 | 2; p1Games?: number | null; p2Games?: number | null }, gamesWeight: number): number {
+export function whrSetTrials(
+  set: { winner: 1 | 2; p1Games?: number | null; p2Games?: number | null },
+  gamesWeight: number,
+): number {
   const winnerGames = set.winner === 1 ? set.p1Games : set.p2Games;
   const loserGames = set.winner === 1 ? set.p2Games : set.p1Games;
-  if (winnerGames == null || loserGames == null || loserGames < 0 || winnerGames <= loserGames) return 1;
+  if (winnerGames == null || loserGames == null || loserGames < 0 || winnerGames <= loserGames)
+    return 1;
   return Math.max(1, Math.min(2, 1 + gamesWeight * (winnerGames - loserGames - 1)));
 }
 
@@ -86,7 +90,7 @@ interface PlayerTrack {
   /** Posterior variance at each time, natural units squared. */
   variance: number[];
   /** Games indexed by time position. */
-  games: Array<Array<{ opponentId: string; opponentTimeIndex: number; won: boolean; trials: number }>>;
+  games: { opponentId: string; opponentTimeIndex: number; won: boolean; trials: number }[][];
   /** Centre of this player's prior, natural units (0 unless overridden). */
   priorMean: number;
 }
@@ -108,7 +112,7 @@ export interface WhrFit {
   /** Rating projected to `time`, with drift variance added for the gap. */
   at(playerId: string, time: number): PlayerRatingAt;
   /** Full trajectory, for charting. */
-  track(playerId: string): Array<{ time: number } & PlayerRatingAt> | null;
+  track(playerId: string): ({ time: number } & PlayerRatingAt)[] | null;
   /** Calibrated probability that `p1` beats `p2` at `time`. */
   winProbability(p1PlayerId: string, p2PlayerId: string, time: number): number;
   /** Display-scale rating (1500-centred) and standard deviation. */
@@ -178,8 +182,18 @@ export function fitWhr(input: {
     const t2 = tracks.get(set.p2PlayerId)!;
     const i1 = timeIndex(t1, set.time);
     const i2 = timeIndex(t2, set.time);
-    t1.games[i1]!.push({ opponentId: set.p2PlayerId, opponentTimeIndex: i2, won: set.winner === 1, trials });
-    t2.games[i2]!.push({ opponentId: set.p1PlayerId, opponentTimeIndex: i1, won: set.winner === 2, trials });
+    t1.games[i1]!.push({
+      opponentId: set.p2PlayerId,
+      opponentTimeIndex: i2,
+      won: set.winner === 1,
+      trials,
+    });
+    t2.games[i2]!.push({
+      opponentId: set.p1PlayerId,
+      opponentTimeIndex: i1,
+      won: set.winner === 2,
+      trials,
+    });
   }
 
   // ---- iterative conditional modes: Newton step per player until settled ----
@@ -211,7 +225,8 @@ export function fitWhr(input: {
   const at = (playerId: string, time: number): PlayerRatingAt => {
     const track = tracks.get(playerId);
     // Unknown player: the prior, centred.
-    if (!track || track.times.length === 0) return { r: 0, variance: config.priorSd * config.priorSd };
+    if (!track || track.times.length === 0)
+      return { r: 0, variance: config.priorSd * config.priorSd };
     // Find the last observation at or before `time`.
     let index = -1;
     for (let i = 0; i < track.times.length; i++) if (track.times[i]! <= time) index = i;
@@ -221,7 +236,10 @@ export function fitWhr(input: {
       return { r: track.r[0]!, variance: track.variance[0]! + gap * config.driftVariancePerDay };
     }
     const gap = Math.max(0, time - track.times[index]!);
-    return { r: track.r[index]!, variance: track.variance[index]! + gap * config.driftVariancePerDay };
+    return {
+      r: track.r[index]!,
+      variance: track.variance[index]! + gap * config.driftVariancePerDay,
+    };
   };
 
   return {
@@ -242,7 +260,10 @@ export function fitWhr(input: {
       return probabilityFromRatings(a.r, b.r, a.variance + b.variance);
     },
     display: (playerId, time) => {
-      const value = time === undefined ? (latest(playerId) ?? { r: 0, variance: config.priorSd ** 2 }) : at(playerId, time);
+      const value =
+        time === undefined
+          ? (latest(playerId) ?? { r: 0, variance: config.priorSd ** 2 })
+          : at(playerId, time);
       return {
         rating: DISPLAY_CENTRE + value.r * NATURAL_TO_DISPLAY,
         sd: Math.sqrt(value.variance) * NATURAL_TO_DISPLAY,
@@ -257,7 +278,11 @@ export function fitWhr(input: {
  * to the diagonal, and the Brownian prior couples consecutive times — so it
  * solves in linear time.
  */
-function newtonUpdatePlayer(track: PlayerTrack, tracks: Map<string, PlayerTrack>, config: WhrConfig): number {
+function newtonUpdatePlayer(
+  track: PlayerTrack,
+  tracks: Map<string, PlayerTrack>,
+  config: WhrConfig,
+): number {
   const n = track.times.length;
   if (n === 0) return 0;
 
@@ -307,23 +332,27 @@ function newtonUpdatePlayer(track: PlayerTrack, tracks: Map<string, PlayerTrack>
 }
 
 /** Thomas algorithm for a symmetric tridiagonal system H·x = rhs. */
-function solveTridiagonal(diagonal: Float64Array, offDiagonal: Float64Array, rhs: Float64Array): Float64Array {
+function solveTridiagonal(
+  diagonal: Float64Array,
+  offDiagonal: Float64Array,
+  rhs: Float64Array,
+): Float64Array {
   const n = diagonal.length;
   const c = new Float64Array(Math.max(0, n - 1));
   const d = new Float64Array(n);
   let denominator = diagonal[0]!;
   if (Math.abs(denominator) < 1e-12) denominator = -1e-12;
-  if (n > 1) c[0]! = offDiagonal[0]! / denominator;
-  d[0]! = rhs[0]! / denominator;
+  if (n > 1) c[0] = offDiagonal[0]! / denominator;
+  d[0] = rhs[0]! / denominator;
   for (let i = 1; i < n; i++) {
     let den = diagonal[i]! - offDiagonal[i - 1]! * c[i - 1]!;
     if (Math.abs(den) < 1e-12) den = -1e-12;
-    if (i < n - 1) c[i]! = offDiagonal[i]! / den;
-    d[i]! = (rhs[i]! - offDiagonal[i - 1]! * d[i - 1]!) / den;
+    if (i < n - 1) c[i] = offDiagonal[i]! / den;
+    d[i] = (rhs[i]! - offDiagonal[i - 1]! * d[i - 1]!) / den;
   }
   const x = new Float64Array(n);
-  x[n - 1]! = d[n - 1]!;
-  for (let i = n - 2; i >= 0; i--) x[i]! = d[i]! - c[i]! * x[i + 1]!;
+  x[n - 1] = d[n - 1]!;
+  for (let i = n - 2; i >= 0; i--) x[i] = d[i]! - c[i]! * x[i + 1]!;
   return x;
 }
 
@@ -332,7 +361,11 @@ function solveTridiagonal(diagonal: Float64Array, offDiagonal: Float64Array, rhs
  * negative Hessian, via the standard forward/backward recursions for a
  * tridiagonal matrix.
  */
-function computeVariances(track: PlayerTrack, tracks: Map<string, PlayerTrack>, config: WhrConfig): void {
+function computeVariances(
+  track: PlayerTrack,
+  tracks: Map<string, PlayerTrack>,
+  config: WhrConfig,
+): void {
   const n = track.times.length;
   if (n === 0) return;
 
@@ -359,19 +392,21 @@ function computeVariances(track: PlayerTrack, tracks: Map<string, PlayerTrack>, 
   // theta: forward elimination; phi: backward elimination.
   const theta = new Float64Array(n);
   const phi = new Float64Array(n);
-  theta[0]! = diagonal[0]!;
+  theta[0] = diagonal[0]!;
   for (let i = 1; i < n; i++) {
-    theta[i]! = diagonal[i]! - (offDiagonal[i - 1]! * offDiagonal[i - 1]!) / Math.max(theta[i - 1]!, 1e-12);
+    theta[i] =
+      diagonal[i]! - (offDiagonal[i - 1]! * offDiagonal[i - 1]!) / Math.max(theta[i - 1]!, 1e-12);
   }
-  phi[n - 1]! = diagonal[n - 1]!;
+  phi[n - 1] = diagonal[n - 1]!;
   for (let i = n - 2; i >= 0; i--) {
-    phi[i]! = diagonal[i]! - (offDiagonal[i]! * offDiagonal[i]!) / Math.max(phi[i + 1]!, 1e-12);
+    phi[i] = diagonal[i]! - (offDiagonal[i]! * offDiagonal[i]!) / Math.max(phi[i + 1]!, 1e-12);
   }
 
   for (let i = 0; i < n; i++) {
     let precision = diagonal[i]!;
-    if (i > 0) precision -= (offDiagonal[i - 1]! * offDiagonal[i - 1]!) / Math.max(theta[i - 1]!, 1e-12);
+    if (i > 0)
+      precision -= (offDiagonal[i - 1]! * offDiagonal[i - 1]!) / Math.max(theta[i - 1]!, 1e-12);
     if (i < n - 1) precision -= (offDiagonal[i]! * offDiagonal[i]!) / Math.max(phi[i + 1]!, 1e-12);
-    track.variance[i]! = 1 / Math.max(precision, 1e-12);
+    track.variance[i] = 1 / Math.max(precision, 1e-12);
   }
 }

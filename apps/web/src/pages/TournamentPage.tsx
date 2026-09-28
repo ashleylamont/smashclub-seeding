@@ -29,7 +29,8 @@ export function TournamentPage() {
   });
 
   if (query.isPending) return <p className="loading-text">Loading tournament…</p>;
-  if (query.isError) return <p className="error-text">Failed to load tournament: {query.error.message}</p>;
+  if (query.isError)
+    return <p className="error-text">Failed to load tournament: {query.error.message}</p>;
   if (query.data === null) return <p className="error-text">Tournament not found.</p>;
 
   return <TournamentDetail data={query.data} now={now} />;
@@ -85,7 +86,10 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
         <span className="tournament-tags">
           {isLive && <span className="live-badge">LIVE</span>}
           {data.isRookie && (
-            <span className="chip chip-warning" title="A beginners' bracket — sets in it are weighted differently">
+            <span
+              className="chip chip-warning"
+              title="A beginners' bracket — sets in it are weighted differently"
+            >
               rookie
             </span>
           )}
@@ -207,7 +211,13 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
       )}
 
       <div className="section">
-        <h2>Sets ({effectiveStage === 'all' ? data.sets.length : `${visibleSets.length} of ${data.sets.length}`})</h2>
+        <h2>
+          Sets (
+          {effectiveStage === 'all'
+            ? data.sets.length
+            : `${visibleSets.length} of ${data.sets.length}`}
+          )
+        </h2>
         {hasBothStages && (
           <label className="history-stage-filter">
             <span>Show</span>
@@ -243,12 +253,23 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
                 {visibleSets.map((set) => {
                   const state = setStateLabel(set.state);
                   return (
-                    <tr key={set.id} className={set.excludedFromRatings ? 'set-excluded' : undefined}>
-                      <td>{set.resultStage === 'group' ? 'Pool' : set.resultStage === 'final' ? 'Bracket' : '—'}</td>
+                    <tr
+                      key={set.id}
+                      className={set.excludedFromRatings ? 'set-excluded' : undefined}
+                    >
+                      <td>
+                        {set.resultStage === 'group'
+                          ? 'Pool'
+                          : set.resultStage === 'final'
+                            ? 'Bracket'
+                            : '—'}
+                      </td>
                       <td className="mono">
                         {set.resultStage === 'group'
-                          ? set.round ?? '—'
-                          : set.round != null ? roundLabel(set.round) : '—'}
+                          ? (set.round ?? '—')
+                          : set.round != null
+                            ? roundLabel(set.round)
+                            : '—'}
                       </td>
                       <td className="mono">{set.identifier ?? '—'}</td>
                       <td>
@@ -256,9 +277,11 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
                         {set.excludedFromRatings && (
                           <span
                             className="chip chip-danger excluded-chip"
-                            title={set.excludedByResultsMode
-                              ? 'Group results are ignored by this tournament’s Final stage only setting'
-                              : 'Not counted towards ratings — a walkover, a disqualification, or an admin exclusion'}
+                            title={
+                              set.excludedByResultsMode
+                                ? 'Group results are ignored by this tournament’s Final stage only setting'
+                                : 'Not counted towards ratings — a walkover, a disqualification, or an admin exclusion'
+                            }
                           >
                             {set.excludedByResultsMode ? 'group ignored' : 'excluded'}
                           </span>
@@ -266,7 +289,9 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
                       </td>
                       <td className="mono">{scoreCell(set.scoresCsv)}</td>
                       <td title={state.hint}>{state.label}</td>
-                      <td className="mono">{set.completedAt ? formatDateTime(set.completedAt) : '—'}</td>
+                      <td className="mono">
+                        {set.completedAt ? formatDateTime(set.completedAt) : '—'}
+                      </td>
                     </tr>
                   );
                 })}

@@ -75,7 +75,10 @@ export function isNonCompanyLabel(text: string): boolean {
 }
 
 /** Resolve free text (a code, full name, or alias) to a company code, if known. */
-export function resolveCompanyCode(text: string, taxonomy: CompanyTaxonomy = DEFAULT_COMPANY_TAXONOMY): string | null {
+export function resolveCompanyCode(
+  text: string,
+  taxonomy: CompanyTaxonomy = DEFAULT_COMPANY_TAXONOMY,
+): string | null {
   const trimmed = text.trim();
   if (!trimmed) return null;
   const upper = trimmed.toUpperCase();

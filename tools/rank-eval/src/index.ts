@@ -44,15 +44,17 @@ interface CacheRow {
  * aliases resolve under the player's company, each past company, and with no
  * company at all. Without this, one person appears as several players.
  */
-function buildRegistryResolver(registryPath: string): (cleanedName: string, companyCode: string | null) => string | null {
+function buildRegistryResolver(
+  registryPath: string,
+): (cleanedName: string, companyCode: string | null) => string | null {
   const payload = parseYaml(readFileSync(registryPath, 'utf8')) as {
-    players?: Array<{
+    players?: {
       id: string;
       canonical_name: string;
       company?: string | null;
       aliases?: string[] | null;
       past_companies?: string[] | null;
-    }>;
+    }[];
   };
   const map = new Map<string, string>();
   for (const player of payload.players ?? []) {
@@ -87,7 +89,9 @@ function loadFromCache(cacheDir: string, registryPath?: string): EvalSet[] {
   const origin = Date.UTC(2024, 0, 1);
   for (const file of readdirSync(cacheDir)) {
     if (!file.endsWith('.json')) continue;
-    const payload = JSON.parse(readFileSync(path.join(cacheDir, file), 'utf8')) as { rows?: CacheRow[] };
+    const payload = JSON.parse(readFileSync(path.join(cacheDir, file), 'utf8')) as {
+      rows?: CacheRow[];
+    };
     const rows = payload.rows ?? [];
     if (rows.length < 5) continue; // skip unit-test fixtures living alongside
     for (const row of rows) {
@@ -184,9 +188,10 @@ function calibrationReport(score: ModelScore): void {
   for (const bin of score.calibration) {
     if (!bin.count) continue;
     console.log(
-      `  ${(100 * bin.lower).toFixed(0)}–${(100 * bin.upper).toFixed(0)}%` .padEnd(18) +
-        `${String(bin.count).padStart(4)}    ${(100 * bin.predicted).toFixed(1)}%`.padEnd(18) +
-        `    ${(100 * bin.observed).toFixed(1)}%`,
+      `${
+        `  ${(100 * bin.lower).toFixed(0)}–${(100 * bin.upper).toFixed(0)}%`.padEnd(18) +
+        `${String(bin.count).padStart(4)}    ${(100 * bin.predicted).toFixed(1)}%`.padEnd(18)
+      }    ${(100 * bin.observed).toFixed(1)}%`,
     );
   }
 }
@@ -206,7 +211,10 @@ function main(): void {
   });
   const cacheDir = positionals.find((p) => p !== '--');
 
-  const sets = values.synthetic || !cacheDir ? syntheticSets() : loadFromCache(cacheDir, values.registry as string | undefined);
+  const sets =
+    values.synthetic || !cacheDir
+      ? syntheticSets()
+      : loadFromCache(cacheDir, values.registry as string | undefined);
   console.log(
     values.synthetic || !cacheDir
       ? 'source: synthetic (known ground truth)'
@@ -251,7 +259,9 @@ function main(): void {
       if (cacheDir && values.registry) {
         identityImpact(cacheDir, String(values.registry), models);
       } else {
-        console.log('\n--identity-impact needs a cache directory and --registry to compare against.');
+        console.log(
+          '\n--identity-impact needs a cache directory and --registry to compare against.',
+        );
       }
     }
     return;
@@ -282,7 +292,6 @@ function main(): void {
     calibrationReport(bestScore);
     if (baseline) calibrationReport(baseline);
   }
-
 }
 
 /**
@@ -292,12 +301,22 @@ function main(): void {
  *
  * This is the comparison that should drive where effort goes.
  */
-function identityImpact(cacheDir: string, registryPath: string, models: readonly EvalModel[]): void {
+function identityImpact(
+  cacheDir: string,
+  registryPath: string,
+  models: readonly EvalModel[],
+): void {
   const raw = walkForward({ sets: loadFromCache(cacheDir), models, minTrainingEvents: 2 });
-  const resolved = walkForward({ sets: loadFromCache(cacheDir, registryPath), models, minTrainingEvents: 2 });
+  const resolved = walkForward({
+    sets: loadFromCache(cacheDir, registryPath),
+    models,
+    minTrainingEvents: 2,
+  });
 
   const bestOf = (scores: ModelScore[]): ModelScore =>
-    [...scores].filter((s) => !s.name.startsWith('baseline:')).sort((a, b) => a.logLoss - b.logLoss)[0]!;
+    [...scores]
+      .filter((s) => !s.name.startsWith('baseline:'))
+      .sort((a, b) => a.logLoss - b.logLoss)[0]!;
   const rawBest = bestOf(raw.scores);
   const resolvedBest = bestOf(resolved.scores);
 
@@ -323,7 +342,9 @@ function identityImpact(cacheDir: string, registryPath: string, models: readonly
         `Invest in the review queue.`,
     );
   }
-  console.log(`  (fragmentation also left ${rawLegacy.predictions - resolvedLegacy.predictions} fewer usable comparisons)`);
+  console.log(
+    `  (fragmentation also left ${rawLegacy.predictions - resolvedLegacy.predictions} fewer usable comparisons)`,
+  );
 }
 
 main();

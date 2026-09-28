@@ -57,7 +57,9 @@ export function AdminPlayersPage() {
 
   const toggleMergeSelection = (playerId: string) => {
     setMergeSelection((prev) =>
-      prev.includes(playerId) ? prev.filter((id) => id !== playerId) : [...prev.slice(-1), playerId],
+      prev.includes(playerId)
+        ? prev.filter((id) => id !== playerId)
+        : [...prev.slice(-1), playerId],
     );
   };
 
@@ -75,7 +77,11 @@ export function AdminPlayersPage() {
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
             />
-            <button type="button" className="btn btn-small btn-primary" onClick={() => setCreating(true)}>
+            <button
+              type="button"
+              className="btn btn-small btn-primary"
+              onClick={() => setCreating(true)}
+            >
               New player
             </button>
           </span>
@@ -93,8 +99,9 @@ export function AdminPlayersPage() {
             onSubmit={(values) => create.mutate(values)}
           >
             <p className="muted">
-              Adds a player to the registry directly. Their registry name and any aliases are matched against future
-              bracket entries, so this player will link automatically instead of going to the review queue.
+              Adds a player to the registry directly. Their registry name and any aliases are
+              matched against future bracket entries, so this player will link automatically instead
+              of going to the review queue.
             </p>
           </PlayerFormModal>
         )}
@@ -166,7 +173,8 @@ function MergeBar({
   const into = intoId ? byId.get(intoId) : undefined;
 
   const merge = useMutation({
-    mutationFn: () => trpc.admin.mergePlayers.mutate({ fromPlayerId: fromId!, intoPlayerId: intoId! }),
+    mutationFn: () =>
+      trpc.admin.mergePlayers.mutate({ fromPlayerId: fromId!, intoPlayerId: intoId! }),
     onSuccess: () => {
       setConfirming(false);
       onMerged();
@@ -177,7 +185,8 @@ function MergeBar({
     <div className="banner banner-warning merge-bar">
       {selection.length === 1 ? (
         <span>
-          Merging <strong>{from?.canonicalName}</strong> — now select the player to merge it <em>into</em>.
+          Merging <strong>{from?.canonicalName}</strong> — now select the player to merge it{' '}
+          <em>into</em>.
         </span>
       ) : (
         <span>
@@ -185,7 +194,11 @@ function MergeBar({
         </span>
       )}
       {selection.length === 2 && (
-        <button type="button" className="btn btn-small btn-primary" onClick={() => setConfirming(true)}>
+        <button
+          type="button"
+          className="btn btn-small btn-primary"
+          onClick={() => setConfirming(true)}
+        >
           Merge…
         </button>
       )}
@@ -195,13 +208,20 @@ function MergeBar({
       {merge.isError && <span className="error-text">{merge.error.message}</span>}
 
       {confirming && from && into && (
-        <div className="modal-overlay" onClick={() => setConfirming(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay">
+          <button
+            type="button"
+            className="modal-backdrop"
+            aria-label="Close dialog"
+            onClick={() => setConfirming(false)}
+          />
+          <div className="modal">
             <h3>Merge players</h3>
             <p>
-              <strong>{from.canonicalName}</strong> will be merged into <strong>{into.canonicalName}</strong>. All of{' '}
-              {from.canonicalName}'s aliases, sets, and history move to {into.canonicalName}; this triggers a full
-              recompute. This cannot be undone from the UI.
+              <strong>{from.canonicalName}</strong> will be merged into{' '}
+              <strong>{into.canonicalName}</strong>. All of {from.canonicalName}'s aliases, sets,
+              and history move to {into.canonicalName}; this triggers a full recompute. This cannot
+              be undone from the UI.
             </p>
             <div className="modal-actions">
               <button type="button" className="btn" onClick={() => setConfirming(false)}>
@@ -278,6 +298,7 @@ function PlayerRow({
           onChange={onToggleMerge}
           disabled={player.status !== 'active'}
           title="Select for merge"
+          aria-label={`Select ${player.canonicalName} for merge`}
         />
       </td>
       <td>
@@ -288,7 +309,11 @@ function PlayerRow({
         {error && <div className="error-text">{error.message}</div>}
       </td>
       <td>
-        {player.characters.length > 0 ? <CharacterIcons slugs={player.characters} /> : <span className="muted">—</span>}
+        {player.characters.length > 0 ? (
+          <CharacterIcons slugs={player.characters} />
+        ) : (
+          <span className="muted">—</span>
+        )}
       </td>
       <td>{player.companyCode ?? '—'}</td>
       <td>
@@ -321,7 +346,9 @@ function PlayerRow({
       </td>
       <td>{player.legacyId ?? '—'}</td>
       <td>
-        <span className={`chip ${player.status === 'active' ? '' : 'chip-warning'}`}>{player.status}</span>
+        <span className={`chip ${player.status === 'active' ? '' : 'chip-warning'}`}>
+          {player.status}
+        </span>
       </td>
       <td>
         <button type="button" className="btn btn-small" onClick={() => setEditing(true)}>
@@ -417,7 +444,11 @@ function ClaimRow({ claim, onChanged }: { claim: AdminClaim; onChanged: () => vo
       <td>
         <span
           className={`chip ${
-            claim.status === 'approved' ? 'chip-success' : claim.status === 'pending' ? 'chip-warning' : 'chip-danger'
+            claim.status === 'approved'
+              ? 'chip-success'
+              : claim.status === 'pending'
+                ? 'chip-warning'
+                : 'chip-danger'
           }`}
         >
           {claim.status}

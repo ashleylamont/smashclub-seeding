@@ -1,36 +1,90 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
-type Match = { id: string; label: string; status: string; revision: number; division: string; poolIndex: number | null; player1Id: string; player2Id: string; score1: number | null; score2: number | null; winnerId: string | null; resultUpdatedAt: string | null; availability: { canStart: boolean } };
-type Snapshot = { plan: { bracketMode: string }; matches: Match[]; stations: { id: string; name: string; status: string }[] };
+type Match = {
+  id: string;
+  label: string;
+  status: string;
+  revision: number;
+  division: string;
+  poolIndex: number | null;
+  player1Id: string;
+  player2Id: string;
+  score1: number | null;
+  score2: number | null;
+  winnerId: string | null;
+  resultUpdatedAt: string | null;
+  availability: { canStart: boolean };
+};
+type Snapshot = {
+  plan: { bracketMode: string };
+  matches: Match[];
+  stations: { id: string; name: string; status: string }[];
+};
 async function signIn(request: APIRequestContext, email: string) {
-  const response = await request.post('/api/auth/sign-in/email', { data: { email, password: 'devpassword123' } });
+  const response = await request.post('/api/auth/sign-in/email', {
+    data: { email, password: 'devpassword123' },
+  });
   expect(response.ok(), await response.text()).toBe(true);
 }
 async function query<T>(request: APIRequestContext, procedure: string, input?: object): Promise<T> {
-  const response = await request.get(`/api/trpc/${procedure}`, { params: input ? { input: JSON.stringify(input) } : {} });
+  const response = await request.get(`/api/trpc/${procedure}`, {
+    params: input ? { input: JSON.stringify(input) } : {},
+  });
   expect(response.ok(), await response.text()).toBe(true);
   return (await response.json()).result.data as T;
 }
-async function mutate<T = unknown>(request: APIRequestContext, procedure: string, data: object): Promise<T> {
+async function mutate<T = unknown>(
+  request: APIRequestContext,
+  procedure: string,
+  data: object,
+): Promise<T> {
   const response = await request.post(`/api/trpc/${procedure}`, { data });
   expect(response.ok(), await response.text()).toBe(true);
   return (await response.json()).result.data as T;
 }
 async function freshEvent(request: APIRequestContext, suffix: string) {
   const plans = await query<{ id: string; name: string }[]>(request, 'admin.eventPlanner.plans');
-  const source = plans.find(plan => plan.name === 'Nemesis · Rehearsal Night')!;
-  const roster = await query<{ entries: { playerId: string; playerName: string; companyId: string | null }[] }>(request, 'admin.eventPlanner.plan', { planId: source.id });
-  const created = await mutate<{ planId: string }>(request, 'admin.eventPlanner.createPlan', { name: `Night regression ${suffix} ${Date.now()}`, bracketMode: 'native', eventDate: new Date().toISOString(), upperTargetSize: 9,
-    rows: roster.entries.map((entry, index) => ({ lineNumber: index + 1, rawInput: entry.playerName, cleanedName: entry.playerName, playerId: entry.playerId, companyId: entry.companyId ?? null, resolutionMethod: 'manual', divisionPreference: 'auto' })) });
-  for (const procedure of ['admin.eventPlanner.freezeRoster', 'admin.eventPlanner.generatePools', 'eventOps.prepare']) await mutate(request, procedure, created);
+  const source = plans.find((plan) => plan.name === 'Nemesis · Rehearsal Night')!;
+  const roster = await query<{
+    entries: { playerId: string; playerName: string; companyId: string | null }[];
+  }>(request, 'admin.eventPlanner.plan', { planId: source.id });
+  const created = await mutate<{ planId: string }>(request, 'admin.eventPlanner.createPlan', {
+    name: `Night regression ${suffix} ${Date.now()}`,
+    bracketMode: 'native',
+    eventDate: new Date().toISOString(),
+    upperTargetSize: 9,
+    rows: roster.entries.map((entry, index) => ({
+      lineNumber: index + 1,
+      rawInput: entry.playerName,
+      cleanedName: entry.playerName,
+      playerId: entry.playerId,
+      companyId: entry.companyId ?? null,
+      resolutionMethod: 'manual',
+      divisionPreference: 'auto',
+    })),
+  });
+  for (const procedure of [
+    'admin.eventPlanner.freezeRoster',
+    'admin.eventPlanner.generatePools',
+    'eventOps.prepare',
+  ])
+    await mutate(request, procedure, created);
   await mutate(request, 'eventOps.settings', { ...created, published: true, playerReports: true });
   return { ...created, snapshot: await query<Snapshot>(request, 'eventOps.snapshot', created) };
 }
 
-test('signed-out player hub browses without a pass and reuses a venue pass across live-board navigation', async ({ page, browser, baseURL }, testInfo) => {
+test('signed-out player hub browses without a pass and reuses a venue pass across live-board navigation', async ({
+  page,
+  browser,
+  baseURL,
+}, testInfo) => {
   await signIn(page.request, 'admin@smashclub.dev');
   const { planId, snapshot } = await freshEvent(page.request, 'guest hub');
-  await mutate(page.request, 'eventOps.guests.configure', { planId, enabled: true, showOnOverlay: false });
+  await mutate(page.request, 'eventOps.guests.configure', {
+    planId,
+    enabled: true,
+    showOnOverlay: false,
+  });
   const guest = await browser.newContext({ baseURL, viewport: { width: 390, height: 844 } });
   try {
     const visitor = await guest.newPage();
@@ -42,8 +96,20 @@ test('signed-out player hub browses without a pass and reuses a venue pass acros
     await expect(visitor.getByLabel('Match view', { exact: true })).toHaveValue('mine');
     await expect(visitor.getByRole('heading', { name: /’s matches$/ })).toBeVisible();
     const focusedCards = visitor.locator('article.ops-match');
-    await expect(focusedCards).toHaveCount(snapshot.matches.filter(match => match.player1Id === focusedPlayer || match.player2Id === focusedPlayer).length);
-    expect(await visitor.locator('.pool-score-selection').evaluate(section => section.compareDocumentPosition(document.querySelector('.pool-flow-stations')!) & Node.DOCUMENT_POSITION_FOLLOWING)).toBeTruthy();
+    await expect(focusedCards).toHaveCount(
+      snapshot.matches.filter(
+        (match) => match.player1Id === focusedPlayer || match.player2Id === focusedPlayer,
+      ).length,
+    );
+    expect(
+      await visitor
+        .locator('.pool-score-selection')
+        .evaluate(
+          (section) =>
+            section.compareDocumentPosition(document.querySelector('.pool-flow-stations')!) &
+            Node.DOCUMENT_POSITION_FOLLOWING,
+        ),
+    ).toBeTruthy();
     await expect(visitor.getByRole('heading', { name: 'Your stations' })).toBeVisible();
     await expect(visitor.locator('article.ops-match input[type="number"]')).toHaveCount(0);
     await visitor.reload();
@@ -51,10 +117,19 @@ test('signed-out player hub browses without a pass and reuses a venue pass acros
     await expect(visitor.getByLabel('Match view', { exact: true })).toHaveValue('mine');
     await visitor.getByLabel('Show matches for').selectOption('');
     await expect(visitor.getByLabel('Match view', { exact: true })).toHaveValue('matches');
-    await visitor.screenshot({ path: testInfo.outputPath('guest-no-account-mobile.png'), fullPage: true });
-    expect(await visitor.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
-    const invitation = await mutate<{ token: string }>(page.request, 'eventOps.guests.invitation', { planId });
-    await visitor.goto(`/guest/${planId}?pool=upper%3A0#token=${encodeURIComponent(invitation.token)}`);
+    await visitor.screenshot({
+      path: testInfo.outputPath('guest-no-account-mobile.png'),
+      fullPage: true,
+    });
+    expect(
+      await visitor.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
+    ).toBe(true);
+    const invitation = await mutate<{ token: string }>(page.request, 'eventOps.guests.invitation', {
+      planId,
+    });
+    await visitor.goto(
+      `/guest/${planId}?pool=upper%3A0#token=${encodeURIComponent(invitation.token)}`,
+    );
     await expect(visitor.locator('.guest-pass-expiry')).toContainText('remaining');
     await expect.poll(() => new URL(visitor.url()).hash).toBe('');
     await visitor.getByRole('link', { name: 'Live event board →', exact: true }).click();
@@ -64,34 +139,72 @@ test('signed-out player hub browses without a pass and reuses a venue pass acros
     await expect(visitor.getByLabel('Your pool')).toHaveValue('upper:0');
     await visitor.getByLabel('Match view', { exact: true }).selectOption('matches');
     await expect(visitor.locator('article.ops-match input[type="number"]').first()).toBeVisible();
-    await visitor.evaluate(id => { const key = `nemesis:guest:${id}`; const pass = JSON.parse(sessionStorage.getItem(key)!); pass.expiresAt = new Date(Date.now() - 1000).toISOString(); sessionStorage.setItem(key, JSON.stringify(pass)); }, planId);
+    await visitor.evaluate((id) => {
+      const key = `nemesis:guest:${id}`;
+      const pass = JSON.parse(sessionStorage.getItem(key)!);
+      pass.expiresAt = new Date(Date.now() - 1000).toISOString();
+      sessionStorage.setItem(key, JSON.stringify(pass));
+    }, planId);
     await visitor.reload();
-    await expect(visitor.getByRole('heading', { name: 'Your guest pass has expired' })).toBeVisible();
+    await expect(
+      visitor.getByRole('heading', { name: 'Your guest pass has expired' }),
+    ).toBeVisible();
     await visitor.getByLabel('Match view', { exact: true }).selectOption('matches');
     expect(await visitor.locator('article.ops-match').count()).toBeGreaterThan(0);
     await expect(visitor.locator('article.ops-match input[type="number"]')).toHaveCount(0);
     await visitor.goto(`/guest/${planId}#token=invalid`);
     await expect(visitor.locator('.error-text')).toBeVisible();
-    await expect(visitor.getByRole('heading', { name: 'Find your station', exact: true })).toBeVisible();
+    await expect(
+      visitor.getByRole('heading', { name: 'Find your station', exact: true }),
+    ).toBeVisible();
     await visitor.goto(`/guest/${planId}#token=${encodeURIComponent(invitation.token)}`);
     await expect(visitor.locator('.guest-pass-expiry')).toContainText('remaining');
-    await mutate(page.request, 'eventOps.guests.configure', { planId, enabled: false, showOnOverlay: false });
+    await mutate(page.request, 'eventOps.guests.configure', {
+      planId,
+      enabled: false,
+      showOnOverlay: false,
+    });
     await expect(visitor.getByRole('heading', { name: 'Refresh your guest pass' })).toBeVisible();
-    await expect(visitor.getByRole('heading', { name: 'Find your station', exact: true })).toBeVisible();
+    await expect(
+      visitor.getByRole('heading', { name: 'Find your station', exact: true }),
+    ).toBeVisible();
     await expect(visitor.locator('article.ops-match input[type="number"]')).toHaveCount(0);
-    await mutate(page.request, 'eventOps.settings', { planId, published: false, playerReports: true });
-    await expect(visitor.getByRole('alert')).toContainText('This event is unavailable or has not been published.');
+    await mutate(page.request, 'eventOps.settings', {
+      planId,
+      published: false,
+      playerReports: true,
+    });
+    await expect(visitor.getByRole('alert')).toContainText(
+      'This event is unavailable or has not been published.',
+    );
     await expect(visitor.locator('article.ops-match')).toHaveCount(0);
-  } finally { await guest.close(); }
+  } finally {
+    await guest.close();
+  }
 });
 
-test('QR and unlinked attendees confirm recorded results or flag a different score without overwriting it', async ({ page, browser, baseURL }, testInfo) => {
+test('QR and unlinked attendees confirm recorded results or flag a different score without overwriting it', async ({
+  page,
+  browser,
+  baseURL,
+}, testInfo) => {
   await signIn(page.request, 'admin@smashclub.dev');
   const { planId, snapshot } = await freshEvent(page.request, 'dispute UI');
-  await mutate(page.request, 'eventOps.settings', { planId, published: true, playerReports: true, scoreReportingMode: 'approve_unless_disputed' });
-  await mutate(page.request, 'eventOps.guests.configure', { planId, enabled: true, showOnOverlay: false });
-  const invitation = await mutate<{ token: string }>(page.request, 'eventOps.guests.invitation', { planId });
-  const first = snapshot.matches.find(match => match.status === 'ready')!;
+  await mutate(page.request, 'eventOps.settings', {
+    planId,
+    published: true,
+    playerReports: true,
+    scoreReportingMode: 'approve_unless_disputed',
+  });
+  await mutate(page.request, 'eventOps.guests.configure', {
+    planId,
+    enabled: true,
+    showOnOverlay: false,
+  });
+  const invitation = await mutate<{ token: string }>(page.request, 'eventOps.guests.invitation', {
+    planId,
+  });
+  const first = snapshot.matches.find((match) => match.status === 'ready')!;
   const reporter = await browser.newContext({ baseURL });
   const second = await browser.newContext({ baseURL, viewport: { width: 390, height: 844 } });
   const attendee = await browser.newContext({ baseURL });
@@ -116,8 +229,13 @@ test('QR and unlinked attendees confirm recorded results or flag a different sco
     await otherCard.getByRole('button', { name: 'Send different score to TOs' }).click();
     await expect(otherCard).toContainText('Different score sent to the TOs for review');
     await expect(otherCard).toContainText('Confirmed result: 2 – 1');
-    await other.screenshot({ path: testInfo.outputPath('guest-dispute-mobile.png'), fullPage: true });
-    expect(await other.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    await other.screenshot({
+      path: testInfo.outputPath('guest-dispute-mobile.png'),
+      fullPage: true,
+    });
+    expect(await other.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true,
+    );
     await signIn(attendee.request, 'player@smashclub.dev');
     const signed = await attendee.newPage();
     await signed.goto(`/play/${planId}`);
@@ -131,6 +249,14 @@ test('QR and unlinked attendees confirm recorded results or flag a different sco
     await signedCard.getByRole('button', { name: 'Send different score to TOs' }).click();
     await expect(signedCard).toContainText('Different score sent to the TOs for review');
     const official = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
-    expect(official.matches.find(match => match.id === first.id)).toMatchObject({ status: 'complete', score1: 2, score2: 1 });
-  } finally { await reporter.close(); await second.close(); await attendee.close(); }
+    expect(official.matches.find((match) => match.id === first.id)).toMatchObject({
+      status: 'complete',
+      score1: 2,
+      score2: 1,
+    });
+  } finally {
+    await reporter.close();
+    await second.close();
+    await attendee.close();
+  }
 });

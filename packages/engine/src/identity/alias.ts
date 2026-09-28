@@ -51,7 +51,9 @@ export function candidateNames(candidate: IdentityCandidate): string[] {
 export function firstNameCompatible(a: string, b: string): boolean {
   const la = a.toLowerCase();
   const lb = b.toLowerCase();
-  return la === lb || (la.length >= 4 && lb.startsWith(la)) || (lb.length >= 4 && la.startsWith(lb));
+  return (
+    la === lb || (la.length >= 4 && lb.startsWith(la)) || (lb.length >= 4 && la.startsWith(lb))
+  );
 }
 
 /**
@@ -91,7 +93,9 @@ export function findSimilarPlayer<T extends IdentityCandidate>(
     }
   }
 
-  return best && bestScore >= 0.6 ? { candidate: best, score: bestScore, matchedName: bestName } : null;
+  return best && bestScore >= 0.6
+    ? { candidate: best, score: bestScore, matchedName: bestName }
+    : null;
 }
 
 /**
@@ -106,7 +110,10 @@ function nameSimilarity(query: string, candidateName: string): number {
   const candidateParts = candidateName.split(/\s+/).filter(Boolean);
   if (inputParts.length >= 2 && candidateParts.length >= 2) {
     const firstMatch = similarityRatio(inputParts[0]!, candidateParts[0]!);
-    const lastMatch = similarityRatio(inputParts[inputParts.length - 1]!, candidateParts[candidateParts.length - 1]!);
+    const lastMatch = similarityRatio(
+      inputParts[inputParts.length - 1]!,
+      candidateParts[candidateParts.length - 1]!,
+    );
     ratio = Math.max(ratio, (firstMatch + lastMatch) / 2);
   }
   return ratio;
@@ -140,7 +147,9 @@ export function matchStructuredAlias<T extends IdentityCandidate>(
   candidates: readonly T[],
 ): { candidate: T; matchedName: string } | null {
   const parts = name.split(/\s+/).filter(Boolean);
-  const pool = candidates.filter((entry) => companyCode === null || entry.companyCode === companyCode);
+  const pool = candidates.filter(
+    (entry) => companyCode === null || entry.companyCode === companyCode,
+  );
   if (pool.length === 0) return null;
 
   if (parts.length === 1) {
@@ -174,8 +183,8 @@ export function matchStructuredAlias<T extends IdentityCandidate>(
 function matchesOf<T extends IdentityCandidate>(
   pool: readonly T[],
   predicate: (entryName: string) => boolean,
-): Array<{ candidate: T; matchedName: string }> {
-  const matches: Array<{ candidate: T; matchedName: string }> = [];
+): { candidate: T; matchedName: string }[] {
+  const matches: { candidate: T; matchedName: string }[] = [];
   for (const candidate of pool) {
     const matchedName = candidateNames(candidate).find(predicate);
     if (matchedName !== undefined) matches.push({ candidate, matchedName });
@@ -184,7 +193,7 @@ function matchesOf<T extends IdentityCandidate>(
 }
 
 function uniqueOrNull<T extends IdentityCandidate>(
-  matches: ReadonlyArray<{ candidate: T; matchedName: string }>,
+  matches: readonly { candidate: T; matchedName: string }[],
 ): { candidate: T; matchedName: string } | null {
   const unique = new Map<string, { candidate: T; matchedName: string }>();
   for (const match of matches) {
@@ -203,7 +212,11 @@ export function scoreNameShape(queryName: string, candidateName: string): number
   const candidateParts = candidateName.toLowerCase().split(/\s+/).filter(Boolean);
   if (queryParts.length === 0 || candidateParts.length === 0) return 0;
 
-  if (queryParts.length >= 2 && candidateParts.length === 1 && queryParts[0] === candidateParts[0]) {
+  if (
+    queryParts.length >= 2 &&
+    candidateParts.length === 1 &&
+    queryParts[0] === candidateParts[0]
+  ) {
     return 0.84;
   }
   if (queryParts.length >= 2 && candidateParts.length >= 2 && queryParts[0] === candidateParts[0]) {
@@ -213,7 +226,11 @@ export function scoreNameShape(queryName: string, candidateName: string): number
     if (candidateLast.length === 1 && queryLast.startsWith(candidateLast)) return 0.92;
     if (queryLast.length === 1 && candidateLast.startsWith(queryLast)) return 0.92;
   }
-  if (queryParts.length === 1 && candidateParts.length >= 2 && queryParts[0] === candidateParts[0]) {
+  if (
+    queryParts.length === 1 &&
+    candidateParts.length >= 2 &&
+    queryParts[0] === candidateParts[0]
+  ) {
     return 0.84;
   }
   return 0;
@@ -257,7 +274,12 @@ export function rankReviewCandidates<T extends IdentityCandidate>(
     }
     const existing = scored.get(candidate);
     if (shape > 0 && (!existing || shape > existing.score)) {
-      scored.set(candidate, { candidate, score: shape, reason: 'name-shape', matchedName: shapeName });
+      scored.set(candidate, {
+        candidate,
+        score: shape,
+        reason: 'name-shape',
+        matchedName: shapeName,
+      });
     }
   }
 

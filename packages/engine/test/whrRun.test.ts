@@ -13,7 +13,12 @@ import type { EngineSet, EngineTournament } from '../src/types';
 
 const settings = defaultGlickoSettings;
 
-const tournament = (id: string, eventDate: string, isRookie = false, challongeId?: number): EngineTournament => ({
+const tournament = (
+  id: string,
+  eventDate: string,
+  isRookie = false,
+  challongeId?: number,
+): EngineTournament => ({
   id,
   eventDate,
   isRookie,
@@ -90,7 +95,10 @@ describe('runWhrModel', () => {
     for (const playerId of ['alice', 'falco', 'kirby']) {
       const events = run.events.filter((e) => e.playerId === playerId);
       for (let i = 1; i < events.length; i++) {
-        expect(events[i]!.preRating, `${playerId} row ${i} chains`).toBeCloseTo(events[i - 1]!.postRating, 9);
+        expect(events[i]!.preRating, `${playerId} row ${i} chains`).toBeCloseTo(
+          events[i - 1]!.postRating,
+          9,
+        );
       }
       expect(events[0]!.preRating).toBeCloseTo(settings.initialRating, 9);
     }
@@ -126,7 +134,9 @@ describe('runWhrModel', () => {
     const full = runWhrModel({ sets, tournaments, settings });
 
     for (const before of firstNightOnly.events) {
-      const after = full.events.find((e) => e.playerId === before.playerId && e.setId === before.setId)!;
+      const after = full.events.find(
+        (e) => e.playerId === before.playerId && e.setId === before.setId,
+      )!;
       expect(after.preRating, `${before.playerId} pre`).toBeCloseTo(before.preRating, 9);
       expect(after.postRating, `${before.playerId} post`).toBeCloseTo(before.postRating, 9);
       expect(after.preRd).toBeCloseTo(before.preRd, 9);
@@ -144,7 +154,7 @@ describe('runWhrModel', () => {
     }
     // On the latest night, hindsight and the ledger agree — nothing later has
     // revised it yet. Alice's last set is in main2.
-    const aliceLast = run.events.filter((e) => e.playerId === 'alice').at(-1)!;
+    const aliceLast = run.events.findLast((e) => e.playerId === 'alice')!;
     expect(aliceLast.revisedRating).toBeCloseTo(aliceLast.postRating, 6);
   });
 
@@ -152,10 +162,28 @@ describe('runWhrModel', () => {
     const tournaments = [tournament('t1', '2025-01-10T18:00:00.000Z')];
     const base = { suggestedPlayOrder: 1, completedAt: null, challongeMatchId: 1 };
     const sweep: EngineSet[] = [
-      { id: 's-a', tournamentId: 't1', p1PlayerId: 'a', p2PlayerId: 'b', winner: 1, ...base, p1Games: 3, p2Games: 0 },
+      {
+        id: 's-a',
+        tournamentId: 't1',
+        p1PlayerId: 'a',
+        p2PlayerId: 'b',
+        winner: 1,
+        ...base,
+        p1Games: 3,
+        p2Games: 0,
+      },
     ];
     const close: EngineSet[] = [
-      { id: 's-a', tournamentId: 't1', p1PlayerId: 'a', p2PlayerId: 'b', winner: 1, ...base, p1Games: 3, p2Games: 2 },
+      {
+        id: 's-a',
+        tournamentId: 't1',
+        p1PlayerId: 'a',
+        p2PlayerId: 'b',
+        winner: 1,
+        ...base,
+        p1Games: 3,
+        p2Games: 2,
+      },
     ];
     const sweepRun = runWhrModel({ sets: sweep, tournaments, settings });
     const closeRun = runWhrModel({ sets: close, tournaments, settings });
@@ -284,7 +312,9 @@ describe('runWhrModel', () => {
     const reversed = runWhrModel({ sets: [...sets].reverse(), tournaments, settings });
 
     // The whole point of a batch fit: input order cannot be a rating input.
-    expect(reversed.leaderboard.map((r) => r.playerId)).toEqual(forward.leaderboard.map((r) => r.playerId));
+    expect(reversed.leaderboard.map((r) => r.playerId)).toEqual(
+      forward.leaderboard.map((r) => r.playerId),
+    );
     for (const [index, row] of forward.leaderboard.entries()) {
       expect(reversed.leaderboard[index]!.skillRating).toBeCloseTo(row.skillRating, 9);
       expect(reversed.leaderboard[index]!.skillSd).toBeCloseTo(row.skillSd, 9);
@@ -356,7 +386,11 @@ describe('rookie-island calibration', () => {
   it('gives rookie-bracket debutants the rookie prior and leaves the main pool alone', () => {
     const { tournaments, sets } = club();
     const before = runWhrModel({ sets, tournaments, settings });
-    const after = runWhrModel({ sets, tournaments, settings: { ...settings, whrRookieDebutPrior: 1350 } });
+    const after = runWhrModel({
+      sets,
+      tournaments,
+      settings: { ...settings, whrRookieDebutPrior: 1350 },
+    });
 
     // falco farms the rookie island unbeaten; his whole component sinks with
     // its priors, while the disconnected main pool is untouched.
@@ -369,7 +403,11 @@ describe('rookie-island calibration', () => {
   it('anchors an islander’s displayed rating without touching bridged players', () => {
     const { tournaments, sets } = club();
     const raw = runWhrModel({ sets, tournaments, settings });
-    const anchored = runWhrModel({ sets, tournaments, settings: { ...settings, whrIsolationAnchor: true } });
+    const anchored = runWhrModel({
+      sets,
+      tournaments,
+      settings: { ...settings, whrIsolationAnchor: true },
+    });
 
     // falco: all matches rookie, no opponent has main experience — fully
     // isolated, so the displayed rating shrinks toward the prior.
@@ -406,7 +444,11 @@ describe('rookie-island calibration', () => {
       makeSet('r2', 'island', 'r-e', 1),
       makeSet('r2', 'island', 'r-f', 1),
     ];
-    const run = runWhrModel({ sets, tournaments, settings: { ...settings, whrIsolationAnchor: true } });
+    const run = runWhrModel({
+      sets,
+      tournaments,
+      settings: { ...settings, whrIsolationAnchor: true },
+    });
     const islander = run.leaderboard.find((r) => r.playerId === 'island')!;
     // One bridge match in seven is thin exposure; the old count-based test
     // would have scored this same record 1/5 bridged per *opponent* and, at

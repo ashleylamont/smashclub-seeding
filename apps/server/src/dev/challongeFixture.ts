@@ -46,7 +46,8 @@ function payloadsFor(fixture: FixtureTournament) {
         url: fixture.slug,
         state: fixture.state,
         started_at: fixture.startedAt,
-        completed_at: fixture.completedAt ?? (fixture.state === 'complete' ? fixture.startedAt : null),
+        completed_at:
+          fixture.completedAt ?? (fixture.state === 'complete' ? fixture.startedAt : null),
         updated_at: fixture.startedAt,
         tournament_type: 'double elimination',
       },

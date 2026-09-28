@@ -63,8 +63,12 @@ const entrySchema = z.object({
     .refine((value) => value.length > 0, { message: 'canonical_name must not be empty' })
     .refine((value) => value.length <= 120, { message: 'canonical_name is too long' }),
   company: optionalText,
-  aliases: z.array(z.union([z.string(), z.number()]).transform((value) => String(value).trim())).nullish(),
-  past_companies: z.array(z.union([z.string(), z.number()]).transform((value) => String(value).trim())).nullish(),
+  aliases: z
+    .array(z.union([z.string(), z.number()]).transform((value) => String(value).trim()))
+    .nullish(),
+  past_companies: z
+    .array(z.union([z.string(), z.number()]).transform((value) => String(value).trim()))
+    .nullish(),
   numeric_id: z.number().nullish(),
   main_character: optionalText,
 });
@@ -120,15 +124,20 @@ export function parseRegistryYaml(text: string): ParsedRegistry {
     document = parseYaml(text);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return { entries: [], issues: [{ index: -1, id: null, message: `YAML could not be parsed: ${message}` }] };
+    return {
+      entries: [],
+      issues: [{ index: -1, id: null, message: `YAML could not be parsed: ${message}` }],
+    };
   }
 
   // Both `players: [...]` and a bare top-level list are accepted; the club's
   // real file uses the former, and a pasted fragment is usually the latter.
   const list = Array.isArray(document)
     ? document
-    : document && typeof document === 'object' && Array.isArray((document as { players?: unknown }).players)
-      ? ((document as { players: unknown[] }).players)
+    : document &&
+        typeof document === 'object' &&
+        Array.isArray((document as { players?: unknown }).players)
+      ? (document as { players: unknown[] }).players
       : null;
   if (list === null) {
     return {
@@ -147,14 +156,22 @@ export function parseRegistryYaml(text: string): ParsedRegistry {
     if (!parsed.success) {
       for (const issue of parsed.error.issues) {
         const field = issue.path.join('.');
-        issues.push({ index, id: rawId, message: field ? `${field}: ${issue.message}` : issue.message });
+        issues.push({
+          index,
+          id: rawId,
+          message: field ? `${field}: ${issue.message}` : issue.message,
+        });
       }
       return;
     }
 
     const entry = parsed.data;
     if (seenIds.has(entry.id)) {
-      issues.push({ index, id: entry.id, message: `Duplicate id “${entry.id}” — ids must be unique.` });
+      issues.push({
+        index,
+        id: entry.id,
+        message: `Duplicate id “${entry.id}” — ids must be unique.`,
+      });
       return;
     }
     seenIds.add(entry.id);

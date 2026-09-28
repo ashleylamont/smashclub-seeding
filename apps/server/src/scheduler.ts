@@ -161,6 +161,6 @@ export async function acquireSchedulerLock(db: Db): Promise<boolean> {
     // Fixed app-specific lock key.
     `select pg_try_advisory_lock(824361002) as locked`,
   );
-  const rows = (result as unknown as { rows?: Array<{ locked: boolean }> }).rows ?? [];
+  const rows = (result as unknown as { rows?: { locked: boolean }[] }).rows ?? [];
   return rows[0]?.locked === true;
 }
