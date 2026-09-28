@@ -1,0 +1,173 @@
+.bracket-backup-launch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+.bracket-backup-launch small {
+  color: var(--text-muted);
+}
+.bracket-backup-dialog {
+  width: min(940px, calc(100vw - 24px));
+  max-height: 92vh;
+  padding: 0;
+  border: 1px solid #aaa;
+  border-radius: 8px;
+  background: #e8e8e8;
+  color: #181818;
+}
+.bracket-backup-dialog::backdrop {
+  background: #0009;
+}
+.bracket-backup-toolbar {
+  padding: 20px;
+  background: white;
+}
+.bracket-backup-toolbar h2 {
+  margin: 0;
+}
+.bracket-backup-toolbar fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 14px 0;
+}
+.bracket-backup-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.bracket-backup-toolbar button {
+  margin-right: 8px;
+}
+.bracket-backup-page {
+  box-sizing: border-box;
+  margin: 20px auto;
+  padding: 28px;
+  width: 100%;
+  max-width: 794px;
+  background: white;
+  color: #111;
+  font:
+    12px/1.4 Arial,
+    sans-serif;
+  overflow-wrap: anywhere;
+}
+.bracket-backup-page header {
+  border-bottom: 2px solid #111;
+  padding-bottom: 10px;
+}
+.bracket-backup-event {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin: 0;
+}
+.bracket-backup-page h1 {
+  font-size: 32px;
+  line-height: 1.1;
+  margin: 6px 0;
+}
+.bracket-backup-page header > p:last-child {
+  margin: 0;
+}
+.bracket-backup-instructions {
+  margin: 14px 0;
+}
+.bracket-backup-roster {
+  margin-bottom: 12px;
+}
+.bracket-backup-roster h2 {
+  font-size: 14px;
+  margin: 0 0 4px;
+}
+.bracket-backup-roster p {
+  margin: 0;
+}
+.bracket-backup-page table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.bracket-backup-page th {
+  text-align: left;
+  border-block: 1px solid #333;
+  padding: 6px;
+}
+.bracket-backup-page td {
+  height: 36px;
+  padding: 5px 6px;
+  border-bottom: 1px solid #ccc;
+  vertical-align: top;
+}
+.bracket-backup-page.is-short-template td {
+  height: 78px;
+}
+.bracket-backup-page th:first-child {
+  width: 24%;
+}
+.bracket-backup-page th:last-child {
+  width: 25%;
+}
+.bracket-backup-score small {
+  display: block;
+}
+.bracket-backup-page footer {
+  margin-top: 14px;
+  border-top: 1px solid #333;
+  padding-top: 7px;
+  font-size: 9px;
+}
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+  body.printing-bracket-backups > :not(.bracket-backup-dialog) {
+    display: none !important;
+  }
+  body.printing-bracket-backups {
+    background: white !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+  .bracket-backup-dialog {
+    display: block;
+    position: static;
+    width: auto;
+    max-width: none;
+    height: auto;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    overflow: visible;
+    background: white;
+  }
+  .bracket-backup-dialog::backdrop,
+  .bracket-backup-toolbar {
+    display: none !important;
+  }
+  .bracket-backup-page {
+    max-width: none;
+    width: auto;
+    margin: 0;
+    padding: 0;
+    break-after: page;
+  }
+  .bracket-backup-page:last-child {
+    break-after: auto;
+  }
+  .bracket-backup-page header,
+  .bracket-backup-roster,
+  .bracket-backup-instructions {
+    break-inside: avoid;
+  }
+  .bracket-backup-page tr {
+    break-inside: avoid;
+  }
+  .bracket-backup-page thead {
+    display: table-header-group;
+  }
+}

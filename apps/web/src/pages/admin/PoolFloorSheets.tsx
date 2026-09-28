@@ -28,7 +28,9 @@ export function PoolFloorSheets({ data }: { data: FloorSheetData }) {
       >
         Print pool sheets
       </button>
-      <small>Station signs, pairings and paper score backup.</small>
+      <small>
+        TO paper backup for pairings and scores. Station QR signs are printed separately.
+      </small>
       {preview &&
         createPortal(
           <PrintPreview

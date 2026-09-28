@@ -160,4 +160,23 @@ test('TO prints selected pool sheets with stable public QR and unclipped A4 pair
   );
   await preview.getByRole('button', { name: 'Close preview' }).click();
   await expect(page.locator('body')).not.toHaveClass(/printing-pool-sheets/);
+  await page.getByRole('button', { name: 'Print bracket backup sheets' }).click();
+  const brackets = page.getByRole('dialog', { name: 'Print bracket backup sheets' });
+  await expect(brackets.locator('.bracket-backup-page')).toHaveCount(4);
+  await expect(brackets.locator('.bracket-backup-page').first()).toContainText(
+    'Draw not generated yet',
+  );
+  await expect(
+    brackets.locator('.bracket-backup-page').first().locator('tbody tr'),
+  ).not.toHaveCount(0);
+  await expect(brackets.locator('.bracket-backup-page').first()).toContainText('Winner of R1 M1');
+  for (const label of ['Upper Consolation', 'Lower Championship', 'Lower Consolation'])
+    await brackets.getByRole('checkbox', { name: label, exact: true }).uncheck();
+  await page.emulateMedia({ media: 'print' });
+  const bracketPdf = await page.pdf({ format: 'A4', preferCSSPageSize: true });
+  await writeFile(testInfo.outputPath('blank-bracket-backup.pdf'), bracketPdf);
+  expect(bracketPdf.toString('latin1').match(/\/Type \/Page\b/g)).toHaveLength(1);
+  await page.emulateMedia({ media: 'screen' });
+  await brackets.getByRole('button', { name: 'Close preview' }).click();
+  await expect(page.locator('body')).not.toHaveClass(/printing-bracket-backups/);
 });
