@@ -16,7 +16,7 @@ beforeEach(async () => {
   ({ db, close } = await createTestDb());
   await db.insert(user).values([admin, member]);
   const entrants = await db.insert(players).values(Array.from({ length: 14 }, (_, i) => ({ canonicalName: `Entrant ${i}`, displayName: `Alias ${i}` }))).returning();
-  planId = (await db.insert(eventPlans).values({ name: 'Native test', eventDate: new Date(), status: 'pools_ready', bracketMode: 'native' }).returning())[0]!.id;
+  planId = (await db.insert(eventPlans).values({ name: 'Native test', eventDate: new Date(), status: 'pools_ready', bracketMode: 'native', softLockedAt: new Date() }).returning())[0]!.id;
   await db.insert(eventPlanEntries).values(entrants.map((player, i) => ({ eventPlanId: planId, playerId: player.id, sourceLineNumber: i + 1, rawInput: player.canonicalName, cleanedName: player.canonicalName, assignedDivision: i < 7 ? 'upper' as const : 'lower' as const, divisionSeed: i % 7 + 1 })));
   await prepare(db, planId);
 });

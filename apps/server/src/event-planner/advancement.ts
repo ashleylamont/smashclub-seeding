@@ -3,8 +3,8 @@ import { poolLabel } from './pools';
 /**
  * What happens to a pool once it has been played.
  *
- * First and second go on to the division's championship bracket, which
- * Challonge's own group stage advances automatically. Third and fourth are this
+ * The upper half (rounded up) go on to the division's championship bracket,
+ * which Challonge's own group stage advances automatically. The remainder are this
  * module's problem: they go into a separate single-elimination consolation
  * bracket, and the app has to say who plays whom, because Challonge is being
  * handed a flat participant list with seeds and will pair them by its standard
@@ -16,6 +16,17 @@ export interface PoolFinisher {
   poolIndex: number;
   /** 1-based position within the pool (including fifth in larger pools). */
   place: number;
+}
+
+/** Keep two qualifiers in a two-player pool; a five-player pool advances three. */
+export function winnersCount(poolSize: number): number {
+  return Math.min(poolSize, Math.max(2, Math.ceil(poolSize / 2)));
+}
+
+export function consolationQualifiers(finishers: readonly PoolFinisher[]): PoolFinisher[] {
+  const counts = new Map<number, number>();
+  for (const finisher of finishers) counts.set(finisher.poolIndex, (counts.get(finisher.poolIndex) ?? 0) + 1);
+  return finishers.filter(finisher => finisher.place > winnersCount(counts.get(finisher.poolIndex)!));
 }
 
 export interface ConsolationEntrant {
@@ -64,9 +75,9 @@ interface Seeded {
 /**
  * Build the consolation bracket from confirmed pool placements.
  *
- * Provisional strength order is every third place by pool, then every fourth
- * place by pool — pool A holds the division's top seed, so A3 is the strongest
- * third on the same reasoning that made the pools. Laying that order onto a
+ * Provisional strength order is finishing place, then pool order — pool A
+ * holds the division's top seed, so A3 leads the thirds on the same reasoning
+ * that made the pools. Laying that order onto a
  * standard single-elimination bracket already gives the two properties we want
  * for free: the strongest finishers start in opposite halves, and thirds meet
  * fourths.
@@ -80,7 +91,7 @@ interface Seeded {
  * needs to be able to check.
  */
 export function buildConsolationBracket(finishers: readonly PoolFinisher[]): ConsolationBracket {
-  const qualifiers = finishers.filter((finisher) => finisher.place >= 3);
+  const qualifiers = consolationQualifiers(finishers);
   if (qualifiers.length === 0) {
     throw new Error('No consolation finishers to build a consolation bracket from.');
   }
@@ -219,10 +230,12 @@ function nextPowerOfTwo(value: number): number {
   return size;
 }
 
-/** First and second from every pool, in pool then place order. */
+/** Upper half of each pool, rounded up, in pool then place order. */
 export function championshipQualifiers(finishers: readonly PoolFinisher[]): Array<PoolFinisher & { label: string }> {
+  const counts = new Map<number, number>();
+  for (const finisher of finishers) counts.set(finisher.poolIndex, (counts.get(finisher.poolIndex) ?? 0) + 1);
   return finishers
-    .filter((finisher) => finisher.place === 1 || finisher.place === 2)
+    .filter((finisher) => finisher.place <= winnersCount(counts.get(finisher.poolIndex)!))
     .sort((a, b) => a.poolIndex - b.poolIndex || a.place - b.place)
     .map((finisher) => ({ ...finisher, label: `${poolLabel(finisher.poolIndex)}${finisher.place}` }));
 }

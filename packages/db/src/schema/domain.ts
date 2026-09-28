@@ -553,6 +553,9 @@ export const eventPlans = pgTable('event_plans', {
   /** Prefix suggested for the four Challonge slugs; purely advisory. */
   slugPrefix: text('slug_prefix'),
   status: eventPlanStatusEnum('status').notNull().default('draft'),
+  /** TO commitment to stable pool membership. Null while the draw is still editable. */
+  softLockedAt: timestamp('soft_locked_at', { withTimezone: true }),
+  softLockedBy: text('soft_locked_by').references(() => user.id, { onDelete: 'set null' }),
   upperTargetSize: integer('upper_target_size'),
   /** Locked at 4 for the first version; stored so a later format is a data change. */
   poolSize: integer('pool_size').notNull().default(4),

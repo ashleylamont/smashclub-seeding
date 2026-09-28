@@ -56,7 +56,7 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
     // Archived plans are planning intent, not evidence of attendance or finishes.
     const entrants = plan.historicalAdoption ? [] : (await db.select({ id: eventPlanEntries.playerId }).from(eventPlanEntries).where(eq(eventPlanEntries.eventPlanId, planId))).flatMap(p => p.id ? [{ id: p.id, name: names.get(p.id) ?? 'Player' }] : []);
     const prizes = (await db.select().from(eventPrizes).where(eq(eventPrizes.eventPlanId, planId))).map(p => ({ ...p, playerName: p.playerId ? names.get(p.playerId) ?? 'Player' : null }));
-    return { ...await loadStationQueues(db, planId), nativeBrackets: await nativeBracketViews(db, planId), plan: { id: plan.id, name: plan.name, eventDate: plan.eventDate.toISOString(), status: plan.status, bracketMode: plan.bracketMode, historicalResultsSlug, resultsSlug }, brackets: (await db.select({ division: eventPlanBrackets.division, stage: eventPlanBrackets.stage, slug: eventPlanBrackets.challongeSlug }).from(eventPlanBrackets).where(eq(eventPlanBrackets.eventPlanId, planId))), settings: { scoreReportingMode: settings?.scoreReportingMode ?? 'to_review', published: settings?.published ?? false, playerReports: settings?.playerReports ?? false }, matches, entrants, prizes,
+    return { ...await loadStationQueues(db, planId), nativeBrackets: await nativeBracketViews(db, planId), plan: { id: plan.id, name: plan.name, eventDate: plan.eventDate.toISOString(), status: plan.status, softLockedAt: plan.softLockedAt?.toISOString() ?? null, bracketMode: plan.bracketMode, historicalResultsSlug, resultsSlug }, brackets: (await db.select({ division: eventPlanBrackets.division, stage: eventPlanBrackets.stage, slug: eventPlanBrackets.challongeSlug }).from(eventPlanBrackets).where(eq(eventPlanBrackets.eventPlanId, planId))), settings: { scoreReportingMode: settings?.scoreReportingMode ?? 'to_review', published: settings?.published ?? false, playerReports: settings?.playerReports ?? false }, matches, entrants, prizes,
         stations: stations.map(station=>stationAvailability(station,rows)), poolSchedules,
         announcements: (await db.select().from(eventAnnouncements).where(and(eq(eventAnnouncements.eventPlanId, planId),or(isNull(eventAnnouncements.expiresAt),gt(eventAnnouncements.expiresAt,new Date())))).orderBy(desc(eventAnnouncements.createdAt))).map(a => ({ ...a, createdAt: a.createdAt.toISOString(),expiresAt:a.expiresAt?.toISOString()??null })),
         withdrawals: await db.select({ playerId: eventWithdrawals.playerId }).from(eventWithdrawals).where(eq(eventWithdrawals.eventPlanId, planId)),
@@ -81,6 +81,7 @@ export async function prepare(db: Db, planId: string) {
         if (!plan)
             return fail('NOT_FOUND', 'Event not found.');
         const existing = await tx.select().from(eventMatches).where(eq(eventMatches.eventPlanId, planId));
+        const withdrawnForDraw = new Set((await tx.select({ playerId: eventWithdrawals.playerId }).from(eventWithdrawals).where(eq(eventWithdrawals.eventPlanId, planId))).map(w => w.playerId));
         const linked = await tx.select().from(eventPlanBrackets).where(eq(eventPlanBrackets.eventPlanId, planId));
         const imported = row.bracketMode !== 'native' && linked.length ? await tx.select().from(sets).where(inArray(sets.tournamentId, linked.flatMap(b => b.tournamentId ? [b.tournamentId] : []))) : [];
         const rows: Array<typeof eventMatches.$inferInsert> = [];
@@ -89,8 +90,12 @@ export async function prepare(db: Db, planId: string) {
                 for (let i = 0; i < pool.members.length; i++)
                     for (let j = i + 1; j < pool.members.length; j++) {
                         const a = pool.members[i]!, b = pool.members[j]!;
+                        const sourceKey = `group:${d.division}:${pool.poolIndex}:${[a.playerId, b.playerId].sort().join(':')}`;
+                        // Keep old matches for audit and forfeits. A newcomer has no match to
+                        // play against somebody who had already withdrawn.
+                        if ((withdrawnForDraw.has(a.playerId) || withdrawnForDraw.has(b.playerId)) && !existing.some(m => m.sourceKey === sourceKey)) continue;
                         const remote = imported.find(s => linked.some(b => b.tournamentId === s.tournamentId && b.division === d.division && b.stage === 'main') && s.resultStage === 'group' && ((s.p1PlayerId === a.playerId && s.p2PlayerId === b.playerId) || (s.p2PlayerId === a.playerId && s.p1PlayerId === b.playerId)));
-                        rows.push({ eventPlanId: planId, sourceKey: `group:${d.division}:${pool.poolIndex}:${[a.playerId, b.playerId].sort().join(':')}`, division: d.division, stage: 'group', poolIndex: pool.poolIndex, label: `${d.division} Pool ${pool.label} · ${i + 1} v ${j + 1}`, player1Id: a.playerId, player2Id: b.playerId, ...(remote ? remoteValues(remote, a.playerId) : {}) });
+                        rows.push({ eventPlanId: planId, sourceKey, division: d.division, stage: 'group', poolIndex: pool.poolIndex, label: `${d.division} Pool ${pool.label} · ${i + 1} v ${j + 1}`, player1Id: a.playerId, player2Id: b.playerId, ...(remote ? remoteValues(remote, a.playerId) : {}) });
                     }
         for (const s of imported.filter(s => s.resultStage !== 'group')) {
             const b = linked.find(b => b.tournamentId === s.tournamentId)!;
