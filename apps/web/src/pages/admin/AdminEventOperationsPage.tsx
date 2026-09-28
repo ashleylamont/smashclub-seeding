@@ -6,7 +6,7 @@ import { ToPlayerFinder } from './ToPlayerFinder'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearch, useParams } from '@tanstack/react-router'
 import { trpc } from '../../lib/trpc'
-import { authClient, sessionRole } from '../../lib/auth'
+import { authClient, useCurrentUser } from '../../lib/auth'
 import './EventOperations.css'
 import { ScoreHandoff } from './ScoreHandoff'
 import { AttendanceControls } from './AttendanceControls'
@@ -58,7 +58,8 @@ export function AssignedEventOperationsPage() {
 export function EventOperationsPanel({ planId }: { planId: string }) {
   const cache = useQueryClient()
   const { data: session } = authClient.useSession()
-  const admin = sessionRole(session) === 'admin'
+  const currentUser = useCurrentUser(session)
+  const admin = currentUser.data?.role === 'admin'
   const event = useQuery({
     queryKey: ['eventOps', planId],
     queryFn: () => trpc.eventOps.overview.query({ planId }),

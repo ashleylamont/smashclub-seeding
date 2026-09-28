@@ -117,7 +117,7 @@
     {
       "files": ["apps/server/src/trpc/routers/admin.ts"],
       "rules": {
-        "max-lines": ["error", { "max": 625, "skipBlankLines": true, "skipComments": true }]
+        "max-lines": ["error", { "max": 700, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {

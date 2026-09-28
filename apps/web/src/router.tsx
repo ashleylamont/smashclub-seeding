@@ -24,6 +24,7 @@ import { AdminImportPage } from './pages/admin/AdminImportPage'
 import { AdminSeedingPage } from './pages/admin/AdminSeedingPage'
 import { AdminEventPlannerPage } from './pages/admin/eventPlanner/AdminEventPlannerPage'
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage'
+import { AdminAccountsPage } from './pages/admin/AdminAccountsPage'
 import { AdminBreakthroughPage } from './pages/admin/AdminBreakthroughPage'
 import { breakthroughSearch } from './lib/breakthrough'
 
@@ -165,6 +166,12 @@ const adminSettingsRoute = createRoute({
   component: AdminSettingsPage,
 })
 
+const adminAccountsRoute = createRoute({
+  getParentRoute: () => adminRoute,
+  path: '/accounts',
+  component: AdminAccountsPage,
+})
+
 const adminBreakthroughRoute = createRoute({
   getParentRoute: () => adminRoute,
   path: '/breakthroughs',
@@ -238,6 +245,7 @@ const routeTree = rootRoute.addChildren([
     adminEventPlannerRoute,
     adminEventOperationsRoute,
     adminSettingsRoute,
+    adminAccountsRoute,
   ]),
 ])
 

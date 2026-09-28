@@ -1,6 +1,6 @@
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import type { Db } from '@smashclub/db'
 import { account, session, user, verification } from '@smashclub/db'
 import type { Env } from './env'
@@ -63,26 +63,6 @@ export function createAuth(db: Db, env: Env, options: { enableCredentials?: bool
         role: { type: 'string', defaultValue: 'user', input: false },
       },
     },
-    databaseHooks: {
-      user: {
-        create: {
-          /**
-           * Stamp the admin role at creation for addresses in ADMIN_EMAILS,
-           * covering OAuth sign-ups too. Without this the role would only be
-           * applied lazily on the first API call, so the client's session (and
-           * therefore the admin navigation) would lag a request behind. This is
-           * purely a latency shortcut — `getSessionUser` reconciles the column
-           * against the allowlist on every request regardless.
-           */
-          before: async (user: { email?: string; emailVerified?: boolean }) => {
-            if (isAdminIdentity(user, env)) {
-              return { data: { ...user, role: 'admin' } }
-            }
-            return undefined
-          },
-        },
-      },
-    },
   })
 }
 
@@ -93,7 +73,7 @@ function adminEmails(env: Env): string[] {
 }
 
 /**
- * Whether an account currently qualifies for the admin role.
+ * Whether an account can bootstrap the first admin role.
  *
  * The address must be *verified by the provider*, not merely present on the
  * profile. Discord in particular reports an unverified address for accounts
@@ -117,17 +97,10 @@ export interface SessionUser {
 }
 
 /**
- * Resolve the request's session user and reconcile its role against
- * ADMIN_EMAILS.
- *
- * ADMIN_EMAILS is the single source of truth for administrator access; the
- * `role` column is a cache of it. Reconciliation runs in *both* directions on
- * every request, so adding an address grants admin on the allowlisted user's
- * next call and removing one revokes it just as promptly — including for a
- * session that is already open, and for any other provider linked to the same
- * account. There is deliberately no way to pin an admin in the database that
- * the allowlist will not revoke: a role the allowlist cannot take back is a
- * role nobody can offboard.
+ * Resolve the request's session user from the current database row. The auth
+ * session may contain an older role after another admin changes it in the UI.
+ * ADMIN_EMAILS is used only when no verified admin can sign in; after that,
+ * the database role is authoritative.
  */
 export async function getSessionUser(
   auth: Auth,
@@ -137,13 +110,37 @@ export async function getSessionUser(
 ): Promise<SessionUser | null> {
   const sessionData = await auth.api.getSession({ headers })
   if (!sessionData?.user) return null
-  const { id, email, name } = sessionData.user
-  const persisted = (sessionData.user as { role?: string }).role === 'admin' ? 'admin' : 'user'
-  const role: 'admin' | 'user' = isAdminIdentity(sessionData.user, env) ? 'admin' : 'user'
+  const [current] = await db
+    .select({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      emailVerified: user.emailVerified,
+      role: user.role,
+    })
+    .from(user)
+    .where(eq(user.id, sessionData.user.id))
+  if (!current) return null
 
-  if (role !== persisted) {
-    await db.update(user).set({ role, updatedAt: new Date() }).where(eq(user.id, id))
+  if (current.role !== 'admin' && isAdminIdentity(current, env)) {
+    const [existingAdmin] = await db
+      .select({ id: user.id })
+      .from(user)
+      .where(and(eq(user.role, 'admin'), eq(user.emailVerified, true)))
+      .limit(1)
+    if (!existingAdmin) {
+      const [promoted] = await db
+        .update(user)
+        .set({ role: 'admin', updatedAt: new Date() })
+        .where(and(eq(user.id, current.id), eq(user.role, 'user'), eq(user.emailVerified, true)))
+        .returning({ id: user.id })
+      if (promoted) current.role = 'admin'
+    }
   }
-
-  return { id, email, name, role }
+  return {
+    id: current.id,
+    email: current.email,
+    name: current.name,
+    role: current.role === 'admin' && current.emailVerified ? 'admin' : 'user',
+  }
 }

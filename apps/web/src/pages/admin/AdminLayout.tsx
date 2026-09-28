@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Link, Navigate, Outlet, useRouterState } from '@tanstack/react-router'
-import { authClient, sessionRole } from '../../lib/auth'
+import { authClient, useCurrentUser } from '../../lib/auth'
 import './Admin.css'
 
 const TABS = [
@@ -14,10 +14,12 @@ const TABS = [
   { to: '/admin/event-planner', label: 'Event planner' },
   { to: '/admin/event-operations', label: 'Run event' },
   { to: '/admin/settings', label: 'Settings' },
+  { to: '/admin/accounts', label: 'Admins' },
 ] as const
 
 export function AdminLayout() {
   const { data: session, isPending } = authClient.useSession()
+  const currentUser = useCurrentUser(session)
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const tabs = useRef<HTMLElement>(null)
 
@@ -43,9 +45,11 @@ export function AdminLayout() {
     }
   }, [pathname])
 
-  if (isPending) return <p className="loading-text">Checking access…</p>
+  if (isPending || (session && currentUser.isPending))
+    return <p className="loading-text">Checking access…</p>
   if (!session) return <Navigate to="/login" />
-  if (sessionRole(session) !== 'admin') return <Navigate to="/" />
+  if (currentUser.isError) return <p className="error-text">{currentUser.error.message}</p>
+  if (currentUser.data?.role !== 'admin') return <Navigate to="/" />
 
   return (
     <div className="admin-layout">

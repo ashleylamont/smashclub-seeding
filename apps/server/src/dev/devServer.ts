@@ -80,8 +80,8 @@ export async function startDevHarness(
   const recomputeTrigger = new RecomputeTrigger(db, 500)
   const app = await buildApp({ db, env, auth, challonge, recomputeTrigger })
 
-  // Two accounts so role-gating can actually be tested. The admin address is in
-  // ADMIN_EMAILS, so it is promoted on first sign-in.
+  // Two accounts so role-gating can actually be tested. The first verified
+  // sign-in from ADMIN_EMAILS bootstraps the admin role.
   for (const [email, name] of [
     [adminEmail, 'Dev Admin'],
     [userEmail, 'Dev Player'],
