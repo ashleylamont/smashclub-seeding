@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest';
 import {
   buildRecap,
   formatFact,
@@ -12,7 +12,7 @@ import {
   type RecapParticipant,
   type RecapSet,
   type RecapTournament,
-} from '../src/recap'
+} from '../src/recap';
 
 /**
  * The recap turns a night into facts. Two properties matter most and are
@@ -27,11 +27,11 @@ const MAIN: RecapTournament = {
   eventDate: '2025-03-01T08:00:00.000Z',
   isRookie: false,
   challongeState: 'complete',
-}
+};
 
-let seq = 0
+let seq = 0;
 function participant(overrides: Partial<RecapParticipant> & { name: string }): RecapParticipant {
-  seq += 1
+  seq += 1;
   return {
     id: `p-${overrides.name.toLowerCase().replace(/\W+/g, '')}-${seq}`,
     tournamentId: MAIN.id,
@@ -41,17 +41,17 @@ function participant(overrides: Partial<RecapParticipant> & { name: string }): R
     seed: null,
     finalRank: null,
     ...overrides,
-  }
+  };
 }
 
-let setSeq = 0
+let setSeq = 0;
 function completedSet(
   p1: RecapParticipant,
   p2: RecapParticipant,
   winner: 1 | 2,
   overrides: Partial<RecapSet> = {},
 ): RecapSet {
-  setSeq += 1
+  setSeq += 1;
   return {
     id: `s-${setSeq}`,
     tournamentId: MAIN.id,
@@ -65,7 +65,7 @@ function completedSet(
     excludedFromRatings: false,
     completedAt: `2025-03-01T09:0${setSeq % 10}:00.000Z`,
     ...overrides,
-  }
+  };
 }
 
 /** Facts of one kind, for concise assertions. */
@@ -75,7 +75,7 @@ function factsOfKind<K extends RecapFactKind>(
 ): Extract<RecapFact, { kind: K }>[] {
   return result.facts
     .map((f) => f.fact)
-    .filter((f): f is Extract<RecapFact, { kind: K }> => f.kind === kind)
+    .filter((f): f is Extract<RecapFact, { kind: K }> => f.kind === kind);
 }
 
 function emptyHistory(overrides: Partial<RecapHistory> = {}): RecapHistory {
@@ -85,55 +85,55 @@ function emptyHistory(overrides: Partial<RecapHistory> = {}): RecapHistory {
     priorPeakRating: new Map(),
     priorMeetings: new Map(),
     ...overrides,
-  }
+  };
 }
 
 describe('parseScoresCsv', () => {
   it('reads a single pair as the set score', () => {
-    expect(parseScoresCsv('3-1')).toEqual({ p1: 3, p2: 1, unknown: false })
-  })
+    expect(parseScoresCsv('3-1')).toEqual({ p1: 3, p2: 1, unknown: false });
+  });
 
   it('tallies games won when scores are reported per game', () => {
     // "1-0,0-1,1-0" is three games, two of them to player 1.
-    expect(parseScoresCsv('1-0,0-1,1-0')).toEqual({ p1: 2, p2: 1, unknown: false })
-  })
+    expect(parseScoresCsv('1-0,0-1,1-0')).toEqual({ p1: 2, p2: 1, unknown: false });
+  });
 
   it('ignores games that were drawn when tallying', () => {
-    expect(parseScoresCsv('2-0,1-1,0-2,3-1')).toEqual({ p1: 2, p2: 1, unknown: false })
-  })
+    expect(parseScoresCsv('2-0,1-1,0-2,3-1')).toEqual({ p1: 2, p2: 1, unknown: false });
+  });
 
   it('treats a forfeit as unreadable rather than as a scoreline', () => {
     // Challonge marks forfeits with a negative score; there is no game story.
-    expect(parseScoresCsv('-1-0').unknown).toBe(true)
-  })
+    expect(parseScoresCsv('-1-0').unknown).toBe(true);
+  });
 
   it('treats a bye as unreadable rather than as a 99-game whitewash', () => {
     // The club closes an unplayed slot with 99-0. Read literally it is the most
     // one-sided result in club history, which is what every "dominant" fact
     // goes looking for.
-    expect(parseScoresCsv('99-0').unknown).toBe(true)
-    expect(parseScoresCsv('0-99').unknown).toBe(true)
+    expect(parseScoresCsv('99-0').unknown).toBe(true);
+    expect(parseScoresCsv('0-99').unknown).toBe(true);
     // A best-of-five is still a real set.
-    expect(parseScoresCsv('3-0')).toEqual({ p1: 3, p2: 0, unknown: false })
-  })
+    expect(parseScoresCsv('3-0')).toEqual({ p1: 3, p2: 0, unknown: false });
+  });
 
   it('treats missing or malformed scores as unknown', () => {
-    expect(parseScoresCsv(null).unknown).toBe(true)
-    expect(parseScoresCsv('').unknown).toBe(true)
-    expect(parseScoresCsv('W/O').unknown).toBe(true)
-  })
-})
+    expect(parseScoresCsv(null).unknown).toBe(true);
+    expect(parseScoresCsv('').unknown).toBe(true);
+    expect(parseScoresCsv('W/O').unknown).toBe(true);
+  });
+});
 
 describe('pairKey', () => {
   it('is order independent', () => {
-    expect(pairKey('b', 'a')).toBe(pairKey('a', 'b'))
-  })
-})
+    expect(pairKey('b', 'a')).toBe(pairKey('a', 'b'));
+  });
+});
 
 describe('buildRecap without any rating data', () => {
-  const champion = participant({ name: 'Ivy', seed: 6, finalRank: 1 })
-  const runnerUp = participant({ name: 'Nour', seed: 1, finalRank: 2 })
-  const third = participant({ name: 'Sam', seed: 2, finalRank: 3 })
+  const champion = participant({ name: 'Ivy', seed: 6, finalRank: 1 });
+  const runnerUp = participant({ name: 'Nour', seed: 1, finalRank: 2 });
+  const third = participant({ name: 'Sam', seed: 2, finalRank: 3 });
 
   const input: RecapInput = {
     tournaments: [MAIN],
@@ -142,37 +142,37 @@ describe('buildRecap without any rating data', () => {
       completedSet(champion, third, 1, { round: 2 }),
       completedSet(champion, runnerUp, 1, { round: 3, scoresCsv: '3-2' }),
     ],
-  }
+  };
 
   it('still produces facts', () => {
     // The whole point: a bracket that just finished has no recompute yet.
-    expect(buildRecap(input).facts.length).toBeGreaterThan(0)
-  })
+    expect(buildRecap(input).facts.length).toBeGreaterThan(0);
+  });
 
   it('reports the podium in placing order', () => {
-    const [podium] = factsOfKind(buildRecap(input), 'podium')
-    expect(podium?.places.map((p) => p.player.name)).toEqual(['Ivy', 'Nour', 'Sam'])
-    expect(podium?.places[0]?.seed).toBe(6)
-  })
+    const [podium] = factsOfKind(buildRecap(input), 'podium');
+    expect(podium?.places.map((p) => p.player.name)).toEqual(['Ivy', 'Nour', 'Sam']);
+    expect(podium?.places[0]?.seed).toBe(6);
+  });
 
   it('finds the seed upset', () => {
-    const upsets = factsOfKind(buildRecap(input), 'seed_upset')
-    expect(upsets.map((u) => [u.winner.name, u.loser.name])).toContainEqual(['Ivy', 'Nour'])
-  })
+    const upsets = factsOfKind(buildRecap(input), 'seed_upset');
+    expect(upsets.map((u) => [u.winner.name, u.loser.name])).toContainEqual(['Ivy', 'Nour']);
+  });
 
   it('emits no rating-derived facts', () => {
-    const result = buildRecap(input)
-    expect(factsOfKind(result, 'rating_upset')).toHaveLength(0)
-    expect(factsOfKind(result, 'biggest_climb')).toHaveLength(0)
-  })
+    const result = buildRecap(input);
+    expect(factsOfKind(result, 'rating_upset')).toHaveLength(0);
+    expect(factsOfKind(result, 'biggest_climb')).toHaveLength(0);
+  });
 
   it('calls the last set of the bracket grand finals', () => {
-    const [finals] = factsOfKind(buildRecap(input), 'grand_finals')
-    expect(finals?.winner.name).toBe('Ivy')
-    expect(finals?.bracketReset).toBe(false)
-    expect(finals?.score).toBe('3-2')
-  })
-})
+    const [finals] = factsOfKind(buildRecap(input), 'grand_finals');
+    expect(finals?.winner.name).toBe('Ivy');
+    expect(finals?.bracketReset).toBe(false);
+    expect(finals?.score).toBe('3-2');
+  });
+});
 
 describe('placements when Challonge reports none', () => {
   /*
@@ -180,9 +180,9 @@ describe('placements when Challonge reports none', () => {
    * final_rank at all — so this path, not the reported one, is what most of the
    * club's history goes through.
    */
-  const champ = participant({ name: 'Ivy', seed: 3 })
-  const runnerUp = participant({ name: 'Nour', seed: 1 })
-  const third = participant({ name: 'Sam', seed: 2 })
+  const champ = participant({ name: 'Ivy', seed: 3 });
+  const runnerUp = participant({ name: 'Nour', seed: 1 });
+  const third = participant({ name: 'Sam', seed: 2 });
 
   /** A double-elimination bracket with nobody's final_rank filled in. */
   const bracket: RecapSet[] = [
@@ -190,27 +190,27 @@ describe('placements when Challonge reports none', () => {
     // Sam beats Nour in losers, so Nour is out third.
     completedSet(third, runnerUp, 1, { round: -1, completedAt: '2025-03-01T09:30:00.000Z' }),
     completedSet(champ, third, 1, { round: 2, completedAt: '2025-03-01T10:00:00.000Z' }),
-  ]
+  ];
 
   it('derives the podium from elimination order', () => {
     const result = buildRecap({
       tournaments: [MAIN],
       participants: [champ, runnerUp, third],
       sets: bracket,
-    })
-    const [podium] = factsOfKind(result, 'podium')
+    });
+    const [podium] = factsOfKind(result, 'podium');
     // Last eliminated placed best: Ivy undefeated, then Sam, then Nour.
     expect(podium?.places.map((p) => [p.player.name, p.place])).toEqual([
       ['Ivy', 1],
       ['Sam', 2],
       ['Nour', 3],
-    ])
-  })
+    ]);
+  });
 
   it('keeps group results in played totals and facts without treating them as finals', () => {
-    const groupWinner = participant({ name: 'Group Winner', seed: 8 })
-    const seeded = participant({ name: 'Seeded Player', seed: 1 })
-    const champion = participant({ name: 'Champion', seed: 2 })
+    const groupWinner = participant({ name: 'Group Winner', seed: 8 });
+    const seeded = participant({ name: 'Seeded Player', seed: 1 });
+    const champion = participant({ name: 'Champion', seed: 2 });
     const result = buildRecap({
       tournaments: [MAIN],
       participants: [groupWinner, seeded, champion],
@@ -221,16 +221,16 @@ describe('placements when Challonge reports none', () => {
         completedSet(champion, groupWinner, 1, { round: 1 }),
         completedSet(champion, seeded, 1, { round: 2 }),
       ],
-    })
-    const podium = factsOfKind(result, 'podium')[0]
-    expect(podium?.places[0]?.player.name).toBe('Champion')
-    expect(result.setsPlayed).toBe(3)
-    expect(factsOfKind(result, 'seed_upset')).toHaveLength(0)
-  })
+    });
+    const podium = factsOfKind(result, 'podium')[0];
+    expect(podium?.places[0]?.player.name).toBe('Champion');
+    expect(result.setsPlayed).toBe(3);
+    expect(factsOfKind(result, 'seed_upset')).toHaveLength(0);
+  });
 
   it('does not treat reseeded two-stage brackets as seed performance stories', () => {
-    const group = participant({ name: 'Group Winner', seed: 8, finalRank: 1 })
-    const finalist = participant({ name: 'Finalist', seed: 1, finalRank: 2 })
+    const group = participant({ name: 'Group Winner', seed: 8, finalRank: 1 });
+    const finalist = participant({ name: 'Finalist', seed: 1, finalRank: 2 });
     const result = buildRecap({
       tournaments: [{ ...MAIN, tournamentType: 'single elimination' }],
       participants: [group, finalist],
@@ -238,22 +238,22 @@ describe('placements when Challonge reports none', () => {
         completedSet(group, finalist, 1, { round: 1, resultStage: 'group' }),
         completedSet(finalist, group, 1, { round: 1, resultStage: 'final' }),
       ],
-    })
-    expect(factsOfKind(result, 'seed_upset')).toHaveLength(0)
-    expect(factsOfKind(result, 'overperformer')).toHaveLength(0)
-    const [finals] = factsOfKind(result, 'grand_finals')
-    expect(finals?.winner.name).toBe('Finalist')
-  })
+    });
+    expect(factsOfKind(result, 'seed_upset')).toHaveLength(0);
+    expect(factsOfKind(result, 'overperformer')).toHaveLength(0);
+    const [finals] = factsOfKind(result, 'grand_finals');
+    expect(finals?.winner.name).toBe('Finalist');
+  });
 
   it('labels single-elimination rounds without winners-bracket names', () => {
-    expect(stageName(1, { maxRound: 1, minRound: 0 }, 'single elimination')).toBe('the final')
-  })
+    expect(stageName(1, { maxRound: 1, minRound: 0 }, 'single elimination')).toBe('the final');
+  });
 
   it('keeps both semifinal losers tied for third in single elimination', () => {
-    const a = participant({ name: 'A' })
-    const b = participant({ name: 'B' })
-    const c = participant({ name: 'C' })
-    const d = participant({ name: 'D' })
+    const a = participant({ name: 'A' });
+    const b = participant({ name: 'B' });
+    const c = participant({ name: 'C' });
+    const d = participant({ name: 'D' });
     const result = buildRecap({
       tournaments: [{ ...MAIN, tournamentType: 'single elimination' }],
       participants: [a, b, c, d],
@@ -262,24 +262,24 @@ describe('placements when Challonge reports none', () => {
         completedSet(c, d, 1, { round: 1, resultStage: 'final' }),
         completedSet(a, c, 1, { round: 2, resultStage: 'final' }),
       ],
-    })
+    });
     const places = factsOfKind(result, 'podium')[0]?.places.map((place) => [
       place.player.name,
       place.place,
-    ])
+    ]);
     expect(places).toEqual([
       ['A', 1],
       ['C', 2],
       ['B', 3],
       ['D', 3],
-    ])
-  })
+    ]);
+  });
 
   it('uses a completed final walkover for structure without counting it as played', () => {
-    const a = participant({ name: 'A' })
-    const b = participant({ name: 'B' })
-    const c = participant({ name: 'C' })
-    const d = participant({ name: 'D' })
+    const a = participant({ name: 'A' });
+    const b = participant({ name: 'B' });
+    const c = participant({ name: 'C' });
+    const d = participant({ name: 'D' });
     const result = buildRecap({
       tournaments: [{ ...MAIN, tournamentType: 'single elimination' }],
       participants: [a, b, c, d],
@@ -288,19 +288,19 @@ describe('placements when Challonge reports none', () => {
         completedSet(c, d, 1, { round: 1, resultStage: 'final' }),
         completedSet(a, c, 1, { round: 2, resultStage: 'final', scoresCsv: '99-0' }),
       ],
-    })
-    expect(factsOfKind(result, 'podium')[0]?.places[0]?.player.name).toBe('A')
-    expect(factsOfKind(result, 'grand_finals')).toHaveLength(0)
-    expect(result.setsPlayed).toBe(2)
-  })
+    });
+    expect(factsOfKind(result, 'podium')[0]?.places[0]?.player.name).toBe('A');
+    expect(factsOfKind(result, 'grand_finals')).toHaveLength(0);
+    expect(result.setsPlayed).toBe(2);
+  });
 
   it('marks a derived podium as derived', () => {
     const derivedResult = buildRecap({
       tournaments: [MAIN],
       participants: [champ, runnerUp, third],
       sets: bracket,
-    })
-    expect(factsOfKind(derivedResult, 'podium')[0]?.derived).toBe(true)
+    });
+    expect(factsOfKind(derivedResult, 'podium')[0]?.derived).toBe(true);
 
     const reportedResult = buildRecap({
       tournaments: [MAIN],
@@ -310,9 +310,9 @@ describe('placements when Challonge reports none', () => {
         { ...third, finalRank: 3 },
       ],
       sets: bracket,
-    })
-    expect(factsOfKind(reportedResult, 'podium')[0]?.derived).toBe(false)
-  })
+    });
+    expect(factsOfKind(reportedResult, 'podium')[0]?.derived).toBe(false);
+  });
 
   it('prefers what Challonge reported over what the bracket implies', () => {
     // The API path is authoritative when it is available.
@@ -324,22 +324,22 @@ describe('placements when Challonge reports none', () => {
         { ...third, finalRank: 3 },
       ],
       sets: bracket,
-    })
+    });
     expect(factsOfKind(result, 'podium')[0]?.places.map((p) => p.player.name)).toEqual([
       'Ivy',
       'Nour',
       'Sam',
-    ])
-  })
+    ]);
+  });
 
   it('derives nothing while the bracket is still underway', () => {
     const result = buildRecap({
       tournaments: [{ ...MAIN, challongeState: 'underway' }],
       participants: [champ, runnerUp, third],
       sets: bracket,
-    })
-    expect(factsOfKind(result, 'podium')).toHaveLength(0)
-  })
+    });
+    expect(factsOfKind(result, 'podium')).toHaveLength(0);
+  });
 
   it('crowns the winner of a grand final that went to a bracket reset', () => {
     /*
@@ -348,9 +348,9 @@ describe('placements when Challonge reports none', () => {
      * champion as "whoever never lost" found nobody here and dropped the podium
      * from the most dramatic nights.
      */
-    const fromLosers = participant({ name: 'Una' })
-    const fromWinners = participant({ name: 'Vex' })
-    const third = participant({ name: 'Wren' })
+    const fromLosers = participant({ name: 'Una' });
+    const fromWinners = participant({ name: 'Vex' });
+    const third = participant({ name: 'Wren' });
     const result = buildRecap({
       tournaments: [MAIN],
       participants: [fromLosers, fromWinners, third],
@@ -370,14 +370,14 @@ describe('placements when Challonge reports none', () => {
           completedAt: '2025-03-01T10:30:00.000Z',
         }),
       ],
-    })
-    const [podium] = factsOfKind(result, 'podium')
+    });
+    const [podium] = factsOfKind(result, 'podium');
     expect(podium?.places.map((p) => [p.player.name, p.place])).toEqual([
       ['Una', 1],
       ['Vex', 2],
       ['Wren', 3],
-    ])
-  })
+    ]);
+  });
 
   it('does not claim a seed overperformance from a derived placement', () => {
     // Derived placements are exact at the top and approximate below it, so
@@ -386,9 +386,9 @@ describe('placements when Challonge reports none', () => {
       tournaments: [MAIN],
       participants: [champ, runnerUp, third],
       sets: bracket,
-    })
-    expect(factsOfKind(result, 'overperformer')).toHaveLength(0)
-  })
+    });
+    expect(factsOfKind(result, 'overperformer')).toHaveLength(0);
+  });
 
   it('names the same champion on the podium and in the grand-final card', () => {
     /*
@@ -398,29 +398,29 @@ describe('placements when Challonge reports none', () => {
      * tie-breaks disagreed, so a recap named one player as champion and another
      * as the grand-final winner on the same page.
      */
-    const a = participant({ name: 'Una' })
-    const b = participant({ name: 'Vex' })
-    const c = participant({ name: 'Wren' })
+    const a = participant({ name: 'Una' });
+    const b = participant({ name: 'Vex' });
+    const c = participant({ name: 'Wren' });
     const noTimestamps: RecapSet[] = [
       completedSet(a, c, 1, { round: 1, completedAt: null, suggestedPlayOrder: null }),
       completedSet(b, c, 1, { round: -1, completedAt: null, suggestedPlayOrder: null }),
       completedSet(a, b, 2, { round: 2, completedAt: null, suggestedPlayOrder: null }),
-    ]
+    ];
 
-    const result = buildRecap({ tournaments: [MAIN], participants: [a, b, c], sets: noTimestamps })
-    const champion = factsOfKind(result, 'podium')[0]?.places[0]?.player.name
-    const finalsWinner = factsOfKind(result, 'grand_finals')[0]?.winner.name
-    expect(champion).toBe('Vex')
-    expect(finalsWinner).toBe(champion)
-  })
+    const result = buildRecap({ tournaments: [MAIN], participants: [a, b, c], sets: noTimestamps });
+    const champion = factsOfKind(result, 'podium')[0]?.places[0]?.player.name;
+    const finalsWinner = factsOfKind(result, 'grand_finals')[0]?.winner.name;
+    expect(champion).toBe('Vex');
+    expect(finalsWinner).toBe(champion);
+  });
 
   it('still finds the champion for a clean sweep', () => {
     const opponents = [
       participant({ name: 'Bo' }),
       participant({ name: 'Cy' }),
       participant({ name: 'Di' }),
-    ]
-    const sweeper = participant({ name: 'Ada' })
+    ];
+    const sweeper = participant({ name: 'Ada' });
     const result = buildRecap({
       tournaments: [MAIN],
       participants: [sweeper, ...opponents],
@@ -430,31 +430,31 @@ describe('placements when Challonge reports none', () => {
           completedAt: `2025-03-01T0${i + 1}:00:00.000Z`,
         }),
       ),
-    })
-    expect(factsOfKind(result, 'clean_sweep')[0]?.player.name).toBe('Ada')
-  })
-})
+    });
+    expect(factsOfKind(result, 'clean_sweep')[0]?.player.name).toBe('Ada');
+  });
+});
 
 describe('excluded sets', () => {
   it('never become facts', () => {
-    const winner = participant({ name: 'Ada', seed: 9 })
-    const loser = participant({ name: 'Bo', seed: 1 })
+    const winner = participant({ name: 'Ada', seed: 9 });
+    const loser = participant({ name: 'Bo', seed: 1 });
     const result = buildRecap({
       tournaments: [MAIN],
       participants: [winner, loser],
       // A DQ that would otherwise read as a huge seed upset.
       sets: [completedSet(winner, loser, 1, { excludedFromRatings: true, scoresCsv: '-1-0' })],
-    })
-    expect(factsOfKind(result, 'seed_upset')).toHaveLength(0)
-    expect(result.setsPlayed).toBe(0)
-  })
+    });
+    expect(factsOfKind(result, 'seed_upset')).toHaveLength(0);
+    expect(result.setsPlayed).toBe(0);
+  });
 
   it('do not break a clean sweep claim for the sets that were played', () => {
     // A walkover is not a dropped game, but it is also not evidence of one.
-    const champion = participant({ name: 'Ada', finalRank: 1 })
-    const a = participant({ name: 'Bo' })
-    const b = participant({ name: 'Cy' })
-    const c = participant({ name: 'Di' })
+    const champion = participant({ name: 'Ada', finalRank: 1 });
+    const a = participant({ name: 'Bo' });
+    const b = participant({ name: 'Cy' });
+    const c = participant({ name: 'Di' });
     const result = buildRecap({
       tournaments: [MAIN],
       participants: [champion, a, b, c],
@@ -464,10 +464,10 @@ describe('excluded sets', () => {
         completedSet(champion, c, 1),
         completedSet(champion, c, 1, { excludedFromRatings: true, scoresCsv: '-1-0' }),
       ],
-    })
-    expect(factsOfKind(result, 'clean_sweep')).toHaveLength(1)
-  })
-})
+    });
+    expect(factsOfKind(result, 'clean_sweep')).toHaveLength(1);
+  });
+});
 
 describe('byes', () => {
   /*
@@ -476,23 +476,23 @@ describe('byes', () => {
    * the evidence, and it is read here as well.
    */
   it('are not results, even before a sync has marked them excluded', () => {
-    const winner = participant({ name: 'Ada', seed: 9 })
-    const absent = participant({ name: 'Bo', seed: 1 })
+    const winner = participant({ name: 'Ada', seed: 9 });
+    const absent = participant({ name: 'Bo', seed: 1 });
     const result = buildRecap({
       tournaments: [MAIN],
       participants: [winner, absent],
       sets: [completedSet(winner, absent, 1, { scoresCsv: '99-0', excludedFromRatings: false })],
-    })
-    expect(result.setsPlayed).toBe(0)
+    });
+    expect(result.setsPlayed).toBe(0);
     // Beating the top seed 99-0 would otherwise be the upset of the year.
-    expect(factsOfKind(result, 'seed_upset')).toHaveLength(0)
-    expect(factsOfKind(result, 'clean_sweep')).toHaveLength(0)
-  })
+    expect(factsOfKind(result, 'seed_upset')).toHaveLength(0);
+    expect(factsOfKind(result, 'clean_sweep')).toHaveLength(0);
+  });
 
   it('do not put anyone on the podium they walked past', () => {
-    const champ = participant({ name: 'Ivy' })
-    const absent = participant({ name: 'Nour' })
-    const beaten = participant({ name: 'Sam' })
+    const champ = participant({ name: 'Ivy' });
+    const absent = participant({ name: 'Nour' });
+    const beaten = participant({ name: 'Sam' });
     const result = buildRecap({
       tournaments: [MAIN],
       participants: [champ, absent, beaten],
@@ -501,12 +501,12 @@ describe('byes', () => {
         completedSet(champ, absent, 1, { round: 1, scoresCsv: '99-0' }),
         completedSet(champ, beaten, 1, { round: 2 }),
       ],
-    })
+    });
     // Nour never played, so nothing about them was decided on the night.
-    const places = factsOfKind(result, 'podium')[0]?.places.map((p) => p.player.name) ?? []
-    expect(places).not.toContain('Nour')
-  })
-})
+    const places = factsOfKind(result, 'podium')[0]?.places.map((p) => p.player.name) ?? [];
+    expect(places).not.toContain('Nour');
+  });
+});
 
 describe('a bracket that never reached its final', () => {
   /*
@@ -514,9 +514,9 @@ describe('a bracket that never reached its final', () => {
    * bracket upstream. Its deepest *played* round is not its final, and naming
    * that winner as champion puts a player on a podium they never reached.
    */
-  const a = participant({ name: 'Ivy' })
-  const b = participant({ name: 'Nour' })
-  const c = participant({ name: 'Sam' })
+  const a = participant({ name: 'Ivy' });
+  const b = participant({ name: 'Nour' });
+  const c = participant({ name: 'Sam' });
 
   it('crowns nobody, even once the night is long enough past to be over', () => {
     const result = buildRecap({
@@ -529,14 +529,14 @@ describe('a bracket that never reached its final', () => {
         { ...completedSet(a, b, 1, { round: 2 }), state: 'open', winner: null, scoresCsv: null },
       ],
       now: Date.parse('2025-06-01T00:00:00.000Z'),
-    })
-    expect(result.isComplete).toBe(true)
-    expect(result.isAbandoned).toBe(true)
-    expect(factsOfKind(result, 'podium')).toHaveLength(0)
-    expect(factsOfKind(result, 'grand_finals')).toHaveLength(0)
+    });
+    expect(result.isComplete).toBe(true);
+    expect(result.isAbandoned).toBe(true);
+    expect(factsOfKind(result, 'podium')).toHaveLength(0);
+    expect(factsOfKind(result, 'grand_finals')).toHaveLength(0);
     // The sets that were played still happened.
-    expect(result.setsPlayed).toBe(2)
-  })
+    expect(result.setsPlayed).toBe(2);
+  });
 
   it('is still in progress on the night itself', () => {
     const result = buildRecap({
@@ -544,52 +544,52 @@ describe('a bracket that never reached its final', () => {
       participants: [a, b],
       sets: [completedSet(a, b, 1, { round: 1 })],
       now: Date.parse('2025-03-01T10:00:00.000Z'),
-    })
-    expect(result.isComplete).toBe(false)
-    expect(result.isAbandoned).toBe(false)
-  })
-})
+    });
+    expect(result.isComplete).toBe(false);
+    expect(result.isAbandoned).toBe(false);
+  });
+});
 
 describe('clean sweeps', () => {
-  const champion = participant({ name: 'Ada', finalRank: 1 })
+  const champion = participant({ name: 'Ada', finalRank: 1 });
   const others = [
     participant({ name: 'Bo' }),
     participant({ name: 'Cy' }),
     participant({ name: 'Di' }),
-  ]
+  ];
 
   it('are claimed when no game was dropped', () => {
     const result = buildRecap({
       tournaments: [MAIN],
       participants: [champion, ...others],
       sets: others.map((o) => completedSet(champion, o, 1, { scoresCsv: '3-0' })),
-    })
-    const [sweep] = factsOfKind(result, 'clean_sweep')
-    expect(sweep?.player.name).toBe('Ada')
-    expect(sweep?.sets).toBe(3)
-  })
+    });
+    const [sweep] = factsOfKind(result, 'clean_sweep');
+    expect(sweep?.player.name).toBe('Ada');
+    expect(sweep?.sets).toBe(3);
+  });
 
   it('are not claimed when a game was dropped', () => {
-    const sets = others.map((o) => completedSet(champion, o, 1, { scoresCsv: '3-0' }))
-    sets[1] = { ...sets[1]!, scoresCsv: '3-1' }
-    const result = buildRecap({ tournaments: [MAIN], participants: [champion, ...others], sets })
-    expect(factsOfKind(result, 'clean_sweep')).toHaveLength(0)
-  })
+    const sets = others.map((o) => completedSet(champion, o, 1, { scoresCsv: '3-0' }));
+    sets[1] = { ...sets[1]!, scoresCsv: '3-1' };
+    const result = buildRecap({ tournaments: [MAIN], participants: [champion, ...others], sets });
+    expect(factsOfKind(result, 'clean_sweep')).toHaveLength(0);
+  });
 
   it('are not claimed when a scoreline could not be read', () => {
     // An unreadable score could be hiding a dropped game, so the sweep is
     // unverifiable and must not be asserted.
-    const sets = others.map((o) => completedSet(champion, o, 1, { scoresCsv: '3-0' }))
-    sets[2] = { ...sets[2]!, scoresCsv: null }
-    const result = buildRecap({ tournaments: [MAIN], participants: [champion, ...others], sets })
-    expect(factsOfKind(result, 'clean_sweep')).toHaveLength(0)
-  })
-})
+    const sets = others.map((o) => completedSet(champion, o, 1, { scoresCsv: '3-0' }));
+    sets[2] = { ...sets[2]!, scoresCsv: null };
+    const result = buildRecap({ tournaments: [MAIN], participants: [champion, ...others], sets });
+    expect(factsOfKind(result, 'clean_sweep')).toHaveLength(0);
+  });
+});
 
 describe('runbacks and highlights', () => {
   it('reports a later win over the same opponent as a runback', () => {
-    const a = participant({ name: 'Ada' })
-    const b = participant({ name: 'Bo' })
+    const a = participant({ name: 'Ada' });
+    const b = participant({ name: 'Bo' });
     const result = buildRecap({
       tournaments: [MAIN],
       participants: [a, b],
@@ -597,58 +597,58 @@ describe('runbacks and highlights', () => {
         completedSet(a, b, 1, { completedAt: '2025-03-01T09:00:00.000Z' }),
         completedSet(a, b, 2, { completedAt: '2025-03-01T10:00:00.000Z', scoresCsv: '2-1' }),
       ],
-    })
-    const [runback] = factsOfKind(result, 'runback')
-    expect(runback?.winner.name).toBe('Bo')
-    expect(runback?.loser.name).toBe('Ada')
-  })
+    });
+    const [runback] = factsOfKind(result, 'runback');
+    expect(runback?.winner.name).toBe('Bo');
+    expect(runback?.loser.name).toBe('Ada');
+  });
 
   it('does not call a single meeting or a bye a runback', () => {
-    const a = participant({ name: 'Ada' })
-    const b = participant({ name: 'Bo' })
+    const a = participant({ name: 'Ada' });
+    const b = participant({ name: 'Bo' });
     const result = buildRecap({
       tournaments: [MAIN],
       participants: [a, b],
       sets: [completedSet(a, b, 1), completedSet(a, b, 2, { scoresCsv: '99-0' })],
-    })
-    expect(factsOfKind(result, 'runback')).toHaveLength(0)
-  })
+    });
+    expect(factsOfKind(result, 'runback')).toHaveLength(0);
+  });
 
   it('keeps highlights short and leaves sparse nights unpadded', () => {
-    const a = participant({ name: 'Ada' })
-    const b = participant({ name: 'Bo' })
+    const a = participant({ name: 'Ada' });
+    const b = participant({ name: 'Bo' });
     const result = buildRecap({
       tournaments: [MAIN],
       participants: [a, b],
       sets: [completedSet(a, b, 1, { round: 1 })],
-    })
-    expect(result.highlights.length).toBeLessThanOrEqual(6)
-    expect(result.highlights.every((entry) => entry.notability >= 0.45)).toBe(true)
-  })
-})
+    });
+    expect(result.highlights.length).toBeLessThanOrEqual(6);
+    expect(result.highlights.every((entry) => entry.notability >= 0.45)).toBe(true);
+  });
+});
 
 describe('nailbiters', () => {
   // A later set decides the bracket, so the close set is not the decider —
   // the decider's story belongs to the grand-final card, not a nailbiter.
-  const a = participant({ name: 'Ada' })
-  const b = participant({ name: 'Bo' })
-  const c = participant({ name: 'Cy' })
+  const a = participant({ name: 'Ada' });
+  const b = participant({ name: 'Bo' });
+  const c = participant({ name: 'Cy' });
   const decider = (winner: RecapParticipant): RecapSet =>
     completedSet(winner, c, 1, {
       round: 5,
       scoresCsv: '3-0',
       completedAt: '2025-03-01T11:00:00.000Z',
-    })
+    });
 
   it('are sets that went to a deciding game', () => {
     const result = buildRecap({
       tournaments: [MAIN],
       participants: [a, b, c],
       sets: [completedSet(a, b, 1, { scoresCsv: '3-2' }), decider(a)],
-    })
-    const [fact] = factsOfKind(result, 'nailbiter')
-    expect(fact?.score).toBe('3-2')
-  })
+    });
+    const [fact] = factsOfKind(result, 'nailbiter');
+    expect(fact?.score).toBe('3-2');
+  });
 
   it("report the score from the winner's side even when player two won", () => {
     const result = buildRecap({
@@ -656,20 +656,20 @@ describe('nailbiters', () => {
       participants: [a, b, c],
       // scores_csv is always player-one-first, so "2-3" is a win for Bo.
       sets: [completedSet(a, b, 2, { scoresCsv: '2-3' }), decider(b)],
-    })
-    const [fact] = factsOfKind(result, 'nailbiter')
-    expect(fact?.winner.name).toBe('Bo')
-    expect(fact?.score).toBe('3-2')
-  })
+    });
+    const [fact] = factsOfKind(result, 'nailbiter');
+    expect(fact?.winner.name).toBe('Bo');
+    expect(fact?.score).toBe('3-2');
+  });
 
   it('exclude one-sided sets', () => {
     const result = buildRecap({
       tournaments: [MAIN],
       participants: [a, b, c],
       sets: [completedSet(a, b, 1, { scoresCsv: '3-0' }), decider(a)],
-    })
-    expect(factsOfKind(result, 'nailbiter')).toHaveLength(0)
-  })
+    });
+    expect(factsOfKind(result, 'nailbiter')).toHaveLength(0);
+  });
 
   it('never duplicate the set that decided the bracket', () => {
     const result = buildRecap({
@@ -678,42 +678,42 @@ describe('nailbiters', () => {
       // The bracket's only set went the distance — but it is the decider, and
       // the grand-final card already tells that story.
       sets: [completedSet(a, b, 1, { scoresCsv: '3-2' })],
-    })
-    expect(factsOfKind(result, 'nailbiter')).toHaveLength(0)
-    expect(factsOfKind(result, 'grand_finals')).toHaveLength(1)
-  })
-})
+    });
+    expect(factsOfKind(result, 'nailbiter')).toHaveLength(0);
+    expect(factsOfKind(result, 'grand_finals')).toHaveLength(1);
+  });
+});
 
 describe('losers runs', () => {
   it('count consecutive elimination wins', () => {
-    const runner = participant({ name: 'Ada', finalRank: 2 })
-    const opponents = [1, 2, 3, 4].map((n) => participant({ name: `Foe${n}` }))
+    const runner = participant({ name: 'Ada', finalRank: 2 });
+    const opponents = [1, 2, 3, 4].map((n) => participant({ name: `Foe${n}` }));
     const result = buildRecap({
       tournaments: [MAIN],
       participants: [runner, ...opponents],
       sets: opponents.map((o, i) => completedSet(runner, o, 1, { round: -(i + 1) })),
-    })
-    const [run] = factsOfKind(result, 'losers_run')
-    expect(run?.wins).toBe(4)
-    expect(run?.finalRank).toBe(2)
-  })
+    });
+    const [run] = factsOfKind(result, 'losers_run');
+    expect(run?.wins).toBe(4);
+    expect(run?.finalRank).toBe(2);
+  });
 
   it('ignore short runs', () => {
-    const runner = participant({ name: 'Ada' })
-    const opponents = [1, 2].map((n) => participant({ name: `Foe${n}` }))
+    const runner = participant({ name: 'Ada' });
+    const opponents = [1, 2].map((n) => participant({ name: `Foe${n}` }));
     const result = buildRecap({
       tournaments: [MAIN],
       participants: [runner, ...opponents],
       sets: opponents.map((o, i) => completedSet(runner, o, 1, { round: -(i + 1) })),
-    })
-    expect(factsOfKind(result, 'losers_run')).toHaveLength(0)
-  })
-})
+    });
+    expect(factsOfKind(result, 'losers_run')).toHaveLength(0);
+  });
+});
 
 describe('grand finals', () => {
   it('detect a bracket reset from two sets in the final round', () => {
-    const a = participant({ name: 'Ada', finalRank: 1 })
-    const b = participant({ name: 'Bo', finalRank: 2 })
+    const a = participant({ name: 'Ada', finalRank: 1 });
+    const b = participant({ name: 'Bo', finalRank: 2 });
     const result = buildRecap({
       tournaments: [MAIN],
       participants: [a, b],
@@ -721,30 +721,30 @@ describe('grand finals', () => {
         completedSet(a, b, 2, { round: 5, completedAt: '2025-03-01T10:00:00.000Z' }),
         completedSet(a, b, 1, { round: 5, completedAt: '2025-03-01T10:30:00.000Z' }),
       ],
-    })
-    const [finals] = factsOfKind(result, 'grand_finals')
-    expect(finals?.bracketReset).toBe(true)
+    });
+    const [finals] = factsOfKind(result, 'grand_finals');
+    expect(finals?.bracketReset).toBe(true);
     // The decider is the later set — Ada won the reset.
-    expect(finals?.winner.name).toBe('Ada')
-  })
+    expect(finals?.winner.name).toBe('Ada');
+  });
 
   it('are not claimed for a bracket still in progress', () => {
-    const a = participant({ name: 'Ada' })
-    const b = participant({ name: 'Bo' })
+    const a = participant({ name: 'Ada' });
+    const b = participant({ name: 'Bo' });
     const result = buildRecap({
       tournaments: [{ ...MAIN, challongeState: 'underway' }],
       participants: [a, b],
       sets: [completedSet(a, b, 1, { round: 2 })],
-    })
-    expect(factsOfKind(result, 'grand_finals')).toHaveLength(0)
-    expect(result.isComplete).toBe(false)
-  })
-})
+    });
+    expect(factsOfKind(result, 'grand_finals')).toHaveLength(0);
+    expect(result.isComplete).toBe(false);
+  });
+});
 
 describe('rating-derived facts', () => {
-  const underdog = participant({ name: 'Ada' })
-  const favourite = participant({ name: 'Bo' })
-  const set = completedSet(underdog, favourite, 1, { round: 3 })
+  const underdog = participant({ name: 'Ada' });
+  const favourite = participant({ name: 'Bo' });
+  const set = completedSet(underdog, favourite, 1, { round: 3 });
 
   const result = buildRecap({
     tournaments: [MAIN],
@@ -774,25 +774,25 @@ describe('rating-derived facts', () => {
         postRd: 58,
       },
     ],
-  })
+  });
 
   it('score the upset by how unlikely it was', () => {
-    const [upset] = factsOfKind(result, 'rating_upset')
-    expect(upset?.winner.name).toBe('Ada')
-    expect(upset?.probability).toBeLessThan(0.2)
-    expect(Math.round(upset!.ratingGap)).toBe(500)
-  })
+    const [upset] = factsOfKind(result, 'rating_upset');
+    expect(upset?.winner.name).toBe('Ada');
+    expect(upset?.probability).toBeLessThan(0.2);
+    expect(Math.round(upset!.ratingGap)).toBe(500);
+  });
 
   it('report the biggest climb of the night', () => {
-    const [climb] = factsOfKind(result, 'biggest_climb')
-    expect(climb?.player.name).toBe('Ada')
-    expect(Math.round(climb!.gained)).toBe(60)
-  })
+    const [climb] = factsOfKind(result, 'biggest_climb');
+    expect(climb?.player.name).toBe('Ada');
+    expect(Math.round(climb!.gained)).toBe(60);
+  });
 
   it('do not call an even set an upset', () => {
-    const a = participant({ name: 'Cy' })
-    const b = participant({ name: 'Di' })
-    const even = completedSet(a, b, 1)
+    const a = participant({ name: 'Cy' });
+    const b = participant({ name: 'Di' });
+    const even = completedSet(a, b, 1);
     const evenResult = buildRecap({
       tournaments: [MAIN],
       participants: [a, b],
@@ -808,18 +808,18 @@ describe('rating-derived facts', () => {
         preRd: 60,
         postRd: 59,
       })),
-    })
-    expect(factsOfKind(evenResult, 'rating_upset')).toHaveLength(0)
-  })
-})
+    });
+    expect(factsOfKind(evenResult, 'rating_upset')).toHaveLength(0);
+  });
+});
 
 describe('history-derived facts', () => {
-  const a = participant({ name: 'Ada' })
-  const b = participant({ name: 'Bo' })
-  const set = completedSet(a, b, 1)
+  const a = participant({ name: 'Ada' });
+  const b = participant({ name: 'Bo' });
+  const set = completedSet(a, b, 1);
 
   it("report a rivalry with the series to the night's winner", () => {
-    const prior = { aWins: 3, bWins: 3 }
+    const prior = { aWins: 3, bWins: 3 };
     const result = buildRecap({
       tournaments: [MAIN],
       participants: [a, b],
@@ -827,13 +827,13 @@ describe('history-derived facts', () => {
       history: emptyHistory({
         priorMeetings: new Map([[pairKey(a.playerId!, b.playerId!), prior]]),
       }),
-    })
-    const [rivalry] = factsOfKind(result, 'rivalry')
-    expect(rivalry?.meetings).toBe(7)
+    });
+    const [rivalry] = factsOfKind(result, 'rivalry');
+    expect(rivalry?.meetings).toBe(7);
     // `a` is always tonight's winner, and their win is already counted.
-    expect(rivalry?.a.name).toBe('Ada')
-    expect([rivalry?.aWins, rivalry?.bWins]).toEqual([4, 3])
-  })
+    expect(rivalry?.a.name).toBe('Ada');
+    expect([rivalry?.aWins, rivalry?.bWins]).toEqual([4, 3]);
+  });
 
   it('ignore a pairing that has barely met', () => {
     const result = buildRecap({
@@ -843,9 +843,9 @@ describe('history-derived facts', () => {
       history: emptyHistory({
         priorMeetings: new Map([[pairKey(a.playerId!, b.playerId!), { aWins: 1, bWins: 0 }]]),
       }),
-    })
-    expect(factsOfKind(result, 'rivalry')).toHaveLength(0)
-  })
+    });
+    expect(factsOfKind(result, 'rivalry')).toHaveLength(0);
+  });
 
   it('call a first-ever win over a long-time tormentor a breakthrough, not a rivalry', () => {
     // Ada has lost to Bo three times and never won. Tonight is the story.
@@ -861,13 +861,13 @@ describe('history-derived facts', () => {
           ],
         ]),
       }),
-    })
-    const [breakthrough] = factsOfKind(result, 'breakthrough')
-    expect(breakthrough?.winner.name).toBe('Ada')
-    expect(breakthrough?.priorLosses).toBe(3)
+    });
+    const [breakthrough] = factsOfKind(result, 'breakthrough');
+    expect(breakthrough?.winner.name).toBe('Ada');
+    expect(breakthrough?.priorLosses).toBe(3);
     // The same set must not also appear as a rivalry card.
-    expect(factsOfKind(result, 'rivalry')).toHaveLength(0)
-  })
+    expect(factsOfKind(result, 'rivalry')).toHaveLength(0);
+  });
 
   it('announce debuts for players with no prior nights', () => {
     const result = buildRecap({
@@ -875,10 +875,10 @@ describe('history-derived facts', () => {
       participants: [a, b],
       sets: [set],
       history: emptyHistory({ priorEventCounts: new Map([[a.playerId!, 4]]) }),
-    })
-    const [debut] = factsOfKind(result, 'debut')
-    expect(debut?.players.map((p) => p.name)).toEqual(['Bo'])
-  })
+    });
+    const [debut] = factsOfKind(result, 'debut');
+    expect(debut?.players.map((p) => p.name)).toEqual(['Bo']);
+  });
 
   it('report a career-high rating only against a known previous peak', () => {
     const withPeak = buildRecap({
@@ -899,9 +899,9 @@ describe('history-derived facts', () => {
         },
       ],
       history: emptyHistory({ priorPeakRating: new Map([[a.playerId!, 1520]]) }),
-    })
-    const peaks = factsOfKind(withPeak, 'milestone').filter((m) => m.milestone === 'peak_rating')
-    expect(peaks.map((p) => p.player.name)).toEqual(['Ada'])
+    });
+    const peaks = factsOfKind(withPeak, 'milestone').filter((m) => m.milestone === 'peak_rating');
+    expect(peaks.map((p) => p.player.name)).toEqual(['Ada']);
 
     // With no prior peak recorded, that is a debut rather than a career high.
     const noHistory = buildRecap({
@@ -922,11 +922,11 @@ describe('history-derived facts', () => {
         },
       ],
       history: emptyHistory(),
-    })
+    });
     expect(
       factsOfKind(noHistory, 'milestone').filter((m) => m.milestone === 'peak_rating'),
-    ).toHaveLength(0)
-  })
+    ).toHaveLength(0);
+  });
 
   it('mark a round-number career set count crossed tonight', () => {
     const result = buildRecap({
@@ -934,11 +934,11 @@ describe('history-derived facts', () => {
       participants: [a, b],
       sets: [set],
       history: emptyHistory({ priorSetCounts: new Map([[a.playerId!, 49]]) }),
-    })
-    const milestones = factsOfKind(result, 'milestone').filter((m) => m.milestone === 'sets')
-    expect(milestones.map((m) => [m.player.name, m.value])).toEqual([['Ada', 50]])
-  })
-})
+    });
+    const milestones = factsOfKind(result, 'milestone').filter((m) => m.milestone === 'sets');
+    expect(milestones.map((m) => [m.player.name, m.value])).toEqual([['Ada', 50]]);
+  });
+});
 
 describe('the night as a whole', () => {
   it('folds both brackets of an evening into one recap', () => {
@@ -948,88 +948,88 @@ describe('the night as a whole', () => {
       eventDate: '2025-03-01T10:00:00.000Z',
       isRookie: true,
       challongeState: 'complete',
-    }
-    const mainPlayer = participant({ name: 'Ada', finalRank: 1 })
-    const rookiePlayer = participant({ name: 'Bo', tournamentId: rookie.id, finalRank: 1 })
-    const rookieFoe = participant({ name: 'Cy', tournamentId: rookie.id, finalRank: 2 })
+    };
+    const mainPlayer = participant({ name: 'Ada', finalRank: 1 });
+    const rookiePlayer = participant({ name: 'Bo', tournamentId: rookie.id, finalRank: 1 });
+    const rookieFoe = participant({ name: 'Cy', tournamentId: rookie.id, finalRank: 2 });
 
     const result = buildRecap({
       tournaments: [rookie, MAIN],
       participants: [mainPlayer, rookiePlayer, rookieFoe],
       sets: [completedSet(rookiePlayer, rookieFoe, 1, { tournamentId: rookie.id })],
-    })
+    });
 
     // Main bracket first — a night's headline result is the main bracket's.
-    expect(result.tournaments.map((t) => t.id)).toEqual([MAIN.id, rookie.id])
-    expect(result.eventKey).toBe('2025-03-01')
-    expect(factsOfKind(result, 'podium')).toHaveLength(2)
-  })
+    expect(result.tournaments.map((t) => t.id)).toEqual([MAIN.id, rookie.id]);
+    expect(result.eventKey).toBe('2025-03-01');
+    expect(factsOfKind(result, 'podium')).toHaveLength(2);
+  });
 
   it('counts a player who entered both brackets once in the turnout', () => {
-    const rookie: RecapTournament = { ...MAIN, id: 't-rookie', isRookie: true }
-    const inMain = participant({ name: 'Ada' })
-    const inRookie = { ...inMain, id: 'other-entry', tournamentId: rookie.id }
+    const rookie: RecapTournament = { ...MAIN, id: 't-rookie', isRookie: true };
+    const inMain = participant({ name: 'Ada' });
+    const inRookie = { ...inMain, id: 'other-entry', tournamentId: rookie.id };
     const result = buildRecap({
       tournaments: [MAIN, rookie],
       participants: [inMain, inRookie],
       sets: [],
       priorTurnouts: [{ eventKey: '2025-02-01', entrants: 1 }],
-    })
-    const [turnout] = factsOfKind(result, 'turnout')
-    expect(turnout?.entrants).toBe(1)
-  })
+    });
+    const [turnout] = factsOfKind(result, 'turnout');
+    expect(turnout?.entrants).toBe(1);
+  });
 
   it('only compares turnout when there is a previous night to compare with', () => {
     const result = buildRecap({
       tournaments: [MAIN],
       participants: [participant({ name: 'Ada' })],
       sets: [],
-    })
-    expect(factsOfKind(result, 'turnout')).toHaveLength(0)
-  })
+    });
+    expect(factsOfKind(result, 'turnout')).toHaveLength(0);
+  });
 
   it('ranks facts by notability, most notable first', () => {
-    const champion = participant({ name: 'Ivy', seed: 8, finalRank: 1 })
-    const foe = participant({ name: 'Nour', seed: 1, finalRank: 2 })
+    const champion = participant({ name: 'Ivy', seed: 8, finalRank: 1 });
+    const foe = participant({ name: 'Nour', seed: 1, finalRank: 2 });
     const result = buildRecap({
       tournaments: [MAIN],
       participants: [champion, foe],
       sets: [completedSet(champion, foe, 1, { round: 4 })],
-    })
-    const scores = result.facts.map((f) => f.notability)
-    expect(scores).toEqual([...scores].sort((x, y) => y - x))
-  })
+    });
+    const scores = result.facts.map((f) => f.notability);
+    expect(scores).toEqual([...scores].sort((x, y) => y - x));
+  });
 
   it('keeps only the most notable few of a repetitive fact kind', () => {
     // A bracket where most sets go to a deciding game would otherwise bury
     // everything else under identical "went the distance" cards.
-    const players = Array.from({ length: 10 }, (_, i) => participant({ name: `P${i}` }))
+    const players = Array.from({ length: 10 }, (_, i) => participant({ name: `P${i}` }));
     const closeSets = players
       .slice(1)
-      .map((p, i) => completedSet(players[0]!, p, 1, { scoresCsv: '2-1', round: i + 1 }))
+      .map((p, i) => completedSet(players[0]!, p, 1, { scoresCsv: '2-1', round: i + 1 }));
 
-    const result = buildRecap({ tournaments: [MAIN], participants: players, sets: closeSets })
-    expect(closeSets).toHaveLength(9)
-    expect(factsOfKind(result, 'nailbiter')).toHaveLength(2)
+    const result = buildRecap({ tournaments: [MAIN], participants: players, sets: closeSets });
+    expect(closeSets).toHaveLength(9);
+    expect(factsOfKind(result, 'nailbiter')).toHaveLength(2);
 
     // The ones kept are the most notable, not the first encountered: these
     // sets climb through the rounds, so the deepest two survive — minus the
     // round-9 decider, whose story belongs to the grand-final card.
-    const kept = factsOfKind(result, 'nailbiter').map((f) => f.stage)
-    expect(kept).toEqual(['the winners final', 'the winners semis'])
-  })
+    const kept = factsOfKind(result, 'nailbiter').map((f) => f.stage);
+    expect(kept).toEqual(['the winners final', 'the winners semis']);
+  });
 
   it('is empty but well-formed for a night with nothing in it', () => {
-    const result = buildRecap({ tournaments: [], participants: [], sets: [] })
-    expect(result).toMatchObject({ facts: [], entrants: 0, setsPlayed: 0, isComplete: false })
-  })
-})
+    const result = buildRecap({ tournaments: [], participants: [], sets: [] });
+    expect(result).toMatchObject({ facts: [], entrants: 0, setsPlayed: 0, isComplete: false });
+  });
+});
 
 describe('formatFact', () => {
   it('writes copy for every fact kind', () => {
     // A missing branch would ship a blank card, so every kind is exercised.
-    const player = { playerId: 'x', name: 'Ada', companyCode: 'ACME', characters: [] }
-    const other = { playerId: 'y', name: 'Bo', companyCode: null, characters: [] }
+    const player = { playerId: 'x', name: 'Ada', companyCode: 'ACME', characters: [] };
+    const other = { playerId: 'y', name: 'Bo', companyCode: null, characters: [] };
     const facts: RecapFact[] = [
       {
         kind: 'podium',
@@ -1098,14 +1098,14 @@ describe('formatFact', () => {
         runSets: 6,
         gamesDropped: 4,
       },
-    ]
+    ];
 
     for (const fact of facts) {
-      const { headline, detail } = formatFact(fact)
-      expect(headline, `headline for ${fact.kind}`).not.toBe('')
-      expect(headline, `headline for ${fact.kind}`).not.toContain('undefined')
-      expect(detail, `detail for ${fact.kind}`).not.toContain('undefined')
-      expect(detail, `detail for ${fact.kind}`).not.toContain('NaN')
+      const { headline, detail } = formatFact(fact);
+      expect(headline, `headline for ${fact.kind}`).not.toBe('');
+      expect(headline, `headline for ${fact.kind}`).not.toContain('undefined');
+      expect(detail, `detail for ${fact.kind}`).not.toContain('undefined');
+      expect(detail, `detail for ${fact.kind}`).not.toContain('NaN');
     }
 
     /*
@@ -1131,18 +1131,18 @@ describe('formatFact', () => {
       turnout: false,
       grand_finals: false,
       runback: false,
-    }
-    for (const fact of facts) covered[fact.kind] = true
+    };
+    for (const fact of facts) covered[fact.kind] = true;
     expect(
       Object.entries(covered)
         .filter(([, seen]) => !seen)
         .map(([kind]) => kind),
-    ).toEqual([])
-  })
+    ).toEqual([]);
+  });
 
   it('uses the right ordinal suffixes', () => {
-    const player = { playerId: 'x', name: 'Ada', companyCode: null, characters: [] }
-    const other = { playerId: 'y', name: 'Bo', companyCode: null, characters: [] }
+    const player = { playerId: 'x', name: 'Ada', companyCode: null, characters: [] };
+    const other = { playerId: 'y', name: 'Bo', companyCode: null, characters: [] };
     const seedUpset = (winnerSeed: number, loserSeed: number): string =>
       formatFact({
         kind: 'seed_upset',
@@ -1153,11 +1153,11 @@ describe('formatFact', () => {
         loserSeed,
         stage: null,
         score: null,
-      }).detail
+      }).detail;
 
-    expect(seedUpset(2, 1)).toContain('2nd seed against the 1st')
-    expect(seedUpset(23, 3)).toContain('23rd seed against the 3rd')
+    expect(seedUpset(2, 1)).toContain('2nd seed against the 1st');
+    expect(seedUpset(23, 3)).toContain('23rd seed against the 3rd');
     // The teens are the case a naive suffix table gets wrong.
-    expect(seedUpset(13, 11)).toContain('13th seed against the 11th')
-  })
-})
+    expect(seedUpset(13, 11)).toContain('13th seed against the 11th');
+  });
+});

@@ -1,10 +1,10 @@
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { trpc } from '../../../lib/trpc'
-import type { EventPlanEntry, EventPlanView, ReviewCandidate } from '../../../lib/apiTypes'
-import { PlayerFormModal, type PlayerFormValues } from '../../../components/PlayerFormModal'
-import { PlayerLookupModal } from '../../../components/PlayerLookupModal'
-import { CopyBlock, IssueList } from './shared'
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { trpc } from '../../../lib/trpc';
+import type { EventPlanEntry, EventPlanView, ReviewCandidate } from '../../../lib/apiTypes';
+import { PlayerFormModal, type PlayerFormValues } from '../../../components/PlayerFormModal';
+import { PlayerLookupModal } from '../../../components/PlayerLookupModal';
+import { CopyBlock, IssueList } from './shared';
 
 /**
  * Step 3 of the wizard: one editable row per pasted entrant.
@@ -22,34 +22,34 @@ const METHOD_LABEL: Record<string, string> = {
   manual: 'Chosen by hand',
   new: 'New player',
   unresolved: 'Unresolved',
-}
+};
 
 export function RosterStep({ view, onChanged }: { view: EventPlanView; onChanged: () => void }) {
-  const planId = view.plan.id
-  const [highlighted, setHighlighted] = useState<Set<string>>(new Set())
-  const [addingText, setAddingText] = useState('')
-  const editable = view.plan.status === 'draft'
+  const planId = view.plan.id;
+  const [highlighted, setHighlighted] = useState<Set<string>>(new Set());
+  const [addingText, setAddingText] = useState('');
+  const editable = view.plan.status === 'draft';
 
   const addRows = useMutation({
     mutationFn: () => trpc.admin.eventPlanner.addRows.mutate({ planId, text: addingText }),
     onSuccess: () => {
-      setAddingText('')
-      onChanged()
+      setAddingText('');
+      onChanged();
     },
-  })
+  });
 
   const freeze = useMutation({
     mutationFn: () => trpc.admin.eventPlanner.freezeRoster.mutate({ planId }),
     onSuccess: onChanged,
-  })
+  });
 
   const unfreeze = useMutation({
     mutationFn: () => trpc.admin.eventPlanner.unfreezeRoster.mutate({ planId }),
     onSuccess: onChanged,
-  })
+  });
 
-  const resolved = view.entries.filter((entry) => entry.playerId !== null).length
-  const canFreeze = editable && view.issues.blocking.length === 0
+  const resolved = view.entries.filter((entry) => entry.playerId !== null).length;
+  const canFreeze = editable && view.issues.blocking.length === 0;
 
   return (
     <div>
@@ -91,7 +91,7 @@ export function RosterStep({ view, onChanged }: { view: EventPlanView; onChanged
                     'Reopen the roster? The ranking snapshot and every seed is discarded.',
                   )
                 ) {
-                  unfreeze.mutate()
+                  unfreeze.mutate();
                 }
               }}
             >
@@ -182,7 +182,7 @@ export function RosterStep({ view, onChanged }: { view: EventPlanView; onChanged
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function RosterRow({
@@ -192,38 +192,38 @@ function RosterRow({
   highlighted,
   onChanged,
 }: {
-  planId: string
-  entry: EventPlanEntry
-  editable: boolean
-  highlighted: boolean
-  onChanged: () => void
+  planId: string;
+  entry: EventPlanEntry;
+  editable: boolean;
+  highlighted: boolean;
+  onChanged: () => void;
 }) {
-  const queryClient = useQueryClient()
-  const [lookingUp, setLookingUp] = useState(false)
-  const [creating, setCreating] = useState(false)
+  const queryClient = useQueryClient();
+  const [lookingUp, setLookingUp] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   const companies = useQuery({
     queryKey: ['admin', 'companies'],
     queryFn: () => trpc.admin.companies.query(),
     enabled: creating,
-  })
+  });
 
   const update = useMutation({
     mutationFn: (patch: {
-      playerId?: string | null
-      divisionPreference?: 'auto' | 'upper' | 'lower'
-      resolutionMethod?: 'manual' | 'new'
+      playerId?: string | null;
+      divisionPreference?: 'auto' | 'upper' | 'lower';
+      resolutionMethod?: 'manual' | 'new';
     }) => trpc.admin.eventPlanner.updateEntry.mutate({ planId, entryId: entry.id, ...patch }),
     onSuccess: () => {
-      setLookingUp(false)
-      onChanged()
+      setLookingUp(false);
+      onChanged();
     },
-  })
+  });
 
   const remove = useMutation({
     mutationFn: () => trpc.admin.eventPlanner.removeEntry.mutate({ planId, entryId: entry.id }),
     onSuccess: onChanged,
-  })
+  });
 
   /**
    * Mint the player, then bind them to this row. Two calls, and the order
@@ -239,20 +239,20 @@ function RosterRow({
         companyCode: values.companyCode === '' ? null : values.companyCode,
         characters: values.characters,
         aliases: values.aliases,
-      })
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'players'] })
+      });
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'players'] });
       await trpc.admin.eventPlanner.updateEntry.mutate({
         planId,
         entryId: entry.id,
         playerId,
         resolutionMethod: 'new',
-      })
+      });
     },
     onSuccess: () => {
-      setCreating(false)
-      onChanged()
+      setCreating(false);
+      onChanged();
     },
-  })
+  });
 
   /**
    * Teach the club this spelling for good. Deliberately a separate, explicit
@@ -267,11 +267,11 @@ function RosterRow({
         companyCode: entry.companyCode,
       }),
     onSuccess: onChanged,
-  })
+  });
 
-  const candidates = entry.candidates as ReviewCandidate[]
-  const needsDivision = entry.currentRank === null && entry.divisionPreference === 'auto'
-  const rank = entry.snapshotRank ?? entry.currentRank
+  const candidates = entry.candidates as ReviewCandidate[];
+  const needsDivision = entry.currentRank === null && entry.divisionPreference === 'auto';
+  const rank = entry.snapshotRank ?? entry.currentRank;
 
   return (
     <div
@@ -423,16 +423,16 @@ function RosterRow({
         </PlayerFormModal>
       )}
     </div>
-  )
+  );
 }
 
 function DraftSettings({ view, onChanged }: { view: EventPlanView; onChanged: () => void }) {
-  const [name, setName] = useState(view.plan.name)
-  const [prefix, setPrefix] = useState(view.plan.slugPrefix ?? '')
+  const [name, setName] = useState(view.plan.name);
+  const [prefix, setPrefix] = useState(view.plan.slugPrefix ?? '');
   const [upper, setUpper] = useState(
     view.plan.upperTargetSize ?? Math.ceil(view.entries.length / 2),
-  )
-  const total = view.entries.length
+  );
+  const total = view.entries.length;
   const update = useMutation({
     mutationFn: () =>
       trpc.admin.eventPlanner.updatePlan.mutate({
@@ -442,13 +442,13 @@ function DraftSettings({ view, onChanged }: { view: EventPlanView; onChanged: ()
         upperTargetSize: upper,
       }),
     onSuccess: onChanged,
-  })
+  });
   return (
     <form
       className="card section"
       onSubmit={(event) => {
-        event.preventDefault()
-        update.mutate()
+        event.preventDefault();
+        update.mutate();
       }}
     >
       <h4>Draft settings</h4>
@@ -488,5 +488,5 @@ function DraftSettings({ view, onChanged }: { view: EventPlanView; onChanged: ()
       </button>
       {update.isError && <p className="error-text">{update.error.message}</p>}
     </form>
-  )
+  );
 }

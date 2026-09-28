@@ -1,5 +1,5 @@
-import type { Db } from '@smashclub/db'
-import { resolvePlayerInputs, type ResolutionPreview } from '../identity/resolver'
+import type { Db } from '@smashclub/db';
+import { resolvePlayerInputs, type ResolutionPreview } from '../identity/resolver';
 
 /**
  * Turning a pasted attendance list into rows a human can correct.
@@ -10,16 +10,16 @@ import { resolvePlayerInputs, type ResolutionPreview } from '../identity/resolve
  */
 
 /** Ceiling on a pasted roster. The club's biggest night is ~40 lines. */
-export const ROSTER_MAX_BYTES = 100_000
-export const ROSTER_MAX_LINES = 500
+export const ROSTER_MAX_BYTES = 100_000;
+export const ROSTER_MAX_LINES = 500;
 
 export interface RosterLine {
   /** 1-based line number in the pasted text, for "row 12 is wrong". */
-  lineNumber: number
+  lineNumber: number;
   /** The pasted line, surrounding whitespace aside. Kept for the audit trail. */
-  rawInput: string
+  rawInput: string;
   /** The same line with copy-paste decoration removed; what gets resolved. */
-  input: string
+  input: string;
 }
 
 /**
@@ -33,17 +33,17 @@ export interface RosterLine {
  * only ever manufacture entrants that are not people.
  */
 export function parseRosterText(text: string): RosterLine[] {
-  const lines: RosterLine[] = []
+  const lines: RosterLine[] = [];
   for (const [index, rawLine] of text.split(/\r?\n/).entries()) {
-    const rawInput = rawLine.trim()
+    const rawInput = rawLine.trim();
     // A rule between sections of a pasted thread is decoration, not a person.
-    if (rawInput === '' || /^[-*•‣·–—_=]+$/.test(rawInput)) continue
-    const input = stripListDecoration(rawInput)
-    if (input === '') continue
-    lines.push({ lineNumber: index + 1, rawInput, input })
-    if (lines.length >= ROSTER_MAX_LINES) break
+    if (rawInput === '' || /^[-*•‣·–—_=]+$/.test(rawInput)) continue;
+    const input = stripListDecoration(rawInput);
+    if (input === '') continue;
+    lines.push({ lineNumber: index + 1, rawInput, input });
+    if (lines.length >= ROSTER_MAX_LINES) break;
   }
-  return lines
+  return lines;
 }
 
 /**
@@ -58,17 +58,17 @@ function stripListDecoration(line: string): string {
   return line
     .replace(/^[-*•‣·–—]+\s+/, '')
     .replace(/^\(?\d+[.)]\s+/, '')
-    .trim()
+    .trim();
 }
 
 export interface RosterResolution extends ResolutionPreview {
   /** Stable id for the row in the browser, before anything is persisted. */
-  clientRowId: string
-  lineNumber: number
+  clientRowId: string;
+  lineNumber: number;
   /** Current leaderboard rank, or null for anyone the board does not carry. */
-  currentRank: number | null
+  currentRank: number | null;
   /** Conservative rating — what bracket seeding orders on. */
-  seedingScore: number | null
+  seedingScore: number | null;
 }
 
 /**
@@ -84,10 +84,10 @@ export async function resolveRoster(
     db,
     lines.map((line) => line.input),
     { scoreResolvedCandidates: true },
-  )
+  );
   return lines.map((line, index) => {
-    const resolution = resolutions[index]!
-    const rating = resolution.playerId ? ranking.get(resolution.playerId) : undefined
+    const resolution = resolutions[index]!;
+    const rating = resolution.playerId ? ranking.get(resolution.playerId) : undefined;
     return {
       ...resolution,
       // The pasted line, not the decoration-stripped one: the row has to show
@@ -97,6 +97,6 @@ export async function resolveRoster(
       lineNumber: line.lineNumber,
       currentRank: rating?.rank ?? null,
       seedingScore: rating?.conservativeRating ?? null,
-    }
-  })
+    };
+  });
 }

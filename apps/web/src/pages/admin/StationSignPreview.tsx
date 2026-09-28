@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import QRCode from 'qrcode'
-import { guestInvitationUrl } from '../../lib/guestReporting'
-import './StationSignPreview.css'
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import QRCode from 'qrcode';
+import { guestInvitationUrl } from '../../lib/guestReporting';
+import './StationSignPreview.css';
 
-type Station = { id: string; name: string }
+type Station = { id: string; name: string };
 
 export function StationSignPreview({
   planId,
@@ -13,25 +13,25 @@ export function StationSignPreview({
   token,
   onClose,
 }: {
-  planId: string
-  eventName: string
-  stations: Station[]
-  token: string
-  onClose: () => void
+  planId: string;
+  eventName: string;
+  stations: Station[];
+  token: string;
+  onClose: () => void;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null)
-  const [selected, setSelected] = useState(() => stations.map((station) => station.id))
-  const [codes, setCodes] = useState<Record<string, string>>({})
-  const [error, setError] = useState('')
-  const [ready, setReady] = useState(false)
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [selected, setSelected] = useState(() => stations.map((station) => station.id));
+  const [codes, setCodes] = useState<Record<string, string>>({});
+  const [error, setError] = useState('');
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    dialog.current?.showModal()
-    document.body.classList.add('printing-station-signs')
-    return () => document.body.classList.remove('printing-station-signs')
-  }, [])
+    dialog.current?.showModal();
+    document.body.classList.add('printing-station-signs');
+    return () => document.body.classList.remove('printing-station-signs');
+  }, []);
   useEffect(() => {
-    let active = true
+    let active = true;
     void Promise.all(
       stations.map(
         async (station) =>
@@ -47,17 +47,18 @@ export function StationSignPreview({
     )
       .then((entries) => {
         if (active) {
-          setCodes(Object.fromEntries(entries))
-          setReady(true)
+          setCodes(Object.fromEntries(entries));
+          setReady(true);
         }
       })
       .catch(() => {
-        if (active) setError('Could not prepare station QR codes. Close the preview and try again.')
-      })
+        if (active)
+          setError('Could not prepare station QR codes. Close the preview and try again.');
+      });
     return () => {
-      active = false
-    }
-  }, [planId, stations, token])
+      active = false;
+    };
+  }, [planId, stations, token]);
 
   return createPortal(
     <dialog
@@ -65,8 +66,8 @@ export function StationSignPreview({
       ref={dialog}
       aria-label="Print station signs"
       onCancel={(event) => {
-        event.preventDefault()
-        onClose()
+        event.preventDefault();
+        onClose();
       }}
     >
       <div className="station-sign-toolbar">
@@ -139,5 +140,5 @@ export function StationSignPreview({
       </div>
     </dialog>,
     document.body,
-  )
+  );
 }

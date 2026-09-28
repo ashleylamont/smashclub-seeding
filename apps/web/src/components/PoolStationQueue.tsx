@@ -7,23 +7,23 @@ import {
   stationPreview,
   type PoolFlowData,
   type StartPoolMatch,
-} from '../lib/poolFlow'
-import { CharacterIcons } from './CharacterIcons'
-import './PoolStationQueue.css'
+} from '../lib/poolFlow';
+import { CharacterIcons } from './CharacterIcons';
+import './PoolStationQueue.css';
 
 export function PoolFilter({
   data,
   value,
   onChange,
 }: {
-  data: Pick<PoolFlowData, 'matches'>
-  value: string
-  onChange: (value: string) => void
+  data: Pick<PoolFlowData, 'matches'>;
+  value: string;
+  onChange: (value: string) => void;
 }) {
   const keys = [
     ...new Set(data.matches.map(poolKey).filter((key): key is string => Boolean(key))),
-  ].sort()
-  if (!keys.length) return null
+  ].sort();
+  if (!keys.length) return null;
   return (
     <label className="pool-flow-filter">
       Your pool
@@ -39,7 +39,7 @@ export function PoolFilter({
         ))}
       </select>
     </label>
-  )
+  );
 }
 export function PoolStationQueue({
   data,
@@ -50,26 +50,26 @@ export function PoolStationQueue({
   disabled = false,
   pendingMatchId,
 }: {
-  data: PoolFlowData
-  selectedPool?: string
-  stationId?: string
-  onStart?: (input: StartPoolMatch) => void
-  onReport?: (matchId: string) => void
-  disabled?: boolean
-  pendingMatchId?: string | null
+  data: PoolFlowData;
+  selectedPool?: string;
+  stationId?: string;
+  onStart?: (input: StartPoolMatch) => void;
+  onReport?: (matchId: string) => void;
+  disabled?: boolean;
+  pendingMatchId?: string | null;
 }) {
-  const closed = ['complete', 'cancelled'].includes(data.plan.status)
-  const queues = data.stationQueues ?? []
+  const closed = ['complete', 'cancelled'].includes(data.plan.status);
+  const queues = data.stationQueues ?? [];
   const selectedSchedule = data.poolSchedules.find(
     (pool) => `${pool.division}:${pool.poolIndex}` === selectedPool,
-  )
+  );
   const visible = data.stations.filter((station) => {
-    if (stationId && station.id !== stationId) return false
-    if (!selectedPool) return true
+    if (stationId && station.id !== stationId) return false;
+    if (!selectedPool) return true;
     const schedule = data.poolSchedules.find(
       (pool) => `${pool.division}:${pool.poolIndex}` === selectedPool,
-    )
-    const queue = queues.find((item) => item.stationId === station.id)
+    );
+    const queue = queues.find((item) => item.stationId === station.id);
     return (
       schedule?.stationIds.includes(station.id) ||
       queue?.poolKey === selectedPool ||
@@ -82,8 +82,8 @@ export function PoolStationQueue({
       data.matches.some(
         (match) => match.id === queue?.currentMatchId && matchesPool(match, selectedPool),
       )
-    )
-  })
+    );
+  });
   return (
     <section className="pool-flow-stations" aria-label="Pool station queues">
       <div className="pool-flow-heading">
@@ -102,23 +102,23 @@ export function PoolStationQueue({
       </p>
       <div className="pool-flow-grid">
         {visible.map((station) => {
-          const queue = queues.find((item) => item.stationId === station.id)
+          const queue = queues.find((item) => item.stationId === station.id);
           const current = data.matches.find(
             (match) =>
               match.id === (queue?.currentMatchId ?? station.currentMatchId) ||
               (!queue && match.status === 'playing' && match.stationId === station.id),
-          )
+          );
           const next = queue?.nextMatchId
             ? data.matches.find(
                 (match) => match.id === queue.nextMatchId && matchesPool(match, selectedPool),
               )
-            : undefined
+            : undefined;
           const upcoming = queue
             ? stationPreview(queue, data.matches, 4)
                 .filter((match) => match.id !== next?.id && matchesPool(match, selectedPool))
                 .slice(0, 2)
-            : []
-          const policy = next && poolPolicy(data, next)
+            : [];
+          const policy = next && poolPolicy(data, next);
           return (
             <article
               className={`pool-flow-station${current ? ' is-playing' : ''}`}
@@ -234,7 +234,7 @@ export function PoolStationQueue({
                 </div>
               )}
             </article>
-          )
+          );
         })}
       </div>
       {!visible.length && (
@@ -245,18 +245,18 @@ export function PoolStationQueue({
         </p>
       )}
     </section>
-  )
+  );
 }
 export function PoolRoundSchedule({
   data,
   selectedPool = '',
 }: {
-  data: PoolFlowData
-  selectedPool?: string
+  data: PoolFlowData;
+  selectedPool?: string;
 }) {
   const groups = (data.poolRounds ?? []).filter(
     (pool) => !selectedPool || pool.poolKey === selectedPool,
-  )
+  );
   const names = new Map(
     data.matches.flatMap(
       (match) =>
@@ -265,8 +265,8 @@ export function PoolRoundSchedule({
           [match.player2Id, match.player2Name],
         ] as const,
     ),
-  )
-  if (!groups.length) return null
+  );
+  if (!groups.length) return null;
   return (
     <section className="pool-flow-rounds">
       <div className="pool-flow-heading">
@@ -291,7 +291,7 @@ export function PoolRoundSchedule({
                 <h3>Round {round.round}</h3>
                 <ul>
                   {round.matchIds.map((id) => {
-                    const match = data.matches.find((item) => item.id === id)
+                    const match = data.matches.find((item) => item.id === id);
                     return match ? (
                       <li key={id}>
                         <span>
@@ -305,7 +305,7 @@ export function PoolRoundSchedule({
                               : 'Upcoming'}
                         </small>
                       </li>
-                    ) : null
+                    ) : null;
                   })}
                 </ul>
                 {round.restingPlayerIds.length > 0 && (
@@ -320,5 +320,5 @@ export function PoolRoundSchedule({
         </details>
       ))}
     </section>
-  )
+  );
 }

@@ -1,6 +1,6 @@
-import { startPoolMatch } from './selfService'
-import { z } from 'zod'
-import { authedProcedure, publicProcedure, router } from '../trpc/trpc'
+import { startPoolMatch } from './selfService';
+import { z } from 'zod';
+import { authedProcedure, publicProcedure, router } from '../trpc/trpc';
 import {
   configureGuests,
   guestInvitation,
@@ -9,9 +9,9 @@ import {
   redeemGuest,
   rotateGuests,
   submitGuest,
-} from './guests'
-const plan = z.object({ planId: z.string().uuid() })
-const session = plan.extend({ sessionToken: z.string().min(32).max(100) })
+} from './guests';
+const plan = z.object({ planId: z.string().uuid() });
+const session = plan.extend({ sessionToken: z.string().min(32).max(100) });
 export const guestRouter = router({
   startPoolMatch: publicProcedure
     .input(
@@ -59,4 +59,4 @@ export const guestRouter = router({
       }),
     )
     .mutation(({ ctx, input }) => submitGuest(ctx.db, input)),
-})
+});

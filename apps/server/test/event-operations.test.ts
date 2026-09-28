@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { eq } from 'drizzle-orm'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 import {
   eventMatches,
   eventMatchAudit,
@@ -20,7 +20,7 @@ import {
   tournaments,
   user,
   type Db,
-} from '@smashclub/db'
+} from '@smashclub/db';
 import {
   prepare,
   reportScore,
@@ -28,39 +28,39 @@ import {
   snapshot,
   updateMatch,
   requireOperator,
-} from '../src/event-operations/service'
-import { updateLiveScore } from '../src/event-operations/controls'
-import { deleteStation, saveStation } from '../src/event-operations/stations'
+} from '../src/event-operations/service';
+import { updateLiveScore } from '../src/event-operations/controls';
+import { deleteStation, saveStation } from '../src/event-operations/stations';
 import {
   applyAttendance,
   previewAttendance,
   resetOperations,
   softLockPools,
   unlockPools,
-} from '../src/event-operations/attendance'
+} from '../src/event-operations/attendance';
 import {
   getPlan,
   unfreezeRoster,
   reorderDivision,
   generatePools,
   savePoolPlacements,
-} from '../src/event-planner/plans'
-import { createTestDb } from './helpers/testDb'
-import type { SessionUser } from '../src/auth'
-let db: Db
-let close: () => Promise<void>
-let planId: string
-let ids: string[]
-const admin: SessionUser = { id: 'admin', role: 'admin', name: 'TO', email: 'to@example.test' }
+} from '../src/event-planner/plans';
+import { createTestDb } from './helpers/testDb';
+import type { SessionUser } from '../src/auth';
+let db: Db;
+let close: () => Promise<void>;
+let planId: string;
+let ids: string[];
+const admin: SessionUser = { id: 'admin', role: 'admin', name: 'TO', email: 'to@example.test' };
 const member: SessionUser = {
   id: 'member',
   role: 'user',
   name: 'Player',
   email: 'player@example.test',
-}
+};
 beforeEach(async () => {
-  ;({ db, close } = await createTestDb())
-  await db.insert(user).values([admin, member])
+  ({ db, close } = await createTestDb());
+  await db.insert(user).values([admin, member]);
   ids = (
     await db
       .insert(players)
@@ -71,7 +71,7 @@ beforeEach(async () => {
         })),
       )
       .returning()
-  ).map((p) => p.id)
+  ).map((p) => p.id);
   planId = (
     await db
       .insert(eventPlans)
@@ -82,7 +82,7 @@ beforeEach(async () => {
         softLockedAt: new Date(),
       })
       .returning()
-  )[0]!.id
+  )[0]!.id;
   await db.insert(eventPlanEntries).values(
     ids.map((id, i) => ({
       eventPlanId: planId,
@@ -93,9 +93,9 @@ beforeEach(async () => {
       assignedDivision: i < 4 ? ('upper' as const) : ('lower' as const),
       divisionSeed: (i % 4) + 1,
     })),
-  )
-})
-afterEach(async () => close())
+  );
+});
+afterEach(async () => close());
 const score = (m: typeof eventMatches.$inferSelect, requestId = 'r1') => ({
   matchId: m.id,
   expectedRevision: m.revision,
@@ -103,21 +103,21 @@ const score = (m: typeof eventMatches.$inferSelect, requestId = 'r1') => ({
   score1: 2,
   score2: 0,
   outcome: 'played' as const,
-})
+});
 async function ready() {
-  await prepare(db, planId)
-  return await db.select().from(eventMatches).where(eq(eventMatches.eventPlanId, planId))
+  await prepare(db, planId);
+  return await db.select().from(eventMatches).where(eq(eventMatches.eventPlanId, planId));
 }
 describe('event operations', () => {
   it('renames stations and deletes idle stations without leaving match or pool references', async () => {
-    const [station] = await saveStation(db, admin, { planId, name: 'Stage' })
-    const [renamed] = await saveStation(db, admin, { planId, id: station!.id, name: 'Main stage' })
-    expect(renamed!.name).toBe('Main stage')
-    const matches = await ready()
+    const [station] = await saveStation(db, admin, { planId, name: 'Stage' });
+    const [renamed] = await saveStation(db, admin, { planId, id: station!.id, name: 'Main stage' });
+    expect(renamed!.name).toBe('Main stage');
+    const matches = await ready();
     await db
       .update(eventMatches)
       .set({ stationId: station!.id })
-      .where(eq(eventMatches.id, matches[0]!.id))
+      .where(eq(eventMatches.id, matches[0]!.id));
     await db.insert(eventPoolSchedules).values({
       eventPlanId: planId,
       division: 'upper',
@@ -125,98 +125,98 @@ describe('event operations', () => {
       stationIds: [station!.id],
       selfRun: true,
       autoAcceptScores: true,
-    })
+    });
     await expect(deleteStation(db, member, { planId, id: station!.id })).rejects.toMatchObject({
       code: 'FORBIDDEN',
-    })
-    await deleteStation(db, admin, { planId, id: station!.id })
-    expect(await db.select().from(eventStations)).toHaveLength(0)
+    });
+    await deleteStation(db, admin, { planId, id: station!.id });
+    expect(await db.select().from(eventStations)).toHaveLength(0);
     expect(
       (await db.select().from(eventMatches).where(eq(eventMatches.id, matches[0]!.id)))[0],
-    ).toMatchObject({ stationId: null, revision: 1 })
+    ).toMatchObject({ stationId: null, revision: 1 });
     expect((await db.select().from(eventPoolSchedules))[0]).toMatchObject({
       stationIds: [],
       selfRun: false,
       autoAcceptScores: false,
       revision: 2,
-    })
+    });
     await expect(
       saveStation(db, admin, { planId, id: station!.id, name: 'Gone' }),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
-  })
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
   it('keeps a station while its match is playing', async () => {
-    const [station] = await saveStation(db, admin, { planId, name: 'Stage' })
-    const [match] = await ready()
+    const [station] = await saveStation(db, admin, { planId, name: 'Stage' });
+    const [match] = await ready();
     await updateMatch(db, admin, {
       matchId: match!.id,
       expectedRevision: 0,
       status: 'playing',
       stationId: station!.id,
-    })
+    });
     await expect(deleteStation(db, admin, { planId, id: station!.id })).rejects.toMatchObject({
       code: 'CONFLICT',
-    })
-    expect(await db.select().from(eventStations)).toHaveLength(1)
-  })
+    });
+    expect(await db.select().from(eventStations)).toHaveLength(1);
+  });
   it('prepares all pairs idempotently, gates publication, exposes safe aliases', async () => {
-    expect(await prepare(db, planId)).toEqual({ created: 12 })
-    expect(await prepare(db, planId)).toEqual({ created: 0 })
-    await expect(snapshot(db, planId)).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(await prepare(db, planId)).toEqual({ created: 12 });
+    expect(await prepare(db, planId)).toEqual({ created: 0 });
+    await expect(snapshot(db, planId)).rejects.toMatchObject({ code: 'NOT_FOUND' });
     await db
       .update(eventOperationSettings)
       .set({ published: true })
-      .where(eq(eventOperationSettings.eventPlanId, planId))
-    const publicView = await snapshot(db, planId)
-    expect(publicView.matches).toHaveLength(12)
-    expect(JSON.stringify(publicView)).not.toContain('Private')
-  })
+      .where(eq(eventOperationSettings.eventPlanId, planId));
+    const publicView = await snapshot(db, planId);
+    expect(publicView.matches).toHaveLength(12);
+    expect(JSON.stringify(publicView)).not.toContain('Private');
+  });
   it('retries once, rejects stale updates, and audits corrections', async () => {
-    const [m] = await ready()
-    const input = score(m!)
-    await reportScore(db, admin, input)
-    await reportScore(db, admin, input)
-    expect(await db.select().from(eventMatchAudit)).toHaveLength(1)
+    const [m] = await ready();
+    const input = score(m!);
+    await reportScore(db, admin, input);
+    await reportScore(db, admin, input);
+    expect(await db.select().from(eventMatchAudit)).toHaveLength(1);
     await expect(reportScore(db, admin, { ...input, requestId: 'stale' })).rejects.toMatchObject({
       code: 'CONFLICT',
-    })
+    });
     await expect(reportScore(db, admin, { ...input, score1: 3 })).rejects.toMatchObject({
       code: 'CONFLICT',
-    })
+    });
     await reportScore(db, admin, {
       ...input,
       requestId: 'correction',
       expectedRevision: 1,
       score1: 0,
       score2: 2,
-    })
-    expect(await db.select().from(eventMatchAudit)).toHaveLength(2)
+    });
+    expect(await db.select().from(eventMatchAudit)).toHaveLength(2);
     expect(
       (await db.select().from(eventMatches).where(eq(eventMatches.id, m!.id)))[0],
-    ).toMatchObject({ revision: 2, winnerId: m!.player2Id, syncState: 'local' })
-  })
+    ).toMatchObject({ revision: 2, winnerId: m!.player2Id, syncState: 'local' });
+  });
   it('allows assigned TOs only in their event and serialises station/player conflicts', async () => {
-    await expect(requireOperator(db, planId, member)).rejects.toMatchObject({ code: 'FORBIDDEN' })
-    await db.insert(eventOperators).values({ eventPlanId: planId, userId: member.id })
-    await requireOperator(db, planId, member)
-    const matches = await ready()
-    const m = matches[0]!
+    await expect(requireOperator(db, planId, member)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await db.insert(eventOperators).values({ eventPlanId: planId, userId: member.id });
+    await requireOperator(db, planId, member);
+    const matches = await ready();
+    const m = matches[0]!;
     const other = matches.find(
       (x) =>
         x.player1Id !== m.player1Id &&
         x.player2Id !== m.player1Id &&
         x.player1Id !== m.player2Id &&
         x.player2Id !== m.player2Id,
-    )!
+    )!;
     const [station] = await db
       .insert(eventStations)
       .values({ eventPlanId: planId, name: 'Stage' })
-      .returning()
+      .returning();
     await updateMatch(db, member, {
       matchId: m.id,
       expectedRevision: 0,
       status: 'playing',
       stationId: station!.id,
-    })
+    });
     await expect(
       updateMatch(db, member, {
         matchId: other.id,
@@ -224,57 +224,57 @@ describe('event operations', () => {
         status: 'playing',
         stationId: station!.id,
       }),
-    ).rejects.toMatchObject({ code: 'CONFLICT' })
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
     const overlap = matches.find(
       (x) => x.id !== m.id && [x.player1Id, x.player2Id].includes(m.player1Id),
-    )!
+    )!;
     await expect(
       updateMatch(db, member, { matchId: overlap.id, expectedRevision: 0, status: 'playing' }),
-    ).rejects.toMatchObject({ code: 'CONFLICT' })
-  })
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
   it('keeps player reports pending and prevents stale approval overwriting TO corrections', async () => {
-    const [m] = await ready()
+    const [m] = await ready();
     await db
       .update(eventOperationSettings)
       .set({ playerReports: true, published: true })
-      .where(eq(eventOperationSettings.eventPlanId, planId))
+      .where(eq(eventOperationSettings.eventPlanId, planId));
     // Signed-in attendees can report any open match without linking a profile.
-    const r = await reportScore(db, member, score(m!))
-    expect(r.status).toBe('pending')
-    expect(await db.select().from(eventMatchAudit)).toHaveLength(0)
-    await reportScore(db, admin, score(m!, 'to-result'))
-    await expect(reviewReport(db, admin, r.id, true)).rejects.toMatchObject({ code: 'CONFLICT' })
-    await reviewReport(db, admin, r.id, false)
+    const r = await reportScore(db, member, score(m!));
+    expect(r.status).toBe('pending');
+    expect(await db.select().from(eventMatchAudit)).toHaveLength(0);
+    await reportScore(db, admin, score(m!, 'to-result'));
+    await expect(reviewReport(db, admin, r.id, true)).rejects.toMatchObject({ code: 'CONFLICT' });
+    await reviewReport(db, admin, r.id, false);
     expect(
       (await db.select().from(eventScoreReports).where(eq(eventScoreReports.id, r.id)))[0]!.status,
-    ).toBe('rejected')
-  })
+    ).toBe('rejected');
+  });
   it('approves a valid report and makes closed events read-only', async () => {
-    const [m] = await ready()
+    const [m] = await ready();
     await db
       .update(eventOperationSettings)
       .set({ playerReports: true, published: true })
-      .where(eq(eventOperationSettings.eventPlanId, planId))
+      .where(eq(eventOperationSettings.eventPlanId, planId));
     await db
       .insert(playerClaims)
-      .values({ userId: member.id, playerId: m!.player1Id!, status: 'approved' })
-    const r = await reportScore(db, member, score(m!))
-    await reviewReport(db, admin, r.id, true)
-    await reviewReport(db, admin, r.id, true)
-    expect(await db.select().from(eventMatchAudit)).toHaveLength(1)
-    await db.update(eventPlans).set({ status: 'complete' }).where(eq(eventPlans.id, planId))
+      .values({ userId: member.id, playerId: m!.player1Id!, status: 'approved' });
+    const r = await reportScore(db, member, score(m!));
+    await reviewReport(db, admin, r.id, true);
+    await reviewReport(db, admin, r.id, true);
+    expect(await db.select().from(eventMatchAudit)).toHaveLength(1);
+    await db.update(eventPlans).set({ status: 'complete' }).where(eq(eventPlans.id, planId));
     await expect(
       reportScore(db, admin, { ...score(m!, 'closed'), expectedRevision: 1 }),
-    ).rejects.toMatchObject({ code: 'CONFLICT' })
-  })
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
   it('classifies imported bye and forfeit sentinels as unplayed outcomes', async () => {
     const [t] = await db
       .insert(tournaments)
       .values({ challongeSlug: 'outcomes', name: 'Outcomes' })
-      .returning()
+      .returning();
     await db
       .insert(eventPlanBrackets)
-      .values({ eventPlanId: planId, division: 'upper', stage: 'main', tournamentId: t!.id })
+      .values({ eventPlanId: planId, division: 'upper', stage: 'main', tournamentId: t!.id });
     await db.insert(sets).values([
       {
         tournamentId: t!.id,
@@ -296,22 +296,22 @@ describe('event operations', () => {
         scoresCsv: '-1-0',
         winner: 2,
       },
-    ])
-    await prepare(db, planId)
-    const rows = await db.select().from(eventMatches)
-    expect(rows.find((m) => m.sourceSetId && m.stage === 'group')!.outcome).toBe('bye')
-    expect(rows.find((m) => m.stage === 'main')!.outcome).toBe('forfeit')
-  })
+    ]);
+    await prepare(db, planId);
+    const rows = await db.select().from(eventMatches);
+    expect(rows.find((m) => m.sourceSetId && m.stage === 'group')!.outcome).toBe('bye');
+    expect(rows.find((m) => m.stage === 'main')!.outcome).toBe('forfeit');
+  });
   it('imports group results with correct orientation and refreshes unknown finals without overwriting local scores', async () => {
-    const matches = await ready()
-    const group = matches.find((m) => m.division === 'upper')!
+    const matches = await ready();
+    const group = matches.find((m) => m.division === 'upper')!;
     const [t] = await db
       .insert(tournaments)
       .values({ challongeSlug: 'upper-test', name: 'Upper' })
-      .returning()
+      .returning();
     await db
       .insert(eventPlanBrackets)
-      .values({ eventPlanId: planId, division: 'upper', stage: 'main', tournamentId: t!.id })
+      .values({ eventPlanId: planId, division: 'upper', stage: 'main', tournamentId: t!.id });
     await db.insert(sets).values({
       tournamentId: t!.id,
       challongeMatchId: 1,
@@ -321,79 +321,84 @@ describe('event operations', () => {
       p2PlayerId: group.player1Id,
       scoresCsv: '2-1',
       winner: 1,
-    })
+    });
     const [final] = await db
       .insert(sets)
       .values({ tournamentId: t!.id, challongeMatchId: 2, state: 'pending', resultStage: 'final' })
-      .returning()
-    await prepare(db, planId)
-    let row = (await db.select().from(eventMatches).where(eq(eventMatches.id, group.id)))[0]!
+      .returning();
+    await prepare(db, planId);
+    let row = (await db.select().from(eventMatches).where(eq(eventMatches.id, group.id)))[0]!;
     expect(row).toMatchObject({
       score1: 1,
       score2: 2,
       status: 'complete',
       winnerId: group.player2Id,
       syncState: 'synced',
-    })
-    const importedAt = row.resultUpdatedAt
-    expect(importedAt).toBeInstanceOf(Date)
-    await prepare(db, planId)
+    });
+    const importedAt = row.resultUpdatedAt;
+    expect(importedAt).toBeInstanceOf(Date);
+    await prepare(db, planId);
     expect(
       (await db.select().from(eventMatches).where(eq(eventMatches.id, group.id)))[0]!
         .resultUpdatedAt,
-    ).toEqual(importedAt)
-    await reportScore(db, admin, { ...score(row), score1: 2, score2: 0 })
+    ).toEqual(importedAt);
+    await reportScore(db, admin, { ...score(row), score1: 2, score2: 0 });
     await db
       .update(sets)
       .set({ p1PlayerId: ids[0], p2PlayerId: ids[1], state: 'open' })
-      .where(eq(sets.id, final!.id))
-    await prepare(db, planId)
-    row = (await db.select().from(eventMatches).where(eq(eventMatches.id, group.id)))[0]!
-    expect(row).toMatchObject({ score1: 2, score2: 0, syncState: 'error' })
+      .where(eq(sets.id, final!.id));
+    await prepare(db, planId);
+    row = (await db.select().from(eventMatches).where(eq(eventMatches.id, group.id)))[0]!;
+    expect(row).toMatchObject({ score1: 2, score2: 0, syncState: 'error' });
     expect(
       (await db.select().from(eventMatches).where(eq(eventMatches.sourceSetId, final!.id)))[0],
-    ).toMatchObject({ status: 'ready', player1Id: ids[0], player2Id: ids[1] })
-    await db.update(sets).set({ scoresCsv: '0-2', winner: 2 }).where(eq(sets.challongeMatchId, 1))
-    await prepare(db, planId)
+    ).toMatchObject({ status: 'ready', player1Id: ids[0], player2Id: ids[1] });
+    await db.update(sets).set({ scoresCsv: '0-2', winner: 2 }).where(eq(sets.challongeMatchId, 1));
+    await prepare(db, planId);
     expect(
       (await db.select().from(eventMatches).where(eq(eventMatches.id, group.id)))[0]!.syncState,
-    ).toBe('synced')
+    ).toBe('synced');
     await db
       .update(sets)
       .set({ scoresCsv: null, winner: null, state: 'open' })
-      .where(eq(sets.challongeMatchId, 1))
-    await prepare(db, planId)
+      .where(eq(sets.challongeMatchId, 1));
+    await prepare(db, planId);
     expect(
       (await db.select().from(eventMatches).where(eq(eventMatches.id, group.id)))[0],
-    ).toMatchObject({ status: 'ready', score1: null, winnerId: null })
-  })
-})
+    ).toMatchObject({ status: 'ready', score1: null, winnerId: null });
+  });
+});
 describe('late attendance and protected pools', () => {
   it('does not reopen a played pool for a late arrival', async () => {
-    const matches = await ready()
-    const match = matches.find((m) => m.division === 'upper')!
-    await reportScore(db, admin, score(match))
+    const matches = await ready();
+    const match = matches.find((m) => m.division === 'upper')!;
+    await reportScore(db, admin, score(match));
     const [late] = await db
       .insert(players)
       .values({ canonicalName: 'Late Arrival', displayName: 'Late' })
-      .returning()
-    const input = { planId, action: 'add' as const, playerId: late!.id, division: 'upper' as const }
-    const preview = await previewAttendance(db, input)
-    expect(preview).toMatchObject({ allowed: false, poolIndex: null })
+      .returning();
+    const input = {
+      planId,
+      action: 'add' as const,
+      playerId: late!.id,
+      division: 'upper' as const,
+    };
+    const preview = await previewAttendance(db, input);
+    expect(preview).toMatchObject({ allowed: false, poolIndex: null });
     await expect(
       applyAttendance(db, admin, { ...input, revisionToken: preview.revisionToken }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     expect(
       (await db.select().from(eventMatches).where(eq(eventMatches.id, match.id)))[0],
-    ).toMatchObject({ score1: 2, status: 'complete' })
-    expect(await db.select().from(eventMatches)).toHaveLength(12)
-  })
+    ).toMatchObject({ score1: 2, status: 'complete' });
+    expect(await db.select().from(eventMatches)).toHaveLength(12);
+  });
   it('automatically chooses the smallest open pool in the selected division', async () => {
-    await db.update(eventPlans).set({ softLockedAt: null })
+    await db.update(eventPlans).set({ softLockedAt: null });
     const extra = await db
       .insert(players)
       .values(Array.from({ length: 3 }, (_, i) => ({ canonicalName: `Upper extra ${i}` })))
-      .returning()
+      .returning();
     await db.insert(eventPlanEntries).values(
       extra.map((p, i) => ({
         eventPlanId: planId,
@@ -404,71 +409,78 @@ describe('late attendance and protected pools', () => {
         assignedDivision: 'upper' as const,
         divisionSeed: 5 + i,
       })),
-    )
-    await softLockPools(db, admin, planId)
-    const before = (await getPlan(db, planId))!.divisions.find((d) => d.division === 'upper')!
+    );
+    await softLockPools(db, admin, planId);
+    const before = (await getPlan(db, planId))!.divisions.find((d) => d.division === 'upper')!;
     const smallest = [...before.pools].sort(
       (a, b) => a.members.length - b.members.length || a.poolIndex - b.poolIndex,
-    )[0]!
-    const [late] = await db.insert(players).values({ canonicalName: 'Late arrival' }).returning()
-    const input = { planId, action: 'add' as const, playerId: late!.id, division: 'upper' as const }
-    const preview = await previewAttendance(db, input)
+    )[0]!;
+    const [late] = await db.insert(players).values({ canonicalName: 'Late arrival' }).returning();
+    const input = {
+      planId,
+      action: 'add' as const,
+      playerId: late!.id,
+      division: 'upper' as const,
+    };
+    const preview = await previewAttendance(db, input);
     expect(preview).toMatchObject({
       allowed: true,
       poolIndex: smallest.poolIndex,
       addedMatches: smallest.members.length,
-    })
-    await applyAttendance(db, admin, { ...input, revisionToken: preview.revisionToken })
-    const after = (await getPlan(db, planId))!.divisions.find((d) => d.division === 'upper')!
+    });
+    await applyAttendance(db, admin, { ...input, revisionToken: preview.revisionToken });
+    const after = (await getPlan(db, planId))!.divisions.find((d) => d.division === 'upper')!;
     expect(
       after.pools.find((p) => p.poolIndex === smallest.poolIndex)!.members.map((m) => m.playerId),
-    ).toEqual([...smallest.members.map((m) => m.playerId), late!.id])
+    ).toEqual([...smallest.members.map((m) => m.playerId), late!.id]);
     for (const pool of before.pools.filter((p) => p.poolIndex !== smallest.poolIndex))
-      expect(after.pools.find((p) => p.poolIndex === pool.poolIndex)!.members).toEqual(pool.members)
-  })
+      expect(after.pools.find((p) => p.poolIndex === pool.poolIndex)!.members).toEqual(
+        pool.members,
+      );
+  });
   it('removes a no-show and only their unplayed matches when three players remain', async () => {
-    const before = await ready()
-    const input = { planId, action: 'no_show' as const, playerId: ids[0]! }
-    const preview = await previewAttendance(db, input)
+    const before = await ready();
+    const input = { planId, action: 'no_show' as const, playerId: ids[0]! };
+    const preview = await previewAttendance(db, input);
     expect(preview).toMatchObject({
       allowed: true,
       requiresRedistributionApproval: false,
       relocations: [],
-    })
-    await applyAttendance(db, admin, { ...input, revisionToken: preview.revisionToken })
-    const after = await db.select().from(eventMatches)
-    expect(after.some((m) => m.player1Id === ids[0] || m.player2Id === ids[0])).toBe(false)
+    });
+    await applyAttendance(db, admin, { ...input, revisionToken: preview.revisionToken });
+    const after = await db.select().from(eventMatches);
+    expect(after.some((m) => m.player1Id === ids[0] || m.player2Id === ids[0])).toBe(false);
     expect(after.map((m) => m.id).sort()).toEqual(
       before
         .filter((m) => m.player1Id !== ids[0] && m.player2Id !== ids[0])
         .map((m) => m.id)
         .sort(),
-    )
+    );
     expect(
       (await getPlan(db, planId))!.divisions.find((d) => d.division === 'upper')!.pools[0]!.members,
-    ).toHaveLength(3)
+    ).toHaveLength(3);
     expect((await db.select().from(eventPlanEntries)).some((e) => e.playerId === ids[0])).toBe(
       false,
-    )
+    );
     const arrived = {
       planId,
       action: 'add' as const,
       playerId: ids[0]!,
       division: 'upper' as const,
-    }
-    const arrivalPreview = await previewAttendance(db, arrived)
-    expect(arrivalPreview).toMatchObject({ allowed: true, poolIndex: 0, addedMatches: 3 })
-    await applyAttendance(db, admin, { ...arrived, revisionToken: arrivalPreview.revisionToken })
+    };
+    const arrivalPreview = await previewAttendance(db, arrived);
+    expect(arrivalPreview).toMatchObject({ allowed: true, poolIndex: 0, addedMatches: 3 });
+    await applyAttendance(db, admin, { ...arrived, revisionToken: arrivalPreview.revisionToken });
     expect(
       (await getPlan(db, planId))!.divisions.find((d) => d.division === 'upper')!.pools[0]!.members,
-    ).toHaveLength(4)
-  })
+    ).toHaveLength(4);
+  });
   it('requires TO approval before dissolving a two-player pool into the smallest open pool', async () => {
-    await db.update(eventPlans).set({ softLockedAt: null })
+    await db.update(eventPlans).set({ softLockedAt: null });
     const extra = await db
       .insert(players)
       .values([{ canonicalName: 'Upper extra A' }, { canonicalName: 'Upper extra B' }])
-      .returning()
+      .returning();
     await db.insert(eventPlanEntries).values(
       extra.map((p, i) => ({
         eventPlanId: planId,
@@ -479,14 +491,14 @@ describe('late attendance and protected pools', () => {
         assignedDivision: 'upper' as const,
         divisionSeed: 5 + i,
       })),
-    )
-    await softLockPools(db, admin, planId)
-    const before = (await getPlan(db, planId))!.divisions.find((d) => d.division === 'upper')!
-    expect(before.pools.map((p) => p.members.length)).toEqual([3, 3])
+    );
+    await softLockPools(db, admin, planId);
+    const before = (await getPlan(db, planId))!.divisions.find((d) => d.division === 'upper')!;
+    expect(before.pools.map((p) => p.members.length)).toEqual([3, 3]);
     const source = before.pools[0]!,
-      target = before.pools[1]!
-    const input = { planId, action: 'no_show' as const, playerId: source.members[0]!.playerId }
-    const preview = await previewAttendance(db, input)
+      target = before.pools[1]!;
+    const input = { planId, action: 'no_show' as const, playerId: source.members[0]!.playerId };
+    const preview = await previewAttendance(db, input);
     expect(preview).toMatchObject({
       allowed: true,
       requiresRedistributionApproval: true,
@@ -502,100 +514,100 @@ describe('late attendance and protected pools', () => {
           toPoolIndex: target.poolIndex,
         },
       ],
-    })
-    await applyAttendance(db, admin, { ...input, revisionToken: preview.revisionToken })
-    const waiting = (await getPlan(db, planId))!.divisions.find((d) => d.division === 'upper')!
-    expect(waiting.pools.find((p) => p.poolIndex === source.poolIndex)!.members).toHaveLength(2)
+    });
+    await applyAttendance(db, admin, { ...input, revisionToken: preview.revisionToken });
+    const waiting = (await getPlan(db, planId))!.divisions.find((d) => d.division === 'upper')!;
+    expect(waiting.pools.find((p) => p.poolIndex === source.poolIndex)!.members).toHaveLength(2);
     const moveInput = {
       planId,
       action: 'redistribute' as const,
       playerId: source.members[1]!.playerId,
-    }
-    const movePreview = await previewAttendance(db, moveInput)
+    };
+    const movePreview = await previewAttendance(db, moveInput);
     expect(movePreview).toMatchObject({
       allowed: true,
       requiresRedistributionApproval: true,
       relocations: preview.relocations,
-    })
+    });
     await expect(
       applyAttendance(db, admin, { ...moveInput, revisionToken: movePreview.revisionToken }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     const targetMatchIds = (await db.select().from(eventMatches))
       .filter((m) => m.division === 'upper' && m.poolIndex === target.poolIndex)
-      .map((m) => m.id)
+      .map((m) => m.id);
     await applyAttendance(db, admin, {
       ...moveInput,
       revisionToken: movePreview.revisionToken,
       approveRedistribution: true,
-    })
-    const after = (await getPlan(db, planId))!.divisions.find((d) => d.division === 'upper')!
-    expect(after.pools.map((p) => p.poolIndex)).toEqual([target.poolIndex])
-    expect(after.pools[0]!.members).toHaveLength(5)
-    const matches = await db.select().from(eventMatches)
-    expect(targetMatchIds.every((id) => matches.some((m) => m.id === id))).toBe(true)
+    });
+    const after = (await getPlan(db, planId))!.divisions.find((d) => d.division === 'upper')!;
+    expect(after.pools.map((p) => p.poolIndex)).toEqual([target.poolIndex]);
+    expect(after.pools[0]!.members).toHaveLength(5);
+    const matches = await db.select().from(eventMatches);
+    expect(targetMatchIds.every((id) => matches.some((m) => m.id === id))).toBe(true);
     expect(
       matches.some(
         (m) => m.stage === 'group' && m.division === 'upper' && m.poolIndex === source.poolIndex,
       ),
-    ).toBe(false)
-  })
+    ).toBe(false);
+  });
   it('rejects stale attendance previews when another TO changes a match', async () => {
-    const [m] = await ready()
-    const input = { planId, action: 'withdraw' as const, playerId: m!.player1Id! }
-    const preview = await previewAttendance(db, input)
-    await reportScore(db, admin, score(m!))
+    const [m] = await ready();
+    const input = { planId, action: 'withdraw' as const, playerId: m!.player1Id! };
+    const preview = await previewAttendance(db, input);
+    await reportScore(db, admin, score(m!));
     await expect(
       applyAttendance(db, admin, { ...input, revisionToken: preview.revisionToken }),
-    ).rejects.toMatchObject({ code: 'CONFLICT' })
-    expect(await db.select().from(eventWithdrawals)).toHaveLength(0)
-  })
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(await db.select().from(eventWithdrawals)).toHaveLength(0);
+  });
   it('withdraws without inventing scores, retains history, and requires explicit forfeits', async () => {
-    const matches = await ready()
-    const m = matches[0]!
-    await reportScore(db, admin, score(m))
+    const matches = await ready();
+    const m = matches[0]!;
+    await reportScore(db, admin, score(m));
     const input = {
       planId,
       action: 'withdraw' as const,
       playerId: m.player1Id!,
       reason: 'Went home',
-    }
-    const preview = await previewAttendance(db, input)
-    await applyAttendance(db, admin, { ...input, revisionToken: preview.revisionToken })
+    };
+    const preview = await previewAttendance(db, input);
+    await applyAttendance(db, admin, { ...input, revisionToken: preview.revisionToken });
     const affected = (await db.select().from(eventMatches)).filter(
       (x) => x.player1Id === m.player1Id || x.player2Id === m.player1Id,
-    )
-    expect(affected.find((x) => x.id === m.id)!.status).toBe('complete')
+    );
+    expect(affected.find((x) => x.id === m.id)!.status).toBe('complete');
     expect(
       affected
         .filter((x) => x.id !== m.id)
         .every((x) => x.status === 'blocked' && x.score1 === null),
-    ).toBe(true)
-    const held = affected.find((x) => x.id !== m.id)!
+    ).toBe(true);
+    const held = affected.find((x) => x.id !== m.id)!;
     await expect(
       updateMatch(db, admin, {
         matchId: held.id,
         expectedRevision: held.revision,
         status: 'playing',
       }),
-    ).rejects.toMatchObject({ code: 'CONFLICT' })
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
     await expect(reportScore(db, admin, score(held, 'played-withdrawn'))).rejects.toMatchObject({
       code: 'CONFLICT',
-    })
+    });
     await reportScore(db, admin, {
       ...score(held, 'forfeit'),
       outcome: 'forfeit',
       winnerId: held.player1Id === m.player1Id ? held.player2Id! : held.player1Id!,
-    })
+    });
     expect(
       (await getPlan(db, planId))!.issues.warnings.some((i) => i.code === 'withdrawal_advancement'),
-    ).toBe(true)
-  })
+    ).toBe(true);
+  });
   it('guards pool mutations until a genuinely unplayed queue is explicitly reset', async () => {
-    await db.update(eventPlans).set({ softLockedAt: null })
-    await ready()
-    await expect(unfreezeRoster(db, planId)).rejects.toThrow('Operational matches')
-    await expect(generatePools(db, planId)).rejects.toThrow('Operational matches')
-    const view = (await getPlan(db, planId))!
+    await db.update(eventPlans).set({ softLockedAt: null });
+    await ready();
+    await expect(unfreezeRoster(db, planId)).rejects.toThrow('Operational matches');
+    await expect(generatePools(db, planId)).rejects.toThrow('Operational matches');
+    const view = (await getPlan(db, planId))!;
     await expect(
       reorderDivision(
         db,
@@ -603,15 +615,15 @@ describe('late attendance and protected pools', () => {
         'upper',
         view.entries.filter((e) => e.assignedDivision === 'upper').map((e) => e.id),
       ),
-    ).rejects.toThrow('Operational matches')
-    expect(await resetOperations(db, admin, planId)).toEqual({ removedMatches: 12 })
-    await unfreezeRoster(db, planId)
-    expect((await getPlan(db, planId))!.plan.status).toBe('draft')
-  })
+    ).rejects.toThrow('Operational matches');
+    expect(await resetOperations(db, admin, planId)).toEqual({ removedMatches: 12 });
+    await unfreezeRoster(db, planId);
+    expect((await getPlan(db, planId))!.plan.status).toBe('draft');
+  });
   it('soft-locks a draft draw, keeps assignments after queue reset, and blocks full rebalance', async () => {
-    await db.update(eventPlans).set({ softLockedAt: null })
-    const before = (await getPlan(db, planId))!
-    const arrival = (await db.insert(players).values({ canonicalName: 'Arrival' }).returning())[0]!
+    await db.update(eventPlans).set({ softLockedAt: null });
+    const before = (await getPlan(db, planId))!;
+    const arrival = (await db.insert(players).values({ canonicalName: 'Arrival' }).returning())[0]!;
     expect(
       (
         await previewAttendance(db, {
@@ -622,14 +634,14 @@ describe('late attendance and protected pools', () => {
           poolIndex: 0,
         })
       ).allowed,
-    ).toBe(false)
-    const locked = await softLockPools(db, admin, planId)
-    expect(locked.softLockedAt).toBeTruthy()
-    expect((await getPlan(db, planId))!.plan.softLockedBy).toBe(admin.id)
-    expect(await db.select().from(eventPoolAssignments)).toHaveLength(8)
-    expect(await db.select().from(eventMatches)).toHaveLength(12)
-    await expect(unfreezeRoster(db, planId)).rejects.toThrow(/soft-locked/)
-    await expect(generatePools(db, planId)).rejects.toThrow(/soft-locked/)
+    ).toBe(false);
+    const locked = await softLockPools(db, admin, planId);
+    expect(locked.softLockedAt).toBeTruthy();
+    expect((await getPlan(db, planId))!.plan.softLockedBy).toBe(admin.id);
+    expect(await db.select().from(eventPoolAssignments)).toHaveLength(8);
+    expect(await db.select().from(eventMatches)).toHaveLength(12);
+    await expect(unfreezeRoster(db, planId)).rejects.toThrow(/soft-locked/);
+    await expect(generatePools(db, planId)).rejects.toThrow(/soft-locked/);
     await expect(
       reorderDivision(
         db,
@@ -637,15 +649,15 @@ describe('late attendance and protected pools', () => {
         'upper',
         before.entries.filter((e) => e.assignedDivision === 'upper').map((e) => e.id),
       ),
-    ).rejects.toThrow(/soft-locked/)
-    await ready()
-    await resetOperations(db, admin, planId)
-    expect(await db.select().from(eventPoolAssignments)).toHaveLength(8)
-    expect((await getPlan(db, planId))!.divisions).toEqual(before.divisions)
-  })
+    ).rejects.toThrow(/soft-locked/);
+    await ready();
+    await resetOperations(db, admin, planId);
+    expect(await db.select().from(eventPoolAssignments)).toHaveLength(8);
+    expect((await getPlan(db, planId))!.divisions).toEqual(before.divisions);
+  });
   it('lets a TO return an unplayed soft-locked draw to draft and rebalance it', async () => {
-    await db.update(eventPlans).set({ softLockedBy: admin.id }).where(eq(eventPlans.id, planId))
-    await ready()
+    await db.update(eventPlans).set({ softLockedBy: admin.id }).where(eq(eventPlans.id, planId));
+    await ready();
     await db.insert(eventPoolAssignments).values(
       ids.map((playerId, i) => ({
         eventPlanId: planId,
@@ -653,21 +665,21 @@ describe('late attendance and protected pools', () => {
         division: i < 4 ? ('upper' as const) : ('lower' as const),
         poolIndex: 0,
       })),
-    )
+    );
     await db
       .insert(eventPoolSchedules)
-      .values({ eventPlanId: planId, division: 'upper', poolIndex: 0, stationIds: [] })
-    await expect(unlockPools(db, member, planId)).rejects.toMatchObject({ code: 'FORBIDDEN' })
-    expect(await unlockPools(db, admin, planId)).toEqual({ removedMatches: 12 })
-    expect(await db.select().from(eventMatches)).toHaveLength(0)
-    expect(await db.select().from(eventPoolAssignments)).toHaveLength(0)
-    expect(await db.select().from(eventPoolSchedules)).toHaveLength(0)
-    const view = (await getPlan(db, planId))!
+      .values({ eventPlanId: planId, division: 'upper', poolIndex: 0, stationIds: [] });
+    await expect(unlockPools(db, member, planId)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(await unlockPools(db, admin, planId)).toEqual({ removedMatches: 12 });
+    expect(await db.select().from(eventMatches)).toHaveLength(0);
+    expect(await db.select().from(eventPoolAssignments)).toHaveLength(0);
+    expect(await db.select().from(eventPoolSchedules)).toHaveLength(0);
+    const view = (await getPlan(db, planId))!;
     expect(view.plan).toMatchObject({
       status: 'pools_ready',
       softLockedAt: null,
       softLockedBy: null,
-    })
+    });
     await reorderDivision(
       db,
       planId,
@@ -676,109 +688,109 @@ describe('late attendance and protected pools', () => {
         .filter((e) => e.assignedDivision === 'upper')
         .map((e) => e.id)
         .reverse(),
-    )
-    await generatePools(db, planId)
-    expect((await softLockPools(db, admin, planId)).softLockedAt).toBeTruthy()
-  })
+    );
+    await generatePools(db, planId);
+    expect((await softLockPools(db, admin, planId)).softLockedAt).toBeTruthy();
+  });
   it('requires soft-locking before play begins', async () => {
-    await db.update(eventPlans).set({ softLockedAt: null }).where(eq(eventPlans.id, planId))
-    const [match] = await ready()
-    await reportScore(db, admin, score(match!))
-    await expect(softLockPools(db, admin, planId)).rejects.toMatchObject({ code: 'CONFLICT' })
-    expect((await getPlan(db, planId))!.plan.softLockedAt).toBeNull()
-  })
+    await db.update(eventPlans).set({ softLockedAt: null }).where(eq(eventPlans.id, planId));
+    const [match] = await ready();
+    await reportScore(db, admin, score(match!));
+    await expect(softLockPools(db, admin, planId)).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect((await getPlan(db, planId))!.plan.softLockedAt).toBeNull();
+  });
   it('refuses to reopen a draw after play or a bracket handoff', async () => {
-    const [match] = await ready()
-    await reportScore(db, admin, score(match!))
-    await expect(unlockPools(db, admin, planId)).rejects.toMatchObject({ code: 'CONFLICT' })
-    expect(await db.select().from(eventMatches)).toHaveLength(12)
-    expect((await getPlan(db, planId))!.plan.softLockedAt).toBeTruthy()
-    await db.delete(eventMatches).where(eq(eventMatches.eventPlanId, planId))
+    const [match] = await ready();
+    await reportScore(db, admin, score(match!));
+    await expect(unlockPools(db, admin, planId)).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(await db.select().from(eventMatches)).toHaveLength(12);
+    expect((await getPlan(db, planId))!.plan.softLockedAt).toBeTruthy();
+    await db.delete(eventMatches).where(eq(eventMatches.eventPlanId, planId));
     await db.insert(eventPlanBrackets).values({
       eventPlanId: planId,
       division: 'upper',
       stage: 'main',
       challongeSlug: 'linked-draw',
-    })
-    await expect(unlockPools(db, admin, planId)).rejects.toMatchObject({ code: 'CONFLICT' })
-  })
+    });
+    await expect(unlockPools(db, admin, planId)).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
   it('replaces an active place without adding matches against an earlier withdrawal', async () => {
-    await ready()
+    await ready();
     const [first, replacement] = await db
       .insert(players)
       .values([{ canonicalName: 'First arrival' }, { canonicalName: 'Replacement' }])
-      .returning()
+      .returning();
     const add = {
       planId,
       action: 'add' as const,
       playerId: first!.id,
       division: 'upper' as const,
       poolIndex: 0,
-    }
+    };
     await applyAttendance(db, admin, {
       ...add,
       revisionToken: (await previewAttendance(db, add)).revisionToken,
-    })
-    const withdraw = { planId, action: 'withdraw' as const, playerId: ids[0]! }
+    });
+    const withdraw = { planId, action: 'withdraw' as const, playerId: ids[0]! };
     await applyAttendance(db, admin, {
       ...withdraw,
       revisionToken: (await previewAttendance(db, withdraw)).revisionToken,
-    })
-    const next = { ...add, playerId: replacement!.id }
-    const preview = await previewAttendance(db, next)
-    expect(preview).toMatchObject({ allowed: true, poolSize: 4, addedMatches: 4 })
-    await applyAttendance(db, admin, { ...next, revisionToken: preview.revisionToken })
-    const matches = await db.select().from(eventMatches)
+    });
+    const next = { ...add, playerId: replacement!.id };
+    const preview = await previewAttendance(db, next);
+    expect(preview).toMatchObject({ allowed: true, poolSize: 4, addedMatches: 4 });
+    await applyAttendance(db, admin, { ...next, revisionToken: preview.revisionToken });
+    const matches = await db.select().from(eventMatches);
     expect(
       matches.filter((m) => m.player1Id === replacement!.id || m.player2Id === replacement!.id),
-    ).toHaveLength(4)
+    ).toHaveLength(4);
     expect(
       matches.some(
         (m) =>
           [m.player1Id, m.player2Id].includes(replacement!.id) &&
           [m.player1Id, m.player2Id].includes(ids[0]!),
       ),
-    ).toBe(false)
-  })
+    ).toBe(false);
+  });
   it('requires acknowledgement for linked roster changes and refuses reset after scoring', async () => {
-    const [m] = await ready()
+    const [m] = await ready();
     await db
       .insert(eventPlanBrackets)
-      .values({ eventPlanId: planId, division: 'upper', stage: 'main', challongeSlug: 'linked' })
-    const [late] = await db.insert(players).values({ canonicalName: 'Late' }).returning()
+      .values({ eventPlanId: planId, division: 'upper', stage: 'main', challongeSlug: 'linked' });
+    const [late] = await db.insert(players).values({ canonicalName: 'Late' }).returning();
     const input = {
       planId,
       action: 'add' as const,
       playerId: late!.id,
       division: 'upper' as const,
       poolIndex: 0,
-    }
-    const preview = await previewAttendance(db, input)
-    expect(preview.requiresExternalAcknowledgement).toBe(true)
+    };
+    const preview = await previewAttendance(db, input);
+    expect(preview.requiresExternalAcknowledgement).toBe(true);
     await expect(
       applyAttendance(db, admin, { ...input, revisionToken: preview.revisionToken }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     await applyAttendance(db, admin, {
       ...input,
       revisionToken: preview.revisionToken,
       acknowledgeExternalChange: true,
-    })
-    await reportScore(db, admin, score(m!))
-    await expect(resetOperations(db, admin, planId)).rejects.toMatchObject({ code: 'CONFLICT' })
-  })
-})
+    });
+    await reportScore(db, admin, score(m!));
+    await expect(resetOperations(db, admin, planId)).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
+});
 
 describe('withdrawal advancement recovery', () => {
   it('requires fresh completed results then advances only active entrants in confirmed order', async () => {
-    await ready()
-    const input = { planId, action: 'withdraw' as const, playerId: ids[0]! }
+    await ready();
+    const input = { planId, action: 'withdraw' as const, playerId: ids[0]! };
     await applyAttendance(db, admin, {
       ...input,
       revisionToken: (await previewAttendance(db, input)).revisionToken,
-    })
-    let view = (await getPlan(db, planId))!
-    let pool = view.divisions[0]!.pools[0]!
-    const order = [ids[0]!, ids[1]!, ids[2]!, ids[3]!]
+    });
+    let view = (await getPlan(db, planId))!;
+    let pool = view.divisions[0]!.pools[0]!;
+    const order = [ids[0]!, ids[1]!, ids[2]!, ids[3]!];
     await expect(
       savePoolPlacements(db, planId, 'upper', [
         {
@@ -788,14 +800,14 @@ describe('withdrawal advancement recovery', () => {
           expectedPlacementRevision: pool.placementRevision,
         },
       ]),
-    ).rejects.toThrow('Record every pool result')
-    const matches = (await db.select().from(eventMatches)).filter((m) => m.division === 'upper')
+    ).rejects.toThrow('Record every pool result');
+    const matches = (await db.select().from(eventMatches)).filter((m) => m.division === 'upper');
     for (const m of matches)
       await reportScore(db, admin, {
         ...score(m, `finish-${m.id}`),
         outcome: [m.player1Id, m.player2Id].includes(ids[0]!) ? 'forfeit' : 'played',
         winnerId: m.player1Id === ids[0] ? m.player2Id! : m.player1Id!,
-      })
+      });
     await expect(
       savePoolPlacements(db, planId, 'upper', [
         {
@@ -805,9 +817,9 @@ describe('withdrawal advancement recovery', () => {
           expectedPlacementRevision: pool.placementRevision,
         },
       ]),
-    ).rejects.toThrow('Pool matches changed')
-    view = (await getPlan(db, planId))!
-    pool = view.divisions[0]!.pools[0]!
+    ).rejects.toThrow('Pool matches changed');
+    view = (await getPlan(db, planId))!;
+    pool = view.divisions[0]!.pools[0]!;
     await savePoolPlacements(db, planId, 'upper', [
       {
         poolIndex: 0,
@@ -815,11 +827,11 @@ describe('withdrawal advancement recovery', () => {
         expectedMatchRevisions: pool.matchRevisions,
         expectedPlacementRevision: pool.placementRevision,
       },
-    ])
-    const restored = (await getPlan(db, planId))!.divisions[0]!
-    expect(restored.championship.map((p) => p.playerId)).toEqual([ids[1], ids[2]])
-    expect(restored.consolation!.entrants.map((p) => p.playerId)).toEqual([ids[3]])
-    expect(restored.pools[0]!.members.find((m) => m.playerId === ids[0])!.place).toBe(1)
+    ]);
+    const restored = (await getPlan(db, planId))!.divisions[0]!;
+    expect(restored.championship.map((p) => p.playerId)).toEqual([ids[1], ids[2]]);
+    expect(restored.consolation!.entrants.map((p) => p.playerId)).toEqual([ids[3]]);
+    expect(restored.pools[0]!.members.find((m) => m.playerId === ids[0])!.place).toBe(1);
     await expect(
       savePoolPlacements(db, planId, 'upper', [
         {
@@ -829,15 +841,15 @@ describe('withdrawal advancement recovery', () => {
           expectedPlacementRevision: pool.placementRevision,
         },
       ]),
-    ).rejects.toThrow('Pool placements changed')
-  })
+    ).rejects.toThrow('Pool placements changed');
+  });
   it('invalidates a stale worksheet after a completed score is corrected', async () => {
-    const matches = (await ready()).filter((m) => m.division === 'upper')
-    for (const m of matches) await reportScore(db, admin, score(m, `finish-${m.id}`))
-    const pool = (await getPlan(db, planId))!.divisions[0]!.pools[0]!
-    const order = pool.members.map((m) => m.playerId)
-    const [m] = await db.select().from(eventMatches).where(eq(eventMatches.id, matches[0]!.id))
-    await reportScore(db, admin, { ...score(m!, 'correction'), score1: 0, score2: 2 })
+    const matches = (await ready()).filter((m) => m.division === 'upper');
+    for (const m of matches) await reportScore(db, admin, score(m, `finish-${m.id}`));
+    const pool = (await getPlan(db, planId))!.divisions[0]!.pools[0]!;
+    const order = pool.members.map((m) => m.playerId);
+    const [m] = await db.select().from(eventMatches).where(eq(eventMatches.id, matches[0]!.id));
+    await reportScore(db, admin, { ...score(m!, 'correction'), score1: 0, score2: 2 });
     await expect(
       savePoolPlacements(db, planId, 'upper', [
         {
@@ -847,35 +859,37 @@ describe('withdrawal advancement recovery', () => {
           expectedPlacementRevision: pool.placementRevision,
         },
       ]),
-    ).rejects.toThrow('Pool matches changed')
-    expect((await getPlan(db, planId))!.divisions[0]!.championship).toHaveLength(0)
-  })
-})
+    ).rejects.toThrow('Pool matches changed');
+    expect((await getPlan(db, planId))!.divisions[0]!.championship).toHaveLength(0);
+  });
+});
 
 it('allows confirmed advancement past an unplayed no contest between two withdrawals', async () => {
-  await ready()
+  await ready();
   for (const id of ids.slice(0, 2)) {
-    const input = { planId, action: 'withdraw' as const, playerId: id }
+    const input = { planId, action: 'withdraw' as const, playerId: id };
     await applyAttendance(db, admin, {
       ...input,
       revisionToken: (await previewAttendance(db, input)).revisionToken,
-    })
+    });
   }
-  const matches = (await db.select().from(eventMatches)).filter((m) => m.division === 'upper')
-  const withdrawn = new Set(ids.slice(0, 2))
-  const noContest = matches.find((m) => withdrawn.has(m.player1Id!) && withdrawn.has(m.player2Id!))!
-  expect(noContest).toMatchObject({ status: 'blocked', winnerId: null, score1: null })
-  expect(noContest.blockedReason).toContain('no contest')
+  const matches = (await db.select().from(eventMatches)).filter((m) => m.division === 'upper');
+  const withdrawn = new Set(ids.slice(0, 2));
+  const noContest = matches.find(
+    (m) => withdrawn.has(m.player1Id!) && withdrawn.has(m.player2Id!),
+  )!;
+  expect(noContest).toMatchObject({ status: 'blocked', winnerId: null, score1: null });
+  expect(noContest.blockedReason).toContain('no contest');
   await expect(
     reportScore(db, admin, { ...score(noContest, 'fake-forfeit'), outcome: 'forfeit' }),
-  ).rejects.toThrow('no contest')
+  ).rejects.toThrow('no contest');
   for (const m of matches.filter((m) => m.id !== noContest.id))
     await reportScore(db, admin, {
       ...score(m, `finish-${m.id}`),
       outcome: withdrawn.has(m.player1Id!) || withdrawn.has(m.player2Id!) ? 'forfeit' : 'played',
       winnerId: withdrawn.has(m.player1Id!) ? m.player2Id! : m.player1Id!,
-    })
-  const pool = (await getPlan(db, planId))!.divisions[0]!.pools[0]!
+    });
+  const pool = (await getPlan(db, planId))!.divisions[0]!.pools[0]!;
   await savePoolPlacements(db, planId, 'upper', [
     {
       poolIndex: 0,
@@ -883,17 +897,17 @@ it('allows confirmed advancement past an unplayed no contest between two withdra
       expectedMatchRevisions: pool.matchRevisions,
       expectedPlacementRevision: pool.placementRevision,
     },
-  ])
-  const division = (await getPlan(db, planId))!.divisions[0]!
-  expect(division.championship.map((p) => p.playerId)).toEqual(ids.slice(2, 4))
-  expect(division.consolation).toBeNull()
-})
+  ]);
+  const division = (await getPlan(db, planId))!.divisions[0]!;
+  expect(division.championship.map((p) => p.playerId)).toEqual(ids.slice(2, 4));
+  expect(division.consolation).toBeNull();
+});
 
 it('invalidates confirmed placements when imported pool results change, including attached finals', async () => {
   const [t] = await db
     .insert(tournaments)
     .values({ challongeSlug: 'corrected-pools', name: 'Pools' })
-    .returning()
+    .returning();
   await db.insert(eventPlanBrackets).values([
     { eventPlanId: planId, division: 'upper', stage: 'main', tournamentId: t!.id },
     {
@@ -902,7 +916,7 @@ it('invalidates confirmed placements when imported pool results change, includin
       stage: 'consolation',
       challongeSlug: 'already-handed-off',
     },
-  ])
+  ]);
   const [remote] = await db
     .insert(sets)
     .values({
@@ -915,8 +929,8 @@ it('invalidates confirmed placements when imported pool results change, includin
       winner: 1,
       scoresCsv: '2-0',
     })
-    .returning()
-  await ready()
+    .returning();
+  await ready();
   await db.insert(eventPlanPoolPlacements).values(
     ids.slice(0, 4).map((id, i) => ({
       eventPlanId: planId,
@@ -925,30 +939,30 @@ it('invalidates confirmed placements when imported pool results change, includin
       playerId: id,
       place: i + 1,
     })),
-  )
-  await prepare(db, planId)
-  expect(await db.select().from(eventPlanPoolPlacements)).toHaveLength(4)
-  await db.update(sets).set({ winner: 2, scoresCsv: '0-2' }).where(eq(sets.id, remote!.id))
-  await prepare(db, planId)
-  expect(await db.select().from(eventPlanPoolPlacements)).toHaveLength(0)
-  expect((await getPlan(db, planId))!.divisions[0]!.championship).toHaveLength(0)
+  );
+  await prepare(db, planId);
+  expect(await db.select().from(eventPlanPoolPlacements)).toHaveLength(4);
+  await db.update(sets).set({ winner: 2, scoresCsv: '0-2' }).where(eq(sets.id, remote!.id));
+  await prepare(db, planId);
+  expect(await db.select().from(eventPlanPoolPlacements)).toHaveLength(0);
+  expect((await getPlan(db, planId))!.divisions[0]!.championship).toHaveLength(0);
   expect(
     (await db.select().from(eventPlanBrackets)).find((b) => b.stage === 'consolation'),
-  ).toMatchObject({ externalState: 'error' })
+  ).toMatchObject({ externalState: 'error' });
   expect(
     (await db.select().from(eventMatches)).find((m) => m.sourceSetId === remote!.id),
-  ).toMatchObject({ score1: 0, score2: 2, syncState: 'synced' })
-})
+  ).toMatchObject({ score1: 0, score2: 2, syncState: 'synced' });
+});
 
 it('holds changed imported participants and clears live games without erasing the audit', async () => {
-  const matches = await ready()
+  const matches = await ready();
   const [t] = await db
     .insert(tournaments)
     .values({ challongeSlug: 'changing-final', name: 'Finals' })
-    .returning()
+    .returning();
   await db
     .insert(eventPlanBrackets)
-    .values({ eventPlanId: planId, division: 'upper', stage: 'main', tournamentId: t!.id })
+    .values({ eventPlanId: planId, division: 'upper', stage: 'main', tournamentId: t!.id });
   const [remote] = await db
     .insert(sets)
     .values({
@@ -959,32 +973,32 @@ it('holds changed imported participants and clears live games without erasing th
       p1PlayerId: ids[0],
       p2PlayerId: ids[1],
     })
-    .returning()
-  await prepare(db, planId)
+    .returning();
+  await prepare(db, planId);
   const [final] = await db
     .select()
     .from(eventMatches)
-    .where(eq(eventMatches.sourceSetId, remote!.id))
+    .where(eq(eventMatches.sourceSetId, remote!.id));
   const playing = await updateMatch(db, admin, {
     matchId: final!.id,
     expectedRevision: final!.revision,
     status: 'playing',
-  })
+  });
   await updateLiveScore(db, admin, {
     matchId: final!.id,
     expectedRevision: playing.revision,
     score1: 1,
     score2: 0,
-  })
-  const other = matches.find((m) => m.player1Id === ids[2] && m.player2Id === ids[3])!
+  });
+  const other = matches.find((m) => m.player1Id === ids[2] && m.player2Id === ids[3])!;
   await updateMatch(db, admin, {
     matchId: other.id,
     expectedRevision: other.revision,
     status: 'playing',
-  })
-  await db.update(sets).set({ p1PlayerId: ids[2] }).where(eq(sets.id, remote!.id))
-  await prepare(db, planId)
-  const [held] = await db.select().from(eventMatches).where(eq(eventMatches.id, final!.id))
+  });
+  await db.update(sets).set({ p1PlayerId: ids[2] }).where(eq(sets.id, remote!.id));
+  await prepare(db, planId);
+  const [held] = await db.select().from(eventMatches).where(eq(eventMatches.id, final!.id));
   expect(held).toMatchObject({
     player1Id: ids[2],
     status: 'blocked',
@@ -992,37 +1006,37 @@ it('holds changed imported participants and clears live games without erasing th
     liveScore2: null,
     winnerId: null,
     score1: null,
-  })
-  expect(held!.blockedReason).toContain('participants changed')
+  });
+  expect(held!.blockedReason).toContain('participants changed');
   const audit = await db
     .select()
     .from(eventMatchAudit)
-    .where(eq(eventMatchAudit.matchId, final!.id))
+    .where(eq(eventMatchAudit.matchId, final!.id));
   expect(audit.find((a) => a.action === 'live_score_updated')!.after).toMatchObject({
     player1Id: ids[0],
     liveScore1: 1,
-  })
-  await prepare(db, planId)
+  });
+  await prepare(db, planId);
   expect((await db.select().from(eventMatches).where(eq(eventMatches.id, final!.id)))[0]).toEqual(
     held,
-  )
+  );
   await expect(
     updateMatch(db, admin, {
       matchId: held!.id,
       expectedRevision: held!.revision,
       status: 'playing',
     }),
-  ).rejects.toMatchObject({ code: 'CONFLICT' })
+  ).rejects.toMatchObject({ code: 'CONFLICT' });
   const readyAgain = await updateMatch(db, admin, {
     matchId: held!.id,
     expectedRevision: held!.revision,
     status: 'ready',
-  })
+  });
   await expect(
     updateMatch(db, admin, {
       matchId: readyAgain.id,
       expectedRevision: readyAgain.revision,
       status: 'playing',
     }),
-  ).rejects.toThrow('already playing')
-})
+  ).rejects.toThrow('already playing');
+});

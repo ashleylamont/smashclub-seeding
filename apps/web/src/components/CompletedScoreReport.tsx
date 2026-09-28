@@ -1,19 +1,19 @@
-import { useState } from 'react'
+import { useState } from 'react';
 
 type RecordedMatch = {
-  revision: number
-  score1: number | null
-  score2: number | null
-  player1Name: string | null
-  player2Name: string | null
-  pendingDisputeCount?: number
-}
+  revision: number;
+  score1: number | null;
+  score2: number | null;
+  player1Name: string | null;
+  player2Name: string | null;
+  pendingDisputeCount?: number;
+};
 export type ResultSubmission = {
-  expectedRevision: number
-  requestId: string
-  score1: number
-  score2: number
-}
+  expectedRevision: number;
+  requestId: string;
+  score1: number;
+  score2: number;
+};
 /** Later reports are evidence for organisers; they never replace the displayed official result. */
 export function CompletedScoreReport({
   match,
@@ -23,44 +23,44 @@ export function CompletedScoreReport({
   pendingReport,
   label = 'Confirmed result',
 }: {
-  match: RecordedMatch
-  enabled: boolean
-  allowReports: boolean
-  pendingReport?: { score1: number; score2: number; isDispute: boolean }
-  onSubmit: (input: ResultSubmission) => Promise<{ isDispute: boolean }>
-  label?: string
+  match: RecordedMatch;
+  enabled: boolean;
+  allowReports: boolean;
+  pendingReport?: { score1: number; score2: number; isDispute: boolean };
+  onSubmit: (input: ResultSubmission) => Promise<{ isDispute: boolean }>;
+  label?: string;
 }) {
-  const [editing, setEditing] = useState(false)
-  const [score1, setScore1] = useState(match.score1 ?? 0)
-  const [score2, setScore2] = useState(match.score2 ?? 0)
-  const [revision, setRevision] = useState(match.revision)
-  const [requestId, setRequestId] = useState(() => crypto.randomUUID())
-  const [pending, setPending] = useState(false)
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
+  const [editing, setEditing] = useState(false);
+  const [score1, setScore1] = useState(match.score1 ?? 0);
+  const [score2, setScore2] = useState(match.score2 ?? 0);
+  const [revision, setRevision] = useState(match.revision);
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
   const submit = async (first: number, second: number) => {
-    setPending(true)
-    setError('')
+    setPending(true);
+    setError('');
     try {
       const result = await onSubmit({
         expectedRevision: revision,
         requestId,
         score1: first,
         score2: second,
-      })
+      });
       setMessage(
         result.isDispute
           ? 'Different score sent to the TOs for review. The recorded result stays official until they resolve it.'
           : 'Thanks — your score agrees with the recorded result.',
-      )
-      setEditing(false)
-      setRequestId(crypto.randomUUID())
+      );
+      setEditing(false);
+      setRequestId(crypto.randomUUID());
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not send this report. Try again.')
+      setError(cause instanceof Error ? cause.message : 'Could not send this report. Try again.');
     } finally {
-      setPending(false)
+      setPending(false);
     }
-  }
+  };
   return (
     <div>
       <p>
@@ -93,12 +93,12 @@ export function CompletedScoreReport({
                     type="button"
                     className="btn"
                     onClick={() => {
-                      setRevision(match.revision)
-                      setScore1(match.score1 ?? 0)
-                      setScore2(match.score2 ?? 0)
-                      setRequestId(crypto.randomUUID())
-                      setError('')
-                      setMessage('')
+                      setRevision(match.revision);
+                      setScore1(match.score1 ?? 0);
+                      setScore2(match.score2 ?? 0);
+                      setRequestId(crypto.randomUUID());
+                      setError('');
+                      setMessage('');
                     }}
                   >
                     Reload match
@@ -117,8 +117,8 @@ export function CompletedScoreReport({
                   className="btn"
                   disabled={pending}
                   onClick={() => {
-                    setEditing(!editing)
-                    setMessage('')
+                    setEditing(!editing);
+                    setMessage('');
                   }}
                 >
                   Report a different score
@@ -128,8 +128,8 @@ export function CompletedScoreReport({
                 <form
                   className="ops-score-form"
                   onSubmit={(event) => {
-                    event.preventDefault()
-                    void submit(score1, score2)
+                    event.preventDefault();
+                    void submit(score1, score2);
                   }}
                 >
                   <div className="ops-score-inputs">
@@ -143,8 +143,8 @@ export function CompletedScoreReport({
                         required
                         value={score1}
                         onChange={(event) => {
-                          setScore1(Number(event.target.value))
-                          setRequestId(crypto.randomUUID())
+                          setScore1(Number(event.target.value));
+                          setRequestId(crypto.randomUUID());
                         }}
                       />
                     </label>
@@ -158,8 +158,8 @@ export function CompletedScoreReport({
                         required
                         value={score2}
                         onChange={(event) => {
-                          setScore2(Number(event.target.value))
-                          setRequestId(crypto.randomUUID())
+                          setScore2(Number(event.target.value));
+                          setRequestId(crypto.randomUUID());
                         }}
                       />
                     </label>
@@ -188,5 +188,5 @@ export function CompletedScoreReport({
         </p>
       )}
     </div>
-  )
+  );
 }

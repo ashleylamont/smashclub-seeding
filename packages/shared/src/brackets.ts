@@ -14,18 +14,18 @@
  * *presentation only* — see the note in `scheduler.ts` on why liveness is never
  * inferred from Challonge state.
  */
-const ABANDONED_AFTER_MS = 7 * 24 * 60 * 60 * 1000
+const ABANDONED_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface BracketStatusInput {
   /** Challonge's own state; null before the bracket has ever been synced. */
-  challongeState: string | null
+  challongeState: string | null;
   /** ISO 8601, or null for a bracket with no date yet. */
-  eventDate: string | null
+  eventDate: string | null;
 }
 
 /** True when Challonge itself says the bracket is finalised. */
 export function isBracketFinalised(bracket: BracketStatusInput): boolean {
-  return bracket.challongeState === 'complete'
+  return bracket.challongeState === 'complete';
 }
 
 /**
@@ -34,11 +34,11 @@ export function isBracketFinalised(bracket: BracketStatusInput): boolean {
  * there is nothing to measure staleness against.
  */
 export function isBracketAbandoned(bracket: BracketStatusInput, now: number): boolean {
-  if (isBracketFinalised(bracket)) return false
-  if (!bracket.eventDate) return false
-  const eventTime = Date.parse(bracket.eventDate)
-  if (Number.isNaN(eventTime)) return false
-  return now - eventTime > ABANDONED_AFTER_MS
+  if (isBracketFinalised(bracket)) return false;
+  if (!bracket.eventDate) return false;
+  const eventTime = Date.parse(bracket.eventDate);
+  if (Number.isNaN(eventTime)) return false;
+  return now - eventTime > ABANDONED_AFTER_MS;
 }
 
 /**
@@ -46,5 +46,5 @@ export function isBracketAbandoned(bracket: BracketStatusInput, now: number): bo
  * properly or it was abandoned long enough ago to be treated as finished.
  */
 export function isBracketOver(bracket: BracketStatusInput, now: number): boolean {
-  return isBracketFinalised(bracket) || isBracketAbandoned(bracket, now)
+  return isBracketFinalised(bracket) || isBracketAbandoned(bracket, now);
 }

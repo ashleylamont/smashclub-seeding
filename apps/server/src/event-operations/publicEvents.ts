@@ -1,5 +1,5 @@
-import { desc, eq, sql } from 'drizzle-orm'
-import { eventOperationSettings, eventPlans, type Db } from '@smashclub/db'
+import { desc, eq, sql } from 'drizzle-orm';
+import { eventOperationSettings, eventPlans, type Db } from '@smashclub/db';
 
 /** Public event discovery contains no roster drafts, operator accounts or guest credentials. */
 export async function publicEventNights(db: Db) {
@@ -19,6 +19,6 @@ export async function publicEventNights(db: Db) {
       desc(eventPlans.eventDate),
       eventPlans.id,
     )
-    .limit(50)
-  return events.map((event) => ({ ...event, eventDate: event.eventDate.toISOString() }))
+    .limit(50);
+  return events.map((event) => ({ ...event, eventDate: event.eventDate.toISOString() }));
 }

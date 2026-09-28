@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMemo, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import {
   DndContext,
   KeyboardSensor,
@@ -8,18 +8,18 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
-} from '@dnd-kit/core'
+} from '@dnd-kit/core';
 import {
   SortableContext,
   arrayMove,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
-} from '@dnd-kit/sortable'
-import { trpc } from '../../../lib/trpc'
-import type { EventPlanEntry, EventPlanView } from '../../../lib/apiTypes'
-import { formatDateTime } from '../../../lib/format'
-import { DIVISION_LABEL } from './labels'
+} from '@dnd-kit/sortable';
+import { trpc } from '../../../lib/trpc';
+import type { EventPlanEntry, EventPlanView } from '../../../lib/apiTypes';
+import { formatDateTime } from '../../../lib/format';
+import { DIVISION_LABEL } from './labels';
 
 /**
  * Step 4: the frozen split, with the seed order still adjustable by hand.
@@ -29,19 +29,19 @@ import { DIVISION_LABEL } from './labels'
  */
 
 export function DivisionsStep({ view, onChanged }: { view: EventPlanView; onChanged: () => void }) {
-  const planId = view.plan.id
-  const attached = view.brackets.some((bracket) => bracket.challongeSlug !== null)
+  const planId = view.plan.id;
+  const attached = view.brackets.some((bracket) => bracket.challongeSlug !== null);
   const locked =
     Boolean(view.plan.softLockedAt) ||
     attached ||
     view.plan.status === 'underway' ||
     view.plan.status === 'complete' ||
-    view.plan.status === 'cancelled'
+    view.plan.status === 'cancelled';
 
   const generate = useMutation({
     mutationFn: () => trpc.admin.eventPlanner.generatePools.mutate({ planId }),
     onSuccess: onChanged,
-  })
+  });
 
   return (
     <div>
@@ -97,7 +97,7 @@ export function DivisionsStep({ view, onChanged }: { view: EventPlanView; onChan
         ))}
       </div>
     </div>
-  )
+  );
 }
 
 function DivisionColumn({
@@ -107,48 +107,48 @@ function DivisionColumn({
   locked,
   onChanged,
 }: {
-  planId: string
-  division: 'upper' | 'lower'
-  entries: EventPlanEntry[]
-  locked: boolean
-  onChanged: () => void
+  planId: string;
+  division: 'upper' | 'lower';
+  entries: EventPlanEntry[];
+  locked: boolean;
+  onChanged: () => void;
 }) {
-  const serverOrder = useMemo(() => entries.map((entry) => entry.id), [entries])
-  const [order, setOrder] = useState<string[]>(serverOrder)
-  const [lastServerOrder, setLastServerOrder] = useState<string[]>(serverOrder)
+  const serverOrder = useMemo(() => entries.map((entry) => entry.id), [entries]);
+  const [order, setOrder] = useState<string[]>(serverOrder);
+  const [lastServerOrder, setLastServerOrder] = useState<string[]>(serverOrder);
   if (serverOrder !== lastServerOrder) {
-    setLastServerOrder(serverOrder)
-    setOrder(serverOrder)
+    setLastServerOrder(serverOrder);
+    setOrder(serverOrder);
   }
 
-  const byId = useMemo(() => new Map(entries.map((entry) => [entry.id, entry])), [entries])
+  const byId = useMemo(() => new Map(entries.map((entry) => [entry.id, entry])), [entries]);
 
   const reorder = useMutation({
     mutationFn: (orderedEntryIds: string[]) =>
       trpc.admin.eventPlanner.reorderDivision.mutate({ planId, division, orderedEntryIds }),
     onSuccess: onChanged,
     onError: () => setOrder(serverOrder),
-  })
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     // Drag by keyboard as well as pointer; the move buttons below are the
     // belt-and-braces version for anyone the drag interaction does not suit.
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  )
+  );
 
   const move = (from: number, to: number) => {
-    if (locked || to < 0 || to >= order.length) return
-    const next = arrayMove(order, from, to)
-    setOrder(next)
-    reorder.mutate(next)
-  }
+    if (locked || to < 0 || to >= order.length) return;
+    const next = arrayMove(order, from, to);
+    setOrder(next);
+    reorder.mutate(next);
+  };
 
   const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-    move(order.indexOf(String(active.id)), order.indexOf(String(over.id)))
-  }
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    move(order.indexOf(String(active.id)), order.indexOf(String(over.id)));
+  };
 
   return (
     <div className="card division-column">
@@ -162,8 +162,8 @@ function DivisionColumn({
         <SortableContext items={order} strategy={verticalListSortingStrategy}>
           <ol className="division-list">
             {order.map((entryId, index) => {
-              const entry = byId.get(entryId)
-              if (!entry) return null
+              const entry = byId.get(entryId);
+              if (!entry) return null;
               return (
                 <DivisionRow
                   key={entryId}
@@ -172,13 +172,13 @@ function DivisionColumn({
                   locked={locked}
                   onMove={(delta) => move(index, index + delta)}
                 />
-              )
+              );
             })}
           </ol>
         </SortableContext>
       </DndContext>
     </div>
-  )
+  );
 }
 
 function DivisionRow({
@@ -187,15 +187,15 @@ function DivisionRow({
   locked,
   onMove,
 }: {
-  entry: EventPlanEntry
-  seed: number
-  locked: boolean
-  onMove: (delta: number) => void
+  entry: EventPlanEntry;
+  seed: number;
+  locked: boolean;
+  onMove: (delta: number) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: entry.id,
     disabled: locked,
-  })
+  });
 
   return (
     <li
@@ -247,5 +247,5 @@ function DivisionRow({
         </button>
       </span>
     </li>
-  )
+  );
 }

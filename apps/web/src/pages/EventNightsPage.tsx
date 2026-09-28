@@ -1,17 +1,17 @@
-import { useQuery } from '@tanstack/react-query'
-import { trpc } from '../lib/trpc'
-import './EventNights.css'
+import { useQuery } from '@tanstack/react-query';
+import { trpc } from '../lib/trpc';
+import './EventNights.css';
 
-const closed = (status: string) => ['complete', 'cancelled'].includes(status)
+const closed = (status: string) => ['complete', 'cancelled'].includes(status);
 export function EventNightsPage() {
   const events = useQuery({
     queryKey: ['publicEventNights'],
     queryFn: () => trpc.eventOps.publicEvents.query(),
     refetchInterval: 15_000,
     retry: false,
-  })
-  const open = events.data?.filter((event) => !closed(event.status)) ?? []
-  const finished = events.data?.filter((event) => closed(event.status)) ?? []
+  });
+  const open = events.data?.filter((event) => !closed(event.status)) ?? [];
+  const finished = events.data?.filter((event) => closed(event.status)) ?? [];
   return (
     <div className="event-nights">
       <header>
@@ -77,5 +77,5 @@ export function EventNightsPage() {
         </details>
       )}
     </div>
-  )
+  );
 }

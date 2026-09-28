@@ -9,14 +9,14 @@ import {
   uniqueIndex,
   uuid,
   type AnyPgColumn,
-} from 'drizzle-orm/pg-core'
-import { sql } from 'drizzle-orm'
-import { eventPlans, players, sets } from './domain'
-import { user } from './auth'
+} from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { eventPlans, players, sets } from './domain';
+import { user } from './auth';
 const planId = () =>
   uuid('event_plan_id')
     .notNull()
-    .references(() => eventPlans.id, { onDelete: 'cascade' })
+    .references(() => eventPlans.id, { onDelete: 'cascade' });
 export const eventOperationSettings = pgTable('event_operation_settings', {
   scoreReportingMode: text('score_reporting_mode')
     .$type<'to_review' | 'approve_unless_disputed'>()
@@ -25,7 +25,7 @@ export const eventOperationSettings = pgTable('event_operation_settings', {
   eventPlanId: planId().primaryKey(),
   published: boolean('published').notNull().default(false),
   playerReports: boolean('player_reports').notNull().default(false),
-})
+});
 export const eventOperators = pgTable(
   'event_operators',
   {
@@ -36,12 +36,12 @@ export const eventOperators = pgTable(
       .references(() => user.id, { onDelete: 'cascade' }),
   },
   (t) => [uniqueIndex('event_operators_user_idx').on(t.eventPlanId, t.userId)],
-)
+);
 export const eventStations = pgTable('event_stations', {
   id: uuid('id').primaryKey().defaultRandom(),
   eventPlanId: planId(),
   name: text('name').notNull(),
-})
+});
 export const eventNativeBrackets = pgTable(
   'event_native_brackets',
   {
@@ -53,7 +53,7 @@ export const eventNativeBrackets = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('event_native_brackets_slot_idx').on(t.eventPlanId, t.division, t.stage)],
-)
+);
 export const eventMatches = pgTable(
   'event_matches',
   {
@@ -94,7 +94,7 @@ export const eventMatches = pgTable(
       .default('local'),
   },
   (t) => [uniqueIndex('event_matches_source_idx').on(t.eventPlanId, t.sourceKey)],
-)
+);
 export const eventScoreReports = pgTable(
   'event_score_reports',
   {
@@ -127,7 +127,7 @@ export const eventScoreReports = pgTable(
       sql`(${t.userId} IS NULL) <> (${t.guestSessionId} IS NULL)`,
     ),
   ],
-)
+);
 export const eventMatchAudit = pgTable('event_match_audit', {
   id: uuid('id').primaryKey().defaultRandom(),
   eventPlanId: planId(),
@@ -140,21 +140,21 @@ export const eventMatchAudit = pgTable('event_match_audit', {
   before: jsonb('before').notNull(),
   after: jsonb('after').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-})
+});
 export const eventAnnouncements = pgTable('event_announcements', {
   id: uuid('id').primaryKey().defaultRandom(),
   eventPlanId: planId(),
   message: text('message').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp('expires_at', { withTimezone: true }),
-})
+});
 export const eventPrizes = pgTable('event_prizes', {
   id: uuid('id').primaryKey().defaultRandom(),
   eventPlanId: planId(),
   title: text('title').notNull(),
   description: text('description'),
   playerId: uuid('player_id').references(() => players.id),
-})
+});
 /** Stable membership after an attendance change; all pools are snapshotted together. */
 export const eventPoolAssignments = pgTable(
   'event_pool_assignments',
@@ -168,7 +168,7 @@ export const eventPoolAssignments = pgTable(
     poolIndex: integer('pool_index').notNull(),
   },
   (t) => [uniqueIndex('event_pool_assignments_player_idx').on(t.eventPlanId, t.playerId)],
-)
+);
 export const eventWithdrawals = pgTable(
   'event_withdrawals',
   {
@@ -181,7 +181,7 @@ export const eventWithdrawals = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('event_withdrawals_player_idx').on(t.eventPlanId, t.playerId)],
-)
+);
 export const eventAttendanceAudit = pgTable('event_attendance_audit', {
   id: uuid('id').primaryKey().defaultRandom(),
   eventPlanId: planId(),
@@ -191,7 +191,7 @@ export const eventAttendanceAudit = pgTable('event_attendance_audit', {
   action: text('action').notNull(),
   details: jsonb('details').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-})
+});
 
 /** Never expose the event secret, session digest or request fingerprints publicly. */
 export const eventGuestSettings = pgTable('event_guest_settings', {
@@ -200,7 +200,7 @@ export const eventGuestSettings = pgTable('event_guest_settings', {
   showOnOverlay: boolean('show_on_overlay').notNull().default(false),
   rotateInvitations: boolean('rotate_invitations').notNull().default(true),
   secret: text('secret').notNull(),
-})
+});
 export const eventGuestSessions = pgTable(
   'event_guest_sessions',
   {
@@ -212,13 +212,13 @@ export const eventGuestSessions = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('event_guest_sessions_token_idx').on(t.tokenHash)],
-)
+);
 export const eventGuestRateLimits = pgTable('event_guest_rate_limits', {
   key: text('key').primaryKey(),
   eventPlanId: planId(),
   count: integer('count').notNull(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-})
+});
 
 /** Absent schedule means active and unrestricted, preserving existing events. */
 export const eventPoolSchedules = pgTable(
@@ -235,4 +235,4 @@ export const eventPoolSchedules = pgTable(
     revision: integer('revision').notNull().default(1),
   },
   (t) => [uniqueIndex('event_pool_schedules_pool_idx').on(t.eventPlanId, t.division, t.poolIndex)],
-)
+);

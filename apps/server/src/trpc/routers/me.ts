@@ -1,15 +1,15 @@
-import { z } from 'zod'
-import { TRPCError } from '@trpc/server'
-import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm'
-import type { Db } from '@smashclub/db'
-import { companies, playerClaims, players } from '@smashclub/db'
-import { defaultPublicAlias, publicPlayerName } from '@smashclub/shared'
+import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
+import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
+import type { Db } from '@smashclub/db';
+import { companies, playerClaims, players } from '@smashclub/db';
+import { defaultPublicAlias, publicPlayerName } from '@smashclub/shared';
 import {
   charactersByPlayer,
   characterSlugsSchema,
   setPlayerCharacters,
-} from '../../players/characters'
-import { authedProcedure, router } from '../trpc'
+} from '../../players/characters';
+import { authedProcedure, router } from '../trpc';
 
 /**
  * Every self-service edit below is gated on the caller holding an *approved*
@@ -26,9 +26,9 @@ async function assertApprovedClaim(db: Db, userId: string, playerId: string): Pr
         eq(playerClaims.playerId, playerId),
         eq(playerClaims.status, 'approved'),
       ),
-    )
+    );
   if (approved.length === 0) {
-    throw new TRPCError({ code: 'FORBIDDEN', message: 'You have not claimed this player.' })
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'You have not claimed this player.' });
   }
 }
 
@@ -63,11 +63,11 @@ export const meRouter = router({
       .innerJoin(players, eq(playerClaims.playerId, players.id))
       .leftJoin(companies, eq(players.companyId, companies.id))
       .where(eq(playerClaims.userId, ctx.user.id))
-      .orderBy(desc(playerClaims.createdAt))
+      .orderBy(desc(playerClaims.createdAt));
     const characters = await charactersByPlayer(
       ctx.db,
       rows.map((row) => row.playerId),
-    )
+    );
     /*
      * A claim is a *request*, and anyone may request one on any player, so this
      * route would otherwise hand out the canonical name of whoever the caller
@@ -81,7 +81,7 @@ export const meRouter = router({
       characters: characters.get(row.playerId) ?? [],
       createdAt: row.createdAt.toISOString(),
       resolvedAt: row.resolvedAt?.toISOString() ?? null,
-    }))
+    }));
   }),
 
   requestClaim: authedProcedure
@@ -90,8 +90,8 @@ export const meRouter = router({
       const [player] = await ctx.db
         .select()
         .from(players)
-        .where(and(eq(players.id, input.playerId), eq(players.status, 'active')))
-      if (!player) throw new TRPCError({ code: 'NOT_FOUND', message: 'Player not found.' })
+        .where(and(eq(players.id, input.playerId), eq(players.status, 'active')));
+      if (!player) throw new TRPCError({ code: 'NOT_FOUND', message: 'Player not found.' });
 
       const live = await ctx.db
         .select({ id: playerClaims.id })
@@ -101,19 +101,19 @@ export const meRouter = router({
             eq(playerClaims.userId, ctx.user.id),
             inArray(playerClaims.status, ['pending', 'approved']),
           ),
-        )
+        );
       if (live.length > 0) {
         throw new TRPCError({
           code: 'CONFLICT',
           message: 'You already have a live claim. Withdraw it before claiming another player.',
-        })
+        });
       }
 
       const [claim] = await ctx.db
         .insert(playerClaims)
         .values({ userId: ctx.user.id, playerId: input.playerId, note: input.note ?? null })
-        .returning({ id: playerClaims.id })
-      return { claimId: claim!.id }
+        .returning({ id: playerClaims.id });
+      return { claimId: claim!.id };
     }),
 
   withdrawClaim: authedProcedure
@@ -122,16 +122,16 @@ export const meRouter = router({
       const [claim] = await ctx.db
         .select()
         .from(playerClaims)
-        .where(and(eq(playerClaims.id, input.claimId), eq(playerClaims.userId, ctx.user.id)))
-      if (!claim) throw new TRPCError({ code: 'NOT_FOUND' })
+        .where(and(eq(playerClaims.id, input.claimId), eq(playerClaims.userId, ctx.user.id)));
+      if (!claim) throw new TRPCError({ code: 'NOT_FOUND' });
       if (claim.status !== 'pending' && claim.status !== 'approved') {
-        throw new TRPCError({ code: 'CONFLICT', message: 'Only live claims can be withdrawn.' })
+        throw new TRPCError({ code: 'CONFLICT', message: 'Only live claims can be withdrawn.' });
       }
       await ctx.db
         .update(playerClaims)
         .set({ status: 'revoked', resolvedAt: new Date(), updatedAt: new Date() })
-        .where(eq(playerClaims.id, input.claimId))
-      return { ok: true }
+        .where(eq(playerClaims.id, input.claimId));
+      return { ok: true };
     }),
 
   /**
@@ -144,7 +144,7 @@ export const meRouter = router({
       z.object({ playerId: z.uuid(), displayName: z.string().trim().min(1).max(80).nullable() }),
     )
     .mutation(async ({ ctx, input }) => {
-      await assertApprovedClaim(ctx.db, ctx.user.id, input.playerId)
+      await assertApprovedClaim(ctx.db, ctx.user.id, input.playerId);
 
       // Two players publishing the same alias would make the board ambiguous,
       // so the name is claimed first-come. Canonical names may still collide —
@@ -159,28 +159,28 @@ export const meRouter = router({
               eq(players.status, 'active'),
               ne(players.id, input.playerId),
             ),
-          )
+          );
         if (clash.length > 0) {
           throw new TRPCError({
             code: 'CONFLICT',
             message: `“${input.displayName}” is already taken.`,
-          })
+          });
         }
       }
 
       await ctx.db
         .update(players)
         .set({ displayName: input.displayName, updatedAt: new Date() })
-        .where(eq(players.id, input.playerId))
-      return { ok: true }
+        .where(eq(players.id, input.playerId));
+      return { ok: true };
     }),
 
   /** Approved claimants keep their own mains current. */
   updateCharacters: authedProcedure
     .input(z.object({ playerId: z.uuid(), characters: characterSlugsSchema }))
     .mutation(async ({ ctx, input }) => {
-      await assertApprovedClaim(ctx.db, ctx.user.id, input.playerId)
-      await setPlayerCharacters(ctx.db, input.playerId, input.characters)
-      return { ok: true }
+      await assertApprovedClaim(ctx.db, ctx.user.id, input.playerId);
+      await setPlayerCharacters(ctx.db, input.playerId, input.characters);
+      return { ok: true };
     }),
-})
+});

@@ -1,30 +1,30 @@
-import { ScorePolicyControls } from './ScorePolicyControls'
-import { StationPoolControls } from './StationPoolControls'
-import { NativeBracketControls } from './NativeBracketControls'
-import { useState } from 'react'
-import { ToPlayerFinder } from './ToPlayerFinder'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useSearch, useParams } from '@tanstack/react-router'
-import { trpc } from '../../lib/trpc'
-import { authClient, useCurrentUser } from '../../lib/auth'
-import './EventOperations.css'
-import { ScoreHandoff } from './ScoreHandoff'
-import { AttendanceControls } from './AttendanceControls'
-import { GuestReportingControls } from './GuestReportingControls'
-import { availableMatches, poolStandings } from '../../lib/eventQueue'
-import { OpsAttentionDesk } from './OpsAttentionDesk'
-import { jumpToOpsControl } from '../../lib/opsAttention'
+import { ScorePolicyControls } from './ScorePolicyControls';
+import { StationPoolControls } from './StationPoolControls';
+import { NativeBracketControls } from './NativeBracketControls';
+import { useState } from 'react';
+import { ToPlayerFinder } from './ToPlayerFinder';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSearch, useParams } from '@tanstack/react-router';
+import { trpc } from '../../lib/trpc';
+import { authClient, useCurrentUser } from '../../lib/auth';
+import './EventOperations.css';
+import { ScoreHandoff } from './ScoreHandoff';
+import { AttendanceControls } from './AttendanceControls';
+import { GuestReportingControls } from './GuestReportingControls';
+import { availableMatches, poolStandings } from '../../lib/eventQueue';
+import { OpsAttentionDesk } from './OpsAttentionDesk';
+import { jumpToOpsControl } from '../../lib/opsAttention';
 
-type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>
-type Match = Overview['matches'][number]
+type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
+type Match = Overview['matches'][number];
 
 export function AdminEventOperationsPage() {
-  const search = useSearch({ strict: false }) as { plan?: string }
+  const search = useSearch({ strict: false }) as { plan?: string };
   const plans = useQuery({
     queryKey: ['admin', 'eventPlanner', 'plans'],
     queryFn: () => trpc.admin.eventPlanner.plans.query(),
-  })
-  if (search.plan) return <EventOperationsPanel planId={search.plan} />
+  });
+  if (search.plan) return <EventOperationsPanel planId={search.plan} />;
   return (
     <section className="card">
       <h2>Run an event</h2>
@@ -47,52 +47,52 @@ export function AdminEventOperationsPage() {
       </div>
       {plans.data?.length === 0 && <a href="/admin/event-planner">Create your first event plan</a>}
     </section>
-  )
+  );
 }
 
 export function AssignedEventOperationsPage() {
-  const { planId } = useParams({ strict: false }) as { planId: string }
-  return <EventOperationsPanel planId={planId} />
+  const { planId } = useParams({ strict: false }) as { planId: string };
+  return <EventOperationsPanel planId={planId} />;
 }
 
 export function EventOperationsPanel({ planId }: { planId: string }) {
-  const cache = useQueryClient()
-  const { data: session } = authClient.useSession()
-  const currentUser = useCurrentUser(session)
-  const admin = currentUser.data?.role === 'admin'
+  const cache = useQueryClient();
+  const { data: session } = authClient.useSession();
+  const currentUser = useCurrentUser(session);
+  const admin = currentUser.data?.role === 'admin';
   const event = useQuery({
     queryKey: ['eventOps', planId],
     queryFn: () => trpc.eventOps.overview.query({ planId }),
     refetchInterval: 2500,
-  })
-  const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
-  const [pending, setPending] = useState(false)
-  const [filter, setFilter] = useState('active')
-  const [division, setDivision] = useState('all')
-  const [search, setSearch] = useState('')
-  const [poolFilter, setPoolFilter] = useState('all')
-  const [focusedMatchId, setFocusedMatchId] = useState<string | null>(null)
-  const [announcementMinutes, setAnnouncementMinutes] = useState(5)
-  const [announcement, setAnnouncement] = useState('')
-  const [prizeTitle, setPrizeTitle] = useState('')
-  const [prizePlayer, setPrizePlayer] = useState('')
-  const [toUserId, setToUserId] = useState('')
+  });
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [pending, setPending] = useState(false);
+  const [filter, setFilter] = useState('active');
+  const [division, setDivision] = useState('all');
+  const [search, setSearch] = useState('');
+  const [poolFilter, setPoolFilter] = useState('all');
+  const [focusedMatchId, setFocusedMatchId] = useState<string | null>(null);
+  const [announcementMinutes, setAnnouncementMinutes] = useState(5);
+  const [announcement, setAnnouncement] = useState('');
+  const [prizeTitle, setPrizeTitle] = useState('');
+  const [prizePlayer, setPrizePlayer] = useState('');
+  const [toUserId, setToUserId] = useState('');
   const act = async (work: () => Promise<unknown>, message = 'Saved') => {
-    setPending(true)
-    setError('')
-    setNotice('')
+    setPending(true);
+    setError('');
+    setNotice('');
     try {
-      await work()
-      setNotice(message)
-      await cache.invalidateQueries({ queryKey: ['eventOps', planId] })
+      await work();
+      setNotice(message);
+      await cache.invalidateQueries({ queryKey: ['eventOps', planId] });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not save. Please try again.')
+      setError(cause instanceof Error ? cause.message : 'Could not save. Please try again.');
     } finally {
-      setPending(false)
+      setPending(false);
     }
-  }
-  if (event.isPending) return <p>Opening event control…</p>
+  };
+  if (event.isPending) return <p>Opening event control…</p>;
   if (!event.data)
     return (
       <section className="card">
@@ -100,17 +100,17 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
         <p role="alert">{event.error?.message ?? 'Event unavailable'}</p>
         <a href="/login">Sign in</a>
       </section>
-    )
-  const data = event.data
-  const closed = ['complete', 'cancelled'].includes(data.plan.status)
-  const canSoftLock = data.plan.status === 'pools_ready' && !data.plan.softLockedAt
-  const canUnlock = data.plan.status === 'pools_ready' && Boolean(data.plan.softLockedAt)
+    );
+  const data = event.data;
+  const closed = ['complete', 'cancelled'].includes(data.plan.status);
+  const canSoftLock = data.plan.status === 'pools_ready' && !data.plan.softLockedAt;
+  const canUnlock = data.plan.status === 'pools_ready' && Boolean(data.plan.softLockedAt);
   const disputes = data.reports.filter(
     (report) => report.status === 'pending' && report.isDispute,
-  ).length
-  const available = availableMatches(data.matches).filter((match) => match.availability.canStart)
-  const callable = new Set(available.map((match) => match.id))
-  const pools = poolStandings(data.matches)
+  ).length;
+  const available = availableMatches(data.matches).filter((match) => match.availability.canStart);
+  const callable = new Set(available.map((match) => match.id));
+  const pools = poolStandings(data.matches);
   const matches = focusedMatchId
     ? data.matches.filter((match) => match.id === focusedMatchId)
     : (filter === 'ready' ? available : data.matches).filter(
@@ -128,11 +128,11 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
           `${match.player1Name} ${match.player2Name} ${match.label}`
             .toLowerCase()
             .includes(search.toLowerCase()),
-      )
-  const entrants = new Map<string, string>()
+      );
+  const entrants = new Map<string, string>();
   for (const match of data.matches) {
-    if (match.player1Id) entrants.set(match.player1Id, match.player1Name)
-    if (match.player2Id) entrants.set(match.player2Id, match.player2Name)
+    if (match.player1Id) entrants.set(match.player1Id, match.player1Name);
+    if (match.player2Id) entrants.set(match.player2Id, match.player2Name);
   }
   return (
     <div className="ops-page">
@@ -161,12 +161,12 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
       <OpsAttentionDesk
         data={data}
         onMatch={(id) => {
-          setFocusedMatchId(id)
-          setDivision('all')
-          setPoolFilter('all')
-          setSearch('')
-          setFilter('all')
-          jumpToOpsControl('match-desk')
+          setFocusedMatchId(id);
+          setDivision('all');
+          setPoolFilter('all');
+          setSearch('');
+          setFilter('all');
+          jumpToOpsControl('match-desk');
         }}
       />
       {event.isError && (
@@ -219,7 +219,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
                 void act(
                   () => trpc.eventOps.softLockPools.mutate({ planId, confirm: true }),
                   'Pool draw soft-locked',
-                )
+                );
             }}
           >
             Soft-lock pool draw
@@ -238,7 +238,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
                 void act(
                   () => trpc.eventOps.unlockPools.mutate({ planId, confirm: true }),
                   'Pool draw returned to draft. You can rebalance it in the planner.',
-                )
+                );
             }}
           >
             Return draw to draft
@@ -248,28 +248,28 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
       <ToPlayerFinder
         data={data}
         onMatch={(id) => {
-          setFocusedMatchId(id)
-          setSearch('')
-          setDivision('all')
-          setPoolFilter('all')
-          setFilter('all')
+          setFocusedMatchId(id);
+          setSearch('');
+          setDivision('all');
+          setPoolFilter('all');
+          setFilter('all');
           requestAnimationFrame(() => {
-            const desk = document.getElementById('match-desk')
-            desk?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-            desk?.focus({ preventScroll: true })
-          })
+            const desk = document.getElementById('match-desk');
+            desk?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            desk?.focus({ preventScroll: true });
+          });
         }}
         onPool={(key) => {
-          setFocusedMatchId(null)
-          setSearch('')
-          setPoolFilter(key)
-          setDivision('all')
-          setFilter('all')
+          setFocusedMatchId(null);
+          setSearch('');
+          setPoolFilter(key);
+          setDivision('all');
+          setFilter('all');
           requestAnimationFrame(() => {
-            const desk = document.getElementById('match-desk')
-            desk?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-            desk?.focus({ preventScroll: true })
-          })
+            const desk = document.getElementById('match-desk');
+            desk?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            desk?.focus({ preventScroll: true });
+          });
         }}
       />
       <StationPoolControls
@@ -277,12 +277,12 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
         disabled={pending || closed}
         act={act}
         onPool={(key) => {
-          setFocusedMatchId(null)
-          setSearch('')
-          setPoolFilter(key)
-          setDivision('all')
-          setFilter('active')
-          document.getElementById('match-desk')?.scrollIntoView({ behavior: 'smooth' })
+          setFocusedMatchId(null);
+          setSearch('');
+          setPoolFilter(key);
+          setDivision('all');
+          setFilter('active');
+          document.getElementById('match-desk')?.scrollIntoView({ behavior: 'smooth' });
         }}
       />
       <div className="ops-stats">
@@ -291,8 +291,8 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
             key={status}
             className={`ops-stat ${filter === status ? 'selected' : ''}`}
             onClick={() => {
-              setFocusedMatchId(null)
-              setFilter(status)
+              setFocusedMatchId(null);
+              setFilter(status);
             }}
           >
             <strong>
@@ -489,15 +489,15 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
           <h3>Announcements</h3>
           <form
             onSubmit={(e) => {
-              e.preventDefault()
+              e.preventDefault();
               void act(async () => {
                 await trpc.eventOps.announce.mutate({
                   planId,
                   message: announcement,
                   durationSeconds: announcementMinutes * 60,
-                })
-                setAnnouncement('')
-              }, 'Announcement published to the event feed')
+                });
+                setAnnouncement('');
+              }, 'Announcement published to the event feed');
             }}
           >
             <label>
@@ -549,15 +549,15 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
           <p className="muted">Publish confirmed awards. You choose the recipient.</p>
           <form
             onSubmit={(e) => {
-              e.preventDefault()
+              e.preventDefault();
               void act(async () => {
                 await trpc.eventOps.savePrize.mutate({
                   planId,
                   title: prizeTitle,
                   ...(prizePlayer ? { playerId: prizePlayer } : {}),
-                })
-                setPrizeTitle('')
-              })
+                });
+                setPrizeTitle('');
+              });
             }}
           >
             <label>
@@ -639,11 +639,11 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
             </p>
             <form
               onSubmit={(e) => {
-                e.preventDefault()
+                e.preventDefault();
                 void act(async () => {
-                  await trpc.eventOps.assignTo.mutate({ planId, email: toUserId })
-                  setToUserId('')
-                })
+                  await trpc.eventOps.assignTo.mutate({ planId, email: toUserId });
+                  setToUserId('');
+                });
               }}
             >
               <label>
@@ -717,7 +717,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
                   data.plan.softLockedAt
                     ? 'Unplayed queue cleared. Pool assignments were kept.'
                     : 'Unplayed queue cleared. Reopen the roster in the planner to reshuffle.',
-                )
+                );
             }}
           >
             Reset unplayed queue
@@ -729,10 +729,10 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
         <AuditList data={data} />
       </details>
     </div>
-  )
+  );
 }
 
-type Action = (work: () => Promise<unknown>, message?: string) => Promise<void>
+type Action = (work: () => Promise<unknown>, message?: string) => Promise<void>;
 function MatchCard({
   match,
   stations,
@@ -741,36 +741,36 @@ function MatchCard({
   native,
   act,
 }: {
-  match: Match
-  stations: Overview['stations']
-  disabled: boolean
-  canStart: boolean
-  native: boolean
-  act: Action
+  match: Match;
+  stations: Overview['stations'];
+  disabled: boolean;
+  canStart: boolean;
+  native: boolean;
+  act: Action;
 }) {
-  const [editing, setEditing] = useState<'live' | 'final' | null>(null)
-  const [revision, setRevision] = useState(match.revision)
-  const [score1, setScore1] = useState(match.score1 ?? 0)
-  const [score2, setScore2] = useState(match.score2 ?? 0)
-  const [outcome, setOutcome] = useState<'played' | 'forfeit' | 'bye'>('played')
-  const [winnerId, setWinnerId] = useState(match.winnerId ?? match.player1Id ?? '')
-  const [requestId, setRequestId] = useState('')
-  const stale = editing !== null && revision !== match.revision
+  const [editing, setEditing] = useState<'live' | 'final' | null>(null);
+  const [revision, setRevision] = useState(match.revision);
+  const [score1, setScore1] = useState(match.score1 ?? 0);
+  const [score2, setScore2] = useState(match.score2 ?? 0);
+  const [outcome, setOutcome] = useState<'played' | 'forfeit' | 'bye'>('played');
+  const [winnerId, setWinnerId] = useState(match.winnerId ?? match.player1Id ?? '');
+  const [requestId, setRequestId] = useState('');
+  const stale = editing !== null && revision !== match.revision;
   const begin = (mode: 'live' | 'final') => {
-    setEditing(mode)
-    setRevision(match.revision)
-    setScore1(match.score1 ?? 0)
-    setScore2(match.score2 ?? 0)
-    setOutcome(match.outcome ?? 'played')
-    setWinnerId(match.winnerId ?? match.player1Id ?? '')
-    setRequestId(crypto.randomUUID())
-  }
+    setEditing(mode);
+    setRevision(match.revision);
+    setScore1(match.score1 ?? 0);
+    setScore2(match.score2 ?? 0);
+    setOutcome(match.outcome ?? 'played');
+    setWinnerId(match.winnerId ?? match.player1Id ?? '');
+    setRequestId(crypto.randomUUID());
+  };
   const eligible = stations.filter(
     (station) =>
       (station.status === 'free' || station.currentMatchId === match.id) &&
       (match.availability.eligibleStationIds.includes(station.id) ||
         station.currentMatchId === match.id),
-  )
+  );
   const label =
     match.status === 'complete'
       ? 'Finished'
@@ -778,7 +778,7 @@ function MatchCard({
         ? 'Playing now'
         : canStart
           ? 'Ready to start'
-          : 'Waiting'
+          : 'Waiting';
   return (
     <article className={`card ops-match ops-match-${match.status}`}>
       <div className="ops-match-meta">
@@ -896,7 +896,7 @@ function MatchCard({
                         status: 'ready',
                       }),
                     'Players confirmed · match returned to the queue',
-                  )
+                  );
               }}
             >
               Confirm players and return to queue
@@ -915,7 +915,7 @@ function MatchCard({
         <form
           className="ops-score-form"
           onSubmit={(event) => {
-            event.preventDefault()
+            event.preventDefault();
             void act(
               async () => {
                 if (editing === 'live')
@@ -924,7 +924,7 @@ function MatchCard({
                     expectedRevision: revision,
                     score1,
                     score2,
-                  })
+                  });
                 else
                   await trpc.eventOps.reportScore.mutate({
                     matchId: match.id,
@@ -934,13 +934,13 @@ function MatchCard({
                     score2,
                     outcome,
                     ...(outcome !== 'played' ? { winnerId } : {}),
-                  })
-                setEditing(null)
+                  });
+                setEditing(null);
               },
               editing === 'live'
                 ? 'Live score updated · match still playing'
                 : 'Score recorded locally',
-            )
+            );
           }}
         >
           <strong>
@@ -963,8 +963,8 @@ function MatchCard({
                 max={5}
                 value={score1}
                 onChange={(event) => {
-                  setScore1(Number(event.target.value))
-                  setRequestId(crypto.randomUUID())
+                  setScore1(Number(event.target.value));
+                  setRequestId(crypto.randomUUID());
                 }}
                 required
               />
@@ -978,8 +978,8 @@ function MatchCard({
                 max={5}
                 value={score2}
                 onChange={(event) => {
-                  setScore2(Number(event.target.value))
-                  setRequestId(crypto.randomUUID())
+                  setScore2(Number(event.target.value));
+                  setRequestId(crypto.randomUUID());
                 }}
                 required
               />
@@ -993,8 +993,8 @@ function MatchCard({
                   className="select"
                   value={outcome}
                   onChange={(event) => {
-                    setOutcome(event.target.value as typeof outcome)
-                    setRequestId(crypto.randomUUID())
+                    setOutcome(event.target.value as typeof outcome);
+                    setRequestId(crypto.randomUUID());
                   }}
                 >
                   <option value="played">Played match</option>
@@ -1009,8 +1009,8 @@ function MatchCard({
                     className="select"
                     value={winnerId}
                     onChange={(event) => {
-                      setWinnerId(event.target.value)
-                      setRequestId(crypto.randomUUID())
+                      setWinnerId(event.target.value);
+                      setRequestId(crypto.randomUUID());
                     }}
                   >
                     {[
@@ -1046,16 +1046,16 @@ function MatchCard({
         </form>
       )}
     </article>
-  )
+  );
 }
 function PlayerReports({
   data,
   disabled,
   act,
 }: {
-  data: Overview
-  disabled: boolean
-  act: Action
+  data: Overview;
+  disabled: boolean;
+  act: Action;
 }) {
   return (
     <section className="card" id="score-submissions">
@@ -1066,16 +1066,16 @@ function PlayerReports({
       </p>
       <ReportRows data={data} disabled={disabled} act={act} />
     </section>
-  )
+  );
 }
 function ReportRows({ data, disabled, act }: { data: Overview; disabled: boolean; act: Action }) {
   const reports = data.reports
     .filter((report) => report.status === 'pending')
-    .sort((a, b) => Number(b.isDispute) - Number(a.isDispute))
+    .sort((a, b) => Number(b.isDispute) - Number(a.isDispute));
   return reports.length ? (
     <div>
       {reports.map((report) => {
-        const match = data.matches.find((match) => match.id === report.matchId)
+        const match = data.matches.find((match) => match.id === report.matchId);
         return (
           <div
             className="ops-report"
@@ -1134,12 +1134,12 @@ function ReportRows({ data, disabled, act }: { data: Overview; disabled: boolean
               {report.isDispute && match?.status === 'complete' ? 'Keep recorded result' : 'Reject'}
             </button>
           </div>
-        )
+        );
       })}
     </div>
   ) : (
     <p className="muted">No scores awaiting review.</p>
-  )
+  );
 }
 function AuditList({ data }: { data: Overview }) {
   return (
@@ -1152,5 +1152,5 @@ function AuditList({ data }: { data: Overview }) {
         </li>
       ))}
     </ol>
-  )
+  );
 }

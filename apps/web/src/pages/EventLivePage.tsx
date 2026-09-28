@@ -1,41 +1,41 @@
-import { useEffect, useState, type CSSProperties } from 'react'
-import { TRPCClientError } from '@trpc/client'
-import { useQuery } from '@tanstack/react-query'
-import { useParams } from '@tanstack/react-router'
-import { trpc } from '../lib/trpc'
-import './EventLive.css'
-import { NemesisMark } from '../components/NemesisMark'
-import { CharacterIcons } from '../components/CharacterIcons'
-import { OverlaySetup } from '../components/OverlaySetup'
+import { useEffect, useState, type CSSProperties } from 'react';
+import { TRPCClientError } from '@trpc/client';
+import { useQuery } from '@tanstack/react-query';
+import { useParams } from '@tanstack/react-router';
+import { trpc } from '../lib/trpc';
+import './EventLive.css';
+import { NemesisMark } from '../components/NemesisMark';
+import { CharacterIcons } from '../components/CharacterIcons';
+import { OverlaySetup } from '../components/OverlaySetup';
 import {
   EventPools,
   EventBrackets,
   type PoolSchedule,
   type NativeBracketView,
-} from '../components/EventNightBoard'
-import { PoolFilter, PoolRoundSchedule, PoolStationQueue } from '../components/PoolStationQueue'
+} from '../components/EventNightBoard';
+import { PoolFilter, PoolRoundSchedule, PoolStationQueue } from '../components/PoolStationQueue';
 import {
   matchesPool,
   poolPath,
   stationPreview,
   usePoolFilter,
   type PoolFlowData,
-} from '../lib/poolFlow'
-import { ResultGraphic } from '../components/ResultGraphic'
-import { GuestOverlayQr } from '../components/GuestOverlayQr'
-import { BroadcastResults } from '../components/BroadcastResults'
-import { recentResults } from '../lib/broadcastResults'
-import { useGuestClock } from '../lib/guestReporting'
-import { confirmedPoolGraphics } from '../lib/resultGraphic'
+} from '../lib/poolFlow';
+import { ResultGraphic } from '../components/ResultGraphic';
+import { GuestOverlayQr } from '../components/GuestOverlayQr';
+import { BroadcastResults } from '../components/BroadcastResults';
+import { recentResults } from '../lib/broadcastResults';
+import { useGuestClock } from '../lib/guestReporting';
+import { confirmedPoolGraphics } from '../lib/resultGraphic';
 
-import { broadcastQueue, liveSections, overlayGeometry, type LiveMatch } from '../lib/eventDisplay'
+import { broadcastQueue, liveSections, overlayGeometry, type LiveMatch } from '../lib/eventDisplay';
 export function EventLivePage() {
-  const { planId } = useParams({ from: '/live/$planId' })
-  return <EventDisplay key={planId} planId={planId} />
+  const { planId } = useParams({ from: '/live/$planId' });
+  return <EventDisplay key={planId} planId={planId} />;
 }
 export function EventOverlayPage() {
-  const { planId } = useParams({ from: '/overlay/$planId' })
-  return <EventDisplay key={planId} planId={planId} overlay />
+  const { planId } = useParams({ from: '/overlay/$planId' });
+  return <EventDisplay key={planId} planId={planId} overlay />;
 }
 function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: boolean }) {
   const query = useQuery({
@@ -44,19 +44,19 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
     refetchInterval: 5000,
     refetchIntervalInBackground: true,
     retry: 1,
-  })
-  const now = useGuestClock()
-  const [selectedPool, setSelectedPool] = usePoolFilter()
+  });
+  const now = useGuestClock();
+  const [selectedPool, setSelectedPool] = usePoolFilter();
   const [focus, setFocus] = useState(
     () => new URLSearchParams(window.location.search).get('station') ?? '',
-  )
+  );
   const changeFocus = (stationId: string) => {
-    const url = new URL(window.location.href)
-    if (stationId) url.searchParams.set('station', stationId)
-    else url.searchParams.delete('station')
-    window.history.replaceState(window.history.state, '', url)
-    setFocus(stationId)
-  }
+    const url = new URL(window.location.href);
+    if (stationId) url.searchParams.set('station', stationId);
+    else url.searchParams.delete('station');
+    window.history.replaceState(window.history.state, '', url);
+    setFocus(stationId);
+  };
   const guestInvitation = useQuery({
     queryKey: ['overlayGuestInvitation', planId],
     queryFn: () => trpc.eventOps.guests.overlayInvitation.query({ planId }),
@@ -64,21 +64,21 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
     refetchInterval: 10000,
     refetchIntervalInBackground: true,
     retry: false,
-  })
+  });
   const guestQr =
     !guestInvitation.isError &&
     guestInvitation.data &&
     (!guestInvitation.data.expiresAt || Date.parse(guestInvitation.data.expiresAt) > now)
       ? guestInvitation.data
-      : null
+      : null;
   useEffect(() => {
-    if (!overlay) return
-    document.documentElement.classList.add('event-overlay-document')
-    return () => document.documentElement.classList.remove('event-overlay-document')
-  }, [overlay])
+    if (!overlay) return;
+    document.documentElement.classList.add('event-overlay-document');
+    return () => document.documentElement.classList.remove('event-overlay-document');
+  }, [overlay]);
   const publicationUnavailable =
     query.error instanceof TRPCClientError &&
-    ['NOT_FOUND', 'FORBIDDEN', 'UNAUTHORIZED'].includes(query.error.data?.code ?? '')
+    ['NOT_FOUND', 'FORBIDDEN', 'UNAUTHORIZED'].includes(query.error.data?.code ?? '');
   if (!query.data || publicationUnavailable)
     return (
       <div className={overlay ? 'event-display-message' : 'loading-text'} role="status">
@@ -86,14 +86,14 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
           ? 'This event is unavailable or has not been published.'
           : 'Loading live event…'}
       </div>
-    )
+    );
   const data: typeof query.data & {
-    poolSchedules?: PoolSchedule[]
-    nativeBrackets?: NativeBracketView[]
-  } & Partial<Pick<PoolFlowData, 'stationQueues' | 'poolRounds'>> = query.data
+    poolSchedules?: PoolSchedule[];
+    nativeBrackets?: NativeBracketView[];
+  } & Partial<Pick<PoolFlowData, 'stationQueues' | 'poolRounds'>> = query.data;
   const announcements = data.announcements.filter(
     (item) => !('expiresAt' in item) || !item.expiresAt || Date.parse(String(item.expiresAt)) > now,
-  )
+  );
   if (data.plan.historicalResultsSlug)
     return (
       <section className={overlay ? 'event-display-message' : 'card section'}>
@@ -103,53 +103,53 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
           View historical results →
         </a>
       </section>
-    )
-  const closed = ['complete', 'cancelled'].includes(data.plan.status)
-  const visibleMatches = data.matches.filter((match) => matchesPool(match, selectedPool))
-  const sections = liveSections(visibleMatches)
+    );
+  const closed = ['complete', 'cancelled'].includes(data.plan.status);
+  const visibleMatches = data.matches.filter((match) => matchesPool(match, selectedPool));
+  const sections = liveSections(visibleMatches);
   const poolResults = confirmedPoolGraphics(
     data.placements.filter(
       (place) => !selectedPool || `${place.division}:${place.poolIndex}` === selectedPool,
     ),
     data.entrants,
-  )
-  const geometry = overlayGeometry(window.location.search)
-  const search = new URLSearchParams(window.location.search)
-  const customGeometry = search.has('captureWidth') || search.has('captureHeight')
+  );
+  const geometry = overlayGeometry(window.location.search);
+  const search = new URLSearchParams(window.location.search);
+  const customGeometry = search.has('captureWidth') || search.has('captureHeight');
   const variables = (
     customGeometry
       ? { '--capture-width': `${geometry.width}vw`, '--capture-height': `${geometry.height}vh` }
       : {}
-  ) as CSSProperties
-  const station = (match: LiveMatch) => data.stations.find((s) => s.id === match.stationId)?.name
+  ) as CSSProperties;
+  const station = (match: LiveMatch) => data.stations.find((s) => s.id === match.stationId)?.name;
   const focusedStation = focus
     ? data.stations.find(
         (item) => item.id === focus || item.name.toLowerCase() === focus.toLowerCase(),
       )
-    : undefined
+    : undefined;
   // Keep the broadcast tied to its station between sets, so the next pairing
   // comes from the same authoritative queue attendees use to start a match.
   const broadcastStation = focus
     ? focusedStation
-    : (data.stations.find((item) => item.name.toLowerCase() === 'stage') ?? data.stations[0])
+    : (data.stations.find((item) => item.name.toLowerCase() === 'stage') ?? data.stations[0]);
   const onStream = broadcastStation
     ? sections.playing.find((match) => match.stationId === broadcastStation.id)
     : focus
       ? undefined
-      : sections.playing[0]
+      : sections.playing[0];
   const stationQueue = data.stationQueues?.find(
     (queue) => queue.stationId === (broadcastStation?.id ?? onStream?.stationId),
-  )
+  );
   const onDeck = stationQueue
     ? stationPreview(stationQueue, data.matches).filter((match) => matchesPool(match, selectedPool))
     : focus
       ? []
-      : broadcastQueue(sections.ready)
+      : broadcastQueue(sections.ready);
   const provisionalNext =
     stationQueue !== undefined &&
-    (!stationQueue.nextMatchId || Boolean(stationQueue.currentMatchId))
-  const otherPlaying = sections.playing.filter((match) => match.id !== onStream?.id)
-  const showName = data.plan.name.split(' · ')[0]!
+    (!stationQueue.nextMatchId || Boolean(stationQueue.currentMatchId));
+  const otherPlaying = sections.playing.filter((match) => match.id !== onStream?.id);
+  const showName = data.plan.name.split(' · ')[0]!;
   if (overlay)
     return (
       <div className="event-display event-overlay" style={variables}>
@@ -292,7 +292,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
           </div>
         )}
       </div>
-    )
+    );
   return (
     <div className="event-display event-board" style={variables}>
       <header className="event-live-header">
@@ -475,7 +475,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
         )}
       </>
     </div>
-  )
+  );
 }
 export function MatchCard({ match, station }: { match: LiveMatch; station?: string }) {
   return (
@@ -516,5 +516,5 @@ export function MatchCard({ match, station }: { match: LiveMatch; station?: stri
       ))}
       {match.status === 'complete' && <span className="event-match-status">Final</span>}
     </article>
-  )
+  );
 }

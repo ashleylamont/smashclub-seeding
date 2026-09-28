@@ -1,8 +1,8 @@
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { trpc } from '../../lib/trpc'
-import type { GlickoSettings, SettingsData } from '../../lib/apiTypes'
-import { ModelComparison } from './ModelComparison'
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { trpc } from '../../lib/trpc';
+import type { GlickoSettings, SettingsData } from '../../lib/apiTypes';
+import { ModelComparison } from './ModelComparison';
 
 /**
  * Numeric tuning parameters. Non-numeric settings (the active model, the league
@@ -10,9 +10,9 @@ import { ModelComparison } from './ModelComparison'
  * express them.
  */
 const GROUPS: {
-  title: string
-  note?: string
-  fields: { key: keyof GlickoSettings; label: string; hint?: string }[]
+  title: string;
+  note?: string;
+  fields: { key: keyof GlickoSettings; label: string; hint?: string }[];
 }[] = [
   {
     title: 'Core Glicko-2',
@@ -122,52 +122,52 @@ const GROUPS: {
       { key: 'anchorFloor', label: 'Anchor floor' },
     ],
   },
-]
+];
 
 const MODEL_LABELS: Record<GlickoSettings['activeModel'], string> = {
   glicko2: 'Glicko-2 (per-tournament periods)',
   whr: 'Whole-History Rating',
-}
+};
 
 export function AdminSettingsPage() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   const settings = useQuery({
     queryKey: ['admin', 'settings'],
     queryFn: () => trpc.admin.settings.query(),
-  })
+  });
 
-  const [values, setValues] = useState<Record<string, string>>({})
-  const [model, setModel] = useState<GlickoSettings['activeModel']>('glicko2')
-  const [bands, setBands] = useState<GlickoSettings['leagueBands']>([])
-  const [formError, setFormError] = useState<string | null>(null)
-  const [lastLoaded, setLastLoaded] = useState<SettingsData | null>(null)
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [model, setModel] = useState<GlickoSettings['activeModel']>('glicko2');
+  const [bands, setBands] = useState<GlickoSettings['leagueBands']>([]);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [lastLoaded, setLastLoaded] = useState<SettingsData | null>(null);
 
   // Seed the form whenever fresh settings arrive (render-time adjustment).
   if (settings.data && settings.data !== lastLoaded) {
-    setLastLoaded(settings.data)
-    const next: Record<string, string> = {}
+    setLastLoaded(settings.data);
+    const next: Record<string, string> = {};
     for (const [key, value] of Object.entries(settings.data.glicko)) {
-      if (typeof value === 'number') next[key] = String(value)
+      if (typeof value === 'number') next[key] = String(value);
     }
-    setValues(next)
-    setModel(settings.data.glicko.activeModel)
-    setBands(settings.data.glicko.leagueBands)
+    setValues(next);
+    setModel(settings.data.glicko.activeModel);
+    setBands(settings.data.glicko.leagueBands);
   }
 
   const save = useMutation({
     mutationFn: (input: GlickoSettings) => trpc.admin.updateSettings.mutate(input),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] });
     },
-  })
+  });
 
   const recompute = useMutation({
     mutationFn: () => trpc.admin.recomputeNow.mutate(),
-  })
+  });
 
   const handleSave = () => {
-    setFormError(null)
-    if (!settings.data) return
+    setFormError(null);
+    if (!settings.data) return;
 
     /**
      * Start from the settings as loaded and override only what the form edits.
@@ -179,25 +179,25 @@ export function AdminSettingsPage() {
       ...settings.data.glicko,
       activeModel: model,
       leagueBands: bands,
-    }
+    };
     for (const group of GROUPS) {
       for (const field of group.fields) {
-        const raw = values[field.key]
-        const num = raw === undefined || raw.trim() === '' ? NaN : Number(raw)
+        const raw = values[field.key];
+        const num = raw === undefined || raw.trim() === '' ? NaN : Number(raw);
         if (Number.isNaN(num)) {
-          setFormError(`"${field.label}" must be a number.`)
-          return
+          setFormError(`"${field.label}" must be a number.`);
+          return;
         }
-        ;(parsed as unknown as Record<string, number>)[field.key] = num
+        (parsed as unknown as Record<string, number>)[field.key] = num;
       }
     }
-    save.mutate(parsed)
-  }
+    save.mutate(parsed);
+  };
 
-  if (settings.isPending) return <p className="loading-text">Loading settings…</p>
-  if (settings.isError) return <p className="error-text">{settings.error.message}</p>
+  if (settings.isPending) return <p className="loading-text">Loading settings…</p>;
+  if (settings.isError) return <p className="error-text">{settings.error.message}</p>;
 
-  const modelChanged = model !== settings.data.glicko.activeModel
+  const modelChanged = model !== settings.data.glicko.activeModel;
 
   return (
     <div className="settings-page">
@@ -339,5 +339,5 @@ export function AdminSettingsPage() {
 
       <ModelComparison activeModel={settings.data.glicko.activeModel} />
     </div>
-  )
+  );
 }

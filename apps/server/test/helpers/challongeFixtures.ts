@@ -1,4 +1,4 @@
-import { ChallongeClient } from '../../src/challonge/client'
+import { ChallongeClient } from '../../src/challonge/client';
 
 /**
  * Builders for Challonge v1 API payload shapes (mirroring the real wrapped
@@ -6,28 +6,28 @@ import { ChallongeClient } from '../../src/challonge/client'
  */
 
 export interface FixtureMatch {
-  id: number
-  p1: number | null
-  p2: number | null
-  winner: number | null
-  state?: string
-  scores?: string | null
-  round?: number
-  order?: number
-  completedAt?: string
+  id: number;
+  p1: number | null;
+  p2: number | null;
+  winner: number | null;
+  state?: string;
+  scores?: string | null;
+  round?: number;
+  order?: number;
+  completedAt?: string;
   /** Optional logical stage for two-stage event result policy tests. */
-  stage?: 'group' | 'final'
+  stage?: 'group' | 'final';
 }
 
 export interface FixtureTournament {
-  slug: string
-  id?: number
-  name?: string
-  state?: string
-  startedAt?: string | null
-  completedAt?: string | null
-  participants: { id: number; name: string; seed?: number; finalRank?: number | null }[]
-  matches: FixtureMatch[]
+  slug: string;
+  id?: number;
+  name?: string;
+  state?: string;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  participants: { id: number; name: string; seed?: number; finalRank?: number | null }[];
+  matches: FixtureMatch[];
 }
 
 /**
@@ -41,13 +41,13 @@ export interface FixtureTournament {
  * Real brackets carry per-match `underway_at`, so this mirrors reality.
  */
 function defaultMatchTime(fixture: FixtureTournament): string {
-  return fixture.completedAt ?? fixture.startedAt ?? '2025-01-10T20:00:00.000+11:00'
+  return fixture.completedAt ?? fixture.startedAt ?? '2025-01-10T20:00:00.000+11:00';
 }
 
 export function apiPayloads(fixture: FixtureTournament): {
-  tournament: unknown
-  participants: unknown
-  matches: unknown
+  tournament: unknown;
+  participants: unknown;
+  matches: unknown;
 } {
   return {
     tournament: {
@@ -89,7 +89,7 @@ export function apiPayloads(fixture: FixtureTournament): {
         ...(m.stage === 'group' ? { group_id: 1, is_group_match: true } : {}),
       },
     })),
-  }
+  };
 }
 
 /**
@@ -110,16 +110,16 @@ export function apiPayloads(fixture: FixtureTournament): {
  * not this one; that hid the extractor dropping both fields on every real sync.
  */
 function modulePage(fixture: FixtureTournament): string {
-  const participantById = new Map(fixture.participants.map((p) => [p.id, p]))
+  const participantById = new Map(fixture.participants.map((p) => [p.id, p]));
   const player = (id: number | null | undefined) => {
-    if (id === null || id === undefined) return null
-    const p = participantById.get(id)
-    return p ? { id: p.id, display_name: p.name, seed: p.seed ?? null } : null
-  }
-  const matchesByRound: Record<string, unknown[]> = {}
-  const groupMatchesByRound: Record<string, unknown[]> = {}
+    if (id === null || id === undefined) return null;
+    const p = participantById.get(id);
+    return p ? { id: p.id, display_name: p.name, seed: p.seed ?? null } : null;
+  };
+  const matchesByRound: Record<string, unknown[]> = {};
+  const groupMatchesByRound: Record<string, unknown[]> = {};
   for (const m of fixture.matches) {
-    const round = String(m.round ?? 1)
+    const round = String(m.round ?? 1);
     const payload = {
       id: m.id,
       round: m.round ?? 1,
@@ -135,11 +135,11 @@ function modulePage(fixture: FixtureTournament): string {
       underway_at: m.completedAt ?? defaultMatchTime(fixture),
       player1: player(m.p1),
       player2: player(m.p2),
-    }
+    };
     // Challonge exposes two-stage group results below nested group stores;
     // the top-level matches_by_round contains only final-stage matches.
-    ;(m.stage === 'group' ? groupMatchesByRound : matchesByRound)[round] ??= []
-    ;(m.stage === 'group' ? groupMatchesByRound : matchesByRound)[round]!.push(payload)
+    (m.stage === 'group' ? groupMatchesByRound : matchesByRound)[round] ??= [];
+    (m.stage === 'group' ? groupMatchesByRound : matchesByRound)[round]!.push(payload);
   }
   const store = {
     requested_plotter: 'DoubleEliminationBracketPlotter',
@@ -153,50 +153,50 @@ function modulePage(fixture: FixtureTournament): string {
       Object.keys(groupMatchesByRound).length > 0
         ? [{ tournament: { id: 9001 }, matches_by_round: groupMatchesByRound }]
         : [],
-  }
+  };
   return [
     `<!DOCTYPE html><html><head><title>${fixture.name ?? fixture.slug} - Challonge</title></head><body>`,
     '<script>',
     `window._initialStoreState = {}; window._initialStoreState['TournamentStore'] = ${JSON.stringify(store)};`,
     '</script></body></html>',
-  ].join('\n')
+  ].join('\n');
 }
 
 export function fixtureClient(fixtures: FixtureTournament[]): ChallongeClient {
-  const bySlug = new Map(fixtures.map((f) => [f.slug, f]))
+  const bySlug = new Map(fixtures.map((f) => [f.slug, f]));
   const fetchImpl: typeof fetch = async (input) => {
-    const url = String(input)
+    const url = String(input);
 
-    const moduleMatch = url.match(/challonge\.com\/([^/]+)\/module$/)
+    const moduleMatch = url.match(/challonge\.com\/([^/]+)\/module$/);
     if (moduleMatch) {
-      const fixture = bySlug.get(moduleMatch[1]!)
-      if (!fixture) return new Response('not found', { status: 404 })
+      const fixture = bySlug.get(moduleMatch[1]!);
+      if (!fixture) return new Response('not found', { status: 404 });
       return new Response(modulePage(fixture), {
         status: 200,
         headers: { 'Content-Type': 'text/html' },
-      })
+      });
     }
 
-    const match = url.match(/\/tournaments\/([^/]+?)(?:\/(participants|matches))?\.json$/)
-    if (!match) return new Response('not found', { status: 404 })
-    const fixture = bySlug.get(match[1]!)
-    if (!fixture) return new Response('not found', { status: 404 })
-    const payloads = apiPayloads(fixture)
+    const match = url.match(/\/tournaments\/([^/]+?)(?:\/(participants|matches))?\.json$/);
+    if (!match) return new Response('not found', { status: 404 });
+    const fixture = bySlug.get(match[1]!);
+    if (!fixture) return new Response('not found', { status: 404 });
+    const payloads = apiPayloads(fixture);
     const body =
       match[2] === 'participants'
         ? payloads.participants
         : match[2] === 'matches'
           ? payloads.matches
-          : payloads.tournament
+          : payloads.tournament;
     return new Response(JSON.stringify(body), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
-    })
-  }
+    });
+  };
   return new ChallongeClient({
     apiKey: 'test-key',
     username: 'test-user',
     minRequestSpacingMs: 0,
     fetchImpl,
-  })
+  });
 }

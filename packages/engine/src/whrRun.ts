@@ -1,9 +1,9 @@
-import type { GlickoSettings } from '@smashclub/shared'
-import { attendanceOf, eventKeyOf } from './events'
-import { DISPLAY_CENTRE, NATURAL_TO_DISPLAY, fitWhr, whrSetTrials, type WhrFit } from './whr'
-import { compareNullableNumbers, compareSetsInBracket, compareStrings } from './setOrder'
-import { activityPenaltyFor, rankScores, type LeaderboardRow, type PlayerScore } from './score'
-import type { EngineSet, EngineTournament, RatingEvent } from './types'
+import type { GlickoSettings } from '@smashclub/shared';
+import { attendanceOf, eventKeyOf } from './events';
+import { DISPLAY_CENTRE, NATURAL_TO_DISPLAY, fitWhr, whrSetTrials, type WhrFit } from './whr';
+import { compareNullableNumbers, compareSetsInBracket, compareStrings } from './setOrder';
+import { activityPenaltyFor, rankScores, type LeaderboardRow, type PlayerScore } from './score';
+import type { EngineSet, EngineTournament, RatingEvent } from './types';
 
 /**
  * Runs Whole-History Rating over the full set history and returns the same
@@ -53,47 +53,47 @@ import type { EngineSet, EngineTournament, RatingEvent } from './types'
  * (`whrRookieDebutPrior`).
  */
 export interface WhrRunResult {
-  events: RatingEvent[]
-  leaderboard: LeaderboardRow[]
-  converged: boolean
-  iterations: number
+  events: RatingEvent[];
+  leaderboard: LeaderboardRow[];
+  converged: boolean;
+  iterations: number;
   /** Distinct events (occasions) the fit ran over. */
-  periods: number
+  periods: number;
   /**
    * Rank each player held on the board fitted *without* the latest event —
    * the same prefix the ledger already computes — so the recompute can record
    * `previousRank` without running a second withheld fit.
    */
-  previousRanks: Map<string, number>
+  previousRanks: Map<string, number>;
 }
 
-const MS_PER_DAY = 86_400_000
+const MS_PER_DAY = 86_400_000;
 
 interface RateableSet {
-  set: EngineSet
-  tournament: EngineTournament
+  set: EngineSet;
+  tournament: EngineTournament;
   /** Which occasion this set belongs to — the rating period. */
-  eventKey: string
+  eventKey: string;
   /**
    * Elapsed days, for the drift-variance axis only. Unlike the period, this
    * one really is time: uncertainty grows with the gap between occasions.
    */
-  day: number
+  day: number;
   /** How many independent results this set counts as (decisiveness). */
-  trials: number
+  trials: number;
 }
 
 interface Participation {
-  playerId: string
-  matchCount: number
-  wins: number
-  losses: number
-  mainMatchCount: number
-  rookieMatchCount: number
-  tournamentIds: Set<string>
-  eventKeys: Set<string>
-  opponentIds: Set<string>
-  lastPlayedDate: string
+  playerId: string;
+  matchCount: number;
+  wins: number;
+  losses: number;
+  mainMatchCount: number;
+  rookieMatchCount: number;
+  tournamentIds: Set<string>;
+  eventKeys: Set<string>;
+  opponentIds: Set<string>;
+  lastPlayedDate: string;
 }
 
 /**
@@ -103,26 +103,26 @@ interface Participation {
  * that emits `RatingEvent` rows.
  */
 interface NightPlan {
-  deltas: number[]
-  endRating: number
-  preSd: number
-  postSd: number
-  revisedRating: number
-  revisedSd: number
+  deltas: number[];
+  endRating: number;
+  preSd: number;
+  postSd: number;
+  revisedRating: number;
+  revisedSd: number;
   /** Next delta to consume during the emit walk. */
-  cursor: number
+  cursor: number;
   /** Running ledger rating during the emit walk. */
-  running: number
+  running: number;
 }
 
 export function runWhrModel(input: {
-  sets: readonly EngineSet[]
-  tournaments: readonly EngineTournament[]
-  settings: GlickoSettings
+  sets: readonly EngineSet[];
+  tournaments: readonly EngineTournament[];
+  settings: GlickoSettings;
 }): WhrRunResult {
-  const { settings } = input
-  const tournamentById = new Map(input.tournaments.map((t) => [t.id, t]))
-  const priorDisplaySd = settings.whrPriorSd * NATURAL_TO_DISPLAY
+  const { settings } = input;
+  const tournamentById = new Map(input.tournaments.map((t) => [t.id, t]));
+  const priorDisplaySd = settings.whrPriorSd * NATURAL_TO_DISPLAY;
 
   /**
    * A decisive set carries more evidence: `1 + weight·(margin − 1)` trials,
@@ -131,8 +131,8 @@ export function runWhrModel(input: {
    * fewer games than the loser (a DQ artefact) reads as unknown.
    */
   const trialsOf = (set: EngineSet): number => {
-    return whrSetTrials(set, settings.whrGamesWeight)
-  }
+    return whrSetTrials(set, settings.whrGamesWeight);
+  };
 
   // Rateable sets only, in the same deterministic chronological order the
   // Glicko replay uses, so the two models see identical input: brackets by
@@ -149,14 +149,14 @@ export function runWhrModel(input: {
   const rateable: RateableSet[] = input.sets
     .filter((set) => tournamentById.has(set.tournamentId) && set.p1PlayerId !== set.p2PlayerId)
     .map((set) => {
-      const tournament = tournamentById.get(set.tournamentId)!
+      const tournament = tournamentById.get(set.tournamentId)!;
       return {
         set,
         tournament,
         eventKey: eventKeyOf(tournament.eventDate),
         day: Math.floor(Date.parse(tournament.eventDate) / MS_PER_DAY),
         trials: trialsOf(set),
-      }
+      };
     })
     .sort(
       (a, b) =>
@@ -165,7 +165,7 @@ export function runWhrModel(input: {
         compareNullableNumbers(a.tournament.challongeId, b.tournament.challongeId) ||
         compareStrings(a.tournament.id, b.tournament.id) ||
         compareSetsInBracket(a.set, b.set),
-    )
+    );
 
   if (rateable.length === 0) {
     return {
@@ -175,10 +175,10 @@ export function runWhrModel(input: {
       iterations: 0,
       periods: 0,
       previousRanks: new Map(),
-    }
+    };
   }
 
-  const originDay = rateable[0]!.day
+  const originDay = rateable[0]!.day;
 
   /*
    * A player who debuts in a rookie bracket gets the rookie prior rather than
@@ -190,15 +190,15 @@ export function runWhrModel(input: {
    * the full history serves every prefix fit.
    */
   const rookieDebutPriorNatural =
-    (settings.whrRookieDebutPrior - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY
-  const priorMeans = new Map<string, number>()
+    (settings.whrRookieDebutPrior - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY;
+  const priorMeans = new Map<string, number>();
   if (rookieDebutPriorNatural !== 0) {
-    const seen = new Set<string>()
+    const seen = new Set<string>();
     for (const { set, tournament } of rateable) {
       for (const playerId of [set.p1PlayerId, set.p2PlayerId]) {
-        if (seen.has(playerId)) continue
-        seen.add(playerId)
-        if (tournament.isRookie) priorMeans.set(playerId, rookieDebutPriorNatural)
+        if (seen.has(playerId)) continue;
+        seen.add(playerId);
+        if (tournament.isRookie) priorMeans.set(playerId, rookieDebutPriorNatural);
       }
     }
   }
@@ -211,8 +211,8 @@ export function runWhrModel(input: {
    * hindsight track. A dozen events over ~1,000 sets makes this a dozen small
    * fits, each linear per iteration — cheap enough to keep the property.
    */
-  const orderedEventKeys = [...new Set(rateable.map((r) => r.eventKey))]
-  const eventIndexByKey = new Map(orderedEventKeys.map((key, index) => [key, index]))
+  const orderedEventKeys = [...new Set(rateable.map((r) => r.eventKey))];
+  const eventIndexByKey = new Map(orderedEventKeys.map((key, index) => [key, index]));
   const fitPrefix = (upToEventIndex: number): WhrFit =>
     fitWhr({
       sets: rateable
@@ -229,42 +229,42 @@ export function runWhrModel(input: {
         priorSd: settings.whrPriorSd,
       },
       priorMeans,
-    })
-  const fits = orderedEventKeys.map((_, index) => fitPrefix(index))
-  const fullFit = fits[fits.length - 1]!
+    });
+  const fits = orderedEventKeys.map((_, index) => fitPrefix(index));
+  const fullFit = fits[fits.length - 1]!;
 
   // ---- attribution plans, night by night ----
-  const plans = new Map<string, Map<string, NightPlan>>() // eventKey -> playerId -> plan
-  const ledger = new Map<string, { rating: number; sd: number }>()
+  const plans = new Map<string, Map<string, NightPlan>>(); // eventKey -> playerId -> plan
+  const ledger = new Map<string, { rating: number; sd: number }>();
 
   for (const [eventIndex, eventKey] of orderedEventKeys.entries()) {
-    const nightSets = rateable.filter((r) => r.eventKey === eventKey)
-    const day = nightSets[0]!.day
-    const time = day - originDay
-    const nightFit = fits[eventIndex]!
-    const preFit = eventIndex > 0 ? fits[eventIndex - 1]! : null
+    const nightSets = rateable.filter((r) => r.eventKey === eventKey);
+    const day = nightSets[0]!.day;
+    const time = day - originDay;
+    const nightFit = fits[eventIndex]!;
+    const preFit = eventIndex > 0 ? fits[eventIndex - 1]! : null;
 
     // The player's results tonight, in play order.
-    const results = new Map<string, { opponentId: string; won: boolean; trials: number }[]>()
+    const results = new Map<string, { opponentId: string; won: boolean; trials: number }[]>();
     for (const { set, trials } of nightSets) {
       for (const [playerId, opponentId, won] of [
         [set.p1PlayerId, set.p2PlayerId, set.winner === 1],
         [set.p2PlayerId, set.p1PlayerId, set.winner === 2],
       ] as const) {
-        const list = results.get(playerId) ?? []
-        list.push({ opponentId, won, trials })
-        results.set(playerId, list)
+        const list = results.get(playerId) ?? [];
+        list.push({ opponentId, won, trials });
+        results.set(playerId, list);
       }
     }
 
-    const nightPlans = new Map<string, NightPlan>()
+    const nightPlans = new Map<string, NightPlan>();
     for (const [playerId, played] of results) {
-      const current = nightFit.display(playerId, time)
+      const current = nightFit.display(playerId, time);
       const previous = ledger.get(playerId) ?? {
         rating: settings.initialRating,
         sd: priorDisplaySd,
-      }
-      const nightDelta = current.rating - previous.rating
+      };
+      const nightDelta = current.rating - previous.rating;
 
       /**
        * Attribute the night's movement across its sets by surprise. The
@@ -277,15 +277,15 @@ export function runWhrModel(input: {
        * spread evenly as a remainder, so the shares always sum to exactly
        * the night's published movement.
        */
-      const varianceNatural = (current.sd / NATURAL_TO_DISPLAY) ** 2
+      const varianceNatural = (current.sd / NATURAL_TO_DISPLAY) ** 2;
       const residuals = played.map(({ opponentId, won, trials }) => {
-        const expected = preFit ? preFit.winProbability(playerId, opponentId, time) : 0.5
-        return trials * ((won ? 1 : 0) - expected)
-      })
-      const base = residuals.map((residual) => varianceNatural * residual * NATURAL_TO_DISPLAY)
-      const remainder = (nightDelta - base.reduce((sum, value) => sum + value, 0)) / played.length
+        const expected = preFit ? preFit.winProbability(playerId, opponentId, time) : 0.5;
+        return trials * ((won ? 1 : 0) - expected);
+      });
+      const base = residuals.map((residual) => varianceNatural * residual * NATURAL_TO_DISPLAY);
+      const remainder = (nightDelta - base.reduce((sum, value) => sum + value, 0)) / played.length;
 
-      const revised = fullFit.display(playerId, time)
+      const revised = fullFit.display(playerId, time);
       nightPlans.set(playerId, {
         deltas: base.map((value) => value + remainder),
         endRating: current.rating,
@@ -295,14 +295,14 @@ export function runWhrModel(input: {
         revisedSd: revised.sd,
         cursor: 0,
         running: previous.rating,
-      })
-      ledger.set(playerId, current)
+      });
+      ledger.set(playerId, current);
     }
-    plans.set(eventKey, nightPlans)
+    plans.set(eventKey, nightPlans);
   }
 
   // ---- rating events: the global chronological walk ----
-  const events: RatingEvent[] = []
+  const events: RatingEvent[] = [];
   /**
    * ONE COUNTER FOR THE WHOLE WALK, not one per player.
    *
@@ -316,22 +316,22 @@ export function runWhrModel(input: {
    * A player's own events still ascend under a global counter, so per-player
    * history reads exactly as before.
    */
-  let seq = 0
+  let seq = 0;
 
   for (const { set, tournament, eventKey, trials } of rateable) {
     for (const [playerId, opponentId, won] of [
       [set.p1PlayerId, set.p2PlayerId, set.winner === 1],
       [set.p2PlayerId, set.p1PlayerId, set.winner === 2],
     ] as const) {
-      const plan = plans.get(eventKey)!.get(playerId)!
-      const index = plan.cursor
-      plan.cursor += 1
-      const isLastOfNight = plan.cursor === plan.deltas.length
-      const preRating = plan.running
+      const plan = plans.get(eventKey)!.get(playerId)!;
+      const index = plan.cursor;
+      plan.cursor += 1;
+      const isLastOfNight = plan.cursor === plan.deltas.length;
+      const preRating = plan.running;
       // The last set lands exactly on the fit's value, so the ledger chains
       // float-exactly from night to night.
-      const postRating = isLastOfNight ? plan.endRating : preRating + plan.deltas[index]!
-      plan.running = postRating
+      const postRating = isLastOfNight ? plan.endRating : preRating + plan.deltas[index]!;
+      plan.running = postRating;
 
       events.push({
         playerId,
@@ -352,11 +352,11 @@ export function runWhrModel(input: {
         weight: trials,
         revisedRating: plan.revisedRating,
         revisedSd: plan.revisedSd,
-      })
+      });
     }
   }
 
-  const leaderboard = buildLeaderboard(fullFit, rateable, orderedEventKeys, settings, priorMeans)
+  const leaderboard = buildLeaderboard(fullFit, rateable, orderedEventKeys, settings, priorMeans);
 
   /**
    * The board as it stood before the latest night: the second-to-last prefix,
@@ -364,18 +364,18 @@ export function runWhrModel(input: {
    * the prefix directly keeps it byte-identical with the ledger's idea of
    * "before" — no separate withheld refit that could drift.
    */
-  const previousRanks = new Map<string, number>()
+  const previousRanks = new Map<string, number>();
   if (orderedEventKeys.length > 1) {
-    const withheldKey = orderedEventKeys[orderedEventKeys.length - 1]!
-    const previousRateable = rateable.filter((r) => r.eventKey !== withheldKey)
+    const withheldKey = orderedEventKeys[orderedEventKeys.length - 1]!;
+    const previousRateable = rateable.filter((r) => r.eventKey !== withheldKey);
     const previousBoard = buildLeaderboard(
       fits[orderedEventKeys.length - 2]!,
       previousRateable,
       orderedEventKeys.slice(0, -1),
       settings,
       priorMeans,
-    )
-    for (const row of previousBoard) previousRanks.set(row.playerId, row.rank)
+    );
+    for (const row of previousBoard) previousRanks.set(row.playerId, row.rank);
   }
 
   return {
@@ -385,7 +385,7 @@ export function runWhrModel(input: {
     iterations: fullFit.iterations,
     periods: orderedEventKeys.length,
     previousRanks,
-  }
+  };
 }
 
 /**
@@ -404,14 +404,14 @@ function buildLeaderboard(
   /** Natural-units prior centres (rookie debuts); the isolation anchor's target. */
   priorMeans: ReadonlyMap<string, number>,
 ): LeaderboardRow[] {
-  const priorDisplaySd = settings.whrPriorSd * NATURAL_TO_DISPLAY
+  const priorDisplaySd = settings.whrPriorSd * NATURAL_TO_DISPLAY;
   const latestTime =
-    rateable.length === 0 ? 0 : rateable[rateable.length - 1]!.day - rateable[0]!.day
+    rateable.length === 0 ? 0 : rateable[rateable.length - 1]!.day - rateable[0]!.day;
 
   // ---- participation counts (model-independent) ----
-  const participation = new Map<string, Participation>()
+  const participation = new Map<string, Participation>();
   const ensure = (playerId: string, eventDate: string): Participation => {
-    let row = participation.get(playerId)
+    let row = participation.get(playerId);
     if (!row) {
       row = {
         playerId,
@@ -424,33 +424,33 @@ function buildLeaderboard(
         eventKeys: new Set(),
         opponentIds: new Set(),
         lastPlayedDate: eventDate,
-      }
-      participation.set(playerId, row)
+      };
+      participation.set(playerId, row);
     }
-    if (eventDate > row.lastPlayedDate) row.lastPlayedDate = eventDate
-    return row
-  }
+    if (eventDate > row.lastPlayedDate) row.lastPlayedDate = eventDate;
+    return row;
+  };
 
   for (const { set, tournament, eventKey } of rateable) {
-    const p1 = ensure(set.p1PlayerId, tournament.eventDate)
-    const p2 = ensure(set.p2PlayerId, tournament.eventDate)
+    const p1 = ensure(set.p1PlayerId, tournament.eventDate);
+    const p2 = ensure(set.p2PlayerId, tournament.eventDate);
     for (const [self, other] of [
       [p1, p2],
       [p2, p1],
     ] as const) {
-      self.matchCount += 1
-      self.tournamentIds.add(tournament.id)
-      self.eventKeys.add(eventKey)
-      self.opponentIds.add(other.playerId)
-      if (tournament.isRookie) self.rookieMatchCount += 1
-      else self.mainMatchCount += 1
+      self.matchCount += 1;
+      self.tournamentIds.add(tournament.id);
+      self.eventKeys.add(eventKey);
+      self.opponentIds.add(other.playerId);
+      if (tournament.isRookie) self.rookieMatchCount += 1;
+      else self.mainMatchCount += 1;
     }
     if (set.winner === 1) {
-      p1.wins += 1
-      p2.losses += 1
+      p1.wins += 1;
+      p2.losses += 1;
     } else {
-      p2.wins += 1
-      p1.losses += 1
+      p2.wins += 1;
+      p1.losses += 1;
     }
   }
 
@@ -462,14 +462,14 @@ function buildLeaderboard(
    * players once each — trivially satisfied in brackets that mix veterans in —
    * while their record stayed 90% intra-island.
    */
-  const bridgeMatchCounts = new Map<string, number>()
+  const bridgeMatchCounts = new Map<string, number>();
   for (const { set } of rateable) {
     for (const [selfId, otherId] of [
       [set.p1PlayerId, set.p2PlayerId],
       [set.p2PlayerId, set.p1PlayerId],
     ] as const) {
       if ((participation.get(otherId)?.mainMatchCount ?? 0) > 0) {
-        bridgeMatchCounts.set(selfId, (bridgeMatchCounts.get(selfId) ?? 0) + 1)
+        bridgeMatchCounts.set(selfId, (bridgeMatchCounts.get(selfId) ?? 0) + 1);
       }
     }
   }
@@ -480,16 +480,16 @@ function buildLeaderboard(
    * who turned up to what. Switching the active model must not change what
    * missing a club night costs.
    */
-  const scores: PlayerScore[] = []
+  const scores: PlayerScore[] = [];
   for (const row of participation.values()) {
-    const latest = fit.display(row.playerId, latestTime)
-    let bridgeOpponentCount = 0
+    const latest = fit.display(row.playerId, latestTime);
+    let bridgeOpponentCount = 0;
     for (const opponentId of row.opponentIds) {
-      if ((participation.get(opponentId)?.mainMatchCount ?? 0) > 0) bridgeOpponentCount += 1
+      if ((participation.get(opponentId)?.mainMatchCount ?? 0) > 0) bridgeOpponentCount += 1;
     }
-    const rookieRatio = row.matchCount ? row.rookieMatchCount / row.matchCount : 0
-    const attendance = attendanceOf(orderedEventKeys, row.eventKeys)
-    const activityPenalty = activityPenaltyFor(attendance.missedEvents, settings)
+    const rookieRatio = row.matchCount ? row.rookieMatchCount / row.matchCount : 0;
+    const attendance = attendanceOf(orderedEventKeys, row.eventKeys);
+    const activityPenalty = activityPenaltyFor(attendance.missedEvents, settings);
 
     /*
      * The posterior variance says how unsure the fit is, but the *point
@@ -499,17 +499,18 @@ function buildLeaderboard(
      * record touches the established field. The fit and win probabilities are
      * untouched.
      */
-    let isolationFactor = 0
-    let displayedRating = latest.rating
+    let isolationFactor = 0;
+    let displayedRating = latest.rating;
     if (settings.whrIsolationAnchor) {
-      const mainExperienceFactor = Math.min(row.mainMatchCount, 5) / 5
+      const mainExperienceFactor = Math.min(row.mainMatchCount, 5) / 5;
       const bridgeExposure = row.matchCount
         ? (bridgeMatchCounts.get(row.playerId) ?? 0) / row.matchCount
-        : 0
-      isolationFactor = rookieRatio * (1 - Math.max(mainExperienceFactor, bridgeExposure))
-      const anchorFactor = Math.max(0.25, 1 - 0.65 * isolationFactor)
-      const priorDisplay = DISPLAY_CENTRE + (priorMeans.get(row.playerId) ?? 0) * NATURAL_TO_DISPLAY
-      displayedRating = priorDisplay + (latest.rating - priorDisplay) * anchorFactor
+        : 0;
+      isolationFactor = rookieRatio * (1 - Math.max(mainExperienceFactor, bridgeExposure));
+      const anchorFactor = Math.max(0.25, 1 - 0.65 * isolationFactor);
+      const priorDisplay =
+        DISPLAY_CENTRE + (priorMeans.get(row.playerId) ?? 0) * NATURAL_TO_DISPLAY;
+      displayedRating = priorDisplay + (latest.rating - priorDisplay) * anchorFactor;
     }
 
     scores.push({
@@ -555,10 +556,10 @@ function buildLeaderboard(
        */
       sampleConfidence: Math.max(0, Math.min(1, 1 - latest.sd / priorDisplaySd)),
       lastPlayedDate: row.lastPlayedDate,
-    })
+    });
   }
 
   // Ranked exactly as the Glicko-2 board is, so switching the active model is a
   // change of model and not a change of what "first" means.
-  return rankScores(scores, settings)
+  return rankScores(scores, settings);
 }

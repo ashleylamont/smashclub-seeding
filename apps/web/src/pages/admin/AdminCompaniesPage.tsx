@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { trpc } from '../../lib/trpc'
-import type { AdminCompany } from '../../lib/apiTypes'
+import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { trpc } from '../../lib/trpc';
+import type { AdminCompany } from '../../lib/apiTypes';
 
 /**
  * Company taxonomy management.
@@ -14,19 +14,19 @@ import type { AdminCompany } from '../../lib/apiTypes'
  */
 
 export function AdminCompaniesPage() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   const companies = useQuery({
     queryKey: ['admin', 'companies'],
     queryFn: () => trpc.admin.companies.query(),
-  })
+  });
 
-  const [editing, setEditing] = useState<AdminCompany | null>(null)
-  const [creating, setCreating] = useState(false)
+  const [editing, setEditing] = useState<AdminCompany | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['admin', 'companies'] })
-    void queryClient.invalidateQueries({ queryKey: ['admin', 'players'] })
-  }
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'companies'] });
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'players'] });
+  };
 
   return (
     <div className="section">
@@ -87,14 +87,14 @@ export function AdminCompaniesPage() {
         <CompanyFormModal
           company={editing}
           onClose={() => {
-            setCreating(false)
-            setEditing(null)
+            setCreating(false);
+            setEditing(null);
           }}
           onSaved={invalidate}
         />
       )}
     </div>
-  )
+  );
 }
 
 function CompanyRow({
@@ -102,27 +102,27 @@ function CompanyRow({
   onEdit,
   onChanged,
 }: {
-  company: AdminCompany
-  onEdit: () => void
-  onChanged: () => void
+  company: AdminCompany;
+  onEdit: () => void;
+  onChanged: () => void;
 }) {
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const removeAlias = useMutation({
     mutationFn: (alias: string) =>
       trpc.admin.removeCompanyAlias.mutate({ companyId: company.id, alias }),
     onSuccess: onChanged,
-  })
+  });
 
   const remove = useMutation({
     mutationFn: () => trpc.admin.deleteCompany.mutate({ companyId: company.id }),
     onSuccess: () => {
-      setConfirmingDelete(false)
-      onChanged()
+      setConfirmingDelete(false);
+      onChanged();
     },
-  })
+  });
 
-  const error = removeAlias.error ?? remove.error
+  const error = removeAlias.error ?? remove.error;
 
   return (
     <tr>
@@ -200,7 +200,7 @@ function CompanyRow({
         )}
       </td>
     </tr>
-  )
+  );
 }
 
 function CompanyFormModal({
@@ -208,22 +208,22 @@ function CompanyFormModal({
   onClose,
   onSaved,
 }: {
-  company: AdminCompany | null
-  onClose: () => void
-  onSaved: () => void
+  company: AdminCompany | null;
+  onClose: () => void;
+  onSaved: () => void;
 }) {
-  const [code, setCode] = useState(company?.code ?? '')
-  const [name, setName] = useState(company?.name ?? '')
-  const [aliases, setAliases] = useState<string[]>([])
-  const [aliasInput, setAliasInput] = useState('')
+  const [code, setCode] = useState(company?.code ?? '');
+  const [name, setName] = useState(company?.name ?? '');
+  const [aliases, setAliases] = useState<string[]>([]);
+  const [aliasInput, setAliasInput] = useState('');
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
   const save = useMutation({
     mutationFn: () =>
@@ -236,19 +236,19 @@ function CompanyFormModal({
         aliases: aliasInput.trim() === '' ? aliases : [...aliases, aliasInput.trim()],
       }),
     onSuccess: () => {
-      onSaved()
-      onClose()
+      onSaved();
+      onClose();
     },
-  })
+  });
 
   const addAlias = () => {
-    const value = aliasInput.trim()
-    if (value === '' || aliases.includes(value)) return
-    setAliases([...aliases, value])
-    setAliasInput('')
-  }
+    const value = aliasInput.trim();
+    if (value === '' || aliases.includes(value)) return;
+    setAliases([...aliases, value]);
+    setAliasInput('');
+  };
 
-  const valid = code.trim() !== '' && name.trim() !== ''
+  const valid = code.trim() !== '' && name.trim() !== '';
 
   return (
     <div className="modal-overlay">
@@ -310,8 +310,8 @@ function CompanyFormModal({
                 onChange={(event) => setAliasInput(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
-                    event.preventDefault()
-                    addAlias()
+                    event.preventDefault();
+                    addAlias();
                   }
                 }}
               />
@@ -348,5 +348,5 @@ function CompanyFormModal({
         </div>
       </div>
     </div>
-  )
+  );
 }

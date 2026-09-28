@@ -1,20 +1,20 @@
-import { TRPCClientError } from '@trpc/client'
-import { CompletedScoreReport, type ResultSubmission } from '../components/CompletedScoreReport'
-import { PlayerMatchFilter } from '../components/PlayerMatchFilter'
-import { eventPlayers, useDevicePlayer } from '../lib/playerSelection'
-import { useEffect, useRef, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useParams } from '@tanstack/react-router'
-import { trpc } from '../lib/trpc'
+import { TRPCClientError } from '@trpc/client';
+import { CompletedScoreReport, type ResultSubmission } from '../components/CompletedScoreReport';
+import { PlayerMatchFilter } from '../components/PlayerMatchFilter';
+import { eventPlayers, useDevicePlayer } from '../lib/playerSelection';
+import { useEffect, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useParams } from '@tanstack/react-router';
+import { trpc } from '../lib/trpc';
 import {
   guestTimeLeft,
   useGuestClock,
   readGuestSession,
   saveGuestSession,
   type GuestSession,
-} from '../lib/guestReporting'
-import './admin/EventOperations.css'
-import { PoolFilter, PoolRoundSchedule, PoolStationQueue } from '../components/PoolStationQueue'
+} from '../lib/guestReporting';
+import './admin/EventOperations.css';
+import { PoolFilter, PoolRoundSchedule, PoolStationQueue } from '../components/PoolStationQueue';
 import {
   matchesPool,
   poolPath,
@@ -23,61 +23,61 @@ import {
   usePoolFilter,
   type PoolFlowData,
   type StartPoolMatch,
-} from '../lib/poolFlow'
+} from '../lib/poolFlow';
 
-type GuestData = Awaited<ReturnType<typeof trpc.eventOps.guests.matches.mutate>>
-type Match = GuestData['matches'][number]
+type GuestData = Awaited<ReturnType<typeof trpc.eventOps.guests.matches.mutate>>;
+type Match = GuestData['matches'][number];
 export function GuestEventPage() {
-  const { planId } = useParams({ strict: false }) as { planId: string }
-  return <GuestEvent key={planId} planId={planId} />
+  const { planId } = useParams({ strict: false }) as { planId: string };
+  return <GuestEvent key={planId} planId={planId} />;
 }
 export function GuestEvent({ planId }: { planId: string }) {
   const [invitation, setInvitation] = useState(() =>
     new URLSearchParams(window.location.hash.slice(1)).get('token'),
-  )
-  const [invitationGeneration, setInvitationGeneration] = useState(0)
-  const [session, setSession] = useState<GuestSession | null>(() => readGuestSession(planId))
-  const [redeeming, setRedeeming] = useState(Boolean(invitation))
-  const [error, setError] = useState('')
-  const [search, setSearch] = useState('')
-  const [selectedPlayer, setSelectedPlayer] = useDevicePlayer(planId)
-  const [view, setView] = useState(selectedPlayer ? 'mine' : 'queue')
-  const [selectedPool, setSelectedPool] = usePoolFilter()
+  );
+  const [invitationGeneration, setInvitationGeneration] = useState(0);
+  const [session, setSession] = useState<GuestSession | null>(() => readGuestSession(planId));
+  const [redeeming, setRedeeming] = useState(Boolean(invitation));
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [selectedPlayer, setSelectedPlayer] = useDevicePlayer(planId);
+  const [view, setView] = useState(selectedPlayer ? 'mine' : 'queue');
+  const [selectedPool, setSelectedPool] = usePoolFilter();
   const [selectedStation, setSelectedStation] = useState(
     () => new URLSearchParams(window.location.search).get('station') ?? '',
-  )
-  const [selectedMatch, setSelectedMatch] = useState<string | null>(null)
-  const [starting, setStarting] = useState<string | null>(null)
-  const cache = useQueryClient()
-  const [cacheId] = useState(() => crypto.randomUUID())
+  );
+  const [selectedMatch, setSelectedMatch] = useState<string | null>(null);
+  const [starting, setStarting] = useState<string | null>(null);
+  const cache = useQueryClient();
+  const [cacheId] = useState(() => crypto.randomUUID());
   const redemption = useRef<{
-    token: string
-    generation: number
-    promise: Promise<GuestSession>
-  } | null>(null)
-  const now = useGuestClock()
-  const valid = session !== null && Date.parse(session.expiresAt) > now
+    token: string;
+    generation: number;
+    promise: Promise<GuestSession>;
+  } | null>(null);
+  const now = useGuestClock();
+  const valid = session !== null && Date.parse(session.expiresAt) > now;
   useEffect(() => {
     const acceptInvitation = () => {
-      const token = new URLSearchParams(window.location.hash.slice(1)).get('token')
+      const token = new URLSearchParams(window.location.hash.slice(1)).get('token');
       if (token) {
-        setInvitation(token)
-        setInvitationGeneration((value) => value + 1)
-        setRedeeming(true)
-        setError('')
+        setInvitation(token);
+        setInvitationGeneration((value) => value + 1);
+        setRedeeming(true);
+        setError('');
       }
-    }
-    window.addEventListener('hashchange', acceptInvitation)
-    return () => window.removeEventListener('hashchange', acceptInvitation)
-  }, [])
+    };
+    window.addEventListener('hashchange', acceptInvitation);
+    return () => window.removeEventListener('hashchange', acceptInvitation);
+  }, []);
   useEffect(() => {
-    if (!invitation) return
+    if (!invitation) return;
     // Strip the invitation before navigation, analytics or a user copying the address.
     window.history.replaceState(
       window.history.state,
       '',
       `${window.location.pathname}${window.location.search}`,
-    )
+    );
     if (
       redemption.current?.token !== invitation ||
       redemption.current.generation !== invitationGeneration
@@ -86,13 +86,13 @@ export function GuestEvent({ planId }: { planId: string }) {
         token: invitation,
         generation: invitationGeneration,
         promise: trpc.eventOps.guests.redeem.mutate({ planId, token: invitation }),
-      }
-    let active = true
+      };
+    let active = true;
     void redemption.current.promise
       .then((value) => {
-        if (!active) return
-        setSession(value)
-        saveGuestSession(planId, value)
+        if (!active) return;
+        setSession(value);
+        saveGuestSession(planId, value);
       })
       .catch((cause) => {
         if (active)
@@ -100,15 +100,15 @@ export function GuestEvent({ planId }: { planId: string }) {
             cause instanceof Error
               ? cause.message
               : 'Invitation could not be redeemed. Scan a fresh QR.',
-          )
+          );
       })
       .finally(() => {
-        if (active) setRedeeming(false)
-      })
+        if (active) setRedeeming(false);
+      });
     return () => {
-      active = false
-    }
-  }, [invitation, invitationGeneration, planId])
+      active = false;
+    };
+  }, [invitation, invitationGeneration, planId]);
   const matches = useQuery({
     queryKey: ['guestMatches', planId, cacheId, session?.expiresAt],
     queryFn: () =>
@@ -116,38 +116,38 @@ export function GuestEvent({ planId }: { planId: string }) {
     enabled: valid && !redeeming,
     refetchInterval: 2500,
     retry: false,
-  })
+  });
   const publicEvent = useQuery({
     queryKey: ['eventOpsPublic', planId],
     queryFn: () => trpc.eventOps.snapshot.query({ planId }),
     refetchInterval: 2500,
     retry: false,
-  })
+  });
   const unpublished =
     publicEvent.error instanceof TRPCClientError &&
-    ['NOT_FOUND', 'FORBIDDEN', 'UNAUTHORIZED'].includes(publicEvent.error.data?.code ?? '')
+    ['NOT_FOUND', 'FORBIDDEN', 'UNAUTHORIZED'].includes(publicEvent.error.data?.code ?? '');
   const canWrite =
-    valid && !redeeming && Boolean(matches.data) && !matches.isError && !publicEvent.isError
+    valid && !redeeming && Boolean(matches.data) && !matches.isError && !publicEvent.isError;
   const data: PoolFlowData | undefined = unpublished
     ? undefined
-    : (publicEvent.data ?? matches.data)
+    : (publicEvent.data ?? matches.data);
   const disputeMode =
     (publicEvent.data ?? matches.data)?.settings.scoreReportingMode === 'approve_unless_disputed' &&
-    (publicEvent.data ?? matches.data)?.plan.bracketMode === 'native'
-  const closed = data !== undefined && ['complete', 'cancelled'].includes(data.plan.status)
-  const players = eventPlayers(data?.matches ?? [])
-  const player = players.some((item) => item.id === selectedPlayer) ? selectedPlayer : ''
-  const reportedIds = new Set(matches.data?.reports.map((report) => report.matchId))
-  const queuedIds = data ? queueScoringIds(data) : new Set<string>()
+    (publicEvent.data ?? matches.data)?.plan.bracketMode === 'native';
+  const closed = data !== undefined && ['complete', 'cancelled'].includes(data.plan.status);
+  const players = eventPlayers(data?.matches ?? []);
+  const player = players.some((item) => item.id === selectedPlayer) ? selectedPlayer : '';
+  const reportedIds = new Set(matches.data?.reports.map((report) => report.matchId));
+  const queuedIds = data ? queueScoringIds(data) : new Set<string>();
   const stationId = data?.stations.some((station) => station.id === selectedStation)
     ? selectedStation
-    : ''
-  const stationQueue = data?.stationQueues?.find((queue) => queue.stationId === stationId)
+    : '';
+  const stationQueue = data?.stationQueues?.find((queue) => queue.stationId === stationId);
   const stationMatchIds = new Set([
     stationQueue?.currentMatchId,
     stationQueue?.nextMatchId,
     ...(stationQueue?.upcoming.map((item) => item.matchId) ?? []),
-  ])
+  ]);
   const visible =
     data?.matches.filter(
       (match) =>
@@ -175,39 +175,39 @@ export function GuestEvent({ planId }: { planId: string }) {
         `${match.player1Name} ${match.player2Name} ${match.label} ${match.division} ${match.poolIndex === null ? '' : `Pool ${String.fromCharCode(65 + match.poolIndex)}`}`
           .toLowerCase()
           .includes(search.toLowerCase()),
-    ) ?? []
+    ) ?? [];
   const start = async (input: StartPoolMatch) => {
-    if (!session || !canWrite) return
-    setStarting(input.matchId)
-    setError('')
+    if (!session || !canWrite) return;
+    setStarting(input.matchId);
+    setError('');
     try {
       await trpc.eventOps.guests.startPoolMatch.mutate({
         planId,
         sessionToken: session.sessionToken,
         ...input,
-      })
-      setSelectedMatch(input.matchId)
+      });
+      setSelectedMatch(input.matchId);
       await Promise.all([
         cache.invalidateQueries({ queryKey: ['guestMatches', planId] }),
         cache.invalidateQueries({ queryKey: ['eventOpsPublic', planId] }),
-      ])
+      ]);
     } catch (cause) {
       setError(
         cause instanceof Error
           ? cause.message
           : 'The station queue changed. Refresh before starting.',
-      )
+      );
     } finally {
-      setStarting(null)
+      setStarting(null);
     }
-  }
+  };
   const chooseMatch = (id: string) => {
-    setSelectedMatch(id)
-    setView('queue')
-    setSearch('')
-    document.getElementById('guest-score-entry')?.scrollIntoView({ behavior: 'smooth' })
-  }
-  if (unpublished) return <p role="alert">This event is unavailable or has not been published.</p>
+    setSelectedMatch(id);
+    setView('queue');
+    setSearch('');
+    document.getElementById('guest-score-entry')?.scrollIntoView({ behavior: 'smooth' });
+  };
+  if (unpublished) return <p role="alert">This event is unavailable or has not been published.</p>;
   return (
     <div className="ops-page guest-page">
       <header>
@@ -264,17 +264,17 @@ export function GuestEvent({ planId }: { planId: string }) {
             players={players}
             value={player}
             onChange={(id) => {
-              setSelectedPlayer(id)
-              setView(id ? 'mine' : 'matches')
-              setSelectedPool('')
+              setSelectedPlayer(id);
+              setView(id ? 'mine' : 'matches');
+              setSelectedPool('');
             }}
           />
           <PoolFilter
             data={data}
             value={selectedPool}
             onChange={(value) => {
-              setSelectedPool(value)
-              setSelectedMatch(null)
+              setSelectedPool(value);
+              setSelectedMatch(null);
             }}
           />
           <label className="pool-flow-filter">
@@ -364,7 +364,7 @@ export function GuestEvent({ planId }: { planId: string }) {
         </p>
       )}
     </div>
-  )
+  );
 }
 
 function GuestScoreCard({
@@ -376,50 +376,50 @@ function GuestScoreCard({
   autoAccept,
   disputeMode,
 }: {
-  planId: string
-  session: GuestSession | null
-  match: Match
-  report?: GuestData['reports'][number]
-  selfRun: boolean
-  autoAccept: boolean
-  disputeMode: boolean
+  planId: string;
+  session: GuestSession | null;
+  match: Match;
+  report?: GuestData['reports'][number];
+  selfRun: boolean;
+  autoAccept: boolean;
+  disputeMode: boolean;
 }) {
-  const cache = useQueryClient()
-  const [score1, setScore1] = useState(0)
-  const [score2, setScore2] = useState(0)
-  const [revision, setRevision] = useState(match.revision)
-  const [requestId, setRequestId] = useState(() => crypto.randomUUID())
-  const [pending, setPending] = useState(false)
-  const [sent, setSent] = useState<'approved' | 'pending' | null>(null)
-  const [retryRejected, setRetryRejected] = useState(false)
-  const [error, setError] = useState('')
-  const stale = revision !== match.revision
+  const cache = useQueryClient();
+  const [score1, setScore1] = useState(0);
+  const [score2, setScore2] = useState(0);
+  const [revision, setRevision] = useState(match.revision);
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const [pending, setPending] = useState(false);
+  const [sent, setSent] = useState<'approved' | 'pending' | null>(null);
+  const [retryRejected, setRetryRejected] = useState(false);
+  const [error, setError] = useState('');
+  const stale = revision !== match.revision;
   const reset = () => {
-    setRevision(match.revision)
-    setScore1(0)
-    setScore2(0)
-    setRequestId(crypto.randomUUID())
-    setError('')
-    setSent(null)
-  }
+    setRevision(match.revision);
+    setScore1(0);
+    setScore2(0);
+    setRequestId(crypto.randomUUID());
+    setError('');
+    setSent(null);
+  };
   const reportResult = async (input: ResultSubmission) => {
-    if (!session) throw new Error('Scan a guest reporting QR to report a score.')
+    if (!session) throw new Error('Scan a guest reporting QR to report a score.');
     const result = await trpc.eventOps.guests.submit.mutate({
       planId,
       sessionToken: session.sessionToken,
       matchId: match.id,
       ...input,
-    })
+    });
     await Promise.all([
       cache.invalidateQueries({ queryKey: ['guestMatches', planId] }),
       cache.invalidateQueries({ queryKey: ['eventOpsPublic', planId] }),
-    ])
-    return result
-  }
+    ]);
+    return result;
+  };
   const submit = async () => {
-    if (!session) return
-    setPending(true)
-    setError('')
+    if (!session) return;
+    setPending(true);
+    setError('');
     try {
       const result = await trpc.eventOps.guests.submit.mutate({
         planId,
@@ -429,19 +429,19 @@ function GuestScoreCard({
         requestId,
         score1,
         score2,
-      })
-      setSent(result.status === 'approved' ? 'approved' : 'pending')
-      setRetryRejected(false)
+      });
+      setSent(result.status === 'approved' ? 'approved' : 'pending');
+      setRetryRejected(false);
       await Promise.all([
         cache.invalidateQueries({ queryKey: ['guestMatches', planId] }),
         cache.invalidateQueries({ queryKey: ['eventOpsPublic', planId] }),
-      ])
+      ]);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not send the score. Try again.')
+      setError(cause instanceof Error ? cause.message : 'Could not send the score. Try again.');
     } finally {
-      setPending(false)
+      setPending(false);
     }
-  }
+  };
   return (
     <article className="card ops-match">
       <div className="ops-match-meta">
@@ -485,8 +485,8 @@ function GuestScoreCard({
           <button
             className="btn"
             onClick={() => {
-              reset()
-              setRetryRejected(true)
+              reset();
+              setRetryRejected(true);
             }}
           >
             Start a new report
@@ -501,8 +501,8 @@ function GuestScoreCard({
         <form
           className="ops-score-form"
           onSubmit={(e) => {
-            e.preventDefault()
-            void submit()
+            e.preventDefault();
+            void submit();
           }}
         >
           {stale && (
@@ -526,8 +526,8 @@ function GuestScoreCard({
                 value={score1}
                 required
                 onChange={(e) => {
-                  setScore1(Number(e.target.value))
-                  setRequestId(crypto.randomUUID())
+                  setScore1(Number(e.target.value));
+                  setRequestId(crypto.randomUUID());
                 }}
               />
             </label>
@@ -541,8 +541,8 @@ function GuestScoreCard({
                 value={score2}
                 required
                 onChange={(e) => {
-                  setScore2(Number(e.target.value))
-                  setRequestId(crypto.randomUUID())
+                  setScore2(Number(e.target.value));
+                  setRequestId(crypto.randomUUID());
                 }}
               />
             </label>
@@ -573,5 +573,5 @@ function GuestScoreCard({
         </p>
       )}
     </article>
-  )
+  );
 }

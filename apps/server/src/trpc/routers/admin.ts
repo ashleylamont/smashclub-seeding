@@ -1,6 +1,6 @@
-import { z } from 'zod'
-import { TRPCError } from '@trpc/server'
-import { and, asc, count, desc, eq, ilike, ne, or, sql } from 'drizzle-orm'
+import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
+import { and, asc, count, desc, eq, ilike, ne, or, sql } from 'drizzle-orm';
 import {
   companies,
   companyAliases,
@@ -13,37 +13,37 @@ import {
   tournamentParticipants,
   tournaments,
   user,
-} from '@smashclub/db'
-import type { Db } from '@smashclub/db'
-import { normalizeTournamentId } from '@smashclub/engine'
-import { glickoSettingsSchema } from '@smashclub/shared'
-import { recomputePendingCandidates } from '../../identity/candidates'
-import { ensureAlias } from '../../identity/matching'
+} from '@smashclub/db';
+import type { Db } from '@smashclub/db';
+import { normalizeTournamentId } from '@smashclub/engine';
+import { glickoSettingsSchema } from '@smashclub/shared';
+import { recomputePendingCandidates } from '../../identity/candidates';
+import { ensureAlias } from '../../identity/matching';
 import {
   charactersByPlayer,
   characterSlugsSchema,
   setPlayerCharacters,
-} from '../../players/characters'
-import { mergePlayers } from '../../players/merge'
-import { compareModels } from '../../recompute/compareModels'
-import { loadBreakthrough } from '../../recap/breakthrough'
+} from '../../players/characters';
+import { mergePlayers } from '../../players/merge';
+import { compareModels } from '../../recompute/compareModels';
+import { loadBreakthrough } from '../../recap/breakthrough';
 import {
   RegistryValidationError,
   applyRegistryYaml,
   previewRegistryYaml,
-} from '../../registry/import'
-import { resolveReviewItem, type ReviewResolutionInput } from '../../review/resolve'
-import { eventPlannerRouter } from './eventPlanner'
+} from '../../registry/import';
+import { resolveReviewItem, type ReviewResolutionInput } from '../../review/resolve';
+import { eventPlannerRouter } from './eventPlanner';
 import {
   createSeedingRun,
   latestSeedingRun,
   pushSeedingRun,
   reorderSeedingRun,
   setEntryLocked,
-} from '../../seeding/seeding'
-import { getGlickoSettings, updateGlickoSettings } from '../../settings'
-import { syncTournament } from '../../sync/sync'
-import { adminProcedure, router } from '../trpc'
+} from '../../seeding/seeding';
+import { getGlickoSettings, updateGlickoSettings } from '../../settings';
+import { syncTournament } from '../../sync/sync';
+import { adminProcedure, router } from '../trpc';
 
 /**
  * Company code -> id, for the several mutations that take a human-facing code.
@@ -51,10 +51,10 @@ import { adminProcedure, router } from '../trpc'
  * error rather than a silent unset.
  */
 async function resolveCompanyId(db: Db, code: string | null): Promise<string | null> {
-  if (code === null || code === '') return null
-  const [company] = await db.select().from(companies).where(eq(companies.code, code))
-  if (!company) throw new TRPCError({ code: 'NOT_FOUND', message: `Unknown company ${code}` })
-  return company.id
+  if (code === null || code === '') return null;
+  const [company] = await db.select().from(companies).where(eq(companies.code, code));
+  if (!company) throw new TRPCError({ code: 'NOT_FOUND', message: `Unknown company ${code}` });
+  return company.id;
 }
 
 /**
@@ -68,7 +68,7 @@ async function assertDisplayNameFree(
   displayName: string | null,
   playerId?: string,
 ): Promise<void> {
-  if (!displayName) return
+  if (!displayName) return;
   const clash = await db
     .select({ id: players.id })
     .from(players)
@@ -78,12 +78,12 @@ async function assertDisplayNameFree(
         eq(players.status, 'active'),
         playerId ? ne(players.id, playerId) : undefined,
       ),
-    )
+    );
   if (clash.length > 0) {
     throw new TRPCError({
       code: 'CONFLICT',
       message: `“${displayName}” is already taken by another player.`,
-    })
+    });
   }
 }
 
@@ -97,7 +97,7 @@ const reviewDetailsSchema = z.object({
   displayName: z.string().trim().min(1).max(80).nullable().optional(),
   companyCode: z.string().nullable().optional(),
   characters: characterSlugsSchema.optional(),
-})
+});
 
 /** Swap the client's company *code* for the id the resolver stores. */
 async function withResolvedCompany(
@@ -107,16 +107,16 @@ async function withResolvedCompany(
     | { kind: 'created_new'; details?: z.infer<typeof reviewDetailsSchema> }
     | { kind: 'kept_separate'; details?: z.infer<typeof reviewDetailsSchema> },
 ): Promise<ReviewResolutionInput> {
-  if (resolution.kind === 'linked_existing' || !resolution.details) return resolution
-  const { companyCode, ...rest } = resolution.details
-  await assertDisplayNameFree(db, rest.displayName ?? null)
+  if (resolution.kind === 'linked_existing' || !resolution.details) return resolution;
+  const { companyCode, ...rest } = resolution.details;
+  await assertDisplayNameFree(db, rest.displayName ?? null);
   return {
     kind: resolution.kind,
     details: {
       ...rest,
       ...(companyCode !== undefined ? { companyId: await resolveCompanyId(db, companyCode) } : {}),
     },
-  }
+  };
 }
 
 /**
@@ -124,7 +124,7 @@ async function withResolvedCompany(
  * is room for an order of magnitude of growth and still small enough that a
  * mis-paste cannot tie up the server.
  */
-const REGISTRY_YAML_MAX_BYTES = 4_000_000
+const REGISTRY_YAML_MAX_BYTES = 4_000_000;
 
 /** Details accepted when creating a player, from the registry or the queue. */
 const playerDetailsSchema = z.object({
@@ -134,7 +134,7 @@ const playerDetailsSchema = z.object({
   characters: characterSlugsSchema.default([]),
   /** Extra spellings to match future bracket entries on. */
   aliases: z.array(z.string().trim().min(1).max(120)).default([]),
-})
+});
 
 export const adminRouter = router({
   /** Existing accounts only: a person signs in before an admin can promote them. */
@@ -154,8 +154,8 @@ export const adminRouter = router({
   findAccounts: adminProcedure
     .input(z.object({ search: z.string().trim().min(2).max(100) }))
     .query(({ ctx, input }) => {
-      const escaped = input.search.replace(/[\\%_]/g, '\\$&')
-      const pattern = `%${escaped}%`
+      const escaped = input.search.replace(/[\\%_]/g, '\\$&');
+      const pattern = `%${escaped}%`;
       return ctx.db
         .select({
           id: user.id,
@@ -167,7 +167,7 @@ export const adminRouter = router({
         .from(user)
         .where(or(ilike(user.name, pattern), ilike(user.email, pattern)))
         .orderBy(asc(user.name))
-        .limit(25)
+        .limit(25);
     }),
 
   setAdminRole: adminProcedure
@@ -181,20 +181,23 @@ export const adminRouter = router({
           .from(user)
           .where(eq(user.role, 'admin'))
           .orderBy(asc(user.id))
-          .for('update')
+          .for('update');
         if (!admins.some((row) => row.id === ctx.user.id && row.emailVerified)) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'Your admin access has been removed.' })
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Your admin access has been removed.',
+          });
         }
         const [target] = await tx
           .select({ id: user.id, role: user.role, emailVerified: user.emailVerified })
           .from(user)
-          .where(eq(user.id, input.userId))
-        if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Account not found.' })
+          .where(eq(user.id, input.userId));
+        if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Account not found.' });
         if (input.admin && !target.emailVerified) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: 'The account email must be verified before promotion.',
-          })
+          });
         }
         if (
           !input.admin &&
@@ -205,7 +208,7 @@ export const adminRouter = router({
           throw new TRPCError({
             code: 'CONFLICT',
             message: 'Promote another admin before removing the last one.',
-          })
+          });
         }
         if (target.role !== (input.admin ? 'admin' : 'user')) {
           const [updated] = await tx
@@ -217,15 +220,15 @@ export const adminRouter = router({
                 input.admin ? eq(user.emailVerified, true) : undefined,
               ),
             )
-            .returning({ id: user.id })
+            .returning({ id: user.id });
           if (!updated) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
               message: 'The account email must be verified before promotion.',
-            })
+            });
           }
         }
-        return { ok: true }
+        return { ok: true };
       }),
     ),
 
@@ -250,7 +253,7 @@ export const adminRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const slug = normalizeTournamentId(input.slugOrUrl)
+      const slug = normalizeTournamentId(input.slugOrUrl);
       const [row] = await ctx.db
         .insert(tournaments)
         .values({
@@ -260,13 +263,13 @@ export const adminRouter = router({
           resultsMode: input.resultsMode ?? 'auto',
         })
         .onConflictDoNothing()
-        .returning({ id: tournaments.id })
+        .returning({ id: tournaments.id });
       if (!row)
         throw new TRPCError({
           code: 'CONFLICT',
           message: `Tournament ${slug} is already registered.`,
-        })
-      return { tournamentId: row.id, slug }
+        });
+      return { tournamentId: row.id, slug };
     }),
 
   syncNow: adminProcedure
@@ -285,9 +288,9 @@ export const adminRouter = router({
     .mutation(async ({ ctx, input }) => {
       const result = await syncTournament(ctx.db, ctx.challonge, input.tournamentId, {
         source: input.useApi ? 'api' : 'public',
-      })
-      ctx.recomputeTrigger.request()
-      return result
+      });
+      ctx.recomputeTrigger.request();
+      return result;
     }),
 
   /**
@@ -312,18 +315,18 @@ export const adminRouter = router({
       const [source] = await ctx.db
         .select({ provider: tournaments.provider })
         .from(tournaments)
-        .where(eq(tournaments.id, input.tournamentId))
+        .where(eq(tournaments.id, input.tournamentId));
       if (source?.provider === 'native')
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: 'Nemesis events use the event control page for live scoring.',
-        })
-      const liveUntil = new Date(Date.now() + input.hours * 60 * 60 * 1000)
+        });
+      const liveUntil = new Date(Date.now() + input.hours * 60 * 60 * 1000);
       await ctx.db
         .update(tournaments)
         .set({ liveUntil, updatedAt: new Date() })
-        .where(eq(tournaments.id, input.tournamentId))
-      return { liveUntil: liveUntil.toISOString() }
+        .where(eq(tournaments.id, input.tournamentId));
+      return { liveUntil: liveUntil.toISOString() };
     }),
 
   /** Close the live window immediately. */
@@ -333,8 +336,8 @@ export const adminRouter = router({
       await ctx.db
         .update(tournaments)
         .set({ liveUntil: null, updatedAt: new Date() })
-        .where(eq(tournaments.id, input.tournamentId))
-      return { ok: true }
+        .where(eq(tournaments.id, input.tournamentId));
+      return { ok: true };
     }),
 
   updateTournament: adminProcedure
@@ -350,16 +353,16 @@ export const adminRouter = router({
       const [before] = await ctx.db
         .select({ resultsMode: tournaments.resultsMode, provider: tournaments.provider })
         .from(tournaments)
-        .where(eq(tournaments.id, input.tournamentId))
-      if (!before) throw new TRPCError({ code: 'NOT_FOUND', message: 'Tournament not found.' })
-      const patch: Record<string, unknown> = { updatedAt: new Date() }
-      if (input.isRookie !== undefined) patch.isRookie = input.isRookie
-      if (input.resultsMode !== undefined) patch.resultsMode = input.resultsMode
+        .where(eq(tournaments.id, input.tournamentId));
+      if (!before) throw new TRPCError({ code: 'NOT_FOUND', message: 'Tournament not found.' });
+      const patch: Record<string, unknown> = { updatedAt: new Date() };
+      if (input.isRookie !== undefined) patch.isRookie = input.isRookie;
+      if (input.resultsMode !== undefined) patch.resultsMode = input.resultsMode;
       if (input.eventDate !== undefined) {
-        patch.eventDate = input.eventDate ? new Date(input.eventDate) : null
-        patch.eventDateManual = input.eventDate !== null
+        patch.eventDate = input.eventDate ? new Date(input.eventDate) : null;
+        patch.eventDateManual = input.eventDate !== null;
       }
-      await ctx.db.update(tournaments).set(patch).where(eq(tournaments.id, input.tournamentId))
+      await ctx.db.update(tournaments).set(patch).where(eq(tournaments.id, input.tournamentId));
       // A mode change must re-read the bracket so older imports gain stage
       // metadata before the recompute is queued. The sync remains idempotent.
       if (
@@ -368,24 +371,24 @@ export const adminRouter = router({
         input.resultsMode !== before.resultsMode
       ) {
         try {
-          await syncTournament(ctx.db, ctx.challonge, input.tournamentId, { source: 'public' })
+          await syncTournament(ctx.db, ctx.challonge, input.tournamentId, { source: 'public' });
         } catch (error) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message:
               'Results setting saved, but refreshing Challonge failed. Existing results will be recalculated; retry Sync.',
             cause: error,
-          })
+          });
         } finally {
           // The setting itself is durable even when Challonge is unavailable;
           // recalculate existing imported rows regardless, and preserve the
           // sync error for the caller to display.
-          ctx.recomputeTrigger.request()
+          ctx.recomputeTrigger.request();
         }
       } else {
-        ctx.recomputeTrigger.request()
+        ctx.recomputeTrigger.request();
       }
-      return { ok: true }
+      return { ok: true };
     }),
 
   setSetExclusion: adminProcedure
@@ -394,18 +397,18 @@ export const adminRouter = router({
       await ctx.db
         .update(sets)
         .set({ excludedFromRatings: input.excluded, exclusionManual: true, updatedAt: new Date() })
-        .where(eq(sets.id, input.setId))
-      ctx.recomputeTrigger.request()
-      return { ok: true }
+        .where(eq(sets.id, input.setId));
+      ctx.recomputeTrigger.request();
+      return { ok: true };
     }),
 
   jobs: adminProcedure.query(async ({ ctx }) => {
-    const rows = await ctx.db.select().from(syncJobs).orderBy(desc(syncJobs.startedAt)).limit(50)
+    const rows = await ctx.db.select().from(syncJobs).orderBy(desc(syncJobs.startedAt)).limit(50);
     return rows.map((row) => ({
       ...row,
       startedAt: row.startedAt.toISOString(),
       finishedAt: row.finishedAt?.toISOString() ?? null,
-    }))
+    }));
   }),
 
   // --- review queue ---
@@ -438,12 +441,12 @@ export const adminRouter = router({
       .innerJoin(tournaments, eq(tournamentParticipants.tournamentId, tournaments.id))
       .leftJoin(companies, eq(reviewItems.companyId, companies.id))
       .where(eq(reviewItems.status, 'pending'))
-      .orderBy(asc(reviewItems.createdAt))
+      .orderBy(asc(reviewItems.createdAt));
     return rows.map((row) => ({
       ...row,
       createdAt: row.createdAt.toISOString(),
       candidatesComputedAt: row.candidatesComputedAt.toISOString(),
-    }))
+    }));
   }),
 
   /**
@@ -456,7 +459,7 @@ export const adminRouter = router({
       return recomputePendingCandidates(
         ctx.db,
         input?.reviewItemId ? { reviewItemIds: [input.reviewItemId] } : {},
-      )
+      );
     }),
 
   resolveReview: adminProcedure
@@ -471,13 +474,13 @@ export const adminRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const resolution = await withResolvedCompany(ctx.db, input.resolution)
-      const result = await resolveReviewItem(ctx.db, input.reviewItemId, resolution, ctx.user.id)
+      const resolution = await withResolvedCompany(ctx.db, input.resolution);
+      const result = await resolveReviewItem(ctx.db, input.reviewItemId, resolution, ctx.user.id);
       // Resolving mints or re-aliases a player, which is exactly the kind of
       // change the *other* open items were scored before.
-      await recomputePendingCandidates(ctx.db)
-      ctx.recomputeTrigger.request()
-      return result
+      await recomputePendingCandidates(ctx.db);
+      ctx.recomputeTrigger.request();
+      return result;
     }),
 
   // --- players / registry ---
@@ -493,20 +496,20 @@ export const adminRouter = router({
       })
       .from(players)
       .leftJoin(companies, eq(players.companyId, companies.id))
-      .orderBy(asc(players.canonicalName))
-    const aliases = await ctx.db.select().from(playerAliases)
-    const aliasesByPlayer = new Map<string, string[]>()
+      .orderBy(asc(players.canonicalName));
+    const aliases = await ctx.db.select().from(playerAliases);
+    const aliasesByPlayer = new Map<string, string[]>();
     for (const alias of aliases) {
-      const list = aliasesByPlayer.get(alias.playerId) ?? []
-      list.push(alias.aliasNorm)
-      aliasesByPlayer.set(alias.playerId, list)
+      const list = aliasesByPlayer.get(alias.playerId) ?? [];
+      list.push(alias.aliasNorm);
+      aliasesByPlayer.set(alias.playerId, list);
     }
-    const characters = await charactersByPlayer(ctx.db)
+    const characters = await charactersByPlayer(ctx.db);
     return rows.map((row) => ({
       ...row,
       aliases: [...new Set(aliasesByPlayer.get(row.id) ?? [])].sort(),
       characters: characters.get(row.id) ?? [],
-    }))
+    }));
   }),
 
   /**
@@ -515,8 +518,8 @@ export const adminRouter = router({
    * of that spelling links silently instead of queueing for review.
    */
   createPlayer: adminProcedure.input(playerDetailsSchema).mutation(async ({ ctx, input }) => {
-    const companyId = await resolveCompanyId(ctx.db, input.companyCode)
-    await assertDisplayNameFree(ctx.db, input.displayName)
+    const companyId = await resolveCompanyId(ctx.db, input.companyCode);
+    await assertDisplayNameFree(ctx.db, input.displayName);
 
     const [created] = await ctx.db
       .insert(players)
@@ -525,18 +528,18 @@ export const adminRouter = router({
         companyId,
         displayName: input.displayName,
       })
-      .returning({ id: players.id })
-    const playerId = created!.id
+      .returning({ id: players.id });
+    const playerId = created!.id;
 
     for (const alias of [input.canonicalName, ...input.aliases]) {
-      await ensureAlias(ctx.db, playerId, alias.toLowerCase(), companyId, 'manual')
+      await ensureAlias(ctx.db, playerId, alias.toLowerCase(), companyId, 'manual');
     }
-    await setPlayerCharacters(ctx.db, playerId, input.characters)
+    await setPlayerCharacters(ctx.db, playerId, input.characters);
     // The new player is a candidate for every open review item — including the
     // ones queued long before they existed, which used to keep insisting there
     // were "no candidates" for a name this player answers to exactly.
-    await recomputePendingCandidates(ctx.db)
-    return { playerId }
+    await recomputePendingCandidates(ctx.db);
+    return { playerId };
   }),
 
   updatePlayer: adminProcedure
@@ -550,25 +553,25 @@ export const adminRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const patch: Record<string, unknown> = { updatedAt: new Date() }
-      if (input.canonicalName !== undefined) patch.canonicalName = input.canonicalName
+      const patch: Record<string, unknown> = { updatedAt: new Date() };
+      if (input.canonicalName !== undefined) patch.canonicalName = input.canonicalName;
       if (input.displayName !== undefined) {
-        await assertDisplayNameFree(ctx.db, input.displayName, input.playerId)
-        patch.displayName = input.displayName
+        await assertDisplayNameFree(ctx.db, input.displayName, input.playerId);
+        patch.displayName = input.displayName;
       }
       if (input.companyCode !== undefined) {
-        patch.companyId = await resolveCompanyId(ctx.db, input.companyCode)
+        patch.companyId = await resolveCompanyId(ctx.db, input.companyCode);
       }
-      await ctx.db.update(players).set(patch).where(eq(players.id, input.playerId))
+      await ctx.db.update(players).set(patch).where(eq(players.id, input.playerId));
       if (input.characters !== undefined) {
-        await setPlayerCharacters(ctx.db, input.playerId, input.characters)
+        await setPlayerCharacters(ctx.db, input.playerId, input.characters);
       }
       // A rename or a re-tag changes how this player scores against every open
       // item, so the snapshots that mention them are now wrong either way.
       if (input.canonicalName !== undefined || input.companyCode !== undefined) {
-        await recomputePendingCandidates(ctx.db)
+        await recomputePendingCandidates(ctx.db);
       }
-      return { ok: true }
+      return { ok: true };
     }),
 
   addAlias: adminProcedure
@@ -580,21 +583,21 @@ export const adminRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const companyId = await resolveCompanyId(ctx.db, input.companyCode)
-      await ensureAlias(ctx.db, input.playerId, input.alias.toLowerCase(), companyId, 'manual')
-      await recomputePendingCandidates(ctx.db)
-      return { ok: true }
+      const companyId = await resolveCompanyId(ctx.db, input.companyCode);
+      await ensureAlias(ctx.db, input.playerId, input.alias.toLowerCase(), companyId, 'manual');
+      await recomputePendingCandidates(ctx.db);
+      return { ok: true };
     }),
 
   mergePlayers: adminProcedure
     .input(z.object({ fromPlayerId: z.uuid(), intoPlayerId: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      await mergePlayers(ctx.db, input.fromPlayerId, input.intoPlayerId)
+      await mergePlayers(ctx.db, input.fromPlayerId, input.intoPlayerId);
       // The tombstoned player must stop being offered, and its aliases now
       // belong to the survivor.
-      await recomputePendingCandidates(ctx.db)
-      ctx.recomputeTrigger.request()
-      return { ok: true }
+      await recomputePendingCandidates(ctx.db);
+      ctx.recomputeTrigger.request();
+      return { ok: true };
     }),
 
   // --- registry import wizard ---
@@ -615,34 +618,34 @@ export const adminRouter = router({
   applyRegistryImport: adminProcedure
     .input(z.object({ yaml: z.string().max(REGISTRY_YAML_MAX_BYTES) }))
     .mutation(async ({ ctx, input }) => {
-      let result
+      let result;
       try {
-        result = await applyRegistryYaml(ctx.db, input.yaml)
+        result = await applyRegistryYaml(ctx.db, input.yaml);
       } catch (error) {
         if (error instanceof RegistryValidationError) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: error.message, cause: error })
+          throw new TRPCError({ code: 'BAD_REQUEST', message: error.message, cause: error });
         }
-        throw error
+        throw error;
       }
       // Importing the registry is the moment stale review candidates matter
       // most: every player it just created is a candidate the open items were
       // scored without.
-      const candidates = await recomputePendingCandidates(ctx.db)
-      return { ...result, candidates }
+      const candidates = await recomputePendingCandidates(ctx.db);
+      return { ...result, candidates };
     }),
 
   // --- companies ---
   companies: adminProcedure.query(async ({ ctx }) => {
-    const rows = await ctx.db.select().from(companies).orderBy(asc(companies.code))
-    const aliases = await ctx.db.select().from(companyAliases)
+    const rows = await ctx.db.select().from(companies).orderBy(asc(companies.code));
+    const aliases = await ctx.db.select().from(companyAliases);
     // Player counts make the consequences of a rename or delete visible before
     // the admin commits to one.
     const counts = await ctx.db
       .select({ companyId: players.companyId, total: count() })
       .from(players)
       .where(eq(players.status, 'active'))
-      .groupBy(players.companyId)
-    const countByCompany = new Map(counts.map((row) => [row.companyId, row.total]))
+      .groupBy(players.companyId);
+    const countByCompany = new Map(counts.map((row) => [row.companyId, row.total]));
     return rows.map((row) => ({
       id: row.id,
       code: row.code,
@@ -652,7 +655,7 @@ export const adminRouter = router({
         .filter((alias) => alias.companyId === row.id)
         .map((alias) => alias.aliasNorm)
         .sort(),
-    }))
+    }));
   }),
 
   /**
@@ -670,33 +673,33 @@ export const adminRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const code = input.code.toUpperCase()
+      const code = input.code.toUpperCase();
       const clash = await ctx.db
         .select({ id: companies.id })
         .from(companies)
-        .where(eq(companies.code, code))
+        .where(eq(companies.code, code));
       if (clash.some((row) => row.id !== input.id)) {
         throw new TRPCError({
           code: 'CONFLICT',
           message: `Company code ${code} is already in use.`,
-        })
+        });
       }
 
-      let companyId: string
+      let companyId: string;
       if (input.id) {
         const [updated] = await ctx.db
           .update(companies)
           .set({ code, name: input.name, updatedAt: new Date() })
           .where(eq(companies.id, input.id))
-          .returning({ id: companies.id })
-        if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Company not found.' })
-        companyId = updated.id
+          .returning({ id: companies.id });
+        if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Company not found.' });
+        companyId = updated.id;
       } else {
         const [created] = await ctx.db
           .insert(companies)
           .values({ code, name: input.name })
-          .returning({ id: companies.id })
-        companyId = created!.id
+          .returning({ id: companies.id });
+        companyId = created!.id;
       }
 
       // Aliases are stored lowercased: matching is case-insensitive anyway, so
@@ -706,9 +709,9 @@ export const adminRouter = router({
         await ctx.db
           .insert(companyAliases)
           .values({ companyId, aliasNorm: alias.toLowerCase() })
-          .onConflictDoNothing()
+          .onConflictDoNothing();
       }
-      return { companyId }
+      return { companyId };
     }),
 
   removeCompanyAlias: adminProcedure
@@ -721,8 +724,8 @@ export const adminRouter = router({
             eq(companyAliases.companyId, input.companyId),
             eq(companyAliases.aliasNorm, input.alias),
           ),
-        )
-      return { ok: true }
+        );
+      return { ok: true };
     }),
 
   /**
@@ -737,10 +740,10 @@ export const adminRouter = router({
       const [company] = await ctx.db
         .select()
         .from(companies)
-        .where(eq(companies.id, input.companyId))
-      if (!company) throw new TRPCError({ code: 'NOT_FOUND', message: 'Company not found.' })
-      await ctx.db.delete(companies).where(eq(companies.id, input.companyId))
-      return { ok: true }
+        .where(eq(companies.id, input.companyId));
+      if (!company) throw new TRPCError({ code: 'NOT_FOUND', message: 'Company not found.' });
+      await ctx.db.delete(companies).where(eq(companies.id, input.companyId));
+      return { ok: true };
     }),
 
   // --- claims ---
@@ -761,12 +764,12 @@ export const adminRouter = router({
       .innerJoin(user, eq(playerClaims.userId, user.id))
       .innerJoin(players, eq(playerClaims.playerId, players.id))
       .orderBy(desc(playerClaims.createdAt))
-      .limit(100)
+      .limit(100);
     return rows.map((row) => ({
       ...row,
       playerName: row.displayName ?? row.canonicalName,
       createdAt: row.createdAt.toISOString(),
-    }))
+    }));
   }),
 
   resolveClaim: adminProcedure
@@ -775,8 +778,8 @@ export const adminRouter = router({
       const [claim] = await ctx.db
         .select()
         .from(playerClaims)
-        .where(eq(playerClaims.id, input.claimId))
-      if (!claim) throw new TRPCError({ code: 'NOT_FOUND' })
+        .where(eq(playerClaims.id, input.claimId));
+      if (!claim) throw new TRPCError({ code: 'NOT_FOUND' });
       await ctx.db
         .update(playerClaims)
         .set({
@@ -785,23 +788,23 @@ export const adminRouter = router({
           resolvedAt: new Date(),
           updatedAt: new Date(),
         })
-        .where(eq(playerClaims.id, input.claimId))
-      return { ok: true }
+        .where(eq(playerClaims.id, input.claimId));
+      return { ok: true };
     }),
 
   // --- seeding ---
   createSeedingRun: adminProcedure
     .input(z.object({ tournamentId: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const runId = await createSeedingRun(ctx.db, input.tournamentId, ctx.user.id)
-      return { runId }
+      const runId = await createSeedingRun(ctx.db, input.tournamentId, ctx.user.id);
+      return { runId };
     }),
 
   seedingRun: adminProcedure
     .input(z.object({ tournamentId: z.uuid() }))
     .query(async ({ ctx, input }) => {
-      const result = await latestSeedingRun(ctx.db, input.tournamentId)
-      if (!result) return null
+      const result = await latestSeedingRun(ctx.db, input.tournamentId);
+      if (!result) return null;
       return {
         run: {
           id: result.run.id,
@@ -816,41 +819,41 @@ export const adminRouter = router({
             ? (entry.displayName ?? entry.canonicalName)
             : entry.cleanedName,
         })),
-      }
+      };
     }),
 
   reorderSeedingRun: adminProcedure
     .input(z.object({ runId: z.uuid(), participantIdsInOrder: z.array(z.uuid()) }))
     .mutation(async ({ ctx, input }) => {
-      await reorderSeedingRun(ctx.db, input.runId, input.participantIdsInOrder)
-      return { ok: true }
+      await reorderSeedingRun(ctx.db, input.runId, input.participantIdsInOrder);
+      return { ok: true };
     }),
 
   setSeedingEntryLocked: adminProcedure
     .input(z.object({ entryId: z.uuid(), locked: z.boolean() }))
     .mutation(async ({ ctx, input }) => {
-      await setEntryLocked(ctx.db, input.entryId, input.locked)
-      return { ok: true }
+      await setEntryLocked(ctx.db, input.entryId, input.locked);
+      return { ok: true };
     }),
 
   pushSeedingRun: adminProcedure
     .input(z.object({ runId: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      return pushSeedingRun(ctx.db, ctx.challonge, input.runId)
+      return pushSeedingRun(ctx.db, ctx.challonge, input.runId);
     }),
 
   // --- settings / recompute ---
   settings: adminProcedure.query(async ({ ctx }) => getGlickoSettings(ctx.db)),
 
   updateSettings: adminProcedure.input(glickoSettingsSchema).mutation(async ({ ctx, input }) => {
-    const version = await updateGlickoSettings(ctx.db, input)
-    ctx.recomputeTrigger.request()
-    return { version }
+    const version = await updateGlickoSettings(ctx.db, input);
+    ctx.recomputeTrigger.request();
+    return { version };
   }),
 
   recomputeNow: adminProcedure.mutation(async ({ ctx }) => {
-    await ctx.recomputeTrigger.runNow()
-    return { ok: true }
+    await ctx.recomputeTrigger.runNow();
+    return { ok: true };
   }),
 
   /**
@@ -859,4 +862,4 @@ export const adminRouter = router({
    * setting change.
    */
   compareModels: adminProcedure.query(async ({ ctx }) => compareModels(ctx.db)),
-})
+});

@@ -1,5 +1,5 @@
-import { and, desc, eq, inArray } from 'drizzle-orm'
-import { TRPCError } from '@trpc/server'
+import { and, desc, eq, inArray } from 'drizzle-orm';
+import { TRPCError } from '@trpc/server';
 import {
   eventMatchAudit,
   eventMatches,
@@ -9,32 +9,32 @@ import {
   tournamentParticipants,
   tournaments,
   type Db,
-} from '@smashclub/db'
-import { scoresIndicateUnplayed } from '@smashclub/shared'
-import type { SessionUser } from '../auth'
+} from '@smashclub/db';
+import { scoresIndicateUnplayed } from '@smashclub/shared';
+import type { SessionUser } from '../auth';
 import {
   ChallongeScoreClient,
   ChallongeScoreError,
   type DeliverScoreInput,
-} from '../challonge/scoreClient'
-import { lockEvent, requireOperator } from './service'
+} from '../challonge/scoreClient';
+import { lockEvent, requireOperator } from './service';
 
 export interface DeliveryConfig {
-  enabled: boolean
-  apiKey?: string
+  enabled: boolean;
+  apiKey?: string;
 }
-export type ScoreSender = Pick<ChallongeScoreClient, 'deliverScore'>
+export type ScoreSender = Pick<ChallongeScoreClient, 'deliverScore'>;
 export type DeliveryResult = {
-  ok: boolean
-  matchId: string
-  revision: number
-  status: string
-  message?: string
-  mayHaveWritten?: boolean
-}
+  ok: boolean;
+  matchId: string;
+  revision: number;
+  status: string;
+  message?: string;
+  mayHaveWritten?: boolean;
+};
 const conflict = (message: string): never => {
-  throw new TRPCError({ code: 'CONFLICT', message })
-}
+  throw new TRPCError({ code: 'CONFLICT', message });
+};
 
 export async function deliveryStatus(
   db: Db,
@@ -42,8 +42,8 @@ export async function deliveryStatus(
   planId: string,
   config: DeliveryConfig,
 ) {
-  await requireOperator(db, planId, user)
-  return { enabled: config.enabled, hasCredentials: Boolean(config.apiKey?.trim()) }
+  await requireOperator(db, planId, user);
+  return { enabled: config.enabled, hasCredentials: Boolean(config.apiKey?.trim()) };
 }
 
 /** Local confirmation and remote delivery are separate, explicit operations. */
@@ -59,20 +59,23 @@ export async function deliverMatchScore(
       code: 'PRECONDITION_FAILED',
       message:
         'Challonge score delivery is disabled or credentials are missing. Use the manual handoff.',
-    })
+    });
   // A committed start record survives a process crash or ambiguous transport.
   const attempt = await db.transaction(async (tx) => {
-    const [initial] = await tx.select().from(eventMatches).where(eq(eventMatches.id, input.matchId))
-    if (!initial) throw new TRPCError({ code: 'NOT_FOUND', message: 'Match not found.' })
-    await lockEvent(tx, initial.eventPlanId)
-    await requireOperator(tx, initial.eventPlanId, user)
+    const [initial] = await tx
+      .select()
+      .from(eventMatches)
+      .where(eq(eventMatches.id, input.matchId));
+    if (!initial) throw new TRPCError({ code: 'NOT_FOUND', message: 'Match not found.' });
+    await lockEvent(tx, initial.eventPlanId);
+    await requireOperator(tx, initial.eventPlanId, user);
     const [match] = await tx
       .select()
       .from(eventMatches)
       .where(eq(eventMatches.id, initial.id))
-      .for('update')
+      .for('update');
     if (!match || match.revision !== input.expectedRevision)
-      return conflict('Match changed; refresh before sending.')
+      return conflict('Match changed; refresh before sending.');
     if (
       match.status !== 'complete' ||
       match.outcome !== 'played' ||
@@ -84,26 +87,26 @@ export async function deliverMatchScore(
     ) {
       return conflict(
         'Only completed played matches linked to an imported Challonge match can be delivered.',
-      )
+      );
     }
     if (
       match.score1 === match.score2 ||
       match.winnerId !== (match.score1 > match.score2 ? match.player1Id : match.player2Id)
     )
-      return conflict('The local result needs correction before delivery.')
+      return conflict('The local result needs correction before delivery.');
     const [unfinished] = await tx
       .select()
       .from(eventMatchAudit)
       .where(
         and(eq(eventMatchAudit.matchId, match.id), eq(eventMatchAudit.action, 'delivery_started')),
       )
-      .limit(1)
+      .limit(1);
     if (unfinished)
       return conflict(
         'A previous delivery was interrupted. Reconcile its remote result before another delivery attempt.',
-      )
-    const [source] = await tx.select().from(sets).where(eq(sets.id, match.sourceSetId))
-    if (!source) return conflict('Imported match no longer exists. Re-import first.')
+      );
+    const [source] = await tx.select().from(sets).where(eq(sets.id, match.sourceSetId));
+    if (!source) return conflict('Imported match no longer exists. Re-import first.');
     const [linked] = await tx
       .select()
       .from(eventPlanBrackets)
@@ -114,17 +117,17 @@ export async function deliverMatchScore(
           eq(eventPlanBrackets.division, match.division),
           eq(eventPlanBrackets.stage, match.stage === 'consolation' ? 'consolation' : 'main'),
         ),
-      )
+      );
     if (!linked)
-      return conflict('The imported match is not attached to this event division and stage.')
+      return conflict('The imported match is not attached to this event division and stage.');
     const [tournament] = await tx
       .select()
       .from(tournaments)
-      .where(eq(tournaments.id, source.tournamentId))
+      .where(eq(tournaments.id, source.tournamentId));
     if (tournament?.provider === 'native')
-      return conflict('Native matches are recorded in Nemesis and cannot be sent to Challonge.')
+      return conflict('Native matches are recorded in Nemesis and cannot be sent to Challonge.');
     if (!tournament || source.resultStage !== (match.stage === 'group' ? 'group' : 'final'))
-      return conflict('The imported match stage no longer matches.')
+      return conflict('The imported match stage no longer matches.');
     const participants = await tx
       .select()
       .from(tournamentParticipants)
@@ -138,45 +141,45 @@ export async function deliverMatchScore(
             ),
           ),
         ),
-      )
+      );
     const map = (playerId: string, score: number) => {
-      const matches = participants.filter((participant) => participant.playerId === playerId)
+      const matches = participants.filter((participant) => participant.playerId === playerId);
       if (matches.length !== 1)
-        return conflict('Participant identities are not reconciled; re-import before delivery.')
-      const participantId = String(matches[0]!.challongeParticipantId)
+        return conflict('Participant identities are not reconciled; re-import before delivery.');
+      const participantId = String(matches[0]!.challongeParticipantId);
       const raw =
-        source.raw && typeof source.raw === 'object' ? (source.raw as Record<string, unknown>) : {}
+        source.raw && typeof source.raw === 'object' ? (source.raw as Record<string, unknown>) : {};
       // Preserve root identity while supplying only aliases explicitly paired
       // with that root by the imported module payload. Never infer by local order.
       const aliases =
         source.resultStage === 'group'
           ? [1, 2].flatMap((slot) => {
-              const childId = raw[`sourcePlayer${slot}Id`]
+              const childId = raw[`sourcePlayer${slot}Id`];
               return String(raw[`player${slot}Id`]) === participantId &&
                 (typeof childId === 'number' || typeof childId === 'string') &&
                 /^[1-9]\d*$/.test(String(childId))
                 ? [String(childId)]
-                : []
+                : [];
             })
-          : []
-      return { participantId, ...(aliases.length ? { aliases } : {}), score }
-    }
+          : [];
+      return { participantId, ...(aliases.length ? { aliases } : {}), score };
+    };
     if (
       new Set([source.p1PlayerId, source.p2PlayerId]).size !== 2 ||
       ![source.p1PlayerId, source.p2PlayerId].includes(match.player1Id) ||
       ![source.p1PlayerId, source.p2PlayerId].includes(match.player2Id)
     )
-      return conflict('Imported player identities differ from the local match.')
+      return conflict('Imported player identities differ from the local match.');
     const payload: DeliverScoreInput = {
       tournamentSlug: tournament.challongeSlug,
       matchId: String(source.challongeMatchId),
       participants: [map(match.player1Id, match.score1), map(match.player2Id, match.score2)],
-    }
-    const revision = match.revision + 1
+    };
+    const revision = match.revision + 1;
     await tx
       .update(eventMatches)
       .set({ revision, syncState: 'pending' })
-      .where(eq(eventMatches.id, match.id))
+      .where(eq(eventMatches.id, match.id));
     const [audit] = await tx
       .insert(eventMatchAudit)
       .values({
@@ -187,10 +190,10 @@ export async function deliverMatchScore(
         before: match,
         after: { revision, payload },
       })
-      .returning()
-    return { auditId: audit!.id, planId: match.eventPlanId, matchId: match.id, revision, payload }
-  })
-  const client = sender ?? new ChallongeScoreClient({ apiKey: config.apiKey })
+      .returning();
+    return { auditId: audit!.id, planId: match.eventPlanId, matchId: match.id, revision, payload };
+  });
+  const client = sender ?? new ChallongeScoreClient({ apiKey: config.apiKey });
   return db.transaction(async (tx) => {
     // Serialise score corrections and event closure with the network attempt.
     // Lock without lockEvent here: closure between transactions is persisted as
@@ -199,15 +202,15 @@ export async function deliverMatchScore(
       .select()
       .from(eventPlans)
       .where(eq(eventPlans.id, attempt.planId))
-      .for('update')
+      .for('update');
     const [match] = await tx
       .select()
       .from(eventMatches)
       .where(eq(eventMatches.id, attempt.matchId))
-      .for('update')
-    let result: DeliveryResult
+      .for('update');
+    let result: DeliveryResult;
     try {
-      await requireOperator(tx, attempt.planId, user)
+      await requireOperator(tx, attempt.planId, user);
       if (
         !plan ||
         ['complete', 'cancelled'].includes(plan.status) ||
@@ -217,17 +220,17 @@ export async function deliverMatchScore(
         throw new ChallongeScoreError(
           'remote_conflict',
           'Event or match changed before delivery; no write was attempted.',
-        )
-      const sent = await client.deliverScore(attempt.payload)
-      await storeVerifiedResult(tx, match)
+        );
+      const sent = await client.deliverScore(attempt.payload);
+      await storeVerifiedResult(tx, match);
       result = {
         ok: true,
         matchId: attempt.matchId,
         revision: attempt.revision + 1,
         status: sent.status,
-      }
+      };
     } catch (error) {
-      const known = error instanceof ChallongeScoreError
+      const known = error instanceof ChallongeScoreError;
       result = {
         ok: false,
         matchId: attempt.matchId,
@@ -237,27 +240,31 @@ export async function deliverMatchScore(
           ? error.message
           : 'Delivery failed. Reconcile the remote match before trying again.',
         mayHaveWritten: known ? error.mayHaveWritten : true,
-      }
+      };
     }
     if (match)
       await tx
         .update(eventMatches)
         .set({ syncState: result.ok ? 'synced' : 'error', revision: result.revision })
-        .where(eq(eventMatches.id, attempt.matchId))
+        .where(eq(eventMatches.id, attempt.matchId));
     await tx
       .update(eventMatchAudit)
       .set({
         action: result.ok ? 'delivery_verified' : 'delivery_failed',
         after: { ...result, payload: attempt.payload },
       })
-      .where(eq(eventMatchAudit.id, attempt.auditId))
-    return result
-  })
+      .where(eq(eventMatchAudit.id, attempt.auditId));
+    return result;
+  });
 }
 
 /** Store the remotely verified result in the same orientation as the imported set. */
 async function storeVerifiedResult(db: Db, match: typeof eventMatches.$inferSelect) {
-  const [source] = await db.select().from(sets).where(eq(sets.id, match.sourceSetId!)).for('update')
+  const [source] = await db
+    .select()
+    .from(sets)
+    .where(eq(sets.id, match.sourceSetId!))
+    .for('update');
   if (
     !source ||
     !source.p1PlayerId ||
@@ -270,10 +277,10 @@ async function storeVerifiedResult(db: Db, match: typeof eventMatches.$inferSele
       'ambiguous',
       'The imported identities changed; reconcile the verified remote result before continuing.',
       true,
-    )
+    );
   }
-  const flipped = source.p1PlayerId !== match.player1Id
-  const scoresCsv = `${flipped ? match.score2 : match.score1}-${flipped ? match.score1 : match.score2}`
+  const flipped = source.p1PlayerId !== match.player1Id;
+  const scoresCsv = `${flipped ? match.score2 : match.score1}-${flipped ? match.score1 : match.score2}`;
   await db
     .update(sets)
     .set({
@@ -284,7 +291,7 @@ async function storeVerifiedResult(db: Db, match: typeof eventMatches.$inferSele
       completedAt: source.completedAt ?? new Date(),
       updatedAt: new Date(),
     })
-    .where(eq(sets.id, source.id))
+    .where(eq(sets.id, source.id));
 }
 
 /** Read-only remote recovery for a process-interrupted delivery. Never performs a PUT. */
@@ -299,19 +306,22 @@ export async function reconcileMatchDelivery(
     throw new TRPCError({
       code: 'PRECONDITION_FAILED',
       message: 'Challonge credentials are required to verify an interrupted delivery.',
-    })
+    });
   return db.transaction(async (tx) => {
-    const [initial] = await tx.select().from(eventMatches).where(eq(eventMatches.id, input.matchId))
-    if (!initial) throw new TRPCError({ code: 'NOT_FOUND', message: 'Match not found.' })
-    await lockEvent(tx, initial.eventPlanId)
-    await requireOperator(tx, initial.eventPlanId, user)
+    const [initial] = await tx
+      .select()
+      .from(eventMatches)
+      .where(eq(eventMatches.id, input.matchId));
+    if (!initial) throw new TRPCError({ code: 'NOT_FOUND', message: 'Match not found.' });
+    await lockEvent(tx, initial.eventPlanId);
+    await requireOperator(tx, initial.eventPlanId, user);
     const [match] = await tx
       .select()
       .from(eventMatches)
       .where(eq(eventMatches.id, input.matchId))
-      .for('update')
+      .for('update');
     if (!match || match.revision !== input.expectedRevision)
-      return conflict('Match changed; refresh before reconciling.')
+      return conflict('Match changed; refresh before reconciling.');
     const [audit] = await tx
       .select()
       .from(eventMatchAudit)
@@ -322,42 +332,44 @@ export async function reconcileMatchDelivery(
         ),
       )
       .orderBy(desc(eventMatchAudit.createdAt))
-      .limit(1)
-    if (!audit) return conflict('No interrupted delivery needs reconciliation.')
-    const payload = (audit.after as { payload?: DeliverScoreInput }).payload
+      .limit(1);
+    if (!audit) return conflict('No interrupted delivery needs reconciliation.');
+    const payload = (audit.after as { payload?: DeliverScoreInput }).payload;
     if (!payload || !Array.isArray(payload.participants) || payload.participants.length !== 2)
       return conflict(
         'The interrupted attempt has no valid delivery payload; reconcile it manually.',
-      )
+      );
     const remote = await (reader ?? new ChallongeScoreClient({ apiKey: config.apiKey! })).readMatch(
       payload.tournamentSlug,
       payload.matchId,
-    )
+    );
     const candidates = payload.participants.map(
       (p) => new Set([p.participantId, ...(p.aliases ?? [])]),
-    )
-    const ids = candidates.map((set) => remote.participantIds.filter((id) => set.has(id)))
+    );
+    const ids = candidates.map((set) => remote.participantIds.filter((id) => set.has(id)));
     if (ids.some((found) => found.length !== 1) || ids[0]![0] === ids[1]![0])
-      return conflict('Remote participant identities changed. Re-import and resolve the mapping.')
+      return conflict('Remote participant identities changed. Re-import and resolve the mapping.');
     const recorded =
       remote.state === 'complete' &&
       remote.winnerId ===
         ids[payload.participants[0].score > payload.participants[1].score ? 0 : 1]![0] &&
-      ids.every((found, index) => remote.scores?.[found[0]!] === payload.participants[index]!.score)
-    const noResult = ['open', 'underway'].includes(remote.state) && remote.winnerId === null
+      ids.every(
+        (found, index) => remote.scores?.[found[0]!] === payload.participants[index]!.score,
+      );
+    const noResult = ['open', 'underway'].includes(remote.state) && remote.winnerId === null;
     if (!recorded && !noResult)
       return conflict(
         'Remote result differs from the interrupted attempt. Reconcile the score manually first.',
-      )
-    const before = audit.before as typeof eventMatches.$inferSelect
+      );
+    const before = audit.before as typeof eventMatches.$inferSelect;
     const unchanged =
       before.player1Id === match.player1Id &&
       before.player2Id === match.player2Id &&
       before.score1 === match.score1 &&
       before.score2 === match.score2 &&
       before.winnerId === match.winnerId &&
-      before.outcome === match.outcome
-    if (recorded && unchanged) await storeVerifiedResult(tx, match)
+      before.outcome === match.outcome;
+    if (recorded && unchanged) await storeVerifiedResult(tx, match);
     const result: DeliveryResult = {
       ok: true,
       matchId: match.id,
@@ -369,15 +381,15 @@ export async function reconcileMatchDelivery(
           : 'The prior result landed; the current local correction still needs delivery.'
         : 'Remote match has no completed result. The interrupted attempt is closed; a new explicit delivery may be attempted.',
       mayHaveWritten: recorded,
-    }
+    };
     await tx
       .update(eventMatches)
       .set({ syncState: recorded && unchanged ? 'synced' : 'error', revision: result.revision })
-      .where(eq(eventMatches.id, match.id))
+      .where(eq(eventMatches.id, match.id));
     await tx
       .update(eventMatchAudit)
       .set({ action: 'delivery_reconciled', after: { ...result, payload, reconciledBy: user.id } })
-      .where(eq(eventMatchAudit.id, audit.id))
-    return result
-  })
+      .where(eq(eventMatchAudit.id, audit.id));
+    return result;
+  });
 }

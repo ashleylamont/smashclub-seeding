@@ -1,12 +1,12 @@
-import { publicEventNights } from './publicEvents'
-import { startPoolMatch } from './selfService'
-import { nativeBracketRouter } from './nativeRouter'
-import { guestRouter } from './guestRouter'
-import { eventDeliveryRouter } from './deliveryRouter'
-import { sourceRefreshRouter } from './sourceRefreshRouter'
-import { z } from 'zod'
-import { and, desc, eq, sql } from 'drizzle-orm'
-import { TRPCError } from '@trpc/server'
+import { publicEventNights } from './publicEvents';
+import { startPoolMatch } from './selfService';
+import { nativeBracketRouter } from './nativeRouter';
+import { guestRouter } from './guestRouter';
+import { eventDeliveryRouter } from './deliveryRouter';
+import { sourceRefreshRouter } from './sourceRefreshRouter';
+import { z } from 'zod';
+import { and, desc, eq, sql } from 'drizzle-orm';
+import { TRPCError } from '@trpc/server';
 import {
   eventMatchAudit,
   eventOperationSettings,
@@ -16,8 +16,8 @@ import {
   eventPlanEntries,
   eventAttendanceAudit,
   user,
-} from '@smashclub/db'
-import { adminProcedure, authedProcedure, publicProcedure, router } from '../trpc/trpc'
+} from '@smashclub/db';
+import { adminProcedure, authedProcedure, publicProcedure, router } from '../trpc/trpc';
 import {
   lockEvent,
   prepare,
@@ -26,16 +26,16 @@ import {
   reviewReport,
   snapshot,
   updateMatch,
-} from './service'
-import { configurePools, configurePool, publishAnnouncement, updateLiveScore } from './controls'
+} from './service';
+import { configurePools, configurePool, publishAnnouncement, updateLiveScore } from './controls';
 import {
   applyAttendance,
   previewAttendance,
   resetOperations,
   softLockPools,
   unlockPools,
-} from './attendance'
-import { deleteStation, saveStation } from './stations'
+} from './attendance';
+import { deleteStation, saveStation } from './stations';
 const attendanceInput = z.object({
   planId: z.string().uuid(),
   action: z.enum(['add', 'withdraw', 'no_show', 'redistribute']),
@@ -45,8 +45,8 @@ const attendanceInput = z.object({
   reason: z.string().trim().max(200).optional(),
   acknowledgeExternalChange: z.boolean().optional(),
   approveRedistribution: z.boolean().optional(),
-})
-const planInput = z.object({ planId: z.string().uuid() })
+});
+const planInput = z.object({ planId: z.string().uuid() });
 export const eventOpsRouter = router({
   publicEvents: publicProcedure.query(({ ctx }) => publicEventNights(ctx.db)),
   startPoolMatch: authedProcedure
@@ -107,8 +107,8 @@ export const eventOpsRouter = router({
   delivery: eventDeliveryRouter,
   sources: sourceRefreshRouter,
   previewAttendance: authedProcedure.input(attendanceInput).query(async ({ ctx, input }) => {
-    await requireOperator(ctx.db, input.planId, ctx.user)
-    return previewAttendance(ctx.db, input)
+    await requireOperator(ctx.db, input.planId, ctx.user);
+    return previewAttendance(ctx.db, input);
   }),
   softLockPools: authedProcedure
     .input(planInput.extend({ confirm: z.literal(true) }))
@@ -138,7 +138,7 @@ export const eventOpsRouter = router({
     .input(planInput)
     .query(({ ctx, input }) => snapshot(ctx.db, input.planId)),
   overview: authedProcedure.input(planInput).query(async ({ ctx, input }) => {
-    await requireOperator(ctx.db, input.planId, ctx.user)
+    await requireOperator(ctx.db, input.planId, ctx.user);
     return {
       ...(await snapshot(ctx.db, input.planId, true)),
       reports: (
@@ -171,11 +171,11 @@ export const eventOpsRouter = router({
         .where(eq(eventAttendanceAudit.eventPlanId, input.planId))
         .orderBy(desc(eventAttendanceAudit.createdAt))
         .limit(100),
-    }
+    };
   }),
   prepare: authedProcedure.input(planInput).mutation(async ({ ctx, input }) => {
-    await requireOperator(ctx.db, input.planId, ctx.user)
-    return prepare(ctx.db, input.planId)
+    await requireOperator(ctx.db, input.planId, ctx.user);
+    return prepare(ctx.db, input.planId);
   }),
   reportScore: authedProcedure
     .input(
@@ -214,22 +214,22 @@ export const eventOpsRouter = router({
     )
     .mutation(({ ctx, input }) =>
       ctx.db.transaction(async (tx) => {
-        const plan = await lockEvent(tx, input.planId)
+        const plan = await lockEvent(tx, input.planId);
         if (input.scoreReportingMode === 'approve_unless_disputed' && plan.bracketMode !== 'native')
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: 'Automatic approval is available for native Nemesis events only.',
-          })
+          });
         const settings = {
           published: input.published,
           playerReports: input.playerReports,
           ...(input.scoreReportingMode ? { scoreReportingMode: input.scoreReportingMode } : {}),
-        }
+        };
         return tx
           .insert(eventOperationSettings)
           .values({ eventPlanId: input.planId, ...settings })
           .onConflictDoUpdate({ target: eventOperationSettings.eventPlanId, set: settings })
-          .returning()
+          .returning();
       }),
     ),
   assignTo: adminProcedure
@@ -246,7 +246,7 @@ export const eventOpsRouter = router({
     )
     .mutation(({ ctx, input }) =>
       ctx.db.transaction(async (tx) => {
-        await lockEvent(tx, input.planId)
+        await lockEvent(tx, input.planId);
         const [account] = await tx
           .select()
           .from(user)
@@ -254,13 +254,13 @@ export const eventOpsRouter = router({
             input.userId
               ? eq(user.id, input.userId)
               : sql`lower(${user.email}) = ${input.email!.toLowerCase()}`,
-          )
+          );
         if (!account)
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message:
               'This person must sign in to Nemesis first. No account matches that email or ID.',
-          })
+          });
         if (input.remove)
           return tx
             .delete(eventOperators)
@@ -270,12 +270,12 @@ export const eventOpsRouter = router({
                 eq(eventOperators.userId, account.id),
               ),
             )
-            .returning()
+            .returning();
         return tx
           .insert(eventOperators)
           .values({ eventPlanId: input.planId, userId: account.id })
           .onConflictDoNothing()
-          .returning()
+          .returning();
       }),
     ),
   saveStation: authedProcedure
@@ -307,9 +307,9 @@ export const eventOpsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await requireOperator(ctx.db, input.planId, ctx.user)
+      await requireOperator(ctx.db, input.planId, ctx.user);
       return ctx.db.transaction(async (tx) => {
-        await lockEvent(tx, input.planId)
+        await lockEvent(tx, input.planId);
         if (
           input.playerId &&
           !(
@@ -327,12 +327,12 @@ export const eventOpsRouter = router({
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: 'Prize recipient must be an event entrant.',
-          })
+          });
         const values = {
           title: input.title,
           description: input.description ?? null,
           playerId: input.playerId ?? null,
-        }
+        };
         return input.id
           ? tx
               .update(eventPrizes)
@@ -342,7 +342,7 @@ export const eventOpsRouter = router({
           : tx
               .insert(eventPrizes)
               .values({ ...values, eventPlanId: input.planId })
-              .returning()
-      })
+              .returning();
+      });
     }),
-})
+});

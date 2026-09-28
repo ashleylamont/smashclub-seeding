@@ -1,92 +1,92 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
-import { trpc } from '../../lib/trpc'
-type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import { trpc } from '../../lib/trpc';
+type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 export function ScoreHandoff({
   planId,
   data,
   disabled,
 }: {
-  planId: string
-  data: Overview
-  disabled: boolean
+  planId: string;
+  data: Overview;
+  disabled: boolean;
 }) {
-  const cache = useQueryClient()
+  const cache = useQueryClient();
   const capability = useQuery({
     queryKey: ['eventOpsDelivery', planId],
     queryFn: () => trpc.eventOps.delivery.status.query({ planId }),
-  })
-  const [pending, setPending] = useState<string | null>(null)
-  const [notice, setNotice] = useState('')
-  const [error, setError] = useState('')
+  });
+  const [pending, setPending] = useState<string | null>(null);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
   const refresh = async () => {
-    setPending('refresh')
-    setError('')
-    setNotice('')
+    setPending('refresh');
+    setError('');
+    setNotice('');
     try {
-      const result = await trpc.eventOps.sources.refresh.mutate({ planId })
-      const failures = result.brackets.filter((bracket) => bracket.status === 'failed')
-      setNotice(`${result.brackets.length - failures.length} linked bracket(s) refreshed.`)
+      const result = await trpc.eventOps.sources.refresh.mutate({ planId });
+      const failures = result.brackets.filter((bracket) => bracket.status === 'failed');
+      setNotice(`${result.brackets.length - failures.length} linked bracket(s) refreshed.`);
       setError(
         [...failures.map((bracket) => `${bracket.slug}: ${bracket.error}`), result.queue.error]
           .filter(Boolean)
           .join(' '),
-      )
-      await cache.invalidateQueries({ queryKey: ['eventOps', planId] })
+      );
+      await cache.invalidateQueries({ queryKey: ['eventOps', planId] });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to refresh brackets.')
+      setError(cause instanceof Error ? cause.message : 'Unable to refresh brackets.');
     } finally {
-      setPending(null)
+      setPending(null);
     }
-  }
+  };
   const reconcile = async (match: Overview['matches'][number]) => {
-    setPending(match.id)
-    setError('')
-    setNotice('')
+    setPending(match.id);
+    setError('');
+    setNotice('');
     try {
       const result = await trpc.eventOps.delivery.reconcile.mutate({
         matchId: match.id,
         expectedRevision: match.revision,
-      })
-      setNotice(result.message ?? 'Interrupted delivery checked.')
-      await cache.invalidateQueries({ queryKey: ['eventOps', planId] })
+      });
+      setNotice(result.message ?? 'Interrupted delivery checked.');
+      await cache.invalidateQueries({ queryKey: ['eventOps', planId] });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to check interrupted delivery.')
+      setError(cause instanceof Error ? cause.message : 'Unable to check interrupted delivery.');
     } finally {
-      setPending(null)
+      setPending(null);
     }
-  }
+  };
   const undelivered = data.matches.filter(
     (match) => match.status === 'complete' && match.syncState !== 'synced',
-  )
+  );
   const summary = undelivered
     .map(
       (match) =>
         `${match.label}: ${match.player1Name} ${match.score1 ?? '–'} – ${match.score2 ?? '–'} ${match.player2Name} (${match.outcome ?? 'result'}; ${match.syncState})`,
     )
-    .join('\n')
+    .join('\n');
   const deliver = async (match: Overview['matches'][number]) => {
-    setPending(match.id)
-    setError('')
-    setNotice('')
+    setPending(match.id);
+    setError('');
+    setNotice('');
     try {
       const result = await trpc.eventOps.delivery.deliver.mutate({
         matchId: match.id,
         expectedRevision: match.revision,
-      })
-      if (result.ok) setNotice('Challonge confirmed the score.')
-      else setError(result.message ?? 'Delivery needs reconciliation.')
-      await cache.invalidateQueries({ queryKey: ['eventOps', planId] })
+      });
+      if (result.ok) setNotice('Challonge confirmed the score.');
+      else setError(result.message ?? 'Delivery needs reconciliation.');
+      await cache.invalidateQueries({ queryKey: ['eventOps', planId] });
     } catch (cause) {
       setError(
         cause instanceof Error
           ? cause.message
           : 'Delivery failed. Refresh and reconcile before retrying.',
-      )
+      );
     } finally {
-      setPending(null)
+      setPending(null);
     }
-  }
+  };
   return (
     <section className="card">
       <h3>
@@ -136,12 +136,12 @@ export function ScoreHandoff({
             onClick={() => {
               const url = URL.createObjectURL(
                 new Blob([`${data.plan.name}\n\n${summary}\n`], { type: 'text/plain' }),
-              )
-              const link = document.createElement('a')
-              link.href = url
-              link.download = 'nemesis-score-handoff.txt'
-              link.click()
-              setTimeout(() => URL.revokeObjectURL(url), 1000)
+              );
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = 'nemesis-score-handoff.txt';
+              link.click();
+              setTimeout(() => URL.revokeObjectURL(url), 1000);
             }}
           >
             Download score handoff
@@ -198,5 +198,5 @@ export function ScoreHandoff({
       )}
       {notice && <p role="status">{notice}</p>}
     </section>
-  )
+  );
 }

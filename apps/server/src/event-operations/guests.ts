@@ -1,8 +1,8 @@
-import { attendeeScoreDecision } from './scorePolicy'
-import { loadStationQueues } from './queue'
-import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
-import { and, desc, eq, lt, sql } from 'drizzle-orm'
-import { TRPCError } from '@trpc/server'
+import { attendeeScoreDecision } from './scorePolicy';
+import { loadStationQueues } from './queue';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { and, desc, eq, lt, sql } from 'drizzle-orm';
+import { TRPCError } from '@trpc/server';
 import {
   eventGuestRateLimits,
   eventGuestSessions,
@@ -12,42 +12,42 @@ import {
   eventScoreReports,
   eventWithdrawals,
   type Db,
-} from '@smashclub/db'
-import type { SessionUser } from '../auth'
-import { lockEvent, requireOperator, snapshot, validateScore, applyScore } from './service'
+} from '@smashclub/db';
+import type { SessionUser } from '../auth';
+import { lockEvent, requireOperator, snapshot, validateScore, applyScore } from './service';
 
 // In rotating mode, change the displayed code every 15 minutes while keeping
 // each issued code valid for at least an hour.
-const INVITATION_ROTATION_MS = 15 * 60_000
-const INVITATION_MS = 75 * 60_000
-const SESSION_MS = 60 * 60_000
-const hash = (value: string) => createHash('sha256').update(value).digest('hex')
-const randomToken = () => randomBytes(32).toString('base64url')
+const INVITATION_ROTATION_MS = 15 * 60_000;
+const INVITATION_MS = 75 * 60_000;
+const SESSION_MS = 60 * 60_000;
+const hash = (value: string) => createHash('sha256').update(value).digest('hex');
+const randomToken = () => randomBytes(32).toString('base64url');
 const deny = () => {
   throw new TRPCError({
     code: 'FORBIDDEN',
     message: 'Guest access expired or is unavailable. Scan an active event QR code.',
-  })
-}
+  });
+};
 const limited = () => {
   throw new TRPCError({
     code: 'TOO_MANY_REQUESTS',
     message: 'Too many guest requests. Please wait before trying again or ask an organiser.',
-  })
-}
+  });
+};
 const publicSettings = (s?: typeof eventGuestSettings.$inferSelect) => ({
   enabled: s?.enabled ?? false,
   showOnOverlay: s?.showOnOverlay ?? false,
   rotateInvitations: s?.rotateInvitations ?? true,
-})
+});
 
 export async function guestSettings(db: Db, actor: SessionUser, planId: string) {
-  await requireOperator(db, planId, actor)
+  await requireOperator(db, planId, actor);
   return publicSettings(
     (
       await db.select().from(eventGuestSettings).where(eq(eventGuestSettings.eventPlanId, planId))
     )[0],
-  )
+  );
 }
 export async function configureGuests(
   db: Db,
@@ -56,13 +56,13 @@ export async function configureGuests(
   rotate = false,
 ) {
   return db.transaction(async (tx) => {
-    await lockEvent(tx, input.planId)
-    await requireOperator(tx, input.planId, actor)
+    await lockEvent(tx, input.planId);
+    await requireOperator(tx, input.planId, actor);
     const [previous] = await tx
       .select()
       .from(eventGuestSettings)
-      .where(eq(eventGuestSettings.eventPlanId, input.planId))
-    const rotateInvitations = input.rotateInvitations ?? previous?.rotateInvitations ?? true
+      .where(eq(eventGuestSettings.eventPlanId, input.planId));
+    const rotateInvitations = input.rotateInvitations ?? previous?.rotateInvitations ?? true;
     const secret =
       !previous ||
       rotate ||
@@ -70,7 +70,7 @@ export async function configureGuests(
       !previous.enabled ||
       previous.rotateInvitations !== rotateInvitations
         ? randomToken()
-        : previous.secret
+        : previous.secret;
     const [settings] = await tx
       .insert(eventGuestSettings)
       .values({
@@ -89,47 +89,47 @@ export async function configureGuests(
           secret,
         },
       })
-      .returning()
-    return publicSettings(settings)
-  })
+      .returning();
+    return publicSettings(settings);
+  });
 }
 export async function rotateGuests(db: Db, actor: SessionUser, planId: string) {
   return db.transaction(async (tx) => {
-    await lockEvent(tx, planId)
-    await requireOperator(tx, planId, actor)
+    await lockEvent(tx, planId);
+    await requireOperator(tx, planId, actor);
     const [settings] = await tx
       .update(eventGuestSettings)
       .set({ secret: randomToken() })
       .where(eq(eventGuestSettings.eventPlanId, planId))
-      .returning()
-    return publicSettings(settings)
-  })
+      .returning();
+    return publicSettings(settings);
+  });
 }
 async function available(db: Db, planId: string, requirePublished = true) {
-  await lockEvent(db, planId)
+  await lockEvent(db, planId);
   const [settings] = await db
     .select()
     .from(eventGuestSettings)
-    .where(eq(eventGuestSettings.eventPlanId, planId))
+    .where(eq(eventGuestSettings.eventPlanId, planId));
   const [ops] = await db
     .select()
     .from(eventOperationSettings)
-    .where(eq(eventOperationSettings.eventPlanId, planId))
-  if (!settings?.enabled || (requirePublished && !ops?.published)) return deny()
-  return settings
+    .where(eq(eventOperationSettings.eventPlanId, planId));
+  if (!settings?.enabled || (requirePublished && !ops?.published)) return deny();
+  return settings;
 }
 function invitation(settings: typeof eventGuestSettings.$inferSelect, now: number) {
   if (!settings.rotateInvitations) {
     const signature = createHmac('sha256', settings.secret)
       .update(`${settings.eventPlanId}:persistent`)
-      .digest('base64url')
-    return { token: `persistent.${signature}`, expiresAt: null }
+      .digest('base64url');
+    return { token: `persistent.${signature}`, expiresAt: null };
   }
-  const expires = Math.floor(now / INVITATION_ROTATION_MS) * INVITATION_ROTATION_MS + INVITATION_MS
+  const expires = Math.floor(now / INVITATION_ROTATION_MS) * INVITATION_ROTATION_MS + INVITATION_MS;
   const signature = createHmac('sha256', settings.secret)
     .update(`${settings.eventPlanId}:${expires}`)
-    .digest('base64url')
-  return { token: `${expires}.${signature}`, expiresAt: new Date(expires).toISOString() }
+    .digest('base64url');
+  return { token: `${expires}.${signature}`, expiresAt: new Date(expires).toISOString() };
 }
 export async function guestInvitation(
   db: Db,
@@ -138,26 +138,26 @@ export async function guestInvitation(
   now = Date.now(),
 ) {
   return db.transaction(async (tx) => {
-    if (actor) await requireOperator(tx, planId, actor)
+    if (actor) await requireOperator(tx, planId, actor);
     try {
-      const settings = await available(tx, planId, !actor)
-      if (!actor && !settings.showOnOverlay) return null
-      return invitation(settings, now)
+      const settings = await available(tx, planId, !actor);
+      if (!actor && !settings.showOnOverlay) return null;
+      return invitation(settings, now);
     } catch (error) {
       if (
         !actor &&
         error instanceof TRPCError &&
         ['FORBIDDEN', 'NOT_FOUND', 'CONFLICT'].includes(error.code)
       )
-        return null
-      throw error
+        return null;
+      throw error;
     }
-  })
+  });
 }
 /** Committed separately so invalid redemption attempts also consume their allowance. */
 async function consumeRedemptionLimit(db: Db, planId: string, ip: string, now: number) {
   const accepted = await db.transaction(async (tx) => {
-    const settings = await available(tx, planId)
+    const settings = await available(tx, planId);
     await tx
       .delete(eventGuestRateLimits)
       .where(
@@ -165,18 +165,18 @@ async function consumeRedemptionLimit(db: Db, planId: string, ip: string, now: n
           eq(eventGuestRateLimits.eventPlanId, planId),
           lt(eventGuestRateLimits.expiresAt, new Date(now)),
         ),
-      )
-    const window = Math.floor(now / SESSION_MS)
+      );
+    const window = Math.floor(now / SESSION_MS);
     const scopes = [
       { key: hash(`${settings.secret}:${ip}:${window}`), max: 240 },
       { key: hash(`${settings.secret}:event:${window}`), max: 1500 },
-    ]
+    ];
     for (const scope of scopes) {
       const [row] = await tx
         .select()
         .from(eventGuestRateLimits)
-        .where(eq(eventGuestRateLimits.key, scope.key))
-      if (row && row.count >= scope.max) return false
+        .where(eq(eventGuestRateLimits.key, scope.key));
+      if (row && row.count >= scope.max) return false;
     }
     for (const scope of scopes)
       await tx
@@ -190,10 +190,10 @@ async function consumeRedemptionLimit(db: Db, planId: string, ip: string, now: n
         .onConflictDoUpdate({
           target: eventGuestRateLimits.key,
           set: { count: sql`${eventGuestRateLimits.count} + 1` },
-        })
-    return true
-  })
-  if (!accepted) limited()
+        });
+    return true;
+  });
+  if (!accepted) limited();
 }
 export async function redeemGuest(
   db: Db,
@@ -201,41 +201,41 @@ export async function redeemGuest(
   ip = 'unknown',
   now = Date.now(),
 ) {
-  await consumeRedemptionLimit(db, input.planId, ip, now)
+  await consumeRedemptionLimit(db, input.planId, ip, now);
   return db.transaction(async (tx) => {
-    const settings = await available(tx, input.planId)
-    let expected: string
+    const settings = await available(tx, input.planId);
+    let expected: string;
     if (settings.rotateInvitations) {
-      const expires = Number(input.token.split('.')[0])
+      const expires = Number(input.token.split('.')[0]);
       if (!Number.isSafeInteger(expires) || expires <= now || expires > now + INVITATION_MS)
-        return deny()
+        return deny();
       const signature = createHmac('sha256', settings.secret)
         .update(`${settings.eventPlanId}:${expires}`)
-        .digest('base64url')
-      expected = `${expires}.${signature}`
+        .digest('base64url');
+      expected = `${expires}.${signature}`;
     } else {
-      expected = invitation(settings, now).token
+      expected = invitation(settings, now).token;
     }
-    const supplied = Buffer.from(input.token)
+    const supplied = Buffer.from(input.token);
     if (supplied.length !== expected.length || !timingSafeEqual(supplied, Buffer.from(expected)))
-      return deny()
-    const sessionToken = randomToken()
-    const expiresAt = new Date(now + SESSION_MS)
+      return deny();
+    const sessionToken = randomToken();
+    const expiresAt = new Date(now + SESSION_MS);
     await tx.insert(eventGuestSessions).values({
       eventPlanId: input.planId,
       tokenHash: hash(sessionToken),
       generation: hash(settings.secret),
       expiresAt,
-    })
-    return { sessionToken, expiresAt: expiresAt.toISOString() }
-  })
+    });
+    return { sessionToken, expiresAt: expiresAt.toISOString() };
+  });
 }
 export async function validateGuestSession(
   db: Db,
   input: { planId: string; sessionToken: string },
   now: number,
 ) {
-  const settings = await available(db, input.planId)
+  const settings = await available(db, input.planId);
   const [guest] = await db
     .select()
     .from(eventGuestSessions)
@@ -244,10 +244,10 @@ export async function validateGuestSession(
         eq(eventGuestSessions.eventPlanId, input.planId),
         eq(eventGuestSessions.tokenHash, hash(input.sessionToken)),
       ),
-    )
+    );
   if (!guest || guest.expiresAt.getTime() <= now || guest.generation !== hash(settings.secret))
-    return deny()
-  return guest
+    return deny();
+  return guest;
 }
 export async function guestMatches(
   db: Db,
@@ -255,8 +255,8 @@ export async function guestMatches(
   now = Date.now(),
 ) {
   return db.transaction(async (tx) => {
-    const guest = await validateGuestSession(tx, input, now)
-    const data = await snapshot(tx, input.planId)
+    const guest = await validateGuestSession(tx, input, now);
+    const data = await snapshot(tx, input.planId);
     const reports = await tx
       .select({
         id: eventScoreReports.id,
@@ -268,7 +268,7 @@ export async function guestMatches(
       })
       .from(eventScoreReports)
       .where(eq(eventScoreReports.guestSessionId, guest.id))
-      .orderBy(desc(eventScoreReports.createdAt), desc(eventScoreReports.id))
+      .orderBy(desc(eventScoreReports.createdAt), desc(eventScoreReports.id));
     return {
       settings: data.settings,
       plan: data.plan,
@@ -278,29 +278,29 @@ export async function guestMatches(
       matches: data.matches,
       reports,
       expiresAt: guest.expiresAt.toISOString(),
-    }
-  })
+    };
+  });
 }
 export async function submitGuest(
   db: Db,
   input: {
-    planId: string
-    sessionToken: string
-    matchId: string
-    expectedRevision: number
-    requestId: string
-    score1: number
-    score2: number
+    planId: string;
+    sessionToken: string;
+    matchId: string;
+    expectedRevision: number;
+    requestId: string;
+    score1: number;
+    score2: number;
   },
   now = Date.now(),
 ) {
   return db.transaction(async (tx) => {
-    const guest = await validateGuestSession(tx, input, now)
+    const guest = await validateGuestSession(tx, input, now);
     const reports = await tx
       .select()
       .from(eventScoreReports)
-      .where(eq(eventScoreReports.guestSessionId, guest.id))
-    const prior = reports.find((r) => r.requestId === input.requestId)
+      .where(eq(eventScoreReports.guestSessionId, guest.id));
+    const prior = reports.find((r) => r.requestId === input.requestId);
     if (prior) {
       if (
         prior.matchId !== input.matchId ||
@@ -311,33 +311,33 @@ export async function submitGuest(
         throw new TRPCError({
           code: 'CONFLICT',
           message: 'Request identifier already used for a different score.',
-        })
-      return { reportId: prior.id, status: prior.status, isDispute: prior.isDispute }
+        });
+      return { reportId: prior.id, status: prior.status, isDispute: prior.isDispute };
     }
     const [match] = await tx
       .select()
       .from(eventMatches)
-      .where(and(eq(eventMatches.id, input.matchId), eq(eventMatches.eventPlanId, input.planId)))
+      .where(and(eq(eventMatches.id, input.matchId), eq(eventMatches.eventPlanId, input.planId)));
     if (!match)
       throw new TRPCError({
         code: 'CONFLICT',
         message: 'This match changed or is unavailable. Refresh the match list.',
-      })
+      });
     const withdrawn = await tx
       .select()
       .from(eventWithdrawals)
-      .where(eq(eventWithdrawals.eventPlanId, input.planId))
+      .where(eq(eventWithdrawals.eventPlanId, input.planId));
     if (withdrawn.some((w) => [match.player1Id, match.player2Id].includes(w.playerId)))
       throw new TRPCError({
         code: 'CONFLICT',
         message: 'A player withdrew. Ask an organiser to record this match.',
-      })
-    const winnerId = validateScore(match, { ...input, outcome: 'played' })
+      });
+    const winnerId = validateScore(match, { ...input, outcome: 'played' });
     if (reports.some((r) => r.matchId === match.id && r.status === 'pending'))
       throw new TRPCError({
         code: 'CONFLICT',
         message: 'Your score is already waiting for organiser approval.',
-      })
+      });
     const [eventCount] = await tx
       .select({ count: sql<number>`count(*)::integer` })
       .from(eventScoreReports)
@@ -346,28 +346,28 @@ export async function submitGuest(
           eq(eventScoreReports.eventPlanId, input.planId),
           eq(eventScoreReports.status, 'pending'),
         ),
-      )
+      );
     // Durable caps remain in force across processes and restarts. Valid retries cost nothing.
     if (
       reports.length >= 30 ||
       reports.filter((r) => r.createdAt.getTime() > now - 60_000).length >= 6 ||
       (eventCount?.count ?? 0) >= 200
     )
-      limited()
+      limited();
     const decision = await attendeeScoreDecision(
       tx,
       match,
       { ...input, outcome: 'played' },
       winnerId,
-    )
+    );
     if (decision.apply)
-      await applyScore(tx, match, { ...input, outcome: 'played' }, winnerId, null, guest.id)
+      await applyScore(tx, match, { ...input, outcome: 'played' }, winnerId, null, guest.id);
     const reportDecision = {
       status: decision.status,
       expectedRevision: decision.expectedRevision,
       autoApproved: decision.autoApproved,
       isDispute: decision.isDispute,
-    }
+    };
     const [report] = await tx
       .insert(eventScoreReports)
       .values({
@@ -382,7 +382,7 @@ export async function submitGuest(
         outcome: 'played',
         winnerId,
       })
-      .returning()
-    return { reportId: report!.id, status: report!.status, isDispute: report!.isDispute }
-  })
+      .returning();
+    return { reportId: report!.id, status: report!.status, isDispute: report!.isDispute };
+  });
 }

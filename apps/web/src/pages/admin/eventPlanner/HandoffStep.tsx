@@ -1,10 +1,14 @@
-import { useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { trpc } from '../../../lib/trpc'
-import type { EventPlanBracket, EventPlanBracketExport, EventPlanView } from '../../../lib/apiTypes'
-import { formatDate } from '../../../lib/format'
-import { CopyBlock } from './shared'
-import { DIVISION_LABEL } from './labels'
+import { useState } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { trpc } from '../../../lib/trpc';
+import type {
+  EventPlanBracket,
+  EventPlanBracketExport,
+  EventPlanView,
+} from '../../../lib/apiTypes';
+import { formatDate } from '../../../lib/format';
+import { CopyBlock } from './shared';
+import { DIVISION_LABEL } from './labels';
 
 /**
  * Step 6: the handoff to Challonge.
@@ -21,7 +25,7 @@ export function HandoffStep({ view, onChanged }: { view: EventPlanView; onChange
     queryKey: ['admin', 'eventPlanner', 'exports', view.plan.id],
     enabled: view.plan.bracketMode !== 'native',
     queryFn: () => trpc.admin.eventPlanner.exports.query({ planId: view.plan.id }),
-  })
+  });
 
   if (view.plan.bracketMode === 'native')
     return (
@@ -36,16 +40,16 @@ export function HandoffStep({ view, onChanged }: { view: EventPlanView; onChange
           Open event desk
         </a>
       </div>
-    )
+    );
 
-  if (exportsQuery.isPending) return <p className="loading-text">Building exports…</p>
-  if (exportsQuery.isError) return <p className="error-text">{exportsQuery.error.message}</p>
+  if (exportsQuery.isPending) return <p className="loading-text">Building exports…</p>;
+  if (exportsQuery.isError) return <p className="error-text">{exportsQuery.error.message}</p>;
 
   const eventDates = new Set(
     view.brackets
       .filter((bracket) => bracket.tournamentEventDate)
       .map((bracket) => bracket.tournamentEventDate),
-  )
+  );
 
   return (
     <div>
@@ -71,7 +75,7 @@ export function HandoffStep({ view, onChanged }: { view: EventPlanView; onChange
         const bracket = view.brackets.find(
           (entry) =>
             entry.division === bracketExport.division && entry.stage === bracketExport.stage,
-        )!
+        )!;
         return (
           <BracketCard
             key={`${bracketExport.division}-${bracketExport.stage}`}
@@ -81,7 +85,7 @@ export function HandoffStep({ view, onChanged }: { view: EventPlanView; onChange
             payload={bracketExport}
             onChanged={onChanged}
           />
-        )
+        );
       })}
 
       <div className="card section">
@@ -98,7 +102,7 @@ export function HandoffStep({ view, onChanged }: { view: EventPlanView; onChange
         />
       </div>
     </div>
-  )
+  );
 }
 
 function BracketCard({
@@ -108,13 +112,13 @@ function BracketCard({
   payload,
   onChanged,
 }: {
-  planId: string
-  bracket: EventPlanBracket
-  closed: boolean
-  payload: EventPlanBracketExport
-  onChanged: () => void
+  planId: string;
+  bracket: EventPlanBracket;
+  closed: boolean;
+  payload: EventPlanBracketExport;
+  onChanged: () => void;
 }) {
-  const [slug, setSlug] = useState(bracket.challongeSlug ?? '')
+  const [slug, setSlug] = useState(bracket.challongeSlug ?? '');
 
   const attach = useMutation({
     mutationFn: () =>
@@ -125,7 +129,7 @@ function BracketCard({
         challongeSlug: slug.trim(),
       }),
     onSuccess: onChanged,
-  })
+  });
 
   const detach = useMutation({
     mutationFn: () =>
@@ -135,18 +139,18 @@ function BracketCard({
         stage: bracket.stage,
       }),
     onSuccess: () => {
-      setSlug('')
-      onChanged()
+      setSlug('');
+      onChanged();
     },
-  })
+  });
 
   const sync = useMutation({
     mutationFn: () =>
       trpc.admin.syncNow.mutate({ tournamentId: bracket.tournamentId!, useApi: true }),
     onSuccess: onChanged,
-  })
+  });
 
-  const ready = payload.participants !== ''
+  const ready = payload.participants !== '';
 
   return (
     <div className="card section bracket-card">
@@ -239,5 +243,5 @@ function BracketCard({
       )}
       {bracket.lastError && <p className="error-text">{bracket.lastError}</p>}
     </div>
-  )
+  );
 }

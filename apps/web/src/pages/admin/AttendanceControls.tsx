@@ -1,50 +1,50 @@
-import { useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { trpc } from '../../lib/trpc'
-type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>
-type Preview = Awaited<ReturnType<typeof trpc.eventOps.previewAttendance.query>>
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { trpc } from '../../lib/trpc';
+type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
+type Preview = Awaited<ReturnType<typeof trpc.eventOps.previewAttendance.query>>;
 type Input = {
-  planId: string
-  action: 'add' | 'withdraw' | 'no_show' | 'redistribute'
-  playerId: string
-  division?: 'upper' | 'lower'
-  reason?: string
-  acknowledgeExternalChange?: boolean
-  approveRedistribution?: boolean
-}
+  planId: string;
+  action: 'add' | 'withdraw' | 'no_show' | 'redistribute';
+  playerId: string;
+  division?: 'upper' | 'lower';
+  reason?: string;
+  acknowledgeExternalChange?: boolean;
+  approveRedistribution?: boolean;
+};
 
 export function AttendanceControls({
   planId,
   data,
   disabled,
 }: {
-  planId: string
-  data: Overview
-  disabled: boolean
+  planId: string;
+  data: Overview;
+  disabled: boolean;
 }) {
-  const cache = useQueryClient()
-  const [action, setAction] = useState<'add' | 'withdraw' | 'no_show' | 'redistribute'>('add')
-  const [query, setQuery] = useState('')
-  const [playerId, setPlayerId] = useState('')
-  const [division, setDivision] = useState<'upper' | 'lower'>('upper')
-  const [reason, setReason] = useState('')
-  const [ack, setAck] = useState(false)
-  const [approve, setApprove] = useState(false)
-  const [preview, setPreview] = useState<{ result: Preview; input: Input } | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [message, setMessage] = useState('')
+  const cache = useQueryClient();
+  const [action, setAction] = useState<'add' | 'withdraw' | 'no_show' | 'redistribute'>('add');
+  const [query, setQuery] = useState('');
+  const [playerId, setPlayerId] = useState('');
+  const [division, setDivision] = useState<'upper' | 'lower'>('upper');
+  const [reason, setReason] = useState('');
+  const [ack, setAck] = useState(false);
+  const [approve, setApprove] = useState(false);
+  const [preview, setPreview] = useState<{ result: Preview; input: Input } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const search = useQuery({
     queryKey: ['public', 'players', query],
     queryFn: () => trpc.public.searchPlayers.query({ query }),
     enabled: query.trim().length > 1 && action === 'add',
-  })
+  });
   const changed = () => {
-    setPreview(null)
-    setApprove(false)
-    setMessage('')
-    setError('')
-  }
+    setPreview(null);
+    setApprove(false);
+    setMessage('');
+    setError('');
+  };
   const inspect = async () => {
     const input: Input = {
       planId,
@@ -53,41 +53,41 @@ export function AttendanceControls({
       reason,
       acknowledgeExternalChange: ack,
       ...(action === 'add' ? { division } : {}),
-    }
-    setBusy(true)
-    setError('')
-    setMessage('')
+    };
+    setBusy(true);
+    setError('');
+    setMessage('');
     try {
-      setPreview({ input, result: await trpc.eventOps.previewAttendance.query(input) })
+      setPreview({ input, result: await trpc.eventOps.previewAttendance.query(input) });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not preview change')
+      setError(cause instanceof Error ? cause.message : 'Could not preview change');
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
   const apply = async () => {
-    if (!preview) return
-    setBusy(true)
-    setError('')
+    if (!preview) return;
+    setBusy(true);
+    setError('');
     try {
       await trpc.eventOps.applyAttendance.mutate({
         ...preview.input,
         approveRedistribution: approve,
         revisionToken: preview.result.revisionToken,
-      })
-      setPreview(null)
-      setApprove(false)
-      setPlayerId('')
+      });
+      setPreview(null);
+      setApprove(false);
+      setPlayerId('');
       setMessage(
         'Attendance updated. Refresh the match queue to see the current pools and matches.',
-      )
-      await cache.invalidateQueries({ queryKey: ['eventOps', planId] })
+      );
+      await cache.invalidateQueries({ queryKey: ['eventOps', planId] });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not update attendance')
+      setError(cause instanceof Error ? cause.message : 'Could not update attendance');
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
   return (
     <section className="card">
       <h3>Late arrivals and no-shows</h3>
@@ -106,9 +106,9 @@ export function AttendanceControls({
             className="select"
             value={action}
             onChange={(e) => {
-              setAction(e.target.value as typeof action)
-              setPlayerId('')
-              changed()
+              setAction(e.target.value as typeof action);
+              setPlayerId('');
+              changed();
             }}
           >
             <option value="add">Add a late arrival</option>
@@ -124,9 +124,9 @@ export function AttendanceControls({
               className="input"
               value={query}
               onChange={(e) => {
-                setQuery(e.target.value)
-                setPlayerId('')
-                changed()
+                setQuery(e.target.value);
+                setPlayerId('');
+                changed();
               }}
               maxLength={100}
               placeholder="Start typing a player alias"
@@ -139,8 +139,8 @@ export function AttendanceControls({
             className="select"
             value={playerId}
             onChange={(e) => {
-              setPlayerId(e.target.value)
-              changed()
+              setPlayerId(e.target.value);
+              changed();
             }}
           >
             <option value="">Choose a player</option>
@@ -163,8 +163,8 @@ export function AttendanceControls({
               className="select"
               value={division}
               onChange={(e) => {
-                setDivision(e.target.value as typeof division)
-                changed()
+                setDivision(e.target.value as typeof division);
+                changed();
               }}
             >
               <option value="upper">Upper</option>
@@ -178,8 +178,8 @@ export function AttendanceControls({
             className="input"
             value={reason}
             onChange={(e) => {
-              setReason(e.target.value)
-              changed()
+              setReason(e.target.value);
+              changed();
             }}
             maxLength={200}
             placeholder="Arrived late / unable to stay"
@@ -190,8 +190,8 @@ export function AttendanceControls({
             type="checkbox"
             checked={ack}
             onChange={(e) => {
-              setAck(e.target.checked)
-              changed()
+              setAck(e.target.checked);
+              changed();
             }}
           />{' '}
           I have reconciled the attendance change in any attached Challonge bracket.
@@ -278,5 +278,5 @@ export function AttendanceControls({
       )}
       {message && <p role="status">{message}</p>}
     </section>
-  )
+  );
 }

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { opsAttention, type AttentionMatch } from '../src/lib/opsAttention'
+import { describe, expect, it } from 'vitest';
+import { opsAttention, type AttentionMatch } from '../src/lib/opsAttention';
 const match = (id: string, overrides: Partial<AttentionMatch> = {}): AttentionMatch => ({
   id,
   label: id,
@@ -12,14 +12,14 @@ const match = (id: string, overrides: Partial<AttentionMatch> = {}): AttentionMa
   blockedReason: null,
   availability: { canStart: true, reasons: [] },
   ...overrides,
-})
+});
 const data = (matches: AttentionMatch[]) => ({
   plan: { status: 'pools_generated' },
   matches,
   reports: [],
   stations: [],
   stationQueues: [],
-})
+});
 describe('TO attention work list', () => {
   it('separates actionable holds from normal bracket dependencies, resolved withdrawals, and later waves', () => {
     const result = opsAttention(
@@ -63,14 +63,14 @@ describe('TO attention work list', () => {
           availability: { canStart: false, reasons: [{ code: 'player_busy', message: 'Playing' }] },
         }),
       ]),
-    )
+    );
     expect(result.decisions.map((match) => match.id)).toEqual([
       'withdrawn',
       'changed',
       'held',
       'later-decision',
-    ])
-  })
+    ]);
+  });
   it('keeps pending stale reports visible separately, including missing matches, and excludes reviewed reports', () => {
     const result = opsAttention({
       ...data([match('current'), match('edited', { revision: 2 })]),
@@ -108,13 +108,13 @@ describe('TO attention work list', () => {
           score2: 1,
         },
       ],
-    })
+    });
     expect(result.reports.map((report) => [report.id, report.stale])).toEqual([
       ['valid', false],
       ['stale', true],
       ['missing', true],
-    ])
-  })
+    ]);
+  });
   it('only offers known next pairings at genuinely free stations; does not invent work from future projections', () => {
     const result = opsAttention({
       ...data([match('next'), match('busy', { availability: { canStart: false, reasons: [] } })]),
@@ -130,19 +130,19 @@ describe('TO attention work list', () => {
         { stationId: 'unavailable', currentMatchId: null, nextMatchId: 'busy' },
         { stationId: 'empty', currentMatchId: null, nextMatchId: null },
       ],
-    })
-    expect(result.dispatch.map((item) => item.station.id)).toEqual(['free'])
-    expect(result.needsStations).toBe(false)
-  })
+    });
+    expect(result.dispatch.map((item) => item.station.id)).toEqual(['free']);
+    expect(result.needsStations).toBe(false);
+  });
   it('only flags station setup for a live queue and suppresses all action prompts on closed events', () => {
-    expect(opsAttention(data([])).needsStations).toBe(false)
-    expect(opsAttention(data([match('ready')])).needsStations).toBe(true)
+    expect(opsAttention(data([])).needsStations).toBe(false);
+    expect(opsAttention(data([match('ready')])).needsStations).toBe(true);
     for (const status of ['complete', 'cancelled'])
       expect(opsAttention({ ...data([match('ready')]), plan: { status } })).toEqual({
         reports: [],
         decisions: [],
         dispatch: [],
         needsStations: false,
-      })
-  })
-})
+      });
+  });
+});

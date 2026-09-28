@@ -1,11 +1,11 @@
-import { betterAuth } from 'better-auth'
-import { drizzleAdapter } from 'better-auth/adapters/drizzle'
-import { and, eq } from 'drizzle-orm'
-import type { Db } from '@smashclub/db'
-import { account, session, user, verification } from '@smashclub/db'
-import type { Env } from './env'
+import { betterAuth } from 'better-auth';
+import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { and, eq } from 'drizzle-orm';
+import type { Db } from '@smashclub/db';
+import { account, session, user, verification } from '@smashclub/db';
+import type { Env } from './env';
 
-export type Auth = ReturnType<typeof createAuth>
+export type Auth = ReturnType<typeof createAuth>;
 
 /**
  * better-auth with Discord + Google and multi-provider account linking: a
@@ -13,18 +13,18 @@ export type Auth = ReturnType<typeof createAuth>
  * land on the same user row.
  */
 export function createAuth(db: Db, env: Env, options: { enableCredentials?: boolean } = {}) {
-  const socialProviders: Record<string, { clientId: string; clientSecret: string }> = {}
+  const socialProviders: Record<string, { clientId: string; clientSecret: string }> = {};
   if (env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET) {
     socialProviders.discord = {
       clientId: env.DISCORD_CLIENT_ID,
       clientSecret: env.DISCORD_CLIENT_SECRET,
-    }
+    };
   }
   if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
     socialProviders.google = {
       clientId: env.GOOGLE_CLIENT_ID,
       clientSecret: env.GOOGLE_CLIENT_SECRET,
-    }
+    };
   }
 
   return betterAuth({
@@ -63,13 +63,13 @@ export function createAuth(db: Db, env: Env, options: { enableCredentials?: bool
         role: { type: 'string', defaultValue: 'user', input: false },
       },
     },
-  })
+  });
 }
 
 function adminEmails(env: Env): string[] {
   return env.ADMIN_EMAILS.split(',')
     .map((entry) => entry.trim().toLowerCase())
-    .filter(Boolean)
+    .filter(Boolean);
 }
 
 /**
@@ -85,15 +85,15 @@ function isAdminIdentity(
   account: { email?: string | null; emailVerified?: boolean | null },
   env: Env,
 ): boolean {
-  if (!account.email || account.emailVerified !== true) return false
-  return adminEmails(env).includes(account.email.toLowerCase())
+  if (!account.email || account.emailVerified !== true) return false;
+  return adminEmails(env).includes(account.email.toLowerCase());
 }
 
 export interface SessionUser {
-  id: string
-  email: string
-  name: string
-  role: 'admin' | 'user'
+  id: string;
+  email: string;
+  name: string;
+  role: 'admin' | 'user';
 }
 
 /**
@@ -108,8 +108,8 @@ export async function getSessionUser(
   env: Env,
   headers: Headers,
 ): Promise<SessionUser | null> {
-  const sessionData = await auth.api.getSession({ headers })
-  if (!sessionData?.user) return null
+  const sessionData = await auth.api.getSession({ headers });
+  if (!sessionData?.user) return null;
   const [current] = await db
     .select({
       id: user.id,
@@ -119,22 +119,22 @@ export async function getSessionUser(
       role: user.role,
     })
     .from(user)
-    .where(eq(user.id, sessionData.user.id))
-  if (!current) return null
+    .where(eq(user.id, sessionData.user.id));
+  if (!current) return null;
 
   if (current.role !== 'admin' && isAdminIdentity(current, env)) {
     const [existingAdmin] = await db
       .select({ id: user.id })
       .from(user)
       .where(and(eq(user.role, 'admin'), eq(user.emailVerified, true)))
-      .limit(1)
+      .limit(1);
     if (!existingAdmin) {
       const [promoted] = await db
         .update(user)
         .set({ role: 'admin', updatedAt: new Date() })
         .where(and(eq(user.id, current.id), eq(user.role, 'user'), eq(user.emailVerified, true)))
-        .returning({ id: user.id })
-      if (promoted) current.role = 'admin'
+        .returning({ id: user.id });
+      if (promoted) current.role = 'admin';
     }
   }
   return {
@@ -142,5 +142,5 @@ export async function getSessionUser(
     email: current.email,
     name: current.name,
     role: current.role === 'admin' && current.emailVerified ? 'admin' : 'user',
-  }
+  };
 }

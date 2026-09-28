@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { cleanPlayerEntry, preparePlayerEntry } from '../src/identity/clean'
+import { describe, expect, it } from 'vitest';
+import { cleanPlayerEntry, preparePlayerEntry } from '../src/identity/clean';
 
 // These cases are ported verbatim from legacy tests/test_smart_parsing.py —
 // they encode real messy sign-up-sheet inputs the pipeline must survive.
@@ -20,35 +20,35 @@ describe('cleanPlayerEntry', () => {
     ['[Atlas]@Solid Snake (Dietary: Gluten Free)', 'Solid Snake', 'ATL'],
     // @ outside parentheses infers Atlassian
     ['@Jack Morrison', 'Jack Morrison', 'ATL'],
-  ]
+  ];
 
   for (const [input, name, company] of cases) {
     it(`parses ${JSON.stringify(input)}`, () => {
-      const result = cleanPlayerEntry(input)
-      expect(result.name).toBe(name)
-      expect(result.companyCode).toBe(company)
-    })
+      const result = cleanPlayerEntry(input);
+      expect(result.name).toBe(name);
+      expect(result.companyCode).toBe(company);
+    });
   }
-})
+});
 
 describe('preparePlayerEntry', () => {
   it('normalises pipe-prefixed company', () => {
-    expect(preparePlayerEntry('ATL|Fox McCloud')).toBe('[ATL] Fox McCloud')
-  })
+    expect(preparePlayerEntry('ATL|Fox McCloud')).toBe('[ATL] Fox McCloud');
+  });
 
   it('normalises leading parenthesised company', () => {
-    expect(preparePlayerEntry('(ATL) Fox McCloud')).toBe('[ATL] Fox McCloud')
-  })
+    expect(preparePlayerEntry('(ATL) Fox McCloud')).toBe('[ATL] Fox McCloud');
+  });
 
   it('normalises trailing parenthesised company', () => {
-    expect(preparePlayerEntry('Fox McCloud (Canva)')).toBe('[CAN] Fox McCloud')
-  })
+    expect(preparePlayerEntry('Fox McCloud (Canva)')).toBe('[CAN] Fox McCloud');
+  });
 
   it('leaves non-company parentheticals alone', () => {
-    expect(preparePlayerEntry('Fox McCloud (the fast one)')).toBe('Fox McCloud (the fast one)')
-  })
+    expect(preparePlayerEntry('Fox McCloud (the fast one)')).toBe('Fox McCloud (the fast one)');
+  });
 
   it('leaves plain names alone', () => {
-    expect(preparePlayerEntry('  Fox McCloud ')).toBe('Fox McCloud')
-  })
-})
+    expect(preparePlayerEntry('  Fox McCloud ')).toBe('Fox McCloud');
+  });
+});

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react';
 import {
   newResultNotices,
   recentResults,
@@ -6,38 +6,38 @@ import {
   resultHeadline,
   type ResultMatch,
   type ResultNotice,
-} from '../lib/broadcastResults'
-import './BroadcastResults.css'
+} from '../lib/broadcastResults';
+import './BroadcastResults.css';
 
 /** Entirely confined to the existing footer: no animation can cover gameplay. */
 export function BroadcastResults({
   matches,
   announcement,
 }: {
-  matches: readonly ResultMatch[]
-  announcement: string
+  matches: readonly ResultMatch[];
+  announcement: string;
 }) {
-  const previous = useRef<readonly ResultMatch[] | null>(null)
-  const [queue, setQueue] = useState<ResultNotice[]>([])
+  const previous = useRef<readonly ResultMatch[] | null>(null);
+  const [queue, setQueue] = useState<ResultNotice[]>([]);
   useEffect(() => {
-    const incoming = newResultNotices(previous.current, matches)
-    previous.current = matches
+    const incoming = newResultNotices(previous.current, matches);
+    previous.current = matches;
     const timer = window.setTimeout(
       () =>
         setQueue((old) => {
-          const current = new Map(matches.map((match) => [match.id, match]))
+          const current = new Map(matches.map((match) => [match.id, match]));
           const valid = old.filter((notice) => {
-            const match = current.get(notice.matchId)
-            return match?.status === 'complete' && resultFingerprint(match) === notice.fingerprint
-          })
+            const match = current.get(notice.matchId);
+            return match?.status === 'complete' && resultFingerprint(match) === notice.fingerprint;
+          });
           // Keep the freshest batch bounded when a bracket import brings many results.
-          return [...valid, ...incoming].slice(-8)
+          return [...valid, ...incoming].slice(-8);
         }),
       0,
-    )
-    return () => window.clearTimeout(timer)
-  }, [matches])
-  const active = queue[0]
+    );
+    return () => window.clearTimeout(timer);
+  }, [matches]);
+  const active = queue[0];
   const match =
     active &&
     matches.find(
@@ -45,14 +45,14 @@ export function BroadcastResults({
         item.id === active.matchId &&
         item.status === 'complete' &&
         resultFingerprint(item) === active.fingerprint,
-    )
-  const activeKey = active ? `${active.matchId}:${active.fingerprint}` : ''
+    );
+  const activeKey = active ? `${active.matchId}:${active.fingerprint}` : '';
   useEffect(() => {
-    if (!activeKey) return
-    const timer = window.setTimeout(() => setQueue((old) => old.slice(1)), 8000)
-    return () => window.clearTimeout(timer)
-  }, [activeKey])
-  const recent = recentResults(matches)
+    if (!activeKey) return;
+    const timer = window.setTimeout(() => setQueue((old) => old.slice(1)), 8000);
+    return () => window.clearTimeout(timer);
+  }, [activeKey]);
+  const recent = recentResults(matches);
   return (
     <div className="broadcast-results">
       <div className="broadcast-recent" aria-label="Recent match outcomes">
@@ -107,5 +107,5 @@ export function BroadcastResults({
         )}
       </div>
     </div>
-  )
+  );
 }

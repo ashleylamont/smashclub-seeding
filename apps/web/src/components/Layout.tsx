@@ -1,24 +1,24 @@
-import { useEffect, useRef } from 'react'
-import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
-import { useQueryClient } from '@tanstack/react-query'
-import { authClient, useCurrentUser } from '../lib/auth'
-import { BUILD_COMMIT_URL, BUILD_LABEL, BUILD_SHA } from '../lib/build'
-import { useEventSource } from '../lib/useEventSource'
-import { NemesisMark } from './NemesisMark'
-import { ThemeToggle } from './ThemeToggle'
-import '../App.css'
+import { useEffect, useRef } from 'react';
+import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
+import { useQueryClient } from '@tanstack/react-query';
+import { authClient, useCurrentUser } from '../lib/auth';
+import { BUILD_COMMIT_URL, BUILD_LABEL, BUILD_SHA } from '../lib/build';
+import { useEventSource } from '../lib/useEventSource';
+import { NemesisMark } from './NemesisMark';
+import { ThemeToggle } from './ThemeToggle';
+import '../App.css';
 
 /** App shell: top nav, routed content, footer. Also holds the global SSE
  *  subscription that keeps cached queries fresh across the whole app. */
 export function Layout() {
-  const { data: session, isPending } = authClient.useSession()
-  const currentUser = useCurrentUser(session)
-  const role = currentUser.data?.role
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const pathname = useRouterState({ select: (state) => state.location.pathname })
-  const standaloneDisplay = /^\/(live|overlay)\/[^/]+\/?$/.test(pathname)
-  const nav = useRef<HTMLElement>(null)
+  const { data: session, isPending } = authClient.useSession();
+  const currentUser = useCurrentUser(session);
+  const role = currentUser.data?.role;
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const standaloneDisplay = /^\/(live|overlay)\/[^/]+\/?$/.test(pathname);
+  const nav = useRef<HTMLElement>(null);
 
   /*
    * Publishes the nav's height as `--nav-h`.
@@ -31,42 +31,45 @@ export function Layout() {
    * link, and touch targets change it again. So it is measured.
    */
   useEffect(() => {
-    const element = nav.current
-    if (!element) return
+    const element = nav.current;
+    if (!element) return;
     const publish = () => {
-      document.documentElement.style.setProperty('--nav-h', `${Math.round(element.offsetHeight)}px`)
-    }
-    publish()
-    const observer = new ResizeObserver(publish)
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [standaloneDisplay])
+      document.documentElement.style.setProperty(
+        '--nav-h',
+        `${Math.round(element.offsetHeight)}px`,
+      );
+    };
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [standaloneDisplay]);
 
   useEventSource('/api/live', (type) => {
     if (type === 'recompute_completed') {
-      void queryClient.invalidateQueries({ queryKey: ['leaderboard'] })
-      void queryClient.invalidateQueries({ queryKey: ['ratingHistory'] })
-      void queryClient.invalidateQueries({ queryKey: ['player'] })
+      void queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+      void queryClient.invalidateQueries({ queryKey: ['ratingHistory'] });
+      void queryClient.invalidateQueries({ queryKey: ['player'] });
     } else if (type === 'sync_completed' || type === 'set_updated') {
-      void queryClient.invalidateQueries({ queryKey: ['tournaments'] })
-      void queryClient.invalidateQueries({ queryKey: ['tournament'] })
+      void queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+      void queryClient.invalidateQueries({ queryKey: ['tournament'] });
     }
-  })
+  });
 
   const signOut = async () => {
-    await authClient.signOut()
-    void navigate({ to: '/' })
-  }
+    await authClient.signOut();
+    void navigate({ to: '/' });
+  };
 
-  const userName = session?.user.name ?? ''
-  const userImage = session?.user.image ?? null
+  const userName = session?.user.name ?? '';
+  const userImage = session?.user.image ?? null;
 
   if (standaloneDisplay)
     return (
       <main id="main">
         <Outlet />
       </main>
-    )
+    );
 
   return (
     <div className="app-shell">
@@ -160,5 +163,5 @@ export function Layout() {
         </span>
       </footer>
     </div>
-  )
+  );
 }

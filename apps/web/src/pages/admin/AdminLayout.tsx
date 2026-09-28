@@ -1,7 +1,7 @@
-import { useEffect, useRef } from 'react'
-import { Link, Navigate, Outlet, useRouterState } from '@tanstack/react-router'
-import { authClient, useCurrentUser } from '../../lib/auth'
-import './Admin.css'
+import { useEffect, useRef } from 'react';
+import { Link, Navigate, Outlet, useRouterState } from '@tanstack/react-router';
+import { authClient, useCurrentUser } from '../../lib/auth';
+import './Admin.css';
 
 const TABS = [
   { to: '/admin/tournaments', label: 'Tournaments' },
@@ -15,13 +15,13 @@ const TABS = [
   { to: '/admin/event-operations', label: 'Run event' },
   { to: '/admin/settings', label: 'Settings' },
   { to: '/admin/accounts', label: 'Admins' },
-] as const
+] as const;
 
 export function AdminLayout() {
-  const { data: session, isPending } = authClient.useSession()
-  const currentUser = useCurrentUser(session)
-  const pathname = useRouterState({ select: (state) => state.location.pathname })
-  const tabs = useRef<HTMLElement>(null)
+  const { data: session, isPending } = authClient.useSession();
+  const currentUser = useCurrentUser(session);
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const tabs = useRef<HTMLElement>(null);
 
   /*
    * Keeps the current section visible in the tab strip.
@@ -34,22 +34,22 @@ export function AdminLayout() {
    * on screen.
    */
   useEffect(() => {
-    const strip = tabs.current
-    const active = strip?.querySelector<HTMLElement>('.admin-tab.active')
-    if (!strip || !active) return
+    const strip = tabs.current;
+    const active = strip?.querySelector<HTMLElement>('.admin-tab.active');
+    if (!strip || !active) return;
     const overflowsRight =
-      active.offsetLeft + active.offsetWidth > strip.scrollLeft + strip.clientWidth
-    const overflowsLeft = active.offsetLeft < strip.scrollLeft
+      active.offsetLeft + active.offsetWidth > strip.scrollLeft + strip.clientWidth;
+    const overflowsLeft = active.offsetLeft < strip.scrollLeft;
     if (overflowsRight || overflowsLeft) {
-      strip.scrollTo({ left: Math.max(0, active.offsetLeft - 16), behavior: 'auto' })
+      strip.scrollTo({ left: Math.max(0, active.offsetLeft - 16), behavior: 'auto' });
     }
-  }, [pathname])
+  }, [pathname]);
 
   if (isPending || (session && currentUser.isPending))
-    return <p className="loading-text">Checking access…</p>
-  if (!session) return <Navigate to="/login" />
-  if (currentUser.isError) return <p className="error-text">{currentUser.error.message}</p>
-  if (currentUser.data?.role !== 'admin') return <Navigate to="/" />
+    return <p className="loading-text">Checking access…</p>;
+  if (!session) return <Navigate to="/login" />;
+  if (currentUser.isError) return <p className="error-text">{currentUser.error.message}</p>;
+  if (currentUser.data?.role !== 'admin') return <Navigate to="/" />;
 
   return (
     <div className="admin-layout">
@@ -70,5 +70,5 @@ export function AdminLayout() {
       </div>
       <Outlet />
     </div>
-  )
+  );
 }

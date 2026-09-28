@@ -9,55 +9,55 @@
  * and must not be set for Lower.
  */
 
-export type Division = 'upper' | 'lower'
-export type DivisionPreference = 'auto' | Division
+export type Division = 'upper' | 'lower';
+export type DivisionPreference = 'auto' | Division;
 
 export interface DivisionCandidate {
-  entryId: string
-  playerId: string
-  divisionPreference: DivisionPreference
+  entryId: string;
+  playerId: string;
+  divisionPreference: DivisionPreference;
   /** Frozen leaderboard rank; null for anyone the board does not carry yet. */
-  snapshotRank: number | null
+  snapshotRank: number | null;
   /** Paste order, the tiebreak among equally unranked entrants. */
-  sourceLineNumber: number
+  sourceLineNumber: number;
 }
 
 export interface DivisionPlacement {
-  entryId: string
-  playerId: string
-  division: Division
+  entryId: string;
+  playerId: string;
+  division: Division;
   /** 1-based seed within the division. */
-  seed: number
-  snapshotRank: number | null
+  seed: number;
+  snapshotRank: number | null;
   /** True when an admin pinned this entrant rather than the rank deciding. */
-  pinned: boolean
+  pinned: boolean;
 }
 
 export interface PlanIssue {
-  code: string
-  message: string
+  code: string;
+  message: string;
   /** Rows the issue is about, so the UI can link straight to them. */
-  entryIds?: string[]
+  entryIds?: string[];
 }
 
 export class EventPlanValidationError extends Error {
   constructor(readonly issues: PlanIssue[]) {
-    super(issues.map((issue) => issue.message).join(' '))
-    this.name = 'EventPlanValidationError'
+    super(issues.map((issue) => issue.message).join(' '));
+    this.name = 'EventPlanValidationError';
   }
 }
 
 /** Default to an even competitive split, with the extra entrant in Upper. */
 export function defaultUpperSize(total: number, poolSize = 4): number | null {
-  const half = Math.ceil(total / 2)
-  return validUpperSizes(total, poolSize).includes(half) ? half : null
+  const half = Math.ceil(total / 2);
+  return validUpperSizes(total, poolSize).includes(half) ? half : null;
 }
 
 /** Every split supporting pools of three to five (target four). */
 export function validUpperSizes(total: number, poolSize = 4): number[] {
-  const minimum = Math.max(3, poolSize - 1)
-  if (!Number.isInteger(total) || total < minimum * 2) return []
-  return Array.from({ length: total - minimum * 2 + 1 }, (_, index) => minimum + index)
+  const minimum = Math.max(3, poolSize - 1);
+  if (!Number.isInteger(total) || total < minimum * 2) return [];
+  return Array.from({ length: total - minimum * 2 + 1 }, (_, index) => minimum + index);
 }
 
 /**
@@ -69,16 +69,16 @@ export function validateDivisionInput(
   candidates: readonly DivisionCandidate[],
   options: { upperTargetSize: number | null; poolSize: number },
 ): PlanIssue[] {
-  const { upperTargetSize, poolSize } = options
-  const issues: PlanIssue[] = []
-  const total = candidates.length
+  const { upperTargetSize, poolSize } = options;
+  const issues: PlanIssue[] = [];
+  const total = candidates.length;
 
-  const duplicates = new Map<string, string[]>()
+  const duplicates = new Map<string, string[]>();
   for (const candidate of candidates) {
     duplicates.set(candidate.playerId, [
       ...(duplicates.get(candidate.playerId) ?? []),
       candidate.entryId,
-    ])
+    ]);
   }
   for (const [, entryIds] of duplicates) {
     if (entryIds.length > 1) {
@@ -86,13 +86,13 @@ export function validateDivisionInput(
         code: 'duplicate_player',
         message: 'The same player appears on more than one row.',
         entryIds,
-      })
+      });
     }
   }
 
   const unrankedAuto = candidates.filter(
     (candidate) => candidate.snapshotRank === null && candidate.divisionPreference === 'auto',
-  )
+  );
   if (unrankedAuto.length > 0) {
     issues.push({
       code: 'unranked_needs_division',
@@ -100,23 +100,23 @@ export function validateDivisionInput(
         `${unrankedAuto.length} entrant(s) have no club ranking, so nothing can place them automatically. ` +
         'Pick Upper or Lower for each.',
       entryIds: unrankedAuto.map((candidate) => candidate.entryId),
-    })
+    });
   }
 
-  const minimum = Math.max(3, poolSize - 1)
+  const minimum = Math.max(3, poolSize - 1);
   if (total < minimum * 2) {
     issues.push({
       code: 'too_few_entrants',
       message: `Two divisions need at least ${minimum * 2} entrants; this roster has ${total}.`,
-    })
-    return issues
+    });
+    return issues;
   }
   if (upperTargetSize === null) {
     issues.push({
       code: 'upper_size_unset',
       message: 'Choose how many players go in the Upper division.',
-    })
-    return issues
+    });
+    return issues;
   }
   if (
     !Number.isInteger(upperTargetSize) ||
@@ -126,27 +126,27 @@ export function validateDivisionInput(
     issues.push({
       code: 'division_too_small',
       message: `Each division needs at least ${minimum} players and a whole-number size.`,
-    })
+    });
   }
 
-  const pinnedUpper = candidates.filter((candidate) => candidate.divisionPreference === 'upper')
-  const pinnedLower = candidates.filter((candidate) => candidate.divisionPreference === 'lower')
+  const pinnedUpper = candidates.filter((candidate) => candidate.divisionPreference === 'upper');
+  const pinnedLower = candidates.filter((candidate) => candidate.divisionPreference === 'lower');
   if (pinnedUpper.length > upperTargetSize) {
     issues.push({
       code: 'pins_exceed_upper',
       message: `${pinnedUpper.length} entrants are pinned to Upper, which only has ${upperTargetSize} places.`,
       entryIds: pinnedUpper.map((candidate) => candidate.entryId),
-    })
+    });
   }
   if (pinnedLower.length > total - upperTargetSize) {
     issues.push({
       code: 'pins_exceed_lower',
       message: `${pinnedLower.length} entrants are pinned to Lower, which only has ${total - upperTargetSize} places.`,
       entryIds: pinnedLower.map((candidate) => candidate.entryId),
-    })
+    });
   }
 
-  return issues
+  return issues;
 }
 
 /**
@@ -170,27 +170,27 @@ export function assignDivisions(
   candidates: readonly DivisionCandidate[],
   options: { upperTargetSize: number | null; poolSize: number },
 ): DivisionPlacement[] {
-  const issues = validateDivisionInput(candidates, options)
-  if (issues.length > 0) throw new EventPlanValidationError(issues)
+  const issues = validateDivisionInput(candidates, options);
+  if (issues.length > 0) throw new EventPlanValidationError(issues);
 
-  const upperTargetSize = options.upperTargetSize!
-  const upper: DivisionCandidate[] = []
-  const lower: DivisionCandidate[] = []
-  const auto: DivisionCandidate[] = []
+  const upperTargetSize = options.upperTargetSize!;
+  const upper: DivisionCandidate[] = [];
+  const lower: DivisionCandidate[] = [];
+  const auto: DivisionCandidate[] = [];
   for (const candidate of candidates) {
-    if (candidate.divisionPreference === 'upper') upper.push(candidate)
-    else if (candidate.divisionPreference === 'lower') lower.push(candidate)
-    else auto.push(candidate)
+    if (candidate.divisionPreference === 'upper') upper.push(candidate);
+    else if (candidate.divisionPreference === 'lower') lower.push(candidate);
+    else auto.push(candidate);
   }
 
   // Every auto entrant is ranked at this point — `validateDivisionInput`
   // rejects the alternative — so ranking order is total.
-  const byRank = [...auto].sort(seedOrder)
-  const upperPlaces = upperTargetSize - upper.length
-  upper.push(...byRank.slice(0, upperPlaces))
-  lower.push(...byRank.slice(upperPlaces))
+  const byRank = [...auto].sort(seedOrder);
+  const upperPlaces = upperTargetSize - upper.length;
+  upper.push(...byRank.slice(0, upperPlaces));
+  lower.push(...byRank.slice(upperPlaces));
 
-  return [...seedDivision(upper, 'upper'), ...seedDivision(lower, 'lower')]
+  return [...seedDivision(upper, 'upper'), ...seedDivision(lower, 'lower')];
 }
 
 function seedDivision(
@@ -204,15 +204,15 @@ function seedDivision(
     seed: index + 1,
     snapshotRank: candidate.snapshotRank,
     pinned: candidate.divisionPreference !== 'auto',
-  }))
+  }));
 }
 
 /** Ranked first, best rank first; unranked after them in paste order. */
 function seedOrder(a: DivisionCandidate, b: DivisionCandidate): number {
   if (a.snapshotRank !== null && b.snapshotRank !== null) {
-    return a.snapshotRank - b.snapshotRank || a.sourceLineNumber - b.sourceLineNumber
+    return a.snapshotRank - b.snapshotRank || a.sourceLineNumber - b.sourceLineNumber;
   }
-  if (a.snapshotRank !== null) return -1
-  if (b.snapshotRank !== null) return 1
-  return a.sourceLineNumber - b.sourceLineNumber
+  if (a.snapshotRank !== null) return -1;
+  if (b.snapshotRank !== null) return 1;
+  return a.sourceLineNumber - b.sourceLineNumber;
 }

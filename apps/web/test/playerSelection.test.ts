@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { eventPlayers } from '../src/lib/playerSelection'
+import { describe, expect, it } from 'vitest';
+import { eventPlayers } from '../src/lib/playerSelection';
 
 describe('device-only player options', () => {
   it('uses stable public IDs, deduplicates repeat matches and excludes unresolved slots', () => {
@@ -14,6 +14,6 @@ describe('device-only player options', () => {
       { id: 'b', name: 'Alex' },
       { id: 'd', name: 'Player' },
       { id: 'c', name: 'Zoe' },
-    ])
-  })
-})
+    ]);
+  });
+});

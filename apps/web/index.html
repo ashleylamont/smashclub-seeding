@@ -18,9 +18,9 @@
       // pinned light theme does not flash the dark field on load. Must agree
       // with src/lib/theme.ts on the key and the attribute.
       try {
-        var mode = localStorage.getItem('smashclub:theme')
+        var mode = localStorage.getItem('smashclub:theme');
         if (mode === 'light' || mode === 'dark')
-          document.documentElement.setAttribute('data-theme', mode)
+          document.documentElement.setAttribute('data-theme', mode);
       } catch (e) {
         /* Storage can throw; the OS preference is a fine fallback. */
       }

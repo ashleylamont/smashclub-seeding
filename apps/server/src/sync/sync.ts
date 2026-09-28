@@ -1,20 +1,20 @@
-import { and, eq } from 'drizzle-orm'
-import type { Db } from '@smashclub/db'
-import { sets, syncJobs, tournamentParticipants, tournaments } from '@smashclub/db'
-import { scoresIndicateUnplayed, type ChallongeMatch } from '@smashclub/engine'
-import type { ChallongeClient } from '../challonge/client'
-import { recomputePendingCandidates } from '../identity/candidates'
-import { backfillSetPlayers, matchTournamentParticipants } from '../identity/matching'
-import { liveBus } from '../live/bus'
-import { markDraftRunsStale } from '../seeding/seeding'
+import { and, eq } from 'drizzle-orm';
+import type { Db } from '@smashclub/db';
+import { sets, syncJobs, tournamentParticipants, tournaments } from '@smashclub/db';
+import { scoresIndicateUnplayed, type ChallongeMatch } from '@smashclub/engine';
+import type { ChallongeClient } from '../challonge/client';
+import { recomputePendingCandidates } from '../identity/candidates';
+import { backfillSetPlayers, matchTournamentParticipants } from '../identity/matching';
+import { liveBus } from '../live/bus';
+import { markDraftRunsStale } from '../seeding/seeding';
 
 export interface SyncResult {
-  tournamentId: string
-  participantsUpserted: number
-  setsUpserted: number
-  setsChanged: number
-  queuedForReview: number
-  challongeState: string
+  tournamentId: string;
+  participantsUpserted: number;
+  setsUpserted: number;
+  setsChanged: number;
+  queuedForReview: number;
+  challongeState: string;
 }
 
 /**
@@ -40,7 +40,7 @@ export interface SyncOptions {
    * needs — participants, matches, winners, scores, seeds — is in the public
    * bracket.
    */
-  source?: 'api' | 'public'
+  source?: 'api' | 'public';
 }
 
 export async function syncTournament(
@@ -49,26 +49,26 @@ export async function syncTournament(
   tournamentId: string,
   options: SyncOptions = {},
 ): Promise<SyncResult> {
-  const [tournament] = await db.select().from(tournaments).where(eq(tournaments.id, tournamentId))
-  if (!tournament) throw new Error(`Unknown tournament ${tournamentId}`)
+  const [tournament] = await db.select().from(tournaments).where(eq(tournaments.id, tournamentId));
+  if (!tournament) throw new Error(`Unknown tournament ${tournamentId}`);
   if (tournament.provider === 'native')
-    throw new Error('Nemesis results cannot be refreshed from Challonge.')
+    throw new Error('Nemesis results cannot be refreshed from Challonge.');
 
   const [job] = await db
     .insert(syncJobs)
     .values({ type: 'tournament_sync', tournamentId })
-    .returning({ id: syncJobs.id })
+    .returning({ id: syncJobs.id });
 
   try {
     await db
       .update(tournaments)
       .set({ syncState: 'syncing', updatedAt: new Date() })
-      .where(eq(tournaments.id, tournamentId))
+      .where(eq(tournaments.id, tournamentId));
 
     const bundle =
       options.source === 'api'
         ? await client.fetchTournamentBundle(tournament.challongeSlug)
-        : await client.fetchPublicTournamentBundle(tournament.challongeSlug)
+        : await client.fetchPublicTournamentBundle(tournament.challongeSlug);
 
     const eventDate = tournament.eventDateManual
       ? tournament.eventDate
@@ -76,7 +76,7 @@ export async function syncTournament(
           bundle.tournament.startedAt ??
             bundle.tournament.completedAt ??
             bundle.tournament.updatedAt,
-        ) ?? tournament.eventDate)
+        ) ?? tournament.eventDate);
 
     await db
       .update(tournaments)
@@ -88,7 +88,7 @@ export async function syncTournament(
         raw: bundle.tournament as unknown as Record<string, unknown>,
         updatedAt: new Date(),
       })
-      .where(eq(tournaments.id, tournamentId))
+      .where(eq(tournaments.id, tournamentId));
 
     // --- participants ---
     const beforeCount = (
@@ -96,8 +96,8 @@ export async function syncTournament(
         .select({ id: tournamentParticipants.id })
         .from(tournamentParticipants)
         .where(eq(tournamentParticipants.tournamentId, tournamentId))
-    ).length
-    let participantsUpserted = 0
+    ).length;
+    let participantsUpserted = 0;
     for (const participant of bundle.participants) {
       await db
         .insert(tournamentParticipants)
@@ -123,8 +123,8 @@ export async function syncTournament(
             ...(participant.finalRank !== null ? { finalRank: participant.finalRank } : {}),
             updatedAt: new Date(),
           },
-        })
-      participantsUpserted += 1
+        });
+      participantsUpserted += 1;
     }
 
     const participantRows = await db
@@ -133,30 +133,30 @@ export async function syncTournament(
         challongeParticipantId: tournamentParticipants.challongeParticipantId,
       })
       .from(tournamentParticipants)
-      .where(eq(tournamentParticipants.tournamentId, tournamentId))
+      .where(eq(tournamentParticipants.tournamentId, tournamentId));
     const participantIdByChallongeId = new Map(
       participantRows.map((row) => [row.challongeParticipantId, row.id]),
-    )
+    );
     if (participantRows.length !== beforeCount) {
       // Roster changed: any draft seeding run no longer reflects reality.
-      await markDraftRunsStale(db, tournamentId)
+      await markDraftRunsStale(db, tournamentId);
     }
 
     // --- sets ---
-    let setsUpserted = 0
-    const changedSetIds = new Set<string>()
+    let setsUpserted = 0;
+    const changedSetIds = new Set<string>();
     for (const match of bundle.matches) {
-      const values = buildSetValues(tournamentId, match, participantIdByChallongeId)
+      const values = buildSetValues(tournamentId, match, participantIdByChallongeId);
       const existing = await db
         .select()
         .from(sets)
-        .where(and(eq(sets.tournamentId, tournamentId), eq(sets.challongeMatchId, match.id)))
-      const current = existing[0]
+        .where(and(eq(sets.tournamentId, tournamentId), eq(sets.challongeMatchId, match.id)));
+      const current = existing[0];
       if (!current) {
-        const [inserted] = await db.insert(sets).values(values).returning({ id: sets.id })
-        setsUpserted += 1
-        changedSetIds.add(inserted!.id)
-        continue
+        const [inserted] = await db.insert(sets).values(values).returning({ id: sets.id });
+        setsUpserted += 1;
+        changedSetIds.add(inserted!.id);
+        continue;
       }
       const changed =
         current.state !== values.state ||
@@ -176,7 +176,7 @@ export async function syncTournament(
          * this the fix would only have reached sets Challonge happened to touch
          * again. An admin's manual override is still respected below.
          */
-        (!current.exclusionManual && current.excludedFromRatings !== values.excludedFromRatings)
+        (!current.exclusionManual && current.excludedFromRatings !== values.excludedFromRatings);
       if (changed) {
         await db
           .update(sets)
@@ -189,24 +189,24 @@ export async function syncTournament(
             exclusionManual: current.exclusionManual,
             updatedAt: new Date(),
           })
-          .where(eq(sets.id, current.id))
-        changedSetIds.add(current.id)
+          .where(eq(sets.id, current.id));
+        changedSetIds.add(current.id);
       }
-      setsUpserted += 1
+      setsUpserted += 1;
     }
 
     // --- identity resolution + denormalisation ---
-    const outcomes = await matchTournamentParticipants(db, tournamentId)
+    const outcomes = await matchTournamentParticipants(db, tournamentId);
     // A later stage can introduce sets after every participant is resolved.
     // Identity matching then has nothing to do, but those sets still need links.
-    for (const id of await backfillSetPlayers(db, tournamentId)) changedSetIds.add(id)
-    const setsChanged = changedSetIds.size
-    const queuedForReview = outcomes.filter((o) => o.method === 'queued').length
+    for (const id of await backfillSetPlayers(db, tournamentId)) changedSetIds.add(id);
+    const setsChanged = changedSetIds.size;
+    const queuedForReview = outcomes.filter((o) => o.method === 'queued').length;
     // Refresh the older items' candidate snapshots too, but only when this sync
     // actually had identities to resolve — a live poll of a settled bracket
     // should stay a no-op. No Challonge traffic either way: this reads players
     // out of Postgres.
-    if (outcomes.length > 0) await recomputePendingCandidates(db)
+    if (outcomes.length > 0) await recomputePendingCandidates(db);
 
     /*
      * `sync_state` answers ONE question: have we pulled this bracket's results
@@ -226,10 +226,10 @@ export async function syncTournament(
      * exhausting the free tier's 500 requests/month in about 40 minutes.
      * Liveness is an explicit, expiring admin decision (`tournaments.live_until`).
      */
-    const syncState = 'synced'
+    const syncState = 'synced';
     // A finished bracket ends live monitoring immediately, without waiting for
     // the window to expire.
-    const liveUntil = bundle.tournament.state === 'complete' ? null : tournament.liveUntil
+    const liveUntil = bundle.tournament.state === 'complete' ? null : tournament.liveUntil;
     await db
       .update(tournaments)
       .set({
@@ -239,7 +239,7 @@ export async function syncTournament(
         syncError: null,
         updatedAt: new Date(),
       })
-      .where(eq(tournaments.id, tournamentId))
+      .where(eq(tournaments.id, tournamentId));
 
     const result: SyncResult = {
       tournamentId,
@@ -248,7 +248,7 @@ export async function syncTournament(
       setsChanged,
       queuedForReview,
       challongeState: bundle.tournament.state,
-    }
+    };
     await db
       .update(syncJobs)
       .set({
@@ -256,22 +256,22 @@ export async function syncTournament(
         finishedAt: new Date(),
         stats: result as unknown as Record<string, unknown>,
       })
-      .where(eq(syncJobs.id, job!.id))
+      .where(eq(syncJobs.id, job!.id));
     if (setsChanged > 0) {
-      liveBus.publish({ type: 'set_updated', tournamentId, payload: { setsChanged } })
+      liveBus.publish({ type: 'set_updated', tournamentId, payload: { setsChanged } });
     }
-    liveBus.publish({ type: 'sync_completed', tournamentId, payload: result })
-    return result
+    liveBus.publish({ type: 'sync_completed', tournamentId, payload: result });
+    return result;
   } catch (error) {
     await db
       .update(syncJobs)
       .set({ status: 'failed', finishedAt: new Date(), error: String(error) })
-      .where(eq(syncJobs.id, job!.id))
+      .where(eq(syncJobs.id, job!.id));
     await db
       .update(tournaments)
       .set({ syncState: 'error', syncError: String(error), updatedAt: new Date() })
-      .where(eq(tournaments.id, tournamentId))
-    throw error
+      .where(eq(tournaments.id, tournamentId));
+    throw error;
   }
 }
 
@@ -285,7 +285,7 @@ function buildSetValues(
       ? 1
       : match.winnerId !== null && match.player2Id !== null && match.winnerId === match.player2Id
         ? 2
-        : null
+        : null;
   return {
     tournamentId,
     challongeMatchId: match.id,
@@ -303,11 +303,11 @@ function buildSetValues(
     excludedFromRatings: scoresIndicateUnplayed(match.scoresCsv),
     completedAt: parseDate(match.completedAt),
     raw: match as unknown as Record<string, unknown>,
-  }
+  };
 }
 
 function parseDate(value: string | null | undefined): Date | null {
-  if (!value) return null
-  const parsed = new Date(value)
-  return Number.isNaN(parsed.getTime()) ? null : parsed
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }

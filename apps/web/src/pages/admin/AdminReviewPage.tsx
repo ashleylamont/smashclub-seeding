@@ -1,38 +1,38 @@
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { trpc } from '../../lib/trpc'
-import type { ReviewCandidate, ReviewItem } from '../../lib/apiTypes'
-import { timeAgo } from '../../lib/format'
-import { PlayerFormModal, type PlayerFormValues } from '../../components/PlayerFormModal'
-import { PlayerLookupModal } from '../../components/PlayerLookupModal'
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { trpc } from '../../lib/trpc';
+import type { ReviewCandidate, ReviewItem } from '../../lib/apiTypes';
+import { timeAgo } from '../../lib/format';
+import { PlayerFormModal, type PlayerFormValues } from '../../components/PlayerFormModal';
+import { PlayerLookupModal } from '../../components/PlayerLookupModal';
 
 /** Details the reviewer may attach when a resolution mints a new player. */
 interface NewPlayerDetails {
-  canonicalName?: string
-  displayName?: string | null
-  companyCode?: string | null
-  characters?: string[]
+  canonicalName?: string;
+  displayName?: string | null;
+  companyCode?: string | null;
+  characters?: string[];
 }
 
 type Resolution =
   | { kind: 'linked_existing'; playerId: string }
   | { kind: 'created_new'; details?: NewPlayerDetails }
-  | { kind: 'kept_separate'; details?: NewPlayerDetails }
+  | { kind: 'kept_separate'; details?: NewPlayerDetails };
 
 /** Which resolution the detail form is currently standing in for. */
-type DetailKind = 'created_new' | 'kept_separate'
+type DetailKind = 'created_new' | 'kept_separate';
 
 export function AdminReviewPage() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   const queue = useQuery({
     queryKey: ['admin', 'reviewQueue'],
     queryFn: () => trpc.admin.reviewQueue.query(),
-  })
+  });
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['admin', 'reviewQueue'] })
-    void queryClient.invalidateQueries({ queryKey: ['admin', 'players'] })
-  }
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'reviewQueue'] });
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'players'] });
+  };
 
   /**
    * Candidates are a snapshot taken when sync queued the item, so anything
@@ -44,10 +44,10 @@ export function AdminReviewPage() {
   const recompute = useMutation({
     mutationFn: () => trpc.admin.recomputeReviewCandidates.mutate({}),
     onSuccess: invalidate,
-  })
+  });
 
-  if (queue.isPending) return <p className="loading-text">Loading review queue…</p>
-  if (queue.isError) return <p className="error-text">{queue.error.message}</p>
+  if (queue.isPending) return <p className="loading-text">Loading review queue…</p>;
+  if (queue.isError) return <p className="error-text">{queue.error.message}</p>;
 
   return (
     <div>
@@ -79,36 +79,36 @@ export function AdminReviewPage() {
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function ReviewCard({ item, onResolved }: { item: ReviewItem; onResolved: () => void }) {
-  const candidates = (item.candidates as ReviewCandidate[] | null) ?? []
-  const [detailKind, setDetailKind] = useState<DetailKind | null>(null)
-  const [lookingUp, setLookingUp] = useState(false)
+  const candidates = (item.candidates as ReviewCandidate[] | null) ?? [];
+  const [detailKind, setDetailKind] = useState<DetailKind | null>(null);
+  const [lookingUp, setLookingUp] = useState(false);
 
   const companies = useQuery({
     queryKey: ['admin', 'companies'],
     queryFn: () => trpc.admin.companies.query(),
-  })
+  });
 
   const resolve = useMutation({
     mutationFn: (resolution: Resolution) =>
       trpc.admin.resolveReview.mutate({ reviewItemId: item.id, resolution }),
     onSuccess: () => {
-      setDetailKind(null)
-      setLookingUp(false)
-      onResolved()
+      setDetailKind(null);
+      setLookingUp(false);
+      onResolved();
     },
-  })
+  });
 
   const recomputeItem = useMutation({
     mutationFn: () => trpc.admin.recomputeReviewCandidates.mutate({ reviewItemId: item.id }),
     onSuccess: onResolved,
-  })
+  });
 
   const submitDetails = (values: PlayerFormValues) => {
-    if (!detailKind) return
+    if (!detailKind) return;
     resolve.mutate({
       kind: detailKind,
       details: {
@@ -117,8 +117,8 @@ function ReviewCard({ item, onResolved }: { item: ReviewItem; onResolved: () => 
         companyCode: values.companyCode === '' ? null : values.companyCode,
         characters: values.characters,
       },
-    })
-  }
+    });
+  };
 
   return (
     <div className="card review-card">
@@ -260,5 +260,5 @@ function ReviewCard({ item, onResolved }: { item: ReviewItem; onResolved: () => 
         </PlayerFormModal>
       )}
     </div>
-  )
+  );
 }

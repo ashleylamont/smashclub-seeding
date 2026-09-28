@@ -26,37 +26,37 @@ import {
   type EngineTournament,
   type EvalSet,
   type PlayerScore,
-} from '@smashclub/engine'
-import { defaultGlickoSettings, type GlickoSettings } from '@smashclub/shared'
+} from '@smashclub/engine';
+import { defaultGlickoSettings, type GlickoSettings } from '@smashclub/shared';
 
 interface Row {
-  playerId: string
-  rank: number
-  displayed: number
-  league: string
-  sets: number
+  playerId: string;
+  rank: number;
+  displayed: number;
+  league: string;
+  sets: number;
 }
 
 function quantile(sorted: readonly number[], q: number): number {
-  if (sorted.length === 0) return NaN
-  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(q * (sorted.length - 1))))]!
+  if (sorted.length === 0) return NaN;
+  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(q * (sorted.length - 1))))]!;
 }
 
 function describe(label: string, values: number[]): string {
-  const sorted = [...values].sort((a, b) => a - b)
+  const sorted = [...values].sort((a, b) => a - b);
   return (
     `${label.padEnd(26)} min ${quantile(sorted, 0).toFixed(0).padStart(5)}   ` +
     `p25 ${quantile(sorted, 0.25).toFixed(0).padStart(5)}   median ${quantile(sorted, 0.5).toFixed(0).padStart(5)}   ` +
     `p75 ${quantile(sorted, 0.75).toFixed(0).padStart(5)}   max ${quantile(sorted, 1).toFixed(0).padStart(5)}`
-  )
+  );
 }
 
 function toEngineInput(sets: readonly EvalSet[]): {
-  sets: EngineSet[]
-  tournaments: EngineTournament[]
+  sets: EngineSet[];
+  tournaments: EngineTournament[];
 } {
-  const tournaments = new Map<string, EngineTournament>()
-  const engineSets: EngineSet[] = []
+  const tournaments = new Map<string, EngineTournament>();
+  const engineSets: EngineSet[] = [];
   sets.forEach((set, index) => {
     if (!tournaments.has(set.tournamentId)) {
       tournaments.set(set.tournamentId, {
@@ -65,7 +65,7 @@ function toEngineInput(sets: readonly EvalSet[]): {
         eventDate: new Date(Date.UTC(2024, 0, 1) + set.time * 86_400_000).toISOString(),
         isRookie: /rookie/i.test(set.tournamentId),
         challongeId: null,
-      })
+      });
     }
     engineSets.push({
       id: `s${index}`,
@@ -76,9 +76,9 @@ function toEngineInput(sets: readonly EvalSet[]): {
       suggestedPlayOrder: index,
       completedAt: null,
       challongeMatchId: index,
-    })
-  })
-  return { sets: engineSets, tournaments: [...tournaments.values()] }
+    });
+  });
+  return { sets: engineSets, tournaments: [...tournaments.values()] };
 }
 
 function glickoRows(
@@ -86,7 +86,7 @@ function glickoRows(
   settings: GlickoSettings,
   mode: 'current' | 'shipped',
 ): { rows: Row[]; scores: PlayerScore[]; decayEvents: number; periods: number } {
-  const input = toEngineInput(sets)
+  const input = toEngineInput(sets);
   const replay = replayRatings({
     sets: input.sets,
     tournaments: input.tournaments,
@@ -102,18 +102,18 @@ function glickoRows(
             legacyVolatilityDecay: true,
           }
         : undefined,
-  })
+  });
   const scores = [...replay.finalStates.values()].map((state) =>
     computePlayerScore(state, replay.finalStates, settings),
-  )
-  const decayEvents = replay.events.filter((event) => event.isDecay).length
-  const periods = new Set(replay.decayPeriods.values()).size
+  );
+  const decayEvents = replay.events.filter((event) => event.isDecay).length;
+  const periods = new Set(replay.decayPeriods.values()).size;
 
   if (mode === 'current') {
     // Today's published order: conservative score, and quartile leagues.
-    const ordered = seedingOrder(scores)
-    const all = ordered.map((s) => s.conservativeRating).sort((a, b) => b - a)
-    const bands = calibrateLeagueBands(all)
+    const ordered = seedingOrder(scores);
+    const all = ordered.map((s) => s.conservativeRating).sort((a, b) => b - a);
+    const bands = calibrateLeagueBands(all);
     return {
       rows: ordered.map((score, index) => ({
         playerId: score.playerId,
@@ -125,7 +125,7 @@ function glickoRows(
       scores,
       decayEvents,
       periods,
-    }
+    };
   }
 
   /*
@@ -134,14 +134,14 @@ function glickoRows(
    * placeholder defaults for another would make the league spread say more about
    * which column got calibrated than about the models.
    */
-  const provisional = computeLeaderboard(replay.finalStates, settings)
+  const provisional = computeLeaderboard(replay.finalStates, settings);
   const calibrated: GlickoSettings = {
     ...settings,
     // The number the board ranks on, which is what the bands have to be cut
     // from — see `leagueBandBasis`.
     leagueBands: calibrateLeagueBands(provisional.map((row) => row.clubRating)),
-  }
-  const board = computeLeaderboard(replay.finalStates, calibrated)
+  };
+  const board = computeLeaderboard(replay.finalStates, calibrated);
   return {
     rows: board.map((row) => ({
       playerId: row.playerId,
@@ -153,7 +153,7 @@ function glickoRows(
     scores,
     decayEvents,
     periods,
-  }
+  };
 }
 
 function whrRows(sets: readonly EvalSet[], settings: GlickoSettings): Row[] {
@@ -165,125 +165,125 @@ function whrRows(sets: readonly EvalSet[], settings: GlickoSettings): Row[] {
       time: set.time,
     })),
     config: { driftVariancePerDay: settings.whrDriftVariancePerDay, priorSd: settings.whrPriorSd },
-  })
-  const setCounts = new Map<string, number>()
+  });
+  const setCounts = new Map<string, number>();
   for (const set of sets) {
-    setCounts.set(set.p1PlayerId, (setCounts.get(set.p1PlayerId) ?? 0) + 1)
-    setCounts.set(set.p2PlayerId, (setCounts.get(set.p2PlayerId) ?? 0) + 1)
+    setCounts.set(set.p1PlayerId, (setCounts.get(set.p1PlayerId) ?? 0) + 1);
+    setCounts.set(set.p2PlayerId, (setCounts.get(set.p2PlayerId) ?? 0) + 1);
   }
-  const latestTime = Math.max(...sets.map((s) => s.time))
+  const latestTime = Math.max(...sets.map((s) => s.time));
   const rows = fit
     .playerIds()
     .map((playerId) => {
-      const display = fit.display(playerId, latestTime)
+      const display = fit.display(playerId, latestTime);
       return {
         playerId,
         rating: display.rating,
         sd: display.sd,
         sets: setCounts.get(playerId) ?? 0,
-      }
+      };
     })
-    .sort((a, b) => b.rating - a.rating || a.sd - b.sd || a.playerId.localeCompare(b.playerId))
-  const bands = calibrateLeagueBands(rows.map((r) => r.rating))
+    .sort((a, b) => b.rating - a.rating || a.sd - b.sd || a.playerId.localeCompare(b.playerId));
+  const bands = calibrateLeagueBands(rows.map((r) => r.rating));
   return rows.map((row, index) => ({
     playerId: row.playerId,
     rank: index + 1,
     displayed: row.rating,
     league: leagueForRating(row.rating, bands),
     sets: row.sets,
-  }))
+  }));
 }
 
 function movement(
   before: Row[],
   after: Row[],
 ): { deltas: number[]; biggest: { playerId: string; from: number; to: number }[] } {
-  const byId = new Map(before.map((row) => [row.playerId, row]))
-  const deltas: number[] = []
-  const moves: { playerId: string; from: number; to: number }[] = []
+  const byId = new Map(before.map((row) => [row.playerId, row]));
+  const deltas: number[] = [];
+  const moves: { playerId: string; from: number; to: number }[] = [];
   for (const row of after) {
-    const previous = byId.get(row.playerId)
-    if (!previous) continue
-    deltas.push(row.rank - previous.rank)
-    moves.push({ playerId: row.playerId, from: previous.rank, to: row.rank })
+    const previous = byId.get(row.playerId);
+    if (!previous) continue;
+    deltas.push(row.rank - previous.rank);
+    moves.push({ playerId: row.playerId, from: previous.rank, to: row.rank });
   }
-  moves.sort((a, b) => Math.abs(b.to - b.from) - Math.abs(a.to - a.from))
-  return { deltas, biggest: moves.slice(0, 6) }
+  moves.sort((a, b) => Math.abs(b.to - b.from) - Math.abs(a.to - a.from));
+  return { deltas, biggest: moves.slice(0, 6) };
 }
 
 function leagueSpread(rows: Row[]): string {
-  const counts = new Map<string, number>()
-  for (const row of rows) counts.set(row.league, (counts.get(row.league) ?? 0) + 1)
+  const counts = new Map<string, number>();
+  for (const row of rows) counts.set(row.league, (counts.get(row.league) ?? 0) + 1);
   return [...counts.entries()]
     .map(([name, n]) => `${name.replace(/[^\w -]/g, '').trim()} ${n}`)
-    .join(', ')
+    .join(', ');
 }
 
 export function impactReport(sets: readonly EvalSet[], anonymise: boolean): void {
-  const settings = defaultGlickoSettings
+  const settings = defaultGlickoSettings;
   const label = (playerId: string): string => {
-    if (!anonymise) return playerId.slice(0, 28)
+    if (!anonymise) return playerId.slice(0, 28);
     // Stable short handle so movements can be followed without naming anyone.
-    let hash = 0
-    for (const ch of playerId) hash = (hash * 31 + ch.charCodeAt(0)) % 100_000
-    return `player-${String(hash).padStart(5, '0')}`
-  }
+    let hash = 0;
+    for (const ch of playerId) hash = (hash * 31 + ch.charCodeAt(0)) % 100_000;
+    return `player-${String(hash).padStart(5, '0')}`;
+  };
 
-  const current = glickoRows(sets, settings, 'current')
-  const shipped = glickoRows(sets, settings, 'shipped')
-  const whr = whrRows(sets, settings)
+  const current = glickoRows(sets, settings, 'current');
+  const shipped = glickoRows(sets, settings, 'shipped');
+  const whr = whrRows(sets, settings);
 
-  console.log('\n══════════ what the rating changes do to this data ══════════\n')
-  console.log(`players ranked: ${current.rows.length}\n`)
+  console.log('\n══════════ what the rating changes do to this data ══════════\n');
+  console.log(`players ranked: ${current.rows.length}\n`);
 
-  console.log('── the number each player sees ──')
+  console.log('── the number each player sees ──');
   console.log(
     describe(
       'A. current (published)',
       current.rows.map((r) => r.displayed),
     ),
-  )
+  );
   console.log(
     describe(
       'B. shipped (skill)',
       shipped.rows.map((r) => r.displayed),
     ),
-  )
+  );
   console.log(
     describe(
       'C. whr',
       whr.map((r) => r.displayed),
     ),
-  )
-  const belowStart = (rows: Row[]): number => rows.filter((r) => r.displayed < 1500).length
+  );
+  const belowStart = (rows: Row[]): number => rows.filter((r) => r.displayed < 1500).length;
   console.log(
     `\n  players shown below the 1500 starting point:  ` +
       `current ${belowStart(current.rows)}/${current.rows.length}   ` +
       `shipped ${belowStart(shipped.rows)}/${shipped.rows.length}   ` +
       `whr ${belowStart(whr)}/${whr.length}`,
-  )
+  );
 
-  console.log('\n── how much the order moves vs today ──')
+  console.log('\n── how much the order moves vs today ──');
   for (const [name, rows] of [
     ['B. shipped (skill ranking)', shipped.rows],
     ['C. whr', whr],
   ] as [string, Row[]][]) {
-    const { deltas, biggest } = movement(current.rows, rows)
-    const moved = deltas.filter((d) => d !== 0).length
-    const mean = deltas.reduce((s, d) => s + Math.abs(d), 0) / (deltas.length || 1)
-    const top10Before = new Set(current.rows.slice(0, 10).map((r) => r.playerId))
-    const top10After = new Set(rows.slice(0, 10).map((r) => r.playerId))
-    const kept = [...top10After].filter((id) => top10Before.has(id)).length
+    const { deltas, biggest } = movement(current.rows, rows);
+    const moved = deltas.filter((d) => d !== 0).length;
+    const mean = deltas.reduce((s, d) => s + Math.abs(d), 0) / (deltas.length || 1);
+    const top10Before = new Set(current.rows.slice(0, 10).map((r) => r.playerId));
+    const top10After = new Set(rows.slice(0, 10).map((r) => r.playerId));
+    const kept = [...top10After].filter((id) => top10Before.has(id)).length;
     console.log(
       `\n  ${name}: ${moved}/${deltas.length} players change rank, mean |Δrank| ${mean.toFixed(1)}, ` +
         `max ${Math.max(0, ...deltas.map(Math.abs))}`,
-    )
-    console.log(`     top 10 retained from today's top 10: ${kept}/10`)
+    );
+    console.log(`     top 10 retained from today's top 10: ${kept}/10`);
     console.log(
       `     biggest moves: ${biggest
         .map((m) => `${label(m.playerId)} ${m.from}→${m.to}`)
         .join(', ')}`,
-    )
+    );
   }
 
   /*
@@ -301,13 +301,13 @@ export function impactReport(sets: readonly EvalSet[], anonymise: boolean): void
   const decayAb = (
     perBracket: boolean,
   ): { events: number; medianRd: number; atCap: number; periods: number } => {
-    const input = toEngineInput(sets)
+    const input = toEngineInput(sets);
     const replay = replayRatings({
       sets: input.sets,
       tournaments: input.tournaments,
       settings,
       compat: perBracket ? { decayPerBracket: true } : undefined,
-    })
+    });
     /*
      * Effective RD, not raw: the published figure applies the rookie-isolation
      * multiplier on top, and that is the quantity that saturates at the cap.
@@ -317,55 +317,55 @@ export function impactReport(sets: readonly EvalSet[], anonymise: boolean): void
      */
     const rds = [...replay.finalStates.values()]
       .map((state) => computePlayerScore(state, replay.finalStates, settings).effectiveRd)
-      .sort((a, b) => a - b)
+      .sort((a, b) => a - b);
     return {
       events: replay.events.filter((event) => event.isDecay).length,
       medianRd: rds[Math.floor(rds.length / 2)] ?? NaN,
       atCap: rds.filter((rd) => rd >= settings.rdCap - 0.5).length,
       periods: new Set(replay.decayPeriods.values()).size,
-    }
-  }
-  const perBracket = decayAb(true)
-  const perDay = decayAb(false)
+    };
+  };
+  const perBracket = decayAb(true);
+  const perDay = decayAb(false);
 
-  console.log('\n── inactivity decay: counted per bracket vs per event ──')
+  console.log('\n── inactivity decay: counted per bracket vs per event ──');
   console.log(
     `  periods counted:     ${perBracket.periods} brackets   vs   ${perDay.periods} events`,
-  )
+  );
   console.log(
     `  decay steps charged: ${perBracket.events}   vs   ${perDay.events}   ` +
       `(${perBracket.events - perDay.events} were for brackets the player was never in, ` +
       `${(((perBracket.events - perDay.events) / (perBracket.events || 1)) * 100).toFixed(0)}%)`,
-  )
+  );
   console.log(
     `  median effective RD: ${perBracket.medianRd.toFixed(0)}   vs   ${perDay.medianRd.toFixed(0)}`,
-  )
+  );
   console.log(
     `  at the RD cap:       ${perBracket.atCap}/${current.rows.length}   vs   ${perDay.atCap}/${current.rows.length}`,
-  )
+  );
 
-  console.log('\n── league spread ──')
-  console.log(`  current: ${leagueSpread(current.rows)}`)
-  console.log(`  shipped: ${leagueSpread(shipped.rows)}`)
-  console.log(`  whr:     ${leagueSpread(whr)}`)
+  console.log('\n── league spread ──');
+  console.log(`  current: ${leagueSpread(current.rows)}`);
+  console.log(`  shipped: ${leagueSpread(shipped.rows)}`);
+  console.log(`  whr:     ${leagueSpread(whr)}`);
 
-  console.log('\n── top 8 under each ──')
-  const width = 30
+  console.log('\n── top 8 under each ──');
+  const width = 30;
   console.log(
     `  ${'A. current (conservative)'.padEnd(width)}${'B. shipped (club)'.padEnd(width)}C. whr`,
-  )
+  );
   for (let i = 0; i < 8; i++) {
     const cells = [current.rows[i], shipped.rows[i], whr[i]].map((row) =>
       row
         ? `${i + 1}. ${label(row.playerId)} ${row.displayed.toFixed(0)}`.padEnd(width)
         : ''.padEnd(width),
-    )
-    console.log(`  ${cells.join('')}`)
+    );
+    console.log(`  ${cells.join('')}`);
   }
 
-  console.log('\n── seeding is now a separate question ──')
-  const seeds = seedingOrder(shipped.scores)
-  const rankById = new Map(shipped.rows.map((row) => [row.playerId, row.rank]))
+  console.log('\n── seeding is now a separate question ──');
+  const seeds = seedingOrder(shipped.scores);
+  const rankById = new Map(shipped.rows.map((row) => [row.playerId, row.rank]));
   const disagreements = seeds
     .map((score, index) => ({
       playerId: score.playerId,
@@ -375,12 +375,12 @@ export function impactReport(sets: readonly EvalSet[], anonymise: boolean): void
     }))
     .filter((entry) => Math.abs(entry.seed - entry.rank) >= 5)
     .sort((a, b) => Math.abs(b.seed - b.rank) - Math.abs(a.seed - a.rank))
-    .slice(0, 6)
+    .slice(0, 6);
   console.log(
     `  players whose seed differs from their rank by 5+ places: ` +
       `${disagreements.length ? disagreements.map((d) => `${label(d.playerId)} rank ${d.rank}/seed ${d.seed} (${d.sets} sets)`).join(', ') : 'none'}`,
-  )
+  );
   console.log(
     '  (a gap here is intended: the leaderboard states the best estimate, seeding stays cautious about thin evidence)',
-  )
+  );
 }

@@ -1,39 +1,39 @@
-import { useMemo, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useParams } from '@tanstack/react-router'
-import { isBracketAbandoned, isBracketOver } from '@smashclub/shared'
-import { trpc } from '../lib/trpc'
-import type { TournamentData, TournamentSet } from '../lib/apiTypes'
-import { formatDate, formatDateTime, roundLabel, scoreCell, timeAgo } from '../lib/format'
-import { challongeStateLabel, setStateLabel, syncStateLabel } from '../lib/labels'
-import { useEventSource } from '../lib/useEventSource'
-import { useNow } from '../lib/useNow'
-import { InfoTip } from '../components/InfoTip'
-import './Tournaments.css'
+import { useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link, useParams } from '@tanstack/react-router';
+import { isBracketAbandoned, isBracketOver } from '@smashclub/shared';
+import { trpc } from '../lib/trpc';
+import type { TournamentData, TournamentSet } from '../lib/apiTypes';
+import { formatDate, formatDateTime, roundLabel, scoreCell, timeAgo } from '../lib/format';
+import { challongeStateLabel, setStateLabel, syncStateLabel } from '../lib/labels';
+import { useEventSource } from '../lib/useEventSource';
+import { useNow } from '../lib/useNow';
+import { InfoTip } from '../components/InfoTip';
+import './Tournaments.css';
 
 export function TournamentPage() {
-  const { slug } = useParams({ from: '/tournaments/$slug' })
-  const queryClient = useQueryClient()
-  const now = useNow()
+  const { slug } = useParams({ from: '/tournaments/$slug' });
+  const queryClient = useQueryClient();
+  const now = useNow();
 
   const query = useQuery({
     queryKey: ['tournament', slug],
     queryFn: () => trpc.public.tournament.query({ slug }),
-  })
+  });
 
-  const isLive = isLiveNow(query.data ?? null, now)
+  const isLive = isLiveNow(query.data ?? null, now);
   useEventSource(isLive && query.data ? `/api/live/${query.data.id}` : null, (type) => {
     if (type === 'set_updated' || type === 'sync_completed') {
-      void queryClient.invalidateQueries({ queryKey: ['tournament', slug] })
+      void queryClient.invalidateQueries({ queryKey: ['tournament', slug] });
     }
-  })
+  });
 
-  if (query.isPending) return <p className="loading-text">Loading tournament…</p>
+  if (query.isPending) return <p className="loading-text">Loading tournament…</p>;
   if (query.isError)
-    return <p className="error-text">Failed to load tournament: {query.error.message}</p>
-  if (query.data === null) return <p className="error-text">Tournament not found.</p>
+    return <p className="error-text">Failed to load tournament: {query.error.message}</p>;
+  if (query.data === null) return <p className="error-text">Tournament not found.</p>;
 
-  return <TournamentDetail data={query.data} now={now} />
+  return <TournamentDetail data={query.data} now={now} />;
 }
 
 /**
@@ -43,29 +43,29 @@ export function TournamentPage() {
  * had been asking a question nothing answered, so nothing was ever live.
  */
 function isLiveNow(data: TournamentData | null, now: number): boolean {
-  return data?.liveUntil != null && new Date(data.liveUntil).getTime() > now
+  return data?.liveUntil != null && new Date(data.liveUntil).getTime() > now;
 }
 
 function TournamentDetail({ data, now }: { data: TournamentData; now: number }) {
-  const isLive = isLiveNow(data, now)
+  const isLive = isLiveNow(data, now);
   // Over, not necessarily finished: a bracket abandoned mid-run is also done.
-  const abandoned = isBracketAbandoned(data, now)
-  const isComplete = isBracketOver(data, now)
-  const [stageFilter, setStageFilter] = useState<'all' | 'group' | 'final'>('all')
+  const abandoned = isBracketAbandoned(data, now);
+  const isComplete = isBracketOver(data, now);
+  const [stageFilter, setStageFilter] = useState<'all' | 'group' | 'final'>('all');
   const hasBothStages = useMemo(
     () => new Set(data.sets.map((set) => set.resultStage)).size > 1,
     [data.sets],
-  )
-  const effectiveStage = hasBothStages ? stageFilter : 'all'
+  );
+  const effectiveStage = hasBothStages ? stageFilter : 'all';
   const visibleSets = useMemo(
     () => data.sets.filter((set) => effectiveStage === 'all' || set.resultStage === effectiveStage),
     [data.sets, effectiveStage],
-  )
+  );
 
   const standings = useMemo(() => {
-    if (!isComplete) return []
-    return data.participants.filter((p) => p.finalRank != null)
-  }, [data.participants, isComplete])
+    if (!isComplete) return [];
+    return data.participants.filter((p) => p.finalRank != null);
+  }, [data.participants, isComplete]);
 
   const recentSets = useMemo(
     () =>
@@ -74,10 +74,10 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
         .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''))
         .slice(0, 8),
     [data.sets],
-  )
+  );
 
-  const bracket = challongeStateLabel(data.challongeState, { abandoned })
-  const sync = syncStateLabel(data.syncState)
+  const bracket = challongeStateLabel(data.challongeState, { abandoned });
+  const sync = syncStateLabel(data.syncState);
 
   return (
     <div>
@@ -251,7 +251,7 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
               </thead>
               <tbody>
                 {visibleSets.map((set) => {
-                  const state = setStateLabel(set.state)
+                  const state = setStateLabel(set.state);
                   return (
                     <tr
                       key={set.id}
@@ -293,7 +293,7 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
                         {set.completedAt ? formatDateTime(set.completedAt) : '—'}
                       </td>
                     </tr>
-                  )
+                  );
                 })}
               </tbody>
             </table>
@@ -301,26 +301,26 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
         )}
       </div>
     </div>
-  )
+  );
 }
 
 function ParticipantName({ name, playerId }: { name: string; playerId: string | null }) {
-  if (!playerId) return <>{name}</>
+  if (!playerId) return <>{name}</>;
   return (
     <Link to="/players/$playerId" params={{ playerId }}>
       {name}
     </Link>
-  )
+  );
 }
 
 function SetLine({ set }: { set: TournamentSet }) {
-  const p1 = set.p1Name ?? 'TBD'
-  const p2 = set.p2Name ?? 'TBD'
+  const p1 = set.p1Name ?? 'TBD';
+  const p2 = set.p2Name ?? 'TBD';
   return (
     <span className="set-line">
       <span className={set.winner === 1 ? 'set-winner' : undefined}>{p1}</span>
       <span className="muted"> vs </span>
       <span className={set.winner === 2 ? 'set-winner' : undefined}>{p2}</span>
     </span>
-  )
+  );
 }

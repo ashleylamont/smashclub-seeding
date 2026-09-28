@@ -15,47 +15,47 @@
  *   DEV_CACHE_DIR=/path/to/.challonge-cache pnpm dev:harness
  *   pnpm dev:harness            # synthetic data
  */
-import { fileURLToPath } from 'node:url'
-import { PGlite } from '@electric-sql/pglite'
-import { drizzle } from 'drizzle-orm/pglite'
-import { migrate } from 'drizzle-orm/pglite/migrator'
-import { inArray } from 'drizzle-orm'
-import { schema, user, type Db } from '@smashclub/db'
-import { buildApp } from '../app'
-import { createAuth } from '../auth'
-import { loadEnv } from '../env'
-import { RecomputeTrigger } from '../recompute/trigger'
-import { seedDevData } from './seedFixtures'
-import { seedOperations } from './seedOperations'
-import { seedHistoricalEvent } from './seedHistoricalEvent'
+import { fileURLToPath } from 'node:url';
+import { PGlite } from '@electric-sql/pglite';
+import { drizzle } from 'drizzle-orm/pglite';
+import { migrate } from 'drizzle-orm/pglite/migrator';
+import { inArray } from 'drizzle-orm';
+import { schema, user, type Db } from '@smashclub/db';
+import { buildApp } from '../app';
+import { createAuth } from '../auth';
+import { loadEnv } from '../env';
+import { RecomputeTrigger } from '../recompute/trigger';
+import { seedDevData } from './seedFixtures';
+import { seedOperations } from './seedOperations';
+import { seedHistoricalEvent } from './seedHistoricalEvent';
 
 const migrationsFolder = fileURLToPath(
   new URL('../../../../packages/db/migrations', import.meta.url),
-)
+);
 
 export interface DevHarness {
-  url: string
-  close: () => Promise<void>
-  adminCredentials: { email: string; password: string }
-  userCredentials: { email: string; password: string }
+  url: string;
+  close: () => Promise<void>;
+  adminCredentials: { email: string; password: string };
+  userCredentials: { email: string; password: string };
 }
 
 export async function startDevHarness(
   options: { port?: number; cacheDir?: string; quiet?: boolean; webDistDir?: string } = {},
 ): Promise<DevHarness> {
-  const port = options.port ?? Number(process.env.PORT ?? 3000)
-  const cacheDir = options.cacheDir ?? process.env.DEV_CACHE_DIR
-  const webDistDir = options.webDistDir ?? process.env.WEB_DIST_DIR
-  const log = options.quiet ? () => undefined : (message: string) => console.log(message)
+  const port = options.port ?? Number(process.env.PORT ?? 3000);
+  const cacheDir = options.cacheDir ?? process.env.DEV_CACHE_DIR;
+  const webDistDir = options.webDistDir ?? process.env.WEB_DIST_DIR;
+  const log = options.quiet ? () => undefined : (message: string) => console.log(message);
 
-  const client = new PGlite()
-  const pgliteDb = drizzle(client, { schema })
-  await migrate(pgliteDb, { migrationsFolder })
-  const db = pgliteDb as unknown as Db
+  const client = new PGlite();
+  const pgliteDb = drizzle(client, { schema });
+  await migrate(pgliteDb, { migrationsFolder });
+  const db = pgliteDb as unknown as Db;
 
-  const adminEmail = 'admin@smashclub.dev'
-  const userEmail = 'player@smashclub.dev'
-  const password = 'devpassword123'
+  const adminEmail = 'admin@smashclub.dev';
+  const userEmail = 'player@smashclub.dev';
+  const password = 'devpassword123';
 
   const env = loadEnv({
     NODE_ENV: 'development',
@@ -67,18 +67,18 @@ export async function startDevHarness(
     // When provided, the harness also serves the built SPA, so the browser
     // talks to a single origin (no dev proxy) — what e2e runs against.
     ...(webDistDir ? { WEB_DIST_DIR: webDistDir } : {}),
-  })
+  });
 
-  log('seeding development data…')
-  const { result, client: challonge } = await seedDevData(db, cacheDir)
+  log('seeding development data…');
+  const { result, client: challonge } = await seedDevData(db, cacheDir);
   log(
     `seeded from ${result.source}: ${result.tournaments} tournaments, ${result.sets} sets, ` +
       `${result.players} players, ${result.queuedForReview} awaiting identity review`,
-  )
+  );
 
-  const auth = createAuth(db, env, { enableCredentials: true })
-  const recomputeTrigger = new RecomputeTrigger(db, 500)
-  const app = await buildApp({ db, env, auth, challonge, recomputeTrigger })
+  const auth = createAuth(db, env, { enableCredentials: true });
+  const recomputeTrigger = new RecomputeTrigger(db, 500);
+  const app = await buildApp({ db, env, auth, challonge, recomputeTrigger });
 
   // Two accounts so role-gating can actually be tested. The first verified
   // sign-in from ADMIN_EMAILS bootstraps the admin role.
@@ -90,7 +90,7 @@ export async function startDevHarness(
   ]) {
     await auth.api
       .signUpEmail({ body: { email: email!, password, name: name! } })
-      .catch((error: unknown) => log(`  (sign-up for ${email} skipped: ${String(error)})`))
+      .catch((error: unknown) => log(`  (sign-up for ${email} skipped: ${String(error)})`));
   }
   // Admin promotion requires a provider-verified address (see auth.ts). The
   // harness has no mail server, so stand in for the verification an OAuth
@@ -105,36 +105,36 @@ export async function startDevHarness(
         'rehearsal-player@smashclub.dev',
         'organiser@smashclub.dev',
       ]),
-    )
-  const rehearsalPlanId = await seedOperations(db)
-  const historicalPlanId = await seedHistoricalEvent(db)
+    );
+  const rehearsalPlanId = await seedOperations(db);
+  const historicalPlanId = await seedHistoricalEvent(db);
 
-  await app.listen({ port, host: '127.0.0.1' })
-  const url = `http://127.0.0.1:${port}`
-  log(`\ndev harness listening on ${url}`)
-  log(`  admin:  ${adminEmail} / ${password}`)
-  log(`  player: ${userEmail} / ${password}`)
-  log(`  rehearsal player: rehearsal-player@smashclub.dev / ${password}`)
-  log(`  event TO: organiser@smashclub.dev / ${password}`)
-  log(`  rehearsal: ${url}/live/${rehearsalPlanId}`)
-  log(`  control: ${url}/admin/event-operations?plan=${rehearsalPlanId}`)
-  log(`  historical repair: ${url}/admin/event-planner?plan=${historicalPlanId}`)
+  await app.listen({ port, host: '127.0.0.1' });
+  const url = `http://127.0.0.1:${port}`;
+  log(`\ndev harness listening on ${url}`);
+  log(`  admin:  ${adminEmail} / ${password}`);
+  log(`  player: ${userEmail} / ${password}`);
+  log(`  rehearsal player: rehearsal-player@smashclub.dev / ${password}`);
+  log(`  event TO: organiser@smashclub.dev / ${password}`);
+  log(`  rehearsal: ${url}/live/${rehearsalPlanId}`);
+  log(`  control: ${url}/admin/event-operations?plan=${rehearsalPlanId}`);
+  log(`  historical repair: ${url}/admin/event-planner?plan=${historicalPlanId}`);
 
   return {
     url,
     adminCredentials: { email: adminEmail, password },
     userCredentials: { email: userEmail, password },
     close: async () => {
-      await app.close()
-      await client.close()
+      await app.close();
+      await client.close();
     },
-  }
+  };
 }
 
 // Run directly (not when imported by tests).
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   startDevHarness().catch((error) => {
-    console.error(error)
-    process.exit(1)
-  })
+    console.error(error);
+    process.exit(1);
+  });
 }

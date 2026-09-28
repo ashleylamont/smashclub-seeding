@@ -1,6 +1,6 @@
-import { divisionLabel, EventPlanStateError, type PlanView } from './plans'
-import type { Division } from './divisions'
-import { winnersCount } from './advancement'
+import { divisionLabel, EventPlanStateError, type PlanView } from './plans';
+import type { Division } from './divisions';
+import { winnersCount } from './advancement';
 
 /**
  * The copy-and-paste handoff to Challonge.
@@ -20,53 +20,53 @@ import { winnersCount } from './advancement'
  */
 
 export interface BracketExport {
-  division: Division
-  stage: 'main' | 'consolation'
-  title: string
+  division: Division;
+  stage: 'main' | 'consolation';
+  title: string;
   /** Newline-separated names, in seed order: Challonge's bulk-add box. */
-  participants: string
+  participants: string;
   /** `seed<TAB>name`, for checking the bracket against the plan afterwards. */
-  audit: string
+  audit: string;
   /** Setup steps that are not expressible as a participant list. */
-  checklist: string[]
+  checklist: string[];
   /** Null unless the plan already knows the slug. */
-  challongeSlug: string | null
-  suggestedSlug: string
+  challongeSlug: string | null;
+  suggestedSlug: string;
 }
 
 export interface PlanExports {
-  eventDate: string
-  rankingSnapshotAt: string | null
-  brackets: BracketExport[]
+  eventDate: string;
+  rankingSnapshotAt: string | null;
+  brackets: BracketExport[];
   /** Pool cards, ready to print for a venue with no connectivity. */
   poolCards: {
-    division: Division
-    label: string
-    lines: string[]
-  }[]
+    division: Division;
+    label: string;
+    lines: string[];
+  }[];
 }
 
 export function buildExports(view: PlanView): PlanExports {
   if (view.plan.bracketMode === 'native')
     throw new EventPlanStateError(
       'This event runs in Nemesis; Challonge handoff exports are unavailable.',
-    )
-  const brackets: BracketExport[] = []
-  const poolCards: PlanExports['poolCards'] = []
+    );
+  const brackets: BracketExport[] = [];
+  const poolCards: PlanExports['poolCards'] = [];
 
   for (const division of view.divisions) {
-    if (division.size === 0) continue
+    if (division.size === 0) continue;
     const advanceCounts = division.pools.map((pool) =>
       winnersCount(pool.members.filter((member) => !member.withdrawn).length),
-    )
-    const mixedAdvanceCounts = new Set(advanceCounts).size > 1
+    );
+    const mixedAdvanceCounts = new Set(advanceCounts).size > 1;
     const slot = (stage: 'main' | 'consolation') =>
       view.brackets.find(
         (bracket) => bracket.division === division.division && bracket.stage === stage,
-      )
+      );
 
-    const seeded = division.pools.flatMap((pool) => pool.members).sort((a, b) => a.seed - b.seed)
-    const mainSlot = slot('main')
+    const seeded = division.pools.flatMap((pool) => pool.members).sort((a, b) => a.seed - b.seed);
+    const mainSlot = slot('main');
     brackets.push({
       division: division.division,
       stage: 'main',
@@ -87,10 +87,10 @@ export function buildExports(view: PlanView): PlanExports {
       ],
       challongeSlug: mainSlot?.challongeSlug ?? null,
       suggestedSlug: mainSlot?.suggestedSlug ?? '',
-    })
+    });
 
-    const consolationSlot = slot('consolation')
-    const consolation = division.consolation
+    const consolationSlot = slot('consolation');
+    const consolation = division.consolation;
     brackets.push({
       division: division.division,
       stage: 'consolation',
@@ -128,14 +128,14 @@ export function buildExports(view: PlanView): PlanExports {
       ],
       challongeSlug: consolationSlot?.challongeSlug ?? null,
       suggestedSlug: consolationSlot?.suggestedSlug ?? '',
-    })
+    });
 
     for (const pool of division.pools) {
       poolCards.push({
         division: division.division,
         label: `${divisionLabel(division.division)} — Pool ${pool.label}`,
         lines: pool.members.map((member) => `#${member.seed}  ${member.name}`),
-      })
+      });
     }
   }
 
@@ -144,13 +144,13 @@ export function buildExports(view: PlanView): PlanExports {
     rankingSnapshotAt: view.plan.rankingSnapshotAt,
     brackets,
     poolCards,
-  }
+  };
 
   function nameFor(division: PlanView['divisions'][number], playerId: string): string {
     for (const pool of division.pools) {
-      const member = pool.members.find((entry) => entry.playerId === playerId)
-      if (member) return member.name
+      const member = pool.members.find((entry) => entry.playerId === playerId);
+      if (member) return member.name;
     }
-    return '?'
+    return '?';
   }
 }

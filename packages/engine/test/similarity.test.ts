@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
-import parityFixtures from './fixtures/difflib-parity.json'
-import { similarityRatio } from '../src/identity/similarity'
+import { describe, expect, it } from 'vitest';
+import parityFixtures from './fixtures/difflib-parity.json';
+import { similarityRatio } from '../src/identity/similarity';
 
 describe('similarityRatio (difflib parity)', () => {
   // Fixture ratios generated with CPython's difflib.SequenceMatcher — the
@@ -8,7 +8,7 @@ describe('similarityRatio (difflib parity)', () => {
   // matters.
   for (const { a, b, ratio } of parityFixtures as { a: string; b: string; ratio: number }[]) {
     it(`ratio(${JSON.stringify(a.slice(0, 30))}, ${JSON.stringify(b.slice(0, 30))}) = ${ratio.toFixed(4)}`, () => {
-      expect(similarityRatio(a, b)).toBeCloseTo(ratio, 10)
-    })
+      expect(similarityRatio(a, b)).toBeCloseTo(ratio, 10);
+    });
   }
-})
+});

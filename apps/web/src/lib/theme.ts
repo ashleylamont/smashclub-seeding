@@ -18,69 +18,69 @@
  * that inline script — same key, same attribute.
  */
 
-export type ThemeMode = 'system' | 'light' | 'dark'
+export type ThemeMode = 'system' | 'light' | 'dark';
 
-const STORAGE_KEY = 'smashclub:theme'
+const STORAGE_KEY = 'smashclub:theme';
 
-const listeners = new Set<() => void>()
+const listeners = new Set<() => void>();
 
 function isMode(value: unknown): value is ThemeMode {
-  return value === 'system' || value === 'light' || value === 'dark'
+  return value === 'system' || value === 'light' || value === 'dark';
 }
 
 function readStored(): ThemeMode {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    return isMode(stored) ? stored : 'system'
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return isMode(stored) ? stored : 'system';
   } catch {
     // Private-mode Safari and friends throw on access rather than returning null.
-    return 'system'
+    return 'system';
   }
 }
 
 function apply(mode: ThemeMode): void {
-  const root = document.documentElement
-  if (mode === 'system') root.removeAttribute('data-theme')
-  else root.setAttribute('data-theme', mode)
+  const root = document.documentElement;
+  if (mode === 'system') root.removeAttribute('data-theme');
+  else root.setAttribute('data-theme', mode);
 }
 
-let mode: ThemeMode = typeof document === 'undefined' ? 'system' : readStored()
+let mode: ThemeMode = typeof document === 'undefined' ? 'system' : readStored();
 
 /** Snapshot for `useSyncExternalStore`; must be a stable reference per state. */
 export function getThemeMode(): ThemeMode {
-  return mode
+  return mode;
 }
 
 export function subscribeTheme(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 }
 
 export function setThemeMode(next: ThemeMode): void {
-  mode = next
+  mode = next;
   try {
-    localStorage.setItem(STORAGE_KEY, next)
+    localStorage.setItem(STORAGE_KEY, next);
   } catch {
     // A preference we cannot persist still applies for this session.
   }
-  apply(next)
-  for (const listener of listeners) listener()
+  apply(next);
+  for (const listener of listeners) listener();
 }
 
 /** Cycle order matches the toggle's label: Auto → Light → Dark → Auto. */
 export function nextThemeMode(current: ThemeMode): ThemeMode {
-  return current === 'system' ? 'light' : current === 'light' ? 'dark' : 'system'
+  return current === 'system' ? 'light' : current === 'light' ? 'dark' : 'system';
 }
 
 export const THEME_LABELS: Record<ThemeMode, string> = {
   system: 'Auto',
   light: 'Light',
   dark: 'Dark',
-}
+};
 
 /** A glyph that reads at 11px: half-filled for "follow the OS". */
 export const THEME_GLYPHS: Record<ThemeMode, string> = {
   system: '◐',
   light: '☀',
   dark: '☾',
-}
+};

@@ -1,11 +1,11 @@
-import { expect, it } from 'vitest'
-import { eq } from 'drizzle-orm'
-import { eventOperationSettings, eventPlans } from '@smashclub/db'
-import { publicEventNights } from '../src/event-operations/publicEvents'
-import { createTestDb } from './helpers/testDb'
+import { expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { eventOperationSettings, eventPlans } from '@smashclub/db';
+import { publicEventNights } from '../src/event-operations/publicEvents';
+import { createTestDb } from './helpers/testDb';
 
 it('lists only explicitly published events, prioritizes open nights and removes unpublished entries immediately', async () => {
-  const { db, close } = await createTestDb()
+  const { db, close } = await createTestDb();
   try {
     const plans = await db
       .insert(eventPlans)
@@ -20,25 +20,27 @@ it('lists only explicitly published events, prioritizes open nights and removes 
         },
         { name: 'Completed night', eventDate: new Date('2026-09-20'), status: 'complete' },
       ])
-      .returning()
+      .returning();
     await db
       .insert(eventOperationSettings)
-      .values(plans.slice(1).map((plan, index) => ({ eventPlanId: plan.id, published: index > 0 })))
-    const list = await publicEventNights(db)
-    expect(list.map((event) => event.name)).toEqual(['Open night', 'Completed night'])
+      .values(
+        plans.slice(1).map((plan, index) => ({ eventPlanId: plan.id, published: index > 0 })),
+      );
+    const list = await publicEventNights(db);
+    expect(list.map((event) => event.name)).toEqual(['Open night', 'Completed night']);
     expect(Object.keys(list[0]!).sort()).toEqual([
       'bracketMode',
       'eventDate',
       'id',
       'name',
       'status',
-    ])
+    ]);
     await db
       .update(eventOperationSettings)
       .set({ published: false })
-      .where(eq(eventOperationSettings.eventPlanId, plans[2]!.id))
-    expect((await publicEventNights(db)).map((event) => event.name)).toEqual(['Completed night'])
+      .where(eq(eventOperationSettings.eventPlanId, plans[2]!.id));
+    expect((await publicEventNights(db)).map((event) => event.name)).toEqual(['Completed night']);
   } finally {
-    await close()
+    await close();
   }
-})
+});

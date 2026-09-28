@@ -1,15 +1,15 @@
-import { useState } from 'react'
-import { TRPCClientError } from '@trpc/client'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useParams } from '@tanstack/react-router'
-import { CompletedScoreReport, type ResultSubmission } from '../components/CompletedScoreReport'
-import { GuestEvent } from './GuestEventPage'
-import { PlayerMatchFilter } from '../components/PlayerMatchFilter'
-import { eventPlayers, useDevicePlayer } from '../lib/playerSelection'
-import { authClient } from '../lib/auth'
-import { trpc } from '../lib/trpc'
-import './admin/EventOperations.css'
-import { PoolFilter, PoolRoundSchedule, PoolStationQueue } from '../components/PoolStationQueue'
+import { useState } from 'react';
+import { TRPCClientError } from '@trpc/client';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useParams } from '@tanstack/react-router';
+import { CompletedScoreReport, type ResultSubmission } from '../components/CompletedScoreReport';
+import { GuestEvent } from './GuestEventPage';
+import { PlayerMatchFilter } from '../components/PlayerMatchFilter';
+import { eventPlayers, useDevicePlayer } from '../lib/playerSelection';
+import { authClient } from '../lib/auth';
+import { trpc } from '../lib/trpc';
+import './admin/EventOperations.css';
+import { PoolFilter, PoolRoundSchedule, PoolStationQueue } from '../components/PoolStationQueue';
 import {
   matchesPool,
   poolPath,
@@ -18,58 +18,58 @@ import {
   usePoolFilter,
   type PoolFlowData,
   type StartPoolMatch,
-} from '../lib/poolFlow'
+} from '../lib/poolFlow';
 
-type Snapshot = Awaited<ReturnType<typeof trpc.eventOps.snapshot.query>>
-type Match = Snapshot['matches'][number]
+type Snapshot = Awaited<ReturnType<typeof trpc.eventOps.snapshot.query>>;
+type Match = Snapshot['matches'][number];
 export function PlayerEventPage() {
-  const { planId } = useParams({ strict: false }) as { planId: string }
-  return <PlayerEvent key={planId} planId={planId} />
+  const { planId } = useParams({ strict: false }) as { planId: string };
+  return <PlayerEvent key={planId} planId={planId} />;
 }
 function PlayerEvent({ planId }: { planId: string }) {
-  const { data: session, isPending } = authClient.useSession()
+  const { data: session, isPending } = authClient.useSession();
   const event = useQuery({
     queryKey: ['eventOpsPublic', planId],
     queryFn: () => trpc.eventOps.snapshot.query({ planId }),
     refetchInterval: 2500,
     retry: false,
-  })
+  });
   const reports = useQuery({
     queryKey: ['eventOpsReports', planId],
     queryFn: () => trpc.eventOps.myReports.query({ planId }),
     enabled: Boolean(session),
     refetchInterval: 2500,
-  })
+  });
   const claims = useQuery({
     queryKey: ['me', 'claims'],
     queryFn: () => trpc.me.claims.query(),
     enabled: Boolean(session),
-  })
-  const [devicePlayer, setDevicePlayer] = useDevicePlayer(planId)
-  const [view, setView] = useState(devicePlayer ? 'mine' : 'queue')
-  const [selectedPool, setSelectedPool] = usePoolFilter()
-  const [selectedMatch, setSelectedMatch] = useState<string | null>(null)
-  const [starting, setStarting] = useState<string | null>(null)
-  const [startError, setStartError] = useState('')
-  const cache = useQueryClient()
-  const [search, setSearch] = useState('')
-  if (isPending || event.isPending) return <p>Loading your event…</p>
+  });
+  const [devicePlayer, setDevicePlayer] = useDevicePlayer(planId);
+  const [view, setView] = useState(devicePlayer ? 'mine' : 'queue');
+  const [selectedPool, setSelectedPool] = usePoolFilter();
+  const [selectedMatch, setSelectedMatch] = useState<string | null>(null);
+  const [starting, setStarting] = useState<string | null>(null);
+  const [startError, setStartError] = useState('');
+  const cache = useQueryClient();
+  const [search, setSearch] = useState('');
+  if (isPending || event.isPending) return <p>Loading your event…</p>;
   if (!session || event.data?.settings.playerReports === false)
-    return <GuestEvent key={planId} planId={planId} />
+    return <GuestEvent key={planId} planId={planId} />;
   const publicationUnavailable =
     event.error instanceof TRPCClientError &&
-    ['NOT_FOUND', 'FORBIDDEN', 'UNAUTHORIZED'].includes(event.error.data?.code ?? '')
+    ['NOT_FOUND', 'FORBIDDEN', 'UNAUTHORIZED'].includes(event.error.data?.code ?? '');
   if (!event.data || publicationUnavailable)
-    return <p role="alert">This event is unavailable or has not been published.</p>
-  const data: Snapshot & Partial<Pick<PoolFlowData, 'stationQueues' | 'poolRounds'>> = event.data
+    return <p role="alert">This event is unavailable or has not been published.</p>;
+  const data: Snapshot & Partial<Pick<PoolFlowData, 'stationQueues' | 'poolRounds'>> = event.data;
   const disputeMode =
     data.settings.scoreReportingMode === 'approve_unless_disputed' &&
-    data.plan.bracketMode === 'native'
-  const claim = claims.data?.find((claim) => claim.status === 'approved')
-  const players = eventPlayers(data.matches)
-  const selectedPlayer = players.some((player) => player.id === devicePlayer) ? devicePlayer : ''
-  const reported = new Set(reports.data?.map((report) => report.matchId))
-  const queued = queueScoringIds(data)
+    data.plan.bracketMode === 'native';
+  const claim = claims.data?.find((claim) => claim.status === 'approved');
+  const players = eventPlayers(data.matches);
+  const selectedPlayer = players.some((player) => player.id === devicePlayer) ? devicePlayer : '';
+  const reported = new Set(reports.data?.map((report) => report.matchId));
+  const queued = queueScoringIds(data);
   const visible = data.matches.filter(
     (match) =>
       matchesPool(match, selectedPool) &&
@@ -87,35 +87,35 @@ function PlayerEvent({ planId }: { planId: string }) {
       `${match.player1Name} ${match.player2Name} ${match.label} ${match.division}`
         .toLowerCase()
         .includes(search.toLowerCase()),
-  )
-  const closed = ['complete', 'cancelled'].includes(data.plan.status)
+  );
+  const closed = ['complete', 'cancelled'].includes(data.plan.status);
   const start = async (input: StartPoolMatch) => {
-    setStarting(input.matchId)
-    setStartError('')
+    setStarting(input.matchId);
+    setStartError('');
     try {
-      await trpc.eventOps.startPoolMatch.mutate({ planId, ...input })
-      setSelectedMatch(input.matchId)
-      await cache.invalidateQueries({ queryKey: ['eventOpsPublic', planId] })
+      await trpc.eventOps.startPoolMatch.mutate({ planId, ...input });
+      setSelectedMatch(input.matchId);
+      await cache.invalidateQueries({ queryKey: ['eventOpsPublic', planId] });
     } catch (cause) {
       setStartError(
         cause instanceof Error
           ? cause.message
           : 'This station queue changed. Refresh before starting.',
-      )
+      );
     } finally {
-      setStarting(null)
+      setStarting(null);
     }
-  }
+  };
   const choosePool = (value: string) => {
-    setSelectedPool(value)
-    setSelectedMatch(null)
-  }
+    setSelectedPool(value);
+    setSelectedMatch(null);
+  };
   const chooseMatch = (id: string) => {
-    setSelectedMatch(id)
-    setView('queue')
-    setSearch('')
-    document.getElementById('pool-score-entry')?.scrollIntoView({ behavior: 'smooth' })
-  }
+    setSelectedMatch(id);
+    setView('queue');
+    setSearch('');
+    document.getElementById('pool-score-entry')?.scrollIntoView({ behavior: 'smooth' });
+  };
   return (
     <div className="ops-page">
       <header>
@@ -146,9 +146,9 @@ function PlayerEvent({ planId }: { planId: string }) {
         players={players}
         value={selectedPlayer}
         onChange={(id) => {
-          setDevicePlayer(id)
-          setView(id ? 'mine' : 'all')
-          setSelectedPool('')
+          setDevicePlayer(id);
+          setView(id ? 'mine' : 'all');
+          setSelectedPool('');
         }}
       />
       <PoolFilter data={data} value={selectedPool} onChange={choosePool} />
@@ -227,7 +227,7 @@ function PlayerEvent({ planId }: { planId: string }) {
         )}
       </section>
     </div>
-  )
+  );
 }
 function PlayerScoreCard({
   match,
@@ -239,40 +239,40 @@ function PlayerScoreCard({
   autoAccept,
   disputeMode,
 }: {
-  match: Match
-  planId: string
-  enabled: boolean
-  station?: string
-  report?: Awaited<ReturnType<typeof trpc.eventOps.myReports.query>>[number]
-  selfRun: boolean
-  autoAccept: boolean
-  disputeMode: boolean
+  match: Match;
+  planId: string;
+  enabled: boolean;
+  station?: string;
+  report?: Awaited<ReturnType<typeof trpc.eventOps.myReports.query>>[number];
+  selfRun: boolean;
+  autoAccept: boolean;
+  disputeMode: boolean;
 }) {
-  const reportStatus = report?.status
-  const cache = useQueryClient()
-  const [score1, setScore1] = useState(0)
-  const [score2, setScore2] = useState(0)
-  const [requestId, setRequestId] = useState(() => crypto.randomUUID())
-  const [revision, setRevision] = useState(match.revision)
-  const [retryRejected, setRetryRejected] = useState(false)
-  const [pending, setPending] = useState(false)
-  const [sent, setSent] = useState<'approved' | 'pending' | null>(null)
-  const [error, setError] = useState('')
+  const reportStatus = report?.status;
+  const cache = useQueryClient();
+  const [score1, setScore1] = useState(0);
+  const [score2, setScore2] = useState(0);
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const [revision, setRevision] = useState(match.revision);
+  const [retryRejected, setRetryRejected] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [sent, setSent] = useState<'approved' | 'pending' | null>(null);
+  const [error, setError] = useState('');
   const reportResult = async (input: ResultSubmission) => {
     const result = await trpc.eventOps.reportScore.mutate({
       matchId: match.id,
       ...input,
       outcome: 'played',
-    })
+    });
     await Promise.all([
       cache.invalidateQueries({ queryKey: ['eventOpsPublic', planId] }),
       cache.invalidateQueries({ queryKey: ['eventOpsReports', planId] }),
-    ])
-    return result
-  }
+    ]);
+    return result;
+  };
   const submit = async () => {
-    setPending(true)
-    setError('')
+    setPending(true);
+    setError('');
     try {
       const result = await trpc.eventOps.reportScore.mutate({
         matchId: match.id,
@@ -281,19 +281,19 @@ function PlayerScoreCard({
         score1,
         score2,
         outcome: 'played',
-      })
-      setSent(result.status === 'approved' ? 'approved' : 'pending')
-      setRetryRejected(false)
+      });
+      setSent(result.status === 'approved' ? 'approved' : 'pending');
+      setRetryRejected(false);
       await Promise.all([
         cache.invalidateQueries({ queryKey: ['eventOpsPublic', planId] }),
         cache.invalidateQueries({ queryKey: ['eventOpsReports', planId] }),
-      ])
+      ]);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not submit. Try again.')
+      setError(cause instanceof Error ? cause.message : 'Could not submit. Try again.');
     } finally {
-      setPending(false)
+      setPending(false);
     }
-  }
+  };
   return (
     <article className="card ops-match">
       <div className="ops-match-meta">
@@ -318,9 +318,9 @@ function PlayerScoreCard({
           <button
             className="btn"
             onClick={() => {
-              setRequestId(crypto.randomUUID())
-              setRevision(match.revision)
-              setRetryRejected(true)
+              setRequestId(crypto.randomUUID());
+              setRevision(match.revision);
+              setRetryRejected(true);
             }}
           >
             Start a new report
@@ -341,8 +341,8 @@ function PlayerScoreCard({
         <form
           className="ops-score-form"
           onSubmit={(e) => {
-            e.preventDefault()
-            void submit()
+            e.preventDefault();
+            void submit();
           }}
         >
           {reportStatus === 'rejected' && (
@@ -360,10 +360,10 @@ function PlayerScoreCard({
                 type="button"
                 className="btn"
                 onClick={() => {
-                  setRevision(match.revision)
-                  setScore1(0)
-                  setScore2(0)
-                  setRequestId(crypto.randomUUID())
+                  setRevision(match.revision);
+                  setScore1(0);
+                  setScore2(0);
+                  setRequestId(crypto.randomUUID());
                 }}
               >
                 Reload match
@@ -380,8 +380,8 @@ function PlayerScoreCard({
                 max={5}
                 value={score1}
                 onChange={(e) => {
-                  setScore1(Number(e.target.value))
-                  setRequestId(crypto.randomUUID())
+                  setScore1(Number(e.target.value));
+                  setRequestId(crypto.randomUUID());
                 }}
               />
             </label>
@@ -394,8 +394,8 @@ function PlayerScoreCard({
                 max={5}
                 value={score2}
                 onChange={(e) => {
-                  setScore2(Number(e.target.value))
-                  setRequestId(crypto.randomUUID())
+                  setScore2(Number(e.target.value));
+                  setRequestId(crypto.randomUUID());
                 }}
               />
             </label>
@@ -430,5 +430,5 @@ function PlayerScoreCard({
         </form>
       )}
     </article>
-  )
+  );
 }

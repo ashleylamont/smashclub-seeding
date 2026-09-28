@@ -16,12 +16,12 @@
  * "Ludwig v B", not "Ludwig V B").
  */
 export function defaultPublicAlias(canonicalName: string): string {
-  const parts = canonicalName.trim().split(/\s+/).filter(Boolean)
-  const [first, ...rest] = parts
-  if (first === undefined) return canonicalName.trim()
-  if (rest.length === 0) return first
+  const parts = canonicalName.trim().split(/\s+/).filter(Boolean);
+  const [first, ...rest] = parts;
+  if (first === undefined) return canonicalName.trim();
+  if (rest.length === 0) return first;
   // Spread to codepoints so a non-BMP initial is not split into half a pair.
-  return [first, ...rest.map((part) => [...part][0]!)].join(' ')
+  return [first, ...rest.map((part) => [...part][0]!)].join(' ');
 }
 
 /**
@@ -35,10 +35,10 @@ export function defaultPublicAlias(canonicalName: string): string {
  * instead of the columns it was derived from.
  */
 export function publicPlayerName(row: {
-  displayName: string | null
-  canonicalName: string
+  displayName: string | null;
+  canonicalName: string;
 }): string {
-  return row.displayName ?? defaultPublicAlias(row.canonicalName)
+  return row.displayName ?? defaultPublicAlias(row.canonicalName);
 }
 
 /**
@@ -52,11 +52,11 @@ export function publicPlayerName(row: {
  * whether a name has been reviewed is not something the reader chose.
  */
 export function publicParticipantName(row: {
-  displayName: string | null
-  canonicalName: string | null
-  cleanedName: string
+  displayName: string | null;
+  canonicalName: string | null;
+  cleanedName: string;
 }): string {
   return row.canonicalName === null
     ? defaultPublicAlias(row.cleanedName)
-    : publicPlayerName({ displayName: row.displayName, canonicalName: row.canonicalName })
+    : publicPlayerName({ displayName: row.displayName, canonicalName: row.canonicalName });
 }

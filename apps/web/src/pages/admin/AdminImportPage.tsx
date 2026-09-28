@@ -1,7 +1,7 @@
-import { useRef, useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { trpc } from '../../lib/trpc'
-import type { RegistryEntryPlan, RegistryImportPlan } from '../../lib/apiTypes'
+import { useRef, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { trpc } from '../../lib/trpc';
+import type { RegistryEntryPlan, RegistryImportPlan } from '../../lib/apiTypes';
 
 /**
  * players.yaml import, as a wizard: paste or upload, look at exactly what it
@@ -11,56 +11,56 @@ import type { RegistryEntryPlan, RegistryImportPlan } from '../../lib/apiTypes'
  * genuine no-op instead of a pile of writes.
  */
 
-type Step = 'input' | 'preview' | 'done'
+type Step = 'input' | 'preview' | 'done';
 
 const ACTION_LABEL: Record<RegistryEntryPlan['action'], string> = {
   create: 'create',
   update: 'update',
   unchanged: 'unchanged',
-}
+};
 
 export function AdminImportPage() {
-  const queryClient = useQueryClient()
-  const [yaml, setYaml] = useState('')
-  const [step, setStep] = useState<Step>('input')
-  const [showUnchanged, setShowUnchanged] = useState(false)
-  const fileInput = useRef<HTMLInputElement>(null)
+  const queryClient = useQueryClient();
+  const [yaml, setYaml] = useState('');
+  const [step, setStep] = useState<Step>('input');
+  const [showUnchanged, setShowUnchanged] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const preview = useMutation({
     mutationFn: (document: string) => trpc.admin.previewRegistryImport.mutate({ yaml: document }),
     onSuccess: () => setStep('preview'),
-  })
+  });
 
   const apply = useMutation({
     mutationFn: (document: string) => trpc.admin.applyRegistryImport.mutate({ yaml: document }),
     onSuccess: () => {
-      setStep('done')
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'players'] })
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'companies'] })
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'reviewQueue'] })
-      void queryClient.invalidateQueries({ queryKey: ['leaderboard'] })
+      setStep('done');
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'players'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'companies'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'reviewQueue'] });
+      void queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
     },
-  })
+  });
 
   const onFile = async (file: File | undefined) => {
-    if (!file) return
-    const text = await file.text()
-    setYaml(text)
-    setStep('input')
-    apply.reset()
-    preview.mutate(text)
-  }
+    if (!file) return;
+    const text = await file.text();
+    setYaml(text);
+    setStep('input');
+    apply.reset();
+    preview.mutate(text);
+  };
 
   const restart = () => {
-    setStep('input')
-    preview.reset()
-    apply.reset()
-  }
+    setStep('input');
+    preview.reset();
+    apply.reset();
+  };
 
-  const plan = preview.data ?? null
-  const blocked = (plan?.issues.length ?? 0) > 0
+  const plan = preview.data ?? null;
+  const blocked = (plan?.issues.length ?? 0) > 0;
   /** Nothing to write: a re-import of an unchanged file, which is the norm. */
-  const noop = plan !== null && plan.counts.create + plan.counts.update === 0
+  const noop = plan !== null && plan.counts.create + plan.counts.update === 0;
 
   return (
     <div className="section">
@@ -85,8 +85,8 @@ export function AdminImportPage() {
           value={yaml}
           spellCheck={false}
           onChange={(event) => {
-            setYaml(event.target.value)
-            if (step !== 'input') restart()
+            setYaml(event.target.value);
+            if (step !== 'input') restart();
           }}
         />
         <div className="import-actions">
@@ -111,8 +111,8 @@ export function AdminImportPage() {
             accept=".yaml,.yml,.txt,text/yaml"
             className="visually-hidden"
             onChange={(event) => {
-              void onFile(event.target.files?.[0])
-              event.target.value = ''
+              void onFile(event.target.files?.[0]);
+              event.target.value = '';
             }}
           />
           {yaml !== '' && (
@@ -120,8 +120,8 @@ export function AdminImportPage() {
               type="button"
               className="btn btn-small"
               onClick={() => {
-                setYaml('')
-                restart()
+                setYaml('');
+                restart();
               }}
             >
               Clear
@@ -172,7 +172,7 @@ export function AdminImportPage() {
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function PlanView({
@@ -180,13 +180,13 @@ function PlanView({
   showUnchanged,
   onToggleUnchanged,
 }: {
-  plan: RegistryImportPlan
-  showUnchanged: boolean
-  onToggleUnchanged: () => void
+  plan: RegistryImportPlan;
+  showUnchanged: boolean;
+  onToggleUnchanged: () => void;
 }) {
   const visible = showUnchanged
     ? plan.entries
-    : plan.entries.filter((entry) => entry.action !== 'unchanged')
+    : plan.entries.filter((entry) => entry.action !== 'unchanged');
 
   return (
     <div className="import-plan">
@@ -253,7 +253,7 @@ function PlanView({
         </>
       )}
     </div>
-  )
+  );
 }
 
 /**
@@ -264,13 +264,13 @@ function PlanView({
  * summary's alias count still reflects the real number of writes.
  */
 function groupAliases(aliases: RegistryEntryPlan['aliasesToAdd']): [string, string[]][] {
-  const byAlias = new Map<string, string[]>()
+  const byAlias = new Map<string, string[]>();
   for (const entry of aliases) {
-    const scopes = byAlias.get(entry.alias) ?? []
-    scopes.push(entry.companyCode ?? 'no company')
-    byAlias.set(entry.alias, scopes)
+    const scopes = byAlias.get(entry.alias) ?? [];
+    scopes.push(entry.companyCode ?? 'no company');
+    byAlias.set(entry.alias, scopes);
   }
-  return [...byAlias]
+  return [...byAlias];
 }
 
 function PlanRow({ entry }: { entry: RegistryEntryPlan }) {
@@ -314,5 +314,5 @@ function PlanRow({ entry }: { entry: RegistryEntryPlan }) {
         <span className={`chip import-action-${entry.action}`}>{ACTION_LABEL[entry.action]}</span>
       </td>
     </tr>
-  )
+  );
 }

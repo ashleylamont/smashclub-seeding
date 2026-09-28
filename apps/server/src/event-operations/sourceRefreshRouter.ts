@@ -1,6 +1,6 @@
-import { z } from 'zod'
-import { authedProcedure, router } from '../trpc/trpc'
-import { refreshEventSources } from './sourceRefresh'
+import { z } from 'zod';
+import { authedProcedure, router } from '../trpc/trpc';
+import { refreshEventSources } from './sourceRefresh';
 
 /** Parent binds this router at eventOps.sources. */
 export const sourceRefreshRouter = router({
@@ -11,4 +11,4 @@ export const sourceRefreshRouter = router({
         recompute: ctx.recomputeTrigger,
       }),
     ),
-})
+});

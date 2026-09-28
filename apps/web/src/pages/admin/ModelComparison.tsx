@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
-import { trpc } from '../../lib/trpc'
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
+import { trpc } from '../../lib/trpc';
 
 /**
  * Side-by-side of what each rating model would publish.
@@ -11,15 +11,15 @@ import { trpc } from '../../lib/trpc'
  * wants it when they are actually considering a switch.
  */
 export function ModelComparison({ activeModel }: { activeModel: string }) {
-  const [enabled, setEnabled] = useState(false)
-  const [showAll, setShowAll] = useState(false)
+  const [enabled, setEnabled] = useState(false);
+  const [showAll, setShowAll] = useState(false);
 
   const comparison = useQuery({
     queryKey: ['admin', 'compareModels'],
     queryFn: () => trpc.admin.compareModels.query(),
     enabled,
     staleTime: 5 * 60 * 1000,
-  })
+  });
 
   return (
     <section className="section model-comparison">
@@ -133,5 +133,5 @@ export function ModelComparison({ activeModel }: { activeModel: string }) {
         </>
       )}
     </section>
-  )
+  );
 }

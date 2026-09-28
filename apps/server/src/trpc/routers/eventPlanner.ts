@@ -2,11 +2,11 @@ import {
   historicalCandidates,
   previewHistoricalAdoption,
   applyHistoricalAdoption,
-} from '../../event-planner/historicalAdoption'
-import { z } from 'zod'
-import { TRPCError } from '@trpc/server'
-import { EventPlanValidationError } from '../../event-planner/divisions'
-import { buildExports } from '../../event-planner/exports'
+} from '../../event-planner/historicalAdoption';
+import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
+import { EventPlanValidationError } from '../../event-planner/divisions';
+import { buildExports } from '../../event-planner/exports';
 import {
   EventPlanStateError,
   addPlanRows,
@@ -26,9 +26,9 @@ import {
   unfreezeRoster,
   updateEntry,
   updatePlanDetails,
-} from '../../event-planner/plans'
-import { ROSTER_MAX_BYTES } from '../../event-planner/roster'
-import { adminProcedure, router } from '../trpc'
+} from '../../event-planner/plans';
+import { ROSTER_MAX_BYTES } from '../../event-planner/roster';
+import { adminProcedure, router } from '../trpc';
 
 /**
  * The event planner's API.
@@ -39,28 +39,28 @@ import { adminProcedure, router } from '../trpc'
  * is not a guarantee about anything.
  */
 
-const divisionSchema = z.enum(['upper', 'lower'])
-const stageSchema = z.enum(['main', 'consolation'])
+const divisionSchema = z.enum(['upper', 'lower']);
+const stageSchema = z.enum(['main', 'consolation']);
 const historicalSchema = z.object({
   planId: z.uuid(),
   brackets: z
     .array(z.object({ division: divisionSchema, stage: stageSchema, tournamentId: z.uuid() }))
     .length(4),
-})
-const preferenceSchema = z.enum(['auto', 'upper', 'lower'])
+});
+const preferenceSchema = z.enum(['auto', 'upper', 'lower']);
 
 /** Translate the planner's own errors into the tRPC codes a client can act on. */
 async function guard<T>(run: () => Promise<T>): Promise<T> {
   try {
-    return await run()
+    return await run();
   } catch (error) {
     if (error instanceof EventPlanValidationError) {
-      throw new TRPCError({ code: 'BAD_REQUEST', message: error.message, cause: error })
+      throw new TRPCError({ code: 'BAD_REQUEST', message: error.message, cause: error });
     }
     if (error instanceof EventPlanStateError) {
-      throw new TRPCError({ code: 'CONFLICT', message: error.message, cause: error })
+      throw new TRPCError({ code: 'CONFLICT', message: error.message, cause: error });
     }
-    throw error
+    throw error;
   }
 }
 
@@ -120,8 +120,8 @@ export const eventPlannerRouter = router({
     .mutation(async ({ ctx, input }) => {
       const planId = await guard(() =>
         createPlan(ctx.db, { ...input, eventDate: new Date(input.eventDate) }, ctx.user.id),
-      )
-      return { planId }
+      );
+      return { planId };
     }),
 
   plan: adminProcedure
@@ -139,21 +139,21 @@ export const eventPlannerRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { planId, eventDate, ...rest } = input
+      const { planId, eventDate, ...rest } = input;
       await guard(() =>
         updatePlanDetails(ctx.db, planId, {
           ...rest,
           ...(eventDate !== undefined ? { eventDate: new Date(eventDate) } : {}),
         }),
-      )
-      return { ok: true }
+      );
+      return { ok: true };
     }),
 
   addRows: adminProcedure
     .input(z.object({ planId: z.uuid(), text: z.string().max(ROSTER_MAX_BYTES) }))
     .mutation(async ({ ctx, input }) => {
-      const added = await guard(() => addPlanRows(ctx.db, input.planId, input.text))
-      return { added }
+      const added = await guard(() => addPlanRows(ctx.db, input.planId, input.text));
+      return { added };
     }),
 
   updateEntry: adminProcedure
@@ -168,30 +168,30 @@ export const eventPlannerRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { planId, entryId, ...patch } = input
-      await guard(() => updateEntry(ctx.db, planId, entryId, patch))
-      return { ok: true }
+      const { planId, entryId, ...patch } = input;
+      await guard(() => updateEntry(ctx.db, planId, entryId, patch));
+      return { ok: true };
     }),
 
   removeEntry: adminProcedure
     .input(z.object({ planId: z.uuid(), entryId: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      await guard(() => removeEntry(ctx.db, input.planId, input.entryId))
-      return { ok: true }
+      await guard(() => removeEntry(ctx.db, input.planId, input.entryId));
+      return { ok: true };
     }),
 
   freezeRoster: adminProcedure
     .input(z.object({ planId: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      await guard(() => freezeRoster(ctx.db, input.planId))
-      return { ok: true }
+      await guard(() => freezeRoster(ctx.db, input.planId));
+      return { ok: true };
     }),
 
   unfreezeRoster: adminProcedure
     .input(z.object({ planId: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      await guard(() => unfreezeRoster(ctx.db, input.planId))
-      return { ok: true }
+      await guard(() => unfreezeRoster(ctx.db, input.planId));
+      return { ok: true };
     }),
 
   reorderDivision: adminProcedure
@@ -205,15 +205,15 @@ export const eventPlannerRouter = router({
     .mutation(async ({ ctx, input }) => {
       await guard(() =>
         reorderDivision(ctx.db, input.planId, input.division, input.orderedEntryIds),
-      )
-      return { ok: true }
+      );
+      return { ok: true };
     }),
 
   generatePools: adminProcedure
     .input(z.object({ planId: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      await guard(() => generatePools(ctx.db, input.planId))
-      return { ok: true }
+      await guard(() => generatePools(ctx.db, input.planId));
+      return { ok: true };
     }),
 
   savePoolPlacements: adminProcedure
@@ -236,8 +236,8 @@ export const eventPlannerRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await guard(() => savePoolPlacements(ctx.db, input.planId, input.division, input.pools))
-      return { ok: true }
+      await guard(() => savePoolPlacements(ctx.db, input.planId, input.division, input.pools));
+      return { ok: true };
     }),
 
   attachBracket: adminProcedure
@@ -258,8 +258,8 @@ export const eventPlannerRouter = router({
   detachBracket: adminProcedure
     .input(z.object({ planId: z.uuid(), division: divisionSchema, stage: stageSchema }))
     .mutation(async ({ ctx, input }) => {
-      await guard(() => detachBracket(ctx.db, input.planId, input.division, input.stage))
-      return { ok: true }
+      await guard(() => detachBracket(ctx.db, input.planId, input.division, input.stage));
+      return { ok: true };
     }),
 
   /**
@@ -268,24 +268,24 @@ export const eventPlannerRouter = router({
    * venue is precisely when this must not have disappeared.
    */
   exports: adminProcedure.input(z.object({ planId: z.uuid() })).query(async ({ ctx, input }) => {
-    const view = await getPlan(ctx.db, input.planId)
+    const view = await getPlan(ctx.db, input.planId);
     if (!view)
-      throw new TRPCError({ code: 'NOT_FOUND', message: 'That event plan no longer exists.' })
-    return buildExports(view)
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'That event plan no longer exists.' });
+    return buildExports(view);
   }),
 
   /** Mark the night finished, or call it off. Both are one-way. */
   closePlan: adminProcedure
     .input(z.object({ planId: z.uuid(), status: z.enum(['complete', 'cancelled']) }))
     .mutation(async ({ ctx, input }) => {
-      await guard(() => closePlan(ctx.db, input.planId, input.status))
-      return { ok: true }
+      await guard(() => closePlan(ctx.db, input.planId, input.status));
+      return { ok: true };
     }),
 
   deletePlan: adminProcedure
     .input(z.object({ planId: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      await guard(() => deletePlan(ctx.db, input.planId))
-      return { ok: true }
+      await guard(() => deletePlan(ctx.db, input.planId));
+      return { ok: true };
     }),
-})
+});

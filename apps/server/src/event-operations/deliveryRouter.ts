@@ -1,6 +1,6 @@
-import { z } from 'zod'
-import { authedProcedure, router } from '../trpc/trpc'
-import { deliverMatchScore, deliveryStatus, reconcileMatchDelivery } from './delivery'
+import { z } from 'zod';
+import { authedProcedure, router } from '../trpc/trpc';
+import { deliverMatchScore, deliveryStatus, reconcileMatchDelivery } from './delivery';
 
 /** Register as eventOps.delivery. Defaults remain read-only, including harnesses. */
 export const eventDeliveryRouter = router({
@@ -16,9 +16,9 @@ export const eventDeliveryRouter = router({
       const result = await deliverMatchScore(ctx.db, ctx.user, input, {
         enabled: ctx.env.CHALLONGE_SCORE_WRITES ?? false,
         apiKey: ctx.env.CHALLONGE_API_KEY,
-      })
-      if (result.ok) ctx.recomputeTrigger.request()
-      return result
+      });
+      if (result.ok) ctx.recomputeTrigger.request();
+      return result;
     }),
   reconcile: authedProcedure
     .input(z.object({ matchId: z.uuid(), expectedRevision: z.number().int().nonnegative() }))
@@ -26,8 +26,8 @@ export const eventDeliveryRouter = router({
       const result = await reconcileMatchDelivery(ctx.db, ctx.user, input, {
         enabled: ctx.env.CHALLONGE_SCORE_WRITES ?? false,
         apiKey: ctx.env.CHALLONGE_API_KEY,
-      })
-      if (result.status === 'verified') ctx.recomputeTrigger.request()
-      return result
+      });
+      if (result.status === 'verified') ctx.recomputeTrigger.request();
+      return result;
     }),
-})
+});

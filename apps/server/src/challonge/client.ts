@@ -9,33 +9,33 @@ import {
   type ChallongeParticipant,
   type ChallongeTournament,
   type PublicBracket,
-} from '@smashclub/engine'
+} from '@smashclub/engine';
 
 export class ChallongeApiError extends Error {
   constructor(
     message: string,
     readonly status?: number,
   ) {
-    super(message)
+    super(message);
   }
 }
 
 export interface ChallongeClientOptions {
-  apiKey?: string
-  username?: string
+  apiKey?: string;
+  username?: string;
   /** Minimum spacing between requests (Challonge v1 limits are undocumented). */
-  minRequestSpacingMs?: number
-  maxRetries?: number
-  fetchImpl?: typeof fetch
-  baseUrl?: string
-  publicBaseUrl?: string
+  minRequestSpacingMs?: number;
+  maxRetries?: number;
+  fetchImpl?: typeof fetch;
+  baseUrl?: string;
+  publicBaseUrl?: string;
 }
 
 export interface TournamentBundle {
-  tournament: ChallongeTournament
-  participants: ChallongeParticipant[]
-  matches: ChallongeMatch[]
-  source: 'api' | 'public'
+  tournament: ChallongeTournament;
+  participants: ChallongeParticipant[];
+  matches: ChallongeMatch[];
+  source: 'api' | 'public';
 }
 
 /**
@@ -44,28 +44,28 @@ export interface TournamentBundle {
  * bracket JSON for reads when credentials are missing or the API 404s.
  */
 export class ChallongeClient {
-  private readonly apiKey?: string
-  private readonly username?: string
-  private readonly spacingMs: number
-  private readonly maxRetries: number
-  private readonly fetchImpl: typeof fetch
-  private readonly baseUrl: string
-  private readonly publicBaseUrl: string
-  private queue: Promise<unknown> = Promise.resolve()
-  private lastRequestAt = 0
+  private readonly apiKey?: string;
+  private readonly username?: string;
+  private readonly spacingMs: number;
+  private readonly maxRetries: number;
+  private readonly fetchImpl: typeof fetch;
+  private readonly baseUrl: string;
+  private readonly publicBaseUrl: string;
+  private queue: Promise<unknown> = Promise.resolve();
+  private lastRequestAt = 0;
 
   constructor(options: ChallongeClientOptions = {}) {
-    this.apiKey = options.apiKey
-    this.username = options.username
-    this.spacingMs = options.minRequestSpacingMs ?? 500
-    this.maxRetries = options.maxRetries ?? 3
-    this.fetchImpl = options.fetchImpl ?? fetch
-    this.baseUrl = options.baseUrl ?? 'https://api.challonge.com/v1'
-    this.publicBaseUrl = options.publicBaseUrl ?? 'https://challonge.com'
+    this.apiKey = options.apiKey;
+    this.username = options.username;
+    this.spacingMs = options.minRequestSpacingMs ?? 500;
+    this.maxRetries = options.maxRetries ?? 3;
+    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.baseUrl = options.baseUrl ?? 'https://api.challonge.com/v1';
+    this.publicBaseUrl = options.publicBaseUrl ?? 'https://challonge.com';
   }
 
   get hasCredentials(): boolean {
-    return Boolean(this.apiKey && this.username)
+    return Boolean(this.apiKey && this.username);
   }
 
   async fetchTournamentBundle(slug: string): Promise<TournamentBundle> {
@@ -73,34 +73,34 @@ export class ChallongeClient {
       try {
         const tournament = extractTournament(
           await this.requestJson(`${this.baseUrl}/tournaments/${slug}.json`, true),
-        )
+        );
         const participants = extractParticipants(
           await this.requestJson(`${this.baseUrl}/tournaments/${slug}/participants.json`, true),
-        )
+        );
         const matches = extractMatches(
           await this.requestJson(`${this.baseUrl}/tournaments/${slug}/matches.json`, true),
-        )
+        );
         // v1's match endpoint can omit nested group-stage matches. The public
         // module carries the complete two-stage view, so use it when the API
         // advertises a group stage while retaining API placements/names.
         if (tournament.groupStageEnabled) {
-          const publicBundle = await this.fetchPublicTournamentBundle(slug)
-          const byId = new Map(participants.map((p) => [p.id, p]))
-          for (const p of publicBundle.participants) if (!byId.has(p.id)) byId.set(p.id, p)
+          const publicBundle = await this.fetchPublicTournamentBundle(slug);
+          const byId = new Map(participants.map((p) => [p.id, p]));
+          for (const p of publicBundle.participants) if (!byId.has(p.id)) byId.set(p.id, p);
           return {
             tournament,
             participants: [...byId.values()],
             matches: publicBundle.matches,
             source: 'api',
-          }
+          };
         }
-        return { tournament, participants, matches, source: 'api' }
+        return { tournament, participants, matches, source: 'api' };
       } catch (error) {
-        if (!(error instanceof ChallongeApiError) || error.status !== 404) throw error
+        if (!(error instanceof ChallongeApiError) || error.status !== 404) throw error;
         // 404 with credentials: tournament may be outside the account; try public.
       }
     }
-    return this.fetchPublicTournamentBundle(slug)
+    return this.fetchPublicTournamentBundle(slug);
   }
 
   /**
@@ -115,24 +115,24 @@ export class ChallongeClient {
    * `unknown`; liveness is an explicit, expiring admin decision instead.
    */
   async fetchPublicTournamentBundle(slug: string): Promise<TournamentBundle> {
-    const html = await this.fetchModulePage(slug)
-    const payload = extractModuleBracketPayload(html)
-    const bracket = extractPublicBracket(payload)
-    const meta = (payload as { tournament?: Record<string, unknown> }).tournament ?? {}
+    const html = await this.fetchModulePage(slug);
+    const payload = extractModuleBracketPayload(html);
+    const bracket = extractPublicBracket(payload);
+    const meta = (payload as { tournament?: Record<string, unknown> }).tournament ?? {};
 
-    const rawState = typeof meta.state === 'string' ? meta.state : null
+    const rawState = typeof meta.state === 'string' ? meta.state : null;
     const groupStageEnabled =
       meta.group_stage_enabled === true ||
       bracket.matches.some((match) => match.stage === 'group') ||
       (Array.isArray((payload as Record<string, unknown>).groups) &&
-        ((payload as Record<string, unknown>).groups as unknown[]).length > 0)
+        ((payload as Record<string, unknown>).groups as unknown[]).length > 0);
     // Finished pools are not a finished tournament: finals may not have been
     // generated yet. Keep the organiser's live-poll lease until finals exist
     // or authoritative tournament metadata explicitly declares completion.
     const inferredComplete =
       bracket.allComplete &&
-      (!groupStageEnabled || bracket.matches.some((match) => match.stage === 'final'))
-    const state = rawState ?? (inferredComplete ? 'complete' : 'unknown')
+      (!groupStageEnabled || bracket.matches.some((match) => match.stage === 'final'));
+    const state = rawState ?? (inferredComplete ? 'complete' : 'unknown');
     const tournament: ChallongeTournament = {
       id: typeof meta.id === 'number' ? meta.id : 0,
       // The payload has no name; it lives in the page title. Empty string when
@@ -148,13 +148,13 @@ export class ChallongeClient {
       updatedAt: bracket.latestMatchDate,
       tournamentType: typeof meta.tournament_type === 'string' ? meta.tournament_type : null,
       groupStageEnabled,
-    }
+    };
     return {
       tournament,
       participants: bracket.participants,
       matches: bracket.matches,
       source: 'public',
-    }
+    };
   }
 
   private async fetchModulePage(slug: string): Promise<string> {
@@ -169,8 +169,8 @@ export class ChallongeClient {
     // failed with Accept: application/json; 0 of 12 with text/html.
     const response = await this.request(`${this.publicBaseUrl}/${slug}/module`, false, {
       headers: { Accept: 'text/html' },
-    })
-    return response.text()
+    });
+    return response.text();
   }
 
   /**
@@ -184,13 +184,13 @@ export class ChallongeClient {
    * `matches_by_round` payload.
    */
   async fetchPublicBracket(slug: string): Promise<PublicBracket> {
-    return extractPublicBracket(extractModuleBracketPayload(await this.fetchModulePage(slug)))
+    return extractPublicBracket(extractModuleBracketPayload(await this.fetchModulePage(slug)));
   }
 
   /** PUT participant seed; used by the seeding push. */
   async updateParticipantSeed(slug: string, participantId: number, seed: number): Promise<void> {
     if (!this.hasCredentials) {
-      throw new ChallongeApiError('Challonge credentials are required to push seeds.')
+      throw new ChallongeApiError('Challonge credentials are required to push seeds.');
     }
     await this.request(
       `${this.baseUrl}/tournaments/${slug}/participants/${participantId}.json`,
@@ -200,23 +200,23 @@ export class ChallongeClient {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participant: { seed } }),
       },
-    )
+    );
   }
 
   private async requestJson(url: string, useAuth: boolean): Promise<unknown> {
-    const response = await this.request(url, useAuth)
+    const response = await this.request(url, useAuth);
     try {
-      return await response.json()
+      return await response.json();
     } catch {
-      throw new ChallongeApiError('Challonge API returned invalid JSON.')
+      throw new ChallongeApiError('Challonge API returned invalid JSON.');
     }
   }
 
   private request(url: string, useAuth: boolean, init: RequestInit = {}): Promise<Response> {
-    const run = this.queue.then(() => this.requestWithRetries(url, useAuth, init))
+    const run = this.queue.then(() => this.requestWithRetries(url, useAuth, init));
     // Keep the queue alive regardless of individual failures.
-    this.queue = run.catch(() => undefined)
-    return run
+    this.queue = run.catch(() => undefined);
+    return run;
   }
 
   private async requestWithRetries(
@@ -224,28 +224,28 @@ export class ChallongeClient {
     useAuth: boolean,
     init: RequestInit,
   ): Promise<Response> {
-    let attempt = 0
+    let attempt = 0;
     for (;;) {
-      await this.waitForSpacing()
+      await this.waitForSpacing();
       const headers: Record<string, string> = {
         Accept: 'application/json',
         'User-Agent': 'smashclub/1.0 (+club ranking sync)',
         ...(init.headers as Record<string, string> | undefined),
-      }
+      };
       if (useAuth && this.hasCredentials) {
-        const token = Buffer.from(`${this.username}:${this.apiKey}`).toString('base64')
-        headers.Authorization = `Basic ${token}`
+        const token = Buffer.from(`${this.username}:${this.apiKey}`).toString('base64');
+        headers.Authorization = `Basic ${token}`;
       }
-      let response: Response
+      let response: Response;
       try {
-        response = await this.fetchImpl(url, { ...init, headers })
+        response = await this.fetchImpl(url, { ...init, headers });
       } catch (error) {
         if (attempt >= this.maxRetries) {
-          throw new ChallongeApiError(`Failed to reach Challonge: ${String(error)}`)
+          throw new ChallongeApiError(`Failed to reach Challonge: ${String(error)}`);
         }
-        await sleep(backoffMs(attempt))
-        attempt += 1
-        continue
+        await sleep(backoffMs(attempt));
+        attempt += 1;
+        continue;
       }
       // 429 is NOT retried. Challonge's limit is a MONTHLY request quota, not a
       // burst limit, so a 429 means the allowance is gone — retrying three
@@ -257,64 +257,64 @@ export class ChallongeClient {
             `The free tier allows 500 requests per month; check https://connect.challonge.com. ` +
             `This request was NOT retried, deliberately.`,
           429,
-        )
+        );
       }
       if (response.status >= 500) {
         if (attempt >= this.maxRetries) {
           // Include the URL and body: "failed (500) after retries" alone gives
           // no way to tell which endpoint, which tournament, or why.
-          const detail = (await response.text().catch(() => '')).slice(0, 200)
+          const detail = (await response.text().catch(() => '')).slice(0, 200);
           throw new ChallongeApiError(
             `Challonge request failed (${response.status}) after retries for ${url}: ${detail}`,
             response.status,
-          )
+          );
         }
-        await sleep(backoffMs(attempt))
-        attempt += 1
-        continue
+        await sleep(backoffMs(attempt));
+        attempt += 1;
+        continue;
       }
       if (response.status === 401) {
         throw new ChallongeApiError(
           'Challonge API authentication failed (401). Check CHALLONGE_USERNAME and CHALLONGE_API_KEY.',
           401,
-        )
+        );
       }
       if (response.status === 404) {
-        throw new ChallongeApiError('Challonge tournament not found (404).', 404)
+        throw new ChallongeApiError('Challonge tournament not found (404).', 404);
       }
       if (!response.ok) {
         // Report the headers that identify WHY, not 200 chars of body. A
         // Cloudflare challenge page's body says only "Just a moment..." while
         // `cf-mitigated: challenge` is what distinguishes bot-blocking from an
         // auth or slug problem — the useful half used to be discarded.
-        const mitigated = response.headers.get('cf-mitigated')
-        const server = response.headers.get('server')
-        const contentType = response.headers.get('content-type') ?? 'unknown'
+        const mitigated = response.headers.get('cf-mitigated');
+        const server = response.headers.get('server');
+        const contentType = response.headers.get('content-type') ?? 'unknown';
         const hint = mitigated
           ? ` — blocked by a ${server ?? 'CDN'} bot challenge (cf-mitigated: ${mitigated}); this endpoint cannot be read by a non-browser client`
-          : ''
-        const detail = (await response.text().catch(() => '')).slice(0, 200)
+          : '';
+        const detail = (await response.text().catch(() => '')).slice(0, 200);
         throw new ChallongeApiError(
           `Challonge request failed (${response.status}) for ${url} [content-type: ${contentType}]${hint}: ${detail}`,
           response.status,
-        )
+        );
       }
-      return response
+      return response;
     }
   }
 
   private async waitForSpacing(): Promise<void> {
-    const now = Date.now()
-    const wait = this.lastRequestAt + this.spacingMs - now
-    this.lastRequestAt = Math.max(now, this.lastRequestAt + this.spacingMs)
-    if (wait > 0) await sleep(wait)
+    const now = Date.now();
+    const wait = this.lastRequestAt + this.spacingMs - now;
+    this.lastRequestAt = Math.max(now, this.lastRequestAt + this.spacingMs);
+    if (wait > 0) await sleep(wait);
   }
 }
 
 function backoffMs(attempt: number): number {
-  return 1000 * 2 ** attempt
+  return 1000 * 2 ** attempt;
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

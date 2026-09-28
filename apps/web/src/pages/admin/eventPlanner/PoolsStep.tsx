@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
-import { trpc } from '../../../lib/trpc'
-import type { EventPlanDivision, EventPlanPool, EventPlanView } from '../../../lib/apiTypes'
-import { DIVISION_LABEL } from './labels'
+import { useMemo, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { trpc } from '../../../lib/trpc';
+import type { EventPlanDivision, EventPlanPool, EventPlanView } from '../../../lib/apiTypes';
+import { DIVISION_LABEL } from './labels';
 
 /**
  * Step 5 and step 7: the pool cards, and the worksheet that records how each
@@ -42,7 +42,7 @@ export function PoolsStep({ view, onChanged }: { view: EventPlanView; onChanged:
         />
       ))}
     </div>
-  )
+  );
 }
 
 function DivisionPools({
@@ -51,10 +51,10 @@ function DivisionPools({
   locked,
   onChanged,
 }: {
-  planId: string
-  division: EventPlanDivision
-  locked: boolean
-  onChanged: () => void
+  planId: string;
+  division: EventPlanDivision;
+  locked: boolean;
+  onChanged: () => void;
 }) {
   if (division.pools.length === 0) {
     return (
@@ -62,7 +62,7 @@ function DivisionPools({
         <h4>{DIVISION_LABEL[division.division]}</h4>
         <p className="muted">No pools yet — freeze the roster and generate pools first.</p>
       </div>
-    )
+    );
   }
 
   return (
@@ -146,15 +146,15 @@ function DivisionPools({
         </p>
       )}
     </div>
-  )
+  );
 }
 
 function nameOf(division: EventPlanDivision, playerId: string): string {
   for (const pool of division.pools) {
-    const member = pool.members.find((entry) => entry.playerId === playerId)
-    if (member) return member.name
+    const member = pool.members.find((entry) => entry.playerId === playerId);
+    if (member) return member.name;
   }
-  return '?'
+  return '?';
 }
 
 /**
@@ -169,11 +169,11 @@ function PoolCard({
   locked,
   onChanged,
 }: {
-  planId: string
-  divisionKey: 'upper' | 'lower'
-  pool: EventPlanPool
-  locked: boolean
-  onChanged: () => void
+  planId: string;
+  divisionKey: 'upper' | 'lower';
+  pool: EventPlanPool;
+  locked: boolean;
+  onChanged: () => void;
 }) {
   const saved = useMemo(
     () =>
@@ -181,14 +181,14 @@ function PoolCard({
         ? [...pool.members].sort((a, b) => a.place! - b.place!).map((member) => member.playerId)
         : [],
     [pool.members],
-  )
+  );
   const [order, setOrder] = useState<(string | '')[]>(
     saved.length > 0 ? saved : pool.members.map(() => ''),
-  )
-  const [lastSaved, setLastSaved] = useState(saved)
+  );
+  const [lastSaved, setLastSaved] = useState(saved);
   if (saved !== lastSaved) {
-    setLastSaved(saved)
-    setOrder(saved.length > 0 ? saved : pool.members.map(() => ''))
+    setLastSaved(saved);
+    setOrder(saved.length > 0 ? saved : pool.members.map(() => ''));
   }
 
   const save = useMutation({
@@ -206,10 +206,10 @@ function PoolCard({
         ],
       }),
     onSuccess: onChanged,
-  })
+  });
 
-  const chosen = order.filter((id) => id !== '')
-  const complete = chosen.length === pool.members.length && new Set(chosen).size === chosen.length
+  const chosen = order.filter((id) => id !== '');
+  const complete = chosen.length === pool.members.length && new Set(chosen).size === chosen.length;
 
   return (
     <div className="pool-card">
@@ -242,9 +242,9 @@ function PoolCard({
               value={order[place] ?? ''}
               aria-label={`${ordinal(place + 1)} place in pool ${pool.label}`}
               onChange={(event) => {
-                const next = [...order]
-                next[place] = event.target.value
-                setOrder(next)
+                const next = [...order];
+                next[place] = event.target.value;
+                setOrder(next);
               }}
             >
               <option value="">—</option>
@@ -270,9 +270,9 @@ function PoolCard({
         {save.isError && <p className="error-text">{save.error.message}</p>}
       </div>
     </div>
-  )
+  );
 }
 
 function ordinal(place: number): string {
-  return ['1st', '2nd', '3rd', '4th'][place - 1] ?? `${place}th`
+  return ['1st', '2nd', '3rd', '4th'][place - 1] ?? `${place}th`;
 }

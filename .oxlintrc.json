@@ -115,9 +115,15 @@
       }
     },
     {
-      "files": ["apps/server/src/event-planner/plans.ts", "packages/engine/src/recap.ts"],
+      "files": ["packages/engine/src/recap.ts"],
       "rules": {
         "max-lines": ["error", { "max": 1250, "skipBlankLines": true, "skipComments": true }]
+      }
+    },
+    {
+      "files": ["apps/server/src/event-planner/plans.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 1300, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {

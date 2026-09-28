@@ -1,5 +1,5 @@
-import { z } from 'zod'
-import { and, asc, desc, eq, inArray, isNotNull } from 'drizzle-orm'
+import { z } from 'zod';
+import { and, asc, desc, eq, inArray, isNotNull } from 'drizzle-orm';
 import {
   companies,
   playerClaims,
@@ -11,24 +11,24 @@ import {
   tournamentParticipants,
   tournaments,
   type Db,
-} from '@smashclub/db'
-import { eventKeyOf } from '@smashclub/engine'
-import { includesResultStage, publicParticipantName, publicPlayerName } from '@smashclub/shared'
-import { latestRecomputeId } from '../../recompute/recompute'
-import { getGlickoSettings } from '../../settings'
-import { charactersByPlayer, charactersForPlayer } from '../../players/characters'
-import { loadRecap } from '../../recap/recap'
-import { loadEventOverview } from '../../events/overview'
-import { publicProcedure, router } from '../trpc'
+} from '@smashclub/db';
+import { eventKeyOf } from '@smashclub/engine';
+import { includesResultStage, publicParticipantName, publicPlayerName } from '@smashclub/shared';
+import { latestRecomputeId } from '../../recompute/recompute';
+import { getGlickoSettings } from '../../settings';
+import { charactersByPlayer, charactersForPlayer } from '../../players/characters';
+import { loadRecap } from '../../recap/recap';
+import { loadEventOverview } from '../../events/overview';
+import { publicProcedure, router } from '../trpc';
 
-const playerName = publicPlayerName
+const playerName = publicPlayerName;
 
 /** One club night's brackets, as a decay row should name them. */
 interface NightBrackets {
   /** Every bracket of the evening, in the order they were played. */
-  name: string
+  name: string;
   /** True only when there was nothing but a rookie bracket to enter. */
-  allRookie: boolean
+  allRookie: boolean;
 }
 
 /**
@@ -51,8 +51,8 @@ async function nightsByEventKey(
   recomputeId: string,
   keys: ReadonlySet<string>,
 ): Promise<Map<string, NightBrackets>> {
-  const nights = new Map<string, NightBrackets>()
-  if (keys.size === 0) return nights
+  const nights = new Map<string, NightBrackets>();
+  if (keys.size === 0) return nights;
 
   const brackets = await db
     .selectDistinct({
@@ -70,23 +70,23 @@ async function nightsByEventKey(
       ),
     )
     // Chronological, so a night is read back in the order it was played.
-    .orderBy(asc(tournaments.eventDate), asc(tournaments.name))
+    .orderBy(asc(tournaments.eventDate), asc(tournaments.name));
 
-  const byKey = new Map<string, typeof brackets>()
+  const byKey = new Map<string, typeof brackets>();
   for (const bracket of brackets) {
-    const key = eventKeyOf(bracket.eventDate!.toISOString())
-    if (!keys.has(key)) continue
-    const list = byKey.get(key)
-    if (list) list.push(bracket)
-    else byKey.set(key, [bracket])
+    const key = eventKeyOf(bracket.eventDate!.toISOString());
+    if (!keys.has(key)) continue;
+    const list = byKey.get(key);
+    if (list) list.push(bracket);
+    else byKey.set(key, [bracket]);
   }
   for (const [key, list] of byKey) {
     nights.set(key, {
       name: list.map((bracket) => bracket.name).join(' + '),
       allRookie: list.every((bracket) => bracket.isRookie),
-    })
+    });
   }
-  return nights
+  return nights;
 }
 
 /*
@@ -102,10 +102,10 @@ export const publicRouter = router({
   leaderboard: publicProcedure.query(async ({ ctx }) => {
     // Before the first recompute there is nothing to rank, but the response
     // shape stays identical so callers need no narrowing.
-    const recomputeId = await latestRecomputeId(ctx.db)
+    const recomputeId = await latestRecomputeId(ctx.db);
     const [recompute] = recomputeId
       ? await ctx.db.select().from(recomputes).where(eq(recomputes.id, recomputeId))
-      : []
+      : [];
     const rows = !recomputeId
       ? []
       : await ctx.db
@@ -151,13 +151,13 @@ export const publicRouter = router({
           .innerJoin(players, eq(playerRatings.playerId, players.id))
           .leftJoin(companies, eq(players.companyId, companies.id))
           .where(eq(playerRatings.recomputeId, recomputeId))
-          .orderBy(asc(playerRatings.rank))
+          .orderBy(asc(playerRatings.rank));
 
     const verified = await ctx.db
       .select({ playerId: playerClaims.playerId })
       .from(playerClaims)
-      .where(eq(playerClaims.status, 'approved'))
-    const verifiedIds = new Set(verified.map((row) => row.playerId))
+      .where(eq(playerClaims.status, 'approved'));
+    const verifiedIds = new Set(verified.map((row) => row.playerId));
 
     /*
      * Club-wide event count for the masthead. Derived here rather than in the web
@@ -168,14 +168,14 @@ export const publicRouter = router({
     const eventDates = await ctx.db
       .select({ eventDate: tournaments.eventDate })
       .from(tournaments)
-      .where(isNotNull(tournaments.eventDate))
+      .where(isNotNull(tournaments.eventDate));
     const eventCount = new Set(eventDates.map((row) => eventKeyOf(row.eventDate!.toISOString())))
-      .size
+      .size;
 
     const characters = await charactersByPlayer(
       ctx.db,
       rows.map((row) => row.playerId),
-    )
+    );
 
     /*
      * The attendance policy in force, so the site can *state* it rather than
@@ -183,12 +183,12 @@ export const publicRouter = router({
      * retunes a number. A policy nobody can read is indistinguishable from an
      * arbitrary one, which was the main charge against ranking on RD.
      */
-    const { glicko } = await getGlickoSettings(ctx.db)
+    const { glicko } = await getGlickoSettings(ctx.db);
     const activityPolicy = {
       graceEvents: glicko.activityGraceEvents,
       penaltyPerEvent: glicko.activityPenaltyPerEvent,
       penaltyCap: glicko.activityPenaltyCap,
-    }
+    };
 
     return {
       computedAt: recompute?.finishedAt?.toISOString() ?? null,
@@ -212,7 +212,7 @@ export const publicRouter = router({
          */
         rankDelta: row.previousRank === null ? null : row.previousRank - row.rank,
       })),
-    }
+    };
   }),
 
   player: publicProcedure.input(z.object({ playerId: z.uuid() })).query(async ({ ctx, input }) => {
@@ -228,22 +228,22 @@ export const publicRouter = router({
       })
       .from(players)
       .leftJoin(companies, eq(players.companyId, companies.id))
-      .where(eq(players.id, input.playerId))
-    if (!player) return null
+      .where(eq(players.id, input.playerId));
+    if (!player) return null;
     if (player.status === 'merged' && player.mergedIntoPlayerId) {
-      return { redirectTo: player.mergedIntoPlayerId }
+      return { redirectTo: player.mergedIntoPlayerId };
     }
 
-    const recomputeId = await latestRecomputeId(ctx.db)
-    let ratingRow = null
-    let events: Record<string, unknown>[] = []
-    let model = 'glicko2'
+    const recomputeId = await latestRecomputeId(ctx.db);
+    let ratingRow = null;
+    let events: Record<string, unknown>[] = [];
+    let model = 'glicko2';
     if (recomputeId) {
       const [recompute] = await ctx.db
         .select({ model: recomputes.model })
         .from(recomputes)
-        .where(eq(recomputes.id, recomputeId))
-      model = recompute?.model ?? model
+        .where(eq(recomputes.id, recomputeId));
+      model = recompute?.model ?? model;
       const [rating] = await ctx.db
         .select()
         .from(playerRatings)
@@ -252,10 +252,10 @@ export const publicRouter = router({
             eq(playerRatings.recomputeId, recomputeId),
             eq(playerRatings.playerId, input.playerId),
           ),
-        )
-      ratingRow = rating ?? null
+        );
+      ratingRow = rating ?? null;
 
-      const opponents = players // alias for readability in the join below
+      const opponents = players; // alias for readability in the join below
       const eventRows = await ctx.db
         .select({
           seq: ratingEvents.seq,
@@ -288,7 +288,7 @@ export const publicRouter = router({
         .where(
           and(eq(ratingEvents.recomputeId, recomputeId), eq(ratingEvents.playerId, input.playerId)),
         )
-        .orderBy(asc(ratingEvents.seq))
+        .orderBy(asc(ratingEvents.seq));
       const nights = await nightsByEventKey(
         ctx.db,
         recomputeId,
@@ -297,13 +297,13 @@ export const publicRouter = router({
             .filter((row) => row.isDecay && row.tournamentDate)
             .map((row) => eventKeyOf(row.tournamentDate!.toISOString())),
         ),
-      )
+      );
       events = eventRows.map(({ opponentCanonicalName, opponentDisplayName, ...row }) => {
         // Decay is charged for the night, so it is named for the night.
         const night =
           row.isDecay && row.tournamentDate
             ? nights.get(eventKeyOf(row.tournamentDate.toISOString()))
-            : undefined
+            : undefined;
         return {
           ...row,
           tournamentName: night?.name ?? row.tournamentName,
@@ -315,14 +315,14 @@ export const publicRouter = router({
                 canonicalName: opponentCanonicalName,
               })
             : null,
-        }
-      })
+        };
+      });
     }
 
     const verified = await ctx.db
       .select({ id: playerClaims.id })
       .from(playerClaims)
-      .where(and(eq(playerClaims.playerId, input.playerId), eq(playerClaims.status, 'approved')))
+      .where(and(eq(playerClaims.playerId, input.playerId), eq(playerClaims.status, 'approved')));
 
     return {
       player: {
@@ -337,13 +337,13 @@ export const publicRouter = router({
       events,
       /** Which rating model produced the events — the profile explains deltas differently per model. */
       model,
-    }
+    };
   }),
 
   /** Full rating history for every ranked player (the RatingsOverTime chart). */
   ratingHistory: publicProcedure.query(async ({ ctx }) => {
-    const recomputeId = await latestRecomputeId(ctx.db)
-    if (!recomputeId) return { events: [], players: [] }
+    const recomputeId = await latestRecomputeId(ctx.db);
+    if (!recomputeId) return { events: [], players: [] };
     const eventRows = await ctx.db
       .select({
         seq: ratingEvents.seq,
@@ -357,7 +357,7 @@ export const publicRouter = router({
       })
       .from(ratingEvents)
       .where(eq(ratingEvents.recomputeId, recomputeId))
-      .orderBy(asc(ratingEvents.seq))
+      .orderBy(asc(ratingEvents.seq));
     const playerRows = await ctx.db
       .select({
         playerId: playerRatings.playerId,
@@ -369,18 +369,18 @@ export const publicRouter = router({
       .from(playerRatings)
       .innerJoin(players, eq(playerRatings.playerId, players.id))
       .where(eq(playerRatings.recomputeId, recomputeId))
-      .orderBy(asc(playerRatings.rank))
+      .orderBy(asc(playerRatings.rank));
     return {
       events: eventRows,
       players: playerRows.map(({ canonicalName, displayName, ...row }) => ({
         ...row,
         name: playerName({ canonicalName, displayName }),
       })),
-    }
+    };
   }),
 
   tournaments: publicProcedure.query(async ({ ctx }) => {
-    const rows = await ctx.db.select().from(tournaments).orderBy(desc(tournaments.eventDate))
+    const rows = await ctx.db.select().from(tournaments).orderBy(desc(tournaments.eventDate));
     return rows.map((row) => ({
       id: row.id,
       slug: row.challongeSlug,
@@ -394,7 +394,7 @@ export const publicRouter = router({
       lastSyncedAt: row.lastSyncedAt?.toISOString() ?? null,
       /** Open live-monitoring window, if any; null once it expires or the bracket completes. */
       liveUntil: row.liveUntil?.toISOString() ?? null,
-    }))
+    }));
   }),
 
   tournament: publicProcedure
@@ -403,8 +403,8 @@ export const publicRouter = router({
       const [tournament] = await ctx.db
         .select()
         .from(tournaments)
-        .where(eq(tournaments.challongeSlug, input.slug))
-      if (!tournament) return null
+        .where(eq(tournaments.challongeSlug, input.slug));
+      if (!tournament) return null;
 
       const participants = await ctx.db
         .select({
@@ -420,9 +420,9 @@ export const publicRouter = router({
         .from(tournamentParticipants)
         .leftJoin(players, eq(tournamentParticipants.playerId, players.id))
         .leftJoin(companies, eq(players.companyId, companies.id))
-        .where(eq(tournamentParticipants.tournamentId, tournament.id))
+        .where(eq(tournamentParticipants.tournamentId, tournament.id));
 
-      const participantName = new Map(participants.map((p) => [p.id, publicParticipantName(p)]))
+      const participantName = new Map(participants.map((p) => [p.id, publicParticipantName(p)]));
 
       const setRows = await ctx.db
         .select()
@@ -433,7 +433,7 @@ export const publicRouter = router({
         // comparator applies. Ordering by `challonge_match_id` alone (what this
         // did while `suggested_play_order` was never populated) is bracket
         // *creation* order: the whole winners side, then the whole losers side.
-        .orderBy(asc(sets.suggestedPlayOrder), asc(sets.completedAt), asc(sets.challongeMatchId))
+        .orderBy(asc(sets.suggestedPlayOrder), asc(sets.completedAt), asc(sets.challongeMatchId));
 
       return {
         id: tournament.id,
@@ -489,13 +489,13 @@ export const publicRouter = router({
           p1PlayerId: row.p1PlayerId,
           p2PlayerId: row.p2PlayerId,
         })),
-      }
+      };
     }),
 
   eventOverview: publicProcedure
     .input(z.object({ slug: z.string() }))
     .query(async ({ ctx, input }) => {
-      return loadEventOverview(ctx.db, input.slug)
+      return loadEventOverview(ctx.db, input.slug);
     }),
 
   /**
@@ -504,7 +504,7 @@ export const publicRouter = router({
    * shared out of the club.
    */
   recap: publicProcedure.input(z.object({ slug: z.string() })).query(async ({ ctx, input }) => {
-    return loadRecap(ctx.db, input.slug)
+    return loadRecap(ctx.db, input.slug);
   }),
 
   /**
@@ -527,7 +527,7 @@ export const publicRouter = router({
   searchPlayers: publicProcedure
     .input(z.object({ query: z.string().min(1).max(100) }))
     .query(async ({ ctx, input }) => {
-      const query = input.query.trim().toLowerCase()
+      const query = input.query.trim().toLowerCase();
       const rows = (
         await ctx.db
           .select({
@@ -543,7 +543,7 @@ export const publicRouter = router({
         .map((row) => ({ id: row.id, name: playerName(row), companyCode: row.companyCode }))
         .filter((row) => row.name.toLowerCase().includes(query))
         .sort((a, b) => a.name.localeCompare(b.name))
-        .slice(0, 20)
+        .slice(0, 20);
       const claims = rows.length
         ? await ctx.db
             .select({ playerId: playerClaims.playerId })
@@ -557,8 +557,8 @@ export const publicRouter = router({
                 eq(playerClaims.status, 'approved'),
               ),
             )
-        : []
-      const claimed = new Set(claims.map((row) => row.playerId))
-      return rows.map((row) => ({ ...row, verified: claimed.has(row.id) }))
+        : [];
+      const claimed = new Set(claims.map((row) => row.playerId));
+      return rows.map((row) => ({ ...row, verified: claimed.has(row.id) }));
     }),
-})
+});

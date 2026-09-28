@@ -1,14 +1,14 @@
-import type { GlickoSettings } from '@smashclub/shared'
-import { attendanceOf, eventKeyOf } from './events'
-import { GLICKO2_SCALE, updateRating, type Rating } from './glicko2'
-import { compareNullableNumbers, compareSetsInBracket, compareStrings } from './setOrder'
+import type { GlickoSettings } from '@smashclub/shared';
+import { attendanceOf, eventKeyOf } from './events';
+import { GLICKO2_SCALE, updateRating, type Rating } from './glicko2';
+import { compareNullableNumbers, compareSetsInBracket, compareStrings } from './setOrder';
 import type {
   EngineSet,
   EngineTournament,
   PlayerFinalState,
   RatingEvent,
   ReplayResult,
-} from './types'
+} from './types';
 
 /**
  * Flags that reproduce specific defects of the legacy Python engine so the
@@ -20,17 +20,17 @@ export interface LegacyCompat {
    * Replay sets in the caller-supplied array order and number tournaments by
    * order of first appearance, rather than sorting chronologically.
    */
-  legacyOrdering?: boolean
+  legacyOrdering?: boolean;
   /**
    * Reproduce the use-before-assign defect where rookie-bracket scaling read
    * the *previous* set's winner (glicko_calculator.py:285, assigned at :355).
    */
-  rookieScaleUsesPreviousWinner?: boolean
+  rookieScaleUsesPreviousWinner?: boolean;
   /**
    * Reproduce trailing inactivity decay being computed for charts but never
    * written back to player state, so going dark did not affect seeding.
    */
-  skipTrailingDecay?: boolean
+  skipTrailingDecay?: boolean;
   /**
    * Count inactivity decay in missed *brackets* rather than missed events.
    *
@@ -39,7 +39,7 @@ export interface LegacyCompat {
    * regular is recorded as having "missed" every rookie bracket they were never
    * in — and vice versa — so RD grows on evenings they actually attended.
    */
-  decayPerBracket?: boolean
+  decayPerBracket?: boolean;
   /**
    * Grow RD per missed period by the legacy volatility-scaled, escalating rule
    * (`LEGACY_DECAY`) instead of the flat quadrature step.
@@ -47,7 +47,7 @@ export interface LegacyCompat {
    * Only golden-check needs this. Mid-history decay feeds the pre-RD of every
    * later set, so without it the replay cannot reproduce the recorded output.
    */
-  legacyVolatilityDecay?: boolean
+  legacyVolatilityDecay?: boolean;
 }
 
 /**
@@ -57,7 +57,7 @@ export interface LegacyCompat {
  * fixed recorded output — so they live here instead of in settings, where they
  * would invite someone to tune a formula that production no longer runs.
  */
-const LEGACY_DECAY = { rdScale: 20, escalation: 0.2 } as const
+const LEGACY_DECAY = { rdScale: 20, escalation: 0.2 } as const;
 
 /**
  * Replays the full set history through Glicko-2 and returns every rating
@@ -89,22 +89,22 @@ const LEGACY_DECAY = { rdScale: 20, escalation: 0.2 } as const
  *   `decayedRd` for why neither survives.
  */
 export function replayRatings(input: {
-  sets: readonly EngineSet[]
-  tournaments: readonly EngineTournament[]
-  settings: GlickoSettings
+  sets: readonly EngineSet[];
+  tournaments: readonly EngineTournament[];
+  settings: GlickoSettings;
   /**
    * Bug-for-bug reproduction of the legacy Python engine, used only by
    * tools/golden-check to prove this port is faithful before the fixes are
    * applied. Never set in production.
    */
-  compat?: LegacyCompat
+  compat?: LegacyCompat;
 }): ReplayResult {
-  const { sets, tournaments, settings, compat } = input
+  const { sets, tournaments, settings, compat } = input;
 
-  const tournamentsById = new Map(tournaments.map((t) => [t.id, t]))
+  const tournamentsById = new Map(tournaments.map((t) => [t.id, t]));
   for (const set of sets) {
     if (!tournamentsById.has(set.tournamentId)) {
-      throw new Error(`Set ${set.id} references unknown tournament ${set.tournamentId}`)
+      throw new Error(`Set ${set.id} references unknown tournament ${set.tournamentId}`);
     }
   }
 
@@ -115,7 +115,7 @@ export function replayRatings(input: {
   // Legacy ordering instead numbered tournaments by order of first appearance
   // in the input file and replayed sets in file order, which made input order
   // a rating input.
-  const activeTournamentIds = new Set(sets.map((s) => s.tournamentId))
+  const activeTournamentIds = new Set(sets.map((s) => s.tournamentId));
   const orderedTournaments = compat?.legacyOrdering
     ? dedupe(sets.map((s) => s.tournamentId)).map((id) => tournamentsById.get(id)!)
     : tournaments
@@ -125,9 +125,9 @@ export function replayRatings(input: {
             compareStrings(a.eventDate, b.eventDate) ||
             compareNullableNumbers(a.challongeId, b.challongeId) ||
             compareStrings(a.id, b.id),
-        )
-  const tournamentSequences = new Map<string, number>()
-  orderedTournaments.forEach((t, index) => tournamentSequences.set(t.id, index))
+        );
+  const tournamentSequences = new Map<string, number>();
+  orderedTournaments.forEach((t, index) => tournamentSequences.set(t.id, index));
 
   /*
    * A decay period is one *event*, not one bracket.
@@ -141,25 +141,25 @@ export function replayRatings(input: {
    * evenings they had actually turned up to — and the reverse for rookie-only
    * players.
    */
-  const periodByTournament = new Map<string, number>()
-  const tournamentIdByPeriod: string[] = []
+  const periodByTournament = new Map<string, number>();
+  const tournamentIdByPeriod: string[] = [];
   if (compat?.decayPerBracket) {
     orderedTournaments.forEach((t, index) => {
-      periodByTournament.set(t.id, index)
-      tournamentIdByPeriod.push(t.id)
-    })
+      periodByTournament.set(t.id, index);
+      tournamentIdByPeriod.push(t.id);
+    });
   } else {
-    const periodByEvent = new Map<string, number>()
+    const periodByEvent = new Map<string, number>();
     for (const tournament of orderedTournaments) {
-      const key = eventKeyOf(tournament.eventDate)
-      let period = periodByEvent.get(key)
+      const key = eventKeyOf(tournament.eventDate);
+      let period = periodByEvent.get(key);
       if (period === undefined) {
-        period = periodByEvent.size
-        periodByEvent.set(key, period)
+        period = periodByEvent.size;
+        periodByEvent.set(key, period);
         // Decay events need a tournament to hang off; use the event's first bracket.
-        tournamentIdByPeriod.push(tournament.id)
+        tournamentIdByPeriod.push(tournament.id);
       }
-      periodByTournament.set(tournament.id, period)
+      periodByTournament.set(tournament.id, period);
     }
   }
 
@@ -169,41 +169,41 @@ export function replayRatings(input: {
         (a, b) =>
           tournamentSequences.get(a.tournamentId)! - tournamentSequences.get(b.tournamentId)! ||
           compareSetsInBracket(a, b),
-      )
+      );
 
   // First pass: total sets per player per tournament, for the
   // inverse-diminishing weight denominator.
-  const totalsByPlayerTournament = new Map<string, number>()
+  const totalsByPlayerTournament = new Map<string, number>();
   for (const set of orderedSets) {
     for (const playerId of [set.p1PlayerId, set.p2PlayerId]) {
-      const key = `${playerId}\u0000${set.tournamentId}`
-      totalsByPlayerTournament.set(key, (totalsByPlayerTournament.get(key) ?? 0) + 1)
+      const key = `${playerId}\u0000${set.tournamentId}`;
+      totalsByPlayerTournament.set(key, (totalsByPlayerTournament.get(key) ?? 0) + 1);
     }
   }
 
   interface InternalState {
-    rating: Rating
-    matchCount: number
-    wins: number
-    losses: number
-    mainMatchCount: number
-    rookieMatchCount: number
+    rating: Rating;
+    matchCount: number;
+    wins: number;
+    losses: number;
+    mainMatchCount: number;
+    rookieMatchCount: number;
     /** Dense index of the last event played; drives decay counting. */
-    lastPeriodIndex: number | null
-    lastPlayedDate: string | null
-    tournamentIds: Set<string>
+    lastPeriodIndex: number | null;
+    lastPlayedDate: string | null;
+    tournamentIds: Set<string>;
     /** Events (occasions) attended, as opposed to brackets entered. */
-    eventKeys: Set<string>
-    opponentIds: Set<string>
+    eventKeys: Set<string>;
+    opponentIds: Set<string>;
   }
 
-  const states = new Map<string, InternalState>()
-  const indicesByPlayerTournament = new Map<string, number>()
-  const events: RatingEvent[] = []
-  let seq = 0
+  const states = new Map<string, InternalState>();
+  const indicesByPlayerTournament = new Map<string, number>();
+  const events: RatingEvent[] = [];
+  let seq = 0;
 
   const getState = (playerId: string): InternalState => {
-    let state = states.get(playerId)
+    let state = states.get(playerId);
     if (!state) {
       state = {
         rating: {
@@ -221,11 +221,11 @@ export function replayRatings(input: {
         tournamentIds: new Set(),
         eventKeys: new Set(),
         opponentIds: new Set(),
-      }
-      states.set(playerId, state)
+      };
+      states.set(playerId, state);
     }
-    return state
-  }
+    return state;
+  };
 
   /**
    * One missed-event decay step; returns the new (capped) RD.
@@ -241,24 +241,27 @@ export function replayRatings(input: {
    * to the cold-start value, because a lapsed regular is not a stranger.
    */
   const decayedRd = (rd: number, vol: number, missIndex: number): number => {
-    const phi = rd / GLICKO2_SCALE
+    const phi = rd / GLICKO2_SCALE;
     if (compat?.legacyVolatilityDecay) {
-      const multiplier = LEGACY_DECAY.rdScale * (1 + missIndex * LEGACY_DECAY.escalation)
-      return Math.min(Math.sqrt(phi * phi + multiplier * vol * vol) * GLICKO2_SCALE, settings.rdCap)
+      const multiplier = LEGACY_DECAY.rdScale * (1 + missIndex * LEGACY_DECAY.escalation);
+      return Math.min(
+        Math.sqrt(phi * phi + multiplier * vol * vol) * GLICKO2_SCALE,
+        settings.rdCap,
+      );
     }
-    const grown = Math.sqrt(rd * rd + settings.missedEventRdGrowth * settings.missedEventRdGrowth)
+    const grown = Math.sqrt(rd * rd + settings.missedEventRdGrowth * settings.missedEventRdGrowth);
     // Already past the ceiling (a newcomer decaying from 350) must not be
     // dragged *down* to it: decay may only ever widen a player's band.
-    return Math.max(rd, Math.min(grown, settings.decayRdCap))
-  }
+    return Math.max(rd, Math.min(grown, settings.decayRdCap));
+  };
 
   const applyDecay = (playerId: string, state: InternalState, targetPeriod: number): void => {
-    if (state.lastPeriodIndex === null) return
-    const missed = targetPeriod - state.lastPeriodIndex - 1
+    if (state.lastPeriodIndex === null) return;
+    const missed = targetPeriod - state.lastPeriodIndex - 1;
     for (let i = 0; i < missed; i++) {
-      const missedPeriod = state.lastPeriodIndex + 1 + i
-      const preRd = state.rating.rd
-      const postRd = decayedRd(preRd, state.rating.vol, i)
+      const missedPeriod = state.lastPeriodIndex + 1 + i;
+      const preRd = state.rating.rd;
+      const postRd = decayedRd(preRd, state.rating.vol, i);
       /*
        * Nothing to record when the step cannot widen the band any further —
        * someone we have seen once is already at the ceiling, and there is no
@@ -266,8 +269,8 @@ export function replayRatings(input: {
        * anyway would put a run of zero-change decay marks on their chart and
        * invite the reader to look for a change that is not there.
        */
-      if (postRd <= preRd) continue
-      state.rating = { ...state.rating, rd: postRd }
+      if (postRd <= preRd) continue;
+      state.rating = { ...state.rating, rd: postRd };
       events.push({
         seq: seq++,
         playerId,
@@ -283,65 +286,65 @@ export function replayRatings(input: {
         preVol: state.rating.vol,
         postVol: state.rating.vol,
         weight: 1,
-      })
+      });
     }
-  }
+  };
 
   const rookieScale = (rating: number, won: boolean): number => {
-    if (rating >= settings.rookieOverPenaltyThreshold) return won ? 0.4 : 1.25
-    if (rating >= settings.rookieFullPenaltyThreshold) return won ? 0.25 : 1.0
-    if (rating >= settings.rookiePartialPenaltyThreshold) return won ? 0.375 : 0.75
-    return settings.rookieBracketBaseScale
-  }
+    if (rating >= settings.rookieOverPenaltyThreshold) return won ? 0.4 : 1.25;
+    if (rating >= settings.rookieFullPenaltyThreshold) return won ? 0.25 : 1.0;
+    if (rating >= settings.rookiePartialPenaltyThreshold) return won ? 0.375 : 0.75;
+    return settings.rookieBracketBaseScale;
+  };
 
   // Legacy read this from the previous loop iteration when scaling rookie
   // matches; only used under compat.
-  let previousP1Won = false
+  let previousP1Won = false;
 
   for (const set of orderedSets) {
-    const tournament = tournamentsById.get(set.tournamentId)!
-    const period = periodByTournament.get(set.tournamentId)!
-    const state1 = getState(set.p1PlayerId)
-    const state2 = getState(set.p2PlayerId)
-    const p1Won = set.winner === 1
-    const scaleWinnerFlag = compat?.rookieScaleUsesPreviousWinner ? previousP1Won : p1Won
-    previousP1Won = p1Won
+    const tournament = tournamentsById.get(set.tournamentId)!;
+    const period = periodByTournament.get(set.tournamentId)!;
+    const state1 = getState(set.p1PlayerId);
+    const state2 = getState(set.p2PlayerId);
+    const p1Won = set.winner === 1;
+    const scaleWinnerFlag = compat?.rookieScaleUsesPreviousWinner ? previousP1Won : p1Won;
+    previousP1Won = p1Won;
 
     // Inactivity decay for tournaments missed since each player's last event.
-    applyDecay(set.p1PlayerId, state1, period)
-    applyDecay(set.p2PlayerId, state2, period)
+    applyDecay(set.p1PlayerId, state1, period);
+    applyDecay(set.p2PlayerId, state2, period);
 
     // Inverse-diminishing weight from the set's position in the player's
     // tournament run (1-indexed; the last set gets full weight).
-    const key1 = `${set.p1PlayerId}\u0000${set.tournamentId}`
-    const key2 = `${set.p2PlayerId}\u0000${set.tournamentId}`
-    const index1 = (indicesByPlayerTournament.get(key1) ?? 0) + 1
-    const index2 = (indicesByPlayerTournament.get(key2) ?? 0) + 1
-    indicesByPlayerTournament.set(key1, index1)
-    indicesByPlayerTournament.set(key2, index2)
+    const key1 = `${set.p1PlayerId}\u0000${set.tournamentId}`;
+    const key2 = `${set.p2PlayerId}\u0000${set.tournamentId}`;
+    const index1 = (indicesByPlayerTournament.get(key1) ?? 0) + 1;
+    const index2 = (indicesByPlayerTournament.get(key2) ?? 0) + 1;
+    indicesByPlayerTournament.set(key1, index1);
+    indicesByPlayerTournament.set(key2, index2);
     let weight1 =
-      (index1 / totalsByPlayerTournament.get(key1)!) ** settings.inverseDiminishingExponent
+      (index1 / totalsByPlayerTournament.get(key1)!) ** settings.inverseDiminishingExponent;
     let weight2 =
-      (index2 / totalsByPlayerTournament.get(key2)!) ** settings.inverseDiminishingExponent
+      (index2 / totalsByPlayerTournament.get(key2)!) ** settings.inverseDiminishingExponent;
 
     if (tournament.isRookie) {
-      weight1 *= rookieScale(state1.rating.rating, scaleWinnerFlag)
-      weight2 *= rookieScale(state2.rating.rating, !scaleWinnerFlag)
+      weight1 *= rookieScale(state1.rating.rating, scaleWinnerFlag);
+      weight2 *= rookieScale(state2.rating.rating, !scaleWinnerFlag);
     }
 
     // Symmetric update from both players' pre-set values.
-    const pre1 = state1.rating
-    const pre2 = state2.rating
+    const pre1 = state1.rating;
+    const pre2 = state2.rating;
     const updated1 = updateRating(
       pre1,
       [{ rating: pre2.rating, rd: pre2.rd, outcome: p1Won ? 1 : 0 }],
       settings.tau,
-    )
+    );
     const updated2 = updateRating(
       pre2,
       [{ rating: pre1.rating, rd: pre1.rd, outcome: p1Won ? 0 : 1 }],
       settings.tau,
-    )
+    );
 
     // Weight is applied by lerping rating and RD toward the pre-update
     // values; volatility keeps the full update (legacy behaviour).
@@ -349,30 +352,30 @@ export function replayRatings(input: {
       rating: pre1.rating + (updated1.rating - pre1.rating) * weight1,
       rd: pre1.rd + (updated1.rd - pre1.rd) * weight1,
       vol: updated1.vol,
-    }
+    };
     state2.rating = {
       rating: pre2.rating + (updated2.rating - pre2.rating) * weight2,
       rd: pre2.rd + (updated2.rd - pre2.rd) * weight2,
       vol: updated2.vol,
-    }
+    };
 
     for (const [playerId, state, pre, weight, won, opponentId] of [
       [set.p1PlayerId, state1, pre1, weight1, p1Won, set.p2PlayerId],
       [set.p2PlayerId, state2, pre2, weight2, !p1Won, set.p1PlayerId],
     ] as const) {
-      state.matchCount += 1
-      state.wins += won ? 1 : 0
-      state.losses += won ? 0 : 1
+      state.matchCount += 1;
+      state.wins += won ? 1 : 0;
+      state.losses += won ? 0 : 1;
       if (tournament.isRookie) {
-        state.rookieMatchCount += 1
+        state.rookieMatchCount += 1;
       } else {
-        state.mainMatchCount += 1
+        state.mainMatchCount += 1;
       }
-      state.lastPeriodIndex = period
-      state.lastPlayedDate = tournament.eventDate
-      state.tournamentIds.add(set.tournamentId)
-      state.eventKeys.add(eventKeyOf(tournament.eventDate))
-      state.opponentIds.add(opponentId)
+      state.lastPeriodIndex = period;
+      state.lastPlayedDate = tournament.eventDate;
+      state.tournamentIds.add(set.tournamentId);
+      state.eventKeys.add(eventKeyOf(tournament.eventDate));
+      state.opponentIds.add(opponentId);
       events.push({
         seq: seq++,
         playerId,
@@ -388,7 +391,7 @@ export function replayRatings(input: {
         preVol: pre.vol,
         postVol: state.rating.vol,
         weight,
-      })
+      });
     }
   }
 
@@ -396,12 +399,12 @@ export function replayRatings(input: {
   // most recent event, and it counts (persisted into final state).
   // Legacy computed these snapshots for charts but never wrote them back, so
   // going dark did not affect seeding.
-  const lastPeriod = tournamentIdByPeriod.length - 1
+  const lastPeriod = tournamentIdByPeriod.length - 1;
   if (lastPeriod >= 0 && !compat?.skipTrailingDecay) {
     for (const [playerId, state] of [...states.entries()].sort(([a], [b]) =>
       compareStrings(a, b),
     )) {
-      applyDecay(playerId, state, lastPeriod + 1)
+      applyDecay(playerId, state, lastPeriod + 1);
     }
   }
 
@@ -416,9 +419,9 @@ export function replayRatings(input: {
    */
   const orderedEventKeys = dedupe(orderedTournaments.map((t) => eventKeyOf(t.eventDate))).sort(
     compareStrings,
-  )
+  );
 
-  const finalStates = new Map<string, PlayerFinalState>()
+  const finalStates = new Map<string, PlayerFinalState>();
   for (const [playerId, state] of states) {
     finalStates.set(playerId, {
       playerId,
@@ -436,12 +439,12 @@ export function replayRatings(input: {
       tournamentIds: state.tournamentIds,
       eventKeys: state.eventKeys,
       opponentIds: state.opponentIds,
-    })
+    });
   }
 
-  return { events, finalStates, tournamentSequences, decayPeriods: periodByTournament }
+  return { events, finalStates, tournamentSequences, decayPeriods: periodByTournament };
 }
 
 function dedupe(values: readonly string[]): string[] {
-  return [...new Set(values)]
+  return [...new Set(values)];
 }

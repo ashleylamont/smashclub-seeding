@@ -1,37 +1,37 @@
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { trpc } from '../../../lib/trpc'
-import type { EventPlanView } from '../../../lib/apiTypes'
-import { formatDate, formatDateTime } from '../../../lib/format'
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { trpc } from '../../../lib/trpc';
+import type { EventPlanView } from '../../../lib/apiTypes';
+import { formatDate, formatDateTime } from '../../../lib/format';
 
 const SLOTS = [
   { division: 'upper', stage: 'main', label: 'Upper main' },
   { division: 'upper', stage: 'consolation', label: 'Upper consolation' },
   { division: 'lower', stage: 'main', label: 'Lower main' },
   { division: 'lower', stage: 'consolation', label: 'Lower consolation' },
-] as const
+] as const;
 
 type AdoptionPreview = Awaited<
   ReturnType<typeof trpc.admin.eventPlanner.previewHistoricalAdoption.mutate>
->
+>;
 
 function historicalResultsUrl(view: EventPlanView): string | null {
   const slug = view.brackets.find(
     (bracket) => bracket.division === 'upper' && bracket.stage === 'main',
-  )?.challongeSlug
-  return slug ? `/events/${encodeURIComponent(slug)}` : null
+  )?.challongeSlug;
+  return slug ? `/events/${encodeURIComponent(slug)}` : null;
 }
 
 export function HistoricalAdoption({
   view,
   onChanged,
 }: {
-  view: EventPlanView
-  onChanged: () => void
+  view: EventPlanView;
+  onChanged: () => void;
 }) {
-  const [editing, setEditing] = useState(false)
-  const adopted = view.plan.historicalAdoption
-  const resultsUrl = historicalResultsUrl(view)
+  const [editing, setEditing] = useState(false);
+  const adopted = view.plan.historicalAdoption;
+  const resultsUrl = historicalResultsUrl(view);
 
   return (
     <section
@@ -100,17 +100,17 @@ export function HistoricalAdoption({
           key={adopted?.adoptedAt ?? 'original'}
           view={view}
           onApplied={() => {
-            setEditing(false)
-            onChanged()
+            setEditing(false);
+            onChanged();
           }}
         />
       )}
     </section>
-  )
+  );
 }
 
 function AdoptionForm({ view, onApplied }: { view: EventPlanView; onApplied: () => void }) {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   const [selection, setSelection] = useState(() =>
     SLOTS.map(
       (slot) =>
@@ -118,26 +118,26 @@ function AdoptionForm({ view, onApplied }: { view: EventPlanView; onApplied: () 
           (bracket) => bracket.division === slot.division && bracket.stage === slot.stage,
         )?.tournamentId ?? '',
     ),
-  )
-  const [preview, setPreview] = useState<AdoptionPreview | null>(null)
+  );
+  const [preview, setPreview] = useState<AdoptionPreview | null>(null);
   const candidates = useQuery({
     queryKey: ['admin', 'eventPlanner', 'historicalCandidates', view.plan.id],
     queryFn: () => trpc.admin.eventPlanner.historicalCandidates.query({ planId: view.plan.id }),
-  })
+  });
   const brackets = SLOTS.map(({ division, stage }, index) => ({
     division,
     stage,
     tournamentId: selection[index]!,
-  }))
+  }));
   const previewMutation = useMutation({
     mutationFn: () =>
       trpc.admin.eventPlanner.previewHistoricalAdoption.mutate({ planId: view.plan.id, brackets }),
     onMutate: () => {
-      setPreview(null)
-      applyMutation.reset()
+      setPreview(null);
+      applyMutation.reset();
     },
     onSuccess: setPreview,
-  })
+  });
   const applyMutation = useMutation({
     mutationFn: (fingerprint: string) =>
       trpc.admin.eventPlanner.applyHistoricalAdoption.mutate({
@@ -146,14 +146,14 @@ function AdoptionForm({ view, onApplied }: { view: EventPlanView; onApplied: () 
         fingerprint,
       }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['eventOverview'] })
-      void queryClient.invalidateQueries({ queryKey: ['recap'] })
-      void queryClient.invalidateQueries({ queryKey: ['tournaments'] })
-      onApplied()
+      void queryClient.invalidateQueries({ queryKey: ['eventOverview'] });
+      void queryClient.invalidateQueries({ queryKey: ['recap'] });
+      void queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+      onApplied();
     },
     onError: () => setPreview(null),
-  })
-  const pending = previewMutation.isPending || applyMutation.isPending
+  });
+  const pending = previewMutation.isPending || applyMutation.isPending;
 
   return (
     <div className="historical-form">
@@ -188,10 +188,10 @@ function AdoptionForm({ view, onApplied }: { view: EventPlanView; onApplied: () 
                       selection.map((value, position) =>
                         position === index ? event.target.value : value,
                       ),
-                    )
-                    setPreview(null)
-                    previewMutation.reset()
-                    applyMutation.reset()
+                    );
+                    setPreview(null);
+                    previewMutation.reset();
+                    applyMutation.reset();
                   }}
                 >
                   <option value="">Choose an imported bracket</option>
@@ -337,15 +337,15 @@ function AdoptionForm({ view, onApplied }: { view: EventPlanView; onApplied: () 
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function RosterDifference({
   title,
   rows,
 }: {
-  title: string
-  rows: { name: string; playerId: string | null }[]
+  title: string;
+  rows: { name: string; playerId: string | null }[];
 }) {
   return (
     <div>
@@ -365,5 +365,5 @@ function RosterDifference({
         </ul>
       )}
     </div>
-  )
+  );
 }

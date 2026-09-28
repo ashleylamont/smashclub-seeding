@@ -1,23 +1,23 @@
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, Navigate } from '@tanstack/react-router'
-import { authClient, useCurrentUser } from '../lib/auth'
-import { trpc } from '../lib/trpc'
-import type { MyClaim } from '../lib/apiTypes'
-import { CharacterPicker } from '../components/CharacterPicker'
-import { formatDate } from '../lib/format'
-import './Auth.css'
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link, Navigate } from '@tanstack/react-router';
+import { authClient, useCurrentUser } from '../lib/auth';
+import { trpc } from '../lib/trpc';
+import type { MyClaim } from '../lib/apiTypes';
+import { CharacterPicker } from '../components/CharacterPicker';
+import { formatDate } from '../lib/format';
+import './Auth.css';
 
-const PROVIDERS = ['discord', 'google'] as const
+const PROVIDERS = ['discord', 'google'] as const;
 
 export function MePage() {
-  const { data: session, isPending } = authClient.useSession()
-  const currentUser = useCurrentUser(session)
+  const { data: session, isPending } = authClient.useSession();
+  const currentUser = useCurrentUser(session);
 
-  if (isPending) return <p className="loading-text">Loading account…</p>
-  if (!session) return <Navigate to="/login" />
+  if (isPending) return <p className="loading-text">Loading account…</p>;
+  if (!session) return <Navigate to="/login" />;
 
-  const role = currentUser.data?.role
+  const role = currentUser.data?.role;
 
   return (
     <div className="me-page">
@@ -45,38 +45,38 @@ export function MePage() {
 
       <ClaimSection />
     </div>
-  )
+  );
 }
 
 function LinkedProviders() {
   const accounts = useQuery({
     queryKey: ['me', 'accounts'],
     queryFn: async () => {
-      const res = await authClient.listAccounts()
-      if (res.error) throw new Error(res.error.message ?? 'Failed to load linked accounts')
-      return res.data
+      const res = await authClient.listAccounts();
+      if (res.error) throw new Error(res.error.message ?? 'Failed to load linked accounts');
+      return res.data;
     },
-  })
-  const [error, setError] = useState<string | null>(null)
+  });
+  const [error, setError] = useState<string | null>(null);
 
   const linked = new Set(
     (accounts.data ?? []).map((account) => {
-      const a = account as { provider?: string; providerId?: string }
-      return (a.provider ?? a.providerId ?? '').toLowerCase()
+      const a = account as { provider?: string; providerId?: string };
+      return (a.provider ?? a.providerId ?? '').toLowerCase();
     }),
-  )
+  );
 
   const link = async (provider: (typeof PROVIDERS)[number]) => {
-    setError(null)
+    setError(null);
     try {
-      const res = await authClient.linkSocial({ provider, callbackURL: '/me' })
-      if (res.error) setError(res.error.message ?? 'Linking failed')
+      const res = await authClient.linkSocial({ provider, callbackURL: '/me' });
+      if (res.error) setError(res.error.message ?? 'Linking failed');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Linking failed')
+      setError(err instanceof Error ? err.message : 'Linking failed');
     }
-  }
+  };
 
-  const unlinked = PROVIDERS.filter((provider) => !linked.has(provider))
+  const unlinked = PROVIDERS.filter((provider) => !linked.has(provider));
 
   return (
     <>
@@ -114,29 +114,29 @@ function LinkedProviders() {
         </p>
       )}
     </>
-  )
+  );
 }
 
 function ClaimSection() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   const claims = useQuery({
     queryKey: ['me', 'claims'],
     queryFn: () => trpc.me.claims.query(),
-  })
+  });
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['me', 'claims'] })
-    void queryClient.invalidateQueries({ queryKey: ['leaderboard'] })
-    void queryClient.invalidateQueries({ queryKey: ['player'] })
-  }
+    void queryClient.invalidateQueries({ queryKey: ['me', 'claims'] });
+    void queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+    void queryClient.invalidateQueries({ queryKey: ['player'] });
+  };
 
-  if (claims.isPending) return <p className="loading-text">Loading claim…</p>
+  if (claims.isPending) return <p className="loading-text">Loading claim…</p>;
   if (claims.isError)
-    return <p className="error-text">Failed to load claims: {claims.error.message}</p>
+    return <p className="error-text">Failed to load claims: {claims.error.message}</p>;
 
   const liveClaim =
-    claims.data.find((c) => c.status === 'pending' || c.status === 'approved') ?? null
-  const pastClaims = claims.data.filter((c) => c !== liveClaim)
+    claims.data.find((c) => c.status === 'pending' || c.status === 'approved') ?? null;
+  const pastClaims = claims.data.filter((c) => c !== liveClaim);
 
   return (
     <div className="card">
@@ -164,14 +164,14 @@ function ClaimSection() {
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function LiveClaim({ claim, onChanged }: { claim: MyClaim; onChanged: () => void }) {
   const withdraw = useMutation({
     mutationFn: () => trpc.me.withdrawClaim.mutate({ claimId: claim.id }),
     onSuccess: onChanged,
-  })
+  });
 
   return (
     <div>
@@ -199,7 +199,7 @@ function LiveClaim({ claim, onChanged }: { claim: MyClaim; onChanged: () => void
       {withdraw.isError && <p className="error-text">{withdraw.error.message}</p>}
       {claim.status === 'approved' && <ProfileEditor claim={claim} onChanged={onChanged} />}
     </div>
-  )
+  );
 }
 
 /**
@@ -208,22 +208,22 @@ function LiveClaim({ claim, onChanged }: { claim: MyClaim; onChanged: () => void
  * changing their tag or switching mains.
  */
 function ProfileEditor({ claim, onChanged }: { claim: MyClaim; onChanged: () => void }) {
-  const [displayName, setDisplayName] = useState(claim.displayName ?? '')
-  const [characters, setCharacters] = useState<string[]>(claim.characters)
+  const [displayName, setDisplayName] = useState(claim.displayName ?? '');
+  const [characters, setCharacters] = useState<string[]>(claim.characters);
 
   const updateName = useMutation({
     mutationFn: (name: string | null) =>
       trpc.me.updateDisplayName.mutate({ playerId: claim.playerId, displayName: name }),
     onSuccess: onChanged,
-  })
+  });
 
   const updateCharacters = useMutation({
     mutationFn: (slugs: string[]) =>
       trpc.me.updateCharacters.mutate({ playerId: claim.playerId, characters: slugs }),
     onSuccess: onChanged,
-  })
+  });
 
-  const dirtyCharacters = characters.join(',') !== claim.characters.join(',')
+  const dirtyCharacters = characters.join(',') !== claim.characters.join(',');
 
   return (
     <div className="profile-editor">
@@ -274,25 +274,25 @@ function ProfileEditor({ claim, onChanged }: { claim: MyClaim; onChanged: () => 
         <CharacterPicker value={characters} onChange={setCharacters} />
       </div>
     </div>
-  )
+  );
 }
 
 function ClaimSearch({ onChanged }: { onChanged: () => void }) {
-  const [query, setQuery] = useState('')
-  const [note, setNote] = useState('')
-  const trimmed = query.trim()
+  const [query, setQuery] = useState('');
+  const [note, setNote] = useState('');
+  const trimmed = query.trim();
 
   const search = useQuery({
     queryKey: ['searchPlayers', trimmed],
     queryFn: () => trpc.public.searchPlayers.query({ query: trimmed }),
     enabled: trimmed.length >= 1,
-  })
+  });
 
   const request = useMutation({
     mutationFn: (playerId: string) =>
       trpc.me.requestClaim.mutate({ playerId, note: note.trim() === '' ? undefined : note.trim() }),
     onSuccess: onChanged,
-  })
+  });
 
   return (
     <div>
@@ -348,5 +348,5 @@ function ClaimSearch({ onChanged }: { onChanged: () => void }) {
         </ul>
       )}
     </div>
-  )
+  );
 }

@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { trpc } from '../lib/trpc'
-import { searchPlayers } from '../lib/playerSearch'
-import './PlayerLookupModal.css'
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { trpc } from '../lib/trpc';
+import { searchPlayers } from '../lib/playerSearch';
+import './PlayerLookupModal.css';
 
 /**
  * Free-text player lookup for the review queue. The ranked candidate list only
@@ -13,30 +13,30 @@ import './PlayerLookupModal.css'
  */
 
 interface Props {
-  title: string
+  title: string;
   /** Context for the reviewer — which bracket entry they are resolving. */
-  children?: ReactNode
+  children?: ReactNode;
   /** Players already offered as candidates, marked so the list is not confusing. */
-  candidatePlayerIds?: readonly string[]
-  busy?: boolean
-  error?: string | null
-  onPick: (playerId: string) => void
-  onCancel: () => void
+  candidatePlayerIds?: readonly string[];
+  busy?: boolean;
+  error?: string | null;
+  onPick: (playerId: string) => void;
+  onCancel: () => void;
 }
 
-const RESULT_LIMIT = 25
+const RESULT_LIMIT = 25;
 
 /** Aliases worth showing: the ones that are not just the names already in the row. */
 function otherAliases(player: {
-  canonicalName: string
-  displayName: string | null
-  aliases: string[]
+  canonicalName: string;
+  displayName: string | null;
+  aliases: string[];
 }): string[] {
   const shown = new Set([
     player.canonicalName.toLowerCase(),
     (player.displayName ?? '').toLowerCase(),
-  ])
-  return player.aliases.filter((alias) => !shown.has(alias.toLowerCase()))
+  ]);
+  return player.aliases.filter((alias) => !shown.has(alias.toLowerCase()));
 }
 
 export function PlayerLookupModal({
@@ -48,26 +48,26 @@ export function PlayerLookupModal({
   onPick,
   onCancel,
 }: Props) {
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState('');
 
   const players = useQuery({
     queryKey: ['admin', 'players'],
     queryFn: () => trpc.admin.players.query(),
-  })
+  });
 
   // Escape closes, matching every other dismissable surface in the app.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onCancel()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onCancel])
+      if (event.key === 'Escape') onCancel();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onCancel]);
 
-  const all = useMemo(() => players.data ?? [], [players.data])
-  const results = useMemo(() => searchPlayers(all, query, RESULT_LIMIT), [all, query])
-  const alreadyOffered = new Set(candidatePlayerIds)
-  const activeCount = all.filter((player) => player.status === 'active').length
+  const all = useMemo(() => players.data ?? [], [players.data]);
+  const results = useMemo(() => searchPlayers(all, query, RESULT_LIMIT), [all, query]);
+  const alreadyOffered = new Set(candidatePlayerIds);
+  const activeCount = all.filter((player) => player.status === 'active').length;
 
   return (
     <div className="modal-overlay">
@@ -91,7 +91,7 @@ export function PlayerLookupModal({
             // Enter on a single unambiguous hit is the whole point of typing a
             // name you already know; anything else needs a deliberate click.
             if (event.key === 'Enter' && results.length === 1 && !busy)
-              onPick(results[0]!.player.id)
+              onPick(results[0]!.player.id);
           }}
         />
 
@@ -157,5 +157,5 @@ export function PlayerLookupModal({
         </div>
       </div>
     </div>
-  )
+  );
 }

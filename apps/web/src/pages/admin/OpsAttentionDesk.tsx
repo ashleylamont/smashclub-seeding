@@ -1,19 +1,19 @@
-import { opsAttention, jumpToOpsControl } from '../../lib/opsAttention'
-import type { trpc } from '../../lib/trpc'
-import './OpsAttentionDesk.css'
+import { opsAttention, jumpToOpsControl } from '../../lib/opsAttention';
+import type { trpc } from '../../lib/trpc';
+import './OpsAttentionDesk.css';
 
-type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>
+type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 export function OpsAttentionDesk({
   data,
   onMatch,
 }: {
-  data: Overview
-  onMatch: (matchId: string) => void
+  data: Overview;
+  onMatch: (matchId: string) => void;
 }) {
-  const { reports, decisions, dispatch, needsStations } = opsAttention(data)
-  const stale = reports.filter((report) => report.stale).length
-  const count = reports.length + decisions.length + (needsStations ? 1 : 0)
-  if (['complete', 'cancelled'].includes(data.plan.status)) return null
+  const { reports, decisions, dispatch, needsStations } = opsAttention(data);
+  const stale = reports.filter((report) => report.stale).length;
+  const count = reports.length + decisions.length + (needsStations ? 1 : 0);
+  if (['complete', 'cancelled'].includes(data.plan.status)) return null;
   return (
     <section className="card ops-attention" aria-labelledby="ops-attention-title">
       <div className="ops-attention-heading">
@@ -131,5 +131,5 @@ export function OpsAttentionDesk({
         </details>
       )}
     </section>
-  )
+  );
 }

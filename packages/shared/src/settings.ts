@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z } from 'zod';
 
 /**
  * Lower bound for the bottom league band, meaning "everyone else".
@@ -7,7 +7,7 @@ import { z } from 'zod'
  * JSON, which has no Infinity, so -Infinity would serialise to null and then
  * fail validation on the way back in.
  */
-export const LEAGUE_CATCH_ALL = -1_000_000
+export const LEAGUE_CATCH_ALL = -1_000_000;
 
 /**
  * Tunable parameters of the rating system. Stored as a single settings row in
@@ -170,9 +170,9 @@ export const glickoSettingsSchema = z.object({
     { name: '🎓 Smashclub Grads', minRating: 1425 },
     { name: '👶 Smashclub Interns', minRating: LEAGUE_CATCH_ALL },
   ]),
-})
+});
 
-export type GlickoSettings = z.output<typeof glickoSettingsSchema>
-export type GlickoSettingsInput = z.input<typeof glickoSettingsSchema>
+export type GlickoSettings = z.output<typeof glickoSettingsSchema>;
+export type GlickoSettingsInput = z.input<typeof glickoSettingsSchema>;
 
-export const defaultGlickoSettings: GlickoSettings = glickoSettingsSchema.parse({})
+export const defaultGlickoSettings: GlickoSettings = glickoSettingsSchema.parse({});

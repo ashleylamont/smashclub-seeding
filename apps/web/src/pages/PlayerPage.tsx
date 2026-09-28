@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Link, useNavigate, useParams } from '@tanstack/react-router'
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Link, useNavigate, useParams } from '@tanstack/react-router';
 import {
   Area,
   CartesianGrid,
@@ -12,44 +12,44 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-} from 'recharts'
-import { trpc } from '../lib/trpc'
-import type { PlayerData, PlayerEventView } from '../lib/apiTypes'
-import { CharacterIcons } from '../components/CharacterIcons'
-import { InfoTip } from '../components/InfoTip'
-import { formatDate, tierClass } from '../lib/format'
-import './PlayerPage.css'
+} from 'recharts';
+import { trpc } from '../lib/trpc';
+import type { PlayerData, PlayerEventView } from '../lib/apiTypes';
+import { CharacterIcons } from '../components/CharacterIcons';
+import { InfoTip } from '../components/InfoTip';
+import { formatDate, tierClass } from '../lib/format';
+import './PlayerPage.css';
 
 export function PlayerPage() {
-  const { playerId } = useParams({ from: '/players/$playerId' })
-  const navigate = useNavigate()
+  const { playerId } = useParams({ from: '/players/$playerId' });
+  const navigate = useNavigate();
 
   const query = useQuery({
     queryKey: ['player', playerId],
     queryFn: () => trpc.public.player.query({ playerId }),
-  })
+  });
 
   // Merged players redirect to their canonical record.
-  const redirectTo = query.data && 'redirectTo' in query.data ? query.data.redirectTo : null
+  const redirectTo = query.data && 'redirectTo' in query.data ? query.data.redirectTo : null;
   useEffect(() => {
     if (redirectTo) {
-      void navigate({ to: '/players/$playerId', params: { playerId: redirectTo }, replace: true })
+      void navigate({ to: '/players/$playerId', params: { playerId: redirectTo }, replace: true });
     }
-  }, [redirectTo, navigate])
+  }, [redirectTo, navigate]);
 
-  if (query.isPending) return <p className="loading-text">Loading player…</p>
+  if (query.isPending) return <p className="loading-text">Loading player…</p>;
   if (query.isError)
-    return <p className="error-text">Failed to load player: {query.error.message}</p>
-  if (query.data === null) return <p className="error-text">Player not found.</p>
-  if (redirectTo) return <p className="loading-text">Redirecting…</p>
+    return <p className="error-text">Failed to load player: {query.error.message}</p>;
+  if (query.data === null) return <p className="error-text">Player not found.</p>;
+  if (redirectTo) return <p className="loading-text">Redirecting…</p>;
 
-  return <PlayerProfile data={query.data as PlayerData} />
+  return <PlayerProfile data={query.data as PlayerData} />;
 }
 
 function PlayerProfile({ data }: { data: PlayerData }) {
-  const { player, rating } = data
+  const { player, rating } = data;
   // The server types these rows loosely (Record<string, unknown>); see PlayerEventView.
-  const events = data.events as unknown as PlayerEventView[]
+  const events = data.events as unknown as PlayerEventView[];
   /**
    * Which model produced the events changes how they should be read. Glicko
    * is sequential: each set moved the rating then and there, once, forever.
@@ -58,7 +58,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
    * the model more about the past. The profile shows the ledger as the
    * primary record and the hindsight track alongside it, labelled.
    */
-  const isWhr = data.model === 'whr'
+  const isWhr = data.model === 'whr';
 
   /**
    * The trajectory. One series — the skill estimate — inside a shaded ±2 SD
@@ -86,7 +86,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         revised: isWhr ? event.revisedRating : null,
       })),
     [events, isWhr],
-  )
+  );
 
   /**
    * Only draw the hindsight series when it actually disagrees somewhere —
@@ -100,19 +100,19 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         (point) => point.revised !== null && Math.abs(point.revised - point.rating) >= 1,
       ),
     [isWhr, chartData],
-  )
+  );
 
   /** Event indices where a new tournament starts, drawn as vertical rules. */
   const eventBoundaries = useMemo(() => {
-    const marks: number[] = []
+    const marks: number[] = [];
     events.forEach((event, idx) => {
-      if (idx > 0 && event.tournamentId !== events[idx - 1]!.tournamentId) marks.push(idx + 1)
-    })
-    return marks
-  }, [events])
+      if (idx > 0 && event.tournamentId !== events[idx - 1]!.tournamentId) marks.push(idx + 1);
+    });
+    return marks;
+  }, [events]);
 
-  const matches = useMemo(() => events.filter((e) => !e.isDecay), [events])
-  const [stageFilter, setStageFilter] = useState<'all' | 'group' | 'final'>('all')
+  const matches = useMemo(() => events.filter((e) => !e.isDecay), [events]);
+  const [stageFilter, setStageFilter] = useState<'all' | 'group' | 'final'>('all');
   const hasBothStages = useMemo(
     () =>
       new Set(
@@ -121,35 +121,35 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           .filter((stage): stage is 'group' | 'final' => stage !== null),
       ).size > 1,
     [matches],
-  )
-  const effectiveStage = hasBothStages ? stageFilter : 'all'
-  const wins = matches.filter((e) => e.won).length
-  const winRate = matches.length > 0 ? ((wins / matches.length) * 100).toFixed(0) : null
+  );
+  const effectiveStage = hasBothStages ? stageFilter : 'all';
+  const wins = matches.filter((e) => e.won).length;
+  const winRate = matches.length > 0 ? ((wins / matches.length) * 100).toFixed(0) : null;
 
   const confidenceExplainer = useMemo(() => {
-    if (!rating) return 'No rated match history yet.'
+    if (!rating) return 'No rated match history yet.';
     const parts: string[] = [
       `${rating.tournamentCount} bracket(s), ${rating.uniqueOpponentCount} unique opponent(s), ${rating.matchCount} set(s).`,
-    ]
+    ];
     if (rating.rookieRatio > 0) {
-      parts.push(`${(rating.rookieRatio * 100).toFixed(0)}% of sets in rookie brackets.`)
+      parts.push(`${(rating.rookieRatio * 100).toFixed(0)}% of sets in rookie brackets.`);
       if (isWhr) {
         // WHR has no isolation correction: thin linkage between the rookie and
         // main pools simply comes out as a wider band, which this meter reads.
         parts.push(
           'Where the rookie and main pools barely overlap, the uncertainty band stays wider.',
-        )
+        );
       } else if (rating.isolationFactor > 0) {
         parts.push(
           `Isolation ${(rating.isolationFactor * 100).toFixed(0)}% — rookie-only players with little main-bracket exposure carry more uncertainty.`,
-        )
+        );
       }
     }
     if (isWhr && rating.missedEvents > 0) {
-      parts.push('Confidence also fades a little for time away, until results firm it up again.')
+      parts.push('Confidence also fades a little for time away, until results firm it up again.');
     }
-    return parts.join(' ')
-  }, [rating, isWhr])
+    return parts.join(' ');
+  }, [rating, isWhr]);
 
   // Most recent first for the table.
   const tableEvents = useMemo(
@@ -158,7 +158,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         .reverse()
         .filter((event) => effectiveStage === 'all' || event.resultStage === effectiveStage),
     [events, effectiveStage],
-  )
+  );
 
   /**
    * Where this player stands with the attendance policy, and — the part worth
@@ -171,28 +171,28 @@ function PlayerProfile({ data }: { data: PlayerData }) {
    * be shown before the decision rather than explained after it.
    */
   const activity = useMemo(() => {
-    if (!rating) return null
-    const { missedEvents, attendanceStreak, activityPenalty, nextMissPenalty } = rating
+    if (!rating) return null;
+    const { missedEvents, attendanceStreak, activityPenalty, nextMissPenalty } = rating;
     const standing =
       missedEvents === 0
         ? attendanceStreak > 1
           ? `At the last ${attendanceStreak} club nights in a row.`
           : 'At the most recent club night.'
-        : `${missedEvents} club night${missedEvents === 1 ? '' : 's'} missed since ${formatDate(rating.lastPlayedDate)}.`
+        : `${missedEvents} club night${missedEvents === 1 ? '' : 's'} missed since ${formatDate(rating.lastPlayedDate)}.`;
 
     const now =
       activityPenalty > 0
         ? `${activityPenalty.toFixed(0)} points are currently docked. Playing once puts all of them back.`
         : missedEvents > 0
           ? 'Still inside the grace window, so nothing is docked yet.'
-          : 'Nothing docked.'
+          : 'Nothing docked.';
 
     const next =
       nextMissPenalty > 0
         ? `Missing the next one would cost ${nextMissPenalty.toFixed(0)}${activityPenalty > 0 ? ' more' : ''}.`
         : activityPenalty > 0
           ? 'Missing the next one costs nothing further — the penalty is already at its cap.'
-          : 'Missing the next one would still cost nothing.'
+          : 'Missing the next one would still cost nothing.';
 
     /**
      * The tile's headline. Deliberately never "−0": inside the grace window
@@ -206,10 +206,10 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           ? `${missedEvents} missed`
           : attendanceStreak > 1
             ? `${attendanceStreak} in a row`
-            : 'Up to date'
+            : 'Up to date';
 
-    return { headline, standing, now, next, penalised: activityPenalty > 0 }
-  }, [rating])
+    return { headline, standing, now, next, penalised: activityPenalty > 0 };
+  }, [rating]);
 
   return (
     <div className="player-page">
@@ -372,8 +372,8 @@ function PlayerProfile({ data }: { data: PlayerData }) {
               />
               <Tooltip
                 content={({ active, payload }) => {
-                  if (!active || !payload || payload.length === 0) return null
-                  const d = payload[0]!.payload as (typeof chartData)[number]
+                  if (!active || !payload || payload.length === 0) return null;
+                  const d = payload[0]!.payload as (typeof chartData)[number];
                   return (
                     <div className="custom-tooltip">
                       <p className="tooltip-label">{d.tournament}</p>
@@ -390,7 +390,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                         <p className="num">now revised to {d.revised.toFixed(0)}</p>
                       )}
                     </div>
-                  )
+                  );
                 }}
               />
               {/* Band first so the line draws over it. */}
@@ -495,8 +495,8 @@ function PlayerProfile({ data }: { data: PlayerData }) {
               </thead>
               <tbody>
                 {tableEvents.map((event) => {
-                  const ratingChange = event.postRating - event.preRating
-                  const rdChange = event.postRd - event.preRd
+                  const ratingChange = event.postRating - event.preRating;
+                  const rdChange = event.postRd - event.preRd;
                   return (
                     <tr
                       key={event.seq}
@@ -561,7 +561,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                         )}
                       </td>
                     </tr>
-                  )
+                  );
                 })}
               </tbody>
             </table>
@@ -569,5 +569,5 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         )}
       </section>
     </div>
-  )
+  );
 }

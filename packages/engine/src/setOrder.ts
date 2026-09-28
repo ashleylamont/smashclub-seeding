@@ -34,33 +34,33 @@
 
 /** The order-relevant fields. Anything set-shaped structurally satisfies this. */
 export interface OrderableSet {
-  id: string
-  suggestedPlayOrder?: number | null
-  completedAt?: string | null
-  challongeMatchId?: number | null
+  id: string;
+  suggestedPlayOrder?: number | null;
+  completedAt?: string | null;
+  challongeMatchId?: number | null;
 }
 
 export function compareNullableNumbers(
   a: number | null | undefined,
   b: number | null | undefined,
 ): number {
-  const aVal = a ?? Number.POSITIVE_INFINITY
-  const bVal = b ?? Number.POSITIVE_INFINITY
-  return aVal - bVal || 0
+  const aVal = a ?? Number.POSITIVE_INFINITY;
+  const bVal = b ?? Number.POSITIVE_INFINITY;
+  return aVal - bVal || 0;
 }
 
 export function compareStrings(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 export function compareNullableStrings(
   a: string | null | undefined,
   b: string | null | undefined,
 ): number {
-  if (a == null && b == null) return 0
-  if (a == null) return 1
-  if (b == null) return -1
-  return compareStrings(a, b)
+  if (a == null && b == null) return 0;
+  if (a == null) return 1;
+  if (b == null) return -1;
+  return compareStrings(a, b);
 }
 
 /**
@@ -74,5 +74,5 @@ export function compareSetsInBracket(a: OrderableSet, b: OrderableSet): number {
     compareNullableStrings(a.completedAt, b.completedAt) ||
     compareNullableNumbers(a.challongeMatchId, b.challongeMatchId) ||
     compareStrings(a.id, b.id)
-  )
+  );
 }

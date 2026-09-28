@@ -1,32 +1,32 @@
-import { useMemo, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
-import { trpc } from '../../lib/trpc'
-import type { AdminClaim, AdminCompany, AdminPlayer } from '../../lib/apiTypes'
-import { timeAgo } from '../../lib/format'
-import { CharacterIcons } from '../../components/CharacterIcons'
-import { PlayerFormModal, type PlayerFormValues } from '../../components/PlayerFormModal'
+import { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
+import { trpc } from '../../lib/trpc';
+import type { AdminClaim, AdminCompany, AdminPlayer } from '../../lib/apiTypes';
+import { timeAgo } from '../../lib/format';
+import { CharacterIcons } from '../../components/CharacterIcons';
+import { PlayerFormModal, type PlayerFormValues } from '../../components/PlayerFormModal';
 
 export function AdminPlayersPage() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   const players = useQuery({
     queryKey: ['admin', 'players'],
     queryFn: () => trpc.admin.players.query(),
-  })
+  });
   const companies = useQuery({
     queryKey: ['admin', 'companies'],
     queryFn: () => trpc.admin.companies.query(),
-  })
+  });
 
-  const [filter, setFilter] = useState('')
-  const [mergeSelection, setMergeSelection] = useState<string[]>([])
-  const [creating, setCreating] = useState(false)
+  const [filter, setFilter] = useState('');
+  const [mergeSelection, setMergeSelection] = useState<string[]>([]);
+  const [creating, setCreating] = useState(false);
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['admin', 'players'] })
-    void queryClient.invalidateQueries({ queryKey: ['leaderboard'] })
-    void queryClient.invalidateQueries({ queryKey: ['player'] })
-  }
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'players'] });
+    void queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+    void queryClient.invalidateQueries({ queryKey: ['player'] });
+  };
 
   const create = useMutation({
     mutationFn: (values: PlayerFormValues) =>
@@ -38,30 +38,30 @@ export function AdminPlayersPage() {
         aliases: values.aliases,
       }),
     onSuccess: () => {
-      setCreating(false)
-      invalidate()
+      setCreating(false);
+      invalidate();
     },
-  })
+  });
 
   const filtered = useMemo(() => {
-    const query = filter.trim().toLowerCase()
-    const all = players.data ?? []
-    if (!query) return all
+    const query = filter.trim().toLowerCase();
+    const all = players.data ?? [];
+    if (!query) return all;
     return all.filter(
       (p) =>
         p.canonicalName.toLowerCase().includes(query) ||
         (p.displayName ?? '').toLowerCase().includes(query) ||
         p.aliases.some((a) => a.includes(query)),
-    )
-  }, [players.data, filter])
+    );
+  }, [players.data, filter]);
 
   const toggleMergeSelection = (playerId: string) => {
     setMergeSelection((prev) =>
       prev.includes(playerId)
         ? prev.filter((id) => id !== playerId)
         : [...prev.slice(-1), playerId],
-    )
-  }
+    );
+  };
 
   return (
     <div>
@@ -112,8 +112,8 @@ export function AdminPlayersPage() {
             players={players.data ?? []}
             onClear={() => setMergeSelection([])}
             onMerged={() => {
-              setMergeSelection([])
-              invalidate()
+              setMergeSelection([]);
+              invalidate();
             }}
           />
         )}
@@ -152,7 +152,7 @@ export function AdminPlayersPage() {
         )}
       </div>
     </div>
-  )
+  );
 }
 
 function MergeBar({
@@ -161,25 +161,25 @@ function MergeBar({
   onClear,
   onMerged,
 }: {
-  selection: string[]
-  players: AdminPlayer[]
-  onClear: () => void
-  onMerged: () => void
+  selection: string[];
+  players: AdminPlayer[];
+  onClear: () => void;
+  onMerged: () => void;
 }) {
-  const [confirming, setConfirming] = useState(false)
-  const byId = new Map(players.map((p) => [p.id, p]))
-  const [fromId, intoId] = selection
-  const from = fromId ? byId.get(fromId) : undefined
-  const into = intoId ? byId.get(intoId) : undefined
+  const [confirming, setConfirming] = useState(false);
+  const byId = new Map(players.map((p) => [p.id, p]));
+  const [fromId, intoId] = selection;
+  const from = fromId ? byId.get(fromId) : undefined;
+  const into = intoId ? byId.get(intoId) : undefined;
 
   const merge = useMutation({
     mutationFn: () =>
       trpc.admin.mergePlayers.mutate({ fromPlayerId: fromId!, intoPlayerId: intoId! }),
     onSuccess: () => {
-      setConfirming(false)
-      onMerged()
+      setConfirming(false);
+      onMerged();
     },
-  })
+  });
 
   return (
     <div className="banner banner-warning merge-bar">
@@ -240,7 +240,7 @@ function MergeBar({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function PlayerRow({
@@ -250,14 +250,14 @@ function PlayerRow({
   onToggleMerge,
   onChanged,
 }: {
-  player: AdminPlayer
-  companies: AdminCompany[]
-  mergeSelected: boolean
-  onToggleMerge: () => void
-  onChanged: () => void
+  player: AdminPlayer;
+  companies: AdminCompany[];
+  mergeSelected: boolean;
+  onToggleMerge: () => void;
+  onChanged: () => void;
 }) {
-  const [editing, setEditing] = useState(false)
-  const [aliasInput, setAliasInput] = useState('')
+  const [editing, setEditing] = useState(false);
+  const [aliasInput, setAliasInput] = useState('');
 
   const update = useMutation({
     mutationFn: (values: PlayerFormValues) =>
@@ -269,10 +269,10 @@ function PlayerRow({
         characters: values.characters,
       }),
     onSuccess: () => {
-      setEditing(false)
-      onChanged()
+      setEditing(false);
+      onChanged();
     },
-  })
+  });
 
   const addAlias = useMutation({
     mutationFn: () =>
@@ -282,12 +282,12 @@ function PlayerRow({
         companyCode: player.companyCode,
       }),
     onSuccess: () => {
-      setAliasInput('')
-      onChanged()
+      setAliasInput('');
+      onChanged();
     },
-  })
+  });
 
-  const error = update.error ?? addAlias.error
+  const error = update.error ?? addAlias.error;
 
   return (
     <tr className={player.status !== 'active' ? 'player-inactive' : undefined}>
@@ -331,7 +331,7 @@ function PlayerRow({
             value={aliasInput}
             onChange={(e) => setAliasInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && aliasInput.trim() !== '') addAlias.mutate()
+              if (e.key === 'Enter' && aliasInput.trim() !== '') addAlias.mutate();
             }}
           />
           <button
@@ -373,23 +373,23 @@ function PlayerRow({
         )}
       </td>
     </tr>
-  )
+  );
 }
 
 function ClaimsPanel() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   const claims = useQuery({
     queryKey: ['admin', 'claims'],
     queryFn: () => trpc.admin.claims.query(),
-  })
+  });
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['admin', 'claims'] })
-    void queryClient.invalidateQueries({ queryKey: ['leaderboard'] })
-  }
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'claims'] });
+    void queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+  };
 
-  const pending = (claims.data ?? []).filter((c) => c.status === 'pending')
-  const resolved = (claims.data ?? []).filter((c) => c.status !== 'pending')
+  const pending = (claims.data ?? []).filter((c) => c.status === 'pending');
+  const resolved = (claims.data ?? []).filter((c) => c.status !== 'pending');
 
   return (
     <div className="section">
@@ -419,7 +419,7 @@ function ClaimsPanel() {
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function ClaimRow({ claim, onChanged }: { claim: AdminClaim; onChanged: () => void }) {
@@ -427,7 +427,7 @@ function ClaimRow({ claim, onChanged }: { claim: AdminClaim; onChanged: () => vo
     mutationFn: (action: 'approved' | 'rejected' | 'revoked') =>
       trpc.admin.resolveClaim.mutate({ claimId: claim.id, action }),
     onSuccess: onChanged,
-  })
+  });
 
   return (
     <tr>
@@ -490,5 +490,5 @@ function ClaimRow({ claim, onChanged }: { claim: AdminClaim; onChanged: () => vo
         {resolve.isError && <div className="error-text">{resolve.error.message}</div>}
       </td>
     </tr>
-  )
+  );
 }

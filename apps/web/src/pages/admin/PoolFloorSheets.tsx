@@ -1,18 +1,18 @@
-import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import QRCode from 'qrcode'
-import { poolFloorSheets, type FloorSheetData } from '../../lib/poolFloorSheets'
-import './PoolFloorSheets.css'
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import QRCode from 'qrcode';
+import { poolFloorSheets, type FloorSheetData } from '../../lib/poolFloorSheets';
+import './PoolFloorSheets.css';
 
-type Sheet = ReturnType<typeof poolFloorSheets>[number]
+type Sheet = ReturnType<typeof poolFloorSheets>[number];
 export function PoolFloorSheets({ data }: { data: FloorSheetData }) {
   const [preview, setPreview] = useState<{
-    sheets: Sheet[]
-    eventName: string
-    capturedAt: string
-  } | null>(null)
-  const trigger = useRef<HTMLButtonElement>(null)
-  if (data.plan.bracketMode !== 'native' || !data.poolRounds?.length) return null
+    sheets: Sheet[];
+    eventName: string;
+    capturedAt: string;
+  } | null>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  if (data.plan.bracketMode !== 'native' || !data.poolRounds?.length) return null;
   return (
     <div className="floor-sheet-launch">
       <button
@@ -34,14 +34,14 @@ export function PoolFloorSheets({ data }: { data: FloorSheetData }) {
           <PrintPreview
             {...preview}
             onClose={() => {
-              setPreview(null)
-              trigger.current?.focus()
+              setPreview(null);
+              trigger.current?.focus();
             }}
           />,
           document.body,
         )}
     </div>
-  )
+  );
 }
 function PrintPreview({
   sheets,
@@ -49,22 +49,22 @@ function PrintPreview({
   capturedAt,
   onClose,
 }: {
-  sheets: Sheet[]
-  eventName: string
-  capturedAt: string
-  onClose: () => void
+  sheets: Sheet[];
+  eventName: string;
+  capturedAt: string;
+  onClose: () => void;
 }) {
-  const [selected, setSelected] = useState(sheets.map((sheet) => sheet.key))
-  const [qrImages, setQrImages] = useState<Record<string, string>>({})
-  const [qrReady, setQrReady] = useState(false)
-  const dialog = useRef<HTMLDialogElement>(null)
+  const [selected, setSelected] = useState(sheets.map((sheet) => sheet.key));
+  const [qrImages, setQrImages] = useState<Record<string, string>>({});
+  const [qrReady, setQrReady] = useState(false);
+  const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
-    dialog.current?.showModal()
-    document.body.classList.add('printing-pool-sheets')
-    return () => document.body.classList.remove('printing-pool-sheets')
-  }, [])
+    dialog.current?.showModal();
+    document.body.classList.add('printing-pool-sheets');
+    return () => document.body.classList.remove('printing-pool-sheets');
+  }, []);
   useEffect(() => {
-    let active = true
+    let active = true;
     void Promise.all(
       sheets
         .filter((sheet) => sheet.boardUrl)
@@ -77,29 +77,29 @@ function PrintPreview({
                 margin: 4,
                 errorCorrectionLevel: 'M',
               }),
-            ] as const
+            ] as const;
           } catch {
-            return [sheet.key, ''] as const
+            return [sheet.key, ''] as const;
           }
         }),
     ).then((entries) => {
       if (active) {
-        setQrImages(Object.fromEntries(entries))
-        setQrReady(true)
+        setQrImages(Object.fromEntries(entries));
+        setQrReady(true);
       }
-    })
+    });
     return () => {
-      active = false
-    }
-  }, [sheets])
+      active = false;
+    };
+  }, [sheets]);
   return (
     <dialog
       className="floor-sheet-dialog"
       ref={dialog}
       aria-label="Print pool sheets"
       onCancel={(event) => {
-        event.preventDefault()
-        onClose()
+        event.preventDefault();
+        onClose();
       }}
     >
       <div className="floor-sheet-toolbar">
@@ -241,5 +241,5 @@ function PrintPreview({
           ))}
       </div>
     </dialog>
-  )
+  );
 }

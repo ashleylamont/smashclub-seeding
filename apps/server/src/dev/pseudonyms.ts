@@ -111,27 +111,27 @@ const CHARACTERS = [
   'Elma',
   'Isaac',
   'Andy',
-]
+];
 
 export class Pseudonymiser {
-  private readonly assigned = new Map<string, string>()
+  private readonly assigned = new Map<string, string>();
 
   /** Stable pseudonym for a real name; identical inputs always map alike. */
   get(realName: string): string {
-    const key = realName.trim().toLowerCase()
-    const existing = this.assigned.get(key)
-    if (existing) return existing
-    const index = this.assigned.size
+    const key = realName.trim().toLowerCase();
+    const existing = this.assigned.get(key);
+    if (existing) return existing;
+    const index = this.assigned.size;
     const name =
       index < CHARACTERS.length
         ? CHARACTERS[index]!
-        : `${CHARACTERS[index % CHARACTERS.length]!} ${Math.floor(index / CHARACTERS.length) + 1}`
-    this.assigned.set(key, name)
-    return name
+        : `${CHARACTERS[index % CHARACTERS.length]!} ${Math.floor(index / CHARACTERS.length) + 1}`;
+    this.assigned.set(key, name);
+    return name;
   }
 
   get size(): number {
-    return this.assigned.size
+    return this.assigned.size;
   }
 }
 
@@ -140,5 +140,5 @@ export function characterSlug(name: string): string {
   return name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
+    .replace(/^-|-$/g, '');
 }

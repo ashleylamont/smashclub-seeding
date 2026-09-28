@@ -1,32 +1,32 @@
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { trpc } from '../../lib/trpc'
-import { authClient } from '../../lib/auth'
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { trpc } from '../../lib/trpc';
+import { authClient } from '../../lib/auth';
 
 export function AdminAccountsPage() {
-  const { data: session } = authClient.useSession()
-  const queryClient = useQueryClient()
-  const [search, setSearch] = useState('')
-  const trimmedSearch = search.trim()
+  const { data: session } = authClient.useSession();
+  const queryClient = useQueryClient();
+  const [search, setSearch] = useState('');
+  const trimmedSearch = search.trim();
   const admins = useQuery({
     queryKey: ['admin', 'admins'],
     queryFn: () => trpc.admin.admins.query(),
-  })
-  const verifiedAdminCount = admins.data?.filter((account) => account.emailVerified).length ?? 0
+  });
+  const verifiedAdminCount = admins.data?.filter((account) => account.emailVerified).length ?? 0;
   const accounts = useQuery({
     queryKey: ['admin', 'findAccounts', trimmedSearch],
     queryFn: () => trpc.admin.findAccounts.query({ search: trimmedSearch }),
     enabled: trimmedSearch.length >= 2,
-  })
+  });
   const changeRole = useMutation({
     mutationFn: (input: { userId: string; admin: boolean }) =>
       trpc.admin.setAdminRole.mutate(input),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'admins'] })
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'findAccounts'] })
-      void queryClient.invalidateQueries({ queryKey: ['me', 'whoami'] })
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'admins'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'findAccounts'] });
+      void queryClient.invalidateQueries({ queryKey: ['me', 'whoami'] });
     },
-  })
+  });
 
   const remove = (id: string, name: string) => {
     if (
@@ -34,9 +34,9 @@ export function AdminAccountsPage() {
         `Remove admin access for ${name}? Their open sessions will lose admin access immediately.`,
       )
     ) {
-      changeRole.mutate({ userId: id, admin: false })
+      changeRole.mutate({ userId: id, admin: false });
     }
-  }
+  };
 
   return (
     <div className="admin-accounts-page">
@@ -141,5 +141,5 @@ export function AdminAccountsPage() {
         </ul>
       </section>
     </div>
-  )
+  );
 }

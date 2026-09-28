@@ -1,11 +1,11 @@
-import { useState } from 'react'
-import { PoolStationSetup } from './PoolStationSetup'
-import { PoolFloorSheets } from './PoolFloorSheets'
-import { trpc } from '../../lib/trpc'
-import { poolStandings } from '../../lib/eventQueue'
-import { poolLabel } from '../../lib/poolStationPlan'
-type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>
-type Action = (work: () => Promise<unknown>, message?: string) => Promise<void>
+import { useState } from 'react';
+import { PoolStationSetup } from './PoolStationSetup';
+import { PoolFloorSheets } from './PoolFloorSheets';
+import { trpc } from '../../lib/trpc';
+import { poolStandings } from '../../lib/eventQueue';
+import { poolLabel } from '../../lib/poolStationPlan';
+type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
+type Action = (work: () => Promise<unknown>, message?: string) => Promise<void>;
 
 export function StationPoolControls({
   data,
@@ -13,16 +13,16 @@ export function StationPoolControls({
   act,
   onPool,
 }: {
-  data: Overview
-  disabled: boolean
-  act: Action
-  onPool: (key: string) => void
+  data: Overview;
+  disabled: boolean;
+  act: Action;
+  onPool: (key: string) => void;
 }) {
-  const [stationName, setStationName] = useState('')
-  const [stationCount, setStationCount] = useState(4)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editName, setEditName] = useState('')
-  const pools = poolStandings(data.matches)
+  const [stationName, setStationName] = useState('');
+  const [stationCount, setStationCount] = useState(4);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const pools = poolStandings(data.matches);
   return (
     <>
       <section className="card" id="station-controls" tabIndex={-1}>
@@ -35,14 +35,14 @@ export function StationPoolControls({
         </div>
         <div className="ops-station-board">
           {data.stations.map((station) => {
-            const match = data.matches.find((match) => match.id === station.currentMatchId)
-            const queue = data.stationQueues.find((queue) => queue.stationId === station.id)
-            const next = data.matches.find((match) => match.id === queue?.nextMatchId)
+            const match = data.matches.find((match) => match.id === station.currentMatchId);
+            const queue = data.stationQueues.find((queue) => queue.stationId === station.id);
+            const next = data.matches.find((match) => match.id === queue?.nextMatchId);
             const upcoming =
               queue?.upcoming.slice(0, 2).flatMap((item) => {
-                const match = data.matches.find((match) => match.id === item.matchId)
-                return match ? [{ ...item, match }] : []
-              }) ?? []
+                const match = data.matches.find((match) => match.id === item.matchId);
+                return match ? [{ ...item, match }] : [];
+              }) ?? [];
             return (
               <article
                 className={`ops-station-tile ${match ? 'is-playing' : 'is-free'}`}
@@ -128,8 +128,8 @@ export function StationPoolControls({
                     className="btn btn-small"
                     disabled={disabled}
                     onClick={() => {
-                      setEditingId(station.id)
-                      setEditName(station.name)
+                      setEditingId(station.id);
+                      setEditName(station.name);
                     }}
                   >
                     Rename
@@ -152,7 +152,7 @@ export function StationPoolControls({
                               id: station.id,
                             }),
                           'Station deleted',
-                        )
+                        );
                     }}
                   >
                     Delete
@@ -162,15 +162,15 @@ export function StationPoolControls({
                   <form
                     className="ops-station-rename"
                     onSubmit={(event) => {
-                      event.preventDefault()
+                      event.preventDefault();
                       void act(async () => {
                         await trpc.eventOps.saveStation.mutate({
                           planId: data.plan.id,
                           id: station.id,
                           name: editName,
-                        })
-                        setEditingId(null)
-                      }, 'Station renamed')
+                        });
+                        setEditingId(null);
+                      }, 'Station renamed');
                     }}
                   >
                     <label>
@@ -198,7 +198,7 @@ export function StationPoolControls({
                   </form>
                 )}
               </article>
-            )
+            );
           })}
         </div>
         {!data.stations.length && (
@@ -208,11 +208,11 @@ export function StationPoolControls({
           <summary>Add stations</summary>
           <form
             onSubmit={(event) => {
-              event.preventDefault()
+              event.preventDefault();
               void act(async () => {
-                await trpc.eventOps.saveStation.mutate({ planId: data.plan.id, name: stationName })
-                setStationName('')
-              }, 'Station added')
+                await trpc.eventOps.saveStation.mutate({ planId: data.plan.id, name: stationName });
+                setStationName('');
+              }, 'Station added');
             }}
           >
             <label>
@@ -232,18 +232,20 @@ export function StationPoolControls({
           </form>
           <form
             onSubmit={(event) => {
-              event.preventDefault()
+              event.preventDefault();
               void act(async () => {
-                const existing = new Set(data.stations.map((station) => station.name.toLowerCase()))
-                let number = 1
+                const existing = new Set(
+                  data.stations.map((station) => station.name.toLowerCase()),
+                );
+                let number = 1;
                 for (let added = 0; added < stationCount; added++) {
-                  while (existing.has(`station ${number}`)) number++
+                  while (existing.has(`station ${number}`)) number++;
                   await trpc.eventOps.saveStation.mutate({
                     planId: data.plan.id,
                     name: `Station ${number++}`,
-                  })
+                  });
                 }
-              }, `${stationCount} stations added`)
+              }, `${stationCount} stations added`);
             }}
           >
             <label>
@@ -290,14 +292,14 @@ export function StationPoolControls({
               const schedule = data.poolSchedules.find(
                 (schedule) =>
                   schedule.division === pool.division && schedule.poolIndex === pool.poolIndex,
-              )
+              );
               const playing = data.matches.filter(
                 (match) =>
                   match.stage === 'group' &&
                   match.division === pool.division &&
                   match.poolIndex === pool.poolIndex &&
                   match.status === 'playing',
-              ).length
+              ).length;
               return (
                 <PoolSchedule
                   key={`${pool.division}:${pool.poolIndex}:${schedule?.revision ?? 0}`}
@@ -311,13 +313,13 @@ export function StationPoolControls({
                   act={act}
                   onView={() => onPool(`${pool.division}:${pool.poolIndex}`)}
                 />
-              )
+              );
             })}
           </div>
         </section>
       )}
     </>
-  )
+  );
 }
 
 function PoolSchedule({
@@ -331,27 +333,27 @@ function PoolSchedule({
   act,
   onView,
 }: {
-  planId: string
-  native: boolean
-  pool: ReturnType<typeof poolStandings>[number]
-  schedule: Overview['poolSchedules'][number] | undefined
-  stations: Overview['stations']
-  playing: number
-  disabled: boolean
-  act: Action
-  onView: () => void
+  planId: string;
+  native: boolean;
+  pool: ReturnType<typeof poolStandings>[number];
+  schedule: Overview['poolSchedules'][number] | undefined;
+  stations: Overview['stations'];
+  playing: number;
+  disabled: boolean;
+  act: Action;
+  onView: () => void;
 }) {
-  const [active, setActive] = useState(schedule?.active ?? true)
-  const [selected, setSelected] = useState(schedule?.stationIds ?? [])
-  const [selfRun, setSelfRun] = useState(schedule?.selfRun ?? false)
-  const [autoAcceptScores, setAutoAcceptScores] = useState(schedule?.autoAcceptScores ?? false)
-  const done = pool.complete === pool.total
-  const label = `${pool.division === 'upper' ? 'Upper' : 'Lower'} Pool ${String.fromCharCode(65 + pool.poolIndex)}`
+  const [active, setActive] = useState(schedule?.active ?? true);
+  const [selected, setSelected] = useState(schedule?.stationIds ?? []);
+  const [selfRun, setSelfRun] = useState(schedule?.selfRun ?? false);
+  const [autoAcceptScores, setAutoAcceptScores] = useState(schedule?.autoAcceptScores ?? false);
+  const done = pool.complete === pool.total;
+  const label = `${pool.division === 'upper' ? 'Upper' : 'Lower'} Pool ${String.fromCharCode(65 + pool.poolIndex)}`;
   const changed =
     selfRun !== (schedule?.selfRun ?? false) ||
     (selfRun && autoAcceptScores) !== (schedule?.autoAcceptScores ?? false) ||
     active !== (schedule?.active ?? true) ||
-    [...selected].sort().join() !== [...(schedule?.stationIds ?? [])].sort().join()
+    [...selected].sort().join() !== [...(schedule?.stationIds ?? [])].sort().join();
   return (
     <article className="ops-pool-schedule">
       <div className="ops-section-heading">
@@ -405,8 +407,8 @@ function PoolSchedule({
           checked={selfRun}
           disabled={disabled || done || !native}
           onChange={(event) => {
-            setSelfRun(event.target.checked)
-            if (event.target.checked) setAutoAcceptScores(true)
+            setSelfRun(event.target.checked);
+            if (event.target.checked) setAutoAcceptScores(true);
           }}
         />
         Players can start queued matches
@@ -460,5 +462,5 @@ function PoolSchedule({
         </button>
       </div>
     </article>
-  )
+  );
 }

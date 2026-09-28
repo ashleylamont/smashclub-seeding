@@ -1,11 +1,11 @@
-import { useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { trpc } from '../../lib/trpc'
-import { GuestQr } from '../../components/GuestQr'
-import { guestInvitationUrl, guestTimeLeft, useGuestClock } from '../../lib/guestReporting'
-import { StationSignPreview } from './StationSignPreview'
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { trpc } from '../../lib/trpc';
+import { GuestQr } from '../../components/GuestQr';
+import { guestInvitationUrl, guestTimeLeft, useGuestClock } from '../../lib/guestReporting';
+import { StationSignPreview } from './StationSignPreview';
 
-type Station = { id: string; name: string }
+type Station = { id: string; name: string };
 export function GuestReportingControls({
   planId,
   eventName,
@@ -13,45 +13,45 @@ export function GuestReportingControls({
   closed,
   published,
 }: {
-  planId: string
-  eventName: string
-  stations: Station[]
-  closed: boolean
-  published: boolean
+  planId: string;
+  eventName: string;
+  stations: Station[];
+  closed: boolean;
+  published: boolean;
 }) {
-  const cache = useQueryClient()
+  const cache = useQueryClient();
   const settings = useQuery({
     queryKey: ['guestSettings', planId],
     queryFn: () => trpc.eventOps.guests.settings.query({ planId }),
     refetchInterval: 5000,
-  })
+  });
   const [invitation, setInvitation] = useState<{ token: string; expiresAt: string | null } | null>(
     null,
-  )
-  const [printInvitation, setPrintInvitation] = useState<string | null>(null)
-  const [pending, setPending] = useState(false)
-  const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
-  const now = useGuestClock()
+  );
+  const [printInvitation, setPrintInvitation] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const now = useGuestClock();
   const act = async (work: () => Promise<unknown>) => {
-    setPending(true)
-    setError('')
-    setNotice('')
+    setPending(true);
+    setError('');
+    setNotice('');
     try {
-      await work()
-      await cache.invalidateQueries({ queryKey: ['guestSettings', planId] })
+      await work();
+      await cache.invalidateQueries({ queryKey: ['guestSettings', planId] });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not update guest reporting.')
+      setError(cause instanceof Error ? cause.message : 'Could not update guest reporting.');
     } finally {
-      setPending(false)
+      setPending(false);
     }
-  }
+  };
   const valid =
     invitation &&
     (!invitation.expiresAt || Date.parse(invitation.expiresAt) > now) &&
     settings.data?.enabled &&
-    !closed
-  const link = valid ? guestInvitationUrl(planId, invitation.token) : ''
+    !closed;
+  const link = valid ? guestInvitationUrl(planId, invitation.token) : '';
   const configure = (
     changes: Partial<
       Pick<NonNullable<typeof settings.data>, 'enabled' | 'showOnOverlay' | 'rotateInvitations'>
@@ -64,10 +64,10 @@ export function GuestReportingControls({
         showOnOverlay: settings.data!.showOnOverlay,
         rotateInvitations: settings.data!.rotateInvitations,
         ...changes,
-      })
-      setInvitation(null)
-      setPrintInvitation(null)
-    })
+      });
+      setInvitation(null);
+      setPrintInvitation(null);
+    });
   return (
     <section className="card guest-controls">
       <h3>Guest score reporting</h3>
@@ -123,7 +123,7 @@ export function GuestReportingControls({
               disabled={pending || closed || !settings.data.enabled}
               onClick={() =>
                 void act(async () => {
-                  setInvitation(await trpc.eventOps.guests.invitation.mutate({ planId }))
+                  setInvitation(await trpc.eventOps.guests.invitation.mutate({ planId }));
                 })
               }
             >
@@ -140,8 +140,8 @@ export function GuestReportingControls({
               }
               onClick={() =>
                 void act(async () => {
-                  const issued = await trpc.eventOps.guests.invitation.mutate({ planId })
-                  if (issued && !issued.expiresAt) setPrintInvitation(issued.token)
+                  const issued = await trpc.eventOps.guests.invitation.mutate({ planId });
+                  if (issued && !issued.expiresAt) setPrintInvitation(issued.token);
                 })
               }
             >
@@ -157,13 +157,13 @@ export function GuestReportingControls({
                   )
                 )
                   void act(async () => {
-                    await trpc.eventOps.guests.rotate.mutate({ planId })
-                    setInvitation(null)
-                    setPrintInvitation(null)
+                    await trpc.eventOps.guests.rotate.mutate({ planId });
+                    setInvitation(null);
+                    setPrintInvitation(null);
                     setNotice(
                       'All guest passes revoked. Print fresh signs or generate a new guest QR.',
-                    )
-                  })
+                    );
+                  });
               }}
             >
               Revoke all guest passes
@@ -190,8 +190,8 @@ export function GuestReportingControls({
               className="btn"
               onClick={() =>
                 void act(async () => {
-                  await navigator.clipboard.writeText(link)
-                  setNotice('Guest invitation copied.')
+                  await navigator.clipboard.writeText(link);
+                  setNotice('Guest invitation copied.');
                 })
               }
             >
@@ -215,5 +215,5 @@ export function GuestReportingControls({
         />
       )}
     </section>
-  )
+  );
 }

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState } from 'react';
 
 /**
  * A boolean the browser remembers.
@@ -13,29 +13,29 @@ import { useCallback, useState } from 'react'
  */
 function read(key: string): boolean | null {
   try {
-    const stored = window.localStorage.getItem(key)
-    return stored === null ? null : stored === 'true'
+    const stored = window.localStorage.getItem(key);
+    return stored === null ? null : stored === 'true';
   } catch {
-    return null
+    return null;
   }
 }
 
 export function useStoredFlag(key: string, fallback: boolean): [boolean, (next: boolean) => void] {
   // Lazy initialiser, so storage is read once per mount rather than on every
   // render — and never as a side effect that has to correct itself afterwards.
-  const [value, setValue] = useState(() => read(key) ?? fallback)
+  const [value, setValue] = useState(() => read(key) ?? fallback);
 
   const set = useCallback(
     (next: boolean) => {
-      setValue(next)
+      setValue(next);
       try {
-        window.localStorage.setItem(key, String(next))
+        window.localStorage.setItem(key, String(next));
       } catch {
         // Preference not persisted; the session still honours it.
       }
     },
     [key],
-  )
+  );
 
-  return [value, set]
+  return [value, set];
 }

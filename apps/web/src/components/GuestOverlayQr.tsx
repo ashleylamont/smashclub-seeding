@@ -1,15 +1,15 @@
-import { GuestQr } from './GuestQr'
-import { guestInvitationUrl, guestTimeLeft, useGuestClock } from '../lib/guestReporting'
+import { GuestQr } from './GuestQr';
+import { guestInvitationUrl, guestTimeLeft, useGuestClock } from '../lib/guestReporting';
 
 export function GuestOverlayQr({
   planId,
   invitation,
 }: {
-  planId: string
-  invitation: { token: string; expiresAt: string | null }
+  planId: string;
+  invitation: { token: string; expiresAt: string | null };
 }) {
-  const now = useGuestClock()
-  if (invitation.expiresAt && Date.parse(invitation.expiresAt) <= now) return null
+  const now = useGuestClock();
+  if (invitation.expiresAt && Date.parse(invitation.expiresAt) <= now) return null;
   return (
     <section className="broadcast-guest-pass" aria-label="Guest score reporting">
       <div className="broadcast-guest-heading">
@@ -27,5 +27,5 @@ export function GuestOverlayQr({
         </span>
       </p>
     </section>
-  )
+  );
 }

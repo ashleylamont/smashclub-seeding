@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { captureError, LocalCapture } from '../lib/localCapture'
+import { useEffect, useRef, useState } from 'react';
+import { captureError, LocalCapture } from '../lib/localCapture';
 
 /** Capture stays on this device: no upload, audio request, or automatic permission prompt. */
 export function OverlaySetup({
@@ -7,34 +7,34 @@ export function OverlaySetup({
   focus,
   onFocus,
 }: {
-  stations: { id: string; name: string }[]
-  focus: string
-  onFocus: (id: string) => void
+  stations: { id: string; name: string }[];
+  focus: string;
+  onFocus: (id: string) => void;
 }) {
-  const [open, setOpen] = useState(() => new URLSearchParams(location.search).get('setup') === '1')
+  const [open, setOpen] = useState(() => new URLSearchParams(location.search).get('setup') === '1');
   const [showButton, setShowButton] = useState(
     () => new URLSearchParams(location.search).get('controls') !== '0',
-  )
-  const [stream, setStream] = useState<MediaStream | null>(null)
-  const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
-  const [device, setDevice] = useState('')
-  const [pending, setPending] = useState(false)
-  const [error, setError] = useState('')
-  const [label, setLabel] = useState('')
-  const video = useRef<HTMLVideoElement>(null)
-  const alive = useRef(true)
-  const attempt = useRef(0)
-  const [capture] = useState(() => new LocalCapture(setStream))
+  );
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [device, setDevice] = useState('');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+  const [label, setLabel] = useState('');
+  const video = useRef<HTMLVideoElement>(null);
+  const alive = useRef(true);
+  const attempt = useRef(0);
+  const [capture] = useState(() => new LocalCapture(setStream));
   useEffect(() => {
-    alive.current = true
+    alive.current = true;
     return () => {
-      alive.current = false
-      capture.dispose()
-    }
-  }, [capture])
+      alive.current = false;
+      capture.dispose();
+    };
+  }, [capture]);
   useEffect(() => {
-    if (video.current) video.current.srcObject = stream
-  }, [stream])
+    if (video.current) video.current.srcObject = stream;
+  }, [stream]);
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (
@@ -44,32 +44,32 @@ export function OverlaySetup({
         (event.target instanceof HTMLElement &&
           event.target.closest('input,select,textarea,button,[contenteditable="true"]'))
       )
-        return
+        return;
       if (event.key.toLowerCase() === 's') {
-        setOpen((value) => !value)
-        event.preventDefault()
+        setOpen((value) => !value);
+        event.preventDefault();
       }
-      if (event.key === 'Escape') setOpen(false)
-    }
-    window.addEventListener('keydown', key)
-    return () => window.removeEventListener('keydown', key)
-  }, [])
+      if (event.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, []);
   const refreshDevices = async () => {
     if (!navigator.mediaDevices?.enumerateDevices) {
-      setError('Device selection needs a supported browser on HTTPS or localhost.')
-      return
+      setError('Device selection needs a supported browser on HTTPS or localhost.');
+      return;
     }
     try {
-      const found = await navigator.mediaDevices.enumerateDevices()
-      if (alive.current) setDevices(found.filter((item) => item.kind === 'videoinput'))
+      const found = await navigator.mediaDevices.enumerateDevices();
+      if (alive.current) setDevices(found.filter((item) => item.kind === 'videoinput'));
     } catch (cause) {
-      if (alive.current) setError(captureError(cause))
+      if (alive.current) setError(captureError(cause));
     }
-  }
+  };
   const start = async (kind: 'screen' | 'camera') => {
-    const version = ++attempt.current
-    setError('')
-    setPending(true)
+    const version = ++attempt.current;
+    setError('');
+    setPending(true);
     try {
       if (
         !navigator.mediaDevices ||
@@ -78,7 +78,7 @@ export function OverlaySetup({
       )
         throw new Error(
           'This browser cannot open that source. Use a supported desktop browser on HTTPS or localhost, or add this page as an OBS browser source.',
-        )
+        );
       const started = await capture.start(() =>
         kind === 'screen'
           ? navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
@@ -86,33 +86,33 @@ export function OverlaySetup({
               video: device ? { deviceId: { exact: device } } : true,
               audio: false,
             }),
-      )
+      );
       if (alive.current && version === attempt.current && started) {
-        setLabel(kind === 'screen' ? 'Shared window / screen' : 'Camera / capture card')
-        if (kind === 'camera') void refreshDevices()
+        setLabel(kind === 'screen' ? 'Shared window / screen' : 'Camera / capture card');
+        if (kind === 'camera') void refreshDevices();
       }
     } catch (cause) {
-      if (alive.current && version === attempt.current) setError(captureError(cause))
+      if (alive.current && version === attempt.current) setError(captureError(cause));
     } finally {
-      if (alive.current && version === attempt.current) setPending(false)
+      if (alive.current && version === attempt.current) setPending(false);
     }
-  }
+  };
   const stop = () => {
-    ++attempt.current
-    capture.stop()
-    setPending(false)
-    setLabel('')
-  }
+    ++attempt.current;
+    capture.stop();
+    setPending(false);
+    setLabel('');
+  };
   const fullscreen = async () => {
     try {
       if (!document.documentElement.requestFullscreen)
-        throw new Error('Fullscreen is unavailable here. Open this overlay in a desktop browser.')
-      await document.documentElement.requestFullscreen()
-      setOpen(false)
+        throw new Error('Fullscreen is unavailable here. Open this overlay in a desktop browser.');
+      await document.documentElement.requestFullscreen();
+      setOpen(false);
     } catch (cause) {
-      setError(captureError(cause))
+      setError(captureError(cause));
     }
-  }
+  };
   return (
     <>
       <div
@@ -127,8 +127,8 @@ export function OverlaySetup({
             playsInline
             aria-label="Selected local video source"
             onError={() => {
-              stop()
-              setError('The selected video could not be displayed. Choose another source.')
+              stop();
+              setError('The selected video could not be displayed. Choose another source.');
             }}
           />
         )}
@@ -226,8 +226,8 @@ export function OverlaySetup({
             <button
               className="btn"
               onClick={() => {
-                setShowButton(false)
-                setOpen(false)
+                setShowButton(false);
+                setOpen(false);
               }}
             >
               Hide setup button
@@ -245,5 +245,5 @@ export function OverlaySetup({
         </section>
       )}
     </>
-  )
+  );
 }

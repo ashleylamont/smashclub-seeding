@@ -1,23 +1,23 @@
-import { useState } from 'react'
-import { Navigate } from '@tanstack/react-router'
-import { authClient } from '../lib/auth'
-import './Auth.css'
+import { useState } from 'react';
+import { Navigate } from '@tanstack/react-router';
+import { authClient } from '../lib/auth';
+import './Auth.css';
 
 export function LoginPage() {
-  const { data: session, isPending } = authClient.useSession()
-  const [error, setError] = useState<string | null>(null)
+  const { data: session, isPending } = authClient.useSession();
+  const [error, setError] = useState<string | null>(null);
 
-  if (!isPending && session) return <Navigate to="/me" />
+  if (!isPending && session) return <Navigate to="/me" />;
 
   const signIn = async (provider: 'discord' | 'google') => {
-    setError(null)
+    setError(null);
     try {
-      const res = await authClient.signIn.social({ provider, callbackURL: '/me' })
-      if (res.error) setError(res.error.message ?? 'Sign-in failed')
+      const res = await authClient.signIn.social({ provider, callbackURL: '/me' });
+      if (res.error) setError(res.error.message ?? 'Sign-in failed');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign-in failed')
+      setError(err instanceof Error ? err.message : 'Sign-in failed');
     }
-  }
+  };
 
   return (
     <div className="login-wrap">
@@ -54,5 +54,5 @@ export function LoginPage() {
         </p>
       </div>
     </div>
-  )
+  );
 }

@@ -1,42 +1,42 @@
-import { useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
-import { trpc } from '../lib/trpc'
-import { formatDate } from '../lib/format'
-import { syncStateLabel } from '../lib/labels'
-import { groupTournamentsByEvent, type TournamentEventGroup } from '../lib/eventGrouping'
-import { useNow } from '../lib/useNow'
-import './Tournaments.css'
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
+import { trpc } from '../lib/trpc';
+import { formatDate } from '../lib/format';
+import { syncStateLabel } from '../lib/labels';
+import { groupTournamentsByEvent, type TournamentEventGroup } from '../lib/eventGrouping';
+import { useNow } from '../lib/useNow';
+import './Tournaments.css';
 
 export function TournamentsPage() {
   const query = useQuery({
     queryKey: ['tournaments'],
     queryFn: () => trpc.public.tournaments.query(),
-  })
+  });
 
   // A ticking clock rather than a read during render: a live window that
   // expires while this page is open has to actually move the tournament out of
   // the Live group.
-  const now = useNow()
+  const now = useNow();
 
   const groups = useMemo(() => {
-    const all = query.data ?? []
-    const events = groupTournamentsByEvent(all, now)
-    const live = events.filter((t) => t.bucket === 'live')
+    const all = query.data ?? [];
+    const events = groupTournamentsByEvent(all, now);
+    const live = events.filter((t) => t.bucket === 'live');
     const upcoming = events
       .filter((t) => t.bucket === 'upcoming')
-      .sort((a, b) => (a.eventDate ?? '9999').localeCompare(b.eventDate ?? '9999'))
+      .sort((a, b) => (a.eventDate ?? '9999').localeCompare(b.eventDate ?? '9999'));
     // Newest first, and stated as such on the page — so it is sorted here
     // rather than inherited from whatever order the API happened to return.
     const completed = events
       .filter((t) => t.bucket === 'completed')
-      .sort((a, b) => (b.eventDate ?? '').localeCompare(a.eventDate ?? ''))
-    return { live, upcoming, completed }
-  }, [query.data, now])
+      .sort((a, b) => (b.eventDate ?? '').localeCompare(a.eventDate ?? ''));
+    return { live, upcoming, completed };
+  }, [query.data, now]);
 
-  if (query.isPending) return <p className="loading-text">Loading tournaments…</p>
+  if (query.isPending) return <p className="loading-text">Loading tournaments…</p>;
   if (query.isError)
-    return <p className="error-text">Failed to load tournaments: {query.error.message}</p>
+    return <p className="error-text">Failed to load tournaments: {query.error.message}</p>;
 
   if (query.data.length === 0) {
     return (
@@ -44,7 +44,7 @@ export function TournamentsPage() {
         <h1>Tournaments</h1>
         <p className="muted">No tournaments registered yet.</p>
       </div>
-    )
+    );
   }
 
   return (
@@ -61,7 +61,7 @@ export function TournamentsPage() {
         <TournamentGroup title="Completed" items={groups.completed} />
       )}
     </div>
-  )
+  );
 }
 
 function TournamentGroup({ title, items }: { title: string; items: TournamentEventGroup[] }) {
@@ -76,7 +76,7 @@ function TournamentGroup({ title, items }: { title: string; items: TournamentEve
         {items.map((event) => {
           const sync = event.items.every((t) => t.syncState === 'synced')
             ? syncStateLabel('synced')
-            : syncStateLabel('registered')
+            : syncStateLabel('registered');
           return (
             <div key={event.key} className="tournament-event-card">
               <div className="tournament-row-main">
@@ -121,9 +121,9 @@ function TournamentGroup({ title, items }: { title: string; items: TournamentEve
                 </Link>
               </div>
             </div>
-          )
+          );
         })}
       </div>
     </div>
-  )
+  );
 }

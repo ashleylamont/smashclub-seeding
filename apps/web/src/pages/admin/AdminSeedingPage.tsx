@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
   PointerSensor,
@@ -7,28 +7,28 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
-} from '@dnd-kit/core'
+} from '@dnd-kit/core';
 import {
   SortableContext,
   arrayMove,
   useSortable,
   verticalListSortingStrategy,
-} from '@dnd-kit/sortable'
-import { trpc } from '../../lib/trpc'
-import type { SeedingEntry, SeedingPushLog, SeedingRunData } from '../../lib/apiTypes'
-import { formatDateTime } from '../../lib/format'
+} from '@dnd-kit/sortable';
+import { trpc } from '../../lib/trpc';
+import type { SeedingEntry, SeedingPushLog, SeedingRunData } from '../../lib/apiTypes';
+import { formatDateTime } from '../../lib/format';
 
 export function AdminSeedingPage() {
   const tournaments = useQuery({
     queryKey: ['tournaments'],
     queryFn: () => trpc.public.tournaments.query(),
-  })
-  const [tournamentId, setTournamentId] = useState('')
+  });
+  const [tournamentId, setTournamentId] = useState('');
 
   const seedable = useMemo(
     () => (tournaments.data ?? []).filter((t) => t.challongeState !== 'complete'),
     [tournaments.data],
-  )
+  );
 
   return (
     <div>
@@ -60,28 +60,28 @@ export function AdminSeedingPage() {
 
       {tournamentId !== '' && <SeedingWorkbench key={tournamentId} tournamentId={tournamentId} />}
     </div>
-  )
+  );
 }
 
 function SeedingWorkbench({ tournamentId }: { tournamentId: string }) {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   const runQuery = useQuery({
     queryKey: ['admin', 'seedingRun', tournamentId],
     queryFn: () => trpc.admin.seedingRun.query({ tournamentId }),
-  })
+  });
 
   const invalidateRun = () =>
-    void queryClient.invalidateQueries({ queryKey: ['admin', 'seedingRun', tournamentId] })
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'seedingRun', tournamentId] });
 
   const generate = useMutation({
     mutationFn: () => trpc.admin.createSeedingRun.mutate({ tournamentId }),
     onSuccess: invalidateRun,
-  })
+  });
 
-  if (runQuery.isPending) return <p className="loading-text">Loading seeding run…</p>
-  if (runQuery.isError) return <p className="error-text">{runQuery.error.message}</p>
+  if (runQuery.isPending) return <p className="loading-text">Loading seeding run…</p>;
+  if (runQuery.isError) return <p className="error-text">{runQuery.error.message}</p>;
 
-  const data = runQuery.data
+  const data = runQuery.data;
 
   if (data === null) {
     return (
@@ -99,7 +99,7 @@ function SeedingWorkbench({ tournamentId }: { tournamentId: string }) {
         </div>
         {generate.isError && <p className="error-text">{generate.error.message}</p>}
       </div>
-    )
+    );
   }
 
   return (
@@ -110,7 +110,7 @@ function SeedingWorkbench({ tournamentId }: { tournamentId: string }) {
       regenerateError={generate.error?.message ?? null}
       onChanged={invalidateRun}
     />
-  )
+  );
 }
 
 function SeedingRun({
@@ -120,30 +120,30 @@ function SeedingRun({
   regenerateError,
   onChanged,
 }: {
-  data: SeedingRunData
-  onRegenerate: () => void
-  regenerating: boolean
-  regenerateError: string | null
-  onChanged: () => void
+  data: SeedingRunData;
+  onRegenerate: () => void;
+  regenerating: boolean;
+  regenerateError: string | null;
+  onChanged: () => void;
 }) {
-  const { run, entries } = data
-  const serverOrder = useMemo(() => entries.map((e) => e.participantId), [entries])
-  const [order, setOrder] = useState<string[]>(serverOrder)
-  const [lastServerOrder, setLastServerOrder] = useState<string[]>(serverOrder)
-  const [confirmingPush, setConfirmingPush] = useState(false)
-  const [pushResult, setPushResult] = useState<(SeedingPushLog & { pushed: number }) | null>(null)
+  const { run, entries } = data;
+  const serverOrder = useMemo(() => entries.map((e) => e.participantId), [entries]);
+  const [order, setOrder] = useState<string[]>(serverOrder);
+  const [lastServerOrder, setLastServerOrder] = useState<string[]>(serverOrder);
+  const [confirmingPush, setConfirmingPush] = useState(false);
+  const [pushResult, setPushResult] = useState<(SeedingPushLog & { pushed: number }) | null>(null);
 
   // Re-sync local order whenever the server entries change (render-time adjustment).
   if (serverOrder !== lastServerOrder) {
-    setLastServerOrder(serverOrder)
-    setOrder(serverOrder)
+    setLastServerOrder(serverOrder);
+    setOrder(serverOrder);
   }
 
-  const byParticipant = useMemo(() => new Map(entries.map((e) => [e.participantId, e])), [entries])
+  const byParticipant = useMemo(() => new Map(entries.map((e) => [e.participantId, e])), [entries]);
   const lockedIds = useMemo(
     () => new Set(entries.filter((e) => e.locked).map((e) => e.participantId)),
     [entries],
-  )
+  );
 
   const reorder = useMutation({
     mutationFn: (participantIdsInOrder: string[]) =>
@@ -151,32 +151,32 @@ function SeedingRun({
     onSuccess: onChanged,
     // Roll the optimistic local order back if the server rejects it.
     onError: () => setOrder(serverOrder),
-  })
+  });
 
   const push = useMutation({
     mutationFn: () => trpc.admin.pushSeedingRun.mutate({ runId: run.id }),
     onSuccess: (result) => {
-      setConfirmingPush(false)
-      setPushResult(result)
-      onChanged()
+      setConfirmingPush(false);
+      setPushResult(result);
+      onChanged();
     },
-  })
+  });
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-    const oldIndex = order.indexOf(String(active.id))
-    const newIndex = order.indexOf(String(over.id))
-    if (oldIndex === -1 || newIndex === -1) return
-    const next = enforceLocks(order, arrayMove(order, oldIndex, newIndex), lockedIds)
-    setOrder(next)
-    reorder.mutate(next)
-  }
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = order.indexOf(String(active.id));
+    const newIndex = order.indexOf(String(over.id));
+    if (oldIndex === -1 || newIndex === -1) return;
+    const next = enforceLocks(order, arrayMove(order, oldIndex, newIndex), lockedIds);
+    setOrder(next);
+    reorder.mutate(next);
+  };
 
-  const storedPushLog = run.pushLog as SeedingPushLog | null
-  const draggable = run.status === 'draft'
+  const storedPushLog = run.pushLog as SeedingPushLog | null;
+  const draggable = run.status === 'draft';
 
   return (
     <div className="card">
@@ -263,8 +263,8 @@ function SeedingRun({
         <SortableContext items={order} strategy={verticalListSortingStrategy}>
           <div className="seeding-list">
             {order.map((participantId, index) => {
-              const entry = byParticipant.get(participantId)
-              if (!entry) return null
+              const entry = byParticipant.get(participantId);
+              if (!entry) return null;
               return (
                 <SeedingRow
                   key={participantId}
@@ -273,7 +273,7 @@ function SeedingRun({
                   draggable={draggable}
                   onChanged={onChanged}
                 />
-              )
+              );
             })}
           </div>
         </SortableContext>
@@ -312,22 +312,22 @@ function SeedingRun({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 /** Locked entries keep their pre-drag positions; everyone else fills around them. */
 function enforceLocks(prev: string[], moved: string[], locked: Set<string>): string[] {
-  if (locked.size === 0) return moved
-  const result: (string | null)[] = Array<string | null>(prev.length).fill(null)
+  if (locked.size === 0) return moved;
+  const result: (string | null)[] = Array<string | null>(prev.length).fill(null);
   prev.forEach((id, index) => {
-    if (locked.has(id)) result[index] = id
-  })
-  const rest = moved.filter((id) => !locked.has(id))
-  let j = 0
+    if (locked.has(id)) result[index] = id;
+  });
+  const rest = moved.filter((id) => !locked.has(id));
+  let j = 0;
   for (let i = 0; i < result.length; i++) {
-    if (result[i] === null) result[i] = rest[j++] ?? null
+    if (result[i] === null) result[i] = rest[j++] ?? null;
   }
-  return result.filter((id): id is string => id !== null)
+  return result.filter((id): id is string => id !== null);
 }
 
 function SeedingRow({
@@ -336,24 +336,24 @@ function SeedingRow({
   draggable,
   onChanged,
 }: {
-  entry: SeedingEntry
-  seed: number
-  draggable: boolean
-  onChanged: () => void
+  entry: SeedingEntry;
+  seed: number;
+  draggable: boolean;
+  onChanged: () => void;
 }) {
-  const disabled = !draggable || entry.locked
+  const disabled = !draggable || entry.locked;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: entry.participantId,
     disabled,
-  })
+  });
 
   const toggleLock = useMutation({
     mutationFn: () =>
       trpc.admin.setSeedingEntryLocked.mutate({ entryId: entry.id, locked: !entry.locked }),
     onSuccess: onChanged,
-  })
+  });
 
-  const delta = entry.challongeSeed != null ? entry.challongeSeed - seed : null
+  const delta = entry.challongeSeed != null ? entry.challongeSeed - seed : null;
 
   return (
     <div
@@ -411,5 +411,5 @@ function SeedingRow({
         </button>
       </span>
     </div>
-  )
+  );
 }

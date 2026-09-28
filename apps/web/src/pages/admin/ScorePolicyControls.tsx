@@ -1,18 +1,18 @@
-import { trpc } from '../../lib/trpc'
-type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>
+import { trpc } from '../../lib/trpc';
+type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 export function ScorePolicyControls({
   data,
   admin,
   disabled,
   act,
 }: {
-  data: Overview
-  admin: boolean
-  disabled: boolean
-  act: (work: () => Promise<unknown>, message?: string) => Promise<void>
+  data: Overview;
+  admin: boolean;
+  disabled: boolean;
+  act: (work: () => Promise<unknown>, message?: string) => Promise<void>;
 }) {
-  const mode = data.settings.scoreReportingMode ?? 'to_review'
-  const disputes = data.reports.filter((report) => report.status === 'pending' && report.isDispute)
+  const mode = data.settings.scoreReportingMode ?? 'to_review';
+  const disputes = data.reports.filter((report) => report.status === 'pending' && report.isDispute);
   return (
     <section className="card" aria-labelledby="score-policy-heading">
       <h3 id="score-policy-heading">Score approval</h3>
@@ -73,5 +73,5 @@ export function ScorePolicyControls({
         </p>
       )}
     </section>
-  )
+  );
 }

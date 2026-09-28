@@ -1,22 +1,22 @@
-import { useQuery } from '@tanstack/react-query'
-import { Link, useParams } from '@tanstack/react-router'
-import { trpc } from '../lib/trpc'
-import type { EventOverviewData } from '../lib/apiTypes'
-import { formatDate } from '../lib/format'
-import './EventPage.css'
-import { ResultGraphic } from '../components/ResultGraphic'
+import { useQuery } from '@tanstack/react-query';
+import { Link, useParams } from '@tanstack/react-router';
+import { trpc } from '../lib/trpc';
+import type { EventOverviewData } from '../lib/apiTypes';
+import { formatDate } from '../lib/format';
+import './EventPage.css';
+import { ResultGraphic } from '../components/ResultGraphic';
 
 export function EventPage() {
-  const { slug } = useParams({ from: '/events/$slug' })
+  const { slug } = useParams({ from: '/events/$slug' });
   const query = useQuery({
     queryKey: ['eventOverview', slug],
     queryFn: () => trpc.public.eventOverview.query({ slug }),
-  })
-  if (query.isPending) return <p className="loading-text">Loading event…</p>
+  });
+  if (query.isPending) return <p className="loading-text">Loading event…</p>;
   if (query.isError)
-    return <p className="error-text">Failed to load event: {query.error.message}</p>
-  if (!query.data) return <p className="error-text">Event not found.</p>
-  return <EventOverview data={query.data} />
+    return <p className="error-text">Failed to load event: {query.error.message}</p>;
+  if (!query.data) return <p className="error-text">Event not found.</p>;
+  return <EventOverview data={query.data} />;
 }
 
 function EventOverview({ data }: { data: EventOverviewData }) {
@@ -113,11 +113,11 @@ function EventOverview({ data }: { data: EventOverviewData }) {
         </div>
       </section>
     </div>
-  )
+  );
 }
 
 function Standings({ players }: { players: EventOverviewData['divisions'][number]['players'] }) {
-  const hasPools = players.some((p) => p.poolWins + p.poolLosses > 0)
+  const hasPools = players.some((p) => p.poolWins + p.poolLosses > 0);
   return (
     <div className="table-scroll">
       <table className="data-table event-standings">
@@ -175,5 +175,5 @@ function Standings({ players }: { players: EventOverviewData['divisions'][number
         </tbody>
       </table>
     </div>
-  )
+  );
 }

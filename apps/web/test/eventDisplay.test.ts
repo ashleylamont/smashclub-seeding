@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest';
 import {
   broadcastQueue,
   liveSections,
   overlayGeometry,
   type LiveMatch,
-} from '../src/lib/eventDisplay'
+} from '../src/lib/eventDisplay';
 
 describe('spectator event board', () => {
   it('keeps blocked matches out of the ready queue and counts only confirmed results', () => {
@@ -26,23 +26,26 @@ describe('spectator event board', () => {
           winnerId: null,
           stationId: null,
         }) satisfies LiveMatch,
-    )
-    const sections = liveSections(matches)
-    expect(sections.ready.map((m) => m.id)).toEqual(['0'])
-    expect(sections.playing.map((m) => m.id)).toEqual(['2'])
-    expect(sections.complete.map((m) => m.id)).toEqual(['3'])
-    expect(sections.total).toBe(4)
-  })
+    );
+    const sections = liveSections(matches);
+    expect(sections.ready.map((m) => m.id)).toEqual(['0']);
+    expect(sections.playing.map((m) => m.id)).toEqual(['2']);
+    expect(sections.complete.map((m) => m.id)).toEqual(['3']);
+    expect(sections.total).toBe(4);
+  });
   it('bounds malformed browser-source geometry while retaining a transparent centre', () => {
-    expect(overlayGeometry('')).toEqual({ width: 78, height: 78 })
-    expect(overlayGeometry('?captureWidth=75&captureHeight=70')).toEqual({ width: 75, height: 70 })
+    expect(overlayGeometry('')).toEqual({ width: 78, height: 78 });
+    expect(overlayGeometry('?captureWidth=75&captureHeight=70')).toEqual({ width: 75, height: 70 });
     expect(overlayGeometry('?captureWidth=Infinity&captureHeight=no')).toEqual({
       width: 78,
       height: 78,
-    })
-    expect(overlayGeometry('?captureWidth=-1&captureHeight=999')).toEqual({ width: 35, height: 78 })
-  })
-})
+    });
+    expect(overlayGeometry('?captureWidth=-1&captureHeight=999')).toEqual({
+      width: 35,
+      height: 78,
+    });
+  });
+});
 
 it('does not put the same challenger into several broadcast on-deck slots', () => {
   const matches = [
@@ -52,10 +55,10 @@ it('does not put the same challenger into several broadcast on-deck slots', () =
     ['e', 'f'],
   ].map(
     ([player1Id, player2Id], index) => ({ id: String(index), player1Id, player2Id }) as LiveMatch,
-  )
-  expect(broadcastQueue(matches).map((match) => match.id)).toEqual(['0', '2', '3'])
-  expect(overlayGeometry('?captureWidth=100&captureHeight=100')).toEqual({ width: 78, height: 78 })
-})
+  );
+  expect(broadcastQueue(matches).map((match) => match.id)).toEqual(['0', '2', '3']);
+  expect(overlayGeometry('?captureWidth=100&captureHeight=100')).toEqual({ width: 78, height: 78 });
+});
 
 it('respects server scheduling holds even when both players are idle', () => {
   const match: LiveMatch = {
@@ -78,9 +81,9 @@ it('respects server scheduling holds even when both players are idle', () => {
       reasons: [{ code: 'pool_held', message: 'Pool is on hold' }],
       eligibleStationIds: [],
     },
-  }
-  expect(liveSections([match]).ready).toEqual([])
+  };
+  expect(liveSections([match]).ready).toEqual([]);
   expect(
     liveSections([{ ...match, availability: { ...match.availability!, canStart: true } }]).ready,
-  ).toHaveLength(1)
-})
+  ).toHaveLength(1);
+});

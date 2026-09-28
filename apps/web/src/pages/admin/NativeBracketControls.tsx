@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { trpc } from '../../lib/trpc'
-type Preview = Awaited<ReturnType<typeof trpc.eventOps.native.preview.query>>
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { trpc } from '../../lib/trpc';
+type Preview = Awaited<ReturnType<typeof trpc.eventOps.native.preview.query>>;
 
 /** Only render for native events; remote handoff remains a separate workflow. */
 export function NativeBracketControls({
@@ -9,31 +9,31 @@ export function NativeBracketControls({
   entrants,
   closed = false,
 }: {
-  planId: string
-  entrants: { id: string; name: string }[]
-  closed?: boolean
+  planId: string;
+  entrants: { id: string; name: string }[];
+  closed?: boolean;
 }) {
-  const cache = useQueryClient()
-  const [preview, setPreview] = useState<Preview | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [message, setMessage] = useState('')
+  const cache = useQueryClient();
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const name = (id: string | null) =>
-    id ? (entrants.find((p) => p.id === id)?.name ?? 'Player') : 'Bye'
+    id ? (entrants.find((p) => p.id === id)?.name ?? 'Player') : 'Bye';
   const act = async (work: () => Promise<unknown>, success: string) => {
-    setBusy(true)
-    setError('')
-    setMessage('')
+    setBusy(true);
+    setError('');
+    setMessage('');
     try {
-      await work()
-      setMessage(success)
-      await cache.invalidateQueries({ queryKey: ['eventOps', planId] })
+      await work();
+      setMessage(success);
+      await cache.invalidateQueries({ queryKey: ['eventOps', planId] });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not update native brackets.')
+      setError(cause instanceof Error ? cause.message : 'Could not update native brackets.');
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
   return (
     <section className="card">
       <h3>Championship and consolation</h3>
@@ -85,8 +85,8 @@ export function NativeBracketControls({
                 await trpc.eventOps.native.generate.mutate({
                   planId,
                   revisionToken: preview.revisionToken,
-                })
-                setPreview(null)
+                });
+                setPreview(null);
               }, 'Finals are ready in the match queue.')
             }
           >
@@ -102,9 +102,9 @@ export function NativeBracketControls({
                     await trpc.eventOps.native.reset.mutate({
                       planId,
                       revisionToken: preview.revisionToken,
-                    })
-                    setPreview(null)
-                  }, 'Unplayed finals removed. Pool orders and attendance can now be corrected.')
+                    });
+                    setPreview(null);
+                  }, 'Unplayed finals removed. Pool orders and attendance can now be corrected.');
               }}
             >
               Remove unplayed finals
@@ -128,7 +128,7 @@ export function NativeBracketControls({
             void act(
               () => trpc.eventOps.native.finalize.mutate({ planId }),
               'Event finalized. Club ratings are being recomputed.',
-            )
+            );
         }}
       >
         Finalize native results
@@ -140,5 +140,5 @@ export function NativeBracketControls({
       )}
       {message && <p role="status">{message}</p>}
     </section>
-  )
+  );
 }

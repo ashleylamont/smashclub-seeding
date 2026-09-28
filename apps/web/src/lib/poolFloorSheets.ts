@@ -1,25 +1,25 @@
-import { poolKey, poolPath, poolTitle, type PoolFlowData } from './poolFlow'
+import { poolKey, poolPath, poolTitle, type PoolFlowData } from './poolFlow';
 
 export type FloorSheetData = PoolFlowData & {
-  plan: PoolFlowData['plan'] & { name: string; bracketMode: string }
-  settings: { published: boolean }
-  withdrawals: { playerId: string }[]
-}
+  plan: PoolFlowData['plan'] & { name: string; bracketMode: string };
+  settings: { published: boolean };
+  withdrawals: { playerId: string }[];
+};
 /** A printable snapshot of native pairings, never a second scheduler or reporting credential. */
 export function poolFloorSheets(data: FloorSheetData, origin: string) {
-  if (data.plan.bracketMode !== 'native') return []
-  const withdrawn = new Set(data.withdrawals.map((player) => player.playerId))
+  if (data.plan.bracketMode !== 'native') return [];
+  const withdrawn = new Set(data.withdrawals.map((player) => player.playerId));
   return [...(data.poolRounds ?? [])]
     .sort((a, b) => {
       const [ad, ai] = a.poolKey.split(':'),
-        [bd, bi] = b.poolKey.split(':')
-      return (ad === bd ? 0 : ad === 'upper' ? -1 : 1) || Number(ai) - Number(bi)
+        [bd, bi] = b.poolKey.split(':');
+      return (ad === bd ? 0 : ad === 'upper' ? -1 : 1) || Number(ai) - Number(bi);
     })
     .map((pool) => {
-      const matches = data.matches.filter((match) => poolKey(match) === pool.poolKey)
+      const matches = data.matches.filter((match) => poolKey(match) === pool.poolKey);
       const schedule = data.poolSchedules.find(
         (item) => `${item.division}:${item.poolIndex}` === pool.poolKey,
-      )
+      );
       const names = new Map(
         matches.flatMap(
           (match) =>
@@ -28,11 +28,11 @@ export function poolFloorSheets(data: FloorSheetData, origin: string) {
               [match.player2Id, match.player2Name],
             ] as const,
         ),
-      )
+      );
       const resolved = (match: (typeof matches)[number]) =>
         match.status === 'complete' ||
-        match.blockedReason === 'Both players withdrawn: no contest; no winner or score recorded'
-      const finished = matches.length > 0 && matches.every(resolved)
+        match.blockedReason === 'Both players withdrawn: no contest; no winner or score recorded';
+      const finished = matches.length > 0 && matches.every(resolved);
       return {
         key: pool.poolKey,
         title: poolTitle(pool.poolKey),
@@ -66,8 +66,8 @@ export function poolFloorSheets(data: FloorSheetData, origin: string) {
             (id) => `${names.get(id) ?? 'Player'}${withdrawn.has(id) ? ' (withdrawn)' : ''}`,
           ),
           matches: round.matchIds.flatMap((id) => {
-            const match = matches.find((item) => item.id === id)
-            if (!match) return []
+            const match = matches.find((item) => item.id === id);
+            if (!match) return [];
             const result =
               match.status === 'complete'
                 ? match.outcome === 'forfeit' || match.outcome === 'bye'
@@ -79,7 +79,7 @@ export function poolFloorSheets(data: FloorSheetData, origin: string) {
                     ? `Playing · ${match.score1 ?? 0} – ${match.score2 ?? 0}`
                     : match.status === 'blocked'
                       ? 'Blocked · ask TO'
-                      : '_____ – _____'
+                      : '_____ – _____';
             return [
               {
                 id,
@@ -88,9 +88,9 @@ export function poolFloorSheets(data: FloorSheetData, origin: string) {
                 player2: `${match.player2Name ?? 'Player'}${match.player2Id && withdrawn.has(match.player2Id) ? ' (withdrawn)' : ''}`,
                 result,
               },
-            ]
+            ];
           }),
         })),
-      }
-    })
+      };
+    });
 }

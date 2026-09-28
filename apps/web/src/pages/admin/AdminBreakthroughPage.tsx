@@ -1,52 +1,52 @@
-import { Fragment } from 'react'
-import { Link, useNavigate, useSearch } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { eventNameOf } from '@smashclub/shared'
-import { trpc } from '../../lib/trpc'
+import { Fragment } from 'react';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
+import { useQuery } from '@tanstack/react-query';
+import { eventNameOf } from '@smashclub/shared';
+import { trpc } from '../../lib/trpc';
 import {
   breakthroughDefaults,
   summariseBreakthrough,
   type BreakthroughData,
   type BreakthroughOptions,
-} from '../../lib/breakthrough'
-import './Breakthrough.css'
+} from '../../lib/breakthrough';
+import './Breakthrough.css';
 
-const signed = (n: number) => `${n > 0 ? '+' : ''}${n.toFixed(2)}`
-const percent = (n: number | null) => (n === null ? '—' : `${n > 0 ? '+' : ''}${n.toFixed(1)} pp`)
+const signed = (n: number) => `${n > 0 ? '+' : ''}${n.toFixed(2)}`;
+const percent = (n: number | null) => (n === null ? '—' : `${n > 0 ? '+' : ''}${n.toFixed(1)} pp`);
 const dateTime = (value: string | null) =>
-  value ? new Date(value).toLocaleString() : 'Never synced'
+  value ? new Date(value).toLocaleString() : 'Never synced';
 
 export function AdminBreakthroughPage() {
-  const options = useSearch({ from: '/admin/breakthroughs' })
-  const navigate = useNavigate({ from: '/admin/breakthroughs' })
+  const options = useSearch({ from: '/admin/breakthroughs' });
+  const navigate = useNavigate({ from: '/admin/breakthroughs' });
   const change = (patch: Partial<BreakthroughOptions>) =>
-    void navigate({ search: { ...options, ...patch }, replace: true })
+    void navigate({ search: { ...options, ...patch }, replace: true });
   const tournaments = useQuery({
     queryKey: ['tournaments'],
     queryFn: () => trpc.public.tournaments.query(),
     refetchInterval: 15_000,
-  })
-  const grouped = new Map<string, string[]>()
+  });
+  const grouped = new Map<string, string[]>();
   for (const t of tournaments.data ?? []) {
-    if (!t.eventDate) continue
-    const key = t.eventDate.slice(0, 10)
-    grouped.set(key, [...(grouped.get(key) ?? []), t.name])
+    if (!t.eventDate) continue;
+    const key = t.eventDate.slice(0, 10);
+    grouped.set(key, [...(grouped.get(key) ?? []), t.name]);
   }
-  const nights = [...grouped].sort(([a], [b]) => b.localeCompare(a))
-  const event = options.event || nights[0]?.[0] || ''
+  const nights = [...grouped].sort(([a], [b]) => b.localeCompare(a));
+  const event = options.event || nights[0]?.[0] || '';
   const query = useQuery({
     queryKey: ['admin', 'breakthrough', event],
     queryFn: () => trpc.admin.breakthrough.query({ eventKey: event }),
     enabled: Boolean(event),
     refetchInterval: 15_000,
-  })
+  });
   const controls: { key: keyof typeof breakthroughDefaults; label: string; max: number }[] = [
     { key: 'priorNights', label: 'Minimum prior nights', max: 20 },
     { key: 'priorSets', label: 'Minimum prior sets', max: 100 },
     { key: 'nightSets', label: 'Comparable sets tonight', max: 30 },
     { key: 'opponents', label: 'Different opponents tonight', max: 30 },
     { key: 'smoothing', label: 'Small-sample adjustment', max: 20 },
-  ]
+  ];
   return (
     <div className="breakthrough-page">
       <section className="card section">
@@ -98,9 +98,9 @@ export function AdminBreakthroughPage() {
                 step={1}
                 value={options[key]}
                 onChange={(e) => {
-                  const value = e.target.valueAsNumber
+                  const value = e.target.valueAsNumber;
                   if (Number.isInteger(value) && value >= 0 && value <= max)
-                    change({ [key]: value, event })
+                    change({ [key]: value, event });
                 }}
               />
             </label>
@@ -179,22 +179,22 @@ export function AdminBreakthroughPage() {
         </p>
       </section>
     </div>
-  )
+  );
 }
 
 function Evidence({ data, options }: { data: BreakthroughData; options: BreakthroughOptions }) {
-  const rows = data.rows.map((row) => ({ row, summary: summariseBreakthrough(row, options) }))
+  const rows = data.rows.map((row) => ({ row, summary: summariseBreakthrough(row, options) }));
   const shown = rows
     .filter(({ summary }) => options.showAll || summary.meetsCriteria)
     .sort((a, b) => {
       const score = (s: typeof a.summary) =>
-        s.assessed ? (options.sort === 'surplus' ? s.surplus : s.adjusted!) : -Infinity
-      return score(b.summary) - score(a.summary) || a.row.name.localeCompare(b.row.name)
-    })
-  const bracket = new Map(data.brackets.map((b) => [b.id, b]))
+        s.assessed ? (options.sort === 'surplus' ? s.surplus : s.adjusted!) : -Infinity;
+      return score(b.summary) - score(a.summary) || a.row.name.localeCompare(b.row.name);
+    });
+  const bracket = new Map(data.brackets.map((b) => [b.id, b]));
   const monitoring = data.brackets.filter(
     (b) => b.liveUntil && Date.parse(b.liveUntil) > Date.parse(data.checkedAt),
-  ).length
+  ).length;
   return (
     <section className="card section" aria-label="Breakthrough evidence">
       <div className="breakthrough-status">
@@ -351,5 +351,5 @@ function Evidence({ data, options }: { data: BreakthroughData; options: Breakthr
         </details>
       )}
     </section>
-  )
+  );
 }

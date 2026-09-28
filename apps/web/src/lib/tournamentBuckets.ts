@@ -1,6 +1,6 @@
-import type { TournamentListItem } from './apiTypes'
+import type { TournamentListItem } from './apiTypes';
 
-export type Bucket = 'live' | 'upcoming' | 'completed'
+export type Bucket = 'live' | 'upcoming' | 'completed';
 
 /**
  * "Live" is an explicit, expiring admin decision (`liveUntil`) — NEVER inferred
@@ -18,9 +18,9 @@ export type Bucket = 'live' | 'upcoming' | 'completed'
  * `lib/useNow.ts`), and it is what makes the rule unit-testable.
  */
 export function bucketFor(t: TournamentListItem, now: number): Bucket {
-  if (t.liveUntil && new Date(t.liveUntil).getTime() > now) return 'live'
-  if (t.challongeState === 'complete') return 'completed'
-  const eventTime = t.eventDate ? new Date(t.eventDate).getTime() : null
-  if (eventTime !== null && eventTime < now) return 'completed'
-  return 'upcoming'
+  if (t.liveUntil && new Date(t.liveUntil).getTime() > now) return 'live';
+  if (t.challongeState === 'complete') return 'completed';
+  const eventTime = t.eventDate ? new Date(t.eventDate).getTime() : null;
+  if (eventTime !== null && eventTime < now) return 'completed';
+  return 'upcoming';
 }

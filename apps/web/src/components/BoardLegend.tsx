@@ -1,4 +1,4 @@
-import { tierClass } from '../lib/format'
+import { tierClass } from '../lib/format';
 
 /**
  * The board's key.
@@ -19,16 +19,18 @@ import { tierClass } from '../lib/format'
 
 interface Props {
   /** The leagues actually present on the board, so the ramp is never invented. */
-  leagues: string[]
+  leagues: string[];
 }
 
 /** Highest rung first — `tierClass` is already ordered, so sort on it. */
 function orderLeagues(leagues: string[]): string[] {
-  return [...leagues].sort((a, b) => tierClass(a).localeCompare(tierClass(b)) || a.localeCompare(b))
+  return [...leagues].sort(
+    (a, b) => tierClass(a).localeCompare(tierClass(b)) || a.localeCompare(b),
+  );
 }
 
 export function BoardLegend({ leagues }: Props) {
-  const ordered = orderLeagues(leagues)
+  const ordered = orderLeagues(leagues);
 
   return (
     <details className="board-legend">
@@ -139,5 +141,5 @@ export function BoardLegend({ leagues }: Props) {
         )}
       </div>
     </details>
-  )
+  );
 }

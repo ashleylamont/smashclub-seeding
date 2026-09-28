@@ -6,7 +6,7 @@
  * components.
  */
 
-export const DIVISION_LABEL = { upper: 'Upper', lower: 'Lower' } as const
+export const DIVISION_LABEL = { upper: 'Upper', lower: 'Lower' } as const;
 
 /** `event_plan_status`, spelled out. Unknown values print through unchanged. */
 export const STATUS_LABEL: Record<string, string> = {
@@ -16,4 +16,4 @@ export const STATUS_LABEL: Record<string, string> = {
   underway: 'Underway',
   complete: 'Complete',
   cancelled: 'Cancelled',
-}
+};

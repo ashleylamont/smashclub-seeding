@@ -1,6 +1,6 @@
-import { createHash, randomUUID } from 'node:crypto'
-import { and, asc, eq, inArray } from 'drizzle-orm'
-import { TRPCError } from '@trpc/server'
+import { createHash, randomUUID } from 'node:crypto';
+import { and, asc, eq, inArray } from 'drizzle-orm';
+import { TRPCError } from '@trpc/server';
 import {
   eventNativeBrackets,
   eventMatches,
@@ -15,56 +15,56 @@ import {
   sets,
   players,
   type Db,
-} from '@smashclub/db'
-import { scoresIndicateUnplayed } from '@smashclub/shared'
-import type { SessionUser } from '../auth'
-import { getPlan } from '../event-planner/plans'
-import { buildConsolationBracket, standardBracketOrder } from '../event-planner/advancement'
-import { lockEvent, requireOperator } from './access'
+} from '@smashclub/db';
+import { scoresIndicateUnplayed } from '@smashclub/shared';
+import type { SessionUser } from '../auth';
+import { getPlan } from '../event-planner/plans';
+import { buildConsolationBracket, standardBracketOrder } from '../event-planner/advancement';
+import { lockEvent, requireOperator } from './access';
 function reject(message: string): never {
-  throw new TRPCError({ code: 'CONFLICT', message })
+  throw new TRPCError({ code: 'CONFLICT', message });
 }
-const noContest = 'Both players withdrawn: no contest; no winner or score recorded'
+const noContest = 'Both players withdrawn: no contest; no winner or score recorded';
 const resolved = (match: typeof eventMatches.$inferSelect) =>
-  match.status === 'complete' || match.blockedReason === noContest
-const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
+  match.status === 'complete' || match.blockedReason === noContest;
+const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
 export function nativeDraw(entrantIds: readonly string[]) {
   if (new Set(entrantIds).size !== entrantIds.length)
-    reject('A native bracket cannot contain the same entrant twice.')
-  let size = 2
-  while (size < entrantIds.length) size *= 2
+    reject('A native bracket cannot contain the same entrant twice.');
+  let size = 2;
+  while (size < entrantIds.length) size *= 2;
   return entrantIds.length
     ? standardBracketOrder(size).map((seed) => entrantIds[seed - 1] ?? null)
-    : []
+    : [];
 }
 
 export async function previewNativeBrackets(db: Db, planId: string) {
-  const view = await getPlan(db, planId)
-  if (!view) reject('Event not found.')
+  const view = await getPlan(db, planId);
+  if (!view) reject('Event not found.');
   const existing = await db
     .select()
     .from(eventNativeBrackets)
-    .where(eq(eventNativeBrackets.eventPlanId, planId))
+    .where(eq(eventNativeBrackets.eventPlanId, planId));
   const matches = await db
     .select()
     .from(eventMatches)
     .where(eq(eventMatches.eventPlanId, planId))
-    .orderBy(asc(eventMatches.id))
+    .orderBy(asc(eventMatches.id));
   const reports = await db
     .select({ id: eventScoreReports.id })
     .from(eventScoreReports)
-    .where(and(eq(eventScoreReports.eventPlanId, planId), eq(eventScoreReports.status, 'pending')))
-  const nativeIds = matches.filter((m) => m.nativeBracketId).map((m) => m.id)
+    .where(and(eq(eventScoreReports.eventPlanId, planId), eq(eventScoreReports.status, 'pending')));
+  const nativeIds = matches.filter((m) => m.nativeBracketId).map((m) => m.id);
   const nativeAudit = nativeIds.length
     ? await db.select().from(eventMatchAudit).where(inArray(eventMatchAudit.matchId, nativeIds))
-    : []
-  const issues: string[] = []
-  if (view.plan.bracketMode !== 'native') issues.push('This event uses Challonge brackets.')
+    : [];
+  const issues: string[] = [];
+  if (view.plan.bracketMode !== 'native') issues.push('This event uses Challonge brackets.');
   if (!['pools_ready', 'underway'].includes(view.plan.status))
-    issues.push('Prepare the pools in an open event first.')
+    issues.push('Prepare the pools in an open event first.');
   if (view.brackets.some((b) => b.tournamentId || b.challongeSlug))
-    issues.push('Finalized or externally linked brackets cannot be rebuilt.')
+    issues.push('Finalized or externally linked brackets cannot be rebuilt.');
   if (
     matches.some(
       (m) =>
@@ -77,7 +77,7 @@ export async function previewNativeBrackets(db: Db, planId: string) {
           m.liveScore2 !== null),
     )
   )
-    issues.push('Finals have started. Existing play cannot be rebuilt.')
+    issues.push('Finals have started. Existing play cannot be rebuilt.');
   if (
     nativeAudit.some(
       (a) =>
@@ -85,12 +85,12 @@ export async function previewNativeBrackets(db: Db, planId: string) {
         (a.before as { status?: string }).status === 'playing',
     )
   )
-    issues.push('A finals match has previously started; it cannot be reset.')
-  if (reports.length) issues.push('Review pending score reports before generating finals.')
-  const resetIssues = [...issues]
-  if (!existing.length) resetIssues.push('There are no native finals to remove.')
+    issues.push('A finals match has previously started; it cannot be reset.');
+  if (reports.length) issues.push('Review pending score reports before generating finals.');
+  const resetIssues = [...issues];
+  if (!existing.length) resetIssues.push('There are no native finals to remove.');
   if (!matches.some((m) => m.stage === 'group'))
-    issues.push('Prepare and play the pool matches first.')
+    issues.push('Prepare and play the pool matches first.');
   if (
     matches.some(
       (m) =>
@@ -99,11 +99,11 @@ export async function previewNativeBrackets(db: Db, planId: string) {
         m.blockedReason !== 'Both players withdrawn: no contest; no winner or score recorded',
     )
   )
-    issues.push('Resolve every pool match before generating finals.')
+    issues.push('Resolve every pool match before generating finals.');
   const brackets = view.divisions.flatMap((division) => {
     if (division.pools.some((pool) => pool.members.some((member) => member.place === null)))
-      issues.push(`Confirm every ${division.division} pool order first.`)
-    const championshipIds = new Set(division.championship.map((p) => p.playerId))
+      issues.push(`Confirm every ${division.division} pool order first.`);
+    const championshipIds = new Set(division.championship.map((p) => p.playerId));
     const finishers = division.pools.flatMap((pool) =>
       pool.members
         .filter((member) => championshipIds.has(member.playerId))
@@ -113,10 +113,10 @@ export async function previewNativeBrackets(db: Db, planId: string) {
           poolIndex: pool.poolIndex,
           place: index + 3,
         })),
-    )
+    );
     // The same seed-integrity repair used for consolation avoids immediate
     // pool rematches for championship qualifiers, including uneven fields.
-    const main = finishers.length ? buildConsolationBracket(finishers).entrants : []
+    const main = finishers.length ? buildConsolationBracket(finishers).entrants : [];
     return [
       {
         division: division.division,
@@ -128,8 +128,8 @@ export async function previewNativeBrackets(db: Db, planId: string) {
         stage: 'consolation' as const,
         entrantIds: division.consolation?.entrants.map((p) => p.playerId) ?? [],
       },
-    ].map((bracket) => ({ ...bracket, roundOne: pairSlots(nativeDraw(bracket.entrantIds)) }))
-  })
+    ].map((bracket) => ({ ...bracket, roundOne: pairSlots(nativeDraw(bracket.entrantIds)) }));
+  });
   return {
     allowed: issues.length === 0,
     issues,
@@ -145,13 +145,13 @@ export async function previewNativeBrackets(db: Db, planId: string) {
       reports,
       existing: existing.map((b) => b.id),
     }),
-  }
+  };
 }
 function pairSlots(slots: (string | null)[]) {
   return Array.from({ length: slots.length / 2 }, (_, i) => ({
     player1Id: slots[i * 2]!,
     player2Id: slots[i * 2 + 1]!,
-  }))
+  }));
 }
 
 export async function generateNativeBrackets(
@@ -161,17 +161,17 @@ export async function generateNativeBrackets(
   revisionToken: string,
 ) {
   return db.transaction(async (tx) => {
-    await lockEvent(tx, planId)
-    await requireOperator(tx, planId, user)
-    const preview = await previewNativeBrackets(tx, planId)
+    await lockEvent(tx, planId);
+    await requireOperator(tx, planId, user);
+    const preview = await previewNativeBrackets(tx, planId);
     if (preview.revisionToken !== revisionToken)
-      reject('The event changed since this finals preview. Preview again.')
-    if (!preview.allowed) reject(preview.issues.join(' '))
+      reject('The event changed since this finals preview. Preview again.');
+    if (!preview.allowed) reject(preview.issues.join(' '));
     // Remove child dependencies before deleting an entirely unplayed draw.
     const old = await tx
       .select()
       .from(eventNativeBrackets)
-      .where(eq(eventNativeBrackets.eventPlanId, planId))
+      .where(eq(eventNativeBrackets.eventPlanId, planId));
     if (old.length) {
       await tx
         .update(eventMatches)
@@ -181,8 +181,8 @@ export async function generateNativeBrackets(
             eventMatches.nativeBracketId,
             old.map((b) => b.id),
           ),
-        )
-      await tx.delete(eventNativeBrackets).where(eq(eventNativeBrackets.eventPlanId, planId))
+        );
+      await tx.delete(eventNativeBrackets).where(eq(eventNativeBrackets.eventPlanId, planId));
     }
     for (const bracket of preview.brackets) {
       const [created] = await tx
@@ -193,17 +193,17 @@ export async function generateNativeBrackets(
           stage: bracket.stage,
           entrantIds: bracket.entrantIds,
         })
-        .returning()
-      let previous: string[] = []
-      const slots = nativeDraw(bracket.entrantIds)
+        .returning();
+      let previous: string[] = [];
+      const slots = nativeDraw(bracket.entrantIds);
       for (let width = slots.length / 2, round = 1; width >= 1; width /= 2, round++) {
-        const current: string[] = []
+        const current: string[] = [];
         for (let slot = 0; slot < width; slot++) {
-          const id = randomUUID()
-          current.push(id)
-          const p1 = round === 1 ? (slots[slot * 2] ?? null) : null
-          const p2 = round === 1 ? (slots[slot * 2 + 1] ?? null) : null
-          const bye = round === 1 && Boolean(p1) !== Boolean(p2)
+          const id = randomUUID();
+          current.push(id);
+          const p1 = round === 1 ? (slots[slot * 2] ?? null) : null;
+          const p2 = round === 1 ? (slots[slot * 2 + 1] ?? null) : null;
+          const bye = round === 1 && Boolean(p1) !== Boolean(p2);
           await tx.insert(eventMatches).values({
             id,
             eventPlanId: planId,
@@ -222,20 +222,20 @@ export async function generateNativeBrackets(
             outcome: bye ? 'bye' : null,
             winnerId: bye ? (p1 ?? p2) : null,
             blockedReason: round > 1 ? 'Waiting for previous round winners' : null,
-          })
+          });
         }
-        previous = current
+        previous = current;
       }
     }
-    await advanceNativeBrackets(tx, planId)
+    await advanceNativeBrackets(tx, planId);
     await tx.insert(eventAttendanceAudit).values({
       eventPlanId: planId,
       userId: user.id,
       action: 'native_finals_generated',
       details: { brackets: preview.brackets },
-    })
-    return { created: preview.brackets.length }
-  })
+    });
+    return { created: preview.brackets.length };
+  });
 }
 
 /** Called within the same event lock as score entry and report approval. */
@@ -243,10 +243,10 @@ export async function assertNativeCorrectionAllowed(
   db: Db,
   match: typeof eventMatches.$inferSelect,
 ) {
-  const [plan] = await db.select().from(eventPlans).where(eq(eventPlans.id, match.eventPlanId))
-  if (plan?.bracketMode !== 'native') return
+  const [plan] = await db.select().from(eventPlans).where(eq(eventPlans.id, match.eventPlanId));
+  if (plan?.bracketMode !== 'native') return;
   if (match.sourceSetId)
-    reject('These native results have been finalized for ratings and cannot be edited.')
+    reject('These native results have been finalized for ratings and cannot be edited.');
   const brackets = await db
     .select()
     .from(eventNativeBrackets)
@@ -255,24 +255,24 @@ export async function assertNativeCorrectionAllowed(
         eq(eventNativeBrackets.eventPlanId, match.eventPlanId),
         eq(eventNativeBrackets.division, match.division),
       ),
-    )
+    );
   if (match.stage === 'group' && brackets.length)
     reject(
       'Finals already use this pool order. Rebuild the unplayed finals before correcting pool results.',
-    )
-  if (!match.nativeBracketId) return
-  if (match.outcome === 'bye') reject('Automatic bracket byes are fixed by the draw.')
+    );
+  if (!match.nativeBracketId) return;
+  if (match.outcome === 'bye') reject('Automatic bracket byes are fixed by the draw.');
   const all = await db
     .select()
     .from(eventMatches)
-    .where(eq(eventMatches.nativeBracketId, match.nativeBracketId))
+    .where(eq(eventMatches.nativeBracketId, match.nativeBracketId));
   const parents = [match.parent1MatchId, match.parent2MatchId].filter((id): id is string =>
     Boolean(id),
-  )
+  );
   if (parents.some((id) => !all.some((parent) => parent.id === id && resolved(parent))))
     reject(
       'Previous round matches must be resolved before recording this native result. An unresolved opponent is not a bye.',
-    )
+    );
   const audit = all.length
     ? await db
         .select()
@@ -283,7 +283,7 @@ export async function assertNativeCorrectionAllowed(
             all.map((m) => m.id),
           ),
         )
-    : []
+    : [];
   const started = new Set(
     audit
       .filter(
@@ -292,8 +292,8 @@ export async function assertNativeCorrectionAllowed(
           (a.before as { status?: string }).status === 'playing',
       )
       .map((a) => a.matchId),
-  )
-  const downstream = new Set([match.id])
+  );
+  const downstream = new Set([match.id]);
   for (const item of all.sort((a, b) => (a.nativeRound ?? 0) - (b.nativeRound ?? 0))) {
     if (downstream.has(item.parent1MatchId ?? '') || downstream.has(item.parent2MatchId ?? '')) {
       if (
@@ -305,8 +305,8 @@ export async function assertNativeCorrectionAllowed(
         item.liveScore2 !== null ||
         started.has(item.id)
       )
-        reject('A downstream match has started. Its feeder result cannot be changed.')
-      downstream.add(item.id)
+        reject('A downstream match has started. Its feeder result cannot be changed.');
+      downstream.add(item.id);
     }
   }
 }
@@ -315,12 +315,12 @@ export async function advanceNativeBrackets(db: Db, planId: string) {
     .select()
     .from(eventMatches)
     .where(eq(eventMatches.eventPlanId, planId))
-    .orderBy(asc(eventMatches.nativeRound))
+    .orderBy(asc(eventMatches.nativeRound));
   const withdrawn = new Set(
     (await db.select().from(eventWithdrawals).where(eq(eventWithdrawals.eventPlanId, planId))).map(
       (w) => w.playerId,
     ),
-  )
+  );
   const audit = all.length
     ? await db
         .select()
@@ -331,7 +331,7 @@ export async function advanceNativeBrackets(db: Db, planId: string) {
             all.map((m) => m.id),
           ),
         )
-    : []
+    : [];
   const started = new Set(
     audit
       .filter(
@@ -340,17 +340,17 @@ export async function advanceNativeBrackets(db: Db, planId: string) {
           (a.before as { status?: string }).status === 'playing',
       )
       .map((a) => a.matchId),
-  )
-  const byId = new Map(all.map((m) => [m.id, m]))
+  );
+  const byId = new Map(all.map((m) => [m.id, m]));
   for (const match of all) {
-    if (!match.nativeBracketId || !match.parent1MatchId || !match.parent2MatchId) continue
-    const a = byId.get(match.parent1MatchId)!
-    const b = byId.get(match.parent2MatchId)!
-    const p1 = a.status === 'complete' ? a.winnerId : null
-    const p2 = b.status === 'complete' ? b.winnerId : null
-    const parentsResolved = resolved(a) && resolved(b)
-    const vacancy = parentsResolved && (!p1 || !p2)
-    if (p1 === match.player1Id && p2 === match.player2Id && (!vacancy || resolved(match))) continue
+    if (!match.nativeBracketId || !match.parent1MatchId || !match.parent2MatchId) continue;
+    const a = byId.get(match.parent1MatchId)!;
+    const b = byId.get(match.parent2MatchId)!;
+    const p1 = a.status === 'complete' ? a.winnerId : null;
+    const p2 = b.status === 'complete' ? b.winnerId : null;
+    const parentsResolved = resolved(a) && resolved(b);
+    const vacancy = parentsResolved && (!p1 || !p2);
+    if (p1 === match.player1Id && p2 === match.player2Id && (!vacancy || resolved(match))) continue;
     if (
       match.status === 'playing' ||
       match.status === 'complete' ||
@@ -358,10 +358,10 @@ export async function advanceNativeBrackets(db: Db, planId: string) {
       match.liveScore2 !== null ||
       started.has(match.id)
     )
-      reject('Cannot alter participants after downstream play starts.')
-    const held = (p1 !== null && withdrawn.has(p1)) || (p2 !== null && withdrawn.has(p2))
-    const empty = vacancy && [p1, p2].every((id) => !id || withdrawn.has(id))
-    const bye = vacancy && Boolean(p1 ?? p2) && !held
+      reject('Cannot alter participants after downstream play starts.');
+    const held = (p1 !== null && withdrawn.has(p1)) || (p2 !== null && withdrawn.has(p2));
+    const empty = vacancy && [p1, p2].every((id) => !id || withdrawn.has(id));
+    const bye = vacancy && Boolean(p1 ?? p2) && !held;
     const [updated] = await db
       .update(eventMatches)
       .set({
@@ -380,22 +380,22 @@ export async function advanceNativeBrackets(db: Db, planId: string) {
         revision: match.revision + 1,
       })
       .where(eq(eventMatches.id, match.id))
-      .returning()
-    byId.set(match.id, updated!)
+      .returning();
+    byId.set(match.id, updated!);
   }
 }
 export async function nativeBracketViews(db: Db, planId: string) {
   const brackets = await db
     .select()
     .from(eventNativeBrackets)
-    .where(eq(eventNativeBrackets.eventPlanId, planId))
-  const matches = await db.select().from(eventMatches).where(eq(eventMatches.eventPlanId, planId))
+    .where(eq(eventNativeBrackets.eventPlanId, planId));
+  const matches = await db.select().from(eventMatches).where(eq(eventMatches.eventPlanId, planId));
   return brackets.map((bracket) => {
-    const rounds = matches.filter((m) => m.nativeBracketId === bracket.id)
-    const maxRound = Math.max(0, ...rounds.map((m) => m.nativeRound ?? 0))
-    const final = rounds.find((m) => m.nativeRound === maxRound)
-    const complete = bracket.entrantIds.length === 0 || (final !== undefined && resolved(final))
-    const winnerId = complete ? (final?.winnerId ?? null) : null
+    const rounds = matches.filter((m) => m.nativeBracketId === bracket.id);
+    const maxRound = Math.max(0, ...rounds.map((m) => m.nativeRound ?? 0));
+    const final = rounds.find((m) => m.nativeRound === maxRound);
+    const complete = bracket.entrantIds.length === 0 || (final !== undefined && resolved(final));
+    const winnerId = complete ? (final?.winnerId ?? null) : null;
     const standings = !complete
       ? []
       : rounds.flatMap((m) =>
@@ -407,15 +407,15 @@ export async function nativeBracketViews(db: Db, planId: string) {
                 },
               ]
             : [],
-        )
-    if (winnerId) standings.push({ playerId: winnerId, place: 1 })
+        );
+    if (winnerId) standings.push({ playerId: winnerId, place: 1 });
     return {
       ...bracket,
       complete,
       winnerId,
       standings: standings.sort((a, b) => a.place - b.place),
-    }
-  })
+    };
+  });
 }
 
 export async function resetNativeBrackets(
@@ -425,16 +425,16 @@ export async function resetNativeBrackets(
   revisionToken: string,
 ) {
   return db.transaction(async (tx) => {
-    await lockEvent(tx, planId)
-    await requireOperator(tx, planId, user)
-    const preview = await previewNativeBrackets(tx, planId)
+    await lockEvent(tx, planId);
+    await requireOperator(tx, planId, user);
+    const preview = await previewNativeBrackets(tx, planId);
     if (revisionToken !== preview.revisionToken)
-      reject('The event changed; preview again before removing finals.')
-    if (!preview.resetAllowed) reject(preview.resetIssues.join(' '))
+      reject('The event changed; preview again before removing finals.');
+    if (!preview.resetAllowed) reject(preview.resetIssues.join(' '));
     const brackets = await tx
       .select()
       .from(eventNativeBrackets)
-      .where(eq(eventNativeBrackets.eventPlanId, planId))
+      .where(eq(eventNativeBrackets.eventPlanId, planId));
     if (brackets.length) {
       await tx
         .update(eventMatches)
@@ -444,35 +444,40 @@ export async function resetNativeBrackets(
             eventMatches.nativeBracketId,
             brackets.map((b) => b.id),
           ),
-        )
-      await tx.delete(eventNativeBrackets).where(eq(eventNativeBrackets.eventPlanId, planId))
+        );
+      await tx.delete(eventNativeBrackets).where(eq(eventNativeBrackets.eventPlanId, planId));
     }
     await tx.insert(eventAttendanceAudit).values({
       eventPlanId: planId,
       userId: user.id,
       action: 'native_finals_reset',
       details: { removed: brackets.length },
-    })
-    return { removed: brackets.length }
-  })
+    });
+    return { removed: brackets.length };
+  });
 }
 
 /** Finalize exactly once into the existing ratings/history pipeline, without a remote service. */
 export async function finalizeNativeEvent(db: Db, user: SessionUser, planId: string) {
   return db.transaction(async (tx) => {
-    const [plan] = await tx.select().from(eventPlans).where(eq(eventPlans.id, planId)).for('update')
-    if (!plan || plan.bracketMode !== 'native') reject('Only a native event can be finalized here.')
-    await requireOperator(tx, planId, user)
-    if (plan.status === 'complete') return { alreadyFinalized: true }
-    if (!['pools_ready', 'underway'].includes(plan.status)) reject('The event is not open.')
-    const brackets = await nativeBracketViews(tx, planId)
+    const [plan] = await tx
+      .select()
+      .from(eventPlans)
+      .where(eq(eventPlans.id, planId))
+      .for('update');
+    if (!plan || plan.bracketMode !== 'native')
+      reject('Only a native event can be finalized here.');
+    await requireOperator(tx, planId, user);
+    if (plan.status === 'complete') return { alreadyFinalized: true };
+    if (!['pools_ready', 'underway'].includes(plan.status)) reject('The event is not open.');
+    const brackets = await nativeBracketViews(tx, planId);
     if (brackets.length !== 4 || brackets.some((b) => !b.complete))
-      reject('Complete championship and consolation in both divisions before finalizing.')
+      reject('Complete championship and consolation in both divisions before finalizing.');
     const all = await tx
       .select()
       .from(eventMatches)
       .where(eq(eventMatches.eventPlanId, planId))
-      .orderBy(asc(eventMatches.sourceKey))
+      .orderBy(asc(eventMatches.sourceKey));
     if (
       all.some(
         (m) =>
@@ -480,28 +485,28 @@ export async function finalizeNativeEvent(db: Db, user: SessionUser, planId: str
           m.blockedReason !== 'Both players withdrawn: no contest; no winner or score recorded',
       )
     )
-      reject('Resolve all remaining matches before finalizing.')
+      reject('Resolve all remaining matches before finalizing.');
     const reports = await tx
       .select()
       .from(eventScoreReports)
       .where(
         and(eq(eventScoreReports.eventPlanId, planId), eq(eventScoreReports.status, 'pending')),
-      )
-    if (reports.length) reject('Review pending player reports before finalizing.')
+      );
+    if (reports.length) reject('Review pending player reports before finalizing.');
     for (const bracket of brackets) {
       const matches = all.filter(
         (m) =>
           m.division === bracket.division &&
           (m.nativeBracketId === bracket.id || (bracket.stage === 'main' && m.stage === 'group')),
-      )
-      if (!matches.length && !bracket.entrantIds.length) continue
-      const slug = `nemesis_${planId.replaceAll('-', '')}_${bracket.division}_${bracket.stage}`
+      );
+      if (!matches.length && !bracket.entrantIds.length) continue;
+      const slug = `nemesis_${planId.replaceAll('-', '')}_${bracket.division}_${bracket.stage}`;
       const existing = await tx
         .select()
         .from(tournaments)
-        .where(eq(tournaments.challongeSlug, slug))
+        .where(eq(tournaments.challongeSlug, slug));
       if (existing.length)
-        reject('An internal results record already exists. Reconcile it before finalizing.')
+        reject('An internal results record already exists. Reconcile it before finalizing.');
       const [tournament] = await tx
         .insert(tournaments)
         .values({
@@ -514,7 +519,7 @@ export async function finalizeNativeEvent(db: Db, user: SessionUser, planId: str
           syncState: 'synced',
           raw: { provider: 'native', eventPlanId: planId, tournamentType: 'single elimination' },
         })
-        .returning()
+        .returning();
       const playerIds = [
         ...new Set([
           ...bracket.entrantIds,
@@ -522,10 +527,10 @@ export async function finalizeNativeEvent(db: Db, user: SessionUser, planId: str
             [m.player1Id, m.player2Id].filter((id): id is string => Boolean(id)),
           ),
         ]),
-      ]
+      ];
       const names = playerIds.length
         ? await tx.select().from(players).where(inArray(players.id, playerIds))
-        : []
+        : [];
       const participants = playerIds.length
         ? await tx
             .insert(tournamentParticipants)
@@ -540,9 +545,9 @@ export async function finalizeNativeEvent(db: Db, user: SessionUser, planId: str
               })),
             )
             .returning()
-        : []
+        : [];
       const participantId = (playerId: string | null) =>
-        participants.find((p) => p.playerId === playerId)?.id ?? null
+        participants.find((p) => p.playerId === playerId)?.id ?? null;
       for (const [index, match] of matches.entries()) {
         const [stored] = await tx
           .insert(sets)
@@ -566,11 +571,11 @@ export async function finalizeNativeEvent(db: Db, user: SessionUser, planId: str
             completedAt: match.resultUpdatedAt ?? new Date(),
             raw: { provider: 'native', eventMatchId: match.id, outcome: match.outcome },
           })
-          .returning()
+          .returning();
         await tx
           .update(eventMatches)
           .set({ sourceSetId: stored!.id, syncState: 'synced' })
-          .where(eq(eventMatches.id, match.id))
+          .where(eq(eventMatches.id, match.id));
       }
       await tx
         .update(eventPlanBrackets)
@@ -581,12 +586,12 @@ export async function finalizeNativeEvent(db: Db, user: SessionUser, planId: str
             eq(eventPlanBrackets.division, bracket.division),
             eq(eventPlanBrackets.stage, bracket.stage),
           ),
-        )
+        );
     }
     await tx
       .update(eventPlans)
       .set({ status: 'complete', updatedAt: new Date() })
-      .where(eq(eventPlans.id, planId))
-    return { alreadyFinalized: false }
-  })
+      .where(eq(eventPlans.id, planId));
+    return { alreadyFinalized: false };
+  });
 }

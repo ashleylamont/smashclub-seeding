@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react'
-import type { EventPlanIssue } from '../../../lib/apiTypes'
+import { useState, type ReactNode } from 'react';
+import type { EventPlanIssue } from '../../../lib/apiTypes';
 
 /**
  * Bits every step of the planner needs. The theme running through them is that
@@ -19,22 +19,22 @@ export function CopyBlock({
   rows = 6,
   hint,
 }: {
-  label: string
-  text: string
-  rows?: number
-  hint?: ReactNode
+  label: string;
+  text: string;
+  rows?: number;
+  hint?: ReactNode;
 }) {
-  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(text)
-      setState('copied')
-      setTimeout(() => setState('idle'), 1500)
+      await navigator.clipboard.writeText(text);
+      setState('copied');
+      setTimeout(() => setState('idle'), 1500);
     } catch {
-      setState('failed')
+      setState('failed');
     }
-  }
+  };
 
   return (
     <div className="copy-block">
@@ -63,7 +63,7 @@ export function CopyBlock({
         spellCheck={false}
       />
     </div>
-  )
+  );
 }
 
 /** Blocking problems and warnings, each linking to the rows it is about. */
@@ -72,11 +72,11 @@ export function IssueList({
   kind,
   onFocusRows,
 }: {
-  issues: EventPlanIssue[]
-  kind: 'blocking' | 'warning'
-  onFocusRows?: (entryIds: string[]) => void
+  issues: EventPlanIssue[];
+  kind: 'blocking' | 'warning';
+  onFocusRows?: (entryIds: string[]) => void;
 }) {
-  if (issues.length === 0) return null
+  if (issues.length === 0) return null;
   return (
     <div className={`banner ${kind === 'blocking' ? 'banner-danger' : 'banner-warning'}`}>
       <strong>{kind === 'blocking' ? 'Fix before freezing' : 'Worth a look'}</strong>
@@ -97,5 +97,5 @@ export function IssueList({
         ))}
       </ul>
     </div>
-  )
+  );
 }

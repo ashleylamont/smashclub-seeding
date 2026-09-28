@@ -13,14 +13,14 @@
 
 export interface Character {
   /** Stable identifier — stored in the DB and used as the icon filename. */
-  slug: string
+  slug: string;
   /** Display label. */
-  name: string
+  name: string;
   /**
    * Alternate spellings the icon fetcher matches on, for fighters whose wiki
    * file name differs from their display name.
    */
-  aka?: string[]
+  aka?: string[];
 }
 
 /**
@@ -135,22 +135,22 @@ export const CHARACTERS: Character[] = [
   { slug: 'mythra', name: 'Mythra' },
   { slug: 'kazuya', name: 'Kazuya' },
   { slug: 'sora', name: 'Sora' },
-]
+];
 
 /** How many characters one player may pin. Keeps the leaderboard row legible. */
-export const MAX_CHARACTERS_PER_PLAYER = 4
+export const MAX_CHARACTERS_PER_PLAYER = 4;
 
-const BY_SLUG = new Map(CHARACTERS.map((character) => [character.slug, character]))
+const BY_SLUG = new Map(CHARACTERS.map((character) => [character.slug, character]));
 
 export function isCharacterSlug(slug: string): boolean {
-  return BY_SLUG.has(slug)
+  return BY_SLUG.has(slug);
 }
 
 export function characterBySlug(slug: string): Character | undefined {
-  return BY_SLUG.get(slug)
+  return BY_SLUG.get(slug);
 }
 
 /** Display label for a slug, falling back to the raw slug for unknown values. */
 export function characterName(slug: string): string {
-  return BY_SLUG.get(slug)?.name ?? slug
+  return BY_SLUG.get(slug)?.name ?? slug;
 }

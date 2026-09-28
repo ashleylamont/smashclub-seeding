@@ -10,14 +10,14 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
-} from 'drizzle-orm/pg-core'
-import { sql } from 'drizzle-orm'
-import { user } from './auth'
+} from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { user } from './auth';
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-}
+};
 
 // ---------------------------------------------------------------------------
 // Company taxonomy (was hardcoded COMPANY_CODES/COMPANY_ALIASES)
@@ -28,7 +28,7 @@ export const companies = pgTable('companies', {
   code: text('code').notNull().unique(),
   name: text('name').notNull(),
   ...timestamps,
-})
+});
 
 export const companyAliases = pgTable(
   'company_aliases',
@@ -41,13 +41,13 @@ export const companyAliases = pgTable(
     ...timestamps,
   },
   (table) => [uniqueIndex('company_aliases_alias_norm_idx').on(table.aliasNorm)],
-)
+);
 
 // ---------------------------------------------------------------------------
 // Players and identity
 // ---------------------------------------------------------------------------
 
-export const playerStatusEnum = pgEnum('player_status', ['active', 'merged'])
+export const playerStatusEnum = pgEnum('player_status', ['active', 'merged']);
 
 export const players = pgTable('players', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -60,7 +60,7 @@ export const players = pgTable('players', {
   status: playerStatusEnum('status').notNull().default('active'),
   mergedIntoPlayerId: uuid('merged_into_player_id'),
   ...timestamps,
-})
+});
 
 export const aliasSourceEnum = pgEnum('alias_source', [
   'registry',
@@ -68,7 +68,7 @@ export const aliasSourceEnum = pgEnum('alias_source', [
   'structured',
   'manual',
   'merge_decision',
-])
+]);
 
 export const playerAliases = pgTable(
   'player_aliases',
@@ -89,7 +89,7 @@ export const playerAliases = pgTable(
       sql`coalesce(${table.companyId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
     ),
   ],
-)
+);
 
 /**
  * Fighters a player mains, shown as head icons beside their name. Ordered by
@@ -114,9 +114,12 @@ export const playerCharacters = pgTable(
   (table) => [
     uniqueIndex('player_characters_player_slug_idx').on(table.playerId, table.characterSlug),
   ],
-)
+);
 
-export const identityDecisionKindEnum = pgEnum('identity_decision_kind', ['merge', 'keep_separate'])
+export const identityDecisionKindEnum = pgEnum('identity_decision_kind', [
+  'merge',
+  'keep_separate',
+]);
 
 /**
  * Durable record of human identity decisions (replaces the legacy alias
@@ -146,14 +149,14 @@ export const identityDecisions = pgTable(
       sql`coalesce(${table.keptSeparateFromPlayerId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
     ),
   ],
-)
+);
 
 export const claimStatusEnum = pgEnum('claim_status', [
   'pending',
   'approved',
   'rejected',
   'revoked',
-])
+]);
 
 /**
  * User <-> player links. Many users may hold approved claims on one player
@@ -181,7 +184,7 @@ export const playerClaims = pgTable(
       .on(table.userId)
       .where(sql`${table.status} in ('pending', 'approved')`),
   ],
-)
+);
 
 // ---------------------------------------------------------------------------
 // Tournaments and sets (the source of truth)
@@ -193,10 +196,10 @@ export const syncStateEnum = pgEnum('sync_state', [
   'live',
   'synced',
   'error',
-])
+]);
 
-export type TournamentResultsMode = 'auto' | 'final_stage_only'
-export type SetResultStage = 'group' | 'final'
+export type TournamentResultsMode = 'auto' | 'final_stage_only';
+export type SetResultStage = 'group' | 'final';
 
 export const tournaments = pgTable('tournaments', {
   provider: text('provider').$type<'challonge' | 'native'>().notNull().default('challonge'),
@@ -235,7 +238,7 @@ export const tournaments = pgTable('tournaments', {
   syncError: text('sync_error'),
   raw: jsonb('raw'),
   ...timestamps,
-})
+});
 
 export const tournamentParticipants = pgTable(
   'tournament_participants',
@@ -260,7 +263,7 @@ export const tournamentParticipants = pgTable(
       table.challongeParticipantId,
     ),
   ],
-)
+);
 
 export const sets = pgTable(
   'sets',
@@ -298,13 +301,13 @@ export const sets = pgTable(
   (table) => [
     uniqueIndex('sets_challonge_match_idx').on(table.tournamentId, table.challongeMatchId),
   ],
-)
+);
 
 // ---------------------------------------------------------------------------
 // Derived ratings (recomputable from sets)
 // ---------------------------------------------------------------------------
 
-export const recomputeStatusEnum = pgEnum('recompute_status', ['running', 'complete', 'failed'])
+export const recomputeStatusEnum = pgEnum('recompute_status', ['running', 'complete', 'failed']);
 
 export const recomputes = pgTable('recomputes', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -319,7 +322,7 @@ export const recomputes = pgTable('recomputes', {
   stats: jsonb('stats'),
   startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
   finishedAt: timestamp('finished_at', { withTimezone: true }),
-})
+});
 
 export const ratingEvents = pgTable('rating_events', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -354,7 +357,7 @@ export const ratingEvents = pgTable('rating_events', {
    */
   revisedRating: doublePrecision('revised_rating'),
   revisedSd: doublePrecision('revised_sd'),
-})
+});
 
 export const playerRatings = pgTable(
   'player_ratings',
@@ -429,18 +432,18 @@ export const playerRatings = pgTable(
   (table) => [
     uniqueIndex('player_ratings_recompute_player_idx').on(table.recomputeId, table.playerId),
   ],
-)
+);
 
 // ---------------------------------------------------------------------------
 // Review queue (replaces the blocking CLI prompts)
 // ---------------------------------------------------------------------------
 
-export const reviewStatusEnum = pgEnum('review_status', ['pending', 'resolved', 'dismissed'])
+export const reviewStatusEnum = pgEnum('review_status', ['pending', 'resolved', 'dismissed']);
 export const reviewResolutionEnum = pgEnum('review_resolution', [
   'linked_existing',
   'created_new',
   'kept_separate',
-])
+]);
 
 export const reviewItems = pgTable(
   'review_items',
@@ -477,13 +480,13 @@ export const reviewItems = pgTable(
       .on(table.tournamentParticipantId)
       .where(sql`${table.status} = 'pending'`),
   ],
-)
+);
 
 // ---------------------------------------------------------------------------
 // Seeding runs
 // ---------------------------------------------------------------------------
 
-export const seedingRunStatusEnum = pgEnum('seeding_run_status', ['draft', 'pushed', 'stale'])
+export const seedingRunStatusEnum = pgEnum('seeding_run_status', ['draft', 'pushed', 'stale']);
 
 export const seedingRuns = pgTable('seeding_runs', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -496,7 +499,7 @@ export const seedingRuns = pgTable('seeding_runs', {
   pushedAt: timestamp('pushed_at', { withTimezone: true }),
   pushLog: jsonb('push_log'),
   ...timestamps,
-})
+});
 
 export const seedingEntries = pgTable(
   'seeding_entries',
@@ -518,7 +521,7 @@ export const seedingEntries = pgTable(
   (table) => [
     uniqueIndex('seeding_entries_run_participant_idx').on(table.runId, table.participantId),
   ],
-)
+);
 
 // ---------------------------------------------------------------------------
 // Event plans (the two-division club night, planned before Challonge exists)
@@ -542,43 +545,43 @@ export const eventPlanStatusEnum = pgEnum('event_plan_status', [
   'underway',
   'complete',
   'cancelled',
-])
+]);
 
 export interface HistoricalAdoptionBracket {
-  division: 'upper' | 'lower'
-  stage: 'main' | 'consolation'
-  tournamentId: string
-  name: string
-  slug: string
-  participantCount: number
-  previousSlug: string | null
+  division: 'upper' | 'lower';
+  stage: 'main' | 'consolation';
+  tournamentId: string;
+  name: string;
+  slug: string;
+  participantCount: number;
+  previousSlug: string | null;
 }
 export interface HistoricalAdoptionDifferences {
-  plannedOnly: { name: string; playerId: string | null }[]
-  actualOnly: { name: string; playerId: string | null }[]
+  plannedOnly: { name: string; playerId: string | null }[];
+  actualOnly: { name: string; playerId: string | null }[];
   divisionChanges: {
-    name: string
-    playerId: string
-    plannedDivision: 'upper' | 'lower'
-    actualDivision: 'upper' | 'lower'
-  }[]
+    name: string;
+    playerId: string;
+    plannedDivision: 'upper' | 'lower';
+    actualDivision: 'upper' | 'lower';
+  }[];
 }
 export interface HistoricalAdoptionRecord {
-  adoptedAt: string
-  adoptedBy: string
-  previousStatus: string
+  adoptedAt: string;
+  adoptedBy: string;
+  previousStatus: string;
   previousBrackets: {
-    division: 'upper' | 'lower'
-    stage: 'main' | 'consolation'
-    tournamentId: string | null
-    challongeSlug: string | null
-  }[]
-  brackets: HistoricalAdoptionBracket[]
-  differences: HistoricalAdoptionDifferences
-  warnings: string[]
+    division: 'upper' | 'lower';
+    stage: 'main' | 'consolation';
+    tournamentId: string | null;
+    challongeSlug: string | null;
+  }[];
+  brackets: HistoricalAdoptionBracket[];
+  differences: HistoricalAdoptionDifferences;
+  warnings: string[];
 }
 export interface HistoricalAdoption extends HistoricalAdoptionRecord {
-  history: HistoricalAdoptionRecord[]
+  history: HistoricalAdoptionRecord[];
 }
 
 export const eventPlans = pgTable('event_plans', {
@@ -609,14 +612,14 @@ export const eventPlans = pgTable('event_plans', {
   }),
   createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
   ...timestamps,
-})
+});
 
-export const eventPlanDivisionEnum = pgEnum('event_plan_division', ['upper', 'lower'])
+export const eventPlanDivisionEnum = pgEnum('event_plan_division', ['upper', 'lower']);
 export const eventPlanDivisionPreferenceEnum = pgEnum('event_plan_division_preference', [
   'auto',
   'upper',
   'lower',
-])
+]);
 /**
  * How a roster row came to point at a player. Mirrors the sync-time pipeline's
  * outcomes (`identity/resolve.ts`) plus the two only a human can produce.
@@ -628,7 +631,7 @@ export const eventPlanResolutionEnum = pgEnum('event_plan_resolution', [
   'manual',
   'new',
   'unresolved',
-])
+]);
 
 export const eventPlanEntries = pgTable(
   'event_plan_entries',
@@ -665,9 +668,9 @@ export const eventPlanEntries = pgTable(
       .on(table.eventPlanId, table.assignedDivision, table.divisionSeed)
       .where(sql`${table.assignedDivision} is not null and ${table.divisionSeed} is not null`),
   ],
-)
+);
 
-export const eventPlanStageEnum = pgEnum('event_plan_stage', ['main', 'consolation'])
+export const eventPlanStageEnum = pgEnum('event_plan_stage', ['main', 'consolation']);
 /**
  * How far a bracket has got in the handoff. `draft` is "we know we need this
  * one"; `attached` is "an admin pasted a slug back"; `verified` is "we read the
@@ -679,7 +682,7 @@ export const eventPlanBracketStateEnum = pgEnum('event_plan_bracket_state', [
   'attached',
   'verified',
   'error',
-])
+]);
 
 export const eventPlanBrackets = pgTable(
   'event_plan_brackets',
@@ -700,12 +703,12 @@ export const eventPlanBrackets = pgTable(
   (table) => [
     uniqueIndex('event_plan_brackets_slot_idx').on(table.eventPlanId, table.division, table.stage),
   ],
-)
+);
 
 export const eventPlanPlacementSourceEnum = pgEnum('event_plan_placement_source', [
   'manual',
   'challonge',
-])
+]);
 
 /**
  * Confirmed 1-4 order within one pool. Manual for the first event: round-robin
@@ -742,13 +745,13 @@ export const eventPlanPoolPlacements = pgTable(
       table.place,
     ),
   ],
-)
+);
 
 // ---------------------------------------------------------------------------
 // Job log + settings
 // ---------------------------------------------------------------------------
 
-export const jobStatusEnum = pgEnum('job_status', ['running', 'complete', 'failed'])
+export const jobStatusEnum = pgEnum('job_status', ['running', 'complete', 'failed']);
 
 export const syncJobs = pgTable('sync_jobs', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -759,11 +762,11 @@ export const syncJobs = pgTable('sync_jobs', {
   stats: jsonb('stats'),
   startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
   finishedAt: timestamp('finished_at', { withTimezone: true }),
-})
+});
 
 export const settings = pgTable('settings', {
   id: integer('id').primaryKey().default(1),
   glicko: jsonb('glicko').notNull(),
   version: integer('version').notNull().default(1),
   ...timestamps,
-})
+});

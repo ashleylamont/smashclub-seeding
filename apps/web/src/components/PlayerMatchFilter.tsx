@@ -1,13 +1,13 @@
-import type { PublicPlayer } from '../lib/playerSelection'
+import type { PublicPlayer } from '../lib/playerSelection';
 
 export function PlayerMatchFilter({
   players,
   value,
   onChange,
 }: {
-  players: PublicPlayer[]
-  value: string
-  onChange: (id: string) => void
+  players: PublicPlayer[];
+  value: string;
+  onChange: (id: string) => void;
 }) {
   return (
     <div className="card">
@@ -32,5 +32,5 @@ export function PlayerMatchFilter({
         identity. Choose All players to browse everyone’s matches.
       </p>
     </div>
-  )
+  );
 }

@@ -1,32 +1,32 @@
-import { useState } from 'react'
+import { useState } from 'react';
 import {
   findEventPlayers,
   playerEventStatus,
   type FinderData,
   type FinderMatch,
-} from '../../lib/toPlayerFinder'
-import { poolTitle } from '../../lib/poolFlow'
-import './ToPlayerFinder.css'
+} from '../../lib/toPlayerFinder';
+import { poolTitle } from '../../lib/poolFlow';
+import './ToPlayerFinder.css';
 
 export function ToPlayerFinder({
   data,
   onMatch,
   onPool,
 }: {
-  data: FinderData
-  onMatch: (id: string) => void
-  onPool: (key: string) => void
+  data: FinderData;
+  onMatch: (id: string) => void;
+  onPool: (key: string) => void;
 }) {
-  const [query, setQuery] = useState('')
-  const [selected, setSelected] = useState<string | null>(null)
-  const results = findEventPlayers(data, query)
-  const player = results.find((item) => item.id === selected)
-  const status = player ? playerEventStatus(data, player.id) : null
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<string | null>(null);
+  const results = findEventPlayers(data, query);
+  const player = results.find((item) => item.id === selected);
+  const status = player ? playerEventStatus(data, player.id) : null;
   const matchLink = (match: FinderMatch, title: string) => (
     <button className="btn btn-small" onClick={() => onMatch(match.id)}>
       {title}
     </button>
-  )
+  );
   return (
     <section className="card to-player-finder" aria-labelledby="to-player-finder-heading">
       <div>
@@ -42,8 +42,8 @@ export function ToPlayerFinder({
           placeholder="Search event entrants"
           value={query}
           onChange={(event) => {
-            setQuery(event.target.value)
-            setSelected(null)
+            setQuery(event.target.value);
+            setSelected(null);
           }}
         />
       </label>
@@ -51,7 +51,7 @@ export function ToPlayerFinder({
         <div className="to-player-results" aria-live="polite">
           {!results.length && <p>No event players match that name.</p>}
           {results.slice(0, 12).map((item) => {
-            const info = playerEventStatus(data, item.id)
+            const info = playerEventStatus(data, item.id);
             return (
               <button
                 className="to-player-result"
@@ -74,7 +74,7 @@ export function ToPlayerFinder({
                   <small>Player ID …{item.id.slice(-8)}</small>
                 )}
               </button>
-            )
+            );
           })}
           {results.length > 12 && <p>{results.length} matches. Keep typing to narrow the list.</p>}
         </div>
@@ -185,5 +185,5 @@ export function ToPlayerFinder({
         </div>
       )}
     </section>
-  )
+  );
 }

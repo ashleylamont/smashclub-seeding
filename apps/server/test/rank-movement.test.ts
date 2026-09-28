@@ -1,14 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { and, eq } from 'drizzle-orm'
-import { playerRatings, players, tournaments, type Db } from '@smashclub/db'
-import { importRegistryPlayers, registerTournamentSlugs } from '../src/bootstrap/importRegistry'
-import { syncTournament } from '../src/sync/sync'
-import { runRecompute } from '../src/recompute/recompute'
-import { RecomputeTrigger } from '../src/recompute/trigger'
-import { loadEnv } from '../src/env'
-import { appRouter } from '../src/trpc/router'
-import { createTestDb } from './helpers/testDb'
-import { fixtureClient, type FixtureTournament } from './helpers/challongeFixtures'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { and, eq } from 'drizzle-orm';
+import { playerRatings, players, tournaments, type Db } from '@smashclub/db';
+import { importRegistryPlayers, registerTournamentSlugs } from '../src/bootstrap/importRegistry';
+import { syncTournament } from '../src/sync/sync';
+import { runRecompute } from '../src/recompute/recompute';
+import { RecomputeTrigger } from '../src/recompute/trigger';
+import { loadEnv } from '../src/env';
+import { appRouter } from '../src/trpc/router';
+import { createTestDb } from './helpers/testDb';
+import { fixtureClient, type FixtureTournament } from './helpers/challongeFixtures';
 
 /**
  * Rank movement is movement over the club's most recent night.
@@ -20,8 +20,8 @@ import { fixtureClient, type FixtureTournament } from './helpers/challongeFixtur
  * column says depends on the games played, not on how often the pipeline ran.
  */
 
-let db: Db
-let close: () => Promise<void>
+let db: Db;
+let close: () => Promise<void>;
 
 const night1: FixtureTournament = {
   slug: 'night1',
@@ -38,7 +38,7 @@ const night1: FixtureTournament = {
     { id: 12, p1: 1, p2: 3, winner: 1, order: 2 },
     { id: 13, p1: 2, p2: 3, winner: 2, order: 3 },
   ],
-}
+};
 
 /** A month later, Samus turns the head-to-head around decisively. */
 const night2: FixtureTournament = {
@@ -58,35 +58,35 @@ const night2: FixtureTournament = {
     { id: 23, p1: 2, p2: 1, winner: 2, order: 3 },
     { id: 24, p1: 3, p2: 1, winner: 3, order: 4 },
   ],
-}
+};
 
-const ALL = [night1, night2]
+const ALL = [night1, night2];
 
 beforeEach(async () => {
-  ;({ db, close } = await createTestDb())
+  ({ db, close } = await createTestDb());
   await importRegistryPlayers(db, [
     { id: 'fox-mccloud', canonical_name: 'Fox McCloud', company: 'ATL' },
     { id: 'samus-aran', canonical_name: 'Samus Aran', company: 'ATL' },
     { id: 'kirby', canonical_name: 'Kirby', company: 'ATL' },
-  ])
+  ]);
   await registerTournamentSlugs(
     db,
     ALL.map((t) => t.slug),
-  )
-})
+  );
+});
 
 afterEach(async () => {
-  await close()
-})
+  await close();
+});
 
 async function sync(slugs: string[]): Promise<void> {
-  const client = fixtureClient(ALL)
+  const client = fixtureClient(ALL);
   for (const slug of slugs) {
     const [row] = await db
       .select({ id: tournaments.id })
       .from(tournaments)
-      .where(eq(tournaments.challongeSlug, slug))
-    await syncTournament(db, client, row!.id)
+      .where(eq(tournaments.challongeSlug, slug));
+    await syncTournament(db, client, row!.id);
   }
 }
 
@@ -94,8 +94,8 @@ async function playerId(canonicalName: string): Promise<string> {
   const [row] = await db
     .select({ id: players.id })
     .from(players)
-    .where(eq(players.canonicalName, canonicalName))
-  return row!.id
+    .where(eq(players.canonicalName, canonicalName));
+  return row!.id;
 }
 
 /** rank and previousRank by player name, from a recompute's stored board. */
@@ -110,10 +110,10 @@ async function board(
     })
     .from(playerRatings)
     .innerJoin(players, eq(playerRatings.playerId, players.id))
-    .where(eq(playerRatings.recomputeId, recomputeId))
+    .where(eq(playerRatings.recomputeId, recomputeId));
   return new Map(
     rows.map((row) => [row.canonicalName, { rank: row.rank, previousRank: row.previousRank }]),
-  )
+  );
 }
 
 /** What the board actually publishes, through the real router. */
@@ -122,15 +122,15 @@ async function publicDeltas(): Promise<Map<string, number | null>> {
     NODE_ENV: 'test',
     DATABASE_URL: 'postgres://unused',
     BETTER_AUTH_SECRET: 'test-secret-test-secret-test',
-  })
+  });
   const caller = appRouter.createCaller({
     db,
     env,
     user: null,
     challonge: fixtureClient(ALL),
     recomputeTrigger: new RecomputeTrigger(db, 1_000_000),
-  })
-  const { rows } = await caller.public.leaderboard()
+  });
+  const { rows } = await caller.public.leaderboard();
   // Keyed on the canonical name, not the published one, so this map shares a
   // key space with board() above — the published name is the shortened alias,
   // and the canonical one never leaves the server on a public route, so the
@@ -139,64 +139,64 @@ async function publicDeltas(): Promise<Map<string, number | null>> {
     (await db.select({ id: players.id, canonicalName: players.canonicalName }).from(players)).map(
       (row) => [row.id, row.canonicalName],
     ),
-  )
-  return new Map(rows.map((row) => [canonicalById.get(row.playerId)!, row.rankDelta]))
+  );
+  return new Map(rows.map((row) => [canonicalById.get(row.playerId)!, row.rankDelta]));
 }
 
 describe('rank movement over the last club night', () => {
   it('has nothing to compare against on the first night', async () => {
-    await sync(['night1'])
-    const run = await runRecompute(db)
+    await sync(['night1']);
+    const run = await runRecompute(db);
 
     for (const [name, row] of await board(run.recomputeId)) {
-      expect(row.previousRank, name).toBeNull()
+      expect(row.previousRank, name).toBeNull();
     }
     for (const [name, delta] of await publicDeltas()) {
-      expect(delta, name).toBeNull()
+      expect(delta, name).toBeNull();
     }
-  })
+  });
 
   it('reports exactly the standings from before the latest night', async () => {
-    await sync(['night1'])
-    const first = await runRecompute(db)
-    const afterNight1 = await board(first.recomputeId)
+    await sync(['night1']);
+    const first = await runRecompute(db);
+    const afterNight1 = await board(first.recomputeId);
 
-    await sync(['night2'])
-    const second = await runRecompute(db)
-    const afterNight2 = await board(second.recomputeId)
+    await sync(['night2']);
+    const second = await runRecompute(db);
+    const afterNight2 = await board(second.recomputeId);
 
     // Every player's `previousRank` is the rank they actually held before the
     // night — the standings the earlier recompute published.
     for (const [name, row] of afterNight2) {
-      expect(row.previousRank, name).toBe(afterNight1.get(name)!.rank)
+      expect(row.previousRank, name).toBe(afterNight1.get(name)!.rank);
     }
     // And the night genuinely moved someone, so this is not a vacuous pass.
-    expect(afterNight1.get('Fox McCloud')!.rank).toBe(1)
-    expect(afterNight2.get('Samus Aran')!.rank).toBe(1)
+    expect(afterNight1.get('Fox McCloud')!.rank).toBe(1);
+    expect(afterNight2.get('Samus Aran')!.rank).toBe(1);
 
-    const deltas = await publicDeltas()
+    const deltas = await publicDeltas();
     expect(deltas.get('Samus Aran')).toBe(
       afterNight2.get('Samus Aran')!.previousRank! - afterNight2.get('Samus Aran')!.rank,
-    )
-    expect(deltas.get('Samus Aran')!).toBeGreaterThan(0)
-    expect(deltas.get('Fox McCloud')!).toBeLessThan(0)
-  })
+    );
+    expect(deltas.get('Samus Aran')!).toBeGreaterThan(0);
+    expect(deltas.get('Fox McCloud')!).toBeLessThan(0);
+  });
 
   it('does not forget the movement when the pipeline runs again', async () => {
-    await sync(['night1', 'night2'])
-    await runRecompute(db)
-    const before = await publicDeltas()
+    await sync(['night1', 'night2']);
+    await runRecompute(db);
+    const before = await publicDeltas();
 
     // A second recompute over the same games — what any resolved identity or
     // settings save triggers. Under the old recompute-diff this flattened every
     // arrow to "–" because the two most recent boards were identical.
-    const again = await runRecompute(db)
-    expect(await publicDeltas()).toEqual(before)
+    const again = await runRecompute(db);
+    expect(await publicDeltas()).toEqual(before);
 
-    const rows = await board(again.recomputeId)
-    expect(rows.get('Samus Aran')!.previousRank).not.toBeNull()
-    expect([...before.values()].some((delta) => (delta ?? 0) !== 0)).toBe(true)
-  })
+    const rows = await board(again.recomputeId);
+    expect(rows.get('Samus Aran')!.previousRank).not.toBeNull();
+    expect([...before.values()].some((delta) => (delta ?? 0) !== 0)).toBe(true);
+  });
 
   it('withholds the whole event, not just one bracket of it', async () => {
     // A rookie bracket on the same evening as the main one: a player who only
@@ -213,19 +213,19 @@ describe('rank movement over the last club night', () => {
         { id: 2, name: '[ATL] Samus Aran' },
       ],
       matches: [{ id: 31, p1: 1, p2: 2, winner: 1, order: 1 }],
-    }
-    await registerTournamentSlugs(db, ['night2-rookie'])
-    const client = fixtureClient([...ALL, sameNightRookie])
+    };
+    await registerTournamentSlugs(db, ['night2-rookie']);
+    const client = fixtureClient([...ALL, sameNightRookie]);
     for (const slug of ['night1', 'night2', 'night2-rookie']) {
       const [row] = await db
         .select({ id: tournaments.id })
         .from(tournaments)
-        .where(eq(tournaments.challongeSlug, slug))
-      await syncTournament(db, client, row!.id)
+        .where(eq(tournaments.challongeSlug, slug));
+      await syncTournament(db, client, row!.id);
     }
 
-    const withRookie = await runRecompute(db)
-    const rows = await board(withRookie.recomputeId)
+    const withRookie = await runRecompute(db);
+    const rows = await board(withRookie.recomputeId);
 
     // Withholding only the main bracket would leave the rookie set in the
     // "before" board, so Kirby's win over Samus would already be counted on
@@ -238,8 +238,8 @@ describe('rank movement over the last club night', () => {
           eq(playerRatings.recomputeId, withRookie.recomputeId),
           eq(playerRatings.playerId, await playerId('Kirby')),
         ),
-      )
-    expect(kirbyBefore!.previousRank).toBe(rows.get('Kirby')!.previousRank)
-    expect(rows.get('Kirby')!.previousRank).toBe(3) // bottom of the night-one board
-  })
-})
+      );
+    expect(kirbyBefore!.previousRank).toBe(rows.get('Kirby')!.previousRank);
+    expect(rows.get('Kirby')!.previousRank).toBe(3); // bottom of the night-one board
+  });
+});

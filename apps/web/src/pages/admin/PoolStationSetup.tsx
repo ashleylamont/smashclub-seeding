@@ -1,45 +1,45 @@
-import { useState } from 'react'
-import { trpc } from '../../lib/trpc'
-import { poolStandings } from '../../lib/eventQueue'
-import { distributePoolStations, nextPoolWave, poolLabel } from '../../lib/poolStationPlan'
-type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>
-type Action = (work: () => Promise<unknown>, message?: string) => Promise<void>
+import { useState } from 'react';
+import { trpc } from '../../lib/trpc';
+import { poolStandings } from '../../lib/eventQueue';
+import { distributePoolStations, nextPoolWave, poolLabel } from '../../lib/poolStationPlan';
+type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
+type Action = (work: () => Promise<unknown>, message?: string) => Promise<void>;
 export function PoolStationSetup({
   data,
   disabled,
   act,
 }: {
-  data: Overview
-  disabled: boolean
-  act: Action
+  data: Overview;
+  disabled: boolean;
+  act: Action;
 }) {
-  const [perPool, setPerPool] = useState(2)
-  const [selected, setSelected] = useState(data.stations.map((station) => station.id))
-  const [selfRun, setSelfRun] = useState(data.plan.bracketMode === 'native')
-  const [autoAcceptScores, setAutoAcceptScores] = useState(true)
-  const [preview, setPreview] = useState<ReturnType<typeof distributePoolStations> | null>(null)
-  const pools = poolStandings(data.matches)
+  const [perPool, setPerPool] = useState(2);
+  const [selected, setSelected] = useState(data.stations.map((station) => station.id));
+  const [selfRun, setSelfRun] = useState(data.plan.bracketMode === 'native');
+  const [autoAcceptScores, setAutoAcceptScores] = useState(true);
+  const [preview, setPreview] = useState<ReturnType<typeof distributePoolStations> | null>(null);
+  const pools = poolStandings(data.matches);
   const stationOptions = [...data.stations].sort(
     (a, b) =>
       a.name.localeCompare(b.name, undefined, { numeric: true }) || a.id.localeCompare(b.id),
-  )
+  );
   const proposed = distributePoolStations(
     pools,
     stationOptions.filter((station) => selected.includes(station.id)).map((station) => station.id),
     perPool,
     data.poolSchedules,
     { selfRun, autoAcceptScores },
-  )
+  );
   const nextWave = nextPoolWave(
     pools,
     data.poolSchedules,
     data.stations.filter((station) => station.status === 'occupied').map((station) => station.id),
-  )
-  const playing = data.matches.some((match) => match.status === 'playing')
+  );
+  const playing = data.matches.some((match) => match.status === 'playing');
   const stationNames = (ids: string[]) =>
     ids
       .map((id) => data.stations.find((station) => station.id === id)?.name ?? 'Station')
-      .join(' + ')
+      .join(' + ');
   return (
     <div className="ops-pool-setup">
       <details>
@@ -72,8 +72,8 @@ export function PoolStationSetup({
                     event.target.checked
                       ? [...selected, station.id]
                       : selected.filter((id) => id !== station.id),
-                  )
-                  setPreview(null)
+                  );
+                  setPreview(null);
                 }}
               />
               {station.name}
@@ -87,8 +87,8 @@ export function PoolStationSetup({
             value={perPool}
             disabled={disabled || playing}
             onChange={(event) => {
-              setPerPool(Number(event.target.value))
-              setPreview(null)
+              setPerPool(Number(event.target.value));
+              setPreview(null);
             }}
           >
             {[1, 2, 3, 4].map((count) => (
@@ -107,8 +107,8 @@ export function PoolStationSetup({
             checked={selfRun}
             disabled={disabled || playing || data.plan.bracketMode !== 'native'}
             onChange={(event) => {
-              setSelfRun(event.target.checked)
-              setPreview(null)
+              setSelfRun(event.target.checked);
+              setPreview(null);
             }}
           />
           Let players start their pool’s next matches
@@ -119,8 +119,8 @@ export function PoolStationSetup({
             checked={selfRun && autoAcceptScores}
             disabled={disabled || playing || !selfRun}
             onChange={(event) => {
-              setAutoAcceptScores(event.target.checked)
-              setPreview(null)
+              setAutoAcceptScores(event.target.checked);
+              setPreview(null);
             }}
           />
           Accept player scores immediately in these pools
@@ -175,8 +175,8 @@ export function PoolStationSetup({
                       autoAcceptScores: pool.autoAcceptScores,
                       expectedRevision: pool.expectedRevision,
                     })),
-                  })
-                  setPreview(null)
+                  });
+                  setPreview(null);
                 }, 'Pool stations and round-robin queues ready')
               }
             >
@@ -210,5 +210,5 @@ export function PoolStationSetup({
         </div>
       )}
     </div>
-  )
+  );
 }

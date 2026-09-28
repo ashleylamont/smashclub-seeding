@@ -1,34 +1,34 @@
-import type { LiveMatch } from '../lib/eventDisplay'
-import { poolStandings } from '../lib/eventQueue'
-import { CharacterIcons } from './CharacterIcons'
+import type { LiveMatch } from '../lib/eventDisplay';
+import { poolStandings } from '../lib/eventQueue';
+import { CharacterIcons } from './CharacterIcons';
 
 export type DisplayStation = {
-  id: string
-  name: string
-  status?: 'free' | 'occupied'
-  currentMatchId?: string | null
-}
+  id: string;
+  name: string;
+  status?: 'free' | 'occupied';
+  currentMatchId?: string | null;
+};
 export type PoolSchedule = {
-  division: string
-  poolIndex: number
-  active: boolean
-  stationIds: string[]
-}
+  division: string;
+  poolIndex: number;
+  active: boolean;
+  stationIds: string[];
+};
 export type NativeBracketView = {
-  id: string
-  division: string
-  stage: string
-  entrantIds: string[]
-  complete: boolean
-  winnerId: string | null
-  standings: { playerId: string; place: number }[]
-}
+  id: string;
+  division: string;
+  stage: string;
+  entrantIds: string[];
+  complete: boolean;
+  winnerId: string | null;
+  standings: { playerId: string; place: number }[];
+};
 export function EventStations({
   stations,
   matches,
 }: {
-  stations: DisplayStation[]
-  matches: LiveMatch[]
+  stations: DisplayStation[];
+  matches: LiveMatch[];
 }) {
   return (
     <section className="event-stations">
@@ -40,8 +40,8 @@ export function EventStations({
               station.currentMatchId
                 ? item.id === station.currentMatchId
                 : item.stationId === station.id && item.status === 'playing',
-            )
-            const occupied = station.status === 'occupied' || Boolean(match)
+            );
+            const occupied = station.status === 'occupied' || Boolean(match);
             return (
               <article
                 className={`event-station ${occupied ? 'is-occupied' : ''}`}
@@ -63,7 +63,7 @@ export function EventStations({
                   <p>Ask a TO for your next match.</p>
                 )}
               </article>
-            )
+            );
           })}
         </div>
       ) : (
@@ -72,19 +72,19 @@ export function EventStations({
         </p>
       )}
     </section>
-  )
+  );
 }
 export function EventPools({
   matches,
   schedules,
   stations,
 }: {
-  matches: LiveMatch[]
-  schedules: PoolSchedule[]
-  stations: DisplayStation[]
+  matches: LiveMatch[];
+  schedules: PoolSchedule[];
+  stations: DisplayStation[];
 }) {
-  const pools = poolStandings(matches)
-  if (!pools.length) return null
+  const pools = poolStandings(matches);
+  if (!pools.length) return null;
   return (
     <section className="event-pool-progress">
       <h2>Pool progress & standings</h2>
@@ -96,11 +96,11 @@ export function EventPools({
         {pools.map((pool) => {
           const schedule = schedules.find(
             (item) => item.division === pool.division && item.poolIndex === pool.poolIndex,
-          )
+          );
           const names =
             schedule?.stationIds
               .map((id) => stations.find((item) => item.id === id)?.name)
-              .filter(Boolean) ?? []
+              .filter(Boolean) ?? [];
           return (
             <article className="event-pool" key={`${pool.division}:${pool.poolIndex}`}>
               <header>
@@ -147,11 +147,11 @@ export function EventPools({
                     {pool.players.map((player) => {
                       const match = matches.find(
                         (item) => item.player1Id === player.id || item.player2Id === player.id,
-                      )
+                      );
                       const characters =
                         match?.player1Id === player.id
                           ? match.player1Characters
-                          : match?.player2Characters
+                          : match?.player2Characters;
                       return (
                         <tr key={player.id}>
                           <th scope="row">
@@ -166,17 +166,17 @@ export function EventPools({
                           </td>
                           <td>{player.remaining}</td>
                         </tr>
-                      )
+                      );
                     })}
                   </tbody>
                 </table>
               </div>
             </article>
-          )
+          );
         })}
       </div>
     </section>
-  )
+  );
 }
 export function EventBrackets({
   brackets,
@@ -184,22 +184,22 @@ export function EventBrackets({
   entrants,
   linked,
 }: {
-  brackets: NativeBracketView[]
-  matches: LiveMatch[]
-  entrants: { id: string; name: string }[]
-  linked: { division: string; stage: string; slug: string | null }[]
+  brackets: NativeBracketView[];
+  matches: LiveMatch[];
+  entrants: { id: string; name: string }[];
+  linked: { division: string; stage: string; slug: string | null }[];
 }) {
-  if (!brackets.length && !linked.some((item) => item.slug)) return null
-  const names = new Map(entrants.map((player) => [player.id, player.name]))
-  const labels = new Map(matches.map((match) => [match.id, match.label]))
+  if (!brackets.length && !linked.some((item) => item.slug)) return null;
+  const names = new Map(entrants.map((player) => [player.id, player.name]));
+  const labels = new Map(matches.map((match) => [match.id, match.label]));
   return (
     <section className="event-brackets">
       <h2>Brackets</h2>
       {brackets.map((bracket) => {
-        const games = matches.filter((match) => match.nativeBracketId === bracket.id)
+        const games = matches.filter((match) => match.nativeBracketId === bracket.id);
         const rounds = [...new Set(games.map((match) => match.nativeRound ?? 0))].sort(
           (a, b) => a - b,
-        )
+        );
         return (
           <article className="event-bracket" key={bracket.id}>
             <header>
@@ -300,7 +300,7 @@ export function EventBrackets({
               </p>
             )}
           </article>
-        )
+        );
       })}
       {linked.some((item) => item.slug) && (
         <nav className="event-bracket-links" aria-label="Challonge brackets">
@@ -321,5 +321,5 @@ export function EventBrackets({
         </nav>
       )}
     </section>
-  )
+  );
 }

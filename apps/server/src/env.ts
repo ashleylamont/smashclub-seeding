@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z } from 'zod';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -59,10 +59,10 @@ const envSchema = z.object({
   WEB_DIST_DIR: z.string().optional(),
   /** Drizzle SQL migrations folder, applied at startup. */
   MIGRATIONS_DIR: z.string().default('./migrations'),
-})
+});
 
-export type Env = z.infer<typeof envSchema>
+export type Env = z.infer<typeof envSchema>;
 
 export function loadEnv(source: Record<string, string | undefined> = process.env): Env {
-  return envSchema.parse(source)
+  return envSchema.parse(source);
 }

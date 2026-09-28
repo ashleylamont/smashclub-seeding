@@ -1,14 +1,14 @@
-import { describe, expect, it } from 'vitest'
-import { ChallongeClient } from '../src/challonge/client'
+import { describe, expect, it } from 'vitest';
+import { ChallongeClient } from '../src/challonge/client';
 
 const MODULE_HTML =
   '<title>Example - Challonge</title>' +
-  '<script>window._initialStoreState[\'TournamentStore\'] = {"tournament":{"id":7,"state":"complete"},"matches_by_round":{}};</script>'
+  '<script>window._initialStoreState[\'TournamentStore\'] = {"tournament":{"id":7,"state":"complete"},"matches_by_round":{}};</script>';
 
 describe('ChallongeClient public bracket requests', () => {
   it('supplements two-stage API imports with pools while retaining API placements', async () => {
-    const rootPlayer = { id: 1, display_name: 'Alpha', seed: 1 }
-    const opponent = { id: 2, display_name: 'Bravo', seed: 2 }
+    const rootPlayer = { id: 1, display_name: 'Alpha', seed: 1 };
+    const opponent = { id: 2, display_name: 'Bravo', seed: 2 };
     const final = {
       id: 20,
       state: 'complete',
@@ -16,7 +16,7 @@ describe('ChallongeClient public bracket requests', () => {
       player1: rootPlayer,
       player2: opponent,
       scores: [2, 1],
-    }
+    };
     const group = {
       id: 10,
       state: 'complete',
@@ -24,52 +24,52 @@ describe('ChallongeClient public bracket requests', () => {
       scores: [1, 2],
       player1: { ...rootPlayer, id: 101, participant_id: 1 },
       player2: { ...opponent, id: 102, participant_id: 2 },
-    }
+    };
     const store = {
       tournament: { id: 7, state: 'complete' },
       matches_by_round: { '1': [final] },
       groups: [{ tournament: { id: 70 }, matches_by_round: { '1': [group] } }],
-    }
-    const requests: string[] = []
+    };
+    const requests: string[] = [];
     const client = new ChallongeClient({
       apiKey: 'test-key',
       username: 'test-user',
       minRequestSpacingMs: 0,
       fetchImpl: async (input) => {
-        const url = new URL(String(input))
-        requests.push(url.pathname)
+        const url = new URL(String(input));
+        requests.push(url.pathname);
         if (url.pathname.endsWith('/module')) {
           return new Response(
             `<script>window._initialStoreState['TournamentStore'] = ${JSON.stringify(store)};</script>`,
-          )
+          );
         }
         if (url.pathname.endsWith('/participants.json')) {
           return Response.json([
             { participant: { id: 1, name: 'Alpha API', seed: 1, final_rank: 1 } },
-          ])
+          ]);
         }
-        if (url.pathname.endsWith('/matches.json')) return Response.json([])
+        if (url.pathname.endsWith('/matches.json')) return Response.json([]);
         return Response.json({
           tournament: { id: 7, name: 'Example', group_stage_enabled: true, state: 'complete' },
-        })
+        });
       },
-    })
-    const bundle = await client.fetchTournamentBundle('example')
-    expect(requests).toContain('/example/module')
-    expect(bundle.matches.map((match) => match.stage)).toEqual(['group', 'final'])
+    });
+    const bundle = await client.fetchTournamentBundle('example');
+    expect(requests).toContain('/example/module');
+    expect(bundle.matches.map((match) => match.stage)).toEqual(['group', 'final']);
     expect(bundle.matches[0]).toMatchObject({
       player1Id: 1,
       player2Id: 2,
       winnerId: 2,
       sourcePlayer1Id: 101,
       sourcePlayer2Id: 102,
-    })
+    });
     expect(bundle.participants.find((p) => p.id === 1)).toMatchObject({
       displayName: 'Alpha API',
       finalRank: 1,
-    })
-    expect(bundle.participants.find((p) => p.id === 2)).toBeDefined()
-  })
+    });
+    expect(bundle.participants.find((p) => p.id === 2)).toBeDefined();
+  });
 
   /**
    * Regression guard. The client sends `Accept: application/json` for the API,
@@ -80,49 +80,49 @@ describe('ChallongeClient public bracket requests', () => {
    * 20 requests failed with application/json, 0 of 12 with text/html.
    */
   it('requests the module page as HTML, not JSON', async () => {
-    let headers: Record<string, string> | undefined
+    let headers: Record<string, string> | undefined;
     const client = new ChallongeClient({
       minRequestSpacingMs: 0,
       fetchImpl: async (_input, init) => {
-        headers = init?.headers as Record<string, string>
-        return new Response(MODULE_HTML, { status: 200 })
+        headers = init?.headers as Record<string, string>;
+        return new Response(MODULE_HTML, { status: 200 });
       },
-    })
+    });
 
-    await client.fetchPublicBracket('example')
-    expect(headers?.Accept).toBe('text/html')
-  })
+    await client.fetchPublicBracket('example');
+    expect(headers?.Accept).toBe('text/html');
+  });
 
   it('hits the /module endpoint on the public host', async () => {
-    let url = ''
+    let url = '';
     const client = new ChallongeClient({
       minRequestSpacingMs: 0,
       fetchImpl: async (input) => {
-        url = String(input)
-        return new Response(MODULE_HTML, { status: 200 })
+        url = String(input);
+        return new Response(MODULE_HTML, { status: 200 });
       },
-    })
+    });
 
-    await client.fetchPublicBracket('example')
-    expect(url).toBe('https://challonge.com/example/module')
-  })
+    await client.fetchPublicBracket('example');
+    expect(url).toBe('https://challonge.com/example/module');
+  });
 
   it('does not retry a 429 — the quota is monthly, not a burst limit', async () => {
-    let calls = 0
+    let calls = 0;
     const client = new ChallongeClient({
       apiKey: 'k',
       username: 'u',
       minRequestSpacingMs: 0,
       fetchImpl: async () => {
-        calls += 1
-        return new Response('{}', { status: 429 })
+        calls += 1;
+        return new Response('{}', { status: 429 });
       },
-    })
+    });
 
-    await expect(client.fetchTournamentBundle('example')).rejects.toThrow(/quota is exhausted/i)
-    expect(calls).toBe(1)
-  })
-})
+    await expect(client.fetchTournamentBundle('example')).rejects.toThrow(/quota is exhausted/i);
+    expect(calls).toBe(1);
+  });
+});
 
 it.each([undefined, 'underway', 'complete'])(
   'does not infer completion from finished pools (metadata %s)',
@@ -148,18 +148,18 @@ it.each([undefined, 'underway', 'complete'])(
           },
         },
       ],
-    }
+    };
     const client = new ChallongeClient({
       minRequestSpacingMs: 0,
       fetchImpl: async () =>
         new Response(
           `<script>window._initialStoreState['TournamentStore'] = ${JSON.stringify(store)};</script>`,
         ),
-    })
-    const bundle = await client.fetchPublicTournamentBundle('pool-night')
-    expect(bundle.tournament.state).toBe(state ?? 'unknown')
-    expect(bundle.tournament.groupStageEnabled).toBe(true)
-    expect(state === 'complete' || bundle.tournament.completedAt === null).toBe(true)
-    expect(bundle.matches).toHaveLength(1)
+    });
+    const bundle = await client.fetchPublicTournamentBundle('pool-night');
+    expect(bundle.tournament.state).toBe(state ?? 'unknown');
+    expect(bundle.tournament.groupStageEnabled).toBe(true);
+    expect(state === 'complete' || bundle.tournament.completedAt === null).toBe(true);
+    expect(bundle.matches).toHaveLength(1);
   },
-)
+);
