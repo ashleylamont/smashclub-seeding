@@ -1,5 +1,7 @@
 # Delight features — exploration & plan
 
+> Historical design plan. Recaps, live views and other features described here have since been implemented or changed. Use the [documentation index](README.md) for current behavior.
+
 A plan for the "fun layer" on top of the ranking machinery: post-tournament
 recaps, a big-screen live view for club nights, and smaller moments of delight
 on player pages. Everything here is grounded in data the app already stores —

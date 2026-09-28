@@ -1,15 +1,10 @@
 # Local tournament operations review
 
-Everything is on `codex/event-operations` in `.worktrees/codex-event-operations`. Main and production were not changed.
+> Historical rehearsal record. The branch, URLs, sample event IDs and operating limits below describe the original review session. For current event instructions, use [Run a club night](event-guide.md) and the [event desk guide](event-night-refinements.md).
 
 ## Open the rehearsal
 
-Start the local rehearsal at http://127.0.0.1:3311 using the command below. The server prints fresh event links on startup. The links below refer to the last local review session and may change after restart.
-
-- [Event control](http://127.0.0.1:3311/admin/event-operations?plan=cc77a595-1e27-47f4-8051-e7a81bfe9f91)
-- [Public event board](http://127.0.0.1:3311/live/cc77a595-1e27-47f4-8051-e7a81bfe9f91)
-- [OBS overlay](http://127.0.0.1:3311/overlay/cc77a595-1e27-47f4-8051-e7a81bfe9f91?station=Stage)
-- [Player score reporting](http://127.0.0.1:3311/play/cc77a595-1e27-47f4-8051-e7a81bfe9f91)
+Run the local harness with the command below. It prints a fresh sample event ID and links on startup. Use that ID with `/admin/event-operations?plan=<planId>`, `/live/<planId>`, `/overlay/<planId>` and `/play/<planId>`. The in-memory database resets on restart, so saved links from another session will not work.
 
 All local passwords are `devpassword123`:
 
