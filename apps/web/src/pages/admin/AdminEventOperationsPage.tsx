@@ -104,6 +104,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
   const data = event.data
   const closed = ['complete', 'cancelled'].includes(data.plan.status)
   const canSoftLock = data.plan.status === 'pools_ready' && !data.plan.softLockedAt
+  const canUnlock = data.plan.status === 'pools_ready' && Boolean(data.plan.softLockedAt)
   const disputes = data.reports.filter(
     (report) => report.status === 'pending' && report.isDispute,
   ).length
@@ -193,25 +194,54 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
       )}
       <section className="card ops-setup">
         <div>
-          <h3>Pool draw · {data.plan.softLockedAt ? 'Soft-locked' : 'Draft'}</h3>
+          <h3>Pool draw: {data.plan.softLockedAt ? 'Soft-locked' : 'Draft'}</h3>
           <p className="muted">
             {data.plan.softLockedAt
-              ? 'Existing players keep their pools and opponents. Additions go into one chosen pool; withdrawals leave other matches in place.'
-              : 'The roster and pools can still be rebalanced in the planner. Soft-lock when the TO is ready to preserve this draw.'}
+              ? 'The TO has committed to these pools and opponents. Late arrivals and no-shows change only their affected pools.'
+              : 'You can still change the roster and rebalance pools in the planner. A TO must explicitly soft-lock the draw before using local attendance changes.'}
           </p>
+          {data.plan.softLockedAt && (
+            <p className="muted">
+              Soft-locked {new Date(data.plan.softLockedAt).toLocaleString()}.
+            </p>
+          )}
         </div>
         {canSoftLock && (
           <button
             className="btn btn-primary"
             disabled={pending}
-            onClick={() =>
-              void act(
-                () => trpc.eventOps.softLockPools.mutate({ planId }),
-                'Pool draw soft-locked',
+            onClick={() => {
+              if (
+                window.confirm(
+                  'Soft-lock this pool draw? Existing players will keep their pools and opponents, and the initial match queue will be prepared.',
+                )
               )
-            }
+                void act(
+                  () => trpc.eventOps.softLockPools.mutate({ planId, confirm: true }),
+                  'Pool draw soft-locked',
+                )
+            }}
           >
-            Soft-lock pools
+            Soft-lock pool draw
+          </button>
+        )}
+        {canUnlock && (
+          <button
+            className="btn"
+            disabled={pending}
+            onClick={() => {
+              if (
+                window.confirm(
+                  'Return this pool draw to draft? This clears unplayed matches, saved pool assignments, and pool station settings. The planner may rebalance the pools. Recorded play and linked brackets cannot be cleared this way.',
+                )
+              )
+                void act(
+                  () => trpc.eventOps.unlockPools.mutate({ planId, confirm: true }),
+                  'Pool draw returned to draft. You can rebalance it in the planner.',
+                )
+            }}
+          >
+            Return draw to draft
           </button>
         )}
       </section>

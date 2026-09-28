@@ -42,6 +42,62 @@ export async function softLockPools(db: Db, actor: SessionUser, planId: string) 
         code: 'CONFLICT',
         message: 'Generate pools before soft-locking the draw.',
       })
+    const matches = await tx.select().from(eventMatches).where(eq(eventMatches.eventPlanId, planId))
+    const reports = await tx
+      .select()
+      .from(eventScoreReports)
+      .where(eq(eventScoreReports.eventPlanId, planId))
+      .limit(1)
+    const matchAudit = await tx
+      .select()
+      .from(eventMatchAudit)
+      .where(eq(eventMatchAudit.eventPlanId, planId))
+      .limit(1)
+    const placements = await tx
+      .select()
+      .from(eventPlanPoolPlacements)
+      .where(eq(eventPlanPoolPlacements.eventPlanId, planId))
+      .limit(1)
+    const withdrawals = await tx
+      .select()
+      .from(eventWithdrawals)
+      .where(eq(eventWithdrawals.eventPlanId, planId))
+      .limit(1)
+    const nativeBrackets = await tx
+      .select()
+      .from(eventNativeBrackets)
+      .where(eq(eventNativeBrackets.eventPlanId, planId))
+      .limit(1)
+    const brackets = await tx
+      .select()
+      .from(eventPlanBrackets)
+      .where(eq(eventPlanBrackets.eventPlanId, planId))
+    if (
+      matches.some(
+        (m) =>
+          m.stage !== 'group' ||
+          m.status === 'playing' ||
+          m.status === 'complete' ||
+          m.score1 !== null ||
+          m.score2 !== null ||
+          m.liveScore1 !== null ||
+          m.liveScore2 !== null ||
+          m.winnerId !== null ||
+          m.outcome !== null ||
+          m.sourceSetId !== null,
+      ) ||
+      reports.length ||
+      matchAudit.length ||
+      placements.length ||
+      withdrawals.length ||
+      nativeBrackets.length ||
+      brackets.some((b) => b.tournamentId || b.challongeSlug)
+    )
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message:
+          'Soft-lock the draw before play, score history, withdrawals, confirmed placements, or bracket handoff.',
+      })
     const view = (await getPlan(tx, planId))!
     if (
       view.divisions.some(
@@ -102,6 +158,92 @@ export async function softLockPools(db: Db, actor: SessionUser, planId: string) 
       },
     })
     return { softLockedAt: now.toISOString() }
+  })
+}
+/** Reopen a draw while every match and placement can still be safely discarded. */
+export async function unlockPools(db: Db, actor: SessionUser, planId: string) {
+  return db.transaction(async (tx) => {
+    const plan = await lockEvent(tx, planId)
+    await requireOperator(tx, planId, actor)
+    if (!plan.softLockedAt || plan.status !== 'pools_ready')
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'Only a soft-locked, pre-play pool draw can be returned to draft.',
+      })
+    const matches = await tx.select().from(eventMatches).where(eq(eventMatches.eventPlanId, planId))
+    const reports = await tx
+      .select()
+      .from(eventScoreReports)
+      .where(eq(eventScoreReports.eventPlanId, planId))
+      .limit(1)
+    const matchAudit = await tx
+      .select()
+      .from(eventMatchAudit)
+      .where(eq(eventMatchAudit.eventPlanId, planId))
+      .limit(1)
+    const placements = await tx
+      .select()
+      .from(eventPlanPoolPlacements)
+      .where(eq(eventPlanPoolPlacements.eventPlanId, planId))
+      .limit(1)
+    const withdrawals = await tx
+      .select()
+      .from(eventWithdrawals)
+      .where(eq(eventWithdrawals.eventPlanId, planId))
+      .limit(1)
+    const nativeBrackets = await tx
+      .select()
+      .from(eventNativeBrackets)
+      .where(eq(eventNativeBrackets.eventPlanId, planId))
+      .limit(1)
+    const brackets = await tx
+      .select()
+      .from(eventPlanBrackets)
+      .where(eq(eventPlanBrackets.eventPlanId, planId))
+    if (
+      matches.some(
+        (m) =>
+          m.stage !== 'group' ||
+          m.status === 'playing' ||
+          m.status === 'complete' ||
+          m.score1 !== null ||
+          m.score2 !== null ||
+          m.liveScore1 !== null ||
+          m.liveScore2 !== null ||
+          m.winnerId !== null ||
+          m.outcome !== null ||
+          m.sourceSetId !== null,
+      ) ||
+      reports.length ||
+      matchAudit.length ||
+      placements.length ||
+      withdrawals.length ||
+      nativeBrackets.length ||
+      brackets.some((b) => b.tournamentId || b.challongeSlug)
+    )
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message:
+          'The draw has play, score history, confirmed placements, withdrawals, or a linked bracket. It cannot be returned to draft.',
+      })
+    await tx.delete(eventMatches).where(eq(eventMatches.eventPlanId, planId))
+    await tx.delete(eventPoolAssignments).where(eq(eventPoolAssignments.eventPlanId, planId))
+    await tx.delete(eventPoolSchedules).where(eq(eventPoolSchedules.eventPlanId, planId))
+    const now = new Date()
+    await tx
+      .update(eventPlans)
+      .set({ softLockedAt: null, softLockedBy: null, updatedAt: now })
+      .where(eq(eventPlans.id, planId))
+    await tx.insert(eventAttendanceAudit).values({
+      eventPlanId: planId,
+      userId: actor.id,
+      action: 'soft_unlock',
+      details: {
+        removedMatches: matches.length,
+        previousSoftLockedAt: plan.softLockedAt.toISOString(),
+      },
+    })
+    return { removedMatches: matches.length }
   })
 }
 export async function previewAttendance(db: Db, input: AttendanceInput) {

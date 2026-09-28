@@ -395,7 +395,11 @@ function PlanWizard({
           <h2>
             {view.plan.name}{' '}
             <span className="chip">{STATUS_LABEL[view.plan.status] ?? view.plan.status}</span>{' '}
-            {view.plan.softLockedAt && <span className="chip">Pools soft-locked</span>}
+            {['pools_ready', 'underway'].includes(view.plan.status) && (
+              <span className="chip">
+                Pool draw: {view.plan.softLockedAt ? 'soft-locked' : 'draft'}
+              </span>
+            )}
           </h2>
           <span className="row-actions">
             {adopted ? (

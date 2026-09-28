@@ -28,7 +28,13 @@ import {
   updateMatch,
 } from './service'
 import { configurePools, configurePool, publishAnnouncement, updateLiveScore } from './controls'
-import { applyAttendance, previewAttendance, resetOperations, softLockPools } from './attendance'
+import {
+  applyAttendance,
+  previewAttendance,
+  resetOperations,
+  softLockPools,
+  unlockPools,
+} from './attendance'
 import { deleteStation, saveStation } from './stations'
 const attendanceInput = z.object({
   planId: z.string().uuid(),
@@ -105,8 +111,11 @@ export const eventOpsRouter = router({
     return previewAttendance(ctx.db, input)
   }),
   softLockPools: authedProcedure
-    .input(planInput)
+    .input(planInput.extend({ confirm: z.literal(true) }))
     .mutation(({ ctx, input }) => softLockPools(ctx.db, ctx.user, input.planId)),
+  unlockPools: authedProcedure
+    .input(planInput.extend({ confirm: z.literal(true) }))
+    .mutation(({ ctx, input }) => unlockPools(ctx.db, ctx.user, input.planId)),
   applyAttendance: authedProcedure
     .input(attendanceInput.extend({ revisionToken: z.string().min(1) }))
     .mutation(({ ctx, input }) => applyAttendance(ctx.db, ctx.user, input)),

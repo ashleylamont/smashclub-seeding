@@ -55,6 +55,12 @@
       }
     },
     {
+      "files": ["apps/server/test/event-operations.test.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 1100, "skipBlankLines": true, "skipComments": true }]
+      }
+    },
+    {
       "files": ["packages/shared/**/*.{ts,tsx}"],
       "rules": {
         "no-restricted-imports": ["error", { "patterns": ["@smashclub/*"] }]
@@ -104,7 +110,7 @@
     {
       "files": ["apps/server/src/event-operations/attendance.ts"],
       "rules": {
-        "max-lines": ["error", { "max": 700, "skipBlankLines": true, "skipComments": true }],
+        "max-lines": ["error", { "max": 850, "skipBlankLines": true, "skipComments": true }],
         "complexity": ["error", { "max": 75 }]
       }
     },
@@ -123,11 +129,12 @@
     {
       "files": ["apps/web/src/pages/admin/AdminEventOperationsPage.tsx"],
       "rules": {
-        "max-lines": ["error", { "max": 1150, "skipBlankLines": true, "skipComments": true }],
+        "max-lines": ["error", { "max": 1200, "skipBlankLines": true, "skipComments": true }],
         "max-lines-per-function": [
           "error",
-          { "max": 675, "skipBlankLines": true, "skipComments": true }
-        ]
+          { "max": 700, "skipBlankLines": true, "skipComments": true }
+        ],
+        "complexity": ["error", { "max": 60 }]
       }
     },
     {
