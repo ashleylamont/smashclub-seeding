@@ -43,14 +43,16 @@ The source of truth is [`apps/server/src/env.ts`](../apps/server/src/env.ts). Va
 | `PORT` | API port, default `3000`. |
 | `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` | Auth secret and public base URL for a real deployment. |
 | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | OAuth provider credentials. |
-| `ADMIN_EMAILS` | Comma-separated primary, verified account emails allowed to administer. |
+| `ADMIN_EMAILS` | Comma-separated verified primary emails allowed to bootstrap the first administrator. |
 | `CHALLONGE_API_KEY`, `CHALLONGE_USERNAME` | External sync and seeding integration. Native events do not need them. |
 | `CHALLONGE_SCORE_WRITES` | Explicit opt-in to send organiser scores upstream; defaults to `false`. Rehearse with a disposable Challonge tournament before enabling it. |
 | `WEB_DIST_DIR` | Built frontend directory when Fastify serves the SPA. |
 | `TRUST_PROXY` | Set to `true` only behind a trusted proxy so per-client live-feed limits use the forwarded address. |
 | `SSE_MAX_*` | Connection, per-IP, lifetime and buffered-byte limits for public live streams. |
 
-`ADMIN_EMAILS` is the admin allowlist. Each request reconciles the stored role with it, so removing an address revokes admin access for an existing session. Match the account's primary sign-up email; an address from a later linked provider does not count. The provider must report that email as verified. Users can link Discord and Google from `/me` after signing in with their original provider; signing in separately with a new provider creates a separate account.
+`ADMIN_EMAILS` bootstraps the first administrator when the database has no verified admin. The address must be the account's verified primary sign-up email; an address from a later linked provider does not count. After that first promotion, the stored account role controls access. Use **Admin → Admins** to promote a signed-in, verified account or remove an administrator. Changes take effect on that account's next API request, including in an open session. The last verified admin cannot be removed until another account is promoted. Changing `ADMIN_EMAILS` after bootstrap does not add or remove admins; it can be unset once the first admin has signed in.
+
+Users can link Discord and Google from `/me` after signing in with their original provider. Signing in separately with a new provider creates a separate account. Admin access follows the account across linked providers.
 
 ## Initial data
 
@@ -62,7 +64,7 @@ DATABASE_URL=postgres://... pnpm --filter @smashclub/import-registry start \
   --tournaments "$PWD/legacy/challonge_tournaments.txt"
 ```
 
-Then sign in with an `ADMIN_EMAILS` account, sync tournaments under **Admin → Tournaments**, and resolve unmatched entrants under **Admin → Review**. The scheduler also refreshes registered tournaments. Ratings recompute after eligible results and identity decisions change.
+Then sign in with a verified `ADMIN_EMAILS` bootstrap account, sync tournaments under **Admin → Tournaments**, and resolve unmatched entrants under **Admin → Review**. The scheduler also refreshes registered tournaments. Ratings recompute after eligible results and identity decisions change.
 
 ## Kubernetes
 
