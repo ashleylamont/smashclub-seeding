@@ -20,7 +20,7 @@ export function PoolsStep({ view, onChanged }: { view: EventPlanView; onChanged:
       <div className="page-header">
         <h3>Pools</h3>
         <span className="muted">
-          Balanced pools of three to five players, striped across seed order. Top two advance; everyone else enters consolation.
+          Balanced pools of three to five players, striped across seed order. The upper half, rounded up, advances; everyone else enters consolation.
         </span>
       </div>
       {view.divisions.map((division) => (

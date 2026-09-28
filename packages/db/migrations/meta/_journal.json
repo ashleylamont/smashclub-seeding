@@ -148,6 +148,13 @@
       "when": 1790558557289,
       "tag": "0020_ancient_sister_grimm",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790560000000,
+      "tag": "0021_reopen_unplayed_pool_draws",
+      "breakpoints": true
     }
   ]
 }

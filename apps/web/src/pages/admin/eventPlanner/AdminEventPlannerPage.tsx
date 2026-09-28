@@ -365,7 +365,7 @@ function PlanWizard({
       <div className="card section">
         <div className="page-header">
           <h2>
-            {view.plan.name} <span className="chip">{STATUS_LABEL[view.plan.status] ?? view.plan.status}</span> {view.plan.softLockedAt && <span className="chip">Pools soft-locked</span>}
+            {view.plan.name} <span className="chip">{STATUS_LABEL[view.plan.status] ?? view.plan.status}</span> {['pools_ready', 'underway'].includes(view.plan.status) && <span className="chip">Pool draw: {view.plan.softLockedAt ? 'soft-locked' : 'draft'}</span>}
           </h2>
           <span className="row-actions">
             {adopted ? resultsUrl && <a className="btn btn-small" href={resultsUrl}>Imported results →</a> : <a className="btn btn-small" href={`/admin/event-operations?plan=${planId}`}>Run event →</a>}
