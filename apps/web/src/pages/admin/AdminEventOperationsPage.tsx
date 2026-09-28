@@ -64,6 +64,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
   const data = event.data;
   const closed = ['complete', 'cancelled'].includes(data.plan.status);
   const canSoftLock = data.plan.status === 'pools_ready' && !data.plan.softLockedAt;
+  const canUnlock = data.plan.status === 'pools_ready' && !!data.plan.softLockedAt;
   const disputes = data.reports.filter(report => report.status === 'pending' && report.isDispute).length;
   const available = availableMatches(data.matches).filter(match => match.availability.canStart);
   const callable = new Set(available.map(match => match.id));
@@ -81,7 +82,23 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
     {event.isError && <div className="banner banner-warning" role="alert">Live updates interrupted. Last loaded data is shown. {event.error.message}</div>}
     {error && <div className="banner banner-danger" role="alert">{error}</div>}{notice && <p className="ops-notice" role="status">{notice}</p>}
     {disputes > 0 && <p className="banner banner-warning" role="status"><strong>{disputes} conflicting {disputes === 1 ? 'score needs' : 'scores need'} TO review.</strong> Recorded results stay in place. <a href="#score-submissions">Review disagreements →</a></p>}
-    <section className="card ops-setup"><div><h3>Pool draw · {data.plan.softLockedAt ? 'Soft-locked' : 'Draft'}</h3><p className="muted">{data.plan.softLockedAt ? 'Existing players keep their pools and opponents. Additions go into one chosen pool; withdrawals leave other matches in place.' : 'The roster and pools can still be rebalanced in the planner. Soft-lock when the TO is ready to preserve this draw.'}</p></div>{canSoftLock && <button className="btn btn-primary" disabled={pending} onClick={() => void act(() => trpc.eventOps.softLockPools.mutate({ planId }), 'Pool draw soft-locked')}>Soft-lock pools</button>}</section>
+    <section className="card ops-setup">
+      <div>
+        <h3>Pool draw: {data.plan.softLockedAt ? 'Soft-locked' : 'Draft'}</h3>
+        <p className="muted">{data.plan.softLockedAt
+          ? 'The TO has committed to these pools and opponents. Late arrivals and no-shows change only their affected pools.'
+          : 'You can still change the roster and rebalance pools in the planner. A TO must explicitly soft-lock the draw before using local attendance changes.'}</p>
+        {data.plan.softLockedAt && <p className="muted">Soft-locked {new Date(data.plan.softLockedAt).toLocaleString()}.</p>}
+      </div>
+      {canSoftLock && <button className="btn btn-primary" disabled={pending} onClick={() => {
+        if (window.confirm('Soft-lock this pool draw? Existing players will keep their pools and opponents, and the initial match queue will be prepared.'))
+          void act(() => trpc.eventOps.softLockPools.mutate({ planId, confirm: true }), 'Pool draw soft-locked');
+      }}>Soft-lock pool draw</button>}
+      {canUnlock && <button className="btn" disabled={pending} onClick={() => {
+        if (window.confirm('Return this pool draw to draft? This clears unplayed matches, saved pool assignments, and pool station settings. The planner may rebalance the pools. Recorded play and linked brackets cannot be cleared this way.'))
+          void act(() => trpc.eventOps.unlockPools.mutate({ planId, confirm: true }), 'Pool draw returned to draft. You can rebalance it in the planner.');
+      }}>Return draw to draft</button>}
+    </section>
     <ToPlayerFinder data={data} onMatch={id => { setFocusedMatchId(id); setSearch(''); setDivision('all'); setPoolFilter('all'); setFilter('all'); requestAnimationFrame(() => { const desk = document.getElementById('match-desk'); desk?.scrollIntoView({ behavior: 'smooth', block: 'center' }); desk?.focus({ preventScroll: true }); }); }} onPool={key => { setFocusedMatchId(null); setSearch(''); setPoolFilter(key); setDivision('all'); setFilter('all'); requestAnimationFrame(() => { const desk = document.getElementById('match-desk'); desk?.scrollIntoView({ behavior: 'smooth', block: 'center' }); desk?.focus({ preventScroll: true }); }); }} />
     <StationPoolControls data={data} disabled={pending || closed} act={act} onPool={key => { setFocusedMatchId(null); setSearch(''); setPoolFilter(key); setDivision('all'); setFilter('active'); document.getElementById('match-desk')?.scrollIntoView({ behavior: 'smooth' }); }} />
     <div className="ops-stats">{(['playing', 'ready', 'waiting', 'complete'] as const).map(status => <button key={status} className={`ops-stat ${filter === status ? 'selected' : ''}`} onClick={() => { setFocusedMatchId(null); setFilter(status); }}><strong>{status === 'ready' ? available.length : status === 'waiting' ? data.matches.filter(m => m.status === 'blocked' || (m.status === 'ready' && !callable.has(m.id))).length : data.matches.filter(m => m.status === status).length}</strong><span>{status === 'playing' ? 'Playing now' : status === 'ready' ? 'Ready to start' : status === 'waiting' ? 'Waiting' : 'Finished'}</span></button>)}</div>
