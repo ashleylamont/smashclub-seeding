@@ -28,21 +28,20 @@ test('attendance preview preserves completed play, rejects stale changes, and ho
     rows: original.entries.slice(0, 16).map((entry, index) => ({ lineNumber: index + 1, rawInput: entry.playerName, cleanedName: entry.playerName,
       playerId: entry.playerId, companyId: entry.companyId ?? null, resolutionMethod: 'manual', divisionPreference: 'auto' })),
   });
-  for (const operation of ['admin.eventPlanner.freezeRoster', 'admin.eventPlanner.generatePools', 'eventOps.prepare']) await mutate(page.request, operation, { planId });
+  for (const operation of ['admin.eventPlanner.freezeRoster', 'admin.eventPlanner.generatePools', 'eventOps.softLockPools', 'eventOps.prepare']) await mutate(page.request, operation, { planId });
   const before = await query<Snapshot>(page.request, 'eventOps.overview', { planId });
   const played = before.matches.find(match => match.division === 'upper' && match.poolIndex === 0)!;
   await mutate(page.request, 'eventOps.reportScore', { matchId: played.id, expectedRevision: played.revision, requestId: crypto.randomUUID(), score1: 2, score2: 1, outcome: 'played' });
   const frozen = await query<Plan>(page.request, 'admin.eventPlanner.plan', { planId });
   await page.goto(`/admin/event-operations?plan=${planId}`);
-  const attendance = page.locator('section.card').filter({ has: page.getByRole('heading', { name: 'Late arrivals and withdrawals', exact: true }) });
+  const attendance = page.locator('section.card').filter({ has: page.getByRole('heading', { name: 'Late arrivals and no-shows', exact: true }) });
   await attendance.getByLabel('Find player by public alias', { exact: true }).fill(latePlayer.publicName ?? latePlayer.playerName);
   await expect(attendance.getByRole('combobox', { name: 'Player', exact: true }).locator(`option[value="${latePlayer.playerId}"]`)).toHaveCount(1);
   await attendance.getByRole('combobox', { name: 'Player', exact: true }).selectOption(latePlayer.playerId);
-  await attendance.getByRole('combobox', { name: 'Pool', exact: true }).selectOption('upper:0');
   await attendance.getByRole('button', { name: 'Preview attendance change' }).click();
   await expect(attendance.locator('.ops-attendance-preview')).toContainText('4 new match(es)');
   await attendance.getByRole('button', { name: 'Apply this change' }).click();
-  await expect(attendance.getByRole('status')).toContainText('Completed results were preserved');
+  await expect(attendance.getByRole('status')).toContainText('Attendance updated');
 
   const afterAdd = await query<Snapshot>(page.request, 'eventOps.overview', { planId });
   expect(afterAdd.matches).toHaveLength(before.matches.length + 4);

@@ -121,12 +121,21 @@ pnpm test                 # engine unit tests + server integration tests (PGlite
 pnpm typecheck
 pnpm -r build
 
+# Browser integration tests: built SPA + real Fastify API + PGlite harness
+pnpm --filter @smashclub/web exec playwright install chromium
+pnpm --filter @smashclub/web build
+pnpm test:e2e
+
 # Run the server (needs DATABASE_URL; migrations apply at startup)
 DATABASE_URL=postgres://localhost:5432/smashclub pnpm dev
 
 # Run the web app with API proxy to :3000
 pnpm --filter @smashclub/web dev
 ```
+
+The browser suite covers planning, attendance, guest and TO reporting, native
+finals, public results, and desktop/mobile layout checks. It runs in CI as a
+separate check, uploads its page captures, and retains traces for failures.
 
 Environment variables (see `apps/server/src/env.ts`): `DATABASE_URL`
 (required), `CHALLONGE_API_KEY` + `CHALLONGE_USERNAME`,
