@@ -109,8 +109,12 @@ test('attention desk directs TOs to exact decisions and stale scores, without cl
     await expect(attention).toContainText('No stations configured')
     await attention.getByText('Match decisions · 1', { exact: true }).click()
     // Pre-existing queue filters must not hide the exact match opened from attention.
-    await page.getByRole('combobox', { name: 'Division', exact: true }).selectOption('lower')
     await page
+      .locator('.ops-toolbar')
+      .getByRole('combobox', { name: 'Division', exact: true })
+      .selectOption('lower')
+    await page
+      .locator('.ops-toolbar')
       .getByRole('textbox', { name: 'Find a player or match', exact: true })
       .fill('not an entrant')
     await attention.getByRole('button', { name: 'Open match', exact: true }).click()

@@ -3,10 +3,9 @@ import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 
 /**
- * Captures every page at desktop and mobile widths in both colour schemes.
- * This is the first time this UI has ever been rendered, so the run doubles as
- * a smoke test: each capture asserts the page actually painted its own content
- * rather than an error boundary or an empty shell.
+ * Captures key public pages at desktop and mobile widths in both colour schemes.
+ * Each pass checks real content and page overflow before writing a capture
+ * that CI uploads for visual review.
  */
 
 const OUT = process.env.SCREENSHOT_DIR ?? path.resolve('screenshots')
@@ -26,6 +25,10 @@ async function settle(page: Page): Promise<void> {
 
 async function capture(page: Page, name: string): Promise<void> {
   await settle(page)
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  )
+  expect(overflow, `${name} has horizontal page overflow`).toBeLessThanOrEqual(1)
   await page.screenshot({ path: path.join(OUT, `${name}.png`), fullPage: true })
 }
 
@@ -146,7 +149,7 @@ test.describe('page screenshots', () => {
         if (finishedSlug) {
           await page.goto(`/tournaments/${finishedSlug}`)
           await settle(page)
-          await page.locator('.tournament-recap-link:not(.tournament-venue-link)').click()
+          await page.locator('a.tournament-recap-link[href^="/recaps/"]').click()
           await expect(page).toHaveURL(/\/recaps\/.+/)
           // A recap with no facts at all would still render its shell, so this
           // asserts real content rather than an empty page.

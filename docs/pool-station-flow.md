@@ -21,6 +21,8 @@ Individual pool settings remain available. Batch changes validate the complete p
 
 New station plans for native events enable player starts and immediate score acceptance. Existing schedules retain their previous TO approval policy until explicitly changed. Both options are visible in the setup preview and can be controlled per pool.
 
+An event using **Approve unless disputed** follows that event-level policy instead of per-pool immediate acceptance; see [guest event night and score approval](guest-event-night.md#approve-unless-disputed).
+
 1. Open the pool’s player board or scan a guest QR code and choose a pool. A printed station sign opens the reporting page focused on that station. The pool selection stays in the URL for sharing.
 2. Find the station marked **Play next**. When both players are there, press **We’re here — start match** from the reporting page.
 3. Play the set and submit its final score. In a self-running pool with immediate acceptance enabled, that result is recorded immediately and the queue advances.

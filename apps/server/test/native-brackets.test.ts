@@ -109,6 +109,30 @@ async function generate() {
 }
 
 describe('native brackets', () => {
+  it('rejects unauthorized and incomplete finalization without publishing partial history', async () => {
+    await finishPools()
+    await generate()
+    const first = (await db.select().from(eventMatches)).find(
+      (match) => match.nativeBracketId && match.status === 'ready',
+    )!
+    await expect(finalizeNativeEvent(db, member, planId)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    })
+    await expect(finalizeNativeEvent(db, admin, planId)).rejects.toThrow(
+      /Complete championship and consolation/,
+    )
+    await score(first)
+    await expect(finalizeNativeEvent(db, admin, planId)).rejects.toThrow(
+      /Complete championship and consolation/,
+    )
+    expect(await db.select().from(tournaments)).toHaveLength(0)
+    expect(await db.select().from(sets)).toHaveLength(0)
+    expect((await db.select().from(eventPlans))[0]!.status).not.toBe('complete')
+    expect(
+      (await db.select().from(eventMatches)).every((match) => match.sourceSetId === null),
+    ).toBe(true)
+  })
+
   it('draws honest byes and completes all four brackets into history exactly once', async () => {
     expect(nativeDraw(['a', 'b', 'c', 'd', 'e'])).toEqual([
       'a',
@@ -168,6 +192,12 @@ describe('native brackets', () => {
           division.players.every((player) => player.place !== null),
       ),
     ).toBe(true)
+    expect(overview.warnings).toEqual([])
+    const records = overview.divisions.flatMap((division) => division.players)
+    expect(records.reduce((count, player) => count + player.poolWins, 0)).toBe(18)
+    expect(records.reduce((count, player) => count + player.poolLosses, 0)).toBe(18)
+    expect(records.reduce((count, player) => count + player.bracketWins, 0)).toBe(10)
+    expect(records.reduce((count, player) => count + player.bracketLosses, 0)).toBe(10)
     await expect(score(rounds[0]!)).rejects.toMatchObject({ code: 'CONFLICT' })
   })
 

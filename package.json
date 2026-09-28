@@ -9,6 +9,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "vitest run",
+    "test:e2e": "pnpm --filter @smashclub/web test:e2e",
     "test:watch": "vitest",
     "typecheck": "pnpm -r typecheck",
     "lint": "oxlint .",
