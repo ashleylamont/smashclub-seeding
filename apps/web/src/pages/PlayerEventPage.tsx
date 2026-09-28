@@ -19,6 +19,12 @@ import {
   type PoolFlowData,
   type StartPoolMatch,
 } from '../lib/poolFlow';
+import {
+  includesPlayer,
+  matchStation,
+  matchStatus,
+  sortPlayerMatches,
+} from '../lib/playerMatchView';
 
 type Snapshot = Awaited<ReturnType<typeof trpc.eventOps.snapshot.query>>;
 type Match = Snapshot['matches'][number];
@@ -68,15 +74,17 @@ function PlayerEvent({ planId }: { planId: string }) {
   const claim = claims.data?.find((claim) => claim.status === 'approved');
   const players = eventPlayers(data.matches);
   const selectedPlayer = players.some((player) => player.id === devicePlayer) ? devicePlayer : '';
+  const playerName = players.find((player) => player.id === selectedPlayer)?.name;
   const reported = new Set(reports.data?.map((report) => report.matchId));
   const queued = queueScoringIds(data);
-  const visible = data.matches.filter(
+  const matching = data.matches.filter(
     (match) =>
       matchesPool(match, selectedPool) &&
+      (!selectedPlayer || includesPlayer(match, selectedPlayer)) &&
       (view === 'results'
         ? match.status === 'complete'
         : view === 'mine'
-          ? selectedPlayer && [match.player1Id, match.player2Id].includes(selectedPlayer)
+          ? Boolean(selectedPlayer)
           : view === 'reports'
             ? reported.has(match.id)
             : view === 'all' || search
@@ -88,6 +96,7 @@ function PlayerEvent({ planId }: { planId: string }) {
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
+  const visible = selectedPlayer ? sortPlayerMatches(data, matching) : matching;
   const closed = ['complete', 'cancelled'].includes(data.plan.status);
   const start = async (input: StartPoolMatch) => {
     setStarting(input.matchId);
@@ -127,8 +136,8 @@ function PlayerEvent({ planId }: { planId: string }) {
         <p role="alert">Live updates interrupted. Scores shown may be out of date.</p>
       )}
       <p>
-        Find your pool’s stations, start the next match when both players are there, then report the
-        result. Each pool shows whether results need TO approval.{' '}
+        Choose your name to see your matches and station calls. Start the next match when both
+        players are there, then report the result.{' '}
         {claim && (
           <>
             Your linked profile is <strong>{claim.playerName}</strong>.
@@ -149,55 +158,60 @@ function PlayerEvent({ planId }: { planId: string }) {
           setDevicePlayer(id);
           setView(id ? 'mine' : 'all');
           setSelectedPool('');
+          setSelectedMatch(null);
+          setSearch('');
         }}
       />
-      <PoolFilter data={data} value={selectedPool} onChange={choosePool} />
-      <PoolStationQueue
-        data={data}
-        selectedPool={selectedPool}
-        onStart={(input) => void start(input)}
-        onReport={chooseMatch}
-        pendingMatchId={starting}
-        disabled={event.isError || closed || !data.settings.playerReports}
-      />
-      {startError && (
-        <p className="error-text" role="alert">
-          {startError}
-        </p>
-      )}
-      <PoolRoundSchedule data={data} selectedPool={selectedPool} />
       <section className="pool-score-selection" id="pool-score-entry">
-        <h2>Report a result</h2>
-        <div className="ops-toolbar">
-          <label>
-            View
-            <select
-              className="select"
-              aria-label="Match view"
-              value={view}
-              onChange={(e) => setView(e.target.value)}
-            >
-              <option value="queue">Station matches & my reports</option>
-              <option value="all">
-                {disputeMode ? 'All matches & results' : 'All open matches'}
-              </option>
-              <option value="results">Recorded results</option>
-              <option value="mine" disabled={!selectedPlayer}>
-                My matches{!selectedPlayer ? ' (choose a player above)' : ''}
-              </option>
-              <option value="reports">My reports</option>
-            </select>
-          </label>
-          <label className="ops-search">
-            Find a player or pool
-            <input
-              className="input"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Player name, Upper, Pool A…"
-            />
-          </label>
+        <div className="player-matches-heading">
+          <h2>{playerName ? `${playerName}’s matches` : 'Matches & results'}</h2>
+          {playerName && (
+            <p>
+              {visible.length} {visible.length === 1 ? 'match' : 'matches'} in this view · station
+              calls first
+            </p>
+          )}
         </div>
+        <details
+          className="player-match-refine"
+          key={selectedPlayer ? 'focused' : 'everyone'}
+          open={!selectedPlayer}
+        >
+          <summary>Match filters{selectedPool ? ' · one pool selected' : ''}</summary>
+          <div className="player-match-controls">
+            <PoolFilter data={data} value={selectedPool} onChange={choosePool} />
+            <div className="ops-toolbar">
+              <label>
+                View
+                <select
+                  className="select"
+                  aria-label="Match view"
+                  value={view}
+                  onChange={(e) => setView(e.target.value)}
+                >
+                  <option value="queue">Station matches & my reports</option>
+                  <option value="all">
+                    {disputeMode ? 'All matches & results' : 'All open matches'}
+                  </option>
+                  <option value="results">Recorded results</option>
+                  <option value="mine" disabled={!selectedPlayer}>
+                    All selected player’s matches
+                  </option>
+                  <option value="reports">My reports</option>
+                </select>
+              </label>
+              <label className="ops-search">
+                Search matches
+                <input
+                  className="input"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Player, pool or match…"
+                />
+              </label>
+            </div>
+          </div>
+        </details>
         <div className="ops-match-grid">
           {visible.map((match) => (
             <PlayerScoreCard
@@ -213,7 +227,8 @@ function PlayerEvent({ planId }: { planId: string }) {
                 (['ready', 'playing'].includes(match.status) ||
                   (disputeMode && match.status === 'complete'))
               }
-              station={data.stations.find((station) => station.id === match.stationId)?.name}
+              station={matchStation(data, match).name ?? undefined}
+              status={matchStatus(data, match)}
               selfRun={Boolean(poolPolicy(data, match)?.selfRun)}
               autoAccept={Boolean(poolPolicy(data, match)?.autoAcceptScores)}
             />
@@ -221,11 +236,27 @@ function PlayerEvent({ planId }: { planId: string }) {
         </div>
         {!visible.length && (
           <p className="card">
-            No matches in this view yet. Choose a pool above, search for a player, or select All
-            open matches.
+            {selectedPlayer
+              ? 'No matches for this player in this view. Try All selected player’s matches or clear the pool filter.'
+              : 'No matches in this view yet. Choose a pool, search for a player, or select All open matches.'}
           </p>
         )}
       </section>
+      <PoolStationQueue
+        data={data}
+        selectedPool={selectedPool}
+        playerId={selectedPlayer}
+        onStart={(input) => void start(input)}
+        onReport={chooseMatch}
+        pendingMatchId={starting}
+        disabled={event.isError || closed || !data.settings.playerReports}
+      />
+      {startError && (
+        <p className="error-text" role="alert">
+          {startError}
+        </p>
+      )}
+      <PoolRoundSchedule data={data} selectedPool={selectedPool} playerId={selectedPlayer} />
     </div>
   );
 }
@@ -234,6 +265,7 @@ function PlayerScoreCard({
   planId,
   enabled,
   station,
+  status,
   report,
   selfRun,
   autoAccept,
@@ -243,6 +275,7 @@ function PlayerScoreCard({
   planId: string;
   enabled: boolean;
   station?: string;
+  status: string;
   report?: Awaited<ReturnType<typeof trpc.eventOps.myReports.query>>[number];
   selfRun: boolean;
   autoAccept: boolean;
@@ -298,7 +331,10 @@ function PlayerScoreCard({
     <article className="card ops-match">
       <div className="ops-match-meta">
         <span>{match.label}</span>
-        <span>{station ?? 'Station pending'}</span>
+        <span>
+          {status}
+          {station ? ` · ${station}` : ''}
+        </span>
       </div>
       <h3>
         {match.player1Name} vs {match.player2Name}
@@ -312,6 +348,8 @@ function PlayerScoreCard({
           pendingReport={report?.status === 'pending' ? report : undefined}
           label="Confirmed"
         />
+      ) : match.status === 'blocked' ? (
+        <p>Waiting for earlier matches or a TO before this match can start.</p>
       ) : reportStatus === 'rejected' && !retryRejected ? (
         <div>
           <p>Your previous report was rejected. Check the result with a TO before trying again.</p>
@@ -334,8 +372,14 @@ function PlayerScoreCard({
         </p>
       ) : selfRun && match.status !== 'playing' ? (
         <p className="pool-flow-selected-note">
-          Start this match from its station’s Play next card first. Once it is playing, you can
-          report the result here.
+          {status === 'Play next' ? (
+            <>
+              Start this match from its station’s <a href="#pool-station-queues">Play next card</a>{' '}
+              first. Once it is playing, you can report the result here.
+            </>
+          ) : (
+            'Wait for a station call before starting this match.'
+          )}
         </p>
       ) : (
         <form

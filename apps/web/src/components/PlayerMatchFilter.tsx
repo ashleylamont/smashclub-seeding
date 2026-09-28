@@ -10,26 +10,26 @@ export function PlayerMatchFilter({
   onChange: (id: string) => void;
 }) {
   return (
-    <div className="card">
-      <label>
-        Find my matches
-        <select
-          className="select"
-          aria-label="Player on this device"
-          value={players.some((player) => player.id === value) ? value : ''}
-          onChange={(event) => onChange(event.target.value)}
-        >
-          <option value="">All players</option>
-          {players.map((player) => (
-            <option key={player.id} value={player.id}>
-              {player.name}
-            </option>
-          ))}
-        </select>
-      </label>
+    <div className="card player-match-filter">
+      <label htmlFor="player-match-select">Show matches for</label>
+      <select
+        id="player-match-select"
+        className="select"
+        value={players.some((player) => player.id === value) ? value : ''}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="">Everyone</option>
+        {players.map((player) => (
+          <option key={player.id} value={player.id}>
+            {player.label}
+          </option>
+        ))}
+      </select>
       <p className="muted">
-        Saves a match filter on this device only. This does not link a profile or prove your
-        identity. Choose All players to browse everyone’s matches.
+        {value
+          ? 'Showing only this player’s matches. '
+          : 'Choose your name to see your matches first. '}
+        Your choice is saved on this device; it does not verify your identity.
       </p>
     </div>
   );

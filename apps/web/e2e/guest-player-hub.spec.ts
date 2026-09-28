@@ -91,16 +91,31 @@ test('signed-out player hub browses without a pass and reuses a venue pass acros
     await visitor.goto(`/play/${planId}?pool=upper%3A0`);
     await expect(visitor.getByRole('heading', { name: 'Scan in to report a score' })).toBeVisible();
     await expect(visitor.getByLabel('Your pool')).toHaveValue('upper:0');
-    await visitor.getByLabel('Player on this device').selectOption(snapshot.matches[0]!.player1Id);
+    const focusedPlayer = snapshot.matches[0]!.player1Id;
+    await visitor.getByLabel('Show matches for').selectOption(focusedPlayer);
     await expect(visitor.getByLabel('Match view', { exact: true })).toHaveValue('mine');
-    expect(await visitor.locator('article.ops-match').count()).toBeGreaterThan(0);
+    await expect(visitor.getByRole('heading', { name: /’s matches$/ })).toBeVisible();
+    const focusedCards = visitor.locator('article.ops-match');
+    await expect(focusedCards).toHaveCount(
+      snapshot.matches.filter(
+        (match) => match.player1Id === focusedPlayer || match.player2Id === focusedPlayer,
+      ).length,
+    );
+    expect(
+      await visitor
+        .locator('.pool-score-selection')
+        .evaluate(
+          (section) =>
+            section.compareDocumentPosition(document.querySelector('.pool-flow-stations')!) &
+            Node.DOCUMENT_POSITION_FOLLOWING,
+        ),
+    ).toBeTruthy();
+    await expect(visitor.getByRole('heading', { name: 'Your stations' })).toBeVisible();
     await expect(visitor.locator('article.ops-match input[type="number"]')).toHaveCount(0);
     await visitor.reload();
-    await expect(visitor.getByLabel('Player on this device')).toHaveValue(
-      snapshot.matches[0]!.player1Id,
-    );
+    await expect(visitor.getByLabel('Show matches for')).toHaveValue(focusedPlayer);
     await expect(visitor.getByLabel('Match view', { exact: true })).toHaveValue('mine');
-    await visitor.getByLabel('Player on this device').selectOption('');
+    await visitor.getByLabel('Show matches for').selectOption('');
     await expect(visitor.getByLabel('Match view', { exact: true })).toHaveValue('matches');
     await visitor.screenshot({
       path: testInfo.outputPath('guest-no-account-mobile.png'),
