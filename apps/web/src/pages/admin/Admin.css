@@ -73,6 +73,30 @@
   flex-wrap: wrap;
 }
 
+.admin-account-search {
+  display: block;
+  width: min(100%, 420px);
+  margin: var(--s2) 0 var(--s3);
+}
+
+.admin-account-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--s3) 0;
+}
+
+.admin-account-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-account-row .chip { margin-left: var(--s2); }
+
 .date-edit {
   display: inline-flex;
   gap: var(--s1);

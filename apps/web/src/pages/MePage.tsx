@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate } from '@tanstack/react-router';
-import { authClient, sessionRole } from '../lib/auth';
+import { authClient, useCurrentUser } from '../lib/auth';
 import { trpc } from '../lib/trpc';
 import type { MyClaim } from '../lib/apiTypes';
 import { CharacterPicker } from '../components/CharacterPicker';
@@ -12,11 +12,12 @@ const PROVIDERS = ['discord', 'google'] as const;
 
 export function MePage() {
   const { data: session, isPending } = authClient.useSession();
+  const currentUser = useCurrentUser(session);
 
   if (isPending) return <p className="loading-text">Loading account…</p>;
   if (!session) return <Navigate to="/login" />;
 
-  const role = sessionRole(session);
+  const role = currentUser.data?.role;
 
   return (
     <div className="me-page">
