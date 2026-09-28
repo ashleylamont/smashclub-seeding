@@ -2,8 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 /**
  * E2E runs against the dev harness, which serves the built SPA and the real API
- * from one origin backed by an in-process Postgres. Chromium is preinstalled in
- * this environment (PLAYWRIGHT_BROWSERS_PATH), so no browser download happens.
+ * from one origin backed by an in-process Postgres. Playwright's installed
+ * Chromium is used by default; CHROMIUM_PATH can override it when needed.
  *
  * The harness seeds and recomputes before listening, which takes a while, hence
  * the generous server timeout.
@@ -30,19 +30,16 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1440, height: 900 },
-        launchOptions: {
-          // This environment preinstalls Chromium (build 1194) which may not
-          // match the build @playwright/test expects. Point at the provided
-          // binary rather than downloading one; `playwright install` is blocked.
-          executablePath: process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium',
-        },
+        ...(process.env.CHROMIUM_PATH
+          ? { launchOptions: { executablePath: process.env.CHROMIUM_PATH } }
+          : {}),
       },
     },
   ],
   webServer: {
     command: 'pnpm --filter @smashclub/server dev:harness',
     url: `${baseURL}/healthz`,
-    reuseExistingServer: true,
+    reuseExistingServer: !process.env.CI,
     timeout: 240_000,
     cwd: '../..',
     env: {

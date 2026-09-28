@@ -20,6 +20,16 @@ WEB_DIST_DIR="$PWD/apps/web/dist" pnpm dev:harness
 
 Run workspace checks with `pnpm test`, `pnpm typecheck`, `pnpm lint` and `pnpm build`. `pnpm rank-eval` compares rating models, and `pnpm golden-check` checks the legacy reference output.
 
+For browser integration tests, install Playwright's Chromium once, build the web app, then run the suite from the repository root:
+
+```bash
+pnpm --filter @smashclub/web exec playwright install chromium
+pnpm --filter @smashclub/web build
+pnpm test:e2e
+```
+
+The browser suite starts a disposable API harness. It exercises event planning, attendance, guest and organiser reporting, native finals, public results, and desktop and mobile layouts. CI uploads page captures and retains traces for failures.
+
 ## PostgreSQL-backed server
 
 Create a database, then start the API from the repository root:

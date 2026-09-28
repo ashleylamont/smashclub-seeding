@@ -32,6 +32,19 @@ async function finishPools() {
 async function generate() { const preview = await previewNativeBrackets(db, planId); expect(preview.issues).toEqual([]); await generateNativeBrackets(db, admin, planId, preview.revisionToken); }
 
 describe('native brackets', () => {
+  it('rejects unauthorized and incomplete finalization without publishing partial history', async () => {
+    await finishPools(); await generate();
+    const first = (await db.select().from(eventMatches)).find(match => match.nativeBracketId && match.status === 'ready')!;
+    await expect(finalizeNativeEvent(db, member, planId)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(finalizeNativeEvent(db, admin, planId)).rejects.toThrow(/Complete championship and consolation/);
+    await score(first);
+    await expect(finalizeNativeEvent(db, admin, planId)).rejects.toThrow(/Complete championship and consolation/);
+    expect(await db.select().from(tournaments)).toHaveLength(0);
+    expect(await db.select().from(sets)).toHaveLength(0);
+    expect((await db.select().from(eventPlans))[0]!.status).not.toBe('complete');
+    expect((await db.select().from(eventMatches)).every(match => match.sourceSetId === null)).toBe(true);
+  });
+
   it('draws honest byes and completes all four brackets into history exactly once', async () => {
     expect(nativeDraw(['a', 'b', 'c', 'd', 'e'])).toEqual(['a', null, 'd', 'e', 'b', null, 'c', null]);
     expect(nativeDraw([])).toEqual([]);
@@ -59,6 +72,12 @@ describe('native brackets', () => {
     const overview = (await loadEventOverview(db, published!.challongeSlug))!;
     expect(overview.brackets).toHaveLength(4);
     expect(overview.divisions.every(division => division.players.length === 7 && division.players.every(player => player.place !== null))).toBe(true);
+    expect(overview.warnings).toEqual([]);
+    const records = overview.divisions.flatMap(division => division.players);
+    expect(records.reduce((count, player) => count + player.poolWins, 0)).toBe(18);
+    expect(records.reduce((count, player) => count + player.poolLosses, 0)).toBe(18);
+    expect(records.reduce((count, player) => count + player.bracketWins, 0)).toBe(10);
+    expect(records.reduce((count, player) => count + player.bracketLosses, 0)).toBe(10);
     await expect(score(rounds[0]!)).rejects.toMatchObject({ code: 'CONFLICT' });
   });
 
