@@ -26,7 +26,7 @@ and plans with operational matches or score reports cannot be adopted through th
 flow. Existing operational history needs its own reconciliation rather than being
 discarded by adoption.
 
-## Tech In Place 11
+## Tech In Place 11 case study (September 2026 snapshot)
 
 Read-only production inspection on 18 September 2026 found a completed saved plan
 with 40 entrants and two attached main brackets. The consolation brackets had been

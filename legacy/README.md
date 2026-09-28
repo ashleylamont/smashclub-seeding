@@ -1,5 +1,7 @@
 # SSBU Tournament Seeding Tool 🎮
 
+> Historical Python CLI. The maintained web app and its setup instructions are in the [project README](../README.md). Run the commands below from the `legacy/` directory when working with this reference implementation.
+
 Automatically seed Super Smash Bros Ultimate tournaments based on historical player performance.
 
 This tool was created to assist with event planning for
@@ -254,7 +256,7 @@ You can export this data from the [Results Database](https://hello.atlassian.net
 ## Testing
 
 ```bash
-# Run all tests (51 tests)
+# Run all legacy tests
 uv run pytest tests/ -v
 
 # Quick test

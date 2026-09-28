@@ -1,5 +1,7 @@
 # Whole-History Rating: how it is integrated here
 
+WHR is available as an active model in admin settings; new installations default to Glicko-2. This document explains the WHR design and evaluation, not a requirement to switch a running club to it.
+
 WHR (Coulom, 2008) refits every rating from all evidence at once. On this
 club's data — a dozen-ish nights, ~1,000 sets, weakly-linked main and rookie
 brackets, a long tail of one-event players — that is measurably the right
