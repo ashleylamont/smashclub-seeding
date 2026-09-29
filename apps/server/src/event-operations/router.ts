@@ -36,6 +36,7 @@ import {
   unlockPools,
 } from './attendance';
 import { deleteStation, saveStation } from './stations';
+import { attendeeRoster, updateAttendee } from './attendeeRoster';
 const attendanceInput = z.object({
   planId: z.string().uuid(),
   action: z.enum(['add', 'withdraw', 'no_show', 'redistribute']),
@@ -49,6 +50,19 @@ const attendanceInput = z.object({
 const planInput = z.object({ planId: z.string().uuid() });
 export const eventOpsRouter = router({
   publicEvents: publicProcedure.query(({ ctx }) => publicEventNights(ctx.db)),
+  attendeeRoster: authedProcedure
+    .input(planInput)
+    .query(({ ctx, input }) => attendeeRoster(ctx.db, input.planId, ctx.user)),
+  updateAttendee: authedProcedure
+    .input(
+      planInput.extend({
+        playerId: z.uuid(),
+        canonicalName: z.string().trim().min(1).max(120),
+        displayName: z.string().trim().min(1).max(80).nullable(),
+        companyCode: z.string().nullable(),
+      }),
+    )
+    .mutation(({ ctx, input }) => updateAttendee(ctx.db, ctx.user, input)),
   startPoolMatch: authedProcedure
     .input(
       z.object({

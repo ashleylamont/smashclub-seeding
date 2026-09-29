@@ -321,9 +321,50 @@
   padding: 16px;
   margin-top: 20px;
 }
+/* Let the attendee table scroll inside its grid cell on narrow screens. */
+.ops-attendee-list {
+  min-width: 0;
+}
+.ops-attendee-filters,
+.ops-attendee-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+.ops-attendee-filters label,
+.ops-attendee-edit label {
+  display: grid;
+  gap: 6px;
+  min-width: 150px;
+  flex: 1;
+}
+.ops-attendee-copy {
+  display: flex;
+  align-items: start;
+  gap: 12px;
+  margin: 12px 0 20px;
+}
+.ops-attendee-copy textarea {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+}
+.ops-attendee-edit {
+  padding: 8px 0;
+}
+.ops-attendee-edit .error-text {
+  flex-basis: 100%;
+}
 @media (max-width: 650px) {
   .ops-attendance-fields {
     grid-template-columns: 1fr;
+  }
+  .ops-attendee-copy {
+    flex-direction: column;
+  }
+  .ops-attendee-copy textarea {
+    width: 100%;
   }
 }
 .guest-controls .guest-invitation {
