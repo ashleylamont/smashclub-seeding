@@ -19,7 +19,11 @@ export function NativeBracketControls({
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const name = (id: string | null) =>
-    id ? (entrants.find((p) => p.id === id)?.name ?? 'Player') : 'Bye';
+    id?.startsWith('pending:')
+      ? `Pool ${String.fromCharCode(65 + Number(id.split(':')[2]))} place ${id.split(':')[3]} TBD`
+      : id
+        ? (entrants.find((p) => p.id === id)?.name ?? 'Player')
+        : 'Bye';
   const act = async (work: () => Promise<unknown>, success: string) => {
     setBusy(true);
     setError('');
@@ -38,9 +42,9 @@ export function NativeBracketControls({
     <section className="card">
       <h3>Championship and consolation</h3>
       <p>
-        Confirm every pool order before building finals. Top two active entrants advance to
-        championship; the remaining active entrants enter consolation. Bye winners advance
-        automatically.
+        Finals can start while pools are still playing. Unknown qualifiers stay blocked until their
+        pool order is confirmed; then their places fill automatically. Top active entrants advance
+        to championship, and the rest enter consolation. Bye winners advance automatically.
       </p>
       <button
         className="btn"

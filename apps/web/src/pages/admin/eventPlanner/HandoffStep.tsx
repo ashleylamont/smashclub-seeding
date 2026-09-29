@@ -32,9 +32,9 @@ export function HandoffStep({ view, onChanged }: { view: EventPlanView; onChange
       <div className="card section">
         <h3>Run this event in Nemesis</h3>
         <p>
-          Record pool results in the event desk, confirm pool finishing orders, then preview
-          championship and consolation draws. Winners advance automatically and byes are shown
-          explicitly.
+          Preview and start finals while pools are still playing. Confirm each pool’s finishing
+          order as it becomes available; its qualifiers fill their reserved places automatically.
+          Winners advance and byes are shown explicitly.
         </p>
         <a className="btn btn-primary" href={`/admin/event-operations?plan=${view.plan.id}`}>
           Open event desk

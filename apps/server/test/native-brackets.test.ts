@@ -107,8 +107,91 @@ async function generate() {
   expect(preview.issues).toEqual([]);
   await generateNativeBrackets(db, admin, planId, preview.revisionToken);
 }
+async function finishPool(division: 'upper' | 'lower', poolIndex: number, reverse = false) {
+  const matches = (await db.select().from(eventMatches)).filter(
+    (match) =>
+      match.stage === 'group' && match.division === division && match.poolIndex === poolIndex,
+  );
+  for (const match of matches) await score(match);
+  const pool = (await getPlan(db, planId))!.divisions
+    .find((entry) => entry.division === division)!
+    .pools.find((entry) => entry.poolIndex === poolIndex)!;
+  await savePoolPlacements(db, planId, division, [
+    {
+      poolIndex,
+      playerIdsInOrder: (reverse ? [...pool.members].reverse() : pool.members).map(
+        (member) => member.playerId,
+      ),
+      expectedMatchRevisions: pool.matchRevisions,
+      expectedPlacementRevision: pool.placementRevision,
+    },
+  ]);
+}
 
 describe('native brackets', () => {
+  it('starts finals with pending pools and fills their reserved places as results arrive', async () => {
+    await generate();
+    const initial = await nativeBracketViews(db, planId);
+    expect(initial).toHaveLength(4);
+    expect(initial.every((bracket) => !bracket.complete)).toBe(true);
+    expect(
+      initial.some((bracket) => bracket.entrantIds.some((id) => id.startsWith('pending:'))),
+    ).toBe(true);
+    const upperPools = (await getPlan(db, planId))!.divisions.find(
+      (d) => d.division === 'upper',
+    )!.pools;
+    await finishPool('upper', upperPools[0]!.poolIndex);
+    const waiting = (await db.select().from(eventMatches)).filter(
+      (match) => match.nativeBracketId && match.division === 'upper' && match.nativeRound === 1,
+    );
+    expect(
+      waiting.some(
+        (match) =>
+          (match.player1Id || match.player2Id) &&
+          match.blockedReason === 'Waiting for pool finishing order',
+      ),
+    ).toBe(true);
+    expect(waiting.every((match) => match.outcome !== 'bye')).toBe(true);
+    await finishPool('upper', upperPools[1]!.poolIndex);
+    const upperReady = (await db.select().from(eventMatches)).find(
+      (match) => match.nativeBracketId && match.division === 'upper' && match.status === 'ready',
+    )!;
+    expect(upperReady).toBeDefined();
+    await score(upperReady);
+    const lowerPools = (await getPlan(db, planId))!.divisions.find(
+      (d) => d.division === 'lower',
+    )!.pools;
+    const lowerFirst = lowerPools[0]!;
+    const lowerFirstPlace = lowerFirst.members.at(-1)!.playerId;
+    const lowerMainBefore = initial.find(
+      (bracket) => bracket.division === 'lower' && bracket.stage === 'main',
+    )!;
+    const reservedIndex = lowerMainBefore.entrantIds.indexOf(
+      `pending:lower:${lowerFirst.poolIndex}:1`,
+    );
+    expect(reservedIndex).toBeGreaterThanOrEqual(0);
+    await finishPool('lower', lowerFirst.poolIndex, true);
+    for (const pool of lowerPools.slice(1)) await finishPool('lower', pool.poolIndex);
+    const finalBrackets = await nativeBracketViews(db, planId);
+    expect(
+      finalBrackets.find((bracket) => bracket.id === lowerMainBefore.id)!.entrantIds[reservedIndex],
+    ).toBe(lowerFirstPlace);
+    expect(
+      finalBrackets.every((bracket) =>
+        bracket.entrantIds.every((id) => !id.startsWith('pending:')),
+      ),
+    ).toBe(true);
+    expect(
+      (await db.select().from(eventMatches)).find((match) => match.id === upperReady.id)?.status,
+    ).toBe('complete');
+    let finals = (await db.select().from(eventMatches)).filter((match) => match.nativeBracketId);
+    while (finals.some((match) => match.status === 'ready')) {
+      for (const match of finals.filter((entry) => entry.status === 'ready')) await score(match);
+      finals = (await db.select().from(eventMatches)).filter((match) => match.nativeBracketId);
+    }
+    await finalizeNativeEvent(db, admin, planId);
+    expect((await db.select().from(tournaments)).length).toBe(4);
+  });
   it('rejects unauthorized and incomplete finalization without publishing partial history', async () => {
     await finishPools();
     await generate();
@@ -324,8 +407,14 @@ describe('native brackets', () => {
     const attendance = await previewAttendance(db, input);
     await applyAttendance(db, admin, { ...input, revisionToken: attendance.revisionToken });
     const preview = await previewNativeBrackets(db, planId);
-    expect(preview.allowed).toBe(false);
-    expect(preview.issues.join(' ')).toMatch(/Confirm every upper pool order/);
+    expect(preview.allowed).toBe(true);
+    expect(
+      preview.brackets.some(
+        (bracket) =>
+          bracket.division === 'upper' &&
+          bracket.entrantIds.some((id) => id.startsWith('pending:')),
+      ),
+    ).toBe(true);
     expect(preview.resetAllowed).toBe(true);
     await resetNativeBrackets(db, admin, planId, preview.revisionToken);
     const view = (await getPlan(db, planId))!;

@@ -1002,15 +1002,22 @@ async function savePoolPlacementsUnlocked(
     .where(
       and(eq(eventNativeBrackets.eventPlanId, planId), eq(eventNativeBrackets.division, division)),
     );
-  if (native.length)
-    throw new EventPlanStateError(
-      'Native finals already use these qualifiers. Remove the unplayed finals before changing pool placements.',
-    );
   const view = await getPlan(db, planId);
   const divisionView = view?.divisions.find((entry) => entry.division === division);
   if (!divisionView || divisionView.pools.length === 0) {
     throw new EventPlanStateError(`The ${division} division has no pools yet.`);
   }
+  if (
+    native.length &&
+    pools.some((pool) =>
+      divisionView.pools
+        .find((entry) => entry.poolIndex === pool.poolIndex)
+        ?.members.some((member) => member.place !== null),
+    )
+  )
+    throw new EventPlanStateError(
+      'Native finals already use these qualifiers. Remove the unplayed finals before changing pool placements.',
+    );
 
   for (const pool of pools) {
     const operational = await db
@@ -1123,6 +1130,10 @@ async function savePoolPlacementsUnlocked(
         .update(eventPlans)
         .set({ status: 'underway', updatedAt: now })
         .where(eq(eventPlans.id, planId));
+    }
+    if (native.length) {
+      const { fillNativeBracketSlots } = await import('../event-operations/nativeBracketSlots');
+      for (const pool of pools) await fillNativeBracketSlots(tx, planId, division, pool.poolIndex);
     }
   });
 }
