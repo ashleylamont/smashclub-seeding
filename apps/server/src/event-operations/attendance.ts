@@ -322,17 +322,23 @@ export async function previewAttendance(db: Db, input: AttendanceInput) {
       'Soft-lock the pools first. While the draw is in draft, edit the roster and rebalance it in the planner.',
     );
   if (!player || player.status !== 'active') issues.push('Choose an existing active player.');
-  if (
-    input.action !== 'withdraw' &&
-    (
-      await db
-        .select()
-        .from(eventNativeBrackets)
-        .where(eq(eventNativeBrackets.eventPlanId, input.planId))
-    ).length
-  )
+  const nativeBrackets = await db
+    .select()
+    .from(eventNativeBrackets)
+    .where(eq(eventNativeBrackets.eventPlanId, input.planId));
+  if (input.action !== 'withdraw' && nativeBrackets.length)
     issues.push(
       'Native finals already use the roster. Remove unplayed finals before changing the pool draw.',
+    );
+  if (
+    input.action === 'withdraw' &&
+    pool &&
+    nativeBrackets.some((bracket) =>
+      bracket.entrantIds.some((id) => id.startsWith(`pending:${division}:${pool.poolIndex}:`)),
+    )
+  )
+    issues.push(
+      'This pool has reserved finals places. Resolve its finishing order before changing its active roster.',
     );
   if (input.action === 'add' && entrant) issues.push('This player is already in the event.');
   if (input.action !== 'add' && !entrant) issues.push('This player is not an event entrant.');

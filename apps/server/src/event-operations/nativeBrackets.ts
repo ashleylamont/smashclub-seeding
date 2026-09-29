@@ -1,11 +1,11 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { and, asc, eq, inArray } from 'drizzle-orm';
-import { TRPCError } from '@trpc/server';
 import {
   eventNativeBrackets,
   eventMatches,
   eventPlans,
   eventPlanBrackets,
+  eventPlanPoolPlacements,
   eventScoreReports,
   eventMatchAudit,
   eventAttendanceAudit,
@@ -19,26 +19,26 @@ import {
 import { scoresIndicateUnplayed } from '@smashclub/shared';
 import type { SessionUser } from '../auth';
 import { getPlan } from '../event-planner/plans';
-import { buildConsolationBracket, standardBracketOrder } from '../event-planner/advancement';
+import {
+  buildConsolationBracket,
+  consolationQualifiers,
+  winnersCount,
+} from '../event-planner/advancement';
 import { lockEvent, requireOperator } from './access';
-function reject(message: string): never {
-  throw new TRPCError({ code: 'CONFLICT', message });
-}
+import { nativeBracketViews } from './nativeBracketViews';
+import {
+  digest,
+  isPendingSlot,
+  nativeDraw,
+  pairSlots,
+  pendingSlot,
+  reject,
+} from './nativeBracketSlots';
+export { nativeBracketViews } from './nativeBracketViews';
+export { nativeDraw } from './nativeBracketSlots';
 const noContest = 'Both players withdrawn: no contest; no winner or score recorded';
 const resolved = (match: typeof eventMatches.$inferSelect) =>
   match.status === 'complete' || match.blockedReason === noContest;
-const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-
-export function nativeDraw(entrantIds: readonly string[]) {
-  if (new Set(entrantIds).size !== entrantIds.length)
-    reject('A native bracket cannot contain the same entrant twice.');
-  let size = 2;
-  while (size < entrantIds.length) size *= 2;
-  return entrantIds.length
-    ? standardBracketOrder(size).map((seed) => entrantIds[seed - 1] ?? null)
-    : [];
-}
-
 export async function previewNativeBrackets(db: Db, planId: string) {
   const view = await getPlan(db, planId);
   if (!view) reject('Event not found.');
@@ -91,32 +91,33 @@ export async function previewNativeBrackets(db: Db, planId: string) {
   if (!existing.length) resetIssues.push('There are no native finals to remove.');
   if (!matches.some((m) => m.stage === 'group'))
     issues.push('Prepare and play the pool matches first.');
-  if (
-    matches.some(
-      (m) =>
-        m.stage === 'group' &&
-        m.status !== 'complete' &&
-        m.blockedReason !== 'Both players withdrawn: no contest; no winner or score recorded',
-    )
-  )
-    issues.push('Resolve every pool match before generating finals.');
   const brackets = view.divisions.flatMap((division) => {
-    if (division.pools.some((pool) => pool.members.some((member) => member.place === null)))
-      issues.push(`Confirm every ${division.division} pool order first.`);
-    const championshipIds = new Set(division.championship.map((p) => p.playerId));
-    const finishers = division.pools.flatMap((pool) =>
-      pool.members
-        .filter((member) => championshipIds.has(member.playerId))
-        .sort((a, b) => a.place! - b.place!)
-        .map((member, index) => ({
-          playerId: member.playerId,
-          poolIndex: pool.poolIndex,
-          place: index + 3,
-        })),
-    );
+    const finishers = division.pools.flatMap((pool) => {
+      const confirmed = pool.members.every((member) => member.place !== null);
+      const active = pool.members
+        .filter((member) => !member.withdrawn)
+        .sort((a, b) => (a.place ?? 0) - (b.place ?? 0));
+      return active.map((member, index) => ({
+        playerId: confirmed
+          ? member.playerId
+          : pendingSlot(division.division, pool.poolIndex, index + 1),
+        poolIndex: pool.poolIndex,
+        place: index + 1,
+      }));
+    });
+    const championship = finishers
+      .filter(
+        (finisher) =>
+          finisher.place <=
+          winnersCount(finishers.filter((other) => other.poolIndex === finisher.poolIndex).length),
+      )
+      .map((finisher) => ({ ...finisher, place: finisher.place + 2 }));
     // The same seed-integrity repair used for consolation avoids immediate
     // pool rematches for championship qualifiers, including uneven fields.
-    const main = finishers.length ? buildConsolationBracket(finishers).entrants : [];
+    const main = championship.length ? buildConsolationBracket(championship).entrants : [];
+    const consolation = consolationQualifiers(finishers).length
+      ? buildConsolationBracket(finishers).entrants
+      : [];
     return [
       {
         division: division.division,
@@ -126,7 +127,7 @@ export async function previewNativeBrackets(db: Db, planId: string) {
       {
         division: division.division,
         stage: 'consolation' as const,
-        entrantIds: division.consolation?.entrants.map((p) => p.playerId) ?? [],
+        entrantIds: consolation.map((p) => p.playerId),
       },
     ].map((bracket) => ({ ...bracket, roundOne: pairSlots(nativeDraw(bracket.entrantIds)) }));
   });
@@ -147,13 +148,6 @@ export async function previewNativeBrackets(db: Db, planId: string) {
     }),
   };
 }
-function pairSlots(slots: (string | null)[]) {
-  return Array.from({ length: slots.length / 2 }, (_, i) => ({
-    player1Id: slots[i * 2]!,
-    player2Id: slots[i * 2 + 1]!,
-  }));
-}
-
 export async function generateNativeBrackets(
   db: Db,
   user: SessionUser,
@@ -201,9 +195,15 @@ export async function generateNativeBrackets(
         for (let slot = 0; slot < width; slot++) {
           const id = randomUUID();
           current.push(id);
-          const p1 = round === 1 ? (slots[slot * 2] ?? null) : null;
-          const p2 = round === 1 ? (slots[slot * 2 + 1] ?? null) : null;
-          const bye = round === 1 && Boolean(p1) !== Boolean(p2);
+          const first = round === 1 ? (slots[slot * 2] ?? null) : null;
+          const second = round === 1 ? (slots[slot * 2 + 1] ?? null) : null;
+          const p1 = isPendingSlot(first) ? null : first;
+          const p2 = isPendingSlot(second) ? null : second;
+          const bye =
+            round === 1 &&
+            !isPendingSlot(first) &&
+            !isPendingSlot(second) &&
+            Boolean(p1) !== Boolean(p2);
           await tx.insert(eventMatches).values({
             id,
             eventPlanId: planId,
@@ -221,7 +221,12 @@ export async function generateNativeBrackets(
             status: bye ? 'complete' : p1 && p2 ? 'ready' : 'blocked',
             outcome: bye ? 'bye' : null,
             winnerId: bye ? (p1 ?? p2) : null,
-            blockedReason: round > 1 ? 'Waiting for previous round winners' : null,
+            blockedReason:
+              round > 1
+                ? 'Waiting for previous round winners'
+                : isPendingSlot(first) || isPendingSlot(second)
+                  ? 'Waiting for pool finishing order'
+                  : null,
           });
         }
         previous = current;
@@ -256,10 +261,22 @@ export async function assertNativeCorrectionAllowed(
         eq(eventNativeBrackets.division, match.division),
       ),
     );
-  if (match.stage === 'group' && brackets.length)
-    reject(
-      'Finals already use this pool order. Rebuild the unplayed finals before correcting pool results.',
-    );
+  if (match.stage === 'group' && brackets.length) {
+    const placements = await db
+      .select({ id: eventPlanPoolPlacements.playerId })
+      .from(eventPlanPoolPlacements)
+      .where(
+        and(
+          eq(eventPlanPoolPlacements.eventPlanId, match.eventPlanId),
+          eq(eventPlanPoolPlacements.division, match.division),
+          eq(eventPlanPoolPlacements.poolIndex, match.poolIndex!),
+        ),
+      );
+    if (placements.length)
+      reject(
+        'Finals already use this pool order. Rebuild the unplayed finals before correcting pool results.',
+      );
+  }
   if (!match.nativeBracketId) return;
   if (match.outcome === 'bye') reject('Automatic bracket byes are fixed by the draw.');
   const all = await db
@@ -384,40 +401,6 @@ export async function advanceNativeBrackets(db: Db, planId: string) {
     byId.set(match.id, updated!);
   }
 }
-export async function nativeBracketViews(db: Db, planId: string) {
-  const brackets = await db
-    .select()
-    .from(eventNativeBrackets)
-    .where(eq(eventNativeBrackets.eventPlanId, planId));
-  const matches = await db.select().from(eventMatches).where(eq(eventMatches.eventPlanId, planId));
-  return brackets.map((bracket) => {
-    const rounds = matches.filter((m) => m.nativeBracketId === bracket.id);
-    const maxRound = Math.max(0, ...rounds.map((m) => m.nativeRound ?? 0));
-    const final = rounds.find((m) => m.nativeRound === maxRound);
-    const complete = bracket.entrantIds.length === 0 || (final !== undefined && resolved(final));
-    const winnerId = complete ? (final?.winnerId ?? null) : null;
-    const standings = !complete
-      ? []
-      : rounds.flatMap((m) =>
-          m.outcome !== 'bye' && m.status === 'complete' && m.winnerId && m.player1Id && m.player2Id
-            ? [
-                {
-                  playerId: m.winnerId === m.player1Id ? m.player2Id : m.player1Id,
-                  place: 2 ** (maxRound - m.nativeRound!) + 1,
-                },
-              ]
-            : [],
-        );
-    if (winnerId) standings.push({ playerId: winnerId, place: 1 });
-    return {
-      ...bracket,
-      complete,
-      winnerId,
-      standings: standings.sort((a, b) => a.place - b.place),
-    };
-  });
-}
-
 export async function resetNativeBrackets(
   db: Db,
   user: SessionUser,
