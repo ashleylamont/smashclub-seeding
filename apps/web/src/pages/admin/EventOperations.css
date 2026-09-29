@@ -321,6 +321,10 @@
   padding: 16px;
   margin-top: 20px;
 }
+/* Let the attendee table scroll inside its grid cell on narrow screens. */
+.ops-attendee-list {
+  min-width: 0;
+}
 .ops-attendee-filters,
 .ops-attendee-edit {
   display: flex;
