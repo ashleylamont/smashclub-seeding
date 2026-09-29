@@ -10,6 +10,7 @@ import { authClient, useCurrentUser } from '../../lib/auth';
 import './EventOperations.css';
 import { ScoreHandoff } from './ScoreHandoff';
 import { AttendanceControls } from './AttendanceControls';
+import { AttendeeList } from './AttendeeList';
 import { GuestReportingControls } from './GuestReportingControls';
 import { availableMatches, poolStandings } from '../../lib/eventQueue';
 import { OpsAttentionDesk } from './OpsAttentionDesk';
@@ -483,6 +484,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
           <ScoreHandoff planId={planId} data={data} disabled={pending || closed} />
         </details>
       )}
+      <AttendeeList planId={planId} closed={closed} />
       <AttendanceControls planId={planId} data={data} disabled={pending || closed} />
       <div className="ops-bottom-grid">
         <section className="card">
