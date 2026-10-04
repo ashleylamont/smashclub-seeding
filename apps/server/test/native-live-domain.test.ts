@@ -42,7 +42,9 @@ describe('native tournament decisions', () => {
     state = apply(state, score(target), 'player-b', false);
     state = apply(state, score(target, 0, 2), 'player-c', false);
     expect(state.matches[0]!.revision).toBe(1);
-    expect(state.reports.map((r) => [r.status, r.isDispute])).toEqual([
+    expect(
+      state.reports.filter((r) => r.matchId === target.id).map((r) => [r.status, r.isDispute]),
+    ).toEqual([
       ['approved', false],
       ['approved', false],
       ['pending', true],
@@ -51,11 +53,11 @@ describe('native tournament decisions', () => {
     expect(() => apply(state, score(target), 'player-d', false)).toThrow(/changed/);
     state = apply(state, {
       kind: 'review',
-      reportId: state.reports[2]!.id,
+      reportId: state.reports.find((r) => r.actorId === 'player-c')!.id,
       approve: false,
       expectedRevision: state.matches[0]!.revision,
     });
-    expect(state.reports[2]!.status).toBe('rejected');
+    expect(state.reports.find((r) => r.actorId === 'player-c')!.status).toBe('rejected');
   });
   it('preserves approval mode and decisive-winner validation', () => {
     const state = pureState();

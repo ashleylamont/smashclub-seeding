@@ -592,7 +592,7 @@ export const adminRouter = router({
   mergePlayers: adminProcedure
     .input(z.object({ fromPlayerId: z.uuid(), intoPlayerId: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      await mergePlayers(ctx.db, input.fromPlayerId, input.intoPlayerId);
+      await mergePlayers(ctx.db, input.fromPlayerId, input.intoPlayerId, ctx.nativeRuntime);
       // The tombstoned player must stop being offered, and its aliases now
       // belong to the survivor.
       await recomputePendingCandidates(ctx.db);

@@ -106,7 +106,7 @@ describe.skipIf(process.env.RUN_POSTGRES_TESTS !== '1')(
       const planId = await seedNativeDraft(cluster.db);
       const a = await runtime();
       const b = await runtime();
-      await a.adopt(nativeAdmin, planId);
+      await a.lock(nativeAdmin, planId);
       await b.transfer(planId);
       const [one, two] = await Promise.all([
         a.app.load(NativeTournament, nativeStream(planId)),
@@ -155,7 +155,7 @@ describe.skipIf(process.env.RUN_POSTGRES_TESTS !== '1')(
       const planId = await seedNativeDraft(cluster.db);
       const a = await runtime();
       const b = await runtime();
-      await a.adopt(nativeAdmin, planId);
+      await a.lock(nativeAdmin, planId);
       await command(a, planId, {
         kind: 'resources',
         capacity: 1,
@@ -246,7 +246,7 @@ describe.skipIf(process.env.RUN_POSTGRES_TESTS !== '1')(
       const a = await runtime(async (phase) => {
         if (phase === 'afterCommit') throw new Error('simulated publication acknowledgement crash');
       });
-      await a.adopt(nativeAdmin, planId);
+      await a.lock(nativeAdmin, planId);
       for (let i = 0; i < 22; i++)
         await command(a, planId, {
           kind: 'resources',
@@ -308,7 +308,7 @@ describe.skipIf(process.env.RUN_POSTGRES_TESTS !== '1')(
     it('rolls back failed publication SQL and deduplicates publication from two independent connections', async () => {
       const planId = await seedNativeDraft(cluster.db);
       const a = await runtime();
-      await a.adopt(nativeAdmin, planId);
+      await a.lock(nativeAdmin, planId);
       await completed(a, planId);
       // Seal a standalone persisted decision, but invoke the SQL handoff directly
       // to control its failure boundary independently of reaction scheduling.
@@ -321,6 +321,8 @@ describe.skipIf(process.env.RUN_POSTGRES_TESTS !== '1')(
         name: current.baseline!.name,
         eventDate: current.baseline!.eventDate,
         sealedAt: Date.now(),
+        replacesResultId: null,
+        replacementReason: null,
         entrants: current.entrants,
         brackets: current.brackets,
         matches: current.matches,

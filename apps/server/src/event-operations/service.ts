@@ -97,6 +97,13 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
     );
   const matches = rows.map((m) => ({
     ...m,
+    resourceRevision: 0,
+    progressRevision: 0,
+    started:
+      m.status === 'playing' ||
+      m.outcome !== null ||
+      m.liveScore1 !== null ||
+      m.liveScore2 !== null,
     pendingDisputeCount: disputes.filter((report) => report.matchId === m.id).length,
     score1: m.status === 'playing' ? (m.liveScore1 ?? m.score1) : m.score1,
     score2: m.status === 'playing' ? (m.liveScore2 ?? m.score2) : m.score2,
@@ -121,7 +128,7 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
     plan.historicalAdoption?.brackets.find(
       (bracket) => bracket.division === 'upper' && bracket.stage === 'main',
     )?.slug ?? null;
-  const [nativeResult] =
+  const nativeResults =
     plan.bracketMode === 'native' && plan.status === 'complete'
       ? await db
           .select({ slug: tournaments.challongeSlug })
@@ -135,7 +142,7 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
             ),
           )
       : [];
-  const resultsSlug = nativeResult?.slug ?? historicalResultsSlug;
+  const resultsSlug = nativeResults.at(0)?.slug ?? historicalResultsSlug;
   // Archived plans are planning intent, not evidence of attendance or finishes.
   const entrants = plan.historicalAdoption
     ? []
@@ -153,6 +160,8 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
     nativeBrackets: await nativeBracketViews(db, planId),
     plan: {
       id: plan.id,
+      liveOwned: false,
+      drawPaused: false,
       name: plan.name,
       eventDate: plan.eventDate.toISOString(),
       status: plan.status,
@@ -170,6 +179,8 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
       .from(eventPlanBrackets)
       .where(eq(eventPlanBrackets.eventPlanId, planId)),
     settings: {
+      resourceRevision: 0,
+      reportingRevision: 0,
       scoreReportingMode: settings?.scoreReportingMode ?? 'to_review',
       published: settings?.published ?? false,
       playerReports: settings?.playerReports ?? false,

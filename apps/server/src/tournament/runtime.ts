@@ -19,9 +19,10 @@ import {
   Decision,
   Envelope,
   initialState,
+  LiveState,
   type TournamentCommand,
 } from './schemas';
-import { stageNativeBaseline } from './baseline';
+import { stageNativeBaseline, migrateLegacyNativePlans } from './baseline';
 import { publishNativeResult, processNativeRatingIntents } from './publication';
 import { captureBaseline, receiptKey, reduceDecision, TournamentConflict } from './domain';
 
@@ -74,19 +75,21 @@ export function createNativeRuntime(
       .select()
       .from(nativeLiveHandoffs)
       .where(eq(nativeLiveHandoffs.eventPlanId, planId));
-    if (!handoff) throw new TournamentConflict('This event has not been adopted into Act.');
-    const baseline = Baseline.parse(handoff.baseline);
+    if (!handoff) throw new TournamentConflict('Lock the pools to start the native live journal.');
+    const saved = handoff.baseline as { baseline?: unknown; importedState?: unknown };
+    const baseline = Baseline.parse(saved.baseline ?? handoff.baseline);
+    const imported = saved.importedState ? LiveState.parse(saved.importedState) : undefined;
     for (let attempt = 0; ; attempt++) {
       const current = await app.load(NativeTournament, nativeStream(planId));
       try {
         await app.do(
-          'CaptureNativeBaseline',
+          imported ? 'ImportLegacyNativeState' : 'CaptureNativeBaseline',
           {
             stream: nativeStream(planId),
             actor: { id: baseline.capturedBy, name: 'Baseline transfer' },
             expectedVersion: current.version,
           },
-          baseline,
+          imported ?? baseline,
         );
         return;
       } catch (error) {
@@ -95,22 +98,25 @@ export function createNativeRuntime(
     }
   }
   async function command(
-    actor: SessionUser,
+    actor: SessionUser & { guest?: boolean },
     planId: string,
     requestId: string,
     input: TournamentCommand,
+    inputHash?: string,
   ) {
     const parsed = Command.parse(input);
     const operator = await isOperator(db, planId, actor);
-    if (parsed.kind !== 'score') await requireOperator(db, planId, actor);
+    if (!['score', 'dispatch'].includes(parsed.kind)) await requireOperator(db, planId, actor);
     await transfer(planId);
     const envelope = Envelope.parse({
       id: randomUUID(),
       requestId,
       actorId: actor.id,
       operator,
+      guest: actor.guest ?? false,
       at: Date.now(),
       command: parsed,
+      inputHash,
     });
     // Contention is internal. Semantic match/resource preconditions are checked again
     // in the action after each fresh load; unrelated commits do not reject a score.
@@ -170,10 +176,16 @@ export function createNativeRuntime(
         id: planId,
         name: state.baseline.name,
         eventDate: new Date(state.baseline.eventDate).toISOString(),
-        status: state.lifecycle === 'finalized' ? 'complete' : 'underway',
+        status:
+          state.lifecycle === 'finalized'
+            ? 'complete'
+            : state.lifecycle === 'cancelled'
+              ? 'cancelled'
+              : 'underway',
         bracketMode: 'native' as const,
-        softLockedAt:
-          state.lifecycle === 'unlocked' ? null : new Date(state.baseline.capturedAt).toISOString(),
+        liveOwned: true,
+        drawPaused: state.lifecycle === 'unlocked',
+        softLockedAt: new Date(state.baseline.capturedAt).toISOString(),
       },
       // Domain cursor excludes Act checkpoints and reaction subscription events.
       cursor: state.sequence,
@@ -239,6 +251,9 @@ export function createNativeRuntime(
     let rebuilt = initialState();
     await app.query({ stream: nativeStream(planId), after: -1 }, (event) => {
       switch (event.name) {
+        case 'LegacyStateImportedV1':
+          rebuilt = LiveState.parse(event.data);
+          break;
         case 'BaselineCapturedV1':
           rebuilt = captureBaseline(Baseline.parse(event.data));
           break;
@@ -260,6 +275,7 @@ export function createNativeRuntime(
     return rebuilt;
   }
   async function recover() {
+    await migrateLegacyNativePlans(db);
     const handoffs = await db.select().from(nativeLiveHandoffs);
     for (const handoff of handoffs) await transfer(handoff.eventPlanId);
     await drainReactions();
@@ -283,6 +299,8 @@ export function createNativeRuntime(
   }
   return {
     app,
+    state: async (planId: string) =>
+      (await app.load(NativeTournament, nativeStream(planId))).state.current[0],
     command,
     transfer,
     snapshot,
@@ -290,7 +308,7 @@ export function createNativeRuntime(
     recover,
     drainReactions,
     recoverPublication,
-    adopt: async (actor: SessionUser, planId: string) => {
+    lock: async (actor: SessionUser, planId: string) => {
       await stageNativeBaseline(db, actor, planId);
       await transfer(planId);
       return snapshot(planId, true);

@@ -18,8 +18,8 @@ interface AttentionData {
     matchId: string;
     status: string;
     expectedRevision: number;
-    score1: number;
-    score2: number;
+    score1: number | null;
+    score2: number | null;
   }[];
   stations: { id: string; name: string; currentMatchId: string | null }[];
   stationQueues: { stationId: string; nextMatchId: string | null; currentMatchId: string | null }[];

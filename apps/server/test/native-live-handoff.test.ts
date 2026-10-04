@@ -118,7 +118,7 @@ describe('native SQL handoff with PGlite (Act in memory)', () => {
     execute({ kind: 'finalize' });
     const result = state.result!;
     await expect(publishNativeResult(db, { ...result, revision: 2 })).rejects.toThrow(
-      /Replacement result publication is not implemented/,
+      /Replacement must supersede/,
     );
     await expect(
       publishNativeResult(db, result, async (phase) => {
@@ -172,7 +172,9 @@ describe('native SQL handoff with PGlite (Act in memory)', () => {
       user: { ...nativeAdmin, id: 'attendee', role: 'user' },
     });
     const anonymous = appRouter.createCaller({ ...context, user: null });
-    const adopted = await operator.eventOps.live.adopt({ planId });
+    const adopted = await operator.eventOps
+      .softLockPools({ planId, confirm: true })
+      .then(() => operator.eventOps.live.overview({ planId }));
     expect(adopted.cursor).toBe(1);
     await expect(
       anonymous.eventOps.live.command({
@@ -214,8 +216,9 @@ describe('native SQL handoff with PGlite (Act in memory)', () => {
     expect(
       (await anonymous.eventOps.live.snapshot({ planId, cursor: publicView.cursor })).unchanged,
     ).toBe(true);
-    await expect(anonymous.eventOps.snapshot({ planId })).rejects.toMatchObject({
-      code: 'CONFLICT',
-    });
+    expect(
+      (await anonymous.eventOps.snapshot({ planId })).matches.find((m) => m.id === match.id)!
+        .score1,
+    ).toBe(2);
   });
 });

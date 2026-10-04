@@ -1,3 +1,5 @@
+import { PoolDrawControls } from './PoolDrawControls';
+import { NativeResultControls } from './NativeResultControls';
 import { ScorePolicyControls } from './ScorePolicyControls';
 import { StationPoolControls } from './StationPoolControls';
 import { NativeBracketControls } from './NativeBracketControls';
@@ -104,8 +106,6 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
     );
   const data = event.data;
   const closed = ['complete', 'cancelled'].includes(data.plan.status);
-  const canSoftLock = data.plan.status === 'pools_ready' && !data.plan.softLockedAt;
-  const canUnlock = data.plan.status === 'pools_ready' && Boolean(data.plan.softLockedAt);
   const disputes = data.reports.filter(
     (report) => report.status === 'pending' && report.isDispute,
   ).length;
@@ -193,59 +193,11 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
           Recorded results stay in place. <a href="#score-submissions">Review disagreements →</a>
         </p>
       )}
-      <section className="card ops-setup">
-        <div>
-          <h3>Pool draw: {data.plan.softLockedAt ? 'Soft-locked' : 'Draft'}</h3>
-          <p className="muted">
-            {data.plan.softLockedAt
-              ? 'The TO has committed to these pools and opponents. Late arrivals and no-shows change only their affected pools.'
-              : 'You can still change the roster and rebalance pools in the planner. A TO must explicitly soft-lock the draw before using local attendance changes.'}
-          </p>
-          {data.plan.softLockedAt && (
-            <p className="muted">
-              Soft-locked {new Date(data.plan.softLockedAt).toLocaleString()}.
-            </p>
-          )}
-        </div>
-        {canSoftLock && (
-          <button
-            className="btn btn-primary"
-            disabled={pending}
-            onClick={() => {
-              if (
-                window.confirm(
-                  'Soft-lock this pool draw? Existing players will keep their pools and opponents, and the initial match queue will be prepared.',
-                )
-              )
-                void act(
-                  () => trpc.eventOps.softLockPools.mutate({ planId, confirm: true }),
-                  'Pool draw soft-locked',
-                );
-            }}
-          >
-            Soft-lock pool draw
-          </button>
-        )}
-        {canUnlock && (
-          <button
-            className="btn"
-            disabled={pending}
-            onClick={() => {
-              if (
-                window.confirm(
-                  'Return this pool draw to draft? This clears unplayed matches, saved pool assignments, and pool station settings. The planner may rebalance the pools. Recorded play and linked brackets cannot be cleared this way.',
-                )
-              )
-                void act(
-                  () => trpc.eventOps.unlockPools.mutate({ planId, confirm: true }),
-                  'Pool draw returned to draft. You can rebalance it in the planner.',
-                );
-            }}
-          >
-            Return draw to draft
-          </button>
-        )}
-      </section>
+      <PoolDrawControls data={data} closed={closed} pending={pending} act={act} />
+      <NativeResultControls
+        data={data}
+        onChanged={() => cache.invalidateQueries({ queryKey: ['eventOps', planId] })}
+      />
       <ToPlayerFinder
         data={data}
         onMatch={(id) => {
@@ -494,6 +446,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
               e.preventDefault();
               void act(async () => {
                 await trpc.eventOps.announce.mutate({
+                  requestId: crypto.randomUUID(),
                   planId,
                   message: announcement,
                   durationSeconds: announcementMinutes * 60,
@@ -554,6 +507,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
               e.preventDefault();
               void act(async () => {
                 await trpc.eventOps.savePrize.mutate({
+                  requestId: crypto.randomUUID(),
                   planId,
                   title: prizeTitle,
                   ...(prizePlayer ? { playerId: prizePlayer } : {}),
@@ -609,6 +563,8 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
                 onChange={(e) =>
                   void act(() =>
                     trpc.eventOps.settings.mutate({
+                      requestId: crypto.randomUUID(),
+                      expectedReportingRevision: data.settings.reportingRevision,
                       planId,
                       published: e.target.checked,
                       playerReports: data.settings.playerReports,
@@ -626,6 +582,8 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
                 onChange={(e) =>
                   void act(() =>
                     trpc.eventOps.settings.mutate({
+                      requestId: crypto.randomUUID(),
+                      expectedReportingRevision: data.settings.reportingRevision,
                       planId,
                       published: data.settings.published,
                       playerReports: e.target.checked,
@@ -686,14 +644,18 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
       {admin && !closed && (
         <details className="card">
           <summary>
-            {data.plan.softLockedAt
-              ? 'Before play: reset match queue'
-              : 'Before play: rebuild the roster'}
+            {data.plan.drawPaused
+              ? 'Play is paused. Adjust attendance in this desk, then resume the draw.'
+              : data.plan.softLockedAt
+                ? 'Before play: reset match queue'
+                : 'Before play: rebuild the roster'}
           </summary>
           <p className="muted">
-            {data.plan.softLockedAt
-              ? 'Clear unplayed matches while keeping the soft-locked pool assignments. Prepare matches again to restore the queue.'
-              : 'Clear an unplayed queue before reopening the planner. This is unavailable once a match starts, a score is reported, someone withdraws, or a bracket is attached.'}
+            {data.plan.drawPaused
+              ? 'Play is paused. Adjust attendance in this desk, then resume the draw.'
+              : data.plan.softLockedAt
+                ? 'Clear unplayed matches while keeping the soft-locked pool assignments. Prepare matches again to restore the queue.'
+                : 'Clear an unplayed queue before reopening the planner. This is unavailable once a match starts, a score is reported, someone withdraws, or a bracket is attached.'}
           </p>
           <button
             className="btn"
@@ -752,15 +714,20 @@ function MatchCard({
 }) {
   const [editing, setEditing] = useState<'live' | 'final' | null>(null);
   const [revision, setRevision] = useState(match.revision);
+  const [progressRevision, setProgressRevision] = useState(match.progressRevision);
   const [score1, setScore1] = useState(match.score1 ?? 0);
   const [score2, setScore2] = useState(match.score2 ?? 0);
   const [outcome, setOutcome] = useState<'played' | 'forfeit' | 'bye'>('played');
   const [winnerId, setWinnerId] = useState(match.winnerId ?? match.player1Id ?? '');
   const [requestId, setRequestId] = useState('');
-  const stale = editing !== null && revision !== match.revision;
+  const stale =
+    editing !== null &&
+    (revision !== match.revision ||
+      (editing === 'live' && progressRevision !== match.progressRevision));
   const begin = (mode: 'live' | 'final') => {
     setEditing(mode);
     setRevision(match.revision);
+    setProgressRevision(match.progressRevision);
     setScore1(match.score1 ?? 0);
     setScore2(match.score2 ?? 0);
     setOutcome(match.outcome ?? 'played');
@@ -826,6 +793,7 @@ function MatchCard({
               trpc.eventOps.updateMatch.mutate({
                 matchId: match.id,
                 expectedRevision: match.revision,
+                expectedResourceRevision: match.resourceRevision,
                 status:
                   match.status === 'playing'
                     ? 'playing'
@@ -867,6 +835,7 @@ function MatchCard({
                 trpc.eventOps.updateMatch.mutate({
                   matchId: match.id,
                   expectedRevision: match.revision,
+                  expectedResourceRevision: match.resourceRevision,
                   status: match.status === 'playing' ? 'ready' : 'playing',
                   stationId: match.stationId,
                 }),
@@ -895,6 +864,7 @@ function MatchCard({
                       trpc.eventOps.updateMatch.mutate({
                         matchId: match.id,
                         expectedRevision: match.revision,
+                        expectedResourceRevision: match.resourceRevision,
                         status: 'ready',
                       }),
                     'Players confirmed · match returned to the queue',
@@ -923,6 +893,7 @@ function MatchCard({
                 if (editing === 'live')
                   await trpc.eventOps.updateLiveScore.mutate({
                     matchId: match.id,
+                    expectedProgressRevision: progressRevision,
                     expectedRevision: revision,
                     score1,
                     score2,

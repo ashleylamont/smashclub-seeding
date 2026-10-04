@@ -10,8 +10,7 @@ function runtime(ctx: TrpcContext) {
   if (!ctx.nativeRuntime)
     throw new TRPCError({
       code: 'PRECONDITION_FAILED',
-      message:
-        'Act-PG live tournaments require the PostgreSQL runtime. The PGlite harness supports draft planning only.',
+      message: 'The native live tournament runtime is unavailable.',
     });
   return ctx.nativeRuntime;
 }
@@ -25,15 +24,24 @@ async function transport<T>(work: () => Promise<T>) {
   }
 }
 
-/** Additive backend contract; adoption is explicitly requested per native event. */
+/** Direct command/cursor/recovery API for the standard native lifecycle. */
 export const nativeLiveRouter = router({
-  adopt: authedProcedure
-    .input(plan)
-    .mutation(({ ctx, input }) => transport(() => runtime(ctx).adopt(ctx.user, input.planId))),
   command: authedProcedure
     .input(plan.extend({ requestId: z.string().min(1).max(128), command: Command }))
     .mutation(({ ctx, input }) =>
-      transport(() => runtime(ctx).command(ctx.user, input.planId, input.requestId, input.command)),
+      transport(async () => {
+        const live = runtime(ctx);
+        const response = await live.command(ctx.user, input.planId, input.requestId, input.command);
+        if (['finalize', 'replaceResult'].includes(input.command.kind)) {
+          await live.drainReactions();
+          return {
+            ...response,
+            publicationStatus:
+              (await live.snapshot(input.planId, true)).publication?.status ?? null,
+          };
+        }
+        return response;
+      }),
     ),
   snapshot: publicProcedure
     .input(plan.extend({ cursor: z.number().int().nonnegative().optional() }))

@@ -31,7 +31,19 @@ export type PoolFlowData = {
   stationQueues?: StationQueue[];
   poolRounds?: PoolRounds[];
 };
-export type StartPoolMatch = { matchId: string; stationId: string; expectedRevision: number };
+export type StartPoolMatch = {
+  matchId: string;
+  stationId: string;
+  expectedRevision: number;
+  requestId?: string;
+};
+export function eventPlayOpen(
+  plan: { bracketMode?: string; softLockedAt?: string | null; drawPaused?: boolean } | undefined,
+) {
+  return Boolean(
+    plan && (plan.bracketMode !== 'native' || (plan.softLockedAt && !plan.drawPaused)),
+  );
+}
 export const poolKey = (match: Pick<LiveMatch, 'stage' | 'division' | 'poolIndex'>) =>
   match.stage === 'group' && match.poolIndex !== null
     ? `${match.division}:${match.poolIndex}`

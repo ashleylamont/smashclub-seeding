@@ -1,3 +1,5 @@
+import { InMemoryStore } from '@rotorsoft/act';
+import { createNativeRuntime, startNativeWorker } from '../tournament/runtime';
 /**
  * Local development harness.
  *
@@ -78,7 +80,8 @@ export async function startDevHarness(
 
   const auth = createAuth(db, env, { enableCredentials: true });
   const recomputeTrigger = new RecomputeTrigger(db, 500);
-  const app = await buildApp({ db, env, auth, challonge, recomputeTrigger });
+  const nativeRuntime = createNativeRuntime(db, new InMemoryStore());
+  const app = await buildApp({ db, env, auth, challonge, recomputeTrigger, nativeRuntime });
 
   // Two accounts so role-gating can actually be tested. The first verified
   // sign-in from ADMIN_EMAILS bootstraps the admin role.
@@ -109,6 +112,8 @@ export async function startDevHarness(
   const rehearsalPlanId = await seedOperations(db);
   const historicalPlanId = await seedHistoricalEvent(db);
 
+  await nativeRuntime.recover();
+  const stopNative = startNativeWorker(nativeRuntime, db, (error) => app.log.error(error));
   await app.listen({ port, host: '127.0.0.1' });
   const url = `http://127.0.0.1:${port}`;
   log(`\ndev harness listening on ${url}`);
@@ -125,6 +130,8 @@ export async function startDevHarness(
     adminCredentials: { email: adminEmail, password },
     userCredentials: { email: userEmail, password },
     close: async () => {
+      await stopNative();
+      await nativeRuntime.shutdown();
       await app.close();
       await client.close();
     },

@@ -26,7 +26,7 @@ export function CompletedScoreReport({
   match: RecordedMatch;
   enabled: boolean;
   allowReports: boolean;
-  pendingReport?: { score1: number; score2: number; isDispute: boolean };
+  pendingReport?: { score1: number | null; score2: number | null; isDispute: boolean };
   onSubmit: (input: ResultSubmission) => Promise<{ isDispute: boolean }>;
   label?: string;
 }) {

@@ -11,12 +11,14 @@ export const NativeTournament = state({
   .init(() => ({ current: [initialState()] as [ReturnType<typeof initialState>] }))
   .emits({
     BaselineCapturedV1: Baseline,
+    LegacyStateImportedV1: LiveState,
     DecisionRecordedV1: Decision,
     ResultsSealedV1: Decision,
     PublicationRecordedV1: z.object({ resultId: z.uuid(), tournamentIds: z.array(z.uuid()) }),
   })
   .patch({
     BaselineCapturedV1: ({ data }) => ({ current: [captureBaseline(data)] }),
+    LegacyStateImportedV1: ({ data }) => ({ current: [data] }),
     DecisionRecordedV1: ({ data }, state) => ({
       current: [reduceDecision(state.current[0], data)],
     }),
@@ -41,8 +43,22 @@ export const NativeTournament = state({
   .emit((envelope, snapshot) => {
     const decision = decide(snapshot.state.current[0], envelope);
     return decision
-      ? [envelope.command.kind === 'finalize' ? 'ResultsSealedV1' : 'DecisionRecordedV1', decision]
+      ? [
+          ['finalize', 'replaceResult'].includes(envelope.command.kind)
+            ? 'ResultsSealedV1'
+            : 'DecisionRecordedV1',
+          decision,
+        ]
       : undefined;
+  })
+  .on({ ImportLegacyNativeState: LiveState })
+  .emit((imported, snapshot) => {
+    if (snapshot.state.current[0].baseline) {
+      if (hash(snapshot.state.current[0].baseline) !== hash(imported.baseline))
+        throw new TournamentConflict('Imported state differs from the immutable handoff.');
+      return undefined;
+    }
+    return ['LegacyStateImportedV1', imported];
   })
   .on({
     AcknowledgeNativePublication: z.object({

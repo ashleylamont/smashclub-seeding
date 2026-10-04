@@ -42,6 +42,12 @@ export function advance(state: TournamentState, at: number, commandId: string) {
     if (!parentsResolved) continue;
     const players = [match.player1Id, match.player2Id].filter((p): p is string => Boolean(p));
     const remaining = players.filter((p) => !withdrawn.has(p));
+    if (match.stage === 'group' && remaining.length === 1 && players.length === 2) {
+      match.status = 'blocked';
+      match.blockedReason = 'Player withdrawn: awaiting organiser forfeit decision';
+      match.stationId = null;
+      continue;
+    }
     if (remaining.length === 2) {
       match.status = 'ready';
       continue;
@@ -75,7 +81,12 @@ export function drawFinals(state: TournamentState, envelope: CommandEnvelope) {
     const finishers = state.pools
       .filter((p) => p.division === division)
       .flatMap((p) =>
-        p.order!.map((playerId, index) => ({ playerId, poolIndex: p.index, place: index + 1 })),
+        p
+          .order!.filter(
+            (id) =>
+              !state.entrants.some((e) => e.playerId === id && e.availability === 'withdrawn'),
+          )
+          .map((playerId, index) => ({ playerId, poolIndex: p.index, place: index + 1 })),
       );
     for (const stage of ['main', 'consolation'] as const) {
       const qualifiers =
@@ -132,6 +143,10 @@ export function drawFinals(state: TournamentState, envelope: CommandEnvelope) {
             completedAt: null,
             automaticFromRevision: null,
             resultCommandId: null,
+            liveScore1: null,
+            liveScore2: null,
+            progressRevision: 0,
+            blockedReason: null,
           });
         }
         previous = current;

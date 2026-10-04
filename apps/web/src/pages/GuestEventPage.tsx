@@ -17,6 +17,7 @@ import './admin/EventOperations.css';
 import { PoolFilter, PoolRoundSchedule, PoolStationQueue } from '../components/PoolStationQueue';
 import {
   poolPath,
+  eventPlayOpen,
   poolPolicy,
   queueScoringIds,
   usePoolFilter,
@@ -124,8 +125,15 @@ export function GuestEvent({ planId }: { planId: string }) {
   const unpublished =
     publicEvent.error instanceof TRPCClientError &&
     ['NOT_FOUND', 'FORBIDDEN', 'UNAUTHORIZED'].includes(publicEvent.error.data?.code ?? '');
+  const eventPlan = (publicEvent.data ?? matches.data)?.plan;
+  const playOpen = eventPlayOpen(eventPlan);
   const canWrite =
-    valid && !redeeming && Boolean(matches.data) && !matches.isError && !publicEvent.isError;
+    playOpen &&
+    valid &&
+    !redeeming &&
+    Boolean(matches.data) &&
+    !matches.isError &&
+    !publicEvent.isError;
   const data: PoolFlowData | undefined = unpublished
     ? undefined
     : (publicEvent.data ?? matches.data);
@@ -210,33 +218,20 @@ export function GuestEvent({ planId }: { planId: string }) {
           This event is closed. Results remain available; ask a TO about corrections.
         </p>
       )}
-      {!closed &&
-        (redeeming ? (
-          <p role="status">Opening your guest pass…</p>
-        ) : !valid || matches.isError ? (
-          <section className="card">
-            <h2>
-              {session && !valid
-                ? 'Your guest pass has expired'
-                : matches.isError
-                  ? 'Refresh your guest pass'
-                  : 'Scan in to report a score'}
-            </h2>
-            <p>
-              Scan a guest reporting QR at the venue or ask a TO for an active invitation to start
-              matches and report scores. You can keep browsing without a pass.
-            </p>
-            {matches.isError && (
-              <p className="banner banner-warning" role="alert">
-                {matches.error.message} If this pass was revoked, ask a TO for a new QR.
-              </p>
-            )}
-          </section>
-        ) : (
-          <p className="guest-pass-expiry">
-            Guest pass · {guestTimeLeft(session!.expiresAt, now)} remaining
-          </p>
-        ))}
+      {!closed && !playOpen && (
+        <p className="card">
+          Match reporting opens when the organiser locks or resumes the pool draw.
+        </p>
+      )}
+      {!closed && (
+        <GuestPassStatus
+          redeeming={redeeming}
+          valid={valid}
+          session={session}
+          now={now}
+          error={matches.isError ? matches.error.message : null}
+        />
+      )}
       {publicEvent.isError && !unpublished && (
         <p role="alert">Live updates interrupted. Scores shown may be out of date.</p>
       )}
@@ -338,7 +333,7 @@ export function GuestEvent({ planId }: { planId: string }) {
                   key={`${match.id}:${poolPolicy(data, match)?.selfRun && match.status === 'playing' ? 'playing' : 'regular'}`}
                   planId={planId}
                   session={canWrite && !closed ? session : null}
-                  disputeMode={disputeMode && !closed}
+                  disputeMode={disputeMode && !closed && playOpen}
                   match={match as GuestMatch}
                   report={matches.data?.reports.find((report) => report.matchId === match.id)}
                   status={matchStatus(data, match)}
@@ -377,5 +372,47 @@ export function GuestEvent({ planId }: { planId: string }) {
         </p>
       )}
     </div>
+  );
+}
+
+function GuestPassStatus({
+  redeeming,
+  valid,
+  session,
+  now,
+  error,
+}: {
+  redeeming: boolean;
+  valid: boolean;
+  session: GuestSession | null;
+  now: number;
+  error: string | null;
+}) {
+  if (redeeming) return <p role="status">Opening your guest pass…</p>;
+  if (!valid || error)
+    return (
+      <section className="card">
+        <h2>
+          {session && !valid
+            ? 'Your guest pass has expired'
+            : error
+              ? 'Refresh your guest pass'
+              : 'Scan in to report a score'}
+        </h2>
+        <p>
+          Scan a guest reporting QR at the venue or ask a TO for an active invitation to start
+          matches and report scores. You can keep browsing without a pass.
+        </p>
+        {error && (
+          <p className="banner banner-warning" role="alert">
+            {error} If this pass was revoked, ask a TO for a new QR.
+          </p>
+        )}
+      </section>
+    );
+  return (
+    <p className="guest-pass-expiry">
+      Guest pass · {guestTimeLeft(session!.expiresAt, now)} remaining
+    </p>
   );
 }

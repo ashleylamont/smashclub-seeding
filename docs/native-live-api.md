@@ -1,70 +1,94 @@
-# Native live backend prototype
+# Native live tournament API
 
-The backend slice is explicitly adopted per event. Existing event desks are still
-relational consumers: do not adopt a real night until its UI/writers are migrated.
-[ADR](adr/0001-act-native-tournament.md) explains the ownership boundary, dependency
-patch, tests and outstanding rollout.
+Native live events use Act by default through the existing event APIs. There is
+no opt-in adoption endpoint. [The ADR](adr/0001-act-native-tournament.md) describes
+ownership, migration, concurrency and publication.
 
-Run Node >=22.23.3. The normal PostgreSQL server initializes Act-PG in the
-`native_act` schema and starts durable recovery. PGlite's dev harness deliberately
-does not create a fake production Act-PG adapter; `eventOps.live` returns a clear
-precondition error there. The tests pair PGlite with in-memory Act only for SQL
-handoff coverage.
+Run Node >=22.23.3. Production initializes Act-PG in the `native_act` schema and
+recovers legacy native nights before accepting traffic. The PGlite development
+harness uses an isolated in-memory Act runtime for the same application APIs.
 
-## tRPC contract
+## Standard application API
 
-| Procedure | Input | Behavior |
-| --- | --- | --- |
-| `eventOps.live.adopt` | `planId` | Operator-only, first soft lock of an unplayed native draft; freezes SQL ownership, transfers immutable baseline, returns private snapshot. Safe to retry after interruption. |
-| `eventOps.live.command` | `planId`, `requestId`, `command` | Server resolves actor/operator access. Deduplication is scoped to actor + request. Response includes receipt/sequence, affected match and publication status. |
-| `eventOps.live.snapshot` | `planId`, optional `cursor` | Published public view. Consistent domain cursor; `unchanged` when current, `resync` when a full replacement is needed. No reports, actor history or credentials. |
-| `eventOps.live.overview` | `planId` | Operator view includes reports, grouped commands and pending rating intents. |
-| `eventOps.live.recover` | `planId` | Operator retries baseline/publication work, unblocks this publication subscription only and returns current status. |
+`eventOps.softLockPools` establishes the immutable SQL handoff and transfers the
+chosen draw into Act. A first native desk score/control operation also establishes
+this boundary automatically. Anonymous guests cannot initiate a fresh handoff.
+Once owned, native events require the runtime and cannot fall back to SQL writes.
 
-Commands are discriminated by `kind`. The exact schemas live in
-`apps/server/src/tournament/schemas.ts`:
+The existing `eventOps` snapshot/overview, score/review/progress, station/pool,
+attendance, publication settings, announcement and prize procedures use Act.
+Player and guest self-service recheck authenticated access outside the aggregate
+and submit credential-free domain commands. Native planner reads, pool orders,
+finals preview/generation/reset and event close operations use the same state.
+Draft setup and global identity/access remain relational.
 
-- `score`: match ID, expected match revision, played score or a forfeit with null
-  games and explicit winner. Decisive played scores infer the winner. A TO can
-  record a completed result without dispatching first.
-- `review`: report ID, approval/rejection, current match revision. Agreeing reports
-  never apply a second result; disputes stay pending for an operator.
-- `dispatch`: match revision plus resource revision. Rechecks both players,
-  aggregate capacity and optional reserved station together. Dispatch does not
-  change the score/pairing revision.
-- `availability`, `resources`, `poolResources`, `reporting`: explicit entrant,
-  resource or reporting preconditions. Availability includes a recorded reason.
-- `placements`: pool revision plus all relevant match revisions, and a complete
-  entrant order. No algorithmic tie resolution is implied by a manual order.
-- `drawFinals`: persists the selected entrants, slots, parent dependencies and
-  match IDs. Replay does not call the draw algorithm.
-- `unlock`, `relock`: retained lifecycle decisions for an unplayed live draw.
-- `finalize`: seal results exactly once per request. `pending` means the durable
-  publication reaction has not acknowledged; `blocked` appears in the snapshot
-  after delivery is quarantined; `published` includes historical tournament IDs.
-  Pending rating intents are independent of publication acknowledgement.
+Player and guest reporting open once the organiser locks the pool draw. A valid
+guest pass is independent of the signed-in player-reporting switch; its validated
+access is captured as guest attribution without recording the bearer credential.
 
-Match revisions, the resource/reporting revisions, the public domain cursor and
-Act's internal stream version have different purposes. Send semantic revisions
-with commands; do not send a public cursor as a universal mutation precondition.
-The server retries Act contention against freshly loaded state and revalidates
-semantic conditions. Guest credentials and other secrets never enter commands.
+Standard mutations accept their existing preconditions; live progress has a
+separate progress revision, station controls can send a resource revision, and
+publication settings can send a reporting revision. Mutations based on a plan
+also accept an optional `requestId`; reuse the same ID for a transport retry.
+Scores require their existing actor-scoped request ID. Pool orders retain all
+relevant match revisions and a pool placement revision. Attendance and finals
+apply a reviewed preview token.
+
+## Direct command and recovery API
+
+| Procedure | Behavior |
+| --- | --- |
+| `eventOps.live.command` | Authenticated actor plus `planId`, `requestId`, `command`; resolves organiser access and returns a receipt, sequence and publication status. |
+| `eventOps.live.snapshot` | Published view with optional domain `cursor`; returns `unchanged` or full `resync` metadata. No reports, actor history or credentials. |
+| `eventOps.live.overview` | Operator view with reports, grouped commands and pending rating intents. |
+| `eventOps.live.recover` | Operator retries pending transfer/publication, unblocks this publication subscription and returns status. |
+
+Commands are discriminated by `kind`; schemas are in
+`apps/server/src/tournament/schemas.ts` and `commands.ts`:
+
+- Results: `score`, `review`, `progress`. Played scores infer a decisive winner;
+  forfeits have null games and an explicit winner. Byes come from the recorded
+  draw. Agreeing reports do not apply a second result; disputes require review.
+- Scheduling: `dispatch`, `matchControl`, `resources`, `poolResources`,
+  `configurePools`, `station`. Match and resource preconditions protect dispatch;
+  scheduling and placement revisions are distinct.
+- Attendance and policy: `availability`, `attendance`, `reporting`. Attendance
+  captures a new entrant's identity facts and applies a reviewed preview.
+- Draw and lifecycle: `placements`, `poolOrders`, `drawFinals`, `resetFinals`,
+  `resetQueue`, `unlock`, `relock`, `cancel`. Unlock means pause for an unplayed
+  Act-owned draw; SQL editing stays frozen. Chosen draws and dependencies are
+  persisted, so replay does not call the draw algorithm.
+- Communications: `announce`, `prize`.
+- Publication: `finalize`, `replaceResult`. Replacement names the current result,
+  its corrected match revisions and a ruling reason. It retains actual opponents
+  and the draw and publishes a new revision through the same durable reaction.
+
+Publication status is `pending`, `blocked` or `published`; published includes
+historical tournament IDs. Rating-intent completion is independent of the
+publication acknowledgement. The desk exposes both statuses and a recovery
+control, plus a reviewed score/forfeit correction form on sealed native events.
+
+Stream version, semantic revisions and the public domain cursor have different
+purposes. Do not send a cursor as a universal mutation precondition. Incremental
+transport delivery can be added independently; current clients receive consistent
+replacement snapshots from authoritative state.
 
 ## Verification and recovery
 
 ```sh
-pnpm exec vitest run apps/server/test/native-live-domain.test.ts apps/server/test/native-act-runtime.test.ts apps/server/test/native-live-handoff.test.ts
+pnpm exec vitest run apps/server/test/native-live-domain.test.ts apps/server/test/native-act-runtime.test.ts apps/server/test/native-live-handoff.test.ts apps/server/test/native-live-cutover.test.ts
 RUN_POSTGRES_TESTS=1 pnpm exec vitest run apps/server/test/native-live-postgres.test.ts
+pnpm --filter @smashclub/web exec playwright test --project=desktop native-event.spec.ts event-attendance.spec.ts guest-event-discovery.spec.ts event-night-reporting.spec.ts
 ```
 
-The PostgreSQL test suite creates and removes its own temporary cluster/Unix socket;
-it never connects to an external `DATABASE_URL`. PostgreSQL `initdb`/`pg_ctl` must be
-available. OS sandbox restrictions may require allowing local sockets/shared memory.
+The PostgreSQL suite creates and removes a private temporary cluster and Unix
+socket; it never connects to an external `DATABASE_URL`. `initdb`/`pg_ctl` must be
+available. Local OS restrictions may require allowing sockets/shared memory.
 
-A crash before baseline append leaves the frozen SQL handoff; the recovery worker
-retries it. SQL publication failures roll back history/receipt/rating intent
-together. A crash after commit is deduplicated by the immutable receipt, then Act
-records acknowledgement with explicit concurrency. Ratings and intent completion
-commit together under the common recompute lock. Replaying the retained log is a
-read-only reducer operation and does not touch providers, history, credentials,
-notifications or ratings. No Act close/archive/truncate operation is exposed.
+A crash before baseline append leaves the frozen handoff for the recovery worker.
+SQL publication failures roll back history, receipt and rating intent together.
+A post-commit crash is deduplicated by the immutable receipt; Act then records the
+acknowledgement. Ratings and intent completion commit together under the common
+recompute lock. Replay is a read-only reducer operation and never calls providers,
+changes history, touches credentials or triggers ratings/notifications. No stream
+close/archive/truncate operation is exposed.

@@ -1,7 +1,20 @@
 import { z } from 'zod';
+import { additionalCommands } from './commands';
 
 const id = z.uuid();
 const revision = z.number().int().nonnegative();
+const Announcement = z.object({
+  id,
+  message: z.string(),
+  createdAt: z.number(),
+  expiresAt: z.number().nullable(),
+});
+const Prize = z.object({
+  id,
+  title: z.string(),
+  description: z.string().nullable(),
+  playerId: id.nullable(),
+});
 export const Division = z.enum(['upper', 'lower']);
 export const LiveMatch = z.object({
   id,
@@ -28,6 +41,10 @@ export const LiveMatch = z.object({
   completedAt: z.number().nullable(),
   automaticFromRevision: revision.nullable(),
   resultCommandId: id.nullable(),
+  liveScore1: revision.nullable().default(null),
+  liveScore2: revision.nullable().default(null),
+  progressRevision: revision.default(0),
+  blockedReason: z.string().nullable().default(null),
 });
 export const Entrant = z.object({
   id,
@@ -51,6 +68,7 @@ export const Pool = z.object({
   stationIds: z.array(id),
   selfRun: z.boolean(),
   autoAcceptScores: z.boolean(),
+  scheduleRevision: revision.default(0),
 });
 export const Station = z.object({ id, name: z.string(), enabled: z.boolean(), revision });
 export const Bracket = z.object({
@@ -101,6 +119,8 @@ export const Baseline = z.object({
   matches: z.array(LiveMatch),
   stations: z.array(Station),
   settings: LiveSettings,
+  announcements: z.array(Announcement).default([]),
+  prizes: z.array(Prize).default([]),
 });
 export const Report = z.object({
   id,
@@ -112,7 +132,7 @@ export const Report = z.object({
   score1: revision.nullable(),
   score2: revision.nullable(),
   winnerId: id,
-  outcome: z.enum(['played', 'forfeit']),
+  outcome: z.enum(['played', 'forfeit', 'bye']),
   status: z.enum(['pending', 'approved', 'rejected']),
   autoApproved: z.boolean(),
   isDispute: z.boolean(),
@@ -126,14 +146,21 @@ export const Result = z.object({
   name: z.string(),
   eventDate: z.number(),
   sealedAt: z.number(),
+  replacesResultId: id.nullable().default(null),
+  replacementReason: z.string().nullable().default(null),
   entrants: z.array(Entrant),
   brackets: z.array(Bracket),
   matches: z.array(LiveMatch),
 });
-export const Receipt = z.object({ hash: z.string(), sequence: revision, reportId: id.nullable() });
+export const Receipt = z.object({
+  hash: z.string(),
+  sequence: revision,
+  reportId: id.nullable(),
+  commandId: id.optional(),
+});
 export const LiveState = z.object({
   baseline: Baseline.nullable(),
-  lifecycle: z.enum(['absent', 'locked', 'unlocked', 'finalized']),
+  lifecycle: z.enum(['absent', 'locked', 'unlocked', 'finalized', 'cancelled']),
   sequence: revision,
   entrants: z.array(Entrant),
   pools: z.array(Pool),
@@ -145,6 +172,26 @@ export const LiveState = z.object({
   receipts: z.record(z.string(), Receipt),
   result: Result.nullable(),
   publication: z.object({ resultId: id, tournamentIds: z.array(id) }).nullable(),
+  announcements: z
+    .array(
+      z.object({
+        id,
+        message: z.string(),
+        createdAt: z.number(),
+        expiresAt: z.number().nullable(),
+      }),
+    )
+    .default([]),
+  prizes: z
+    .array(
+      z.object({
+        id,
+        title: z.string(),
+        description: z.string().nullable(),
+        playerId: id.nullable(),
+      }),
+    )
+    .default([]),
 });
 export const Command = z.discriminatedUnion('kind', [
   z.object({
@@ -205,18 +252,25 @@ export const Command = z.discriminatedUnion('kind', [
     expectedRevision: revision,
     matchRevisions: z.record(id, revision),
   }),
-  z.object({ kind: z.literal('drawFinals') }),
+  z.object({
+    kind: z.literal('drawFinals'),
+    revisionToken: z.string().length(64).optional(),
+    replaceExisting: z.boolean().optional(),
+  }),
   z.object({ kind: z.literal('unlock') }),
   z.object({ kind: z.literal('relock') }),
   z.object({ kind: z.literal('finalize') }),
+  ...additionalCommands,
 ]);
 export const Envelope = z.object({
   id,
   requestId: z.string().min(1).max(128),
   actorId: z.string(),
   operator: z.boolean(),
+  guest: z.boolean().optional(),
   at: z.number(),
   command: Command,
+  inputHash: z.string().optional(),
 });
 /** Persist decided state changes; reducers do not rerun scheduling/draw policy. */
 export const Decision = z.object({
@@ -228,11 +282,19 @@ export const Decision = z.object({
   at: z.number(),
   basis: z.record(z.string(), revision),
   command: Command,
-  source: z.enum(['operator', 'attendee']),
+  source: z.enum(['operator', 'attendee', 'guest']),
   correctionOf: id.nullable(),
   causation: z.array(id),
   // Arrays replace rather than merge; all chosen IDs/results are persisted.
-  after: LiveState.omit({ baseline: true, receipts: true, sequence: true }).partial(),
+  after: LiveState.omit({
+    baseline: true,
+    receipts: true,
+    sequence: true,
+    announcements: true,
+    prizes: true,
+  })
+    .extend({ announcements: z.array(Announcement), prizes: z.array(Prize) })
+    .partial(),
   receiptKey: z.string(),
   receipt: Receipt,
 });
@@ -258,6 +320,8 @@ export function initialState(): TournamentState {
     receipts: {},
     result: null,
     publication: null,
+    announcements: [],
+    prizes: [],
     settings: {
       published: false,
       playerReports: false,

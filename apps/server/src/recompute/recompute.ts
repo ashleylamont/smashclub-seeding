@@ -19,6 +19,7 @@ import {
   type GlickoSettings,
 } from '@smashclub/shared';
 import { getGlickoSettings, updateGlickoSettings } from '../settings';
+import { nativeHistory } from '../events/nativeHistory';
 
 export const ENGINE_VERSION = '1.0.0';
 const KEEP_RECOMPUTES = 5;
@@ -46,6 +47,7 @@ async function computeRatings(
   db: Db,
 ): Promise<{ recomputeId: string; model: string; players: number; sets: number; events: number }> {
   const { glicko, version } = await getGlickoSettings(db);
+  const { superseded } = await nativeHistory(db);
 
   const tournamentRows = await db
     .select({
@@ -84,6 +86,7 @@ async function computeRatings(
     : [];
 
   const engineSets: EngineSet[] = setRows
+    .filter((row) => !superseded.has(row.tournamentId))
     .filter((row) => includesResultStage(modes.get(row.tournamentId) ?? 'auto', row.resultStage))
     .filter((row) => row.p1PlayerId !== row.p2PlayerId)
     /*

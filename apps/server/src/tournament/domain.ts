@@ -1,3 +1,5 @@
+import { dispatchMatch } from './scheduling';
+import { additionalDecision, finalsToken, resetFinals } from './operations';
 import { advance, drawFinals } from './brackets';
 import { hash, receiptKey, requireFact, resolved, sameScore } from './facts';
 import { applyScore, recordScore } from './scores';
@@ -20,7 +22,7 @@ export function captureBaseline(baseline: TournamentBaseline): TournamentState {
   requireFact(
     baseline.matches.every(
       (m) =>
-        m.status === 'ready' &&
+        ['ready', 'blocked'].includes(m.status) &&
         !m.started &&
         !m.outcome &&
         m.player1Id &&
@@ -78,6 +80,8 @@ export function captureBaseline(baseline: TournamentBaseline): TournamentState {
     matches: baseline.matches,
     stations: baseline.stations,
     settings: baseline.settings,
+    announcements: baseline.announcements,
+    prizes: baseline.prizes,
   };
 }
 
@@ -86,7 +90,7 @@ export function decide(
   envelope: CommandEnvelope,
 ): TournamentDecision | undefined {
   const key = receiptKey(envelope.actorId, envelope.requestId);
-  const inputHash = hash(envelope.command);
+  const inputHash = envelope.inputHash ?? hash(envelope.command);
   if (previous.receipts[key]) {
     requireFact(
       previous.receipts[key].hash === inputHash,
@@ -96,17 +100,29 @@ export function decide(
   }
   requireFact(previous.baseline, 'Baseline transfer has not completed.');
   requireFact(
-    previous.lifecycle !== 'finalized',
+    (previous.lifecycle !== 'finalized' || envelope.command.kind === 'replaceResult') &&
+      previous.lifecycle !== 'cancelled',
     'Results are sealed. Use an explicit replacement revision workflow.',
   );
   const command = envelope.command;
   requireFact(
-    envelope.operator || command.kind === 'score',
+    envelope.operator || command.kind === 'score' || command.kind === 'dispatch',
     'Only an organiser can perform this action.',
   );
   requireFact(
     previous.lifecycle === 'locked' ||
-      ['relock', 'resources', 'reporting', 'poolResources'].includes(command.kind),
+      [
+        'relock',
+        'resources',
+        'reporting',
+        'poolResources',
+        'station',
+        'configurePools',
+        'cancel',
+        'replaceResult',
+        'attendance',
+        'resetQueue',
+      ].includes(command.kind),
     'Relock before making live decisions.',
   );
   const next = structuredClone(previous);
@@ -132,58 +148,9 @@ export function decide(
       report.isDispute = false;
       break;
     }
-    case 'dispatch': {
-      const match = next.matches.find((m) => m.id === command.matchId);
-      requireFact(
-        match && match.status === 'ready' && match.player1Id && match.player2Id,
-        'Match is not ready.',
-      );
-      requireFact(
-        match.revision === command.expectedRevision &&
-          next.settings.resourceRevision === command.expectedResourceRevision,
-        'Pairing or resources changed.',
-      );
-      basis[match.id] = match.revision;
-      basis.resources = next.settings.resourceRevision;
-      const active = next.matches.filter((m) => m.status === 'playing');
-      requireFact(active.length < next.settings.capacity, 'Shared match capacity is full.');
-      requireFact(
-        !active.some((m) =>
-          [m.player1Id, m.player2Id].some((id) => id === match.player1Id || id === match.player2Id),
-        ),
-        'A player is already playing.',
-      );
-      requireFact(
-        next.entrants
-          .filter((e) => e.playerId === match.player1Id || e.playerId === match.player2Id)
-          .every((e) => e.availability === 'available'),
-        'A player is unavailable.',
-      );
-      const pool = next.pools.find((p) => p.id === match.poolId);
-      requireFact(!pool || pool.active, 'This pool is paused.');
-      if (command.stationId)
-        requireFact(
-          next.stations.some((s) => s.id === command.stationId && s.enabled) &&
-            !active.some((m) => m.stationId === command.stationId),
-          'Reserved station is unavailable.',
-        );
-      if (command.stationId)
-        requireFact(
-          !next.pools.some(
-            (p) =>
-              p.id !== match.poolId &&
-              p.active &&
-              p.stationIds.includes(command.stationId!) &&
-              next.matches.some((m) => m.poolId === p.id && !resolved(m)),
-          ),
-          'This station is reserved for another unfinished pool.',
-        );
-      match.status = 'playing';
-      match.started = true;
-      match.stationId = command.stationId;
-      next.settings.resourceRevision++;
+    case 'dispatch':
+      dispatchMatch(next, envelope, command, basis);
       break;
-    }
     case 'availability': {
       const entrant = next.entrants.find((e) => e.playerId === command.playerId);
       requireFact(entrant && entrant.revision === command.expectedRevision, 'Entrant changed.');
@@ -196,6 +163,11 @@ export function decide(
       basis[entrant.id] = entrant.revision;
       entrant.availability = command.availability;
       entrant.revision++;
+      if (command.availability === 'withdrawn')
+        for (const pool of next.pools.filter((p) => p.entrantIds.includes(entrant.playerId))) {
+          pool.order = null;
+          pool.revision++;
+        }
       next.settings.resourceRevision++;
       advance(next, envelope.at, envelope.id);
       break;
@@ -273,6 +245,7 @@ export function decide(
         selfRun: command.selfRun,
         autoAcceptScores: command.autoAcceptScores,
       });
+      pool.scheduleRevision++;
       next.settings.resourceRevision++;
       break;
     }
@@ -300,6 +273,12 @@ export function decide(
       break;
     }
     case 'drawFinals':
+      if (command.revisionToken)
+        requireFact(
+          finalsToken(next) === command.revisionToken,
+          'Finals changed since the preview.',
+        );
+      if (command.replaceExisting) resetFinals(next);
       for (const pool of next.pools) basis[pool.id] = pool.revision;
       drawFinals(next, envelope);
       break;
@@ -333,12 +312,16 @@ export function decide(
         name: next.baseline!.name,
         eventDate: next.baseline!.eventDate,
         sealedAt: envelope.at,
+        replacesResultId: null,
+        replacementReason: null,
         entrants: structuredClone(next.entrants),
         brackets: structuredClone(next.brackets),
         matches: structuredClone(next.matches),
       };
       next.lifecycle = 'finalized';
       break;
+    default:
+      requireFact(additionalDecision(next, envelope, basis), 'Unsupported command.');
   }
   const after: TournamentDecision['after'] = {};
   for (const field of [
@@ -351,6 +334,9 @@ export function decide(
     'settings',
     'reports',
     'result',
+    'publication',
+    'announcements',
+    'prizes',
   ] as const) {
     if (hash(previous[field]) !== hash(next[field])) Object.assign(after, { [field]: next[field] });
   }
@@ -365,7 +351,7 @@ export function decide(
     after,
     receiptKey: key,
     command,
-    source: envelope.operator ? 'operator' : 'attendee',
+    source: envelope.operator ? 'operator' : envelope.guest ? 'guest' : 'attendee',
     correctionOf:
       command.kind === 'score'
         ? (previous.matches.find((m) => m.id === command.matchId)?.resultCommandId ?? null)
@@ -377,7 +363,7 @@ export function decide(
           .flatMap((m) => (m.resultCommandId ? [m.resultCommandId] : [])),
       ),
     ],
-    receipt: { hash: inputHash, sequence: previous.sequence + 1, reportId },
+    receipt: { hash: inputHash, sequence: previous.sequence + 1, reportId, commandId: envelope.id },
   };
 }
 

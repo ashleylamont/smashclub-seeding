@@ -1,3 +1,4 @@
+import type { NativeRuntime } from '../tournament/runtime';
 import { attendeeScoreDecision } from './scorePolicy';
 import { loadStationQueues } from './queue';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
@@ -7,6 +8,7 @@ import {
   eventGuestRateLimits,
   eventGuestSessions,
   eventGuestSettings,
+  eventPlans,
   eventMatches,
   eventOperationSettings,
   eventScoreReports,
@@ -54,9 +56,10 @@ export async function configureGuests(
   actor: SessionUser,
   input: { planId: string; enabled: boolean; showOnOverlay: boolean; rotateInvitations?: boolean },
   rotate = false,
+  native?: NativeRuntime,
 ) {
   return db.transaction(async (tx) => {
-    await lockEvent(tx, input.planId);
+    await credentialAccess(tx, input.planId, native);
     await requireOperator(tx, input.planId, actor);
     const [previous] = await tx
       .select()
@@ -93,9 +96,14 @@ export async function configureGuests(
     return publicSettings(settings);
   });
 }
-export async function rotateGuests(db: Db, actor: SessionUser, planId: string) {
+export async function rotateGuests(
+  db: Db,
+  actor: SessionUser,
+  planId: string,
+  native?: NativeRuntime,
+) {
   return db.transaction(async (tx) => {
-    await lockEvent(tx, planId);
+    await credentialAccess(tx, planId, native);
     await requireOperator(tx, planId, actor);
     const [settings] = await tx
       .update(eventGuestSettings)
@@ -105,8 +113,8 @@ export async function rotateGuests(db: Db, actor: SessionUser, planId: string) {
     return publicSettings(settings);
   });
 }
-async function available(db: Db, planId: string, requirePublished = true) {
-  await lockEvent(db, planId);
+async function available(db: Db, planId: string, requirePublished = true, native?: NativeRuntime) {
+  await credentialAccess(db, planId, native);
   const [settings] = await db
     .select()
     .from(eventGuestSettings)
@@ -115,9 +123,32 @@ async function available(db: Db, planId: string, requirePublished = true) {
     .select()
     .from(eventOperationSettings)
     .where(eq(eventOperationSettings.eventPlanId, planId));
-  if (!settings?.enabled || (requirePublished && !ops?.published)) return deny();
+  const live = native ? await native.state(planId) : undefined;
+  if (
+    !settings?.enabled ||
+    (requirePublished && !(live?.baseline ? live.settings.published : ops?.published))
+  )
+    return deny();
   return settings;
 }
+
+async function credentialAccess(db: Db, planId: string, native?: NativeRuntime) {
+  if (native) {
+    const state = await native.state(planId);
+    if (state.baseline) {
+      if (!['locked', 'unlocked'].includes(state.lifecycle)) return deny();
+      const [plan] = await db
+        .select()
+        .from(eventPlans)
+        .where(eq(eventPlans.id, planId))
+        .for('update');
+      if (!plan) return deny();
+      return plan;
+    }
+  }
+  return lockEvent(db, planId);
+}
+
 function invitation(settings: typeof eventGuestSettings.$inferSelect, now: number) {
   if (!settings.rotateInvitations) {
     const signature = createHmac('sha256', settings.secret)
@@ -136,11 +167,12 @@ export async function guestInvitation(
   planId: string,
   actor?: SessionUser,
   now = Date.now(),
+  native?: NativeRuntime,
 ) {
   return db.transaction(async (tx) => {
     if (actor) await requireOperator(tx, planId, actor);
     try {
-      const settings = await available(tx, planId, !actor);
+      const settings = await available(tx, planId, !actor, native);
       if (!actor && !settings.showOnOverlay) return null;
       return invitation(settings, now);
     } catch (error) {
@@ -155,9 +187,15 @@ export async function guestInvitation(
   });
 }
 /** Committed separately so invalid redemption attempts also consume their allowance. */
-async function consumeRedemptionLimit(db: Db, planId: string, ip: string, now: number) {
+async function consumeRedemptionLimit(
+  db: Db,
+  planId: string,
+  ip: string,
+  now: number,
+  native?: NativeRuntime,
+) {
   const accepted = await db.transaction(async (tx) => {
-    const settings = await available(tx, planId);
+    const settings = await available(tx, planId, true, native);
     await tx
       .delete(eventGuestRateLimits)
       .where(
@@ -200,10 +238,11 @@ export async function redeemGuest(
   input: { planId: string; token: string },
   ip = 'unknown',
   now = Date.now(),
+  native?: NativeRuntime,
 ) {
-  await consumeRedemptionLimit(db, input.planId, ip, now);
+  await consumeRedemptionLimit(db, input.planId, ip, now, native);
   return db.transaction(async (tx) => {
-    const settings = await available(tx, input.planId);
+    const settings = await available(tx, input.planId, true, native);
     let expected: string;
     if (settings.rotateInvitations) {
       const expires = Number(input.token.split('.')[0]);
@@ -234,8 +273,9 @@ export async function validateGuestSession(
   db: Db,
   input: { planId: string; sessionToken: string },
   now: number,
+  native?: NativeRuntime,
 ) {
-  const settings = await available(db, input.planId);
+  const settings = await available(db, input.planId, true, native);
   const [guest] = await db
     .select()
     .from(eventGuestSessions)

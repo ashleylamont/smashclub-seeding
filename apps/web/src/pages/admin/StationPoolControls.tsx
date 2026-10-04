@@ -91,6 +91,7 @@ export function StationPoolControls({
                             trpc.eventOps.updateMatch.mutate({
                               matchId: next.id,
                               expectedRevision: next.revision,
+                              expectedResourceRevision: next.resourceRevision,
                               status: 'playing',
                               stationId: station.id,
                             }),
@@ -149,6 +150,8 @@ export function StationPoolControls({
                         void act(
                           () =>
                             trpc.eventOps.deleteStation.mutate({
+                              requestId: crypto.randomUUID(),
+                              expectedResourceRevision: data.settings.resourceRevision,
                               planId: data.plan.id,
                               id: station.id,
                             }),
@@ -166,6 +169,8 @@ export function StationPoolControls({
                       event.preventDefault();
                       void act(async () => {
                         await trpc.eventOps.saveStation.mutate({
+                          requestId: crypto.randomUUID(),
+                          expectedResourceRevision: data.settings.resourceRevision,
                           planId: data.plan.id,
                           id: station.id,
                           name: editName,
@@ -211,7 +216,12 @@ export function StationPoolControls({
             onSubmit={(event) => {
               event.preventDefault();
               void act(async () => {
-                await trpc.eventOps.saveStation.mutate({ planId: data.plan.id, name: stationName });
+                await trpc.eventOps.saveStation.mutate({
+                  requestId: crypto.randomUUID(),
+                  expectedResourceRevision: data.settings.resourceRevision,
+                  planId: data.plan.id,
+                  name: stationName,
+                });
                 setStationName('');
               }, 'Station added');
             }}
@@ -242,6 +252,7 @@ export function StationPoolControls({
                 for (let added = 0; added < stationCount; added++) {
                   while (existing.has(`station ${number}`)) number++;
                   await trpc.eventOps.saveStation.mutate({
+                    requestId: crypto.randomUUID(),
                     planId: data.plan.id,
                     name: `Station ${number++}`,
                   });

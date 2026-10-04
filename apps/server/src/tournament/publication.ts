@@ -1,4 +1,4 @@
-import { eq, isNull, sql } from 'drizzle-orm';
+import { eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   nativeLiveHandoffs,
   nativeResultPublications,
@@ -11,6 +11,7 @@ import {
 import { hash, TournamentConflict } from './domain';
 import type { TournamentResult } from './schemas';
 import { runRecompute } from '../recompute/recompute';
+import { historicalPlayerIds } from '../identity/playerIds';
 
 /** Only sealed facts are exported. Profile/draw/rating reads cannot change this result. */
 export async function publishNativeResult(
@@ -18,8 +19,6 @@ export async function publishNativeResult(
   result: TournamentResult,
   fault?: (phase: 'beforeReceipt' | 'afterCommit', transaction?: Db) => Promise<void>,
 ) {
-  if (result.revision !== 1)
-    throw new TournamentConflict('Replacement result publication is not implemented.');
   const publication = await db.transaction(async (tx) => {
     const [handoff] = await tx
       .select()
@@ -36,7 +35,23 @@ export async function publishNativeResult(
         throw new TournamentConflict('Publication receipt refers to different results.');
       return { resultId: result.id, tournamentIds: prior.tournamentIds };
     }
+    const revisions = await tx
+      .select()
+      .from(nativeResultPublications)
+      .where(eq(nativeResultPublications.eventPlanId, result.planId));
+    const previous = revisions.sort((a, b) => b.revision - a.revision)[0];
+    if (
+      result.revision !== (previous?.revision ?? 0) + 1 ||
+      result.replacesResultId !== (previous?.resultId ?? null)
+    )
+      throw new TournamentConflict('Replacement must supersede the latest published revision.');
+    if (previous?.tournamentIds.length)
+      await tx
+        .update(sets)
+        .set({ excludedFromRatings: true })
+        .where(inArray(sets.tournamentId, previous.tournamentIds));
     const tournamentIds: string[] = [];
+    const canonicalId = await historicalPlayerIds(tx);
     for (const bracket of result.brackets) {
       const matches = result.matches.filter(
         (m) =>
@@ -92,15 +107,15 @@ export async function publishNativeResult(
           playerIds.map((playerId, i) => ({
             tournamentId: tournament!.id,
             challongeParticipantId: i + 1,
-            playerId,
+            playerId: canonicalId(playerId),
             rawName: result.entrants.find((e) => e.playerId === playerId)!.name,
             cleanedName: result.entrants.find((e) => e.playerId === playerId)!.name,
             finalRank: ranks.get(playerId) ?? null,
           })),
         )
         .returning();
-      const participant = (id: string | null) =>
-        participants.find((p) => p.playerId === id)?.id ?? null;
+      const participantIds = new Map(playerIds.map((id, i) => [id, participants[i]!.id]));
+      const participant = (id: string | null) => (id ? (participantIds.get(id) ?? null) : null);
       for (const [index, match] of matches.entries())
         await tx.insert(sets).values({
           tournamentId: tournament!.id,
@@ -112,8 +127,8 @@ export async function publishNativeResult(
           suggestedPlayOrder: index + 1,
           p1ParticipantId: participant(match.player1Id),
           p2ParticipantId: participant(match.player2Id),
-          p1PlayerId: match.player1Id,
-          p2PlayerId: match.player2Id,
+          p1PlayerId: match.player1Id ? canonicalId(match.player1Id) : null,
+          p2PlayerId: match.player2Id ? canonicalId(match.player2Id) : null,
           winner: match.winnerId ? (match.winnerId === match.player1Id ? 1 : 2) : null,
           scoresCsv: match.outcome === 'played' ? `${match.score1}-${match.score2}` : null,
           excludedFromRatings: match.outcome !== 'played',

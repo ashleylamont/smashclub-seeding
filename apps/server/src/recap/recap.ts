@@ -1,5 +1,6 @@
 import { and, asc, eq, inArray, isNotNull, lt } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
+import { nativeHistory } from '../events/nativeHistory';
 import {
   companies,
   eventPlanBrackets,
@@ -100,6 +101,8 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
     .orderBy(asc(tournaments.eventDate));
 
   const anchorKey = anchor.eventDate ? eventKeyOf(anchor.eventDate.toISOString()) : null;
+  const nativePublications = await nativeHistory(db);
+  const nativeIds = nativePublications.byTournament.get(anchor.id);
   const memberships = await db
     .select()
     .from(eventPlanBrackets)
@@ -113,13 +116,17 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
       ? []
       : allDated.filter(
           (t) =>
-            !linkedTournamentIds.has(t.id) && eventKeyOf(t.eventDate!.toISOString()) === anchorKey,
+            !linkedTournamentIds.has(t.id) &&
+            !nativePublications.byTournament.has(t.id) &&
+            eventKeyOf(t.eventDate!.toISOString()) === anchorKey,
         );
-  if (anchorPlans.size === 1) {
+  if (nativeIds || anchorPlans.size === 1) {
     const planId = [...anchorPlans][0]!;
-    const ids = memberships
-      .filter((link) => link.eventPlanId === planId)
-      .flatMap((link) => (link.tournamentId ? [link.tournamentId] : []));
+    const ids =
+      nativeIds ??
+      memberships
+        .filter((link) => link.eventPlanId === planId)
+        .flatMap((link) => (link.tournamentId ? [link.tournamentId] : []));
     nightRows = (
       await db
         .select()

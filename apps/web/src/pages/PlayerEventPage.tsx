@@ -12,6 +12,7 @@ import './admin/EventOperations.css';
 import { PoolFilter, PoolRoundSchedule, PoolStationQueue } from '../components/PoolStationQueue';
 import {
   matchesPool,
+  eventPlayOpen,
   poolPath,
   poolPolicy,
   queueScoringIds,
@@ -98,6 +99,7 @@ function PlayerEvent({ planId }: { planId: string }) {
   );
   const visible = selectedPlayer ? sortPlayerMatches(data, matching) : matching;
   const closed = ['complete', 'cancelled'].includes(data.plan.status);
+  const playOpen = eventPlayOpen(data.plan);
   const start = async (input: StartPoolMatch) => {
     setStarting(input.matchId);
     setStartError('');
@@ -151,6 +153,11 @@ function PlayerEvent({ planId }: { planId: string }) {
         </p>
       )}
       {closed && <p>This event is closed. Ask an organiser about corrections.</p>}
+      {!closed && !playOpen && (
+        <p className="card">
+          Match reporting opens when the organiser locks or resumes the pool draw.
+        </p>
+      )}
       <PlayerMatchFilter
         players={players}
         value={selectedPlayer}
@@ -219,11 +226,12 @@ function PlayerEvent({ planId }: { planId: string }) {
               match={match}
               planId={planId}
               report={reports.data?.find((report) => report.matchId === match.id)}
-              disputeMode={disputeMode && !closed}
+              disputeMode={disputeMode && !closed && playOpen}
               enabled={
                 !event.isError &&
                 event.data.settings.playerReports &&
                 !closed &&
+                playOpen &&
                 (['ready', 'playing'].includes(match.status) ||
                   (disputeMode && match.status === 'complete'))
               }
@@ -249,7 +257,7 @@ function PlayerEvent({ planId }: { planId: string }) {
         onStart={(input) => void start(input)}
         onReport={chooseMatch}
         pendingMatchId={starting}
-        disabled={event.isError || closed || !data.settings.playerReports}
+        disabled={event.isError || closed || !playOpen || !data.settings.playerReports}
       />
       {startError && (
         <p className="error-text" role="alert">
@@ -381,6 +389,8 @@ function PlayerScoreCard({
             'Wait for a station call before starting this match.'
           )}
         </p>
+      ) : !enabled ? (
+        <p className="muted">Match reporting is currently unavailable.</p>
       ) : (
         <form
           className="ops-score-form"

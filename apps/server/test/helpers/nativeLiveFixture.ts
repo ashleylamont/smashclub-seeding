@@ -25,6 +25,8 @@ export const nativeAdmin: SessionUser = {
 export function pureBaseline(): TournamentBaseline {
   const baseline: TournamentBaseline = {
     version: 1,
+    announcements: [],
+    prizes: [],
     planId: stableId('plan'),
     name: 'Test night',
     eventDate: 1791072000000,
@@ -80,6 +82,7 @@ export function pureBaseline(): TournamentBaseline {
       stationIds: [],
       selfRun: false,
       autoAcceptScores: false,
+      scheduleRevision: 0,
     });
     for (let a = 0; a < ids.length; a++)
       for (let b = a + 1; b < ids.length; b++) {
@@ -109,6 +112,10 @@ export function pureBaseline(): TournamentBaseline {
           completedAt: null,
           automaticFromRevision: null,
           resultCommandId: null,
+          liveScore1: null,
+          liveScore2: null,
+          progressRevision: 0,
+          blockedReason: null,
         });
       }
   }

@@ -28,6 +28,7 @@ async function main(): Promise<void> {
   const recomputeTrigger = new RecomputeTrigger(db);
 
   const nativeRuntime = await createPostgresNativeRuntime(db, env.DATABASE_URL);
+  await nativeRuntime.recover();
   const app = await buildApp({ db, env, auth, challonge, recomputeTrigger, nativeRuntime });
   const stopNativeWorker = startNativeWorker(nativeRuntime, db, (error) =>
     app.log.error(error, 'native tournament recovery failed'),

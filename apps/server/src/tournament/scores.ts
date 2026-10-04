@@ -2,7 +2,10 @@ import { advance } from './brackets';
 import { requireFact, resolved, sameScore } from './facts';
 import type { CommandEnvelope, Match, TournamentState } from './schemas';
 
-function winner(command: Extract<CommandEnvelope['command'], { kind: 'score' }>, match: Match) {
+export function winner(
+  command: Extract<CommandEnvelope['command'], { kind: 'score' }>,
+  match: Match,
+) {
   requireFact(
     match.player1Id && match.player2Id && match.player1Id !== match.player2Id,
     'Both real opponents must be known.',
@@ -58,8 +61,15 @@ export function applyScore(
       }
     }
   }
-  Object.assign(match, result, {
+  Object.assign(match, {
+    score1: result.score1,
+    score2: result.score2,
+    winnerId: result.winnerId,
+    outcome: result.outcome,
     status: 'complete',
+    liveScore1: null,
+    liveScore2: null,
+    blockedReason: null,
     stationId: null,
     completedAt: at,
     automaticFromRevision: automatic ? match.revision : null,
@@ -90,19 +100,54 @@ export function recordScore(
   }
   const winnerId = winner(command, match);
   requireFact(
-    ['ready', 'playing', 'complete'].includes(match.status),
+    ['ready', 'playing', 'complete'].includes(match.status) ||
+      (envelope.operator && command.outcome === 'forfeit' && match.status === 'blocked'),
     'The pairing is unresolved.',
   );
   const result = { ...command, winnerId };
+  if (!resolved(match)) {
+    requireFact(
+      !next.entrants.some((e) => e.playerId === winnerId && e.availability === 'withdrawn'),
+      'A withdrawn entrant cannot win an outstanding match.',
+    );
+    requireFact(
+      command.outcome !== 'played' ||
+        !next.entrants.some(
+          (e) =>
+            [match.player1Id, match.player2Id].includes(e.playerId) &&
+            e.availability === 'withdrawn',
+        ),
+      'Record an explicit forfeit for withdrawn players.',
+    );
+  }
   if (envelope.operator) {
     requireFact(
       match.revision === command.expectedRevision,
       'This match changed. Refresh and try again.',
     );
     applyScore(next, match, result, envelope.at, false, envelope.id);
+    reportId = envelope.id;
+    next.reports.push({
+      id: reportId,
+      matchId: match.id,
+      actorId: envelope.actorId,
+      requestId: envelope.requestId,
+      submittedRevision: command.expectedRevision,
+      expectedRevision: command.expectedRevision,
+      score1: command.score1,
+      score2: command.score2,
+      winnerId,
+      outcome: command.outcome,
+      status: 'approved',
+      autoApproved: false,
+      isDispute: false,
+      createdAt: envelope.at,
+    });
   } else {
     requireFact(
-      next.settings.published && next.settings.playerReports && command.outcome === 'played',
+      next.settings.published &&
+        (envelope.guest || next.settings.playerReports) &&
+        command.outcome === 'played',
       'Player reporting is unavailable.',
     );
     requireFact(
@@ -174,7 +219,7 @@ export function recordScore(
       outcome: command.outcome,
       status: accepted ? 'approved' : 'pending',
       autoApproved: accepted && !complete,
-      isDispute: (complete && !agrees) || priorConflicts,
+      isDispute: !agrees && (complete || priorConflicts),
       createdAt: envelope.at,
     });
     if (accepted && !complete) {
