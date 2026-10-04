@@ -312,6 +312,9 @@
 .event-overlay-document #root {
   background: transparent !important;
 }
+.event-overlay-document body::before {
+  display: none;
+}
 .event-overlay {
   --capture-width: min(78vw, calc(78vh * 16 / 9));
   --capture-height: min(43.875vw, 78vh);
@@ -373,14 +376,14 @@
   font-size: clamp(7px, 0.55vw, 11px);
   letter-spacing: 0.14em;
 }
+/* Event identity must remain readable in the 20% OBS rail. */
 .broadcast-identity h1 {
-  font-size: clamp(24px, 4.1vw, 90px);
-  line-height: 1.06;
-  letter-spacing: -0.045em;
-  margin: 8px 0 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: clamp(24px, 2.5vw, 54px);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin: var(--s2) 0 var(--s3);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .broadcast-edition {
   font-size: clamp(8px, 0.6vw, 12px);

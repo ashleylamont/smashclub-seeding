@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react';
-import { TRPCClientError } from '@trpc/client';
+import { eventUnavailable } from '../lib/eventErrors';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { trpc } from '../lib/trpc';
@@ -76,9 +76,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
     document.documentElement.classList.add('event-overlay-document');
     return () => document.documentElement.classList.remove('event-overlay-document');
   }, [overlay]);
-  const publicationUnavailable =
-    query.error instanceof TRPCClientError &&
-    ['NOT_FOUND', 'FORBIDDEN', 'UNAUTHORIZED'].includes(query.error.data?.code ?? '');
+  const publicationUnavailable = eventUnavailable(query.error);
   if (!query.data || publicationUnavailable)
     return (
       <div className={overlay ? 'event-display-message' : 'loading-text'} role="status">
@@ -163,13 +161,12 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
             </span>
           </div>
           <div className="broadcast-identity">
-            <span className="event-eyebrow">THE CLUB NIGHT</span>
             <h1 title={data.plan.name}>{showName}</h1>
-            <span className="broadcast-edition">
-              {data.plan.name.includes(' · ')
-                ? data.plan.name.split(' · ').slice(1).join(' · ')
-                : 'Find your rival.'}
-            </span>
+            {data.plan.name.includes(' · ') && (
+              <span className="broadcast-edition">
+                {data.plan.name.split(' · ').slice(1).join(' · ')}
+              </span>
+            )}
           </div>
           <div className="broadcast-rail-rule">
             <span>{provisionalNext ? 'COMING UP' : 'PLAY NEXT'}</span>
@@ -227,7 +224,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
             </div>
           )}
           <div className="broadcast-progress">
-            <span>{selectedPool ? 'THIS POOL SO FAR' : 'THE NIGHT SO FAR'}</span>
+            <span>{selectedPool ? 'POOL PROGRESS' : 'EVENT PROGRESS'}</span>
             <strong>
               {String(sections.complete.length).padStart(2, '0')}
               <i>/{String(sections.total).padStart(2, '0')}</i>
@@ -237,10 +234,9 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
               max={Math.max(1, sections.total)}
               aria-label="Sets completed"
             />
-            <small>SETS IN THE BOOKS</small>
+            <small>SETS COMPLETE</small>
           </div>
           {guestQr && <GuestOverlayQr planId={planId} invitation={guestQr} />}
-          <span className="broadcast-rail-footer">GOOD GAMES. GREAT RIVALS.</span>
         </aside>
         <header className="broadcast-topline">
           <span>
@@ -260,14 +256,18 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
         <div className="broadcast-matchup" aria-label="Current match">
           <div className="broadcast-fighter broadcast-fighter-one">
             <span className="broadcast-side">P1</span>
-            <strong>{onStream?.player1Name || (closed ? 'GOOD GAMES' : 'NEXT CHALLENGER')}</strong>
+            <strong>
+              {onStream?.player1Name || (closed ? 'EVENT FINISHED' : 'AWAITING MATCH')}
+            </strong>
             <CharacterIcons slugs={onStream?.player1Characters ?? []} />
             <b>{onStream?.score1 ?? '—'}</b>
           </div>
           <span className="broadcast-match-versus">VS</span>
           <div className="broadcast-fighter broadcast-fighter-two">
             <b>{onStream?.score2 ?? '—'}</b>
-            <strong>{onStream?.player2Name || (closed ? 'GOOD GAMES' : 'NEXT CHALLENGER')}</strong>
+            <strong>
+              {onStream?.player2Name || (closed ? 'EVENT FINISHED' : 'AWAITING MATCH')}
+            </strong>
             <CharacterIcons slugs={onStream?.player2Characters ?? []} />
             <span className="broadcast-side">P2</span>
           </div>
@@ -281,9 +281,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
           <BroadcastResults
             key={planId}
             matches={data.matches}
-            announcement={
-              announcements[0]?.message ?? 'Grab a setup. Find your rival. Make it a good set.'
-            }
+            announcement={announcements[0]?.message ?? ''}
           />
         </footer>
         {query.isError && (
@@ -298,23 +296,18 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
       <header className="event-live-header">
         <div className="event-board-brand">
           <NemesisMark />
-          <span>
-            SMASH CLUB
-            <br />
-            TOURNAMENT NIGHT
-          </span>
+          <span>SMASH CLUB</span>
         </div>
         <div className="event-board-title">
-          <span className="event-eyebrow">FIND YOUR RIVAL.</span>
           <h1>{data.plan.name}</h1>
         </div>
         <div className="event-live-progress">
-          <span>{selectedPool ? 'THIS POOL SO FAR' : 'THE NIGHT SO FAR'}</span>
+          <span>{selectedPool ? 'POOL PROGRESS' : 'EVENT PROGRESS'}</span>
           <strong>
             {String(sections.complete.length).padStart(2, '0')}
             <span> / {sections.total}</span>
           </strong>
-          <span>sets in the books</span>
+          <span>sets complete</span>
           <progress
             value={sections.complete.length}
             max={Math.max(1, sections.total)}
@@ -361,19 +354,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
               ))
             ) : (
               <p className="event-empty">
-                {closed ? (
-                  <>
-                    The event has ended.
-                    <br />
-                    <strong>Good games, everyone.</strong>
-                  </>
-                ) : (
-                  <>
-                    A little breather.
-                    <br />
-                    <strong>The next set is coming.</strong>
-                  </>
-                )}
+                {closed ? 'Event finished.' : 'No matches playing. Check the station queue.'}
               </p>
             )}
           </section>
@@ -389,22 +370,22 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
               <p className="event-empty">
                 {closed
                   ? 'There are no more matches scheduled.'
-                  : 'Stay close. Your next matchup lands here.'}
+                  : 'No matches ready. Check back as earlier matches finish.'}
               </p>
             )}
           </section>
         </div>
       </details>
-      <aside className="event-announcements" aria-label="Announcements">
-        <strong>FROM THE FLOOR ↗</strong>
-        <div>
-          {announcements.length ? (
-            announcements.slice(0, 2).map((a) => <p key={a.id}>{a.message}</p>)
-          ) : (
-            <p>Good games. Great rivals. Welcome to the club.</p>
-          )}
-        </div>
-      </aside>
+      {announcements.length > 0 && (
+        <aside className="event-announcements" aria-label="Announcements">
+          <strong>Announcements</strong>
+          <div>
+            {announcements.slice(0, 2).map((a) => (
+              <p key={a.id}>{a.message}</p>
+            ))}
+          </div>
+        </aside>
+      )}
       <>
         <EventPools
           matches={visibleMatches}

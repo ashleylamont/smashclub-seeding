@@ -89,6 +89,7 @@ test('TO divides stations once, players see pool queues, and the next wave reuse
   page.once('dialog', (dialog) => void dialog.accept());
   await renamedTile.getByRole('button', { name: 'Delete' }).click();
   await expect(page.locator('.ops-station-tile').filter({ hasText: 'Side stage' })).toHaveCount(0);
+  await page.getByText('Pool queues and stations', { exact: true }).click();
   await page.getByText('Divide stations between pools', { exact: true }).click();
   const setup = page.locator('.ops-pool-setup');
   await setup
@@ -136,6 +137,7 @@ test('TO divides stations once, players see pool queues, and the next wave reuse
       outcome: 'played',
     });
   await page.goto(`/admin/event-operations?plan=${planId}`);
+  await page.getByText('Pool queues and stations', { exact: true }).click();
   await page.getByRole('button', { name: 'Open next pools on free stations', exact: true }).click();
   await expect(page.locator('.ops-notice')).toContainText('Next pools can play now');
   snapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });

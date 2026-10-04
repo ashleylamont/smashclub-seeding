@@ -74,6 +74,7 @@ test('TO prints selected pool sheets with stable public QR and unclipped A4 pair
     expectedRevision: 0,
   });
   await page.goto(`/admin/event-operations?plan=${planId}`);
+  await page.getByText('Pool queues and stations', { exact: true }).click();
   await page.getByRole('button', { name: 'Print pool sheets', exact: true }).click();
   const preview = page.getByRole('dialog', { name: 'Print pool sheets', exact: true });
   await expect(
@@ -83,6 +84,7 @@ test('TO prints selected pool sheets with stable public QR and unclipped A4 pair
   await preview.getByRole('button', { name: 'Close preview' }).click();
   await mutate(page.request, 'eventOps.settings', { planId, published: true, playerReports: true });
   await page.reload();
+  await page.getByText('Pool queues and stations', { exact: true }).click();
   await page.getByRole('button', { name: 'Print pool sheets', exact: true }).click();
   await expect(preview.getByRole('button', { name: 'Print selected pools' })).toBeEnabled();
   await expect(preview.locator('.floor-sheet-page')).toHaveCount(4);

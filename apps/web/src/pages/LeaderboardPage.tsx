@@ -179,8 +179,11 @@ export function LeaderboardPage() {
           <p className="hero-eyebrow">{coverage}</p>
           <h1 className="hero-title">Rankings</h1>
           <p className="hero-sub muted">
-            Ranked on your skill estimate, less a penalty for missed club nights. {policyLine} The
-            smaller figure is the estimate and its ± band — play more and the band narrows.
+            Skill estimate adjusted for attendance.{' '}
+            <InfoTip label="How ranking works">
+              Ranked on your skill estimate, less a penalty for missed club nights. {policyLine} The
+              smaller figure is the estimate and its ± band — play more and the band narrows.
+            </InfoTip>
           </p>
         </div>
 

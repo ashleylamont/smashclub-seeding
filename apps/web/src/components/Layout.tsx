@@ -143,7 +143,7 @@ export function Layout() {
       </main>
 
       <footer className="app-footer">
-        <span>Smash Club — club rankings, synced from Challonge</span>
+        <span>Smash Club</span>
         {/* The build this page was served from, so "is prod actually on the
             new image?" is answerable without kubectl. */}
         <span className="build-tag">

@@ -93,6 +93,7 @@ test('attendance preview preserves completed play, rejects stale changes, and ho
   });
   const frozen = await query<Plan>(page.request, 'admin.eventPlanner.plan', { planId });
   await page.goto(`/admin/event-operations?plan=${planId}`);
+  await page.getByRole('tab', { name: 'Players', exact: true }).click();
   const attendance = page.locator('section.card').filter({
     has: page.getByRole('heading', { name: 'Late arrivals and no-shows', exact: true }),
   });

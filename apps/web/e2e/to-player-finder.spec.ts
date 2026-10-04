@@ -94,6 +94,7 @@ test('TO finds an entrant, follows their current station call, and opens the exa
   data = await query<Overview>(page.request, 'eventOps.overview', { planId });
   const called = data.matches.find((match) => match.id === data.stationQueues[0]!.nextMatchId)!;
   await page.goto(`/admin/event-operations?plan=${planId}`);
+  await page.getByRole('tab', { name: 'Players', exact: true }).click();
   const finder = page.getByRole('region', { name: 'Find a player', exact: true });
   await finder.getByLabel('Player name', { exact: true }).fill(called.player1Name);
   await finder
@@ -114,6 +115,7 @@ test('TO finds an entrant, follows their current station call, and opens the exa
     status: 'playing',
     stationId: data.stations[0]!.id,
   });
+  await page.getByRole('tab', { name: 'Players', exact: true }).click();
   await expect(finder).toContainText('Playing · Station 1');
   await expect(finder).not.toContainText('Play next ·');
   await finder.locator('summary').click();
@@ -140,6 +142,7 @@ test('TO finds an entrant, follows their current station call, and opens the exa
   );
   await expect(page.locator('#match-desk')).toBeFocused();
   await expect(page.locator('.ops-match-grid')).toContainText('lower Pool A');
+  await page.getByRole('tab', { name: 'Players', exact: true }).click();
   await finder.getByLabel('Player name', { exact: true }).fill('definitely-no-entrant');
   await expect(finder).toContainText('No event players match that name.');
 });

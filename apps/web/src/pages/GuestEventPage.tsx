@@ -1,4 +1,7 @@
-import { TRPCClientError } from '@trpc/client';
+import { PageHeader } from '../components/ui/PageHeader';
+import { LoadingState, Notice } from '../components/ui/Feedback';
+import { Button } from '../components/ui/Button';
+import { eventUnavailable } from '../lib/eventErrors';
 import { GuestScoreCard, type GuestMatch } from '../components/GuestScoreCard';
 import { PlayerMatchFilter } from '../components/PlayerMatchFilter';
 import { eventPlayers, useDevicePlayer } from '../lib/playerSelection';
@@ -13,7 +16,7 @@ import {
   saveGuestSession,
   type GuestSession,
 } from '../lib/guestReporting';
-import './admin/EventOperations.css';
+import '../styles/event.css';
 import { PoolFilter, PoolRoundSchedule, PoolStationQueue } from '../components/PoolStationQueue';
 import {
   poolPath,
@@ -121,9 +124,7 @@ export function GuestEvent({ planId }: { planId: string }) {
     refetchInterval: 2500,
     retry: false,
   });
-  const unpublished =
-    publicEvent.error instanceof TRPCClientError &&
-    ['NOT_FOUND', 'FORBIDDEN', 'UNAUTHORIZED'].includes(publicEvent.error.data?.code ?? '');
+  const unpublished = eventUnavailable(publicEvent.error);
   const canWrite =
     valid && !redeeming && Boolean(matches.data) && !matches.isError && !publicEvent.isError;
   const data: PoolFlowData | undefined = unpublished
@@ -193,18 +194,15 @@ export function GuestEvent({ planId }: { planId: string }) {
   if (unpublished) return <p role="alert">This event is unavailable or has not been published.</p>;
   return (
     <div className="ops-page guest-page">
-      <header>
-        <span className="ops-eyebrow">PLAYER AREA / SMASH CLUB</span>
-        <h1>{publicEvent.data?.plan.name ?? 'Your event'}</h1>
-        <p>
-          Choose your name to see your matches, station calls and results. No account or linked
-          player profile is needed to browse.
-        </p>
-        <a href={poolPath(`/live/${planId}`, selectedPool)}>Live event board →</a>
-        <p className="muted">
-          Pool standings, brackets, announcements and prizes are on the live event board.
-        </p>
-      </header>
+      <PageHeader
+        title={publicEvent.data?.plan.name ?? 'Your event'}
+        description="Choose your name to find your matches."
+        actions={
+          <a className="btn" href={poolPath(`/live/${planId}`, selectedPool)}>
+            Event board →
+          </a>
+        }
+      />
       {closed && (
         <p className="card">
           This event is closed. Results remain available; ask a TO about corrections.
@@ -212,7 +210,7 @@ export function GuestEvent({ planId }: { planId: string }) {
       )}
       {!closed &&
         (redeeming ? (
-          <p role="status">Opening your guest pass…</p>
+          <LoadingState>Opening your guest pass…</LoadingState>
         ) : !valid || matches.isError ? (
           <section className="card">
             <h2>
@@ -237,10 +235,15 @@ export function GuestEvent({ planId }: { planId: string }) {
             Guest pass · {guestTimeLeft(session!.expiresAt, now)} remaining
           </p>
         ))}
-      {publicEvent.isError && !unpublished && (
+      {publicEvent.isError && !unpublished && data && (
         <p role="alert">Live updates interrupted. Scores shown may be out of date.</p>
       )}
-      {!data && publicEvent.isPending && <p>Loading matches…</p>}
+      {!data && !unpublished && (
+        <GuestLoadState
+          pending={publicEvent.isPending}
+          onRetry={() => void publicEvent.refetch()}
+        />
+      )}
       {data && (
         <>
           <PlayerMatchFilter
@@ -377,5 +380,17 @@ export function GuestEvent({ planId }: { planId: string }) {
         </p>
       )}
     </div>
+  );
+}
+
+function GuestLoadState({ pending, onRetry }: { pending: boolean; onRetry: () => void }) {
+  if (pending) return <LoadingState>Loading matches…</LoadingState>;
+  return (
+    <Notice tone="danger">
+      Could not load matches.
+      <Button size="small" onClick={onRetry}>
+        Retry
+      </Button>
+    </Notice>
   );
 }

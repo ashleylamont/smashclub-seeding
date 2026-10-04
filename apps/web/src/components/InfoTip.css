@@ -15,12 +15,12 @@
   align-items: center;
   justify-content: center;
   /* Sized so the glyph reads at label scale; the tap area is grown below. */
-  width: 15px;
-  height: 15px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: 1px solid var(--border-strong);
   background: transparent;
-  color: var(--text-soft);
+  color: var(--text);
   font-family: var(--mono);
   font-size: 10px;
   font-weight: 700;
@@ -29,25 +29,14 @@
   position: relative;
 }
 
-/* A 15px target is not tappable. The visible mark stays small and a transparent
-   box around it does the catching, so the glyph does not have to grow into the
-   dense rows it sits in. */
-.info-tip-button::after {
-  content: '';
-  position: absolute;
-  inset: -11px;
-}
-
 .info-tip-button:hover,
-.info-tip-button.is-open {
+.info-tip-button[data-state='open'] {
   border-color: var(--accent);
   color: var(--accent);
 }
 
 .info-tip-panel {
-  position: absolute;
-  top: calc(100% + var(--s2));
-  z-index: 60;
+  z-index: var(--z-help);
   display: block;
   width: max-content;
   max-width: min(300px, calc(100vw - var(--s5)));
@@ -80,24 +69,9 @@
   color: var(--text-h);
 }
 
-.info-tip-start {
-  left: 0;
-}
-
-.info-tip-end {
-  right: 0;
-}
-
-/* Narrow screens have no room to hang a panel off a mid-line glyph without it
-   running off one edge or the other, so it spans the viewport gutter instead. */
-@media (max-width: 560px) {
-  .info-tip-panel {
-    position: fixed;
-    top: auto;
-    left: var(--s2);
-    right: var(--s2);
-    bottom: var(--s2);
-    max-width: none;
-    width: auto;
+@media (pointer: coarse) {
+  .info-tip-button {
+    width: 36px;
+    height: 36px;
   }
 }

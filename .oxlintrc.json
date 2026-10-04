@@ -135,10 +135,10 @@
     {
       "files": ["apps/web/src/pages/admin/AdminEventOperationsPage.tsx"],
       "rules": {
-        "max-lines": ["error", { "max": 1200, "skipBlankLines": true, "skipComments": true }],
+        "max-lines": ["error", { "max": 650, "skipBlankLines": true, "skipComments": true }],
         "max-lines-per-function": [
           "error",
-          { "max": 700, "skipBlankLines": true, "skipComments": true }
+          { "max": 550, "skipBlankLines": true, "skipComments": true }
         ],
         "complexity": ["error", { "max": 60 }]
       }

@@ -118,11 +118,11 @@ test('attention desk directs TOs to exact decisions and stale scores, without cl
       .getByRole('textbox', { name: 'Find a player or match', exact: true })
       .fill('not an entrant');
     await attention.getByRole('button', { name: 'Open match', exact: true }).click();
-    await expect(page.locator('article.ops-match')).toHaveCount(1);
-    await expect(page.locator('article.ops-match')).toContainText(blocked.label);
+    await expect(page.locator('article.ops-match:visible')).toHaveCount(1);
+    await expect(page.locator('article.ops-match:visible')).toContainText(blocked.label);
     await expect(page.locator('#match-desk')).toBeFocused();
     await page.getByRole('button', { name: 'Show all matches', exact: true }).click();
-    await expect(page.locator('article.ops-match')).toHaveCount(initial.matches.length);
+    await expect(page.locator('article.ops-match:visible')).toHaveCount(initial.matches.length);
     await attention.getByText('Score reviews · 1', { exact: true }).click();
     await attention.getByRole('button', { name: 'Review score', exact: true }).click();
     await expect(page.locator('.ops-report')).toBeFocused();

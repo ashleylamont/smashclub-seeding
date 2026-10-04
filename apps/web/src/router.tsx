@@ -1,4 +1,10 @@
-import { createRootRoute, createRoute, createRouter, redirect } from '@tanstack/react-router';
+import {
+  createRootRoute,
+  createRoute,
+  createRouter,
+  redirect,
+  lazyRouteComponent,
+} from '@tanstack/react-router';
 import { Layout } from './components/Layout';
 import { LeaderboardPage } from './pages/LeaderboardPage';
 import { PlayerPage } from './pages/PlayerPage';
@@ -26,6 +32,7 @@ import { AdminEventPlannerPage } from './pages/admin/eventPlanner/AdminEventPlan
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
 import { AdminAccountsPage } from './pages/admin/AdminAccountsPage';
 import { AdminBreakthroughPage } from './pages/admin/AdminBreakthroughPage';
+import { opsSection } from './lib/opsWorkspace';
 import { breakthroughSearch } from './lib/breakthrough';
 
 const rootRoute = createRootRoute({ component: Layout });
@@ -208,16 +215,26 @@ const eventOperateRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/operate/$planId',
   component: EventOperatorPage,
+  validateSearch: (search: Record<string, unknown>) => ({ view: opsSection(search.view) }),
 });
 const adminEventOperationsRoute = createRoute({
   getParentRoute: () => adminRoute,
   path: '/event-operations',
   component: AdminEventOperationsPage,
-  validateSearch: (search: Record<string, unknown>): { plan?: string } =>
-    typeof search.plan === 'string' ? { plan: search.plan } : {},
+  validateSearch: (search: Record<string, unknown>) => ({
+    ...(typeof search.plan === 'string' ? { plan: search.plan } : {}),
+    view: opsSection(search.view),
+  }),
+});
+
+const uiGalleryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/ui',
+  component: lazyRouteComponent(() => import('./pages/UiGalleryPage'), 'UiGalleryPage'),
 });
 
 const routeTree = rootRoute.addChildren([
+  uiGalleryRoute,
   eventNightsRoute,
   eventLiveRoute,
   eventOverlayRoute,

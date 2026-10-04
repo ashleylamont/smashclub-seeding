@@ -1,4 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { Dialog } from './ui/Dialog';
+import { Field } from './ui/Field';
+import { useState, type ReactNode } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { defaultPublicAlias } from '@smashclub/shared';
 import { trpc } from '../lib/trpc';
@@ -67,15 +69,6 @@ export function PlayerFormModal({
   const [aliases, setAliases] = useState<string[]>(initial?.aliases ?? []);
   const [aliasInput, setAliasInput] = useState('');
 
-  // Escape closes, matching every other dismissable surface in the app.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onCancel();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onCancel]);
-
   const valid = canonicalName.trim() !== '';
 
   const submit = () => {
@@ -98,132 +91,127 @@ export function PlayerFormModal({
   };
 
   return (
-    <div className="modal-overlay">
-      <button
-        type="button"
-        className="modal-backdrop"
-        aria-label="Close dialog"
-        onClick={onCancel}
-      />
-      <div className="modal modal-wide">
-        <h3>{title}</h3>
-        {children}
+    <Dialog
+      title={title}
+      open
+      wide
+      onOpenChange={(open) => {
+        if (!open) onCancel();
+      }}
+    >
+      {children}
 
-        <div className="form-grid">
-          <label className="form-field">
-            <span className="form-label">Registry name</span>
-            <input
-              className="input"
-              autoFocus
-              value={canonicalName}
-              onChange={(event) => setCanonicalName(event.target.value)}
-              placeholder="e.g. Ashley Lamont"
-            />
-            <span className="form-hint">
-              The club's own record of who this is. Used for identity matching, not shown publicly
-              when an alias is set.
-            </span>
-          </label>
-
-          <label className="form-field">
-            <span className="form-label">Public alias</span>
-            <input
-              className="input"
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-              placeholder={
-                canonicalName.trim() ? defaultPublicAlias(canonicalName) : 'optional username'
-              }
-            />
-            <span className="form-hint">
+      <div className="form-grid">
+        <Field
+          label="Registry name"
+          autoFocus
+          value={canonicalName}
+          onChange={(event) => setCanonicalName(event.target.value)}
+          placeholder="e.g. Ashley Lamont"
+          hint="Used for identity matching. Hidden publicly when an alias is set."
+        />
+        <Field
+          label="Public alias"
+          value={displayName}
+          onChange={(event) => setDisplayName(event.target.value)}
+          placeholder={
+            canonicalName.trim() ? defaultPublicAlias(canonicalName) : 'optional username'
+          }
+          hint={
+            <>
               The tag shown on the leaderboard. Leave blank to go by{' '}
               {canonicalName.trim()
                 ? `“${defaultPublicAlias(canonicalName)}”`
                 : 'the shortened registry name'}
               .
-            </span>
-          </label>
+            </>
+          }
+        />
 
+        <div className="form-field">
+          <span className="form-label">Company</span>
+          <CompanySelect companies={companies} value={companyCode} onChange={setCompanyCode} />
+        </div>
+
+        <div className="form-field">
+          <span className="form-label">Characters</span>
+          <CharacterPicker value={characters} onChange={setCharacters} />
+        </div>
+
+        {showAliases && (
           <div className="form-field">
-            <span className="form-label">Company</span>
-            <CompanySelect companies={companies} value={companyCode} onChange={setCompanyCode} />
-          </div>
-
-          <div className="form-field">
-            <span className="form-label">Characters</span>
-            <CharacterPicker value={characters} onChange={setCharacters} />
-          </div>
-
-          {showAliases && (
-            <div className="form-field">
-              <span className="form-label">Extra aliases</span>
-              <div className="alias-editor">
-                {aliases.map((alias) => (
-                  <span key={alias} className="chip">
-                    {alias}
-                    <button
-                      type="button"
-                      className="chip-remove"
-                      aria-label={`Remove alias ${alias}`}
-                      onClick={() => setAliases(aliases.filter((entry) => entry !== alias))}
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-              <div className="admin-form-row">
-                <input
-                  className="input"
-                  placeholder="other spelling…"
-                  value={aliasInput}
-                  onChange={(event) => setAliasInput(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault();
-                      addAlias();
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  className="btn btn-small"
-                  disabled={aliasInput.trim() === ''}
-                  onClick={addAlias}
-                >
-                  Add
-                </button>
-              </div>
-              <span className="form-hint">
-                Other names this player enters brackets under. Future imports of these match
-                silently instead of queueing for review.
-              </span>
+            <span className="form-label">Extra aliases</span>
+            <div className="alias-editor">
+              {aliases.map((alias) => (
+                <span key={alias} className="chip">
+                  {alias}
+                  <button
+                    type="button"
+                    className="chip-remove"
+                    aria-label={`Remove alias ${alias}`}
+                    onClick={() => setAliases(aliases.filter((entry) => entry !== alias))}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
             </div>
-          )}
-        </div>
-
-        {error && <p className="error-text">{error}</p>}
-
-        <div className="modal-actions">
-          <button type="button" className="btn" onClick={onCancel}>
-            Cancel
-          </button>
-          {secondary && (
-            <button type="button" className="btn" disabled={busy} onClick={secondary.onClick}>
-              {secondary.label}
-            </button>
-          )}
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={!valid || busy}
-            onClick={submit}
-          >
-            {busy ? 'Saving…' : submitLabel}
-          </button>
-        </div>
+            <div className="admin-form-row">
+              <input
+                className="input"
+                placeholder="other spelling…"
+                aria-label="Extra alias"
+                value={aliasInput}
+                onChange={(event) => setAliasInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    addAlias();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="btn btn-small"
+                disabled={aliasInput.trim() === ''}
+                onClick={addAlias}
+              >
+                Add
+              </button>
+            </div>
+            <span className="form-hint">
+              Other names this player enters brackets under. Future imports of these match silently
+              instead of queueing for review.
+            </span>
+          </div>
+        )}
       </div>
-    </div>
+
+      {error && (
+        <p className="error-text" role="alert">
+          {error}
+        </p>
+      )}
+
+      <div className="modal-actions">
+        <button type="button" className="btn" onClick={onCancel}>
+          Cancel
+        </button>
+        {secondary && (
+          <button type="button" className="btn" disabled={busy} onClick={secondary.onClick}>
+            {secondary.label}
+          </button>
+        )}
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={!valid || busy}
+          onClick={submit}
+        >
+          {busy ? 'Saving…' : submitLabel}
+        </button>
+      </div>
+    </Dialog>
   );
 }
 
@@ -261,7 +249,12 @@ function CompanySelect({
   return (
     <div className="company-select">
       <div className="admin-form-row">
-        <select className="select" value={value} onChange={(event) => onChange(event.target.value)}>
+        <select
+          className="select"
+          aria-label="Company"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        >
           <option value="">No company</option>
           {companies.map((company) => (
             <option key={company.code} value={company.code}>
@@ -279,6 +272,7 @@ function CompanySelect({
           <input
             className="input company-code-input"
             placeholder="CODE"
+            aria-label="Company code"
             value={code}
             onChange={(event) => setCode(event.target.value.toUpperCase())}
             maxLength={10}
@@ -286,6 +280,7 @@ function CompanySelect({
           <input
             className="input"
             placeholder="Company name"
+            aria-label="Company name"
             value={name}
             onChange={(event) => setName(event.target.value)}
           />

@@ -2,11 +2,13 @@ import { trpc } from '../../lib/trpc';
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 export function ScorePolicyControls({
   data,
+  onReports,
   admin,
   disabled,
   act,
 }: {
   data: Overview;
+  onReports: () => void;
   admin: boolean;
   disabled: boolean;
   act: (work: () => Promise<unknown>, message?: string) => Promise<void>;
@@ -69,7 +71,9 @@ export function ScorePolicyControls({
             {disputes.length} conflicting {disputes.length === 1 ? 'report needs' : 'reports need'}{' '}
             review.
           </strong>{' '}
-          <a href="#score-submissions">Review score submissions →</a>
+          <button className="btn btn-small" onClick={onReports}>
+            Review score submissions
+          </button>
         </p>
       )}
     </section>

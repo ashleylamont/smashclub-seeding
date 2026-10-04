@@ -202,12 +202,6 @@
   gap: var(--s1) var(--s3);
 }
 
-/* Deliberately quiet: this is a diagnostic, not a thing to read. It only gains
-   contrast on hover/focus, when someone is actually reaching for it. */
-.build-tag {
-  opacity: 0.75;
-}
-
 .build-tag a {
   color: inherit;
   text-decoration-color: var(--border);
@@ -221,88 +215,6 @@
 }
 
 /* ── buttons ────────────────────────────────────────────────────── */
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s2);
-  padding: 6px var(--s3);
-  border: 1px solid var(--border-strong);
-  background: transparent;
-  color: var(--text-h);
-  font-family: var(--display);
-  font-size: var(--fs-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  cursor: pointer;
-  transition:
-    color 0.12s,
-    border-color 0.12s,
-    background-color 0.12s;
-}
-
-.btn:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.btn.btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-contrast);
-  font-weight: 600;
-}
-
-.btn.btn-primary:hover:not(:disabled) {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
-  color: var(--accent-contrast);
-}
-
-.btn.btn-danger {
-  color: var(--bad);
-  border-color: var(--bad);
-}
-
-.btn.btn-danger:hover:not(:disabled) {
-  background: var(--bad);
-  border-color: var(--bad);
-  color: var(--bg);
-}
-
-.btn.btn-small {
-  padding: 2px var(--s2);
-  font-size: var(--fs-xs);
-}
-
-/* ── form controls ──────────────────────────────────────────────── */
-
-.input,
-.select,
-.textarea {
-  padding: 6px var(--s2);
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
-  color: var(--text-h);
-  font-family: var(--mono);
-  font-size: var(--fs-sm);
-}
-
-.input:focus,
-.select:focus,
-.textarea:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-.input::placeholder {
-  color: var(--text-soft);
-}
 
 /* ── tags ───────────────────────────────────────────────────────────
    Square, bordered, monospaced — a stamped label rather than a pill. */
@@ -411,51 +323,6 @@
 /* ── panels ─────────────────────────────────────────────────────────
    A bounded region, flat on the field. `.card` keeps its name because it is
    used throughout the app, but it is no longer card-like. */
-
-.card {
-  background: transparent;
-  border: 1px solid var(--border);
-  padding: var(--s4);
-}
-
-/* Nested panels would reintroduce the stacked-card look. */
-.card .card {
-  border: 0;
-  padding: 0;
-}
-
-.banner {
-  padding: var(--s2) var(--s3);
-  font-family: var(--mono);
-  font-size: var(--fs-sm);
-  margin-bottom: var(--s3);
-  border-left: 3px solid transparent;
-}
-
-.banner.banner-warning {
-  background: var(--warn-bg);
-  border-left-color: var(--warn);
-  color: var(--warn);
-}
-
-/* Neutral note: says "here is how to read this", not "something is wrong". */
-.banner.banner-info {
-  background: var(--accent-bg);
-  border-left-color: var(--accent-border);
-  color: var(--text-soft);
-}
-
-.banner.banner-success {
-  background: var(--good-bg);
-  border-left-color: var(--good);
-  color: var(--good);
-}
-
-.banner.banner-danger {
-  background: var(--bad-bg);
-  border-left-color: var(--bad);
-  color: var(--bad);
-}
 
 /* ── generic data table ─────────────────────────────────────────────
    Hairline horizontal rules only. No vertical rules and no zebra fill: the
@@ -636,35 +503,12 @@
  * it is, so the screens keep their rhythm and stop mis-firing.
  */
 @media (pointer: coarse) {
-  .btn {
-    min-height: 40px;
-  }
-
-  .btn.btn-small {
-    min-height: 34px;
-    padding: 6px var(--s2);
-  }
-
   .app-nav .nav-link {
     min-height: 44px;
   }
 
   .user-chip {
     min-height: 34px;
-  }
-
-  /*
-   * iOS Safari zooms the viewport when a focused field is set under 16px, and
-   * it does not zoom back out afterwards. The app's small type is fine to read
-   * on a phone; being thrown into a zoomed viewport by tapping the board's
-   * search box is not.
-   */
-  .input,
-  .select,
-  .textarea,
-  .control-input {
-    min-height: 40px;
-    font-size: 16px;
   }
 }
 

@@ -78,6 +78,11 @@ export function opsAttention(data: AttentionData) {
 
 export function jumpToOpsControl(id: string) {
   const target = document.getElementById(id);
+  let parent = target?.parentElement;
+  while (parent) {
+    if (parent instanceof HTMLDetailsElement) parent.open = true;
+    parent = parent.parentElement;
+  }
   target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   target?.focus({ preventScroll: true });
 }

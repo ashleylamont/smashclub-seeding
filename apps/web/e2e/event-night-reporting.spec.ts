@@ -93,7 +93,7 @@ test('an unlinked signed-in attendee reports different players and loses the for
       snapshot.matches.find((match) => match.division === division)!,
     );
     for (const match of chosen) {
-      const card = reporting.locator('article.ops-match').filter({ hasText: match.label });
+      const card = reporting.locator('article.ops-match:visible').filter({ hasText: match.label });
       await card.locator('input[type="number"]').nth(0).fill('2');
       await card.locator('input[type="number"]').nth(1).fill('1');
       await card.getByRole('button', { name: 'Submit score for approval' }).click();
@@ -118,7 +118,7 @@ test('an unlinked signed-in attendee reports different players and loses the for
     });
     await expect(
       reporting
-        .locator('article.ops-match')
+        .locator('article.ops-match:visible')
         .filter({ hasText: chosen.find((match) => match.id === reports[0]!.matchId)!.label }),
     ).toContainText('Confirmed: 2 – 1');
     await expect(
@@ -132,7 +132,7 @@ test('an unlinked signed-in attendee reports different players and loses the for
     await expect(reporting.getByRole('alert')).toContainText(
       'This event is unavailable or has not been published.',
     );
-    await expect(reporting.locator('article.ops-match')).toHaveCount(0);
+    await expect(reporting.locator('article.ops-match:visible')).toHaveCount(0);
     await expect(reporting.getByRole('button', { name: 'Submit score for approval' })).toHaveCount(
       0,
     );
@@ -155,11 +155,15 @@ test('TO live scores stay unfinished while station options and pool holds follow
     (match) => match.division === 'lower' && match.poolIndex === 0,
   )!;
   await page.goto(`/admin/event-operations?plan=${planId}`);
+  await page
+    .getByRole('tabpanel', { name: 'Run matches' })
+    .getByRole('combobox', { name: 'View', exact: true })
+    .selectOption('all');
   const upperCard = page
-    .locator('article.ops-match')
+    .locator('article.ops-match:visible')
     .filter({ has: page.getByText(upper.label, { exact: true }) });
   const lowerCard = page
-    .locator('article.ops-match')
+    .locator('article.ops-match:visible')
     .filter({ has: page.getByText(lower.label, { exact: true }) });
   await upperCard
     .getByRole('combobox', { name: `Station for ${upper.label}` })
@@ -181,6 +185,7 @@ test('TO live scores stay unfinished while station options and pool holds follow
   });
   await expect(lowerCard.locator('select option').filter({ hasText: 'Station A' })).toHaveCount(0);
   await expect(lowerCard.locator('select option').filter({ hasText: 'Station B' })).toHaveCount(1);
+  await page.getByText('Pool queues and stations', { exact: true }).click();
   const schedule = page.locator('article.ops-pool-schedule').filter({ hasText: 'Lower Pool A' });
   await schedule.getByRole('checkbox', { name: 'Allow this pool to play now' }).uncheck();
   await schedule.getByRole('button', { name: 'Save pool settings' }).click();

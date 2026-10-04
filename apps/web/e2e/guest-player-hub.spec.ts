@@ -132,7 +132,7 @@ test('signed-out player hub browses without a pass and reuses a venue pass acros
     );
     await expect(visitor.locator('.guest-pass-expiry')).toContainText('remaining');
     await expect.poll(() => new URL(visitor.url()).hash).toBe('');
-    await visitor.getByRole('link', { name: 'Live event board →', exact: true }).click();
+    await visitor.getByRole('link', { name: 'Event board →', exact: true }).click();
     await expect(visitor.getByLabel('Your pool')).toHaveValue('upper:0');
     await visitor.getByRole('link', { name: 'Player area · my matches & scores →' }).click();
     await expect(visitor.locator('.guest-pass-expiry')).toContainText('remaining');

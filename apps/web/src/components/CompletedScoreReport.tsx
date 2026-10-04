@@ -1,3 +1,5 @@
+import { Button } from './ui/Button';
+import { ScoreFields } from './ScoreFields';
 import { useState } from 'react';
 
 type RecordedMatch = {
@@ -89,9 +91,8 @@ export function CompletedScoreReport({
               {revision !== match.revision && (
                 <div role="alert">
                   <p>The recorded result changed. Reload it before reporting.</p>
-                  <button
+                  <Button
                     type="button"
-                    className="btn"
                     onClick={() => {
                       setRevision(match.revision);
                       setScore1(match.score1 ?? 0);
@@ -102,19 +103,17 @@ export function CompletedScoreReport({
                     }}
                   >
                     Reload match
-                  </button>
+                  </Button>
                 </div>
               )}
               <div className="ops-toolbar">
-                <button
-                  className="btn"
+                <Button
                   disabled={pending || revision !== match.revision}
                   onClick={() => void submit(match.score1 ?? 0, match.score2 ?? 0)}
                 >
                   Confirm recorded score
-                </button>
-                <button
-                  className="btn"
+                </Button>
+                <Button
                   disabled={pending}
                   onClick={() => {
                     setEditing(!editing);
@@ -122,7 +121,7 @@ export function CompletedScoreReport({
                   }}
                 >
                   Report a different score
-                </button>
+                </Button>
               </div>
               {editing && (
                 <form
@@ -132,40 +131,23 @@ export function CompletedScoreReport({
                     void submit(score1, score2);
                   }}
                 >
-                  <div className="ops-score-inputs">
-                    <label>
-                      {match.player1Name}
-                      <input
-                        className="input"
-                        type="number"
-                        min={0}
-                        max={5}
-                        required
-                        value={score1}
-                        onChange={(event) => {
-                          setScore1(Number(event.target.value));
-                          setRequestId(crypto.randomUUID());
-                        }}
-                      />
-                    </label>
-                    <label>
-                      {match.player2Name}
-                      <input
-                        className="input"
-                        type="number"
-                        min={0}
-                        max={5}
-                        required
-                        value={score2}
-                        onChange={(event) => {
-                          setScore2(Number(event.target.value));
-                          setRequestId(crypto.randomUUID());
-                        }}
-                      />
-                    </label>
-                  </div>
-                  <button
-                    className="btn"
+                  <ScoreFields
+                    player1Name={match.player1Name}
+                    player2Name={match.player2Name}
+                    score1={score1}
+                    score2={score2}
+                    onScore1={(value) => {
+                      setScore1(value);
+                      setRequestId(crypto.randomUUID());
+                    }}
+                    onScore2={(value) => {
+                      setScore2(value);
+                      setRequestId(crypto.randomUUID());
+                    }}
+                  />
+                  <Button
+                    type="submit"
+                    pending={pending}
                     disabled={
                       pending ||
                       revision !== match.revision ||
@@ -174,7 +156,7 @@ export function CompletedScoreReport({
                     }
                   >
                     Send different score to TOs
-                  </button>
+                  </Button>
                 </form>
               )}
             </>

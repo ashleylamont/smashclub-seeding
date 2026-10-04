@@ -1,0 +1,351 @@
+/* Shared controls; legacy class names are supported during migration. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 6px var(--s3);
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-h);
+  font-family: var(--display);
+  font-size: var(--fs-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition:
+    color 0.12s,
+    border-color 0.12s,
+    background-color 0.12s;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+}
+
+.btn.btn-primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: var(--accent-contrast);
+}
+
+.btn.btn-danger {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+.btn.btn-danger:hover:not(:disabled) {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: var(--bg);
+}
+
+.btn.btn-small {
+  padding: 2px var(--s2);
+  font-size: var(--fs-xs);
+}
+
+/* ── form controls ──────────────────────────────────────────────── */
+
+.input,
+.select,
+.textarea {
+  padding: 6px var(--s2);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-h);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.input::placeholder {
+  color: var(--text-soft);
+}
+
+.card {
+  background: transparent;
+  border: 1px solid var(--border);
+  padding: var(--s4);
+}
+
+/* Nested panels would reintroduce the stacked-card look. */
+.card .card {
+  border: 0;
+  padding: 0;
+}
+
+.banner {
+  padding: var(--s2) var(--s3);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  margin-bottom: var(--s3);
+  border-left: 3px solid transparent;
+}
+
+.banner.banner-warning {
+  background: var(--warn-bg);
+  border-left-color: var(--warn);
+  color: var(--text-h);
+}
+
+/* Neutral note: says "here is how to read this", not "something is wrong". */
+.banner.banner-info {
+  background: var(--accent-bg);
+  border-left-color: var(--accent-border);
+  color: var(--text-soft);
+}
+
+.banner.banner-success {
+  background: var(--good-bg);
+  border-left-color: var(--good);
+  color: var(--text-h);
+}
+
+.banner.banner-danger {
+  background: var(--bad-bg);
+  border-left-color: var(--bad);
+  color: var(--text-h);
+}
+
+.btn {
+  min-height: var(--control-height);
+  justify-content: center;
+  border-radius: var(--r1);
+}
+.btn.btn-small {
+  min-height: var(--control-height-small);
+}
+.input,
+.select,
+.textarea {
+  min-height: var(--control-height);
+  border-radius: var(--r1);
+  max-width: 100%;
+}
+.input:focus-visible,
+.select:focus-visible,
+.textarea:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.input[aria-invalid='true'],
+.textarea[aria-invalid='true'] {
+  border-color: var(--bad);
+}
+.input:disabled,
+.select:disabled,
+.textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.ui-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+.ui-field label {
+  color: var(--text-h);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+.ui-field-hint {
+  color: var(--text);
+  font-size: var(--fs-sm);
+  line-height: var(--line-body);
+}
+.ui-field .error-text {
+  font-size: var(--fs-sm);
+}
+.ui-score-fields {
+  display: grid;
+  gap: var(--s2);
+}
+.ui-score-fields .ops-score-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: var(--s3);
+}
+.ui-score-fields .input {
+  width: 100%;
+  min-height: var(--touch-target);
+  text-align: center;
+  font-size: var(--fs-lg);
+}
+.ui-loading,
+.ui-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+.ui-spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: ui-spin 0.8s linear infinite;
+  flex: none;
+}
+@keyframes ui-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.ui-empty {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: var(--s3);
+}
+.ui-empty a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.ui-page-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--s4);
+  flex-wrap: wrap;
+}
+.ui-page-header > div {
+  min-width: 0;
+}
+.ui-page-header h1 {
+  line-height: var(--line-heading);
+  overflow-wrap: anywhere;
+}
+.ui-page-header p {
+  margin-top: var(--s2);
+  max-width: 65ch;
+}
+.ui-tab-list {
+  display: flex;
+  gap: var(--s1);
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border-strong);
+  padding: var(--s1);
+  scroll-padding: var(--s2);
+  overscroll-behavior-x: contain;
+}
+.ui-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  flex: none;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  padding: var(--s2) var(--s3);
+  min-height: var(--touch-target);
+  font-family: var(--display);
+  color: var(--text);
+  font-size: var(--fs-md);
+  cursor: pointer;
+}
+.ui-tab:hover {
+  color: var(--text-h);
+  background: var(--surface-2);
+}
+.ui-tab[data-state='active'] {
+  border-bottom-color: var(--accent);
+  color: var(--text-h);
+  background: var(--accent-bg);
+}
+.ui-tab:focus-visible {
+  outline-offset: -2px;
+}
+.ui-tab-panel[data-state='inactive'] {
+  display: none;
+}
+.ui-tab-panel[data-state='active'] {
+  display: grid;
+  gap: var(--s4);
+  min-width: 0;
+  padding-top: var(--s4);
+}
+.ui-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 72%);
+  z-index: var(--z-dialog);
+}
+.ui-dialog.modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: var(--z-dialog);
+  width: min(520px, calc(100% - var(--s6)));
+  max-height: 85svh;
+  overscroll-behavior: contain;
+}
+.ui-dialog.modal-wide {
+  width: min(640px, calc(100% - var(--s6)));
+}
+.ui-dialog-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--s4);
+}
+.ui-dialog-heading h2 {
+  overflow-wrap: anywhere;
+  line-height: var(--line-heading);
+}
+.ui-dialog-heading .btn {
+  flex: none;
+  min-width: var(--control-height-small);
+}
+.ui-dialog-description {
+  margin-bottom: var(--s4);
+}
+@media (max-width: 560px), (pointer: coarse) {
+  .btn,
+  .btn.btn-small,
+  .input,
+  .select,
+  .textarea {
+    min-height: var(--touch-target);
+  }
+  .input,
+  .select,
+  .textarea {
+    font-size: 16px;
+  }
+}
+@media (max-width: 560px) {
+  .ui-dialog.modal {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    transform: none;
+    width: 100%;
+    max-width: none;
+    max-height: 92svh;
+  }
+}

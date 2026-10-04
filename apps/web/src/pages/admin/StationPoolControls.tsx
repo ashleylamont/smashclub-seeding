@@ -13,11 +13,13 @@ export function StationPoolControls({
   disabled,
   act,
   onPool,
+  onMatch,
 }: {
   data: Overview;
   disabled: boolean;
   act: Action;
   onPool: (key: string) => void;
+  onMatch: (id: string) => void;
 }) {
   const [stationName, setStationName] = useState('');
   const [stationCount, setStationCount] = useState(4);
@@ -69,6 +71,14 @@ export function StationPoolControls({
                       {match.player2Name}
                     </p>
                     <small>{match.label}</small>
+                    <button
+                      type="button"
+                      className="btn btn-small"
+                      disabled={disabled}
+                      onClick={() => onMatch(match.id)}
+                    >
+                      Score match
+                    </button>
                   </>
                 ) : (
                   <p>Available for the next match</p>
@@ -268,8 +278,8 @@ export function StationPoolControls({
         </details>
       </section>
       {pools.length > 0 && (
-        <section className="card">
-          <h3>Pool queues and stations</h3>
+        <details className="card ops-pool-settings">
+          <summary>Pool queues and stations</summary>
           <p className="muted">
             Reserve a set of stations for each pool. Players follow their round-robin queue while
             other pools wait for the next wave. Pools without assigned stations use unreserved
@@ -318,7 +328,7 @@ export function StationPoolControls({
               );
             })}
           </div>
-        </section>
+        </details>
       )}
     </>
   );

@@ -1,4 +1,4 @@
-import { opsAttention, jumpToOpsControl } from '../../lib/opsAttention';
+import { opsAttention } from '../../lib/opsAttention';
 import type { trpc } from '../../lib/trpc';
 import './OpsAttentionDesk.css';
 
@@ -6,9 +6,11 @@ type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 export function OpsAttentionDesk({
   data,
   onMatch,
+  onJump,
 }: {
   data: Overview;
   onMatch: (matchId: string) => void;
+  onJump: (id: string) => void;
 }) {
   const { reports, decisions, dispatch, needsStations } = opsAttention(data);
   const stale = reports.filter((report) => report.stale).length;
@@ -22,10 +24,7 @@ export function OpsAttentionDesk({
             Needs attention <span className="chip">{count}</span>
           </h3>
           <p className="muted">
-            {count
-              ? 'Decisions to keep the event moving.'
-              : 'No pending score reviews or held-match decisions.'}{' '}
-            Later pools and matches waiting for players are kept in the queue.
+            {count ? 'Review pending decisions below.' : 'No decisions pending.'}
           </p>
         </div>
       </div>
@@ -53,7 +52,7 @@ export function OpsAttentionDesk({
                   </div>
                   <button
                     className="btn btn-small"
-                    onClick={() => jumpToOpsControl(`score-report-${report.id}`)}
+                    onClick={() => onJump(`score-report-${report.id}`)}
                   >
                     Review score
                   </button>
@@ -94,7 +93,7 @@ export function OpsAttentionDesk({
                 Add your setups so players and TOs can see where matches should be played.
               </span>
             </p>
-            <button className="btn btn-small" onClick={() => jumpToOpsControl('station-controls')}>
+            <button className="btn btn-small" onClick={() => onJump('station-controls')}>
               Set up stations
             </button>
           </div>
@@ -119,10 +118,7 @@ export function OpsAttentionDesk({
                     {match.player1Name} vs {match.player2Name} · {match.label}
                   </span>
                 </div>
-                <button
-                  className="btn btn-small"
-                  onClick={() => jumpToOpsControl('station-controls')}
-                >
+                <button className="btn btn-small" onClick={() => onJump('station-controls')}>
                   Station controls
                 </button>
               </li>

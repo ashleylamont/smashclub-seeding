@@ -84,6 +84,7 @@ test('scannable guest QR accepts anonymous and unlinked reports, keeps approval 
   test.setTimeout(120_000);
   const planId = await event(page.request);
   await page.goto(`/admin/event-operations?plan=${planId}`);
+  await page.getByRole('tab', { name: 'Settings', exact: true }).click();
   const controls = page
     .locator('section')
     .filter({ has: page.getByRole('heading', { name: 'Guest score reporting', exact: true }) })
@@ -128,13 +129,13 @@ test('scannable guest QR accepts anonymous and unlinked reports, keeps approval 
     await guest.goto(invitationUrl);
     await guest.getByRole('combobox', { name: 'Match view', exact: true }).selectOption('matches');
     await expect(guest.locator('header h1')).toContainText('Guest rehearsal');
-    await expect(guest.locator('article.ops-match').first()).toBeVisible();
+    await expect(guest.locator('article.ops-match:visible').first()).toBeVisible();
     expect(new URL(guest.url()).hash).toBe('');
     expect(requestUrls.some((url) => url.includes(invitationToken))).toBe(false);
     const initial = await query<Overview>(page.request, 'eventOps.overview', { planId });
     const first = initial.matches[0]!;
     const second = initial.matches[1]!;
-    const guestCard = guest.locator('article.ops-match').filter({
+    const guestCard = guest.locator('article.ops-match:visible').filter({
       has: guest.getByRole('heading', {
         name: `${first.player1Name} vs ${first.player2Name}`,
         exact: true,
@@ -166,7 +167,7 @@ test('scannable guest QR accepts anonymous and unlinked reports, keeps approval 
     await unlinkedPage
       .getByRole('combobox', { name: 'Match view', exact: true })
       .selectOption('matches');
-    const otherCard = unlinkedPage.locator('article.ops-match').filter({
+    const otherCard = unlinkedPage.locator('article.ops-match:visible').filter({
       has: unlinkedPage.getByRole('heading', {
         name: `${second.player1Name} vs ${second.player2Name}`,
         exact: true,
@@ -292,6 +293,7 @@ test('organisers print a permanent station QR before publication', async ({
   const overview = await query<Overview>(page.request, 'eventOps.overview', { planId });
   const stationId = overview.stations.find((station) => station.name === 'Stage')!.id;
   await page.goto(`/admin/event-operations?plan=${planId}`);
+  await page.getByRole('tab', { name: 'Settings', exact: true }).click();
   const controls = page
     .locator('section')
     .filter({ has: page.getByRole('heading', { name: 'Guest score reporting', exact: true }) })

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Dialog } from './ui/Dialog';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { trpc } from '../lib/trpc';
 import { searchPlayers } from '../lib/playerSearch';
@@ -55,107 +56,103 @@ export function PlayerLookupModal({
     queryFn: () => trpc.admin.players.query(),
   });
 
-  // Escape closes, matching every other dismissable surface in the app.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onCancel();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onCancel]);
-
   const all = useMemo(() => players.data ?? [], [players.data]);
   const results = useMemo(() => searchPlayers(all, query, RESULT_LIMIT), [all, query]);
   const alreadyOffered = new Set(candidatePlayerIds);
   const activeCount = all.filter((player) => player.status === 'active').length;
 
   return (
-    <div className="modal-overlay">
-      <button
-        type="button"
-        className="modal-backdrop"
-        aria-label="Close dialog"
-        onClick={onCancel}
+    <Dialog
+      title={title}
+      open
+      wide
+      onOpenChange={(open) => {
+        if (!open) onCancel();
+      }}
+    >
+      {children}
+
+      <input
+        className="input lookup-search"
+        aria-label="Search players"
+        autoFocus
+        placeholder="Search by name, public alias, or any stored alias…"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        onKeyDown={(event) => {
+          // Enter on a single unambiguous hit is the whole point of typing a
+          // name you already know; anything else needs a deliberate click.
+          if (event.key === 'Enter' && results.length === 1 && !busy) onPick(results[0]!.player.id);
+        }}
       />
-      <div className="modal modal-wide">
-        <h3>{title}</h3>
-        {children}
 
-        <input
-          className="input lookup-search"
-          autoFocus
-          placeholder="Search by name, public alias, or any stored alias…"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          onKeyDown={(event) => {
-            // Enter on a single unambiguous hit is the whole point of typing a
-            // name you already know; anything else needs a deliberate click.
-            if (event.key === 'Enter' && results.length === 1 && !busy)
-              onPick(results[0]!.player.id);
-          }}
-        />
+      {players.isPending && <p className="loading-text">Loading players…</p>}
+      {players.isError && (
+        <p className="error-text" role="alert">
+          {players.error.message}
+        </p>
+      )}
 
-        {players.isPending && <p className="loading-text">Loading players…</p>}
-        {players.isError && <p className="error-text">{players.error.message}</p>}
+      {players.data && results.length === 0 && (
+        <p className="muted">No player matches “{query}”. They may need creating instead.</p>
+      )}
 
-        {players.data && results.length === 0 && (
-          <p className="muted">No player matches “{query}”. They may need creating instead.</p>
-        )}
+      {results.length > 0 && (
+        <ul className="lookup-list">
+          {results.map(({ player, matchedAlias }) => (
+            <li key={player.id} className="lookup-row">
+              <span className="lookup-name">
+                {player.canonicalName}
+                {player.displayName && <span className="muted"> aka “{player.displayName}”</span>}
+                {player.companyCode && <span className="chip">{player.companyCode}</span>}
+                {alreadyOffered.has(player.id) && (
+                  <span className="chip chip-warning">already suggested</span>
+                )}
+              </span>
+              <span className="lookup-aliases">
+                {matchedAlias ? (
+                  <>
+                    matched alias <span className="chip">{matchedAlias}</span>
+                  </>
+                ) : (
+                  // Only the spellings the row does not already show: nearly
+                  // every player is aliased under their own name, and echoing
+                  // it back turns the column into noise.
+                  otherAliases(player).length > 0 && (
+                    <span className="muted">{otherAliases(player).slice(0, 4).join(', ')}</span>
+                  )
+                )}
+              </span>
+              <button
+                type="button"
+                className="btn btn-small"
+                disabled={busy}
+                onClick={() => onPick(player.id)}
+              >
+                Link
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
-        {results.length > 0 && (
-          <ul className="lookup-list">
-            {results.map(({ player, matchedAlias }) => (
-              <li key={player.id} className="lookup-row">
-                <span className="lookup-name">
-                  {player.canonicalName}
-                  {player.displayName && <span className="muted"> aka “{player.displayName}”</span>}
-                  {player.companyCode && <span className="chip">{player.companyCode}</span>}
-                  {alreadyOffered.has(player.id) && (
-                    <span className="chip chip-warning">already suggested</span>
-                  )}
-                </span>
-                <span className="lookup-aliases">
-                  {matchedAlias ? (
-                    <>
-                      matched alias <span className="chip">{matchedAlias}</span>
-                    </>
-                  ) : (
-                    // Only the spellings the row does not already show: nearly
-                    // every player is aliased under their own name, and echoing
-                    // it back turns the column into noise.
-                    otherAliases(player).length > 0 && (
-                      <span className="muted">{otherAliases(player).slice(0, 4).join(', ')}</span>
-                    )
-                  )}
-                </span>
-                <button
-                  type="button"
-                  className="btn btn-small"
-                  disabled={busy}
-                  onClick={() => onPick(player.id)}
-                >
-                  Link
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+      {players.data && results.length === RESULT_LIMIT && activeCount > RESULT_LIMIT && (
+        <p className="muted">
+          Showing the first {RESULT_LIMIT} of {activeCount} players — keep typing to narrow it down.
+        </p>
+      )}
 
-        {players.data && results.length === RESULT_LIMIT && activeCount > RESULT_LIMIT && (
-          <p className="muted">
-            Showing the first {RESULT_LIMIT} of {activeCount} players — keep typing to narrow it
-            down.
-          </p>
-        )}
+      {error && (
+        <p className="error-text" role="alert">
+          {error}
+        </p>
+      )}
 
-        {error && <p className="error-text">{error}</p>}
-
-        <div className="modal-actions">
-          <button type="button" className="btn" onClick={onCancel}>
-            Cancel
-          </button>
-        </div>
+      <div className="modal-actions">
+        <button type="button" className="btn" onClick={onCancel}>
+          Cancel
+        </button>
       </div>
-    </div>
+    </Dialog>
   );
 }
