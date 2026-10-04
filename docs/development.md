@@ -2,7 +2,7 @@
 
 ## Local rehearsal
 
-Install Node.js 22+ and pnpm 10, then run from the repository root:
+Install Node.js 22.23.3+ and pnpm 10, then run from the repository root:
 
 ```bash
 pnpm install

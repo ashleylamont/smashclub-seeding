@@ -1,10 +1,11 @@
 {
   "name": "smashclub",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.33.0",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.23.3"
   },
   "scripts": {
     "build": "pnpm -r build",
@@ -31,6 +32,9 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild"
-    ]
+    ],
+    "patchedDependencies": {
+      "@rotorsoft/act@1.32.3": "patches/@rotorsoft__act@1.32.3.patch"
+    }
   }
 }

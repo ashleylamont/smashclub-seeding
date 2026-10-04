@@ -9,6 +9,7 @@ import { ChallongeClient } from './challonge/client';
 import { loadEnv } from './env';
 import { RecomputeTrigger } from './recompute/trigger';
 import { acquireSchedulerLock, SyncScheduler } from './scheduler';
+import { createPostgresNativeRuntime, startNativeWorker } from './tournament/runtime';
 
 async function main(): Promise<void> {
   const env = loadEnv();
@@ -26,7 +27,11 @@ async function main(): Promise<void> {
   });
   const recomputeTrigger = new RecomputeTrigger(db);
 
-  const app = await buildApp({ db, env, auth, challonge, recomputeTrigger });
+  const nativeRuntime = await createPostgresNativeRuntime(db, env.DATABASE_URL);
+  const app = await buildApp({ db, env, auth, challonge, recomputeTrigger, nativeRuntime });
+  const stopNativeWorker = startNativeWorker(nativeRuntime, db, (error) =>
+    app.log.error(error, 'native tournament recovery failed'),
+  );
 
   const scheduler = new SyncScheduler(db, challonge, recomputeTrigger, (message) =>
     app.log.info(message),
@@ -40,6 +45,8 @@ async function main(): Promise<void> {
 
   const shutdown = async (): Promise<void> => {
     scheduler.stop();
+    await stopNativeWorker();
+    await nativeRuntime.shutdown();
     await app.close();
     await pool.end();
     process.exit(0);

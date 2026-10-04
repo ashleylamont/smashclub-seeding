@@ -34,6 +34,17 @@ const EVENT_INSERT_CHUNK = 500;
 export async function runRecompute(
   db: Db,
 ): Promise<{ recomputeId: string; model: string; players: number; sets: number; events: number }> {
+  // Every caller shares this lock, including the durable native publication
+  // worker. Commit rating rows together, so a crash cannot acknowledge partial WHR.
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(782392)`);
+    return computeRatings(tx);
+  });
+}
+
+async function computeRatings(
+  db: Db,
+): Promise<{ recomputeId: string; model: string; players: number; sets: number; events: number }> {
   const { glicko, version } = await getGlickoSettings(db);
 
   const tournamentRows = await db

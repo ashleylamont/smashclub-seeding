@@ -17,6 +17,7 @@ import {
   eventPlanPoolPlacements,
   eventPlans,
   eventPrizes,
+  nativeLiveHandoffs,
   eventScoreReports,
   eventStations,
   eventWithdrawals,
@@ -40,6 +41,15 @@ const fail = (
   throw new TRPCError({ code, message });
 };
 export async function snapshot(db: Db, planId: string, privateView = false) {
+  const [live] = await db
+    .select()
+    .from(nativeLiveHandoffs)
+    .where(eq(nativeLiveHandoffs.eventPlanId, planId));
+  if (live)
+    return fail(
+      'CONFLICT',
+      'This event is owned by Act. Read its authoritative snapshot through eventOps.live.',
+    );
   const [plan] = await db.select().from(eventPlans).where(eq(eventPlans.id, planId));
   if (!plan) return fail('NOT_FOUND', 'Event not found.');
   const [settings] = await db

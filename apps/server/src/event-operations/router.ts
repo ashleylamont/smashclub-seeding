@@ -1,4 +1,5 @@
 import { publicEventNights } from './publicEvents';
+import { nativeLiveRouter } from '../tournament/router';
 import { startPoolMatch } from './selfService';
 import { nativeBracketRouter } from './nativeRouter';
 import { guestRouter } from './guestRouter';
@@ -49,6 +50,7 @@ const attendanceInput = z.object({
 });
 const planInput = z.object({ planId: z.string().uuid() });
 export const eventOpsRouter = router({
+  live: nativeLiveRouter,
   publicEvents: publicProcedure.query(({ ctx }) => publicEventNights(ctx.db)),
   attendeeRoster: authedProcedure
     .input(planInput)
