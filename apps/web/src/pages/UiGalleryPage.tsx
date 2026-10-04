@@ -6,7 +6,7 @@ import { Field } from '../components/ui/Field';
 import { EmptyState, LoadingState, Notice } from '../components/ui/Feedback';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Tab, TabList, TabPanel, Tabs } from '../components/ui/Tabs';
-import { ScoreFields } from '../components/ScoreFields';
+import { ScoreFields, type ScoreInputValue } from '../components/ScoreFields';
 import { InfoTip } from '../components/InfoTip';
 import { Checkbox } from '../components/ui/Checkbox';
 import { Switch } from '../components/ui/Switch';
@@ -201,8 +201,8 @@ function SelectionExamples() {
 }
 
 function ReportingExamples() {
-  const [score1, setScore1] = useState(0);
-  const [score2, setScore2] = useState(0);
+  const [score1, setScore1] = useState<ScoreInputValue>(0);
+  const [score2, setScore2] = useState<ScoreInputValue>(0);
   const [confirmed, setConfirmed] = useState(false);
   return (
     <div className="ui-gallery-grid">
@@ -213,6 +213,7 @@ function ReportingExamples() {
           className="ui-example"
           onSubmit={(event) => {
             event.preventDefault();
+            if (score1 === '' || score2 === '') return;
             setConfirmed(true);
           }}
         >
@@ -230,7 +231,11 @@ function ReportingExamples() {
               setConfirmed(false);
             }}
           />
-          <Button type="submit" variant="primary" disabled={score1 === score2}>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={score1 === '' || score2 === '' || score1 === score2}
+          >
             Confirm result
           </Button>
           <p className="ui-field-hint">A different score goes to TO review.</p>

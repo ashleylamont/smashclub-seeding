@@ -1,4 +1,4 @@
-import { chooseOption } from '../test-support/controls';
+import { chooseOption, clearInput } from '../test-support/controls';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
 type Match = {
@@ -173,8 +173,14 @@ test('TO live scores stay unfinished while station options and pool holds follow
   });
   await upperCard.getByRole('button', { name: 'Start match', exact: true }).click();
   await upperCard.getByRole('button', { name: 'Update live score', exact: true }).click();
-  await upperCard.locator('input[type="number"]').nth(0).fill('1');
-  await upperCard.locator('input[type="number"]').nth(1).fill('0');
+  const saveLive = upperCard.getByRole('button', { name: 'Save live score', exact: true });
+  await expect(saveLive).toBeEnabled();
+  await clearInput(upperCard.getByRole('spinbutton').nth(0));
+  await expect(saveLive).toBeDisabled();
+  await upperCard.getByRole('spinbutton').nth(0).press('1');
+  await clearInput(upperCard.getByRole('spinbutton').nth(1));
+  await expect(saveLive).toBeDisabled();
+  await upperCard.getByRole('spinbutton').nth(1).press('0');
   await upperCard.getByRole('button', { name: 'Save live score', exact: true }).click();
   await expect(page.locator('.ops-notice')).toContainText('Live score updated');
   await expect(upperCard).toContainText('Live game score · match still in progress');
@@ -200,7 +206,11 @@ test('TO live scores stay unfinished while station options and pool holds follow
   await schedule.getByRole('button', { name: 'Save pool settings' }).click();
   await expect(lowerCard.getByRole('button', { name: 'Start match', exact: true })).toBeEnabled();
   await upperCard.getByRole('button', { name: 'Finish match', exact: true }).click();
-  await upperCard.locator('input[type="number"]').nth(0).fill('2');
+  await clearInput(upperCard.getByRole('spinbutton').nth(0));
+  await expect(
+    upperCard.getByRole('button', { name: 'Confirm result', exact: true }),
+  ).toBeDisabled();
+  await upperCard.getByRole('spinbutton').nth(0).press('2');
   await upperCard.getByRole('button', { name: 'Confirm result', exact: true }).click();
   await expect(page.locator('.ops-notice')).toContainText('Score recorded locally');
   live = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });

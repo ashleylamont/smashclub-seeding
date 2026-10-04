@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { AxeBuilder } from '@axe-core/playwright';
 import { mockEvent, ready } from './fixtures';
-import { chooseOption } from '../test-support/controls';
+import { chooseOption, clearInput } from '../test-support/controls';
 
 test('select handles keyboard, disabled and empty choices with native form values', async ({
   page,
@@ -122,8 +122,12 @@ test('tabs support arrow keys and manual activation, help works by keyboard', as
   await page.keyboard.press('Enter');
   const report = page.getByRole('tabpanel', { name: 'Reporting' });
   await expect(report).toBeVisible();
-  await report.getByLabel('Jordan', { exact: true }).fill('2');
-  await report.getByRole('button', { name: 'Confirm result' }).click();
+  const jordan = report.getByLabel('Jordan', { exact: true });
+  const confirm = report.getByRole('button', { name: 'Confirm result' });
+  await clearInput(jordan);
+  await expect(confirm).toBeDisabled();
+  await jordan.press('2');
+  await confirm.click();
   await expect(report.getByRole('status')).toHaveText('Result confirmed: 0–2.');
   await controls.click();
   const help = page.getByRole('button', { name: 'Explain: Ranked rating' });

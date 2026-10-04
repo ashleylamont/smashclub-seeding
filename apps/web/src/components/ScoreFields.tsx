@@ -1,6 +1,9 @@
 import { useId } from 'react';
 import { Field } from './ui/Field';
 
+/** A cleared field stays empty until the reporter enters its replacement. */
+export type ScoreInputValue = number | '';
+
 /** Shared presentation only: revision, request ID and reporting rules stay with callers. */
 export function ScoreFields({
   player1Name,
@@ -14,10 +17,10 @@ export function ScoreFields({
 }: {
   player1Name: string | null;
   player2Name: string | null;
-  score1: number;
-  score2: number;
-  onScore1: (value: number) => void;
-  onScore2: (value: number) => void;
+  score1: ScoreInputValue;
+  score2: ScoreInputValue;
+  onScore1: (value: ScoreInputValue) => void;
+  onScore2: (value: ScoreInputValue) => void;
   disabled?: boolean;
   requireDecisive?: boolean;
 }) {
@@ -36,7 +39,9 @@ export function ScoreFields({
           value={score1}
           disabled={disabled}
           aria-describedby={hintId}
-          onChange={(event) => onScore1(Number(event.target.value))}
+          onChange={(event) =>
+            onScore1(event.target.value === '' ? '' : Number(event.target.value))
+          }
         />
         <Field
           label={player2Name || 'Player 2'}
@@ -49,11 +54,13 @@ export function ScoreFields({
           value={score2}
           disabled={disabled}
           aria-describedby={hintId}
-          onChange={(event) => onScore2(Number(event.target.value))}
+          onChange={(event) =>
+            onScore2(event.target.value === '' ? '' : Number(event.target.value))
+          }
         />
       </div>
       <p className="ui-field-hint" id={hintId}>
-        {requireDecisive && score1 === score2
+        {requireDecisive && score1 !== '' && score1 === score2
           ? 'Enter a final score with a winner.'
           : 'Games won by each player.'}
       </p>

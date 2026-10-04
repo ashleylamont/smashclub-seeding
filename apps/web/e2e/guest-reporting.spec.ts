@@ -1,4 +1,4 @@
-import { chooseOption } from '../test-support/controls';
+import { chooseOption, clearInput } from '../test-support/controls';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import jsQR from 'jsqr';
 import { writeFile } from 'node:fs/promises';
@@ -142,8 +142,13 @@ test('scannable guest QR accepts anonymous and unlinked reports, keeps approval 
         exact: true,
       }),
     });
-    await guestCard.getByLabel(first.player1Name, { exact: true }).fill('2');
-    await guestCard.getByLabel(first.player2Name, { exact: true }).fill('1');
+    await clearInput(guestCard.getByLabel(first.player1Name, { exact: true }));
+    await guestCard.getByLabel(first.player1Name, { exact: true }).press('2');
+    await clearInput(guestCard.getByLabel(first.player2Name, { exact: true }));
+    await expect(
+      guestCard.getByRole('button', { name: 'Submit score for TO approval' }),
+    ).toBeDisabled();
+    await guestCard.getByLabel(first.player2Name, { exact: true }).press('1');
     await guestCard.getByRole('button', { name: 'Submit score for TO approval' }).click();
     await expect(guestCard).toContainText('Awaiting TO approval');
     expect(await guest.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(

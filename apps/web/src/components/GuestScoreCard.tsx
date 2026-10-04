@@ -1,5 +1,5 @@
 import { Button } from './ui/Button';
-import { ScoreFields } from './ScoreFields';
+import { ScoreFields, type ScoreInputValue } from './ScoreFields';
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CompletedScoreReport, type ResultSubmission } from './CompletedScoreReport';
@@ -31,8 +31,8 @@ export function GuestScoreCard({
   disputeMode: boolean;
 }) {
   const cache = useQueryClient();
-  const [score1, setScore1] = useState(0);
-  const [score2, setScore2] = useState(0);
+  const [score1, setScore1] = useState<ScoreInputValue>(0);
+  const [score2, setScore2] = useState<ScoreInputValue>(0);
   const [revision, setRevision] = useState(match.revision);
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [pending, setPending] = useState(false);
@@ -63,7 +63,7 @@ export function GuestScoreCard({
     return result;
   };
   const submit = async () => {
-    if (!session) return;
+    if (!session || score1 === '' || score2 === '') return;
     setPending(true);
     setError('');
     try {
@@ -190,7 +190,12 @@ export function GuestScoreCard({
             pending={pending}
             variant="primary"
             disabled={
-              pending || stale || score1 === score2 || !['ready', 'playing'].includes(match.status)
+              pending ||
+              stale ||
+              score1 === '' ||
+              score2 === '' ||
+              score1 === score2 ||
+              !['ready', 'playing'].includes(match.status)
             }
           >
             {disputeMode || (selfRun && autoAccept)

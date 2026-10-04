@@ -3,7 +3,7 @@ import { Select, SelectItem } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
 import { useState } from 'react';
 import { trpc } from '../../lib/trpc';
-import { ScoreFields } from '../../components/ScoreFields';
+import { ScoreFields, type ScoreInputValue } from '../../components/ScoreFields';
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 type Match = Overview['matches'][number];
 type Action = (work: () => Promise<unknown>, message?: string) => Promise<void>;
@@ -25,12 +25,13 @@ export function MatchCard({
   const confirmAction = useConfirmation();
   const [editing, setEditing] = useState<'live' | 'final' | null>(null);
   const [revision, setRevision] = useState(match.revision);
-  const [score1, setScore1] = useState(match.score1 ?? 0);
-  const [score2, setScore2] = useState(match.score2 ?? 0);
+  const [score1, setScore1] = useState<ScoreInputValue>(match.score1 ?? 0);
+  const [score2, setScore2] = useState<ScoreInputValue>(match.score2 ?? 0);
   const [outcome, setOutcome] = useState<'played' | 'forfeit' | 'bye'>('played');
   const [winnerId, setWinnerId] = useState(match.winnerId ?? match.player1Id ?? '');
   const [requestId, setRequestId] = useState('');
   const stale = editing !== null && revision !== match.revision;
+  const requireDecisive = editing === 'final' && outcome === 'played';
   const begin = (mode: 'live' | 'final') => {
     setEditing(mode);
     setRevision(match.revision);
@@ -190,6 +191,7 @@ export function MatchCard({
           className="ops-score-form"
           onSubmit={(event) => {
             event.preventDefault();
+            if (score1 === '' || score2 === '') return;
             void act(
               async () => {
                 if (editing === 'live')
@@ -232,7 +234,7 @@ export function MatchCard({
             player2Name={match.player2Name}
             score1={score1}
             score2={score2}
-            requireDecisive={editing === 'final' && outcome === 'played'}
+            requireDecisive={requireDecisive}
             onScore1={(value) => {
               setScore1(value);
               setRequestId(crypto.randomUUID());
@@ -290,7 +292,8 @@ export function MatchCard({
               disabled={
                 disabled ||
                 stale ||
-                (editing === 'final' && outcome === 'played' && score1 === score2)
+                [score1, score2].includes('') ||
+                (requireDecisive && score1 === score2)
               }
             >
               {editing === 'live' ? 'Save live score' : 'Confirm result'}

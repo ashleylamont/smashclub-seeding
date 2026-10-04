@@ -1,4 +1,4 @@
-import { chooseOption } from '../test-support/controls';
+import { chooseOption, clearInput } from '../test-support/controls';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
 type Match = {
@@ -238,7 +238,11 @@ test('QR and unlinked attendees confirm recorded results or flag a different sco
     await expect(otherCard).toContainText('your score agrees');
     await otherCard.getByRole('button', { name: 'Report a different score', exact: true }).click();
     await otherCard.locator('input[type="number"]').nth(0).fill('1');
-    await otherCard.locator('input[type="number"]').nth(1).fill('2');
+    await clearInput(otherCard.getByRole('spinbutton').nth(1));
+    await expect(
+      otherCard.getByRole('button', { name: 'Send different score to TOs' }),
+    ).toBeDisabled();
+    await otherCard.getByRole('spinbutton').nth(1).press('2');
     await otherCard.getByRole('button', { name: 'Send different score to TOs' }).click();
     await expect(otherCard).toContainText('Different score sent to the TOs for review');
     await expect(otherCard).toContainText('Confirmed result: 2 – 1');
@@ -257,8 +261,16 @@ test('QR and unlinked attendees confirm recorded results or flag a different sco
     await signedCard.getByRole('button', { name: 'Confirm recorded score', exact: true }).click();
     await expect(signedCard).toContainText('your score agrees');
     await signedCard.getByRole('button', { name: 'Report a different score', exact: true }).click();
-    await signedCard.locator('input[type="number"]').nth(0).fill('2');
-    await signedCard.locator('input[type="number"]').nth(1).fill('0');
+    await clearInput(signedCard.getByRole('spinbutton').nth(0));
+    await expect(
+      signedCard.getByRole('button', { name: 'Send different score to TOs' }),
+    ).toBeDisabled();
+    await signedCard.getByRole('spinbutton').nth(0).press('2');
+    await clearInput(signedCard.getByRole('spinbutton').nth(1));
+    await expect(
+      signedCard.getByRole('button', { name: 'Send different score to TOs' }),
+    ).toBeDisabled();
+    await signedCard.getByRole('spinbutton').nth(1).press('0');
     await signedCard.getByRole('button', { name: 'Send different score to TOs' }).click();
     await expect(signedCard).toContainText('Different score sent to the TOs for review');
     const official = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });

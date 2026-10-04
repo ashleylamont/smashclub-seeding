@@ -1,5 +1,5 @@
 import { Button } from './ui/Button';
-import { ScoreFields } from './ScoreFields';
+import { ScoreFields, type ScoreInputValue } from './ScoreFields';
 import { useState } from 'react';
 
 type RecordedMatch = {
@@ -33,14 +33,15 @@ export function CompletedScoreReport({
   label?: string;
 }) {
   const [editing, setEditing] = useState(false);
-  const [score1, setScore1] = useState(match.score1 ?? 0);
-  const [score2, setScore2] = useState(match.score2 ?? 0);
+  const [score1, setScore1] = useState<ScoreInputValue>(match.score1 ?? 0);
+  const [score2, setScore2] = useState<ScoreInputValue>(match.score2 ?? 0);
   const [revision, setRevision] = useState(match.revision);
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const submit = async (first: number, second: number) => {
+  const submit = async (first: ScoreInputValue, second: ScoreInputValue) => {
+    if (first === '' || second === '') return;
     setPending(true);
     setError('');
     try {
@@ -151,6 +152,8 @@ export function CompletedScoreReport({
                     disabled={
                       pending ||
                       revision !== match.revision ||
+                      score1 === '' ||
+                      score2 === '' ||
                       score1 === score2 ||
                       (score1 === match.score1 && score2 === match.score2)
                     }

@@ -1,4 +1,4 @@
-import { chooseOption } from '../test-support/controls';
+import { chooseOption, clearInput } from '../test-support/controls';
 import { expect, test } from '@playwright/test';
 import { AxeBuilder } from '@axe-core/playwright';
 import { mockEvent, PLAN_ID, PLAYER_NAME, ready } from './fixtures';
@@ -9,12 +9,27 @@ test('phone reporting preserves input, revision and pending feedback', async ({ 
   await page.goto(`/play/${PLAN_ID}`);
   const card = page.locator('article.ops-match').filter({ hasText: PLAYER_NAME }).first();
   await expect(card).toBeVisible();
-  await expect(card.getByRole('button', { name: /Submit score/ })).toBeDisabled();
-  await card.getByLabel(PLAYER_NAME, { exact: true }).fill('2');
-  await expect(card.getByRole('button', { name: /Submit score/ })).toBeEnabled();
+  const submit = card.getByRole('button', { name: /Submit score/ });
+  const scores = card.getByRole('spinbutton');
+  await expect(submit).toBeDisabled();
+  await scores.nth(0).fill('2');
+  await expect(submit).toBeEnabled();
   await ready(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await expect(page).toHaveScreenshot('player-report-phone.png');
+  for (const replacement of ['0', '2']) {
+    await clearInput(scores.nth(0));
+    await expect(submit).toBeDisabled();
+    await scores.nth(0).press(replacement);
+    await expect(scores.nth(0)).toHaveValue(replacement);
+  }
+  await clearInput(scores.nth(1));
+  await expect(submit).toBeDisabled();
+  await scores.nth(1).press('Enter');
+  expect(fixture.submissions).toHaveLength(0);
+  await scores.nth(1).press('0');
+  await expect(scores.nth(1)).toHaveValue('0');
+  await expect(submit).toBeEnabled();
   await card.getByRole('button', { name: /Submit score/ }).click();
   await expect(card.getByRole('status')).toContainText('Score submitted for TO approval');
   expect(fixture.submissions).toHaveLength(1);

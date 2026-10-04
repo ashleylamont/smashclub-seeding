@@ -4,7 +4,7 @@ import { Input } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
 import { LoadingState, Notice } from '../components/ui/Feedback';
 import { Button } from '../components/ui/Button';
-import { ScoreFields } from '../components/ScoreFields';
+import { ScoreFields, type ScoreInputValue } from '../components/ScoreFields';
 import { useState } from 'react';
 import { eventUnavailable } from '../lib/eventErrors';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -296,8 +296,8 @@ function PlayerScoreCard({
 }) {
   const reportStatus = report?.status;
   const cache = useQueryClient();
-  const [score1, setScore1] = useState(0);
-  const [score2, setScore2] = useState(0);
+  const [score1, setScore1] = useState<ScoreInputValue>(0);
+  const [score2, setScore2] = useState<ScoreInputValue>(0);
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [revision, setRevision] = useState(match.revision);
   const [retryRejected, setRetryRejected] = useState(false);
@@ -317,6 +317,7 @@ function PlayerScoreCard({
     return result;
   };
   const submit = async () => {
+    if (score1 === '' || score2 === '') return;
     setPending(true);
     setError('');
     try {
@@ -447,6 +448,8 @@ function PlayerScoreCard({
               !enabled ||
               pending ||
               revision !== match.revision ||
+              score1 === '' ||
+              score2 === '' ||
               score1 === score2 ||
               !match.player1Id ||
               !match.player2Id

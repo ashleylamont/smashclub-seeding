@@ -41,7 +41,7 @@ Controls have a 36px base height, 32px compact variant and 44px minimum on phone
 | `ui/PageHeader` | Page heading, concise description and actions. Put the event's actual name in the heading. |
 | `ui/Notice`, `LoadingState`, `EmptyState` | Inline error/status, busy feedback and an empty state with a next action. Failures should provide a retry when the user can recover. |
 | `.card`, `.chip`, `.btn`, `.input`, `.select` | Shared CSS for semantic native sections, badges and controls. Include visible state text in chips; use real table elements for tabular data. |
-| `ScoreFields` | Shared labelled game counts and winner hint for player, guest, correction and TO forms. Each caller retains revisions, request IDs, permissions, submission policy and stale-write checks. |
+| `ScoreFields` | Shared labelled game counts and winner hint for player, guest, correction and TO forms. Keep drafts as `ScoreInputValue` (`number \| ''`) so clearing a field stays empty; disable and guard submission until both scores are numbers. Each caller retains revisions, request IDs, permissions, submission policy and stale-write checks. |
 
 Example:
 
