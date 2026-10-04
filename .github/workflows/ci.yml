@@ -164,11 +164,7 @@ jobs:
 
   legacy-python:
     name: Legacy Python tests
-    # Reference implementation kept in legacy/ during the rework. The TypeScript
-    # port is verified against this engine's own recorded output by
-    # tools/golden-check, so these tests guard the thing that master is compared
-    # against.
-    #
+    # Identity/import tests for the unsupported historical Python archive.
     # test_smart_parsing.py and test_seeding.py are excluded on purpose: both
     # construct SeedingCalculator('tests/test_data.csv'), a fixture of real
     # player data that is deliberately not committed. Listing them here only

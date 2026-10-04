@@ -1,113 +1,45 @@
-# Whole-History Rating: how it is integrated here
+# Whole-History Rating
 
-WHR is available as an active model in admin settings; new installations default to Glicko-2. This document explains the WHR design and evaluation, not a requirement to switch a running club to it.
+WHR is the sole supported rating system. Settings expose WHR parameters and club policy; there is no model selector, Glicko runtime or model-comparison API. Historical records retain the model and settings that produced them.
 
-WHR (Coulom, 2008) refits every rating from all evidence at once. On this
-club's data — a dozen-ish nights, ~1,000 sets, weakly-linked main and rookie
-brackets, a long tail of one-event players — that is measurably the right
-model: on walk-forward evaluation it beats every sequential Glicko variant and
-every baseline (`pnpm rank-eval`). But a batch fit does not naturally answer
-the questions this app is built around: *what did this set do to my rating*,
-and *why did my number change when I didn't play*. This document records how
-those are answered.
+## Fits and history
 
-## The two books
+WHR jointly fits the eligible played history. A rating period is a club event day: main and rookie brackets on the same evening share a period. Prefix fits use only the history available through each night. The current full fit provides both the current rating and retrospective estimates at earlier nights.
 
-A batch fit revises the past by design: night 12's results genuinely teach the
-model something about how good you were on night 9. Shown naively, that reads
-as numbers rewriting themselves. So the run keeps two books:
+The engine records each played set for participation, chronological career history and evidence weighting. Its legacy-named `pre_rating` and `post_rating` columns now repeat **pre-night and post-night estimates** on every set that night. They are not per-set updates and must never be summed as match deltas. The pre-night estimate comes from the immediately preceding history prefix, projected to the selected night; a debut uses its configured prior. Profiles and charts show one point per night, and match logs show evidence weights without rating deltas.
 
-**The ledger** (`pre_rating`/`post_rating` on `rating_events`) is what the
-board published as of each night, and it is *frozen*. It is computed from
-prefix fits: event *k*'s numbers come from a fit that has seen events 1..k and
-nothing later, so appending an event can never rewrite an old row. The match
-log, the per-set Δs, the sparkline and the trajectory chart's solid line all
-read from the ledger. It chains continuously — each row's `pre` is the
-previous row's `post` — and a night's rows sum exactly to what the night did.
+Appending later nights preserves earlier prefix estimates under unchanged input and settings. Corrections, identity resolutions or configuration changes can change recomputed estimates; these numbers are not a record of an immutable board publication. Old recomputes remain immutable provenance records. The `revised_rating` / `revised_sd` values describe the current fit's hindsight estimate at a past night.
 
-**The hindsight track** (`revised_rating`/`revised_sd`) is the current full
-fit's estimate at each of the player's nights. It moves with every recompute,
-and that is the point: revision is displayed as a labelled, dashed second
-series on the profile chart ("with everything played since, this is how good
-we now think you were that night") instead of leaking into the record.
+The full explainability work remains in [#61](https://github.com/ashleylamont/smashclub-seeding/issues/61): [approximate result impact #95](https://github.com/ashleylamont/smashclub-seeding/issues/95), [new-night movement versus historical revision #96](https://github.com/ashleylamont/smashclub-seeding/issues/96), [expected outcomes and scoreline evidence #97](https://github.com/ashleylamont/smashclub-seeding/issues/97), and [consistent explanations #98](https://github.com/ashleylamont/smashclub-seeding/issues/98). This removal does not implement approximate influence, leave-one-result-out validation, or a complete nightly revision/attendance breakdown. Do not restore synthetic per-match chains or spread historical catch-up across match rows.
 
-The board itself always shows the latest full fit — which is also the last
-prefix, so the ledger's final value and the board agree exactly.
+## Uncertainty, attendance and seeds
 
-## Per-set deltas
+Brownian drift (`whrDriftVariancePerDay`) widens uncertainty over unobserved elapsed time. The board evaluates everyone at the club's latest rated event. No invented decay matches are emitted. The point estimate, posterior uncertainty and evidence calibration retain the existing WHR mathematics.
 
-WHR does not attribute movement to individual results, but it comes very
-close to licensing one: at the optimum, the first-order effect of a single
-result on a player's rating is `posterior variance × (outcome − expected)` —
-the same residual that drives the Newton step. So a night's total movement
-`D` (from the prefix fits) is split as:
+The public board orders **club rating = displayed skill − activity penalty**. Missing club nights incurs the configured grace window, charge and cap; playing clears the penalty. Provisional thresholds, fixed league bands and their one-time calibration are club policy. Sample confidence measures posterior tightening relative to the WHR prior.
 
-```
-base_i   = v · trials_i · (outcome_i − p_i) · scale     (surprise share)
-delta_i  = base_i + (D − Σ base_j) / n                  (remainder spread evenly)
-```
+Automatic seeding orders **displayed skill − 2 × SD**. Attendance deductions do not enter that score. Optional rookie debut priors and the existing isolation anchor are preserved: the anchor affects the displayed number, not the fit or its probability formula. A frozen tournament draw retains its stored seeds and original recompute reference through the cutover.
 
-where `p_i` is the win probability the *pre-night* fit would have quoted —
-what the board actually expected before the set — and the remainder carries
-what the linearisation cannot see (opponents' own movement that night, prior
-shrinkage on a debut). Wins as the underdog get big positive shares, routine
-wins small ones, losses negative ones, and the shares always sum to exactly
-`D`. A share can disagree in sign with the result — you can win a set on a
-night that still cost you points — which is honest, not a bug.
+## Played evidence and probabilities
 
-## Inactivity
+A played set's evidence weight is `min(2, 1 + whrGamesWeight × (winning margin − 1))`, with unknown or unusable played scorelines contributing one result. At the default 0.5, 3–0 has weight 2, 3–1 has weight 1.5 and 3–2 has weight 1. This weights model evidence; it does not multiply rating points. Games within a set are correlated, so the margin is discounted.
 
-Two mechanisms, deliberately separate:
+Forfeits award a tournament win/advancement with **no invented games and no rating input**. Byes are not played results. Recompute checks imported negative-score forfeits, impossible-score byes and explicit native unplayed outcomes independently of stored exclusion overrides. Unknown scores on an otherwise played result still contribute one result. Legitimate played 5–0 records must not be converted to forfeits based only on their score; audit/correction work is tracked in [#68](https://github.com/ashleylamont/smashclub-seeding/issues/68).
 
-- **Inside the model**: Brownian drift (`whrDriftVariancePerDay`) widens the
-  posterior over unobserved time. The leaderboard evaluates everyone at the
-  *club's latest event*, not at their own last appearance, so an absent
-  player's band widens on the published board, their conservative seeding
-  score (`skill − 2·sd`) sinks, and the confidence meter fades. Their point
-  estimate does not move — Brownian motion is a martingale, and pretending
-  absence is evidence of decline would be inventing data.
-- **On the board**: the activity penalty, shared verbatim with the Glicko
-  path. What missing a club night *costs* is club policy, stated in points,
-  and must not change when the model does.
+Forecasts use WHR's logistic probability with the summed uncertainty of both players. Breakthrough analysis fits strictly before the selected night and reports unavailable expectations for players without history. Recap upset probabilities use the recorded pre-night estimates, never a Glicko fallback. Broader forecast snapshot explanations remain in #97.
 
-## Decisive sets
-
-A 3-0 says more than a 3-2. A set counts as `1 + whrGamesWeight · (margin − 1)`
-independent results, capped at 2 (games within a set are correlated — momentum,
-counterpicks — so the margin is discounted, not counted outright). Forfeits
-and unreadable scorelines rate as a plain set. The multiplier is stored as the
-event's `weight` and surfaced in the match log (`×1.5` etc.).
-
-## What is deliberately absent
-
-The Glicko path's corrective stack — rookie down-weighting, isolation factor,
-rating anchor, sample-confidence shrinkage — is not ported. Thin linkage
-between the rookie and main pools comes out of the fit as *wider uncertainty*,
-which is the honest answer; the prior on each player's first night keeps
-disconnected pools anchored to 1500 instead of floating.
-
-## Tuning
+## Configuration and evaluation
 
 | Knob | Default | Meaning |
-|---|---|---|
-| `whrDriftVariancePerDay` | 0.0002 | ~55 display points of drift/year. Raise to track form faster and widen absence bands faster. |
-| `whrPriorSd` | 1.2 natural (~208 display) | First-night prior; also the scale anchor and the confidence meter's "knowing nothing". |
-| `whrGamesWeight` | 0.5 | Evidence per game of winning margin; 0 ignores scorelines. |
+| --- | --- | --- |
+| `whrDriftVariancePerDay` | 0.0002 | Drift variance per elapsed day in natural units. |
+| `whrPriorSd` | 1.2 | First-night prior SD in natural units. |
+| `whrGamesWeight` | 0.5 | Discounted score-margin evidence; zero ignores margin. |
+| `whrRookieDebutPrior` | 1500 | Display-scale prior centre for rookie debuts. |
+| `whrIsolationAnchor` | false | Existing optional display anchor for isolated rookie records. |
 
-Tune against held-out prediction, not vibes: `pnpm rank-eval <cache>` compares
-drift variants (and the Glicko models) on log loss with a paired bootstrap.
+`pnpm rank-eval --synthetic` or `pnpm rank-eval <cache>` evaluates WHR variants against coin-flip, experience and smoothed win-rate baselines using held-out walk-forward prediction, calibration and paired bootstrap. `--impact` reports WHR club rank versus conservative seeding. The independent baselines have no Glicko dependency. The old Python tree is an unsupported historical archive; its Glicko golden-check workspace tool has been retired.
 
-## Surfaces
+## Data cutover
 
-- **Recompute** writes the ledger + hindsight columns, records WHR convergence
-  in `recomputes.stats`, and takes `previousRank` from the second-to-last
-  prefix — the same board members actually saw before the night — rather than
-  a separate withheld refit.
-- **Profile** explains Δs as shares of the night, draws the hindsight series
-  when it diverges, and words the confidence tile for the model in force.
-- **Leaderboard** confidence meter uses the server's model-appropriate
-  `sampleConfidence` rather than a hardcoded Glicko scale.
-- **Recap** quotes upset odds with the model's own probability formula
-  (variance-sum attenuation for WHR).
-- **Seeding** ranks on `skill − 2·sd` with drift-projected sd, so returners
-  are seeded cautiously without being told they got worse.
+See [WHR-only migration](whr-only-migration.md) for configuration migration, canonical reader gating and deployment rehearsal.

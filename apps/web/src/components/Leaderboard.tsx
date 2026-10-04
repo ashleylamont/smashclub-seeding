@@ -150,8 +150,7 @@ function lastSeenChip(row: LeaderboardRow): { text: string; className: string; t
  * whatever the label says.
  *
  * The server computes `sampleConfidence` against the active model's own
- * "knowing nothing" scale (Glicko's initial RD, WHR's prior), so the meter is
- * not re-derived here from a hardcoded Glicko constant.
+ * WHR prior scale, so the meter uses the server's confidence value.
  */
 function confidenceWidth(sampleConfidence: number): number {
   return Math.max(4, Math.min(100, sampleConfidence * 100));

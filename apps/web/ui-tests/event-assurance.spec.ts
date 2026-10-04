@@ -180,6 +180,7 @@ for (const idle of [false, true])
     await page.goto(`/overlay/${PLAN_ID}`);
     const aperture = page.getByLabel('Transparent game capture area');
     await expect(aperture).toBeVisible();
+    await expect(page.getByRole('img', { name: 'Scan to report a match score' })).toHaveCount(0);
     const box = (await aperture.boundingBox())!;
     expect(box.width).toBeGreaterThan(600);
     expect(box.height).toBeGreaterThan(300);

@@ -1,3 +1,5 @@
+> Unsupported historical archive. The active application supports WHR only. Glicko commands described below are retained as historical reference and are not supported workflows. See [current rating documentation](../docs/whr-design.md).
+
 # SSBU Tournament Seeding Tool 🎮
 
 > Historical Python CLI. The maintained web app and its setup instructions are in the [project README](../README.md). Run the commands below from the `legacy/` directory when working with this reference implementation.

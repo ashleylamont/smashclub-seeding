@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { defaultGlickoSettings } from '@smashclub/shared';
+import { defaultRatingSettings } from '@smashclub/shared';
 import { eq } from 'drizzle-orm';
 import {
   eventMatches,
@@ -21,7 +21,7 @@ import {
 } from '../src/event-operations/nativeBrackets';
 import { getPlan, savePoolPlacements } from '../src/event-planner/plans';
 import { runRecompute } from '../src/recompute/recompute';
-import { updateGlickoSettings } from '../src/settings';
+import { updateRatingSettings } from '../src/settings';
 import { postgresCluster, migrationsFolder, contend } from './helpers/postgres';
 import { nativeFixture, scoreInput, to } from './helpers/nativeFixture';
 
@@ -168,7 +168,7 @@ it('preserves a soft-locked draw across connections, rejects unsafe corrections 
   expect(unplayed.find((s) => (s.raw as { outcome: string }).outcome === 'forfeit')!.winner).toBe(
     1,
   );
-  await updateGlickoSettings(cluster.db, { ...defaultGlickoSettings, activeModel: 'whr' });
+  await updateRatingSettings(cluster.db, defaultRatingSettings);
   const firstFit = await runRecompute(cluster.db);
   expect(firstFit.model).toBe('whr');
   expect(firstFit.sets).toBe(completed.filter((m) => m.outcome === 'played').length);

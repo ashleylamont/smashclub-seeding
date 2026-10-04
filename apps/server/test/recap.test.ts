@@ -7,7 +7,6 @@ import { syncTournament } from '../src/sync/sync';
 import { runRecompute } from '../src/recompute/recompute';
 import { RecomputeTrigger } from '../src/recompute/trigger';
 import { loadEnv } from '../src/env';
-import { getGlickoSettings, updateGlickoSettings } from '../src/settings';
 import { appRouter } from '../src/trpc/router';
 import { createTestDb } from './helpers/testDb';
 import { fixtureClient, type FixtureTournament } from './helpers/challongeFixtures';
@@ -256,12 +255,9 @@ describe('public.recap', () => {
    * player, so every player's first set was `seq` 1 and nothing was ever
    * before anything: the recap announced the whole room as first-timers every
    * night, on every night in club history, and silently dropped every rivalry,
-   * breakthrough and milestone fact with them. Glicko-2 numbered it globally
-   * and passed the test above throughout.
+   * breakthrough and milestone fact with them.
    */
-  it('reads the same history under WHR as under Glicko-2', async () => {
-    const { glicko } = await getGlickoSettings(db);
-    await updateGlickoSettings(db, { ...glicko, activeModel: 'whr' });
+  it('uses the global WHR sequence for career history', async () => {
     await sync(['march-main', 'march-rookie', 'april-main', 'june-main']);
     await runRecompute(db);
 

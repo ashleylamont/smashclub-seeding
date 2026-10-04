@@ -31,7 +31,7 @@ export async function mockEvent(page: Page, options: FixtureOptions = {}) {
       queue.currentMatchId = null;
     });
   }
-  const overview = { ...snapshot, ...extra };
+  const overview = { ...snapshot, ...structuredClone(extra) };
   const user = {
     id: 'example-user',
     name: 'Alex',
@@ -112,7 +112,7 @@ export async function mockEvent(page: Page, options: FixtureOptions = {}) {
           },
         };
       if (!(procedure in responses)) unexpected.push(procedure);
-      return { result: { data: responses[procedure] ?? [] } };
+      return { result: { data: procedure in responses ? responses[procedure] : [] } };
     });
     await route.fulfill({ json: url.searchParams.get('batch') ? result : result[0] });
   });
@@ -120,5 +120,17 @@ export async function mockEvent(page: Page, options: FixtureOptions = {}) {
 }
 
 export async function ready(page: Page) {
-  await page.evaluate(() => document.fonts.ready);
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    // Let inherited colors settle before axe reads contrast, as well as before capture.
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+    await Promise.all(
+      document
+        .getAnimations()
+        .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+        .map((animation) => animation.finished.catch(() => undefined)),
+    );
+  });
 }

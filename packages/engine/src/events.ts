@@ -49,7 +49,7 @@ export interface Attendance {
 /**
  * Attendance derived from the club's event list rather than from either rating
  * model's internals, so the activity policy means the same thing whichever model
- * is authoritative. Both `replayRatings` and `runWhrModel` go through this.
+ * is authoritative. `runWhrModel` uses this for participation policy.
  *
  * `orderedEventKeys` must be the club's distinct event keys, oldest first.
  */

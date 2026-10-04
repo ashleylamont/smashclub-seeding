@@ -17,7 +17,6 @@
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "dev": "pnpm --filter @smashclub/server dev",
-    "golden-check": "pnpm --filter @smashclub/golden-check start",
     "dev:harness": "pnpm --filter @smashclub/server dev:harness",
     "rank-eval": "pnpm --filter @smashclub/rank-eval start",
     "challonge-dump": "pnpm --filter @smashclub/challonge-dump start",

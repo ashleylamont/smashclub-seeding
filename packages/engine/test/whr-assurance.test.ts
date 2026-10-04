@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { performance } from 'node:perf_hooks';
-import { defaultGlickoSettings } from '@smashclub/shared';
+import { defaultRatingSettings } from '@smashclub/shared';
 import { fitWhr, probabilityFromRatings, whrSetTrials, type WhrSet } from '../src/whr';
 import { runWhrModel } from '../src/whrRun';
 import type { EngineSet, EngineTournament } from '../src/types';
@@ -38,7 +38,7 @@ function history(nights = 12, players = 24, perNight = 60) {
       });
     }
   }
-  return { sets, tournaments, settings: { ...defaultGlickoSettings, activeModel: 'whr' as const } };
+  return { sets, tournaments, settings: defaultRatingSettings };
 }
 
 it('matches an independently solved symmetric MAP reference with four wins and one loss', () => {
@@ -128,14 +128,41 @@ it('correction recomputation changes only the affected ledger prefix and restore
       tournaments: [...input.tournaments].reverse(),
     }),
   ).toEqual(initial);
+  const dateByTournament = new Map(input.tournaments.map((t) => [t.id, Date.parse(t.eventDate)]));
+  const origin = Date.parse(input.tournaments[0]!.eventDate);
+  const fitPrefix = (lastNight: string) =>
+    fitWhr({
+      sets: correctedSets
+        .filter((s) => s.tournamentId <= lastNight)
+        .map((s) => ({
+          p1PlayerId: s.p1PlayerId,
+          p2PlayerId: s.p2PlayerId,
+          winner: s.winner,
+          time: (dateByTournament.get(s.tournamentId)! - origin) / 86_400_000,
+          trials: whrSetTrials(s, input.settings.whrGamesWeight),
+        })),
+      config: {
+        priorSd: input.settings.whrPriorSd,
+        driftVariancePerDay: input.settings.whrDriftVariancePerDay,
+      },
+    });
+  for (const [index, tournament] of input.tournaments.entries()) {
+    const before = fitPrefix(input.tournaments[index - 1]?.id ?? '');
+    const after = fitPrefix(tournament.id);
+    const time = (Date.parse(tournament.eventDate) - origin) / 86_400_000;
+    // Every set repeats the independently fitted night boundaries. No invented
+    // per-match chain or telescoping sum is a WHR contract.
+    for (const event of corrected.events.filter((e) => e.tournamentId === tournament.id)) {
+      const prior = before.display(event.playerId, time);
+      const posterior = after.display(event.playerId, time);
+      expect(event.preRating).toBeCloseTo(prior.rating, 8);
+      expect(event.preRd).toBeCloseTo(prior.sd, 8);
+      expect(event.postRating).toBeCloseTo(posterior.rating, 8);
+      expect(event.postRd).toBeCloseTo(posterior.sd, 8);
+    }
+  }
   for (const row of corrected.leaderboard) {
     const events = corrected.events.filter((e) => e.playerId === row.playerId);
-    for (let index = 1; index < events.length; index++)
-      expect(events[index]!.preRating).toBe(events[index - 1]!.postRating);
-    expect(events.reduce((sum, e) => sum + e.postRating - e.preRating, 0)).toBeCloseTo(
-      events.at(-1)!.postRating - events[0]!.preRating,
-      8,
-    );
     expect(
       events.every(
         (e) =>

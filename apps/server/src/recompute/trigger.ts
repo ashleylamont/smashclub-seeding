@@ -4,7 +4,7 @@ import { runRecompute } from './recompute';
 
 /**
  * Debounced recompute trigger: bursts of set changes during live polling
- * collapse into one replay ~5s after the last request. Never runs two
+ * collapse into one WHR fit ~5s after the last request. Never runs two
  * recomputes concurrently; a request arriving mid-run queues one follow-up.
  */
 export class RecomputeTrigger {
@@ -26,14 +26,15 @@ export class RecomputeTrigger {
 
   /** Run immediately (admin "recompute now", tests). */
   async runNow(): Promise<void> {
+    if (this.running) throw new Error('A rating recompute is already running');
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = null;
     }
-    await this.fire();
+    await this.fire(true);
   }
 
-  private async fire(): Promise<void> {
+  private async fire(propagateError = false): Promise<void> {
     this.timer = null;
     if (this.running) {
       this.pendingAgain = true;
@@ -45,6 +46,7 @@ export class RecomputeTrigger {
       liveBus.publish({ type: 'recompute_completed', payload: result });
     } catch (error) {
       this.onError(error);
+      if (propagateError) throw error;
     } finally {
       this.running = false;
       if (this.pendingAgain) {

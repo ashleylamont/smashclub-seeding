@@ -1,6 +1,6 @@
-import type { GlickoSettings } from '@smashclub/shared';
+import type { RatingSettings } from '@smashclub/shared';
+import { isPlayedSet } from './results';
 import { eventKeyOf } from './events';
-import { replayRatings } from './replay';
 import { compareNullableNumbers, compareSetsInBracket, compareStrings } from './setOrder';
 import type { EngineSet, EngineTournament } from './types';
 import {
@@ -38,11 +38,12 @@ export function breakthroughEvidence(input: {
   eventKey: string;
   tournaments: readonly EngineTournament[];
   sets: readonly EngineSet[];
-  settings: GlickoSettings;
+  settings: RatingSettings;
 }) {
   const { eventKey, settings } = input;
   const tournaments = new Map(input.tournaments.map((t) => [t.id, t]));
   const ordered = input.sets
+    .filter(isPlayedSet)
     .filter((s) => tournaments.has(s.tournamentId) && s.p1PlayerId !== s.p2PlayerId)
     .sort((a, b) => {
       const ta = tournaments.get(a.tournamentId)!;
@@ -77,35 +78,20 @@ export function breakthroughEvidence(input: {
     }
   }
 
-  let baseline: (id: string) => { rating: number; sd: number } | null;
-  let converged = true;
-  if (settings.activeModel === 'whr') {
-    const day = (date: string) => Math.floor(Date.parse(date) / 86_400_000);
-    const fit = fitWhr({
-      sets: training.map((s) => ({
-        ...s,
-        time: day(tournaments.get(s.tournamentId)!.eventDate),
-        trials: whrSetTrials(s, settings.whrGamesWeight),
-      })),
-      priorMeans,
-      config: {
-        priorSd: settings.whrPriorSd,
-        driftVariancePerDay: settings.whrDriftVariancePerDay,
-      },
-    });
-    converged = fit.converged;
-    baseline = (id) => (history.has(id) ? fit.display(id, day(eventKey)) : null);
-  } else {
-    const replay = replayRatings({
-      sets: training,
-      tournaments: input.tournaments.filter((t) => eventKeyOf(t.eventDate) < eventKey),
-      settings,
-    });
-    baseline = (id) => {
-      const state = replay.finalStates.get(id);
-      return state ? { rating: state.rating, sd: state.rd } : null;
-    };
-  }
+  const day = (date: string) => Math.floor(Date.parse(date) / 86_400_000);
+  const fit = fitWhr({
+    sets: training.map((s) => ({
+      ...s,
+      time: day(tournaments.get(s.tournamentId)!.eventDate),
+      trials: whrSetTrials(s, settings.whrGamesWeight),
+    })),
+    priorMeans,
+    config: {
+      priorSd: settings.whrPriorSd,
+      driftVariancePerDay: settings.whrDriftVariancePerDay,
+    },
+  });
+  const baseline = (id: string) => (history.has(id) ? fit.display(id, day(eventKey)) : null);
 
   const rows = new Map<string, BreakthroughRow>();
   for (const s of tonight) {
@@ -144,5 +130,5 @@ export function breakthroughEvidence(input: {
       rows.set(id, row);
     }
   }
-  return { model: settings.activeModel, converged, rows: [...rows.values()] };
+  return { model: 'whr' as const, converged: fit.converged, rows: [...rows.values()] };
 }

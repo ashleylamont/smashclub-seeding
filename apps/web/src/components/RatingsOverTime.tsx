@@ -17,8 +17,6 @@ import './RatingsOverTime.css';
 
 interface RatingsOverTimeProps {
   history: RatingHistoryData;
-  /** tournamentId -> display name (for x-axis labels). */
-  tournamentNames: Map<string, string>;
 }
 
 /**
@@ -54,7 +52,6 @@ const MAX_SERIES = SERIES_SLOTS.length;
 /** How many players are pre-selected on first render. */
 const DEFAULT_SELECTION = 5;
 
-type Granularity = 'tournament' | 'event';
 type YMode = 'rating' | 'cautious';
 
 interface Snapshot {
@@ -63,8 +60,7 @@ interface Snapshot {
   [playerId: string]: string | number | null;
 }
 
-export function RatingsOverTime({ history, tournamentNames }: RatingsOverTimeProps) {
-  const [granularity, setGranularity] = useState<Granularity>('tournament');
+export function RatingsOverTime({ history }: RatingsOverTimeProps) {
   const [yMode, setYMode] = useState<YMode>('rating');
   const [search, setSearch] = useState('');
 
@@ -134,32 +130,20 @@ export function RatingsOverTime({ history, tournamentNames }: RatingsOverTimePro
       snapshots.push(snapshot);
     };
 
-    if (granularity === 'tournament') {
-      // Group events by tournament in first-appearance (seq) order.
-      const byTournament = new Map<string, RatingHistoryData['events']>();
-      for (const event of history.events) {
-        const list = byTournament.get(event.tournamentId);
-        if (list) list.push(event);
-        else byTournament.set(event.tournamentId, [event]);
-      }
-      let index = 0;
-      for (const [tournamentId, events] of byTournament) {
-        for (const event of events) {
-          state.set(event.playerId, { rating: event.postRating, rd: event.postRd });
-        }
-        const name = tournamentNames.get(tournamentId) ?? `Event ${index + 1}`;
-        takeSnapshot(name.length > 24 ? `${name.slice(0, 21)}…` : name, index);
-        index += 1;
-      }
-    } else {
-      // One snapshot per rating event that touches a charted player.
-      for (const event of history.events) {
+    const byNight = new Map<string, RatingHistoryData['events']>();
+    for (const event of history.events) {
+      const list = byNight.get(event.eventKey) ?? [];
+      list.push(event);
+      byNight.set(event.eventKey, list);
+    }
+    let index = 0;
+    for (const [eventKey, events] of byNight) {
+      for (const event of events)
         state.set(event.playerId, { rating: event.postRating, rd: event.postRd });
-        if (selectedIds.has(event.playerId)) takeSnapshot(`#${event.seq}`, event.seq);
-      }
+      takeSnapshot(eventKey, index++);
     }
     return snapshots;
-  }, [history.events, selected, selectedIds, granularity, yMode, tournamentNames]);
+  }, [history.events, selected, yMode]);
 
   /** Last snapshot index at which each series has a value, for direct labels. */
   const lastIndexOf = useMemo(() => {
@@ -194,22 +178,12 @@ export function RatingsOverTime({ history, tournamentNames }: RatingsOverTimePro
 
       <div className="chart-controls">
         <label className="chart-control">
-          <span className="control-label">Granularity</span>
-          <Select
-            value={granularity}
-            onValueChange={(selectedValue) => setGranularity(selectedValue as Granularity)}
-          >
-            <SelectItem value="tournament">Per tournament</SelectItem>
-            <SelectItem value="event">Per rating event</SelectItem>
-          </Select>
-        </label>
-        <label className="chart-control">
           <span className="control-label">Y-axis</span>
           <Select value={yMode} onValueChange={(selectedValue) => setYMode(selectedValue as YMode)}>
             <SelectItem value="rating">Skill estimate</SelectItem>
             {/* The seeding basis, not the board's — labelled as such so the
                 chart is not read as disagreeing with the rankings. */}
-            <SelectItem value="cautious">Seeding basis (rating − 2×RD)</SelectItem>
+            <SelectItem value="cautious">Seeding basis (rating − 2×SD)</SelectItem>
           </Select>
         </label>
         <label className="chart-control chart-control-search">
@@ -288,9 +262,9 @@ export function RatingsOverTime({ history, tournamentNames }: RatingsOverTimePro
             <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
             <XAxis
               dataKey="label"
-              angle={granularity === 'tournament' ? -30 : 0}
-              textAnchor={granularity === 'tournament' ? 'end' : 'middle'}
-              height={granularity === 'tournament' ? 88 : 32}
+              angle={-30}
+              textAnchor={'end'}
+              height={88}
               tick={{ fill: 'var(--text-soft)', fontSize: 10 }}
               stroke="var(--border-strong)"
               tickLine={false}

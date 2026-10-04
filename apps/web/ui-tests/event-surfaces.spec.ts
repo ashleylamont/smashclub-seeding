@@ -105,6 +105,7 @@ for (const idle of [false, true]) {
     await expect(page.locator('.broadcast-identity h1')).toHaveText('Tech In Place');
     await expect(page.locator('.app-nav')).toBeHidden();
     await expect(page.getByText('Find your rival.')).toHaveCount(0);
+    await expect(page.getByRole('img', { name: 'Scan to report a match score' })).toHaveCount(0);
     const title = await page
       .locator('.broadcast-identity h1')
       .evaluate((element) => ({ width: element.clientWidth, scroll: element.scrollWidth }));

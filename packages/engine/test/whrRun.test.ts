@@ -1,17 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { defaultGlickoSettings } from '@smashclub/shared';
+import { defaultRatingSettings } from '@smashclub/shared';
 import { runWhrModel } from '../src/whrRun';
-import { replayRatings } from '../src/replay';
-import { computeLeaderboard } from '../src/score';
 import type { EngineSet, EngineTournament } from '../src/types';
 
-/**
- * The production WHR path: the same input the Glicko replay takes, the same
- * output shape, and the two structural decisions that differ from it — periods
- * are event days, and movement is booked per period rather than per set.
- */
-
-const settings = defaultGlickoSettings;
+const settings = defaultRatingSettings;
 
 const tournament = (
   id: string,
@@ -86,42 +78,15 @@ describe('runWhrModel', () => {
     expect(run.periods).toBe(2);
   });
 
-  it('chains each evening’s per-set deltas into one continuous ledger', () => {
+  it('repeats night boundary estimates without constructing a per-set trajectory', () => {
     const { tournaments, sets } = club();
     const run = runWhrModel({ sets, tournaments, settings });
-
-    // Within a night the rows chain (post of one set = pre of the next), and
-    // the chain continues across nights, so the log reads as one trajectory.
-    for (const playerId of ['alice', 'falco', 'kirby']) {
-      const events = run.events.filter((e) => e.playerId === playerId);
-      for (let i = 1; i < events.length; i++) {
-        expect(events[i]!.preRating, `${playerId} row ${i} chains`).toBeCloseTo(
-          events[i - 1]!.postRating,
-          9,
-        );
-      }
-      expect(events[0]!.preRating).toBeCloseTo(settings.initialRating, 9);
-    }
-  });
-
-  it('attributes a night’s whole movement across its sets, with no double counting', () => {
-    const { tournaments, sets } = club();
-    const run = runWhrModel({ sets, tournaments, settings });
-
-    // Alice plays two sets in main1. Both carry a share of the night's
-    // movement, and the shares sum to exactly the night's total — the value
-    // the fit assigns her at that time.
-    const aliceFirstDay = run.events.filter(
-      (e) => e.playerId === 'alice' && e.tournamentId === 'main1',
-    );
-    expect(aliceFirstDay).toHaveLength(2);
-    const total = aliceFirstDay.reduce((sum, e) => sum + (e.postRating - e.preRating), 0);
-    expect(total).toBeCloseTo(aliceFirstDay[1]!.postRating - settings.initialRating, 9);
-    // Two wins against distinct opponents: neither row should read as +0.0 —
-    // the failure mode of booking the whole night on the first set.
-    for (const event of aliceFirstDay) {
-      expect(Math.abs(event.postRating - event.preRating)).toBeGreaterThan(0.05);
-    }
+    const alice = run.events.filter((e) => e.playerId === 'alice' && e.tournamentId === 'main1');
+    expect(alice).toHaveLength(2);
+    expect(alice[0]!.preRating).toBe(1500);
+    expect(alice[1]!.preRating).toBe(alice[0]!.preRating);
+    expect(alice[1]!.postRating).toBe(alice[0]!.postRating);
+    expect(alice[1]!.preRating).not.toBe(alice[0]!.postRating);
   });
 
   it('freezes the ledger: appending a later event never rewrites earlier rows', () => {
@@ -288,22 +253,51 @@ describe('runWhrModel', () => {
     }
   });
 
-  it('agrees with the Glicko replay on how many events each player attended', () => {
+  it('counts playing both brackets as one attended night', () => {
     const { tournaments, sets } = club();
-    // One player in both brackets of one evening — the case the two paths could
-    // disagree on if they derived "same occasion" differently.
     sets.push(makeSet('rookie1', 'alice', 'kirby', 1));
+    const alice = runWhrModel({ sets, tournaments, settings }).leaderboard.find(
+      (r) => r.playerId === 'alice',
+    )!;
+    expect(alice.tournamentCount).toBe(3);
+    expect(alice.eventCount).toBe(2);
+    expect(alice.missedEvents).toBe(0);
+    expect(alice.activityPenalty).toBe(0);
+  });
 
-    const whr = runWhrModel({ sets, tournaments, settings });
-    const glicko = computeLeaderboard(
-      replayRatings({ sets, tournaments, settings }).finalStates,
-      settings,
+  it('excludes unplayed outcomes from fit, attendance and evidence', () => {
+    const { tournaments, sets } = club();
+    const before = runWhrModel({ sets, tournaments, settings });
+    const unplayed: EngineSet[] = [
+      { ...makeSet('main2', 'carol', 'alice', 1), outcome: 'forfeit' },
+      { ...makeSet('main2', 'carol', 'newcomer', 1), outcome: 'bye' },
+      { ...makeSet('main2', 'carol', 'alice', 1), p1Games: -1, p2Games: 0 },
+      { ...makeSet('main2', 'carol', 'alice', 1), p1Games: 99, p2Games: 0 },
+    ];
+    expect(runWhrModel({ sets: [...sets, ...unplayed], tournaments, settings })).toEqual(before);
+  });
+
+  it('preserves attendance penalties, next-miss cost and provisional thresholds', () => {
+    const tournaments = Array.from({ length: 5 }, (_, i) =>
+      tournament(`t${i}`, `2025-0${i + 1}-10`),
     );
-
-    const whrEvents = new Map(whr.leaderboard.map((r) => [r.playerId, r.eventCount]));
-    for (const row of glicko) {
-      expect(whrEvents.get(row.playerId), row.playerId).toBe(row.eventCount);
-    }
+    const sets = [
+      makeSet('t0', 'absent', 'b', 1),
+      ...tournaments.slice(1).map((t) => makeSet(t.id, 'b', 'c', 1)),
+    ];
+    const run = runWhrModel({ sets, tournaments, settings });
+    const absent = run.leaderboard.find((r) => r.playerId === 'absent')!;
+    expect(absent.missedEvents).toBe(4);
+    expect(absent.activityPenalty).toBe(120);
+    expect(absent.nextMissPenalty).toBe(0);
+    expect(absent.clubRating).toBe(absent.skillRating - 120);
+    expect(absent.isProvisional).toBe(true);
+    const returning = runWhrModel({
+      sets: [...sets, makeSet('t4', 'absent', 'b', 2)],
+      tournaments,
+      settings,
+    });
+    expect(returning.leaderboard.find((r) => r.playerId === 'absent')!.activityPenalty).toBe(0);
   });
 
   it('is invariant to the order sets are supplied in', () => {

@@ -10,84 +10,22 @@ import {
   sets,
   tournamentParticipants,
   tournaments,
-  type Db,
 } from '@smashclub/db';
 import { eventKeyOf } from '@smashclub/engine';
-import { includesResultStage, publicParticipantName, publicPlayerName } from '@smashclub/shared';
+import {
+  isPlayedRatingResult,
+  includesResultStage,
+  publicParticipantName,
+  publicPlayerName,
+} from '@smashclub/shared';
 import { latestRecomputeId } from '../../recompute/recompute';
-import { getGlickoSettings } from '../../settings';
+import { getRatingSettings } from '../../settings';
 import { charactersByPlayer, charactersForPlayer } from '../../players/characters';
 import { loadRecap } from '../../recap/recap';
 import { loadEventOverview } from '../../events/overview';
 import { publicProcedure, router } from '../trpc';
 
 const playerName = publicPlayerName;
-
-/** One club night's brackets, as a decay row should name them. */
-interface NightBrackets {
-  /** Every bracket of the evening, in the order they were played. */
-  name: string;
-  /** True only when there was nothing but a rookie bracket to enter. */
-  allRookie: boolean;
-}
-
-/**
- * The brackets that made up each club night, keyed by event key.
- *
- * A decay row is an *occasion* the player missed, not a bracket, but the engine
- * has to hang the event off some tournament and uses the evening's first one
- * (`tournamentIdByPeriod` in replay.ts). Naming that alone told a rookie-only
- * player they had missed the main bracket, and a main-only player they had
- * missed the rookie bracket — the half of the night they were never eligible
- * for, and the exact conflation that per-event decay exists to avoid. So the
- * profile names the whole occasion.
- *
- * Scoped to the brackets this recompute actually rated: a registered-but-empty
- * tournament is not something anyone could have turned up to, and the engine
- * does not count it as a missed event either.
- */
-async function nightsByEventKey(
-  db: Db,
-  recomputeId: string,
-  keys: ReadonlySet<string>,
-): Promise<Map<string, NightBrackets>> {
-  const nights = new Map<string, NightBrackets>();
-  if (keys.size === 0) return nights;
-
-  const brackets = await db
-    .selectDistinct({
-      name: tournaments.name,
-      eventDate: tournaments.eventDate,
-      isRookie: tournaments.isRookie,
-    })
-    .from(tournaments)
-    .innerJoin(ratingEvents, eq(ratingEvents.tournamentId, tournaments.id))
-    .where(
-      and(
-        eq(ratingEvents.recomputeId, recomputeId),
-        eq(ratingEvents.isDecay, false),
-        isNotNull(tournaments.eventDate),
-      ),
-    )
-    // Chronological, so a night is read back in the order it was played.
-    .orderBy(asc(tournaments.eventDate), asc(tournaments.name));
-
-  const byKey = new Map<string, typeof brackets>();
-  for (const bracket of brackets) {
-    const key = eventKeyOf(bracket.eventDate!.toISOString());
-    if (!keys.has(key)) continue;
-    const list = byKey.get(key);
-    if (list) list.push(bracket);
-    else byKey.set(key, [bracket]);
-  }
-  for (const [key, list] of byKey) {
-    nights.set(key, {
-      name: list.map((bracket) => bracket.name).join(' + '),
-      allRookie: list.every((bracket) => bracket.isRookie),
-    });
-  }
-  return nights;
-}
 
 /*
  * Nothing on this router is authenticated, so every response here is public.
@@ -183,17 +121,17 @@ export const publicRouter = router({
      * retunes a number. A policy nobody can read is indistinguishable from an
      * arbitrary one, which was the main charge against ranking on RD.
      */
-    const { glicko } = await getGlickoSettings(ctx.db);
+    const { rating } = await getRatingSettings(ctx.db);
     const activityPolicy = {
-      graceEvents: glicko.activityGraceEvents,
-      penaltyPerEvent: glicko.activityPenaltyPerEvent,
-      penaltyCap: glicko.activityPenaltyCap,
+      graceEvents: rating.activityGraceEvents,
+      penaltyPerEvent: rating.activityPenaltyPerEvent,
+      penaltyCap: rating.activityPenaltyCap,
     };
 
     return {
       computedAt: recompute?.finishedAt?.toISOString() ?? null,
       /** Which rating model produced these numbers. */
-      model: recompute?.model ?? 'glicko2',
+      model: 'whr' as const,
       /** Occasions the club has run, not brackets — a main+rookie night is one. */
       eventCount,
       activityPolicy,
@@ -237,13 +175,7 @@ export const publicRouter = router({
     const recomputeId = await latestRecomputeId(ctx.db);
     let ratingRow = null;
     let events: Record<string, unknown>[] = [];
-    let model = 'glicko2';
     if (recomputeId) {
-      const [recompute] = await ctx.db
-        .select({ model: recomputes.model })
-        .from(recomputes)
-        .where(eq(recomputes.id, recomputeId));
-      model = recompute?.model ?? model;
       const [rating] = await ctx.db
         .select()
         .from(playerRatings)
@@ -261,9 +193,7 @@ export const publicRouter = router({
           seq: ratingEvents.seq,
           isDecay: ratingEvents.isDecay,
           won: ratingEvents.won,
-          preRating: ratingEvents.preRating,
           postRating: ratingEvents.postRating,
-          preRd: ratingEvents.preRd,
           postRd: ratingEvents.postRd,
           weight: ratingEvents.weight,
           /** WHR only: the current fit's hindsight estimate at this night. */
@@ -289,25 +219,9 @@ export const publicRouter = router({
           and(eq(ratingEvents.recomputeId, recomputeId), eq(ratingEvents.playerId, input.playerId)),
         )
         .orderBy(asc(ratingEvents.seq));
-      const nights = await nightsByEventKey(
-        ctx.db,
-        recomputeId,
-        new Set(
-          eventRows
-            .filter((row) => row.isDecay && row.tournamentDate)
-            .map((row) => eventKeyOf(row.tournamentDate!.toISOString())),
-        ),
-      );
       events = eventRows.map(({ opponentCanonicalName, opponentDisplayName, ...row }) => {
-        // Decay is charged for the night, so it is named for the night.
-        const night =
-          row.isDecay && row.tournamentDate
-            ? nights.get(eventKeyOf(row.tournamentDate.toISOString()))
-            : undefined;
         return {
           ...row,
-          tournamentName: night?.name ?? row.tournamentName,
-          isRookie: night ? night.allRookie : row.isRookie,
           tournamentDate: row.tournamentDate?.toISOString() ?? null,
           opponentName: opponentCanonicalName
             ? publicPlayerName({
@@ -335,8 +249,8 @@ export const publicRouter = router({
       },
       rating: ratingRow,
       events,
-      /** Which rating model produced the events — the profile explains deltas differently per model. */
-      model,
+      model: 'whr' as const,
+      ratingScope: 'night' as const,
     };
   }),
 
@@ -354,8 +268,10 @@ export const publicRouter = router({
         postRating: ratingEvents.postRating,
         postRd: ratingEvents.postRd,
         tournamentId: ratingEvents.tournamentId,
+        eventDate: tournaments.eventDate,
       })
       .from(ratingEvents)
+      .innerJoin(tournaments, eq(ratingEvents.tournamentId, tournaments.id))
       .where(eq(ratingEvents.recomputeId, recomputeId))
       .orderBy(asc(ratingEvents.seq));
     const playerRows = await ctx.db
@@ -371,7 +287,10 @@ export const publicRouter = router({
       .where(eq(playerRatings.recomputeId, recomputeId))
       .orderBy(asc(playerRatings.rank));
     return {
-      events: eventRows,
+      events: eventRows.map(({ eventDate, ...row }) => ({
+        ...row,
+        eventKey: eventDate!.toISOString().slice(0, 10),
+      })),
       players: playerRows.map(({ canonicalName, displayName, ...row }) => ({
         ...row,
         name: playerName({ canonicalName, displayName }),
@@ -477,6 +396,7 @@ export const publicRouter = router({
           excludedByResultsMode: !includesResultStage(tournament.resultsMode, row.resultStage),
           excludedFromRatings:
             row.excludedFromRatings ||
+            !isPlayedRatingResult(row.scoresCsv, row.raw) ||
             !includesResultStage(tournament.resultsMode, row.resultStage),
           completedAt: row.completedAt?.toISOString() ?? null,
           /* Participant ids as well as names: a screen that wants a player's seed

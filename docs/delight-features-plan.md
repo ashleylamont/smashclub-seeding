@@ -1,6 +1,6 @@
 # Delight features — exploration & plan
 
-> Historical design plan. Recaps, live views and other features described here have since been implemented or changed. Use the [documentation index](README.md) for current behavior.
+> Historical design plan. Recaps, live views and other features described here have since been implemented or changed. Use the [documentation index](README.md) for current behavior. Sequential per-set rating claims below are superseded by the [WHR design](whr-design.md) and explainability issues #95–98.
 
 A plan for the "fun layer" on top of the ranking machinery: post-tournament
 recaps, a big-screen live view for club nights, and smaller moments of delight
@@ -12,11 +12,7 @@ none of it needs new sync work or schema changes to get started.
 The delight features almost design themselves once you list what's sitting in
 the database:
 
-- **`rating_events` is a per-set story.** Every rated set has pre/post rating
-  *and* RD for both players, the opponent, a weight, and a `set_id` link. That
-  means we can compute "true" upset magnitude (winner's pre-set rating vs
-  loser's), the biggest rating swing of the night, career meeting counts
-  between any two players, and career-high ratings — all from one table.
+- **`rating_events` links played sets to night estimates.** WHR has no exact per-set rating trajectory. Night-boundary estimates, retrospective estimates, opponent identities, evidence weights and set links support career facts; approximate match impact remains deferred.
 - **Seeds and final ranks are stored per participant.** `challonge_seed` +
   `final_rank` give seed upsets, Cinderella runs, and seed-performance without
   touching ratings at all — which matters, because these work even *before*
@@ -79,7 +75,7 @@ Fact catalogue, with where each comes from:
 | --- | --- | --- |
 | **Podium** | `final_rank` 1–3 + seeds + character icons | "Seeded 6th, won the whole thing" is itself a fact |
 | **Biggest upset (seed)** | seed inversion, weighted by log seed ratio | Works with zero rating data |
-| **Biggest upset (rating)** | winner `pre_rating` < loser's; Glicko expected score → "a 12% shot" | Only when rating events exist |
+| **Biggest upset (rating)** | winner `pre_rating` < loser's; WHR pre-night expected score → "a 12% shot" | Only when rating events exist |
 | **Losers-bracket run** | consecutive wins in negative rounds | "Won 5 elimination sets in a row" |
 | **Cinderella / overperformer** | `final_rank` vs `challonge_seed` | Classic SPR |
 | **Nailbiters** | `scores_csv` deciding-game sets | Needs a small tolerant scores parser |

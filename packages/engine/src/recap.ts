@@ -30,7 +30,6 @@ import {
   scoresIndicateUnplayed,
 } from '@smashclub/shared';
 import { eventKeyOf } from './events';
-import { winProbability } from './glicko2';
 import { DISPLAY_CENTRE, NATURAL_TO_DISPLAY, probabilityFromRatings } from './whr';
 
 // ---------------------------------------------------------------------------
@@ -132,14 +131,8 @@ export interface RecapInput {
   rankMovement?: readonly RecapRankMovement[];
   /** Entrant counts for earlier nights, for the turnout comparison. */
   priorTurnouts?: readonly { eventKey: string; entrants: number }[];
-  /**
-   * Which rating model produced `ratingEvents`. Upset odds are computed with
-   * that model's own probability formula — Glicko attenuates by the
-   * opponent's RD alone, WHR by the summed variance of both players — so a
-   * recap's "had a 12% chance" is the number the active model would actually
-   * have quoted before the set. Defaults to Glicko for older callers.
-   */
-  model?: string;
+  /** Rating provenance; only WHR is supported by current callers. */
+  model?: 'whr';
   /**
    * The clock, as epoch milliseconds — an input rather than a `Date.now()`
    * read, so a recap of a given night is reproducible and testable.
@@ -882,7 +875,7 @@ export function buildRecap(input: RecapInput): RecapResult {
     weightOf,
     push,
   );
-  collectRatingUpsets(played, ratingEvents, input.model === 'whr', stageOf, weightOf, push);
+  collectRatingUpsets(played, ratingEvents, stageOf, weightOf, push);
   collectNailbiters(played, deciderSetIds, stageOf, weightOf, push);
   collectLosersRuns(played, placement, push);
   collectOverperformers(
@@ -1039,7 +1032,6 @@ function collectSeedUpsets(
 function collectRatingUpsets(
   played: readonly PlayedSet[],
   ratingEvents: readonly RecapRatingEvent[],
-  isWhr: boolean,
   stageOf: (p: PlayedSet) => string | null,
   weightOf: (p: PlayedSet) => number,
   push: Push,
@@ -1060,17 +1052,11 @@ function collectRatingUpsets(
     const loserEvent = events.find((e) => e.playerId === p.loser.playerId);
     if (!winnerEvent || !loserEvent) continue;
 
-    const probability = isWhr
-      ? probabilityFromRatings(
-          (winnerEvent.preRating - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY,
-          (loserEvent.preRating - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY,
-          (winnerEvent.preRd / NATURAL_TO_DISPLAY) ** 2 +
-            (loserEvent.preRd / NATURAL_TO_DISPLAY) ** 2,
-        )
-      : winProbability(
-          { rating: winnerEvent.preRating, rd: winnerEvent.preRd, vol: 0 },
-          { rating: loserEvent.preRating, rd: loserEvent.preRd, vol: 0 },
-        );
+    const probability = probabilityFromRatings(
+      (winnerEvent.preRating - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY,
+      (loserEvent.preRating - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY,
+      (winnerEvent.preRd / NATURAL_TO_DISPLAY) ** 2 + (loserEvent.preRd / NATURAL_TO_DISPLAY) ** 2,
+    );
     // Only genuine longshots; an even set is not an upset.
     if (probability > 0.35) continue;
     const notability = 0.6 * (1 - probability / 0.35) + 0.3 * weightOf(p) + 0.1;

@@ -25,3 +25,5 @@ These capture decisions and local verification at the time they were written. Us
 - [Delight features plan](delight-features-plan.md)
 - [Event operations progress](event-operations-progress.md)
 - [Event operations rehearsal](event-operations-review.md)
+
+- [WHR-only migration](whr-only-migration.md) — existing database cutover and historical provenance.
