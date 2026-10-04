@@ -103,7 +103,11 @@ export function bracketBackupSheets(data: BracketBackupData) {
               : 'Challonge draw not attached — blank contingency worksheet',
         blank: !bracket && matches.length === 0,
         roster: bracket
-          ? bracket.entrantIds.map((id) => names.get(id) ?? 'Player')
+          ? bracket.entrantIds.map((id) =>
+              id.startsWith('pending:')
+                ? `Pool ${String.fromCharCode(65 + Number(id.split(':')[2]))} place ${id.split(':')[3]} TBD`
+                : (names.get(id) ?? 'Player'),
+            )
           : groupNames(division),
         matches:
           matches.length || bracket
