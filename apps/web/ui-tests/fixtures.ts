@@ -10,6 +10,7 @@ export type FixtureOptions = {
   idle?: boolean;
   failure?: boolean;
   bracket?: boolean;
+  loading?: Promise<void>;
 };
 
 export async function mockEvent(page: Page, options: FixtureOptions = {}) {
@@ -42,6 +43,7 @@ export async function mockEvent(page: Page, options: FixtureOptions = {}) {
     updatedAt: '2026-10-04T00:00:00Z',
   };
   const submissions: Record<string, unknown>[] = [];
+  const starts: Record<string, unknown>[] = [];
   const unexpected: string[] = [];
   const responses: Record<string, unknown> = {
     'me.whoami': user,
@@ -81,8 +83,21 @@ export async function mockEvent(page: Page, options: FixtureOptions = {}) {
       await route.fulfill({ contentType: 'text/event-stream', body: ': fixture\n\n' });
       return;
     }
+    if (options.loading && url.pathname.includes('eventOps.snapshot')) await options.loading;
     const procedures = decodeURIComponent(url.pathname.replace('/api/trpc/', '')).split(',');
     const result = procedures.map((procedure, index) => {
+      if (procedure === 'eventOps.startPoolMatch') {
+        const body = JSON.parse(route.request().postData() ?? '{}');
+        const input = url.searchParams.get('batch') ? body[index] : body;
+        starts.push(input);
+        const match = snapshot.matches.find((item) => item.id === input.matchId)!;
+        Object.assign(match, {
+          status: 'playing',
+          stationId: input.stationId,
+          revision: match.revision + 1,
+        });
+        return { result: { data: match } };
+      }
       if (procedure === 'eventOps.reportScore') {
         const body = JSON.parse(route.request().postData() ?? '{}');
         submissions.push(url.searchParams.get('batch') ? body[index] : body);
@@ -101,7 +116,7 @@ export async function mockEvent(page: Page, options: FixtureOptions = {}) {
     });
     await route.fulfill({ json: url.searchParams.get('batch') ? result : result[0] });
   });
-  return { snapshot, overview, submissions, unexpected };
+  return { snapshot, overview, submissions, starts, unexpected };
 }
 
 export async function ready(page: Page) {

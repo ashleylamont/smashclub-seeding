@@ -1220,3 +1220,34 @@
   padding: 10px 0;
   border-top: 1px solid var(--event-rule);
 }
+
+/* A system-light app surrounds a deliberately dark event poster. Keep shared
+   controls and inherited content readable without changing the dark baseline. */
+@media (prefers-color-scheme: light) {
+  :root:where(:not([data-theme='dark'])) .event-display {
+    --text-h: #f1f0ee;
+    --text: #9a9895;
+    --text-soft: #999691;
+    --surface: #0f1213;
+    --surface-2: #15191a;
+    --border-strong: #656971;
+  }
+  :root:where(:not([data-theme='dark']))
+    .event-display
+    :is(.pool-flow-grid, .event-pool-table, .event-pool-ranking, .event-brackets) {
+    color: #999691;
+  }
+}
+:root[data-theme='light'] .event-display {
+  --text-h: #f1f0ee;
+  --text: #9a9895;
+  --text-soft: #999691;
+  --surface: #0f1213;
+  --surface-2: #15191a;
+  --border-strong: #656971;
+}
+:root[data-theme='light']
+  .event-display
+  :is(.pool-flow-grid, .event-pool-table, .event-pool-ranking, .event-brackets) {
+  color: #999691;
+}

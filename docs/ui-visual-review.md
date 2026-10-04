@@ -1,6 +1,6 @@
 # UI visual and accessibility review
 
-Run `pnpm --filter @smashclub/web test:ui`. The separate `playwright.ui.config.ts` runs Vite on port 3411 and mocks all `/api/**` requests. It needs no database, OAuth credentials or production account. The real database-backed event flows still run through `pnpm test:e2e`.
+Run `pnpm --filter @smashclub/web test:ui`. The runner always starts its own fixture server; set `UI_PORT` to choose a free port when another checkout is running. The separate `playwright.ui.config.ts` runs Vite on port 3411 and mocks all `/api/**` requests. It needs no database, OAuth credentials or production account. The real database-backed event flows still run through `pnpm test:e2e`.
 
 The fixture clock, event identity, aliases, stations, match revisions and ordering are fixed. Fonts are self-hosted and loaded before capture; screenshot animations are disabled. Fixtures are synthetic rehearsal data with no real guest token or player email. Unexpected tRPC calls are asserted so a page cannot silently start relying on an unhandled response.
 
@@ -24,5 +24,7 @@ The CI job **UI accessibility and visuals** runs Chromium on `macos-14`, matchin
 4. Run the normal suite again. Commit the changed PNGs alongside the component change and explain the reason in the PR. A reviewer approves the images; a passing pixel comparison alone does not approve a redesign.
 
 Pixel tolerance is 0.3% per capture to accommodate small rasterization differences. Broad layout, typography or state changes should produce a failure. Do not increase the tolerance to hide an unexplained difference. Keep baseline updates out of automatic CI steps.
+
+Additional deployment-assurance fixtures cover a populated sixteen-slot bracket in a light surrounding theme at desktop and phone sizes, a busy light TO desk with pending disputes and keyboard tab traversal, phone next-match start with its expected revision, loading/empty feedback, active/idle 1280×720 OBS capture, and an actual downloaded SVG rendered in Chromium. SVG text bounds are checked against the export canvas and the file remains in test results. These eight new images are scoped Darwin baselines, generated and inspected locally; existing approved images are retained. The event poster and OBS intentionally use a dark palette inside a light app; shared controls must retain readable contrast there.
 
 The current suite is a representative foundation for #88, not exhaustive coverage. Add light-theme event states, finalized result exports, wider bracket sizes and other admin forms as those surfaces migrate. Axe checks WCAG A/AA rules it can automate; manual assistive-technology review remains useful for real event operation.

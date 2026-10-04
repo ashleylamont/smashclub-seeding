@@ -20,13 +20,16 @@
     "golden-check": "pnpm --filter @smashclub/golden-check start",
     "dev:harness": "pnpm --filter @smashclub/server dev:harness",
     "rank-eval": "pnpm --filter @smashclub/rank-eval start",
-    "challonge-dump": "pnpm --filter @smashclub/challonge-dump start"
+    "challonge-dump": "pnpm --filter @smashclub/challonge-dump start",
+    "test:postgres": "vitest run --config vitest.postgres.config.ts --reporter=default --reporter=junit --outputFile=test-results/postgres.xml && node scripts/check-postgres-results.mjs",
+    "test:image": "bash scripts/production-image-smoke.sh"
   },
   "devDependencies": {
     "oxlint": "^1.85.0",
     "prettier": "^3.9.9",
     "typescript": "~5.9.3",
-    "vitest": "^3.2.0"
+    "vitest": "^3.2.0",
+    "yaml": "^2.9.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

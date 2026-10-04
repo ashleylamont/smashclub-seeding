@@ -11,10 +11,14 @@ export function escapeSvg(value: string): string {
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[character]!,
   );
 }
+/** Bound even wide glyphs to the available canvas; truncation alone is insufficient. */
+function fittedFontSize(text: string, preferred: number, width: number) {
+  return Math.min(preferred, width / Math.max(1, Array.from(text).length)).toFixed(2);
+}
 export function resultsSvg(title: string, results: readonly GraphicResult[]): string {
   const rows = results.slice(0, 8);
   const height = 230 + rows.length * 98;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="${height}" viewBox="0 0 1200 ${height}"><rect width="1200" height="${height}" fill="#141411"/><rect width="14" height="${height}" fill="#f34b2c"/><g font-family="Arial, sans-serif"><text x="64" y="64" fill="#f34b2c" font-size="22" letter-spacing="5">SMASH CLUB · RESULTS</text><text x="64" y="126" fill="white" font-weight="bold" font-size="38">${escapeSvg(title.slice(0, 52))}</text>${rows.map((row, index) => `<rect x="48" y="${166 + index * 98}" width="1104" height="86" fill="${index === 0 ? '#eee9dc' : '#24231e'}"/><text x="76" y="${220 + index * 98}" fill="#f34b2c" font-size="32">${row.place}</text><text x="158" y="${211 + index * 98}" fill="${index === 0 ? '#141411' : '#eee9dc'}" font-weight="bold" font-size="29">${escapeSvg(row.alias.slice(0, 48))}</text><text x="158" y="${238 + index * 98}" fill="#9c9588" font-size="18">${escapeSvg((row.detail ?? '').slice(0, 82))}</text>`).join('')}</g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="${height}" viewBox="0 0 1200 ${height}"><rect width="1200" height="${height}" fill="#141411"/><rect width="14" height="${height}" fill="#f34b2c"/><g font-family="Arial, sans-serif"><text x="64" y="64" fill="#f34b2c" font-size="22" letter-spacing="5">SMASH CLUB · RESULTS</text><text x="64" y="126" fill="white" font-weight="bold" font-size="${fittedFontSize(title.slice(0, 52), 38, 1088)}">${escapeSvg(title.slice(0, 52))}</text>${rows.map((row, index) => `<rect x="48" y="${166 + index * 98}" width="1104" height="86" fill="${index === 0 ? '#eee9dc' : '#24231e'}"/><text x="76" y="${220 + index * 98}" fill="#f34b2c" font-size="32">${row.place}</text><text x="158" y="${211 + index * 98}" fill="${index === 0 ? '#141411' : '#eee9dc'}" font-weight="bold" font-size="${fittedFontSize(row.alias.slice(0, 48), 29, 994)}">${escapeSvg(row.alias.slice(0, 48))}</text><text x="158" y="${238 + index * 98}" fill="#9c9588" font-size="${fittedFontSize((row.detail ?? '').slice(0, 82), 18, 994)}">${escapeSvg((row.detail ?? '').slice(0, 82))}</text>`).join('')}</g></svg>`;
 }
 
 /** Pool placements are never presented as overall event places. */
