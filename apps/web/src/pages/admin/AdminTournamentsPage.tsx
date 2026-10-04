@@ -1,3 +1,7 @@
+import { Input } from '../../components/ui/Input';
+import { Checkbox } from '../../components/ui/Checkbox';
+import { Select, SelectItem } from '../../components/ui/Select';
+import { Button } from '../../components/ui/Button';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
@@ -156,39 +160,33 @@ function RegisterForm({ onDone }: { onDone: () => void }) {
     <div className="card section">
       <h2>Register tournament</h2>
       <div className="admin-form-row">
-        <input
-          className="input"
+        <Input
           placeholder="Challonge slug or URL"
           value={slugOrUrl}
           onChange={(e) => setSlugOrUrl(e.target.value)}
         />
         <label className="checkbox-label">
-          <input
-            type="checkbox"
-            checked={isRookie}
-            onChange={(e) => setIsRookie(e.target.checked)}
-          />
+          <Checkbox checked={isRookie} onCheckedChange={setIsRookie} />
           Rookie bracket
         </label>
         <label className="form-field">
           <span className="form-label">Results</span>
-          <select
-            className="select"
+          <Select
             value={resultsMode}
-            onChange={(e) => setResultsMode(e.target.value as typeof resultsMode)}
+            onValueChange={(selectedValue) => setResultsMode(selectedValue as typeof resultsMode)}
           >
-            <option value="auto">Auto (pools + finals when present)</option>
-            <option value="final_stage_only">Final stage only</option>
-          </select>
+            <SelectItem value="auto">Auto (pools + finals when present)</SelectItem>
+            <SelectItem value="final_stage_only">Final stage only</SelectItem>
+          </Select>
         </label>
-        <button
+        <Button
+          variant="primary"
           type="button"
-          className="btn btn-primary"
           disabled={slugOrUrl.trim() === '' || register.isPending}
           onClick={() => register.mutate()}
         >
           {register.isPending ? 'Registering…' : 'Register + sync'}
-        </button>
+        </Button>
       </div>
       <p className="muted">
         Auto counts pools and finals when present. Use Final stage only when recorded groups were
@@ -276,31 +274,29 @@ function TournamentRow({
         {error && <div className="error-text">{error.message}</div>}
       </td>
       <td>
-        <select
-          className="select"
+        <Select
           aria-label={`Results mode for ${tournament.name}`}
           value={tournament.resultsMode}
           disabled={update.isPending}
-          onChange={(e) =>
-            update.mutate({ resultsMode: e.target.value as 'auto' | 'final_stage_only' })
+          onValueChange={(selectedValue) =>
+            update.mutate({ resultsMode: selectedValue as 'auto' | 'final_stage_only' })
           }
         >
-          <option value="auto">Auto</option>
-          <option value="final_stage_only">Final stage only</option>
-        </select>
+          <SelectItem value="auto">Auto</SelectItem>
+          <SelectItem value="final_stage_only">Final stage only</SelectItem>
+        </Select>
       </td>
       <td>
         {editingDate ? (
           <span className="date-edit">
-            <input
-              className="input"
+            <Input
               type="datetime-local"
               value={dateValue}
               onChange={(e) => setDateValue(e.target.value)}
             />
-            <button
+            <Button
+              size="small"
               type="button"
-              className="btn btn-small"
               disabled={update.isPending}
               onClick={() =>
                 update.mutate({
@@ -309,36 +305,35 @@ function TournamentRow({
               }
             >
               Save
-            </button>
-            <button
+            </Button>
+            <Button
+              size="small"
               type="button"
-              className="btn btn-small"
               title="Clear the manual date — falls back to Challonge's date on next sync"
               disabled={update.isPending}
               onClick={() => update.mutate({ eventDate: null })}
             >
               Clear
-            </button>
-            <button type="button" className="btn btn-small" onClick={() => setEditingDate(false)}>
+            </Button>
+            <Button size="small" type="button" onClick={() => setEditingDate(false)}>
               Cancel
-            </button>
+            </Button>
           </span>
         ) : (
           <span className="date-edit">
             {formatDateTime(tournament.eventDate)}
-            <button type="button" className="btn btn-small" onClick={startEditDate}>
+            <Button size="small" type="button" onClick={startEditDate}>
               Edit
-            </button>
+            </Button>
           </span>
         )}
       </td>
       <td>
         <label className="checkbox-label">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={tournament.isRookie}
             disabled={update.isPending}
-            onChange={(e) => update.mutate({ isRookie: e.target.checked })}
+            onCheckedChange={(nextChecked) => update.mutate({ isRookie: nextChecked })}
           />
           rookie
         </label>
@@ -353,44 +348,44 @@ function TournamentRow({
           <a href={`/events/${encodeURIComponent(tournament.slug)}`}>Nemesis event results →</a>
         ) : (
           <>
-            <button
+            <Button
+              size="small"
               type="button"
-              className="btn btn-small"
               disabled={sync.isPending}
               title="Sync from the free public bracket. No API quota used."
               onClick={() => sync.mutate()}
             >
               {sync.isPending ? 'Syncing…' : 'Sync now'}
-            </button>{' '}
-            <button
+            </Button>{' '}
+            <Button
+              size="small"
               type="button"
-              className="btn btn-small"
               disabled={syncApi.isPending}
               title="Sync via the Challonge API — SPENDS ~3 of the 500 requests/month allowance. Only useful for tournaments the club owns; it is the only way to get final placements."
               onClick={() => syncApi.mutate()}
             >
               {syncApi.isPending ? 'Syncing…' : 'Sync (API)'}
-            </button>{' '}
+            </Button>{' '}
             {isLive ? (
-              <button
+              <Button
+                size="small"
                 type="button"
-                className="btn btn-small"
                 disabled={endLive.isPending}
                 title={`Live until ${liveUntil!.toLocaleString()} — polling the public bracket every 60s`}
                 onClick={() => endLive.mutate()}
               >
                 {endLive.isPending ? 'Stopping…' : `Stop live (until ${formatClock(liveUntil!)})`}
-              </button>
+              </Button>
             ) : (
-              <button
+              <Button
+                size="small"
                 type="button"
-                className="btn btn-small"
                 disabled={setLive.isPending}
                 title={`Poll this bracket every 60s for ${LIVE_HOURS}h, then stop automatically. Uses the public bracket, not the rate-limited API.`}
                 onClick={() => setLive.mutate()}
               >
                 {setLive.isPending ? 'Starting…' : `Go live (${LIVE_HOURS}h)`}
-              </button>
+              </Button>
             )}
           </>
         )}

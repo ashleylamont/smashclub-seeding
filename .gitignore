@@ -49,3 +49,6 @@ apps/web/screenshots/
 
 # Raw Challonge dumps contain real player names
 challonge-raw/
+
+# Isolated fixture UI checks
+apps/web/ui-test-results/

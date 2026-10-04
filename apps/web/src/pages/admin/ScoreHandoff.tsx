@@ -1,3 +1,6 @@
+import { Button } from '../../components/ui/Button';
+import { Textarea } from '../../components/ui/Input';
+import { Disclosure } from '../../components/ui/Disclosure';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { trpc } from '../../lib/trpc';
@@ -96,13 +99,13 @@ export function ScoreHandoff({
         Local scores are retained here. Linked brackets remain the official bracket record. Refresh
         all linked brackets after a manual update to reconcile their results.
       </p>
-      <button
-        className="btn"
+      <Button
+        type="submit"
         disabled={disabled || pending !== null || !data.brackets.some((bracket) => bracket.slug)}
         onClick={() => void refresh()}
       >
         {pending === 'refresh' ? 'Reading linked brackets…' : 'Refresh all linked brackets'}
-      </button>
+      </Button>
       <div className="ops-links">
         {data.brackets
           .filter((bracket) => bracket.slug)
@@ -129,10 +132,10 @@ export function ScoreHandoff({
         <>
           <label className="ops-copy-label">
             Results to reconcile
-            <textarea className="input" rows={5} readOnly value={summary} />
+            <Textarea rows={5} readOnly value={summary} />
           </label>
-          <button
-            className="btn"
+          <Button
+            type="submit"
             onClick={() => {
               const url = URL.createObjectURL(
                 new Blob([`${data.plan.name}\n\n${summary}\n`], { type: 'text/plain' }),
@@ -145,7 +148,7 @@ export function ScoreHandoff({
             }}
           >
             Download score handoff
-          </button>
+          </Button>
         </>
       )}
       {capability.data?.enabled && capability.data.hasCredentials && (
@@ -157,20 +160,20 @@ export function ScoreHandoff({
                 <span>
                   {match.label}: {match.score1}–{match.score2}
                 </span>
-                <button
-                  className="btn btn-small"
+                <Button
+                  size="small"
+                  type="submit"
                   disabled={disabled || pending !== null}
                   onClick={() => void deliver(match)}
                 >
                   {pending === match.id ? 'Verifying delivery…' : 'Send to Challonge'}
-                </button>
+                </Button>
               </div>
             ))}
         </div>
       )}
       {capability.data?.hasCredentials && (
-        <details>
-          <summary>Recover an interrupted score delivery</summary>
+        <Disclosure title="Recover an interrupted score delivery">
           <p className="muted">
             Reads Challonge to check whether an interrupted request arrived. This does not send a
             score.
@@ -180,16 +183,17 @@ export function ScoreHandoff({
             .map((match) => (
               <div className="ops-report" key={match.id}>
                 <span>{match.label}</span>
-                <button
-                  className="btn btn-small"
+                <Button
+                  size="small"
+                  type="submit"
                   disabled={disabled || pending !== null}
                   onClick={() => void reconcile(match)}
                 >
                   Check interrupted delivery
-                </button>
+                </Button>
               </div>
             ))}
-        </details>
+        </Disclosure>
       )}
       {error && (
         <p role="alert" className="error-text">

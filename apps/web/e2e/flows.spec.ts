@@ -1,3 +1,4 @@
+import { chooseOption, optionValues } from '../test-support/controls';
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 
 /**
@@ -216,10 +217,10 @@ test.describe('on a phone', () => {
     await settle(page);
 
     await expect(page.locator('.board-head')).toBeHidden();
-    const sort = page.locator('.control-sort select');
+    const sort = page.locator('.control-sort .ui-select');
     await expect(sort).toBeVisible();
 
-    await sort.selectOption('eventCount');
+    await chooseOption(sort, 'eventCount');
     await settle(page);
 
     /*
@@ -385,14 +386,10 @@ test.describe('admin', () => {
     await page.goto('/admin/seeding');
     await settle(page);
 
-    const select = page.locator('select.select').first();
-    const values = await select
-      .locator('option')
-      .evaluateAll((options) =>
-        options.map((option) => (option as HTMLOptionElement).value).filter(Boolean),
-      );
+    const select = page.locator('[role="combobox"].select').first();
+    const values = await optionValues(select);
     test.skip(values.length === 0, 'no tournaments to seed in this seed');
-    await select.selectOption(values[0]!);
+    await chooseOption(select, values[0]!);
     await settle(page);
 
     const generate = page.getByRole('button', { name: /Generate seeding/i });
@@ -425,7 +422,7 @@ test.describe('admin', () => {
     await page.reload();
     await settle(page);
     // The tournament choice is page state, not a route, so re-pick it after reload.
-    await page.locator('select.select').first().selectOption(values[0]!);
+    await chooseOption(page.locator('[role="combobox"].select').first(), values[0]!);
     await settle(page);
 
     const reloaded = page.locator('.seeding-list .seeding-row');
@@ -464,7 +461,7 @@ test.describe('admin', () => {
     await page.goto('/admin/settings');
     await settle(page);
 
-    await page.locator('select.select').first().selectOption('whr');
+    await chooseOption(page.locator('[role="combobox"].select').first(), 'whr');
     await page.getByRole('button', { name: /Save settings/i }).click();
     await expect(page.getByText(/recompute queued/i)).toBeVisible({ timeout: 60_000 });
 
@@ -489,7 +486,7 @@ test.describe('admin', () => {
     // Put it back, so this test does not decide what the next one sees.
     await page.goto('/admin/settings');
     await settle(page);
-    await page.locator('select.select').first().selectOption('glicko2');
+    await chooseOption(page.locator('[role="combobox"].select').first(), 'glicko2');
     await page.getByRole('button', { name: /Save settings/i }).click();
     await expect(page.getByText(/recompute queued/i)).toBeVisible({ timeout: 60_000 });
     await expect
@@ -571,7 +568,9 @@ test.describe('player profiles and companies', () => {
     await page.goto('/admin/players');
     await settle(page);
     await page.getByRole('button', { name: /New player/i }).click();
-    await expect(page.locator('.modal select.select')).toContainText('ZED — Zed Corp');
+    await page.getByRole('combobox', { name: 'Company', exact: true }).click();
+    await expect(page.getByRole('option', { name: 'ZED — Zed Corp', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
   });
 });
 

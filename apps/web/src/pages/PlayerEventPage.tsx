@@ -1,5 +1,12 @@
+import { Disclosure } from '../components/ui/Disclosure';
+import { Select, SelectItem } from '../components/ui/Select';
+import { Input } from '../components/ui/Input';
+import { PageHeader } from '../components/ui/PageHeader';
+import { LoadingState, Notice } from '../components/ui/Feedback';
+import { Button } from '../components/ui/Button';
+import { ScoreFields, type ScoreInputValue } from '../components/ScoreFields';
 import { useState } from 'react';
-import { TRPCClientError } from '@trpc/client';
+import { eventUnavailable } from '../lib/eventErrors';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { CompletedScoreReport, type ResultSubmission } from '../components/CompletedScoreReport';
@@ -8,7 +15,7 @@ import { PlayerMatchFilter } from '../components/PlayerMatchFilter';
 import { eventPlayers, useDevicePlayer } from '../lib/playerSelection';
 import { authClient } from '../lib/auth';
 import { trpc } from '../lib/trpc';
-import './admin/EventOperations.css';
+import '../styles/event.css';
 import { PoolFilter, PoolRoundSchedule, PoolStationQueue } from '../components/PoolStationQueue';
 import {
   matchesPool,
@@ -39,6 +46,7 @@ function PlayerEvent({ planId }: { planId: string }) {
     queryFn: () => trpc.eventOps.snapshot.query({ planId }),
     refetchInterval: 2500,
     retry: false,
+    enabled: Boolean(session),
   });
   const reports = useQuery({
     queryKey: ['eventOpsReports', planId],
@@ -59,14 +67,25 @@ function PlayerEvent({ planId }: { planId: string }) {
   const [startError, setStartError] = useState('');
   const cache = useQueryClient();
   const [search, setSearch] = useState('');
-  if (isPending || event.isPending) return <p>Loading your event…</p>;
-  if (!session || event.data?.settings.playerReports === false)
+  if (isPending) return <LoadingState>Loading your event…</LoadingState>;
+  if (!session) return <GuestEvent key={planId} planId={planId} />;
+  if (event.isPending) return <LoadingState>Loading your event…</LoadingState>;
+  if (event.data?.settings.playerReports === false)
     return <GuestEvent key={planId} planId={planId} />;
-  const publicationUnavailable =
-    event.error instanceof TRPCClientError &&
-    ['NOT_FOUND', 'FORBIDDEN', 'UNAUTHORIZED'].includes(event.error.data?.code ?? '');
+  const publicationUnavailable = eventUnavailable(event.error);
   if (!event.data || publicationUnavailable)
-    return <p role="alert">This event is unavailable or has not been published.</p>;
+    return (
+      <Notice tone="danger">
+        {publicationUnavailable
+          ? 'This event is unavailable or has not been published.'
+          : 'Could not load your event.'}
+        {!publicationUnavailable && (
+          <Button size="small" onClick={() => void event.refetch()}>
+            Retry
+          </Button>
+        )}
+      </Notice>
+    );
   const data: Snapshot & Partial<Pick<PoolFlowData, 'stationQueues' | 'poolRounds'>> = event.data;
   const disputeMode =
     data.settings.scoreReportingMode === 'approve_unless_disputed' &&
@@ -127,23 +146,23 @@ function PlayerEvent({ planId }: { planId: string }) {
   };
   return (
     <div className="ops-page">
-      <header>
-        <span className="ops-eyebrow">REPORT A SCORE</span>
-        <h1>{event.data.plan.name}</h1>
-        <a href={poolPath(`/live/${planId}`, selectedPool)}>View the event</a>
-      </header>
+      <PageHeader
+        title={event.data.plan.name}
+        description="Choose your name to find your matches."
+        actions={
+          <a className="btn" href={poolPath(`/live/${planId}`, selectedPool)}>
+            Event board →
+          </a>
+        }
+      />
       {event.isError && (
         <p role="alert">Live updates interrupted. Scores shown may be out of date.</p>
       )}
-      <p>
-        Choose your name to see your matches and station calls. Start the next match when both
-        players are there, then report the result.{' '}
-        {claim && (
-          <>
-            Your linked profile is <strong>{claim.playerName}</strong>.
-          </>
-        )}
-      </p>
+      {claim && (
+        <p>
+          Your linked profile: <strong>{claim.playerName}</strong>.
+        </p>
+      )}
       {!event.data.settings.playerReports && (
         <p className="banner banner-warning">
           Signed-in reporting is off for this event. Ask a TO to record your score or scan the event
@@ -172,38 +191,32 @@ function PlayerEvent({ planId }: { planId: string }) {
             </p>
           )}
         </div>
-        <details
+        <Disclosure
+          title={<> Match filters{selectedPool ? ' · one pool selected' : ''} </>}
           className="player-match-refine"
           key={selectedPlayer ? 'focused' : 'everyone'}
-          open={!selectedPlayer}
+          defaultOpen={!selectedPlayer}
         >
-          <summary>Match filters{selectedPool ? ' · one pool selected' : ''}</summary>
           <div className="player-match-controls">
             <PoolFilter data={data} value={selectedPool} onChange={choosePool} />
             <div className="ops-toolbar">
               <label>
                 View
-                <select
-                  className="select"
-                  aria-label="Match view"
-                  value={view}
-                  onChange={(e) => setView(e.target.value)}
-                >
-                  <option value="queue">Station matches & my reports</option>
-                  <option value="all">
+                <Select aria-label="Match view" value={view} onValueChange={setView}>
+                  <SelectItem value="queue">Station matches & my reports</SelectItem>
+                  <SelectItem value="all">
                     {disputeMode ? 'All matches & results' : 'All open matches'}
-                  </option>
-                  <option value="results">Recorded results</option>
-                  <option value="mine" disabled={!selectedPlayer}>
+                  </SelectItem>
+                  <SelectItem value="results">Recorded results</SelectItem>
+                  <SelectItem value="mine" disabled={!selectedPlayer}>
                     All selected player’s matches
-                  </option>
-                  <option value="reports">My reports</option>
-                </select>
+                  </SelectItem>
+                  <SelectItem value="reports">My reports</SelectItem>
+                </Select>
               </label>
               <label className="ops-search">
                 Search matches
-                <input
-                  className="input"
+                <Input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Player, pool or match…"
@@ -211,7 +224,7 @@ function PlayerEvent({ planId }: { planId: string }) {
               </label>
             </div>
           </div>
-        </details>
+        </Disclosure>
         <div className="ops-match-grid">
           {visible.map((match) => (
             <PlayerScoreCard
@@ -283,8 +296,8 @@ function PlayerScoreCard({
 }) {
   const reportStatus = report?.status;
   const cache = useQueryClient();
-  const [score1, setScore1] = useState(0);
-  const [score2, setScore2] = useState(0);
+  const [score1, setScore1] = useState<ScoreInputValue>(0);
+  const [score2, setScore2] = useState<ScoreInputValue>(0);
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [revision, setRevision] = useState(match.revision);
   const [retryRejected, setRetryRejected] = useState(false);
@@ -304,6 +317,7 @@ function PlayerScoreCard({
     return result;
   };
   const submit = async () => {
+    if (score1 === '' || score2 === '') return;
     setPending(true);
     setError('');
     try {
@@ -353,8 +367,7 @@ function PlayerScoreCard({
       ) : reportStatus === 'rejected' && !retryRejected ? (
         <div>
           <p>Your previous report was rejected. Check the result with a TO before trying again.</p>
-          <button
-            className="btn"
+          <Button
             onClick={() => {
               setRequestId(crypto.randomUUID());
               setRevision(match.revision);
@@ -362,7 +375,7 @@ function PlayerScoreCard({
             }}
           >
             Start a new report
-          </button>
+          </Button>
         </div>
       ) : reportStatus === 'pending' || (sent && !reportStatus) ? (
         <p role="status">
@@ -400,9 +413,8 @@ function PlayerScoreCard({
                 Match details changed while you were entering the score. Reload the match before
                 submitting.
               </p>
-              <button
+              <Button
                 type="button"
-                className="btn"
                 onClick={() => {
                   setRevision(match.revision);
                   setScore1(0);
@@ -411,45 +423,33 @@ function PlayerScoreCard({
                 }}
               >
                 Reload match
-              </button>
+              </Button>
             </div>
           )}
-          <div className="ops-score-inputs">
-            <label>
-              {match.player1Name}
-              <input
-                className="input"
-                type="number"
-                min={0}
-                max={5}
-                value={score1}
-                onChange={(e) => {
-                  setScore1(Number(e.target.value));
-                  setRequestId(crypto.randomUUID());
-                }}
-              />
-            </label>
-            <label>
-              {match.player2Name}
-              <input
-                className="input"
-                type="number"
-                min={0}
-                max={5}
-                value={score2}
-                onChange={(e) => {
-                  setScore2(Number(e.target.value));
-                  setRequestId(crypto.randomUUID());
-                }}
-              />
-            </label>
-          </div>
-          <button
-            className="btn"
+          <ScoreFields
+            player1Name={match.player1Name}
+            player2Name={match.player2Name}
+            score1={score1}
+            score2={score2}
+            onScore1={(value) => {
+              setScore1(value);
+              setRequestId(crypto.randomUUID());
+            }}
+            onScore2={(value) => {
+              setScore2(value);
+              setRequestId(crypto.randomUUID());
+            }}
+          />
+          <Button
+            type="submit"
+            pending={pending}
+            variant="primary"
             disabled={
               !enabled ||
               pending ||
               revision !== match.revision ||
+              score1 === '' ||
+              score2 === '' ||
               score1 === score2 ||
               !match.player1Id ||
               !match.player2Id
@@ -458,7 +458,7 @@ function PlayerScoreCard({
             {disputeMode || (selfRun && autoAccept)
               ? 'Confirm result'
               : 'Submit score for approval'}
-          </button>
+          </Button>
           <p className="muted">
             {disputeMode
               ? 'Results advance immediately. Later disagreements go to TO review.'

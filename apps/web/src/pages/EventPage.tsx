@@ -1,3 +1,4 @@
+import { Disclosure } from '../components/ui/Disclosure';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { trpc } from '../lib/trpc';
@@ -103,10 +104,9 @@ function EventOverview({ data }: { data: EventOverviewData }) {
               {bracket.roleSource === 'unclassified' ? (
                 <Standings players={bracket.players} />
               ) : (
-                <details>
-                  <summary>View bracket standings</summary>
+                <Disclosure title="View bracket standings">
                   <Standings players={bracket.players} />
-                </details>
+                </Disclosure>
               )}
             </article>
           ))}

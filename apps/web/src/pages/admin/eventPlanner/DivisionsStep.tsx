@@ -1,3 +1,4 @@
+import { Button } from '../../../components/ui/Button';
 import { useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import {
@@ -51,9 +52,9 @@ export function DivisionsStep({ view, onChanged }: { view: EventPlanView; onChan
           <span className="muted">
             Ranking snapshot: {formatDateTime(view.plan.rankingSnapshotAt)}
           </span>
-          <button
+          <Button
+            variant="primary"
             type="button"
-            className="btn btn-primary"
             disabled={
               locked ||
               generate.isPending ||
@@ -66,7 +67,7 @@ export function DivisionsStep({ view, onChanged }: { view: EventPlanView; onChan
               : view.plan.status === 'roster_frozen'
                 ? 'Generate pools'
                 : 'Regenerate pools'}
-          </button>
+          </Button>
         </span>
       </div>
       {generate.isError && <p className="error-text">{generate.error.message}</p>}
@@ -227,24 +228,24 @@ function DivisionRow({
         {entry.snapshotRank === null ? 'unranked' : `#${entry.snapshotRank}`}
       </span>
       <span className="row-actions">
-        <button
+        <Button
+          size="small"
           type="button"
-          className="btn btn-small"
           disabled={locked || seed === 1}
           onClick={() => onMove(-1)}
           aria-label={`Move ${entry.playerName} up`}
         >
           ↑
-        </button>
-        <button
+        </Button>
+        <Button
+          size="small"
           type="button"
-          className="btn btn-small"
           disabled={locked}
           onClick={() => onMove(1)}
           aria-label={`Move ${entry.playerName} down`}
         >
           ↓
-        </button>
+        </Button>
       </span>
     </li>
   );

@@ -1,3 +1,6 @@
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
+import { Disclosure } from '../../components/ui/Disclosure';
 import { useState } from 'react';
 import {
   findEventPlayers,
@@ -23,9 +26,9 @@ export function ToPlayerFinder({
   const player = results.find((item) => item.id === selected);
   const status = player ? playerEventStatus(data, player.id) : null;
   const matchLink = (match: FinderMatch, title: string) => (
-    <button className="btn btn-small" onClick={() => onMatch(match.id)}>
+    <Button size="small" type="submit" onClick={() => onMatch(match.id)}>
       {title}
-    </button>
+    </Button>
   );
   return (
     <section className="card to-player-finder" aria-labelledby="to-player-finder-heading">
@@ -35,8 +38,7 @@ export function ToPlayerFinder({
       </div>
       <label>
         Player name
-        <input
-          className="input"
+        <Input
           type="search"
           autoComplete="off"
           placeholder="Search event entrants"
@@ -53,7 +55,9 @@ export function ToPlayerFinder({
           {results.slice(0, 12).map((item) => {
             const info = playerEventStatus(data, item.id);
             return (
-              <button
+              <Button
+                type="submit"
+                variant="plain"
                 className="to-player-result"
                 key={item.id}
                 onClick={() => setSelected(item.id)}
@@ -73,7 +77,7 @@ export function ToPlayerFinder({
                 {results.filter((result) => result.name === item.name).length > 1 && (
                   <small>Player ID …{item.id.slice(-8)}</small>
                 )}
-              </button>
+              </Button>
             );
           })}
           {results.length > 12 && <p>{results.length} matches. Keep typing to narrow the list.</p>}
@@ -83,9 +87,9 @@ export function ToPlayerFinder({
         <div className="to-player-detail">
           <div className="to-player-title">
             <h4>{player.name}</h4>
-            <button className="btn btn-small" onClick={() => setSelected(null)}>
+            <Button size="small" type="submit" onClick={() => setSelected(null)}>
               Change player
-            </button>
+            </Button>
           </div>
           {status.closed && (
             <p className="to-player-alert">
@@ -129,9 +133,14 @@ export function ToPlayerFinder({
           <div className="to-player-pools">
             {status.pools.map((pool) => (
               <div key={pool.key}>
-                <button className="to-player-pool-link" onClick={() => onPool(pool.key)}>
+                <Button
+                  type="submit"
+                  variant="plain"
+                  className="to-player-pool-link"
+                  onClick={() => onPool(pool.key)}
+                >
                   {poolTitle(pool.key)}
-                </button>
+                </Button>
                 <span>
                   {pool.remaining === 0
                     ? 'Pool matches resolved'
@@ -156,8 +165,9 @@ export function ToPlayerFinder({
             </p>
           )}
           {status.outstanding.length > 0 && (
-            <details>
-              <summary>Remaining matches and waiting reasons ({status.outstanding.length})</summary>
+            <Disclosure
+              title={<> Remaining matches and waiting reasons ({status.outstanding.length}) </>}
+            >
               <ul className="to-player-matches">
                 {status.outstanding.map((match) => (
                   <li key={match.id}>
@@ -177,7 +187,7 @@ export function ToPlayerFinder({
                   </li>
                 ))}
               </ul>
-            </details>
+            </Disclosure>
           )}
           <small className="muted">
             Station assignments show match activity, not physical attendance.

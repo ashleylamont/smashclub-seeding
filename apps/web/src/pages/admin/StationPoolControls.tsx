@@ -1,3 +1,8 @@
+import { useConfirmation } from '../../lib/confirmation';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
+import { Disclosure } from '../../components/ui/Disclosure';
+import { Checkbox } from '../../components/ui/Checkbox';
 import { useState } from 'react';
 import { PoolStationSetup } from './PoolStationSetup';
 import { PoolFloorSheets } from './PoolFloorSheets';
@@ -13,12 +18,15 @@ export function StationPoolControls({
   disabled,
   act,
   onPool,
+  onMatch,
 }: {
   data: Overview;
   disabled: boolean;
   act: Action;
   onPool: (key: string) => void;
+  onMatch: (id: string) => void;
 }) {
+  const confirmAction = useConfirmation();
   const [stationName, setStationName] = useState('');
   const [stationCount, setStationCount] = useState(4);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -69,6 +77,14 @@ export function StationPoolControls({
                       {match.player2Name}
                     </p>
                     <small>{match.label}</small>
+                    <Button
+                      size="small"
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => onMatch(match.id)}
+                    >
+                      Score match
+                    </Button>
                   </>
                 ) : (
                   <p>Available for the next match</p>
@@ -82,8 +98,9 @@ export function StationPoolControls({
                       </strong>
                     </p>
                     <small>{next.label}</small>
-                    <button
-                      className="btn btn-small"
+                    <Button
+                      size="small"
+                      type="submit"
                       disabled={disabled}
                       onClick={() =>
                         void act(
@@ -99,7 +116,7 @@ export function StationPoolControls({
                       }
                     >
                       Start next match
-                    </button>
+                    </Button>
                   </div>
                 )}
                 {queue?.waitingReason && !next && <p className="muted">{queue.waitingReason}</p>}
@@ -124,9 +141,9 @@ export function StationPoolControls({
                   Open this station’s display ↗
                 </a>
                 <div className="ops-station-actions">
-                  <button
+                  <Button
+                    size="small"
                     type="button"
-                    className="btn btn-small"
                     disabled={disabled}
                     onClick={() => {
                       setEditingId(station.id);
@@ -134,15 +151,15 @@ export function StationPoolControls({
                     }}
                   >
                     Rename
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    size="small"
                     type="button"
-                    className="btn btn-small"
                     disabled={disabled || Boolean(match)}
                     title={match ? 'Return the playing match to the queue first' : undefined}
-                    onClick={() => {
+                    onClick={async () => {
                       if (
-                        window.confirm(
+                        await confirmAction(
                           `Delete ${station.name}? Its idle match assignments and pool reservations will be cleared.`,
                         )
                       )
@@ -157,7 +174,7 @@ export function StationPoolControls({
                     }}
                   >
                     Delete
-                  </button>
+                  </Button>
                 </div>
                 {editingId === station.id && (
                   <form
@@ -176,8 +193,7 @@ export function StationPoolControls({
                   >
                     <label>
                       New name for {station.name}
-                      <input
-                        className="input"
+                      <Input
                         value={editName}
                         onChange={(event) => setEditName(event.target.value)}
                         maxLength={60}
@@ -185,16 +201,12 @@ export function StationPoolControls({
                       />
                     </label>
                     <div className="ops-match-actions">
-                      <button className="btn btn-small" disabled={disabled || !editName.trim()}>
+                      <Button size="small" type="submit" disabled={disabled || !editName.trim()}>
                         Save name
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-small"
-                        onClick={() => setEditingId(null)}
-                      >
+                      </Button>
+                      <Button size="small" type="button" onClick={() => setEditingId(null)}>
                         Cancel
-                      </button>
+                      </Button>
                     </div>
                   </form>
                 )}
@@ -205,8 +217,7 @@ export function StationPoolControls({
         {!data.stations.length && (
           <p>Add the stations available tonight. Matches can then be assigned to a free station.</p>
         )}
-        <details className="ops-station-settings">
-          <summary>Add stations</summary>
+        <Disclosure title="Add stations" className="ops-station-settings">
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -218,8 +229,7 @@ export function StationPoolControls({
           >
             <label>
               Station name
-              <input
-                className="input"
+              <Input
                 value={stationName}
                 onChange={(event) => setStationName(event.target.value)}
                 placeholder="Main stage / Station A"
@@ -227,9 +237,9 @@ export function StationPoolControls({
                 required
               />
             </label>
-            <button className="btn" disabled={disabled}>
+            <Button type="submit" disabled={disabled}>
               Add named station
-            </button>
+            </Button>
           </form>
           <form
             onSubmit={(event) => {
@@ -251,8 +261,7 @@ export function StationPoolControls({
           >
             <label>
               Number of stations to add
-              <input
-                className="input"
+              <Input
                 type="number"
                 min={1}
                 max={32}
@@ -261,15 +270,14 @@ export function StationPoolControls({
                 required
               />
             </label>
-            <button className="btn" disabled={disabled}>
+            <Button type="submit" disabled={disabled}>
               Add numbered stations
-            </button>
+            </Button>
           </form>
-        </details>
+        </Disclosure>
       </section>
       {pools.length > 0 && (
-        <section className="card">
-          <h3>Pool queues and stations</h3>
+        <Disclosure title="Pool queues and stations" className="card ops-pool-settings">
           <p className="muted">
             Reserve a set of stations for each pool. Players follow their round-robin queue while
             other pools wait for the next wave. Pools without assigned stations use unreserved
@@ -318,7 +326,7 @@ export function StationPoolControls({
               );
             })}
           </div>
-        </section>
+        </Disclosure>
       )}
     </>
   );
@@ -376,24 +384,18 @@ function PoolSchedule({
         {pool.complete} / {pool.total} matches complete{playing > 0 && ` · ${playing} playing`}
       </p>
       <label className="ops-check">
-        <input
-          type="checkbox"
-          checked={active}
-          disabled={disabled || done}
-          onChange={(event) => setActive(event.target.checked)}
-        />
+        <Checkbox checked={active} disabled={disabled || done} onCheckedChange={setActive} />
         Allow this pool to play now
       </label>
       <fieldset disabled={disabled || done}>
         <legend>Stations for {label}</legend>
         {stations.map((station) => (
           <label className="ops-check" key={station.id}>
-            <input
-              type="checkbox"
+            <Checkbox
               checked={selected.includes(station.id)}
-              onChange={(event) =>
+              onCheckedChange={(nextChecked) =>
                 setSelected(
-                  event.target.checked
+                  nextChecked
                     ? [...selected, station.id]
                     : selected.filter((id) => id !== station.id),
                 )
@@ -404,23 +406,21 @@ function PoolSchedule({
         ))}
       </fieldset>
       <label className="ops-check">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={selfRun}
           disabled={disabled || done || !native}
-          onChange={(event) => {
-            setSelfRun(event.target.checked);
-            if (event.target.checked) setAutoAcceptScores(true);
+          onCheckedChange={(nextChecked) => {
+            setSelfRun(nextChecked);
+            if (nextChecked) setAutoAcceptScores(true);
           }}
         />
         Players can start queued matches
       </label>
       <label className="ops-check">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={selfRun && autoAcceptScores}
           disabled={disabled || done || !selfRun}
-          onChange={(event) => setAutoAcceptScores(event.target.checked)}
+          onCheckedChange={setAutoAcceptScores}
         />
         Accept scores immediately, without TO approval
       </label>
@@ -437,8 +437,9 @@ function PoolSchedule({
         </a>
       </p>
       <div className="ops-match-actions">
-        <button
-          className="btn btn-small"
+        <Button
+          size="small"
+          type="submit"
           disabled={disabled || done || !changed || (selfRun && !selected.length)}
           onClick={() =>
             void act(
@@ -458,10 +459,10 @@ function PoolSchedule({
           }
         >
           Save pool settings
-        </button>
-        <button className="btn btn-small" onClick={onView}>
+        </Button>
+        <Button size="small" type="submit" onClick={onView}>
           View pool matches
-        </button>
+        </Button>
       </div>
     </article>
   );

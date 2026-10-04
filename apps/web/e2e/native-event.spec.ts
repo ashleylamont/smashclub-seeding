@@ -1,3 +1,4 @@
+import { chooseOption } from '../test-support/controls';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 
 type Match = {
@@ -111,7 +112,13 @@ test('native event progresses from pools through reviewed finals to public club 
     .members.map((member) => member.playerId);
   const firstWins = firstOrder.indexOf(first.player1Id!) < firstOrder.indexOf(first.player2Id!);
   await page.goto(`/admin/event-operations?plan=${planId}`);
-  const firstCard = page.locator('article.ops-match').filter({ hasText: first.label });
+  await chooseOption(
+    page
+      .getByRole('tabpanel', { name: 'Run matches' })
+      .getByRole('combobox', { name: 'View', exact: true }),
+    'all',
+  );
+  const firstCard = page.locator('article.ops-match:visible').filter({ hasText: first.label });
   await firstCard.getByRole('button', { name: 'Finish match', exact: true }).click();
   await firstCard
     .locator('input[type="number"]')
@@ -156,7 +163,14 @@ test('native event progresses from pools through reviewed finals to public club 
   await expect(page.getByRole('heading', { name: 'Confirmed pool standings' })).toBeVisible();
   await expect(page.locator('.event-pool-results .event-prize')).toHaveCount(4);
   await page.goto(`/admin/event-operations?plan=${planId}`);
+  await chooseOption(
+    page
+      .getByRole('tabpanel', { name: 'Run matches' })
+      .getByRole('combobox', { name: 'View', exact: true }),
+    'all',
+  );
   await expect(page.getByText('Challonge integration', { exact: true })).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Standings / draw', exact: true }).click();
   const finals = page.locator('section.card').filter({
     has: page.getByRole('heading', { name: 'Championship and consolation', exact: true }),
   });
@@ -190,8 +204,8 @@ test('native event progresses from pools through reviewed finals to public club 
   const played = snapshot.matches.filter((match) => match.outcome === 'played');
   const poolGames = played.filter((match) => !match.nativeBracketId).length;
   const finalsGames = played.length - poolGames;
-  page.once('dialog', (dialog) => dialog.accept());
   await finals.getByRole('button', { name: 'Finalize native results', exact: true }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm', exact: true }).click();
   await expect(finals.getByRole('status')).toContainText('Event finalized');
   await expect(page.getByText('Event closed · read only', { exact: true })).toBeVisible();
   await page.goto(`/live/${planId}`);

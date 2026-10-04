@@ -1,22 +1,3 @@
-.station-sign-dialog {
-  width: min(850px, calc(100vw - 24px));
-  max-height: 92vh;
-  padding: 0;
-  border: 1px solid #aaa;
-  border-radius: 8px;
-  background: #e8e8e8;
-  color: #111;
-}
-.station-sign-dialog::backdrop {
-  background: #0009;
-}
-.station-sign-toolbar {
-  padding: 20px;
-  background: #fff;
-}
-.station-sign-toolbar h2 {
-  margin: 0;
-}
 .station-sign-toolbar fieldset {
   display: flex;
   flex-wrap: wrap;
@@ -114,7 +95,7 @@
     overflow: visible;
     background: white;
   }
-  .station-sign-dialog::backdrop,
+  .ui-dialog-heading,
   .station-sign-toolbar {
     display: none !important;
   }

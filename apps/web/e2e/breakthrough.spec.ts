@@ -20,7 +20,7 @@ test('TOs can inspect evidence, share criteria and refresh a live night', async 
   await page.reload();
   await expect(page.getByLabel('Minimum prior nights', { exact: true })).toHaveValue('0');
   await expect(page.getByLabel('Small-sample adjustment', { exact: true })).toHaveValue('5');
-  await page.locator('.breakthrough-detail summary').first().click();
+  await page.locator('.breakthrough-detail .ui-disclosure-trigger').first().click();
   await expect(
     page.getByText('Adjusted surplus without the strongest comparable set:').first(),
   ).toBeVisible();

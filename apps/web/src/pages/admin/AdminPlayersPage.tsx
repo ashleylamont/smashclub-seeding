@@ -1,3 +1,7 @@
+import { ConfirmDialog, ConfirmCancel } from '../../components/ui/ConfirmDialog';
+import { Input } from '../../components/ui/Input';
+import { Button } from '../../components/ui/Button';
+import { Checkbox } from '../../components/ui/Checkbox';
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
@@ -71,19 +75,14 @@ export function AdminPlayersPage() {
         <div className="page-header">
           <h2>Player registry</h2>
           <span className="admin-form-row">
-            <input
-              className="input"
+            <Input
               placeholder="Filter by name or alias…"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
             />
-            <button
-              type="button"
-              className="btn btn-small btn-primary"
-              onClick={() => setCreating(true)}
-            >
+            <Button variant="primary" size="small" type="button" onClick={() => setCreating(true)}>
               New player
-            </button>
+            </Button>
           </span>
         </div>
 
@@ -194,50 +193,46 @@ function MergeBar({
         </span>
       )}
       {selection.length === 2 && (
-        <button
-          type="button"
-          className="btn btn-small btn-primary"
-          onClick={() => setConfirming(true)}
-        >
+        <Button variant="primary" size="small" type="button" onClick={() => setConfirming(true)}>
           Merge…
-        </button>
+        </Button>
       )}
-      <button type="button" className="btn btn-small" onClick={onClear}>
+      <Button size="small" type="button" onClick={onClear}>
         Cancel
-      </button>
+      </Button>
       {merge.isError && <span className="error-text">{merge.error.message}</span>}
 
       {confirming && from && into && (
-        <div className="modal-overlay">
-          <button
-            type="button"
-            className="modal-backdrop"
-            aria-label="Close dialog"
-            onClick={() => setConfirming(false)}
-          />
-          <div className="modal">
-            <h3>Merge players</h3>
+        <ConfirmDialog
+          title="Merge players"
+          open
+          onOpenChange={setConfirming}
+          description={
             <p>
               <strong>{from.canonicalName}</strong> will be merged into{' '}
               <strong>{into.canonicalName}</strong>. All of {from.canonicalName}'s aliases, sets,
               and history move to {into.canonicalName}; this triggers a full recompute. This cannot
               be undone from the UI.
             </p>
-            <div className="modal-actions">
-              <button type="button" className="btn" onClick={() => setConfirming(false)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-danger"
-                disabled={merge.isPending}
-                onClick={() => merge.mutate()}
-              >
-                {merge.isPending ? 'Merging…' : 'Merge players'}
-              </button>
-            </div>
+          }
+        >
+          {merge.isError && (
+            <p role="alert" className="error-text">
+              {merge.error.message}
+            </p>
+          )}
+          <div className="modal-actions">
+            <ConfirmCancel />
+            <Button
+              variant="danger"
+              type="button"
+              disabled={merge.isPending}
+              onClick={() => merge.mutate()}
+            >
+              {merge.isPending ? 'Merging…' : 'Merge players'}
+            </Button>
           </div>
-        </div>
+        </ConfirmDialog>
       )}
     </div>
   );
@@ -292,10 +287,9 @@ function PlayerRow({
   return (
     <tr className={player.status !== 'active' ? 'player-inactive' : undefined}>
       <td>
-        <input
-          type="checkbox"
+        <Checkbox
           checked={mergeSelected}
-          onChange={onToggleMerge}
+          onCheckedChange={onToggleMerge}
           disabled={player.status !== 'active'}
           title="Select for merge"
           aria-label={`Select ${player.canonicalName} for merge`}
@@ -325,8 +319,7 @@ function PlayerRow({
           ))}
         </span>
         <span className="alias-add">
-          <input
-            className="input"
+          <Input
             placeholder="add alias…"
             value={aliasInput}
             onChange={(e) => setAliasInput(e.target.value)}
@@ -334,14 +327,14 @@ function PlayerRow({
               if (e.key === 'Enter' && aliasInput.trim() !== '') addAlias.mutate();
             }}
           />
-          <button
+          <Button
+            size="small"
             type="button"
-            className="btn btn-small"
             disabled={aliasInput.trim() === '' || addAlias.isPending}
             onClick={() => addAlias.mutate()}
           >
             +
-          </button>
+          </Button>
         </span>
       </td>
       <td>{player.legacyId ?? '—'}</td>
@@ -351,9 +344,9 @@ function PlayerRow({
         </span>
       </td>
       <td>
-        <button type="button" className="btn btn-small" onClick={() => setEditing(true)}>
+        <Button size="small" type="button" onClick={() => setEditing(true)}>
           Edit
-        </button>
+        </Button>
         {editing && (
           <PlayerFormModal
             title={`Edit ${player.canonicalName}`}
@@ -458,33 +451,36 @@ function ClaimRow({ claim, onChanged }: { claim: AdminClaim; onChanged: () => vo
         <span className="row-actions">
           {claim.status === 'pending' && (
             <>
-              <button
+              <Button
+                variant="primary"
+                size="small"
                 type="button"
-                className="btn btn-small btn-primary"
                 disabled={resolve.isPending}
                 onClick={() => resolve.mutate('approved')}
               >
                 Approve
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="danger"
+                size="small"
                 type="button"
-                className="btn btn-small btn-danger"
                 disabled={resolve.isPending}
                 onClick={() => resolve.mutate('rejected')}
               >
                 Reject
-              </button>
+              </Button>
             </>
           )}
           {claim.status === 'approved' && (
-            <button
+            <Button
+              variant="danger"
+              size="small"
               type="button"
-              className="btn btn-small btn-danger"
               disabled={resolve.isPending}
               onClick={() => resolve.mutate('revoked')}
             >
               Revoke
-            </button>
+            </Button>
           )}
         </span>
         {resolve.isError && <div className="error-text">{resolve.error.message}</div>}

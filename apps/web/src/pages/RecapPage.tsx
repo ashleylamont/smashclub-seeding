@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/Button';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
@@ -482,17 +483,17 @@ function ShareBar({
 
   return (
     <div className="recap-share">
-      <button type="button" className="btn btn-small" onClick={() => void copyLink()}>
+      <Button size="small" type="button" onClick={() => void copyLink()}>
         {status === 'copied' ? 'Link copied' : 'Copy link'}
-      </button>
-      <button
+      </Button>
+      <Button
+        size="small"
         type="button"
-        className="btn btn-small"
         onClick={() => void saveImage()}
         disabled={status === 'rendering'}
       >
         {status === 'rendering' ? 'Rendering…' : 'Save image'}
-      </button>
+      </Button>
       {status === 'failed' && <span className="error-text">Could not share — try again.</span>}
     </div>
   );

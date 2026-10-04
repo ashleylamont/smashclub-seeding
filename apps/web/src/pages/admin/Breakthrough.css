@@ -59,7 +59,7 @@
   margin: var(--s3) 0;
   font-size: var(--fs-sm);
 }
-.breakthrough-page summary {
+.breakthrough-page .ui-disclosure-trigger {
   cursor: pointer;
   padding: var(--s2) 0;
 }

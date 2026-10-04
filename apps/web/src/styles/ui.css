@@ -1,0 +1,813 @@
+/* Shared component appearance. Page CSS owns composition and content only. */
+.ui-button {
+  cursor: pointer;
+}
+.ui-button:disabled {
+  cursor: not-allowed;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 6px var(--s3);
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-h);
+  font-family: var(--display);
+  font-size: var(--fs-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition:
+    color 0.12s,
+    border-color 0.12s,
+    background-color 0.12s;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+}
+
+.btn.btn-primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: var(--accent-contrast);
+}
+
+.btn.btn-danger {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+.btn.btn-danger:hover:not(:disabled) {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: var(--bg);
+}
+
+.btn.btn-small {
+  padding: 2px var(--s2);
+  font-size: var(--fs-xs);
+}
+
+/* ── form controls ──────────────────────────────────────────────── */
+
+.input,
+.select,
+.textarea {
+  padding: 6px var(--s2);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-h);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.input::placeholder {
+  color: var(--text-soft);
+}
+
+.card {
+  background: transparent;
+  border: 1px solid var(--border);
+  padding: var(--s4);
+}
+
+/* Nested panels would reintroduce the stacked-card look. */
+.card .card {
+  border: 0;
+  padding: 0;
+}
+
+.banner {
+  padding: var(--s2) var(--s3);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  margin-bottom: var(--s3);
+  border-left: 3px solid transparent;
+}
+
+.banner.banner-warning {
+  background: var(--warn-bg);
+  border-left-color: var(--warn);
+  color: var(--text-h);
+}
+
+/* Neutral note: says "here is how to read this", not "something is wrong". */
+.banner.banner-info {
+  background: var(--accent-bg);
+  border-left-color: var(--accent-border);
+  color: var(--text-soft);
+}
+
+.banner.banner-success {
+  background: var(--good-bg);
+  border-left-color: var(--good);
+  color: var(--text-h);
+}
+
+.banner.banner-danger {
+  background: var(--bad-bg);
+  border-left-color: var(--bad);
+  color: var(--text-h);
+}
+
+.btn {
+  min-height: var(--control-height);
+  justify-content: center;
+  border-radius: var(--r1);
+}
+.btn.btn-small {
+  min-height: var(--control-height-small);
+}
+.input,
+.select,
+.textarea {
+  min-height: var(--control-height);
+  border-radius: var(--r1);
+  max-width: 100%;
+}
+.input:focus-visible,
+.select:focus-visible,
+.textarea:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.input[aria-invalid='true'],
+.textarea[aria-invalid='true'] {
+  border-color: var(--bad);
+}
+.input:disabled,
+.select:disabled,
+.textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.ui-select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  text-align: left;
+  cursor: pointer;
+}
+.ui-select > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ui-select-icon {
+  flex: none;
+  color: var(--text-soft);
+}
+.ui-select-content {
+  z-index: calc(var(--z-dialog) + 1);
+  min-width: var(--radix-select-trigger-width);
+  max-width: min(480px, calc(100vw - var(--s4)));
+  max-height: min(320px, var(--radix-select-content-available-height));
+  background: var(--surface);
+  color: var(--text-h);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 var(--s2) var(--s5) rgb(0 0 0 / 25%);
+  overflow: hidden;
+  font: var(--fs-sm)/var(--line-body) var(--mono);
+}
+.ui-select-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: var(--control-height);
+  padding: var(--s2) var(--s6) var(--s2) var(--s3);
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.ui-select-item[data-highlighted] {
+  outline: 0;
+  background: var(--accent-bg);
+}
+.ui-select-item[data-disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ui-select-check {
+  position: absolute;
+  right: var(--s2);
+}
+.ui-select-scroll {
+  text-align: center;
+  padding: var(--s1);
+}
+.ui-checkbox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  vertical-align: middle;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r1);
+  background: var(--surface);
+  color: var(--text-h);
+  cursor: pointer;
+}
+.ui-checkbox[data-state='checked'],
+.ui-checkbox[data-state='indeterminate'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+.ui-checkbox:disabled,
+.ui-switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ui-checkbox-mark {
+  font-size: var(--fs-sm);
+  line-height: 1;
+}
+.ui-checkbox-mark::before {
+  content: '✓';
+}
+.ui-checkbox-mark[data-state='indeterminate']::before {
+  content: '−';
+}
+.ui-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  width: 36px;
+  height: 22px;
+  padding: 3px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r1);
+  background: var(--surface);
+  cursor: pointer;
+}
+.ui-switch[data-state='checked'] {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.ui-switch-thumb {
+  width: 14px;
+  height: 14px;
+  background: var(--text-soft);
+  transition: transform 120ms ease;
+}
+.ui-switch-thumb[data-state='checked'] {
+  transform: translateX(14px);
+  background: var(--accent-contrast);
+}
+.ui-disclosure-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  min-height: var(--control-height);
+  padding: var(--s1) 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-h);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ui-disclosure-icon {
+  flex: none;
+}
+.ui-disclosure-content[data-state='closed'] {
+  display: none;
+}
+.ui-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+.ui-field label {
+  color: var(--text-h);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+.ui-field-hint {
+  color: var(--text);
+  font-size: var(--fs-sm);
+  line-height: var(--line-body);
+}
+.ui-field .error-text {
+  font-size: var(--fs-sm);
+}
+.ui-score-fields {
+  display: grid;
+  gap: var(--s2);
+}
+.ui-score-fields .ops-score-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: var(--s3);
+}
+.ui-score-fields .input {
+  width: 100%;
+  min-height: var(--touch-target);
+  text-align: center;
+  font-size: var(--fs-lg);
+}
+.ui-loading,
+.ui-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+.ui-spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: ui-spin 0.8s linear infinite;
+  flex: none;
+}
+@keyframes ui-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.ui-empty {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: var(--s3);
+}
+.ui-empty a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.ui-page-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--s4);
+  flex-wrap: wrap;
+}
+.ui-page-header > div {
+  min-width: 0;
+}
+.ui-page-header h1 {
+  line-height: var(--line-heading);
+  overflow-wrap: anywhere;
+}
+.ui-page-header p {
+  margin-top: var(--s2);
+  max-width: 65ch;
+}
+.ui-tab-list {
+  display: flex;
+  gap: var(--s1);
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border-strong);
+  padding: var(--s1);
+  scroll-padding: var(--s2);
+  overscroll-behavior-x: contain;
+}
+.ui-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  flex: none;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  padding: var(--s2) var(--s3);
+  min-height: var(--touch-target);
+  font-family: var(--display);
+  color: var(--text);
+  font-size: var(--fs-md);
+  cursor: pointer;
+}
+.ui-tab:hover {
+  color: var(--text-h);
+  background: var(--surface-2);
+}
+.ui-tab[data-state='active'] {
+  border-bottom-color: var(--accent);
+  color: var(--text-h);
+  background: var(--accent-bg);
+}
+.ui-tab:focus-visible {
+  outline-offset: -2px;
+}
+.ui-tab-panel[data-state='inactive'] {
+  display: none;
+}
+.ui-tab-panel[data-state='active'] {
+  display: grid;
+  gap: var(--s4);
+  min-width: 0;
+  padding-top: var(--s4);
+}
+.ui-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 72%);
+  z-index: var(--z-dialog);
+}
+.ui-dialog.modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: var(--z-dialog);
+  width: min(520px, calc(100% - var(--s6)));
+  max-height: 85svh;
+  overscroll-behavior: contain;
+}
+.ui-dialog.modal-wide {
+  width: min(640px, calc(100% - var(--s6)));
+}
+.ui-dialog-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--s4);
+}
+.ui-dialog-heading h2 {
+  overflow-wrap: anywhere;
+  line-height: var(--line-heading);
+}
+.ui-dialog-heading .btn {
+  flex: none;
+  min-width: var(--control-height-small);
+}
+.ui-dialog-description {
+  margin-bottom: var(--s4);
+}
+.modal {
+  background: var(--bg);
+  border: 1px solid var(--accent-border);
+  padding: var(--s5);
+  overflow-y: auto;
+}
+.modal h2,
+.modal h3 {
+  margin-bottom: var(--s3);
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s2);
+  margin-top: var(--s4);
+}
+.ui-dialog.ui-print-dialog {
+  width: min(940px, calc(100% - var(--s5)));
+  max-width: none;
+  max-height: 92svh;
+  padding: 0;
+  background: var(--surface-2);
+}
+.ui-print-dialog .ui-dialog-heading,
+.floor-sheet-toolbar,
+.bracket-backup-toolbar,
+.station-sign-toolbar {
+  padding: var(--s4);
+  background: var(--bg);
+}
+@media (max-width: 560px), (pointer: coarse) {
+  .btn,
+  .btn.btn-small,
+  .input,
+  .select,
+  .textarea {
+    min-height: var(--touch-target);
+  }
+  .ui-disclosure-trigger,
+  .ui-select-item {
+    min-height: var(--touch-target);
+  }
+  label:has(> .ui-checkbox),
+  label:has(> .ui-switch) {
+    min-height: var(--touch-target);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s2);
+  }
+  .input,
+  .select,
+  .textarea {
+    font-size: 16px;
+  }
+}
+@media print {
+  .ui-dialog.ui-print-dialog {
+    position: static;
+    transform: none;
+    inset: auto;
+    width: auto;
+    max-height: none;
+    border: 0;
+    overflow: visible;
+  }
+  .ui-print-dialog .ui-dialog-heading {
+    display: none;
+  }
+}
+@media (max-width: 560px) {
+  .ui-dialog.modal {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    transform: none;
+    width: 100%;
+    max-width: none;
+    max-height: 92svh;
+  }
+}
+
+/*
+ * Explanation affordance. Square and hairline-bounded like every other surface
+ * in the app — the panel is a rule-bounded note on the page field, not a
+ * floating card, so it has a border and no shadow.
+ */
+
+.info-tip {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+.info-tip-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Sized so the glyph reads at label scale; the tap area is grown below. */
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  position: relative;
+}
+
+.info-tip-button:hover,
+.info-tip-button[data-state='open'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.info-tip-panel {
+  z-index: var(--z-help);
+  display: block;
+  width: max-content;
+  max-width: min(300px, calc(100vw - var(--s5)));
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--accent);
+  background: var(--bg-elev);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: normal;
+  text-transform: none;
+  /* Panels open inside uppercase display-face headings and inside monospaced
+     figures; neither should leak into the sentence. */
+  white-space: normal;
+}
+
+/* The panel can appear well away from the mark that opened it, so it names what
+   it is answering. */
+.info-tip-title {
+  display: block;
+  margin-bottom: var(--s1);
+  font-family: var(--display);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-h);
+}
+
+@media (pointer: coarse) {
+  .info-tip-button {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* ── buttons ────────────────────────────────────────────────────── */
+
+/* ── tags ───────────────────────────────────────────────────────────
+   Square, bordered, monospaced — a stamped label rather than a pill. */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: 1px var(--s2);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+}
+
+.chip.chip-accent {
+  color: var(--accent);
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.chip.chip-success {
+  color: var(--good);
+  border-color: var(--good);
+  background: var(--good-bg);
+}
+
+.chip.chip-danger {
+  color: var(--bad);
+  border-color: var(--bad);
+  background: var(--bad-bg);
+}
+
+.chip.chip-warning {
+  color: var(--warn);
+  border-color: var(--warn);
+  background: var(--warn-bg);
+}
+
+/* League tags carry the ladder ramp, so a league reads as a rung. */
+.chip.tier-1 {
+  color: var(--tier-1);
+  border-color: var(--tier-1);
+  background: var(--tier-1-bg);
+}
+.chip.tier-2 {
+  color: var(--tier-2);
+  border-color: var(--tier-2);
+  background: var(--tier-2-bg);
+}
+.chip.tier-3 {
+  color: var(--tier-3);
+  border-color: var(--tier-3);
+  background: var(--tier-3-bg);
+}
+.chip.tier-4 {
+  color: var(--tier-4);
+  border-color: var(--tier-4);
+  background: var(--tier-4-bg);
+}
+
+.verified-badge {
+  color: var(--accent);
+  font-weight: 700;
+  cursor: default;
+}
+
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 1px var(--s2);
+  background: var(--live);
+  color: var(--bg);
+  font-family: var(--display);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.live-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+  animation: live-blink 1.1s steps(1, end) infinite;
+}
+
+/* Hard on/off, like a cabinet indicator — not a soft pulse. */
+@keyframes live-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0.15;
+  }
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  font: inherit;
+}
+
+.modal-wide {
+  max-width: 640px;
+}
+
+.form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.form-label {
+  font-family: var(--display);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-soft);
+}
+
+.form-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-soft);
+  line-height: 1.4;
+}
+
+.alias-editor {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+}
+
+.chip-remove {
+  border: none;
+  background: none;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+  padding: 0 0 0 4px;
+  font-size: inherit;
+  line-height: 1;
+}
+
+.chip-remove:hover {
+  opacity: 1;
+  color: var(--bad);
+}
+
+.modal-wide .modal-actions {
+  position: sticky;
+  bottom: calc(-1 * var(--s5));
+  margin-top: var(--s4);
+  padding: var(--s3) 0;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+
+/* The sticky actions hang off the modal's own bottom padding, and the sheet
+   layout on narrow screens uses a different one — including the safe-area
+   inset. Keep the two in step or the bar floats above the edge it is pinned to. */
+@media (max-width: 860px) {
+  .modal-wide .modal-actions {
+    bottom: calc(-1 * (var(--s4) + env(safe-area-inset-bottom)));
+  }
+}

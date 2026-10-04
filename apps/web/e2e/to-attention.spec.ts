@@ -1,3 +1,4 @@
+import { chooseOption } from '../test-support/controls';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 async function query<T>(request: APIRequestContext, procedure: string, input?: object): Promise<T> {
   const response = await request.get(`/api/trpc/${procedure}`, {
@@ -109,20 +110,20 @@ test('attention desk directs TOs to exact decisions and stale scores, without cl
     await expect(attention).toContainText('No stations configured');
     await attention.getByText('Match decisions · 1', { exact: true }).click();
     // Pre-existing queue filters must not hide the exact match opened from attention.
-    await page
-      .locator('.ops-toolbar')
-      .getByRole('combobox', { name: 'Division', exact: true })
-      .selectOption('lower');
+    await chooseOption(
+      page.locator('.ops-toolbar').getByRole('combobox', { name: 'Division', exact: true }),
+      'lower',
+    );
     await page
       .locator('.ops-toolbar')
       .getByRole('textbox', { name: 'Find a player or match', exact: true })
       .fill('not an entrant');
     await attention.getByRole('button', { name: 'Open match', exact: true }).click();
-    await expect(page.locator('article.ops-match')).toHaveCount(1);
-    await expect(page.locator('article.ops-match')).toContainText(blocked.label);
+    await expect(page.locator('article.ops-match:visible')).toHaveCount(1);
+    await expect(page.locator('article.ops-match:visible')).toContainText(blocked.label);
     await expect(page.locator('#match-desk')).toBeFocused();
     await page.getByRole('button', { name: 'Show all matches', exact: true }).click();
-    await expect(page.locator('article.ops-match')).toHaveCount(initial.matches.length);
+    await expect(page.locator('article.ops-match:visible')).toHaveCount(initial.matches.length);
     await attention.getByText('Score reviews · 1', { exact: true }).click();
     await attention.getByRole('button', { name: 'Review score', exact: true }).click();
     await expect(page.locator('.ops-report')).toBeFocused();

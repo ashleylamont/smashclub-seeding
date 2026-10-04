@@ -1,4 +1,10 @@
-import { TRPCClientError } from '@trpc/client';
+import { Disclosure } from '../components/ui/Disclosure';
+import { Select, SelectItem } from '../components/ui/Select';
+import { Input } from '../components/ui/Input';
+import { PageHeader } from '../components/ui/PageHeader';
+import { LoadingState, Notice } from '../components/ui/Feedback';
+import { Button } from '../components/ui/Button';
+import { eventUnavailable } from '../lib/eventErrors';
 import { GuestScoreCard, type GuestMatch } from '../components/GuestScoreCard';
 import { PlayerMatchFilter } from '../components/PlayerMatchFilter';
 import { eventPlayers, useDevicePlayer } from '../lib/playerSelection';
@@ -13,7 +19,7 @@ import {
   saveGuestSession,
   type GuestSession,
 } from '../lib/guestReporting';
-import './admin/EventOperations.css';
+import '../styles/event.css';
 import { PoolFilter, PoolRoundSchedule, PoolStationQueue } from '../components/PoolStationQueue';
 import {
   poolPath,
@@ -121,9 +127,7 @@ export function GuestEvent({ planId }: { planId: string }) {
     refetchInterval: 2500,
     retry: false,
   });
-  const unpublished =
-    publicEvent.error instanceof TRPCClientError &&
-    ['NOT_FOUND', 'FORBIDDEN', 'UNAUTHORIZED'].includes(publicEvent.error.data?.code ?? '');
+  const unpublished = eventUnavailable(publicEvent.error);
   const canWrite =
     valid && !redeeming && Boolean(matches.data) && !matches.isError && !publicEvent.isError;
   const data: PoolFlowData | undefined = unpublished
@@ -193,18 +197,15 @@ export function GuestEvent({ planId }: { planId: string }) {
   if (unpublished) return <p role="alert">This event is unavailable or has not been published.</p>;
   return (
     <div className="ops-page guest-page">
-      <header>
-        <span className="ops-eyebrow">PLAYER AREA / SMASH CLUB</span>
-        <h1>{publicEvent.data?.plan.name ?? 'Your event'}</h1>
-        <p>
-          Choose your name to see your matches, station calls and results. No account or linked
-          player profile is needed to browse.
-        </p>
-        <a href={poolPath(`/live/${planId}`, selectedPool)}>Live event board →</a>
-        <p className="muted">
-          Pool standings, brackets, announcements and prizes are on the live event board.
-        </p>
-      </header>
+      <PageHeader
+        title={publicEvent.data?.plan.name ?? 'Your event'}
+        description="Choose your name to find your matches."
+        actions={
+          <a className="btn" href={poolPath(`/live/${planId}`, selectedPool)}>
+            Event board →
+          </a>
+        }
+      />
       {closed && (
         <p className="card">
           This event is closed. Results remain available; ask a TO about corrections.
@@ -212,7 +213,7 @@ export function GuestEvent({ planId }: { planId: string }) {
       )}
       {!closed &&
         (redeeming ? (
-          <p role="status">Opening your guest pass…</p>
+          <LoadingState>Opening your guest pass…</LoadingState>
         ) : !valid || matches.isError ? (
           <section className="card">
             <h2>
@@ -237,10 +238,15 @@ export function GuestEvent({ planId }: { planId: string }) {
             Guest pass · {guestTimeLeft(session!.expiresAt, now)} remaining
           </p>
         ))}
-      {publicEvent.isError && !unpublished && (
+      {publicEvent.isError && !unpublished && data && (
         <p role="alert">Live updates interrupted. Scores shown may be out of date.</p>
       )}
-      {!data && publicEvent.isPending && <p>Loading matches…</p>}
+      {!data && !unpublished && (
+        <GuestLoadState
+          pending={publicEvent.isPending}
+          onRetry={() => void publicEvent.refetch()}
+        />
+      )}
       {data && (
         <>
           <PlayerMatchFilter
@@ -265,15 +271,17 @@ export function GuestEvent({ planId }: { planId: string }) {
                 </p>
               )}
             </div>
-            <details
+            <Disclosure
+              title={
+                <>
+                  Match filters{selectedPool ? ' · one pool selected' : ''}
+                  {stationId ? ' · one station selected' : ''}
+                </>
+              }
               className="player-match-refine"
               key={player ? 'focused' : 'everyone'}
-              open={!player}
+              defaultOpen={!player}
             >
-              <summary>
-                Match filters{selectedPool ? ' · one pool selected' : ''}
-                {stationId ? ' · one station selected' : ''}
-              </summary>
               <div className="player-match-controls">
                 <div className="player-match-secondary-filters">
                   <PoolFilter
@@ -286,44 +294,34 @@ export function GuestEvent({ planId }: { planId: string }) {
                   />
                   <label className="pool-flow-filter">
                     Station
-                    <select
-                      className="select"
-                      value={stationId}
-                      onChange={(event) => setSelectedStation(event.target.value)}
-                    >
-                      <option value="">All stations</option>
+                    <Select value={stationId} onValueChange={setSelectedStation}>
+                      <SelectItem value="">All stations</SelectItem>
                       {data.stations.map((station) => (
-                        <option key={station.id} value={station.id}>
+                        <SelectItem key={station.id} value={station.id}>
                           {station.name}
-                        </option>
+                        </SelectItem>
                       ))}
-                    </select>
+                    </Select>
                   </label>
                 </div>
                 <div className="ops-toolbar">
                   <label>
                     View
-                    <select
-                      aria-label="Match view"
-                      className="select"
-                      value={view}
-                      onChange={(e) => setView(e.target.value)}
-                    >
-                      <option value="queue">Station matches & my reports</option>
-                      <option value="matches">
+                    <Select aria-label="Match view" value={view} onValueChange={setView}>
+                      <SelectItem value="queue">Station matches & my reports</SelectItem>
+                      <SelectItem value="matches">
                         {disputeMode ? 'All matches & results' : 'All open matches'}
-                      </option>
-                      <option value="results">Recorded results</option>
-                      <option value="mine" disabled={!player}>
+                      </SelectItem>
+                      <SelectItem value="results">Recorded results</SelectItem>
+                      <SelectItem value="mine" disabled={!player}>
                         All selected player’s matches
-                      </option>
-                      <option value="reports">My reports</option>
-                    </select>
+                      </SelectItem>
+                      <SelectItem value="reports">My reports</SelectItem>
+                    </Select>
                   </label>
                   <label className="ops-search">
                     Search matches
-                    <input
-                      className="input"
+                    <Input
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       placeholder="Player, pool or match…"
@@ -331,7 +329,7 @@ export function GuestEvent({ planId }: { planId: string }) {
                   </label>
                 </div>
               </div>
-            </details>
+            </Disclosure>
             <div className="ops-match-grid">
               {visible.map((match) => (
                 <GuestScoreCard
@@ -377,5 +375,17 @@ export function GuestEvent({ planId }: { planId: string }) {
         </p>
       )}
     </div>
+  );
+}
+
+function GuestLoadState({ pending, onRetry }: { pending: boolean; onRetry: () => void }) {
+  if (pending) return <LoadingState>Loading matches…</LoadingState>;
+  return (
+    <Notice tone="danger">
+      Could not load matches.
+      <Button size="small" onClick={onRetry}>
+        Retry
+      </Button>
+    </Notice>
   );
 }

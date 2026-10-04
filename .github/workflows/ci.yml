@@ -86,6 +86,27 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  ui-quality:
+    name: UI accessibility and visuals
+    # Chromium screenshots are platform-specific. Commit Darwin baselines from
+    # this job; the database-backed event flows continue on Linux above.
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-node-pnpm
+      - run: pnpm --filter @smashclub/web exec playwright install chromium
+      - run: pnpm --filter @smashclub/web test:ui
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-review
+          path: |
+            apps/web/playwright-report/ui
+            apps/web/ui-test-results
+          retention-days: 7
+          if-no-files-found: ignore
+
   build:
     name: Build
     runs-on: ubuntu-latest
@@ -178,7 +199,7 @@ jobs:
   all-checks:
     name: All checks
     if: always()
-    needs: [typecheck, lint, format, test, e2e, build, bundle-smoke, legacy-python]
+    needs: [typecheck, lint, format, test, e2e, ui-quality, build, bundle-smoke, legacy-python]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results

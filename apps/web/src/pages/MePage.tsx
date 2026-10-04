@@ -1,3 +1,5 @@
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate } from '@tanstack/react-router';
@@ -87,14 +89,9 @@ function LinkedProviders() {
               ✓ {provider === 'discord' ? 'Discord' : 'Google'} linked
             </span>
           ) : (
-            <button
-              key={provider}
-              type="button"
-              className="btn btn-small"
-              onClick={() => void link(provider)}
-            >
+            <Button size="small" key={provider} type="button" onClick={() => void link(provider)}>
               Link {provider === 'discord' ? 'Discord' : 'Google'}
-            </button>
+            </Button>
           ),
         )}
         {accounts.isError && <span className="error-text">{accounts.error.message}</span>}
@@ -186,14 +183,15 @@ function LiveClaim({ claim, onChanged }: { claim: MyClaim; onChanged: () => void
         <span className={`chip ${claim.status === 'approved' ? 'chip-success' : 'chip-warning'}`}>
           {claim.status === 'approved' ? '✓ approved' : 'pending review'}
         </span>
-        <button
+        <Button
+          variant="danger"
+          size="small"
           type="button"
-          className="btn btn-small btn-danger"
           disabled={withdraw.isPending}
           onClick={() => withdraw.mutate()}
         >
           Withdraw
-        </button>
+        </Button>
       </div>
       {claim.note && <p className="muted">Note: {claim.note}</p>}
       {withdraw.isError && <p className="error-text">{withdraw.error.message}</p>}
@@ -231,21 +229,20 @@ function ProfileEditor({ claim, onChanged }: { claim: MyClaim; onChanged: () => 
         <label htmlFor="display-name" className="muted">
           Public alias
         </label>
-        <input
+        <Input
           id="display-name"
-          className="input"
           value={displayName}
           placeholder={claim.defaultAlias}
           onChange={(e) => setDisplayName(e.target.value)}
         />
-        <button
+        <Button
+          size="small"
           type="button"
-          className="btn btn-small"
           disabled={updateName.isPending}
           onClick={() => updateName.mutate(displayName.trim() === '' ? null : displayName.trim())}
         >
           Save
-        </button>
+        </Button>
         {updateName.isSuccess && <span className="chip chip-success">saved</span>}
         {updateName.isError && <span className="error-text">{updateName.error.message}</span>}
       </div>
@@ -256,14 +253,14 @@ function ProfileEditor({ claim, onChanged }: { claim: MyClaim; onChanged: () => 
       <div className="character-editor">
         <div className="display-name-row">
           <span className="muted">Characters</span>
-          <button
+          <Button
+            size="small"
             type="button"
-            className="btn btn-small"
             disabled={!dirtyCharacters || updateCharacters.isPending}
             onClick={() => updateCharacters.mutate(characters)}
           >
             Save
-          </button>
+          </Button>
           {updateCharacters.isSuccess && !dirtyCharacters && (
             <span className="chip chip-success">saved</span>
           )}
@@ -300,14 +297,12 @@ function ClaimSearch({ onChanged }: { onChanged: () => void }) {
         Find yourself on the leaderboard and claim your player. An admin will approve the claim.
       </p>
       <div className="claim-form-row" style={{ marginTop: 10 }}>
-        <input
-          className="input"
+        <Input
           placeholder="Search players by their board name…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <input
-          className="input"
+        <Input
           placeholder="Optional note for the admins"
           value={note}
           onChange={(e) => setNote(e.target.value)}
@@ -335,14 +330,14 @@ function ClaimSearch({ onChanged }: { onChanged: () => void }) {
                   </span>
                 )}
               </span>
-              <button
+              <Button
+                size="small"
                 type="button"
-                className="btn btn-small"
                 disabled={player.verified || request.isPending}
                 onClick={() => request.mutate(player.id)}
               >
                 This is me
-              </button>
+              </Button>
             </li>
           ))}
         </ul>

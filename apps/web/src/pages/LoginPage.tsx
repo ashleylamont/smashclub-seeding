@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/Button';
 import { useState } from 'react';
 import { Navigate } from '@tanstack/react-router';
 import { authClient } from '../lib/auth';
@@ -24,24 +25,23 @@ export function LoginPage() {
       <div className="login-card card">
         <h1>Sign in</h1>
         <p className="muted">
-          Sign in to claim your player, track your results, and set your public alias and
-          characters.
+          Claim your player profile and edit your public alias and characters.
         </p>
         <div className="login-buttons">
-          <button
+          <Button
             type="button"
-            className="btn provider-btn discord"
+            className="provider-btn discord"
             onClick={() => void signIn('discord')}
           >
             <span className="provider-mark">D</span> Continue with Discord
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="btn provider-btn google"
+            className="provider-btn google"
             onClick={() => void signIn('google')}
           >
             <span className="provider-mark">G</span> Continue with Google
-          </button>
+          </Button>
         </div>
         {error && <p className="error-text">{error}</p>}
         {/* Signing in with the other provider mints a second account rather than
@@ -49,8 +49,8 @@ export function LoginPage() {
             you own both. Linking from /me is what joins them, and it works
             regardless of whether the two addresses match. */}
         <p className="muted login-note">
-          Already signed up with the other one? Sign in with it first, then link this one from your
-          account page — that keeps one account. The two can use different email addresses.
+          Use your original provider to sign in, then link another from your account page. Signing
+          in separately creates another account.
         </p>
       </div>
     </div>

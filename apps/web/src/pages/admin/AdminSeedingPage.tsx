@@ -1,3 +1,6 @@
+import { ConfirmDialog, ConfirmCancel } from '../../components/ui/ConfirmDialog';
+import { Select, SelectItem } from '../../components/ui/Select';
+import { Button } from '../../components/ui/Button';
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -39,18 +42,14 @@ export function AdminSeedingPage() {
           Challonge.
         </p>
         <div className="admin-form-row" style={{ marginTop: 10 }}>
-          <select
-            className="select"
-            value={tournamentId}
-            onChange={(e) => setTournamentId(e.target.value)}
-          >
-            <option value="">Pick a tournament…</option>
+          <Select value={tournamentId} onValueChange={setTournamentId}>
+            <SelectItem value="">Pick a tournament…</SelectItem>
             {seedable.map((t) => (
-              <option key={t.id} value={t.id}>
+              <SelectItem key={t.id} value={t.id}>
                 {t.name}
-              </option>
+              </SelectItem>
             ))}
-          </select>
+          </Select>
         </div>
         {tournaments.isError && <p className="error-text">{tournaments.error.message}</p>}
         {!tournaments.isPending && seedable.length === 0 && (
@@ -88,14 +87,14 @@ function SeedingWorkbench({ tournamentId }: { tournamentId: string }) {
       <div className="card">
         <p className="muted">No seeding run for this tournament yet.</p>
         <div style={{ marginTop: 10 }}>
-          <button
+          <Button
+            variant="primary"
             type="button"
-            className="btn btn-primary"
             disabled={generate.isPending}
             onClick={() => generate.mutate()}
           >
             {generate.isPending ? 'Generating…' : 'Generate seeding'}
-          </button>
+          </Button>
         </div>
         {generate.isError && <p className="error-text">{generate.error.message}</p>}
       </div>
@@ -223,17 +222,17 @@ function SeedingRun({
         </h3>
         <span className="row-actions">
           {(run.status === 'stale' || run.status === 'pushed') && (
-            <button type="button" className="btn" disabled={regenerating} onClick={onRegenerate}>
+            <Button type="button" disabled={regenerating} onClick={onRegenerate}>
               {regenerating
                 ? 'Generating…'
                 : run.status === 'pushed'
                   ? 'Generate new run'
                   : 'Regenerate'}
-            </button>
+            </Button>
           )}
-          <button
+          <Button
+            variant="primary"
             type="button"
-            className="btn btn-primary"
             disabled={run.status !== 'draft' || push.isPending}
             onClick={() => setConfirmingPush(true)}
             title={
@@ -243,7 +242,7 @@ function SeedingRun({
             }
           >
             Push to Challonge
-          </button>
+          </Button>
         </span>
       </div>
       {regenerateError && <p className="error-text">{regenerateError}</p>}
@@ -280,36 +279,40 @@ function SeedingRun({
       </DndContext>
 
       {confirmingPush && (
-        <div className="modal-overlay">
-          <button
-            type="button"
-            className="modal-backdrop"
-            aria-label="Close dialog"
-            onClick={() => setConfirmingPush(false)}
-          />
-          <div className="modal">
-            <h3>Push seeds to Challonge?</h3>
-            <p className="muted">This writes the following seed assignments to the live bracket:</p>
-            <ol className="push-preview">
-              {order.map((participantId) => (
-                <li key={participantId}>{byParticipant.get(participantId)?.name ?? '?'}</li>
-              ))}
-            </ol>
-            <div className="modal-actions">
-              <button type="button" className="btn" onClick={() => setConfirmingPush(false)}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={push.isPending}
-                onClick={() => push.mutate()}
-              >
-                {push.isPending ? 'Pushing…' : 'Push seeds'}
-              </button>
-            </div>
+        <ConfirmDialog
+          title="Push seeds to Challonge?"
+          open
+          onOpenChange={setConfirmingPush}
+          description={
+            <>
+              <p className="muted">
+                This writes the following seed assignments to the live bracket:
+              </p>
+              <ol className="push-preview">
+                {order.map((participantId) => (
+                  <li key={participantId}>{byParticipant.get(participantId)?.name ?? '?'}</li>
+                ))}
+              </ol>
+            </>
+          }
+        >
+          {push.isError && (
+            <p role="alert" className="error-text">
+              Push failed: {push.error.message}
+            </p>
+          )}
+          <div className="modal-actions">
+            <ConfirmCancel />
+            <Button
+              variant="primary"
+              type="button"
+              disabled={push.isPending}
+              onClick={() => push.mutate()}
+            >
+              {push.isPending ? 'Pushing…' : 'Push seeds'}
+            </Button>
           </div>
-        </div>
+        </ConfirmDialog>
       )}
     </div>
   );
@@ -398,9 +401,9 @@ function SeedingRow({
         {/* The glyph alone is not a label: without aria-label the accessible
             name is the emoji, which says nothing and conveys the lock state by
             picture only. */}
-        <button
+        <Button
+          size="small"
           type="button"
-          className="btn btn-small"
           disabled={toggleLock.isPending || !draggable}
           onClick={() => toggleLock.mutate()}
           title={entry.locked ? 'Unlock this seed' : 'Lock this seed in place'}
@@ -408,7 +411,7 @@ function SeedingRow({
           aria-pressed={entry.locked}
         >
           {entry.locked ? '🔒' : '🔓'}
-        </button>
+        </Button>
       </span>
     </div>
   );

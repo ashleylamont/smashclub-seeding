@@ -1,3 +1,7 @@
+import { Dialog } from './ui/Dialog';
+import { Button } from './ui/Button';
+import { Select, SelectItem } from './ui/Select';
+import { Disclosure } from './ui/Disclosure';
 import { useEffect, useRef, useState } from 'react';
 import { captureError, LocalCapture } from '../lib/localCapture';
 
@@ -49,7 +53,6 @@ export function OverlaySetup({
         setOpen((value) => !value);
         event.preventDefault();
       }
-      if (event.key === 'Escape') setOpen(false);
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
@@ -136,35 +139,35 @@ export function OverlaySetup({
         <span className="capture-corner capture-corner-br" />
       </div>
       {showButton && !open && (
-        <button
+        <Button
+          type="submit"
+          variant="plain"
           className="overlay-setup-toggle"
           onClick={() => setOpen(true)}
           title="Display setup (S)"
         >
           Display setup
-        </button>
+        </Button>
       )}
       {open && (
-        <section className="overlay-setup" aria-label="Overlay display setup">
+        <Dialog title="Display setup" className="overlay-setup" open onOpenChange={setOpen}>
           <div className="overlay-setup-heading">
-            <h2>Display setup</h2>
-            <button className="btn" onClick={() => setOpen(false)}>
+            <Button type="submit" onClick={() => setOpen(false)}>
               Hide controls
-            </button>
+            </Button>
           </div>
           <label>
             Current match station
-            <select value={focus} onChange={(event) => onFocus(event.target.value)}>
-              <option value="">Automatic · Stage first</option>
+            <Select value={focus} onValueChange={onFocus}>
+              <SelectItem value="">Automatic · Stage first</SelectItem>
               {stations.map((station) => (
-                <option key={station.id} value={station.id}>
+                <SelectItem key={station.id} value={station.id}>
                   {station.name}
-                </option>
+                </SelectItem>
               ))}
-            </select>
+            </Select>
           </label>
-          <details open>
-            <summary>Use with OBS</summary>
+          <Disclosure title="Use with OBS" defaultOpen>
             <ol>
               <li>Add this URL as a Browser Source at 1920 × 1080.</li>
               <li>
@@ -176,40 +179,39 @@ export function OverlaySetup({
               Set the station above, then copy the updated URL into OBS. Hide these controls before
               going live.
             </p>
-          </details>
-          <details>
-            <summary>Show video directly in this browser</summary>
+          </Disclosure>
+          <Disclosure title="Show video directly in this browser">
             <p>
               For a standalone event screen, choose a window or a capture card that appears as a
               camera. This preview stays on this device and has no audio. Browser and device support
               varies; OBS handles capture separately.
             </p>
             <div className="overlay-setup-actions">
-              <button className="btn" disabled={pending} onClick={() => void start('screen')}>
+              <Button type="submit" disabled={pending} onClick={() => void start('screen')}>
                 Choose window / screen
-              </button>
-              <button className="btn" disabled={pending} onClick={() => void refreshDevices()}>
+              </Button>
+              <Button type="submit" disabled={pending} onClick={() => void refreshDevices()}>
                 Find cameras / capture cards
-              </button>
+              </Button>
             </div>
             <label>
               Video input
-              <select value={device} onChange={(event) => setDevice(event.target.value)}>
-                <option value="">Default camera / capture card</option>
+              <Select value={device} onValueChange={setDevice}>
+                <SelectItem value="">Default camera / capture card</SelectItem>
                 {devices.map((item, index) => (
-                  <option key={item.deviceId || index} value={item.deviceId}>
+                  <SelectItem key={item.deviceId || index} value={item.deviceId}>
                     {item.label || `Video input ${index + 1}`}
-                  </option>
+                  </SelectItem>
                 ))}
-              </select>
+              </Select>
             </label>
             <div className="overlay-setup-actions">
-              <button className="btn" disabled={pending} onClick={() => void start('camera')}>
+              <Button type="submit" disabled={pending} onClick={() => void start('camera')}>
                 Open selected video input
-              </button>
-              <button className="btn" disabled={!stream && !pending} onClick={stop}>
+              </Button>
+              <Button type="submit" disabled={!stream && !pending} onClick={stop}>
                 {pending ? 'Cancel capture request' : 'Stop and close capture'}
-              </button>
+              </Button>
             </div>
             <p role="status">
               {pending
@@ -218,20 +220,20 @@ export function OverlaySetup({
                   ? `${label} is showing. Stop capture here or with your browser’s sharing control.`
                   : 'No local capture is running.'}
             </p>
-          </details>
+          </Disclosure>
           <div className="overlay-setup-actions">
-            <button className="btn" onClick={() => void fullscreen()}>
+            <Button type="submit" onClick={() => void fullscreen()}>
               Fullscreen display
-            </button>
-            <button
-              className="btn"
+            </Button>
+            <Button
+              type="submit"
               onClick={() => {
                 setShowButton(false);
                 setOpen(false);
               }}
             >
               Hide setup button
-            </button>
+            </Button>
           </div>
           <p className="overlay-setup-hint">
             Press S to reopen setup. Add <code>controls=0</code> to the URL to hide its button on
@@ -242,7 +244,7 @@ export function OverlaySetup({
               {error}
             </p>
           )}
-        </section>
+        </Dialog>
       )}
     </>
   );

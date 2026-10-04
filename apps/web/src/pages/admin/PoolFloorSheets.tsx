@@ -1,5 +1,7 @@
+import { Dialog } from '../../components/ui/Dialog';
+import { Button } from '../../components/ui/Button';
+import { Checkbox } from '../../components/ui/Checkbox';
 import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import QRCode from 'qrcode';
 import { poolFloorSheets, type FloorSheetData } from '../../lib/poolFloorSheets';
 import './PoolFloorSheets.css';
@@ -15,8 +17,9 @@ export function PoolFloorSheets({ data }: { data: FloorSheetData }) {
   if (data.plan.bracketMode !== 'native' || !data.poolRounds?.length) return null;
   return (
     <div className="floor-sheet-launch">
-      <button
-        className="btn btn-small"
+      <Button
+        size="small"
+        type="submit"
         ref={trigger}
         onClick={() =>
           setPreview({
@@ -27,21 +30,19 @@ export function PoolFloorSheets({ data }: { data: FloorSheetData }) {
         }
       >
         Print pool sheets
-      </button>
+      </Button>
       <small>
         TO paper backup for pairings and scores. Station QR signs are printed separately.
       </small>
-      {preview &&
-        createPortal(
-          <PrintPreview
-            {...preview}
-            onClose={() => {
-              setPreview(null);
-              trigger.current?.focus();
-            }}
-          />,
-          document.body,
-        )}
+      {preview && (
+        <PrintPreview
+          {...preview}
+          onClose={() => {
+            setPreview(null);
+            trigger.current?.focus();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -59,9 +60,7 @@ function PrintPreview({
   const [selected, setSelected] = useState(sheets.map((sheet) => sheet.key));
   const [qrImages, setQrImages] = useState<Record<string, string>>({});
   const [qrReady, setQrReady] = useState(false);
-  const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
-    dialog.current?.showModal();
     document.body.classList.add('printing-pool-sheets');
     return () => document.body.classList.remove('printing-pool-sheets');
   }, []);
@@ -95,28 +94,26 @@ function PrintPreview({
     };
   }, [sheets]);
   return (
-    <dialog
+    <Dialog
+      title="Print pool sheets"
       className="floor-sheet-dialog"
-      ref={dialog}
-      aria-label="Print pool sheets"
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
+      print
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
       }}
     >
       <div className="floor-sheet-toolbar">
-        <h2>Print pool sheets</h2>
         <p>This preview is frozen at {capturedAt}. Close and reopen it to capture changes.</p>
         <fieldset>
           <legend>Pools to print</legend>
           {sheets.map((sheet) => (
             <label key={sheet.key}>
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={selected.includes(sheet.key)}
-                onChange={(event) =>
+                onCheckedChange={(nextChecked) =>
                   setSelected(
-                    event.target.checked
+                    nextChecked
                       ? [...selected, sheet.key]
                       : selected.filter((key) => key !== sheet.key),
                   )
@@ -127,16 +124,17 @@ function PrintPreview({
           ))}
         </fieldset>
         <p>Use A4 portrait. Turn off browser headers and footers for a clean print.</p>
-        <button
-          className="btn btn-primary"
+        <Button
+          variant="primary"
+          type="submit"
           disabled={!selected.length || !qrReady}
           onClick={() => window.print()}
         >
           {qrReady ? 'Print selected pools' : 'Preparing QR codes…'}
-        </button>
-        <button className="btn" onClick={onClose}>
+        </Button>
+        <Button type="submit" onClick={onClose}>
           Close preview
-        </button>
+        </Button>
       </div>
       <div className="floor-sheet-pages">
         {sheets
@@ -242,6 +240,6 @@ function PrintPreview({
             </article>
           ))}
       </div>
-    </dialog>
+    </Dialog>
   );
 }

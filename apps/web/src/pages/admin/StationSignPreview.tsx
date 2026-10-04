@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { Dialog } from '../../components/ui/Dialog';
+import { Checkbox } from '../../components/ui/Checkbox';
+import { Button } from '../../components/ui/Button';
+import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { guestInvitationUrl } from '../../lib/guestReporting';
 import './StationSignPreview.css';
@@ -19,14 +21,12 @@ export function StationSignPreview({
   token: string;
   onClose: () => void;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
   const [selected, setSelected] = useState(() => stations.map((station) => station.id));
   const [codes, setCodes] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    dialog.current?.showModal();
     document.body.classList.add('printing-station-signs');
     return () => document.body.classList.remove('printing-station-signs');
   }, []);
@@ -60,18 +60,17 @@ export function StationSignPreview({
     };
   }, [planId, stations, token]);
 
-  return createPortal(
-    <dialog
+  return (
+    <Dialog
+      title="Print station signs"
       className="station-sign-dialog"
-      ref={dialog}
-      aria-label="Print station signs"
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
+      print
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
       }}
     >
       <div className="station-sign-toolbar">
-        <h2>Print station signs</h2>
         <p>
           One A4 page per station. These QR codes remain valid until guest access is revoked,
           disabled, or switched back to rotating invitations.
@@ -80,12 +79,11 @@ export function StationSignPreview({
           <legend>Stations to print</legend>
           {stations.map((station) => (
             <label key={station.id}>
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={selected.includes(station.id)}
-                onChange={(event) =>
+                onCheckedChange={(nextChecked) =>
                   setSelected(
-                    event.target.checked
+                    nextChecked
                       ? [...selected, station.id]
                       : selected.filter((id) => id !== station.id),
                   )
@@ -96,16 +94,17 @@ export function StationSignPreview({
           ))}
         </fieldset>
         <p>Print at actual size on A4 portrait paper. Turn off browser headers and footers.</p>
-        <button
-          className="btn btn-primary"
+        <Button
+          variant="primary"
+          type="submit"
           disabled={!selected.length || !ready || Boolean(error)}
           onClick={() => window.print()}
         >
           {ready ? 'Print selected signs' : 'Preparing QR codes…'}
-        </button>
-        <button className="btn" onClick={onClose}>
+        </Button>
+        <Button type="submit" onClick={onClose}>
           Close preview
-        </button>
+        </Button>
         {error && <p role="alert">{error}</p>}
       </div>
       <div className="station-sign-pages">
@@ -138,7 +137,6 @@ export function StationSignPreview({
             </article>
           ))}
       </div>
-    </dialog>,
-    document.body,
+    </Dialog>
   );
 }

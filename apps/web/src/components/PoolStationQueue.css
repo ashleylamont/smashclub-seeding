@@ -150,12 +150,12 @@
   border-top: 1px solid var(--event-rule, var(--border));
   padding: 16px 0;
 }
-.pool-flow-round-group > summary {
+.pool-flow-round-group > .ui-disclosure-trigger {
   cursor: pointer;
   font-weight: 700;
   font-size: 15px;
 }
-.pool-flow-round-group > summary > span {
+.pool-flow-round-group .ui-disclosure-label > span {
   font-size: 10px;
   font-weight: 400;
   margin-left: 14px;
