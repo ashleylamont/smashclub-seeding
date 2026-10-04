@@ -1,12 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { playerRatings, ratingEvents, recomputes, sets, tournaments, type Db } from '@smashclub/db';
-import { LEAGUE_CATCH_ALL } from '@smashclub/shared';
+import * as engine from '@smashclub/engine';
+import { defaultRatingSettings, LEAGUE_CATCH_ALL } from '@smashclub/shared';
 import { importRegistryPlayers, registerTournamentSlugs } from '../src/bootstrap/importRegistry';
 import { syncTournament } from '../src/sync/sync';
-import { runRecompute } from '../src/recompute/recompute';
-import { compareModels } from '../src/recompute/compareModels';
-import { getGlickoSettings, updateGlickoSettings } from '../src/settings';
+import { ENGINE_VERSION, latestRecomputeId, runRecompute } from '../src/recompute/recompute';
+import { getRatingSettings, updateRatingSettings } from '../src/settings';
+import { appRouter } from '../src/trpc/router';
+import { loadEnv } from '../src/env';
+import { RecomputeTrigger } from '../src/recompute/trigger';
 import { createTestDb } from './helpers/testDb';
 import { fixtureClient, type FixtureTournament } from './helpers/challongeFixtures';
 
@@ -60,6 +63,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await close();
 });
 
@@ -74,36 +78,45 @@ async function syncBoth(): Promise<void> {
   }
 }
 
-describe('parallel rating models', () => {
-  it('uses the same final-stage-only results for model comparison and both published models', async () => {
+function publicCaller() {
+  return appRouter.createCaller({
+    db,
+    user: null,
+    env: loadEnv({
+      NODE_ENV: 'test',
+      DATABASE_URL: 'postgres://unused',
+      BETTER_AUTH_SECRET: 'test-secret-test-secret-test',
+    }),
+    challonge: fixtureClient([]),
+    recomputeTrigger: new RecomputeTrigger(db, 60_000),
+  }).public;
+}
+
+describe('WHR-only recomputes', () => {
+  it('rates only eligible result stages', async () => {
     await syncBoth();
     await db.update(sets).set({ resultStage: 'group' }).where(eq(sets.challongeMatchId, 11));
     await db
       .update(tournaments)
       .set({ resultsMode: 'final_stage_only' })
       .where(eq(tournaments.challongeSlug, 'main1'));
-    expect((await compareModels(db)).sets).toBe(5);
     expect((await runRecompute(db)).sets).toBe(5);
-    const { glicko } = await getGlickoSettings(db);
-    await updateGlickoSettings(db, { ...glicko, activeModel: 'whr' });
     expect((await runRecompute(db)).sets).toBe(5);
   });
 
   it('records which model produced a recompute', async () => {
     await syncBoth();
     const first = await runRecompute(db);
-    expect(first.model).toBe('glicko2');
+    expect(first.model).toBe('whr');
     const [row] = await db
       .select({ model: recomputes.model })
       .from(recomputes)
       .where(eq(recomputes.id, first.recomputeId));
-    expect(row!.model).toBe('glicko2');
+    expect(row!.model).toBe('whr');
   });
 
-  it('runs the WHR model when it is the active one and writes a full leaderboard', async () => {
+  it('runs WHR by default and writes a full leaderboard', async () => {
     await syncBoth();
-    const { glicko } = await getGlickoSettings(db);
-    await updateGlickoSettings(db, { ...glicko, activeModel: 'whr' });
 
     const run = await runRecompute(db);
     expect(run.model).toBe('whr');
@@ -127,8 +140,6 @@ describe('parallel rating models', () => {
 
   it('treats same-day brackets as one WHR rating period', async () => {
     await syncBoth();
-    const { glicko } = await getGlickoSettings(db);
-    await updateGlickoSettings(db, { ...glicko, activeModel: 'whr' });
     const run = await runRecompute(db);
 
     const events = await db
@@ -148,15 +159,10 @@ describe('parallel rating models', () => {
 
     for (const [, playerEvents] of byPlayer) {
       const ordered = [...playerEvents].sort((a, b) => a.seq - b.seq);
-      // Main and rookie brackets ran on the same date, so the whole day is one
-      // period: each set carries a share of the day's movement, the rows chain
-      // continuously across the bracket boundary, and the shares sum to the
-      // one number the fit assigns the player for the day.
-      for (let i = 1; i < ordered.length; i++) {
-        expect(ordered[i]!.preRating).toBeCloseTo(ordered[i - 1]!.postRating, 9);
+      for (const event of ordered) {
+        expect(event.preRating).toBe(ordered[0]!.preRating);
+        expect(event.postRating).toBe(ordered[0]!.postRating);
       }
-      const total = ordered.reduce((sum, e) => sum + (e.postRating - e.preRating), 0);
-      expect(total).toBeCloseTo(ordered[ordered.length - 1]!.postRating - ordered[0]!.preRating, 9);
       // One posterior per day: the day's end value carries the hindsight
       // estimate, identical on every row of the day.
       expect(new Set(ordered.map((e) => e.revisedRating)).size).toBe(1);
@@ -171,54 +177,167 @@ describe('parallel rating models', () => {
     expect(new Set(crossover!.map((e) => e.tournamentId)).size).toBe(2);
   });
 
-  it('compares both models without publishing either', async () => {
+  it('never reads old, failed or running runs as canonical', async () => {
     await syncBoth();
-    await runRecompute(db);
-    const before = await db.select({ id: recomputes.id }).from(recomputes);
-
-    const comparison = await compareModels(db);
-    expect(comparison.activeModel).toBe('glicko2');
-    expect(comparison.players).toBe(5);
-    expect(comparison.rows).toHaveLength(5);
-    for (const row of comparison.rows) {
-      expect(row.glicko).not.toBeNull();
-      expect(row.whr).not.toBeNull();
-      expect(row.rankDelta).not.toBeNull();
-    }
-    // Rows are ordered by biggest disagreement.
-    const magnitudes = comparison.rows.map((row) => Math.abs(row.rankDelta ?? 0));
-    expect([...magnitudes].sort((a, b) => b - a)).toEqual(magnitudes);
-
-    // Read-only: no new recompute was written.
-    const after = await db.select({ id: recomputes.id }).from(recomputes);
-    expect(after).toHaveLength(before.length);
+    const legacy = await db
+      .insert(recomputes)
+      .values({
+        status: 'complete',
+        model: 'glicko2',
+        engineVersion: '1.0.0',
+        settingsSnapshot: { glicko: { tau: 0.5 } },
+      })
+      .returning();
+    expect(await latestRecomputeId(db)).toBeNull();
+    expect(await publicCaller().leaderboard()).toMatchObject({ model: 'whr', rows: [] });
+    expect(await publicCaller().ratingHistory()).toEqual({ events: [], players: [] });
+    const completed = await runRecompute(db);
+    for (const status of ['running', 'failed'] as const)
+      await db
+        .insert(recomputes)
+        .values({ status, model: 'whr', engineVersion: ENGINE_VERSION, settingsSnapshot: {} });
+    await db.insert(recomputes).values({
+      status: 'complete',
+      model: 'glicko2',
+      engineVersion: ENGINE_VERSION,
+      settingsSnapshot: {},
+    });
+    await db
+      .insert(recomputes)
+      .values({ status: 'complete', model: 'whr', engineVersion: '1.0.0', settingsSnapshot: {} });
+    expect(await latestRecomputeId(db)).toBe(completed.recomputeId);
+    expect((await db.select().from(recomputes).where(eq(recomputes.id, legacy[0]!.id)))[0]).toEqual(
+      legacy[0],
+    );
   });
 
-  it('round-trips calibrated league bands and the model choice through a settings save', async () => {
-    const { glicko } = await getGlickoSettings(db);
+  it('completes an empty WHR run with no fallback', async () => {
+    const run = await runRecompute(db);
+    expect(run).toMatchObject({ model: 'whr', players: 0, sets: 0, events: 0 });
+    expect(await latestRecomputeId(db)).toBe(run.recomputeId);
+  });
+
+  it('excludes imported forfeits and byes even after a manual inclusion override', async () => {
+    await syncBoth();
+    await db
+      .update(sets)
+      .set({ scoresCsv: '-1-0', excludedFromRatings: false, exclusionManual: true })
+      .where(eq(sets.challongeMatchId, 11));
+    await db
+      .update(sets)
+      .set({ scoresCsv: '99-0', excludedFromRatings: false })
+      .where(eq(sets.challongeMatchId, 12));
+    await db
+      .update(sets)
+      .set({
+        scoresCsv: null,
+        raw: { provider: 'native', outcome: 'forfeit' },
+        excludedFromRatings: false,
+      })
+      .where(eq(sets.challongeMatchId, 13));
+    const run = await runRecompute(db);
+    expect(run.sets).toBe(3);
+    const events = await db
+      .select()
+      .from(ratingEvents)
+      .where(eq(ratingEvents.recomputeId, run.recomputeId));
+    expect(events).toHaveLength(6);
+  });
+
+  it('keeps the prior canonical run on nonconvergence and exposes manual failure', async () => {
+    await syncBoth();
+    const completed = await runRecompute(db);
+    const empty = engine.runWhrModel({
+      sets: [],
+      tournaments: [],
+      settings: defaultRatingSettings,
+    });
+    const fit = vi.spyOn(engine, 'runWhrModel').mockReturnValueOnce({
+      ...empty,
+      converged: false,
+      iterations: 100,
+    });
+    const reportError = vi.fn();
+    const trigger = new RecomputeTrigger(db, 60_000, reportError);
+    await expect(trigger.runNow()).rejects.toThrow('WHR did not converge');
+    expect(reportError).toHaveBeenCalledOnce();
+    expect(await latestRecomputeId(db)).toBe(completed.recomputeId);
+    const failed = (await db.select().from(recomputes).where(eq(recomputes.status, 'failed')))[0]!;
+    expect(
+      await db.select().from(ratingEvents).where(eq(ratingEvents.recomputeId, failed.id)),
+    ).toEqual([]);
+    expect(
+      await db.select().from(playerRatings).where(eq(playerRatings.recomputeId, failed.id)),
+    ).toEqual([]);
+    // A later chunk can fail after an earlier chunk inserted successfully.
+    const [source] = await db
+      .select()
+      .from(ratingEvents)
+      .where(eq(ratingEvents.recomputeId, completed.recomputeId));
+    const event = {
+      ...source!,
+      opponentId: source!.opponentPlayerId,
+      revisedRating: source!.revisedRating ?? undefined,
+      revisedSd: source!.revisedSd ?? undefined,
+    };
+    const events = Array.from({ length: 501 }, (_, seq) => ({ ...event, seq }));
+    events[500]!.setId = '00000000-0000-0000-0000-000000000001';
+    fit.mockReturnValueOnce({ ...empty, events });
+    await expect(runRecompute(db)).rejects.toThrow(/Failed query/);
+    expect(await latestRecomputeId(db)).toBe(completed.recomputeId);
+    const runs = await db.select().from(recomputes).where(eq(recomputes.status, 'failed'));
+    for (const row of runs) {
+      expect(
+        await db.select().from(ratingEvents).where(eq(ratingEvents.recomputeId, row.id)),
+      ).toEqual([]);
+      expect(
+        await db.select().from(playerRatings).where(eq(playerRatings.recomputeId, row.id)),
+      ).toEqual([]);
+    }
+  });
+
+  it('records effective calibrated settings in the completed snapshot', async () => {
+    const expanded: FixtureTournament = {
+      ...main,
+      participants: [...main.participants],
+      matches: [...main.matches],
+    };
+    for (let i = 4; i <= 8; i++) {
+      await importRegistryPlayers(db, [
+        { id: `new-${i}`, canonical_name: `New Player ${i}`, company: 'ATL' },
+      ]);
+      expanded.participants.push({ id: i, name: `[ATL] New Player ${i}` });
+      expanded.matches.push({ id: 20 + i, p1: 1, p2: i, winner: 1, order: 20 + i });
+    }
+    const [t] = await db.select().from(tournaments).where(eq(tournaments.challongeSlug, 'main1'));
+    await syncTournament(db, fixtureClient([expanded]), t!.id);
+    const run = await runRecompute(db);
+    const current = await getRatingSettings(db);
+    const [saved] = await db.select().from(recomputes).where(eq(recomputes.id, run.recomputeId));
+    expect(current.rating.leagueBandsCalibrated).toBe(true);
+    expect(current.rating.leagueBandBasis).toBe('club');
+    expect(saved!.settingsSnapshot).toEqual(current);
+  });
+
+  it('round-trips calibrated league bands and WHR configuration through a settings save', async () => {
+    const { rating } = await getRatingSettings(db);
     const bands = [
       { name: 'Top', minRating: 1700 },
       { name: 'Middle', minRating: 1500 },
       { name: 'Rest', minRating: LEAGUE_CATCH_ALL },
     ];
-    await updateGlickoSettings(db, {
-      ...glicko,
-      activeModel: 'whr',
+    await updateRatingSettings(db, {
+      ...rating,
       leagueBands: bands,
       leagueBandsCalibrated: true,
     });
 
-    // Changing one tuning parameter must not revert the bands to the shipped
-    // defaults or the model to Glicko-2. Anything that saves settings has to send
-    // the whole object; a payload built from a subset of fields silently resets
-    // every setting it omits, because the schema fills those with defaults.
-    const saved = await getGlickoSettings(db);
-    await updateGlickoSettings(db, { ...saved.glicko, tau: 0.6 });
+    const saved = await getRatingSettings(db);
+    await updateRatingSettings(db, { ...saved.rating, whrGamesWeight: 0.6 });
 
-    const after = await getGlickoSettings(db);
-    expect(after.glicko.tau).toBe(0.6);
-    expect(after.glicko.activeModel).toBe('whr');
-    expect(after.glicko.leagueBandsCalibrated).toBe(true);
-    expect(after.glicko.leagueBands).toEqual(bands);
+    const after = await getRatingSettings(db);
+    expect(after.rating.whrGamesWeight).toBe(0.6);
+    expect(after.rating.leagueBandsCalibrated).toBe(true);
+    expect(after.rating.leagueBands).toEqual(bands);
   });
 });

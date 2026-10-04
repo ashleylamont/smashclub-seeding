@@ -16,12 +16,13 @@
 import { readFileSync } from 'node:fs';
 import {
   runWhrModel,
+  isPlayedSet,
   whrModel,
   type EngineSet,
   type EngineTournament,
   type EvalSet,
 } from '@smashclub/engine';
-import { defaultGlickoSettings } from '@smashclub/shared';
+import { defaultRatingSettings } from '@smashclub/shared';
 
 const inputPath = process.argv[2];
 if (!inputPath)
@@ -39,7 +40,7 @@ const rookieById = new Map(payload.tournaments.map((t) => [t.id, t.isRookie]));
 // ---- 1. cross-bracket walk-forward ----
 
 const origin = Math.min(...payload.tournaments.map((t) => Date.parse(t.eventDate)));
-const evalSets: EvalSet[] = payload.sets.map((set) => ({
+const evalSets: EvalSet[] = payload.sets.filter(isPlayedSet).map((set) => ({
   p1PlayerId: set.p1PlayerId,
   p2PlayerId: set.p2PlayerId,
   winner: set.winner,
@@ -131,11 +132,11 @@ for (const t of tallies) {
 // ---- 2. board diff ----
 
 const engineInput = { sets: payload.sets, tournaments: payload.tournaments };
-const before = runWhrModel({ ...engineInput, settings: defaultGlickoSettings });
+const before = runWhrModel({ ...engineInput, settings: defaultRatingSettings });
 const after = runWhrModel({
   ...engineInput,
   settings: {
-    ...defaultGlickoSettings,
+    ...defaultRatingSettings,
     whrRookieDebutPrior: rookieDebutPrior,
     whrIsolationAnchor: true,
   },

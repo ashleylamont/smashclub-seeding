@@ -17,15 +17,11 @@ export interface PlayerEventView {
   seq: number;
   isDecay: boolean;
   won: boolean | null;
-  preRating: number;
   postRating: number;
-  preRd: number;
   postRd: number;
   weight: number;
   /**
-   * WHR only, null under Glicko: the current fit's hindsight estimate of
-   * skill at this night, revised as later results arrive. `pre`/`post` above
-   * are the frozen ledger of what the board published at the time.
+   * Current fit estimate at this night, revised as later results arrive.
    */
   revisedRating: number | null;
   revisedSd: number | null;
@@ -99,9 +95,7 @@ export type RosterPreviewRow = Awaited<
   ReturnType<typeof trpc.admin.eventPlanner.previewRoster.mutate>
 >[number];
 export type SettingsData = Awaited<ReturnType<typeof trpc.admin.settings.query>>;
-export type GlickoSettings = SettingsData['glicko'];
-export type ModelComparison = Awaited<ReturnType<typeof trpc.admin.compareModels.query>>;
-export type ModelComparisonRow = ModelComparison['rows'][number];
+export type RatingSettings = SettingsData['rating'];
 
 /** Shape of review-item candidates (stored as untyped JSON server-side). */
 export interface ReviewCandidate {

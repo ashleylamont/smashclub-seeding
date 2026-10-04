@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { eventKeyOf } from '../src/events';
 
 /**
- * One definition of "same occasion", used by both the Glicko replay (for decay
- * periods) and the WHR run (for rating periods). They previously derived it
+ * One definition of "same occasion", used by WHR rating periods and club participation policy. They previously derived it
  * separately, so this is the guard against them drifting apart again.
  */
 describe('eventKeyOf', () => {

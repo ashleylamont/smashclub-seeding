@@ -7,6 +7,7 @@ import { buildApp } from './app';
 import { createAuth } from './auth';
 import { ChallongeClient } from './challonge/client';
 import { loadEnv } from './env';
+import { latestRecomputeId } from './recompute/recompute';
 import { RecomputeTrigger } from './recompute/trigger';
 import { acquireSchedulerLock, SyncScheduler } from './scheduler';
 
@@ -25,6 +26,8 @@ async function main(): Promise<void> {
     username: env.CHALLONGE_USERNAME,
   });
   const recomputeTrigger = new RecomputeTrigger(db);
+  // After migration, publish a current WHR run before exposing canonical ratings.
+  if (!(await latestRecomputeId(db))) recomputeTrigger.request();
 
   const app = await buildApp({ db, env, auth, challonge, recomputeTrigger });
 

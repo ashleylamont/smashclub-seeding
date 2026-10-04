@@ -155,6 +155,13 @@
       "when": 1790560000000,
       "tag": "0021_reopen_unplayed_pool_draws",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1791093580576,
+      "tag": "0022_whr_only_ratings",
+      "breakpoints": true
     }
   ]
 }

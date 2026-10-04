@@ -203,7 +203,7 @@ describe('review resolution -> recompute', () => {
     expect(item!.resolvedPlayerId).not.toBeNull();
   });
 
-  it('prunes old recomputes, keeping the most recent five', async () => {
+  it('retains recomputes for immutable provenance', async () => {
     await syncOnce();
     const [queueItem] = await db
       .select()
@@ -215,11 +215,11 @@ describe('review resolution -> recompute', () => {
       await runRecompute(db);
     }
     const remaining = await db.select().from(recomputes);
-    expect(remaining.length).toBeLessThanOrEqual(5);
+    expect(remaining).toHaveLength(7);
     expect(await latestRecomputeId(db)).not.toBeNull();
   });
 
-  it('rating math in the DB matches a direct engine replay', async () => {
+  it('rating math in the DB matches a direct WHR fit', async () => {
     await syncOnce();
     const [queueItem] = await db
       .select()
@@ -228,11 +228,11 @@ describe('review resolution -> recompute', () => {
     await resolveReviewItem(db, queueItem!.id, { kind: 'created_new' }, null);
     const { recomputeId } = await runRecompute(db);
 
-    const { replayRatings, computeLeaderboard } = await import('@smashclub/engine');
-    const { defaultGlickoSettings } = await import('@smashclub/shared');
+    const { runWhrModel } = await import('@smashclub/engine');
+    const { defaultRatingSettings } = await import('@smashclub/shared');
     const setRows = await db.select().from(sets);
     const [tournament] = await db.select().from(tournaments);
-    const replay = replayRatings({
+    const run = runWhrModel({
       sets: setRows.map((row) => ({
         id: row.id,
         tournamentId: row.tournamentId,
@@ -251,9 +251,9 @@ describe('review resolution -> recompute', () => {
           challongeId: tournament!.challongeId,
         },
       ],
-      settings: defaultGlickoSettings,
+      settings: defaultRatingSettings,
     });
-    const expected = computeLeaderboard(replay.finalStates, defaultGlickoSettings);
+    const expected = run.leaderboard;
 
     const stored = await db
       .select()

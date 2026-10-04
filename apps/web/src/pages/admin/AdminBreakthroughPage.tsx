@@ -205,8 +205,8 @@ function Evidence({ data, options }: { data: BreakthroughData; options: Breakthr
         {data.coverage.played} played sets ·{' '}
         {rows.filter(({ summary }) => summary.meetsCriteria).length} players meet criteria
         {' · '}
-        {data.model === 'whr' ? 'Whole-history rating' : 'Glicko-2'} · Checked{' '}
-        {dateTime(data.checkedAt)}. Refreshes every 15 seconds while open.
+        Whole-history rating · Checked {dateTime(data.checkedAt)}. Refreshes every 15 seconds while
+        open.
       </p>
       {!data.complete && (
         <p className="breakthrough-notice">

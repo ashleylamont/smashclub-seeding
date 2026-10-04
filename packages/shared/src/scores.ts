@@ -52,3 +52,22 @@ export function scoresIndicateBye(scoresCsv: string | null | undefined): boolean
 export function scoresIndicateUnplayed(scoresCsv: string | null | undefined): boolean {
   return scoresIndicateForfeit(scoresCsv) || scoresIndicateBye(scoresCsv);
 }
+
+/** Stored outcomes and imported score sentinels both exclude unplayed rating input. */
+export function isPlayedRatingResult(scoresCsv: string | null | undefined, raw?: unknown): boolean {
+  if (scoresIndicateUnplayed(scoresCsv)) return false;
+  if (raw && typeof raw === 'object' && 'outcome' in raw) {
+    return raw.outcome !== 'forfeit' && raw.outcome !== 'bye';
+  }
+  return true;
+}
+
+/** Game-count sentinel check for callers with resolved scores rather than CSV. */
+export function gamesIndicateUnplayed(
+  p1Games: number | null | undefined,
+  p2Games: number | null | undefined,
+): boolean {
+  return [p1Games, p2Games].some(
+    (games) => games != null && (games < 0 || games > MAX_PLAUSIBLE_GAMES),
+  );
+}

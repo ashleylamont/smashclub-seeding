@@ -1,8 +1,6 @@
-export * from './glicko2';
 export * from './types';
 export * from './events';
 export * from './setOrder';
-export * from './replay';
 export * from './score';
 export * from './recap';
 export * from './breakthrough';
@@ -15,3 +13,4 @@ export * from './identity/clean';
 export * from './identity/similarity';
 export * from './identity/alias';
 export * from './challonge/extract';
+export * from './results';

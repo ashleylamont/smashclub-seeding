@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { scoresIndicateBye, scoresIndicateForfeit, scoresIndicateUnplayed } from '../src/scores';
+import {
+  isPlayedRatingResult,
+  scoresIndicateBye,
+  scoresIndicateForfeit,
+  scoresIndicateUnplayed,
+} from '../src/scores';
 
 /**
  * Which `scores_csv` values describe a set someone actually played. Three
@@ -43,5 +48,18 @@ describe('scoresIndicateUnplayed', () => {
     expect(scoresIndicateUnplayed('-1-0')).toBe(true);
     expect(scoresIndicateUnplayed('99-0')).toBe(true);
     expect(scoresIndicateUnplayed('2-1')).toBe(false);
+  });
+});
+
+describe('played rating input', () => {
+  it('excludes explicit native outcomes even without a score sentinel', () => {
+    expect(isPlayedRatingResult(null, { provider: 'native', outcome: 'forfeit' })).toBe(false);
+    expect(isPlayedRatingResult(null, { outcome: 'bye' })).toBe(false);
+    expect(isPlayedRatingResult('3-0', { outcome: 'forfeit' })).toBe(false);
+  });
+  it('keeps unknown played scores and legitimate 5–0 results eligible', () => {
+    expect(isPlayedRatingResult(null, { outcome: 'played' })).toBe(true);
+    expect(isPlayedRatingResult('5-0')).toBe(true);
+    expect(isPlayedRatingResult('2-1')).toBe(true);
   });
 });

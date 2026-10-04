@@ -434,74 +434,35 @@ test.describe('admin', () => {
     await expect(reloaded.nth(1).getByRole('button', { name: expected })).toBeVisible();
   });
 
-  test('model comparison fits both models and publishes neither', async ({ page }) => {
+  test('WHR settings preserve club policy and recompute the board', async ({ page }) => {
     await signInAsAdmin(page.request);
-
-    const before = await (await page.request.get('/api/trpc/public.leaderboard')).json();
-    const modelBefore = (before.result?.data ?? before).model;
-
+    const settingsBeforeBody = await (await page.request.get('/api/trpc/admin.settings')).json();
+    const settingsBefore = settingsBeforeBody.result?.data ?? settingsBeforeBody;
+    const boardBeforeBody = await (await page.request.get('/api/trpc/public.leaderboard')).json();
+    const boardBefore = boardBeforeBody.result?.data ?? boardBeforeBody;
     await page.goto('/admin/settings');
     await settle(page);
-    await page.getByRole('button', { name: /Run comparison/i }).click();
-
-    const stats = page.locator('.comparison-stats');
-    await expect(stats).toBeVisible({ timeout: 120_000 });
-    await expect(stats).toContainText('Median rank move');
-    // Both models produced a rank for the rows shown.
-    await expect(page.locator('.model-comparison tbody tr').first()).toBeVisible();
-    const firstRow = await page.locator('.model-comparison tbody tr').first().innerText();
-    expect(firstRow).toMatch(/#\d+/);
-
-    // Read-only: the published model is untouched until the setting is saved.
-    const after = await (await page.request.get('/api/trpc/public.leaderboard')).json();
-    expect((after.result?.data ?? after).model).toBe(modelBefore);
-  });
-
-  test('switching the active model recomputes and republishes under that model', async ({
-    page,
-  }) => {
-    await signInAsAdmin(page.request);
-    await page.goto('/admin/settings');
-    await settle(page);
-
-    await page.locator('select.select').first().selectOption('whr');
+    await expect(page.getByText('Whole-History Rating (WHR)', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Run comparison/i })).toHaveCount(0);
     await page.getByRole('button', { name: /Save settings/i }).click();
     await expect(page.getByText(/recompute queued/i)).toBeVisible({ timeout: 60_000 });
-
-    // Poll the public read until the new model lands — the recompute is async.
+    const settingsAfterBody = await (await page.request.get('/api/trpc/admin.settings')).json();
+    const settingsAfter = settingsAfterBody.result?.data ?? settingsAfterBody;
+    expect(settingsAfter.rating).toEqual(settingsBefore.rating);
+    expect(settingsAfter.version).toBeGreaterThan(settingsBefore.version);
     await expect
       .poll(
         async () => {
           const body = await (await page.request.get('/api/trpc/public.leaderboard')).json();
-          const data = body.result?.data ?? body;
-          return data.rows.length > 0 ? data.model : null;
+          return (body.result?.data ?? body).computedAt;
         },
         { timeout: 120_000, intervals: [1000] },
       )
-      .toBe('whr');
-
+      .not.toBe(boardBefore.computedAt);
     await page.goto('/');
     await settle(page);
     await expect(page.locator('.hero-meta')).toContainText('whr');
-    // The board still ranks and still publishes a ± band under the other model.
     await expect(page.locator('.board-row .rating-band').first()).toContainText('±');
-
-    // Put it back, so this test does not decide what the next one sees.
-    await page.goto('/admin/settings');
-    await settle(page);
-    await page.locator('select.select').first().selectOption('glicko2');
-    await page.getByRole('button', { name: /Save settings/i }).click();
-    await expect(page.getByText(/recompute queued/i)).toBeVisible({ timeout: 60_000 });
-    await expect
-      .poll(
-        async () => {
-          const body = await (await page.request.get('/api/trpc/public.leaderboard')).json();
-          const data = body.result?.data ?? body;
-          return data.rows.length > 0 ? data.model : null;
-        },
-        { timeout: 120_000, intervals: [1000] },
-      )
-      .toBe('glicko2');
   });
 });
 

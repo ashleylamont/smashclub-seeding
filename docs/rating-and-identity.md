@@ -4,7 +4,7 @@
 
 Completed, eligible sets are the rating input. Challonge tournaments are synchronized with idempotent upserts keyed by their external IDs; native Nemesis results enter the same history when an organiser finalizes the event. A set needs resolved players and an event date, and byes, forfeits, excluded matches and ignored result stages do not affect ratings. **Admin → Tournaments** can choose **Auto** (include eligible group and final stages) or **Final stage only** for a Challonge tournament.
 
-Ratings are derived from the full eligible history. Each recompute writes `rating_events` and `player_ratings` under a new `recomputes` row, and readers use the latest completed recompute. The default active model is Glicko-2; an administrator can compare it with Whole-History Rating (WHR) and select the active model in settings. WHR refits history while preserving a per-night published ledger; see [WHR design](whr-design.md) for its treatment of retrospective estimates and per-set explanations.
+Ratings are derived from the full eligible history. Each recompute writes `rating_events` and `player_ratings` under a new `recomputes` row, and canonical readers use the latest completed current-engine WHR recompute. WHR is the sole supported model. Profiles show night estimates and retrospective revisions; match logs carry evidence weights without exact per-set rating deltas. See [WHR design](whr-design.md) and the [cutover guide](whr-only-migration.md).
 
 ## Board and seeds
 
@@ -14,7 +14,7 @@ This separates club attendance from uncertainty. Ranking directly on a conservat
 
 Automatic bracket seeding uses a conservative rating that accounts for uncertainty. Its order can therefore differ from the public board, especially for a newcomer or someone returning after a long break. The planner freezes a ranking snapshot before dividing an event, so later recomputes do not silently change its draw. The administrator can review seeds in the planner and seeding workbench.
 
-Uncertainty and attendance are separate: missing events can widen a rating's uncertainty, while the club's attendance policy is an explicit deduction. Glicko-2 retains the club's tuned per-set replay and match weighting; the older Python CLI remains in [`legacy/`](../legacy/) for reference, with corrected behavior in the TypeScript engine. Settings changes trigger a recompute. The model evaluation harness is available through `pnpm rank-eval`.
+Uncertainty and attendance are separate: missing events can widen a rating's uncertainty, while the club's attendance policy is an explicit deduction. WHR retains its fitted uncertainty, score-margin evidence weights and optional rookie display policy. The Python CLI in [`legacy/`](../legacy/) is an unsupported historical archive. Settings changes trigger a recompute. The model evaluation harness is available through `pnpm rank-eval`.
 
 ## Identity review
 

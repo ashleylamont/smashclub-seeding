@@ -16,7 +16,7 @@ import {
 } from '@smashclub/db';
 import type { Db } from '@smashclub/db';
 import { normalizeTournamentId } from '@smashclub/engine';
-import { glickoSettingsSchema } from '@smashclub/shared';
+import { ratingSettingsSchema } from '@smashclub/shared';
 import { recomputePendingCandidates } from '../../identity/candidates';
 import { ensureAlias } from '../../identity/matching';
 import {
@@ -25,7 +25,6 @@ import {
   setPlayerCharacters,
 } from '../../players/characters';
 import { mergePlayers } from '../../players/merge';
-import { compareModels } from '../../recompute/compareModels';
 import { loadBreakthrough } from '../../recap/breakthrough';
 import {
   RegistryValidationError,
@@ -41,7 +40,7 @@ import {
   reorderSeedingRun,
   setEntryLocked,
 } from '../../seeding/seeding';
-import { getGlickoSettings, updateGlickoSettings } from '../../settings';
+import { getRatingSettings, updateRatingSettings } from '../../settings';
 import { syncTournament } from '../../sync/sync';
 import { adminProcedure, router } from '../trpc';
 
@@ -843,10 +842,10 @@ export const adminRouter = router({
     }),
 
   // --- settings / recompute ---
-  settings: adminProcedure.query(async ({ ctx }) => getGlickoSettings(ctx.db)),
+  settings: adminProcedure.query(async ({ ctx }) => getRatingSettings(ctx.db)),
 
-  updateSettings: adminProcedure.input(glickoSettingsSchema).mutation(async ({ ctx, input }) => {
-    const version = await updateGlickoSettings(ctx.db, input);
+  updateSettings: adminProcedure.input(ratingSettingsSchema).mutation(async ({ ctx, input }) => {
+    const version = await updateRatingSettings(ctx.db, input);
     ctx.recomputeTrigger.request();
     return { version };
   }),
@@ -855,11 +854,4 @@ export const adminRouter = router({
     await ctx.recomputeTrigger.runNow();
     return { ok: true };
   }),
-
-  /**
-   * Side-by-side of what each rating model would publish. Read-only — switching
-   * the active model moves every member's number, so it should never be a blind
-   * setting change.
-   */
-  compareModels: adminProcedure.query(async ({ ctx }) => compareModels(ctx.db)),
 });

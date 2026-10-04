@@ -11,7 +11,7 @@ export interface EngineTournament {
    * tie-breakers below this determines rating order — it is a rating input.
    */
   eventDate: string;
-  /** Rookie brackets get down-weighted rating changes. */
+  /** Rookie bracket metadata for debut priors and participation policy. */
   isRookie: boolean;
   /** Used as a deterministic tie-breaker for tournaments on the same date. */
   challongeId?: number | null;
@@ -29,14 +29,11 @@ export interface EngineSet {
   completedAt?: string | null;
   /** Stable final tie-breaker. */
   challongeMatchId?: number | null;
-  /**
-   * Games won by each side, when the bracket recorded them. Currently a WHR
-   * input only — a 3-0 carries more evidence than a 3-2 — and ignored by the
-   * Glicko replay, whose update has no slot for a margin. Null/undefined means
-   * the scoreline is unknown (or a forfeit), which rates as a plain set.
-   */
+  /** Games won by each side for WHR evidence weighting; absent means unknown. */
   p1Games?: number | null;
   p2Games?: number | null;
+  /** Unplayed outcomes can advance a bracket but never enter a rating fit. */
+  outcome?: 'played' | 'forfeit' | 'bye';
 }
 
 export interface RatingEvent {
@@ -50,66 +47,17 @@ export interface RatingEvent {
   /** Null for decay events. */
   won: boolean | null;
   opponentId: string | null;
+  /** Pre-night estimate, repeated on each set; never a sequential set delta. */
   preRating: number;
+  /** Post-night prefix estimate, repeated on each set. */
   postRating: number;
   preRd: number;
   postRd: number;
   preVol: number;
   postVol: number;
-  /** Effective rating-change weight applied to this set (1 for decay events). */
+  /** WHR evidence weight for this played set. */
   weight: number;
-  /**
-   * Present under WHR only: the *current* full-history fit's estimate of the
-   * player's skill at this event's time. `pre`/`post` above are the ledger —
-   * what the board published as of that night, frozen thereafter — while this
-   * pair is hindsight, and moves as later results teach us more about the
-   * past. Surfacing both is what makes WHR's revision of history an explained
-   * feature rather than silent drift. Absent for Glicko, which never revises.
-   */
+  /** Current full-history estimate at this night; may revise with later evidence. */
   revisedRating?: number;
   revisedSd?: number;
-}
-
-export interface PlayerFinalState {
-  playerId: string;
-  rating: number;
-  rd: number;
-  vol: number;
-  matchCount: number;
-  wins: number;
-  losses: number;
-  mainMatchCount: number;
-  rookieMatchCount: number;
-  /**
-   * Dense chronological index of the last event *day* played. Decay counts
-   * missed days rather than missed brackets, because the club runs a main and a
-   * rookie bracket on one evening and a player can only attend one of them.
-   */
-  lastPeriodIndex: number;
-  /** ISO date of the player's most recent set. */
-  lastPlayedDate: string;
-  /**
-   * Consecutive club events missed since the player's last appearance. What the
-   * board's activity penalty is charged on.
-   */
-  missedEvents: number;
-  /** Unbroken run of events attended up to the club's latest; 0 once broken. */
-  attendanceStreak: number;
-  /** Brackets entered. */
-  tournamentIds: Set<string>;
-  /**
-   * Events (occasions) attended. Smaller than `tournamentIds` for anyone who
-   * played both the main and the rookie bracket on one evening.
-   */
-  eventKeys: Set<string>;
-  opponentIds: Set<string>;
-}
-
-export interface ReplayResult {
-  events: RatingEvent[];
-  finalStates: Map<string, PlayerFinalState>;
-  /** Tournament ID -> dense chronological bracket index, used for set ordering. */
-  tournamentSequences: Map<string, number>;
-  /** Tournament ID -> dense event-day index, used for decay counting. */
-  decayPeriods: Map<string, number>;
 }
