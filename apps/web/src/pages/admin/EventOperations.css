@@ -222,7 +222,7 @@
 .ops-match-actions {
   flex-wrap: wrap;
 }
-.ops-external-handoff > summary {
+.ops-external-handoff > .ui-disclosure-trigger {
   padding: var(--s4);
   cursor: pointer;
   border: 1px solid var(--border);
@@ -319,7 +319,7 @@
   padding: 18px;
   border: 1px solid var(--border);
 }
-.ops-pool-setup summary {
+.ops-pool-setup .ui-disclosure-trigger {
   cursor: pointer;
   font-weight: 700;
 }
@@ -395,14 +395,14 @@
   gap: var(--s2);
   max-width: 28rem;
 }
-.ops-pool-settings > summary {
+.ops-pool-settings > .ui-disclosure-trigger {
   font-family: var(--display);
   color: var(--text-h);
   font-size: var(--fs-lg);
   cursor: pointer;
   padding-block: var(--s2);
 }
-.ops-pool-settings[open] > summary {
+.ops-pool-settings[data-state='open'] > .ui-disclosure-trigger {
   margin-bottom: var(--s3);
 }
 .ops-heading h2 {

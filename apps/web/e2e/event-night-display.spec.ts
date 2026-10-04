@@ -1,3 +1,4 @@
+import { chooseOption } from '../test-support/controls';
 import { expect, test } from '@playwright/test';
 
 test('public night board and user-initiated overlay capture controls', async ({
@@ -64,10 +65,10 @@ test('public night board and user-initiated overlay capture controls', async ({
   ).toEqual([]);
   await expect(page.getByRole('button', { name: 'Display setup' })).toHaveCount(0);
   await page.keyboard.press('s');
-  const controls = page.getByRole('region', { name: 'Overlay display setup' });
+  const controls = page.getByRole('dialog', { name: 'Display setup' });
   await expect(controls).toBeVisible();
   await expect(controls).toContainText('above');
-  await controls.getByLabel('Current match station').selectOption({ label: 'Setup 2' });
+  await chooseOption(controls.getByLabel('Current match station'), { label: 'Setup 2' });
   expect(new URL(page.url()).searchParams.get('station')).toBeTruthy();
   await expect(page.locator('.broadcast-topline')).toContainText('Setup 2');
   await controls.getByText('Show video directly in this browser', { exact: true }).click();

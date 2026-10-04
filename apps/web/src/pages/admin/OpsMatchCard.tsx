@@ -1,3 +1,5 @@
+import { useConfirmation } from '../../lib/confirmation';
+import { Select, SelectItem } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
 import { useState } from 'react';
 import { trpc } from '../../lib/trpc';
@@ -20,6 +22,7 @@ export function MatchCard({
   native: boolean;
   act: Action;
 }) {
+  const confirmAction = useConfirmation();
   const [editing, setEditing] = useState<'live' | 'final' | null>(null);
   const [revision, setRevision] = useState(match.revision);
   const [score1, setScore1] = useState(match.score1 ?? 0);
@@ -86,12 +89,11 @@ export function MatchCard({
         )}
       <label className="ops-station">
         Station
-        <select
-          className="select"
+        <Select
           aria-label={`Station for ${match.label}`}
           value={match.stationId ?? ''}
           disabled={disabled || match.status === 'complete'}
-          onChange={(event) =>
+          onValueChange={(selectedValue) =>
             void act(() =>
               trpc.eventOps.updateMatch.mutate({
                 matchId: match.id,
@@ -102,25 +104,25 @@ export function MatchCard({
                     : match.status === 'blocked'
                       ? 'blocked'
                       : 'ready',
-                stationId: event.target.value || null,
+                stationId: selectedValue || null,
                 ...(match.blockedReason ? { blockedReason: match.blockedReason } : {}),
               }),
             )
           }
         >
-          <option value="">Choose a free station</option>
+          <SelectItem value="">Choose a free station</SelectItem>
           {match.stationId && !eligible.some((station) => station.id === match.stationId) && (
-            <option value={match.stationId} disabled>
+            <SelectItem value={match.stationId} disabled>
               {stations.find((station) => station.id === match.stationId)?.name ?? 'Station'} —
               unavailable
-            </option>
+            </SelectItem>
           )}
           {eligible.map((station) => (
-            <option key={station.id} value={station.id}>
+            <SelectItem key={station.id} value={station.id}>
               {station.name}
-            </option>
+            </SelectItem>
           ))}
-        </select>
+        </Select>
       </label>
       <div className="ops-match-actions">
         {match.status !== 'complete' && (
@@ -154,9 +156,9 @@ export function MatchCard({
             <Button
               size="small"
               disabled={disabled}
-              onClick={() => {
+              onClick={async () => {
                 if (
-                  window.confirm(
+                  await confirmAction(
                     `Confirm that this match is now ${match.player1Name} vs ${match.player2Name}? It will return to the queue with its previous live score cleared.`,
                   )
                 )
@@ -244,27 +246,25 @@ export function MatchCard({
             <>
               <label>
                 Result type
-                <select
-                  className="select"
+                <Select
                   value={outcome}
-                  onChange={(event) => {
-                    setOutcome(event.target.value as typeof outcome);
+                  onValueChange={(selectedValue) => {
+                    setOutcome(selectedValue as typeof outcome);
                     setRequestId(crypto.randomUUID());
                   }}
                 >
-                  <option value="played">Played match</option>
-                  <option value="forfeit">Forfeit</option>
-                  <option value="bye">Bye</option>
-                </select>
+                  <SelectItem value="played">Played match</SelectItem>
+                  <SelectItem value="forfeit">Forfeit</SelectItem>
+                  <SelectItem value="bye">Bye</SelectItem>
+                </Select>
               </label>
               {outcome !== 'played' && (
                 <label>
                   Winner
-                  <select
-                    className="select"
+                  <Select
                     value={winnerId}
-                    onChange={(event) => {
-                      setWinnerId(event.target.value);
+                    onValueChange={(selectedValue) => {
+                      setWinnerId(selectedValue);
                       setRequestId(crypto.randomUUID());
                     }}
                   >
@@ -274,11 +274,11 @@ export function MatchCard({
                     ]
                       .filter((player) => player.id)
                       .map((player) => (
-                        <option key={player.id!} value={player.id!}>
+                        <SelectItem key={player.id!} value={player.id!}>
                           {player.name}
-                        </option>
+                        </SelectItem>
                       ))}
-                  </select>
+                  </Select>
                 </label>
               )}
             </>

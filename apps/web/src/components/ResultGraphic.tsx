@@ -1,3 +1,4 @@
+import { Button } from './ui/Button';
 import { resultsSvg, type GraphicResult } from '../lib/resultGraphic';
 export function ResultGraphic({
   title,
@@ -18,8 +19,8 @@ export function ResultGraphic({
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   return (
-    <button type="button" className="btn" onClick={download}>
+    <Button type="button" onClick={download}>
       Download results graphic ↓
-    </button>
+    </Button>
   );
 }

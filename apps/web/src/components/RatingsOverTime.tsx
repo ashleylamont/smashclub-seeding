@@ -1,3 +1,6 @@
+import { Select, SelectItem } from './ui/Select';
+import { Input } from './ui/Input';
+import { Button } from './ui/Button';
 import { useCallback, useMemo, useState } from 'react';
 import {
   CartesianGrid,
@@ -192,32 +195,26 @@ export function RatingsOverTime({ history, tournamentNames }: RatingsOverTimePro
       <div className="chart-controls">
         <label className="chart-control">
           <span className="control-label">Granularity</span>
-          <select
-            className="select"
+          <Select
             value={granularity}
-            onChange={(e) => setGranularity(e.target.value as Granularity)}
+            onValueChange={(selectedValue) => setGranularity(selectedValue as Granularity)}
           >
-            <option value="tournament">Per tournament</option>
-            <option value="event">Per rating event</option>
-          </select>
+            <SelectItem value="tournament">Per tournament</SelectItem>
+            <SelectItem value="event">Per rating event</SelectItem>
+          </Select>
         </label>
         <label className="chart-control">
           <span className="control-label">Y-axis</span>
-          <select
-            className="select"
-            value={yMode}
-            onChange={(e) => setYMode(e.target.value as YMode)}
-          >
-            <option value="rating">Skill estimate</option>
+          <Select value={yMode} onValueChange={(selectedValue) => setYMode(selectedValue as YMode)}>
+            <SelectItem value="rating">Skill estimate</SelectItem>
             {/* The seeding basis, not the board's — labelled as such so the
                 chart is not read as disagreeing with the rankings. */}
-            <option value="cautious">Seeding basis (rating − 2×RD)</option>
-          </select>
+            <SelectItem value="cautious">Seeding basis (rating − 2×RD)</SelectItem>
+          </Select>
         </label>
         <label className="chart-control chart-control-search">
           <span className="control-label">Add player</span>
-          <input
-            className="input"
+          <Input
             type="search"
             placeholder={full ? `${MAX_SERIES} selected — remove one first` : 'Search by name…'}
             value={search}
@@ -231,9 +228,9 @@ export function RatingsOverTime({ history, tournamentNames }: RatingsOverTimePro
         <ul className="chart-search-results">
           {searchResults.map((player) => (
             <li key={player.playerId}>
-              <button
+              <Button
+                size="small"
                 type="button"
-                className="btn btn-small"
                 disabled={selectedIds.has(player.playerId)}
                 onClick={() => {
                   toggle(player.playerId);
@@ -242,7 +239,7 @@ export function RatingsOverTime({ history, tournamentNames }: RatingsOverTimePro
               >
                 {selectedIds.has(player.playerId) ? '✓ ' : '+ '}
                 {player.name}
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
@@ -252,7 +249,8 @@ export function RatingsOverTime({ history, tournamentNames }: RatingsOverTimePro
       <ul className="chart-legend">
         {selected.map(({ playerId, slot }) => (
           <li key={playerId}>
-            <button
+            <Button
+              variant="plain"
               type="button"
               className="legend-item"
               onClick={() => toggle(playerId)}
@@ -273,7 +271,7 @@ export function RatingsOverTime({ history, tournamentNames }: RatingsOverTimePro
               <span className="legend-remove" aria-hidden="true">
                 ×
               </span>
-            </button>
+            </Button>
           </li>
         ))}
         {selected.length === 0 && <li className="muted">Search above to add a player.</li>}

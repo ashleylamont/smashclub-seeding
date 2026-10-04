@@ -1,3 +1,4 @@
+import { chooseOption } from '../test-support/controls';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 
 async function query<T>(request: APIRequestContext, procedure: string, input?: object): Promise<T> {
@@ -59,11 +60,12 @@ test('adopt a completed night with changed attendance, without rewriting the pla
   await page.goto(`/admin/event-planner?plan=${plan.id}`);
   await page.getByRole('button', { name: 'Choose historical brackets', exact: true }).click();
   for (const choice of selections) {
-    await page
-      .getByLabel(`${choice.division === 'upper' ? 'Upper' : 'Lower'} ${choice.stage}`, {
+    await chooseOption(
+      page.getByLabel(`${choice.division === 'upper' ? 'Upper' : 'Lower'} ${choice.stage}`, {
         exact: true,
-      })
-      .selectOption(choice.tournamentId);
+      }),
+      choice.tournamentId,
+    );
   }
   await page.getByRole('button', { name: 'Preview historical adoption', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Review the event as played' })).toBeVisible();
@@ -82,16 +84,15 @@ test('adopt a completed night with changed attendance, without rewriting the pla
     ),
   ).toHaveLength(2);
   // A changed selection invalidates the reviewed preview immediately.
-  await page.getByLabel('Upper consolation', { exact: true }).selectOption('');
+  await chooseOption(page.getByLabel('Upper consolation', { exact: true }), '');
   await expect(
     page.getByRole('button', { name: 'Adopt these historical results', exact: true }),
   ).toHaveCount(0);
-  await page
-    .getByLabel('Upper consolation', { exact: true })
-    .selectOption(
-      selections.find((choice) => choice.division === 'upper' && choice.stage === 'consolation')!
-        .tournamentId,
-    );
+  await chooseOption(
+    page.getByLabel('Upper consolation', { exact: true }),
+    selections.find((choice) => choice.division === 'upper' && choice.stage === 'consolation')!
+      .tournamentId,
+  );
   await page.getByRole('button', { name: 'Preview historical adoption', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Adopt these historical results', exact: true }),

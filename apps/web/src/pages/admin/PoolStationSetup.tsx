@@ -1,3 +1,7 @@
+import { Disclosure } from '../../components/ui/Disclosure';
+import { Checkbox } from '../../components/ui/Checkbox';
+import { Select, SelectItem } from '../../components/ui/Select';
+import { Button } from '../../components/ui/Button';
 import { useState } from 'react';
 import { trpc } from '../../lib/trpc';
 import { poolStandings } from '../../lib/eventQueue';
@@ -42,8 +46,7 @@ export function PoolStationSetup({
       .join(' + ');
   return (
     <div className="ops-pool-setup">
-      <details>
-        <summary>Divide stations between pools</summary>
+      <Disclosure title="Divide stations between pools">
         {data.settings.scoreReportingMode === 'approve_unless_disputed' && (
           <p>
             The event’s approve-unless-disputed policy accepts played scores immediately. Pool
@@ -64,12 +67,11 @@ export function PoolStationSetup({
           <legend>Stations to use</legend>
           {stationOptions.map((station) => (
             <label className="ops-check" key={station.id}>
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={selected.includes(station.id)}
-                onChange={(event) => {
+                onCheckedChange={(nextChecked) => {
                   setSelected(
-                    event.target.checked
+                    nextChecked
                       ? [...selected, station.id]
                       : selected.filter((id) => id !== station.id),
                   );
@@ -82,44 +84,41 @@ export function PoolStationSetup({
         </fieldset>
         <label>
           Stations per pool
-          <select
-            className="select"
+          <Select
             value={perPool}
             disabled={disabled || playing}
-            onChange={(event) => {
-              setPerPool(Number(event.target.value));
+            onValueChange={(selectedValue) => {
+              setPerPool(Number(selectedValue));
               setPreview(null);
             }}
           >
             {[1, 2, 3, 4].map((count) => (
-              <option key={count} value={count}>
+              <SelectItem key={count} value={count}>
                 {count}
-              </option>
+              </SelectItem>
             ))}
-          </select>
+          </Select>
         </label>
         <p className="muted">
           A four- or five-player pool can play two matches at once. An odd player rests each round.
         </p>
         <label className="ops-check">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={selfRun}
             disabled={disabled || playing || data.plan.bracketMode !== 'native'}
-            onChange={(event) => {
-              setSelfRun(event.target.checked);
+            onCheckedChange={(nextChecked) => {
+              setSelfRun(nextChecked);
               setPreview(null);
             }}
           />
           Let players start their pool’s next matches
         </label>
         <label className="ops-check">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={selfRun && autoAcceptScores}
             disabled={disabled || playing || !selfRun}
-            onChange={(event) => {
-              setAutoAcceptScores(event.target.checked);
+            onCheckedChange={(nextChecked) => {
+              setAutoAcceptScores(nextChecked);
               setPreview(null);
             }}
           />
@@ -131,13 +130,13 @@ export function PoolStationSetup({
             : 'Scores wait for TO approval before the next match becomes available.'}{' '}
           {data.plan.bracketMode !== 'native' && 'Player starts require a native Nemesis event.'}
         </p>
-        <button
-          className="btn"
+        <Button
+          type="submit"
           disabled={disabled || playing || !proposed.length}
           onClick={() => setPreview(proposed)}
         >
           Review station plan
-        </button>
+        </Button>
         {preview && (
           <div className="ops-station-plan">
             <h4>Proposed pool stations</h4>
@@ -159,8 +158,9 @@ export function PoolStationSetup({
                 ? 'Player scores immediately finish matches.'
                 : 'Player scores require TO approval.'}
             </p>
-            <button
-              className="btn btn-primary"
+            <Button
+              variant="primary"
+              type="submit"
               disabled={disabled || playing}
               onClick={() =>
                 void act(async () => {
@@ -181,10 +181,10 @@ export function PoolStationSetup({
               }
             >
               Apply station plan
-            </button>
+            </Button>
           </div>
         )}
-      </details>
+      </Disclosure>
       {nextWave.length > 0 && (
         <div className="ops-next-wave">
           <h4>Ready for the next pools</h4>
@@ -194,8 +194,8 @@ export function PoolStationSetup({
               .map((pool) => `${poolLabel(pool)} on ${stationNames(pool.stationIds)}`)
               .join(' · ')}
           </p>
-          <button
-            className="btn"
+          <Button
+            type="submit"
             disabled={disabled}
             onClick={() =>
               void act(
@@ -206,7 +206,7 @@ export function PoolStationSetup({
             }
           >
             Open next pools on free stations
-          </button>
+          </Button>
         </div>
       )}
     </div>

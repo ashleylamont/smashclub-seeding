@@ -1,6 +1,85 @@
 import { expect, test } from '@playwright/test';
 import { AxeBuilder } from '@axe-core/playwright';
 import { mockEvent, ready } from './fixtures';
+import { chooseOption } from '../test-support/controls';
+
+test('select handles keyboard, disabled and empty choices with native form values', async ({
+  page,
+}) => {
+  await page.goto('/ui');
+  const select = page.getByRole('combobox', { name: 'Featured station' });
+  await select.focus();
+  await select.press('Enter');
+  await expect(page.getByRole('option', { name: 'Unavailable station' })).toBeDisabled();
+  await page.keyboard.press('Home');
+  await expect(page.getByRole('option', { name: 'Automatic', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('option', { name: 'Main stage', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(select).toHaveAttribute('data-value', 'stage');
+  await expect(select).toBeFocused();
+  await page.getByRole('checkbox', { name: 'Publish event board' }).check();
+  await page.getByRole('button', { name: 'Read form values' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Station: stage. Published: Yes.' }),
+  ).toBeVisible();
+  await chooseOption(select, '');
+  await expect(select).toHaveText('Automatic▾');
+  await page.getByRole('button', { name: 'Read form values' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Station: Automatic. Published: Yes.' }),
+  ).toBeVisible();
+});
+
+test('disclosures preserve drafts and switch works from its label and keyboard', async ({
+  page,
+}) => {
+  await page.goto('/ui');
+  const trigger = page.getByRole('button', { name: 'Advanced settings' });
+  await trigger.focus();
+  await trigger.press('Space');
+  const field = page.getByRole('textbox', { name: 'Broadcast caption' });
+  await field.fill('Finals');
+  await trigger.click();
+  await expect(field).toBeHidden();
+  await trigger.click();
+  await expect(field).toHaveValue('Finals');
+  const control = page.getByRole('switch', { name: 'Hide inactive players' });
+  await expect(control).toBeChecked();
+  await page.getByText('Hide inactive players', { exact: true }).click();
+  await expect(control).not.toBeChecked();
+  await control.focus();
+  await control.press('Space');
+  await expect(control).toBeChecked();
+});
+
+test('confirmation focuses cancel, contains focus and restores the action on Escape', async ({
+  page,
+}) => {
+  await page.goto('/ui');
+  const trigger = page.getByRole('button', { name: 'Revoke example access' });
+  await trigger.click();
+  const dialog = page.getByRole('alertdialog', { name: 'Confirm action' });
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await expect(dialog).toHaveAccessibleDescription(
+    'Remove guest access? Existing guest passes will stop working.',
+  );
+  for (let index = 0; index < 5; index++) {
+    await page.keyboard.press('Tab');
+    expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+  }
+  expect(
+    (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze())
+      .violations,
+  ).toEqual([]);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toBeFocused();
+  await expect(page.getByRole('status').filter({ hasText: 'Access kept' })).toBeVisible();
+  await trigger.click();
+  await dialog.getByRole('button', { name: 'Confirm', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Access removed' })).toBeVisible();
+});
 
 test.beforeEach(async ({ page }) => {
   await mockEvent(page);

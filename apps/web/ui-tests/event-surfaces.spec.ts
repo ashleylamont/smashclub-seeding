@@ -1,3 +1,4 @@
+import { chooseOption } from '../test-support/controls';
 import { expect, test } from '@playwright/test';
 import { AxeBuilder } from '@axe-core/playwright';
 import { mockEvent, PLAN_ID, PLAYER_NAME, ready } from './fixtures';
@@ -125,7 +126,7 @@ test('changing the broadcast station clears the previous match score draft', asy
   const panel = page.getByRole('tabpanel', { name: 'Broadcast' });
   await panel.getByRole('button', { name: 'Update live score' }).click();
   await panel.getByLabel(PLAYER_NAME, { exact: true }).fill('3');
-  await panel.getByRole('combobox', { name: 'Station', exact: true }).selectOption(station.id);
+  await chooseOption(panel.getByRole('combobox', { name: 'Station', exact: true }), station.id);
   await expect(panel.getByRole('button', { name: 'Save live score' })).toHaveCount(0);
   await panel.getByRole('button', { name: 'Update live score' }).click();
   await expect(panel.getByLabel(alternate.player1Name!, { exact: true })).toHaveValue('0');

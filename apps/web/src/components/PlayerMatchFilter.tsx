@@ -1,3 +1,4 @@
+import { Select, SelectItem } from './ui/Select';
 import type { PublicPlayer } from '../lib/playerSelection';
 
 export function PlayerMatchFilter({
@@ -12,19 +13,18 @@ export function PlayerMatchFilter({
   return (
     <div className="card player-match-filter">
       <label htmlFor="player-match-select">Show matches for</label>
-      <select
+      <Select
         id="player-match-select"
-        className="select"
         value={players.some((player) => player.id === value) ? value : ''}
-        onChange={(event) => onChange(event.target.value)}
+        onValueChange={onChange}
       >
-        <option value="">Everyone</option>
+        <SelectItem value="">Everyone</SelectItem>
         {players.map((player) => (
-          <option key={player.id} value={player.id}>
+          <SelectItem key={player.id} value={player.id}>
             {player.label}
-          </option>
+          </SelectItem>
         ))}
-      </select>
+      </Select>
       <p className="muted">
         {value
           ? 'Showing only this player’s matches. '

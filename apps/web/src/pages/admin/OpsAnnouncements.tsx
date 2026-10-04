@@ -1,3 +1,6 @@
+import { Textarea, Input } from '../../components/ui/Input';
+import { Select, SelectItem } from '../../components/ui/Select';
+import { Button } from '../../components/ui/Button';
 import { useState } from 'react';
 import { trpc } from '../../lib/trpc';
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
@@ -41,8 +44,7 @@ export function OpsAnnouncements({
         >
           <label>
             Message
-            <textarea
-              className="input"
+            <Textarea
               value={announcement}
               onChange={(e) => setAnnouncement(e.target.value)}
               maxLength={500}
@@ -52,20 +54,19 @@ export function OpsAnnouncements({
           </label>
           <label>
             Show for
-            <select
-              className="select"
+            <Select
               value={announcementMinutes}
-              onChange={(event) => setAnnouncementMinutes(Number(event.target.value))}
+              onValueChange={(selectedValue) => setAnnouncementMinutes(Number(selectedValue))}
             >
-              <option value={1}>1 minute</option>
-              <option value={5}>5 minutes</option>
-              <option value={10}>10 minutes</option>
-              <option value={30}>30 minutes</option>
-            </select>
+              <SelectItem value={1}>1 minute</SelectItem>
+              <SelectItem value={5}>5 minutes</SelectItem>
+              <SelectItem value={10}>10 minutes</SelectItem>
+              <SelectItem value={30}>30 minutes</SelectItem>
+            </Select>
           </label>
-          <button className="btn" disabled={pending || closed}>
+          <Button type="submit" disabled={pending || closed}>
             Post announcement
-          </button>
+          </Button>
         </form>
         {data.announcements.slice(0, 3).map((item) => (
           <p key={item.id} className="ops-announcement">
@@ -101,8 +102,7 @@ export function OpsAnnouncements({
         >
           <label>
             Award
-            <input
-              className="input"
+            <Input
               value={prizeTitle}
               onChange={(e) => setPrizeTitle(e.target.value)}
               placeholder="Upper champion / Best comeback"
@@ -112,22 +112,18 @@ export function OpsAnnouncements({
           </label>
           <label>
             Recipient
-            <select
-              className="select"
-              value={prizePlayer}
-              onChange={(e) => setPrizePlayer(e.target.value)}
-            >
-              <option value="">To be announced</option>
+            <Select value={prizePlayer} onValueChange={setPrizePlayer}>
+              <SelectItem value="">To be announced</SelectItem>
               {[...entrants].map(([id, name]) => (
-                <option value={id} key={id}>
+                <SelectItem value={id} key={id}>
                   {name}
-                </option>
+                </SelectItem>
               ))}
-            </select>
+            </Select>
           </label>
-          <button className="btn" disabled={pending || closed}>
+          <Button type="submit" disabled={pending || closed}>
             Save prize
-          </button>
+          </Button>
         </form>
         {data.prizes.map((prize) => (
           <p key={prize.id}>

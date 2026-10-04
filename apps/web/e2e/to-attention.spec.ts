@@ -1,3 +1,4 @@
+import { chooseOption } from '../test-support/controls';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 async function query<T>(request: APIRequestContext, procedure: string, input?: object): Promise<T> {
   const response = await request.get(`/api/trpc/${procedure}`, {
@@ -109,10 +110,10 @@ test('attention desk directs TOs to exact decisions and stale scores, without cl
     await expect(attention).toContainText('No stations configured');
     await attention.getByText('Match decisions · 1', { exact: true }).click();
     // Pre-existing queue filters must not hide the exact match opened from attention.
-    await page
-      .locator('.ops-toolbar')
-      .getByRole('combobox', { name: 'Division', exact: true })
-      .selectOption('lower');
+    await chooseOption(
+      page.locator('.ops-toolbar').getByRole('combobox', { name: 'Division', exact: true }),
+      'lower',
+    );
     await page
       .locator('.ops-toolbar')
       .getByRole('textbox', { name: 'Find a player or match', exact: true })

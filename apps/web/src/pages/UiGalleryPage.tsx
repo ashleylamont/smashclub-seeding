@@ -1,3 +1,4 @@
+import { Select, SelectItem } from '../components/ui/Select';
 import { useState } from 'react';
 import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
@@ -7,6 +8,10 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { Tab, TabList, TabPanel, Tabs } from '../components/ui/Tabs';
 import { ScoreFields } from '../components/ScoreFields';
 import { InfoTip } from '../components/InfoTip';
+import { Checkbox } from '../components/ui/Checkbox';
+import { Switch } from '../components/ui/Switch';
+import { Disclosure } from '../components/ui/Disclosure';
+import { useConfirmation } from '../lib/confirmation';
 import './UiGallery.css';
 
 /** Local examples: this page never submits to the tournament API. */
@@ -102,12 +107,13 @@ function ControlExamples() {
         <Field label="Station" value="Main stage" disabled readOnly />
         <label className="ui-field">
           Match view
-          <select className="select" defaultValue="playing">
-            <option value="playing">Playing</option>
-            <option value="all">All matches</option>
-          </select>
+          <Select defaultValue="playing">
+            <SelectItem value="playing">Playing</SelectItem>
+            <SelectItem value="all">All matches</SelectItem>
+          </Select>
         </label>
       </section>
+      <SelectionExamples />
       <section className="card ui-example">
         <h2>Feedback</h2>
         <LoadingState>Loading matches…</LoadingState>
@@ -125,6 +131,72 @@ function ControlExamples() {
         Choose another view or clear your filters.
       </EmptyState>
     </div>
+  );
+}
+
+function SelectionExamples() {
+  const confirm = useConfirmation();
+  const [station, setStation] = useState('');
+  const [published, setPublished] = useState(false);
+  const [hideInactive, setHideInactive] = useState(true);
+  const [result, setResult] = useState('');
+  return (
+    <section className="card ui-example">
+      <h2>Selection and disclosure</h2>
+      <form
+        className="ui-example"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const data = new FormData(event.currentTarget);
+          setResult(
+            `Station: ${data.get('station') || 'Automatic'}. Published: ${data.has('published') ? 'Yes' : 'No'}.`,
+          );
+        }}
+      >
+        <label className="ui-field">
+          Featured station
+          <Select name="station" value={station} onValueChange={setStation}>
+            <SelectItem value="">Automatic</SelectItem>
+            <SelectItem value="stage">Main stage</SelectItem>
+            <SelectItem value="unavailable" disabled>
+              Unavailable station
+            </SelectItem>
+          </Select>
+        </label>
+        <label className="ui-actions">
+          <Checkbox name="published" checked={published} onCheckedChange={setPublished} />
+          Publish event board
+        </label>
+        <label className="ui-actions">
+          <Switch checked={hideInactive} onCheckedChange={setHideInactive} />
+          Hide inactive players
+        </label>
+        <label className="ui-actions">
+          <Checkbox checked disabled />
+          Event closed
+        </label>
+        <Disclosure title="Advanced settings">
+          <Field label="Broadcast caption" defaultValue="Main stage" />
+        </Disclosure>
+        <div className="ui-actions">
+          <Button type="submit">Read form values</Button>
+          <Button
+            variant="danger"
+            onClick={async () => {
+              const accepted = await confirm(
+                'Remove guest access? Existing guest passes will stop working.',
+              );
+              setResult(
+                accepted ? 'Access removed in this example.' : 'Access kept in this example.',
+              );
+            }}
+          >
+            Revoke example access
+          </Button>
+        </div>
+      </form>
+      {result && <Notice>{result}</Notice>}
+    </section>
   );
 }
 

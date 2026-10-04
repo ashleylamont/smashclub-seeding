@@ -1,3 +1,4 @@
+import { chooseOption } from '../test-support/controls';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 async function query<T>(request: APIRequestContext, procedure: string, input?: object): Promise<T> {
   const response = await request.get(`/api/trpc/${procedure}`, {
@@ -64,8 +65,8 @@ test('anonymous navigation finds only published events and an admin can opt into
     await expect(guest.getByRole('heading', { name, exact: true })).toHaveCount(0);
     await page.goto(`/admin/event-operations?plan=${planId}`);
     await page.getByRole('tab', { name: 'Settings', exact: true }).click();
-    await expect(page.getByLabel('Event score policy')).toHaveValue('to_review');
-    await page.getByLabel('Event score policy').selectOption('approve_unless_disputed');
+    await expect(page.getByLabel('Event score policy')).toHaveAttribute('data-value', 'to_review');
+    await chooseOption(page.getByLabel('Event score policy'), 'approve_unless_disputed');
     await expect(page.getByText('Score approval policy updated', { exact: true })).toBeVisible();
     await page.getByLabel('Publish live event page', { exact: true }).click();
     await expect(page.getByLabel('Publish live event page', { exact: true })).toBeChecked();

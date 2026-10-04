@@ -1,3 +1,5 @@
+import { Button } from '../components/ui/Button';
+import { Disclosure } from '../components/ui/Disclosure';
 import { useQuery } from '@tanstack/react-query';
 import { trpc } from '../lib/trpc';
 import './EventNights.css';
@@ -23,9 +25,9 @@ export function EventNightsPage() {
       {events.isError && (
         <p role="alert">
           The event list could not be refreshed.{' '}
-          <button className="btn" onClick={() => void events.refetch()}>
+          <Button type="submit" onClick={() => void events.refetch()}>
             Try again
-          </button>
+          </Button>
         </p>
       )}
       <section aria-label="Open event nights">
@@ -50,8 +52,7 @@ export function EventNightsPage() {
         </div>
       </section>
       {finished.length > 0 && (
-        <details>
-          <summary>Recent finished events ({finished.length})</summary>
+        <Disclosure title={<> Recent finished events ({finished.length}) </>}>
           <div className="event-nights-grid">
             {finished.map((event) => (
               <article className="card" key={event.id}>
@@ -64,7 +65,7 @@ export function EventNightsPage() {
               </article>
             ))}
           </div>
-        </details>
+        </Disclosure>
       )}
     </div>
   );

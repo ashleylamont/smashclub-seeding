@@ -1,3 +1,4 @@
+import { Button } from '../../components/ui/Button';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
@@ -30,9 +31,9 @@ export function ModelComparison({ activeModel }: { activeModel: string }) {
       </p>
 
       {!enabled && (
-        <button type="button" className="btn" onClick={() => setEnabled(true)}>
+        <Button type="button" onClick={() => setEnabled(true)}>
           Run comparison
-        </button>
+        </Button>
       )}
 
       {enabled && comparison.isPending && <p className="loading-text">Fitting both models…</p>}
@@ -118,13 +119,9 @@ export function ModelComparison({ activeModel }: { activeModel: string }) {
             </table>
           </div>
           {comparison.data.rows.length > 25 && (
-            <button
-              type="button"
-              className="btn btn-small"
-              onClick={() => setShowAll((prev) => !prev)}
-            >
+            <Button size="small" type="button" onClick={() => setShowAll((prev) => !prev)}>
               {showAll ? 'Show biggest 25 only' : `Show all ${comparison.data.rows.length}`}
-            </button>
+            </Button>
           )}
           <p className="muted comparison-note">
             Rows are ordered by biggest disagreement. &ldquo;Move&rdquo; is places gained going from

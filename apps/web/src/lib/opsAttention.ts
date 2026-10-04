@@ -80,9 +80,11 @@ export function jumpToOpsControl(id: string) {
   const target = document.getElementById(id);
   let parent = target?.parentElement;
   while (parent) {
-    if (parent instanceof HTMLDetailsElement) parent.open = true;
+    if (parent.hasAttribute('data-disclosure')) parent.dispatchEvent(new Event('ui:expand'));
     parent = parent.parentElement;
   }
-  target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  target?.focus({ preventScroll: true });
+  requestAnimationFrame(() => {
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target?.focus({ preventScroll: true });
+  });
 }

@@ -1,3 +1,8 @@
+import { useConfirmation } from '../../lib/confirmation';
+import { Button } from '../../components/ui/Button';
+import { Select, SelectItem } from '../../components/ui/Select';
+import { Input } from '../../components/ui/Input';
+import { Disclosure } from '../../components/ui/Disclosure';
 import { OpsMatchSummary } from './OpsMatchSummary';
 import { OpsAnnouncements } from './OpsAnnouncements';
 import { OpsAccessControls } from './OpsAccessControls';
@@ -61,6 +66,7 @@ export function AssignedEventOperationsPage() {
 }
 
 export function EventOperationsPanel({ planId }: { planId: string }) {
+  const confirmAction = useConfirmation();
   const workspace = useOpsWorkspace();
   const [stageStationId, setStageStationId] = useState('');
   const cache = useQueryClient();
@@ -100,9 +106,9 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
       <section className="card">
         <h2>Event control</h2>
         <Notice tone="danger">{event.error?.message ?? 'Event unavailable'}</Notice>
-        <button className="btn" onClick={() => void event.refetch()}>
+        <Button type="submit" onClick={() => void event.refetch()}>
           Try again
-        </button>
+        </Button>
         <a href="/login">Sign in</a>
       </section>
     );
@@ -148,12 +154,13 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
           </p>
         </div>
         <nav className="ops-links" aria-label="Event links">
-          <button
-            className="btn btn-small"
+          <Button
+            size="small"
+            type="submit"
             onClick={() => void workspace.openControl('station-controls')}
           >
             Stations
-          </button>
+          </Button>
           {data.plan.resultsSlug && (
             <a href={`/events/${encodeURIComponent(data.plan.resultsSlug)}`}>Final results</a>
           )}
@@ -200,12 +207,13 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
             {disputes} conflicting {disputes === 1 ? 'score needs' : 'scores need'} TO review.
           </strong>{' '}
           Recorded results stay in place.{' '}
-          <button
-            className="btn btn-small"
+          <Button
+            size="small"
+            type="submit"
             onClick={() => void workspace.openControl('score-submissions')}
           >
             Review disagreements
-          </button>
+          </Button>
         </p>
       )}
       <Tabs
@@ -235,80 +243,72 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
               {!data.plan.softLockedAt && (
                 <p>
                   Soft-lock pools in{' '}
-                  <button
-                    className="btn btn-small"
+                  <Button
+                    size="small"
+                    type="submit"
                     onClick={() => void workspace.changeSection('draw')}
                   >
                     Standings / draw
-                  </button>{' '}
+                  </Button>{' '}
                   to prepare matches.
                 </p>
               )}
             </div>
-            <button
-              className="btn"
+            <Button
+              type="submit"
               disabled={pending || closed || !data.plan.softLockedAt}
               onClick={() =>
                 void act(() => trpc.eventOps.prepare.mutate({ planId }), 'Match queue refreshed')
               }
             >
               Prepare / refresh matches
-            </button>
+            </Button>
           </section>
           {focusedMatchId && (
             <p className="ops-focus-match card">
               Showing the selected match.
-              <button className="btn btn-small" onClick={() => setFocusedMatchId(null)}>
+              <Button size="small" type="submit" onClick={() => setFocusedMatchId(null)}>
                 Show all matches
-              </button>
+              </Button>
             </p>
           )}
           <div className="ops-toolbar" onChange={() => setFocusedMatchId(null)}>
             <label>
               View
-              <select className="select" value={filter} onChange={(e) => setFilter(e.target.value)}>
-                <option value="active">Unfinished</option>
-                <option value="ready">Ready to start</option>
-                <option value="playing">Playing</option>
-                <option value="waiting">Waiting for players or stations</option>
-                <option value="complete">Completed</option>
-                <option value="all">All matches</option>
-              </select>
+              <Select value={filter} onValueChange={setFilter}>
+                <SelectItem value="active">Unfinished</SelectItem>
+                <SelectItem value="ready">Ready to start</SelectItem>
+                <SelectItem value="playing">Playing</SelectItem>
+                <SelectItem value="waiting">Waiting for players or stations</SelectItem>
+                <SelectItem value="complete">Completed</SelectItem>
+                <SelectItem value="all">All matches</SelectItem>
+              </Select>
             </label>
             <label>
               Division
-              <select
-                className="select"
-                value={division}
-                onChange={(e) => setDivision(e.target.value)}
-              >
-                <option value="all">Both divisions</option>
-                <option value="upper">Upper</option>
-                <option value="lower">Lower</option>
-              </select>
+              <Select value={division} onValueChange={setDivision}>
+                <SelectItem value="all">Both divisions</SelectItem>
+                <SelectItem value="upper">Upper</SelectItem>
+                <SelectItem value="lower">Lower</SelectItem>
+              </Select>
             </label>
             <label>
               Pool
-              <select
-                className="select"
-                value={poolFilter}
-                onChange={(event) => setPoolFilter(event.target.value)}
-              >
-                <option value="all">All pools and brackets</option>
+              <Select value={poolFilter} onValueChange={setPoolFilter}>
+                <SelectItem value="all">All pools and brackets</SelectItem>
                 {pools.map((pool) => (
-                  <option
+                  <SelectItem
                     key={`${pool.division}:${pool.poolIndex}`}
                     value={`${pool.division}:${pool.poolIndex}`}
                   >
                     {pool.division} Pool {String.fromCharCode(65 + pool.poolIndex)}
-                  </option>
+                  </SelectItem>
                 ))}
-              </select>
+              </Select>
             </label>
             <label className="ops-search">
               Find a player or match
-              <input
-                className="input"
+              <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search the queue"
@@ -395,12 +395,13 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
               )}
             </div>
             {canSoftLock && (
-              <button
-                className="btn btn-primary"
+              <Button
+                variant="primary"
+                type="submit"
                 disabled={pending}
-                onClick={() => {
+                onClick={async () => {
                   if (
-                    window.confirm(
+                    await confirmAction(
                       'Soft-lock this pool draw? Existing players will keep their pools and opponents, and the initial match queue will be prepared.',
                     )
                   )
@@ -411,15 +412,15 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
                 }}
               >
                 Soft-lock pool draw
-              </button>
+              </Button>
             )}
             {canUnlock && (
-              <button
-                className="btn"
+              <Button
+                type="submit"
                 disabled={pending}
-                onClick={() => {
+                onClick={async () => {
                   if (
-                    window.confirm(
+                    await confirmAction(
                       'Return this pool draw to draft? This clears unplayed matches, saved pool assignments, and pool station settings. The planner may rebalance the pools. Recorded play and linked brackets cannot be cleared this way.',
                     )
                   )
@@ -430,7 +431,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
                 }}
               >
                 Return draw to draft
-              </button>
+              </Button>
             )}
           </section>
           {pools.length > 0 && (
@@ -491,10 +492,9 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
           {data.plan.bracketMode === 'native' ? (
             <NativeBracketControls planId={planId} entrants={data.entrants} closed={closed} />
           ) : (
-            <details className="ops-external-handoff">
-              <summary>Challonge integration</summary>
+            <Disclosure title="Challonge integration" className="ops-external-handoff">
               <ScoreHandoff planId={planId} data={data} disabled={pending || closed} />
-            </details>
+            </Disclosure>
           )}
         </TabPanel>
         <TabPanel value="broadcast">
@@ -502,18 +502,17 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
             <h3>Main stage</h3>
             <label>
               Station
-              <select
-                className="select"
+              <Select
                 value={stageStationId || data.stations[0]?.id || ''}
-                onChange={(event) => setStageStationId(event.target.value)}
+                onValueChange={setStageStationId}
               >
-                {!data.stations.length && <option value="">No stations configured</option>}
+                {!data.stations.length && <SelectItem value="">No stations configured</SelectItem>}
                 {data.stations.map((station) => (
-                  <option key={station.id} value={station.id}>
+                  <SelectItem key={station.id} value={station.id}>
                     {station.name}
-                  </option>
+                  </SelectItem>
                 ))}
-              </select>
+              </Select>
             </label>
             {stageMatch ? (
               <MatchCard
@@ -556,19 +555,23 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
           />
           {admin && <OpsAccessControls data={data} pending={pending} closed={closed} act={act} />}
           {admin && !closed && (
-            <details className="card">
-              <summary>
-                {data.plan.softLockedAt
-                  ? 'Before play: reset match queue'
-                  : 'Before play: rebuild the roster'}
-              </summary>
+            <Disclosure
+              title={
+                <>
+                  {data.plan.softLockedAt
+                    ? 'Before play: reset match queue'
+                    : 'Before play: rebuild the roster'}
+                </>
+              }
+              className="card"
+            >
               <p className="muted">
                 {data.plan.softLockedAt
                   ? 'Clear unplayed matches while keeping the soft-locked pool assignments. Prepare matches again to restore the queue.'
                   : 'Clear an unplayed queue before reopening the planner. This is unavailable once a match starts, a score is reported, someone withdraws, or a bracket is attached.'}
               </p>
-              <button
-                className="btn"
+              <Button
+                type="submit"
                 disabled={
                   pending ||
                   data.matches.some(
@@ -578,9 +581,9 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
                   data.withdrawals.length > 0 ||
                   data.brackets.some((bracket) => bracket.slug)
                 }
-                onClick={() => {
+                onClick={async () => {
                   if (
-                    window.confirm(
+                    await confirmAction(
                       data.plan.softLockedAt
                         ? 'Clear this unplayed match queue? Soft-locked pools will stay in place.'
                         : 'Clear this unplayed match queue? You can then reopen the roster in the planner.',
@@ -595,13 +598,12 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
                 }}
               >
                 Reset unplayed queue
-              </button>
-            </details>
+              </Button>
+            </Disclosure>
           )}
-          <details className="card">
-            <summary>Recent changes</summary>
+          <Disclosure title="Recent changes" className="card">
             <AuditList data={data} />
-          </details>
+          </Disclosure>
         </TabPanel>
       </Tabs>
     </div>

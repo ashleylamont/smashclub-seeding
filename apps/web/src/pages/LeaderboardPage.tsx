@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/Button';
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { trpc } from '../lib/trpc';
@@ -117,9 +118,14 @@ export function LeaderboardPage() {
         <p className="muted">
           The board is served by the club's own API — if this keeps happening the server is probably
           down rather than your connection.{' '}
-          <button type="button" className="link-button" onClick={() => void leaderboard.refetch()}>
+          <Button
+            variant="plain"
+            type="button"
+            className="link-button"
+            onClick={() => void leaderboard.refetch()}
+          >
             Try again
-          </button>
+          </Button>
         </p>
       </div>
     );

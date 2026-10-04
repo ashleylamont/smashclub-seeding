@@ -375,7 +375,7 @@
 .historical-differences ul {
   padding-left: 18px;
 }
-.historical-original-plan > summary {
+.historical-original-plan > .ui-disclosure-trigger {
   cursor: pointer;
   font-weight: 600;
   padding: 4px 0;

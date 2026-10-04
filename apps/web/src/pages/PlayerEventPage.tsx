@@ -1,3 +1,6 @@
+import { Disclosure } from '../components/ui/Disclosure';
+import { Select, SelectItem } from '../components/ui/Select';
+import { Input } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
 import { LoadingState, Notice } from '../components/ui/Feedback';
 import { Button } from '../components/ui/Button';
@@ -188,38 +191,32 @@ function PlayerEvent({ planId }: { planId: string }) {
             </p>
           )}
         </div>
-        <details
+        <Disclosure
+          title={<> Match filters{selectedPool ? ' · one pool selected' : ''} </>}
           className="player-match-refine"
           key={selectedPlayer ? 'focused' : 'everyone'}
-          open={!selectedPlayer}
+          defaultOpen={!selectedPlayer}
         >
-          <summary>Match filters{selectedPool ? ' · one pool selected' : ''}</summary>
           <div className="player-match-controls">
             <PoolFilter data={data} value={selectedPool} onChange={choosePool} />
             <div className="ops-toolbar">
               <label>
                 View
-                <select
-                  className="select"
-                  aria-label="Match view"
-                  value={view}
-                  onChange={(e) => setView(e.target.value)}
-                >
-                  <option value="queue">Station matches & my reports</option>
-                  <option value="all">
+                <Select aria-label="Match view" value={view} onValueChange={setView}>
+                  <SelectItem value="queue">Station matches & my reports</SelectItem>
+                  <SelectItem value="all">
                     {disputeMode ? 'All matches & results' : 'All open matches'}
-                  </option>
-                  <option value="results">Recorded results</option>
-                  <option value="mine" disabled={!selectedPlayer}>
+                  </SelectItem>
+                  <SelectItem value="results">Recorded results</SelectItem>
+                  <SelectItem value="mine" disabled={!selectedPlayer}>
                     All selected player’s matches
-                  </option>
-                  <option value="reports">My reports</option>
-                </select>
+                  </SelectItem>
+                  <SelectItem value="reports">My reports</SelectItem>
+                </Select>
               </label>
               <label className="ops-search">
                 Search matches
-                <input
-                  className="input"
+                <Input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Player, pool or match…"
@@ -227,7 +224,7 @@ function PlayerEvent({ planId }: { planId: string }) {
               </label>
             </div>
           </div>
-        </details>
+        </Disclosure>
         <div className="ops-match-grid">
           {visible.map((match) => (
             <PlayerScoreCard

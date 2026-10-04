@@ -1,3 +1,4 @@
+import { Button } from '../../components/ui/Button';
 import type { trpc } from '../../lib/trpc';
 
 type Match = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>['matches'][number];
@@ -16,7 +17,9 @@ export function OpsMatchSummary({
   return (
     <div className="ops-stats">
       {(['playing', 'ready', 'waiting', 'complete'] as const).map((status) => (
-        <button
+        <Button
+          type="submit"
+          variant="plain"
           key={status}
           className={`ops-stat ${filter === status ? 'selected' : ''}`}
           aria-pressed={filter === status}
@@ -42,7 +45,7 @@ export function OpsMatchSummary({
                   ? 'Waiting'
                   : 'Finished'}
           </span>
-        </button>
+        </Button>
       ))}
     </div>
   );

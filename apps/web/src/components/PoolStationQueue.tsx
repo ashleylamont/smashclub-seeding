@@ -1,3 +1,6 @@
+import { Select, SelectItem } from './ui/Select';
+import { Button } from './ui/Button';
+import { Disclosure } from './ui/Disclosure';
 import {
   matchesPool,
   poolKey,
@@ -28,17 +31,17 @@ export function PoolFilter({
   return (
     <label className="pool-flow-filter">
       Your pool
-      <select className="select" value={value} onChange={(event) => onChange(event.target.value)}>
-        <option value="">All pools & finals</option>
+      <Select value={value} onValueChange={onChange}>
+        <SelectItem value="">All pools & finals</SelectItem>
         {value && !keys.includes(value) && (
-          <option value={value}>{poolTitle(value)} · unavailable</option>
+          <SelectItem value={value}>{poolTitle(value)} · unavailable</SelectItem>
         )}
         {keys.map((key) => (
-          <option key={key} value={key}>
+          <SelectItem key={key} value={key}>
             {poolTitle(key)}
-          </option>
+          </SelectItem>
         ))}
-      </select>
+      </Select>
     </label>
   );
 }
@@ -179,13 +182,14 @@ export function PoolStationQueue({
                   {onReport &&
                     matchesPool(current, selectedPool) &&
                     (!playerId || includesPlayer(current, playerId)) && (
-                      <button
-                        className="btn btn-small"
+                      <Button
+                        size="small"
+                        type="submit"
                         disabled={disabled}
                         onClick={() => onReport(current.id)}
                       >
                         Report this result
-                      </button>
+                      </Button>
                     )}
                 </div>
               ) : (
@@ -205,8 +209,9 @@ export function PoolStationQueue({
                   </strong>
                   <span>{next.label}</span>
                   {onStart && policy?.selfRun && (!playerId || includesPlayer(next, playerId)) && (
-                    <button
-                      className="btn btn-primary"
+                    <Button
+                      variant="primary"
+                      type="submit"
                       disabled={
                         disabled ||
                         Boolean(pendingMatchId) ||
@@ -222,7 +227,7 @@ export function PoolStationQueue({
                       }
                     >
                       {pendingMatchId === next.id ? 'Starting…' : 'We’re here — start match'}
-                    </button>
+                    </Button>
                   )}
                   {!onStart && (
                     <a href={poolPath(`/play/${data.plan.id}`, poolKey(next) ?? '')}>
@@ -232,13 +237,14 @@ export function PoolStationQueue({
                   {onReport &&
                     !policy?.selfRun &&
                     (!playerId || includesPlayer(next, playerId)) && (
-                      <button
-                        className="btn btn-small"
+                      <Button
+                        size="small"
+                        type="submit"
                         disabled={disabled}
                         onClick={() => onReport(next.id)}
                       >
                         Report a played result
-                      </button>
+                      </Button>
                     )}
                   {policy?.selfRun && (
                     <p className="pool-flow-note">
@@ -329,10 +335,15 @@ export function PoolRoundSchedule({
         start times.
       </p>
       {groups.map((pool) => (
-        <details className="pool-flow-round-group" key={pool.poolKey}>
-          <summary>
-            {poolTitle(pool.poolKey)} <span>{pool.rounds.length} rounds</span>
-          </summary>
+        <Disclosure
+          title={
+            <>
+              {poolTitle(pool.poolKey)} <span>{pool.rounds.length} rounds</span>
+            </>
+          }
+          className="pool-flow-round-group"
+          key={pool.poolKey}
+        >
           <a className="pool-flow-share" href={poolPath(`/live/${data.plan.id}`, pool.poolKey)}>
             Open this pool’s board →
           </a>
@@ -368,7 +379,7 @@ export function PoolRoundSchedule({
               </article>
             ))}
           </div>
-        </details>
+        </Disclosure>
       ))}
     </section>
   );

@@ -1,3 +1,5 @@
+import { Select, SelectItem } from '../../components/ui/Select';
+import { Button } from '../../components/ui/Button';
 import { trpc } from '../../lib/trpc';
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 export function ScorePolicyControls({
@@ -21,27 +23,25 @@ export function ScorePolicyControls({
       {admin ? (
         <label>
           Event score policy
-          <select
-            className="select"
+          <Select
             value={mode}
             disabled={disabled || data.plan.bracketMode !== 'native'}
-            onChange={(event) =>
+            onValueChange={(selectedValue) =>
               void act(
                 () =>
                   trpc.eventOps.settings.mutate({
                     planId: data.plan.id,
                     published: data.settings.published,
                     playerReports: data.settings.playerReports,
-                    scoreReportingMode: event.target.value as
-                      'to_review' | 'approve_unless_disputed',
+                    scoreReportingMode: selectedValue as 'to_review' | 'approve_unless_disputed',
                   }),
                 'Score approval policy updated',
               )
             }
           >
-            <option value="to_review">TO approval / existing pool settings</option>
-            <option value="approve_unless_disputed">Approve unless disputed</option>
-          </select>
+            <SelectItem value="to_review">TO approval / existing pool settings</SelectItem>
+            <SelectItem value="approve_unless_disputed">Approve unless disputed</SelectItem>
+          </Select>
         </label>
       ) : (
         <p>
@@ -71,9 +71,9 @@ export function ScorePolicyControls({
             {disputes.length} conflicting {disputes.length === 1 ? 'report needs' : 'reports need'}{' '}
             review.
           </strong>{' '}
-          <button className="btn btn-small" onClick={onReports}>
+          <Button size="small" type="submit" onClick={onReports}>
             Review score submissions
-          </button>
+          </Button>
         </p>
       )}
     </section>

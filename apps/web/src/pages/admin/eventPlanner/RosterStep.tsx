@@ -1,3 +1,7 @@
+import { useConfirmation } from '../../../lib/confirmation';
+import { Button } from '../../../components/ui/Button';
+import { Textarea, Input } from '../../../components/ui/Input';
+import { Select, SelectItem } from '../../../components/ui/Select';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../../lib/trpc';
@@ -25,6 +29,7 @@ const METHOD_LABEL: Record<string, string> = {
 };
 
 export function RosterStep({ view, onChanged }: { view: EventPlanView; onChanged: () => void }) {
+  const confirmAction = useConfirmation();
   const planId = view.plan.id;
   const [highlighted, setHighlighted] = useState<Set<string>>(new Set());
   const [addingText, setAddingText] = useState('');
@@ -62,9 +67,9 @@ export function RosterStep({ view, onChanged }: { view: EventPlanView; onChanged
         </h3>
         <span className="row-actions">
           {editable ? (
-            <button
+            <Button
+              variant="primary"
               type="button"
-              className="btn btn-primary"
               disabled={!canFreeze || freeze.isPending}
               onClick={() => freeze.mutate()}
               title={
@@ -74,20 +79,19 @@ export function RosterStep({ view, onChanged }: { view: EventPlanView; onChanged
               }
             >
               {freeze.isPending ? 'Freezing…' : 'Freeze roster & split divisions'}
-            </button>
+            </Button>
           ) : (
-            <button
+            <Button
               type="button"
-              className="btn"
               disabled={
                 unfreeze.isPending ||
                 Boolean(view.plan.softLockedAt) ||
                 !['roster_frozen', 'pools_ready'].includes(view.plan.status) ||
                 view.brackets.some((bracket) => bracket.challongeSlug !== null)
               }
-              onClick={() => {
+              onClick={async () => {
                 if (
-                  window.confirm(
+                  await confirmAction(
                     'Reopen the roster? The ranking snapshot and every seed is discarded.',
                   )
                 ) {
@@ -96,7 +100,7 @@ export function RosterStep({ view, onChanged }: { view: EventPlanView; onChanged
               }}
             >
               {unfreeze.isPending ? 'Reopening…' : 'Reopen roster'}
-            </button>
+            </Button>
           )}
         </span>
       </div>
@@ -131,9 +135,9 @@ export function RosterStep({ view, onChanged }: { view: EventPlanView; onChanged
       {highlighted.size > 0 && (
         <p className="muted">
           Highlighting {highlighted.size} row(s).{' '}
-          <button type="button" className="btn btn-small" onClick={() => setHighlighted(new Set())}>
+          <Button size="small" type="button" onClick={() => setHighlighted(new Set())}>
             Clear
-          </button>
+          </Button>
         </p>
       )}
 
@@ -161,22 +165,21 @@ export function RosterStep({ view, onChanged }: { view: EventPlanView; onChanged
       {editable && (
         <div className="card section">
           <span className="form-label">Somebody turned up late</span>
-          <textarea
-            className="input planner-textarea"
+          <Textarea
+            className="planner-textarea"
             rows={3}
             placeholder="Paste more names, one per line…"
             value={addingText}
             onChange={(event) => setAddingText(event.target.value)}
           />
           <div className="admin-form-row">
-            <button
+            <Button
               type="button"
-              className="btn"
               disabled={addingText.trim() === '' || addRows.isPending}
               onClick={() => addRows.mutate()}
             >
               {addRows.isPending ? 'Adding…' : 'Add to roster'}
-            </button>
+            </Button>
             {addRows.isError && <span className="error-text">{addRows.error.message}</span>}
           </div>
         </div>
@@ -298,10 +301,10 @@ function RosterRow({
           <span className="roster-candidates">
             <span className="muted">Did you mean</span>
             {candidates.slice(0, 3).map((candidate) => (
-              <button
+              <Button
+                size="small"
                 key={candidate.playerId}
                 type="button"
-                className="btn btn-small"
                 disabled={!editable || update.isPending}
                 onClick={() =>
                   update.mutate({ playerId: candidate.playerId, resolutionMethod: 'manual' })
@@ -309,7 +312,7 @@ function RosterRow({
                 title={`${Math.round(candidate.score * 100)}% — ${candidate.reason}`}
               >
                 {candidate.name}
-              </button>
+              </Button>
             ))}
           </span>
         ) : (
@@ -334,53 +337,53 @@ function RosterRow({
         )}
       </span>
       <span role="cell">
-        <select
+        <Select
           className={`select${needsDivision ? ' select-required' : ''}`}
           value={entry.divisionPreference}
           disabled={!editable || update.isPending || entry.playerId === null}
           aria-label={`Division for ${entry.cleanedName}`}
-          onChange={(event) =>
-            update.mutate({ divisionPreference: event.target.value as 'auto' | 'upper' | 'lower' })
+          onValueChange={(selectedValue) =>
+            update.mutate({ divisionPreference: selectedValue as 'auto' | 'upper' | 'lower' })
           }
         >
-          <option value="auto">{needsDivision ? 'Required' : 'Auto'}</option>
-          <option value="upper">Upper</option>
-          <option value="lower">Lower</option>
-        </select>
+          <SelectItem value="auto">{needsDivision ? 'Required' : 'Auto'}</SelectItem>
+          <SelectItem value="upper">Upper</SelectItem>
+          <SelectItem value="lower">Lower</SelectItem>
+        </Select>
       </span>
       <span role="cell" className="row-actions">
         {editable && (
           <>
-            <button type="button" className="btn btn-small" onClick={() => setLookingUp(true)}>
+            <Button size="small" type="button" onClick={() => setLookingUp(true)}>
               {entry.playerId ? 'Change' : 'Choose'}
-            </button>
+            </Button>
             {!entry.playerId && (
-              <button type="button" className="btn btn-small" onClick={() => setCreating(true)}>
+              <Button size="small" type="button" onClick={() => setCreating(true)}>
                 Create
-              </button>
+              </Button>
             )}
             {entry.playerId &&
               entry.resolutionMethod === 'manual' &&
               entry.cleanedName.toLowerCase() !== (entry.playerName ?? '').toLowerCase() && (
-                <button
+                <Button
+                  size="small"
                   type="button"
-                  className="btn btn-small"
                   disabled={remember.isPending}
                   title="Add this spelling as a permanent alias, so future brackets match it silently"
                   onClick={() => remember.mutate()}
                 >
                   {remember.isSuccess ? 'Remembered ✓' : 'Remember spelling'}
-                </button>
+                </Button>
               )}
-            <button
+            <Button
+              size="small"
               type="button"
-              className="btn btn-small"
               disabled={remove.isPending}
               onClick={() => remove.mutate()}
               aria-label={`Remove ${entry.cleanedName} from the roster`}
             >
               Remove
-            </button>
+            </Button>
           </>
         )}
       </span>
@@ -454,20 +457,15 @@ function DraftSettings({ view, onChanged }: { view: EventPlanView; onChanged: ()
       <h4>Draft settings</h4>
       <label className="form-field">
         Event name
-        <input className="input" value={name} onChange={(event) => setName(event.target.value)} />
+        <Input value={name} onChange={(event) => setName(event.target.value)} />
       </label>
       <label className="form-field">
         Bracket slug prefix
-        <input
-          className="input"
-          value={prefix}
-          onChange={(event) => setPrefix(event.target.value)}
-        />
+        <Input value={prefix} onChange={(event) => setPrefix(event.target.value)} />
       </label>
       <label className="form-field">
         Upper division size
-        <input
-          className="input"
+        <Input
           type="number"
           min={3}
           max={Math.max(3, total - 3)}
@@ -480,12 +478,13 @@ function DraftSettings({ view, onChanged }: { view: EventPlanView; onChanged: ()
         rounded up, advance to championship and everyone else to consolation. Save a new split after
         attendance changes.
       </p>
-      <button
-        className="btn btn-primary"
+      <Button
+        variant="primary"
+        type="submit"
         disabled={update.isPending || !name.trim() || upper < 3 || upper > total - 3}
       >
         Save settings
-      </button>
+      </Button>
       {update.isError && <p className="error-text">{update.error.message}</p>}
     </form>
   );

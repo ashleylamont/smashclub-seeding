@@ -1,3 +1,6 @@
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
+import { Select, SelectItem } from './ui/Select';
 import { Dialog } from './ui/Dialog';
 import { Field } from './ui/Field';
 import { useState, type ReactNode } from 'react';
@@ -145,20 +148,20 @@ export function PlayerFormModal({
               {aliases.map((alias) => (
                 <span key={alias} className="chip">
                   {alias}
-                  <button
+                  <Button
+                    variant="plain"
                     type="button"
                     className="chip-remove"
                     aria-label={`Remove alias ${alias}`}
                     onClick={() => setAliases(aliases.filter((entry) => entry !== alias))}
                   >
                     ×
-                  </button>
+                  </Button>
                 </span>
               ))}
             </div>
             <div className="admin-form-row">
-              <input
-                className="input"
+              <Input
                 placeholder="other spelling…"
                 aria-label="Extra alias"
                 value={aliasInput}
@@ -170,14 +173,14 @@ export function PlayerFormModal({
                   }
                 }}
               />
-              <button
+              <Button
+                size="small"
                 type="button"
-                className="btn btn-small"
                 disabled={aliasInput.trim() === ''}
                 onClick={addAlias}
               >
                 Add
-              </button>
+              </Button>
             </div>
             <span className="form-hint">
               Other names this player enters brackets under. Future imports of these match silently
@@ -194,22 +197,17 @@ export function PlayerFormModal({
       )}
 
       <div className="modal-actions">
-        <button type="button" className="btn" onClick={onCancel}>
+        <Button type="button" onClick={onCancel}>
           Cancel
-        </button>
+        </Button>
         {secondary && (
-          <button type="button" className="btn" disabled={busy} onClick={secondary.onClick}>
+          <Button type="button" disabled={busy} onClick={secondary.onClick}>
             {secondary.label}
-          </button>
+          </Button>
         )}
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={!valid || busy}
-          onClick={submit}
-        >
+        <Button variant="primary" type="button" disabled={!valid || busy} onClick={submit}>
           {busy ? 'Saving…' : submitLabel}
-        </button>
+        </Button>
       </div>
     </Dialog>
   );
@@ -249,49 +247,44 @@ function CompanySelect({
   return (
     <div className="company-select">
       <div className="admin-form-row">
-        <select
-          className="select"
-          aria-label="Company"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-        >
-          <option value="">No company</option>
+        <Select aria-label="Company" value={value} onValueChange={onChange}>
+          <SelectItem value="">No company</SelectItem>
           {companies.map((company) => (
-            <option key={company.code} value={company.code}>
+            <SelectItem key={company.code} value={company.code}>
               {company.code} — {company.name}
-            </option>
+            </SelectItem>
           ))}
-        </select>
-        <button type="button" className="btn btn-small" onClick={() => setCreating(!creating)}>
+        </Select>
+        <Button size="small" type="button" onClick={() => setCreating(!creating)}>
           {creating ? 'Cancel' : '+ New company'}
-        </button>
+        </Button>
       </div>
 
       {creating && (
         <div className="admin-form-row company-select-create">
-          <input
-            className="input company-code-input"
+          <Input
+            className="company-code-input"
             placeholder="CODE"
             aria-label="Company code"
             value={code}
             onChange={(event) => setCode(event.target.value.toUpperCase())}
             maxLength={10}
           />
-          <input
-            className="input"
+          <Input
             placeholder="Company name"
             aria-label="Company name"
             value={name}
             onChange={(event) => setName(event.target.value)}
           />
-          <button
+          <Button
+            variant="primary"
+            size="small"
             type="button"
-            className="btn btn-small btn-primary"
             disabled={code.trim() === '' || name.trim() === '' || create.isPending}
             onClick={() => create.mutate()}
           >
             Create
-          </button>
+          </Button>
         </div>
       )}
       {create.isError && <p className="error-text">{create.error.message}</p>}

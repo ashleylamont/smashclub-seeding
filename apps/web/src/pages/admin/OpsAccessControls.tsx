@@ -1,3 +1,6 @@
+import { Checkbox } from '../../components/ui/Checkbox';
+import { Input } from '../../components/ui/Input';
+import { Button } from '../../components/ui/Button';
 import { useState } from 'react';
 import { trpc } from '../../lib/trpc';
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
@@ -18,15 +21,14 @@ export function OpsAccessControls({
     <section className="card">
       <h3>Event access</h3>
       <label className="ops-check">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={data.settings.published}
           disabled={pending || closed}
-          onChange={(e) =>
+          onCheckedChange={(nextChecked) =>
             void act(() =>
               trpc.eventOps.settings.mutate({
                 planId,
-                published: e.target.checked,
+                published: nextChecked,
                 playerReports: data.settings.playerReports,
               }),
             )
@@ -35,16 +37,15 @@ export function OpsAccessControls({
         Publish live event page
       </label>
       <label className="ops-check">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={data.settings.playerReports}
           disabled={pending || closed}
-          onChange={(e) =>
+          onCheckedChange={(nextChecked) =>
             void act(() =>
               trpc.eventOps.settings.mutate({
                 planId,
                 published: data.settings.published,
-                playerReports: e.target.checked,
+                playerReports: nextChecked,
               }),
             )
           }
@@ -66,24 +67,24 @@ export function OpsAccessControls({
       >
         <label>
           TO email address
-          <input
+          <Input
             type="email"
-            className="input"
             value={toUserId}
             onChange={(e) => setToUserId(e.target.value)}
             required
           />
         </label>
-        <button className="btn" disabled={pending || closed}>
+        <Button type="submit" disabled={pending || closed}>
           Grant event access
-        </button>
+        </Button>
       </form>
       <ul>
         {data.tos.map((to) => (
           <li key={to.id}>
             {to.name} ({to.email}){' '}
-            <button
-              className="btn btn-small"
+            <Button
+              size="small"
+              type="submit"
               disabled={pending || closed}
               onClick={() =>
                 void act(() =>
@@ -92,7 +93,7 @@ export function OpsAccessControls({
               }
             >
               Remove access
-            </button>
+            </Button>
           </li>
         ))}
       </ul>

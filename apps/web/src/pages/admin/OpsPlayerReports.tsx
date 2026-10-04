@@ -1,3 +1,4 @@
+import { Button } from '../../components/ui/Button';
 import { trpc } from '../../lib/trpc';
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 type Action = (work: () => Promise<unknown>, message?: string) => Promise<void>;
@@ -62,8 +63,9 @@ function ReportRows({ data, disabled, act }: { data: Overview; disabled: boolean
                   : ''}
               </p>
             </div>
-            <button
-              className="btn btn-small"
+            <Button
+              size="small"
+              type="submit"
               disabled={disabled || match?.revision !== report.expectedRevision}
               onClick={() =>
                 void act(
@@ -73,9 +75,10 @@ function ReportRows({ data, disabled, act }: { data: Overview; disabled: boolean
               }
             >
               {report.isDispute ? 'Use submitted result' : 'Approve'}
-            </button>
-            <button
-              className="btn btn-small"
+            </Button>
+            <Button
+              size="small"
+              type="submit"
               disabled={disabled}
               onClick={() =>
                 void act(
@@ -85,7 +88,7 @@ function ReportRows({ data, disabled, act }: { data: Overview; disabled: boolean
               }
             >
               {report.isDispute && match?.status === 'complete' ? 'Keep recorded result' : 'Reject'}
-            </button>
+            </Button>
           </div>
         );
       })}

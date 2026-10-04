@@ -1,3 +1,4 @@
+import { chooseOption } from '../test-support/controls';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import jsQR from 'jsqr';
 import { writeFile } from 'node:fs/promises';
@@ -127,7 +128,7 @@ test('scannable guest QR accepts anonymous and unlinked reports, keeps approval 
     const requestUrls: string[] = [];
     guest.on('request', (request) => requestUrls.push(request.url()));
     await guest.goto(invitationUrl);
-    await guest.getByRole('combobox', { name: 'Match view', exact: true }).selectOption('matches');
+    await chooseOption(guest.getByRole('combobox', { name: 'Match view', exact: true }), 'matches');
     await expect(guest.locator('header h1')).toContainText('Guest rehearsal');
     await expect(guest.locator('article.ops-match:visible').first()).toBeVisible();
     expect(new URL(guest.url()).hash).toBe('');
@@ -164,9 +165,10 @@ test('scannable guest QR accepts anonymous and unlinked reports, keeps approval 
     ).toHaveLength(0);
     const unlinkedPage = await unlinked.newPage();
     await unlinkedPage.goto(invitationUrl);
-    await unlinkedPage
-      .getByRole('combobox', { name: 'Match view', exact: true })
-      .selectOption('matches');
+    await chooseOption(
+      unlinkedPage.getByRole('combobox', { name: 'Match view', exact: true }),
+      'matches',
+    );
     const otherCard = unlinkedPage.locator('article.ops-match:visible').filter({
       has: unlinkedPage.getByRole('heading', {
         name: `${second.player1Name} vs ${second.player2Name}`,
@@ -260,13 +262,17 @@ test('scannable guest QR accepts anonymous and unlinked reports, keeps approval 
       `${first.player2Name} 2–1 ${first.player1Name}`,
     );
     await mutate(page.request, 'eventOps.reviewReport', { reportId: retry.id, approve: true });
-    await unlinkedPage
-      .getByRole('combobox', { name: 'Match view', exact: true })
-      .selectOption('reports');
+    await chooseOption(
+      unlinkedPage.getByRole('combobox', { name: 'Match view', exact: true }),
+      'reports',
+    );
     await expect(otherCard).toContainText('Confirmed result');
     // Revocation is checked server-side on each poll, even with cached session data.
-    page.once('dialog', (dialog) => void dialog.accept());
     await controls.getByRole('button', { name: 'Revoke all guest passes', exact: true }).click();
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Confirm', exact: true })
+      .click();
     await expect(guest.getByRole('alert')).toContainText(/revoked|expired|invalid/i);
     await unlinkedPage.goto(invitationUrl);
     await expect(unlinkedPage.getByRole('alert')).toContainText(/revoked|expired|invalid/i);
@@ -345,7 +351,8 @@ test('organisers print a permanent station QR before publication', async ({
   try {
     const guest = await anonymous.newPage();
     await guest.goto(link!);
-    await expect(guest.getByRole('combobox', { name: 'Station', exact: true })).toHaveValue(
+    await expect(guest.getByRole('combobox', { name: 'Station', exact: true })).toHaveAttribute(
+      'data-value',
       stationId,
     );
     await expect(guest.locator('article.pool-flow-station')).toHaveCount(1);

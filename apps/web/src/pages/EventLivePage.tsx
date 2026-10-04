@@ -1,3 +1,4 @@
+import { Disclosure } from '../components/ui/Disclosure';
 import { useEffect, useState, type CSSProperties } from 'react';
 import { eventUnavailable } from '../lib/eventErrors';
 import { useQuery } from '@tanstack/react-query';
@@ -341,8 +342,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
       <PoolFilter data={data} value={selectedPool} onChange={setSelectedPool} />
       <PoolStationQueue data={data} selectedPool={selectedPool} />
       <PoolRoundSchedule data={data} selectedPool={selectedPool} />
-      <details className="event-extra-matches">
-        <summary>More playing and ready matches</summary>
+      <Disclosure title="More playing and ready matches" className="event-extra-matches">
         <div className="event-live-columns">
           <section className="event-now">
             <h2>
@@ -375,7 +375,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
             )}
           </section>
         </div>
-      </details>
+      </Disclosure>
       {announcements.length > 0 && (
         <aside className="event-announcements" aria-label="Announcements">
           <strong>Announcements</strong>

@@ -1,4 +1,5 @@
 import { useId, type ComponentProps, type ReactNode } from 'react';
+import { Input } from './Input';
 
 type Props = Omit<ComponentProps<'input'>, 'children'> & {
   label: ReactNode;
@@ -20,7 +21,7 @@ export function Field({ label, hint, error, id, className = '', ...props }: Prop
   return (
     <div className="ui-field">
       <label htmlFor={inputId}>{label}</label>
-      <input
+      <Input
         {...props}
         id={inputId}
         className={`input ${className}`}

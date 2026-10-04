@@ -1,3 +1,4 @@
+import { chooseOption } from '../test-support/controls';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 
 type Match = {
@@ -69,10 +70,12 @@ test('rehearsal: two TOs, score approval, station safety, public board and OBS',
     await signIn(toContext.request, 'organiser@smashclub.dev');
     const toPage = await toContext.newPage();
     await toPage.goto(`/operate/${planId}`);
-    await toPage
-      .getByRole('tabpanel', { name: 'Run matches' })
-      .getByRole('combobox', { name: 'View', exact: true })
-      .selectOption('all');
+    await chooseOption(
+      toPage
+        .getByRole('tabpanel', { name: 'Run matches' })
+        .getByRole('combobox', { name: 'View', exact: true }),
+      'all',
+    );
     await expect(toPage.getByRole('heading', { name: plan!.name })).toBeVisible();
     await expect(toPage.getByRole('heading', { name: 'Event access' })).toHaveCount(0);
     const forbidden = await mutate(toContext.request, 'eventOps.settings', {
@@ -99,10 +102,12 @@ test('rehearsal: two TOs, score approval, station safety, public board and OBS',
     ).toBe('ready');
 
     await page.goto(`/admin/event-operations?plan=${planId}`);
-    await page
-      .getByRole('tabpanel', { name: 'Run matches' })
-      .getByRole('combobox', { name: 'View', exact: true })
-      .selectOption('all');
+    await chooseOption(
+      page
+        .getByRole('tabpanel', { name: 'Run matches' })
+        .getByRole('combobox', { name: 'View', exact: true }),
+      'all',
+    );
     const scoreCard = page.locator('article.ops-match:visible').filter({ hasText: ready.label });
     await scoreCard.getByRole('button', { name: 'Finish match', exact: true }).click();
     await scoreCard.locator('input[type="number"]').nth(0).fill('2');
@@ -118,7 +123,10 @@ test('rehearsal: two TOs, score approval, station safety, public board and OBS',
     await signIn(playerContext.request, 'rehearsal-player@smashclub.dev');
     const playerPage = await playerContext.newPage();
     await playerPage.goto(`/play/${planId}`);
-    await playerPage.getByRole('combobox', { name: 'Match view', exact: true }).selectOption('all');
+    await chooseOption(
+      playerPage.getByRole('combobox', { name: 'Match view', exact: true }),
+      'all',
+    );
     const playerCard = playerPage
       .locator('article.ops-match:visible')
       .filter({ hasText: playing.label });
@@ -262,7 +270,10 @@ test('player draft requires an explicit reload after another TO changes the matc
     )!;
     const playerPage = await playerContext.newPage();
     await playerPage.goto(`/play/${planId}`);
-    await playerPage.getByRole('combobox', { name: 'Match view', exact: true }).selectOption('all');
+    await chooseOption(
+      playerPage.getByRole('combobox', { name: 'Match view', exact: true }),
+      'all',
+    );
     const card = playerPage.locator('article.ops-match:visible').filter({ hasText: match.label });
     await card.locator('input[type="number"]').nth(0).fill('2');
     await card.locator('input[type="number"]').nth(1).fill('1');
@@ -317,7 +328,10 @@ test('a rejected player score starts a new request even when its scores are unch
     )!;
     const playerPage = await playerContext.newPage();
     await playerPage.goto(`/play/${planId}`);
-    await playerPage.getByRole('combobox', { name: 'Match view', exact: true }).selectOption('all');
+    await chooseOption(
+      playerPage.getByRole('combobox', { name: 'Match view', exact: true }),
+      'all',
+    );
     const card = playerPage.locator('article.ops-match:visible').filter({ hasText: match.label });
     await card.locator('input[type="number"]').nth(0).fill('2');
     await card.locator('input[type="number"]').nth(1).fill('1');
@@ -373,10 +387,12 @@ test('assigned TO can score on a 390px phone without horizontal overflow', async
     await mutateData(page.request, 'eventOps.assignTo', { planId, userId: session.user.id });
     const toPage = await toContext.newPage();
     await toPage.goto(`/operate/${planId}`);
-    await toPage
-      .getByRole('tabpanel', { name: 'Run matches' })
-      .getByRole('combobox', { name: 'View', exact: true })
-      .selectOption('all');
+    await chooseOption(
+      toPage
+        .getByRole('tabpanel', { name: 'Run matches' })
+        .getByRole('combobox', { name: 'View', exact: true }),
+      'all',
+    );
     const match = snapshot.matches[0]!;
     const card = toPage.locator('article.ops-match:visible').filter({ hasText: match.label });
     await card.getByRole('button', { name: 'Finish match', exact: true }).click();

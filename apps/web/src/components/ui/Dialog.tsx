@@ -11,6 +11,8 @@ export function Dialog({
   onOpenChange,
   trigger,
   wide = false,
+  className = '',
+  print = false,
 }: {
   title: string;
   description?: string;
@@ -19,6 +21,8 @@ export function Dialog({
   onOpenChange: (open: boolean) => void;
   trigger?: ReactNode;
   wide?: boolean;
+  className?: string;
+  print?: boolean;
 }) {
   const [opener] = useState(() =>
     document.activeElement instanceof HTMLElement ? document.activeElement : null,
@@ -29,7 +33,7 @@ export function Dialog({
       <Primitive.Portal>
         <Primitive.Overlay className="ui-dialog-overlay" />
         <Primitive.Content
-          className={`modal ui-dialog${wide ? ' modal-wide' : ''}`}
+          className={`modal ui-dialog${wide ? ' modal-wide' : ''}${print ? ' ui-print-dialog' : ''} ${className}`}
           {...(!description ? { 'aria-describedby': undefined } : {})}
           onCloseAutoFocus={
             trigger

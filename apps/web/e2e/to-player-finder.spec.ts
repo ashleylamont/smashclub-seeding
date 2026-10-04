@@ -118,9 +118,9 @@ test('TO finds an entrant, follows their current station call, and opens the exa
   await page.getByRole('tab', { name: 'Players', exact: true }).click();
   await expect(finder).toContainText('Playing · Station 1');
   await expect(finder).not.toContainText('Play next ·');
-  await finder.locator('summary').click();
+  await finder.locator('.ui-disclosure-trigger').click();
   await expect(finder.locator('.to-player-matches')).toContainText('Playing now');
-  await finder.locator('summary').click();
+  await finder.locator('.ui-disclosure-trigger').click();
   await page.evaluate(() => {
     const panel = document.querySelector('.to-player-finder')!;
     window.scrollTo(0, panel.getBoundingClientRect().top + window.scrollY - 120);
@@ -137,9 +137,9 @@ test('TO finds an entrant, follows their current station call, and opens the exa
     .click();
   await expect(finder).toContainText('On hold for a later wave');
   await finder.getByRole('button', { name: 'Lower Pool A', exact: true }).click();
-  await expect(page.locator('.ops-toolbar').getByRole('combobox', { name: /^Pool/ })).toHaveValue(
-    'lower:0',
-  );
+  await expect(
+    page.locator('.ops-toolbar').getByRole('combobox', { name: /^Pool/ }),
+  ).toHaveAttribute('data-value', 'lower:0');
   await expect(page.locator('#match-desk')).toBeFocused();
   await expect(page.locator('.ops-match-grid')).toContainText('lower Pool A');
   await page.getByRole('tab', { name: 'Players', exact: true }).click();

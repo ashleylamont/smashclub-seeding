@@ -6,17 +6,15 @@ This is the first migration under [#63](https://github.com/ashleylamont/smashclu
 
 ## Component decision
 
-The representative implementation pairs native labelled inputs and score forms with a keyboard-tested dialog, help popover and destination tabs. The existing registry dialog and player/TO reporting forms exercise this combination in real workflows; the gallery provides isolated examples.
+Radix Primitives with shared CSS is the UI foundation across the app. Composite controls use Radix behind small wrappers in `apps/web/src/components/ui`; pages import those wrappers. Buttons, text inputs, textareas, semantic forms, tables and content sections use the same shared styles and retain browser semantics. Radix has no basic text-input or button primitive; `Button` supports Radix Slot composition through `asChild`.
 
-| Option | Strength | Cost | Decision |
-| --- | --- | --- | --- |
-| Native HTML and existing CSS | Small, familiar, preserves browser input and table behavior | Custom dialogs, focus containment and popover positioning need ongoing maintenance | Keep for buttons, inputs, selects, forms, tables and disclosure controls |
-| Radix primitives plus shared CSS | Dialog focus management, Escape, portals, popover collision handling and tab keyboard behavior without replacing the visual identity | New runtime dependencies; wrappers still need labels and caller-specific validation | Adopt Dialog, Popover and Tabs only |
-| shadcn/ui | Editable component source and broad composition examples, built on accessible primitives | Its current Vite setup adds Tailwind and generated styling conventions to an existing CSS app | Defer; no shadcn or Tailwind dependency in this migration |
+Use Dialog for editing and previews, Alert Dialog for consequential confirmations, Popover for contextual help, Tabs for destinations, Select for choices, Checkbox/Switch for binary controls and Collapsible through `Disclosure` for expandable content. Public, profile, planner, settings and TO screens all follow this foundation. Do not add a page-specific control implementation or copy control appearance into a page stylesheet. Page CSS owns layout, data presentation and print content.
 
-Research before installation: [Radix accessibility](https://www.radix-ui.com/primitives/docs/overview/accessibility), [Dialog](https://www.radix-ui.com/primitives/docs/components/dialog), [Popover](https://www.radix-ui.com/primitives/docs/components/popover), [Tabs](https://www.radix-ui.com/primitives/docs/components/tabs), [shadcn Vite installation](https://ui.shadcn.com/docs/installation/vite). Radix and shadcn use MIT licenses ([Radix license](https://github.com/radix-ui/primitives/blob/main/LICENSE), [shadcn license](https://github.com/shadcn-ui/ui/blob/main/LICENSE.md)). Inter uses the [SIL Open Font License 1.1](https://github.com/rsms/inter/blob/master/LICENSE.txt). It is self-hosted through Fontsource, with no font CDN request. Existing Oswald and JetBrains Mono remain self-hosted. Axe is a development-only accessibility checker; [axe-core uses MPL 2.0](https://github.com/dequelabs/axe-core/blob/develop/LICENSE).
+The app keeps its existing CSS and square visual identity. There is no Tailwind or shadcn dependency. Add another Radix primitive when a workflow needs its behavior, then wrap and style it in the shared layer.
 
-Integration touches are limited to `apps/web/package.json` and the root `pnpm-lock.yaml`: three Radix packages, Inter and `@axe-core/playwright`. Existing auth, router, query and tournament API libraries stay in use.
+Primary references: [Radix accessibility](https://www.radix-ui.com/primitives/docs/overview/accessibility), [Dialog](https://www.radix-ui.com/primitives/docs/components/dialog), [Alert Dialog](https://www.radix-ui.com/primitives/docs/components/alert-dialog), [Popover](https://www.radix-ui.com/primitives/docs/components/popover), [Tabs](https://www.radix-ui.com/primitives/docs/components/tabs), [Select](https://www.radix-ui.com/primitives/docs/components/select), [Checkbox](https://www.radix-ui.com/primitives/docs/components/checkbox), [Switch](https://www.radix-ui.com/primitives/docs/components/switch), [Collapsible](https://www.radix-ui.com/primitives/docs/components/collapsible) and [Slot](https://www.radix-ui.com/primitives/docs/utilities/slot). Radix uses the [MIT license](https://github.com/radix-ui/primitives/blob/main/LICENSE). Inter uses the [SIL Open Font License 1.1](https://github.com/rsms/inter/blob/master/LICENSE.txt); Inter, Oswald and JetBrains Mono are self-hosted through Fontsource. Axe is a development-only accessibility checker under [MPL 2.0](https://github.com/dequelabs/axe-core/blob/develop/LICENSE).
+
+Dependencies live in `apps/web/package.json` and the root `pnpm-lock.yaml`. Auth, routing, queries and tournament API libraries stay in use.
 
 ## Tokens and ownership
 
@@ -30,14 +28,19 @@ Controls have a 36px base height, 32px compact variant and 44px minimum on phone
 
 | Building block | Use and contract |
 | --- | --- |
-| `ui/Button` | Native button; default type is `button`. Specify `type="submit"` in forms. `pending` disables the action and sets `aria-busy`; keep a descriptive pending label. |
+| `ui/Button` | Native button with Radix Slot support for `asChild`; default type is `button`. Specify `type="submit"` in forms. `pending` disables the action and sets `aria-busy`; keep a descriptive pending label. |
 | `ui/Field` | Native input with linked label, hint and error. An error sets `aria-invalid`; pass `aria-describedby` for shared instructions. Callers own business validation. |
-| `ui/Dialog` | Required title, optional description, close control, focus containment, Escape and return focus. Prefer a `trigger`; existing conditionally mounted callers can pass `open` and retain their opener. Closing calls `onOpenChange(false)`. |
-| `InfoTip` | Labelled help button and Radix nonmodal popover. Works by keyboard and tap, fits the viewport and returns focus on Escape. Keep explanations optional. |
+| `ui/Input`, `Textarea` | Shared native controls for existing labelled fields, file selection and browser validation. Prefer `Field` for a standalone text/number field. |
+| `ui/Select`, `SelectItem` | Radix menu with keyboard navigation, typeahead, collision handling and disabled choices. `onValueChange` receives a string; numeric callers convert it explicitly. An empty item remains selectable and form submission uses the domain value. |
+| `ui/Checkbox`, `Switch` | Radix binary controls; associate a visible label. `onCheckedChange` receives a boolean. Checked/disabled state and named form values remain available. |
+| `ui/Disclosure` | Radix Collapsible with a named trigger and `defaultOpen`. Closed content stays mounted and hidden, preserving drafts. Attention links can expand ancestor disclosures before focusing their target. |
+| `ui/ConfirmDialog`, `ConfirmCancel`, `useConfirmation` | Radix Alert Dialog focuses Cancel, contains focus and returns it to the action. Await `useConfirmation()` before a mutation; Cancel/Escape resolve false. Explicit confirmation dialogs retain the caller’s mutation and pending lifecycle. |
+| `ui/Dialog` | Required title, optional description, close control, focus containment, Escape and return focus. Prefer a `trigger`; existing conditionally mounted callers can pass `open` and retain their opener. Closing calls `onOpenChange(false)`. Print previews use the same dialog with `print` and keep paper layout in their print stylesheet. |
+| `ui/HelpPopover` (`InfoTip` compatibility export) | Labelled help button and Radix nonmodal popover. Works by keyboard and tap, fits the viewport and returns focus on Escape. Keep explanations optional. |
 | `ui/Tabs` | Manual activation: arrows move focus, Enter/Space activates. Inactive panels remain mounted but hidden, preserving drafts. `TabList` requires an accessible label. |
 | `ui/PageHeader` | Page heading, concise description and actions. Put the event's actual name in the heading. |
 | `ui/Notice`, `LoadingState`, `EmptyState` | Inline error/status, busy feedback and an empty state with a next action. Failures should provide a retry when the user can recover. |
-| `.card`, `.chip`, `.btn`, `.input`, `.select` | Shared CSS for semantic native sections, badges, existing controls and gradual migration. Include visible state text in chips; use real table elements for tabular data. |
+| `.card`, `.chip`, `.btn`, `.input`, `.select` | Shared CSS for semantic native sections, badges and controls. Include visible state text in chips; use real table elements for tabular data. |
 | `ScoreFields` | Shared labelled game counts and winner hint for player, guest, correction and TO forms. Each caller retains revisions, request IDs, permissions, submission policy and stale-write checks. |
 
 Example:
@@ -87,6 +90,8 @@ Avoid slogan headers, repeating helper paragraphs above every control and upperc
 
 ## Adoption and review
 
-Start with existing CSS classes when changing a legacy page, then use shared components for new controls and dialogs. Migrate one workflow at a time. Check the gallery and the real workflow on a phone and desktop, in both themes, with keyboard-only operation and long aliases. Extend the [UI visual suite](ui-visual-review.md) for new representative states. Keep server/domain tests as the authority for scoring and auth semantics.
+Use the shared components for every control. Keep primitive imports and control appearance in the shared layer. The linter recognizes shared controls for label checks. It also rejects native control elements and direct Radix imports in pages and domain components; new primitives belong in `components/ui`. Existing semantic sections, links, badges and tables use shared CSS directly.
 
-This migration covers the registry/lookup dialogs, help popovers, player/guest/TO score entry, event discovery headers, focused TO workspace, live/OBS copy and a gallery. Other admin forms, existing result SVG styling and the bracket interaction model remain candidates for incremental adoption. Automated checks support review; they do not constitute a designer's approval of the new baselines or a full screen-reader audit.
+Check the gallery and real workflow on phone and desktop, in both themes, with keyboard-only operation and long aliases. Extend the [UI visual suite](ui-visual-review.md) for new representative states. Browser tests choose items through the visible Radix menu and confirm through the Alert Dialog; they do not operate hidden form proxies. Keep server/domain tests as the authority for scoring and auth semantics.
+
+The gallery includes empty/disabled choices, checkbox and switch labels, persisted disclosure drafts, form submission and cancellable confirmations. All existing control surfaces use the shared foundation, including print previews and local display setup. Result graphics, bracket drawings, charts and paper sheets keep their specialized rendering. Automated checks support review; they do not constitute a designer’s approval of the new baselines or a full screen-reader audit.

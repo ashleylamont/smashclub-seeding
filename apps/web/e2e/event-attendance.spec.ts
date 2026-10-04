@@ -1,3 +1,4 @@
+import { chooseOption } from '../test-support/controls';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 
 type Match = {
@@ -100,14 +101,15 @@ test('attendance preview preserves completed play, rejects stale changes, and ho
   await attendance
     .getByLabel('Find player by public alias', { exact: true })
     .fill(latePlayer.publicName ?? latePlayer.playerName);
+  await attendance.getByRole('combobox', { name: 'Player', exact: true }).click();
   await expect(
-    attendance
-      .getByRole('combobox', { name: 'Player', exact: true })
-      .locator(`option[value="${latePlayer.playerId}"]`),
+    page.getByRole('option').filter({ hasText: latePlayer.publicName ?? latePlayer.playerName }),
   ).toHaveCount(1);
-  await attendance
-    .getByRole('combobox', { name: 'Player', exact: true })
-    .selectOption(latePlayer.playerId);
+  await page.keyboard.press('Escape');
+  await chooseOption(
+    attendance.getByRole('combobox', { name: 'Player', exact: true }),
+    latePlayer.playerId,
+  );
   await attendance.getByRole('button', { name: 'Preview attendance change' }).click();
   await expect(attendance.locator('.ops-attendance-preview')).toContainText('4 new match(es)');
   await attendance.getByRole('button', { name: 'Apply this change' }).click();
@@ -134,10 +136,11 @@ test('attendance preview preserves completed play, rejects stale changes, and ho
       ).toEqual(pool.members.map((member) => member.playerId));
     }
 
-  await attendance.getByRole('combobox', { name: 'Change', exact: true }).selectOption('withdraw');
-  await attendance
-    .getByRole('combobox', { name: 'Player', exact: true })
-    .selectOption(played.player1Id);
+  await chooseOption(attendance.getByRole('combobox', { name: 'Change', exact: true }), 'withdraw');
+  await chooseOption(
+    attendance.getByRole('combobox', { name: 'Player', exact: true }),
+    played.player1Id,
+  );
   await attendance.getByLabel('Reason', { exact: true }).fill('Needs to leave early');
   await attendance.getByRole('button', { name: 'Preview attendance change' }).click();
   await expect(attendance.locator('.ops-attendance-preview')).toBeVisible();

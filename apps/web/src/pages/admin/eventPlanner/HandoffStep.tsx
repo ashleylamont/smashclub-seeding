@@ -1,3 +1,5 @@
+import { Input } from '../../../components/ui/Input';
+import { Button } from '../../../components/ui/Button';
 import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { trpc } from '../../../lib/trpc';
@@ -191,16 +193,15 @@ function BracketCard({
       )}
 
       <div className="admin-form-row">
-        <input
-          className="input"
+        <Input
           placeholder={payload.suggestedSlug}
           value={slug}
           aria-label={`Challonge slug for ${DIVISION_LABEL[bracket.division]} ${bracket.stage}`}
           onChange={(event) => setSlug(event.target.value)}
         />
-        <button
+        <Button
+          variant="primary"
           type="button"
-          className="btn btn-primary"
           disabled={closed || slug.trim() === '' || attach.isPending}
           onClick={() => attach.mutate()}
           title="Register this bracket against the plan’s event date"
@@ -210,26 +211,20 @@ function BracketCard({
             : bracket.challongeSlug
               ? 'Re-attach'
               : 'Register & attach'}
-        </button>
+        </Button>
         {bracket.tournamentId && (
-          <button
-            type="button"
-            className="btn"
-            disabled={closed || sync.isPending}
-            onClick={() => sync.mutate()}
-          >
+          <Button type="button" disabled={closed || sync.isPending} onClick={() => sync.mutate()}>
             {sync.isPending ? 'Syncing…' : 'Sync (API)'}
-          </button>
+          </Button>
         )}
         {bracket.challongeSlug && (
-          <button
+          <Button
             type="button"
-            className="btn"
             disabled={closed || detach.isPending}
             onClick={() => detach.mutate()}
           >
             Detach
-          </button>
+          </Button>
         )}
       </div>
       {attach.isError && <p className="error-text">{attach.error.message}</p>}

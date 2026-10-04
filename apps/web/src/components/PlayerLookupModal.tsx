@@ -1,3 +1,5 @@
+import { Input } from './ui/Input';
+import { Button } from './ui/Button';
 import { Dialog } from './ui/Dialog';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -72,8 +74,8 @@ export function PlayerLookupModal({
     >
       {children}
 
-      <input
-        className="input lookup-search"
+      <Input
+        className="lookup-search"
         aria-label="Search players"
         autoFocus
         placeholder="Search by name, public alias, or any stored alias…"
@@ -123,14 +125,9 @@ export function PlayerLookupModal({
                   )
                 )}
               </span>
-              <button
-                type="button"
-                className="btn btn-small"
-                disabled={busy}
-                onClick={() => onPick(player.id)}
-              >
+              <Button size="small" type="button" disabled={busy} onClick={() => onPick(player.id)}>
                 Link
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
@@ -149,9 +146,9 @@ export function PlayerLookupModal({
       )}
 
       <div className="modal-actions">
-        <button type="button" className="btn" onClick={onCancel}>
+        <Button type="button" onClick={onCancel}>
           Cancel
-        </button>
+        </Button>
       </div>
     </Dialog>
   );
