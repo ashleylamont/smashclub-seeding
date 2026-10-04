@@ -56,7 +56,7 @@ export function BroadcastResults({
   return (
     <div className="broadcast-results">
       <div className="broadcast-recent" aria-label="Recent match outcomes">
-        <span>JUST IN ↗</span>
+        <span>RECENT RESULTS</span>
         {recent.length ? (
           recent.map((result) => (
             <span className="broadcast-recent-item" key={result.id} title={resultHeadline(result)}>
@@ -64,7 +64,7 @@ export function BroadcastResults({
             </span>
           ))
         ) : (
-          <span>Confirmed results will land here.</span>
+          <span>No confirmed results yet.</span>
         )}
       </div>
       <div className="broadcast-result-stage" aria-live="polite" aria-atomic="true">
@@ -79,7 +79,7 @@ export function BroadcastResults({
             </span>
             <div className="broadcast-result-label">
               <small>{active.kind === 'correction' ? 'SCORE UPDATE' : 'SET COMPLETE'}</small>
-              <strong>{active.kind === 'correction' ? 'CORRECTED' : 'GG!'}</strong>
+              <strong>{active.kind === 'correction' ? 'CORRECTED' : 'FINISHED'}</strong>
             </div>
             <div className="broadcast-result-copy">
               <strong>{resultHeadline(match)}</strong>
@@ -97,12 +97,14 @@ export function BroadcastResults({
           </div>
         ) : (
           <div className="broadcast-floor">
-            <span>
-              FROM THE
-              <br />
-              <strong>FLOOR ↗</strong>
-            </span>
-            <p>{announcement}</p>
+            {announcement && (
+              <>
+                <span>
+                  <strong>ANNOUNCEMENT</strong>
+                </span>
+                <p>{announcement}</p>
+              </>
+            )}
           </div>
         )}
       </div>

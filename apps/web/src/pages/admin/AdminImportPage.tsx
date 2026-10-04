@@ -1,3 +1,6 @@
+import { Textarea, Input } from '../../components/ui/Input';
+import { Button } from '../../components/ui/Button';
+import { Checkbox } from '../../components/ui/Checkbox';
 import { useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
@@ -77,8 +80,8 @@ export function AdminImportPage() {
       </p>
 
       <div className="import-input">
-        <textarea
-          className="textarea import-textarea"
+        <Textarea
+          className="import-textarea"
           placeholder={
             'players:\n  - id: sample-player\n    canonical_name: Sample Player\n    company: Atlassian\n    aliases: [Sample P, Sample]\n    main_character: Ness'
           }
@@ -90,22 +93,19 @@ export function AdminImportPage() {
           }}
         />
         <div className="import-actions">
-          <button
+          <Button
+            variant="primary"
+            size="small"
             type="button"
-            className="btn btn-small btn-primary"
             disabled={yaml.trim() === '' || preview.isPending}
             onClick={() => preview.mutate(yaml)}
           >
             {preview.isPending ? 'Reading…' : 'Preview'}
-          </button>
-          <button
-            type="button"
-            className="btn btn-small"
-            onClick={() => fileInput.current?.click()}
-          >
+          </Button>
+          <Button size="small" type="button" onClick={() => fileInput.current?.click()}>
             Upload file…
-          </button>
-          <input
+          </Button>
+          <Input
             ref={fileInput}
             type="file"
             accept=".yaml,.yml,.txt,text/yaml"
@@ -116,16 +116,16 @@ export function AdminImportPage() {
             }}
           />
           {yaml !== '' && (
-            <button
+            <Button
+              size="small"
               type="button"
-              className="btn btn-small"
               onClick={() => {
                 setYaml('');
                 restart();
               }}
             >
               Clear
-            </button>
+            </Button>
           )}
           {preview.isError && <span className="error-text">{preview.error.message}</span>}
         </div>
@@ -153,9 +153,10 @@ export function AdminImportPage() {
 
       {plan && step === 'preview' && (
         <div className="import-actions import-apply">
-          <button
+          <Button
+            variant="primary"
+            size="small"
             type="button"
-            className="btn btn-small btn-primary"
             disabled={blocked || noop || apply.isPending}
             onClick={() => apply.mutate(yaml)}
             title={blocked ? 'Fix the errors above first' : undefined}
@@ -163,7 +164,7 @@ export function AdminImportPage() {
             {apply.isPending
               ? 'Applying…'
               : `Apply ${plan.counts.create + plan.counts.update} change${plan.counts.create + plan.counts.update === 1 ? '' : 's'}`}
-          </button>
+          </Button>
           {blocked && <span className="muted">Nothing is applied while the file has errors.</span>}
           {noop && !blocked && (
             <span className="muted">Everything in this file is already in the registry.</span>
@@ -228,7 +229,7 @@ function PlanView({
       {plan.entries.length > 0 && (
         <>
           <label className="checkbox-label">
-            <input type="checkbox" checked={showUnchanged} onChange={onToggleUnchanged} />
+            <Checkbox checked={showUnchanged} onCheckedChange={onToggleUnchanged} />
             Show unchanged ({plan.counts.unchanged})
           </label>
           <div className="table-scroll">

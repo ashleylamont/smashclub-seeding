@@ -1,3 +1,6 @@
+import { Select, SelectItem } from '../../components/ui/Select';
+import { Textarea, Input } from '../../components/ui/Input';
+import { Button } from '../../components/ui/Button';
 import { Fragment, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
@@ -55,75 +58,71 @@ export function AttendeeList({ planId, closed }: { planId: string; closed: boole
           <div className="ops-attendee-filters">
             <label>
               Names to copy
-              <select
-                className="select"
+              <Select
                 value={nameStyle}
-                onChange={(event) => {
-                  setNameStyle(event.target.value as typeof nameStyle);
+                onValueChange={(selectedValue) => {
+                  setNameStyle(selectedValue as typeof nameStyle);
                   setCopyMessage('');
                 }}
               >
-                <option value="alias">Public aliases</option>
-                <option value="full">Full names</option>
-              </select>
+                <SelectItem value="alias">Public aliases</SelectItem>
+                <SelectItem value="full">Full names</SelectItem>
+              </Select>
             </label>
             <label>
               Division
-              <select
-                className="select"
+              <Select
                 value={division}
-                onChange={(e) => {
-                  setDivision(e.target.value);
+                onValueChange={(selectedValue) => {
+                  setDivision(selectedValue);
                   setCopyMessage('');
                 }}
               >
-                <option value="all">All divisions</option>
-                <option value="upper">Upper</option>
-                <option value="lower">Lower</option>
-                <option value="unassigned">Unassigned</option>
-              </select>
+                <SelectItem value="all">All divisions</SelectItem>
+                <SelectItem value="upper">Upper</SelectItem>
+                <SelectItem value="lower">Lower</SelectItem>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+              </Select>
             </label>
             <label>
               Company
-              <select
-                className="select"
+              <Select
                 value={company}
-                onChange={(e) => {
-                  setCompany(e.target.value);
+                onValueChange={(selectedValue) => {
+                  setCompany(selectedValue);
                   setCopyMessage('');
                 }}
               >
-                <option value="all">All companies</option>
-                <option value="">No company</option>
+                <SelectItem value="all">All companies</SelectItem>
+                <SelectItem value="">No company</SelectItem>
                 {roster.data.companies.map((option) => (
-                  <option key={option.code} value={option.code}>
+                  <SelectItem key={option.code} value={option.code}>
                     {option.name} ({option.code})
-                  </option>
+                  </SelectItem>
                 ))}
-              </select>
+              </Select>
             </label>
           </div>
           <p className="muted">
             {filtered.length} of {roster.data.attendees.length} attending players
           </p>
           <div className="ops-attendee-copy">
-            <textarea
+            <Textarea
               ref={copyArea}
-              className="input"
               aria-label="Names ready to copy"
               readOnly
               rows={Math.min(Math.max(filtered.length, 3), 8)}
               value={names}
               onFocus={(event) => event.currentTarget.select()}
             />
-            <button
-              className="btn btn-primary"
+            <Button
+              variant="primary"
               type="button"
               disabled={!filtered.length}
               onClick={() => void copy()}
             >
               Copy names
-            </button>
+            </Button>
           </div>
           {copyMessage && <p role="status">{copyMessage}</p>}
           {filtered.length === 0 && (
@@ -212,8 +211,8 @@ function AttendeeRow({
         <td>{row.division ?? 'Unassigned'}</td>
         <td>{row.companyName ?? '—'}</td>
         <td>
-          <button
-            className="btn btn-small"
+          <Button
+            size="small"
             type="button"
             disabled={closed}
             aria-label={`Edit ${row.canonicalName}`}
@@ -226,7 +225,7 @@ function AttendeeRow({
             }}
           >
             {editing ? 'Close' : 'Edit'}
-          </button>
+          </Button>
         </td>
       </tr>
       {editing && (
@@ -241,8 +240,7 @@ function AttendeeRow({
             >
               <label>
                 Full name
-                <input
-                  className="input"
+                <Input
                   required
                   maxLength={120}
                   value={canonicalName}
@@ -251,8 +249,7 @@ function AttendeeRow({
               </label>
               <label>
                 Public alias
-                <input
-                  className="input"
+                <Input
                   maxLength={80}
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
@@ -261,34 +258,25 @@ function AttendeeRow({
               </label>
               <label>
                 Company
-                <select
-                  className="select"
-                  value={companyCode}
-                  onChange={(e) => setCompanyCode(e.target.value)}
-                >
-                  <option value="">No company</option>
+                <Select value={companyCode} onValueChange={setCompanyCode}>
+                  <SelectItem value="">No company</SelectItem>
                   {companies.map((option) => (
-                    <option key={option.code} value={option.code}>
+                    <SelectItem key={option.code} value={option.code}>
                       {option.name} ({option.code})
-                    </option>
+                    </SelectItem>
                   ))}
-                </select>
+                </Select>
               </label>
-              <button
-                className="btn btn-primary"
+              <Button
+                variant="primary"
                 type="submit"
                 disabled={busy || !canonicalName.trim() || closed}
               >
                 {busy ? 'Saving…' : 'Save player'}
-              </button>
-              <button
-                className="btn"
-                type="button"
-                disabled={busy}
-                onClick={() => setEditing(false)}
-              >
+              </Button>
+              <Button type="button" disabled={busy} onClick={() => setEditing(false)}>
                 Cancel
-              </button>
+              </Button>
               {error && (
                 <p className="error-text" role="alert">
                   {error}

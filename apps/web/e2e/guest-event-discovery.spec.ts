@@ -1,3 +1,4 @@
+import { chooseOption } from '../test-support/controls';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 async function query<T>(request: APIRequestContext, procedure: string, input?: object): Promise<T> {
   const response = await request.get(`/api/trpc/${procedure}`, {
@@ -60,11 +61,12 @@ test('anonymous navigation finds only published events and an admin can opt into
     const guest = await anonymous.newPage();
     await guest.goto('/');
     await guest.getByRole('link', { name: 'Event night', exact: true }).click();
-    await expect(guest.getByRole('heading', { name: 'Find your event' })).toBeVisible();
+    await expect(guest.getByRole('heading', { name: 'Events', exact: true })).toBeVisible();
     await expect(guest.getByRole('heading', { name, exact: true })).toHaveCount(0);
     await page.goto(`/admin/event-operations?plan=${planId}`);
-    await expect(page.getByLabel('Event score policy')).toHaveValue('to_review');
-    await page.getByLabel('Event score policy').selectOption('approve_unless_disputed');
+    await page.getByRole('tab', { name: 'Settings', exact: true }).click();
+    await expect(page.getByLabel('Event score policy')).toHaveAttribute('data-value', 'to_review');
+    await chooseOption(page.getByLabel('Event score policy'), 'approve_unless_disputed');
     await expect(page.getByText('Score approval policy updated', { exact: true })).toBeVisible();
     await page.getByLabel('Publish live event page', { exact: true }).click();
     await expect(page.getByLabel('Publish live event page', { exact: true })).toBeChecked();
@@ -128,6 +130,7 @@ test('anonymous navigation finds only published events and an admin can opt into
     );
     expect(dispute).toMatchObject({ isDispute: true, status: 'pending' });
     await page.reload();
+    await page.getByRole('tab', { name: 'Run matches', exact: true }).click();
     const report = page.locator('.ops-report').filter({ hasText: 'Conflicting report' });
     await expect(report).toContainText('Recorded result:');
     await expect(report.getByRole('button', { name: 'Use submitted result' })).toBeEnabled();
@@ -149,10 +152,11 @@ test('anonymous navigation finds only published events and an admin can opt into
     expect(await guest.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true,
     );
-    await card.getByRole('link', { name: 'Open player hub' }).click();
+    await card.getByRole('link', { name: 'Open event' }).click();
     await expect(guest).toHaveURL(new RegExp(`/play/${planId}`));
     await expect(guest.locator('h1')).toBeVisible();
-    await expect(guest.getByRole('link', { name: 'Live event board →' })).toBeVisible();
+    await expect(guest.getByRole('link', { name: 'Event board →' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Settings', exact: true }).click();
     await page.getByLabel('Publish live event page', { exact: true }).click();
     await expect(page.getByLabel('Publish live event page', { exact: true })).not.toBeChecked();
     await expect

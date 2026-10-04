@@ -1,4 +1,6 @@
-import { opsAttention, jumpToOpsControl } from '../../lib/opsAttention';
+import { Disclosure } from '../../components/ui/Disclosure';
+import { Button } from '../../components/ui/Button';
+import { opsAttention } from '../../lib/opsAttention';
 import type { trpc } from '../../lib/trpc';
 import './OpsAttentionDesk.css';
 
@@ -6,9 +8,11 @@ type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 export function OpsAttentionDesk({
   data,
   onMatch,
+  onJump,
 }: {
   data: Overview;
   onMatch: (matchId: string) => void;
+  onJump: (id: string) => void;
 }) {
   const { reports, decisions, dispatch, needsStations } = opsAttention(data);
   const stale = reports.filter((report) => report.stale).length;
@@ -22,20 +26,21 @@ export function OpsAttentionDesk({
             Needs attention <span className="chip">{count}</span>
           </h3>
           <p className="muted">
-            {count
-              ? 'Decisions to keep the event moving.'
-              : 'No pending score reviews or held-match decisions.'}{' '}
-            Later pools and matches waiting for players are kept in the queue.
+            {count ? 'Review pending decisions below.' : 'No decisions pending.'}
           </p>
         </div>
       </div>
       <div className="ops-attention-groups">
         {reports.length > 0 && (
-          <details className="ops-attention-group">
-            <summary>
-              Score reviews · {reports.length}
-              {stale > 0 ? ` (${stale} changed since submission)` : ''}
-            </summary>
+          <Disclosure
+            title={
+              <>
+                Score reviews · {reports.length}
+                {stale > 0 ? ` (${stale} changed since submission)` : ''}
+              </>
+            }
+            className="ops-attention-group"
+          >
             <ul>
               {reports.map((report) => (
                 <li key={report.id}>
@@ -51,20 +56,23 @@ export function OpsAttentionDesk({
                         : 'Awaiting TO approval'}
                     </span>
                   </div>
-                  <button
-                    className="btn btn-small"
-                    onClick={() => jumpToOpsControl(`score-report-${report.id}`)}
+                  <Button
+                    size="small"
+                    type="submit"
+                    onClick={() => onJump(`score-report-${report.id}`)}
                   >
                     Review score
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
-          </details>
+          </Disclosure>
         )}
         {decisions.length > 0 && (
-          <details className="ops-attention-group">
-            <summary>Match decisions · {decisions.length}</summary>
+          <Disclosure
+            title={<> Match decisions · {decisions.length} </>}
+            className="ops-attention-group"
+          >
             <ul>
               {decisions.map((match) => (
                 <li key={match.id}>
@@ -77,13 +85,13 @@ export function OpsAttentionDesk({
                       {match.label} · {match.blockedReason ?? 'An organiser has held this match.'}
                     </span>
                   </div>
-                  <button className="btn btn-small" onClick={() => onMatch(match.id)}>
+                  <Button size="small" type="submit" onClick={() => onMatch(match.id)}>
                     Open match
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
-          </details>
+          </Disclosure>
         )}
         {needsStations && (
           <div className="ops-attention-setup">
@@ -94,18 +102,22 @@ export function OpsAttentionDesk({
                 Add your setups so players and TOs can see where matches should be played.
               </span>
             </p>
-            <button className="btn btn-small" onClick={() => jumpToOpsControl('station-controls')}>
+            <Button size="small" type="submit" onClick={() => onJump('station-controls')}>
               Set up stations
-            </button>
+            </Button>
           </div>
         )}
       </div>
       {dispatch.length > 0 && (
-        <details className="ops-attention-dispatch">
-          <summary>
-            Ready to dispatch · {dispatch.length} free{' '}
-            {dispatch.length === 1 ? 'station' : 'stations'}
-          </summary>
+        <Disclosure
+          title={
+            <>
+              Ready to dispatch · {dispatch.length} free{' '}
+              {dispatch.length === 1 ? 'station' : 'stations'}
+            </>
+          }
+          className="ops-attention-dispatch"
+        >
           <p className="muted">
             These stations have a next pairing. Self-running pools can start it themselves; use
             station controls if they need a hand.
@@ -119,16 +131,13 @@ export function OpsAttentionDesk({
                     {match.player1Name} vs {match.player2Name} · {match.label}
                   </span>
                 </div>
-                <button
-                  className="btn btn-small"
-                  onClick={() => jumpToOpsControl('station-controls')}
-                >
+                <Button size="small" type="submit" onClick={() => onJump('station-controls')}>
                   Station controls
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
-        </details>
+        </Disclosure>
       )}
     </section>
   );

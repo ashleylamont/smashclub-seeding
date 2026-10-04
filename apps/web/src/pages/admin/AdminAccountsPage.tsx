@@ -1,9 +1,13 @@
+import { useConfirmation } from '../../lib/confirmation';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
 import { authClient } from '../../lib/auth';
 
 export function AdminAccountsPage() {
+  const confirmAction = useConfirmation();
   const { data: session } = authClient.useSession();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
@@ -28,9 +32,9 @@ export function AdminAccountsPage() {
     },
   });
 
-  const remove = (id: string, name: string) => {
+  const remove = async (id: string, name: string) => {
     if (
-      window.confirm(
+      await confirmAction(
         `Remove admin access for ${name}? Their open sessions will lose admin access immediately.`,
       )
     ) {
@@ -76,16 +80,16 @@ export function AdminAccountsPage() {
                   <span className="chip">Email unverified · access suspended</span>
                 )}
               </span>
-              <button
+              <Button
+                size="small"
                 type="button"
-                className="btn btn-small"
                 disabled={
                   changeRole.isPending || (account.emailVerified && verifiedAdminCount <= 1)
                 }
                 onClick={() => remove(account.id, account.name)}
               >
                 Remove admin
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
@@ -97,9 +101,9 @@ export function AdminAccountsPage() {
       <section className="section">
         <h3>Promote an account</h3>
         <label htmlFor="admin-account-search">Search signed-in accounts by name or email</label>
-        <input
+        <Input
           id="admin-account-search"
-          className="input admin-account-search"
+          className="admin-account-search"
           type="search"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
@@ -127,14 +131,15 @@ export function AdminAccountsPage() {
               {account.role === 'admin' ? (
                 <span className="chip chip-accent">Admin</span>
               ) : (
-                <button
+                <Button
+                  variant="primary"
+                  size="small"
                   type="button"
-                  className="btn btn-small btn-primary"
                   disabled={!account.emailVerified || changeRole.isPending}
                   onClick={() => changeRole.mutate({ userId: account.id, admin: true })}
                 >
                   Promote
-                </button>
+                </Button>
               )}
             </li>
           ))}

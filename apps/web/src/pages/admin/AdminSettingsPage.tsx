@@ -1,3 +1,6 @@
+import { Button } from '../../components/ui/Button';
+import { Checkbox } from '../../components/ui/Checkbox';
+import { Input } from '../../components/ui/Input';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
@@ -139,23 +142,17 @@ export function AdminSettingsPage() {
           Rating settings <span className="chip">v{settings.data.version}</span>
         </h2>
         <span className="row-actions">
-          <button
+          <Button
             type="button"
-            className="btn"
             disabled={recompute.isPending}
             onClick={() => recompute.mutate()}
             title="Re-run the full rating recompute with current settings"
           >
             {recompute.isPending ? 'Recomputing…' : 'Recompute now'}
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={save.isPending}
-            onClick={handleSave}
-          >
+          </Button>
+          <Button variant="primary" type="button" disabled={save.isPending} onClick={handleSave}>
             {save.isPending ? 'Saving…' : 'Save settings'}
-          </button>
+          </Button>
         </span>
       </div>
       <p className="banner banner-warning">
@@ -187,8 +184,8 @@ export function AdminSettingsPage() {
         </p>
         {bands.map((band, index) => (
           <label key={index} className="settings-field">
-            <input
-              className="input league-name-input"
+            <Input
+              className="league-name-input"
               type="text"
               value={band.name}
               onChange={(event) =>
@@ -200,8 +197,7 @@ export function AdminSettingsPage() {
             {index === bands.length - 1 ? (
               <span className="muted">everyone else</span>
             ) : (
-              <input
-                className="input"
+              <Input
                 type="number"
                 step="1"
                 value={band.minRating}
@@ -220,11 +216,7 @@ export function AdminSettingsPage() {
 
       <label className="settings-field">
         <span>Anchor isolated rookie ratings</span>
-        <input
-          type="checkbox"
-          checked={isolationAnchor}
-          onChange={(event) => setIsolationAnchor(event.target.checked)}
-        />
+        <Checkbox checked={isolationAnchor} onCheckedChange={setIsolationAnchor} />
       </label>
       <div className="settings-groups">
         {GROUPS.map((group) => (
@@ -237,8 +229,7 @@ export function AdminSettingsPage() {
                   {field.label}
                   {field.hint && <span className="muted settings-hint">{field.hint}</span>}
                 </span>
-                <input
-                  className="input"
+                <Input
                   type="number"
                   step="any"
                   value={values[field.key] ?? ''}

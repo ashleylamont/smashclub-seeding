@@ -1,3 +1,8 @@
+import { useConfirmation } from '../../../lib/confirmation';
+import { Button } from '../../../components/ui/Button';
+import { Input, Textarea } from '../../../components/ui/Input';
+import { Select, SelectItem } from '../../../components/ui/Select';
+import { Disclosure } from '../../../components/ui/Disclosure';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
@@ -77,9 +82,9 @@ export function AdminEventPlannerPage() {
           <ul className="plan-list">
             {plans.data.map((plan) => (
               <li key={plan.id} className="plan-row">
-                <button type="button" className="btn btn-small" onClick={() => setPlanId(plan.id)}>
+                <Button size="small" type="button" onClick={() => setPlanId(plan.id)}>
                   Open
-                </button>
+                </Button>
                 <span className="plan-name">{plan.name}</span>
                 <span className="muted">{formatDate(plan.eventDate)}</span>
                 <span className="chip">{STATUS_LABEL[plan.status] ?? plan.status}</span>
@@ -98,6 +103,7 @@ export function AdminEventPlannerPage() {
 
 /** Only offered for a plan nothing was ever run off — a draft or a cancellation. */
 function DeletePlanButton({ planId, name }: { planId: string; name: string }) {
+  const confirmAction = useConfirmation();
   const queryClient = useQueryClient();
   const remove = useMutation({
     mutationFn: () => trpc.admin.eventPlanner.deletePlan.mutate({ planId }),
@@ -105,17 +111,17 @@ function DeletePlanButton({ planId, name }: { planId: string; name: string }) {
   });
   return (
     <>
-      <button
+      <Button
+        size="small"
         type="button"
-        className="btn btn-small"
         disabled={remove.isPending}
         aria-label={`Delete plan ${name}`}
-        onClick={() => {
-          if (window.confirm(`Delete “${name}” and its roster?`)) remove.mutate();
+        onClick={async () => {
+          if (await confirmAction(`Delete “${name}” and its roster?`)) remove.mutate();
         }}
       >
         Delete
-      </button>
+      </Button>
       {remove.isError && <span className="error-text">{remove.error.message}</span>}
     </>
   );
@@ -176,8 +182,7 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
       <div className="form-grid">
         <label className="form-field">
           <span className="form-label">Event name</span>
-          <input
-            className="input"
+          <Input
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="e.g. June Club Night"
@@ -185,8 +190,7 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
         </label>
         <label className="form-field">
           <span className="form-label">Date and time</span>
-          <input
-            className="input"
+          <Input
             type="datetime-local"
             value={eventDate}
             onChange={(event) => setEventDate(event.target.value)}
@@ -198,8 +202,7 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
         </label>
         <label className="form-field">
           <span className="form-label">Slug prefix (optional)</span>
-          <input
-            className="input"
+          <Input
             value={slugPrefix}
             onChange={(event) => setSlugPrefix(event.target.value)}
             placeholder="june25"
@@ -208,15 +211,15 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
         </label>
         <div className="form-field">
           <span className="form-label">Pool size</span>
-          <input className="input" value="4" readOnly aria-readonly="true" />
+          <Input value="4" readOnly aria-readonly="true" />
           <span className="form-hint">Fixed at four for this version.</span>
         </div>
       </div>
 
       <label className="form-field">
         <span className="form-label">Attendance list</span>
-        <textarea
-          className="input planner-textarea"
+        <Textarea
+          className="planner-textarea"
           rows={10}
           value={text}
           onChange={(event) => setText(event.target.value)}
@@ -230,27 +233,25 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
       </label>
 
       <div className="admin-form-row">
-        <button
+        <Button
           type="button"
-          className="btn"
           disabled={text.trim() === '' || previewRoster.isPending}
           onClick={() => previewRoster.mutate()}
         >
           {previewRoster.isPending ? 'Reading…' : 'Preview roster'}
-        </button>
+        </Button>
         {previewRoster.isError && <span className="error-text">{previewRoster.error.message}</span>}
       </div>
 
       <label className="form-field">
         <span className="form-label">Bracket system</span>
-        <select
-          className="select"
+        <Select
           value={bracketMode}
-          onChange={(event) => setBracketMode(event.target.value as 'native' | 'challonge')}
+          onValueChange={(selectedValue) => setBracketMode(selectedValue as 'native' | 'challonge')}
         >
-          <option value="native">Nemesis — run the whole event here</option>
-          <option value="challonge">Challonge — manage external brackets</option>
-        </select>
+          <SelectItem value="native">Nemesis — run the whole event here</SelectItem>
+          <SelectItem value="challonge">Challonge — manage external brackets</SelectItem>
+        </Select>
         <span className="form-hint">
           Nemesis runs pools, championship and consolation, then records the finished night in club
           ratings. Existing Challonge events stay linked to Challonge.
@@ -272,34 +273,33 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
                 At least six entrants are needed for two divisions.
               </span>
             ) : (
-              <select
-                className="select"
+              <Select
                 value={upperSize ?? ''}
-                onChange={(event) =>
-                  setUpperSize(event.target.value === '' ? null : Number(event.target.value))
+                onValueChange={(selectedValue) =>
+                  setUpperSize(selectedValue === '' ? null : Number(selectedValue))
                 }
               >
-                <option value="">Choose…</option>
+                <SelectItem value="">Choose…</SelectItem>
                 {sizes.map((size) => (
-                  <option key={size} value={size}>
+                  <SelectItem key={size} value={size}>
                     {size} Upper / {total - size} Lower
-                  </option>
+                  </SelectItem>
                 ))}
-              </select>
+              </Select>
             )}
             <span className="form-hint">
               The default splits attendance evenly. Each pool advances two players; all remaining
               players enter consolation.
             </span>
           </label>
-          <button
+          <Button
+            variant="primary"
             type="button"
-            className="btn btn-primary"
             disabled={name.trim() === '' || total === 0 || create.isPending}
             onClick={() => create.mutate()}
           >
             {create.isPending ? 'Saving…' : 'Save plan'}
-          </button>
+          </Button>
           {create.isError && <p className="error-text">{create.error.message}</p>}
         </div>
       )}
@@ -318,6 +318,7 @@ function PlanWizard({
   onStep: (step: StepKey) => void;
   onBack: () => void;
 }) {
+  const confirmAction = useConfirmation();
   const queryClient = useQueryClient();
   const planQuery = useQuery({
     queryKey: ['admin', 'eventPlanner', 'plan', planId],
@@ -345,9 +346,9 @@ function PlanWizard({
     return (
       <div className="card">
         <p className="muted">That plan no longer exists.</p>
-        <button type="button" className="btn" onClick={onBack}>
+        <Button type="button" onClick={onBack}>
           Back to plans
-        </button>
+        </Button>
       </div>
     );
   }
@@ -364,7 +365,8 @@ function PlanWizard({
       <PlanSummary view={view} />
       <nav className="planner-steps" aria-label={adopted ? 'Original plan steps' : 'Planner steps'}>
         {steps.map((entry) => (
-          <button
+          <Button
+            variant="plain"
             key={entry.key}
             type="button"
             className={`admin-tab${current === entry.key ? ' active' : ''}`}
@@ -374,7 +376,7 @@ function PlanWizard({
             {entry.key === 'handoff' && view.plan.bracketMode === 'native'
               ? 'Run event'
               : entry.label}
-          </button>
+          </Button>
         ))}
       </nav>
     </>
@@ -415,24 +417,24 @@ function PlanWizard({
             )}
             {view.plan.bracketMode !== 'native' &&
               (view.plan.status === 'pools_ready' || view.plan.status === 'underway') && (
-                <button
+                <Button
+                  size="small"
                   type="button"
-                  className="btn btn-small"
                   disabled={close.isPending}
                   title="The night is played and synced"
                   onClick={() => close.mutate('complete')}
                 >
                   Mark complete
-                </button>
+                </Button>
               )}
             {view.plan.status !== 'complete' && view.plan.status !== 'cancelled' && (
-              <button
+              <Button
+                size="small"
                 type="button"
-                className="btn btn-small"
                 disabled={close.isPending}
-                onClick={() => {
+                onClick={async () => {
                   if (
-                    window.confirm(
+                    await confirmAction(
                       'Cancel this plan? It stays as a record but can no longer be run.',
                     )
                   ) {
@@ -441,11 +443,11 @@ function PlanWizard({
                 }}
               >
                 Cancel plan
-              </button>
+              </Button>
             )}
-            <button type="button" className="btn btn-small" onClick={onBack}>
+            <Button size="small" type="button" onClick={onBack}>
               All plans
-            </button>
+            </Button>
           </span>
         </div>
         <p className="muted">
@@ -462,15 +464,17 @@ function PlanWizard({
         <HistoricalAdoption view={view} onChanged={invalidate} />
       )}
       {adopted ? (
-        <details className="historical-original-plan card section">
-          <summary>Original plan — may differ from the event played</summary>
+        <Disclosure
+          title="Original plan — may differ from the event played"
+          className="historical-original-plan card section"
+        >
           <p className="muted">
             These are the saved roster, seeds and proposed pools. Use the imported results above for
             the matches and placements that actually happened.
           </p>
           {originalPlan}
           {stepContent}
-        </details>
+        </Disclosure>
       ) : (
         stepContent
       )}

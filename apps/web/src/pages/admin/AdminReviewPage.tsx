@@ -1,3 +1,4 @@
+import { Button } from '../../components/ui/Button';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
@@ -56,15 +57,15 @@ export function AdminReviewPage() {
         <span className="admin-form-row">
           <span className="muted">{queue.data.length} pending</span>
           {queue.data.length > 0 && (
-            <button
+            <Button
+              size="small"
               type="button"
-              className="btn btn-small"
               disabled={recompute.isPending}
               onClick={() => recompute.mutate()}
               title="Re-score every pending item against the registry as it is now"
             >
               {recompute.isPending ? 'Recomputing…' : 'Recompute candidates'}
-            </button>
+            </Button>
           )}
           {recompute.isError && <span className="error-text">{recompute.error.message}</span>}
         </span>
@@ -139,15 +140,15 @@ function ReviewCard({ item, onResolved }: { item: ReviewItem; onResolved: () => 
       {candidates.length === 0 ? (
         <p className="muted">
           No candidates as of {timeAgo(item.candidatesComputedAt)} — probably a brand new player.{' '}
-          <button
+          <Button
+            size="small"
             type="button"
-            className="btn btn-small"
             disabled={recomputeItem.isPending}
             onClick={() => recomputeItem.mutate()}
             title="Re-score this item against the registry as it is now"
           >
             {recomputeItem.isPending ? 'Recomputing…' : 'Recompute'}
-          </button>
+          </Button>
         </p>
       ) : (
         <ul className="candidate-list">
@@ -168,16 +169,16 @@ function ReviewCard({ item, onResolved }: { item: ReviewItem; onResolved: () => 
                 />
               </span>
               <span className="score-value">{(candidate.score * 100).toFixed(0)}%</span>
-              <button
+              <Button
+                size="small"
                 type="button"
-                className="btn btn-small"
                 disabled={resolve.isPending}
                 onClick={() =>
                   resolve.mutate({ kind: 'linked_existing', playerId: candidate.playerId })
                 }
               >
                 Link
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
@@ -188,32 +189,32 @@ function ReviewCard({ item, onResolved }: { item: ReviewItem; onResolved: () => 
             accent — with a queue this long it would just be red everywhere.
             Each opens the detail form, which carries a "create as-is" escape so
             working the queue at speed still costs a single extra click. */}
-        <button
+        <Button
+          size="small"
           type="button"
-          className="btn btn-small"
           disabled={resolve.isPending}
           onClick={() => setLookingUp(true)}
           title="Search the registry for the player this entry belongs to"
         >
           Find a player…
-        </button>
-        <button
+        </Button>
+        <Button
+          size="small"
           type="button"
-          className="btn btn-small"
           disabled={resolve.isPending}
           onClick={() => setDetailKind('created_new')}
         >
           Create new player…
-        </button>
-        <button
+        </Button>
+        <Button
+          size="small"
           type="button"
-          className="btn btn-small"
           disabled={resolve.isPending}
           onClick={() => setDetailKind('kept_separate')}
           title="Reject all candidates and create a separate player"
         >
           Keep separate…
-        </button>
+        </Button>
         {resolve.isError && <span className="error-text">{resolve.error.message}</span>}
       </div>
 

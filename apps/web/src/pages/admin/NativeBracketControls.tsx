@@ -1,3 +1,5 @@
+import { useConfirmation } from '../../lib/confirmation';
+import { Button } from '../../components/ui/Button';
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
@@ -13,6 +15,7 @@ export function NativeBracketControls({
   entrants: { id: string; name: string }[];
   closed?: boolean;
 }) {
+  const confirmAction = useConfirmation();
   const cache = useQueryClient();
   const [preview, setPreview] = useState<Preview | null>(null);
   const [busy, setBusy] = useState(false);
@@ -46,15 +49,15 @@ export function NativeBracketControls({
         pool order is confirmed; then their places fill automatically. Top active entrants advance
         to championship, and the rest enter consolation. Bye winners advance automatically.
       </p>
-      <button
-        className="btn"
+      <Button
+        type="submit"
         disabled={closed || busy}
         onClick={() =>
           void act(async () => setPreview(await trpc.eventOps.native.preview.query({ planId })), '')
         }
       >
         Preview finals
-      </button>
+      </Button>
       {preview && (
         <div className="section">
           {preview.issues.map((issue) => (
@@ -81,8 +84,9 @@ export function NativeBracketControls({
               )}
             </div>
           ))}
-          <button
-            className="btn btn-primary"
+          <Button
+            variant="primary"
+            type="submit"
             disabled={closed || busy || !preview.allowed}
             onClick={() =>
               void act(async () => {
@@ -95,13 +99,17 @@ export function NativeBracketControls({
             }
           >
             {preview.replacing ? 'Replace unplayed finals with this draw' : 'Create these finals'}
-          </button>
+          </Button>
           {preview.replacing && (
-            <button
-              className="btn"
+            <Button
+              type="submit"
               disabled={closed || busy || !preview.resetAllowed}
-              onClick={() => {
-                if (window.confirm('Remove the unplayed finals? Pool results will stay recorded.'))
+              onClick={async () => {
+                if (
+                  await confirmAction(
+                    'Remove the unplayed finals? Pool results will stay recorded.',
+                  )
+                )
                   void act(async () => {
                     await trpc.eventOps.native.reset.mutate({
                       planId,
@@ -112,7 +120,7 @@ export function NativeBracketControls({
               }}
             >
               Remove unplayed finals
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -120,12 +128,12 @@ export function NativeBracketControls({
         When every bracket is finished, finalize once to publish the night into club results and
         ratings. Finalized results become read-only.
       </p>
-      <button
-        className="btn"
+      <Button
+        type="submit"
         disabled={closed || busy}
-        onClick={() => {
+        onClick={async () => {
           if (
-            window.confirm(
+            await confirmAction(
               'Finalize all results and close this event? Scores will become read-only and enter club ratings.',
             )
           )
@@ -136,7 +144,7 @@ export function NativeBracketControls({
         }}
       >
         Finalize native results
-      </button>
+      </Button>
       {error && (
         <p role="alert" className="error-text">
           {error}

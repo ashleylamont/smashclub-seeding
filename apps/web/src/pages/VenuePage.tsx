@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/Button';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
@@ -447,12 +448,13 @@ function FullscreenButton() {
   };
 
   return (
-    <button
+    <Button
+      variant="plain"
       type="button"
       className="venue-footer-link venue-fullscreen"
       onClick={() => void toggle()}
     >
       {active ? 'Exit fullscreen' : 'Fullscreen'}
-    </button>
+    </Button>
   );
 }

@@ -1,3 +1,4 @@
+import { chooseOption, optionValues } from '../test-support/controls';
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 
 /**
@@ -79,14 +80,14 @@ test.describe('event planner', () => {
     await settle(page);
 
     await page.getByLabel(/Event name/i).fill(planName);
-    await page.getByLabel('Bracket system').selectOption('challonge');
+    await chooseOption(page.getByLabel('Bracket system'), 'challonge');
     await page.locator('textarea.planner-textarea').first().fill([pasted, '---', ''].join('\n'));
     await page.getByRole('button', { name: /Preview roster/i }).click();
     await settle(page);
 
     // The rule and the blank line are decoration, not people.
     await expect(page.locator('.preview-summary')).toContainText('16');
-    await page.locator('.preview-summary select.select').selectOption('8');
+    await chooseOption(page.locator('.preview-summary [role="combobox"].select'), '8');
     await page.getByRole('button', { name: /^Save plan$/i }).click();
     await settle(page);
 
@@ -171,11 +172,11 @@ test.describe('event planner', () => {
     await page.goto('/admin/event-planner');
     await settle(page);
     await page.getByLabel(/Event name/i).fill(planName);
-    await page.getByLabel('Bracket system').selectOption('challonge');
+    await chooseOption(page.getByLabel('Bracket system'), 'challonge');
     await page.locator('textarea.planner-textarea').first().fill(names.join('\n'));
     await page.getByRole('button', { name: /Preview roster/i }).click();
     await settle(page);
-    await page.locator('.preview-summary select.select').selectOption('4');
+    await chooseOption(page.locator('.preview-summary [role="combobox"].select'), '4');
     await page.getByRole('button', { name: /^Save plan$/i }).click();
     await settle(page);
     await page.getByRole('button', { name: /Freeze roster/i }).click();
@@ -188,15 +189,9 @@ test.describe('event planner', () => {
     await expect(cards).toHaveCount(2);
     for (let cardIndex = 0; cardIndex < 2; cardIndex++) {
       const card = cards.nth(cardIndex);
-      const options = await card
-        .locator('.pool-place select')
-        .first()
-        .locator('option')
-        .evaluateAll((nodes) =>
-          nodes.map((node) => (node as HTMLOptionElement).value).filter(Boolean),
-        );
+      const options = await optionValues(card.locator('.pool-place .ui-select').first());
       for (const [place, value] of options.entries()) {
-        await card.locator('.pool-place select').nth(place).selectOption(value);
+        await chooseOption(card.locator('.pool-place .ui-select').nth(place), value);
       }
       await card.getByRole('button', { name: /Confirm pool/i }).click();
       await settle(page);

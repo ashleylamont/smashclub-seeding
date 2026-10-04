@@ -1,3 +1,8 @@
+import { Select, SelectItem } from '../../components/ui/Select';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
+import { Checkbox } from '../../components/ui/Checkbox';
+import { Disclosure } from '../../components/ui/Disclosure';
 import { Fragment } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
@@ -59,29 +64,28 @@ export function AdminBreakthroughPage() {
         <div className="breakthrough-toolbar">
           <label>
             Club night
-            <select
-              className="select"
+            <Select
               value={event}
-              onChange={(e) => change({ event: e.target.value })}
+              onValueChange={(selectedValue) => change({ event: selectedValue })}
             >
-              {!nights.length && <option value="">No dated events yet</option>}
+              {!nights.length && <SelectItem value="">No dated events yet</SelectItem>}
               {options.event && !grouped.has(options.event) && (
-                <option value={options.event}>{options.event}</option>
+                <SelectItem value={options.event}>{options.event}</SelectItem>
               )}
               {nights.map(([key, names]) => (
-                <option key={key} value={key}>
+                <SelectItem key={key} value={key}>
                   {key} · {eventNameOf(names)}
-                </option>
+                </SelectItem>
               ))}
-            </select>
+            </Select>
           </label>
-          <button
-            className="btn"
+          <Button
+            type="submit"
             disabled={!event || query.isFetching}
             onClick={() => void query.refetch()}
           >
             {query.isFetching ? 'Checking…' : 'Refresh results'}
-          </button>
+          </Button>
         </div>
         {tournaments.isError && (
           <p className="error-text">Could not load events: {tournaments.error.message}</p>
@@ -90,8 +94,7 @@ export function AdminBreakthroughPage() {
           {controls.map(({ key, label, max }) => (
             <label key={key}>
               {label}
-              <input
-                className="input"
+              <Input
                 type="number"
                 min={0}
                 max={max}
@@ -114,33 +117,31 @@ export function AdminBreakthroughPage() {
         <div className="breakthrough-toolbar">
           <label>
             Order by
-            <select
-              className="select"
+            <Select
               value={options.sort}
-              onChange={(e) =>
-                change({ sort: e.target.value as BreakthroughOptions['sort'], event })
+              onValueChange={(selectedValue) =>
+                change({ sort: selectedValue as BreakthroughOptions['sort'], event })
               }
             >
-              <option value="adjusted">Adjusted surplus per set</option>
-              <option value="surplus">Total wins above expected</option>
-            </select>
+              <SelectItem value="adjusted">Adjusted surplus per set</SelectItem>
+              <SelectItem value="surplus">Total wins above expected</SelectItem>
+            </Select>
           </label>
           <label className="checkbox-label">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={options.showAll}
-              onChange={(e) => change({ showAll: e.target.checked, event })}
+              onCheckedChange={(nextChecked) => change({ showAll: nextChecked, event })}
             />
             Show players below criteria
           </label>
-          <button
-            className="btn"
+          <Button
+            type="submit"
             onClick={() =>
               change({ ...breakthroughDefaults, showAll: true, sort: 'adjusted', event })
             }
           >
             Reset criteria
-          </button>
+          </Button>
         </div>
       </section>
       {event && query.isPending && (
@@ -229,8 +230,7 @@ function Evidence({ data, options }: { data: BreakthroughData; options: Breakthr
           {data.unresolvedEntrants} bracket entries need identity review.
         </p>
       )}
-      <details className="breakthrough-sources">
-        <summary>Data coverage and sync times</summary>
+      <Disclosure title="Data coverage and sync times" className="breakthrough-sources">
         <p>
           {data.coverage.pending} pending sets · {data.coverage.excluded} excluded sets (byes,
           forfeits, ignored stages or manual exclusions). Rating settings version{' '}
@@ -246,7 +246,7 @@ function Evidence({ data, options }: { data: BreakthroughData; options: Breakthr
             </li>
           ))}
         </ul>
-      </details>
+      </Disclosure>
       {!shown.length ? (
         <p className="muted">
           {rows.length
@@ -301,11 +301,15 @@ function Evidence({ data, options }: { data: BreakthroughData; options: Breakthr
                   </tr>
                   <tr className="breakthrough-detail-row">
                     <td colSpan={7} className="breakthrough-detail">
-                      <details aria-label={`Set evidence for ${row.name}`}>
-                        <summary>
-                          Set evidence for {row.name}
-                          {!s.meetsCriteria && ` · ${s.reasons.join(' · ')}`}
-                        </summary>
+                      <Disclosure
+                        title={
+                          <>
+                            Set evidence for {row.name}
+                            {!s.meetsCriteria && ` · ${s.reasons.join(' · ')}`}
+                          </>
+                        }
+                        aria-label={`Set evidence for ${row.name}`}
+                      >
                         <p>
                           Pre-night skill:{' '}
                           {row.baseline
@@ -335,7 +339,7 @@ function Evidence({ data, options }: { data: BreakthroughData; options: Breakthr
                             </li>
                           ))}
                         </ul>
-                      </details>
+                      </Disclosure>
                     </td>
                   </tr>
                 </Fragment>
@@ -345,10 +349,12 @@ function Evidence({ data, options }: { data: BreakthroughData; options: Breakthr
         </div>
       )}
       {data.withoutResults.length > 0 && (
-        <details className="breakthrough-sources">
-          <summary>{data.withoutResults.length} entrants without counted results yet</summary>
+        <Disclosure
+          title={<> {data.withoutResults.length} entrants without counted results yet </>}
+          className="breakthrough-sources"
+        >
           <p>{data.withoutResults.map((p) => p.name).join(', ')}</p>
-        </details>
+        </Disclosure>
       )}
     </section>
   );

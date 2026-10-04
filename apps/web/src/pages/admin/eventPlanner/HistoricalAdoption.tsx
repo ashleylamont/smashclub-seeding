@@ -1,3 +1,5 @@
+import { Button } from '../../../components/ui/Button';
+import { Select, SelectItem } from '../../../components/ui/Select';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../../lib/trpc';
@@ -83,9 +85,9 @@ export function HistoricalAdoption({
           brackets and review how the actual roster differs from this plan.
         </p>
       )}
-      <button
+      <Button
+        size="small"
         type="button"
-        className="btn btn-small"
         aria-expanded={editing}
         onClick={() => setEditing(!editing)}
       >
@@ -94,7 +96,7 @@ export function HistoricalAdoption({
           : adopted
             ? 'Review or correct bracket links'
             : 'Choose historical brackets'}
-      </button>
+      </Button>
       {editing && (
         <AdoptionForm
           key={adopted?.adoptedAt ?? 'original'}
@@ -178,15 +180,14 @@ function AdoptionForm({ view, onApplied }: { view: EventPlanView; onApplied: () 
             {SLOTS.map((slot, index) => (
               <label key={slot.label}>
                 <span>{slot.label}</span>
-                <select
-                  className="select"
+                <Select
                   aria-label={slot.label}
                   value={selection[index]}
                   disabled={pending}
-                  onChange={(event) => {
+                  onValueChange={(selectedValue) => {
                     setSelection(
                       selection.map((value, position) =>
-                        position === index ? event.target.value : value,
+                        position === index ? selectedValue : value,
                       ),
                     );
                     setPreview(null);
@@ -194,17 +195,17 @@ function AdoptionForm({ view, onApplied }: { view: EventPlanView; onApplied: () 
                     applyMutation.reset();
                   }}
                 >
-                  <option value="">Choose an imported bracket</option>
+                  <SelectItem value="">Choose an imported bracket</SelectItem>
                   {selection[index] &&
                     !candidates.data.some(
                       (candidate) => candidate.tournamentId === selection[index],
                     ) && (
-                      <option value={selection[index]} disabled>
+                      <SelectItem value={selection[index]} disabled>
                         Current bracket unavailable — choose a completed import
-                      </option>
+                      </SelectItem>
                     )}
                   {candidates.data.map((candidate) => (
-                    <option
+                    <SelectItem
                       value={candidate.tournamentId}
                       key={candidate.tournamentId}
                       disabled={selection.some(
@@ -214,15 +215,14 @@ function AdoptionForm({ view, onApplied }: { view: EventPlanView; onApplied: () 
                       {candidate.name} · {candidate.participantCount} players
                       {candidate.eventDate ? ` · ${formatDate(candidate.eventDate)}` : ''} ·{' '}
                       {candidate.slug}
-                    </option>
+                    </SelectItem>
                   ))}
-                </select>
+                </Select>
               </label>
             ))}
           </div>
-          <button
+          <Button
             type="button"
-            className="btn"
             disabled={
               pending ||
               selection.some((value) => !value) ||
@@ -231,7 +231,7 @@ function AdoptionForm({ view, onApplied }: { view: EventPlanView; onApplied: () 
             onClick={() => previewMutation.mutate()}
           >
             {previewMutation.isPending ? 'Building preview…' : 'Preview historical adoption'}
-          </button>
+          </Button>
         </>
       )}
       {previewMutation.isError && (
@@ -326,14 +326,14 @@ function AdoptionForm({ view, onApplied }: { view: EventPlanView; onApplied: () 
             differences above are recorded for reference; they do not overwrite the original roster
             or rewrite match history.
           </p>
-          <button
+          <Button
+            variant="primary"
             type="button"
-            className="btn btn-primary"
             disabled={pending || preview.blocking.length > 0}
             onClick={() => applyMutation.mutate(preview.fingerprint)}
           >
             {applyMutation.isPending ? 'Adopting…' : 'Adopt these historical results'}
-          </button>
+          </Button>
         </div>
       )}
     </div>

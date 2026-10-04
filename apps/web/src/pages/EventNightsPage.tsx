@@ -1,3 +1,5 @@
+import { Button } from '../components/ui/Button';
+import { Disclosure } from '../components/ui/Disclosure';
 import { useQuery } from '@tanstack/react-query';
 import { trpc } from '../lib/trpc';
 import './EventNights.css';
@@ -15,33 +17,23 @@ export function EventNightsPage() {
   return (
     <div className="event-nights">
       <header>
-        <span className="eyebrow">NEMESIS / EVENT NIGHT</span>
-        <h1>Find your event</h1>
-        <p>
-          Find your pool, follow station queues, check standings and report results. No account
-          needed.
-        </p>
-        <p className="muted">
-          Scan the event’s reporting QR to start eligible matches and submit scores as a guest.
-          Browsing does not need a pass.
-        </p>
+        <h1>Events</h1>
+        <p>Choose an event to find your matches and results.</p>
+        <p className="muted">Scan the event QR to report scores as a guest.</p>
       </header>
       {events.isPending && <p>Loading published events…</p>}
       {events.isError && (
         <p role="alert">
           The event list could not be refreshed.{' '}
-          <button className="btn" onClick={() => void events.refetch()}>
+          <Button type="submit" onClick={() => void events.refetch()}>
             Try again
-          </button>
+          </Button>
         </p>
       )}
       <section aria-label="Open event nights">
         <h2>Open events</h2>
         {!events.isPending && !events.isError && !open.length && (
-          <p>
-            No events are published for play yet. Your TO can publish tonight’s event when it is
-            ready.
-          </p>
+          <p>No events are published yet.</p>
         )}
         <div className="event-nights-grid">
           {open.map((event) => (
@@ -52,7 +44,7 @@ export function EventNightsPage() {
                 {event.status.replaceAll('_', ' ')}
               </p>
               <a className="btn btn-primary" href={`/play/${event.id}`}>
-                Open player hub
+                Open event
               </a>
               <a href={`/live/${event.id}`}>Public event board →</a>
             </article>
@@ -60,8 +52,7 @@ export function EventNightsPage() {
         </div>
       </section>
       {finished.length > 0 && (
-        <details>
-          <summary>Recent finished events ({finished.length})</summary>
+        <Disclosure title={<> Recent finished events ({finished.length}) </>}>
           <div className="event-nights-grid">
             {finished.map((event) => (
               <article className="card" key={event.id}>
@@ -74,7 +65,7 @@ export function EventNightsPage() {
               </article>
             ))}
           </div>
-        </details>
+        </Disclosure>
       )}
     </div>
   );

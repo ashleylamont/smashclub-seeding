@@ -1,3 +1,4 @@
+import { Button } from './ui/Button';
 import { useSyncExternalStore } from 'react';
 import {
   THEME_GLYPHS,
@@ -23,9 +24,10 @@ export function ThemeToggle() {
   const next = nextThemeMode(mode);
 
   return (
-    <button
+    <Button
+      size="small"
       type="button"
-      className="btn btn-small theme-toggle"
+      className="theme-toggle"
       aria-label={`Theme: ${THEME_LABELS[mode].toLowerCase()}. Switch to ${THEME_LABELS[next].toLowerCase()}.`}
       title={`Theme: ${THEME_LABELS[mode]} — click for ${THEME_LABELS[next]}`}
       onClick={() => setThemeMode(next)}
@@ -34,6 +36,6 @@ export function ThemeToggle() {
       <span className="theme-toggle-label" aria-hidden="true">
         {THEME_LABELS[mode]}
       </span>
-    </button>
+    </Button>
   );
 }

@@ -1,5 +1,7 @@
+import { Dialog } from '../../components/ui/Dialog';
+import { Button } from '../../components/ui/Button';
+import { Checkbox } from '../../components/ui/Checkbox';
 import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { bracketBackupSheets, type BracketBackupData } from '../../lib/bracketBackupSheets';
 import './BracketBackupSheets.css';
 
@@ -18,8 +20,9 @@ export function BracketBackupSheets({
   const trigger = useRef<HTMLButtonElement>(null);
   return (
     <div className="bracket-backup-launch">
-      <button
-        className="btn btn-small"
+      <Button
+        size="small"
+        type="submit"
         ref={trigger}
         onClick={() =>
           setPreview({
@@ -30,19 +33,17 @@ export function BracketBackupSheets({
         }
       >
         Print bracket backup sheets
-      </button>
+      </Button>
       <small>Four TO worksheets, including blank draws before finals are generated.</small>
-      {preview &&
-        createPortal(
-          <PrintPreview
-            {...preview}
-            onClose={() => {
-              setPreview(null);
-              trigger.current?.focus();
-            }}
-          />,
-          document.body,
-        )}
+      {preview && (
+        <PrintPreview
+          {...preview}
+          onClose={() => {
+            setPreview(null);
+            trigger.current?.focus();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -59,24 +60,21 @@ function PrintPreview({
   onClose: () => void;
 }) {
   const [selected, setSelected] = useState(sheets.map((sheet) => sheet.key));
-  const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
-    dialog.current?.showModal();
     document.body.classList.add('printing-bracket-backups');
     return () => document.body.classList.remove('printing-bracket-backups');
   }, []);
   return (
-    <dialog
+    <Dialog
+      title="Print bracket backup sheets"
       className="bracket-backup-dialog"
-      ref={dialog}
-      aria-label="Print bracket backup sheets"
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
+      print
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
       }}
     >
       <div className="bracket-backup-toolbar">
-        <h2>Print bracket backup sheets</h2>
         <p>
           Snapshot captured at {capturedAt}. Reopen the preview after the draw or results change.
           Before finals are generated, Nemesis sheets show an estimated round structure from the
@@ -86,12 +84,11 @@ function PrintPreview({
           <legend>Brackets to print</legend>
           {sheets.map((sheet) => (
             <label key={sheet.key}>
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={selected.includes(sheet.key)}
-                onChange={(event) =>
+                onCheckedChange={(nextChecked) =>
                   setSelected(
-                    event.target.checked
+                    nextChecked
                       ? [...selected, sheet.key]
                       : selected.filter((key) => key !== sheet.key),
                   )
@@ -105,16 +102,17 @@ function PrintPreview({
           Use A4 portrait. Reprint if attendance changes; print extra copies if you need more match
           rows.
         </p>
-        <button
-          className="btn btn-primary"
+        <Button
+          variant="primary"
+          type="submit"
           disabled={!selected.length}
           onClick={() => window.print()}
         >
           Print selected brackets
-        </button>
-        <button className="btn" onClick={onClose}>
+        </Button>
+        <Button type="submit" onClick={onClose}>
           Close preview
-        </button>
+        </Button>
       </div>
       <div className="bracket-backup-pages">
         {sheets
@@ -186,6 +184,6 @@ function PrintPreview({
             </article>
           ))}
       </div>
-    </dialog>
+    </Dialog>
   );
 }

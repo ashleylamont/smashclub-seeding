@@ -312,6 +312,9 @@
 .event-overlay-document #root {
   background: transparent !important;
 }
+.event-overlay-document body::before {
+  display: none;
+}
 .event-overlay {
   --capture-width: min(78vw, calc(78vh * 16 / 9));
   --capture-height: min(43.875vw, 78vh);
@@ -373,14 +376,14 @@
   font-size: clamp(7px, 0.55vw, 11px);
   letter-spacing: 0.14em;
 }
+/* Event identity must remain readable in the 20% OBS rail. */
 .broadcast-identity h1 {
-  font-size: clamp(24px, 4.1vw, 90px);
-  line-height: 1.06;
-  letter-spacing: -0.045em;
-  margin: 8px 0 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: clamp(24px, 2.5vw, 54px);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin: var(--s2) 0 var(--s3);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .broadcast-edition {
   font-size: clamp(8px, 0.6vw, 12px);
@@ -1083,54 +1086,27 @@
   opacity: 1;
 }
 .overlay-setup {
-  position: fixed;
-  top: 2vh;
-  right: 2vw;
-  width: min(470px, calc(100vw - 32px));
-  max-height: 94vh;
-  overflow: auto;
-  z-index: 30;
-  background: var(--event-ink);
-  color: var(--event-bone);
-  border: 2px solid var(--event-red);
-  padding: 22px;
-  box-shadow: 0 12px 60px #0008;
-  box-sizing: border-box;
-  font-size: 12px;
-  line-height: 1.6;
+  display: grid;
+  gap: var(--s3);
 }
 .overlay-setup-heading {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 16px;
-}
-.overlay-setup-heading h2 {
-  font-size: 25px;
-  margin: 0;
-  padding: 0;
-  border: 0;
+  justify-content: flex-end;
 }
 .overlay-setup label {
   display: block;
   margin: 20px 0 12px;
   font-weight: 700;
 }
-.overlay-setup select {
-  display: block;
+.overlay-setup .ui-select {
   width: 100%;
-  margin-top: 8px;
-  padding: 10px;
-  background: #201f1a;
-  border: 1px solid var(--event-rule);
-  color: var(--event-bone);
-  font: inherit;
+  margin-top: var(--s2);
 }
-.overlay-setup details {
+.overlay-setup .ui-disclosure {
   border-top: 1px solid var(--event-rule);
   padding: 16px 0;
 }
-.overlay-setup summary {
+.overlay-setup .ui-disclosure-trigger {
   cursor: pointer;
   font-weight: 700;
   color: var(--event-orange);
@@ -1146,14 +1122,6 @@
   flex-wrap: wrap;
   gap: 8px;
   margin: 12px 0;
-}
-.overlay-setup .btn {
-  padding: 8px 10px;
-  font-size: 9px;
-}
-.overlay-setup .btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
 }
 .overlay-setup-hint {
   color: var(--event-muted);
@@ -1224,7 +1192,7 @@
   padding: 16px 0;
   margin: 24px 0;
 }
-.event-extra-matches > summary {
+.event-extra-matches > .ui-disclosure-trigger {
   font-size: 12px;
   cursor: pointer;
   color: var(--event-muted);
@@ -1243,7 +1211,7 @@
 .event-board .pool-flow-station a {
   color: var(--event-orange);
 }
-.event-board .pool-flow-round-group > summary {
+.event-board .pool-flow-round-group > .ui-disclosure-trigger {
   font-family: 'Oswald', Impact, sans-serif;
   text-transform: uppercase;
   font-size: 22px;

@@ -8,25 +8,6 @@
 .bracket-backup-launch small {
   color: var(--text-muted);
 }
-.bracket-backup-dialog {
-  width: min(940px, calc(100vw - 24px));
-  max-height: 92vh;
-  padding: 0;
-  border: 1px solid #aaa;
-  border-radius: 8px;
-  background: #e8e8e8;
-  color: #181818;
-}
-.bracket-backup-dialog::backdrop {
-  background: #0009;
-}
-.bracket-backup-toolbar {
-  padding: 20px;
-  background: white;
-}
-.bracket-backup-toolbar h2 {
-  margin: 0;
-}
 .bracket-backup-toolbar fieldset {
   display: flex;
   flex-wrap: wrap;
@@ -145,7 +126,7 @@
     overflow: visible;
     background: white;
   }
-  .bracket-backup-dialog::backdrop,
+  .ui-dialog-heading,
   .bracket-backup-toolbar {
     display: none !important;
   }

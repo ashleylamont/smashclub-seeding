@@ -78,6 +78,13 @@ export function opsAttention(data: AttentionData) {
 
 export function jumpToOpsControl(id: string) {
   const target = document.getElementById(id);
-  target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  target?.focus({ preventScroll: true });
+  let parent = target?.parentElement;
+  while (parent) {
+    if (parent.hasAttribute('data-disclosure')) parent.dispatchEvent(new Event('ui:expand'));
+    parent = parent.parentElement;
+  }
+  requestAnimationFrame(() => {
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target?.focus({ preventScroll: true });
+  });
 }

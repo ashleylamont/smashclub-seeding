@@ -125,7 +125,7 @@ test('guests and signed-in attendees run a pool station and immediately advance 
     await guestPage.goto(
       `/guest/${planId}?pool=upper%3A0#token=${encodeURIComponent(invitation.token)}`,
     );
-    await expect(guestPage.getByLabel('Your pool')).toHaveValue('upper:0');
+    await expect(guestPage.getByLabel('Your pool')).toHaveAttribute('data-value', 'upper:0');
     await expect.poll(() => new URL(guestPage.url()).hash).toBe('');
     const guestStation = guestPage
       .locator('article.pool-flow-station')
@@ -186,8 +186,8 @@ test('guests and signed-in attendees run a pool station and immediately advance 
     await attendeeCard.getByRole('button', { name: 'Confirm result', exact: true }).click();
     await expect(attendeeCard).toContainText('Confirmed: 2 – 0');
     await page.goto(`/live/${planId}?pool=upper%3A0`);
-    await expect(page.getByLabel('Your pool')).toHaveValue('upper:0');
-    await page.locator('.pool-flow-round-group summary').click();
+    await expect(page.getByLabel('Your pool')).toHaveAttribute('data-value', 'upper:0');
+    await page.locator('.pool-flow-round-group .ui-disclosure-trigger').click();
     await expect(page.locator('.pool-flow-round-grid')).toContainText('Resting:');
     await expect(page.getByRole('button', { name: 'We’re here — start match' })).toHaveCount(0);
   } finally {

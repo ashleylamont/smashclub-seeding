@@ -14,6 +14,8 @@ Start with the [project README](../README.md) for a quick start and repository m
 - [Permanent station QR signs](station-signs.md): printable guest reporting invitations for stations.
 - [Historical event adoption](historical-event-adoption.md): associating completed imported brackets with a saved plan.
 - [Whole-History Rating design](whr-design.md): how WHR fits and explains the history.
+- [UI foundations](ui-foundations.md): components, tokens, copy guidance, the gallery and focused TO workspace.
+- [UI visual review](ui-visual-review.md): deterministic fixtures, accessibility checks, screenshot baselines and CI review.
 
 ## Historical project records
 
