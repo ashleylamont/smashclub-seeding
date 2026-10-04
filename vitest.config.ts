@@ -15,6 +15,12 @@ export default defineConfig({
       },
       {
         test: {
+          name: 'ci',
+          include: ['test/ci/**/*.test.ts'],
+        },
+      },
+      {
+        test: {
           name: 'shared',
           include: ['packages/shared/test/**/*.test.ts'],
         },
@@ -32,6 +38,7 @@ export default defineConfig({
         test: {
           name: 'server',
           include: ['apps/server/test/**/*.test.ts'],
+          exclude: ['**/*-postgres.test.ts'],
           /**
            * Each server test boots its own in-process Postgres (PGlite) and
            * applies every migration, which is slow and memory-hungry. Run these

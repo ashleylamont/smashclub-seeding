@@ -4,6 +4,7 @@ Start with the [project README](../README.md) for a quick start and repository m
 
 ## Current guides
 
+- [Deployment assurance](deployment-assurance.md): required database/image gates, reliability fixtures and publication policy.
 - [Development and deployment](development.md): local rehearsal, PostgreSQL, environment variables, initial import and Kubernetes.
 - [Run an event](event-guide.md): planner workflow, native Nemesis and external Challonge events, results and recaps.
 - [Rating and identity notes](rating-and-identity.md): source data, rating models, board versus seeding, names and account access.

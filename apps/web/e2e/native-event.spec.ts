@@ -62,14 +62,14 @@ test('native event progresses from pools through reviewed finals to public club 
   const roster = await query<{
     entries: { playerId: string; playerName: string; companyId: string | null }[];
   }>(page.request, 'admin.eventPlanner.plan', { planId: source.id });
-  const name = `Native finals rehearsal ${Date.now()}`;
+  const name = 'Native finals reliability rehearsal';
   const { planId } = await mutate<{ planId: string }>(
     page.request,
     'admin.eventPlanner.createPlan',
     {
       name,
       bracketMode: 'native',
-      eventDate: new Date().toISOString(),
+      eventDate: '2026-09-10T08:00:00.000Z',
       upperTargetSize: 7,
       rows: roster.entries.slice(0, 14).map((entry, index) => ({
         lineNumber: index + 1,
@@ -85,9 +85,13 @@ test('native event progresses from pools through reviewed finals to public club 
   for (const procedure of [
     'admin.eventPlanner.freezeRoster',
     'admin.eventPlanner.generatePools',
+    'eventOps.softLockPools',
     'eventOps.prepare',
   ])
-    await mutate(page.request, procedure, { planId });
+    await mutate(page.request, procedure, {
+      planId,
+      ...(procedure === 'eventOps.softLockPools' ? { confirm: true } : {}),
+    });
   await mutate(page.request, 'eventOps.settings', { planId, published: true, playerReports: true });
   let snapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
   expect(snapshot.plan.bracketMode).toBe('native');
@@ -104,6 +108,8 @@ test('native event progresses from pools through reviewed finals to public club 
     placementRevision: string;
   };
   type Planner = { divisions: { division: string; pools: Pool[] }[] };
+  await page.reload();
+  await expect(page.getByRole('heading', { name })).toBeVisible();
   const before = await query<Planner>(page.request, 'admin.eventPlanner.plan', { planId });
   const first = snapshot.matches[0]!;
   const firstOrder = before.divisions
@@ -138,15 +144,40 @@ test('native event progresses from pools through reviewed finals to public club 
       .pools.find((pool) => pool.poolIndex === match.poolIndex)!
       .members.map((member) => member.playerId);
     const firstWins = order.indexOf(match.player1Id!) < order.indexOf(match.player2Id!);
-    await mutate(page.request, 'eventOps.reportScore', {
+    const input = {
       matchId: match.id,
       expectedRevision: match.revision,
-      requestId: crypto.randomUUID(),
+      requestId: `native-pool-${match.id}`,
       score1: firstWins ? 2 : 0,
       score2: firstWins ? 0 : 2,
       outcome: 'played',
-    });
+    };
+    const recorded = await mutate(page.request, 'eventOps.reportScore', input);
+    expect(await mutate(page.request, 'eventOps.reportScore', input)).toEqual(recorded);
   }
+  // A score correction invalidates old placement revisions; the final reviewed
+  // order is based on the corrected persisted match, before finals are drawn.
+  const currentPools = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
+  const corrected = currentPools.matches.find((match) => match.id === first.id)!;
+  await mutate(page.request, 'eventOps.reportScore', {
+    matchId: corrected.id,
+    expectedRevision: corrected.revision,
+    requestId: 'native-correction',
+    score1: firstWins ? 2 : 1,
+    score2: firstWins ? 1 : 2,
+    outcome: 'played',
+  });
+  const stale = await page.request.post('/api/trpc/eventOps.reportScore', {
+    data: {
+      matchId: first.id,
+      expectedRevision: first.revision,
+      requestId: 'stale-native-client',
+      score1: 2,
+      score2: 0,
+      outcome: 'played',
+    },
+  });
+  expect(stale.status()).toBe(409);
   const scored = await query<Planner>(page.request, 'admin.eventPlanner.plan', { planId });
   for (const division of scored.divisions)
     await mutate(page.request, 'admin.eventPlanner.savePoolPlacements', {
@@ -207,6 +238,11 @@ test('native event progresses from pools through reviewed finals to public club 
   await finals.getByRole('button', { name: 'Finalize native results', exact: true }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm', exact: true }).click();
   await expect(finals.getByRole('status')).toContainText('Event finalized');
+  await expect(page.getByText('Event closed · read only', { exact: true })).toBeVisible();
+  expect(await mutate(page.request, 'eventOps.native.finalize', { planId })).toMatchObject({
+    alreadyFinalized: true,
+  });
+  await page.reload();
   await expect(page.getByText('Event closed · read only', { exact: true })).toBeVisible();
   await page.goto(`/live/${planId}`);
   await expect(page.locator('.event-bracket')).toHaveCount(4);
