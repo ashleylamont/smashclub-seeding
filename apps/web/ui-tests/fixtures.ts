@@ -31,7 +31,7 @@ export async function mockEvent(page: Page, options: FixtureOptions = {}) {
       queue.currentMatchId = null;
     });
   }
-  const overview = { ...snapshot, ...extra };
+  const overview = { ...snapshot, ...structuredClone(extra) };
   const user = {
     id: 'example-user',
     name: 'Alex',
