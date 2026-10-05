@@ -1,0 +1,2051 @@
+{
+  "stationQueues": [
+    {
+      "stationId": "ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea",
+      "poolKey": null,
+      "currentMatchId": null,
+      "nextMatchId": "7451f758-732e-43d4-a9f6-aa7d1867e9c2",
+      "upcoming": [
+        {
+          "matchId": "86f6ef07-efa9-466d-befb-ba2cb95f411a",
+          "round": 1
+        },
+        {
+          "matchId": "e810bc4a-1035-4a5f-9eb3-18dbd72c82ec",
+          "round": 1
+        },
+        {
+          "matchId": "3161eff4-a6e6-43ca-bf7d-f63b1b52edfc",
+          "round": 2
+        },
+        {
+          "matchId": "aa295157-fdeb-4524-babc-24817ccec8ff",
+          "round": 2
+        },
+        {
+          "matchId": "c7115ab9-c2cd-479d-84f3-0a0e63376ada",
+          "round": 2
+        },
+        {
+          "matchId": "b771209f-6a8e-48ba-96c8-5c7b4184105f",
+          "round": 3
+        },
+        {
+          "matchId": "914cbe76-eb9c-44d7-90b3-9c552cb55189",
+          "round": 3
+        },
+        {
+          "matchId": "b4a30d9d-9820-4cab-acdd-efa340d931aa",
+          "round": 3
+        },
+        {
+          "matchId": "33911b1b-f61e-4e64-92ce-0fb3b6a0e84b",
+          "round": 4
+        },
+        {
+          "matchId": "5237520b-a1c9-4789-8b79-c8ee4b40525d",
+          "round": 5
+        }
+      ],
+      "waitingReason": null
+    },
+    {
+      "stationId": "5b1da7c1-3ef7-4efd-a670-65921c0ec300",
+      "poolKey": null,
+      "currentMatchId": "e558f251-a777-438c-9ee1-4901b6afbaf8",
+      "nextMatchId": null,
+      "upcoming": [
+        {
+          "matchId": "cde644c8-af90-43f5-9f54-fd8bfb6e8059",
+          "round": 1
+        },
+        {
+          "matchId": "ff2e7ec2-70a9-4636-af98-9e64316dbdca",
+          "round": 1
+        },
+        {
+          "matchId": "9902c9a2-4436-45a7-b611-3e70660b1f78",
+          "round": 2
+        },
+        {
+          "matchId": "b9ed500d-01d5-4f09-9265-16fc3cdd5b80",
+          "round": 2
+        },
+        {
+          "matchId": "cdbe7a10-2fb9-4218-b5a7-5a5ea1951e3e",
+          "round": 2
+        },
+        {
+          "matchId": "ed3ac186-57b5-44a1-b9ab-d59fb5114820",
+          "round": 3
+        },
+        {
+          "matchId": "a9782faf-3db7-408d-9e14-7f8e298f7717",
+          "round": 3
+        },
+        {
+          "matchId": "c5690a73-f8a7-493a-9518-d9526e7c51b8",
+          "round": 3
+        },
+        {
+          "matchId": "73b2a666-cbec-44c0-ad6a-88191ab3432a",
+          "round": 4
+        },
+        {
+          "matchId": "7ce271a7-5cdd-46e3-ba45-1f96bd3319cc",
+          "round": 5
+        }
+      ],
+      "waitingReason": null
+    }
+  ],
+  "poolRounds": [
+    {
+      "poolKey": "lower:0",
+      "rounds": [
+        {
+          "round": 1,
+          "matchIds": [
+            "c94065bc-5b31-4ef8-871d-90da454f1e14",
+            "ede12cc5-6cc2-4243-9bdc-9e53681a4019"
+          ],
+          "restingPlayerIds": ["4a0e97d2-5223-4d13-acb2-7d7103080900"]
+        },
+        {
+          "round": 2,
+          "matchIds": [
+            "7ebed7fe-5fd7-453f-b9bf-5d34e5370c82",
+            "d613be8c-983e-4c43-8eb7-9de9f42aa120"
+          ],
+          "restingPlayerIds": ["ce11ee43-2eeb-4135-a5e5-5f9aed14be0c"]
+        },
+        {
+          "round": 3,
+          "matchIds": [
+            "3a29db3e-88f8-423c-94c1-19ed93e860df",
+            "765dba3e-ed5e-49a0-b6cc-91de09c8dfe4"
+          ],
+          "restingPlayerIds": ["511a587c-1443-4c29-882e-3e48e0f7ee27"]
+        },
+        {
+          "round": 4,
+          "matchIds": [
+            "2e4124ce-9f80-45f7-ad52-b1bee943c344",
+            "3db94e5c-b6f4-4e46-9b70-d5cfa72ef4a3"
+          ],
+          "restingPlayerIds": ["d1b808fb-66fa-484f-a531-0d497d63a756"]
+        },
+        {
+          "round": 5,
+          "matchIds": [
+            "c1ac818c-2cc8-455d-b704-ea12a7816884",
+            "ff6d6dbb-7b65-46fa-b4d1-e8975a40f3a5"
+          ],
+          "restingPlayerIds": ["73e89108-dde6-48cc-a350-d84e9a2eaf22"]
+        }
+      ]
+    },
+    {
+      "poolKey": "lower:1",
+      "rounds": [
+        {
+          "round": 1,
+          "matchIds": [
+            "86f6ef07-efa9-466d-befb-ba2cb95f411a",
+            "e810bc4a-1035-4a5f-9eb3-18dbd72c82ec"
+          ],
+          "restingPlayerIds": []
+        },
+        {
+          "round": 2,
+          "matchIds": [
+            "b9ed500d-01d5-4f09-9265-16fc3cdd5b80",
+            "cdbe7a10-2fb9-4218-b5a7-5a5ea1951e3e"
+          ],
+          "restingPlayerIds": []
+        },
+        {
+          "round": 3,
+          "matchIds": [
+            "a9782faf-3db7-408d-9e14-7f8e298f7717",
+            "b4a30d9d-9820-4cab-acdd-efa340d931aa"
+          ],
+          "restingPlayerIds": []
+        }
+      ]
+    },
+    {
+      "poolKey": "upper:0",
+      "rounds": [
+        {
+          "round": 1,
+          "matchIds": [
+            "7451f758-732e-43d4-a9f6-aa7d1867e9c2",
+            "e558f251-a777-438c-9ee1-4901b6afbaf8"
+          ],
+          "restingPlayerIds": ["27d52e72-668d-4558-8e9b-c3f61ce2b216"]
+        },
+        {
+          "round": 2,
+          "matchIds": [
+            "3161eff4-a6e6-43ca-bf7d-f63b1b52edfc",
+            "9902c9a2-4436-45a7-b611-3e70660b1f78"
+          ],
+          "restingPlayerIds": ["acadd6a6-59c2-4cc0-8f2e-c4335be828f3"]
+        },
+        {
+          "round": 3,
+          "matchIds": [
+            "b771209f-6a8e-48ba-96c8-5c7b4184105f",
+            "ed3ac186-57b5-44a1-b9ab-d59fb5114820"
+          ],
+          "restingPlayerIds": ["5c0bb9a5-70f0-4185-afea-243fe431617d"]
+        },
+        {
+          "round": 4,
+          "matchIds": [
+            "33911b1b-f61e-4e64-92ce-0fb3b6a0e84b",
+            "73b2a666-cbec-44c0-ad6a-88191ab3432a"
+          ],
+          "restingPlayerIds": ["fca28732-73e8-453f-86db-3284672b4602"]
+        },
+        {
+          "round": 5,
+          "matchIds": [
+            "5237520b-a1c9-4789-8b79-c8ee4b40525d",
+            "7ce271a7-5cdd-46e3-ba45-1f96bd3319cc"
+          ],
+          "restingPlayerIds": ["98ab904b-b9c5-47a7-a7e8-985d16c0e2fe"]
+        }
+      ]
+    },
+    {
+      "poolKey": "upper:1",
+      "rounds": [
+        {
+          "round": 1,
+          "matchIds": [
+            "cde644c8-af90-43f5-9f54-fd8bfb6e8059",
+            "ff2e7ec2-70a9-4636-af98-9e64316dbdca"
+          ],
+          "restingPlayerIds": []
+        },
+        {
+          "round": 2,
+          "matchIds": [
+            "aa295157-fdeb-4524-babc-24817ccec8ff",
+            "c7115ab9-c2cd-479d-84f3-0a0e63376ada"
+          ],
+          "restingPlayerIds": []
+        },
+        {
+          "round": 3,
+          "matchIds": [
+            "914cbe76-eb9c-44d7-90b3-9c552cb55189",
+            "c5690a73-f8a7-493a-9518-d9526e7c51b8"
+          ],
+          "restingPlayerIds": []
+        }
+      ]
+    }
+  ],
+  "nativeBrackets": [
+    {
+      "id": "fixture-championship",
+      "division": "upper",
+      "stage": "main",
+      "entrantIds": [
+        "5c0bb9a5-70f0-4185-afea-243fe431617d",
+        "2aa5492e-cdcb-4af9-8aea-f454a452e7d4"
+      ],
+      "complete": false,
+      "winnerId": null,
+      "standings": []
+    }
+  ],
+  "plan": {
+    "id": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+    "name": "Tech In Place · October tournament night",
+    "eventDate": "2026-10-04T04:42:44.062Z",
+    "status": "underway",
+    "softLockedAt": "2026-10-04T00:00:00.000Z",
+    "bracketMode": "native",
+    "historicalResultsSlug": null,
+    "resultsSlug": null,
+    "liveOwned": true,
+    "drawPaused": false
+  },
+  "brackets": [
+    {
+      "division": "upper",
+      "stage": "main",
+      "slug": null
+    },
+    {
+      "division": "upper",
+      "stage": "consolation",
+      "slug": null
+    },
+    {
+      "division": "lower",
+      "stage": "main",
+      "slug": null
+    },
+    {
+      "division": "lower",
+      "stage": "consolation",
+      "slug": null
+    }
+  ],
+  "settings": {
+    "scoreReportingMode": "to_review",
+    "published": true,
+    "playerReports": true,
+    "resourceRevision": 0,
+    "reportingRevision": 0,
+    "capacity": 2
+  },
+  "matches": [
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "765dba3e-ed5e-49a0-b6cc-91de09c8dfe4",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:lower:0:73e89108-dde6-48cc-a350-d84e9a2eaf22:d1b808fb-66fa-484f-a531-0d497d63a756",
+      "sourceSetId": null,
+      "division": "lower",
+      "stage": "group",
+      "poolIndex": 0,
+      "label": "lower Pool A · 1 v 2",
+      "player1Id": "d1b808fb-66fa-484f-a531-0d497d63a756",
+      "player2Id": "73e89108-dde6-48cc-a350-d84e9a2eaf22",
+      "score1": 2,
+      "score2": 0,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": "d1b808fb-66fa-484f-a531-0d497d63a756",
+      "outcome": "played",
+      "status": "complete",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": "2026-10-04T04:42:44.112Z",
+      "revision": 1,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Roy",
+      "player2Name": "Pikachu",
+      "player1Characters": [],
+      "player2Characters": [],
+      "availability": {
+        "canStart": false,
+        "reasons": [
+          {
+            "code": "complete",
+            "message": "This match has finished."
+          }
+        ],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "c1ac818c-2cc8-455d-b704-ea12a7816884",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:lower:0:ce11ee43-2eeb-4135-a5e5-5f9aed14be0c:d1b808fb-66fa-484f-a531-0d497d63a756",
+      "sourceSetId": null,
+      "division": "lower",
+      "stage": "group",
+      "poolIndex": 0,
+      "label": "lower Pool A · 1 v 3",
+      "player1Id": "d1b808fb-66fa-484f-a531-0d497d63a756",
+      "player2Id": "ce11ee43-2eeb-4135-a5e5-5f9aed14be0c",
+      "score1": 2,
+      "score2": 0,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": "d1b808fb-66fa-484f-a531-0d497d63a756",
+      "outcome": "played",
+      "status": "complete",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": "2026-10-04T04:42:44.116Z",
+      "revision": 1,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Roy",
+      "player2Name": "Meta K",
+      "player1Characters": [],
+      "player2Characters": [],
+      "availability": {
+        "canStart": false,
+        "reasons": [
+          {
+            "code": "complete",
+            "message": "This match has finished."
+          }
+        ],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "ede12cc5-6cc2-4243-9bdc-9e53681a4019",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:lower:0:511a587c-1443-4c29-882e-3e48e0f7ee27:d1b808fb-66fa-484f-a531-0d497d63a756",
+      "sourceSetId": null,
+      "division": "lower",
+      "stage": "group",
+      "poolIndex": 0,
+      "label": "lower Pool A · 1 v 4",
+      "player1Id": "d1b808fb-66fa-484f-a531-0d497d63a756",
+      "player2Id": "511a587c-1443-4c29-882e-3e48e0f7ee27",
+      "score1": 2,
+      "score2": 0,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": "d1b808fb-66fa-484f-a531-0d497d63a756",
+      "outcome": "played",
+      "status": "complete",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": "2026-10-04T04:42:44.119Z",
+      "revision": 1,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Roy",
+      "player2Name": "Ganondorf",
+      "player1Characters": [],
+      "player2Characters": ["ganondorf"],
+      "availability": {
+        "canStart": false,
+        "reasons": [
+          {
+            "code": "complete",
+            "message": "This match has finished."
+          }
+        ],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "7ebed7fe-5fd7-453f-b9bf-5d34e5370c82",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:lower:0:4a0e97d2-5223-4d13-acb2-7d7103080900:d1b808fb-66fa-484f-a531-0d497d63a756",
+      "sourceSetId": null,
+      "division": "lower",
+      "stage": "group",
+      "poolIndex": 0,
+      "label": "lower Pool A · 1 v 5",
+      "player1Id": "d1b808fb-66fa-484f-a531-0d497d63a756",
+      "player2Id": "4a0e97d2-5223-4d13-acb2-7d7103080900",
+      "score1": 2,
+      "score2": 0,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": "d1b808fb-66fa-484f-a531-0d497d63a756",
+      "outcome": "played",
+      "status": "complete",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": "2026-10-04T04:42:44.123Z",
+      "revision": 1,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Roy",
+      "player2Name": "Wolf",
+      "player1Characters": [],
+      "player2Characters": ["wolf"],
+      "availability": {
+        "canStart": false,
+        "reasons": [
+          {
+            "code": "complete",
+            "message": "This match has finished."
+          }
+        ],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "c94065bc-5b31-4ef8-871d-90da454f1e14",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:lower:0:73e89108-dde6-48cc-a350-d84e9a2eaf22:ce11ee43-2eeb-4135-a5e5-5f9aed14be0c",
+      "sourceSetId": null,
+      "division": "lower",
+      "stage": "group",
+      "poolIndex": 0,
+      "label": "lower Pool A · 2 v 3",
+      "player1Id": "73e89108-dde6-48cc-a350-d84e9a2eaf22",
+      "player2Id": "ce11ee43-2eeb-4135-a5e5-5f9aed14be0c",
+      "score1": 2,
+      "score2": 0,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": "73e89108-dde6-48cc-a350-d84e9a2eaf22",
+      "outcome": "played",
+      "status": "complete",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": "2026-10-04T04:42:44.126Z",
+      "revision": 1,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Pikachu",
+      "player2Name": "Meta K",
+      "player1Characters": [],
+      "player2Characters": [],
+      "availability": {
+        "canStart": false,
+        "reasons": [
+          {
+            "code": "complete",
+            "message": "This match has finished."
+          }
+        ],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "d613be8c-983e-4c43-8eb7-9de9f42aa120",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:lower:0:511a587c-1443-4c29-882e-3e48e0f7ee27:73e89108-dde6-48cc-a350-d84e9a2eaf22",
+      "sourceSetId": null,
+      "division": "lower",
+      "stage": "group",
+      "poolIndex": 0,
+      "label": "lower Pool A · 2 v 4",
+      "player1Id": "73e89108-dde6-48cc-a350-d84e9a2eaf22",
+      "player2Id": "511a587c-1443-4c29-882e-3e48e0f7ee27",
+      "score1": 2,
+      "score2": 0,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": "73e89108-dde6-48cc-a350-d84e9a2eaf22",
+      "outcome": "played",
+      "status": "complete",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": "2026-10-04T04:42:44.130Z",
+      "revision": 1,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Pikachu",
+      "player2Name": "Ganondorf",
+      "player1Characters": [],
+      "player2Characters": ["ganondorf"],
+      "availability": {
+        "canStart": false,
+        "reasons": [
+          {
+            "code": "complete",
+            "message": "This match has finished."
+          }
+        ],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "2e4124ce-9f80-45f7-ad52-b1bee943c344",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:lower:0:4a0e97d2-5223-4d13-acb2-7d7103080900:73e89108-dde6-48cc-a350-d84e9a2eaf22",
+      "sourceSetId": null,
+      "division": "lower",
+      "stage": "group",
+      "poolIndex": 0,
+      "label": "lower Pool A · 2 v 5",
+      "player1Id": "73e89108-dde6-48cc-a350-d84e9a2eaf22",
+      "player2Id": "4a0e97d2-5223-4d13-acb2-7d7103080900",
+      "score1": 2,
+      "score2": 0,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": "73e89108-dde6-48cc-a350-d84e9a2eaf22",
+      "outcome": "played",
+      "status": "complete",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": "2026-10-04T04:42:44.133Z",
+      "revision": 1,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Pikachu",
+      "player2Name": "Wolf",
+      "player1Characters": [],
+      "player2Characters": ["wolf"],
+      "availability": {
+        "canStart": false,
+        "reasons": [
+          {
+            "code": "complete",
+            "message": "This match has finished."
+          }
+        ],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "3db94e5c-b6f4-4e46-9b70-d5cfa72ef4a3",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:lower:0:511a587c-1443-4c29-882e-3e48e0f7ee27:ce11ee43-2eeb-4135-a5e5-5f9aed14be0c",
+      "sourceSetId": null,
+      "division": "lower",
+      "stage": "group",
+      "poolIndex": 0,
+      "label": "lower Pool A · 3 v 4",
+      "player1Id": "ce11ee43-2eeb-4135-a5e5-5f9aed14be0c",
+      "player2Id": "511a587c-1443-4c29-882e-3e48e0f7ee27",
+      "score1": 2,
+      "score2": 0,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": "ce11ee43-2eeb-4135-a5e5-5f9aed14be0c",
+      "outcome": "played",
+      "status": "complete",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": "2026-10-04T04:42:44.137Z",
+      "revision": 1,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Meta K",
+      "player2Name": "Ganondorf",
+      "player1Characters": [],
+      "player2Characters": ["ganondorf"],
+      "availability": {
+        "canStart": false,
+        "reasons": [
+          {
+            "code": "complete",
+            "message": "This match has finished."
+          }
+        ],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "3a29db3e-88f8-423c-94c1-19ed93e860df",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:lower:0:4a0e97d2-5223-4d13-acb2-7d7103080900:ce11ee43-2eeb-4135-a5e5-5f9aed14be0c",
+      "sourceSetId": null,
+      "division": "lower",
+      "stage": "group",
+      "poolIndex": 0,
+      "label": "lower Pool A · 3 v 5",
+      "player1Id": "ce11ee43-2eeb-4135-a5e5-5f9aed14be0c",
+      "player2Id": "4a0e97d2-5223-4d13-acb2-7d7103080900",
+      "score1": 2,
+      "score2": 0,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": "ce11ee43-2eeb-4135-a5e5-5f9aed14be0c",
+      "outcome": "played",
+      "status": "complete",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": "2026-10-04T04:42:44.140Z",
+      "revision": 1,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Meta K",
+      "player2Name": "Wolf",
+      "player1Characters": [],
+      "player2Characters": ["wolf"],
+      "availability": {
+        "canStart": false,
+        "reasons": [
+          {
+            "code": "complete",
+            "message": "This match has finished."
+          }
+        ],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "ff6d6dbb-7b65-46fa-b4d1-e8975a40f3a5",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:lower:0:4a0e97d2-5223-4d13-acb2-7d7103080900:511a587c-1443-4c29-882e-3e48e0f7ee27",
+      "sourceSetId": null,
+      "division": "lower",
+      "stage": "group",
+      "poolIndex": 0,
+      "label": "lower Pool A · 4 v 5",
+      "player1Id": "511a587c-1443-4c29-882e-3e48e0f7ee27",
+      "player2Id": "4a0e97d2-5223-4d13-acb2-7d7103080900",
+      "score1": 2,
+      "score2": 0,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": "511a587c-1443-4c29-882e-3e48e0f7ee27",
+      "outcome": "played",
+      "status": "complete",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": "2026-10-04T04:42:44.144Z",
+      "revision": 1,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Ganondorf",
+      "player2Name": "Wolf",
+      "player1Characters": ["ganondorf"],
+      "player2Characters": ["wolf"],
+      "availability": {
+        "canStart": false,
+        "reasons": [
+          {
+            "code": "complete",
+            "message": "This match has finished."
+          }
+        ],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "e810bc4a-1035-4a5f-9eb3-18dbd72c82ec",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:lower:1:1b46ee15-4e31-4cdc-9816-21753008b7a5:4894742f-4322-4bc3-b11c-5fa3da2c1680",
+      "sourceSetId": null,
+      "division": "lower",
+      "stage": "group",
+      "poolIndex": 1,
+      "label": "lower Pool B · 1 v 2",
+      "player1Id": "1b46ee15-4e31-4cdc-9816-21753008b7a5",
+      "player2Id": "4894742f-4322-4bc3-b11c-5fa3da2c1680",
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "ready",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": null,
+      "revision": 0,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Mewtwo",
+      "player2Name": "Pit",
+      "player1Characters": [],
+      "player2Characters": [],
+      "availability": {
+        "canStart": true,
+        "reasons": [],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "cdbe7a10-2fb9-4218-b5a7-5a5ea1951e3e",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:lower:1:1b46ee15-4e31-4cdc-9816-21753008b7a5:740d9aed-cc67-43f0-ad1e-65caf59759e0",
+      "sourceSetId": null,
+      "division": "lower",
+      "stage": "group",
+      "poolIndex": 1,
+      "label": "lower Pool B · 1 v 3",
+      "player1Id": "1b46ee15-4e31-4cdc-9816-21753008b7a5",
+      "player2Id": "740d9aed-cc67-43f0-ad1e-65caf59759e0",
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "ready",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": null,
+      "revision": 0,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Mewtwo",
+      "player2Name": "Dark P",
+      "player1Characters": [],
+      "player2Characters": ["dark-pit"],
+      "availability": {
+        "canStart": true,
+        "reasons": [],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "b4a30d9d-9820-4cab-acdd-efa340d931aa",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:lower:1:17215dbb-9e2b-422a-988c-38ea1786208f:1b46ee15-4e31-4cdc-9816-21753008b7a5",
+      "sourceSetId": null,
+      "division": "lower",
+      "stage": "group",
+      "poolIndex": 1,
+      "label": "lower Pool B · 1 v 4",
+      "player1Id": "1b46ee15-4e31-4cdc-9816-21753008b7a5",
+      "player2Id": "17215dbb-9e2b-422a-988c-38ea1786208f",
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "ready",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": null,
+      "revision": 0,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Mewtwo",
+      "player2Name": "Olimar",
+      "player1Characters": [],
+      "player2Characters": [],
+      "availability": {
+        "canStart": true,
+        "reasons": [],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "a9782faf-3db7-408d-9e14-7f8e298f7717",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:lower:1:4894742f-4322-4bc3-b11c-5fa3da2c1680:740d9aed-cc67-43f0-ad1e-65caf59759e0",
+      "sourceSetId": null,
+      "division": "lower",
+      "stage": "group",
+      "poolIndex": 1,
+      "label": "lower Pool B · 2 v 3",
+      "player1Id": "4894742f-4322-4bc3-b11c-5fa3da2c1680",
+      "player2Id": "740d9aed-cc67-43f0-ad1e-65caf59759e0",
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "ready",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": null,
+      "revision": 0,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Pit",
+      "player2Name": "Dark P",
+      "player1Characters": [],
+      "player2Characters": ["dark-pit"],
+      "availability": {
+        "canStart": true,
+        "reasons": [],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "b9ed500d-01d5-4f09-9265-16fc3cdd5b80",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:lower:1:17215dbb-9e2b-422a-988c-38ea1786208f:4894742f-4322-4bc3-b11c-5fa3da2c1680",
+      "sourceSetId": null,
+      "division": "lower",
+      "stage": "group",
+      "poolIndex": 1,
+      "label": "lower Pool B · 2 v 4",
+      "player1Id": "4894742f-4322-4bc3-b11c-5fa3da2c1680",
+      "player2Id": "17215dbb-9e2b-422a-988c-38ea1786208f",
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "ready",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": null,
+      "revision": 0,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Pit",
+      "player2Name": "Olimar",
+      "player1Characters": [],
+      "player2Characters": [],
+      "availability": {
+        "canStart": true,
+        "reasons": [],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "86f6ef07-efa9-466d-befb-ba2cb95f411a",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:lower:1:17215dbb-9e2b-422a-988c-38ea1786208f:740d9aed-cc67-43f0-ad1e-65caf59759e0",
+      "sourceSetId": null,
+      "division": "lower",
+      "stage": "group",
+      "poolIndex": 1,
+      "label": "lower Pool B · 3 v 4",
+      "player1Id": "740d9aed-cc67-43f0-ad1e-65caf59759e0",
+      "player2Id": "17215dbb-9e2b-422a-988c-38ea1786208f",
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "ready",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": null,
+      "revision": 0,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Dark P",
+      "player2Name": "Olimar",
+      "player1Characters": ["dark-pit"],
+      "player2Characters": [],
+      "availability": {
+        "canStart": true,
+        "reasons": [],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "e558f251-a777-438c-9ee1-4901b6afbaf8",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:upper:0:5c0bb9a5-70f0-4185-afea-243fe431617d:fca28732-73e8-453f-86db-3284672b4602",
+      "sourceSetId": null,
+      "division": "upper",
+      "stage": "group",
+      "poolIndex": 0,
+      "label": "upper Pool A · 1 v 2",
+      "player1Id": "5c0bb9a5-70f0-4185-afea-243fe431617d",
+      "player2Id": "fca28732-73e8-453f-86db-3284672b4602",
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "playing",
+      "stationId": "5b1da7c1-3ef7-4efd-a670-65921c0ec300",
+      "blockedReason": null,
+      "resultUpdatedAt": null,
+      "revision": 1,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Alex with a long tournament alias",
+      "player2Name": "Chrom",
+      "player1Characters": [],
+      "player2Characters": ["chrom"],
+      "availability": {
+        "canStart": false,
+        "reasons": [
+          {
+            "code": "playing",
+            "message": "This match is already playing."
+          }
+        ],
+        "eligibleStationIds": [
+          "5b1da7c1-3ef7-4efd-a670-65921c0ec300",
+          "ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"
+        ]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "73b2a666-cbec-44c0-ad6a-88191ab3432a",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:upper:0:5c0bb9a5-70f0-4185-afea-243fe431617d:acadd6a6-59c2-4cc0-8f2e-c4335be828f3",
+      "sourceSetId": null,
+      "division": "upper",
+      "stage": "group",
+      "poolIndex": 0,
+      "label": "upper Pool A · 1 v 3",
+      "player1Id": "5c0bb9a5-70f0-4185-afea-243fe431617d",
+      "player2Id": "acadd6a6-59c2-4cc0-8f2e-c4335be828f3",
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "ready",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": null,
+      "revision": 0,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Alex with a long tournament alias",
+      "player2Name": "Bowser",
+      "player1Characters": [],
+      "player2Characters": [],
+      "availability": {
+        "canStart": false,
+        "reasons": [
+          {
+            "code": "player_busy",
+            "message": "A player is already playing in upper Pool A · 1 v 2."
+          }
+        ],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "3161eff4-a6e6-43ca-bf7d-f63b1b52edfc",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:upper:0:5c0bb9a5-70f0-4185-afea-243fe431617d:98ab904b-b9c5-47a7-a7e8-985d16c0e2fe",
+      "sourceSetId": null,
+      "division": "upper",
+      "stage": "group",
+      "poolIndex": 0,
+      "label": "upper Pool A · 1 v 4",
+      "player1Id": "5c0bb9a5-70f0-4185-afea-243fe431617d",
+      "player2Id": "98ab904b-b9c5-47a7-a7e8-985d16c0e2fe",
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "ready",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": null,
+      "revision": 0,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Alex with a long tournament alias",
+      "player2Name": "Ness",
+      "player1Characters": [],
+      "player2Characters": ["ness"],
+      "availability": {
+        "canStart": false,
+        "reasons": [
+          {
+            "code": "player_busy",
+            "message": "A player is already playing in upper Pool A · 1 v 2."
+          }
+        ],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "7ce271a7-5cdd-46e3-ba45-1f96bd3319cc",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:upper:0:27d52e72-668d-4558-8e9b-c3f61ce2b216:5c0bb9a5-70f0-4185-afea-243fe431617d",
+      "sourceSetId": null,
+      "division": "upper",
+      "stage": "group",
+      "poolIndex": 0,
+      "label": "upper Pool A · 1 v 5",
+      "player1Id": "5c0bb9a5-70f0-4185-afea-243fe431617d",
+      "player2Id": "27d52e72-668d-4558-8e9b-c3f61ce2b216",
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "ready",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": null,
+      "revision": 0,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Alex with a long tournament alias",
+      "player2Name": "Luigi",
+      "player1Characters": [],
+      "player2Characters": [],
+      "availability": {
+        "canStart": false,
+        "reasons": [
+          {
+            "code": "player_busy",
+            "message": "A player is already playing in upper Pool A · 1 v 2."
+          }
+        ],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "5237520b-a1c9-4789-8b79-c8ee4b40525d",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:upper:0:acadd6a6-59c2-4cc0-8f2e-c4335be828f3:fca28732-73e8-453f-86db-3284672b4602",
+      "sourceSetId": null,
+      "division": "upper",
+      "stage": "group",
+      "poolIndex": 0,
+      "label": "upper Pool A · 2 v 3",
+      "player1Id": "fca28732-73e8-453f-86db-3284672b4602",
+      "player2Id": "acadd6a6-59c2-4cc0-8f2e-c4335be828f3",
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "ready",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": null,
+      "revision": 0,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Chrom",
+      "player2Name": "Bowser",
+      "player1Characters": ["chrom"],
+      "player2Characters": [],
+      "availability": {
+        "canStart": false,
+        "reasons": [
+          {
+            "code": "player_busy",
+            "message": "A player is already playing in upper Pool A · 1 v 2."
+          }
+        ],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "ed3ac186-57b5-44a1-b9ab-d59fb5114820",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:upper:0:98ab904b-b9c5-47a7-a7e8-985d16c0e2fe:fca28732-73e8-453f-86db-3284672b4602",
+      "sourceSetId": null,
+      "division": "upper",
+      "stage": "group",
+      "poolIndex": 0,
+      "label": "upper Pool A · 2 v 4",
+      "player1Id": "fca28732-73e8-453f-86db-3284672b4602",
+      "player2Id": "98ab904b-b9c5-47a7-a7e8-985d16c0e2fe",
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "ready",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": null,
+      "revision": 0,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Chrom",
+      "player2Name": "Ness",
+      "player1Characters": ["chrom"],
+      "player2Characters": ["ness"],
+      "availability": {
+        "canStart": false,
+        "reasons": [
+          {
+            "code": "player_busy",
+            "message": "A player is already playing in upper Pool A · 1 v 2."
+          }
+        ],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "9902c9a2-4436-45a7-b611-3e70660b1f78",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:upper:0:27d52e72-668d-4558-8e9b-c3f61ce2b216:fca28732-73e8-453f-86db-3284672b4602",
+      "sourceSetId": null,
+      "division": "upper",
+      "stage": "group",
+      "poolIndex": 0,
+      "label": "upper Pool A · 2 v 5",
+      "player1Id": "fca28732-73e8-453f-86db-3284672b4602",
+      "player2Id": "27d52e72-668d-4558-8e9b-c3f61ce2b216",
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "ready",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": null,
+      "revision": 0,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Chrom",
+      "player2Name": "Luigi",
+      "player1Characters": ["chrom"],
+      "player2Characters": [],
+      "availability": {
+        "canStart": false,
+        "reasons": [
+          {
+            "code": "player_busy",
+            "message": "A player is already playing in upper Pool A · 1 v 2."
+          }
+        ],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "7451f758-732e-43d4-a9f6-aa7d1867e9c2",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:upper:0:98ab904b-b9c5-47a7-a7e8-985d16c0e2fe:acadd6a6-59c2-4cc0-8f2e-c4335be828f3",
+      "sourceSetId": null,
+      "division": "upper",
+      "stage": "group",
+      "poolIndex": 0,
+      "label": "upper Pool A · 3 v 4",
+      "player1Id": "acadd6a6-59c2-4cc0-8f2e-c4335be828f3",
+      "player2Id": "98ab904b-b9c5-47a7-a7e8-985d16c0e2fe",
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "ready",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": null,
+      "revision": 0,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Bowser",
+      "player2Name": "Ness",
+      "player1Characters": [],
+      "player2Characters": ["ness"],
+      "availability": {
+        "canStart": true,
+        "reasons": [],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "b771209f-6a8e-48ba-96c8-5c7b4184105f",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:upper:0:27d52e72-668d-4558-8e9b-c3f61ce2b216:acadd6a6-59c2-4cc0-8f2e-c4335be828f3",
+      "sourceSetId": null,
+      "division": "upper",
+      "stage": "group",
+      "poolIndex": 0,
+      "label": "upper Pool A · 3 v 5",
+      "player1Id": "acadd6a6-59c2-4cc0-8f2e-c4335be828f3",
+      "player2Id": "27d52e72-668d-4558-8e9b-c3f61ce2b216",
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "ready",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": null,
+      "revision": 0,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Bowser",
+      "player2Name": "Luigi",
+      "player1Characters": [],
+      "player2Characters": [],
+      "availability": {
+        "canStart": true,
+        "reasons": [],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "33911b1b-f61e-4e64-92ce-0fb3b6a0e84b",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:upper:0:27d52e72-668d-4558-8e9b-c3f61ce2b216:98ab904b-b9c5-47a7-a7e8-985d16c0e2fe",
+      "sourceSetId": null,
+      "division": "upper",
+      "stage": "group",
+      "poolIndex": 0,
+      "label": "upper Pool A · 4 v 5",
+      "player1Id": "98ab904b-b9c5-47a7-a7e8-985d16c0e2fe",
+      "player2Id": "27d52e72-668d-4558-8e9b-c3f61ce2b216",
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "ready",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": null,
+      "revision": 0,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Ness",
+      "player2Name": "Luigi",
+      "player1Characters": ["ness"],
+      "player2Characters": [],
+      "availability": {
+        "canStart": true,
+        "reasons": [],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "ff2e7ec2-70a9-4636-af98-9e64316dbdca",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:upper:1:2aa5492e-cdcb-4af9-8aea-f454a452e7d4:d7fbb704-776a-4e74-8e26-61847cb1ee05",
+      "sourceSetId": null,
+      "division": "upper",
+      "stage": "group",
+      "poolIndex": 1,
+      "label": "upper Pool B · 1 v 2",
+      "player1Id": "2aa5492e-cdcb-4af9-8aea-f454a452e7d4",
+      "player2Id": "d7fbb704-776a-4e74-8e26-61847cb1ee05",
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "ready",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": null,
+      "revision": 0,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Peach",
+      "player2Name": "Daisy",
+      "player1Characters": [],
+      "player2Characters": ["daisy"],
+      "availability": {
+        "canStart": true,
+        "reasons": [],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "c7115ab9-c2cd-479d-84f3-0a0e63376ada",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:upper:1:2aa5492e-cdcb-4af9-8aea-f454a452e7d4:dcbd4103-145a-455a-b90e-12656df6a959",
+      "sourceSetId": null,
+      "division": "upper",
+      "stage": "group",
+      "poolIndex": 1,
+      "label": "upper Pool B · 1 v 3",
+      "player1Id": "2aa5492e-cdcb-4af9-8aea-f454a452e7d4",
+      "player2Id": "dcbd4103-145a-455a-b90e-12656df6a959",
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "ready",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": null,
+      "revision": 0,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Peach",
+      "player2Name": "Jigglypuff",
+      "player1Characters": [],
+      "player2Characters": [],
+      "availability": {
+        "canStart": true,
+        "reasons": [],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "c5690a73-f8a7-493a-9518-d9526e7c51b8",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:upper:1:2788c1c3-be8a-4b91-a394-cdb33e333689:2aa5492e-cdcb-4af9-8aea-f454a452e7d4",
+      "sourceSetId": null,
+      "division": "upper",
+      "stage": "group",
+      "poolIndex": 1,
+      "label": "upper Pool B · 1 v 4",
+      "player1Id": "2aa5492e-cdcb-4af9-8aea-f454a452e7d4",
+      "player2Id": "2788c1c3-be8a-4b91-a394-cdb33e333689",
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "ready",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": null,
+      "revision": 0,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Peach",
+      "player2Name": "Toon L",
+      "player1Characters": [],
+      "player2Characters": [],
+      "availability": {
+        "canStart": true,
+        "reasons": [],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "914cbe76-eb9c-44d7-90b3-9c552cb55189",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:upper:1:d7fbb704-776a-4e74-8e26-61847cb1ee05:dcbd4103-145a-455a-b90e-12656df6a959",
+      "sourceSetId": null,
+      "division": "upper",
+      "stage": "group",
+      "poolIndex": 1,
+      "label": "upper Pool B · 2 v 3",
+      "player1Id": "d7fbb704-776a-4e74-8e26-61847cb1ee05",
+      "player2Id": "dcbd4103-145a-455a-b90e-12656df6a959",
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "ready",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": null,
+      "revision": 0,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Daisy",
+      "player2Name": "Jigglypuff",
+      "player1Characters": ["daisy"],
+      "player2Characters": [],
+      "availability": {
+        "canStart": true,
+        "reasons": [],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "aa295157-fdeb-4524-babc-24817ccec8ff",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:upper:1:2788c1c3-be8a-4b91-a394-cdb33e333689:d7fbb704-776a-4e74-8e26-61847cb1ee05",
+      "sourceSetId": null,
+      "division": "upper",
+      "stage": "group",
+      "poolIndex": 1,
+      "label": "upper Pool B · 2 v 4",
+      "player1Id": "d7fbb704-776a-4e74-8e26-61847cb1ee05",
+      "player2Id": "2788c1c3-be8a-4b91-a394-cdb33e333689",
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "ready",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": null,
+      "revision": 0,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Daisy",
+      "player2Name": "Toon L",
+      "player1Characters": ["daisy"],
+      "player2Characters": [],
+      "availability": {
+        "canStart": true,
+        "reasons": [],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
+    },
+    {
+      "nativeBracketId": null,
+      "nativeRound": null,
+      "nativeSlot": null,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "cde644c8-af90-43f5-9f54-fd8bfb6e8059",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:upper:1:2788c1c3-be8a-4b91-a394-cdb33e333689:dcbd4103-145a-455a-b90e-12656df6a959",
+      "sourceSetId": null,
+      "division": "upper",
+      "stage": "group",
+      "poolIndex": 1,
+      "label": "upper Pool B · 3 v 4",
+      "player1Id": "dcbd4103-145a-455a-b90e-12656df6a959",
+      "player2Id": "2788c1c3-be8a-4b91-a394-cdb33e333689",
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "ready",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": null,
+      "revision": 0,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Jigglypuff",
+      "player2Name": "Toon L",
+      "player1Characters": [],
+      "player2Characters": [],
+      "availability": {
+        "canStart": true,
+        "reasons": [],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
+    },
+    {
+      "nativeBracketId": "fixture-championship",
+      "nativeRound": 1,
+      "nativeSlot": 0,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "fixture-semi-a",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:lower:0:73e89108-dde6-48cc-a350-d84e9a2eaf22:d1b808fb-66fa-484f-a531-0d497d63a756",
+      "sourceSetId": null,
+      "division": "upper",
+      "stage": "main",
+      "poolIndex": null,
+      "label": "Semi-final A",
+      "player1Id": "5c0bb9a5-70f0-4185-afea-243fe431617d",
+      "player2Id": null,
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": "5c0bb9a5-70f0-4185-afea-243fe431617d",
+      "outcome": "bye",
+      "status": "complete",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": "2026-10-04T04:42:44.112Z",
+      "revision": 1,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Alex with a long tournament alias",
+      "player2Name": null,
+      "player1Characters": ["mario"],
+      "player2Characters": [],
+      "availability": {
+        "canStart": false,
+        "reasons": [
+          {
+            "code": "complete",
+            "message": "This match has finished."
+          }
+        ],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
+    },
+    {
+      "nativeBracketId": "fixture-championship",
+      "nativeRound": 1,
+      "nativeSlot": 1,
+      "parent1MatchId": null,
+      "parent2MatchId": null,
+      "id": "fixture-semi-b",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:lower:0:73e89108-dde6-48cc-a350-d84e9a2eaf22:d1b808fb-66fa-484f-a531-0d497d63a756",
+      "sourceSetId": null,
+      "division": "upper",
+      "stage": "main",
+      "poolIndex": null,
+      "label": "Semi-final B",
+      "player1Id": "2aa5492e-cdcb-4af9-8aea-f454a452e7d4",
+      "player2Id": null,
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "blocked",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": "2026-10-04T04:42:44.112Z",
+      "revision": 1,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Peach",
+      "player2Name": null,
+      "player1Characters": ["mario"],
+      "player2Characters": [],
+      "availability": {
+        "canStart": false,
+        "reasons": [
+          {
+            "code": "complete",
+            "message": "This match has finished."
+          }
+        ],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
+    },
+    {
+      "nativeBracketId": "fixture-championship",
+      "nativeRound": 2,
+      "nativeSlot": 0,
+      "parent1MatchId": null,
+      "parent2MatchId": "fixture-semi-b",
+      "id": "fixture-final",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "sourceKey": "group:lower:0:73e89108-dde6-48cc-a350-d84e9a2eaf22:d1b808fb-66fa-484f-a531-0d497d63a756",
+      "sourceSetId": null,
+      "division": "upper",
+      "stage": "main",
+      "poolIndex": null,
+      "label": "Championship final",
+      "player1Id": "5c0bb9a5-70f0-4185-afea-243fe431617d",
+      "player2Id": null,
+      "score1": null,
+      "score2": null,
+      "liveScore1": null,
+      "liveScore2": null,
+      "winnerId": null,
+      "outcome": null,
+      "status": "blocked",
+      "stationId": null,
+      "blockedReason": null,
+      "resultUpdatedAt": "2026-10-04T04:42:44.112Z",
+      "revision": 1,
+      "syncState": "local",
+      "pendingDisputeCount": 0,
+      "player1Name": "Alex with a long tournament alias",
+      "player2Name": null,
+      "player1Characters": ["mario"],
+      "player2Characters": [],
+      "availability": {
+        "canStart": false,
+        "reasons": [
+          {
+            "code": "complete",
+            "message": "This match has finished."
+          }
+        ],
+        "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
+    }
+  ],
+  "entrants": [
+    {
+      "id": "5c0bb9a5-70f0-4185-afea-243fe431617d",
+      "name": "Ice C"
+    },
+    {
+      "id": "2aa5492e-cdcb-4af9-8aea-f454a452e7d4",
+      "name": "Peach"
+    },
+    {
+      "id": "d7fbb704-776a-4e74-8e26-61847cb1ee05",
+      "name": "Daisy"
+    },
+    {
+      "id": "fca28732-73e8-453f-86db-3284672b4602",
+      "name": "Chrom"
+    },
+    {
+      "id": "acadd6a6-59c2-4cc0-8f2e-c4335be828f3",
+      "name": "Bowser"
+    },
+    {
+      "id": "dcbd4103-145a-455a-b90e-12656df6a959",
+      "name": "Jigglypuff"
+    },
+    {
+      "id": "2788c1c3-be8a-4b91-a394-cdb33e333689",
+      "name": "Toon L"
+    },
+    {
+      "id": "98ab904b-b9c5-47a7-a7e8-985d16c0e2fe",
+      "name": "Ness"
+    },
+    {
+      "id": "27d52e72-668d-4558-8e9b-c3f61ce2b216",
+      "name": "Luigi"
+    },
+    {
+      "id": "d1b808fb-66fa-484f-a531-0d497d63a756",
+      "name": "Roy"
+    },
+    {
+      "id": "1b46ee15-4e31-4cdc-9816-21753008b7a5",
+      "name": "Mewtwo"
+    },
+    {
+      "id": "4894742f-4322-4bc3-b11c-5fa3da2c1680",
+      "name": "Pit"
+    },
+    {
+      "id": "73e89108-dde6-48cc-a350-d84e9a2eaf22",
+      "name": "Pikachu"
+    },
+    {
+      "id": "ce11ee43-2eeb-4135-a5e5-5f9aed14be0c",
+      "name": "Meta K"
+    },
+    {
+      "id": "740d9aed-cc67-43f0-ad1e-65caf59759e0",
+      "name": "Dark P"
+    },
+    {
+      "id": "17215dbb-9e2b-422a-988c-38ea1786208f",
+      "name": "Olimar"
+    },
+    {
+      "id": "511a587c-1443-4c29-882e-3e48e0f7ee27",
+      "name": "Ganondorf"
+    },
+    {
+      "id": "4a0e97d2-5223-4d13-acb2-7d7103080900",
+      "name": "Wolf"
+    }
+  ],
+  "prizes": [
+    {
+      "id": "e72dfb90-8f5e-43ea-846b-57a7fcad9dd5",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "title": "Upper champion",
+      "description": "Rehearsal trophy · recipient to be confirmed",
+      "playerId": null,
+      "playerName": null
+    },
+    {
+      "id": "60d6c274-6df2-4ffc-881c-48675d050dc2",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "title": "Good games award",
+      "description": "For bringing the club spirit",
+      "playerId": "d1b808fb-66fa-484f-a531-0d497d63a756",
+      "playerName": "Roy"
+    }
+  ],
+  "stations": [
+    {
+      "id": "5b1da7c1-3ef7-4efd-a670-65921c0ec300",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "name": "Stage",
+      "status": "occupied",
+      "currentMatchId": "e558f251-a777-438c-9ee1-4901b6afbaf8"
+    },
+    {
+      "id": "ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "name": "Setup 2",
+      "status": "free",
+      "currentMatchId": null
+    }
+  ],
+  "poolSchedules": [],
+  "announcements": [],
+  "withdrawals": [],
+  "placements": [
+    {
+      "id": "3b105ef5-fd87-4109-93d1-5a31fbc302cf",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "division": "lower",
+      "poolIndex": 0,
+      "playerId": "d1b808fb-66fa-484f-a531-0d497d63a756",
+      "place": 1,
+      "source": "manual",
+      "createdAt": "2026-10-04T04:42:44.148Z",
+      "updatedAt": "2026-10-04T04:42:44.148Z"
+    },
+    {
+      "id": "d2d0814b-2b6b-4e36-9938-99bf0e791ae0",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "division": "lower",
+      "poolIndex": 0,
+      "playerId": "73e89108-dde6-48cc-a350-d84e9a2eaf22",
+      "place": 2,
+      "source": "manual",
+      "createdAt": "2026-10-04T04:42:44.148Z",
+      "updatedAt": "2026-10-04T04:42:44.148Z"
+    },
+    {
+      "id": "07a2612d-7690-45e6-a9ab-0d04bef901d1",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "division": "lower",
+      "poolIndex": 0,
+      "playerId": "ce11ee43-2eeb-4135-a5e5-5f9aed14be0c",
+      "place": 3,
+      "source": "manual",
+      "createdAt": "2026-10-04T04:42:44.148Z",
+      "updatedAt": "2026-10-04T04:42:44.148Z"
+    },
+    {
+      "id": "c0262181-e231-409c-8e4b-92974931a8a1",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "division": "lower",
+      "poolIndex": 0,
+      "playerId": "511a587c-1443-4c29-882e-3e48e0f7ee27",
+      "place": 4,
+      "source": "manual",
+      "createdAt": "2026-10-04T04:42:44.148Z",
+      "updatedAt": "2026-10-04T04:42:44.148Z"
+    },
+    {
+      "id": "42d94391-1133-4db0-84f5-2e6e9ec7b630",
+      "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
+      "division": "lower",
+      "poolIndex": 0,
+      "playerId": "4a0e97d2-5223-4d13-acb2-7d7103080900",
+      "place": 5,
+      "source": "manual",
+      "createdAt": "2026-10-04T04:42:44.148Z",
+      "updatedAt": "2026-10-04T04:42:44.148Z"
+    }
+  ]
+}

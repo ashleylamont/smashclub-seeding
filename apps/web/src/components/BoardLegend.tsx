@@ -1,3 +1,4 @@
+import { Disclosure } from './ui/Disclosure';
 import { tierClass } from '../lib/format';
 
 /**
@@ -33,9 +34,11 @@ export function BoardLegend({ leagues }: Props) {
   const ordered = orderLeagues(leagues);
 
   return (
-    <details className="board-legend">
-      <summary className="board-legend-summary">How to read the board</summary>
-
+    <Disclosure
+      title="How to read the board"
+      triggerClassName="board-legend-summary"
+      className="board-legend"
+    >
       <div className="board-legend-body">
         <dl className="legend-terms">
           <div className="legend-term">
@@ -140,6 +143,6 @@ export function BoardLegend({ leagues }: Props) {
           </div>
         )}
       </div>
-    </details>
+    </Disclosure>
   );
 }

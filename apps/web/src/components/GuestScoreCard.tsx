@@ -1,3 +1,5 @@
+import { Button } from './ui/Button';
+import { ScoreFields, type ScoreInputValue } from './ScoreFields';
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CompletedScoreReport, type ResultSubmission } from './CompletedScoreReport';
@@ -29,8 +31,8 @@ export function GuestScoreCard({
   disputeMode: boolean;
 }) {
   const cache = useQueryClient();
-  const [score1, setScore1] = useState(0);
-  const [score2, setScore2] = useState(0);
+  const [score1, setScore1] = useState<ScoreInputValue>(0);
+  const [score2, setScore2] = useState<ScoreInputValue>(0);
   const [revision, setRevision] = useState(match.revision);
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [pending, setPending] = useState(false);
@@ -61,7 +63,7 @@ export function GuestScoreCard({
     return result;
   };
   const submit = async () => {
-    if (!session) return;
+    if (!session || score1 === '' || score2 === '') return;
     setPending(true);
     setError('');
     try {
@@ -131,15 +133,14 @@ export function GuestScoreCard({
       ) : report?.status === 'rejected' && !retryRejected ? (
         <>
           <p>Check the score with a TO before submitting again.</p>
-          <button
-            className="btn"
+          <Button
             onClick={() => {
               reset();
               setRetryRejected(true);
             }}
           >
             Start a new report
-          </button>
+          </Button>
         </>
       ) : selfRun && match.status !== 'playing' ? (
         <p className="pool-flow-selected-note">
@@ -165,53 +166,42 @@ export function GuestScoreCard({
               <p>
                 Match details changed. Reload the match and check the players before submitting.
               </p>
-              <button className="btn" type="button" onClick={reset}>
+              <Button type="button" onClick={reset}>
                 Reload match
-              </button>
+              </Button>
             </div>
           )}
-          <div className="ops-score-inputs">
-            <label>
-              {match.player1Name}
-              <input
-                className="input"
-                type="number"
-                min={0}
-                max={5}
-                value={score1}
-                required
-                onChange={(e) => {
-                  setScore1(Number(e.target.value));
-                  setRequestId(crypto.randomUUID());
-                }}
-              />
-            </label>
-            <label>
-              {match.player2Name}
-              <input
-                className="input"
-                type="number"
-                min={0}
-                max={5}
-                value={score2}
-                required
-                onChange={(e) => {
-                  setScore2(Number(e.target.value));
-                  setRequestId(crypto.randomUUID());
-                }}
-              />
-            </label>
-          </div>
-          <button
-            className="btn btn-primary"
+          <ScoreFields
+            player1Name={match.player1Name}
+            player2Name={match.player2Name}
+            score1={score1}
+            score2={score2}
+            onScore1={(value) => {
+              setScore1(value);
+              setRequestId(crypto.randomUUID());
+            }}
+            onScore2={(value) => {
+              setScore2(value);
+              setRequestId(crypto.randomUUID());
+            }}
+          />
+          <Button
+            type="submit"
+            pending={pending}
+            variant="primary"
             disabled={
-              pending || stale || score1 === score2 || !['ready', 'playing'].includes(match.status)
+              pending ||
+              stale ||
+              score1 === '' ||
+              score2 === '' ||
+              score1 === score2 ||
+              !['ready', 'playing'].includes(match.status)
             }
           >
             {disputeMode || (selfRun && autoAccept)
               ? 'Confirm result'
               : 'Submit score for TO approval'}
-          </button>
+          </Button>
           <p className="muted">
             {disputeMode
               ? 'Results advance immediately. Later disagreements go to TO review.'

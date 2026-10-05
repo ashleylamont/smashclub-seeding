@@ -1,3 +1,4 @@
+import { Select, SelectItem } from '../components/ui/Select';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
@@ -6,9 +7,7 @@ import {
   CartesianGrid,
   ComposedChart,
   Line,
-  ReferenceLine,
   ResponsiveContainer,
-  Scatter,
   Tooltip,
   XAxis,
   YAxis,
@@ -50,43 +49,23 @@ function PlayerProfile({ data }: { data: PlayerData }) {
   const { player, rating } = data;
   // The server types these rows loosely (Record<string, unknown>); see PlayerEventView.
   const events = data.events as unknown as PlayerEventView[];
-  /**
-   * Which model produced the events changes how they should be read. Glicko
-   * is sequential: each set moved the rating then and there, once, forever.
-   * WHR keeps two books — the frozen ledger of what the board published each
-   * night, and a hindsight estimate that is revised as later results teach
-   * the model more about the past. The profile shows the ledger as the
-   * primary record and the hindsight track alongside it, labelled.
-   */
-  const isWhr = data.model === 'whr';
-
-  /**
-   * The trajectory. One series — the skill estimate — inside a shaded ±2 SD
-   * band, so the uncertainty is visible as width rather than being subtracted
-   * into a separate "floor" line that reads as a second, competing rating.
-   * Under WHR a second, dashed series carries the hindsight estimate.
-   */
-  const chartData = useMemo(
-    () =>
-      events.map((event, idx) => ({
-        idx: idx + 1,
-        tournament: event.tournamentName,
-        date: formatDate(event.tournamentDate),
-        result: event.isDecay
-          ? 'decay'
-          : `${event.resultStage === 'group' ? 'Pool' : event.resultStage === 'final' ? 'Bracket' : '—'} · ${event.won ? 'W' : 'L'}`,
-        opponent: event.opponentName,
-        rating: event.postRating,
-        band: [event.postRating - 2 * event.postRd, event.postRating + 2 * event.postRd] as [
-          number,
-          number,
-        ],
-        decayRating: event.isDecay ? event.postRating : null,
-        rd: event.postRd,
-        revised: isWhr ? event.revisedRating : null,
-      })),
-    [events, isWhr],
-  );
+  const chartData = useMemo(() => {
+    const nights = new Map<string, PlayerEventView>();
+    for (const event of events)
+      nights.set(event.tournamentDate?.slice(0, 10) ?? event.tournamentId, event);
+    return [...nights.values()].map((event, idx) => ({
+      idx: idx + 1,
+      tournament: event.tournamentName,
+      date: formatDate(event.tournamentDate),
+      rating: event.postRating,
+      band: [event.postRating - 2 * event.postRd, event.postRating + 2 * event.postRd] as [
+        number,
+        number,
+      ],
+      rd: event.postRd,
+      revised: event.revisedRating,
+    }));
+  }, [events]);
 
   /**
    * Only draw the hindsight series when it actually disagrees somewhere —
@@ -95,21 +74,11 @@ function PlayerProfile({ data }: { data: PlayerData }) {
    */
   const showRevised = useMemo(
     () =>
-      isWhr &&
       chartData.some(
         (point) => point.revised !== null && Math.abs(point.revised - point.rating) >= 1,
       ),
-    [isWhr, chartData],
+    [chartData],
   );
-
-  /** Event indices where a new tournament starts, drawn as vertical rules. */
-  const eventBoundaries = useMemo(() => {
-    const marks: number[] = [];
-    events.forEach((event, idx) => {
-      if (idx > 0 && event.tournamentId !== events[idx - 1]!.tournamentId) marks.push(idx + 1);
-    });
-    return marks;
-  }, [events]);
 
   const matches = useMemo(() => events.filter((e) => !e.isDecay), [events]);
   const [stageFilter, setStageFilter] = useState<'all' | 'group' | 'final'>('all');
@@ -133,23 +102,13 @@ function PlayerProfile({ data }: { data: PlayerData }) {
     ];
     if (rating.rookieRatio > 0) {
       parts.push(`${(rating.rookieRatio * 100).toFixed(0)}% of sets in rookie brackets.`);
-      if (isWhr) {
-        // WHR has no isolation correction: thin linkage between the rookie and
-        // main pools simply comes out as a wider band, which this meter reads.
-        parts.push(
-          'Where the rookie and main pools barely overlap, the uncertainty band stays wider.',
-        );
-      } else if (rating.isolationFactor > 0) {
-        parts.push(
-          `Isolation ${(rating.isolationFactor * 100).toFixed(0)}% — rookie-only players with little main-bracket exposure carry more uncertainty.`,
-        );
-      }
+      parts.push('Where the rookie and main pools barely overlap, uncertainty stays wider.');
     }
-    if (isWhr && rating.missedEvents > 0) {
-      parts.push('Confidence also fades a little for time away, until results firm it up again.');
+    if (rating.missedEvents > 0) {
+      parts.push('Confidence fades during time away until results firm it up again.');
     }
     return parts.join(' ');
-  }, [rating, isWhr]);
+  }, [rating]);
 
   // Most recent first for the table.
   const tableEvents = useMemo(
@@ -334,29 +293,14 @@ function PlayerProfile({ data }: { data: PlayerData }) {
 
       {chartData.length > 0 && (
         <section className="section rating-chart">
-          <h3>Rating trajectory</h3>
+          <h3>Rating history</h3>
           <p className="muted chart-caption">
-            {isWhr ? (
-              <>
-                Published rating after every set — the solid line is what the board showed at the
-                time, and it never rewrites. The shaded band is ±2 standard deviations.
-                {showRevised &&
-                  ' The dashed line is hindsight: with everything played since, the model’s revised estimate of how good this player was on each night.'}{' '}
-                Vertical rules mark the start of each event.
-              </>
-            ) : (
-              <>
-                Skill estimate after every set. The shaded band is ±2 standard deviations — it
-                narrows as we see more results. Vertical rules mark the start of each event.
-              </>
-            )}
+            WHR estimate after each club night. The shaded band is ±2 standard deviations.
+            {showRevised && ' The dashed line shows the current fit’s revised historical estimate.'}
           </p>
           <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={chartData} margin={{ top: 8, right: 8, bottom: 4, left: 0 }}>
               <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
-              {eventBoundaries.map((mark) => (
-                <ReferenceLine key={mark} x={mark} stroke="var(--chart-grid)" />
-              ))}
               <XAxis
                 dataKey="idx"
                 tick={{ fill: 'var(--text-soft)', fontSize: 11 }}
@@ -377,12 +321,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                   return (
                     <div className="custom-tooltip">
                       <p className="tooltip-label">{d.tournament}</p>
-                      <p>
-                        {d.date} —{' '}
-                        {d.result === 'decay'
-                          ? 'inactivity decay'
-                          : `${d.result} vs ${d.opponent ?? 'unknown'}`}
-                      </p>
+                      <p>{d.date}</p>
                       <p className="num">
                         {d.rating.toFixed(0)} ± {d.rd.toFixed(0)}
                       </p>
@@ -409,11 +348,11 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                 strokeWidth={2}
                 dot={false}
                 isAnimationActive={false}
-                name={isWhr ? 'Published' : 'Skill'}
+                name="Night estimate"
               />
               {/* Hindsight: what the current fit says this player's skill was
                   on each night, given everything played since. Dashed and
-                  behind the published line — context, not the record. */}
+                  alongside the prefix estimate. */}
               {showRevised && (
                 <Line
                   type="monotone"
@@ -426,13 +365,6 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                   name="Hindsight"
                 />
               )}
-              {/* Decay is a different kind of event, so it gets its own mark. */}
-              <Scatter
-                dataKey="decayRating"
-                fill="var(--warn)"
-                shape="square"
-                name="Inactivity decay"
-              />
             </ComposedChart>
           </ResponsiveContainer>
         </section>
@@ -449,24 +381,20 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         {hasBothStages && (
           <label className="history-stage-filter">
             <span>Show</span>
-            <select
-              className="select"
+            <Select
               aria-label="Filter match history by stage"
               value={stageFilter}
-              onChange={(event) => setStageFilter(event.target.value as typeof stageFilter)}
+              onValueChange={(selectedValue) => setStageFilter(selectedValue as typeof stageFilter)}
             >
-              <option value="all">All stages</option>
-              <option value="group">Pools</option>
-              <option value="final">Bracket</option>
-            </select>
+              <SelectItem value="all">All stages</SelectItem>
+              <SelectItem value="group">Pools</SelectItem>
+              <SelectItem value="final">Bracket</SelectItem>
+            </Select>
           </label>
         )}
-        {isWhr && events.length > 0 && (
+        {events.length > 0 && (
           <p className="muted chart-caption">
-            Ratings here move once per club night, so each set’s Δ is its share of that night’s
-            movement — bigger for surprising results, smaller for expected ones, adding up to
-            exactly what the night changed. These numbers are what the board published at the time
-            and never rewrite.
+            WHR fits whole nights. Individual sets have no exact rating delta.
           </p>
         )}
         {events.length === 0 ? (
@@ -483,20 +411,14 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                   <th>Result</th>
                   <th
                     className="num"
-                    title={
-                      isWhr
-                        ? 'This set’s share of the night’s rating movement, weighted by how surprising the result was'
-                        : 'How much this set moved the skill estimate'
-                    }
+                    title="Evidence strength in the WHR fit; not a points multiplier"
                   >
-                    Δ Rating
+                    Evidence
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {tableEvents.map((event) => {
-                  const ratingChange = event.postRating - event.preRating;
-                  const rdChange = event.postRd - event.preRd;
                   return (
                     <tr
                       key={event.seq}
@@ -533,32 +455,8 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                       >
                         {event.isDecay ? '—' : event.won ? 'W' : 'L'}
                       </td>
-                      <td className={`num ${ratingChange >= 0 ? 'rating-up' : 'rating-down'}`}>
-                        {ratingChange >= 0 ? '+' : ''}
-                        {ratingChange.toFixed(1)}
-                        {event.isDecay && rdChange > 0 && (
-                          <span className="rd-decay"> (RD +{rdChange.toFixed(1)})</span>
-                        )}
-                        {!event.isDecay && event.weight != null && event.weight < 0.99 && (
-                          <span
-                            className="weight-indicator"
-                            title={`Match weight: ${(event.weight * 100).toFixed(0)}%`}
-                          >
-                            {' '}
-                            ×{event.weight.toFixed(2)}
-                          </span>
-                        )}
-                        {/* Under WHR a decisive scoreline counts as more than one
-                            result; say so where the extra movement shows up. */}
-                        {!event.isDecay && event.weight != null && event.weight > 1.01 && (
-                          <span
-                            className="weight-indicator"
-                            title={`Decisive set — counted as ${event.weight.toFixed(1)} results`}
-                          >
-                            {' '}
-                            ×{event.weight.toFixed(1)}
-                          </span>
-                        )}
+                      <td className="num">
+                        {event.weight == null ? '—' : `×${event.weight.toFixed(1)}`}
                       </td>
                     </tr>
                   );

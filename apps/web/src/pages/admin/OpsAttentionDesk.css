@@ -11,7 +11,7 @@
   display: grid;
   gap: 0.7rem;
 }
-.ops-attention summary {
+.ops-attention .ui-disclosure-trigger {
   cursor: pointer;
   font-weight: 650;
   padding: 0.6rem 0;

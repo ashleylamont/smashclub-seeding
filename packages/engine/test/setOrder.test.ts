@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { defaultGlickoSettings } from '@smashclub/shared';
+import { defaultRatingSettings } from '@smashclub/shared';
 import { compareSetsInBracket } from '../src/setOrder';
 import { runWhrModel } from '../src/whrRun';
-import { replayRatings } from '../src/replay';
 import type { EngineSet, EngineTournament } from '../src/types';
 
 /**
@@ -11,7 +10,7 @@ import type { EngineSet, EngineTournament } from '../src/types';
  * disagreed and the WHR path was ordering a bracket by random uuid.
  */
 
-const settings = defaultGlickoSettings;
+const settings = defaultRatingSettings;
 
 const base = {
   id: 'x',
@@ -111,22 +110,6 @@ describe('a bracket comes out in play order', () => {
 
     const alice = events.filter((e) => e.playerId === 'alice').sort((a, b) => a.seq - b.seq);
     expect(alice.map((e) => e.setId)).toEqual(['set-099', 'set-096', 'set-094']);
-  });
-
-  it('WHR and the Glicko replay agree on the order of a bracket', () => {
-    const { tournaments, sets } = doubleElim();
-    const whr = runWhrModel({ sets, tournaments, settings });
-    const glicko = replayRatings({ sets, tournaments, settings });
-
-    const orderOf = (
-      events: { playerId: string; setId: string | null; seq: number; isDecay: boolean }[],
-    ) =>
-      events
-        .filter((e) => !e.isDecay && e.playerId === 'carol')
-        .sort((a, b) => a.seq - b.seq)
-        .map((e) => e.setId);
-
-    expect(orderOf(whr.events)).toEqual(orderOf(glicko.events));
   });
 
   it('shuffling the input array does not change the order sets are processed in', () => {

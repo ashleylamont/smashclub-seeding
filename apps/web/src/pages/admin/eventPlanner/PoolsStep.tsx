@@ -1,3 +1,5 @@
+import { Select, SelectItem } from '../../../components/ui/Select';
+import { Button } from '../../../components/ui/Button';
 import { useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { trpc } from '../../../lib/trpc';
@@ -236,29 +238,29 @@ function PoolCard({
         {pool.members.map((_, place) => (
           <label key={place} className="pool-place">
             <span>{ordinal(place + 1)}</span>
-            <select
+            <Select
               disabled={locked || save.isPending}
-              className="select"
               value={order[place] ?? ''}
               aria-label={`${ordinal(place + 1)} place in pool ${pool.label}`}
-              onChange={(event) => {
+              onValueChange={(selectedValue) => {
                 const next = [...order];
-                next[place] = event.target.value;
+                next[place] = selectedValue;
                 setOrder(next);
               }}
             >
-              <option value="">—</option>
+              <SelectItem value="">—</SelectItem>
               {pool.members.map((member) => (
-                <option key={member.playerId} value={member.playerId}>
+                <SelectItem key={member.playerId} value={member.playerId}>
                   {member.name}
-                </option>
+                </SelectItem>
               ))}
-            </select>
+            </Select>
           </label>
         ))}
-        <button
+        <Button
+          variant="primary"
+          size="small"
           type="button"
-          className="btn btn-small btn-primary"
           disabled={locked || !complete || save.isPending}
           onClick={() => save.mutate()}
           title={
@@ -266,7 +268,7 @@ function PoolCard({
           }
         >
           {save.isPending ? 'Saving…' : 'Confirm pool'}
-        </button>
+        </Button>
         {save.isError && <p className="error-text">{save.error.message}</p>}
       </div>
     </div>

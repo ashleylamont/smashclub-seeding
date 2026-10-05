@@ -1,4 +1,5 @@
-import { integer, jsonb, pgTable, timestamp, uuid, uniqueIndex } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import { check, integer, jsonb, pgTable, timestamp, uuid, uniqueIndex } from 'drizzle-orm/pg-core';
 import { eventPlans, recomputes } from './domain';
 
 /** Immutable SQL -> Act transfer; restrict deletion so planning cannot erase history. */
@@ -22,7 +23,10 @@ export const nativeResultPublications = pgTable(
     tournamentIds: jsonb('tournament_ids').$type<string[]>().notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex('native_result_publications_revision_idx').on(t.eventPlanId, t.revision)],
+  (t) => [
+    check('native_result_publications_revision_check', sql`${t.revision} > 0`),
+    uniqueIndex('native_result_publications_revision_idx').on(t.eventPlanId, t.revision),
+  ],
 );
 
 /** Durable work, acknowledged only after WHR completes successfully. */

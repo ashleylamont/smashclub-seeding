@@ -1,3 +1,4 @@
+import { chooseOption, optionValues } from '../test-support/controls';
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 
 /**
@@ -181,6 +182,10 @@ test.describe('public browsing', () => {
     await page.goto('/');
     await settle(page);
 
+    const historyAxis = page.locator('.ratings-over-time').getByRole('combobox');
+    await expect(historyAxis).toHaveCount(1);
+    await chooseOption(historyAxis, 'cautious');
+
     const legend = page.locator('.chart-legend .legend-item');
     const before = await legend.count();
     expect(before).toBeGreaterThan(1);
@@ -216,10 +221,10 @@ test.describe('on a phone', () => {
     await settle(page);
 
     await expect(page.locator('.board-head')).toBeHidden();
-    const sort = page.locator('.control-sort select');
+    const sort = page.locator('.control-sort .ui-select');
     await expect(sort).toBeVisible();
 
-    await sort.selectOption('eventCount');
+    await chooseOption(sort, 'eventCount');
     await settle(page);
 
     /*
@@ -385,14 +390,10 @@ test.describe('admin', () => {
     await page.goto('/admin/seeding');
     await settle(page);
 
-    const select = page.locator('select.select').first();
-    const values = await select
-      .locator('option')
-      .evaluateAll((options) =>
-        options.map((option) => (option as HTMLOptionElement).value).filter(Boolean),
-      );
+    const select = page.locator('[role="combobox"].select').first();
+    const values = await optionValues(select);
     test.skip(values.length === 0, 'no tournaments to seed in this seed');
-    await select.selectOption(values[0]!);
+    await chooseOption(select, values[0]!);
     await settle(page);
 
     const generate = page.getByRole('button', { name: /Generate seeding/i });
@@ -425,7 +426,7 @@ test.describe('admin', () => {
     await page.reload();
     await settle(page);
     // The tournament choice is page state, not a route, so re-pick it after reload.
-    await page.locator('select.select').first().selectOption(values[0]!);
+    await chooseOption(page.locator('[role="combobox"].select').first(), values[0]!);
     await settle(page);
 
     const reloaded = page.locator('.seeding-list .seeding-row');
@@ -434,74 +435,40 @@ test.describe('admin', () => {
     await expect(reloaded.nth(1).getByRole('button', { name: expected })).toBeVisible();
   });
 
-  test('model comparison fits both models and publishes neither', async ({ page }) => {
+  test('WHR settings preserve club policy and recompute the board', async ({ page }) => {
     await signInAsAdmin(page.request);
-
-    const before = await (await page.request.get('/api/trpc/public.leaderboard')).json();
-    const modelBefore = (before.result?.data ?? before).model;
-
+    const settingsBeforeBody = await (await page.request.get('/api/trpc/admin.settings')).json();
+    const settingsBefore = settingsBeforeBody.result?.data ?? settingsBeforeBody;
+    const boardBeforeBody = await (await page.request.get('/api/trpc/public.leaderboard')).json();
+    const boardBefore = boardBeforeBody.result?.data ?? boardBeforeBody;
     await page.goto('/admin/settings');
     await settle(page);
-    await page.getByRole('button', { name: /Run comparison/i }).click();
-
-    const stats = page.locator('.comparison-stats');
-    await expect(stats).toBeVisible({ timeout: 120_000 });
-    await expect(stats).toContainText('Median rank move');
-    // Both models produced a rank for the rows shown.
-    await expect(page.locator('.model-comparison tbody tr').first()).toBeVisible();
-    const firstRow = await page.locator('.model-comparison tbody tr').first().innerText();
-    expect(firstRow).toMatch(/#\d+/);
-
-    // Read-only: the published model is untouched until the setting is saved.
-    const after = await (await page.request.get('/api/trpc/public.leaderboard')).json();
-    expect((after.result?.data ?? after).model).toBe(modelBefore);
-  });
-
-  test('switching the active model recomputes and republishes under that model', async ({
-    page,
-  }) => {
-    await signInAsAdmin(page.request);
-    await page.goto('/admin/settings');
-    await settle(page);
-
-    await page.locator('select.select').first().selectOption('whr');
+    await expect(page.getByText('Whole-History Rating (WHR)', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Run comparison/i })).toHaveCount(0);
+    const anchor = page.getByRole('checkbox', { name: 'Anchor isolated rookie ratings' });
+    await expect(anchor).toBeChecked({ checked: settingsBefore.rating.whrIsolationAnchor });
+    await anchor.click();
+    await expect(anchor).toBeChecked({ checked: !settingsBefore.rating.whrIsolationAnchor });
+    await anchor.click();
     await page.getByRole('button', { name: /Save settings/i }).click();
     await expect(page.getByText(/recompute queued/i)).toBeVisible({ timeout: 60_000 });
-
-    // Poll the public read until the new model lands — the recompute is async.
+    const settingsAfterBody = await (await page.request.get('/api/trpc/admin.settings')).json();
+    const settingsAfter = settingsAfterBody.result?.data ?? settingsAfterBody;
+    expect(settingsAfter.rating).toEqual(settingsBefore.rating);
+    expect(settingsAfter.version).toBeGreaterThan(settingsBefore.version);
     await expect
       .poll(
         async () => {
           const body = await (await page.request.get('/api/trpc/public.leaderboard')).json();
-          const data = body.result?.data ?? body;
-          return data.rows.length > 0 ? data.model : null;
+          return (body.result?.data ?? body).computedAt;
         },
         { timeout: 120_000, intervals: [1000] },
       )
-      .toBe('whr');
-
+      .not.toBe(boardBefore.computedAt);
     await page.goto('/');
     await settle(page);
     await expect(page.locator('.hero-meta')).toContainText('whr');
-    // The board still ranks and still publishes a ± band under the other model.
     await expect(page.locator('.board-row .rating-band').first()).toContainText('±');
-
-    // Put it back, so this test does not decide what the next one sees.
-    await page.goto('/admin/settings');
-    await settle(page);
-    await page.locator('select.select').first().selectOption('glicko2');
-    await page.getByRole('button', { name: /Save settings/i }).click();
-    await expect(page.getByText(/recompute queued/i)).toBeVisible({ timeout: 60_000 });
-    await expect
-      .poll(
-        async () => {
-          const body = await (await page.request.get('/api/trpc/public.leaderboard')).json();
-          const data = body.result?.data ?? body;
-          return data.rows.length > 0 ? data.model : null;
-        },
-        { timeout: 120_000, intervals: [1000] },
-      )
-      .toBe('glicko2');
   });
 });
 
@@ -571,7 +538,9 @@ test.describe('player profiles and companies', () => {
     await page.goto('/admin/players');
     await settle(page);
     await page.getByRole('button', { name: /New player/i }).click();
-    await expect(page.locator('.modal select.select')).toContainText('ZED — Zed Corp');
+    await page.getByRole('combobox', { name: 'Company', exact: true }).click();
+    await expect(page.getByRole('option', { name: 'ZED — Zed Corp', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
   });
 });
 

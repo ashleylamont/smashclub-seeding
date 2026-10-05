@@ -1,3 +1,4 @@
+import { chooseOption, clearInput } from '../test-support/controls';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import jsQR from 'jsqr';
 import { writeFile } from 'node:fs/promises';
@@ -85,6 +86,7 @@ test('scannable guest QR accepts anonymous and unlinked reports, keeps approval 
   test.setTimeout(120_000);
   const planId = await event(page.request);
   await page.goto(`/admin/event-operations?plan=${planId}`);
+  await page.getByRole('tab', { name: 'Settings', exact: true }).click();
   const controls = page
     .locator('section')
     .filter({ has: page.getByRole('heading', { name: 'Guest score reporting', exact: true }) })
@@ -127,22 +129,27 @@ test('scannable guest QR accepts anonymous and unlinked reports, keeps approval 
     const requestUrls: string[] = [];
     guest.on('request', (request) => requestUrls.push(request.url()));
     await guest.goto(invitationUrl);
-    await guest.getByRole('combobox', { name: 'Match view', exact: true }).selectOption('matches');
+    await chooseOption(guest.getByRole('combobox', { name: 'Match view', exact: true }), 'matches');
     await expect(guest.locator('header h1')).toContainText('Guest rehearsal');
-    await expect(guest.locator('article.ops-match').first()).toBeVisible();
+    await expect(guest.locator('article.ops-match:visible').first()).toBeVisible();
     expect(new URL(guest.url()).hash).toBe('');
     expect(requestUrls.some((url) => url.includes(invitationToken))).toBe(false);
     const initial = await query<Overview>(page.request, 'eventOps.overview', { planId });
     const first = initial.matches[0]!;
     const second = initial.matches[1]!;
-    const guestCard = guest.locator('article.ops-match').filter({
+    const guestCard = guest.locator('article.ops-match:visible').filter({
       has: guest.getByRole('heading', {
         name: `${first.player1Name} vs ${first.player2Name}`,
         exact: true,
       }),
     });
-    await guestCard.getByLabel(first.player1Name, { exact: true }).fill('2');
-    await guestCard.getByLabel(first.player2Name, { exact: true }).fill('1');
+    await clearInput(guestCard.getByLabel(first.player1Name, { exact: true }));
+    await guestCard.getByLabel(first.player1Name, { exact: true }).press('2');
+    await clearInput(guestCard.getByLabel(first.player2Name, { exact: true }));
+    await expect(
+      guestCard.getByRole('button', { name: 'Submit score for TO approval' }),
+    ).toBeDisabled();
+    await guestCard.getByLabel(first.player2Name, { exact: true }).press('1');
     await guestCard.getByRole('button', { name: 'Submit score for TO approval' }).click();
     await expect(guestCard).toContainText('Awaiting TO approval');
     expect(await guest.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
@@ -164,10 +171,11 @@ test('scannable guest QR accepts anonymous and unlinked reports, keeps approval 
     ).toHaveLength(0);
     const unlinkedPage = await unlinked.newPage();
     await unlinkedPage.goto(invitationUrl);
-    await unlinkedPage
-      .getByRole('combobox', { name: 'Match view', exact: true })
-      .selectOption('matches');
-    const otherCard = unlinkedPage.locator('article.ops-match').filter({
+    await chooseOption(
+      unlinkedPage.getByRole('combobox', { name: 'Match view', exact: true }),
+      'matches',
+    );
+    const otherCard = unlinkedPage.locator('article.ops-match:visible').filter({
       has: unlinkedPage.getByRole('heading', {
         name: `${second.player1Name} vs ${second.player2Name}`,
         exact: true,
@@ -260,13 +268,17 @@ test('scannable guest QR accepts anonymous and unlinked reports, keeps approval 
       `${first.player2Name} 2–1 ${first.player1Name}`,
     );
     await mutate(page.request, 'eventOps.reviewReport', { reportId: retry.id, approve: true });
-    await unlinkedPage
-      .getByRole('combobox', { name: 'Match view', exact: true })
-      .selectOption('reports');
+    await chooseOption(
+      unlinkedPage.getByRole('combobox', { name: 'Match view', exact: true }),
+      'reports',
+    );
     await expect(otherCard).toContainText('Confirmed result');
     // Revocation is checked server-side on each poll, even with cached session data.
-    page.once('dialog', (dialog) => void dialog.accept());
     await controls.getByRole('button', { name: 'Revoke all guest passes', exact: true }).click();
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Confirm', exact: true })
+      .click();
     await expect(guest.getByRole('alert')).toContainText(/revoked|expired|invalid/i);
     await unlinkedPage.goto(invitationUrl);
     await expect(unlinkedPage.getByRole('alert')).toContainText(/revoked|expired|invalid/i);
@@ -293,6 +305,7 @@ test('organisers print a permanent station QR before publication', async ({
   const overview = await query<Overview>(page.request, 'eventOps.overview', { planId });
   const stationId = overview.stations.find((station) => station.name === 'Stage')!.id;
   await page.goto(`/admin/event-operations?plan=${planId}`);
+  await page.getByRole('tab', { name: 'Settings', exact: true }).click();
   const controls = page
     .locator('section')
     .filter({ has: page.getByRole('heading', { name: 'Guest score reporting', exact: true }) })
@@ -344,7 +357,8 @@ test('organisers print a permanent station QR before publication', async ({
   try {
     const guest = await anonymous.newPage();
     await guest.goto(link!);
-    await expect(guest.getByRole('combobox', { name: 'Station', exact: true })).toHaveValue(
+    await expect(guest.getByRole('combobox', { name: 'Station', exact: true })).toHaveAttribute(
+      'data-value',
       stationId,
     );
     await expect(guest.locator('article.pool-flow-station')).toHaveCount(1);

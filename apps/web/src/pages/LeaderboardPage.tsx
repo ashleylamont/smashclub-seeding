@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/Button';
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { trpc } from '../lib/trpc';
@@ -39,11 +40,6 @@ export function LeaderboardPage() {
     queryKey: ['tournaments'],
     queryFn: () => trpc.public.tournaments.query(),
   });
-
-  const tournamentNames = useMemo(
-    () => new Map((tournaments.data ?? []).map((t) => [t.id, t.name])),
-    [tournaments.data],
-  );
 
   /**
    * The field the screen is actually about. Hiding the long tail of players who
@@ -89,9 +85,12 @@ export function LeaderboardPage() {
    */
   const trends = useMemo(() => {
     const map = new Map<string, PlayerTrend>();
+    const lastNight = new Map<string, string>();
     for (const event of ratingHistory.data?.events ?? []) {
       const trend = map.get(event.playerId) ?? { points: [], form: [] };
-      trend.points.push(event.postRating);
+      if (lastNight.get(event.playerId) !== event.eventKey) trend.points.push(event.postRating);
+      else trend.points[trend.points.length - 1] = event.postRating;
+      lastNight.set(event.playerId, event.eventKey);
       if (!event.isDecay && event.won !== null) trend.form.push(event.won);
       map.set(event.playerId, trend);
     }
@@ -117,9 +116,14 @@ export function LeaderboardPage() {
         <p className="muted">
           The board is served by the club's own API — if this keeps happening the server is probably
           down rather than your connection.{' '}
-          <button type="button" className="link-button" onClick={() => void leaderboard.refetch()}>
+          <Button
+            variant="plain"
+            type="button"
+            className="link-button"
+            onClick={() => void leaderboard.refetch()}
+          >
             Try again
-          </button>
+          </Button>
         </p>
       </div>
     );
@@ -179,8 +183,11 @@ export function LeaderboardPage() {
           <p className="hero-eyebrow">{coverage}</p>
           <h1 className="hero-title">Rankings</h1>
           <p className="hero-sub muted">
-            Ranked on your skill estimate, less a penalty for missed club nights. {policyLine} The
-            smaller figure is the estimate and its ± band — play more and the band narrows.
+            Skill estimate adjusted for attendance.{' '}
+            <InfoTip label="How ranking works">
+              Ranked on your skill estimate, less a penalty for missed club nights. {policyLine} The
+              smaller figure is the estimate and its ± band — play more and the band narrows.
+            </InfoTip>
           </p>
         </div>
 
@@ -228,9 +235,8 @@ export function LeaderboardPage() {
           {computedAt ? `Updated ${timeAgo(computedAt)}` : 'No recompute yet'} · model{' '}
           <code>{model}</code>
           <InfoTip label="Rating model">
-            Which rating system produced these numbers. Every recompute replays the club's whole set
-            history through it, so ratings are derived from the results rather than adjusted after
-            them — and switching model re-derives the entire board.
+            WHR fits eligible played results across the club’s history. Later results can revise
+            historical estimates.
           </InfoTip>
           {/* Says so here as well as on the control, because the stats above
               count this field and would otherwise look simply wrong to anyone
@@ -260,7 +266,7 @@ export function LeaderboardPage() {
       )}
 
       {ratingHistory.data && ratingHistory.data.players.length > 0 && (
-        <RatingsOverTime history={ratingHistory.data} tournamentNames={tournamentNames} />
+        <RatingsOverTime history={ratingHistory.data} />
       )}
     </div>
   );

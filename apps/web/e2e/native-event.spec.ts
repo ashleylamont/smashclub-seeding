@@ -1,3 +1,4 @@
+import { chooseOption } from '../test-support/controls';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 
 type Match = {
@@ -61,14 +62,14 @@ test('native event progresses from pools through reviewed finals to public club 
   const roster = await query<{
     entries: { playerId: string; playerName: string; companyId: string | null }[];
   }>(page.request, 'admin.eventPlanner.plan', { planId: source.id });
-  const name = `Native finals rehearsal ${Date.now()}`;
+  const name = 'Native finals reliability rehearsal';
   const { planId } = await mutate<{ planId: string }>(
     page.request,
     'admin.eventPlanner.createPlan',
     {
       name,
       bracketMode: 'native',
-      eventDate: new Date().toISOString(),
+      eventDate: '2026-09-10T08:00:00.000Z',
       upperTargetSize: 7,
       rows: roster.entries.slice(0, 14).map((entry, index) => ({
         lineNumber: index + 1,
@@ -84,10 +85,13 @@ test('native event progresses from pools through reviewed finals to public club 
   for (const procedure of [
     'admin.eventPlanner.freezeRoster',
     'admin.eventPlanner.generatePools',
+    'eventOps.softLockPools',
     'eventOps.prepare',
   ])
-    await mutate(page.request, procedure, { planId });
-  await mutate(page.request, 'eventOps.softLockPools', { planId, confirm: true });
+    await mutate(page.request, procedure, {
+      planId,
+      ...(procedure === 'eventOps.softLockPools' ? { confirm: true } : {}),
+    });
   await mutate(page.request, 'eventOps.settings', { planId, published: true, playerReports: true });
   let snapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
   expect(snapshot.plan.bracketMode).toBe('native');
@@ -104,6 +108,8 @@ test('native event progresses from pools through reviewed finals to public club 
     placementRevision: string;
   };
   type Planner = { divisions: { division: string; pools: Pool[] }[] };
+  await page.reload();
+  await expect(page.getByRole('heading', { name })).toBeVisible();
   const before = await query<Planner>(page.request, 'admin.eventPlanner.plan', { planId });
   const first = snapshot.matches[0]!;
   const firstOrder = before.divisions
@@ -112,7 +118,13 @@ test('native event progresses from pools through reviewed finals to public club 
     .members.map((member) => member.playerId);
   const firstWins = firstOrder.indexOf(first.player1Id!) < firstOrder.indexOf(first.player2Id!);
   await page.goto(`/admin/event-operations?plan=${planId}`);
-  const firstCard = page.locator('article.ops-match').filter({ hasText: first.label });
+  await chooseOption(
+    page
+      .getByRole('tabpanel', { name: 'Run matches' })
+      .getByRole('combobox', { name: 'View', exact: true }),
+    'all',
+  );
+  const firstCard = page.locator('article.ops-match:visible').filter({ hasText: first.label });
   await firstCard.getByRole('button', { name: 'Finish match', exact: true }).click();
   await firstCard
     .locator('input[type="number"]')
@@ -132,15 +144,40 @@ test('native event progresses from pools through reviewed finals to public club 
       .pools.find((pool) => pool.poolIndex === match.poolIndex)!
       .members.map((member) => member.playerId);
     const firstWins = order.indexOf(match.player1Id!) < order.indexOf(match.player2Id!);
-    await mutate(page.request, 'eventOps.reportScore', {
+    const input = {
       matchId: match.id,
       expectedRevision: match.revision,
-      requestId: crypto.randomUUID(),
+      requestId: `native-pool-${match.id}`,
       score1: firstWins ? 2 : 0,
       score2: firstWins ? 0 : 2,
       outcome: 'played',
-    });
+    };
+    const recorded = await mutate(page.request, 'eventOps.reportScore', input);
+    expect(await mutate(page.request, 'eventOps.reportScore', input)).toEqual(recorded);
   }
+  // A score correction invalidates old placement revisions; the final reviewed
+  // order is based on the corrected persisted match, before finals are drawn.
+  const currentPools = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
+  const corrected = currentPools.matches.find((match) => match.id === first.id)!;
+  await mutate(page.request, 'eventOps.reportScore', {
+    matchId: corrected.id,
+    expectedRevision: corrected.revision,
+    requestId: 'native-correction',
+    score1: firstWins ? 2 : 1,
+    score2: firstWins ? 1 : 2,
+    outcome: 'played',
+  });
+  const stale = await page.request.post('/api/trpc/eventOps.reportScore', {
+    data: {
+      matchId: first.id,
+      expectedRevision: first.revision,
+      requestId: 'stale-native-client',
+      score1: 2,
+      score2: 0,
+      outcome: 'played',
+    },
+  });
+  expect(stale.status()).toBe(409);
   const scored = await query<Planner>(page.request, 'admin.eventPlanner.plan', { planId });
   for (const division of scored.divisions)
     await mutate(page.request, 'admin.eventPlanner.savePoolPlacements', {
@@ -157,7 +194,14 @@ test('native event progresses from pools through reviewed finals to public club 
   await expect(page.getByRole('heading', { name: 'Confirmed pool standings' })).toBeVisible();
   await expect(page.locator('.event-pool-results .event-prize')).toHaveCount(4);
   await page.goto(`/admin/event-operations?plan=${planId}`);
+  await chooseOption(
+    page
+      .getByRole('tabpanel', { name: 'Run matches' })
+      .getByRole('combobox', { name: 'View', exact: true }),
+    'all',
+  );
   await expect(page.getByText('Challonge integration', { exact: true })).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Standings / draw', exact: true }).click();
   const finals = page.locator('section.card').filter({
     has: page.getByRole('heading', { name: 'Championship and consolation', exact: true }),
   });
@@ -191,9 +235,14 @@ test('native event progresses from pools through reviewed finals to public club 
   const played = snapshot.matches.filter((match) => match.outcome === 'played');
   const poolGames = played.filter((match) => !match.nativeBracketId).length;
   const finalsGames = played.length - poolGames;
-  page.once('dialog', (dialog) => dialog.accept());
   await finals.getByRole('button', { name: 'Finalize native results', exact: true }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm', exact: true }).click();
   await expect(finals.getByRole('status')).toContainText('Event finalized');
+  await expect(page.getByText('Event closed · read only', { exact: true })).toBeVisible();
+  expect(await mutate(page.request, 'eventOps.native.finalize', { planId })).toMatchObject({
+    alreadyFinalized: true,
+  });
+  await page.reload();
   await expect(page.getByText('Event closed · read only', { exact: true })).toBeVisible();
   await page.goto(`/live/${planId}`);
   await expect(page.locator('.event-bracket')).toHaveCount(4);
@@ -246,13 +295,16 @@ test('native event progresses from pools through reviewed finals to public club 
   await expect(page.locator('.recap-podiums .podium')).toHaveCount(4);
   await expect(page.locator('.recap-bracket-list li')).toHaveCount(4);
   await expect(page.locator('.recap-progress-chip')).toHaveCount(0);
-  await page.goto(`/admin/event-operations?plan=${planId}`);
+  await page.goto(`/admin/event-operations?plan=${planId}&view=draw`);
   const correction = page
     .locator('section.card')
     .filter({ has: page.getByRole('heading', { name: 'Published results and corrections' }) });
   await expect(correction).toContainText('Result revision 1 published.');
   const correctedMatch = played.find((m) => m.nativeBracketId)!;
-  await correction.getByLabel('Completed match').selectOption(correctedMatch.id);
+  await chooseOption(
+    correction.getByRole('combobox', { name: 'Completed match' }),
+    correctedMatch.id,
+  );
   await correction.locator('input[type="number"]').nth(0).fill('3');
   await correction.locator('input[type="number"]').nth(1).fill('1');
   await correction.getByLabel('Ruling reason').fill('The TO reviewed the final game count.');

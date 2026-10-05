@@ -1,13 +1,6 @@
 /**
  * The order sets within one bracket were played in.
  *
- * This is one definition on purpose. It used to be three, and they disagreed:
- * the Glicko replay fell through to `completedAt`, the WHR run fell through to
- * the set's random uuid, and the tournament screen ordered by
- * `challonge_match_id` in SQL. On the club's real data all three produced a
- * different answer for the same bracket — the WHR one was effectively shuffled,
- * and the screen listed the entire winners side before the entire losers side.
- *
  * The keys, in order:
  *
  *  1. `suggestedPlayOrder` — Challonge's own play order. A topological sort of
@@ -27,9 +20,7 @@
  * at all, and before this they either clumped at one end of the list or, under
  * the `?? 0` coalescing the WHR path used, jumped to the front of it.
  *
- * Ordering is not only cosmetic. Under Glicko-2 each set is its own rating
- * period, so this sequence is a rating input; under WHR it decides `seq` and
- * which set a period's rating movement is booked against.
+ * WHR uses this for presentation and the global result sequence.
  */
 
 /** The order-relevant fields. Anything set-shaped structurally satisfies this. */

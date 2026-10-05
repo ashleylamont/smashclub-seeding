@@ -537,7 +537,7 @@
   }
   /*
    * A number keeps its place at the end of the row; a `select` does not. Sized
-   * by its longest option, "Glicko-2 (per-tournament periods)" left its label
+   * by its longest option, a long model name left its label
    * about ninety pixels to say "Authoritative ratings" and a two-line
    * explanation in. Wrapping lets the control take a line of its own while the
    * short numeric rows stay one line each.

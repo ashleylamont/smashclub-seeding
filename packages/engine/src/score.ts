@@ -1,17 +1,6 @@
-import { LEAGUE_CATCH_ALL, type GlickoSettings } from '@smashclub/shared';
-import type { PlayerFinalState } from './types';
+import { LEAGUE_CATCH_ALL, type RatingSettings } from '@smashclub/shared';
 
-/**
- * The conservative seeding score and its confidence breakdown, ported from
- * the legacy calculate_player_score. The blend guards against small-sample
- * and rookie-island inflation:
- *
- * - isolation: rookie-heavy players with little main-bracket exposure get
- *   their RD inflated and their distance from 1500 anchored down.
- * - sample confidence: few tournaments/opponents/sets shrink the distance
- *   from 1500.
- * - conservative = effectiveRating - 2 * effectiveRd.
- */
+/** WHR estimates and the club policies applied to the board and seeding. */
 export interface PlayerScore {
   playerId: string;
   rating: number;
@@ -119,93 +108,9 @@ export interface LeaderboardRow extends PlayerScore {
  * clearing out the long-gone (which retirement does, by taking them off the
  * active board entirely rather than by driving their rating to nothing).
  */
-export function activityPenaltyFor(missedEvents: number, settings: GlickoSettings): number {
+export function activityPenaltyFor(missedEvents: number, settings: RatingSettings): number {
   const charged = Math.max(0, missedEvents - settings.activityGraceEvents);
   return Math.min(settings.activityPenaltyCap, charged * settings.activityPenaltyPerEvent);
-}
-
-export function computePlayerScore(
-  state: PlayerFinalState,
-  finalStates: ReadonlyMap<string, PlayerFinalState>,
-  settings: GlickoSettings,
-): PlayerScore {
-  const rookieRatio = state.matchCount ? state.rookieMatchCount / state.matchCount : 0;
-  const mainExperienceFactor = state.matchCount ? Math.min(state.mainMatchCount, 5) / 5 : 0;
-  let bridgeOpponentCount = 0;
-  for (const opponentId of state.opponentIds) {
-    if ((finalStates.get(opponentId)?.mainMatchCount ?? 0) > 0) bridgeOpponentCount += 1;
-  }
-  const bridgeFactor = state.matchCount ? Math.min(bridgeOpponentCount, 5) / 5 : 0;
-  const isolationFactor = rookieRatio * (1 - Math.max(mainExperienceFactor, bridgeFactor));
-  const rookieOnlyIsland =
-    state.mainMatchCount === 0 && bridgeOpponentCount === 0 && state.rookieMatchCount >= 3;
-
-  const rookieRdMultiplier = 1 + 0.9 * isolationFactor + (rookieOnlyIsland ? 0.5 : 0);
-  const effectiveRd = Math.min(settings.rdCap, state.rd * rookieRdMultiplier);
-
-  const anchorFactor = Math.max(0.25, 1 - 0.65 * isolationFactor - (rookieOnlyIsland ? 0.2 : 0));
-  const tournamentFactor = Math.min(state.tournamentIds.size, 3) / 3;
-  const opponentFactor = Math.min(state.opponentIds.size, 8) / 8;
-  const matchFactor = Math.min(state.matchCount, 10) / 10;
-  const baseSampleConfidence = Math.max(
-    settings.confidenceFloor,
-    Math.min(
-      1,
-      settings.confidenceTournamentWeight * tournamentFactor +
-        settings.confidenceOpponentWeight * opponentFactor +
-        settings.confidenceMatchWeight * matchFactor,
-    ),
-  );
-  const overlapConfidence = Math.max(mainExperienceFactor, bridgeFactor, settings.anchorFloor);
-  const sampleConfidence =
-    rookieRatio > 0
-      ? Math.max(
-          settings.anchorFloor,
-          Math.min(baseSampleConfidence, overlapConfidence + 0.25 * (1 - rookieRatio)),
-        )
-      : baseSampleConfidence;
-
-  const effectiveRating =
-    settings.initialRating +
-    (state.rating - settings.initialRating) * anchorFactor * sampleConfidence;
-  const conservativeRating = effectiveRating - 2 * effectiveRd;
-
-  const activityPenalty = activityPenaltyFor(state.missedEvents, settings);
-  const nextMissPenalty = activityPenaltyFor(state.missedEvents + 1, settings) - activityPenalty;
-  const isProvisional =
-    state.eventKeys.size < settings.provisionalEventCount ||
-    state.matchCount < settings.provisionalMatchCount;
-
-  return {
-    playerId: state.playerId,
-    rating: state.rating,
-    rd: state.rd,
-    vol: state.vol,
-    effectiveRating,
-    effectiveRd,
-    skillRating: effectiveRating,
-    skillSd: effectiveRd,
-    conservativeRating,
-    missedEvents: state.missedEvents,
-    attendanceStreak: state.attendanceStreak,
-    activityPenalty,
-    nextMissPenalty,
-    clubRating: effectiveRating - activityPenalty,
-    isProvisional,
-    matchCount: state.matchCount,
-    wins: state.wins,
-    losses: state.losses,
-    mainMatchCount: state.mainMatchCount,
-    rookieMatchCount: state.rookieMatchCount,
-    tournamentCount: state.tournamentIds.size,
-    eventCount: state.eventKeys.size,
-    uniqueOpponentCount: state.opponentIds.size,
-    bridgeOpponentCount,
-    rookieRatio,
-    isolationFactor,
-    sampleConfidence,
-    lastPlayedDate: state.lastPlayedDate,
-  };
 }
 
 /**
@@ -262,7 +167,7 @@ export function calibrateLeagueBands(
 }
 
 /**
- * Public leaderboard, ranked on `clubRating` — the skill estimate less the
+ * The public leaderboard ranks on `clubRating` — the skill estimate less the
  * activity penalty.
  *
  * Ranking on the point estimate alone left inactivity with no effect on the
@@ -275,23 +180,9 @@ export function calibrateLeagueBands(
  * Ties break on the unpenalised estimate, then lower uncertainty, then player
  * id, so the order is stable.
  */
-export function computeLeaderboard(
-  finalStates: ReadonlyMap<string, PlayerFinalState>,
-  settings: GlickoSettings,
-): LeaderboardRow[] {
-  const scores = [...finalStates.values()].map((state) =>
-    computePlayerScore(state, finalStates, settings),
-  );
-  return rankScores(scores, settings);
-}
-
-/**
- * Rank an already-computed set of scores. Shared with the WHR model so both
- * models order the board the same way.
- */
 export function rankScores(
   scores: readonly PlayerScore[],
-  settings: GlickoSettings,
+  settings: RatingSettings,
 ): LeaderboardRow[] {
   return boardOrder(scores).map((score, index) => ({
     ...score,

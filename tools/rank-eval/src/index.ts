@@ -16,11 +16,8 @@ import {
   cleanPlayerEntry,
   coinFlipModel,
   experienceModel,
-  legacyGlickoModel,
   pairedBootstrap,
   preparePlayerEntry,
-  tournamentGlickoModel,
-  unweightedTournamentGlickoModel,
   walkForward,
   whrModel,
   winRateModel,
@@ -28,7 +25,7 @@ import {
   type EvalSet,
   type ModelScore,
 } from '@smashclub/engine';
-import { defaultGlickoSettings } from '@smashclub/shared';
+import { isPlayedRatingResult } from '@smashclub/shared';
 import { impactReport } from './impact';
 
 interface CacheRow {
@@ -37,6 +34,8 @@ interface CacheRow {
   'Player 1': string;
   'Player 2': string;
   Winner: number | string;
+  Outcome?: string;
+  scores_csv?: string;
 }
 
 /**
@@ -95,6 +94,8 @@ function loadFromCache(cacheDir: string, registryPath?: string): EvalSet[] {
     const rows = payload.rows ?? [];
     if (rows.length < 5) continue; // skip unit-test fixtures living alongside
     for (const row of rows) {
+      if (!isPlayedRatingResult(row.scores_csv, { outcome: row.Outcome })) continue;
+      if (Number(row.Winner) !== 1 && Number(row.Winner) !== 2) continue;
       const p1 = identity(row['Player 1']);
       const p2 = identity(row['Player 2']);
       if (p1 === p2) continue; // legacy over-merge produced self-play
@@ -227,7 +228,6 @@ function main(): void {
     impactReport(sets, !values.names);
   }
 
-  const settings = defaultGlickoSettings;
   // Both the cache loader and the synthetic generator carry rookie-ness in the
   // tournament name, which walk-forward passes through as the tournament id.
   const isRookieTournament = (tournamentId: string): boolean => /rookie/i.test(tournamentId);
@@ -235,9 +235,6 @@ function main(): void {
     coinFlipModel,
     experienceModel,
     winRateModel,
-    legacyGlickoModel(settings),
-    tournamentGlickoModel(settings),
-    unweightedTournamentGlickoModel(settings),
     whrModel(undefined, 'whr'),
     whrModel({ driftVariancePerDay: 0.00005 }, 'whr (slow drift)'),
     whrModel({ driftVariancePerDay: 0.0008 }, 'whr (fast drift)'),
@@ -272,7 +269,7 @@ function main(): void {
   table(scores);
 
   // Paired comparison of the two candidates against what the club runs today.
-  const baseline = scores.find((s) => s.name.startsWith('glicko-2 (legacy'));
+  const baseline = scores.find((s) => s.name === 'whr');
   if (baseline) {
     console.log('\nvs the current system (negative difference = better), paired bootstrap 95% CI:');
     for (const score of scores) {
@@ -321,9 +318,9 @@ function identityImpact(
   const resolvedBest = bestOf(resolved.scores);
 
   const identityGain = rawBest.logLoss - resolvedBest.logLoss;
-  const rawLegacy = raw.scores.find((s) => s.name.startsWith('glicko-2 (legacy'))!;
-  const resolvedLegacy = resolved.scores.find((s) => s.name.startsWith('glicko-2 (legacy'))!;
-  const modelGain = resolvedLegacy.logLoss - resolvedBest.logLoss;
+  const rawWhr = raw.scores.find((s) => s.name === 'whr')!;
+  const resolvedWhr = resolved.scores.find((s) => s.name === 'whr')!;
+  const modelGain = resolvedWhr.logLoss - resolvedBest.logLoss;
 
   console.log('\n════ where does the improvement actually come from? ════');
   console.log(
@@ -335,15 +332,15 @@ function identityImpact(
       `${(100 * resolvedBest.accuracy).toFixed(1)}% accuracy, ${(100 * resolvedBest.uninformative).toFixed(0)}% coin-flip predictions`,
   );
   console.log(`\n  gain from resolving identities: ${identityGain.toFixed(4)} log loss`);
-  console.log(`  gain from the best model swap:  ${modelGain.toFixed(4)} log loss`);
+  console.log(`  gain from WHR tuning:  ${modelGain.toFixed(4)} log loss`);
   if (modelGain > 0) {
     console.log(
-      `  → identity resolution is worth ${(identityGain / modelGain).toFixed(1)}× the algorithm change. ` +
+      `  → identity resolution is worth ${(identityGain / modelGain).toFixed(1)}× the WHR tuning change. ` +
         `Invest in the review queue.`,
     );
   }
   console.log(
-    `  (fragmentation also left ${rawLegacy.predictions - resolvedLegacy.predictions} fewer usable comparisons)`,
+    `  (fragmentation also left ${rawWhr.predictions - resolvedWhr.predictions} fewer usable comparisons)`,
   );
 }
 

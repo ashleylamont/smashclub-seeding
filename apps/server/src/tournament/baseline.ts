@@ -27,7 +27,7 @@ import { requireOperator } from '../event-operations/access';
 import { getPlan } from '../event-planner/plans';
 import { Baseline, LiveState, initialState, type TournamentBaseline } from './schemas';
 import { stableId, TournamentConflict } from './domain';
-import { getGlickoSettings } from '../settings';
+import { getRatingSettings } from '../settings';
 
 /** SQL commit is the ownership boundary; Act append can safely be retried later. */
 export async function stageNativeBaseline(
@@ -105,7 +105,7 @@ export async function stageNativeBaseline(
       .select()
       .from(eventMatchAudit)
       .where(eq(eventMatchAudit.eventPlanId, planId));
-    const ratingSettings = await getGlickoSettings(tx);
+    const ratingSettings = await getRatingSettings(tx);
     const rankingFit = plan.rankingRecomputeId
       ? (await tx.select().from(recomputes).where(eq(recomputes.id, plan.rankingRecomputeId)))[0]
       : null;
@@ -137,7 +137,7 @@ export async function stageNativeBaseline(
       rankingSnapshotAt: plan.rankingSnapshotAt?.getTime() ?? null,
       ratingContext: {
         settingsVersion: ratingSettings.version,
-        settings: ratingSettings.glicko,
+        settings: ratingSettings.rating,
         rankingModel: rankingFit?.model ?? null,
         rankingFitSettings: rankingFit?.settingsSnapshot ?? null,
         inputs: rankingInputs.filter((input) => entries.some((e) => e.playerId === input.playerId)),

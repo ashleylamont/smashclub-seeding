@@ -1,3 +1,7 @@
+import { Select, SelectItem } from '../../components/ui/Select';
+import { Input } from '../../components/ui/Input';
+import { Checkbox } from '../../components/ui/Checkbox';
+import { Button } from '../../components/ui/Button';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
@@ -102,26 +106,24 @@ export function AttendanceControls({
       >
         <label>
           Change
-          <select
-            className="select"
+          <Select
             value={action}
-            onChange={(e) => {
-              setAction(e.target.value as typeof action);
+            onValueChange={(selectedValue) => {
+              setAction(selectedValue as typeof action);
               setPlayerId('');
               changed();
             }}
           >
-            <option value="add">Add a late arrival</option>
-            <option value="no_show">Remove a no-show</option>
-            <option value="redistribute">Redistribute a two-player pool</option>
-            <option value="withdraw">Withdraw an entrant after play</option>
-          </select>
+            <SelectItem value="add">Add a late arrival</SelectItem>
+            <SelectItem value="no_show">Remove a no-show</SelectItem>
+            <SelectItem value="redistribute">Redistribute a two-player pool</SelectItem>
+            <SelectItem value="withdraw">Withdraw an entrant after play</SelectItem>
+          </Select>
         </label>
         {action === 'add' && (
           <label>
             Find player by public alias
-            <input
-              className="input"
+            <Input
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
@@ -135,47 +137,44 @@ export function AttendanceControls({
         )}
         <label>
           Player
-          <select
-            className="select"
+          <Select
             value={playerId}
-            onChange={(e) => {
-              setPlayerId(e.target.value);
+            onValueChange={(selectedValue) => {
+              setPlayerId(selectedValue);
               changed();
             }}
           >
-            <option value="">Choose a player</option>
+            <SelectItem value="">Choose a player</SelectItem>
             {(action === 'add'
               ? (search.data ?? [])
               : data.entrants.filter(
                   (player) => !data.withdrawals.some((row) => row.playerId === player.id),
                 )
             ).map((player) => (
-              <option key={player.id} value={player.id}>
+              <SelectItem key={player.id} value={player.id}>
                 {player.name}
-              </option>
+              </SelectItem>
             ))}
-          </select>
+          </Select>
         </label>
         {action === 'add' && (
           <label>
             Division
-            <select
-              className="select"
+            <Select
               value={division}
-              onChange={(e) => {
-                setDivision(e.target.value as typeof division);
+              onValueChange={(selectedValue) => {
+                setDivision(selectedValue as typeof division);
                 changed();
               }}
             >
-              <option value="upper">Upper</option>
-              <option value="lower">Lower</option>
-            </select>
+              <SelectItem value="upper">Upper</SelectItem>
+              <SelectItem value="lower">Lower</SelectItem>
+            </Select>
           </label>
         )}
         <label>
           Reason
-          <input
-            className="input"
+          <Input
             value={reason}
             onChange={(e) => {
               setReason(e.target.value);
@@ -186,19 +185,18 @@ export function AttendanceControls({
           />
         </label>
         <label className="ops-check">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={ack}
-            onChange={(e) => {
-              setAck(e.target.checked);
+            onCheckedChange={(nextChecked) => {
+              setAck(nextChecked);
               changed();
             }}
           />{' '}
           I have reconciled the attendance change in any attached Challonge bracket.
         </label>
-        <button className="btn" disabled={!playerId} onClick={() => void inspect()}>
+        <Button type="submit" disabled={!playerId} onClick={() => void inspect()}>
           Preview attendance change
-        </button>
+        </Button>
       </fieldset>
       {search.isError && <p role="alert">{search.error.message}</p>}
       {preview && (
@@ -246,19 +244,16 @@ export function AttendanceControls({
           )}
           {preview.result.requiresRedistributionApproval && (
             <label className="ops-check">
-              <input
-                type="checkbox"
-                checked={approve}
-                onChange={(e) => setApprove(e.target.checked)}
-              />{' '}
-              I approve moving these players out of the two-player pool.
+              <Checkbox checked={approve} onCheckedChange={setApprove} /> I approve moving these
+              players out of the two-player pool.
               {preview.input.action === 'no_show'
                 ? ' Leave unchecked to remove the no-show and keep the two-player pool for now.'
                 : ''}
             </label>
           )}
-          <button
-            className="btn btn-primary"
+          <Button
+            variant="primary"
+            type="submit"
             disabled={
               busy ||
               disabled ||
@@ -268,7 +263,7 @@ export function AttendanceControls({
             onClick={() => void apply()}
           >
             Apply this change
-          </button>
+          </Button>
         </div>
       )}
       {error && (

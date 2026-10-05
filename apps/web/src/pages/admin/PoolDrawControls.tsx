@@ -1,3 +1,5 @@
+import { Button } from '../../components/ui/Button';
+import { useConfirmation } from '../../lib/confirmation';
 import { trpc } from '../../lib/trpc';
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 export function PoolDrawControls({
@@ -11,6 +13,7 @@ export function PoolDrawControls({
   pending: boolean;
   act: (work: () => Promise<unknown>, message: string) => Promise<unknown>;
 }) {
+  const confirmAction = useConfirmation();
   const planId = data.plan.id;
   const canSoftLock =
     data.plan.drawPaused || (data.plan.status === 'pools_ready' && !data.plan.softLockedAt);
@@ -39,12 +42,12 @@ export function PoolDrawControls({
         )}
       </div>
       {canSoftLock && (
-        <button
-          className="btn btn-primary"
+        <Button
+          variant="primary"
           disabled={pending}
-          onClick={() => {
+          onClick={async () => {
             if (
-              window.confirm(
+              await confirmAction(
                 data.plan.drawPaused
                   ? 'Resume this draw with its current pools and opponents?'
                   : 'Soft-lock this pool draw? Existing players will keep their pools and opponents, and the initial match queue will be prepared.',
@@ -57,15 +60,14 @@ export function PoolDrawControls({
           }}
         >
           {data.plan.drawPaused ? 'Resume pool draw' : 'Soft-lock pool draw'}
-        </button>
+        </Button>
       )}
       {canUnlock && (
-        <button
-          className="btn"
+        <Button
           disabled={pending}
-          onClick={() => {
+          onClick={async () => {
             if (
-              window.confirm(
+              await confirmAction(
                 data.plan.liveOwned
                   ? 'Pause this unplayed draw? Pool assignments and match history stay recorded. You can adjust attendance before resuming.'
                   : 'Return this pool draw to draft? This clears unplayed matches, saved pool assignments, and pool station settings. The planner may rebalance the pools. Recorded play and linked brackets cannot be cleared this way.',
@@ -80,7 +82,7 @@ export function PoolDrawControls({
           }}
         >
           {data.plan.liveOwned ? 'Pause unplayed draw' : 'Return draw to draft'}
-        </button>
+        </Button>
       )}
     </section>
   );

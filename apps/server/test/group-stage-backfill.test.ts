@@ -103,7 +103,7 @@ it('recovers pools from a completed legacy import and requests a rating recomput
   expect(events).toHaveLength(4);
   const group = stored.find((s) => s.resultStage === 'group')!;
   expect(events.filter((e) => e.setId === group.id)).toHaveLength(2);
-  expect(events.some((e) => e.preRating !== e.postRating)).toBe(true);
+  expect(events.every((e) => e.postRd < e.preRd)).toBe(true);
   const caller = appRouter.createCaller({
     db,
     user: null,

@@ -11,8 +11,7 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
+  workflow_call:
   pull_request:
 
 permissions:
@@ -22,7 +21,7 @@ permissions:
 # finished. Runs on main are never cancelled — main's history is the record of
 # what was green.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-verification
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -86,6 +85,27 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  ui-quality:
+    name: UI accessibility and visuals
+    # Chromium screenshots are platform-specific. Commit Darwin baselines from
+    # this job; the database-backed event flows continue on Linux above.
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-node-pnpm
+      - run: pnpm --filter @smashclub/web exec playwright install chromium
+      - run: pnpm --filter @smashclub/web test:ui
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-review
+          path: |
+            apps/web/playwright-report/ui
+            apps/web/ui-test-results
+          retention-days: 7
+          if-no-files-found: ignore
+
   build:
     name: Build
     runs-on: ubuntu-latest
@@ -144,11 +164,7 @@ jobs:
 
   legacy-python:
     name: Legacy Python tests
-    # Reference implementation kept in legacy/ during the rework. The TypeScript
-    # port is verified against this engine's own recorded output by
-    # tools/golden-check, so these tests guard the thing that master is compared
-    # against.
-    #
+    # Identity/import tests for the unsupported historical Python archive.
     # test_smart_parsing.py and test_seeding.py are excluded on purpose: both
     # construct SeedingCalculator('tests/test_data.csv'), a fixture of real
     # player data that is deliberately not committed. Listing them here only
@@ -172,23 +188,84 @@ jobs:
             tests/test_main_challonge_config.py \
             -q
 
-  # The single check to require in branch protection. `if: always()` is what
-  # makes it trustworthy: without it this job would be *skipped* when a
-  # dependency fails, and GitHub reports a skipped required check as passing.
+  postgres:
+    name: PostgreSQL integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-node-pnpm
+      - run: docker pull postgres:17.10-bookworm
+      - run: pnpm test:postgres
+        env:
+          POSTGRES_TEST_CONTAINER: '1'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: postgres-contracts
+          path: test-results/postgres.xml
+          if-no-files-found: error
+          retention-days: 7
+
+  production-image:
+    name: Production image runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: deploy/Dockerfile
+          load: true
+          tags: smashclub:smoke
+          build-args: GIT_SHA=${{ github.sha }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - run: bash scripts/production-image-smoke.sh
+        env:
+          SMOKE_IMAGE: smashclub:smoke
+      - name: Save the tested image
+        run: docker save smashclub:smoke | gzip > test-results/production-image.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-production-image
+          path: test-results/production-image.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-image-logs
+          path: test-results/image
+          retention-days: 7
+          if-no-files-found: error
+
+  # Every listed dependency is mandatory. Skips/cancellations fail closed.
   all-checks:
     name: All checks
     if: always()
-    needs: [typecheck, lint, format, test, e2e, build, bundle-smoke, legacy-python]
+    needs:
+      [
+        typecheck,
+        lint,
+        format,
+        test,
+        e2e,
+        ui-quality,
+        build,
+        bundle-smoke,
+        legacy-python,
+        postgres,
+        production-image,
+      ]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Check job results
         env:
           RESULTS: ${{ toJSON(needs) }}
-        run: |
-          echo "$RESULTS"
-          # `cancelled` and `failure` both count as not-green. A skipped job is
-          # allowed, so adding a conditional job later does not wedge the gate.
-          if jq -e 'to_entries | any(.value.result == "failure" or .value.result == "cancelled")' <<<"$RESULTS" >/dev/null; then
-            jq -r 'to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | "::error::\(.key) did not pass (\(.value.result))"' <<<"$RESULTS"
-            exit 1
-          fi
+        run: node scripts/check-required-jobs.mjs

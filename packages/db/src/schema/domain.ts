@@ -313,10 +313,9 @@ export const recomputes = pgTable('recomputes', {
   id: uuid('id').primaryKey().defaultRandom(),
   status: recomputeStatusEnum('status').notNull().default('running'),
   /**
-   * Which rating model produced this run. Models run in parallel so they can be
-   * compared on the same data before one becomes authoritative.
+   * Immutable provenance. New runs use WHR; historical model labels are retained.
    */
-  model: text('model').notNull().default('glicko2'),
+  model: text('model').notNull().default('whr'),
   engineVersion: text('engine_version').notNull(),
   settingsSnapshot: jsonb('settings_snapshot').notNull(),
   stats: jsonb('stats'),
@@ -350,10 +349,9 @@ export const ratingEvents = pgTable('rating_events', {
   postVol: doublePrecision('post_vol').notNull(),
   weight: doublePrecision('weight').notNull(),
   /**
-   * WHR only, null under Glicko: the current full-history fit's estimate of
-   * the player's skill at this event's time. `pre_`/`post_rating` are the
-   * frozen ledger of what the board published as of that night; this pair is
-   * hindsight, revised as later results teach the model more about the past.
+   * Current full-history estimate at this night. In engine v2, pre/post columns
+   * repeat pre/post-night estimates on each set, never per-match deltas. Legacy
+   * runs keep their original values and semantics for provenance.
    */
   revisedRating: doublePrecision('revised_rating'),
   revisedSd: doublePrecision('revised_sd'),
@@ -766,7 +764,9 @@ export const syncJobs = pgTable('sync_jobs', {
 
 export const settings = pgTable('settings', {
   id: integer('id').primaryKey().default(1),
-  glicko: jsonb('glicko').notNull(),
+  rating: jsonb('rating')
+    .notNull()
+    .default(sql`'{}'::jsonb`),
   version: integer('version').notNull().default(1),
   ...timestamps,
 });

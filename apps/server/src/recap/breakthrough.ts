@@ -10,9 +10,9 @@ import {
   eventNameOf,
   includesResultStage,
   publicPlayerName,
-  scoresIndicateUnplayed,
+  isPlayedRatingResult,
 } from '@smashclub/shared';
-import { getGlickoSettings } from '../settings';
+import { getRatingSettings } from '../settings';
 
 /** Read directly from synced sets so live analysis never waits for recompute. */
 export async function loadBreakthrough(db: Db, eventKey: string) {
@@ -45,7 +45,7 @@ export async function loadBreakthrough(db: Db, eventKey: string) {
     const isTonight = nightIds.has(s.tournamentId);
     if (
       s.excludedFromRatings ||
-      scoresIndicateUnplayed(s.scoresCsv) ||
+      !isPlayedRatingResult(s.scoresCsv, s.raw) ||
       !includesResultStage(modes.get(s.tournamentId)!, s.resultStage)
     ) {
       if (isTonight) coverage.excluded++;
@@ -78,12 +78,12 @@ export async function loadBreakthrough(db: Db, eventKey: string) {
       });
     }
   }
-  const { glicko, version } = await getGlickoSettings(db);
+  const { rating, version } = await getRatingSettings(db);
   const evidence = breakthroughEvidence({
     eventKey,
     sets: usable,
     tournaments: brackets.map((t) => ({ ...t, eventDate: t.eventDate!.toISOString() })),
-    settings: glicko,
+    settings: rating,
   });
   const names = await db
     .select({

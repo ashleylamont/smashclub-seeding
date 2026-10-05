@@ -1,3 +1,7 @@
+import { Input } from './ui/Input';
+import { Select, SelectItem } from './ui/Select';
+import { Switch } from './ui/Switch';
+import { Button } from './ui/Button';
 import { useId, useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import type { LeaderboardRow } from '../lib/apiTypes';
@@ -146,8 +150,7 @@ function lastSeenChip(row: LeaderboardRow): { text: string; className: string; t
  * whatever the label says.
  *
  * The server computes `sampleConfidence` against the active model's own
- * "knowing nothing" scale (Glicko's initial RD, WHR's prior), so the meter is
- * not re-derived here from a hardcoded Glicko constant.
+ * WHR prior scale, so the meter uses the server's confidence value.
  */
 function confidenceWidth(sampleConfidence: number): number {
   return Math.max(4, Math.min(100, sampleConfidence * 100));
@@ -249,7 +252,7 @@ export function Leaderboard({
       <div className="board-controls">
         <label className="control">
           <span className="control-label">Search</span>
-          <input
+          <Input
             className="control-input"
             type="search"
             placeholder="Player name…"
@@ -259,18 +262,14 @@ export function Leaderboard({
         </label>
         <label className="control">
           <span className="control-label">Company</span>
-          <select
-            className="control-input"
-            value={companyFilter}
-            onChange={(event) => setCompanyFilter(event.target.value)}
-          >
-            <option value="all">All companies</option>
+          <Select className="control-input" value={companyFilter} onValueChange={setCompanyFilter}>
+            <SelectItem value="all">All companies</SelectItem>
             {companies.map((code) => (
-              <option key={code} value={code}>
+              <SelectItem key={code} value={code}>
                 {code}
-              </option>
+              </SelectItem>
             ))}
-          </select>
+          </Select>
         </label>
         {/* Not a filter over the field so much as a definition of it: with it
             on, ranks and movement below are counted among these players only.
@@ -281,24 +280,8 @@ export function Leaderboard({
             className="switch"
             title="Hides anyone with no event in the last six months. Ranks and movement are counted among the players still shown, so an arrow never comes from someone ageing out."
           >
-            {/*
-             * A native checkbox wearing `role="switch"`: the control reads as a
-             * switch on screen, so it should announce as one too, and the input
-             * underneath still supplies the label association, the space key and
-             * focus without any of it being reimplemented. The track and thumb
-             * are decoration drawn over it, so they say nothing.
-             */}
-            <input
-              type="checkbox"
-              role="switch"
-              aria-checked={hideInactive}
-              className="switch-input"
-              checked={hideInactive}
-              onChange={(event) => onHideInactiveChange(event.target.checked)}
-            />
-            <span className="switch-track" aria-hidden="true">
-              <span className="switch-thumb" />
-            </span>
+            <Switch checked={hideInactive} onCheckedChange={onHideInactiveChange} />
+
             <span>Hide inactive</span>
           </label>
         </div>
@@ -311,26 +294,27 @@ export function Leaderboard({
             Sort
           </span>
           <div className="sort-row">
-            <select
+            <Select
               className="control-input"
               aria-labelledby={sortLabelId}
               value={sortField}
-              onChange={(event) => sortBy(event.target.value as SortField)}
+              onValueChange={(selectedValue) => sortBy(selectedValue as SortField)}
             >
               {SORT_OPTIONS.map((option) => (
-                <option key={option.field} value={option.field}>
+                <SelectItem key={option.field} value={option.field}>
                   {option.label}
-                </option>
+                </SelectItem>
               ))}
-            </select>
-            <button
+            </Select>
+            <Button
+              size="small"
               type="button"
-              className="btn btn-small sort-direction"
+              className="sort-direction"
               aria-label={`Sorted ${descending ? 'highest first' : 'lowest first'}. Reverse the order.`}
               onClick={() => setDescending(!descending)}
             >
               <span aria-hidden="true">{descending ? '▾' : '▴'}</span>
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -362,7 +346,8 @@ export function Leaderboard({
               {column.label}
             </span>
           ) : (
-            <button
+            <Button
+              variant="plain"
               key={column.key}
               type="button"
               className={`head-cell head-${column.key} head-sortable${
@@ -381,7 +366,7 @@ export function Leaderboard({
               <span className="head-caret" aria-hidden="true">
                 {sortField === column.field ? (descending ? '▾' : '▴') : ''}
               </span>
-            </button>
+            </Button>
           ),
         )}
       </div>
@@ -522,7 +507,8 @@ export function Leaderboard({
       {visible.length === 0 && (
         <p className="board-empty">
           No players match those filters.{' '}
-          <button
+          <Button
+            variant="plain"
             type="button"
             className="link-button"
             onClick={() => {
@@ -531,7 +517,7 @@ export function Leaderboard({
             }}
           >
             Clear them
-          </button>
+          </Button>
           {/* Offered separately from "clear": the inactivity setting is on by
               default, so folding it into the same button would quietly undo a
               default the member never chose to change. */}
@@ -539,13 +525,14 @@ export function Leaderboard({
             <>
               {' '}
               or{' '}
-              <button
+              <Button
+                variant="plain"
                 type="button"
                 className="link-button"
                 onClick={() => onHideInactiveChange(false)}
               >
                 include the {inactiveCount} inactive
-              </button>
+              </Button>
             </>
           )}
         </p>

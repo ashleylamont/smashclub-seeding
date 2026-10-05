@@ -8,25 +8,6 @@
 .floor-sheet-launch small {
   color: var(--text-muted);
 }
-.floor-sheet-dialog {
-  width: min(940px, calc(100vw - 24px));
-  max-height: 92vh;
-  padding: 0;
-  border: 1px solid #aaa;
-  border-radius: 8px;
-  background: #e8e8e8;
-  color: #181818;
-}
-.floor-sheet-dialog::backdrop {
-  background: #0009;
-}
-.floor-sheet-toolbar {
-  padding: 20px;
-  background: white;
-}
-.floor-sheet-toolbar h2 {
-  margin: 0;
-}
 .floor-sheet-toolbar p {
   font-size: 14px;
 }
@@ -191,7 +172,7 @@
     overflow: visible;
     background: white;
   }
-  .floor-sheet-dialog::backdrop,
+  .ui-dialog-heading,
   .floor-sheet-toolbar {
     display: none !important;
   }

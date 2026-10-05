@@ -1,4 +1,8 @@
-import { useEffect, useState } from 'react';
+import { Dialog } from '../../components/ui/Dialog';
+import { ConfirmDialog, ConfirmCancel } from '../../components/ui/ConfirmDialog';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
 import type { AdminCompany } from '../../lib/apiTypes';
@@ -32,13 +36,9 @@ export function AdminCompaniesPage() {
     <div className="section">
       <div className="page-header">
         <h2>Companies</h2>
-        <button
-          type="button"
-          className="btn btn-small btn-primary"
-          onClick={() => setCreating(true)}
-        >
+        <Button variant="primary" size="small" type="button" onClick={() => setCreating(true)}>
           New company
-        </button>
+        </Button>
       </div>
 
       <p className="muted">
@@ -134,7 +134,8 @@ function CompanyRow({
           {company.aliases.map((alias) => (
             <span key={alias} className="chip">
               {alias}
-              <button
+              <Button
+                variant="plain"
                 type="button"
                 className="chip-remove"
                 aria-label={`Remove alias ${alias}`}
@@ -142,7 +143,7 @@ function CompanyRow({
                 onClick={() => removeAlias.mutate(alias)}
               >
                 ×
-              </button>
+              </Button>
             </span>
           ))}
         </span>
@@ -151,28 +152,25 @@ function CompanyRow({
       <td className="num">{company.playerCount}</td>
       <td>
         <span className="row-actions">
-          <button type="button" className="btn btn-small" onClick={onEdit}>
+          <Button size="small" type="button" onClick={onEdit}>
             Edit
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="danger"
+            size="small"
             type="button"
-            className="btn btn-small btn-danger"
             onClick={() => setConfirmingDelete(true)}
           >
             Delete
-          </button>
+          </Button>
         </span>
 
         {confirmingDelete && (
-          <div className="modal-overlay">
-            <button
-              type="button"
-              className="modal-backdrop"
-              aria-label="Close dialog"
-              onClick={() => setConfirmingDelete(false)}
-            />
-            <div className="modal">
-              <h3>Delete {company.code}?</h3>
+          <ConfirmDialog
+            title={`Delete ${company.code}?`}
+            open
+            onOpenChange={setConfirmingDelete}
+            description={
               <p>
                 {company.playerCount === 0
                   ? 'No players are tagged with this company.'
@@ -182,21 +180,25 @@ function CompanyRow({
                 also be removed, so bracket entries carrying this tag will go to the review queue
                 instead of matching automatically. Ratings and match history are unaffected.
               </p>
-              <div className="modal-actions">
-                <button type="button" className="btn" onClick={() => setConfirmingDelete(false)}>
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-danger"
-                  disabled={remove.isPending}
-                  onClick={() => remove.mutate()}
-                >
-                  {remove.isPending ? 'Deleting…' : 'Delete company'}
-                </button>
-              </div>
+            }
+          >
+            {remove.isError && (
+              <p role="alert" className="error-text">
+                {remove.error.message}
+              </p>
+            )}
+            <div className="modal-actions">
+              <ConfirmCancel />
+              <Button
+                variant="danger"
+                type="button"
+                disabled={remove.isPending}
+                onClick={() => remove.mutate()}
+              >
+                {remove.isPending ? 'Deleting…' : 'Delete company'}
+              </Button>
             </div>
-          </div>
+          </ConfirmDialog>
         )}
       </td>
     </tr>
@@ -216,14 +218,6 @@ function CompanyFormModal({
   const [name, setName] = useState(company?.name ?? '');
   const [aliases, setAliases] = useState<string[]>([]);
   const [aliasInput, setAliasInput] = useState('');
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
 
   const save = useMutation({
     mutationFn: () =>
@@ -251,102 +245,98 @@ function CompanyFormModal({
   const valid = code.trim() !== '' && name.trim() !== '';
 
   return (
-    <div className="modal-overlay">
-      <button
-        type="button"
-        className="modal-backdrop"
-        aria-label="Close dialog"
-        onClick={onClose}
-      />
-      <div className="modal">
-        <h3>{company ? `Edit ${company.code}` : 'New company'}</h3>
+    <Dialog
+      title={company ? `Edit ${company.code}` : 'New company'}
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <div className="form-grid">
+        <label className="form-field">
+          <span className="form-label">Code</span>
+          <Input
+            className="company-code-input"
+            autoFocus
+            maxLength={10}
+            value={code}
+            onChange={(event) => setCode(event.target.value.toUpperCase())}
+            placeholder="ATL"
+          />
+          <span className="form-hint">Short tag shown on the leaderboard.</span>
+        </label>
 
-        <div className="form-grid">
-          <label className="form-field">
-            <span className="form-label">Code</span>
-            <input
-              className="input company-code-input"
-              autoFocus
-              maxLength={10}
-              value={code}
-              onChange={(event) => setCode(event.target.value.toUpperCase())}
-              placeholder="ATL"
-            />
-            <span className="form-hint">Short tag shown on the leaderboard.</span>
-          </label>
+        <label className="form-field">
+          <span className="form-label">Name</span>
+          <Input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Atlassian"
+          />
+        </label>
 
-          <label className="form-field">
-            <span className="form-label">Name</span>
-            <input
-              className="input"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Atlassian"
-            />
-          </label>
-
-          <div className="form-field">
-            <span className="form-label">{company ? 'Add aliases' : 'Aliases'}</span>
-            <div className="alias-editor">
-              {aliases.map((alias) => (
-                <span key={alias} className="chip">
-                  {alias}
-                  <button
-                    type="button"
-                    className="chip-remove"
-                    aria-label={`Remove ${alias}`}
-                    onClick={() => setAliases(aliases.filter((entry) => entry !== alias))}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-            <div className="admin-form-row">
-              <input
-                className="input"
-                placeholder="e.g. Atlas"
-                value={aliasInput}
-                onChange={(event) => setAliasInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    addAlias();
-                  }
-                }}
-              />
-              <button
-                type="button"
-                className="btn btn-small"
-                disabled={aliasInput.trim() === ''}
-                onClick={addAlias}
-              >
-                Add
-              </button>
-            </div>
-            <span className="form-hint">
-              Spellings that appear in bracket entries. Matching ignores case.
-              {company && ' Existing aliases are removed from the table row.'}
-            </span>
+        <div className="form-field">
+          <span className="form-label">{company ? 'Add aliases' : 'Aliases'}</span>
+          <div className="alias-editor">
+            {aliases.map((alias) => (
+              <span key={alias} className="chip">
+                {alias}
+                <Button
+                  variant="plain"
+                  type="button"
+                  className="chip-remove"
+                  aria-label={`Remove ${alias}`}
+                  onClick={() => setAliases(aliases.filter((entry) => entry !== alias))}
+                >
+                  ×
+                </Button>
+              </span>
+            ))}
           </div>
-        </div>
-
-        {save.isError && <p className="error-text">{save.error.message}</p>}
-
-        <div className="modal-actions">
-          <button type="button" className="btn" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={!valid || save.isPending}
-            onClick={() => save.mutate()}
-          >
-            {save.isPending ? 'Saving…' : company ? 'Save changes' : 'Create company'}
-          </button>
+          <div className="admin-form-row">
+            <Input
+              aria-label="Company alias"
+              placeholder="e.g. Atlas"
+              value={aliasInput}
+              onChange={(event) => setAliasInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  addAlias();
+                }
+              }}
+            />
+            <Button
+              size="small"
+              type="button"
+              disabled={aliasInput.trim() === ''}
+              onClick={addAlias}
+            >
+              Add
+            </Button>
+          </div>
+          <span className="form-hint">
+            Spellings that appear in bracket entries. Matching ignores case.
+            {company && ' Existing aliases are removed from the table row.'}
+          </span>
         </div>
       </div>
-    </div>
+
+      {save.isError && <p className="error-text">{save.error.message}</p>}
+
+      <div className="modal-actions">
+        <Button type="button" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          variant="primary"
+          type="button"
+          disabled={!valid || save.isPending}
+          onClick={() => save.mutate()}
+        >
+          {save.isPending ? 'Saving…' : company ? 'Save changes' : 'Create company'}
+        </Button>
+      </div>
+    </Dialog>
   );
 }

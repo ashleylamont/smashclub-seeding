@@ -1,32 +1,22 @@
+import { Button } from '../../components/ui/Button';
+import { Checkbox } from '../../components/ui/Checkbox';
+import { Input } from '../../components/ui/Input';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
-import type { GlickoSettings, SettingsData } from '../../lib/apiTypes';
-import { ModelComparison } from './ModelComparison';
+import type { RatingSettings, SettingsData } from '../../lib/apiTypes';
 
 /**
- * Numeric tuning parameters. Non-numeric settings (the active model, the league
- * bands) get their own controls below, because a bare number input cannot
+ * Numeric tuning parameters. Non-numeric settings (the league bands) get their own controls below, because a bare number input cannot
  * express them.
  */
 const GROUPS: {
   title: string;
   note?: string;
-  fields: { key: keyof GlickoSettings; label: string; hint?: string }[];
+  fields: { key: keyof RatingSettings; label: string; hint?: string }[];
 }[] = [
   {
-    title: 'Core Glicko-2',
-    fields: [
-      { key: 'initialRating', label: 'Initial rating' },
-      { key: 'initialRd', label: 'Initial RD' },
-      { key: 'initialVol', label: 'Initial volatility' },
-      { key: 'tau', label: 'Tau (τ)' },
-      { key: 'rdCap', label: 'RD cap' },
-    ],
-  },
-  {
     title: 'Whole-History Rating',
-    note: 'Used when WHR is the active model.',
     fields: [
       {
         key: 'whrDriftVariancePerDay',
@@ -38,6 +28,7 @@ const GROUPS: {
         label: 'Prior SD',
         hint: 'Natural units. Also anchors the scale across weakly-linked brackets.',
       },
+      { key: 'whrRookieDebutPrior', label: 'Rookie debut prior' },
       {
         key: 'whrGamesWeight',
         label: 'Decisive-set weight',
@@ -46,29 +37,8 @@ const GROUPS: {
     ],
   },
   {
-    title: 'Match weights',
-    note: 'Glicko-2 only.',
-    fields: [
-      {
-        key: 'inverseDiminishingExponent',
-        label: 'Inverse-diminishing exponent',
-        hint: 'w = (matchNum / totalInTournament) ^ exponent',
-      },
-    ],
-  },
-  {
-    title: 'Rookie brackets',
-    note: 'Glicko-2 only — WHR handles thin cross-bracket linkage with wider uncertainty instead.',
-    fields: [
-      { key: 'rookieBracketBaseScale', label: 'Base scale' },
-      { key: 'rookiePartialPenaltyThreshold', label: 'Partial penalty threshold' },
-      { key: 'rookieFullPenaltyThreshold', label: 'Full penalty threshold' },
-      { key: 'rookieOverPenaltyThreshold', label: 'Over-penalty threshold' },
-    ],
-  },
-  {
     title: 'Activity policy',
-    note: 'What missing club nights costs on the board. Applies to both models — it is club policy, not model output.',
+    note: 'What missing club nights costs on the board. This is club policy, separate from the WHR fit.',
     fields: [
       {
         key: 'activityGraceEvents',
@@ -88,22 +58,6 @@ const GROUPS: {
     ],
   },
   {
-    title: 'Inactivity decay',
-    note: 'Glicko-2 only. How much *uncertainty* absence adds — separate from the penalty above, which is what it costs.',
-    fields: [
-      {
-        key: 'missedEventRdGrowth',
-        label: 'RD growth per missed event',
-        hint: 'Added in quadrature: rd² + growth². Uniform across players, unlike the old volatility-scaled rule.',
-      },
-      {
-        key: 'decayRdCap',
-        label: 'Decay RD cap',
-        hint: 'Ceiling reached by sitting out. Below the RD cap on purpose — a lapsed regular is not a stranger.',
-      },
-    ],
-  },
-  {
     title: 'Provisional threshold',
     note: 'Below either figure a player is badged provisional rather than pushed down the board.',
     fields: [
@@ -111,23 +65,7 @@ const GROUPS: {
       { key: 'provisionalMatchCount', label: 'Sets needed' },
     ],
   },
-  {
-    title: 'Sample confidence',
-    note: 'Glicko-2 only.',
-    fields: [
-      { key: 'confidenceTournamentWeight', label: 'Tournament weight' },
-      { key: 'confidenceOpponentWeight', label: 'Opponent weight' },
-      { key: 'confidenceMatchWeight', label: 'Match weight' },
-      { key: 'confidenceFloor', label: 'Confidence floor' },
-      { key: 'anchorFloor', label: 'Anchor floor' },
-    ],
-  },
 ];
-
-const MODEL_LABELS: Record<GlickoSettings['activeModel'], string> = {
-  glicko2: 'Glicko-2 (per-tournament periods)',
-  whr: 'Whole-History Rating',
-};
 
 export function AdminSettingsPage() {
   const queryClient = useQueryClient();
@@ -137,8 +75,8 @@ export function AdminSettingsPage() {
   });
 
   const [values, setValues] = useState<Record<string, string>>({});
-  const [model, setModel] = useState<GlickoSettings['activeModel']>('glicko2');
-  const [bands, setBands] = useState<GlickoSettings['leagueBands']>([]);
+  const [bands, setBands] = useState<RatingSettings['leagueBands']>([]);
+  const [isolationAnchor, setIsolationAnchor] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [lastLoaded, setLastLoaded] = useState<SettingsData | null>(null);
 
@@ -146,16 +84,16 @@ export function AdminSettingsPage() {
   if (settings.data && settings.data !== lastLoaded) {
     setLastLoaded(settings.data);
     const next: Record<string, string> = {};
-    for (const [key, value] of Object.entries(settings.data.glicko)) {
+    for (const [key, value] of Object.entries(settings.data.rating)) {
       if (typeof value === 'number') next[key] = String(value);
     }
     setValues(next);
-    setModel(settings.data.glicko.activeModel);
-    setBands(settings.data.glicko.leagueBands);
+    setBands(settings.data.rating.leagueBands);
+    setIsolationAnchor(settings.data.rating.whrIsolationAnchor);
   }
 
   const save = useMutation({
-    mutationFn: (input: GlickoSettings) => trpc.admin.updateSettings.mutate(input),
+    mutationFn: (input: RatingSettings) => trpc.admin.updateSettings.mutate(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] });
     },
@@ -175,10 +113,10 @@ export function AdminSettingsPage() {
      * setting it has no input for — including the calibrated league bands, which
      * would silently revert to the arbitrary shipped defaults on any save.
      */
-    const parsed: GlickoSettings = {
-      ...settings.data.glicko,
-      activeModel: model,
+    const parsed: RatingSettings = {
+      ...settings.data.rating,
       leagueBands: bands,
+      whrIsolationAnchor: isolationAnchor,
     };
     for (const group of GROUPS) {
       for (const field of group.fields) {
@@ -197,8 +135,6 @@ export function AdminSettingsPage() {
   if (settings.isPending) return <p className="loading-text">Loading settings…</p>;
   if (settings.isError) return <p className="error-text">{settings.error.message}</p>;
 
-  const modelChanged = model !== settings.data.glicko.activeModel;
-
   return (
     <div className="settings-page">
       <div className="page-header">
@@ -206,23 +142,17 @@ export function AdminSettingsPage() {
           Rating settings <span className="chip">v{settings.data.version}</span>
         </h2>
         <span className="row-actions">
-          <button
+          <Button
             type="button"
-            className="btn"
             disabled={recompute.isPending}
             onClick={() => recompute.mutate()}
             title="Re-run the full rating recompute with current settings"
           >
             {recompute.isPending ? 'Recomputing…' : 'Recompute now'}
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={save.isPending}
-            onClick={handleSave}
-          >
+          </Button>
+          <Button variant="primary" type="button" disabled={save.isPending} onClick={handleSave}>
             {save.isPending ? 'Saving…' : 'Save settings'}
-          </button>
+          </Button>
         </span>
       </div>
       <p className="banner banner-warning">
@@ -238,41 +168,13 @@ export function AdminSettingsPage() {
       {recompute.isError && <p className="error-text">{recompute.error.message}</p>}
       {recompute.isSuccess && <p className="banner banner-success">Recompute finished.</p>}
 
-      <section className="section">
-        <h3>Active model</h3>
-        <label className="settings-field">
-          <span>
-            Authoritative ratings
-            <span className="muted settings-hint">
-              Both models are fitted from the same history. This chooses which one the public site
-              publishes.
-            </span>
-          </span>
-          <select
-            className="select"
-            value={model}
-            onChange={(event) => setModel(event.target.value as GlickoSettings['activeModel'])}
-          >
-            {Object.entries(MODEL_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        {modelChanged && (
-          <p className="banner banner-warning">
-            Switching the model changes every member&apos;s published number. Compare the two below
-            before saving.
-          </p>
-        )}
-      </section>
+      <p className="muted">Whole-History Rating (WHR)</p>
 
       <section className="section">
         <h3>
           Leagues{' '}
           <span className="chip">
-            {settings.data.glicko.leagueBandsCalibrated ? 'calibrated' : 'not yet calibrated'}
+            {settings.data.rating.leagueBandsCalibrated ? 'calibrated' : 'not yet calibrated'}
           </span>
         </h3>
         <p className="muted">
@@ -282,8 +184,8 @@ export function AdminSettingsPage() {
         </p>
         {bands.map((band, index) => (
           <label key={index} className="settings-field">
-            <input
-              className="input league-name-input"
+            <Input
+              className="league-name-input"
               type="text"
               value={band.name}
               onChange={(event) =>
@@ -295,8 +197,7 @@ export function AdminSettingsPage() {
             {index === bands.length - 1 ? (
               <span className="muted">everyone else</span>
             ) : (
-              <input
-                className="input"
+              <Input
                 type="number"
                 step="1"
                 value={band.minRating}
@@ -313,6 +214,10 @@ export function AdminSettingsPage() {
         ))}
       </section>
 
+      <label className="settings-field">
+        <span>Anchor isolated rookie ratings</span>
+        <Checkbox checked={isolationAnchor} onCheckedChange={setIsolationAnchor} />
+      </label>
       <div className="settings-groups">
         {GROUPS.map((group) => (
           <div key={group.title} className="settings-group">
@@ -324,8 +229,7 @@ export function AdminSettingsPage() {
                   {field.label}
                   {field.hint && <span className="muted settings-hint">{field.hint}</span>}
                 </span>
-                <input
-                  className="input"
+                <Input
                   type="number"
                   step="any"
                   value={values[field.key] ?? ''}
@@ -336,8 +240,6 @@ export function AdminSettingsPage() {
           </div>
         ))}
       </div>
-
-      <ModelComparison activeModel={settings.data.glicko.activeModel} />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultGlickoSettings } from '@smashclub/shared';
+import { defaultRatingSettings } from '@smashclub/shared';
 import { breakthroughEvidence } from '../src/breakthrough';
 import type { EngineSet, EngineTournament } from '../src/types';
 
@@ -18,13 +18,13 @@ const set = (id: string, tournamentId: string, winner: 1 | 2, p2PlayerId = 'b'):
 });
 const past = Array.from({ length: 6 }, (_, i) => set(`past-${i}`, 'past', 2));
 
-describe.each(['whr', 'glicko2'] as const)('breakthrough evidence (%s)', (activeModel) => {
+describe('WHR breakthrough evidence', () => {
   const analyse = (sets: EngineSet[]) =>
     breakthroughEvidence({
       eventKey: '2026-02-01',
       tournaments,
       sets,
-      settings: { ...defaultGlickoSettings, activeModel },
+      settings: defaultRatingSettings,
     });
 
   it('freezes expectations across live results, same-night brackets and future history', () => {
@@ -67,7 +67,7 @@ describe.each(['whr', 'glicko2'] as const)('breakthrough evidence (%s)', (active
         set('side', 'consolation', 2),
         set('target', 'future', 1),
       ],
-      settings: { ...defaultGlickoSettings, activeModel },
+      settings: defaultRatingSettings,
     });
     expect(result.rows[0]!.priorNights).toBe(2);
     expect(result.rows[0]!.priorSets).toBe(8);

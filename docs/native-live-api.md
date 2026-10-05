@@ -77,7 +77,7 @@ replacement snapshots from authoritative state.
 
 ```sh
 pnpm exec vitest run apps/server/test/native-live-domain.test.ts apps/server/test/native-act-runtime.test.ts apps/server/test/native-live-handoff.test.ts apps/server/test/native-live-cutover.test.ts
-RUN_POSTGRES_TESTS=1 pnpm exec vitest run apps/server/test/native-live-postgres.test.ts
+pnpm test:postgres
 pnpm --filter @smashclub/web exec playwright test --project=desktop native-event.spec.ts event-attendance.spec.ts guest-event-discovery.spec.ts event-night-reporting.spec.ts
 ```
 

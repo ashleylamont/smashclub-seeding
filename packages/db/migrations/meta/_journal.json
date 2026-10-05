@@ -159,8 +159,15 @@
     {
       "idx": 22,
       "version": "7",
-      "when": 1791080000000,
-      "tag": "0022_native_live_handoffs",
+      "when": 1791093580576,
+      "tag": "0022_whr_only_ratings",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791187079516,
+      "tag": "0023_native_live_handoffs",
       "breakpoints": true
     }
   ]

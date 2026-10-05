@@ -173,23 +173,34 @@ describe('inactivity decay through sync and recompute', () => {
     }
   });
 
-  it('charges exactly one step to a player who misses a whole club night', async () => {
-    // Kirby and Yoshi skip the second night's rookie bracket entirely.
-    await syncAll(['main1', 'rookie1', 'main2']);
-    const run = await runRecompute(db);
-
-    // Two event days exist; the rookie pair attended only the first.
-    for (const name of ['Kirby', 'Yoshi']) {
-      const decay = await decayEventsFor(run.recomputeId, name);
-      expect(decay, `${name}`).toHaveLength(1);
-      expect(decay[0]!.postRd).toBeGreaterThan(decay[0]!.preRd);
-      // Decay moves confidence, never the rating itself.
-      expect(decay[0]!.postRating).toBeCloseTo(decay[0]!.preRating, 9);
-    }
-    // The main-bracket pair played both nights and are untouched.
-    for (const name of ['Fox McCloud', 'Samus Aran']) {
-      expect(await decayEventsFor(run.recomputeId, name), name).toHaveLength(0);
-    }
+  it('widens WHR uncertainty for an absent player without decay result rows', async () => {
+    await syncAll(['main1', 'rookie1']);
+    const first = await runRecompute(db);
+    const kirbyId = await playerId('Kirby');
+    const before = (
+      await db
+        .select()
+        .from(playerRatings)
+        .where(
+          and(
+            eq(playerRatings.recomputeId, first.recomputeId),
+            eq(playerRatings.playerId, kirbyId),
+          ),
+        )
+    )[0]!;
+    await syncAll(['main2']);
+    const next = await runRecompute(db);
+    const after = (
+      await db
+        .select()
+        .from(playerRatings)
+        .where(
+          and(eq(playerRatings.recomputeId, next.recomputeId), eq(playerRatings.playerId, kirbyId)),
+        )
+    )[0]!;
+    expect(after.skillSd).toBeGreaterThan(before.skillSd);
+    expect(after.missedEvents).toBe(1);
+    expect(await decayEventsFor(next.recomputeId, 'Kirby')).toEqual([]);
   });
 
   it('publishes events attended separately from brackets entered', async () => {

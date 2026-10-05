@@ -7,7 +7,7 @@ import {
   type Db,
 } from '@smashclub/db';
 import type { SessionUser } from '../../src/auth';
-import { defaultGlickoSettings } from '@smashclub/shared';
+import { defaultRatingSettings } from '@smashclub/shared';
 import { captureBaseline, stableId } from '../../src/tournament/domain';
 import {
   initialState,
@@ -38,7 +38,7 @@ export function pureBaseline(): TournamentBaseline {
     upperTargetSize: 4,
     ratingContext: {
       settingsVersion: 1,
-      settings: defaultGlickoSettings,
+      settings: defaultRatingSettings,
       rankingModel: null,
       rankingFitSettings: null,
       inputs: [],

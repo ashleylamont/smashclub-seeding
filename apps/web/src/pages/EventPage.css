@@ -24,10 +24,10 @@
 .event-standings {
   --table-min: 520px;
 }
-.event-bracket-card details {
+.event-bracket-card .ui-disclosure {
   margin-top: var(--s3);
 }
-.event-bracket-card summary {
+.event-bracket-card .ui-disclosure-trigger {
   cursor: pointer;
   color: var(--accent);
   font-family: var(--display);

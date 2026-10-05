@@ -1,3 +1,5 @@
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
 import { useMemo, useState } from 'react';
 import { CHARACTERS, MAX_CHARACTERS_PER_PLAYER, characterName } from '@smashclub/shared';
 import { CharacterIcons } from './CharacterIcons';
@@ -61,30 +63,33 @@ export function CharacterPicker({ value, onChange, max = MAX_CHARACTERS_PER_PLAY
               {index === 0 ? (
                 <span className="chip chip-accent selected-main-chip">main</span>
               ) : (
-                <button
+                <Button
+                  variant="plain"
                   type="button"
                   className="link-button"
                   title="Make this the main"
                   onClick={() => makeMain(slug)}
                 >
                   make main
-                </button>
+                </Button>
               )}
-              <button
+              <Button
+                variant="plain"
                 type="button"
                 className="selected-character-remove"
                 aria-label={`Remove ${characterName(slug)}`}
                 onClick={() => toggle(slug)}
               >
                 ×
-              </button>
+              </Button>
             </span>
           ))
         )}
       </div>
 
-      <input
-        className="input character-picker-filter"
+      <Input
+        className="character-picker-filter"
+        aria-label="Filter characters"
         placeholder="Filter characters…"
         value={filter}
         onChange={(event) => setFilter(event.target.value)}
@@ -94,7 +99,8 @@ export function CharacterPicker({ value, onChange, max = MAX_CHARACTERS_PER_PLAY
         {matches.map((character) => {
           const selected = value.includes(character.slug);
           return (
-            <button
+            <Button
+              variant="plain"
               key={character.slug}
               type="button"
               className={`character-option${selected ? ' is-selected' : ''}`}
@@ -107,7 +113,7 @@ export function CharacterPicker({ value, onChange, max = MAX_CHARACTERS_PER_PLAY
             >
               <CharacterIcons slugs={[character.slug]} loading="eager" />
               <span className="character-option-name">{character.name}</span>
-            </button>
+            </Button>
           );
         })}
         {matches.length === 0 && <p className="muted">No characters match “{filter}”.</p>}

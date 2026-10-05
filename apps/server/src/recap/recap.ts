@@ -7,7 +7,6 @@ import {
   playerRatings,
   players,
   ratingEvents,
-  recomputes,
   sets,
   tournamentParticipants,
   tournaments,
@@ -30,7 +29,7 @@ import {
   eventNameOf,
   includesResultStage,
   publicParticipantName,
-  scoresIndicateUnplayed,
+  isPlayedRatingResult,
 } from '@smashclub/shared';
 import { latestRecomputeId } from '../recompute/recompute';
 import { charactersByPlayer } from '../players/characters';
@@ -226,7 +225,7 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
       p2ParticipantId: row.p2ParticipantId,
       winner: row.winner === 1 || row.winner === 2 ? row.winner : null,
       scoresCsv: row.scoresCsv,
-      excludedFromRatings: row.excludedFromRatings,
+      excludedFromRatings: row.excludedFromRatings || !isPlayedRatingResult(row.scoresCsv, row.raw),
       completedAt: row.completedAt?.toISOString() ?? null,
     }));
 
@@ -236,12 +235,6 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
   const { nightEvents, history, rankMovement } = recomputeId
     ? await loadRatingContext(db, recomputeId, nightIds)
     : { nightEvents: [], history: undefined, rankMovement: [] };
-  const [recomputeRow] = recomputeId
-    ? await db
-        .select({ model: recomputes.model })
-        .from(recomputes)
-        .where(eq(recomputes.id, recomputeId))
-    : [];
 
   // --- turnout comparison -------------------------------------------------
 
@@ -255,7 +248,7 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
     history,
     rankMovement,
     priorTurnouts,
-    model: recomputeRow?.model,
+    model: 'whr',
     // Lets the engine call a bracket nobody ever closed on Challonge finished,
     // once its night is far enough behind us.
     now: Date.now(),
@@ -282,7 +275,7 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
           s.state === 'complete' &&
           (s.winner === 1 || s.winner === 2) &&
           !s.excludedFromRatings &&
-          !scoresIndicateUnplayed(s.scoresCsv) &&
+          isPlayedRatingResult(s.scoresCsv, s.raw) &&
           includesResultStage(modes.get(s.tournamentId) ?? 'auto', s.resultStage) &&
           (!s.p1PlayerId || !s.p2PlayerId),
       ).length,

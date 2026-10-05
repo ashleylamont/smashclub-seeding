@@ -1,3 +1,6 @@
+import { useConfirmation } from '../../lib/confirmation';
+import { Checkbox } from '../../components/ui/Checkbox';
+import { Button } from '../../components/ui/Button';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
@@ -19,6 +22,7 @@ export function GuestReportingControls({
   closed: boolean;
   published: boolean;
 }) {
+  const confirmAction = useConfirmation();
   const cache = useQueryClient();
   const settings = useQuery({
     queryKey: ['guestSettings', planId],
@@ -79,20 +83,18 @@ export function GuestReportingControls({
       {settings.data && (
         <>
           <label className="ops-check">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={settings.data.enabled}
               disabled={pending || closed}
-              onChange={(e) => configure({ enabled: e.target.checked })}
+              onCheckedChange={(nextChecked) => configure({ enabled: nextChecked })}
             />{' '}
             Allow guest score reports
           </label>
           <label className="ops-check">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={!settings.data.rotateInvitations}
               disabled={pending || closed || !settings.data.enabled}
-              onChange={(e) => configure({ rotateInvitations: !e.target.checked })}
+              onCheckedChange={(nextChecked) => configure({ rotateInvitations: !nextChecked })}
             />{' '}
             Keep QR invitations valid until revoked
           </label>
@@ -101,11 +103,10 @@ export function GuestReportingControls({
             issued QR invitations and guest passes.
           </p>
           <label className="ops-check">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={settings.data.showOnOverlay}
               disabled={pending || closed || !settings.data.enabled}
-              onChange={(e) => configure({ showOnOverlay: e.target.checked })}
+              onCheckedChange={(nextChecked) => configure({ showOnOverlay: nextChecked })}
             />{' '}
             {settings.data.rotateInvitations
               ? 'Show a rotating QR on the OBS overlay'
@@ -118,8 +119,8 @@ export function GuestReportingControls({
             <p>Signs can be prepared now. Publish the event before guests scan them.</p>
           )}
           <div className="ops-match-actions">
-            <button
-              className="btn"
+            <Button
+              type="submit"
               disabled={pending || closed || !settings.data.enabled}
               onClick={() =>
                 void act(async () => {
@@ -128,9 +129,9 @@ export function GuestReportingControls({
               }
             >
               Generate guest QR
-            </button>
-            <button
-              className="btn"
+            </Button>
+            <Button
+              type="submit"
               disabled={
                 pending ||
                 closed ||
@@ -146,13 +147,13 @@ export function GuestReportingControls({
               }
             >
               Print station signs
-            </button>
-            <button
-              className="btn"
+            </Button>
+            <Button
+              type="submit"
               disabled={pending || closed || !settings.data.enabled}
-              onClick={() => {
+              onClick={async () => {
                 if (
-                  window.confirm(
+                  await confirmAction(
                     'Revoke all current guest passes and QR invitations? Printed station signs will need replacing.',
                   )
                 )
@@ -167,7 +168,7 @@ export function GuestReportingControls({
               }}
             >
               Revoke all guest passes
-            </button>
+            </Button>
           </div>
         </>
       )}
@@ -186,8 +187,8 @@ export function GuestReportingControls({
             <a href={link} rel="noreferrer">
               Open guest reporting
             </a>
-            <button
-              className="btn"
+            <Button
+              type="submit"
               onClick={() =>
                 void act(async () => {
                   await navigator.clipboard.writeText(link);
@@ -196,7 +197,7 @@ export function GuestReportingControls({
               }
             >
               Copy invitation link
-            </button>
+            </Button>
           </div>
         </div>
       )}

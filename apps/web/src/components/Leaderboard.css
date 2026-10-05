@@ -39,18 +39,7 @@
 }
 
 .control-input {
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  padding: 6px var(--s2);
   min-width: 168px;
-  color: var(--text-h);
-  font-family: var(--mono);
-  font-size: var(--fs-sm);
-}
-
-.control-input:hover,
-.control-input:focus {
-  border-color: var(--accent-border);
 }
 
 /*
@@ -69,71 +58,6 @@
   color: var(--text-h);
   cursor: pointer;
   white-space: nowrap;
-}
-
-/*
- * The real checkbox, laid over the track it is drawn as. Transparent rather than
- * `display: none`, which would take it out of the tab order and off the
- * accessibility tree along with it — the switch would then be mouse-only.
- */
-.switch-input {
-  position: absolute;
-  /* Above the track it is drawn as, so a click lands on the control itself
-     rather than on the decoration sitting over it. */
-  z-index: 1;
-  top: 50%;
-  left: 0;
-  width: 34px;
-  height: 18px;
-  margin: -9px 0 0;
-  opacity: 0;
-  cursor: pointer;
-}
-
-.switch-track {
-  position: relative;
-  flex: none;
-  width: 34px;
-  height: 18px;
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  transition:
-    background 120ms ease,
-    border-color 120ms ease;
-}
-
-.switch-thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 12px;
-  height: 12px;
-  background: var(--text-soft);
-  transition:
-    transform 120ms ease,
-    background 120ms ease;
-}
-
-/* On means "hiding", which is the default — so the lit state is the resting one. */
-.switch-input:checked + .switch-track {
-  background: var(--accent);
-  border-color: var(--accent-border);
-}
-
-.switch-input:checked + .switch-track .switch-thumb {
-  /* Track width less the thumb and both insets: 34 − 12 − 4. */
-  transform: translateX(16px);
-  background: var(--surface);
-}
-
-.switch:hover .switch-track {
-  border-color: var(--accent-border);
-}
-
-/* The input carries the focus but cannot show it, so the track wears the ring. */
-.switch-input:focus-visible + .switch-track {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
 }
 
 /*
@@ -192,24 +116,6 @@
   display: flex;
   align-items: center;
   gap: var(--s2);
-}
-
-.board-legend-summary::-webkit-details-marker {
-  display: none;
-}
-
-/* A rotating caret, so open/closed is stated by the control rather than only by
-   whether something appeared underneath it. */
-.board-legend-summary::before {
-  content: '▸';
-  color: var(--accent);
-  font-size: var(--fs-sm);
-  line-height: 1;
-  transition: transform 0.12s;
-}
-
-.board-legend[open] .board-legend-summary::before {
-  transform: rotate(90deg);
 }
 
 .board-legend-summary:hover {
@@ -702,16 +608,6 @@
   border: 1px solid var(--border);
   font-family: var(--mono);
   font-size: var(--fs-sm);
-}
-
-.link-button {
-  background: none;
-  border: none;
-  color: var(--accent);
-  cursor: pointer;
-  padding: 0;
-  text-decoration: underline;
-  font: inherit;
 }
 
 /* ── narrow screens ──────────────────────────────────────────── */

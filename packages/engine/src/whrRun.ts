@@ -1,4 +1,5 @@
-import type { GlickoSettings } from '@smashclub/shared';
+import type { RatingSettings } from '@smashclub/shared';
+import { isPlayedSet } from './results';
 import { attendanceOf, eventKeyOf } from './events';
 import { DISPLAY_CENTRE, NATURAL_TO_DISPLAY, fitWhr, whrSetTrials, type WhrFit } from './whr';
 import { compareNullableNumbers, compareSetsInBracket, compareStrings } from './setOrder';
@@ -6,51 +7,11 @@ import { activityPenaltyFor, rankScores, type LeaderboardRow, type PlayerScore }
 import type { EngineSet, EngineTournament, RatingEvent } from './types';
 
 /**
- * Runs Whole-History Rating over the full set history and returns the same
- * shape the Glicko-2 replay does, so the recompute pipeline can produce either
- * model without branching on anything but this call.
- *
- * WHR is a batch fit: it re-estimates every rating from all evidence at once,
- * and a new night's results legitimately *revise* what the model believes
- * about the past. That is its strength on a small dataset — and a problem for
- * an app built around "what did this set do to my rating", where numbers that
- * silently rewrite themselves read as bugs. The run therefore keeps two books:
- *
- *  - **The ledger** (`pre`/`post` on each event): what the board published as
- *    of each night, computed by fitting only the history up to and including
- *    that night. Deltas booked this way are frozen — replaying history with
- *    more nights appended never changes an old row — so the match log is an
- *    append-only record of published movement, exactly as members experienced
- *    it. A night's total movement is attributed across that night's sets in
- *    proportion to how *surprising* each result was (win probability from the
- *    pre-night fit, weighted by set decisiveness), so a routine win carries a
- *    small share and an upset a large one, and the shares sum exactly to the
- *    night's move.
- *  - **The hindsight track** (`revisedRating`/`revisedSd`): the current full
- *    fit's estimate at each of the player's nights. This is where revision
- *    lives, visibly, instead of leaking into the ledger.
- *
- * Two structural differences from the Glicko path remain deliberate:
- *
- *  - **A rating period is one event, not one bracket.** Main and rookie
- *    brackets on the same evening are one occasion (see `eventKeyOf`), and a
- *    player's skill did not change between them.
- *  - **No decay events.** Time out of the game widens the posterior inside the
- *    model (Brownian drift), and the leaderboard evaluates everyone at the
- *    club's latest event so that widening actually reaches the published
- *    uncertainty, the conservative seeding score and the confidence meter.
- *    What absence costs on the *board* stays the explicit activity penalty,
- *    shared with the Glicko path — club policy, not model output.
- *
- * Most of the uncertainty machinery the Glicko path needs (rookie RD
- * inflation, sample-confidence shrinkage) is absent here on purpose: WHR
- * already answers "how sure are we" with the posterior variance, so `skillSd`
- * is that variance directly rather than a stack of hand-tuned multipliers.
- * The one exception is *bias*, which variance cannot express: a rookie
- * islander's point estimate is identified mostly by other islanders, so the
- * board can optionally shrink the displayed number by bridge exposure
- * (`whrIsolationAnchor`) and start rookie debuts from a calibrated prior
- * (`whrRookieDebutPrior`).
+ * Full WHR fit plus prefix estimates at each club night. Main and rookie
+ * brackets on one day share a period. Each played set retains result metadata,
+ * but its pre/post columns repeat the night estimates: WHR has no sequential
+ * per-match rating changes. Approximate result impact is tracked in #95–98.
+ * Brownian drift, evidence weighting and board/seeding policies are unchanged.
  */
 export interface WhrRunResult {
   events: RatingEvent[];
@@ -96,34 +57,22 @@ interface Participation {
   lastPlayedDate: string;
 }
 
-/**
- * Per-player plan for one night: the attributed per-set deltas, in the order
- * the player's sets occur, plus the ledger values the rows interpolate
- * between. Built night-by-night, consumed by the global chronological walk
- * that emits `RatingEvent` rows.
- */
 interface NightPlan {
-  deltas: number[];
+  preRating: number;
   endRating: number;
   preSd: number;
   postSd: number;
   revisedRating: number;
   revisedSd: number;
-  /** Next delta to consume during the emit walk. */
-  cursor: number;
-  /** Running ledger rating during the emit walk. */
-  running: number;
 }
 
 export function runWhrModel(input: {
   sets: readonly EngineSet[];
   tournaments: readonly EngineTournament[];
-  settings: GlickoSettings;
+  settings: RatingSettings;
 }): WhrRunResult {
   const { settings } = input;
   const tournamentById = new Map(input.tournaments.map((t) => [t.id, t]));
-  const priorDisplaySd = settings.whrPriorSd * NATURAL_TO_DISPLAY;
-
   /**
    * A decisive set carries more evidence: `1 + weight·(margin − 1)` trials,
    * capped at 2, so a 3-0 counts as up to two independent results and a 3-2 —
@@ -134,19 +83,9 @@ export function runWhrModel(input: {
     return whrSetTrials(set, settings.whrGamesWeight);
   };
 
-  // Rateable sets only, in the same deterministic chronological order the
-  // Glicko replay uses, so the two models see identical input: brackets by
-  // (eventDate, challongeId, id), then `compareSetsInBracket` within one.
-  //
-  // This once claimed that and did something else — it coalesced a missing play
-  // order to 0 and then fell straight through to the set's random uuid, with no
-  // `completedAt` tie-break at all. Since the default sync source left the play
-  // order null on every set, a bracket's sets were ordered by uuid, i.e.
-  // shuffled. The fit itself is unaffected (it is joint, and `time` is
-  // per-bracket, so it sees the same multiset either way), but `seq` and the
-  // choice of which set carries a period's movement are not — a player's match
-  // history came out in a random order.
+  // Deterministic result order affects presentation and sequence, not the fit.
   const rateable: RateableSet[] = input.sets
+    .filter(isPlayedSet)
     .filter((set) => tournamentById.has(set.tournamentId) && set.p1PlayerId !== set.p2PlayerId)
     .map((set) => {
       const tournament = tournamentById.get(set.tournamentId)!;
@@ -233,89 +172,39 @@ export function runWhrModel(input: {
   const fits = orderedEventKeys.map((_, index) => fitPrefix(index));
   const fullFit = fits[fits.length - 1]!;
 
-  // ---- attribution plans, night by night ----
-  const plans = new Map<string, Map<string, NightPlan>>(); // eventKey -> playerId -> plan
-  const ledger = new Map<string, { rating: number; sd: number }>();
-
+  // Estimates at the night boundary, repeated on each played set.
+  const plans = new Map<string, Map<string, NightPlan>>();
   for (const [eventIndex, eventKey] of orderedEventKeys.entries()) {
     const nightSets = rateable.filter((r) => r.eventKey === eventKey);
-    const day = nightSets[0]!.day;
-    const time = day - originDay;
+    const time = nightSets[0]!.day - originDay;
     const nightFit = fits[eventIndex]!;
     const preFit = eventIndex > 0 ? fits[eventIndex - 1]! : null;
-
-    // The player's results tonight, in play order.
-    const results = new Map<string, { opponentId: string; won: boolean; trials: number }[]>();
-    for (const { set, trials } of nightSets) {
-      for (const [playerId, opponentId, won] of [
-        [set.p1PlayerId, set.p2PlayerId, set.winner === 1],
-        [set.p2PlayerId, set.p1PlayerId, set.winner === 2],
-      ] as const) {
-        const list = results.get(playerId) ?? [];
-        list.push({ opponentId, won, trials });
-        results.set(playerId, list);
-      }
-    }
-
+    const playerIds = new Set(nightSets.flatMap(({ set }) => [set.p1PlayerId, set.p2PlayerId]));
     const nightPlans = new Map<string, NightPlan>();
-    for (const [playerId, played] of results) {
+    for (const playerId of playerIds) {
       const current = nightFit.display(playerId, time);
-      const previous = ledger.get(playerId) ?? {
-        rating: settings.initialRating,
-        sd: priorDisplaySd,
-      };
-      const nightDelta = current.rating - previous.rating;
-
-      /**
-       * Attribute the night's movement across its sets by surprise. The
-       * first-order estimate of what one result does to a MAP fit is
-       * `posterior variance × (outcome − expected)` in natural units — the
-       * same quantity that drives the Newton step — with `expected` taken
-       * from the *pre-night* fit, i.e. what the board would have predicted
-       * before the set was played. What that linearisation cannot see
-       * (opponents' own movement tonight, prior shrinkage on a debut) is
-       * spread evenly as a remainder, so the shares always sum to exactly
-       * the night's published movement.
-       */
-      const varianceNatural = (current.sd / NATURAL_TO_DISPLAY) ** 2;
-      const residuals = played.map(({ opponentId, won, trials }) => {
-        const expected = preFit ? preFit.winProbability(playerId, opponentId, time) : 0.5;
-        return trials * ((won ? 1 : 0) - expected);
-      });
-      const base = residuals.map((residual) => varianceNatural * residual * NATURAL_TO_DISPLAY);
-      const remainder = (nightDelta - base.reduce((sum, value) => sum + value, 0)) / played.length;
-
+      const previous = preFit?.track(playerId)
+        ? preFit.display(playerId, time)
+        : {
+            rating: DISPLAY_CENTRE + (priorMeans.get(playerId) ?? 0) * NATURAL_TO_DISPLAY,
+            sd: settings.whrPriorSd * NATURAL_TO_DISPLAY,
+          };
       const revised = fullFit.display(playerId, time);
       nightPlans.set(playerId, {
-        deltas: base.map((value) => value + remainder),
+        preRating: previous.rating,
         endRating: current.rating,
         preSd: previous.sd,
         postSd: current.sd,
         revisedRating: revised.rating,
         revisedSd: revised.sd,
-        cursor: 0,
-        running: previous.rating,
       });
-      ledger.set(playerId, current);
     }
     plans.set(eventKey, nightPlans);
   }
 
   // ---- rating events: the global chronological walk ----
   const events: RatingEvent[] = [];
-  /**
-   * ONE COUNTER FOR THE WHOLE WALK, not one per player.
-   *
-   * The walk is global and chronological; the numbering has to be too, because
-   * `seq` is what readers use as the replay's processing order. The Glicko path
-   * writes it that way. A per-player counter numbered everybody's first set
-   * `1`, so "everything that happened before this night" — `seq < the night's
-   * first seq`, how the recap decides who is new — matched nothing at all: the
-   * recap announced the entire room as first-timers every single night, and
-   * quietly dropped every rivalry, breakthrough and milestone fact with them.
-   * A player's own events still ascend under a global counter, so per-player
-   * history reads exactly as before.
-   */
+  // One global result sequence preserves recap history ordering.
   let seq = 0;
 
   for (const { set, tournament, eventKey, trials } of rateable) {
@@ -324,14 +213,6 @@ export function runWhrModel(input: {
       [set.p2PlayerId, set.p1PlayerId, set.winner === 2],
     ] as const) {
       const plan = plans.get(eventKey)!.get(playerId)!;
-      const index = plan.cursor;
-      plan.cursor += 1;
-      const isLastOfNight = plan.cursor === plan.deltas.length;
-      const preRating = plan.running;
-      // The last set lands exactly on the fit's value, so the ledger chains
-      // float-exactly from night to night.
-      const postRating = isLastOfNight ? plan.endRating : preRating + plan.deltas[index]!;
-      plan.running = postRating;
 
       events.push({
         playerId,
@@ -341,9 +222,9 @@ export function runWhrModel(input: {
         isDecay: false,
         won,
         opponentId,
-        preRating,
-        postRating,
-        preRd: index === 0 ? plan.preSd : plan.postSd,
+        preRating: plan.preRating,
+        postRating: plan.endRating,
+        preRd: plan.preSd,
         postRd: plan.postSd,
         // WHR has no volatility parameter; the posterior variance carries it.
         preVol: 0,
@@ -400,7 +281,7 @@ function buildLeaderboard(
   fit: WhrFit,
   rateable: readonly RateableSet[],
   orderedEventKeys: readonly string[],
-  settings: GlickoSettings,
+  settings: RatingSettings,
   /** Natural-units prior centres (rookie debuts); the isolation anchor's target. */
   priorMeans: ReadonlyMap<string, number>,
 ): LeaderboardRow[] {
@@ -476,9 +357,8 @@ function buildLeaderboard(
 
   /*
    * The activity penalty is club policy, not model output, so it is computed
-   * the same way here as in the Glicko replay: from the club's event list and
-   * who turned up to what. Switching the active model must not change what
-   * missing a club night costs.
+   * the same way here as in the club policy: from the club's event list and
+   * who turned up to what. Missing a club night has an explicit cost.
    */
   const scores: PlayerScore[] = [];
   for (const row of participation.values()) {
@@ -549,7 +429,7 @@ function buildLeaderboard(
       isolationFactor,
       /**
        * How much the posterior has tightened relative to *this model's* prior
-       * (not the Glicko initial RD, whose scale means nothing here). Zero for
+       * Zero for
        * a player we know nothing about, approaching one as evidence
        * accumulates — and falling again as an absence lets drift widen the
        * band, so the confidence meter stales honestly.
@@ -559,7 +439,5 @@ function buildLeaderboard(
     });
   }
 
-  // Ranked exactly as the Glicko-2 board is, so switching the active model is a
-  // change of model and not a change of what "first" means.
   return rankScores(scores, settings);
 }

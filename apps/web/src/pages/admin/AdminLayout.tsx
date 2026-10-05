@@ -55,6 +55,9 @@ export function AdminLayout() {
     <div className="admin-layout">
       <div className="admin-header">
         <h1>Admin</h1>
+        <Link to="/ui" className="btn btn-small">
+          UI guide
+        </Link>
         <nav className="admin-tabs" aria-label="Admin sections" ref={tabs}>
           {TABS.map((tab) => (
             <Link

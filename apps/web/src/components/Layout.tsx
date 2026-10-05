@@ -1,3 +1,4 @@
+import { Button } from './ui/Button';
 import { useEffect, useRef } from 'react';
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -126,9 +127,9 @@ export function Layout() {
                     and `display: none` would leave the link nameless. */}
                 <span className="user-chip-name">{userName}</span>
               </Link>
-              <button type="button" className="btn btn-small" onClick={() => void signOut()}>
+              <Button size="small" type="button" onClick={() => void signOut()}>
                 Sign out
-              </button>
+              </Button>
             </>
           ) : (
             <Link to="/login" className="btn btn-small">
@@ -143,7 +144,7 @@ export function Layout() {
       </main>
 
       <footer className="app-footer">
-        <span>Smash Club — club rankings, synced from Challonge</span>
+        <span>Smash Club</span>
         {/* The build this page was served from, so "is prod actually on the
             new image?" is answerable without kubectl. */}
         <span className="build-tag">

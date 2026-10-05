@@ -1,3 +1,4 @@
+import { Select, SelectItem } from '../components/ui/Select';
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
@@ -221,16 +222,15 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
         {hasBothStages && (
           <label className="history-stage-filter">
             <span>Show</span>
-            <select
-              className="select"
+            <Select
               aria-label="Filter sets by stage"
               value={stageFilter}
-              onChange={(event) => setStageFilter(event.target.value as typeof stageFilter)}
+              onValueChange={(selectedValue) => setStageFilter(selectedValue as typeof stageFilter)}
             >
-              <option value="all">All stages</option>
-              <option value="group">Pools</option>
-              <option value="final">Bracket</option>
-            </select>
+              <SelectItem value="all">All stages</SelectItem>
+              <SelectItem value="group">Pools</SelectItem>
+              <SelectItem value="final">Bracket</SelectItem>
+            </Select>
           </label>
         )}
         {data.sets.length === 0 ? (
