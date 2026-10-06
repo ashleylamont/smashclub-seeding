@@ -43,7 +43,7 @@ async function mutate<T = unknown>(
   expect(response.ok(), await response.text()).toBe(true);
   return (await response.json()).result.data as T;
 }
-async function freshEvent(request: APIRequestContext, suffix: string) {
+async function freshEvent(request: APIRequestContext, suffix: string, lock = true) {
   const plans = await query<{ id: string; name: string }[]>(request, 'admin.eventPlanner.plans');
   const source = plans.find((plan) => plan.name === 'Nemesis · Rehearsal Night')!;
   const roster = await query<{
@@ -70,6 +70,7 @@ async function freshEvent(request: APIRequestContext, suffix: string) {
     'eventOps.prepare',
   ])
     await mutate(request, procedure, created);
+  if (lock) await mutate(request, 'eventOps.softLockPools', { ...created, confirm: true });
   await mutate(request, 'eventOps.settings', { ...created, published: true, playerReports: true });
   return { ...created, snapshot: await query<Snapshot>(request, 'eventOps.snapshot', created) };
 }
@@ -80,7 +81,7 @@ test('an unlinked signed-in attendee reports different players and loses the for
   baseURL,
 }) => {
   await signIn(page.request, 'admin@smashclub.dev');
-  const { planId, snapshot } = await freshEvent(page.request, 'unlinked reporting');
+  const { planId, snapshot } = await freshEvent(page.request, 'unlinked reporting', false);
   expect(snapshot.plan.bracketMode).toBe('native');
   const attendee = await browser.newContext({ baseURL });
   try {
@@ -89,6 +90,20 @@ test('an unlinked signed-in attendee reports different players and loses the for
     expect(claims.some((claim) => claim.status === 'approved')).toBe(false);
     const reporting = await attendee.newPage();
     await reporting.goto(`/play/${planId}`);
+    await expect(
+      reporting.getByText(
+        'Match reporting opens when the organiser locks or resumes the pool draw.',
+      ),
+    ).toBeVisible();
+    await expect(reporting.getByRole('button', { name: 'Submit score for approval' })).toHaveCount(
+      0,
+    );
+    await mutate(page.request, 'eventOps.softLockPools', { planId, confirm: true });
+    await expect(
+      reporting.getByText(
+        'Match reporting opens when the organiser locks or resumes the pool draw.',
+      ),
+    ).toHaveCount(0);
     await chooseOption(reporting.getByRole('combobox', { name: 'Match view', exact: true }), 'all');
     const chosen = ['upper', 'lower'].map((division) =>
       snapshot.matches.find((match) => match.division === division)!,

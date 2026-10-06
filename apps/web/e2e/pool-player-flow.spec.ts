@@ -85,6 +85,7 @@ test('guests and signed-in attendees run a pool station and immediately advance 
     'eventOps.prepare',
   ])
     await mutate(page.request, procedure, { planId });
+  await mutate(page.request, 'eventOps.softLockPools', { planId, confirm: true });
   await mutate(page.request, 'eventOps.settings', { planId, published: true, playerReports: true });
   await mutate(page.request, 'eventOps.guests.configure', {
     planId,

@@ -79,6 +79,7 @@ test('attendance preview preserves completed play, rejects stale changes, and ho
   for (const operation of ['admin.eventPlanner.freezeRoster', 'admin.eventPlanner.generatePools'])
     await mutate(page.request, operation, { planId });
   await mutate(page.request, 'eventOps.softLockPools', { planId, confirm: true });
+  await mutate(page.request, 'eventOps.saveStation', { planId, name: 'Attendance station' });
   await mutate(page.request, 'eventOps.prepare', { planId });
   const before = await query<Snapshot>(page.request, 'eventOps.overview', { planId });
   const played = before.matches.find(

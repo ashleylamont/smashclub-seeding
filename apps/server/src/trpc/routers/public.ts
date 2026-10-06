@@ -23,6 +23,7 @@ import { getRatingSettings } from '../../settings';
 import { charactersByPlayer, charactersForPlayer } from '../../players/characters';
 import { loadRecap } from '../../recap/recap';
 import { loadEventOverview } from '../../events/overview';
+import { nativeHistory } from '../../events/nativeHistory';
 import { publicProcedure, router } from '../trpc';
 
 const playerName = publicPlayerName;
@@ -300,20 +301,23 @@ export const publicRouter = router({
 
   tournaments: publicProcedure.query(async ({ ctx }) => {
     const rows = await ctx.db.select().from(tournaments).orderBy(desc(tournaments.eventDate));
-    return rows.map((row) => ({
-      id: row.id,
-      slug: row.challongeSlug,
-      provider: row.provider,
-      name: row.name,
-      eventDate: row.eventDate?.toISOString() ?? null,
-      isRookie: row.isRookie,
-      resultsMode: row.resultsMode,
-      challongeState: row.challongeState,
-      syncState: row.syncState,
-      lastSyncedAt: row.lastSyncedAt?.toISOString() ?? null,
-      /** Open live-monitoring window, if any; null once it expires or the bracket completes. */
-      liveUntil: row.liveUntil?.toISOString() ?? null,
-    }));
+    const history = await nativeHistory(ctx.db);
+    return rows
+      .filter((row) => !history.superseded.has(row.id))
+      .map((row) => ({
+        id: row.id,
+        slug: row.challongeSlug,
+        provider: row.provider,
+        name: row.name,
+        eventDate: row.eventDate?.toISOString() ?? null,
+        isRookie: row.isRookie,
+        resultsMode: row.resultsMode,
+        challongeState: row.challongeState,
+        syncState: row.syncState,
+        lastSyncedAt: row.lastSyncedAt?.toISOString() ?? null,
+        /** Open live-monitoring window, if any; null once it expires or the bracket completes. */
+        liveUntil: row.liveUntil?.toISOString() ?? null,
+      }));
   }),
 
   tournament: publicProcedure

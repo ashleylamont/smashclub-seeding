@@ -26,8 +26,10 @@ type Snapshot = {
     status: string;
     player1Id: string;
     player2Id: string;
+    score1: number | null;
+    score2: number | null;
   }[];
-  reports: { id: string; status: string }[];
+  reports: { id: string; matchId: string; status: string; expectedRevision: number }[];
 };
 test('attention desk directs TOs to exact decisions and stale scores, without classifying later waves as problems', async ({
   page,
@@ -96,7 +98,7 @@ test('attention desk directs TOs to exact decisions and stale scores, without cl
     await guestContext.request.post('/api/auth/sign-in/email', {
       data: { email: 'rehearsal-player@smashclub.dev', password: 'devpassword123' },
     });
-    await mutate(guestContext.request, 'eventOps.reportScore', {
+    const report = await mutate<{ id: string }>(guestContext.request, 'eventOps.reportScore', {
       matchId: reported.id,
       expectedRevision: reported.revision,
       requestId: crypto.randomUUID(),
@@ -127,18 +129,48 @@ test('attention desk directs TOs to exact decisions and stale scores, without cl
     await attention.getByText('Score reviews · 1', { exact: true }).click();
     await attention.getByRole('button', { name: 'Review score', exact: true }).click();
     await expect(page.locator('.ops-report')).toBeFocused();
-    // A concurrent TO change makes the pending submission stale; the desk must explain it.
+    // Scheduling holds preserve the score revision and the pending submission.
     await mutate(page.request, 'eventOps.updateMatch', {
       matchId: reported.id,
       expectedRevision: reported.revision,
       status: 'blocked',
       blockedReason: 'Confirm players before recording result',
     });
+    await expect(attention).toContainText('Confirm players before recording result');
+    await expect(attention).not.toContainText('changed since submission');
+    const approve = page
+      .locator('.ops-report')
+      .getByRole('button', { name: 'Approve', exact: true });
+    await expect(approve).toBeEnabled();
+    const held = await query<Snapshot>(page.request, 'eventOps.overview', { planId });
+    expect(held.matches.find((match) => match.id === reported.id)!.revision).toBe(
+      reported.revision,
+    );
+    expect(held.reports.find((item) => item.id === report.id)).toMatchObject({
+      status: 'pending',
+      expectedRevision: reported.revision,
+    });
+    // A concurrent result changes the score revision; the desk must explain the stale report.
+    await mutate(page.request, 'eventOps.updateMatch', {
+      matchId: reported.id,
+      expectedRevision: reported.revision,
+      status: 'ready',
+    });
+    await mutate(page.request, 'eventOps.reportScore', {
+      matchId: reported.id,
+      expectedRevision: reported.revision,
+      requestId: crypto.randomUUID(),
+      score1: 1,
+      score2: 2,
+      outcome: 'played',
+    });
     await expect(attention).toContainText('1 changed since submission');
     await expect(attention).toContainText('Match changed — check the current result');
-    await expect(
-      page.locator('.ops-report').getByRole('button', { name: 'Approve', exact: true }),
-    ).toBeDisabled();
+    await expect(approve).toBeDisabled();
+    const staleApproval = await page.request.post('/api/trpc/eventOps.reviewReport', {
+      data: { reportId: report.id, approve: true },
+    });
+    expect(staleApproval.status()).toBe(409);
     await page.locator('.ops-report').getByRole('button', { name: 'Reject', exact: true }).click();
     await expect(attention).not.toContainText('Score reviews');
     await page.setViewportSize({ width: 390, height: 844 });
@@ -149,7 +181,13 @@ test('attention desk directs TOs to exact decisions and stale scores, without cl
     await page.screenshot({ path: testInfo.outputPath('to-attention-mobile.png') });
     await attention.screenshot({ path: testInfo.outputPath('to-attention-panel.png') });
     const final = await query<Snapshot>(page.request, 'eventOps.overview', { planId });
-    expect(final.matches.find((match) => match.id === reported.id)!.status).toBe('blocked');
+    expect(final.matches.find((match) => match.id === reported.id)).toMatchObject({
+      status: 'complete',
+      revision: reported.revision + 1,
+      score1: 1,
+      score2: 2,
+    });
+    expect(final.reports.find((item) => item.id === report.id)!.status).toBe('rejected');
     expect(final.reports.filter((report) => report.status === 'pending')).toHaveLength(0);
   } finally {
     await guestContext.close();

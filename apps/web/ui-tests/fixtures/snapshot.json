@@ -265,13 +265,15 @@
   ],
   "plan": {
     "id": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
-    "name": "Tech In Place \u00b7 October tournament night",
+    "name": "Tech In Place · October tournament night",
     "eventDate": "2026-10-04T04:42:44.062Z",
     "status": "underway",
-    "softLockedAt": null,
+    "softLockedAt": "2026-10-04T00:00:00.000Z",
     "bracketMode": "native",
     "historicalResultsSlug": null,
-    "resultsSlug": null
+    "resultsSlug": null,
+    "liveOwned": true,
+    "drawPaused": false
   },
   "brackets": [
     {
@@ -298,7 +300,10 @@
   "settings": {
     "scoreReportingMode": "to_review",
     "published": true,
-    "playerReports": true
+    "playerReports": true,
+    "resourceRevision": 0,
+    "reportingRevision": 0,
+    "capacity": 2
   },
   "matches": [
     {
@@ -314,7 +319,7 @@
       "division": "lower",
       "stage": "group",
       "poolIndex": 0,
-      "label": "lower Pool A \u00b7 1 v 2",
+      "label": "lower Pool A · 1 v 2",
       "player1Id": "d1b808fb-66fa-484f-a531-0d497d63a756",
       "player2Id": "73e89108-dde6-48cc-a350-d84e9a2eaf22",
       "score1": 2,
@@ -343,7 +348,10 @@
           }
         ],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
     },
     {
       "nativeBracketId": null,
@@ -358,7 +366,7 @@
       "division": "lower",
       "stage": "group",
       "poolIndex": 0,
-      "label": "lower Pool A \u00b7 1 v 3",
+      "label": "lower Pool A · 1 v 3",
       "player1Id": "d1b808fb-66fa-484f-a531-0d497d63a756",
       "player2Id": "ce11ee43-2eeb-4135-a5e5-5f9aed14be0c",
       "score1": 2,
@@ -387,7 +395,10 @@
           }
         ],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
     },
     {
       "nativeBracketId": null,
@@ -402,7 +413,7 @@
       "division": "lower",
       "stage": "group",
       "poolIndex": 0,
-      "label": "lower Pool A \u00b7 1 v 4",
+      "label": "lower Pool A · 1 v 4",
       "player1Id": "d1b808fb-66fa-484f-a531-0d497d63a756",
       "player2Id": "511a587c-1443-4c29-882e-3e48e0f7ee27",
       "score1": 2,
@@ -431,7 +442,10 @@
           }
         ],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
     },
     {
       "nativeBracketId": null,
@@ -446,7 +460,7 @@
       "division": "lower",
       "stage": "group",
       "poolIndex": 0,
-      "label": "lower Pool A \u00b7 1 v 5",
+      "label": "lower Pool A · 1 v 5",
       "player1Id": "d1b808fb-66fa-484f-a531-0d497d63a756",
       "player2Id": "4a0e97d2-5223-4d13-acb2-7d7103080900",
       "score1": 2,
@@ -475,7 +489,10 @@
           }
         ],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
     },
     {
       "nativeBracketId": null,
@@ -490,7 +507,7 @@
       "division": "lower",
       "stage": "group",
       "poolIndex": 0,
-      "label": "lower Pool A \u00b7 2 v 3",
+      "label": "lower Pool A · 2 v 3",
       "player1Id": "73e89108-dde6-48cc-a350-d84e9a2eaf22",
       "player2Id": "ce11ee43-2eeb-4135-a5e5-5f9aed14be0c",
       "score1": 2,
@@ -519,7 +536,10 @@
           }
         ],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
     },
     {
       "nativeBracketId": null,
@@ -534,7 +554,7 @@
       "division": "lower",
       "stage": "group",
       "poolIndex": 0,
-      "label": "lower Pool A \u00b7 2 v 4",
+      "label": "lower Pool A · 2 v 4",
       "player1Id": "73e89108-dde6-48cc-a350-d84e9a2eaf22",
       "player2Id": "511a587c-1443-4c29-882e-3e48e0f7ee27",
       "score1": 2,
@@ -563,7 +583,10 @@
           }
         ],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
     },
     {
       "nativeBracketId": null,
@@ -578,7 +601,7 @@
       "division": "lower",
       "stage": "group",
       "poolIndex": 0,
-      "label": "lower Pool A \u00b7 2 v 5",
+      "label": "lower Pool A · 2 v 5",
       "player1Id": "73e89108-dde6-48cc-a350-d84e9a2eaf22",
       "player2Id": "4a0e97d2-5223-4d13-acb2-7d7103080900",
       "score1": 2,
@@ -607,7 +630,10 @@
           }
         ],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
     },
     {
       "nativeBracketId": null,
@@ -622,7 +648,7 @@
       "division": "lower",
       "stage": "group",
       "poolIndex": 0,
-      "label": "lower Pool A \u00b7 3 v 4",
+      "label": "lower Pool A · 3 v 4",
       "player1Id": "ce11ee43-2eeb-4135-a5e5-5f9aed14be0c",
       "player2Id": "511a587c-1443-4c29-882e-3e48e0f7ee27",
       "score1": 2,
@@ -651,7 +677,10 @@
           }
         ],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
     },
     {
       "nativeBracketId": null,
@@ -666,7 +695,7 @@
       "division": "lower",
       "stage": "group",
       "poolIndex": 0,
-      "label": "lower Pool A \u00b7 3 v 5",
+      "label": "lower Pool A · 3 v 5",
       "player1Id": "ce11ee43-2eeb-4135-a5e5-5f9aed14be0c",
       "player2Id": "4a0e97d2-5223-4d13-acb2-7d7103080900",
       "score1": 2,
@@ -695,7 +724,10 @@
           }
         ],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
     },
     {
       "nativeBracketId": null,
@@ -710,7 +742,7 @@
       "division": "lower",
       "stage": "group",
       "poolIndex": 0,
-      "label": "lower Pool A \u00b7 4 v 5",
+      "label": "lower Pool A · 4 v 5",
       "player1Id": "511a587c-1443-4c29-882e-3e48e0f7ee27",
       "player2Id": "4a0e97d2-5223-4d13-acb2-7d7103080900",
       "score1": 2,
@@ -739,7 +771,10 @@
           }
         ],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
     },
     {
       "nativeBracketId": null,
@@ -754,7 +789,7 @@
       "division": "lower",
       "stage": "group",
       "poolIndex": 1,
-      "label": "lower Pool B \u00b7 1 v 2",
+      "label": "lower Pool B · 1 v 2",
       "player1Id": "1b46ee15-4e31-4cdc-9816-21753008b7a5",
       "player2Id": "4894742f-4322-4bc3-b11c-5fa3da2c1680",
       "score1": null,
@@ -778,7 +813,10 @@
         "canStart": true,
         "reasons": [],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
     },
     {
       "nativeBracketId": null,
@@ -793,7 +831,7 @@
       "division": "lower",
       "stage": "group",
       "poolIndex": 1,
-      "label": "lower Pool B \u00b7 1 v 3",
+      "label": "lower Pool B · 1 v 3",
       "player1Id": "1b46ee15-4e31-4cdc-9816-21753008b7a5",
       "player2Id": "740d9aed-cc67-43f0-ad1e-65caf59759e0",
       "score1": null,
@@ -817,7 +855,10 @@
         "canStart": true,
         "reasons": [],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
     },
     {
       "nativeBracketId": null,
@@ -832,7 +873,7 @@
       "division": "lower",
       "stage": "group",
       "poolIndex": 1,
-      "label": "lower Pool B \u00b7 1 v 4",
+      "label": "lower Pool B · 1 v 4",
       "player1Id": "1b46ee15-4e31-4cdc-9816-21753008b7a5",
       "player2Id": "17215dbb-9e2b-422a-988c-38ea1786208f",
       "score1": null,
@@ -856,7 +897,10 @@
         "canStart": true,
         "reasons": [],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
     },
     {
       "nativeBracketId": null,
@@ -871,7 +915,7 @@
       "division": "lower",
       "stage": "group",
       "poolIndex": 1,
-      "label": "lower Pool B \u00b7 2 v 3",
+      "label": "lower Pool B · 2 v 3",
       "player1Id": "4894742f-4322-4bc3-b11c-5fa3da2c1680",
       "player2Id": "740d9aed-cc67-43f0-ad1e-65caf59759e0",
       "score1": null,
@@ -895,7 +939,10 @@
         "canStart": true,
         "reasons": [],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
     },
     {
       "nativeBracketId": null,
@@ -910,7 +957,7 @@
       "division": "lower",
       "stage": "group",
       "poolIndex": 1,
-      "label": "lower Pool B \u00b7 2 v 4",
+      "label": "lower Pool B · 2 v 4",
       "player1Id": "4894742f-4322-4bc3-b11c-5fa3da2c1680",
       "player2Id": "17215dbb-9e2b-422a-988c-38ea1786208f",
       "score1": null,
@@ -934,7 +981,10 @@
         "canStart": true,
         "reasons": [],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
     },
     {
       "nativeBracketId": null,
@@ -949,7 +999,7 @@
       "division": "lower",
       "stage": "group",
       "poolIndex": 1,
-      "label": "lower Pool B \u00b7 3 v 4",
+      "label": "lower Pool B · 3 v 4",
       "player1Id": "740d9aed-cc67-43f0-ad1e-65caf59759e0",
       "player2Id": "17215dbb-9e2b-422a-988c-38ea1786208f",
       "score1": null,
@@ -973,7 +1023,10 @@
         "canStart": true,
         "reasons": [],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
     },
     {
       "nativeBracketId": null,
@@ -988,7 +1041,7 @@
       "division": "upper",
       "stage": "group",
       "poolIndex": 0,
-      "label": "upper Pool A \u00b7 1 v 2",
+      "label": "upper Pool A · 1 v 2",
       "player1Id": "5c0bb9a5-70f0-4185-afea-243fe431617d",
       "player2Id": "fca28732-73e8-453f-86db-3284672b4602",
       "score1": null,
@@ -1020,7 +1073,10 @@
           "5b1da7c1-3ef7-4efd-a670-65921c0ec300",
           "ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"
         ]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
     },
     {
       "nativeBracketId": null,
@@ -1035,7 +1091,7 @@
       "division": "upper",
       "stage": "group",
       "poolIndex": 0,
-      "label": "upper Pool A \u00b7 1 v 3",
+      "label": "upper Pool A · 1 v 3",
       "player1Id": "5c0bb9a5-70f0-4185-afea-243fe431617d",
       "player2Id": "acadd6a6-59c2-4cc0-8f2e-c4335be828f3",
       "score1": null,
@@ -1060,11 +1116,14 @@
         "reasons": [
           {
             "code": "player_busy",
-            "message": "A player is already playing in upper Pool A \u00b7 1 v 2."
+            "message": "A player is already playing in upper Pool A · 1 v 2."
           }
         ],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
     },
     {
       "nativeBracketId": null,
@@ -1079,7 +1138,7 @@
       "division": "upper",
       "stage": "group",
       "poolIndex": 0,
-      "label": "upper Pool A \u00b7 1 v 4",
+      "label": "upper Pool A · 1 v 4",
       "player1Id": "5c0bb9a5-70f0-4185-afea-243fe431617d",
       "player2Id": "98ab904b-b9c5-47a7-a7e8-985d16c0e2fe",
       "score1": null,
@@ -1104,11 +1163,14 @@
         "reasons": [
           {
             "code": "player_busy",
-            "message": "A player is already playing in upper Pool A \u00b7 1 v 2."
+            "message": "A player is already playing in upper Pool A · 1 v 2."
           }
         ],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
     },
     {
       "nativeBracketId": null,
@@ -1123,7 +1185,7 @@
       "division": "upper",
       "stage": "group",
       "poolIndex": 0,
-      "label": "upper Pool A \u00b7 1 v 5",
+      "label": "upper Pool A · 1 v 5",
       "player1Id": "5c0bb9a5-70f0-4185-afea-243fe431617d",
       "player2Id": "27d52e72-668d-4558-8e9b-c3f61ce2b216",
       "score1": null,
@@ -1148,11 +1210,14 @@
         "reasons": [
           {
             "code": "player_busy",
-            "message": "A player is already playing in upper Pool A \u00b7 1 v 2."
+            "message": "A player is already playing in upper Pool A · 1 v 2."
           }
         ],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
     },
     {
       "nativeBracketId": null,
@@ -1167,7 +1232,7 @@
       "division": "upper",
       "stage": "group",
       "poolIndex": 0,
-      "label": "upper Pool A \u00b7 2 v 3",
+      "label": "upper Pool A · 2 v 3",
       "player1Id": "fca28732-73e8-453f-86db-3284672b4602",
       "player2Id": "acadd6a6-59c2-4cc0-8f2e-c4335be828f3",
       "score1": null,
@@ -1192,11 +1257,14 @@
         "reasons": [
           {
             "code": "player_busy",
-            "message": "A player is already playing in upper Pool A \u00b7 1 v 2."
+            "message": "A player is already playing in upper Pool A · 1 v 2."
           }
         ],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
     },
     {
       "nativeBracketId": null,
@@ -1211,7 +1279,7 @@
       "division": "upper",
       "stage": "group",
       "poolIndex": 0,
-      "label": "upper Pool A \u00b7 2 v 4",
+      "label": "upper Pool A · 2 v 4",
       "player1Id": "fca28732-73e8-453f-86db-3284672b4602",
       "player2Id": "98ab904b-b9c5-47a7-a7e8-985d16c0e2fe",
       "score1": null,
@@ -1236,11 +1304,14 @@
         "reasons": [
           {
             "code": "player_busy",
-            "message": "A player is already playing in upper Pool A \u00b7 1 v 2."
+            "message": "A player is already playing in upper Pool A · 1 v 2."
           }
         ],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
     },
     {
       "nativeBracketId": null,
@@ -1255,7 +1326,7 @@
       "division": "upper",
       "stage": "group",
       "poolIndex": 0,
-      "label": "upper Pool A \u00b7 2 v 5",
+      "label": "upper Pool A · 2 v 5",
       "player1Id": "fca28732-73e8-453f-86db-3284672b4602",
       "player2Id": "27d52e72-668d-4558-8e9b-c3f61ce2b216",
       "score1": null,
@@ -1280,11 +1351,14 @@
         "reasons": [
           {
             "code": "player_busy",
-            "message": "A player is already playing in upper Pool A \u00b7 1 v 2."
+            "message": "A player is already playing in upper Pool A · 1 v 2."
           }
         ],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
     },
     {
       "nativeBracketId": null,
@@ -1299,7 +1373,7 @@
       "division": "upper",
       "stage": "group",
       "poolIndex": 0,
-      "label": "upper Pool A \u00b7 3 v 4",
+      "label": "upper Pool A · 3 v 4",
       "player1Id": "acadd6a6-59c2-4cc0-8f2e-c4335be828f3",
       "player2Id": "98ab904b-b9c5-47a7-a7e8-985d16c0e2fe",
       "score1": null,
@@ -1323,7 +1397,10 @@
         "canStart": true,
         "reasons": [],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
     },
     {
       "nativeBracketId": null,
@@ -1338,7 +1415,7 @@
       "division": "upper",
       "stage": "group",
       "poolIndex": 0,
-      "label": "upper Pool A \u00b7 3 v 5",
+      "label": "upper Pool A · 3 v 5",
       "player1Id": "acadd6a6-59c2-4cc0-8f2e-c4335be828f3",
       "player2Id": "27d52e72-668d-4558-8e9b-c3f61ce2b216",
       "score1": null,
@@ -1362,7 +1439,10 @@
         "canStart": true,
         "reasons": [],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
     },
     {
       "nativeBracketId": null,
@@ -1377,7 +1457,7 @@
       "division": "upper",
       "stage": "group",
       "poolIndex": 0,
-      "label": "upper Pool A \u00b7 4 v 5",
+      "label": "upper Pool A · 4 v 5",
       "player1Id": "98ab904b-b9c5-47a7-a7e8-985d16c0e2fe",
       "player2Id": "27d52e72-668d-4558-8e9b-c3f61ce2b216",
       "score1": null,
@@ -1401,7 +1481,10 @@
         "canStart": true,
         "reasons": [],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
     },
     {
       "nativeBracketId": null,
@@ -1416,7 +1499,7 @@
       "division": "upper",
       "stage": "group",
       "poolIndex": 1,
-      "label": "upper Pool B \u00b7 1 v 2",
+      "label": "upper Pool B · 1 v 2",
       "player1Id": "2aa5492e-cdcb-4af9-8aea-f454a452e7d4",
       "player2Id": "d7fbb704-776a-4e74-8e26-61847cb1ee05",
       "score1": null,
@@ -1440,7 +1523,10 @@
         "canStart": true,
         "reasons": [],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
     },
     {
       "nativeBracketId": null,
@@ -1455,7 +1541,7 @@
       "division": "upper",
       "stage": "group",
       "poolIndex": 1,
-      "label": "upper Pool B \u00b7 1 v 3",
+      "label": "upper Pool B · 1 v 3",
       "player1Id": "2aa5492e-cdcb-4af9-8aea-f454a452e7d4",
       "player2Id": "dcbd4103-145a-455a-b90e-12656df6a959",
       "score1": null,
@@ -1479,7 +1565,10 @@
         "canStart": true,
         "reasons": [],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
     },
     {
       "nativeBracketId": null,
@@ -1494,7 +1583,7 @@
       "division": "upper",
       "stage": "group",
       "poolIndex": 1,
-      "label": "upper Pool B \u00b7 1 v 4",
+      "label": "upper Pool B · 1 v 4",
       "player1Id": "2aa5492e-cdcb-4af9-8aea-f454a452e7d4",
       "player2Id": "2788c1c3-be8a-4b91-a394-cdb33e333689",
       "score1": null,
@@ -1518,7 +1607,10 @@
         "canStart": true,
         "reasons": [],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
     },
     {
       "nativeBracketId": null,
@@ -1533,7 +1625,7 @@
       "division": "upper",
       "stage": "group",
       "poolIndex": 1,
-      "label": "upper Pool B \u00b7 2 v 3",
+      "label": "upper Pool B · 2 v 3",
       "player1Id": "d7fbb704-776a-4e74-8e26-61847cb1ee05",
       "player2Id": "dcbd4103-145a-455a-b90e-12656df6a959",
       "score1": null,
@@ -1557,7 +1649,10 @@
         "canStart": true,
         "reasons": [],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
     },
     {
       "nativeBracketId": null,
@@ -1572,7 +1667,7 @@
       "division": "upper",
       "stage": "group",
       "poolIndex": 1,
-      "label": "upper Pool B \u00b7 2 v 4",
+      "label": "upper Pool B · 2 v 4",
       "player1Id": "d7fbb704-776a-4e74-8e26-61847cb1ee05",
       "player2Id": "2788c1c3-be8a-4b91-a394-cdb33e333689",
       "score1": null,
@@ -1596,7 +1691,10 @@
         "canStart": true,
         "reasons": [],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
     },
     {
       "nativeBracketId": null,
@@ -1611,7 +1709,7 @@
       "division": "upper",
       "stage": "group",
       "poolIndex": 1,
-      "label": "upper Pool B \u00b7 3 v 4",
+      "label": "upper Pool B · 3 v 4",
       "player1Id": "dcbd4103-145a-455a-b90e-12656df6a959",
       "player2Id": "2788c1c3-be8a-4b91-a394-cdb33e333689",
       "score1": null,
@@ -1635,7 +1733,10 @@
         "canStart": true,
         "reasons": [],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
     },
     {
       "nativeBracketId": "fixture-championship",
@@ -1679,7 +1780,10 @@
           }
         ],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": true
     },
     {
       "nativeBracketId": "fixture-championship",
@@ -1723,7 +1827,10 @@
           }
         ],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
     },
     {
       "nativeBracketId": "fixture-championship",
@@ -1767,7 +1874,10 @@
           }
         ],
         "eligibleStationIds": ["ade4b6cd-5d7c-434d-8c7c-0a90a0b02bea"]
-      }
+      },
+      "resourceRevision": 0,
+      "progressRevision": 0,
+      "started": false
     }
   ],
   "entrants": [
@@ -1849,7 +1959,7 @@
       "id": "e72dfb90-8f5e-43ea-846b-57a7fcad9dd5",
       "eventPlanId": "4de8ae91-f05c-4360-b3ee-b1f9e34836c5",
       "title": "Upper champion",
-      "description": "Rehearsal trophy \u00b7 recipient to be confirmed",
+      "description": "Rehearsal trophy · recipient to be confirmed",
       "playerId": null,
       "playerName": null
     },

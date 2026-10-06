@@ -70,6 +70,7 @@ async function freshEvent(request: APIRequestContext, suffix: string) {
     'eventOps.prepare',
   ])
     await mutate(request, procedure, created);
+  await mutate(request, 'eventOps.softLockPools', { ...created, confirm: true });
   await mutate(request, 'eventOps.settings', { ...created, published: true, playerReports: true });
   return { ...created, snapshot: await query<Snapshot>(request, 'eventOps.snapshot', created) };
 }

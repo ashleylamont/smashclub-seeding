@@ -88,6 +88,7 @@ export async function postgresCluster(applyMigrations = true) {
     if (applyMigrations) await migrate(drizzle(connection.pool), { migrationsFolder });
     return {
       ...connection,
+      connectionString: url.toString(),
       /** Reopen connections without losing durable state. */
       connect: () => createDb(url.toString()),
       close: async () => {

@@ -37,7 +37,9 @@ it.each(['glicko2', 'whr'])(
       const journal = JSON.parse(
         await readFile(join(migrationsFolder, 'meta/_journal.json'), 'utf8'),
       ) as { entries: { tag: string }[] };
-      journal.entries = journal.entries.filter((entry) => !entry.tag.includes('whr_only'));
+      const cutover = journal.entries.findIndex((entry) => entry.tag.includes('whr_only'));
+      expect(cutover).toBeGreaterThanOrEqual(0);
+      journal.entries = journal.entries.slice(0, cutover);
       await mkdir(join(folder, 'meta'));
       await writeFile(join(folder, 'meta/_journal.json'), JSON.stringify(journal));
       await Promise.all(

@@ -5,6 +5,7 @@ FROM node:22-slim AS build
 RUN corepack enable
 WORKDIR /repo
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.base.json ./
+COPY patches ./patches
 COPY packages ./packages
 COPY apps ./apps
 COPY tools ./tools
@@ -23,6 +24,7 @@ FROM node:22-slim
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /out/server/node_modules ./node_modules
+COPY --from=build /out/server/package.json ./package.json
 COPY --from=build /repo/apps/server/dist ./dist
 COPY --from=build /repo/apps/web/dist ./web
 COPY --from=build /repo/packages/db/migrations ./migrations

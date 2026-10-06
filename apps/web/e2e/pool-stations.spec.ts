@@ -76,6 +76,7 @@ test('TO divides stations once, players see pool queues, and the next wave reuse
     'eventOps.prepare',
   ])
     await mutate(page.request, procedure, { planId });
+  await mutate(page.request, 'eventOps.softLockPools', { planId, confirm: true });
   await mutate(page.request, 'eventOps.settings', { planId, published: true, playerReports: true });
   for (const name of ['Station 10', 'Station 1', 'Station 11', 'Station 2'])
     await mutate(page.request, 'eventOps.saveStation', { planId, name });

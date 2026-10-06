@@ -1,3 +1,5 @@
+import { nativePlanList } from '../../tournament/queries';
+import { nativeEvent } from '../../tournament/api';
 import {
   historicalCandidates,
   previewHistoricalAdoption,
@@ -75,7 +77,7 @@ export const eventPlannerRouter = router({
     .input(historicalSchema.extend({ fingerprint: z.string().regex(/^[a-f0-9]{64}$/) }))
     .mutation(({ ctx, input }) => applyHistoricalAdoption(ctx.db, input, ctx.user.id)),
 
-  plans: adminProcedure.query(({ ctx }) => listPlans(ctx.db)),
+  plans: adminProcedure.query(async ({ ctx }) => nativePlanList(ctx, await listPlans(ctx.db))),
 
   /**
    * Parse and resolve a pasted list. A mutation rather than a query only
@@ -124,9 +126,10 @@ export const eventPlannerRouter = router({
       return { planId };
     }),
 
-  plan: adminProcedure
-    .input(z.object({ planId: z.uuid() }))
-    .query(({ ctx, input }) => getPlan(ctx.db, input.planId)),
+  plan: adminProcedure.input(z.object({ planId: z.uuid() })).query(async ({ ctx, input }) => {
+    const api = await nativeEvent(ctx, input.planId, false, input);
+    return api ? api.plan() : getPlan(ctx.db, input.planId);
+  }),
 
   updatePlan: adminProcedure
     .input(
@@ -236,6 +239,33 @@ export const eventPlannerRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const api = await nativeEvent(ctx, input.planId, false, input);
+      if (api) {
+        const state = await api.state();
+        await api.execute({
+          kind: 'poolOrders',
+          pools: input.pools.map((p) => {
+            const pool = state.pools.find(
+              (pool) => pool.division === input.division && pool.index === p.poolIndex,
+            );
+            if (!pool) throw new TRPCError({ code: 'NOT_FOUND' });
+            return {
+              poolId: pool.id,
+              order: p.playerIdsInOrder,
+              expectedRevision:
+                p.expectedPlacementRevision === undefined
+                  ? pool.revision
+                  : Number(p.expectedPlacementRevision),
+              matchRevisions: Object.fromEntries(
+                (p.expectedMatchRevisions ?? state.matches.filter((m) => m.poolId === pool.id)).map(
+                  (m) => [m.id, m.revision],
+                ),
+              ),
+            };
+          }),
+        });
+        return { ok: true };
+      }
       await guard(() => savePoolPlacements(ctx.db, input.planId, input.division, input.pools));
       return { ok: true };
     }),
@@ -268,7 +298,8 @@ export const eventPlannerRouter = router({
    * venue is precisely when this must not have disappeared.
    */
   exports: adminProcedure.input(z.object({ planId: z.uuid() })).query(async ({ ctx, input }) => {
-    const view = await getPlan(ctx.db, input.planId);
+    const api = await nativeEvent(ctx, input.planId, false, input);
+    const view = api ? await api.plan() : await getPlan(ctx.db, input.planId);
     if (!view)
       throw new TRPCError({ code: 'NOT_FOUND', message: 'That event plan no longer exists.' });
     return buildExports(view);
@@ -278,6 +309,15 @@ export const eventPlannerRouter = router({
   closePlan: adminProcedure
     .input(z.object({ planId: z.uuid(), status: z.enum(['complete', 'cancelled']) }))
     .mutation(async ({ ctx, input }) => {
+      const api = await nativeEvent(ctx, input.planId, false, input);
+      if (api) {
+        await api.execute(
+          input.status === 'complete'
+            ? { kind: 'finalize' }
+            : { kind: 'cancel', reason: 'Cancelled by organiser' },
+        );
+        return { ok: true };
+      }
       await guard(() => closePlan(ctx.db, input.planId, input.status));
       return { ok: true };
     }),

@@ -30,6 +30,8 @@ export function ScorePolicyControls({
               void act(
                 () =>
                   trpc.eventOps.settings.mutate({
+                    requestId: crypto.randomUUID(),
+                    expectedReportingRevision: data.settings.reportingRevision,
                     planId: data.plan.id,
                     published: data.settings.published,
                     playerReports: data.settings.playerReports,

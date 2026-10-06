@@ -10,6 +10,7 @@ import { loadEnv } from './env';
 import { latestRecomputeId } from './recompute/recompute';
 import { RecomputeTrigger } from './recompute/trigger';
 import { acquireSchedulerLock, SyncScheduler } from './scheduler';
+import { createPostgresNativeRuntime, startNativeWorker } from './tournament/runtime';
 
 async function main(): Promise<void> {
   const env = loadEnv();
@@ -29,7 +30,12 @@ async function main(): Promise<void> {
   // After migration, publish a current WHR run before exposing canonical ratings.
   if (!(await latestRecomputeId(db))) recomputeTrigger.request();
 
-  const app = await buildApp({ db, env, auth, challonge, recomputeTrigger });
+  const nativeRuntime = await createPostgresNativeRuntime(db, env.DATABASE_URL);
+  await nativeRuntime.recover();
+  const app = await buildApp({ db, env, auth, challonge, recomputeTrigger, nativeRuntime });
+  const stopNativeWorker = startNativeWorker(nativeRuntime, db, (error) =>
+    app.log.error(error, 'native tournament recovery failed'),
+  );
 
   const scheduler = new SyncScheduler(db, challonge, recomputeTrigger, (message) =>
     app.log.info(message),
@@ -43,6 +49,8 @@ async function main(): Promise<void> {
 
   const shutdown = async (): Promise<void> => {
     scheduler.stop();
+    await stopNativeWorker();
+    await nativeRuntime.shutdown();
     await app.close();
     await pool.end();
     process.exit(0);

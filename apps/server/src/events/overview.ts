@@ -9,6 +9,7 @@ import {
   type Db,
 } from '@smashclub/db';
 import { eventKeyOf } from '@smashclub/engine';
+import { nativeHistory } from './nativeHistory';
 import {
   compareEventBrackets,
   eventCanonicalSlug,
@@ -82,8 +83,12 @@ export async function loadEventOverview(db: Db, slug: string): Promise<EventOver
     memberships.filter((link) => link.tournamentId === anchor.id).map((link) => link.eventPlanId),
   );
   const key = anchor.eventDate ? eventKeyOf(anchor.eventDate.toISOString()) : null;
+  const history = await nativeHistory(db);
+  const nativeIds = history.byTournament.get(anchor.id);
   let eventRows: (typeof tournaments.$inferSelect)[];
-  if (anchorPlanIds.size === 1) {
+  if (nativeIds) {
+    eventRows = await db.select().from(tournaments).where(inArray(tournaments.id, nativeIds));
+  } else if (anchorPlanIds.size === 1) {
     // A saved event is an explicit identity, even if another club night or an
     // unrelated bracket happens on the same calendar day.
     const planId = [...anchorPlanIds][0]!;
@@ -107,6 +112,7 @@ export async function loadEventOverview(db: Db, slug: string): Promise<EventOver
     eventRows = rows.filter(
       (row) =>
         !explicitlyLinked.has(row.id) &&
+        !history.byTournament.has(row.id) &&
         row.eventDate &&
         eventKeyOf(row.eventDate.toISOString()) === key,
     );

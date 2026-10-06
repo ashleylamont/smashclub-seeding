@@ -34,6 +34,7 @@ export function OpsAnnouncements({
             e.preventDefault();
             void act(async () => {
               await trpc.eventOps.announce.mutate({
+                requestId: crypto.randomUUID(),
                 planId,
                 message: announcement,
                 durationSeconds: announcementMinutes * 60,
@@ -92,6 +93,7 @@ export function OpsAnnouncements({
             e.preventDefault();
             void act(async () => {
               await trpc.eventOps.savePrize.mutate({
+                requestId: crypto.randomUUID(),
                 planId,
                 title: prizeTitle,
                 ...(prizePlayer ? { playerId: prizePlayer } : {}),

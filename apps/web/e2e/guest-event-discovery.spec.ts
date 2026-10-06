@@ -56,6 +56,7 @@ test('anonymous navigation finds only published events and an admin can opt into
     'eventOps.prepare',
   ])
     await mutate(page.request, procedure, { planId });
+  await mutate(page.request, 'eventOps.softLockPools', { planId, confirm: true });
   const anonymous = await browser.newContext({ baseURL, viewport: { width: 390, height: 844 } });
   try {
     const guest = await anonymous.newPage();

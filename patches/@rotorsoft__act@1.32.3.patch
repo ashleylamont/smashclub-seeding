@@ -1,0 +1,38 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index fd2a61285b62615ab50736e59514293853f347d9..29d78c874e7f9ca4b84ed5477db0ecbb842060f7 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -5753,11 +5753,12 @@ var Act = class {
+         payload,
+         do_options
+       );
++      const committed = snapshots.filter((s) => s.event);
+       if (this._reactive_events.size > 0)
+         this._arm_for_event_names(
+-          snapshots.map((s) => s.event.name)
++          committed.map((s) => s.event.name)
+         );
+-      this.emit("committed", snapshots);
++      if (committed.length > 0) this.emit("committed", committed);
+       return snapshots;
+     });
+   }
+diff --git a/dist/index.js b/dist/index.js
+index 7b6195046a5d73cb81c2afc51d5abf78bebdde01..8f7d090e23daf9ec14d270a0c0d588e6671af469 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -4103,11 +4103,12 @@ var Act = class {
+         payload,
+         do_options
+       );
++      const committed = snapshots.filter((s) => s.event);
+       if (this._reactive_events.size > 0)
+         this._arm_for_event_names(
+-          snapshots.map((s) => s.event.name)
++          committed.map((s) => s.event.name)
+         );
+-      this.emit("committed", snapshots);
++      if (committed.length > 0) this.emit("committed", committed);
+       return snapshots;
+     });
+   }

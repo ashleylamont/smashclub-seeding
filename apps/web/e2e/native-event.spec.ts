@@ -295,4 +295,27 @@ test('native event progresses from pools through reviewed finals to public club 
   await expect(page.locator('.recap-podiums .podium')).toHaveCount(4);
   await expect(page.locator('.recap-bracket-list li')).toHaveCount(4);
   await expect(page.locator('.recap-progress-chip')).toHaveCount(0);
+  await page.goto(`/admin/event-operations?plan=${planId}&view=draw`);
+  const correction = page
+    .locator('section.card')
+    .filter({ has: page.getByRole('heading', { name: 'Published results and corrections' }) });
+  await expect(correction).toContainText('Result revision 1 published.');
+  const correctedMatch = played.find((m) => m.nativeBracketId)!;
+  await chooseOption(
+    correction.getByRole('combobox', { name: 'Completed match' }),
+    correctedMatch.id,
+  );
+  await correction.locator('input[type="number"]').nth(0).fill('3');
+  await correction.locator('input[type="number"]').nth(1).fill('1');
+  await correction.getByLabel('Ruling reason').fill('The TO reviewed the final game count.');
+  await correction.getByRole('button', { name: 'Publish reviewed correction' }).click();
+  await expect(correction).toContainText('Result revision 2 published.');
+  const replaced = await query<Overview>(page.request, 'public.eventOverview', { slug });
+  expect(replaced.brackets).toHaveLength(4);
+  expect(replaced.divisions.flatMap((d) => d.players).reduce((sum, p) => sum + p.wins, 0)).toBe(
+    played.length,
+  );
+  expect(replaced.warnings).toEqual([]);
+  await page.goto(`/recaps/${slug}`);
+  await expect(page.locator('.recap-podiums .podium')).toHaveCount(4);
 });

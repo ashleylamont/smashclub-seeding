@@ -12,6 +12,7 @@ import { SseRegistry } from './live/sse';
 import type { RecomputeTrigger } from './recompute/trigger';
 import { appRouter } from './trpc/router';
 import type { TrpcContext } from './trpc/trpc';
+import type { NativeRuntime } from './tournament/runtime';
 
 export interface AppDeps {
   db: Db;
@@ -19,6 +20,7 @@ export interface AppDeps {
   auth: Auth;
   challonge: ChallongeClient;
   recomputeTrigger: RecomputeTrigger;
+  nativeRuntime?: NativeRuntime;
 }
 
 const SSE_HEARTBEAT_MS = 25_000;
@@ -60,7 +62,15 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       router: appRouter,
       createContext: async ({ req }: { req: FastifyRequest }): Promise<TrpcContext> => {
         const user = await getSessionUser(auth, db, env, toWebHeaders(req));
-        return { db, env, user, challonge, recomputeTrigger, clientIp: req.ip };
+        return {
+          db,
+          env,
+          user,
+          challonge,
+          recomputeTrigger,
+          nativeRuntime: deps.nativeRuntime,
+          clientIp: req.ip,
+        };
       },
     },
   });

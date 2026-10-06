@@ -18,6 +18,7 @@ import {
 } from '@smashclub/engine';
 import { includesResultStage, isPlayedRatingResult } from '@smashclub/shared';
 import { getRatingSettings, updateRatingSettings } from '../settings';
+import { nativeHistory } from '../events/nativeHistory';
 
 export const ENGINE_VERSION = '2.0.0';
 const EVENT_INSERT_CHUNK = 500;
@@ -32,7 +33,24 @@ const EVENT_INSERT_CHUNK = 500;
 export async function runRecompute(
   db: Db,
 ): Promise<{ recomputeId: string; model: 'whr'; players: number; sets: number; events: number }> {
+  // Serialize every caller with durable native publication and preserve failed-run audit.
+  const outcome = await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(782392)`);
+    try {
+      return { result: await computeRatings(tx) };
+    } catch (error) {
+      return { error };
+    }
+  });
+  if ('error' in outcome) throw outcome.error;
+  return outcome.result;
+}
+
+async function computeRatings(
+  db: Db,
+): Promise<{ recomputeId: string; model: 'whr'; players: number; sets: number; events: number }> {
   const { rating, version } = await getRatingSettings(db);
+  const { superseded } = await nativeHistory(db);
 
   const tournamentRows = await db
     .select({
@@ -71,6 +89,7 @@ export async function runRecompute(
     : [];
 
   const engineSets: EngineSet[] = setRows
+    .filter((row) => !superseded.has(row.tournamentId))
     .filter((row) => includesResultStage(modes.get(row.tournamentId) ?? 'auto', row.resultStage))
     .filter((row) => row.p1PlayerId !== row.p2PlayerId)
     /*

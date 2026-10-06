@@ -242,6 +242,8 @@ async function freshOperations(request: APIRequestContext, suffix: string) {
   ]) {
     await mutateData(request, procedure, created);
   }
+  await mutateData(request, 'eventOps.softLockPools', { ...created, confirm: true });
+  await mutateData(request, 'eventOps.saveStation', { ...created, name: 'Desk station' });
   await mutateData(request, 'eventOps.settings', {
     ...created,
     published: true,
@@ -250,7 +252,7 @@ async function freshOperations(request: APIRequestContext, suffix: string) {
   return { ...created, snapshot: await query<Snapshot>(request, 'eventOps.snapshot', created) };
 }
 
-test('player draft requires an explicit reload after another TO changes the match', async ({
+test('player score draft survives a station dispatch without changing its score revision', async ({
   page,
   browser,
   baseURL,
@@ -284,16 +286,14 @@ test('player draft requires an explicit reload after another TO changes the matc
       expectedRevision: match.revision,
       status: 'playing',
     });
-    await expect(card.getByRole('button', { name: 'Reload match', exact: true })).toBeVisible();
-    await expect(submit).toBeDisabled();
+    await expect(card).toContainText('Playing');
+    await expect(card.getByRole('button', { name: 'Reload match', exact: true })).toHaveCount(0);
+    await expect(submit).toBeEnabled();
     expect(
       await query<Report[]>(playerContext.request, 'eventOps.myReports', { planId }),
     ).toHaveLength(0);
-    await card.getByRole('button', { name: 'Reload match', exact: true }).click();
-    await expect(card.locator('input[type="number"]').nth(0)).toHaveValue('0');
-    await expect(card.locator('input[type="number"]').nth(1)).toHaveValue('0');
-    await expect(submit).toBeDisabled();
-    await card.locator('input[type="number"]').nth(0).fill('2');
+    await expect(card.locator('input[type="number"]').nth(0)).toHaveValue('2');
+    await expect(card.locator('input[type="number"]').nth(1)).toHaveValue('1');
     await submit.click();
     await expect(card).toContainText('Score submitted for TO approval');
     const reports = await query<Report[]>(playerContext.request, 'eventOps.myReports', { planId });
@@ -301,7 +301,7 @@ test('player draft requires an explicit reload after another TO changes the matc
     expect(reports[0]).toMatchObject({
       matchId: match.id,
       status: 'pending',
-      expectedRevision: match.revision + 1,
+      expectedRevision: match.revision,
     });
   } finally {
     await playerContext.close();

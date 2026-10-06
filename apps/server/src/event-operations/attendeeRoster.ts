@@ -74,10 +74,13 @@ export async function updateAttendee(
     displayName: string | null;
     companyCode: string | null;
   },
+  liveEntrants?: string[],
 ) {
   await requireOperator(db, input.planId, actor);
   const changed = await db.transaction(async (tx) => {
-    await lockEvent(tx, input.planId);
+    if (!liveEntrants) await lockEvent(tx, input.planId);
+    else if (!liveEntrants.includes(input.playerId))
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'This player is not attending.' });
     const [entry] = await tx
       .select({ id: eventPlanEntries.id })
       .from(eventPlanEntries)
@@ -97,7 +100,7 @@ export async function updateAttendee(
           isNull(eventWithdrawals.playerId),
         ),
       );
-    if (!entry)
+    if (!entry && !liveEntrants)
       throw new TRPCError({
         code: 'NOT_FOUND',
         message: 'This player is not attending the event.',
@@ -144,24 +147,25 @@ export async function updateAttendee(
         updatedAt: new Date(),
       })
       .where(eq(players.id, input.playerId));
-    await tx.insert(eventAttendanceAudit).values({
-      eventPlanId: input.planId,
-      userId: actor.id,
-      action: 'edit_player',
-      details: {
-        playerId: input.playerId,
-        previous: {
-          canonicalName: current.canonicalName,
-          displayName: current.displayName,
-          companyId: current.companyId,
+    if (!liveEntrants)
+      await tx.insert(eventAttendanceAudit).values({
+        eventPlanId: input.planId,
+        userId: actor.id,
+        action: 'edit_player',
+        details: {
+          playerId: input.playerId,
+          previous: {
+            canonicalName: current.canonicalName,
+            displayName: current.displayName,
+            companyId: current.companyId,
+          },
+          updated: {
+            canonicalName: input.canonicalName,
+            displayName: input.displayName,
+            companyId: company?.id ?? null,
+          },
         },
-        updated: {
-          canonicalName: input.canonicalName,
-          displayName: input.displayName,
-          companyId: company?.id ?? null,
-        },
-      },
-    });
+      });
     return (
       current.canonicalName !== input.canonicalName || current.companyId !== (company?.id ?? null)
     );

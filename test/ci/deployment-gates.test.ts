@@ -30,6 +30,7 @@ it('PostgreSQL gate rejects omitted suites and skipped tests even when the runne
     'event-concurrency',
     'event-lifecycle',
     'migration-upgrade',
+    'native-live',
   ]
     .map((name) => `<testsuite name="${name}-postgres.test.ts" tests="1"></testsuite>`)
     .join('')} </testsuites>`;
@@ -41,6 +42,9 @@ it('PostgreSQL gate rejects omitted suites and skipped tests even when the runne
   );
   expect(() => assertPostgresReport(report.replace('event-lifecycle', 'missing'))).toThrow(
     /PostgreSQL gate|Missing required|publication|commit|main|Expected/,
+  );
+  expect(() => assertPostgresReport(report.replace('native-live', 'missing'))).toThrow(
+    /Missing required/,
   );
   expect(() => assertPostgresReport(report.replace('tests="1"', 'tests="0"'))).toThrow(
     /PostgreSQL gate|Missing required|publication|commit|main|Expected/,

@@ -12,7 +12,7 @@ PRs run **CI**. Main pushes, version tags and manual publication run the same re
 - **Browser event flows** and **UI accessibility and visuals:** real API event rehearsals plus deterministic isolated visual fixtures. See [UI review](ui-visual-review.md). Existing screenshots, traces and baselines are retained.
 - **Server bundle boots:** preserves the original missing-`DATABASE_URL` environment-validation check, which catches module-load failures independently of the image check.
 
-**All checks** rejects failed, cancelled, skipped or missing mandatory dependencies. `pnpm test:postgres` additionally validates its JUnit report: all four named required suites must appear and no tests may be skipped. Missing binaries, wrong PostgreSQL major, missing Docker, migrations or an empty/skipped suite fail the command.
+**All checks** rejects failed, cancelled, skipped or missing mandatory dependencies. `pnpm test:postgres` additionally validates its JUnit report: all five named required suites must appear and no tests may be skipped. Missing binaries, wrong PostgreSQL major, missing Docker, migrations or an empty/skipped suite fail the command.
 
 ## Run locally
 

@@ -2,14 +2,14 @@
 
 ## Local rehearsal
 
-Install Node.js 22+ and pnpm 10, then run from the repository root:
+Install Node.js 22.23.3+ and pnpm 10, then run from the repository root:
 
 ```bash
 pnpm install
 pnpm --filter @smashclub/web dev
 ```
 
-In another terminal, run `pnpm dev:harness`. The harness applies the real migrations to an in-memory PGlite database, seeds sample tournaments and an event, and enables email/password sign-in for local testing. It prints account credentials and fresh event links on startup. Restarting it resets the data. The web app opens at <http://localhost:5173> and proxies `/api` to port 3000.
+In another terminal, run `pnpm dev:harness`. The harness applies the real migrations to an in-memory PGlite database, pairs it with an in-memory Act runtime, seeds sample tournaments and an event, and enables email/password sign-in for local testing. It prints account credentials and fresh event links on startup. Restarting it resets the data and journal. The web app opens at <http://localhost:5173> and proxies `/api` to port 3000.
 
 To test the built frontend through the same server origin:
 
@@ -41,6 +41,8 @@ pnpm dev
 ```
 
 The server applies migrations on startup. `MIGRATIONS_DIR` matters here because `pnpm dev` runs the server script from `apps/server/`, while migration files live in `packages/db/migrations/`. Start the Vite frontend separately as above. This server uses OAuth for sign-in; the local harness is the way to test credential sign-in without provider setup.
+
+Native event nights use Act-PG in the `native_act` schema by default. Startup imports existing native live/completed nights and recovers pending handoffs before accepting traffic. The normal pool lock establishes ownership for a new night; there is no adoption toggle. Once locked, use the event desk for attendance, resources, scores and pause/resume. Draft SQL editing stays frozen. Publication and rating recovery run durably in the background; the desk exposes publication status, recovery and reviewed result corrections. See [the native API notes](native-live-api.md).
 
 ## Configuration
 

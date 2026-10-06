@@ -4,6 +4,7 @@ import type { ChallongeClient } from '../challonge/client';
 import type { SessionUser } from '../auth';
 import type { Env } from '../env';
 import type { RecomputeTrigger } from '../recompute/trigger';
+import type { NativeRuntime } from '../tournament/runtime';
 
 export interface TrpcContext {
   clientIp?: string;
@@ -12,6 +13,7 @@ export interface TrpcContext {
   user: SessionUser | null;
   challonge: ChallongeClient;
   recomputeTrigger: RecomputeTrigger;
+  nativeRuntime?: NativeRuntime;
 }
 
 const t = initTRPC.context<TrpcContext>().create();

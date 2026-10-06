@@ -5,6 +5,7 @@ export function assertPostgresReport(report) {
     'event-concurrency',
     'event-lifecycle',
     'migration-upgrade',
+    'native-live',
   ]) {
     const suite = suites.find((attributes) => attributes.includes(`${name}-postgres.test.ts`));
     if (!suite || !/\btests="[1-9]\d*"/.test(suite))

@@ -1,3 +1,5 @@
+import { PoolDrawControls } from './PoolDrawControls';
+import { NativeResultControls } from './NativeResultControls';
 import { useConfirmation } from '../../lib/confirmation';
 import { Button } from '../../components/ui/Button';
 import { Select, SelectItem } from '../../components/ui/Select';
@@ -114,8 +116,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
     );
   const data = event.data;
   const closed = ['complete', 'cancelled'].includes(data.plan.status);
-  const canSoftLock = data.plan.status === 'pools_ready' && !data.plan.softLockedAt;
-  const canUnlock = data.plan.status === 'pools_ready' && Boolean(data.plan.softLockedAt);
+  const liveDisabled = pending || closed || Boolean(data.plan.drawPaused);
   const disputes = data.reports.filter(
     (report) => report.status === 'pending' && report.isDispute,
   ).length;
@@ -256,7 +257,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
             </div>
             <Button
               type="submit"
-              disabled={pending || closed || !data.plan.softLockedAt}
+              disabled={liveDisabled || !data.plan.softLockedAt}
               onClick={() =>
                 void act(() => trpc.eventOps.prepare.mutate({ planId }), 'Match queue refreshed')
               }
@@ -321,7 +322,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
                 key={match.id}
                 match={match}
                 stations={data.stations}
-                disabled={pending || closed}
+                disabled={liveDisabled}
                 canStart={callable.has(match.id)}
                 native={data.plan.bracketMode === 'native'}
                 act={act}
@@ -337,14 +338,14 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
                   : 'No matches in this view.'}
             </p>
           )}
-          <PlayerReports data={data} disabled={pending || closed} act={act} />
+          <PlayerReports data={data} disabled={liveDisabled} act={act} />
           <StationPoolControls
             onMatch={(id) => {
               setFocusedMatchId(id);
               void workspace.openControl('match-desk');
             }}
             data={data}
-            disabled={pending || closed}
+            disabled={liveDisabled}
             act={act}
             onPool={(key) => {
               setFocusedMatchId(null);
@@ -380,60 +381,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
           <AttendanceControls planId={planId} data={data} disabled={pending || closed} />
         </TabPanel>
         <TabPanel value="draw">
-          <section className="card ops-setup">
-            <div>
-              <h3>Pool draw: {data.plan.softLockedAt ? 'Soft-locked' : 'Draft'}</h3>
-              <p className="muted">
-                {data.plan.softLockedAt
-                  ? 'The TO has committed to these pools and opponents. Late arrivals and no-shows change only their affected pools.'
-                  : 'You can still change the roster and rebalance pools in the planner. A TO must explicitly soft-lock the draw before using local attendance changes.'}
-              </p>
-              {data.plan.softLockedAt && (
-                <p className="muted">
-                  Soft-locked {new Date(data.plan.softLockedAt).toLocaleString()}.
-                </p>
-              )}
-            </div>
-            {canSoftLock && (
-              <Button
-                variant="primary"
-                type="submit"
-                disabled={pending}
-                onClick={async () => {
-                  if (
-                    await confirmAction(
-                      'Soft-lock this pool draw? Existing players will keep their pools and opponents, and the initial match queue will be prepared.',
-                    )
-                  )
-                    void act(
-                      () => trpc.eventOps.softLockPools.mutate({ planId, confirm: true }),
-                      'Pool draw soft-locked',
-                    );
-                }}
-              >
-                Soft-lock pool draw
-              </Button>
-            )}
-            {canUnlock && (
-              <Button
-                type="submit"
-                disabled={pending}
-                onClick={async () => {
-                  if (
-                    await confirmAction(
-                      'Return this pool draw to draft? This clears unplayed matches, saved pool assignments, and pool station settings. The planner may rebalance the pools. Recorded play and linked brackets cannot be cleared this way.',
-                    )
-                  )
-                    void act(
-                      () => trpc.eventOps.unlockPools.mutate({ planId, confirm: true }),
-                      'Pool draw returned to draft. You can rebalance it in the planner.',
-                    );
-                }}
-              >
-                Return draw to draft
-              </Button>
-            )}
-          </section>
+          <PoolDrawControls data={data} closed={closed} pending={pending} act={act} />
           {pools.length > 0 && (
             <section className="card">
               <h3>Pool standings</h3>
@@ -490,7 +438,17 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
             </section>
           )}
           {data.plan.bracketMode === 'native' ? (
-            <NativeBracketControls planId={planId} entrants={data.entrants} closed={closed} />
+            <>
+              <NativeBracketControls
+                planId={planId}
+                entrants={data.entrants}
+                closed={closed || Boolean(data.plan.drawPaused)}
+              />
+              <NativeResultControls
+                data={data}
+                onChanged={() => cache.invalidateQueries({ queryKey: ['eventOps', planId] })}
+              />
+            </>
           ) : (
             <Disclosure title="Challonge integration" className="ops-external-handoff">
               <ScoreHandoff planId={planId} data={data} disabled={pending || closed} />
@@ -519,7 +477,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
                 key={stageMatch.id}
                 match={stageMatch}
                 stations={data.stations}
-                disabled={pending || closed}
+                disabled={liveDisabled}
                 canStart={callable.has(stageMatch.id)}
                 native={data.plan.bracketMode === 'native'}
                 act={act}
@@ -575,7 +533,8 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
                 disabled={
                   pending ||
                   data.matches.some(
-                    (match) => match.status === 'playing' || match.status === 'complete',
+                    (match) =>
+                      match.started || match.status === 'playing' || match.status === 'complete',
                   ) ||
                   data.reports.length > 0 ||
                   data.withdrawals.length > 0 ||

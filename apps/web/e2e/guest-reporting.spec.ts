@@ -72,6 +72,7 @@ async function event(request: APIRequestContext) {
     'eventOps.prepare',
   ])
     await mutate(request, name, { planId });
+  await mutate(request, 'eventOps.softLockPools', { planId, confirm: true });
   await mutate(request, 'eventOps.settings', { planId, published: true, playerReports: false });
   await mutate(request, 'eventOps.saveStation', { planId, name: 'Stage' });
   return planId;

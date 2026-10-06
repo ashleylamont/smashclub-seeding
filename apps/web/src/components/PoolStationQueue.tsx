@@ -220,6 +220,7 @@ export function PoolStationQueue({
                       }
                       onClick={() =>
                         onStart({
+                          requestId: crypto.randomUUID(),
                           matchId: next.id,
                           stationId: station.id,
                           expectedRevision: next.revision,

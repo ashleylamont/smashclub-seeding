@@ -25,36 +25,29 @@ export function MatchCard({
   const confirmAction = useConfirmation();
   const [editing, setEditing] = useState<'live' | 'final' | null>(null);
   const [revision, setRevision] = useState(match.revision);
+  const [progressRevision, setProgressRevision] = useState(match.progressRevision);
   const [score1, setScore1] = useState<ScoreInputValue>(match.score1 ?? 0);
   const [score2, setScore2] = useState<ScoreInputValue>(match.score2 ?? 0);
   const [outcome, setOutcome] = useState<'played' | 'forfeit' | 'bye'>('played');
   const [winnerId, setWinnerId] = useState(match.winnerId ?? match.player1Id ?? '');
   const [requestId, setRequestId] = useState('');
-  const stale = editing !== null && revision !== match.revision;
+  const stale =
+    editing !== null &&
+    (revision !== match.revision ||
+      (editing === 'live' && progressRevision !== match.progressRevision));
   const requireDecisive = editing === 'final' && outcome === 'played';
   const begin = (mode: 'live' | 'final') => {
     setEditing(mode);
     setRevision(match.revision);
+    setProgressRevision(match.progressRevision);
     setScore1(match.score1 ?? 0);
     setScore2(match.score2 ?? 0);
     setOutcome(match.outcome ?? 'played');
     setWinnerId(match.winnerId ?? match.player1Id ?? '');
     setRequestId(crypto.randomUUID());
   };
-  const eligible = stations.filter(
-    (station) =>
-      (station.status === 'free' || station.currentMatchId === match.id) &&
-      (match.availability.eligibleStationIds.includes(station.id) ||
-        station.currentMatchId === match.id),
-  );
-  const label =
-    match.status === 'complete'
-      ? 'Finished'
-      : match.status === 'playing'
-        ? 'Playing now'
-        : canStart
-          ? 'Ready to start'
-          : 'Waiting';
+  const eligible = eligibleStations(match, stations);
+  const label = matchLabel(match, canStart);
   return (
     <article className={`card ops-match ops-match-${match.status}`}>
       <div className="ops-match-meta">
@@ -99,6 +92,7 @@ export function MatchCard({
               trpc.eventOps.updateMatch.mutate({
                 matchId: match.id,
                 expectedRevision: match.revision,
+                expectedResourceRevision: match.resourceRevision,
                 status:
                   match.status === 'playing'
                     ? 'playing'
@@ -140,6 +134,7 @@ export function MatchCard({
                 trpc.eventOps.updateMatch.mutate({
                   matchId: match.id,
                   expectedRevision: match.revision,
+                  expectedResourceRevision: match.resourceRevision,
                   status: match.status === 'playing' ? 'ready' : 'playing',
                   stationId: match.stationId,
                 }),
@@ -198,6 +193,7 @@ export function MatchCard({
                   await trpc.eventOps.updateLiveScore.mutate({
                     matchId: match.id,
                     expectedRevision: revision,
+                    expectedProgressRevision: progressRevision,
                     score1,
                     score2,
                   });
@@ -306,4 +302,18 @@ export function MatchCard({
       )}
     </article>
   );
+}
+
+function eligibleStations(match: Match, stations: Overview['stations']) {
+  return stations.filter(
+    (station) =>
+      (station.status === 'free' || station.currentMatchId === match.id) &&
+      (match.availability.eligibleStationIds.includes(station.id) ||
+        station.currentMatchId === match.id),
+  );
+}
+function matchLabel(match: Match, canStart: boolean) {
+  if (match.status === 'complete') return 'Finished';
+  if (match.status === 'playing') return 'Playing now';
+  return canStart ? 'Ready to start' : 'Waiting';
 }

@@ -94,7 +94,8 @@ export async function mockEvent(page: Page, options: FixtureOptions = {}) {
         Object.assign(match, {
           status: 'playing',
           stationId: input.stationId,
-          revision: match.revision + 1,
+          started: true,
+          resourceRevision: ++snapshot.settings.resourceRevision,
         });
         return { result: { data: match } };
       }

@@ -1,4 +1,7 @@
+import { nativeEvent, nativeEntity, reportViews } from '../tournament/api';
+import { nativeOverview, nativePublicEvents, nativeRoster } from '../tournament/queries';
 import { publicEventNights } from './publicEvents';
+import { nativeLiveRouter } from '../tournament/router';
 import { startPoolMatch } from './selfService';
 import { nativeBracketRouter } from './nativeRouter';
 import { guestRouter } from './guestRouter';
@@ -14,6 +17,7 @@ import {
   eventPrizes,
   eventScoreReports,
   eventPlanEntries,
+  eventPlans,
   eventAttendanceAudit,
   user,
 } from '@smashclub/db';
@@ -47,12 +51,20 @@ const attendanceInput = z.object({
   acknowledgeExternalChange: z.boolean().optional(),
   approveRedistribution: z.boolean().optional(),
 });
-const planInput = z.object({ planId: z.string().uuid() });
+const planInput = z.object({
+  planId: z.string().uuid(),
+  requestId: z.string().min(1).max(128).optional(),
+  expectedResourceRevision: z.number().int().nonnegative().optional(),
+});
 export const eventOpsRouter = router({
-  publicEvents: publicProcedure.query(({ ctx }) => publicEventNights(ctx.db)),
-  attendeeRoster: authedProcedure
-    .input(planInput)
-    .query(({ ctx, input }) => attendeeRoster(ctx.db, input.planId, ctx.user)),
+  live: nativeLiveRouter,
+  publicEvents: publicProcedure.query(({ ctx }) =>
+    nativePublicEvents(ctx, () => publicEventNights(ctx.db)),
+  ),
+  attendeeRoster: authedProcedure.input(planInput).query(async ({ ctx, input }) => {
+    const api = await nativeEvent(ctx, input.planId, false, input);
+    return api ? nativeRoster(api) : attendeeRoster(ctx.db, input.planId, ctx.user);
+  }),
   updateAttendee: authedProcedure
     .input(
       planInput.extend({
@@ -62,7 +74,19 @@ export const eventOpsRouter = router({
         companyCode: z.string().nullable(),
       }),
     )
-    .mutation(({ ctx, input }) => updateAttendee(ctx.db, ctx.user, input)),
+    .mutation(async ({ ctx, input }) => {
+      const api = await nativeEvent(ctx, input.planId, false, input);
+      return updateAttendee(
+        ctx.db,
+        ctx.user,
+        input,
+        api
+          ? (await api.state()).entrants
+              .filter((e) => e.availability !== 'withdrawn')
+              .map((e) => e.playerId)
+          : undefined,
+      );
+    }),
   startPoolMatch: authedProcedure
     .input(
       z.object({
@@ -72,7 +96,12 @@ export const eventOpsRouter = router({
         expectedRevision: z.number().int().min(0),
       }),
     )
-    .mutation(({ ctx, input }) => startPoolMatch(ctx.db, ctx.user, input)),
+    .mutation(async ({ ctx, input }) => {
+      const api = await nativeEvent(ctx, input.planId, true, input);
+      return api
+        ? api.updateMatch({ ...input, status: 'playing' })
+        : startPoolMatch(ctx.db, ctx.user, input);
+    }),
   updateLiveScore: authedProcedure
     .input(
       z.object({
@@ -80,9 +109,22 @@ export const eventOpsRouter = router({
         expectedRevision: z.number().int().min(0),
         score1: z.number().int().min(0).max(5),
         score2: z.number().int().min(0).max(5),
+        expectedProgressRevision: z.number().int().nonnegative().optional(),
       }),
     )
-    .mutation(({ ctx, input }) => updateLiveScore(ctx.db, ctx.user, input)),
+    .mutation(async ({ ctx, input }) => {
+      const api = await nativeEntity(ctx, input.matchId, 'match', input);
+      if (!api) return updateLiveScore(ctx.db, ctx.user, input);
+      const state = await api.state();
+      await api.execute({
+        ...input,
+        kind: 'progress',
+        expectedProgressRevision:
+          input.expectedProgressRevision ??
+          state.matches.find((m) => m.id === input.matchId)!.progressRevision,
+      });
+      return (await api.snapshot(true)).matches.find((m) => m.id === input.matchId)!;
+    }),
   configurePools: authedProcedure
     .input(
       planInput.extend({
@@ -102,7 +144,27 @@ export const eventOpsRouter = router({
           .max(128),
       }),
     )
-    .mutation(({ ctx, input }) => configurePools(ctx.db, ctx.user, input)),
+    .mutation(async ({ ctx, input }) => {
+      const api = await nativeEvent(ctx, input.planId, false, input);
+      if (!api) return configurePools(ctx.db, ctx.user, input);
+      const state = await api.state();
+      await api.execute({
+        kind: 'configurePools',
+        pools: input.pools.map((p) => {
+          const pool = state.pools.find(
+            (row) => row.division === p.division && row.index === p.poolIndex,
+          );
+          if (!pool) throw new TRPCError({ code: 'NOT_FOUND', message: 'Pool not found.' });
+          return {
+            ...p,
+            poolId: pool.id,
+            selfRun: p.selfRun ?? pool.selfRun,
+            autoAcceptScores: p.autoAcceptScores ?? pool.autoAcceptScores,
+          };
+        }),
+      });
+      return input.pools;
+    }),
   configurePool: authedProcedure
     .input(
       planInput.extend({
@@ -115,29 +177,72 @@ export const eventOpsRouter = router({
         autoAcceptScores: z.boolean().optional(),
       }),
     )
-    .mutation(({ ctx, input }) => configurePool(ctx.db, ctx.user, input)),
+    .mutation(async ({ ctx, input }) => {
+      const api = await nativeEvent(ctx, input.planId, false, input);
+      if (!api) return configurePool(ctx.db, ctx.user, input);
+      const state = await api.state();
+      const pool = state.pools.find(
+        (p) => p.division === input.division && p.index === input.poolIndex,
+      );
+      if (!pool) throw new TRPCError({ code: 'NOT_FOUND' });
+      await api.execute({
+        kind: 'configurePools',
+        pools: [
+          {
+            ...input,
+            poolId: pool.id,
+            expectedRevision: input.expectedRevision ?? pool.scheduleRevision,
+            selfRun: input.selfRun ?? pool.selfRun,
+            autoAcceptScores: input.autoAcceptScores ?? pool.autoAcceptScores,
+          },
+        ],
+      });
+      return input;
+    }),
   native: nativeBracketRouter,
   guests: guestRouter,
   delivery: eventDeliveryRouter,
   sources: sourceRefreshRouter,
   previewAttendance: authedProcedure.input(attendanceInput).query(async ({ ctx, input }) => {
     await requireOperator(ctx.db, input.planId, ctx.user);
-    return previewAttendance(ctx.db, input);
+    const api = await nativeEvent(ctx, input.planId, false, input);
+    return api ? api.previewAttendance(input) : previewAttendance(ctx.db, input);
   }),
   softLockPools: authedProcedure
     .input(planInput.extend({ confirm: z.literal(true) }))
-    .mutation(({ ctx, input }) => softLockPools(ctx.db, ctx.user, input.planId)),
+    .mutation(async ({ ctx, input }) => {
+      await requireOperator(ctx.db, input.planId, ctx.user);
+      const api = await nativeEvent(ctx, input.planId, true, input);
+      if (!api) return softLockPools(ctx.db, ctx.user, input.planId);
+      const state = await api.state();
+      if (state.lifecycle === 'unlocked') await api.execute({ kind: 'relock' });
+      return { softLockedAt: new Date(state.baseline!.capturedAt).toISOString() };
+    }),
   unlockPools: authedProcedure
     .input(planInput.extend({ confirm: z.literal(true) }))
-    .mutation(({ ctx, input }) => unlockPools(ctx.db, ctx.user, input.planId)),
+    .mutation(async ({ ctx, input }) => {
+      const api = await nativeEvent(ctx, input.planId, false, input);
+      if (!api) return unlockPools(ctx.db, ctx.user, input.planId);
+      await api.execute({ kind: 'unlock' });
+      return { unlocked: true };
+    }),
   applyAttendance: authedProcedure
     .input(attendanceInput.extend({ revisionToken: z.string().min(1) }))
-    .mutation(({ ctx, input }) => applyAttendance(ctx.db, ctx.user, input)),
-  resetOperations: authedProcedure
-    .input(planInput)
-    .mutation(({ ctx, input }) => resetOperations(ctx.db, ctx.user, input.planId)),
-  myReports: authedProcedure.input(planInput).query(({ ctx, input }) =>
-    ctx.db
+    .mutation(async ({ ctx, input }) => {
+      const api = await nativeEvent(ctx, input.planId, false, input);
+      return api ? api.attendance(input) : applyAttendance(ctx.db, ctx.user, input);
+    }),
+  resetOperations: authedProcedure.input(planInput).mutation(async ({ ctx, input }) => {
+    const api = await nativeEvent(ctx, input.planId, false, input);
+    if (!api) return resetOperations(ctx.db, ctx.user, input.planId);
+    const removedMatches = (await api.state()).matches.length;
+    await api.execute({ kind: 'resetQueue' });
+    return { removedMatches };
+  }),
+  myReports: authedProcedure.input(planInput).query(async ({ ctx, input }) => {
+    const api = await nativeEvent(ctx, input.planId, false, input);
+    if (api) return reportViews(await api.state()).filter((r) => r.userId === ctx.user.id);
+    return ctx.db
       .select()
       .from(eventScoreReports)
       .where(
@@ -146,13 +251,16 @@ export const eventOpsRouter = router({
           eq(eventScoreReports.userId, ctx.user.id),
         ),
       )
-      .orderBy(desc(eventScoreReports.createdAt)),
-  ),
-  snapshot: publicProcedure
-    .input(planInput)
-    .query(({ ctx, input }) => snapshot(ctx.db, input.planId)),
+      .orderBy(desc(eventScoreReports.createdAt));
+  }),
+  snapshot: publicProcedure.input(planInput).query(async ({ ctx, input }) => {
+    const api = await nativeEvent(ctx, input.planId, false, input);
+    return api ? api.snapshot() : snapshot(ctx.db, input.planId);
+  }),
   overview: authedProcedure.input(planInput).query(async ({ ctx, input }) => {
     await requireOperator(ctx.db, input.planId, ctx.user);
+    const api = await nativeEvent(ctx, input.planId, false, input);
+    if (api) return nativeOverview(api);
     return {
       ...(await snapshot(ctx.db, input.planId, true)),
       reports: (
@@ -189,7 +297,8 @@ export const eventOpsRouter = router({
   }),
   prepare: authedProcedure.input(planInput).mutation(async ({ ctx, input }) => {
     await requireOperator(ctx.db, input.planId, ctx.user);
-    return prepare(ctx.db, input.planId);
+    const api = await nativeEvent(ctx, input.planId, false, input);
+    return api ? { created: 0 } : prepare(ctx.db, input.planId);
   }),
   reportScore: authedProcedure
     .input(
@@ -203,31 +312,56 @@ export const eventOpsRouter = router({
         winnerId: z.string().uuid().optional(),
       }),
     )
-    .mutation(({ ctx, input }) => reportScore(ctx.db, ctx.user, input)),
+    .mutation(async ({ ctx, input }) => {
+      const api = await nativeEntity(ctx, input.matchId, 'match', input);
+      return api ? api.report(input) : reportScore(ctx.db, ctx.user, input);
+    }),
   reviewReport: authedProcedure
     .input(z.object({ reportId: z.string().uuid(), approve: z.boolean() }))
-    .mutation(({ ctx, input }) => reviewReport(ctx.db, ctx.user, input.reportId, input.approve)),
+    .mutation(async ({ ctx, input }) => {
+      const api = await nativeEntity(ctx, input.reportId, 'report', input);
+      return api
+        ? api.review(input.reportId, input.approve)
+        : reviewReport(ctx.db, ctx.user, input.reportId, input.approve);
+    }),
   updateMatch: authedProcedure
     .input(
       z.object({
         matchId: z.string().uuid(),
         expectedRevision: z.number().int().min(0),
         status: z.enum(['ready', 'playing', 'blocked']),
+        expectedResourceRevision: z.number().int().nonnegative().optional(),
         stationId: z.string().uuid().nullable().optional(),
         blockedReason: z.string().max(200).nullable().optional(),
       }),
     )
-    .mutation(({ ctx, input }) => updateMatch(ctx.db, ctx.user, input)),
+    .mutation(async ({ ctx, input }) => {
+      const api = await nativeEntity(ctx, input.matchId, 'match', input);
+      return api ? api.updateMatch(input) : updateMatch(ctx.db, ctx.user, input);
+    }),
   settings: adminProcedure
     .input(
       planInput.extend({
         published: z.boolean(),
         playerReports: z.boolean(),
         scoreReportingMode: z.enum(['to_review', 'approve_unless_disputed']).optional(),
+        expectedReportingRevision: z.number().int().nonnegative().optional(),
       }),
     )
-    .mutation(({ ctx, input }) =>
-      ctx.db.transaction(async (tx) => {
+    .mutation(async ({ ctx, input }) => {
+      const api = await nativeEvent(ctx, input.planId, false, input);
+      if (api) {
+        const state = await api.state();
+        await api.execute({
+          kind: 'reporting',
+          published: input.published,
+          playerReports: input.playerReports,
+          mode: input.scoreReportingMode ?? state.settings.scoreReportingMode,
+          expectedRevision: input.expectedReportingRevision ?? state.settings.reportingRevision,
+        });
+        return [input];
+      }
+      return ctx.db.transaction(async (tx) => {
         const plan = await lockEvent(tx, input.planId);
         if (input.scoreReportingMode === 'approve_unless_disputed' && plan.bracketMode !== 'native')
           throw new TRPCError({
@@ -244,8 +378,8 @@ export const eventOpsRouter = router({
           .values({ eventPlanId: input.planId, ...settings })
           .onConflictDoUpdate({ target: eventOperationSettings.eventPlanId, set: settings })
           .returning();
-      }),
-    ),
+      });
+    }),
   assignTo: adminProcedure
     .input(
       planInput
@@ -260,7 +394,7 @@ export const eventOpsRouter = router({
     )
     .mutation(({ ctx, input }) =>
       ctx.db.transaction(async (tx) => {
-        await lockEvent(tx, input.planId);
+        await tx.select().from(eventPlans).where(eq(eventPlans.id, input.planId)).for('update');
         const [account] = await tx
           .select()
           .from(user)
@@ -299,10 +433,33 @@ export const eventOpsRouter = router({
         name: z.string().trim().min(1).max(60),
       }),
     )
-    .mutation(({ ctx, input }) => saveStation(ctx.db, ctx.user, input)),
+    .mutation(async ({ ctx, input }) => {
+      const api = await nativeEvent(ctx, input.planId, false, input);
+      if (!api) return saveStation(ctx.db, ctx.user, input);
+      const state = await api.state();
+      const id = input.id ?? api.newId('entity');
+      await api.execute({
+        kind: 'station',
+        id,
+        name: input.name,
+        expectedResourceRevision: input.expectedResourceRevision ?? state.settings.resourceRevision,
+      });
+      return [{ id, eventPlanId: input.planId, name: input.name }];
+    }),
   deleteStation: authedProcedure
     .input(planInput.extend({ id: z.string().uuid() }))
-    .mutation(({ ctx, input }) => deleteStation(ctx.db, ctx.user, input)),
+    .mutation(async ({ ctx, input }) => {
+      const api = await nativeEvent(ctx, input.planId, false, input);
+      if (!api) return deleteStation(ctx.db, ctx.user, input);
+      await api.execute({
+        kind: 'station',
+        id: input.id,
+        name: null,
+        expectedResourceRevision:
+          input.expectedResourceRevision ?? (await api.state()).settings.resourceRevision,
+      });
+      return { deleted: true };
+    }),
   announce: authedProcedure
     .input(
       planInput.extend({
@@ -310,7 +467,16 @@ export const eventOpsRouter = router({
         durationSeconds: z.number().int().min(1).max(86400).nullable().optional(),
       }),
     )
-    .mutation(({ ctx, input }) => publishAnnouncement(ctx.db, ctx.user, input)),
+    .mutation(async ({ ctx, input }) => {
+      const api = await nativeEvent(ctx, input.planId, false, input);
+      if (!api) return publishAnnouncement(ctx.db, ctx.user, input);
+      await api.execute({
+        kind: 'announce',
+        message: input.message,
+        durationSeconds: input.durationSeconds ?? null,
+      });
+      return (await api.snapshot(true)).announcements.at(-1);
+    }),
   savePrize: authedProcedure
     .input(
       planInput.extend({
@@ -322,6 +488,18 @@ export const eventOpsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       await requireOperator(ctx.db, input.planId, ctx.user);
+      const api = await nativeEvent(ctx, input.planId, false, input);
+      if (api) {
+        const id = input.id ?? api.newId('entity');
+        await api.execute({
+          kind: 'prize',
+          id,
+          title: input.title,
+          description: input.description ?? null,
+          playerId: input.playerId ?? null,
+        });
+        return (await api.snapshot(true)).prizes.filter((p) => p.id === id);
+      }
       return ctx.db.transaction(async (tx) => {
         await lockEvent(tx, input.planId);
         if (
