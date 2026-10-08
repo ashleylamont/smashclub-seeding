@@ -27,7 +27,10 @@ const SSE_HEARTBEAT_MS = 25_000;
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const { db, env, auth, challonge, recomputeTrigger } = deps;
-  const app = Fastify({ logger: env.NODE_ENV !== 'test', trustProxy: env.TRUST_PROXY });
+  const app = Fastify({
+    logger: env.NODE_ENV === 'test' ? false : { level: env.LOG_LEVEL },
+    trustProxy: env.TRUST_PROXY,
+  });
   const sse = new SseRegistry({
     maxConnections: env.SSE_MAX_CONNECTIONS,
     maxConnectionsPerIp: env.SSE_MAX_CONNECTIONS_PER_IP,
@@ -40,6 +43,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     await db.execute(sql`select 1`);
     return { ok: true };
   });
+
+  app.get('/api/auth-options', async () => ({
+    credentials: auth.options.emailAndPassword?.enabled === true,
+    providers: ['discord', 'google'].filter((provider) =>
+      Object.hasOwn(auth.options.socialProviders ?? {}, provider),
+    ),
+  }));
 
   // --- better-auth (fetch-style handler bridged onto Fastify) ---
   app.route({

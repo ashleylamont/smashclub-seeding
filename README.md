@@ -4,28 +4,30 @@ Smash Club is a ranking, seeding and event-running app for a workplace Super Sma
 
 ## Quick start
 
-Requirements: Node.js 22.23.3+ and pnpm 10. The local rehearsal uses PGlite, so it needs no external database, OAuth provider or Challonge credentials.
+Requirements: Node.js 22.23.3+ and pnpm 10.33.0. `.node-version` pins the local and CI runtime; with fnm, run `fnm install && fnm use` in this checkout. The local rehearsal uses PGlite, so it needs no external database, OAuth provider or Challonge credentials.
 
 ```bash
-pnpm install
-pnpm --filter @smashclub/web dev   # web app at http://localhost:5173
+pnpm install --frozen-lockfile
+pnpm dev:doctor                   # checks the runtime and optional test tools
+pnpm dev                         # seeded API + Vite, with source watching
 ```
 
-In a second terminal:
+Open <http://127.0.0.1:5173/login> and choose a sample account. The rehearsal sign-in form supplies the shared password `devpassword123`. Accounts cover administrator, profile-claim player, event player and event organiser flows. The API prints fresh event links on startup. Its data and event journal reset when it restarts, including after a server source edit.
+
+Development logs default to warnings and errors, with sample credentials and event links printed on startup. Use `LOG_LEVEL=trace pnpm dev` when you need detailed diagnostics.
+
+Vite proxies `/api` to the harness on port 3000. For separate terminals, use `pnpm dev:web` and `pnpm dev:harness`. `pnpm dev:postgres` starts the web app and the persistent PostgreSQL API; see [Development and deployment](docs/development.md) for its `.env` and OAuth setup.
 
 ```bash
-pnpm dev:harness                 # seeded API at http://127.0.0.1:3000
+pnpm check                       # types, lint, formatting, unit/server tests, build
+pnpm test:watch                   # feedback while editing logic
+pnpm test:ui                     # visual/accessibility fixtures; Chromium required
+pnpm test:e2e                    # builds the frontend, then starts a fresh API harness
+pnpm test:postgres               # disposable PostgreSQL 17 clusters
+pnpm test:image                  # production image smoke check; Docker required
 ```
 
-The Vite dev server proxies `/api` to port 3000. The harness prints fresh links to its sample event and signs in synthetic accounts with the password `devpassword123` (`admin@smashclub.dev` for administration; `player@smashclub.dev` for the player flow). Its in-memory data resets on restart. To run against a local PostgreSQL database instead, see [Development and deployment](docs/development.md).
-
-```bash
-pnpm test
-pnpm typecheck
-pnpm lint
-pnpm format:check
-pnpm build
-```
+Install the browser once with `pnpm --filter @smashclub/web exec playwright install chromium`. `pnpm typecheck` covers frontend source, browser tests, server and packages. Visual baselines are committed for macOS; see [UI review](docs/ui-visual-review.md) before changing snapshots. `pnpm check` does not include browser, PostgreSQL or Docker suites; CI runs those as separate required checks.
 
 ## What the app does
 

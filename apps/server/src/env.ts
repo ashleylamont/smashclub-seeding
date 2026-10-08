@@ -1,8 +1,10 @@
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(3000),
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   DATABASE_URL: z.string().min(1),
   /** Explicit opt-in for organiser-triggered score writes; never enabled by local defaults. */
   CHALLONGE_SCORE_WRITES: z
@@ -58,7 +60,9 @@ const envSchema = z.object({
   /** Absolute path of the built SPA to serve statically (production). */
   WEB_DIST_DIR: z.string().optional(),
   /** Drizzle SQL migrations folder, applied at startup. */
-  MIGRATIONS_DIR: z.string().default('./migrations'),
+  MIGRATIONS_DIR: z
+    .string()
+    .default(fileURLToPath(new URL('../../../packages/db/migrations', import.meta.url))),
 });
 
 export type Env = z.infer<typeof envSchema>;

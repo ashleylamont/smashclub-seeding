@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "test:e2e": "playwright test",
     "preview": "vite preview",
-    "test:ui": "tsc -p tsconfig.ui.json && playwright test --config playwright.ui.config.ts"
+    "test:ui": "tsc -p tsconfig.ui.json && playwright test --config playwright.ui.config.ts",
+    "dev:local": "vite --host 127.0.0.1 --strictPort",
+    "typecheck": "tsc -b && tsc -p tsconfig.ui.json && tsc -p tsconfig.e2e.json"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
