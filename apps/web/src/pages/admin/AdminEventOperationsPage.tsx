@@ -21,6 +21,7 @@ import { ToPlayerFinder } from './ToPlayerFinder';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearch, useParams } from '@tanstack/react-router';
 import { trpc } from '../../lib/trpc';
+import { useOnlineStatus } from '../../lib/useOnlineStatus';
 import { authClient, useCurrentUser } from '../../lib/auth';
 import './EventOperations.css';
 import { ScoreHandoff } from './ScoreHandoff';
@@ -68,6 +69,7 @@ export function AssignedEventOperationsPage() {
 }
 
 export function EventOperationsPanel({ planId }: { planId: string }) {
+  const online = useOnlineStatus();
   const confirmAction = useConfirmation();
   const workspace = useOpsWorkspace();
   const [stageStationId, setStageStationId] = useState('');
@@ -116,7 +118,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
     );
   const data = event.data;
   const closed = ['complete', 'cancelled'].includes(data.plan.status);
-  const liveDisabled = pending || closed || Boolean(data.plan.drawPaused);
+  const liveDisabled = !online || pending || closed || Boolean(data.plan.drawPaused);
   const disputes = data.reports.filter(
     (report) => report.status === 'pending' && report.isDispute,
   ).length;
@@ -187,9 +189,9 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
           void workspace.openControl('match-desk');
         }}
       />
-      {event.isError && (
+      {(!online || event.isError) && (
         <div className="banner banner-warning" role="alert">
-          Live updates interrupted. Last loaded data is shown. {event.error.message}
+          Live updates interrupted. Last loaded data is shown. {event.error?.message}
         </div>
       )}
       {error && (

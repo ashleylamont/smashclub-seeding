@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { trpc } from '../lib/trpc';
+import { useOnlineStatus } from '../lib/useOnlineStatus';
 import {
   guestTimeLeft,
   useGuestClock,
@@ -37,6 +38,7 @@ export function GuestEventPage() {
   return <GuestEvent key={planId} planId={planId} />;
 }
 export function GuestEvent({ planId }: { planId: string }) {
+  const online = useOnlineStatus();
   const [invitation, setInvitation] = useState(() =>
     new URLSearchParams(window.location.hash.slice(1)).get('token'),
   );
@@ -132,6 +134,7 @@ export function GuestEvent({ planId }: { planId: string }) {
   const eventPlan = (publicEvent.data ?? matches.data)?.plan;
   const playOpen = eventPlayOpen(eventPlan);
   const canWrite =
+    online &&
     playOpen &&
     valid &&
     !redeeming &&
@@ -233,7 +236,7 @@ export function GuestEvent({ planId }: { planId: string }) {
           error={matches.isError ? matches.error.message : null}
         />
       )}
-      {publicEvent.isError && !unpublished && data && (
+      {(!online || publicEvent.isError) && !unpublished && data && (
         <p role="alert">Live updates interrupted. Scores shown may be out of date.</p>
       )}
       {!data && !unpublished && (
