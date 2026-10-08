@@ -4,6 +4,7 @@ import { eventUnavailable } from '../lib/eventErrors';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
 import { trpc } from '../lib/trpc';
+import { useOnlineStatus } from '../lib/useOnlineStatus';
 import './EventLive.css';
 import { NemesisMark } from '../components/NemesisMark';
 import { CharacterIcons } from '../components/CharacterIcons';
@@ -39,6 +40,7 @@ export function EventOverlayPage() {
   return <EventDisplay key={planId} planId={planId} overlay />;
 }
 function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: boolean }) {
+  const online = useOnlineStatus();
   const query = useQuery({
     queryKey: ['eventOps', 'snapshot', planId],
     queryFn: () => trpc.eventOps.snapshot.query({ planId }),
@@ -285,7 +287,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
             announcement={announcements[0]?.message ?? ''}
           />
         </footer>
-        {query.isError && (
+        {(!online || query.isError) && (
           <div className="broadcast-offline" role="status">
             Connection interrupted · last received scores
           </div>
@@ -322,7 +324,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
           {sections.playing.length ? 'LIVE FROM THE CLUB' : 'THE EVENT BOARD'}
         </span>
         <span>
-          {query.isError
+          {!online || query.isError
             ? 'Connection interrupted · showing last received results'
             : 'Results refresh every 5 seconds'}
         </span>

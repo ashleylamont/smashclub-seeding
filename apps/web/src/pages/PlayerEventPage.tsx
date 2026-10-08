@@ -15,6 +15,7 @@ import { PlayerMatchFilter } from '../components/PlayerMatchFilter';
 import { eventPlayers, useDevicePlayer } from '../lib/playerSelection';
 import { authClient } from '../lib/auth';
 import { trpc } from '../lib/trpc';
+import { useOnlineStatus } from '../lib/useOnlineStatus';
 import '../styles/event.css';
 import { PoolFilter, PoolRoundSchedule, PoolStationQueue } from '../components/PoolStationQueue';
 import {
@@ -41,6 +42,7 @@ export function PlayerEventPage() {
   return <PlayerEvent key={planId} planId={planId} />;
 }
 function PlayerEvent({ planId }: { planId: string }) {
+  const online = useOnlineStatus();
   const { data: session, isPending } = authClient.useSession();
   const event = useQuery({
     queryKey: ['eventOpsPublic', planId],
@@ -157,7 +159,7 @@ function PlayerEvent({ planId }: { planId: string }) {
           </a>
         }
       />
-      {event.isError && (
+      {(!online || event.isError) && (
         <p role="alert">Live updates interrupted. Scores shown may be out of date.</p>
       )}
       {claim && (
@@ -241,6 +243,7 @@ function PlayerEvent({ planId }: { planId: string }) {
               report={reports.data?.find((report) => report.matchId === match.id)}
               disputeMode={disputeMode && !closed && playOpen}
               enabled={
+                online &&
                 !event.isError &&
                 event.data.settings.playerReports &&
                 !closed &&
@@ -270,7 +273,7 @@ function PlayerEvent({ planId }: { planId: string }) {
         onStart={(input) => void start(input)}
         onReport={chooseMatch}
         pendingMatchId={starting}
-        disabled={event.isError || closed || !playOpen || !data.settings.playerReports}
+        disabled={!online || event.isError || closed || !playOpen || !data.settings.playerReports}
       />
       {startError && (
         <p className="error-text" role="alert">

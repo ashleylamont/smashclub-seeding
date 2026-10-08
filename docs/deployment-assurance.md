@@ -31,6 +31,16 @@ pnpm test:e2e
 
 Historical fixtures use the checked-in migration SQL and truncated real journal, not handcrafted modern schemas masquerading as upgrades. Add a representative historical boundary when a new data migration introduces a materially different transition. Keep all fixture identities and provider records synthetic.
 
+## Browser transport recovery
+
+`pnpm --filter @smashclub/web test:e2e event-recovery.spec.ts` exercises eight isolated native-event scenarios through the real API and merged Act runtime. Each test copies only the synthetic rehearsal roster into its own locked event and uses independent authenticated/guest browser contexts. The browser harness remains PGlite plus in-memory Act; the required PostgreSQL job separately covers durable storage and true database contention.
+
+- Lost acknowledgements: the real guest mutation commits before Playwright drops its response. Previously received snapshots are temporarily held so polling cannot hide the retry. Pending-approval and automatic-result modes reuse the exact request ID/payload, return the same receipt, and produce one report and Act decision with the expected score revision; reload recovers the recorded state.
+- Disconnection: actual browser offline/online events retain guest and signed-in player drafts across station dispatch, require a TO to reopen a score made stale by another TO, and recover missed board/OBS results without reloading. Known offline state pauses queries without setting a fetch error, so event pages explicitly mark cached data and block score/start controls during the interruption.
+- Competing browsers: transport barriers hold two actual UI submissions before either reaches the server. Conflicting TO scores and competing guest station starts return one success and one conflict, show the server's reason to the losing browser, and append only one domain decision. Both clients converge; a second station pairing must not start.
+
+The browser runner always owns its harness. Set `E2E_PORT` to a free port when another checkout is running. No production accounts, external providers, snapshot tolerance changes or automatic screenshot updates are needed.
+
 ## Publication guarantees and tags
 
 Verification has only `contents: read`; registry credentials are available only to the dependent publication job. No fork PR or `pull_request_target` trigger publishes. Publish downloads the image artifact from its own reusable CI invocation, checks its OCI revision against the full event SHA, and pushes those exact tested image bytes. It never rebuilds a different image after validation.
@@ -43,4 +53,4 @@ One publication job at a time writes tags. It reads current main after verificat
 
 Production's PostgreSQL major is not declared in this repository; 17 matches the available development runtime and is the tested deployment contract. Confirm the database operator's major before adopting the gate; test it explicitly if different. These checks do not test database backup restoration, real OAuth credentials, real external-provider outages, Kubernetes rollout or a second active replica.
 
-PR #100's Act implementation remains independent and is not imported here. It already contains opt-in `native-live-postgres.test.ts`, replay, cutover and recovery coverage. On merging that work, adapt its cluster helper to this disposable-container contract, remove its skip gate, and require its suite in `postgres-report-policy.mjs`. Reconcile the current synchronous finalizer and correction/revision contracts with Act's outbox/recovery behavior; do not claim future Act replay or exactly-once rating-intent behavior is covered by the current-main tests. The new current-main tests exercise connection restart, not an Act store process crash. The production image gate should then run unchanged against the merged runtime and additive migrations.
+Act's native lifecycle is now integrated from PR #100. Its `native-live-postgres.test.ts` suite uses the shared disposable-cluster helper and is required by `postgres-report-policy.mjs`, covering durable publication, restart recovery and replay alongside the existing lifecycle contracts. Browser recovery scenarios use the standard Act-backed event APIs but an in-memory store; they do not simulate an Act-PG process crash. See [native live API](native-live-api.md) for the storage, publication and recovery contracts.
