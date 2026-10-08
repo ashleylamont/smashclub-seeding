@@ -37,12 +37,13 @@ type Overview = {
 async function query<T>(request: APIRequestContext, procedure: string, input?: object): Promise<T> {
   const response = await request.get(`/api/trpc/${procedure}`, {
     params: input ? { input: JSON.stringify(input) } : {},
+    timeout: 15_000,
   });
   expect(response.ok(), await response.text()).toBe(true);
   return (await response.json()).result.data as T;
 }
 async function mutate<T>(request: APIRequestContext, procedure: string, data: object): Promise<T> {
-  const response = await request.post(`/api/trpc/${procedure}`, { data });
+  const response = await request.post(`/api/trpc/${procedure}`, { data, timeout: 15_000 });
   expect(response.ok(), await response.text()).toBe(true);
   return (await response.json()).result.data as T;
 }
@@ -50,7 +51,9 @@ async function mutate<T>(request: APIRequestContext, procedure: string, data: ob
 test('native event progresses from pools through reviewed finals to public club results', async ({
   page,
 }, testInfo) => {
-  test.setTimeout(120_000);
+  // Rehearse every pool/finals result plus publication and correction through Act.
+  // Bound individual API calls above while allowing the complete night on CI.
+  test.setTimeout(180_000);
   await page.request.post('/api/auth/sign-in/email', {
     data: { email: 'admin@smashclub.dev', password: 'devpassword123' },
   });

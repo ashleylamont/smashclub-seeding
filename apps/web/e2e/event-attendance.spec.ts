@@ -107,6 +107,8 @@ test('attendance preview preserves completed play, rejects stale changes, and ho
     page.getByRole('option').filter({ hasText: latePlayer.publicName ?? latePlayer.playerName }),
   ).toHaveCount(1);
   await page.keyboard.press('Escape');
+  await expect(page.getByRole('listbox')).toBeHidden();
+  await expect(attendance.getByRole('combobox', { name: 'Player', exact: true })).toBeFocused();
   await chooseOption(
     attendance.getByRole('combobox', { name: 'Player', exact: true }),
     latePlayer.playerId,
