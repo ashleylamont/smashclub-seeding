@@ -72,7 +72,8 @@ const TARGETS: Target[] = [
     name: 'login',
     path: '/login',
     expect: async (page) => {
-      await expect(page.locator('text=/Discord/i').first()).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Local rehearsal' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Sign in to rehearsal' })).toBeEnabled();
     },
   },
 ];

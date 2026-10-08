@@ -12,7 +12,11 @@ export type Auth = ReturnType<typeof createAuth>;
  * logged-in user can link their other provider from /me, and both providers
  * land on the same user row.
  */
-export function createAuth(db: Db, env: Env, options: { enableCredentials?: boolean } = {}) {
+export function createAuth(
+  db: Db,
+  env: Env,
+  options: { enableCredentials?: boolean; trustedOrigins?: string[] } = {},
+) {
   const socialProviders: Record<string, { clientId: string; clientSecret: string }> = {};
   if (env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET) {
     socialProviders.discord = {
@@ -31,6 +35,7 @@ export function createAuth(db: Db, env: Env, options: { enableCredentials?: bool
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
     basePath: '/api/auth',
+    trustedOrigins: options.trustedOrigins,
     database: drizzleAdapter(db, {
       provider: 'pg',
       schema: { user, session, account, verification },

@@ -17,14 +17,16 @@ PRs run **CI**. Main pushes, version tags and manual publication run the same re
 ## Run locally
 
 ```sh
+fnm install && fnm use # optional fnm setup using .node-version
 pnpm install --frozen-lockfile
+pnpm dev:doctor
 pnpm test
 pnpm test:postgres # PostgreSQL 17 initdb and pg_ctl on PATH
 POSTGRES_TEST_CONTAINER=1 pnpm test:postgres # Docker alternative, same CI image
 pnpm test:image # Docker; builds the actual Dockerfile
-pnpm --filter @smashclub/web test:ui
-pnpm --filter @smashclub/web build
-pnpm test:e2e
+pnpm --filter @smashclub/web exec playwright install chromium
+pnpm test:ui
+pnpm test:e2e # includes a fresh frontend build
 ```
 
 `SMOKE_IMAGE=existing-local-image pnpm test:image` checks an already-built image. `SMOKE_LOG_DIR` changes the diagnostic output directory; defaults are `test-results/image` and `test-results/postgres.xml`. Do not point tests at production. If a process is forcibly killed, remove its `smashclub-test-*` / `smashclub-smoke-*` containers; ordinary errors and interrupts clean up automatically. `RUN_POSTGRES_TESTS` no longer controls these required suites; ordinary `pnpm test` excludes `*-postgres.test.ts` so fast tests need no database installation.
@@ -53,4 +55,4 @@ One publication job at a time writes tags. It reads current main after verificat
 
 Production's PostgreSQL major is not declared in this repository; 17 matches the available development runtime and is the tested deployment contract. Confirm the database operator's major before adopting the gate; test it explicitly if different. These checks do not test database backup restoration, real OAuth credentials, real external-provider outages, Kubernetes rollout or a second active replica.
 
-Act's native lifecycle is now integrated from PR #100. Its `native-live-postgres.test.ts` suite uses the shared disposable-cluster helper and is required by `postgres-report-policy.mjs`, covering durable publication, restart recovery and replay alongside the existing lifecycle contracts. Browser recovery scenarios use the standard Act-backed event APIs but an in-memory store; they do not simulate an Act-PG process crash. See [native live API](native-live-api.md) for the storage, publication and recovery contracts.
+The merged Act runtime is covered by the mandatory `native-live-postgres.test.ts` suite. It uses the same disposable-cluster helper and fail-on-skips report policy as the other PostgreSQL suites. It exercises independent-cache concurrency and idempotency, resource contention, ownership transfer, replay, failed publication rollback, process restart and durable publication recovery. PGlite rehearsals and browser recovery scenarios exercise the real application API with an in-memory journal; only the PostgreSQL suite exercises Act-PG durability. Production-image smoke checks verify startup and HTTP boundaries; they do not replace this native lifecycle coverage. See [native live API](native-live-api.md) for the storage, publication and recovery contracts.

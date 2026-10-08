@@ -15,3 +15,15 @@ export function useCurrentUser(session: Session) {
     refetchInterval: 30_000,
   });
 }
+
+export function useSignInOptions() {
+  return useQuery({
+    queryKey: ['auth-options'],
+    retry: false,
+    queryFn: async (): Promise<{ credentials: boolean; providers: string[] }> => {
+      const response = await fetch('/api/auth-options');
+      if (!response.ok) throw new Error('Sign-in is temporarily unavailable. Please try again.');
+      return response.json();
+    },
+  });
+}

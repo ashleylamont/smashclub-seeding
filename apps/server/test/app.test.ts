@@ -63,6 +63,12 @@ describe('HTTP surface', () => {
     expect(response.json()).toEqual({ ok: true });
   });
 
+  it('does not advertise credentials or unconfigured OAuth on the normal server', async () => {
+    const response = await app.inject({ method: 'GET', url: '/api/auth-options' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ credentials: false, providers: [] });
+  });
+
   it('serves the public leaderboard over tRPC', async () => {
     const response = await app.inject({
       method: 'GET',

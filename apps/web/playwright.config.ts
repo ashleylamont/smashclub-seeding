@@ -45,7 +45,8 @@ export default defineConfig({
     env: {
       PORT: String(PORT),
       WEB_DIST_DIR: new URL('./dist', import.meta.url).pathname,
-      ...(process.env.DEV_CACHE_DIR ? { DEV_CACHE_DIR: process.env.DEV_CACHE_DIR } : {}),
+      // Always rehearse the same synthetic club, even if the shell uses a real cache.
+      DEV_CACHE_DIR: '',
     },
   },
 });

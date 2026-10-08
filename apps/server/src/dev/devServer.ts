@@ -17,6 +17,7 @@ import { createNativeRuntime, startNativeWorker } from '../tournament/runtime';
  *   DEV_CACHE_DIR=/path/to/.challonge-cache pnpm dev:harness
  *   pnpm dev:harness            # synthetic data
  */
+import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
@@ -61,8 +62,9 @@ export async function startDevHarness(
 
   const env = loadEnv({
     NODE_ENV: 'development',
+    LOG_LEVEL: process.env.LOG_LEVEL ?? 'warn',
     DATABASE_URL: 'pglite://memory',
-    BETTER_AUTH_SECRET: 'dev-secret-dev-secret-dev-secret-32',
+    BETTER_AUTH_SECRET: randomBytes(32).toString('hex'),
     BETTER_AUTH_URL: `http://localhost:${port}`,
     ADMIN_EMAILS: adminEmail,
     PORT: String(port),
@@ -78,7 +80,16 @@ export async function startDevHarness(
       `${result.players} players, ${result.queuedForReview} awaiting identity review`,
   );
 
-  const auth = createAuth(db, env, { enableCredentials: true });
+  const webPort = Number(process.env.DEV_WEB_PORT ?? 5173);
+  const auth = createAuth(db, env, {
+    enableCredentials: true,
+    trustedOrigins: [
+      `http://localhost:${port}`,
+      `http://127.0.0.1:${port}`,
+      `http://localhost:${webPort}`,
+      `http://127.0.0.1:${webPort}`,
+    ],
+  });
   const recomputeTrigger = new RecomputeTrigger(db, 500);
   const nativeRuntime = createNativeRuntime(db, new InMemoryStore());
   const app = await buildApp({ db, env, auth, challonge, recomputeTrigger, nativeRuntime });

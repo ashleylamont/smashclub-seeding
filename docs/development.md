@@ -2,14 +2,19 @@
 
 ## Local rehearsal
 
-Install Node.js 22.23.3+ and pnpm 10, then run from the repository root:
+Use Node.js 22.23.3+ and pnpm 10.33.0. The checked-in `.node-version` is also used by CI. With fnm, run `fnm install && fnm use`, then:
 
 ```bash
-pnpm install
-pnpm --filter @smashclub/web dev
+pnpm install --frozen-lockfile
+pnpm dev:doctor
+pnpm dev
 ```
 
-In another terminal, run `pnpm dev:harness`. The harness applies the real migrations to an in-memory PGlite database, pairs it with an in-memory Act runtime, seeds sample tournaments and an event, and enables email/password sign-in for local testing. It prints account credentials and fresh event links on startup. Restarting it resets the data and journal. The web app opens at <http://localhost:5173> and proxies `/api` to port 3000.
+`pnpm dev` runs Vite and the seeded API together and watches both sources. Open <http://127.0.0.1:5173/login>. Choose Administrator, Player (profile claim), Event player or Event organiser and submit the prefilled sample password. The API exposes enabled sign-in methods; credential UI appears only with the rehearsal harness. Normal servers offer only configured OAuth providers.
+
+The harness applies real migrations to in-memory PGlite, pairs it with an in-memory Act runtime, and seeds tournaments and event scenarios through the real import/recompute paths. It prints account credentials and fresh event links on startup. Restarting it resets data and the journal; server source edits trigger that reset. It has no persistence option. Use PostgreSQL for work that must survive restarts. `DEV_CACHE_DIR=/absolute/path/to/.challonge-cache pnpm dev` optionally rehearses imported history; default fixtures are synthetic.
+
+For separate terminals, use `pnpm dev:web` and `pnpm dev:harness`; the standalone harness resets only when you restart it. Use `pnpm --filter @smashclub/server dev:local` instead for a watched standalone API. Vite proxies `/api` to `127.0.0.1:3000`. Development commands default to `LOG_LEVEL=warn`, retaining warnings/errors and the harness startup summary while suppressing request logs and full Act state dumps. Use `LOG_LEVEL=info pnpm dev` for request logging or `LOG_LEVEL=trace pnpm dev` for detailed event diagnostics. Production defaults to `info`. Ports are strict so a second checkout fails clearly instead of silently moving the frontend. To use another pair of ports, run `PORT=3001 DEV_WEB_PORT=5174 pnpm dev`. These variables also configure the proxy and harness trusted origins.
 
 To test the built frontend through the same server origin:
 
@@ -18,31 +23,49 @@ pnpm --filter @smashclub/web build
 WEB_DIST_DIR="$PWD/apps/web/dist" pnpm dev:harness
 ```
 
-See [deployment assurance](deployment-assurance.md) for mandatory PostgreSQL, production-image smoke tests and publication guarantees. Run workspace checks with `pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm format:check` and `pnpm build`. `pnpm lint:fix` applies safe Oxlint fixes, and `pnpm format` writes Prettier formatting. CI runs lint and format as separate checks. The Oxlint config enforces workspace import direction and dependency cycles, checks correctness, React hooks, accessibility, and code style, and limits file size, function size, nesting, and complexity. Named overrides set bounded ceilings for existing large modules. New modules should stay within the default limits, and those ceilings should shrink as large modules are split. Prettier covers active code and configuration; generated migration snapshots, engine fixtures, legacy Python, and prose docs are excluded. `pnpm rank-eval` evaluates WHR variants against independent baselines. Read the [WHR-only migration guide](whr-only-migration.md) before upgrading an existing database.
+## Checks
 
-For browser integration tests, install Playwright's Chromium once, build the web app, then run the suite from the repository root:
+| Command | Coverage and prerequisites |
+| --- | --- |
+| `pnpm check` | Typecheck, lint, format, unit/server tests and build; no external services. |
+| `pnpm typecheck` | App and package source, UI fixtures and E2E tests; does not build frontend assets. |
+| `pnpm test:watch` | Vitest watch loop. Server files run serially because each applies migrations to PGlite. |
+| `pnpm test:ui` | Isolated visual/accessibility fixtures in Chromium, no API; macOS baselines. |
+| `pnpm test:e2e` | Rebuilds the frontend and starts a fresh synthetic API harness. |
+| `pnpm test:postgres` | Disposable PostgreSQL 17 clusters, requiring `initdb` and `pg_ctl` on PATH. |
+| `POSTGRES_TEST_CONTAINER=1 pnpm test:postgres` | Docker alternative to local PostgreSQL binaries. |
+| `pnpm test:image` | Builds and probes the production image; requires a running Docker daemon. |
+
+Install Chromium once before browser checks:
 
 ```bash
 pnpm --filter @smashclub/web exec playwright install chromium
-pnpm --filter @smashclub/web build
-pnpm test:e2e
+pnpm test:e2e local-sign-in.spec.ts # optional focused browser run
 ```
 
-The browser suite starts a disposable API harness. It exercises event planning, attendance, guest and organiser reporting, native finals, public results, and desktop and mobile layouts. CI uploads page captures and retains traces for failures.
+E2E always starts its own harness and ignores `DEV_CACHE_DIR`, preventing an unrelated local process or history cache from changing fixtures. Set `E2E_PORT` (default 3310) or `UI_PORT` (default 3411) when testing another checkout. E2E accepts `CHROMIUM_PATH` to use an explicitly chosen compatible browser. Failures retain screenshots and traces. See [UI review](ui-visual-review.md) and [deployment assurance](deployment-assurance.md) for review and CI requirements.
+
+`pnpm lint:fix` applies safe Oxlint fixes; `pnpm format` writes Prettier formatting. Oxlint checks workspace import direction and cycles, correctness, React hooks, accessibility, and bounded complexity. Existing large modules have named overrides. Prettier excludes generated migration snapshots, engine fixtures, legacy Python, and prose docs. `pnpm rank-eval` evaluates WHR variants against independent baselines.
+
+### Troubleshooting
+
+Run `pnpm dev:doctor` first. It reports Node/pnpm mismatches, missing dependencies, browser installation, PostgreSQL 17 binaries and Docker availability. PostgreSQL, Docker and OAuth are optional for the default rehearsal. Docker builds exclude host dependencies, build/test artifacts and local configuration through `.dockerignore`. A Node mismatch can be corrected for this checkout with `fnm install && fnm use`; changing the global fnm default is unnecessary.
+
+Local servers and Chromium need permission to bind sockets and launch processes. An agent sandbox can reject those operations with `EPERM`, and PostgreSQL can fail to create shared memory there; run the same checks in an ordinary terminal or grant the command access outside that sandbox. These startup failures are not passing tests. If a port is occupied, stop the other rehearsal or select another port.
 
 ## PostgreSQL-backed server
 
-Create a database, then start the API from the repository root:
+Create a local database, then copy and fill in the repository-root configuration:
 
 ```bash
-DATABASE_URL=postgres://localhost:5432/smashclub \
-MIGRATIONS_DIR="$PWD/packages/db/migrations" \
-pnpm dev
+createdb smashclub
+cp .env.example .env
+pnpm dev:postgres
 ```
 
-The server applies migrations on startup. `MIGRATIONS_DIR` matters here because `pnpm dev` runs the server script from `apps/server/`, while migration files live in `packages/db/migrations/`. Start the Vite frontend separately as above. This server uses OAuth for sign-in; the local harness is the way to test credential sign-in without provider setup.
+Open <http://localhost:5173/login>, matching the example auth origin. The server watches its sources, reads `.env` at startup, and applies migrations using a default path resolved from its module location. `MIGRATIONS_DIR` can override that path. `.env` is ignored by Git. Configure at least one OAuth provider and a verified bootstrap admin email for authenticated development. Native events do not require Challonge credentials. The rehearsal's sample password accounts are never enabled by this server. Use `pnpm --filter @smashclub/server dev` when only the API is needed. When using the built SPA rather than Vite, set `BETTER_AUTH_URL` to its API origin.
 
-Native event nights use Act-PG in the `native_act` schema by default. Startup imports existing native live/completed nights and recovers pending handoffs before accepting traffic. The normal pool lock establishes ownership for a new night; there is no adoption toggle. Once locked, use the event desk for attendance, resources, scores and pause/resume. Draft SQL editing stays frozen. Publication and rating recovery run durably in the background; the desk exposes publication status, recovery and reviewed result corrections. See [the native API notes](native-live-api.md).
+Native event nights use Act-PG in the `native_act` schema by default. Startup imports existing native live/completed nights and recovers pending handoffs before accepting traffic. The normal pool lock establishes ownership for a new night; there is no adoption toggle. Once locked, use the event desk for attendance, resources, scores and pause/resume. Draft SQL editing stays frozen. Publication and rating recovery run durably in the background; the desk exposes publication status, recovery and reviewed result corrections. See [the native API notes](native-live-api.md) and read the [WHR-only migration guide](whr-only-migration.md) before upgrading an existing database.
 
 ## Configuration
 
@@ -51,8 +74,9 @@ The source of truth is [`apps/server/src/env.ts`](../apps/server/src/env.ts). Va
 | Variable | Use |
 | --- | --- |
 | `DATABASE_URL` | Required PostgreSQL connection string for the normal server. |
-| `MIGRATIONS_DIR` | SQL migration directory; set explicitly outside the container. |
+| `MIGRATIONS_DIR` | SQL migration directory; defaults to the workspace migration folder locally, with an explicit container override. |
 | `PORT` | API port, default `3000`. |
+| `LOG_LEVEL` | Logger verbosity; development commands default to `warn`, other server starts default to `info`. |
 | `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` | Auth secret and public base URL for a real deployment. |
 | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | OAuth provider credentials. |
 | `ADMIN_EMAILS` | Comma-separated verified primary emails allowed to bootstrap the first administrator. |
