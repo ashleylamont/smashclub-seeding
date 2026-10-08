@@ -39,7 +39,7 @@ export default defineConfig({
   webServer: {
     command: 'pnpm --filter @smashclub/server dev:harness',
     url: `${baseURL}/healthz`,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 240_000,
     cwd: '../..',
     env: {
