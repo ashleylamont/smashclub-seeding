@@ -16,6 +16,7 @@ import { stageNativeBaseline } from '../src/tournament/baseline';
 import { NativeTournament } from '../src/tournament/aggregate';
 import { createNativeRuntime, nativeStream, type NativeRuntime } from '../src/tournament/runtime';
 import { processNativeRatingIntents, publishNativeResult } from '../src/tournament/publication';
+import { nativeEventHistory } from '../src/tournament/history';
 import type { TournamentCommand, TournamentResult } from '../src/tournament/schemas';
 
 describe('native Act-PG integration on isolated PostgreSQL', () => {
@@ -144,6 +145,14 @@ describe('native Act-PG integration on isolated PostgreSQL', () => {
     const current = await state(b, planId);
     expect(current.matches[0]!.revision).toBe(1);
     expect(await a.replay(planId)).toEqual(current);
+    const newest = await nativeEventHistory(a, cluster.db, planId, undefined, 2);
+    expect(newest.entries.map((entry) => entry.title)).toEqual(['Result recorded', 'Draw resumed']);
+    const older = await nativeEventHistory(b, cluster.db, planId, newest.nextCursor!, 2);
+    expect(older.entries.map((entry) => entry.title)).toEqual([
+      'Draw paused',
+      'Live history started',
+    ]);
+    expect(older.nextCursor).toBeNull();
     await expect(command(b, planId, { ...score, score2: 1 }, 'duplicate')).rejects.toThrow(
       /identifier/,
     );
@@ -271,6 +280,12 @@ describe('native Act-PG integration on isolated PostgreSQL', () => {
     expect(live.result).toEqual(result);
     expect(live.publication!.tournamentIds).toHaveLength(4);
     expect(await b.replay(planId)).toEqual(live);
+    const history = await nativeEventHistory(b, cluster.db, planId);
+    expect(history.entries.slice(0, 2).map((entry) => entry.title)).toEqual([
+      'Results published',
+      'Results sealed',
+    ]);
+    expect(history.entries[0]!.details).toEqual(live.publication);
     const raw = await cluster.pool.query(
       'select name, count(*)::int as n from native_act.events where stream=$1 group by name',
       [nativeStream(planId)],

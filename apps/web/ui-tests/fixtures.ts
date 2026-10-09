@@ -2,6 +2,9 @@ import type { Page } from '@playwright/test';
 import publicSnapshot from './fixtures/snapshot.json' with { type: 'json' };
 import extra from './fixtures/overview-extra.json' with { type: 'json' };
 import guestSettings from './fixtures/guest-settings.json' with { type: 'json' };
+import type { trpc } from '../src/lib/trpc';
+
+type HistoryPage = Awaited<ReturnType<typeof trpc.eventOps.live.history.query>>;
 
 export const PLAN_ID = publicSnapshot.plan.id;
 export const PLAYER_NAME = 'Alex with a long tournament alias';
@@ -11,6 +14,8 @@ export type FixtureOptions = {
   failure?: boolean;
   bracket?: boolean;
   loading?: Promise<void>;
+  history?: HistoryPage[];
+  historyFailure?: boolean;
 };
 
 export async function mockEvent(page: Page, options: FixtureOptions = {}) {
@@ -86,6 +91,25 @@ export async function mockEvent(page: Page, options: FixtureOptions = {}) {
     if (options.loading && url.pathname.includes('eventOps.snapshot')) await options.loading;
     const procedures = decodeURIComponent(url.pathname.replace('/api/trpc/', '')).split(',');
     const result = procedures.map((procedure, index) => {
+      if (procedure === 'eventOps.live.history') {
+        if (options.historyFailure)
+          return {
+            error: {
+              message: 'History connection interrupted',
+              code: -32603,
+              data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
+            },
+          };
+        const inputs = JSON.parse(url.searchParams.get('input') ?? '{}');
+        const input = url.searchParams.get('batch') ? inputs[index] : inputs;
+        const pages = options.history ?? [{ entries: [], nextCursor: null }];
+        const previous = pages.findIndex(
+          (page) =>
+            page.nextCursor?.before === input.cursor?.before &&
+            page.nextCursor?.source === input.cursor?.source,
+        );
+        return { result: { data: input.cursor ? pages[previous + 1] : pages[0] } };
+      }
       if (procedure === 'eventOps.startPoolMatch') {
         const body = JSON.parse(route.request().postData() ?? '{}');
         const input = url.searchParams.get('batch') ? body[index] : body;

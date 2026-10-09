@@ -8,6 +8,7 @@ import { Disclosure } from '../../components/ui/Disclosure';
 import { OpsMatchSummary } from './OpsMatchSummary';
 import { OpsAnnouncements } from './OpsAnnouncements';
 import { OpsAccessControls } from './OpsAccessControls';
+import { OpsEventHistory } from './OpsEventHistory';
 import { Tabs, TabList, Tab, TabPanel } from '../../components/ui/Tabs';
 import { LoadingState, Notice } from '../../components/ui/Feedback';
 import { OPS_SECTIONS, useOpsWorkspace } from '../../lib/opsWorkspace';
@@ -562,9 +563,33 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
               </Button>
             </Disclosure>
           )}
-          <Disclosure title="Recent changes" className="card">
-            <AuditList data={data} />
-          </Disclosure>
+          {data.plan.bracketMode === 'native' ? (
+            <Button type="button" onClick={() => void workspace.changeSection('history')}>
+              Open event history
+            </Button>
+          ) : (
+            <Disclosure title="Recent changes" className="card">
+              <AuditList data={data} />
+            </Disclosure>
+          )}
+        </TabPanel>
+        <TabPanel value="history">
+          {workspace.section === 'history' &&
+            (data.plan.bracketMode === 'native' ? (
+              <OpsEventHistory
+                data={data}
+                active
+                onMatch={(id) => {
+                  setFocusedMatchId(id);
+                  void workspace.openControl('match-desk');
+                }}
+              />
+            ) : (
+              <section className="card">
+                <h3>Event history</h3>
+                <AuditList data={data} />
+              </section>
+            ))}
         </TabPanel>
       </Tabs>
     </div>

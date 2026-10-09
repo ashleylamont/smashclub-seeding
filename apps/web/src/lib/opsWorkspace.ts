@@ -6,6 +6,7 @@ export const OPS_SECTIONS = [
   { value: 'players', label: 'Players' },
   { value: 'draw', label: 'Standings / draw' },
   { value: 'broadcast', label: 'Broadcast' },
+  { value: 'history', label: 'History' },
   { value: 'settings', label: 'Settings' },
 ] as const;
 export type OpsSection = (typeof OPS_SECTIONS)[number]['value'];

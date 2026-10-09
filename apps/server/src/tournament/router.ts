@@ -4,6 +4,7 @@ import { authedProcedure, publicProcedure, router, type TrpcContext } from '../t
 import { requireOperator } from '../event-operations/access';
 import { Command } from './schemas';
 import { TournamentConflict } from './domain';
+import { nativeEventHistory } from './history';
 
 const plan = z.object({ planId: z.uuid() });
 function runtime(ctx: TrpcContext) {
@@ -55,6 +56,21 @@ export const nativeLiveRouter = router({
       ratingIntents: await runtime(ctx).ratingStatus(input.planId),
     }));
   }),
+  history: authedProcedure
+    .input(
+      plan.extend({
+        cursor: z
+          .object({ source: z.enum(['act', 'imported']), before: z.number().int().nonnegative() })
+          .optional(),
+        limit: z.number().int().min(1).max(100).default(50),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      await requireOperator(ctx.db, input.planId, ctx.user);
+      return transport(() =>
+        nativeEventHistory(runtime(ctx), ctx.db, input.planId, input.cursor, input.limit),
+      );
+    }),
   recover: authedProcedure.input(plan).mutation(async ({ ctx, input }) => {
     await requireOperator(ctx.db, input.planId, ctx.user);
     return transport(() => runtime(ctx).recoverPublication(input.planId));
