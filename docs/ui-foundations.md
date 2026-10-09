@@ -58,7 +58,7 @@ Keep auth and mutation behavior in the caller. Reusing a control must not broade
 
 ## Operations workspace
 
-The assigned-TO and admin routes share the same five destinations. `?view=` selects the destination and works with refresh and browser history. Existing `?plan=` admin links remain valid; the default is Run matches.
+The assigned-TO and admin routes share the same six destinations. `?view=` selects the destination and works with refresh and browser history. Existing `?plan=` admin links remain valid; the default is Run matches.
 
 | Destination | Routine work |
 | --- | --- |
@@ -66,7 +66,8 @@ The assigned-TO and admin routes share the same five destinations. `?view=` sele
 | Players | Find a player, follow their match or pool, adjust attendance. |
 | Standings / draw | Pool standings, soft-lock, advancement, native finals and external bracket handoff. |
 | Broadcast | Choose a station, update its live score or finish its match using the shared score card; open its overlay, manage announcements and awards. |
-| Settings | Score policy, publication, guest QR access, TO access, reset and audit. |
+| History | Recorded changes, actors and timestamps, score/correction evidence, publication and imported audit; search loaded entries, filter and load older records. |
+| Settings | Score policy, publication, guest QR access, TO access and reset. |
 
 Attention links switch destination, open ancestor disclosures, scroll and focus the relevant control. Switching tabs preserves edits; a full refresh still discards local drafts as before. The attention summary stays visible across destinations. Broadcast uses the same match controls and API; the OBS display remains a separate transparent composition. Its event title wraps instead of clipping, and idle/result rails use literal states without fallback announcements.
 
@@ -81,7 +82,7 @@ Use the event name, state and next action. Preserve explanations that change a d
 | App footer, live board, OBS and result rail | Removed recurring slogans, filler eyebrows and invented idle announcements. Actual announcement text and event identity remain. |
 | Event discovery | `Events`, `Open event` and a short instruction to choose an event/name. |
 | Signed-in and guest reporting | Shared heading and game-count controls; instructions and success text distinguish TO approval, immediate confirmation and disagreement. Guest expiry/revocation and device-name notices remain. |
-| TO workspace | Five named destinations, Playing as the initial view, contextual empty-state guidance and secondary pool setup. |
+| TO workspace | Six named destinations, including organiser event history; Playing as the initial view, contextual empty-state guidance and secondary pool setup. |
 | Account onboarding | Shorter steps; provider linking consequences remain explicit. |
 | Leaderboard | A short rating description; the existing mathematical and attendance policy explanation moves into labelled help without changing its meaning. |
 | Player profile | Reviewed; numerical history, identity and chart explanations remain useful and are retained. |

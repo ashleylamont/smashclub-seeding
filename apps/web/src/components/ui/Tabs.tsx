@@ -7,14 +7,20 @@ export function Tabs(props: ComponentProps<typeof Primitive.Root>) {
     const strip = root.current?.querySelector<HTMLElement>('.ui-tab-list');
     const active = strip?.querySelector<HTMLElement>('[data-state="active"]');
     if (!strip || !active) return;
-    const left =
-      active.getBoundingClientRect().left - strip.getBoundingClientRect().left + strip.scrollLeft;
-    if (
-      left < strip.scrollLeft ||
-      left + active.offsetWidth > strip.scrollLeft + strip.clientWidth
-    ) {
-      strip.scrollTo({ left: Math.max(0, left - 8), behavior: 'auto' });
-    }
+    const revealActive = () => {
+      const left =
+        active.getBoundingClientRect().left - strip.getBoundingClientRect().left + strip.scrollLeft;
+      if (
+        left < strip.scrollLeft ||
+        left + active.offsetWidth > strip.scrollLeft + strip.clientWidth
+      ) {
+        strip.scrollTo({ left: Math.max(0, left - 8), behavior: 'auto' });
+      }
+    };
+    revealActive();
+    const observer = new ResizeObserver(revealActive);
+    observer.observe(strip);
+    return () => observer.disconnect();
   }, [props.value]);
   return <Primitive.Root activationMode="manual" {...props} ref={root} />;
 }

@@ -41,6 +41,7 @@ apply a reviewed preview token.
 | `eventOps.live.command` | Authenticated actor plus `planId`, `requestId`, `command`; resolves organiser access and returns a receipt, sequence and publication status. |
 | `eventOps.live.snapshot` | Published view with optional domain `cursor`; returns `unchanged` or full `resync` metadata. No reports, actor history or credentials. |
 | `eventOps.live.overview` | Operator view with reports, grouped commands and pending rating intents. |
+| `eventOps.live.history` | Admin or assigned TO only. Newest-first recorded events, bounded `limit` (default 50, maximum 100), and `nextCursor` for older pages. |
 | `eventOps.live.recover` | Operator retries pending transfer/publication, unblocks this publication subscription and returns status. |
 
 Commands are discriminated by `kind`; schemas are in
@@ -67,6 +68,24 @@ Publication status is `pending`, `blocked` or `published`; published includes
 historical tournament IDs. Rating-intent completion is independent of the
 publication acknowledgement. The desk exposes both statuses and a recovery
 control, plus a reviewed score/forfeit correction form on sealed native events.
+
+## Organiser history
+
+The TO desk and admin event workspace expose a **History** tab. It shows actors,
+timestamps and readable summaries for scores/reviews, match progress, attendance,
+pool/draw changes, settings/stations, announcements/prizes and result publication.
+Match entries link back to the exact match. Expand a record for its event name,
+stream version and recorded command/correction references; full state snapshots,
+guest session IDs and credentials are not returned by this endpoint.
+
+Older pages remain available across Act checkpoints and after cancellation or
+finalization. Original pre-cutover match and attendance audit records follow the
+native stream, labelled as imported evidence with their original timestamps.
+Search and change-type filters apply to loaded entries; load older changes to
+include them. The active tab refreshes every five seconds, retains loaded data
+on connection failure and offers a manual retry. Reading history does not issue
+commands, replay effects or retry publication. Public and attendee views cannot
+read this history; an assigned TO can read their event even when it is unpublished.
 
 Stream version, semantic revisions and the public domain cursor have different
 purposes. Do not send a cursor as a universal mutation precondition. Incremental
