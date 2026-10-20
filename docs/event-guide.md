@@ -11,6 +11,8 @@ The planner at **Admin → Event planner** saves the night's roster, seed snapsh
 
 The plan and its step live in the URL, so an organiser can resume it on another device. Once external brackets are attached or play has begun, roster and seed changes have safeguards; use the attendance controls for late arrivals and withdrawals. [Station waves](pool-station-flow.md), [pool sheets](pool-floor-sheets.md) and [permanent station QR signs](station-signs.md) cover venue setup.
 
+Nemesis also supports fixed-pair **2v2 doubles**, open round robins, and open pools with finals. Choose a structure for the entrant count; doubles counts teams rather than people. See [doubles and tournament structures](doubles.md) for pairing, availability, seeding, and result handling.
+
 ## Nemesis path
 
 Open **Run event** from the planner. Set up stations and pool queues, assign TOs, and control which pools can play. TOs can start matches, save live game counts, confirm results and review attendee reports. An in-progress score does not become a rating result. Signed-in attendees can report under the event policy; guests use a time-limited QR pass. The public **Event night** hub lists published events and provides pools, queues and results without requiring a login. See [event desk and displays](event-night-refinements.md) and [guest reporting and disputes](guest-event-night.md).

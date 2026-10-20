@@ -436,13 +436,14 @@ function DraftSettings({ view, onChanged }: { view: EventPlanView; onChanged: ()
     view.plan.upperTargetSize ?? Math.ceil(view.entries.length / 2),
   );
   const total = view.entries.length;
+  const dual = !view.plan.structure || view.plan.structure === 'dual_division';
   const update = useMutation({
     mutationFn: () =>
       trpc.admin.eventPlanner.updatePlan.mutate({
         planId: view.plan.id,
         name,
         slugPrefix: prefix || null,
-        upperTargetSize: upper,
+        ...(dual ? { upperTargetSize: upper } : {}),
       }),
     onSuccess: onChanged,
   });
@@ -463,25 +464,29 @@ function DraftSettings({ view, onChanged }: { view: EventPlanView; onChanged: ()
         Bracket slug prefix
         <Input value={prefix} onChange={(event) => setPrefix(event.target.value)} />
       </label>
-      <label className="form-field">
-        Upper division size
-        <Input
-          type="number"
-          min={3}
-          max={Math.max(3, total - 3)}
-          value={upper}
-          onChange={(event) => setUpper(Number(event.target.value))}
-        />
-      </label>
-      <p className="muted">
-        {upper} Upper / {total - upper} Lower. Pools contain three to five players; the upper half,
-        rounded up, advance to championship and everyone else to consolation. Save a new split after
-        attendance changes.
-      </p>
+      {dual && (
+        <>
+          <label className="form-field">
+            Upper division size
+            <Input
+              type="number"
+              min={3}
+              max={Math.max(3, total - 3)}
+              value={upper}
+              onChange={(event) => setUpper(Number(event.target.value))}
+            />
+          </label>
+          <p className="muted">
+            {upper} Upper / {total - upper} Lower. Pools contain three to five players; the upper
+            half, rounded up, advance to championship and everyone else to consolation. Save a new
+            split after attendance changes.
+          </p>
+        </>
+      )}
       <Button
         variant="primary"
         type="submit"
-        disabled={update.isPending || !name.trim() || upper < 3 || upper > total - 3}
+        disabled={update.isPending || !name.trim() || (dual && (upper < 3 || upper > total - 3))}
       >
         Save settings
       </Button>

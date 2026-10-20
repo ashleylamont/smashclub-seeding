@@ -10,10 +10,12 @@ export function NativeBracketControls({
   planId,
   entrants,
   closed = false,
+  structure,
 }: {
   planId: string;
   entrants: { id: string; name: string }[];
   closed?: boolean;
+  structure?: string;
 }) {
   const confirmAction = useConfirmation();
   const cache = useQueryClient();
@@ -43,86 +45,104 @@ export function NativeBracketControls({
   };
   return (
     <section className="card">
-      <h3>Championship and consolation</h3>
-      <p>
-        Finals can start while pools are still playing. Unknown qualifiers stay blocked until their
-        pool order is confirmed; then their places fill automatically. Top active entrants advance
-        to championship, and the rest enter consolation. Bye winners advance automatically.
-      </p>
-      <Button
-        type="submit"
-        disabled={closed || busy}
-        onClick={() =>
-          void act(async () => setPreview(await trpc.eventOps.native.preview.query({ planId })), '')
-        }
-      >
-        Preview finals
-      </Button>
-      {preview && (
-        <div className="section">
-          {preview.issues.map((issue) => (
-            <p key={issue} className="error-text">
-              {issue}
-            </p>
-          ))}
-          {preview.brackets.map((bracket) => (
-            <div key={`${bracket.division}:${bracket.stage}`}>
-              <h4>
-                {bracket.division} {bracket.stage === 'main' ? 'championship' : 'consolation'} ·{' '}
-                {bracket.entrantIds.length} entrants
-              </h4>
-              {bracket.roundOne.length ? (
-                <ol>
-                  {bracket.roundOne.map((match, index) => (
-                    <li key={index}>
-                      {name(match.player1Id)} vs {name(match.player2Id)}
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <p>No entrants in this bracket.</p>
-              )}
-            </div>
-          ))}
+      <h3>
+        {structure === 'round_robin' ? 'Round-robin results' : 'Championship and consolation'}
+      </h3>
+      {structure === 'round_robin' ? (
+        <p>
+          Complete every pool match and confirm the final finishing order in the planner, including
+          any tiebreak rulings. Then finalize the results.
+        </p>
+      ) : (
+        <>
+          <p>
+            Finals can start while pools are still playing. Unknown qualifiers stay blocked until
+            their pool order is confirmed; then their places fill automatically. Top active entrants
+            advance to championship, and the rest enter consolation. Bye winners advance
+            automatically.
+          </p>
           <Button
-            variant="primary"
             type="submit"
-            disabled={closed || busy || !preview.allowed}
+            disabled={closed || busy}
             onClick={() =>
-              void act(async () => {
-                await trpc.eventOps.native.generate.mutate({
-                  planId,
-                  revisionToken: preview.revisionToken,
-                });
-                setPreview(null);
-              }, 'Finals are ready in the match queue.')
+              void act(
+                async () => setPreview(await trpc.eventOps.native.preview.query({ planId })),
+                '',
+              )
             }
           >
-            {preview.replacing ? 'Replace unplayed finals with this draw' : 'Create these finals'}
+            Preview finals
           </Button>
-          {preview.replacing && (
-            <Button
-              type="submit"
-              disabled={closed || busy || !preview.resetAllowed}
-              onClick={async () => {
-                if (
-                  await confirmAction(
-                    'Remove the unplayed finals? Pool results will stay recorded.',
-                  )
-                )
+          {preview && (
+            <div className="section">
+              {preview.issues.map((issue) => (
+                <p key={issue} className="error-text">
+                  {issue}
+                </p>
+              ))}
+              {preview.brackets.map((bracket) => (
+                <div key={`${bracket.division}:${bracket.stage}`}>
+                  <h4>
+                    {structure && structure !== 'dual_division' ? 'Open' : bracket.division}{' '}
+                    {bracket.stage === 'main' ? 'championship' : 'consolation'} ·{' '}
+                    {bracket.entrantIds.length} entrants
+                  </h4>
+                  {bracket.roundOne.length ? (
+                    <ol>
+                      {bracket.roundOne.map((match, index) => (
+                        <li key={index}>
+                          {name(match.player1Id)} vs {name(match.player2Id)}
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p>No entrants in this bracket.</p>
+                  )}
+                </div>
+              ))}
+              <Button
+                variant="primary"
+                type="submit"
+                disabled={closed || busy || !preview.allowed}
+                onClick={() =>
                   void act(async () => {
-                    await trpc.eventOps.native.reset.mutate({
+                    await trpc.eventOps.native.generate.mutate({
                       planId,
                       revisionToken: preview.revisionToken,
                     });
                     setPreview(null);
-                  }, 'Unplayed finals removed. Pool orders and attendance can now be corrected.');
-              }}
-            >
-              Remove unplayed finals
-            </Button>
+                  }, 'Finals are ready in the match queue.')
+                }
+              >
+                {preview.replacing
+                  ? 'Replace unplayed finals with this draw'
+                  : 'Create these finals'}
+              </Button>
+              {preview.replacing && (
+                <Button
+                  type="submit"
+                  disabled={closed || busy || !preview.resetAllowed}
+                  onClick={async () => {
+                    if (
+                      await confirmAction(
+                        'Remove the unplayed finals? Pool results will stay recorded.',
+                      )
+                    )
+                      void act(async () => {
+                        await trpc.eventOps.native.reset.mutate({
+                          planId,
+                          revisionToken: preview.revisionToken,
+                        });
+                        setPreview(null);
+                      }, 'Unplayed finals removed. Pool orders and attendance can now be corrected.');
+                  }}
+                >
+                  Remove unplayed finals
+                </Button>
+              )}
+            </div>
           )}
-        </div>
+        </>
       )}
       <p className="muted">
         When every bracket is finished, finalize once to publish the night into club results and

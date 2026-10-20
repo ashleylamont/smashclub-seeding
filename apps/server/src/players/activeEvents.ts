@@ -1,3 +1,4 @@
+import { memberIds } from '../tournament/entrants';
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, or } from 'drizzle-orm';
 import {
@@ -24,7 +25,7 @@ export async function requireInactiveIdentities(db: Db, ids: string[], runtime?:
     const state = await runtime!.state(handoff.eventPlanId);
     if (
       !['finalized', 'cancelled'].includes(state.lifecycle) &&
-      state.entrants.some((e) => ids.includes(e.playerId))
+      state.entrants.some((e) => memberIds(e).some((id) => ids.includes(id)))
     )
       activeNames.push(state.baseline!.name);
   }
@@ -34,7 +35,10 @@ export async function requireInactiveIdentities(db: Db, ids: string[], runtime?:
     .from(eventPlans)
     .innerJoin(eventPlanEntries, eq(eventPlanEntries.eventPlanId, eventPlans.id))
     .where(
-      and(inArray(eventPlans.status, [...activeStatuses]), inArray(eventPlanEntries.playerId, ids)),
+      and(
+        inArray(eventPlans.status, [...activeStatuses]),
+        or(inArray(eventPlanEntries.playerId, ids), inArray(eventPlanEntries.partnerPlayerId, ids)),
+      ),
     );
   const matchEvents = await db
     .select({ id: eventPlans.id, name: eventPlans.name })

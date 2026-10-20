@@ -77,7 +77,18 @@ export function drawFinals(state: TournamentState, envelope: CommandEnvelope) {
     state.matches.every(resolved) && state.pools.every((p) => p.order),
     'Resolve pools and confirm their placements first.',
   );
-  for (const division of ['upper', 'lower'] as const) {
+  if (state.baseline!.structure === 'round_robin') {
+    state.brackets.push({
+      id: stableId(`${envelope.id}:round-robin`),
+      division: 'upper',
+      stage: 'main',
+      entrantIds: state.pools[0]!.order!,
+    });
+    return;
+  }
+  for (const division of state.baseline!.structure === 'pools_finals'
+    ? (['upper'] as const)
+    : (['upper', 'lower'] as const)) {
     const finishers = state.pools
       .filter((p) => p.division === division)
       .flatMap((p) =>

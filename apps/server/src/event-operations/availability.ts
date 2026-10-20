@@ -1,7 +1,10 @@
-import { activePoolReservations } from './queue';
+import { activePoolReservations, queueMemberIds } from './queue';
 import type { eventMatches, eventPoolSchedules, eventStations } from '@smashclub/db';
 
-type Match = typeof eventMatches.$inferSelect;
+type Match = typeof eventMatches.$inferSelect & {
+  player1MemberIds?: string[];
+  player2MemberIds?: string[];
+};
 type Station = typeof eventStations.$inferSelect;
 type Schedule = typeof eventPoolSchedules.$inferSelect;
 export interface MatchAvailability {
@@ -57,9 +60,7 @@ export function matchAvailability(
     add('participants_unknown', 'Waiting for both players to be confirmed.');
   if (schedule && !schedule.active) add('pool_held', 'This pool is scheduled for a later wave.');
   const busy = otherPlaying.find((other) =>
-    [other.player1Id, other.player2Id].some(
-      (id) => id && [match.player1Id, match.player2Id].includes(id),
-    ),
+    queueMemberIds(other).some((id) => queueMemberIds(match).includes(id)),
   );
   if (busy) add('player_busy', `A player is already playing in ${busy.label}.`);
   if (match.stationId) {

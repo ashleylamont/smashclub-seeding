@@ -19,7 +19,12 @@ export function groupTournamentsByEvent(
 ): TournamentEventGroup[] {
   const grouped = new Map<string, TournamentListItem[]>();
   for (const item of items) {
-    const key = item.eventDate ? item.eventDate.slice(0, 10) : `undated:${item.id}`;
+    const dateKey = item.eventDate ? item.eventDate.slice(0, 10) : `undated:${item.id}`;
+    const key = item.nativeEventId
+      ? `native:${item.nativeEventId}`
+      : item.competitionFormat === 'doubles'
+        ? `${dateKey}:doubles`
+        : dateKey;
     grouped.set(key, [...(grouped.get(key) ?? []), item]);
   }
   return [...grouped.entries()].map(([key, rows]) => {
@@ -34,7 +39,7 @@ export function groupTournamentsByEvent(
     return {
       key,
       slug: eventCanonicalSlug(rows, first.slug),
-      title: eventNameOf(rows.map((row) => row.name)),
+      title: first.nativeEventName ?? eventNameOf(rows.map((row) => row.name)),
       eventDate: first.eventDate,
       items: sorted,
       bucket,

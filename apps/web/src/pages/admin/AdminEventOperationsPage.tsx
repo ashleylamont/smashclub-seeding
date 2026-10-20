@@ -1,3 +1,4 @@
+import { DoublesAvailabilityControls } from './DoublesAvailabilityControls';
 import { PoolDrawControls } from './PoolDrawControls';
 import { NativeResultControls } from './NativeResultControls';
 import { useConfirmation } from '../../lib/confirmation';
@@ -442,7 +443,14 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
           )}
           {data.plan.bracketMode === 'native' ? (
             <>
+              <DoublesAvailabilityControls
+                planId={planId}
+                members={data.members}
+                closed={closed}
+                onChanged={() => cache.invalidateQueries({ queryKey: ['eventOps', planId] })}
+              />
               <NativeBracketControls
+                structure={data.plan.structure}
                 planId={planId}
                 entrants={data.entrants}
                 closed={closed || Boolean(data.plan.drawPaused)}

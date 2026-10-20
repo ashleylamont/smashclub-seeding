@@ -1,3 +1,5 @@
+import { stageExtendedNativeBaseline } from './extendedBaseline';
+import { extendedNativePlan } from '../event-planner/nativePlanner';
 import { and, eq, sql } from 'drizzle-orm';
 import {
   eventMatches,
@@ -50,6 +52,7 @@ export async function stageNativeBaseline(
       .where(eq(nativeLiveHandoffs.eventPlanId, planId));
     if (prior)
       return Baseline.parse((prior.baseline as { baseline?: unknown }).baseline ?? prior.baseline);
+    if (extendedNativePlan(plan)) return stageExtendedNativeBaseline(tx, actor, plan);
     const existingMatches = await tx
       .select()
       .from(eventMatches)

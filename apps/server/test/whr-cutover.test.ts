@@ -11,9 +11,7 @@ import {
   schema,
   players,
   recomputes,
-  tournaments,
   sets,
-  tournamentParticipants,
   seedingRuns,
   seedingEntries,
   ratingEvents,
@@ -71,15 +69,11 @@ it.each(['glicko2', 'whr'])(
         .insert(players)
         .values([{ canonicalName: 'a' }, { canonicalName: 'b' }])
         .returning();
-      const [t] = await db
-        .insert(tournaments)
-        .values({
-          challongeSlug: 'old',
-          name: 'Old night',
-          eventDate: new Date('2025-01-01'),
-          challongeState: 'underway',
-        })
-        .returning();
+      // Seed the historical schema explicitly: current Drizzle columns do not exist yet.
+      const insertedTournament = await local.execute<{ id: string }>(
+        sql`insert into tournaments (challonge_slug,name,event_date,challonge_state) values ('old','Old night','2025-01-01T00:00:00Z','underway') returning id`,
+      );
+      const t = { id: String(insertedTournament.rows[0]!.id) };
       const [match] = await db
         .insert(sets)
         .values({
@@ -119,16 +113,10 @@ it.each(['glicko2', 'whr'])(
           weight: 1,
         })
         .returning();
-      const [entrant] = await db
-        .insert(tournamentParticipants)
-        .values({
-          tournamentId: t!.id,
-          challongeParticipantId: 1,
-          rawName: 'a',
-          cleanedName: 'a',
-          playerId: a!.id,
-        })
-        .returning();
+      const insertedParticipant = await local.execute<{ id: string }>(
+        sql`insert into tournament_participants (tournament_id,challonge_participant_id,raw_name,cleaned_name,player_id) values (${t.id},1,'a','a',${a!.id}) returning id`,
+      );
+      const entrant = { id: String(insertedParticipant.rows[0]!.id) };
       const [seeding] = await db
         .insert(seedingRuns)
         .values({ tournamentId: t!.id, recomputeId: oldRun!.id, status: 'pushed' })

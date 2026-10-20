@@ -202,6 +202,10 @@ export type TournamentResultsMode = 'auto' | 'final_stage_only';
 export type SetResultStage = 'group' | 'final';
 
 export const tournaments = pgTable('tournaments', {
+  competitionFormat: text('competition_format')
+    .$type<'singles' | 'doubles'>()
+    .notNull()
+    .default('singles'),
   provider: text('provider').$type<'challonge' | 'native'>().notNull().default('challonge'),
   id: uuid('id').primaryKey().defaultRandom(),
   challongeSlug: text('challonge_slug').notNull().unique(),
@@ -248,6 +252,8 @@ export const tournamentParticipants = pgTable(
       .notNull()
       .references(() => tournaments.id, { onDelete: 'cascade' }),
     challongeParticipantId: bigint('challonge_participant_id', { mode: 'number' }).notNull(),
+    memberPlayerIds: jsonb('member_player_ids').$type<string[]>(),
+    teamName: text('team_name'),
     rawName: text('raw_name').notNull(),
     cleanedName: text('cleaned_name').notNull(),
     companyId: uuid('company_id').references(() => companies.id, { onDelete: 'set null' }),
@@ -583,6 +589,16 @@ export interface HistoricalAdoption extends HistoricalAdoptionRecord {
 }
 
 export const eventPlans = pgTable('event_plans', {
+  competitionFormat: text('competition_format')
+    .$type<'singles' | 'doubles'>()
+    .notNull()
+    .default('singles'),
+  structure: text('structure')
+    .$type<'dual_division' | 'pools_finals' | 'round_robin'>()
+    .notNull()
+    .default('dual_division'),
+  usePairRatings: boolean('use_pair_ratings').notNull().default(false),
+  nativeSeedContext: jsonb('native_seed_context').$type<Record<string, unknown>>(),
   bracketMode: text('bracket_mode').$type<'challonge' | 'native'>().notNull().default('challonge'),
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
@@ -638,6 +654,12 @@ export const eventPlanEntries = pgTable(
     eventPlanId: uuid('event_plan_id')
       .notNull()
       .references(() => eventPlans.id, { onDelete: 'cascade' }),
+    partnerPlayerId: uuid('partner_player_id').references(() => players.id, {
+      onDelete: 'restrict',
+    }),
+    teamName: text('team_name'),
+    snapshotMean: doublePrecision('snapshot_mean'),
+    snapshotSd: doublePrecision('snapshot_sd'),
     sourceLineNumber: integer('source_line_number').notNull(),
     /** The pasted line, verbatim. Kept forever: it is the audit trail. */
     rawInput: text('raw_input').notNull(),

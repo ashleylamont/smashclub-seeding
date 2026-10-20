@@ -1,3 +1,4 @@
+import { available, memberIds, publicEntrantNames } from './entrants';
 import { asc, inArray } from 'drizzle-orm';
 import { players, playerCharacters, tournaments, type Db, type eventMatches } from '@smashclub/db';
 import { publicPlayerName } from '@smashclub/shared';
@@ -14,7 +15,10 @@ import { resolved } from './facts';
 import type { TournamentState } from './schemas';
 
 export type EventSnapshot = Awaited<ReturnType<typeof sqlSnapshot>>;
-export function matchRows(state: TournamentState): (typeof eventMatches.$inferSelect)[] {
+export function matchRows(state: TournamentState): (typeof eventMatches.$inferSelect & {
+  player1MemberIds?: string[];
+  player2MemberIds?: string[];
+})[] {
   return state.matches.map((m) => ({
     id: m.id,
     eventPlanId: state.baseline!.planId,
@@ -25,6 +29,8 @@ export function matchRows(state: TournamentState): (typeof eventMatches.$inferSe
     poolIndex: state.pools.find((p) => p.id === m.poolId)?.index ?? null,
     label: m.label,
     player1Id: m.player1Id,
+    player1MemberIds: state.entrants.find((e) => e.playerId === m.player1Id)?.memberPlayerIds,
+    player2MemberIds: state.entrants.find((e) => e.playerId === m.player2Id)?.memberPlayerIds,
     player2Id: m.player2Id,
     score1: m.score1,
     score2: m.score2,
@@ -67,21 +73,32 @@ export function bracketViews(state: TournamentState) {
     const rounds = state.matches.filter((m) => m.bracketId === b.id);
     const maxRound = Math.max(0, ...rounds.map((m) => m.round));
     const final = rounds.find((m) => m.round === maxRound);
-    const complete = b.entrantIds.length === 0 || Boolean(final && resolved(final));
-    const winnerId = complete ? (final?.winnerId ?? null) : null;
-    const standings = complete
-      ? rounds.flatMap((m) =>
-          m.player1Id && m.player2Id && m.winnerId && resolved(m)
-            ? [
-                {
-                  playerId: m.winnerId === m.player1Id ? m.player2Id : m.player1Id,
-                  place: 2 ** (maxRound - m.round) + 1,
-                },
-              ]
-            : [],
-        )
-      : [];
-    if (winnerId) standings.push({ playerId: winnerId, place: 1 });
+    const roundRobin = state.baseline!.structure === 'round_robin';
+    const order = roundRobin ? state.pools[0]?.order : null;
+    const complete = roundRobin
+      ? Boolean(order && state.matches.every(resolved))
+      : b.entrantIds.length === 0 || Boolean(final && resolved(final));
+    const winnerId = complete
+      ? roundRobin
+        ? (order?.[0] ?? null)
+        : (final?.winnerId ?? null)
+      : null;
+    const standings =
+      roundRobin && complete
+        ? (order ?? []).map((playerId, i) => ({ playerId, place: i + 1 }))
+        : complete
+          ? rounds.flatMap((m) =>
+              m.player1Id && m.player2Id && m.winnerId && resolved(m)
+                ? [
+                    {
+                      playerId: m.winnerId === m.player1Id ? m.player2Id : m.player1Id,
+                      place: 2 ** (maxRound - m.round) + 1,
+                    },
+                  ]
+                : [],
+            )
+          : [];
+    if (winnerId && !roundRobin) standings.push({ playerId: winnerId, place: 1 });
     return {
       ...b,
       eventPlanId: state.baseline!.planId,
@@ -96,8 +113,8 @@ export async function eventView(db: Db, state: TournamentState): Promise<EventSn
   const baseline = state.baseline!;
   const planId = baseline.planId;
   const allPlayers = await db.select().from(players);
-  const names = new Map(allPlayers.map((p) => [p.id, publicPlayerName(p)]));
-  const ids = state.entrants.map((e) => e.playerId);
+  const names = publicEntrantNames(allPlayers, state.entrants);
+  const ids = state.entrants.flatMap(memberIds);
   const characters = ids.length
     ? await db
         .select()
@@ -122,9 +139,21 @@ export async function eventView(db: Db, state: TournamentState): Promise<EventSn
       rows,
       stations,
       poolSchedules,
-      state.entrants.filter((e) => e.availability !== 'available').map((e) => e.playerId),
+      state.entrants.filter((e) => !available(e)).map((e) => e.playerId),
       open,
     ),
+    members:
+      state.baseline?.competitionFormat === 'doubles'
+        ? state.entrants.flatMap((e) =>
+            memberIds(e).map((id) => ({
+              entrantId: e.playerId,
+              playerId: id,
+              name: names.get(id) ?? 'Player',
+              availability: e.memberAvailability?.[id] ?? 'available',
+              revision: e.revision,
+            })),
+          )
+        : undefined,
     nativeBrackets: bracketViews(state),
     plan: {
       id: planId,
@@ -139,6 +168,8 @@ export async function eventView(db: Db, state: TournamentState): Promise<EventSn
             ? 'cancelled'
             : 'underway',
       bracketMode: 'native',
+      competitionFormat: baseline.competitionFormat ?? 'singles',
+      structure: baseline.structure ?? 'dual_division',
       softLockedAt: new Date(baseline.capturedAt).toISOString(),
       historicalResultsSlug: null,
       resultsSlug:
@@ -167,16 +198,31 @@ export async function eventView(db: Db, state: TournamentState): Promise<EventSn
       player1Name: m.player1Id ? (names.get(m.player1Id) ?? 'Player') : 'TBD',
       player2Name: m.player2Id ? (names.get(m.player2Id) ?? 'Player') : 'TBD',
       player1Characters: characters
-        .filter((c) => c.playerId === m.player1Id)
+        .filter((c) => (m.player1MemberIds ?? [m.player1Id]).includes(c.playerId))
         .map((c) => c.characterSlug),
       player2Characters: characters
-        .filter((c) => c.playerId === m.player2Id)
+        .filter((c) => (m.player2MemberIds ?? [m.player2Id]).includes(c.playerId))
         .map((c) => c.characterSlug),
-      availability: matchAvailability(m, rows, stations, poolSchedules, false, open),
+      availability: (() => {
+        const value = matchAvailability(m, rows, stations, poolSchedules, false, open);
+        if (
+          state.entrants.some(
+            (e) => [m.player1Id, m.player2Id].includes(e.playerId) && !available(e),
+          )
+        ) {
+          value.canStart = false;
+          value.reasons.push({
+            code: 'member_unavailable',
+            message: 'An entrant or team member is unavailable.',
+          });
+        }
+        return value;
+      })(),
     })),
     entrants: state.entrants.map((e) => ({
       id: e.playerId,
       name: names.get(e.playerId) ?? 'Player',
+      memberPlayerIds: e.memberPlayerIds,
     })),
     prizes: state.prizes.map((p) => ({
       ...p,
@@ -220,6 +266,10 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
   const entries = state.entrants.map((e, i) => {
     const old = draft.entries.find((old) => old.id === e.id);
     const p = profiles.get(e.playerId);
+    const pairProfiles = e.memberPlayerIds
+      ?.map((id) => profiles.get(id))
+      .filter((p) => p !== undefined);
+    const pairName = pairProfiles?.map(publicPlayerName).join(' / ');
     return {
       ...old,
       id: e.id,
@@ -229,7 +279,11 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
       companyCode: old?.companyCode ?? null,
       playerId: e.playerId,
       playerName: p?.canonicalName ?? e.name,
-      publicName: p ? publicPlayerName(p) : 'Player',
+      publicName: pairName
+        ? `${e.teamName ? `${e.teamName} (` : ''}${pairName}${e.teamName ? ')' : ''}`
+        : p
+          ? publicPlayerName(p)
+          : 'Player',
       playerStatus: p?.status ?? 'active',
       resolutionMethod: old?.resolutionMethod ?? 'manual',
       divisionPreference: old?.divisionPreference ?? 'auto',
@@ -244,7 +298,11 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
       candidates: old?.candidates ?? [],
     };
   });
-  const divisions = (['upper', 'lower'] as const).map((division) => {
+  const divisions = (
+    state.baseline!.structure && state.baseline!.structure !== 'dual_division'
+      ? (['upper'] as const)
+      : (['upper', 'lower'] as const)
+  ).map((division) => {
     const pools = state.pools
       .filter((p) => p.division === division)
       .map((p) => ({
@@ -280,16 +338,19 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
       poolCount: pools.length,
       pools,
       consolation:
-        ordered && consolationQualifiers(finishers).length
+        state.baseline!.structure !== 'round_robin' &&
+        ordered &&
+        consolationQualifiers(finishers).length
           ? buildConsolationBracket(consolationQualifiers(finishers))
           : null,
-      championship: ordered
-        ? championshipQualifiers(finishers).map((q) => ({
-            playerId: q.playerId,
-            name: entries.find((e) => e.playerId === q.playerId)!.publicName,
-            label: `Pool ${q.poolIndex + 1}`,
-          }))
-        : [],
+      championship:
+        state.baseline!.structure !== 'round_robin' && ordered
+          ? championshipQualifiers(finishers).map((q) => ({
+              playerId: q.playerId,
+              name: entries.find((e) => e.playerId === q.playerId)!.publicName,
+              label: `Pool ${q.poolIndex + 1}`,
+            }))
+          : [],
     };
   });
   const event = await eventView(db, state);

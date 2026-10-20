@@ -13,6 +13,12 @@ export function NativeResultControls({
   onChanged: () => Promise<unknown>;
 }) {
   const [matchId, setMatchId] = useState('');
+  const [roundRobinOrder, setRoundRobinOrder] = useState(
+    data.placements
+      .slice()
+      .sort((a, b) => a.place - b.place)
+      .map((p) => p.playerId),
+  );
   const [outcome, setOutcome] = useState<'played' | 'forfeit'>('played');
   const [winnerId, setWinnerId] = useState('');
   const [score1, setScore1] = useState<ScoreInputValue>(0),
@@ -70,6 +76,7 @@ export function NativeResultControls({
               requestId: crypto.randomUUID(),
               command: {
                 kind: 'replaceResult',
+                ...(data.plan.structure === 'round_robin' ? { roundRobinOrder } : {}),
                 resultId: publication.resultId,
                 reason,
                 corrections: [
@@ -147,6 +154,31 @@ export function NativeResultControls({
               </label>
             )}
           </>
+        )}
+        {data.plan.structure === 'round_robin' && (
+          <fieldset>
+            <legend>Review final finishing order</legend>
+            <p>Confirm the full order, including tiebreak rulings, with this score correction.</p>
+            {roundRobinOrder.map((id, i) => (
+              <label key={i}>
+                Place {i + 1}
+                <Select
+                  value={id}
+                  onValueChange={(value) =>
+                    setRoundRobinOrder((order) =>
+                      order.map((old, index) => (index === i ? value : old)),
+                    )
+                  }
+                >
+                  {data.entrants.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>
+                      {e.name}
+                    </SelectItem>
+                  ))}
+                </Select>
+              </label>
+            ))}
+          </fieldset>
         )}
         <label>
           Ruling reason

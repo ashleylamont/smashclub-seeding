@@ -1,3 +1,4 @@
+import { memberIds } from './entrants';
 import { eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   nativeLiveHandoffs,
@@ -52,6 +53,16 @@ export async function publishNativeResult(
         .where(inArray(sets.tournamentId, previous.tournamentIds));
     const tournamentIds: string[] = [];
     const canonicalId = await historicalPlayerIds(tx);
+    if (result.competitionFormat === 'doubles') {
+      const members = result.entrants.flatMap((e) => memberIds(e).map(canonicalId));
+      if (
+        result.entrants.some((e) => memberIds(e).length !== 2) ||
+        new Set(members).size !== members.length
+      )
+        throw new TournamentConflict(
+          'Doubles member identities require review before publication.',
+        );
+    }
     for (const bracket of result.brackets) {
       const matches = result.matches.filter(
         (m) =>
@@ -64,8 +75,9 @@ export async function publishNativeResult(
         .insert(tournaments)
         .values({
           provider: 'native',
+          competitionFormat: result.competitionFormat ?? 'singles',
           challongeSlug: slug,
-          name: `${result.name} ${bracket.division === 'upper' ? 'Upper' : 'Lower'} ${bracket.stage === 'main' ? 'Main' : 'Consolation'}`,
+          name: `${result.name} ${result.structure && result.structure !== 'dual_division' ? 'Open' : bracket.division === 'upper' ? 'Upper' : 'Lower'} ${bracket.stage === 'main' ? (result.structure === 'round_robin' ? 'Round Robin' : 'Main') : 'Consolation'}`,
           eventDate: new Date(result.eventDate),
           eventDateManual: true,
           challongeState: 'complete',
@@ -73,9 +85,15 @@ export async function publishNativeResult(
           raw: {
             provider: 'native',
             eventPlanId: result.planId,
+            eventName: result.name,
             resultId: result.id,
             resultRevision: result.revision,
-            tournamentType: 'single elimination',
+            competitionFormat: result.competitionFormat ?? 'singles',
+            structure: result.structure ?? 'dual_division',
+            division: bracket.division,
+            stage: bracket.stage,
+            tournamentType:
+              result.structure === 'round_robin' ? 'round robin' : 'single elimination',
           },
         })
         .returning();
@@ -84,6 +102,10 @@ export async function publishNativeResult(
       const maxRound = Math.max(0, ...finals.map((m) => m.round));
       const final = finals.find((m) => m.round === maxRound);
       const ranks = new Map<string, number>();
+      if (result.structure === 'round_robin')
+        result.poolOrders
+          ?.find((p) => p.division === bracket.division)
+          ?.order.forEach((id, i) => ranks.set(id, i + 1));
       for (const match of finals) {
         if (match.player1Id && match.player2Id && match.winnerId)
           ranks.set(
@@ -107,7 +129,12 @@ export async function publishNativeResult(
           playerIds.map((playerId, i) => ({
             tournamentId: tournament!.id,
             challongeParticipantId: i + 1,
-            playerId: canonicalId(playerId),
+            playerId: result.competitionFormat === 'doubles' ? null : canonicalId(playerId),
+            teamName: result.entrants.find((e) => e.playerId === playerId)!.teamName ?? null,
+            memberPlayerIds:
+              result.competitionFormat === 'doubles'
+                ? memberIds(result.entrants.find((e) => e.playerId === playerId)!).map(canonicalId)
+                : null,
             rawName: result.entrants.find((e) => e.playerId === playerId)!.name,
             cleanedName: result.entrants.find((e) => e.playerId === playerId)!.name,
             finalRank: ranks.get(playerId) ?? null,
@@ -127,8 +154,14 @@ export async function publishNativeResult(
           suggestedPlayOrder: index + 1,
           p1ParticipantId: participant(match.player1Id),
           p2ParticipantId: participant(match.player2Id),
-          p1PlayerId: match.player1Id ? canonicalId(match.player1Id) : null,
-          p2PlayerId: match.player2Id ? canonicalId(match.player2Id) : null,
+          p1PlayerId:
+            result.competitionFormat !== 'doubles' && match.player1Id
+              ? canonicalId(match.player1Id)
+              : null,
+          p2PlayerId:
+            result.competitionFormat !== 'doubles' && match.player2Id
+              ? canonicalId(match.player2Id)
+              : null,
           winner: match.winnerId ? (match.winnerId === match.player1Id ? 1 : 2) : null,
           scoresCsv: match.outcome === 'played' ? `${match.score1}-${match.score2}` : null,
           excludedFromRatings: match.outcome !== 'played',

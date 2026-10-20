@@ -1,3 +1,4 @@
+import type { MemberView } from '../tournament/entrants';
 import { attendeeScoreDecision, samePlayedScore } from './scorePolicy';
 import { loadStationQueues } from './queue';
 import {
@@ -97,6 +98,7 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
     );
   const matches = rows.map((m) => ({
     ...m,
+    ...({} as { player1MemberIds?: string[]; player2MemberIds?: string[] }),
     resourceRevision: 0,
     progressRevision: 0,
     started:
@@ -167,6 +169,10 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
       status: plan.status,
       softLockedAt: plan.softLockedAt?.toISOString() ?? null,
       bracketMode: plan.bracketMode,
+      ...({ competitionFormat: plan.competitionFormat, structure: plan.structure } as {
+        competitionFormat?: 'singles' | 'doubles';
+        structure?: 'dual_division' | 'pools_finals' | 'round_robin';
+      }),
       historicalResultsSlug,
       resultsSlug,
     },
@@ -187,6 +193,7 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
     },
     matches,
     entrants,
+    ...({} as { members?: MemberView[] }),
     prizes,
     stations: stations.map((station) => stationAvailability(station, rows)),
     poolSchedules,

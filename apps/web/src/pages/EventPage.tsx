@@ -21,6 +21,9 @@ export function EventPage() {
 }
 
 function EventOverview({ data }: { data: EventOverviewData }) {
+  const open = data.structure && data.structure !== 'dual_division';
+  const doubles = data.competitionFormat === 'doubles';
+  const roundRobin = data.structure === 'round_robin';
   return (
     <div>
       <div className="page-header event-header">
@@ -32,9 +35,11 @@ function EventOverview({ data }: { data: EventOverviewData }) {
           </p>
         </div>
         <div className="event-header-links">
-          <Link to="/recaps/$slug" params={{ slug: data.canonicalSlug }}>
-            Recap →
-          </Link>
+          {!doubles && (
+            <Link to="/recaps/$slug" params={{ slug: data.canonicalSlug }}>
+              Recap →
+            </Link>
+          )}
         </div>
       </div>
       {data.warnings?.map((warning) => (
@@ -52,19 +57,19 @@ function EventOverview({ data }: { data: EventOverviewData }) {
         .filter((division) => division.players.length > 0)
         .map((division) => (
           <section className="section" key={division.division}>
-            <h2>{division.division === 'upper' ? 'Upper' : 'Lower'} standings</h2>
+            <h2>{open ? 'Open' : division.division === 'upper' ? 'Upper' : 'Lower'} standings</h2>
             <p className="muted">
               Finishing places are within this division. Ties and missing placements remain visible.
               W-L excludes byes and setup results.
             </p>
             {division.notice && <p className="banner banner-warning">{division.notice}</p>}
-            <Standings players={division.players} />
+            <Standings players={division.players} doubles={doubles} roundRobin={roundRobin} />
             {!division.notice &&
               data.brackets
                 .filter((bracket) => bracket.division === division.division)
                 .every((bracket) => bracket.isComplete) && (
                 <ResultGraphic
-                  title={`${data.name} · ${division.division === 'upper' ? 'Upper' : 'Lower'}`}
+                  title={`${data.name} · ${open ? 'Open' : division.division === 'upper' ? 'Upper' : 'Lower'}`}
                   results={division.players
                     .filter((player) => player.place !== null && !player.provisional)
                     .map((player) => ({
@@ -89,7 +94,11 @@ function EventOverview({ data }: { data: EventOverviewData }) {
                 </h3>
                 <span className="chip">
                   {bracket.division && bracket.stage
-                    ? `${bracket.division} ${bracket.stage}`
+                    ? open
+                      ? roundRobin
+                        ? 'Open round robin'
+                        : `Open ${bracket.stage === 'main' ? 'championship' : 'consolation'}`
+                      : `${bracket.division} ${bracket.stage}`
                     : 'Standalone bracket'}
                 </span>
               </div>
@@ -102,10 +111,10 @@ function EventOverview({ data }: { data: EventOverviewData }) {
                 />
               )}
               {bracket.roleSource === 'unclassified' ? (
-                <Standings players={bracket.players} />
+                <Standings players={bracket.players} doubles={doubles} roundRobin={roundRobin} />
               ) : (
                 <Disclosure title="View bracket standings">
-                  <Standings players={bracket.players} />
+                  <Standings players={bracket.players} doubles={doubles} roundRobin={roundRobin} />
                 </Disclosure>
               )}
             </article>
@@ -116,15 +125,23 @@ function EventOverview({ data }: { data: EventOverviewData }) {
   );
 }
 
-function Standings({ players }: { players: EventOverviewData['divisions'][number]['players'] }) {
-  const hasPools = players.some((p) => p.poolWins + p.poolLosses > 0);
+function Standings({
+  players,
+  doubles,
+  roundRobin,
+}: {
+  players: EventOverviewData['divisions'][number]['players'];
+  doubles: boolean;
+  roundRobin: boolean;
+}) {
+  const hasPools = !roundRobin && players.some((p) => p.poolWins + p.poolLosses > 0);
   return (
     <div className="table-scroll">
       <table className="data-table event-standings">
         <thead>
           <tr>
             <th>Place</th>
-            <th>Player</th>
+            <th>{doubles ? 'Team' : 'Player'}</th>
             {hasPools && (
               <>
                 <th>Pool W-L</th>

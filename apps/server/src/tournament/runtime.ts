@@ -1,3 +1,4 @@
+import { publicEntrantNames } from './entrants';
 import { randomUUID } from 'node:crypto';
 import { act, ConcurrencyError, InMemoryCache, type Store } from '@rotorsoft/act';
 import { PostgresStore } from '@rotorsoft/act-pg';
@@ -9,7 +10,6 @@ import {
   players,
   type Db,
 } from '@smashclub/db';
-import { publicPlayerName } from '@smashclub/shared';
 import type { SessionUser } from '../auth';
 import { isOperator, requireOperator } from '../event-operations/access';
 import { NativeTournament } from './aggregate';
@@ -168,9 +168,7 @@ export function createNativeRuntime(
         stream_exact: true,
       },
     );
-    const names = new Map(
-      (await db.select().from(players)).map((p) => [p.id, publicPlayerName(p)]),
-    );
+    const names = publicEntrantNames(await db.select().from(players), state.entrants);
     const publicState = {
       plan: {
         id: planId,
@@ -183,6 +181,8 @@ export function createNativeRuntime(
               ? 'cancelled'
               : 'underway',
         bracketMode: 'native' as const,
+        competitionFormat: state.baseline.competitionFormat ?? 'singles',
+        structure: state.baseline.structure ?? 'dual_division',
         liveOwned: true,
         drawPaused: state.lifecycle === 'unlocked',
         softLockedAt: new Date(state.baseline.capturedAt).toISOString(),

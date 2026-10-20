@@ -32,14 +32,27 @@ async function capture(page: Page, name: string): Promise<void> {
   await page.screenshot({ path: path.join(OUT, `${name}.png`), fullPage: true });
 }
 
-/** Slug of a bracket Challonge reports as finished, or null if none has. */
-async function completedTournamentSlug(page: Page): Promise<string | null> {
+/** Recaps currently summarize singles; completed doubles events have team results instead. */
+async function completedSinglesTournamentSlug(page: Page): Promise<string> {
   const response = await page.request.get('/api/trpc/public.tournaments');
-  if (!response.ok()) return null;
+  expect(response.ok()).toBe(true);
   const body = (await response.json()) as {
-    result?: { data?: { slug: string; challongeState: string | null }[] };
+    result: {
+      data: {
+        slug: string;
+        challongeState: string | null;
+        competitionFormat: 'singles' | 'doubles';
+      }[];
+    };
   };
-  return body.result?.data?.find((t) => t.challongeState === 'complete')?.slug ?? null;
+  const singles = body.result.data.find(
+    (t) => t.challongeState === 'complete' && t.competitionFormat === 'singles',
+  );
+  expect(
+    singles,
+    'the rehearsal has a completed singles event for recap screenshots',
+  ).toBeDefined();
+  return singles!.slug;
 }
 
 interface Target {
@@ -142,22 +155,20 @@ test.describe('page screenshots', () => {
          * The night's recap, reached the way a reader would — from its bracket.
          *
          * The bracket is chosen from the API rather than by picking one out of
-         * the list, because it has to be a *finished* one: a live bracket has
+         * the list, because it has to be a *finished singles* one: a live bracket has
          * no podium yet, so landing on whichever tournament happens to sort
          * first would assert nothing about the part of the page that matters.
          */
-        const finishedSlug = await completedTournamentSlug(page);
-        if (finishedSlug) {
-          await page.goto(`/tournaments/${finishedSlug}`);
-          await settle(page);
-          await page.locator('a.tournament-recap-link[href^="/recaps/"]').click();
-          await expect(page).toHaveURL(/\/recaps\/.+/);
-          // A recap with no facts at all would still render its shell, so this
-          // asserts real content rather than an empty page.
-          await expect(page.locator('.recap-podiums .podium').first()).toBeVisible();
-          await expect(page.locator('.fact-grid .fact-card').first()).toBeVisible();
-          await capture(page, `recap-${viewport.label}-${scheme}`);
-        }
+        const finishedSlug = await completedSinglesTournamentSlug(page);
+        await page.goto(`/tournaments/${finishedSlug}`);
+        await settle(page);
+        await page.locator('a.tournament-recap-link[href^="/recaps/"]').click();
+        await expect(page).toHaveURL(/\/recaps\/.+/);
+        // A recap with no facts at all would still render its shell, so this
+        // asserts real content rather than an empty page.
+        await expect(page.locator('.recap-podiums .podium').first()).toBeVisible();
+        await expect(page.locator('.fact-grid .fact-card').first()).toBeVisible();
+        await capture(page, `recap-${viewport.label}-${scheme}`);
 
         expect(errors, `uncaught page errors: ${errors.join('; ')}`).toEqual([]);
         await context.close();

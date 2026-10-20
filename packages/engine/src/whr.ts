@@ -79,6 +79,8 @@ export interface WhrSet {
    * discount for the fact that games within a set are correlated.
    */
   trials?: number;
+  /** Known advantage for side one, in natural log-odds units (residual fits). */
+  logOddsOffset?: number;
 }
 
 interface PlayerTrack {
@@ -90,7 +92,13 @@ interface PlayerTrack {
   /** Posterior variance at each time, natural units squared. */
   variance: number[];
   /** Games indexed by time position. */
-  games: { opponentId: string; opponentTimeIndex: number; won: boolean; trials: number }[][];
+  games: {
+    opponentId: string;
+    opponentTimeIndex: number;
+    won: boolean;
+    trials: number;
+    offset: number;
+  }[][];
   /** Centre of this player's prior, natural units (0 unless overridden). */
   priorMean: number;
 }
@@ -178,6 +186,8 @@ export function fitWhr(input: {
 
   for (const set of sets) {
     const trials = set.trials ?? 1;
+    const offset = set.logOddsOffset ?? 0;
+    if (!Number.isFinite(offset)) throw new Error('WHR offset must be finite.');
     const t1 = tracks.get(set.p1PlayerId)!;
     const t2 = tracks.get(set.p2PlayerId)!;
     const i1 = timeIndex(t1, set.time);
@@ -187,12 +197,14 @@ export function fitWhr(input: {
       opponentTimeIndex: i2,
       won: set.winner === 1,
       trials,
+      offset,
     });
     t2.games[i2]!.push({
       opponentId: set.p1PlayerId,
       opponentTimeIndex: i1,
       won: set.winner === 2,
       trials,
+      offset: -offset,
     });
   }
 
@@ -295,7 +307,7 @@ function newtonUpdatePlayer(
     for (const game of track.games[i]!) {
       const opponent = tracks.get(game.opponentId)!;
       const rOpp = opponent.r[game.opponentTimeIndex]!;
-      const expected = 1 / (1 + Math.exp(-(track.r[i]! - rOpp)));
+      const expected = 1 / (1 + Math.exp(-(track.r[i]! - rOpp + game.offset)));
       gradient[i]! += game.trials * ((game.won ? 1 : 0) - expected);
       diagonal[i]! -= game.trials * expected * (1 - expected);
     }
@@ -375,7 +387,8 @@ function computeVariances(
   for (let i = 0; i < n; i++) {
     for (const game of track.games[i]!) {
       const opponent = tracks.get(game.opponentId)!;
-      const expected = 1 / (1 + Math.exp(-(track.r[i]! - opponent.r[game.opponentTimeIndex]!)));
+      const expected =
+        1 / (1 + Math.exp(-(track.r[i]! - opponent.r[game.opponentTimeIndex]! + game.offset)));
       diagonal[i]! += game.trials * expected * (1 - expected);
     }
   }
