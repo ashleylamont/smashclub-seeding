@@ -44,6 +44,18 @@ const data = (matches: FinderMatch[]): FinderData =>
     reports: [],
   }) as unknown as FinderData;
 describe('TO player finder', () => {
+  it('finds a doubles match through either member identity', () => {
+    const view = data([
+      match('doubles', 'opponents', {
+        player1Id: 'pair',
+        player1Name: 'Alex / Bea',
+        player1MemberIds: ['alex', 'bea'],
+        player2MemberIds: ['chris', 'dana'],
+      }),
+    ]);
+    expect(playerEventStatus(view, 'bea').matches.map((m) => m.id)).toEqual(['doubles']);
+    expect(playerEventStatus(view, 'dana').matches.map((m) => m.id)).toEqual(['doubles']);
+  });
   it('keeps duplicate display names separate and includes entrants before matches and historical match participants', () => {
     const view = data([match('a', 'other', { player2Name: 'Alex' })]);
     expect(findEventPlayers(view, ' alex ').map((player) => player.id)).toEqual(['alex', 'other']);

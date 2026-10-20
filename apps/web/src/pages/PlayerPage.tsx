@@ -370,6 +370,22 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         </section>
       )}
 
+      {data.doublesResults?.length > 0 && (
+        <section className="section">
+          <h2>Doubles results</h2>
+          <p className="muted">Team results are recorded separately from singles ratings.</p>
+          <ul>
+            {data.doublesResults.map((r) => (
+              <li key={r.tournamentId}>
+                <Link to="/events/$slug" params={{ slug: r.slug }}>
+                  {r.name}
+                </Link>{' '}
+                · {r.pairName} · {r.place ? `Place ${r.place}` : 'Unplaced'}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <section className="section match-history">
         <h3>
           Match log (

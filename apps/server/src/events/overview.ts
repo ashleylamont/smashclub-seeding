@@ -1,3 +1,4 @@
+import { publicParticipantNames } from './participantNames';
 import { asc, eq, inArray, isNotNull } from 'drizzle-orm';
 import {
   eventPlanBrackets,
@@ -16,7 +17,6 @@ import {
   eventNameOf,
   inferEventBracketRole,
   includesResultStage,
-  publicParticipantName,
   scoresIndicateUnplayed,
 } from '@smashclub/shared';
 
@@ -51,6 +51,8 @@ export interface EventOverviewBracket {
 }
 export interface EventOverview {
   name: string;
+  competitionFormat?: 'singles' | 'doubles';
+  structure?: string;
   date: string | null;
   canonicalSlug: string;
   brackets: EventOverviewBracket[];
@@ -131,6 +133,8 @@ export async function loadEventOverview(db: Db, slug: string): Promise<EventOver
       id: tournamentParticipants.id,
       tournamentId: tournamentParticipants.tournamentId,
       playerId: tournamentParticipants.playerId,
+      memberPlayerIds: tournamentParticipants.memberPlayerIds,
+      teamName: tournamentParticipants.teamName,
       cleanedName: tournamentParticipants.cleanedName,
       finalRank: tournamentParticipants.finalRank,
       canonicalName: players.canonicalName,
@@ -141,6 +145,7 @@ export async function loadEventOverview(db: Db, slug: string): Promise<EventOver
     .leftJoin(players, eq(tournamentParticipants.playerId, players.id))
     .leftJoin(companies, eq(players.companyId, companies.id))
     .where(inArray(tournamentParticipants.tournamentId, ids));
+  const participantNames = await publicParticipantNames(db, participants);
   const setRows = await db.select().from(sets).where(inArray(sets.tournamentId, ids));
   const warnings: string[] =
     anchorPlanIds.size > 1
@@ -148,7 +153,7 @@ export async function loadEventOverview(db: Db, slug: string): Promise<EventOver
       : [];
   if (eventRows.some((t) => t.syncState !== 'synced'))
     warnings.push('Some brackets have not finished syncing; results may be incomplete.');
-  if (participants.some((p) => !p.playerId))
+  if (participants.some((p) => !p.playerId && !p.memberPlayerIds?.length))
     warnings.push(
       'Unlinked entrants remain separate across brackets until their player identities are resolved.',
     );
@@ -157,11 +162,23 @@ export async function loadEventOverview(db: Db, slug: string): Promise<EventOver
     const conflict = new Set(roles.map((p) => `${p.division}:${p.stage}`)).size > 1;
     if (conflict)
       warnings.push(`${t.name} has conflicting plan links; its results are shown separately.`);
-    const role = conflict ? null : (roles[0] ?? inferEventBracketRole(t.name));
+    const nativeRole = t.raw as {
+      division?: 'upper' | 'lower';
+      stage?: 'main' | 'consolation';
+      structure?: string;
+    } | null;
+    const role = conflict
+      ? null
+      : (roles[0] ??
+        (nativeRole?.division && nativeRole.stage
+          ? { division: nativeRole.division, stage: nativeRole.stage }
+          : inferEventBracketRole(t.name)));
     const ps = participants.filter((p) => p.tournamentId === t.id);
     const byId = new Map(ps.map((p) => [p.id, p]));
     const bracketSets = setRows.filter((s) => s.tournamentId === t.id);
-    const finalSets = bracketSets.filter((s) => s.resultStage === 'final');
+    const finalSets = bracketSets.filter(
+      (s) => nativeRole?.structure === 'round_robin' || s.resultStage === 'final',
+    );
     const finalIds = new Set(
       finalSets
         .flatMap((s) => [s.p1ParticipantId, s.p2ParticipantId])
@@ -250,8 +267,12 @@ export async function loadEventOverview(db: Db, slug: string): Promise<EventOver
       players: ps
         .map((p) => ({
           playerId: p.playerId,
-          entryKey: p.playerId ? `player:${p.playerId}` : `participant:${p.id}`,
-          name: publicParticipantName(p),
+          entryKey: p.memberPlayerIds?.length
+            ? `pair:${JSON.stringify([...p.memberPlayerIds].sort())}`
+            : p.playerId
+              ? `player:${p.playerId}`
+              : `participant:${p.id}`,
+          name: participantNames.get(p.id)!,
           place: places.get(p.id) ?? null,
           placeSource: places.has(p.id) ? placeSource : ('unavailable' as const),
           inFinalStage: finalIds.has(p.id),
@@ -272,10 +293,17 @@ export async function loadEventOverview(db: Db, slug: string): Promise<EventOver
     .filter((division) => brackets.some((b) => b.division === division))
     .map((division) => ({
       division,
-      ...combineDivision(brackets.filter((b) => b.division === division)),
+      ...combineDivision(
+        brackets.filter((b) => b.division === division),
+        (anchor.raw as { structure?: string } | null)?.structure === 'round_robin',
+      ),
     }));
   return {
-    name: eventNameOf(eventRows.map((row) => row.name)),
+    name:
+      (anchor.raw as { eventName?: string } | null)?.eventName ??
+      eventNameOf(eventRows.map((row) => row.name)),
+    competitionFormat: anchor.competitionFormat,
+    structure: (anchor.raw as { structure?: string } | null)?.structure,
     date: anchor.eventDate?.toISOString() ?? null,
     canonicalSlug: eventCanonicalSlug(brackets, slug),
     brackets,
@@ -322,7 +350,10 @@ function deriveSingleEliminationPlaces(
   return out;
 }
 
-function combineDivision(brackets: EventOverviewBracket[]): {
+function combineDivision(
+  brackets: EventOverviewBracket[],
+  roundRobin = false,
+): {
   players: EventOverviewPlayer[];
   notice: string | null;
 } {
@@ -347,7 +378,7 @@ function combineDivision(brackets: EventOverviewBracket[]): {
     ? 'Bracket membership is ambiguous; combined places are withheld. See the individual bracket results.'
     : !canOffset
       ? 'The championship results are incomplete or cannot be ranked; consolation places cannot yet be combined.'
-      : !consolations.length
+      : !consolations.length && !roundRobin
         ? 'No consolation bracket is linked for this division; players outside the championship remain unplaced.'
         : null;
   const out = new Map<string, EventOverviewPlayer>();

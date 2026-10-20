@@ -48,7 +48,13 @@ export const LiveMatch = z.object({
 });
 export const Entrant = z.object({
   id,
+  /** V1 transport name: an entrant key, equal to entry ID for doubles. */
   playerId: id,
+  memberPlayerIds: z.array(id).min(1).max(2).optional(),
+  memberAvailability: z.record(id, z.enum(['available', 'snoozed'])).optional(),
+  teamName: z.string().nullable().optional(),
+  snapshotMean: z.number().nullable().optional(),
+  snapshotSd: z.number().nonnegative().nullable().optional(),
   name: z.string(),
   division: Division,
   seed: revision,
@@ -86,7 +92,9 @@ export const LiveSettings = z.object({
   reportingRevision: revision,
 });
 export const Baseline = z.object({
-  version: z.literal(1),
+  version: z.union([z.literal(1), z.literal(2)]),
+  competitionFormat: z.enum(['singles', 'doubles']).optional(),
+  structure: z.enum(['dual_division', 'pools_finals', 'round_robin']).optional(),
   planId: id,
   name: z.string(),
   eventDate: z.number(),
@@ -95,6 +103,7 @@ export const Baseline = z.object({
   rankingRecomputeId: id.nullable(),
   rankingSnapshotAt: z.number().nullable(),
   ratingContext: z.object({
+    doubles: z.record(z.string(), z.json()).optional(),
     settingsVersion: revision,
     settings: z.record(z.string(), z.json()),
     rankingModel: z.string().nullable(),
@@ -139,7 +148,10 @@ export const Report = z.object({
   createdAt: z.number(),
 });
 export const Result = z.object({
-  version: z.literal(1),
+  version: z.union([z.literal(1), z.literal(2)]),
+  competitionFormat: z.enum(['singles', 'doubles']).optional(),
+  structure: z.enum(['dual_division', 'pools_finals', 'round_robin']).optional(),
+  poolOrders: z.array(z.object({ division: Division, order: z.array(id) })).optional(),
   id,
   planId: id,
   revision,

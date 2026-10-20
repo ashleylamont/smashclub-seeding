@@ -12,7 +12,16 @@ type Match = Pick<
   typeof eventMatches.$inferSelect,
   'id' | 'stage' | 'division' | 'poolIndex' | 'player1Id' | 'player2Id' | 'stationId' | 'status'
 > &
-  Partial<Pick<typeof eventMatches.$inferSelect, 'blockedReason'>>;
+  Partial<Pick<typeof eventMatches.$inferSelect, 'blockedReason'>> & {
+    player1MemberIds?: string[];
+    player2MemberIds?: string[];
+  };
+export const queueMemberIds = (
+  m: Pick<Match, 'player1Id' | 'player2Id' | 'player1MemberIds' | 'player2MemberIds'>,
+) => [
+  ...(m.player1MemberIds ?? (m.player1Id ? [m.player1Id] : [])),
+  ...(m.player2MemberIds ?? (m.player2Id ? [m.player2Id] : [])),
+];
 type Station = Pick<typeof eventStations.$inferSelect, 'id'> &
   Partial<Pick<typeof eventStations.$inferSelect, 'name'>>;
 type Schedule = Pick<
@@ -133,9 +142,7 @@ export function buildStationQueues(
   };
   const used = new Set<string>();
   let previousPlayers = new Set(
-    ordered
-      .filter((m) => m.status === 'playing')
-      .flatMap((m) => [m.player1Id, m.player2Id].filter((id): id is string => Boolean(id))),
+    ordered.filter((m) => m.status === 'playing').flatMap(queueMemberIds),
   );
   for (let wave = 0; wave <= candidates.length; wave++) {
     const busy = new Set(wave === 0 ? previousPlayers : []);
@@ -146,21 +153,19 @@ export function buildStationQueues(
         (m) =>
           !used.has(m.id) &&
           eligible(m, queue.stationId) &&
-          !busy.has(m.player1Id!) &&
-          !busy.has(m.player2Id!),
+          !queueMemberIds(m).some((id) => busy.has(id)),
       );
       choices.sort(
         (a, b) =>
           (roundById.get(a.id) ?? 0) - (roundById.get(b.id) ?? 0) ||
-          Number(previousPlayers.has(a.player1Id!) || previousPlayers.has(a.player2Id!)) -
-            Number(previousPlayers.has(b.player1Id!) || previousPlayers.has(b.player2Id!)) ||
+          Number(queueMemberIds(a).some((id) => previousPlayers.has(id))) -
+            Number(queueMemberIds(b).some((id) => previousPlayers.has(id))) ||
           a.id.localeCompare(b.id),
       );
       const match = choices[0];
       if (!match) continue;
       used.add(match.id);
-      busy.add(match.player1Id!);
-      busy.add(match.player2Id!);
+      for (const id of queueMemberIds(match)) busy.add(id);
       allocated++;
       if (wave === 0) queue.nextMatchId = match.id;
       else queue.upcoming.push({ matchId: match.id, round: roundById.get(match.id) ?? 0 });

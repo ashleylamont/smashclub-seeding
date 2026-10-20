@@ -13,6 +13,17 @@ export function replaceResult(
       state.publication?.resultId === command.resultId,
     'Publish the current sealed revision before replacing it.',
   );
+  if (state.baseline!.structure === 'round_robin') {
+    const order = command.roundRobinOrder;
+    requireFact(
+      order &&
+        order.length === state.entrants.length &&
+        new Set(order).size === order.length &&
+        order.every((id) => state.entrants.some((e) => e.playerId === id)),
+      'Review the full round-robin finishing order with this correction.',
+    );
+    state.pools[0]!.order = [...order];
+  }
   for (const correction of command.corrections) {
     const m = state.matches.find((m) => m.id === correction.matchId);
     requireFact(
@@ -36,6 +47,9 @@ export function replaceResult(
     replacementReason: command.reason,
     sealedAt: envelope.at,
     matches: structuredClone(state.matches),
+    ...(state.baseline!.structure === 'round_robin'
+      ? { poolOrders: state.pools.map((p) => ({ division: p.division, order: p.order! })) }
+      : {}),
   };
   state.publication = null;
 }

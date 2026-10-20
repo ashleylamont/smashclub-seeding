@@ -57,14 +57,16 @@ export async function nativeEvent(
       message: 'An organiser must lock the pools before play.',
     });
   if (!handoff)
-    await ctx.nativeRuntime.lock(
-      ctx.user ?? {
-        id: 'native-migration',
-        name: 'Native migration',
-        role: 'admin',
-        email: 'migration@internal',
-      },
-      planId,
+    await nativeTransport(() =>
+      ctx.nativeRuntime!.lock(
+        ctx.user ?? {
+          id: 'native-migration',
+          name: 'Native migration',
+          role: 'admin',
+          email: 'migration@internal',
+        },
+        planId,
+      ),
     );
   await ctx.nativeRuntime.transfer(planId);
   return new NativeEventApi(ctx, ctx.nativeRuntime, planId, intent);

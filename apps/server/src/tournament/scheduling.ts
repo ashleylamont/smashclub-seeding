@@ -1,3 +1,4 @@
+import { available, matchMemberIds } from './entrants';
 import { buildStationQueues } from '../event-operations/queue';
 import { requireFact, resolved } from './facts';
 import type { CommandEnvelope, TournamentState } from './schemas';
@@ -36,7 +37,7 @@ export function dispatchMatch(
       })),
       next.stations,
       next.pools.map((p) => ({ ...p, poolIndex: p.index })),
-      next.entrants.filter((e) => e.availability !== 'available').map((e) => e.playerId),
+      next.entrants.filter((e) => !available(e)).map((e) => e.playerId),
     );
     requireFact(
       queues.stationQueues.some(
@@ -49,14 +50,14 @@ export function dispatchMatch(
   requireFact(active.length < next.settings.capacity, 'Shared match capacity is full.');
   requireFact(
     !active.some((m) =>
-      [m.player1Id, m.player2Id].some((id) => id === match.player1Id || id === match.player2Id),
+      matchMemberIds(next, m).some((id) => matchMemberIds(next, match).includes(id)),
     ),
     'A player is already playing.',
   );
   requireFact(
     next.entrants
       .filter((e) => e.playerId === match.player1Id || e.playerId === match.player2Id)
-      .every((e) => e.availability === 'available'),
+      .every(available),
     'A player is unavailable.',
   );
   const pool = next.pools.find((p) => p.id === match.poolId);

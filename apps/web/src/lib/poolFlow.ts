@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { LiveMatch } from './eventDisplay';
 
-export type PoolFlowMatch = LiveMatch & { revision: number };
+export type PoolFlowMatch = LiveMatch & {
+  revision: number;
+  player1MemberIds?: string[];
+  player2MemberIds?: string[];
+};
 export type PoolPolicy = {
   division: string;
   poolIndex: number;

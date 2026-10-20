@@ -25,6 +25,10 @@ export function attendancePreview(
       ? open[0]
       : state.pools.find((p) => p.entrantIds.includes(input.playerId));
   const issues: string[] = [];
+  if (state.baseline?.competitionFormat === 'doubles' && input.action === 'add')
+    issues.push(
+      'Doubles pairs are fixed at draw lock. Add or change pairs in the draft before locking.',
+    );
   if (!['locked', 'unlocked'].includes(state.lifecycle))
     issues.push('Attendance changes require an open locked event.');
   if (input.action !== 'withdraw' && state.brackets.length)

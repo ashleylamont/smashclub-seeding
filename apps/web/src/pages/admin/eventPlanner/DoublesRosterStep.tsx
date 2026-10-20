@@ -1,0 +1,255 @@
+import { Checkbox } from '../../../components/ui/Checkbox';
+import { useState } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import {
+  tournamentStructures,
+  recommendedStructure,
+  type TournamentStructure,
+} from '@smashclub/shared';
+import { trpc } from '../../../lib/trpc';
+import type { EventPlanView } from '../../../lib/apiTypes';
+import { Button } from '../../../components/ui/Button';
+import { Input } from '../../../components/ui/Input';
+import { Select, SelectItem } from '../../../components/ui/Select';
+import { PlayerLookupModal } from '../../../components/PlayerLookupModal';
+import { IssueList } from './shared';
+
+export function DoublesRosterStep({
+  view,
+  onChanged,
+}: {
+  view: EventPlanView;
+  onChanged: () => void;
+}) {
+  const [first, setFirst] = useState(''),
+    [second, setSecond] = useState(''),
+    [teamName, setTeamName] = useState('');
+  const [picking, setPicking] = useState<1 | 2 | null>(null);
+  const players = useQuery({
+    queryKey: ['admin', 'players'],
+    queryFn: () => trpc.admin.players.query(),
+  });
+  const name = (id: string) =>
+    players.data?.find((p) => p.id === id)?.canonicalName ?? 'Choose player';
+  const planId = view.plan.id,
+    editable = view.plan.status === 'draft';
+  const add = useMutation({
+    mutationFn: () =>
+      trpc.admin.eventPlanner.addDoublesPair.mutate({
+        planId,
+        playerId: first,
+        partnerPlayerId: second,
+        teamName: teamName.trim() || null,
+      }),
+    onSuccess: () => {
+      setFirst('');
+      setSecond('');
+      setTeamName('');
+      onChanged();
+    },
+  });
+  const remove = useMutation({
+    mutationFn: (entryId: string) =>
+      trpc.admin.eventPlanner.removeEntry.mutate({ planId, entryId }),
+    onSuccess: onChanged,
+  });
+  const pin = useMutation({
+    mutationFn: ({
+      entryId,
+      divisionPreference,
+    }: {
+      entryId: string;
+      divisionPreference: 'auto' | 'upper' | 'lower';
+    }) => trpc.admin.eventPlanner.updateEntry.mutate({ planId, entryId, divisionPreference }),
+    onSuccess: onChanged,
+  });
+  const freeze = useMutation({
+    mutationFn: () => trpc.admin.eventPlanner.freezeRoster.mutate({ planId }),
+    onSuccess: onChanged,
+  });
+  const reopen = useMutation({
+    mutationFn: () => trpc.admin.eventPlanner.unfreezeRoster.mutate({ planId }),
+    onSuccess: onChanged,
+  });
+  const format = useMutation({
+    mutationFn: ({
+      structure,
+      usePairRatings,
+    }: {
+      structure: TournamentStructure;
+      usePairRatings?: boolean;
+    }) => trpc.admin.eventPlanner.updateNativeFormat.mutate({ planId, structure, usePairRatings }),
+    onSuccess: onChanged,
+  });
+  const errors = [add, remove, pin, freeze, reopen, format].filter((m) => m.isError);
+  return (
+    <section className="card section">
+      <h3>
+        Doubles roster · {view.entries.length} teams / {view.entries.length * 2} players
+      </h3>
+      <p>
+        Each person can enter once. Pairs are fixed when the pool draw is locked. A missing partner
+        holds the pair until they return or a TO records a withdrawal.
+      </p>
+      {editable && (
+        <>
+          <label className="form-field">
+            <span className="form-label">Tournament structure</span>
+            <Select
+              value={view.plan.structure ?? 'dual_division'}
+              onValueChange={(value) => format.mutate({ structure: value as TournamentStructure })}
+            >
+              {tournamentStructures.map((s) => (
+                <SelectItem key={s.value} value={s.value}>
+                  {s.label}
+                </SelectItem>
+              ))}
+            </Select>
+          </label>
+          <p className="muted">
+            {tournamentStructures.find((s) => s.value === view.plan.structure)?.description}{' '}
+            Recommended for this roster:{' '}
+            {
+              tournamentStructures.find(
+                (s) => s.value === recommendedStructure(view.entries.length),
+              )?.label
+            }
+            .
+          </p>
+          {view.plan.structure === 'dual_division' && (
+            <p className="muted">
+              Teams split evenly between Upper and Lower; review and reorder the frozen seeds before
+              generating pools.
+            </p>
+          )}
+          <label>
+            <Checkbox
+              checked={view.plan.usePairRatings ?? false}
+              onCheckedChange={(checked) =>
+                format.mutate({
+                  structure: view.plan.structure ?? 'dual_division',
+                  usePairRatings: checked,
+                })
+              }
+            />{' '}
+            Include experimental WHR pair adjustments in seeds
+          </label>
+          <p className="muted">
+            Default seeds use average player skill with team uncertainty. Pair adjustments learn
+            only from earlier finalized doubles nights and start at zero for new pairs.
+          </p>
+          <div className="admin-form-row">
+            <Button onClick={() => setPicking(1)}>
+              {first ? name(first) : 'Choose first player'}
+            </Button>
+            <Button onClick={() => setPicking(2)}>
+              {second ? name(second) : 'Choose partner'}
+            </Button>
+            <Input
+              aria-label="Team name"
+              placeholder="Team name (optional)"
+              value={teamName}
+              onChange={(e) => setTeamName(e.target.value)}
+              maxLength={60}
+            />
+            <Button
+              disabled={!first || !second || first === second || add.isPending}
+              onClick={() => add.mutate()}
+            >
+              Add pair
+            </Button>
+          </div>
+        </>
+      )}
+      {picking && (
+        <PlayerLookupModal
+          title={picking === 1 ? 'Choose first player' : 'Choose partner'}
+          onCancel={() => setPicking(null)}
+          onPick={(id) => {
+            if (picking === 1) setFirst(id);
+            else setSecond(id);
+            setPicking(null);
+          }}
+        />
+      )}
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Pair</th>
+              <th>Skill ± SD</th>
+              <th>Seeding score</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {view.entries.map((e) => (
+              <tr key={e.id}>
+                <td>
+                  {e.playerName}
+                  {e.teamName && <> · {e.teamName}</>}
+                  {editable && view.plan.structure === 'dual_division' && (
+                    <Select
+                      aria-label={`Division preference for ${e.playerName}`}
+                      value={e.divisionPreference}
+                      onValueChange={(value) =>
+                        pin.mutate({
+                          entryId: e.id,
+                          divisionPreference: value as 'auto' | 'upper' | 'lower',
+                        })
+                      }
+                    >
+                      <SelectItem value="auto">Automatic division</SelectItem>
+                      <SelectItem value="upper">Pin to Upper</SelectItem>
+                      <SelectItem value="lower">Pin to Lower</SelectItem>
+                    </Select>
+                  )}
+                </td>
+                <td>
+                  {Math.round(e.snapshotMean ?? e.currentMean ?? 1500)} ±{' '}
+                  {Math.round(e.snapshotSd ?? e.currentSd ?? 0)}
+                </td>
+                <td>{Math.round(e.snapshotScore ?? e.currentScore ?? 0)}</td>
+                <td>
+                  {editable && (
+                    <Button
+                      size="small"
+                      disabled={remove.isPending}
+                      onClick={() => remove.mutate(e.id)}
+                    >
+                      Remove pair
+                    </Button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {editable && (
+        <>
+          <IssueList issues={view.issues.blocking} kind="blocking" />
+          <Button
+            variant="primary"
+            disabled={Boolean(view.issues.blocking.length) || freeze.isPending || format.isPending}
+            onClick={() => freeze.mutate()}
+          >
+            Freeze team seeds
+          </Button>
+        </>
+      )}
+      {!editable &&
+        !view.plan.softLockedAt &&
+        ['roster_frozen', 'pools_ready'].includes(view.plan.status) && (
+          <Button disabled={reopen.isPending} onClick={() => reopen.mutate()}>
+            Reopen roster
+          </Button>
+        )}
+      {errors.map((m, i) => (
+        <p key={i} role="alert" className="error-text">
+          {m.error?.message}
+        </p>
+      ))}
+    </section>
+  );
+}

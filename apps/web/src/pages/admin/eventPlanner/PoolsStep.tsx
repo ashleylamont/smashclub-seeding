@@ -22,8 +22,9 @@ export function PoolsStep({ view, onChanged }: { view: EventPlanView; onChanged:
       <div className="page-header">
         <h3>Pools</h3>
         <span className="muted">
-          Balanced pools of three to five players, striped across seed order. The upper half,
-          rounded up, advances; everyone else enters consolation.
+          {view.plan.structure === 'round_robin'
+            ? 'Every entrant plays every other entrant. Confirm the finishing order after resolving ties, then finalize the event.'
+            : `Balanced pools of three to five ${view.plan.competitionFormat === 'doubles' ? 'teams' : 'players'}, striped across seed order. The upper half, rounded up, advances; everyone else enters consolation.`}
         </span>
       </div>
       {view.divisions.map((division) => (
@@ -31,6 +32,8 @@ export function PoolsStep({ view, onChanged }: { view: EventPlanView; onChanged:
           key={division.division}
           planId={view.plan.id}
           division={division}
+          open={Boolean(view.plan.structure && view.plan.structure !== 'dual_division')}
+          roundRobin={view.plan.structure === 'round_robin'}
           locked={
             !['pools_ready', 'underway'].includes(view.plan.status) ||
             view.brackets.some(
@@ -51,8 +54,12 @@ function DivisionPools({
   planId,
   division,
   locked,
+  open,
+  roundRobin,
   onChanged,
 }: {
+  open?: boolean;
+  roundRobin?: boolean;
   planId: string;
   division: EventPlanDivision;
   locked: boolean;
@@ -61,7 +68,7 @@ function DivisionPools({
   if (division.pools.length === 0) {
     return (
       <div className="card section">
-        <h4>{DIVISION_LABEL[division.division]}</h4>
+        <h4>{open ? 'Open' : DIVISION_LABEL[division.division]}</h4>
         <p className="muted">No pools yet — freeze the roster and generate pools first.</p>
       </div>
     );
@@ -71,7 +78,7 @@ function DivisionPools({
     <div className="card section">
       <div className="page-header">
         <h4>
-          {DIVISION_LABEL[division.division]}{' '}
+          {open ? 'Open' : DIVISION_LABEL[division.division]}{' '}
           <span className="muted">
             {division.poolCount} pools · sizes{' '}
             {division.pools.map((pool) => pool.members.length).join(' / ')}
@@ -116,37 +123,39 @@ function DivisionPools({
         ))}
       </div>
 
-      {division.consolation ? (
-        <div className="consolation-preview">
-          <h5>Consolation draw</h5>
-          <ol className="consolation-list">
-            {division.consolation.roundOne.map((pair, index) => (
-              <li key={index}>
-                <span className="chip">{pair.a.label}</span> {nameOf(division, pair.a.playerId)}
-                {pair.b ? (
-                  <>
-                    {' v '}
-                    <span className="chip">{pair.b.label}</span> {nameOf(division, pair.b.playerId)}
-                  </>
-                ) : (
-                  <span className="muted"> — bye</span>
-                )}
-              </li>
-            ))}
-          </ol>
-          {division.consolation.rematches.length > 0 && (
-            <p className="error-text">
-              Pool rematch in round one — review the draw before creating consolation.
-            </p>
-          )}
-        </div>
-      ) : (
-        <p className="muted">
-          {division.pools.every((pool) => pool.members.every((member) => member.place !== null))
-            ? 'No active entrants are eligible for consolation.'
-            : 'Confirm every pool’s finishing order to generate the consolation draw and its import list.'}
-        </p>
-      )}
+      {!roundRobin &&
+        (division.consolation ? (
+          <div className="consolation-preview">
+            <h5>Consolation draw</h5>
+            <ol className="consolation-list">
+              {division.consolation.roundOne.map((pair, index) => (
+                <li key={index}>
+                  <span className="chip">{pair.a.label}</span> {nameOf(division, pair.a.playerId)}
+                  {pair.b ? (
+                    <>
+                      {' v '}
+                      <span className="chip">{pair.b.label}</span>{' '}
+                      {nameOf(division, pair.b.playerId)}
+                    </>
+                  ) : (
+                    <span className="muted"> — bye</span>
+                  )}
+                </li>
+              ))}
+            </ol>
+            {division.consolation.rematches.length > 0 && (
+              <p className="error-text">
+                Pool rematch in round one — review the draw before creating consolation.
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="muted">
+            {division.pools.every((pool) => pool.members.every((member) => member.place !== null))
+              ? 'No active entrants are eligible for consolation.'
+              : 'Confirm every pool’s finishing order to generate the consolation draw and its import list.'}
+          </p>
+        ))}
     </div>
   );
 }

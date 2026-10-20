@@ -169,6 +169,13 @@
       "when": 1791187079516,
       "tag": "0023_native_live_handoffs",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792467183815,
+      "tag": "0024_native_doubles",
+      "breakpoints": true
     }
   ]
 }

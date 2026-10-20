@@ -1,3 +1,4 @@
+import { memberIds } from './entrants';
 import { asc, eq } from 'drizzle-orm';
 import {
   companies,
@@ -101,25 +102,27 @@ export async function nativeRoster(api: NativeEventApi) {
   return {
     attendees: state.entrants
       .filter((e) => e.availability !== 'withdrawn')
-      .flatMap((e) => {
-        const p = profile.find((p) => p.id === e.playerId);
-        if (!p || p.status !== 'active') return [];
-        const company = companyOptions.find((c) => c.id === p.companyId);
-        return [
-          {
-            entryId: e.id,
-            playerId: e.playerId,
-            rawInput: e.name,
-            cleanedName: e.name,
-            division: e.division,
-            canonicalName: p.canonicalName,
-            displayName: p.displayName,
-            companyCode: company?.code ?? null,
-            companyName: company?.name ?? null,
-            publicAlias: publicPlayerName(p),
-          },
-        ];
-      }),
+      .flatMap((e) =>
+        memberIds(e).flatMap((memberId) => {
+          const p = profile.find((p) => p.id === memberId);
+          if (!p || p.status !== 'active') return [];
+          const company = companyOptions.find((c) => c.id === p.companyId);
+          return [
+            {
+              entryId: e.id,
+              playerId: memberId,
+              rawInput: e.name,
+              cleanedName: e.name,
+              division: e.division,
+              canonicalName: p.canonicalName,
+              displayName: p.displayName,
+              companyCode: company?.code ?? null,
+              companyName: company?.name ?? null,
+              publicAlias: publicPlayerName(p),
+            },
+          ];
+        }),
+      ),
     companies: companyOptions.map((c) => ({ code: c.code, name: c.name })),
   };
 }

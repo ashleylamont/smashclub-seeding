@@ -77,7 +77,7 @@ export interface LoadedRecap extends Omit<RecapResult, 'tournaments' | 'facts' |
 
 export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | null> {
   const [anchor] = await db.select().from(tournaments).where(eq(tournaments.challongeSlug, slug));
-  if (!anchor) return null;
+  if (!anchor || anchor.competitionFormat === 'doubles') return null;
 
   /*
    * Explicit plan membership owns the event identity. Historical unlinked
@@ -86,6 +86,7 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
   const allDated = await db
     .select({
       id: tournaments.id,
+      competitionFormat: tournaments.competitionFormat,
       name: tournaments.name,
       slug: tournaments.challongeSlug,
       eventDate: tournaments.eventDate,
@@ -96,7 +97,7 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
       raw: tournaments.raw,
     })
     .from(tournaments)
-    .where(isNotNull(tournaments.eventDate))
+    .where(and(isNotNull(tournaments.eventDate), eq(tournaments.competitionFormat, 'singles')))
     .orderBy(asc(tournaments.eventDate));
 
   const anchorKey = anchor.eventDate ? eventKeyOf(anchor.eventDate.toISOString()) : null;

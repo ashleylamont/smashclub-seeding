@@ -16,6 +16,25 @@ const item = (id: string, overrides: Partial<TournamentListItem> = {}): Tourname
 });
 
 describe('groupTournamentsByEvent', () => {
+  it('separates singles, doubles, and distinct native plans sharing one date', () => {
+    const groups = groupTournamentsByEvent(
+      [
+        item('singles'),
+        item('doubles', { competitionFormat: 'doubles' }),
+        item('native-a', {
+          competitionFormat: 'doubles',
+          nativeEventId: 'a',
+          nativeEventName: 'A',
+        }),
+        item('native-a-finals', { competitionFormat: 'doubles', nativeEventId: 'a' }),
+        item('native-b', { competitionFormat: 'doubles', nativeEventId: 'b' }),
+      ],
+      Date.parse('2026-09-05'),
+    );
+    expect(groups).toHaveLength(4);
+    expect(groups.find((g) => g.key === 'native:a')?.items).toHaveLength(2);
+    expect(groups.find((g) => g.key === 'native:a')?.title).toBe('A');
+  });
   it('groups same-date brackets and makes any live bracket make the event live', () => {
     const groups = groupTournamentsByEvent(
       [

@@ -1,3 +1,4 @@
+import { addDoublesPair, updateNativeFormat } from '../../event-planner/nativePlanner';
 import { nativePlanList } from '../../tournament/queries';
 import { nativeEvent } from '../../tournament/api';
 import {
@@ -67,6 +68,33 @@ async function guard<T>(run: () => Promise<T>): Promise<T> {
 }
 
 export const eventPlannerRouter = router({
+  addDoublesPair: adminProcedure
+    .input(
+      z.object({
+        planId: z.uuid(),
+        playerId: z.uuid(),
+        partnerPlayerId: z.uuid(),
+        teamName: z.string().trim().max(60).nullable().default(null),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await guard(() => addDoublesPair(ctx.db, input));
+      return { ok: true };
+    }),
+  updateNativeFormat: adminProcedure
+    .input(
+      z.object({
+        planId: z.uuid(),
+        structure: z.enum(['dual_division', 'pools_finals', 'round_robin']),
+        usePairRatings: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await guard(() =>
+        updateNativeFormat(ctx.db, input.planId, input.structure, input.usePairRatings),
+      );
+      return { ok: true };
+    }),
   historicalCandidates: adminProcedure
     .input(z.object({ planId: z.uuid() }))
     .query(({ ctx, input }) => historicalCandidates(ctx.db, input.planId)),
@@ -92,6 +120,11 @@ export const eventPlannerRouter = router({
     .input(
       z.object({
         bracketMode: z.enum(['native', 'challonge']).default('native'),
+        competitionFormat: z.enum(['singles', 'doubles']).default('singles'),
+        structure: z
+          .enum(['dual_division', 'pools_finals', 'round_robin'])
+          .default('dual_division'),
+        usePairRatings: z.boolean().default(false),
         name: z.string().trim().min(1).max(120),
         eventDate: z.iso.datetime(),
         slugPrefix: z.string().trim().max(60).nullable().default(null),
@@ -99,6 +132,8 @@ export const eventPlannerRouter = router({
         rows: z
           .array(
             z.object({
+              partnerPlayerId: z.uuid().nullable().optional(),
+              teamName: z.string().trim().max(60).nullable().optional(),
               lineNumber: z.number().int().nonnegative(),
               rawInput: z.string().max(500),
               cleanedName: z.string().max(200),
@@ -165,6 +200,8 @@ export const eventPlannerRouter = router({
         planId: z.uuid(),
         entryId: z.uuid(),
         playerId: z.uuid().nullable().optional(),
+        partnerPlayerId: z.uuid().nullable().optional(),
+        teamName: z.string().trim().max(60).nullable().optional(),
         divisionPreference: preferenceSchema.optional(),
         /** `new` records that the player was minted for this row. */
         resolutionMethod: z.enum(['manual', 'new']).optional(),

@@ -14,7 +14,9 @@ export type FinderData = Pick<
 >;
 export type FinderMatch = FinderData['matches'][number];
 const includesPlayer = (match: FinderMatch, playerId: string) =>
-  match.player1Id === playerId || match.player2Id === playerId;
+  match.player1Id === playerId ||
+  match.player2Id === playerId ||
+  Boolean(match.player1MemberIds?.includes(playerId) || match.player2MemberIds?.includes(playerId));
 export const finderPoolKey = (match: FinderMatch) =>
   match.stage === 'group' && match.poolIndex !== null
     ? `${match.division}:${match.poolIndex}`

@@ -1,4 +1,4 @@
-import { and, inArray, isNotNull, lt } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, lt } from 'drizzle-orm';
 import { players, sets, tournamentParticipants, tournaments, type Db } from '@smashclub/db';
 import {
   breakthroughEvidence,
@@ -21,7 +21,13 @@ export async function loadBreakthrough(db: Db, eventKey: string) {
   const brackets = await db
     .select()
     .from(tournaments)
-    .where(and(isNotNull(tournaments.eventDate), lt(tournaments.eventDate, nextDay)));
+    .where(
+      and(
+        eq(tournaments.competitionFormat, 'singles'),
+        isNotNull(tournaments.eventDate),
+        lt(tournaments.eventDate, nextDay),
+      ),
+    );
   const night = brackets.filter((t) => eventKeyOf(t.eventDate!.toISOString()) === eventKey);
   if (!night.length) return null;
   const nightIds = new Set(night.map((t) => t.id));

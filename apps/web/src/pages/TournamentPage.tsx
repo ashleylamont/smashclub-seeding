@@ -114,9 +114,11 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
         </span>
         {/* The recap covers the whole evening, so it is worth reaching for
             while a bracket is still running as well as after it finishes. */}
-        <Link to="/recaps/$slug" params={{ slug: data.slug }} className="tournament-recap-link">
-          {isComplete ? 'The night in review →' : 'Recap so far →'}
-        </Link>
+        {data.competitionFormat !== 'doubles' && (
+          <Link to="/recaps/$slug" params={{ slug: data.slug }} className="tournament-recap-link">
+            {isComplete ? 'The night in review →' : 'Recap so far →'}
+          </Link>
+        )}
         <Link to="/events/$slug" params={{ slug: data.slug }} className="tournament-recap-link">
           Event results →
         </Link>

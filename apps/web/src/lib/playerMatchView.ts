@@ -1,7 +1,13 @@
 import { matchesPool, type PoolFlowData, type PoolFlowMatch } from './poolFlow';
 
 export function includesPlayer(match: PoolFlowMatch, playerId: string) {
-  return match.player1Id === playerId || match.player2Id === playerId;
+  return (
+    match.player1Id === playerId ||
+    match.player2Id === playerId ||
+    Boolean(
+      match.player1MemberIds?.includes(playerId) || match.player2MemberIds?.includes(playerId),
+    )
+  );
 }
 
 export function matchStation(data: PoolFlowData, match: PoolFlowMatch) {

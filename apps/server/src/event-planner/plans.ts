@@ -1,3 +1,21 @@
+import {
+  EventPlanStateError,
+  BRACKET_SLOTS,
+  type PlanView,
+  type PlanEntryView,
+  type PoolView,
+  type DivisionView,
+  type PlanStatus,
+  type BracketStage,
+} from './contracts';
+import { planIssues } from './validation';
+import {
+  extendedNativePlan,
+  getExtendedNativePlan,
+  freezeExtendedNativePlan,
+  validateDraftMembers,
+} from './nativePlanner';
+import type { CompetitionFormat, TournamentStructure } from '@smashclub/shared';
 import { createHash } from 'node:crypto';
 import { and, asc, eq, inArray, or, sql } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
@@ -22,11 +40,9 @@ import { resolvePlayerInputs } from '../identity/resolver';
 import type { ReviewCandidateSnapshot } from '../identity/candidates';
 import {
   assignDivisions,
-  validateDivisionInput,
   type Division,
   type DivisionCandidate,
   type DivisionPreference,
-  type PlanIssue,
   EventPlanValidationError,
 } from './divisions';
 import { poolLabel, stripeIntoPools } from './pools';
@@ -34,9 +50,19 @@ import {
   buildConsolationBracket,
   championshipQualifiers,
   consolationQualifiers,
-  type ConsolationBracket,
 } from './advancement';
 import { parseRosterText, resolveRoster, type RosterResolution } from './roster';
+
+export { EventPlanStateError, BRACKET_SLOTS } from './contracts';
+export type {
+  PlanView,
+  PlanEntryView,
+  PoolView,
+  DivisionView,
+  PlanStatus,
+  BracketStage,
+} from './contracts';
+export { planIssues } from './validation';
 
 /**
  * Event-plan persistence: the durable half of the planner.
@@ -47,25 +73,6 @@ import { parseRosterText, resolveRoster, type RosterResolution } from './roster'
  * a later recompute moving somebody's rank must not silently move them between
  * divisions on the night.
  */
-
-export type PlanStatus =
-  'draft' | 'roster_frozen' | 'pools_ready' | 'underway' | 'complete' | 'cancelled';
-export type BracketStage = 'main' | 'consolation';
-
-/** The four brackets a two-division club night needs, in handoff order. */
-export const BRACKET_SLOTS: readonly { division: Division; stage: BracketStage }[] = [
-  { division: 'upper', stage: 'main' },
-  { division: 'upper', stage: 'consolation' },
-  { division: 'lower', stage: 'main' },
-  { division: 'lower', stage: 'consolation' },
-];
-
-export class EventPlanStateError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'EventPlanStateError';
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Reading
@@ -99,98 +106,10 @@ export async function previewRoster(db: Db, text: string): Promise<RosterResolut
   return resolveRoster(db, parseRosterText(text), ranking);
 }
 
-export interface PlanEntryView {
-  id: string;
-  sourceLineNumber: number;
-  rawInput: string;
-  cleanedName: string;
-  companyCode: string | null;
-  playerId: string | null;
-  /** Registry name — an admin surface, so shown in full. */
-  playerName: string | null;
-  withdrawn?: boolean;
-  /** What the export and every public surface will call them. */
-  publicName: string | null;
-  playerStatus: string | null;
-  resolutionMethod: string;
-  divisionPreference: DivisionPreference;
-  assignedDivision: Division | null;
-  snapshotRank: number | null;
-  snapshotScore: number | null;
-  divisionSeed: number | null;
-  /** Where they stand on the board *now*, which a frozen plan may disagree with. */
-  currentRank: number | null;
-  currentScore: number | null;
-  lastPlayedDate: string | null;
-  /** Ranked suggestions for an unresolved row. Never auto-selected. */
-  candidates: ReviewCandidateSnapshot[];
-}
-
-export interface PoolView {
-  poolIndex: number;
-  label: string;
-  matchRevisions?: { id: string; revision: number }[];
-  placementRevision?: string;
-  members: {
-    entryId: string;
-    playerId: string;
-    name: string;
-    seed: number;
-    snapshotRank: number | null;
-    /** Confirmed finish, once the worksheet has been filled in. */
-    place: number | null;
-    withdrawn?: boolean;
-  }[];
-}
-
-export interface DivisionView {
-  division: Division;
-  size: number;
-  poolCount: number;
-  pools: PoolView[];
-  /** Null until every pool in the division has a confirmed 1-4. */
-  consolation: ConsolationBracket | null;
-  championship: { playerId: string; name: string; label: string }[];
-}
-
-export interface PlanView {
-  plan: {
-    id: string;
-    name: string;
-    eventDate: string;
-    slugPrefix: string | null;
-    status: PlanStatus;
-    softLockedAt: string | null;
-    softLockedBy: string | null;
-    bracketMode: 'native' | 'challonge';
-    historicalAdoption: typeof eventPlans.$inferSelect.historicalAdoption;
-    upperTargetSize: number | null;
-    poolSize: number;
-    rankingSnapshotAt: string | null;
-    createdAt: string;
-  };
-  entries: PlanEntryView[];
-  divisions: DivisionView[];
-  brackets: {
-    id: string;
-    division: Division;
-    stage: BracketStage;
-    challongeSlug: string | null;
-    tournamentId: string | null;
-    externalState: string;
-    lastError: string | null;
-    /** The tournament row's event date, so a mismatch is visible not implied. */
-    tournamentEventDate: string | null;
-    tournamentSyncState: string | null;
-    tournamentIsRookie: boolean | null;
-    suggestedSlug: string;
-  }[];
-  issues: { blocking: PlanIssue[]; warnings: PlanIssue[] };
-}
-
 export async function getPlan(db: Db, planId: string): Promise<PlanView | null> {
   const [plan] = await db.select().from(eventPlans).where(eq(eventPlans.id, planId));
   if (!plan) return null;
+  if (extendedNativePlan(plan)) return getExtendedNativePlan(db, plan);
 
   const rows = await db
     .select({
@@ -469,85 +388,6 @@ function buildDivisionViews(
 }
 
 /** Everything blocking a freeze, plus the things worth a second look. */
-export function planIssues(
-  entries: readonly PlanEntryView[],
-  upperTargetSize: number | null,
-  poolSize: number,
-): { blocking: PlanIssue[]; warnings: PlanIssue[] } {
-  const blocking: PlanIssue[] = [];
-  const warnings: PlanIssue[] = [];
-
-  const unresolved = entries.filter((entry) => entry.playerId === null);
-  if (unresolved.length > 0) {
-    blocking.push({
-      code: 'unresolved_rows',
-      message: `${unresolved.length} row(s) are not matched to a player yet.`,
-      entryIds: unresolved.map((entry) => entry.id),
-    });
-  }
-
-  const candidates: DivisionCandidate[] = entries
-    .filter((entry) => entry.playerId !== null)
-    .map((entry) => ({
-      entryId: entry.id,
-      playerId: entry.playerId!,
-      divisionPreference: entry.divisionPreference,
-      snapshotRank: entry.snapshotRank ?? entry.currentRank,
-      sourceLineNumber: entry.sourceLineNumber,
-    }));
-  blocking.push(...validateDivisionInput(candidates, { upperTargetSize, poolSize }));
-
-  // Two lines that cleaned to the same name but landed on different people is
-  // usually a mis-correction, and is exactly the mistake that produces a bracket
-  // with somebody's twin in it.
-  const byCleanedName = new Map<string, PlanEntryView[]>();
-  for (const entry of entries) {
-    const key = entry.cleanedName.toLowerCase();
-    byCleanedName.set(key, [...(byCleanedName.get(key) ?? []), entry]);
-  }
-  for (const [name, group] of byCleanedName) {
-    const distinct = new Set(group.map((entry) => entry.playerId));
-    if (group.length > 1 && distinct.size > 1) {
-      warnings.push({
-        code: 'same_name_different_players',
-        message: `“${name}” appears on ${group.length} rows resolved to different players.`,
-        entryIds: group.map((entry) => entry.id),
-      });
-    }
-  }
-
-  const structured = entries.filter((entry) => entry.resolutionMethod === 'structured');
-  if (structured.length > 0) {
-    warnings.push({
-      code: 'structured_unconfirmed',
-      message:
-        `${structured.length} row(s) matched on a short form (“Josh C”) rather than an exact name. ` +
-        'Worth a glance before freezing.',
-      entryIds: structured.map((entry) => entry.id),
-    });
-  }
-
-  const inactive = entries.filter((entry) => entry.playerStatus === 'merged');
-  if (inactive.length > 0) {
-    warnings.push({
-      code: 'merged_player',
-      message: `${inactive.length} row(s) point at a player that has been merged into another.`,
-      entryIds: inactive.map((entry) => entry.id),
-    });
-  }
-
-  const unrated = entries.filter((entry) => entry.playerId !== null && entry.currentRank === null);
-  if (unrated.length > 0) {
-    warnings.push({
-      code: 'unrated_player',
-      message: `${unrated.length} entrant(s) have no rating yet and will seed at the bottom of their division.`,
-      entryIds: unrated.map((entry) => entry.id),
-    });
-  }
-
-  return { blocking, warnings };
-}
-
 async function loadLastPlayed(db: Db, playerIds: readonly string[]): Promise<Map<string, string>> {
   if (playerIds.length === 0) return new Map();
   const recomputeId = await latestRecomputeId(db);
@@ -570,11 +410,16 @@ async function loadLastPlayed(db: Db, playerIds: readonly string[]): Promise<Map
 
 export interface CreatePlanInput {
   bracketMode?: 'native' | 'challonge';
+  competitionFormat?: CompetitionFormat;
+  structure?: TournamentStructure;
+  usePairRatings?: boolean;
   name: string;
   eventDate: Date;
   slugPrefix?: string | null;
   upperTargetSize?: number | null;
   rows: {
+    partnerPlayerId?: string | null;
+    teamName?: string | null;
     lineNumber: number;
     rawInput: string;
     cleanedName: string;
@@ -590,12 +435,21 @@ export async function createPlan(
   input: CreatePlanInput,
   createdBy: string | null,
 ): Promise<string> {
+  if (
+    (input.bracketMode ?? 'native') !== 'native' &&
+    (input.competitionFormat === 'doubles' ||
+      (input.structure && input.structure !== 'dual_division'))
+  )
+    throw new EventPlanStateError('Doubles and open formats require Nemesis.');
   return db.transaction(async (tx) => {
     const [plan] = await tx
       .insert(eventPlans)
       .values({
         name: input.name,
         bracketMode: input.bracketMode ?? 'native',
+        competitionFormat: input.competitionFormat ?? 'singles',
+        structure: input.structure ?? 'dual_division',
+        usePairRatings: input.usePairRatings ?? false,
         eventDate: input.eventDate,
         slugPrefix: input.slugPrefix ?? null,
         upperTargetSize: input.upperTargetSize ?? null,
@@ -612,6 +466,8 @@ export async function createPlan(
           cleanedName: row.cleanedName,
           companyId: row.companyId,
           playerId: row.playerId,
+          partnerPlayerId: row.partnerPlayerId ?? null,
+          teamName: row.teamName ?? null,
           resolutionMethod: row.resolutionMethod,
           divisionPreference: row.divisionPreference,
         })),
@@ -622,6 +478,11 @@ export async function createPlan(
     await tx
       .insert(eventPlanBrackets)
       .values(BRACKET_SLOTS.map((slot) => ({ eventPlanId: planId, ...slot })));
+    if (
+      input.competitionFormat === 'doubles' ||
+      (input.structure && input.structure !== 'dual_division')
+    )
+      await validateDraftMembers(tx, planId);
     return planId;
   });
 }
@@ -747,6 +608,8 @@ export async function updateEntry(
   entryId: string,
   patch: {
     playerId?: string | null;
+    partnerPlayerId?: string | null;
+    teamName?: string | null;
     divisionPreference?: DivisionPreference;
     /** How the player was chosen; only meaningful alongside `playerId`. */
     resolutionMethod?: 'manual' | 'new';
@@ -774,30 +637,48 @@ export async function updateEntry(
     }
   }
 
-  await db
-    .update(eventPlanEntries)
-    .set({
-      ...(patch.playerId !== undefined
-        ? {
-            playerId: patch.playerId,
-            resolutionMethod:
-              patch.playerId === null ? 'unresolved' : (patch.resolutionMethod ?? 'manual'),
-          }
-        : {}),
-      ...(patch.divisionPreference !== undefined
-        ? { divisionPreference: patch.divisionPreference }
-        : {}),
-      updatedAt: new Date(),
-    })
-    .where(and(eq(eventPlanEntries.eventPlanId, planId), eq(eventPlanEntries.id, entryId)));
+  await db.transaction(async (tx) => {
+    const [lockedPlan] = await tx
+      .select()
+      .from(eventPlans)
+      .where(eq(eventPlans.id, planId))
+      .for('update');
+    assertStatus(lockedPlan!.status, ['draft'], 'edit a roster row');
+    await tx
+      .update(eventPlanEntries)
+      .set({
+        ...(patch.partnerPlayerId !== undefined ? { partnerPlayerId: patch.partnerPlayerId } : {}),
+        ...(patch.teamName !== undefined ? { teamName: patch.teamName } : {}),
+        ...(patch.playerId !== undefined
+          ? {
+              playerId: patch.playerId,
+              resolutionMethod:
+                patch.playerId === null ? 'unresolved' : (patch.resolutionMethod ?? 'manual'),
+            }
+          : {}),
+        ...(patch.divisionPreference !== undefined
+          ? { divisionPreference: patch.divisionPreference }
+          : {}),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(eventPlanEntries.eventPlanId, planId), eq(eventPlanEntries.id, entryId)));
+    await validateDraftMembers(tx, planId);
+  });
 }
 
 export async function removeEntry(db: Db, planId: string, entryId: string): Promise<void> {
-  const plan = await loadPlanRow(db, planId);
-  assertStatus(plan.status, ['draft'], 'remove a roster row');
-  await db
-    .delete(eventPlanEntries)
-    .where(and(eq(eventPlanEntries.eventPlanId, planId), eq(eventPlanEntries.id, entryId)));
+  await db.transaction(async (tx) => {
+    const [plan] = await tx
+      .select()
+      .from(eventPlans)
+      .where(eq(eventPlans.id, planId))
+      .for('update');
+    if (!plan) throw new EventPlanStateError('That event plan no longer exists.');
+    assertStatus(plan.status, ['draft'], 'remove a roster row');
+    await tx
+      .delete(eventPlanEntries)
+      .where(and(eq(eventPlanEntries.eventPlanId, planId), eq(eventPlanEntries.id, entryId)));
+  });
 }
 
 /**
@@ -811,6 +692,7 @@ export async function removeEntry(db: Db, planId: string, entryId: string): Prom
 export async function freezeRoster(db: Db, planId: string): Promise<void> {
   const plan = await loadPlanRow(db, planId);
   assertStatus(plan.status, ['draft'], 'freeze the roster');
+  if (extendedNativePlan(plan)) return freezeExtendedNativePlan(db, planId);
 
   const view = await getPlan(db, planId);
   if (!view) throw new EventPlanStateError('That event plan no longer exists.');
@@ -883,13 +765,21 @@ async function unfreezeRosterUnlocked(db: Db, planId: string): Promise<void> {
         divisionSeed: null,
         snapshotRank: null,
         snapshotScore: null,
+        snapshotMean: null,
+        snapshotSd: null,
         updatedAt: now,
       })
       .where(eq(eventPlanEntries.eventPlanId, planId));
     await tx.delete(eventPlanPoolPlacements).where(eq(eventPlanPoolPlacements.eventPlanId, planId));
     await tx
       .update(eventPlans)
-      .set({ status: 'draft', rankingSnapshotAt: null, rankingRecomputeId: null, updatedAt: now })
+      .set({
+        status: 'draft',
+        rankingSnapshotAt: null,
+        rankingRecomputeId: null,
+        nativeSeedContext: null,
+        updatedAt: now,
+      })
       .where(eq(eventPlans.id, planId));
   });
 }

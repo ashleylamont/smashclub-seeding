@@ -1,3 +1,5 @@
+import { memberIds } from '../tournament/entrants';
+import { extendedNativePlan } from '../event-planner/nativePlanner';
 import { nativeEvent, nativeEntity, reportViews } from '../tournament/api';
 import { nativeOverview, nativePublicEvents, nativeRoster } from '../tournament/queries';
 import { publicEventNights } from './publicEvents';
@@ -83,7 +85,7 @@ export const eventOpsRouter = router({
         api
           ? (await api.state()).entrants
               .filter((e) => e.availability !== 'withdrawn')
-              .map((e) => e.playerId)
+              .flatMap(memberIds)
           : undefined,
       );
     }),
@@ -297,7 +299,13 @@ export const eventOpsRouter = router({
   }),
   prepare: authedProcedure.input(planInput).mutation(async ({ ctx, input }) => {
     await requireOperator(ctx.db, input.planId, ctx.user);
-    const api = await nativeEvent(ctx, input.planId, false, input);
+    const [plan] = await ctx.db.select().from(eventPlans).where(eq(eventPlans.id, input.planId));
+    const api = await nativeEvent(
+      ctx,
+      input.planId,
+      Boolean(plan && extendedNativePlan(plan)),
+      input,
+    );
     return api ? { created: 0 } : prepare(ctx.db, input.planId);
   }),
   reportScore: authedProcedure

@@ -89,6 +89,9 @@ export function DivisionsStep({ view, onChanged }: { view: EventPlanView; onChan
             key={division.division}
             planId={planId}
             division={division.division}
+            label={
+              view.plan.structure && view.plan.structure !== 'dual_division' ? 'Open' : undefined
+            }
             entries={view.entries
               .filter((entry) => entry.assignedDivision === division.division)
               .sort((a, b) => a.divisionSeed! - b.divisionSeed!)}
@@ -104,12 +107,14 @@ export function DivisionsStep({ view, onChanged }: { view: EventPlanView; onChan
 function DivisionColumn({
   planId,
   division,
+  label,
   entries,
   locked,
   onChanged,
 }: {
   planId: string;
   division: 'upper' | 'lower';
+  label?: string;
   entries: EventPlanEntry[];
   locked: boolean;
   onChanged: () => void;
@@ -155,7 +160,8 @@ function DivisionColumn({
     <div className="card division-column">
       <div className="page-header">
         <h4>
-          {DIVISION_LABEL[division]} <span className="muted">{entries.length} players</span>
+          {label ?? DIVISION_LABEL[division]}{' '}
+          <span className="muted">{entries.length} players</span>
         </h4>
       </div>
       {reorder.isError && <p className="error-text">{reorder.error.message}</p>}

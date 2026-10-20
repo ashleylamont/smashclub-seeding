@@ -27,7 +27,9 @@ export function AttendanceControls({
   disabled: boolean;
 }) {
   const cache = useQueryClient();
-  const [action, setAction] = useState<'add' | 'withdraw' | 'no_show' | 'redistribute'>('add');
+  const [action, setAction] = useState<'add' | 'withdraw' | 'no_show' | 'redistribute'>(
+    data.plan.competitionFormat === 'doubles' ? 'withdraw' : 'add',
+  );
   const [query, setQuery] = useState('');
   const [playerId, setPlayerId] = useState('');
   const [division, setDivision] = useState<'upper' | 'lower'>('upper');
@@ -94,7 +96,11 @@ export function AttendanceControls({
   };
   return (
     <section className="card">
-      <h3>Late arrivals and no-shows</h3>
+      <h3>
+        {data.plan.competitionFormat === 'doubles'
+          ? 'Pair withdrawals and no-shows'
+          : 'Late arrivals and no-shows'}
+      </h3>
       <p className="muted">
         {data.plan.softLockedAt
           ? 'Late arrivals go to the smallest open pool in their division. A no-show leaves their pool; played entrants use withdrawal instead.'
@@ -114,7 +120,9 @@ export function AttendanceControls({
               changed();
             }}
           >
-            <SelectItem value="add">Add a late arrival</SelectItem>
+            {data.plan.competitionFormat !== 'doubles' && (
+              <SelectItem value="add">Add a late arrival</SelectItem>
+            )}
             <SelectItem value="no_show">Remove a no-show</SelectItem>
             <SelectItem value="redistribute">Redistribute a two-player pool</SelectItem>
             <SelectItem value="withdraw">Withdraw an entrant after play</SelectItem>
@@ -136,7 +144,7 @@ export function AttendanceControls({
           </label>
         )}
         <label>
-          Player
+          {data.plan.competitionFormat === 'doubles' ? 'Pair' : 'Player'}
           <Select
             value={playerId}
             onValueChange={(selectedValue) => {

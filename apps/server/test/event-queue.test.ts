@@ -33,6 +33,39 @@ const pool = (size: number, division: 'upper' | 'lower' = 'upper'): Match[] =>
 const stations = [{ id: 'a' }, { id: 'b' }];
 const schedule = { division: 'upper' as const, poolIndex: 0, active: true, stationIds: ['a', 'b'] };
 describe('pure station queue', () => {
+  it('reserves all four doubles members even when another side has a different entrant key', () => {
+    const base = pool(4)[0]!;
+    const matches: Match[] = [
+      {
+        ...base,
+        id: 'playing',
+        status: 'playing',
+        stationId: 'a',
+        player1Id: 'team-a',
+        player2Id: 'team-b',
+        player1MemberIds: ['a1', 'a2'],
+        player2MemberIds: ['b1', 'b2'],
+      },
+      {
+        ...base,
+        id: 'overlapping',
+        player1Id: 'team-c',
+        player2Id: 'team-d',
+        player1MemberIds: ['a2', 'c2'],
+        player2MemberIds: ['d1', 'd2'],
+      },
+      {
+        ...base,
+        id: 'available',
+        player1Id: 'team-e',
+        player2Id: 'team-f',
+        player1MemberIds: ['e1', 'e2'],
+        player2MemberIds: ['f1', 'f2'],
+      },
+    ];
+    const queues = buildStationQueues(matches, stations, [schedule]);
+    expect(queues.stationQueues.find((q) => q.stationId === 'b')?.nextMatchId).toBe('available');
+  });
   it.each([3, 4, 5])(
     'makes stable %i-player rounds with honest rests and no duplicate pair',
     (size) => {

@@ -1,6 +1,8 @@
+import { sealResults } from './results';
+import { memberIds, changeAvailability } from './entrants';
 import { dispatchMatch } from './scheduling';
 import { additionalDecision, finalsToken, resetFinals } from './operations';
-import { advance, drawFinals } from './brackets';
+import { drawFinals } from './brackets';
 import { hash, receiptKey, requireFact, resolved, sameScore } from './facts';
 import { applyScore, recordScore } from './scores';
 import {
@@ -13,8 +15,31 @@ import {
 export { hash, receiptKey, stableId, TournamentConflict } from './facts';
 
 export function captureBaseline(baseline: TournamentBaseline): TournamentState {
+  if (baseline.version === 2)
+    requireFact(
+      baseline.competitionFormat && baseline.structure,
+      'V2 baselines need a competition format and structure.',
+    );
+  if (baseline.structure === 'round_robin')
+    requireFact(
+      baseline.pools.length === 1 && baseline.pools[0]!.division === 'upper',
+      'An open round robin needs exactly one open pool.',
+    );
+  if (baseline.structure === 'pools_finals')
+    requireFact(
+      baseline.pools.every((p) => p.division === 'upper'),
+      'Open pools use one competitive division.',
+    );
   const entrantIds = new Set(baseline.entrants.map((e) => e.playerId));
   requireFact(entrantIds.size === baseline.entrants.length, 'Duplicate baseline entrants.');
+  const members = baseline.entrants.flatMap(memberIds);
+  requireFact(new Set(members).size === members.length, 'A player cannot enter more than once.');
+  requireFact(
+    baseline.entrants.every(
+      (e) => memberIds(e).length === (baseline.competitionFormat === 'doubles' ? 2 : 1),
+    ),
+    'Entrant membership does not match the competition format.',
+  );
   requireFact(
     new Set(baseline.matches.map((m) => m.id)).size === baseline.matches.length,
     'Duplicate match IDs.',
@@ -151,27 +176,9 @@ export function decide(
     case 'dispatch':
       dispatchMatch(next, envelope, command, basis);
       break;
-    case 'availability': {
-      const entrant = next.entrants.find((e) => e.playerId === command.playerId);
-      requireFact(entrant && entrant.revision === command.expectedRevision, 'Entrant changed.');
-      requireFact(
-        !next.matches.some(
-          (m) => m.status === 'playing' && [m.player1Id, m.player2Id].includes(entrant.playerId),
-        ),
-        'Resolve their playing match first.',
-      );
-      basis[entrant.id] = entrant.revision;
-      entrant.availability = command.availability;
-      entrant.revision++;
-      if (command.availability === 'withdrawn')
-        for (const pool of next.pools.filter((p) => p.entrantIds.includes(entrant.playerId))) {
-          pool.order = null;
-          pool.revision++;
-        }
-      next.settings.resourceRevision++;
-      advance(next, envelope.at, envelope.id);
+    case 'availability':
+      changeAvailability(next, envelope, command, basis);
       break;
-    }
     case 'resources': {
       requireFact(
         next.settings.resourceRevision === command.expectedResourceRevision,
@@ -296,29 +303,7 @@ export function decide(
       next.lifecycle = 'locked';
       break;
     case 'finalize':
-      requireFact(
-        next.brackets.length === 4 && next.matches.every(resolved),
-        'Complete pools and all four finals first.',
-      );
-      requireFact(
-        next.reports.every((r) => r.status !== 'pending'),
-        'Resolve pending reports before finalizing.',
-      );
-      next.result = {
-        version: 1,
-        id: envelope.id,
-        planId: next.baseline!.planId,
-        revision: 1,
-        name: next.baseline!.name,
-        eventDate: next.baseline!.eventDate,
-        sealedAt: envelope.at,
-        replacesResultId: null,
-        replacementReason: null,
-        entrants: structuredClone(next.entrants),
-        brackets: structuredClone(next.brackets),
-        matches: structuredClone(next.matches),
-      };
-      next.lifecycle = 'finalized';
+      sealResults(next, envelope);
       break;
     default:
       requireFact(additionalDecision(next, envelope, basis), 'Unsupported command.');

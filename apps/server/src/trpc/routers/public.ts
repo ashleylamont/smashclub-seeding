@@ -1,3 +1,5 @@
+import { playerDoublesHistory } from '../../events/playerDoublesHistory';
+import { publicParticipantNames } from '../../events/participantNames';
 import { z } from 'zod';
 import { and, asc, desc, eq, inArray, isNotNull } from 'drizzle-orm';
 import {
@@ -12,12 +14,7 @@ import {
   tournaments,
 } from '@smashclub/db';
 import { eventKeyOf } from '@smashclub/engine';
-import {
-  isPlayedRatingResult,
-  includesResultStage,
-  publicParticipantName,
-  publicPlayerName,
-} from '@smashclub/shared';
+import { isPlayedRatingResult, includesResultStage, publicPlayerName } from '@smashclub/shared';
 import { latestRecomputeId } from '../../recompute/recompute';
 import { getRatingSettings } from '../../settings';
 import { charactersByPlayer, charactersForPlayer } from '../../players/characters';
@@ -107,7 +104,7 @@ export const publicRouter = router({
     const eventDates = await ctx.db
       .select({ eventDate: tournaments.eventDate })
       .from(tournaments)
-      .where(isNotNull(tournaments.eventDate));
+      .where(and(isNotNull(tournaments.eventDate), eq(tournaments.competitionFormat, 'singles')));
     const eventCount = new Set(eventDates.map((row) => eventKeyOf(row.eventDate!.toISOString())))
       .size;
 
@@ -252,6 +249,7 @@ export const publicRouter = router({
       events,
       model: 'whr' as const,
       ratingScope: 'night' as const,
+      doublesResults: await playerDoublesHistory(ctx.db, input.playerId),
     };
   }),
 
@@ -308,6 +306,9 @@ export const publicRouter = router({
         id: row.id,
         slug: row.challongeSlug,
         provider: row.provider,
+        competitionFormat: row.competitionFormat,
+        nativeEventId: (row.raw as { eventPlanId?: string } | null)?.eventPlanId,
+        nativeEventName: (row.raw as { eventName?: string } | null)?.eventName,
         name: row.name,
         eventDate: row.eventDate?.toISOString() ?? null,
         isRookie: row.isRookie,
@@ -334,6 +335,8 @@ export const publicRouter = router({
           id: tournamentParticipants.id,
           cleanedName: tournamentParticipants.cleanedName,
           playerId: tournamentParticipants.playerId,
+          memberPlayerIds: tournamentParticipants.memberPlayerIds,
+          teamName: tournamentParticipants.teamName,
           challongeSeed: tournamentParticipants.challongeSeed,
           finalRank: tournamentParticipants.finalRank,
           canonicalName: players.canonicalName,
@@ -345,7 +348,7 @@ export const publicRouter = router({
         .leftJoin(companies, eq(players.companyId, companies.id))
         .where(eq(tournamentParticipants.tournamentId, tournament.id));
 
-      const participantName = new Map(participants.map((p) => [p.id, publicParticipantName(p)]));
+      const participantName = await publicParticipantNames(ctx.db, participants);
 
       const setRows = await ctx.db
         .select()
@@ -362,6 +365,7 @@ export const publicRouter = router({
         id: tournament.id,
         slug: tournament.challongeSlug,
         provider: tournament.provider,
+        competitionFormat: tournament.competitionFormat,
         name: tournament.name,
         resultsMode: tournament.resultsMode,
         eventDate: tournament.eventDate?.toISOString() ?? null,
@@ -379,6 +383,7 @@ export const publicRouter = router({
           .map((p) => ({
             id: p.id,
             playerId: p.playerId,
+            memberPlayerIds: p.memberPlayerIds,
             name: participantName.get(p.id)!,
             companyCode: p.companyCode,
             challongeSeed: p.challongeSeed,

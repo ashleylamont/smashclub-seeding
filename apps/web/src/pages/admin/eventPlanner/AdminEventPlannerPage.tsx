@@ -1,3 +1,9 @@
+import { DoublesRosterStep } from './DoublesRosterStep';
+import {
+  tournamentStructures,
+  type CompetitionFormat,
+  type TournamentStructure,
+} from '@smashclub/shared';
 import { useConfirmation } from '../../../lib/confirmation';
 import { Button } from '../../../components/ui/Button';
 import { Input, Textarea } from '../../../components/ui/Input';
@@ -64,10 +70,8 @@ export function AdminEventPlannerPage() {
       <div className="card section">
         <h2>Event planner</h2>
         <p className="muted">
-          Paste the attendance list, resolve everybody against the registry, split Upper and Lower
-          off a frozen ranking snapshot, and stripe each division into balanced pools of three to
-          five. The plan then hands you exactly what Challonge needs for the four brackets of the
-          night.
+          Plan singles or doubles, resolve the roster, and freeze the seeds. Nemesis supports open
+          round robins, open pools with finals, and Upper/Lower pools with finals.
         </p>
       </div>
 
@@ -137,6 +141,8 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
   const [preview, setPreview] = useState<RosterPreviewRow[] | null>(null);
   const [upperSize, setUpperSize] = useState<number | null>(null);
   const [bracketMode, setBracketMode] = useState<'native' | 'challonge'>('native');
+  const [competitionFormat, setCompetitionFormat] = useState<CompetitionFormat>('singles');
+  const [structure, setStructure] = useState<TournamentStructure>('dual_division');
 
   const previewRoster = useMutation({
     mutationFn: () => trpc.admin.eventPlanner.previewRoster.mutate({ text }),
@@ -148,10 +154,12 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
 
   const create = useMutation({
     mutationFn: async () => {
-      const rows = preview ?? [];
+      const rows = competitionFormat === 'doubles' ? [] : (preview ?? []);
       return trpc.admin.eventPlanner.createPlan.mutate({
         name: name.trim(),
         bracketMode,
+        competitionFormat,
+        structure,
         eventDate: new Date(eventDate).toISOString(),
         slugPrefix: slugPrefix.trim() === '' ? null : slugPrefix.trim(),
         upperTargetSize: upperSize,
@@ -179,6 +187,40 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
   return (
     <div className="card section">
       <h3>New event plan</h3>
+      <label className="form-field">
+        <span className="form-label">Competition</span>
+        <Select
+          value={competitionFormat}
+          onValueChange={(value) => {
+            setCompetitionFormat(value as CompetitionFormat);
+            if (value === 'doubles') {
+              setBracketMode('native');
+              setStructure('round_robin');
+            }
+          }}
+        >
+          <SelectItem value="singles">Singles — 1v1</SelectItem>
+          <SelectItem value="doubles">Doubles — 2v2 (Nemesis)</SelectItem>
+        </Select>
+      </label>
+      {bracketMode === 'native' && (
+        <label className="form-field">
+          <span className="form-label">Tournament structure</span>
+          <Select
+            value={structure}
+            onValueChange={(value) => setStructure(value as TournamentStructure)}
+          >
+            {tournamentStructures.map((s) => (
+              <SelectItem key={s.value} value={s.value}>
+                {s.label}
+              </SelectItem>
+            ))}
+          </Select>
+          <span className="form-hint">
+            {tournamentStructures.find((s) => s.value === structure)?.description}
+          </span>
+        </label>
+      )}
       <div className="form-grid">
         <label className="form-field">
           <span className="form-label">Event name</span>
@@ -196,8 +238,7 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
             onChange={(event) => setEventDate(event.target.value)}
           />
           <span className="form-hint">
-            All four brackets are registered under this date, which is what makes them one club
-            night for ratings.
+            All stages share this event date. Singles and doubles ratings are kept separate.
           </span>
         </label>
         <label className="form-field">
@@ -211,46 +252,67 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
         </label>
         <div className="form-field">
           <span className="form-label">Pool size</span>
-          <Input value="4" readOnly aria-readonly="true" />
-          <span className="form-hint">Fixed at four for this version.</span>
+          <Input
+            value={structure === 'round_robin' ? 'All entrants' : '4'}
+            readOnly
+            aria-readonly="true"
+          />
+          <span className="form-hint">
+            {structure === 'round_robin'
+              ? 'One pool contains the whole field.'
+              : 'Pools balance around four entrants.'}
+          </span>
         </div>
       </div>
 
-      <label className="form-field">
-        <span className="form-label">Attendance list</span>
-        <Textarea
-          className="planner-textarea"
-          rows={10}
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-          placeholder={
-            'One person per line — bullets and numbering are fine.\n- [Atlas] Fox McCloud\n2. Samus Aran'
-          }
-        />
-        <span className="form-hint">
-          Lines are never split on commas: a display name may legitimately contain one.
-        </span>
-      </label>
+      {competitionFormat === 'singles' && (
+        <>
+          <label className="form-field">
+            <span className="form-label">Attendance list</span>
+            <Textarea
+              className="planner-textarea"
+              rows={10}
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              placeholder={
+                'One person per line — bullets and numbering are fine.\n- [Atlas] Fox McCloud\n2. Samus Aran'
+              }
+            />
+            <span className="form-hint">
+              Lines are never split on commas: a display name may legitimately contain one.
+            </span>
+          </label>
 
-      <div className="admin-form-row">
-        <Button
-          type="button"
-          disabled={text.trim() === '' || previewRoster.isPending}
-          onClick={() => previewRoster.mutate()}
-        >
-          {previewRoster.isPending ? 'Reading…' : 'Preview roster'}
-        </Button>
-        {previewRoster.isError && <span className="error-text">{previewRoster.error.message}</span>}
-      </div>
-
+          <div className="admin-form-row">
+            <Button
+              type="button"
+              disabled={text.trim() === '' || previewRoster.isPending}
+              onClick={() => previewRoster.mutate()}
+            >
+              {previewRoster.isPending ? 'Reading…' : 'Preview roster'}
+            </Button>
+            {previewRoster.isError && (
+              <span className="error-text">{previewRoster.error.message}</span>
+            )}
+          </div>
+        </>
+      )}
       <label className="form-field">
         <span className="form-label">Bracket system</span>
         <Select
           value={bracketMode}
-          onValueChange={(selectedValue) => setBracketMode(selectedValue as 'native' | 'challonge')}
+          onValueChange={(selectedValue) => {
+            setBracketMode(selectedValue as 'native' | 'challonge');
+            if (selectedValue === 'challonge') {
+              setCompetitionFormat('singles');
+              setStructure('dual_division');
+            }
+          }}
         >
           <SelectItem value="native">Nemesis — run the whole event here</SelectItem>
-          <SelectItem value="challonge">Challonge — manage external brackets</SelectItem>
+          {competitionFormat === 'singles' && (
+            <SelectItem value="challonge">Challonge — manage external brackets</SelectItem>
+          )}
         </Select>
         <span className="form-hint">
           Nemesis runs pools, championship and consolation, then records the finished night in club
@@ -258,7 +320,23 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
         </span>
       </label>
 
-      {preview && (
+      {competitionFormat === 'doubles' && (
+        <div>
+          <p>
+            Save the draft, then choose the two players in each pair. The roster recommends a
+            structure as teams are added.
+          </p>
+          <Button
+            variant="primary"
+            disabled={!name.trim() || create.isPending}
+            onClick={() => create.mutate()}
+          >
+            Create doubles plan
+          </Button>
+          {create.isError && <p className="error-text">{create.error.message}</p>}
+        </div>
+      )}
+      {competitionFormat === 'singles' && preview && (
         <div className="preview-summary">
           <p>
             <strong>{total}</strong> entrants, <strong>{matched}</strong> matched to a player.{' '}
@@ -266,32 +344,34 @@ function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
               <span className="muted">The rest can be resolved or created on the next screen.</span>
             )}
           </p>
-          <label className="form-field">
-            <span className="form-label">Upper division size</span>
-            {sizes.length === 0 ? (
-              <span className="error-text">
-                At least six entrants are needed for two divisions.
+          {structure === 'dual_division' && (
+            <label className="form-field">
+              <span className="form-label">Upper division size</span>
+              {sizes.length === 0 ? (
+                <span className="error-text">
+                  At least six entrants are needed for two divisions.
+                </span>
+              ) : (
+                <Select
+                  value={upperSize ?? ''}
+                  onValueChange={(selectedValue) =>
+                    setUpperSize(selectedValue === '' ? null : Number(selectedValue))
+                  }
+                >
+                  <SelectItem value="">Choose…</SelectItem>
+                  {sizes.map((size) => (
+                    <SelectItem key={size} value={size}>
+                      {size} Upper / {total - size} Lower
+                    </SelectItem>
+                  ))}
+                </Select>
+              )}
+              <span className="form-hint">
+                The default splits attendance evenly. Each pool advances two players; all remaining
+                players enter consolation.
               </span>
-            ) : (
-              <Select
-                value={upperSize ?? ''}
-                onValueChange={(selectedValue) =>
-                  setUpperSize(selectedValue === '' ? null : Number(selectedValue))
-                }
-              >
-                <SelectItem value="">Choose…</SelectItem>
-                {sizes.map((size) => (
-                  <SelectItem key={size} value={size}>
-                    {size} Upper / {total - size} Lower
-                  </SelectItem>
-                ))}
-              </Select>
-            )}
-            <span className="form-hint">
-              The default splits attendance evenly. Each pool advances two players; all remaining
-              players enter consolation.
-            </span>
-          </label>
+            </label>
+          )}
           <Button
             variant="primary"
             type="button"
@@ -383,7 +463,12 @@ function PlanWizard({
   );
   const stepContent = (
     <>
-      {current === 'roster' && <RosterStep view={view} onChanged={invalidate} />}
+      {current === 'roster' &&
+        (view.plan.competitionFormat === 'doubles' ? (
+          <DoublesRosterStep view={view} onChanged={invalidate} />
+        ) : (
+          <RosterStep view={view} onChanged={invalidate} />
+        ))}
       {current === 'divisions' && <DivisionsStep view={view} onChanged={invalidate} />}
       {current === 'pools' && <PoolsStep view={view} onChanged={invalidate} />}
       {current === 'handoff' && <HandoffStep view={view} onChanged={invalidate} />}
@@ -489,7 +574,13 @@ function PlanSummary({ view }: { view: EventPlanView }) {
     <dl className="plan-summary">
       {view.divisions.map((division) => (
         <div key={division.division} className="stat">
-          <dt>{division.division === 'upper' ? 'Upper' : 'Lower'}</dt>
+          <dt>
+            {view.plan.structure && view.plan.structure !== 'dual_division'
+              ? 'Open'
+              : division.division === 'upper'
+                ? 'Upper'
+                : 'Lower'}
+          </dt>
           <dd>
             {division.size}{' '}
             {division.poolCount > 0 && <span className="muted">· {division.poolCount} pools</span>}
