@@ -6,6 +6,8 @@ The planner at **Admin → Event planner** saves the night's roster, seed snapsh
 
 ## Prepare the plan
 
+Use **Night preview** to compare formats before committing the draw. Adjust the headcount, stations and set timing to see approximate station timelines, a run sheet and pool/bracket layouts. See [previewing a tournament night](tournament-projection.md) for the assumptions and CSV export.
+
 1. **Add attendance.** Paste one entrant per line. Parsing strips list markers and whitespace but does not create player records.
 2. **Resolve names.** Select the correct player for each line or create a missing player. Candidate similarity is a review aid, not an automatic identity decision. A corrected spelling applies to this event unless **Remember spelling** creates a lasting alias.
 3. **Freeze seeds and divisions.** The planner snapshots the current ranking and fills Upper and Lower, respecting explicit division choices. Review unranked entrants before freezing. Later rating changes do not reorder the saved draw.
