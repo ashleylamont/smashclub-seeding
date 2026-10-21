@@ -589,6 +589,17 @@ export interface HistoricalAdoption extends HistoricalAdoptionRecord {
 }
 
 export const eventPlans = pgTable('event_plans', {
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  resultsWithdrawnAt: timestamp('results_withdrawn_at', { withTimezone: true }),
+  retirement: jsonb('retirement').$type<{
+    requestId: string;
+    operation: 'reset' | 'delete';
+    reason: string;
+    actorId: string;
+    at: number;
+    replacementPlanId: string | null;
+    withdrawResults: boolean;
+  }>(),
   competitionFormat: text('competition_format')
     .$type<'singles' | 'doubles'>()
     .notNull()

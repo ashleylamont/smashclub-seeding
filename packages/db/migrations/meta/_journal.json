@@ -176,6 +176,13 @@
       "when": 1792467183815,
       "tag": "0024_native_doubles",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792540034010,
+      "tag": "0025_plan_recovery",
+      "breakpoints": true
     }
   ]
 }

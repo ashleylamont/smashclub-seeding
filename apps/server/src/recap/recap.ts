@@ -102,6 +102,7 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
 
   const anchorKey = anchor.eventDate ? eventKeyOf(anchor.eventDate.toISOString()) : null;
   const nativePublications = await nativeHistory(db);
+  if (nativePublications.withdrawn.has(anchor.id)) return null;
   const nativeIds = nativePublications.byTournament.get(anchor.id);
   const memberships = await db
     .select()

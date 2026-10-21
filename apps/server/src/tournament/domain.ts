@@ -1,3 +1,4 @@
+import { retireEvent } from './retirementDecision';
 import { sealResults } from './results';
 import { memberIds, changeAvailability } from './entrants';
 import { dispatchMatch } from './scheduling';
@@ -125,8 +126,9 @@ export function decide(
   }
   requireFact(previous.baseline, 'Baseline transfer has not completed.');
   requireFact(
-    (previous.lifecycle !== 'finalized' || envelope.command.kind === 'replaceResult') &&
-      previous.lifecycle !== 'cancelled',
+    envelope.command.kind === 'retire' ||
+      ((previous.lifecycle !== 'finalized' || envelope.command.kind === 'replaceResult') &&
+        previous.lifecycle !== 'cancelled'),
     'Results are sealed. Use an explicit replacement revision workflow.',
   );
   const command = envelope.command;
@@ -145,6 +147,7 @@ export function decide(
         'configurePools',
         'cancel',
         'replaceResult',
+        'retire',
         'attendance',
         'resetQueue',
       ].includes(command.kind),
@@ -154,6 +157,9 @@ export function decide(
   const basis: Record<string, number> = {};
   let reportId: string | null = null;
   switch (command.kind) {
+    case 'retire':
+      retireEvent(next, envelope, command);
+      break;
     case 'score':
       reportId = recordScore(next, envelope, command, basis);
       break;
@@ -322,9 +328,12 @@ export function decide(
     'publication',
     'announcements',
     'prizes',
+    'retirement',
   ] as const) {
-    if (hash(previous[field]) !== hash(next[field])) Object.assign(after, { [field]: next[field] });
+    if (hash(previous[field] ?? null) !== hash(next[field] ?? null))
+      Object.assign(after, { [field]: next[field] });
   }
+  if (command.kind === 'retire') after.entrants = structuredClone(next.entrants);
   return {
     version: 1,
     commandId: envelope.id,

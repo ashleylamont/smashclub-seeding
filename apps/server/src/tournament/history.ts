@@ -97,6 +97,7 @@ export async function nativeEventHistory(
       'LegacyStateImportedV1',
       'DecisionRecordedV1',
       'ResultsSealedV1',
+      'PlanRetiredV1',
       'PublicationRecordedV1',
     ],
   });
@@ -108,7 +109,11 @@ export async function nativeEventHistory(
       version: event.version,
       at: event.created.toISOString(),
     };
-    if (event.name === 'DecisionRecordedV1' || event.name === 'ResultsSealedV1') {
+    if (
+      event.name === 'DecisionRecordedV1' ||
+      event.name === 'ResultsSealedV1' ||
+      event.name === 'PlanRetiredV1'
+    ) {
       const decision = Decision.parse(event.data);
       return {
         ...common,

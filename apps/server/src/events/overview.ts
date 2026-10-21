@@ -86,6 +86,7 @@ export async function loadEventOverview(db: Db, slug: string): Promise<EventOver
   );
   const key = anchor.eventDate ? eventKeyOf(anchor.eventDate.toISOString()) : null;
   const history = await nativeHistory(db);
+  if (history.withdrawn.has(anchor.id)) return null;
   const nativeIds = history.byTournament.get(anchor.id);
   let eventRows: (typeof tournaments.$inferSelect)[];
   if (nativeIds) {

@@ -329,6 +329,7 @@ export const publicRouter = router({
         .from(tournaments)
         .where(eq(tournaments.challongeSlug, input.slug));
       if (!tournament) return null;
+      if ((await nativeHistory(ctx.db)).withdrawn.has(tournament.id)) return null;
 
       const participants = await ctx.db
         .select({

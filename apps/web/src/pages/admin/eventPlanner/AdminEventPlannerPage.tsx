@@ -1,4 +1,5 @@
 import { DoublesRosterStep } from './DoublesRosterStep';
+import { PlanRecoveryControls, DeletePlanButton } from './PlanRecoveryControls';
 import {
   tournamentStructures,
   type CompetitionFormat,
@@ -61,6 +62,7 @@ export function AdminEventPlannerPage() {
         step={search.step}
         onStep={(step) => void navigate({ search: { plan: search.plan, step }, replace: true })}
         onBack={() => setPlanId(null)}
+        onReopened={setPlanId}
       />
     );
   }
@@ -93,41 +95,13 @@ export function AdminEventPlannerPage() {
                 <span className="muted">{formatDate(plan.eventDate)}</span>
                 <span className="chip">{STATUS_LABEL[plan.status] ?? plan.status}</span>
                 <span className="muted">{plan.entryCount} entrants</span>
-                {(plan.status === 'draft' || plan.status === 'cancelled') && (
-                  <DeletePlanButton planId={plan.id} name={plan.name} />
-                )}
+                <DeletePlanButton planId={plan.id} name={plan.name} />
               </li>
             ))}
           </ul>
         )}
       </div>
     </div>
-  );
-}
-
-/** Only offered for a plan nothing was ever run off — a draft or a cancellation. */
-function DeletePlanButton({ planId, name }: { planId: string; name: string }) {
-  const confirmAction = useConfirmation();
-  const queryClient = useQueryClient();
-  const remove = useMutation({
-    mutationFn: () => trpc.admin.eventPlanner.deletePlan.mutate({ planId }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'eventPlanner'] }),
-  });
-  return (
-    <>
-      <Button
-        size="small"
-        type="button"
-        disabled={remove.isPending}
-        aria-label={`Delete plan ${name}`}
-        onClick={async () => {
-          if (await confirmAction(`Delete “${name}” and its roster?`)) remove.mutate();
-        }}
-      >
-        Delete
-      </Button>
-      {remove.isError && <span className="error-text">{remove.error.message}</span>}
-    </>
   );
 }
 
@@ -392,11 +366,13 @@ function PlanWizard({
   step,
   onStep,
   onBack,
+  onReopened,
 }: {
   planId: string;
   step: string | undefined;
   onStep: (step: StepKey) => void;
   onBack: () => void;
+  onReopened: (planId: string) => void;
 }) {
   const confirmAction = useConfirmation();
   const queryClient = useQueryClient();
@@ -545,6 +521,18 @@ function PlanWizard({
         {!adopted && originalPlan}
       </div>
 
+      <PlanRecoveryControls
+        planId={planId}
+        name={view.plan.name}
+        onDeleted={() => {
+          invalidate();
+          onBack();
+        }}
+        onReopened={(id) => {
+          invalidate();
+          onReopened(id);
+        }}
+      />
       {view.plan.status !== 'cancelled' && (
         <HistoricalAdoption view={view} onChanged={invalidate} />
       )}

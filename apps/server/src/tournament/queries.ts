@@ -145,6 +145,7 @@ export async function nativePublicEvents(
     .select()
     .from(eventPlans)
     .where(eq(eventPlans.bracketMode, 'native'))) {
+    if (plan.deletedAt) continue;
     const api = await nativeEvent(ctx, plan.id);
     if (!api) continue;
     const state = await api.state();

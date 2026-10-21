@@ -10,6 +10,7 @@ import { Result } from '../tournament/schemas';
 import { historicalPlayerIds } from '../identity/playerIds';
 import { loadSinglesHistory } from './inputs';
 import { getRatingSettings } from '../settings';
+import { nativeHistory } from '../events/nativeHistory';
 
 /** Derived on demand from latest sealed revisions; doubles never changes the singles fit. */
 export async function loadDoublesRatings(db: Db, before: number) {
@@ -17,8 +18,9 @@ export async function loadDoublesRatings(db: Db, before: number) {
   const { engineSets, engineTournaments } = await loadSinglesHistory(db);
   const canonical = await historicalPlayerIds(db);
   const publications = await db.select().from(nativeResultPublications);
+  const { withdrawnPlans } = await nativeHistory(db);
   const latest = new Map<string, (typeof publications)[number]>();
-  for (const p of publications)
+  for (const p of publications.filter((p) => !withdrawnPlans.has(p.eventPlanId)))
     if ((latest.get(p.eventPlanId)?.revision ?? 0) < p.revision) latest.set(p.eventPlanId, p);
   const doubles: DoublesSet[] = [];
   const sourceResultIds: string[] = [];
