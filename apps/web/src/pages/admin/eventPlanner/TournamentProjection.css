@@ -1,0 +1,220 @@
+.planner-projection {
+  min-width: 0;
+}
+.projection-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  gap: var(--s3);
+  margin: var(--s4) 0;
+}
+.projection-controls label,
+.projection-format-select {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  min-width: 0;
+}
+.projection-controls .input {
+  width: 100%;
+}
+.projection-comparison {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  gap: var(--s3);
+  margin: var(--s4) 0;
+}
+.projection-format {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s2);
+  white-space: normal;
+  text-align: left;
+  height: auto;
+  padding: var(--s3);
+}
+.projection-format[aria-pressed='true'] {
+  border: 2px solid var(--accent);
+  background: var(--accent-bg);
+}
+.projection-format span,
+.projection-format small {
+  font-family: var(--font-body, sans-serif);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.projection-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4) var(--s6);
+  margin: var(--s5) 0;
+}
+.projection-summary dt {
+  font-size: var(--fs-sm);
+  color: var(--text-soft);
+}
+.projection-summary dd {
+  margin: var(--s1) 0 0;
+  font: 600 var(--fs-xl)/1.2 var(--display);
+}
+.projection-summary small {
+  font-size: var(--fs-sm);
+}
+.projection-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border);
+  margin: var(--s3) 0;
+}
+.projection-scroll:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.projection-timeline {
+  padding: var(--s3) 0;
+}
+.projection-axis {
+  position: relative;
+  height: 32px;
+  margin-left: 90px;
+  font: var(--fs-xs)/1.2 var(--mono);
+}
+.projection-axis span {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.projection-axis span:first-child {
+  transform: none;
+}
+.projection-axis span:last-child {
+  transform: translateX(-100%);
+}
+.projection-lane {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  border-top: 1px solid var(--border);
+}
+.projection-lane > strong {
+  flex: 0 0 90px;
+  padding-left: var(--s2);
+  font: 600 var(--fs-sm)/1.2 var(--display);
+}
+.projection-track {
+  position: relative;
+  height: 48px;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0,
+    transparent calc(25% - 1px),
+    var(--border) 25%
+  );
+}
+.projection-bar.btn {
+  position: absolute;
+  top: 5px;
+  height: 38px;
+  min-height: 0;
+  min-width: 0;
+  padding: 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  font: var(--fs-xs)/1 var(--mono);
+  border-color: var(--projection-color);
+  background: var(--projection-bg);
+  color: var(--text-h);
+}
+.projection-bar[aria-pressed='true'] {
+  outline: 2px solid var(--text-h);
+  z-index: 1;
+}
+.projection-group {
+  --projection-color: var(--accent);
+  --projection-bg: var(--accent-bg);
+}
+.projection-main {
+  --projection-color: var(--good);
+  --projection-bg: var(--good-bg);
+}
+.projection-consolation {
+  --projection-color: var(--warn);
+  --projection-bg: var(--warn-bg);
+}
+.projection-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  font-size: var(--fs-sm);
+}
+.projection-legend > span {
+  border-left: 3px solid var(--projection-color, var(--border));
+  padding-left: var(--s2);
+}
+.projection-stage-line {
+  position: absolute;
+  inset-block: 0;
+  border-left: 1px dashed var(--text-soft);
+}
+.projection-inspector {
+  min-height: 76px;
+  overflow-wrap: anywhere;
+}
+.projection-scroll table {
+  min-width: 750px;
+}
+.projection-pools {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: var(--s3);
+}
+.projection-pool {
+  padding: var(--s3);
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+}
+.projection-pool h5 {
+  margin: 0;
+}
+.projection-pool ul {
+  padding-left: var(--s4);
+}
+.projection-pool p {
+  font-size: var(--fs-sm);
+}
+.projection-bracket {
+  margin-top: var(--s5);
+}
+.projection-layout {
+  min-width: 0;
+}
+.projection-connector {
+  fill: none;
+  stroke: var(--text-soft);
+  stroke-width: 1.5;
+}
+.projection-node rect {
+  fill: var(--surface);
+  stroke: var(--projection-color);
+  stroke-width: 1.5;
+}
+.projection-node text {
+  fill: var(--text-h);
+  font: 12px var(--mono);
+}
+.projection-node .projection-node-title {
+  fill: var(--text-soft);
+  font-size: 11px;
+}
+@media print {
+  .projection-controls,
+  .projection-comparison,
+  .projection-format-select {
+    display: none;
+  }
+  .projection-scroll {
+    overflow: visible;
+  }
+}
