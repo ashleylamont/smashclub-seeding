@@ -4,7 +4,7 @@ Native live events use Act by default through the existing event APIs. There is
 no opt-in adoption endpoint. [The ADR](adr/0001-act-native-tournament.md) describes
 ownership, migration, concurrency and publication.
 
-Run Node >=22.23.3. Production initializes Act-PG in the `native_act` schema and
+Run Node >=22.23.4. Production initializes Act-PG in the `native_act` schema and
 recovers legacy native nights before accepting traffic. The PGlite development
 harness uses an isolated in-memory Act runtime for the same application APIs.
 
