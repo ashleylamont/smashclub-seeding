@@ -4,6 +4,7 @@ import {
   nativeLiveHandoffs,
   nativeResultPublications,
   nativeRatingIntents,
+  eventPlans,
   tournaments,
   tournamentParticipants,
   sets,
@@ -36,6 +37,9 @@ export async function publishNativeResult(
         throw new TournamentConflict('Publication receipt refers to different results.');
       return { resultId: result.id, tournamentIds: prior.tournamentIds };
     }
+    const [plan] = await tx.select().from(eventPlans).where(eq(eventPlans.id, result.planId));
+    // A delayed seal reaction cannot republish a retired event after recovery.
+    if (plan!.deletedAt) return { resultId: result.id, tournamentIds: [] };
     const revisions = await tx
       .select()
       .from(nativeResultPublications)

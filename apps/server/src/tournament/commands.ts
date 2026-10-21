@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RecoveryInput } from './recoverySchema';
 const id = z.uuid();
 const revision = z.number().int().nonnegative();
 const poolOrder = z.object({
@@ -8,6 +9,7 @@ const poolOrder = z.object({
   matchRevisions: z.record(id, revision),
 });
 export const additionalCommands = [
+  RecoveryInput.extend({ kind: z.literal('retire'), expectedSequence: revision }),
   z.object({
     kind: z.literal('progress'),
     matchId: id,

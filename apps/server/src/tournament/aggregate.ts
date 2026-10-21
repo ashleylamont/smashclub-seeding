@@ -14,6 +14,7 @@ export const NativeTournament = state({
     LegacyStateImportedV1: LiveState,
     DecisionRecordedV1: Decision,
     ResultsSealedV1: Decision,
+    PlanRetiredV1: Decision,
     PublicationRecordedV1: z.object({ resultId: z.uuid(), tournamentIds: z.array(z.uuid()) }),
   })
   .patch({
@@ -23,6 +24,7 @@ export const NativeTournament = state({
       current: [reduceDecision(state.current[0], data)],
     }),
     ResultsSealedV1: ({ data }, state) => ({ current: [reduceDecision(state.current[0], data)] }),
+    PlanRetiredV1: ({ data }, state) => ({ current: [reduceDecision(state.current[0], data)] }),
     PublicationRecordedV1: ({ data }, state) => ({
       current: [
         { ...state.current[0], publication: data, sequence: state.current[0].sequence + 1 },
@@ -44,9 +46,11 @@ export const NativeTournament = state({
     const decision = decide(snapshot.state.current[0], envelope);
     return decision
       ? [
-          ['finalize', 'replaceResult'].includes(envelope.command.kind)
-            ? 'ResultsSealedV1'
-            : 'DecisionRecordedV1',
+          envelope.command.kind === 'retire'
+            ? 'PlanRetiredV1'
+            : ['finalize', 'replaceResult'].includes(envelope.command.kind)
+              ? 'ResultsSealedV1'
+              : 'DecisionRecordedV1',
           decision,
         ]
       : undefined;

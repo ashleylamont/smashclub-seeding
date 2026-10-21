@@ -26,6 +26,7 @@ export async function nativeEvent(
 ) {
   const [plan] = await ctx.db.select().from(eventPlans).where(eq(eventPlans.id, planId));
   if (!plan) throw new TRPCError({ code: 'NOT_FOUND', message: 'Event not found.' });
+  if (plan.deletedAt) return null;
   if (plan.bracketMode !== 'native' || plan.historicalAdoption) return null;
   const [handoff] = await ctx.db
     .select()
@@ -86,6 +87,7 @@ export async function nativeEntity(
   if (ctx.nativeRuntime)
     for (const handoff of await ctx.db.select().from(nativeLiveHandoffs)) {
       const api = await nativeEvent(ctx, handoff.eventPlanId, false, intent);
+      if (!api) continue;
       const state = await api!.state();
       if ((kind === 'match' ? state.matches : state.reports).some((row) => row.id === id))
         return api;

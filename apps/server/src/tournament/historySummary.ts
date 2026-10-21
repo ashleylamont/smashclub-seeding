@@ -160,6 +160,12 @@ export function describeDecision(
       return description('draw', 'Draw resumed', 'The existing draw resumed.');
     case 'cancel':
       return description('results', 'Event cancelled', command.reason);
+    case 'retire':
+      return description(
+        'results',
+        command.operation === 'reset' ? 'Event reverted to a fresh draft' : 'Event deleted',
+        `${command.reason} · ${command.withdrawResults ? 'Published results withdrawn' : 'Published results retained'}`,
+      );
     case 'finalize':
       return description(
         'results',

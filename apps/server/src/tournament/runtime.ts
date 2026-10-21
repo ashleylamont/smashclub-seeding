@@ -1,4 +1,6 @@
 import { publicEntrantNames } from './entrants';
+import { applyPlanRetirement } from '../event-planner/retirement';
+import { TRPCError } from '@trpc/server';
 import { randomUUID } from 'node:crypto';
 import { act, ConcurrencyError, InMemoryCache, type Store } from '@rotorsoft/act';
 import { PostgresStore } from '@rotorsoft/act-pg';
@@ -29,6 +31,45 @@ import { captureBaseline, receiptKey, reduceDecision, TournamentConflict } from 
 export const nativeStream = (planId: string) => `native:${planId}`;
 const systemActor = { id: 'native-publication', name: 'Native publication worker' };
 
+async function replayNative(
+  query: (fold: (event: { name: string; data: unknown }) => void) => Promise<unknown>,
+) {
+  let rebuilt = initialState();
+  await query((event) => {
+    switch (event.name) {
+      case 'LegacyStateImportedV1':
+        rebuilt = LiveState.parse(event.data);
+        break;
+      case 'BaselineCapturedV1':
+        rebuilt = captureBaseline(Baseline.parse(event.data));
+        break;
+      case 'DecisionRecordedV1':
+      case 'ResultsSealedV1':
+      case 'PlanRetiredV1':
+        rebuilt = reduceDecision(rebuilt, Decision.parse(event.data));
+        break;
+      case 'PublicationRecordedV1':
+        rebuilt = {
+          ...rebuilt,
+          publication: event.data as NonNullable<typeof rebuilt.publication>,
+          sequence: rebuilt.sequence + 1,
+        };
+        break;
+      default:
+        throw new TournamentConflict(`Unsupported native event schema: ${String(event.name)}`);
+    }
+  });
+  return rebuilt;
+}
+
+function requireRecoveryAdmin(kind: string, role: string) {
+  if (kind === 'retire' && role !== 'admin')
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Only an administrator can reset or delete an event.',
+    });
+}
+
 /** Each runtime owns its cache and store; no process-global store injection. */
 export function createNativeRuntime(
   db: Db,
@@ -37,6 +78,25 @@ export function createNativeRuntime(
 ) {
   const app = act()
     .withState(NativeTournament)
+    .on('PlanRetiredV1')
+    .do(
+      async function retireNativePlan(event) {
+        const retirement = event.data.after.retirement;
+        if (!retirement) throw new TournamentConflict('Missing retirement decision.');
+        await applyPlanRetirement(
+          db,
+          event.stream.slice('native:'.length),
+          retirement,
+          event.data.after.entrants,
+        );
+      },
+      {
+        blockOnError: true,
+        maxRetries: 10,
+        backoff: { strategy: 'exponential', baseMs: 100, maxMs: 30_000 },
+      },
+    )
+    .to((event) => ({ source: event.stream, target: `native-retirement:${event.stream}` }))
     .on('ResultsSealedV1')
     .do(
       async function publishSealedNativeResults(event, _stream, dispatcher) {
@@ -105,6 +165,7 @@ export function createNativeRuntime(
     inputHash?: string,
   ) {
     const parsed = Command.parse(input);
+    requireRecoveryAdmin(parsed.kind, actor.role);
     const operator = await isOperator(db, planId, actor);
     if (!['score', 'dispatch'].includes(parsed.kind)) await requireOperator(db, planId, actor);
     await transfer(planId);
@@ -231,7 +292,11 @@ export function createNativeRuntime(
       correctionOf: string | null;
     }[] = [];
     await app.query({ stream: nativeStream(planId) }, (event) => {
-      if (event.name === 'DecisionRecordedV1' || event.name === 'ResultsSealedV1') {
+      if (
+        event.name === 'DecisionRecordedV1' ||
+        event.name === 'ResultsSealedV1' ||
+        event.name === 'PlanRetiredV1'
+      ) {
         const data = Decision.parse(event.data);
         audit.push({
           kind: data.kind,
@@ -246,34 +311,8 @@ export function createNativeRuntime(
     });
     return { ...publicState, reports: state.reports, audit: audit.slice(-100) };
   }
-  /** Full event scan, explicitly excluding Act snapshots; never dispatch/reactions. */
-  async function replay(planId: string) {
-    let rebuilt = initialState();
-    await app.query({ stream: nativeStream(planId), after: -1 }, (event) => {
-      switch (event.name) {
-        case 'LegacyStateImportedV1':
-          rebuilt = LiveState.parse(event.data);
-          break;
-        case 'BaselineCapturedV1':
-          rebuilt = captureBaseline(Baseline.parse(event.data));
-          break;
-        case 'DecisionRecordedV1':
-        case 'ResultsSealedV1':
-          rebuilt = reduceDecision(rebuilt, Decision.parse(event.data));
-          break;
-        case 'PublicationRecordedV1':
-          rebuilt = {
-            ...rebuilt,
-            publication: event.data as NonNullable<typeof rebuilt.publication>,
-            sequence: rebuilt.sequence + 1,
-          };
-          break;
-        default:
-          throw new TournamentConflict(`Unsupported native event schema: ${String(event.name)}`);
-      }
-    });
-    return rebuilt;
-  }
+  const replay = (planId: string) =>
+    replayNative((fold) => app.query({ stream: nativeStream(planId), after: -1 }, fold));
   async function recover() {
     await migrateLegacyNativePlans(db);
     const handoffs = await db.select().from(nativeLiveHandoffs);

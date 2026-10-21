@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Retirement } from './recoverySchema';
 import { additionalCommands } from './commands';
 
 const id = z.uuid();
@@ -171,6 +172,7 @@ export const Receipt = z.object({
   commandId: id.optional(),
 });
 export const LiveState = z.object({
+  retirement: Retirement.optional(),
   baseline: Baseline.nullable(),
   lifecycle: z.enum(['absent', 'locked', 'unlocked', 'finalized', 'cancelled']),
   sequence: revision,

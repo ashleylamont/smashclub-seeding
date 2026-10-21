@@ -17,7 +17,7 @@ import {
 } from './nativePlanner';
 import type { CompetitionFormat, TournamentStructure } from '@smashclub/shared';
 import { createHash } from 'node:crypto';
-import { and, asc, eq, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
 import {
   companies,
@@ -108,7 +108,7 @@ export async function previewRoster(db: Db, text: string): Promise<RosterResolut
 
 export async function getPlan(db: Db, planId: string): Promise<PlanView | null> {
   const [plan] = await db.select().from(eventPlans).where(eq(eventPlans.id, planId));
-  if (!plan) return null;
+  if (!plan || plan.deletedAt) return null;
   if (extendedNativePlan(plan)) return getExtendedNativePlan(db, plan);
 
   const rows = await db
@@ -489,7 +489,7 @@ export async function createPlan(
 
 async function loadPlanRow(db: Db, planId: string) {
   const [plan] = await db.select().from(eventPlans).where(eq(eventPlans.id, planId));
-  if (!plan) throw new EventPlanStateError('That event plan no longer exists.');
+  if (!plan || plan.deletedAt) throw new EventPlanStateError('That event plan no longer exists.');
   return plan;
 }
 
@@ -1199,6 +1199,7 @@ export async function listPlans(db: Db) {
       )`,
     })
     .from(eventPlans)
+    .where(isNull(eventPlans.deletedAt))
     .orderBy(sql`${eventPlans.eventDate} desc`)
     .limit(50);
   return rows.map((row) => ({

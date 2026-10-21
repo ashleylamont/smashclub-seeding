@@ -1,4 +1,5 @@
 import { addDoublesPair, updateNativeFormat } from '../../event-planner/nativePlanner';
+import { previewPlanRecovery, recoverPlan } from '../../event-planner/recovery';
 import { nativePlanList } from '../../tournament/queries';
 import { nativeEvent } from '../../tournament/api';
 import {
@@ -68,6 +69,21 @@ async function guard<T>(run: () => Promise<T>): Promise<T> {
 }
 
 export const eventPlannerRouter = router({
+  recoveryPreview: adminProcedure
+    .input(z.object({ planId: z.uuid() }))
+    .query(({ ctx, input }) => previewPlanRecovery(ctx, input.planId)),
+  recoverPlan: adminProcedure
+    .input(
+      z.object({
+        planId: z.uuid(),
+        operation: z.enum(['reset', 'delete']),
+        token: z.string().length(64),
+        withdrawResults: z.boolean(),
+        reason: z.string().trim().min(1).max(200),
+        requestId: z.string().min(1).max(128),
+      }),
+    )
+    .mutation(({ ctx, input }) => recoverPlan(ctx, input)),
   addDoublesPair: adminProcedure
     .input(
       z.object({

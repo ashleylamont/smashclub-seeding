@@ -22,7 +22,8 @@ export async function requireOperator(db: Db, planId: string, user: SessionUser)
 
 export async function lockEvent(db: Db, planId: string) {
   const [plan] = await db.select().from(eventPlans).where(eq(eventPlans.id, planId)).for('update');
-  if (!plan) throw new TRPCError({ code: 'NOT_FOUND', message: 'Event not found.' });
+  if (!plan || plan.deletedAt)
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Event not found.' });
   const [native] = await db
     .select()
     .from(nativeLiveHandoffs)

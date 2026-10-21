@@ -1,5 +1,7 @@
 # Run a club night
 
+To undo an accidental lock or remove an event, see [resetting and deleting plans](plan-recovery.md).
+
 The planner at **Admin → Event planner** saves the night's roster, seed snapshot, divisions and pools. New plans default to **Nemesis**, which runs pools and final brackets in the app. Choose **Challonge** when the brackets will be managed externally. Existing plans and imported tournament history keep their current mode.
 
 ## Prepare the plan

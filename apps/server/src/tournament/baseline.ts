@@ -43,7 +43,7 @@ export async function stageNativeBaseline(
       .from(eventPlans)
       .where(eq(eventPlans.id, planId))
       .for('update');
-    if (!plan || plan.bracketMode !== 'native')
+    if (!plan || plan.deletedAt || plan.bracketMode !== 'native')
       throw new TournamentConflict('Choose a native event.');
     await requireOperator(tx, planId, actor);
     const [prior] = await tx
@@ -336,7 +336,7 @@ export async function migrateLegacyNativePlans(db: Db) {
   const owned = new Set((await db.select().from(nativeLiveHandoffs)).map((h) => h.eventPlanId));
   const plans = (
     await db.select().from(eventPlans).where(eq(eventPlans.bracketMode, 'native'))
-  ).filter((p) => !owned.has(p.id) && !p.historicalAdoption);
+  ).filter((p) => !p.deletedAt && !owned.has(p.id) && !p.historicalAdoption);
   if (!plans.length) return;
   const matches = await db.select().from(eventMatches);
   const reports = await db.select().from(eventScoreReports);
