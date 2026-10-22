@@ -4,7 +4,7 @@ Smash Club is a ranking, seeding and event-running app for a workplace Super Sma
 
 ## Quick start
 
-Requirements: Node.js 22.23.3+ and pnpm 10.33.0. `.node-version` pins the local and CI runtime; with fnm, run `fnm install && fnm use` in this checkout. The local rehearsal uses PGlite, so it needs no external database, OAuth provider or Challonge credentials.
+Requirements: Node.js 22.23.4+ and pnpm 10.33.0. `.node-version` pins the local and CI runtime; with fnm, run `fnm install && fnm use` in this checkout. The local rehearsal uses PGlite, so it needs no external database, OAuth provider or Challonge credentials.
 
 ```bash
 pnpm install --frozen-lockfile

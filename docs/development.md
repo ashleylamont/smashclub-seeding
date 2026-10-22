@@ -2,7 +2,7 @@
 
 ## Local rehearsal
 
-Use Node.js 22.23.3+ and pnpm 10.33.0. The checked-in `.node-version` is also used by CI. With fnm, run `fnm install && fnm use`, then:
+Use Node.js 22.23.4+ and pnpm 10.33.0. The checked-in `.node-version` is also used by CI. With fnm, run `fnm install && fnm use`, then:
 
 ```bash
 pnpm install --frozen-lockfile
