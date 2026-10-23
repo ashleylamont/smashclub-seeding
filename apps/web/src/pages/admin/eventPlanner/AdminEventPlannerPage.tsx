@@ -294,7 +294,7 @@ function PlanWizard({
       />
       {view.plan.status !== 'cancelled' &&
         (adopted ||
-          (view.plan.structure === 'dual_division' &&
+          ((view.plan.structure ?? 'dual_division') === 'dual_division' &&
             view.plan.structureOptions?.consolation !== false)) && (
           <HistoricalAdoption view={view} onChanged={invalidate} />
         )}

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { InMemoryStore } from '@rotorsoft/act';
 import { eq, inArray } from 'drizzle-orm';
 import {
@@ -272,6 +272,30 @@ describe('native format lifecycle through shipped APIs', () => {
       expect(await runtime.replay(planId)).toEqual(final);
     },
   );
+
+  it('routes a known native match without loading unrelated event journals', async () => {
+    const unrelatedId = await draft(3, 'single_elimination');
+    const planId = await draft(3, 'double_elimination');
+    // Populate routing from the same snapshot request a scoring surface uses.
+    await caller().eventOps.snapshot({ planId: unrelatedId });
+    const snapshot = await caller().eventOps.snapshot({ planId });
+    const match = snapshot.matches.find((m) => m.status === 'ready')!;
+    const loads = vi.spyOn(runtime, 'state');
+    try {
+      await caller().eventOps.reportScore({
+        matchId: match.id,
+        expectedRevision: match.revision,
+        requestId: crypto.randomUUID(),
+        score1: 2,
+        score2: 0,
+        outcome: 'played',
+      });
+      expect(loads.mock.calls.length).toBeGreaterThan(0);
+      expect(loads.mock.calls.every(([loadedPlanId]) => loadedPlanId === planId)).toBe(true);
+    } finally {
+      loads.mockRestore();
+    }
+  });
 
   it('rejects stale competing scores, preserves loser feeds, and protects a sealed reset topology during correction', async () => {
     const planId = await draft(3, 'double_elimination');
