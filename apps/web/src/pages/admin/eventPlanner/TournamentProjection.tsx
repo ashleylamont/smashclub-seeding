@@ -14,7 +14,8 @@ import { Disclosure } from '../../../components/ui/Disclosure';
 import { Tabs, TabList, Tab, TabPanel } from '../../../components/ui/Tabs';
 import { ProjectionTimeline } from './ProjectionTimeline';
 import { ProjectionBrackets } from './ProjectionBrackets';
-import { duration, projectedTime } from './projectionView';
+import { projectedTime } from './projectionView';
+import { projectionDuration, projectionFinish } from './projectionBracketLayout';
 import './TournamentProjection.css';
 
 const FIELDS = [
@@ -176,7 +177,8 @@ export function TournamentProjection({
         </Disclosure>
         <p className="muted">
           Assuming {timing.turnaroundMinutes}m station turnaround, {timing.restMinutes}m player
-          recovery and a {timing.transitionMinutes}m finals break.
+          recovery. A {timing.transitionMinutes}m pools-to-finals break applies only when both
+          stages exist.
         </p>
         <p className="muted">
           {entrantCount
@@ -231,7 +233,7 @@ export function TournamentProjection({
                   <span>
                     {candidate.issues.length
                       ? candidate.issues[0]
-                      : `${duration(candidate.totalMinutes)} · ${candidate.setCount} sets · ${candidate.pools.length} pools`}
+                      : `${projectionDuration(candidate)} · ${candidate.conditionalSetCount ? 'up to ' : ''}${candidate.setCount} sets · ${candidate.pools.length} pools`}
                   </span>
                   <small>
                     {candidate.structure === structure ? 'Plan format' : 'What-if format'}
@@ -266,11 +268,11 @@ export function TournamentProjection({
               <dl className="projection-summary" aria-label="Projection summary">
                 <div>
                   <dt>Approximate finish</dt>
-                  <dd>{projectedTime(start, projection.totalMinutes)}</dd>
+                  <dd>{projectionFinish(projection, start)}</dd>
                 </div>
                 <div>
                   <dt>Play window</dt>
-                  <dd>{duration(projection.totalMinutes)}</dd>
+                  <dd>{projectionDuration(projection)}</dd>
                 </div>
                 <div>
                   <dt>Played sets</dt>
@@ -285,7 +287,8 @@ export function TournamentProjection({
                 </div>
               </dl>
               <p className="muted">
-                {projection.conditionalSetCount > 0 && 'Includes a reset final if needed. '}
+                {projection.conditionalSetCount > 0 &&
+                  'The earlier finish is without a reset; the later finish allows a reset final if needed. '}
                 Set-length sensitivity: {projectedTime(start, projection.fastMinutes)}–
                 {projectedTime(start, projection.slowMinutes)} if sets take 20% less to 25% more
                 time (rounded to minutes). Allow extra venue time for check-in, disputes and
@@ -310,9 +313,12 @@ export function TournamentProjection({
               </Tabs>
               <p className="muted">
                 All stations share one queue; each can run any set. Players recover between sets;
-                automatic byes use no station time. All pools finish before the finals break. Finals
-                wait for their feeder matches. Station banks, real seed identities, pauses,
-                withdrawals and differing set lengths can change the order.
+                automatic byes use no station time.{' '}
+                {projection.pools.length > 0 &&
+                  projection.brackets.length > 0 &&
+                  'All pools finish before the finals break. '}
+                Bracket matches wait for their feeder matches. Station banks, real seed identities,
+                pauses, withdrawals and differing set lengths can change the order.
               </p>
             </>
           ))}
