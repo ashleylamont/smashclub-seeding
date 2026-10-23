@@ -1,12 +1,14 @@
 import { type FormatProjection } from './projectionView';
+import { ProjectionDoubleElimination } from './ProjectionDoubleElimination';
 
 export function ProjectionBrackets({ projection }: { projection: FormatProjection }) {
   return (
     <div className="projection-layout">
       <h4>Tournament structure and advancement</h4>
       <p className="muted">
-        Seeds, pool places and winner/loser feeds show the shape of the night. A1 means first in
-        pool A; future results remain unknown.
+        {projection.pools.length > 0
+          ? 'Seeds, pool places and winner/loser feeds show the shape of the night. A1 means first in pool A; future results remain unknown.'
+          : 'Follow seeded entrants through each bracket. Feeder references show where a pairing comes from; future results remain unknown.'}
       </p>
       <div className="projection-pools">
         {projection.pools.map((pool) => (
@@ -37,17 +39,16 @@ export function ProjectionBrackets({ projection }: { projection: FormatProjectio
       </div>
       {projection.brackets.map((bracket) => {
         const matches = projection.matches.filter((m) => m.section === bracket.id);
+        if (bracket.kind === 'double_elimination')
+          return (
+            <ProjectionDoubleElimination key={bracket.id} bracket={bracket} matches={matches} />
+          );
         const rounds = Math.max(1, ...matches.map((m) => m.round));
-        const general = bracket.kind === 'double_elimination';
-        const firstRoundSize = general
-          ? Math.max(1, ...matches.map((m) => m.slot + 1))
-          : matches.filter((m) => m.round === 1).length;
+        const firstRoundSize = matches.filter((m) => m.round === 1).length;
         const height = Math.max(90, firstRoundSize * 90);
         const pos = (round: number, slot: number) => ({
           x: (round - 1) * 250 + 10,
-          y: general
-            ? slot * 90 + 8
-            : (slot * 2 ** (round - 1) + (2 ** (round - 1) - 1) / 2) * 90 + 8,
+          y: (slot * 2 ** (round - 1) + (2 ** (round - 1) - 1) / 2) * 90 + 8,
         });
         return (
           <article key={bracket.id} className="projection-bracket">

@@ -154,3 +154,66 @@ test('uses doubles teams in a saved draft, shows finals and byes, and keeps what
   await expect(preview.getByLabel('Round-robin meetings per pairing')).toHaveValue('2');
   expect(await query(page.request, 'admin.eventPlanner.plan', { planId })).toEqual(before);
 });
+
+test('double elimination separates both brackets and finals and schedules independent paths together', async ({
+  page,
+}) => {
+  await page.goto('/admin/event-planner');
+  const preview = page.getByRole('region', { name: 'Tournament night preview', exact: true });
+  await preview.getByRole('button', { name: 'Explore timeline, run order and brackets' }).click();
+  await preview.getByLabel('Projected players').fill('8');
+  await preview.getByLabel('Preview start time').fill('18:30');
+  await chooseOption(
+    preview.getByRole('combobox', { name: 'Detailed preview format' }),
+    'double_elimination',
+  );
+  await expect(preview.locator('.projection-summary')).toContainText('19:40–19:52');
+  await expect(preview.locator('.projection-summary')).toContainText('1h 10m–1h 22m');
+  await expect(preview).toContainText('The earlier finish is without a reset');
+  const timeline = preview.getByRole('region', { name: 'Projected station timeline' });
+  await timeline.getByRole('button', { name: /^W2\.1:/ }).click();
+  await expect(preview.locator('.projection-inspector')).toContainText('18:42–18:52');
+  await timeline.getByRole('button', { name: /^L1\.1:/ }).click();
+  await expect(preview.locator('.projection-inspector')).toContainText('18:42–18:52');
+  await expect(timeline.getByRole('button', { name: /^Reset final \(if needed\):/ })).toHaveCSS(
+    'border-top-style',
+    'dashed',
+  );
+  await preview.getByRole('tab', { name: 'Pools and bracket layout' }).click();
+  await expect(
+    preview.getByRole('heading', { name: 'Double elimination · 8 entrants', exact: true }),
+  ).toBeVisible();
+  const winners = preview.getByRole('region', { name: 'Winners bracket layout' });
+  const losers = preview.getByRole('region', { name: 'Losers bracket layout' });
+  const finals = preview.getByRole('region', { name: 'Grand final and reset layout' });
+  await expect(winners.getByRole('article')).toHaveCount(7);
+  await expect(losers.getByRole('article')).toHaveCount(6);
+  await expect(finals.getByRole('article')).toHaveCount(2);
+  await expect(losers.getByRole('article', { name: /^L1\.1:/ })).toContainText('Loser W1.1');
+  await expect(finals.getByRole('article', { name: /^Grand final:/ })).toContainText('Winner L4.1');
+  await expect(finals.getByRole('article', { name: /^Reset final:/ })).toContainText('If needed');
+  expect(
+    (
+      await new AxeBuilder({ page })
+        .include('.planner-projection')
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+        .analyze()
+    ).violations,
+  ).toEqual([]);
+  await preview.screenshot({ path: 'screenshots/double-elimination-desktop-brackets.png' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await preview.screenshot({ path: 'screenshots/double-elimination-mobile-brackets.png' });
+  await preview.getByLabel('Projected players').fill('2');
+  await expect(
+    preview.getByRole('heading', { name: 'Double elimination · 2 entrants', exact: true }),
+  ).toBeVisible();
+  await expect(losers).toHaveCount(0);
+  await expect(finals.getByRole('article', { name: /^Grand final:/ })).toContainText('Loser W1.1');
+  await preview.getByLabel('Projected players').fill('5');
+  await expect(
+    preview.getByRole('heading', { name: 'Double elimination · 5 entrants', exact: true }),
+  ).toBeVisible();
+  await expect(preview.locator('.projection-set-bye').first()).toBeVisible();
+  await expect(preview).not.toContainText('undefined');
+});

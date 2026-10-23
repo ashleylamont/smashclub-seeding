@@ -3,7 +3,12 @@ import {
   type TournamentStructure,
   structureIssues,
 } from '@smashclub/shared';
-import { compileTournament, poolLabel, type TournamentSlot } from '@smashclub/engine';
+import {
+  compileTournament,
+  poolLabel,
+  type StructureMatch,
+  type TournamentSlot,
+} from '@smashclub/engine';
 
 export interface ProjectionMatch {
   id: string;
@@ -12,8 +17,11 @@ export interface ProjectionMatch {
   section: string;
   round: number;
   slot: number;
+  bracketLane?: StructureMatch['bracketLane'];
+  bracketRound?: number;
   sides: [string, string];
-  /** Pool entrants, or possible finalists. No winner is predicted. */
+  feeds: { matchId: string; outcome: 'winner' | 'loser'; side: 0 | 1 }[];
+  /** Actual repeated pool entrants; elimination participation follows its feeds. */
   resources: string[];
   dependsOn: string[];
   bye: boolean;
@@ -123,13 +131,32 @@ export function projectionGraph(
     loserResources.set(match.id, sideResources.every((r) => r.length) ? possible : []);
     matches.push({
       id: matchIds.get(match.id)!,
-      label: `${view.label} · ${match.bracketLane ?? 'R'}${match.bracketRound ?? match.round} M${match.slot + 1}${match.activation ? ' (if needed)' : ''}`,
+      label: `${view.label} · ${
+        match.bracketLane === 'final'
+          ? 'Grand final'
+          : match.bracketLane === 'reset'
+            ? 'Reset final (if needed)'
+            : `${match.bracketLane === 'winners' ? 'Winners ' : match.bracketLane === 'losers' ? 'Losers ' : ''}round ${match.bracketRound ?? match.round}, set ${match.slot + 1}`
+      }`,
       stage: view.stage,
       section: view.id,
       round: match.round,
       slot: match.slot,
-      sides: match.sides.map(labelSlot) as [string, string],
-      resources: possible,
+      ...(match.bracketLane
+        ? { bracketLane: match.bracketLane, bracketRound: match.bracketRound }
+        : {}),
+      sides: match.sides.map((source, i) =>
+        sideResources[i]!.length ? labelSlot(source) : 'Bye',
+      ) as [string, string],
+      feeds: match.sides.flatMap((source, side) =>
+        source.kind === 'winner' || source.kind === 'loser'
+          ? [{ matchId: matchIds.get(source.matchId)!, outcome: source.kind, side: side as 0 | 1 }]
+          : [],
+      ),
+      // Winner/loser paths are mutually exclusive. Reserving their union of
+      // possible entrants falsely serializes independent elimination matches.
+      // Each actual participant's next set is already ordered by a feeder.
+      resources: view.stage === 'group' ? possible : [],
       dependsOn: match.dependsOn.map((id) => matchIds.get(id)!),
       bye: sideResources.some((r) => r.length === 0),
       ...(match.activation ? { conditional: true } : {}),

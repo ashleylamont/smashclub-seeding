@@ -208,6 +208,101 @@
   fill: var(--text-soft);
   font-size: 11px;
 }
+.projection-bracket-lane {
+  margin-top: var(--s5);
+  border-top: 2px solid var(--projection-color);
+}
+.projection-bracket-winners,
+.projection-de-winners {
+  --projection-color: var(--good);
+  --projection-bg: var(--good-bg);
+}
+.projection-bracket-losers,
+.projection-de-losers {
+  --projection-color: var(--warn);
+  --projection-bg: var(--warn-bg);
+}
+.projection-bracket-finals,
+.projection-de-final,
+.projection-de-reset {
+  --projection-color: var(--accent);
+  --projection-bg: var(--accent-bg);
+}
+.projection-bracket-lane-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding-top: var(--s3);
+}
+.projection-bracket-lane-heading h5 {
+  margin: 0;
+  font: 600 var(--fs-lg)/1.2 var(--display);
+}
+.projection-bracket-lane-heading span {
+  font: var(--fs-sm)/1.2 var(--mono);
+  color: var(--text-soft);
+}
+.projection-bracket-lane > p {
+  margin-block: var(--s2);
+  font-size: var(--fs-sm);
+}
+.projection-bracket-scroll {
+  max-height: 680px;
+}
+.projection-bracket-canvas {
+  position: relative;
+}
+.projection-bracket-lines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.projection-bracket-round {
+  position: absolute;
+  top: 10px;
+  color: var(--text-soft);
+  font: 600 var(--fs-sm)/1.2 var(--display);
+}
+.projection-set {
+  position: absolute;
+  padding: 7px 9px;
+  border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--projection-color);
+  background: var(--surface);
+  font: var(--fs-sm)/20px var(--mono);
+}
+.projection-set header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s2);
+  line-height: 19px;
+}
+.projection-set header span {
+  color: var(--text-soft);
+  font-size: var(--fs-xs);
+}
+.projection-set p {
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--fs-xs);
+}
+.projection-side-drop {
+  color: var(--warn);
+}
+.projection-set-bye {
+  border-style: dashed;
+  background: var(--surface-2);
+}
+.projection-set-conditional,
+.projection-bar.projection-conditional {
+  border-style: dashed;
+}
+.projection-feed-loser {
+  stroke-dasharray: 4 3;
+}
 @media print {
   .projection-controls,
   .projection-comparison,

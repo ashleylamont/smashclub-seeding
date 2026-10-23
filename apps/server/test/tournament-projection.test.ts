@@ -11,6 +11,7 @@ import { captureBaseline } from '../src/tournament/domain';
 import { envelope, pureBaseline, nativeAdmin } from './helpers/nativeLiveFixture';
 import { eventPlannerRouter } from '../src/trpc/routers/eventPlanner';
 import type { TrpcContext } from '../src/trpc/trpc';
+import { compileTournament, type TournamentSlot } from '@smashclub/engine';
 
 const options: ProjectionInput = {
   entrantCount: 16,
@@ -76,6 +77,109 @@ function assertSchedule(
 }
 
 describe('draft tournament projections', () => {
+  it('runs disjoint winners and losers matches together instead of reserving every possible entrant', () => {
+    const de = (count: number) =>
+      project({ entrantCount: count }).formats.find((f) => f.structure === 'double_elimination')!;
+    expect(de(4).totalMinutes).toBe(58);
+    const eight = de(8);
+    expect(eight.totalMinutes).toBe(82);
+    const secondWave = eight.matches.filter((m) => m.startMinute === 12);
+    expect(secondWave.filter((m) => m.bracketLane === 'winners')).toHaveLength(2);
+    expect(secondWave.filter((m) => m.bracketLane === 'losers')).toHaveLength(2);
+    expect(new Set(secondWave.map((m) => m.station)).size).toBe(4);
+    expect(de(16).totalMinutes).toBe(130);
+    expect(
+      project({ entrantCount: 8, transitionMinutes: 60 }).formats.find(
+        (f) => f.structure === 'double_elimination',
+      )!.totalMinutes,
+    ).toBe(82); // No pool stage to transition from.
+    const reset = eight.matches.find((m) => m.bracketLane === 'reset')!;
+    expect(reset.conditional).toBe(true);
+    expect(reset.feeds.map((f) => f.outcome)).toEqual(['winner', 'loser']);
+    expect(new Set(reset.feeds.map((f) => f.matchId)).size).toBe(1);
+  });
+
+  it('preserves player recovery for every possible small DE outcome, including byes and either final winner', () => {
+    for (const count of [2, 3, 4, 5]) {
+      const graph = compileTournament({
+        structure: 'double_elimination',
+        divisions: [{ id: 'O', entrantIds: Array.from({ length: count }, (_, i) => `P${i}`) }],
+      });
+      for (const stationCount of [1, 2, 4]) {
+        const projection = project({
+          entrantCount: count,
+          stationCount,
+          restMinutes: 3,
+        }).formats.find((f) => f.structure === 'double_elimination')!;
+        const scheduled = new Map(
+          projection.matches.map((m) => [`${m.bracketLane}:${m.bracketRound}:${m.slot}`, m]),
+        );
+        const outcomes = new Map<
+          string,
+          { winner: string | null; loser: string | null; winnerSide: 1 | 2 | null }
+        >();
+        const assignments: { players: string[]; start: number; end: number }[] = [];
+        const recoveryViolations: string[] = [];
+        const resolve = (source: TournamentSlot): string | null =>
+          source.kind === 'entrant'
+            ? source.entrantId
+            : source.kind === 'winner' || source.kind === 'loser'
+              ? outcomes.get(source.matchId)![source.kind]
+              : null;
+        let scenarios = 0;
+        function visit(index: number) {
+          if (index === graph.matches.length) {
+            scenarios++;
+            const free = new Map<string, number>();
+            for (const match of assignments.toSorted((a, b) => a.start - b.start))
+              for (const player of match.players) {
+                if (match.start < (free.get(player) ?? 0))
+                  recoveryViolations.push(
+                    `${player} starts at ${match.start}, available at ${free.get(player)}`,
+                  );
+                free.set(player, match.end + 3);
+              }
+            return;
+          }
+          const match = graph.matches[index]!;
+          if (
+            match.activation &&
+            outcomes.get(match.activation.matchId)!.winnerSide !== match.activation.winnerSide
+          ) {
+            visit(index + 1);
+            return;
+          }
+          const a = resolve(match.sides[0]),
+            b = resolve(match.sides[1]);
+          if (!a || !b) {
+            outcomes.set(match.id, {
+              winner: a ?? b,
+              loser: null,
+              winnerSide: a ? 1 : b ? 2 : null,
+            });
+            visit(index + 1);
+            return;
+          }
+          const timing = scheduled.get(`${match.bracketLane}:${match.bracketRound}:${match.slot}`)!;
+          expect(timing.bye).toBe(false);
+          assignments.push({ players: [a, b], start: timing.startMinute, end: timing.endMinute });
+          for (const winnerSide of [1, 2] as const) {
+            outcomes.set(match.id, {
+              winner: winnerSide === 1 ? a : b,
+              loser: winnerSide === 1 ? b : a,
+              winnerSide,
+            });
+            visit(index + 1);
+          }
+          assignments.pop();
+        }
+        visit(0);
+        expect(scenarios).toBe(3 * 2 ** (2 * count - 3));
+        expect(recoveryViolations).toEqual([]);
+      }
+    }
+  });
+
   it('has hand-checkable round robins and does not charge for idle stations or a final turnaround', () => {
     const two = project({ entrantCount: 2 }).formats[0]!;
     expect(two.setCount).toBe(1);
