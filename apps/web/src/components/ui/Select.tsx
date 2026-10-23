@@ -74,9 +74,7 @@ export function Select({
           sideOffset={4}
           collisionPadding={8}
         >
-          <Primitive.ScrollUpButton className="ui-select-scroll">▴</Primitive.ScrollUpButton>
-          <Primitive.Viewport>{children}</Primitive.Viewport>
-          <Primitive.ScrollDownButton className="ui-select-scroll">▾</Primitive.ScrollDownButton>
+          <Primitive.Viewport className="ui-select-viewport">{children}</Primitive.Viewport>
         </Primitive.Content>
       </Primitive.Portal>
     </Primitive.Root>
