@@ -85,7 +85,7 @@ export const additionalCommands = [
   }),
   z.object({
     kind: z.literal('replaceResult'),
-    roundRobinOrder: z.array(id).min(2).max(8).optional(),
+    roundRobinOrder: z.array(id).min(2).optional(),
     resultId: id,
     reason: z.string().trim().min(1).max(500),
     corrections: z

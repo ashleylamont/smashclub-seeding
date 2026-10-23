@@ -1,3 +1,4 @@
+import { isKnockout } from '@smashclub/shared';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -17,6 +18,28 @@ import { eventView, planView, matchRows } from './views';
 import { TournamentConflict, hash, stableId } from './facts';
 import type { NativeRuntime } from './runtime';
 import type { TournamentCommand, TournamentState } from './schemas';
+
+// Cache only routing hints. Every hit is checked against current event ownership
+// and membership below; permissions remain on the actual command path. Keep one
+// bounded index per runtime so independent stores never share entity identities.
+const entityIndexes = new WeakMap<
+  NativeRuntime,
+  Map<string, { match: Set<string>; report: Set<string> }>
+>();
+function rememberEntities(runtime: NativeRuntime, state: TournamentState) {
+  if (!state.baseline) return;
+  let index = entityIndexes.get(runtime);
+  if (!index) {
+    index = new Map();
+    entityIndexes.set(runtime, index);
+  }
+  index.delete(state.baseline.planId);
+  index.set(state.baseline.planId, {
+    match: new Set(state.matches.map((m) => m.id)),
+    report: new Set(state.reports.map((r) => r.id)),
+  });
+  if (index.size > 128) index.delete(index.keys().next().value!);
+}
 
 export async function nativeEvent(
   ctx: TrpcContext,
@@ -84,6 +107,18 @@ export async function nativeEntity(
     .from(table)
     .where(eq(table.id, id));
   if (row) return nativeEvent(ctx, row.planId, true, intent);
+  const index = ctx.nativeRuntime && entityIndexes.get(ctx.nativeRuntime);
+  if (index)
+    for (const [planId, ids] of index) {
+      if (!ids[kind].has(id)) continue;
+      const api = await nativeEvent(ctx, planId, false, intent);
+      if (api) {
+        const state = await api.state();
+        if ((kind === 'match' ? state.matches : state.reports).some((entity) => entity.id === id))
+          return api;
+      }
+      index.delete(planId);
+    }
   if (ctx.nativeRuntime)
     for (const handoff of await ctx.db.select().from(nativeLiveHandoffs)) {
       const api = await nativeEvent(ctx, handoff.eventPlanId, false, intent);
@@ -123,8 +158,10 @@ export class NativeEventApi {
     readonly planId: string,
     readonly intent?: { requestId?: string; [key: string]: unknown },
   ) {}
-  state() {
-    return this.runtime.state(this.planId);
+  async state() {
+    const state = await this.runtime.state(this.planId);
+    rememberEntities(this.runtime, state);
+    return state;
   }
   newId(kind: string) {
     return this.intent?.requestId
@@ -257,6 +294,8 @@ export class NativeEventApi {
     trial.brackets = [];
     trial.matches = trial.matches.filter((m) => !m.bracketId);
     const issues: string[] = [];
+    if (isKnockout(state.baseline!.structure))
+      issues.push('Knockout brackets are fixed at draw lock.');
     if (state.lifecycle !== 'locked') issues.push('The event is not open.');
     if (
       state.matches.some(

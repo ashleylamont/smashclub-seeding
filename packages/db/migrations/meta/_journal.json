@@ -183,6 +183,13 @@
       "when": 1792540034010,
       "tag": "0025_plan_recovery",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792709325476,
+      "tag": "0026_tournament_structure_options",
+      "breakpoints": true
     }
   ]
 }

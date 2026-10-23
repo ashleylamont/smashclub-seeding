@@ -1,3 +1,4 @@
+import { isKnockout } from '@smashclub/shared';
 import { Input } from '../../../components/ui/Input';
 import { Button } from '../../../components/ui/Button';
 import { useState } from 'react';
@@ -34,9 +35,11 @@ export function HandoffStep({ view, onChanged }: { view: EventPlanView; onChange
       <div className="card section">
         <h3>Run this event in Nemesis</h3>
         <p>
-          {view.plan.structure === 'round_robin'
-            ? 'Complete the round robin, confirm its finishing order, and finalize the event. Teams remain fixed after draw lock.'
-            : 'Complete pools and confirm their finishing orders, then create championship and consolation finals. Winners advance and byes are shown explicitly.'}
+          {isKnockout(view.plan.structure)
+            ? 'Lock the seeded knockout draw and complete its matches, then finalize results. A double-elimination final resets when the losers-bracket finalist wins the first final.'
+            : view.plan.structure === 'round_robin'
+              ? 'Complete the round robin, confirm its finishing order, and finalize the event. Teams remain fixed after draw lock.'
+              : 'Complete pools and confirm their finishing orders, then create championship and consolation finals. Winners advance and byes are shown explicitly.'}
         </p>
         <a className="btn btn-primary" href={`/admin/event-operations?plan=${view.plan.id}`}>
           Open event desk

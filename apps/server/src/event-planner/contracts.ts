@@ -1,5 +1,5 @@
 import type { eventPlans } from '@smashclub/db';
-import type { CompetitionFormat, TournamentStructure } from '@smashclub/shared';
+import type { CompetitionFormat, TournamentStructure, StructureOptions } from '@smashclub/shared';
 import type { Division, DivisionPreference, PlanIssue } from './divisions';
 import type { ConsolationBracket } from './advancement';
 import type { ReviewCandidateSnapshot } from '../identity/candidates';
@@ -98,6 +98,7 @@ export interface PlanView {
     bracketMode: 'native' | 'challonge';
     competitionFormat?: CompetitionFormat;
     structure?: TournamentStructure;
+    structureOptions?: StructureOptions;
     usePairRatings?: boolean;
     nativeSeedContext?: Record<string, unknown> | null;
     historicalAdoption: typeof eventPlans.$inferSelect.historicalAdoption;

@@ -9,7 +9,10 @@ import {
   nativeResultPublications,
   nativeRatingIntents,
   tournaments,
+  players,
+  user,
 } from '@smashclub/db';
+import { createPlan, freezeRoster, generatePools } from '../src/event-planner/plans';
 import { postgresCluster } from './helpers/postgres';
 import { nativeAdmin, seedNativeDraft, envelope } from './helpers/nativeLiveFixture';
 import { stageNativeBaseline } from '../src/tournament/baseline';
@@ -100,6 +103,74 @@ describe('native Act-PG integration on isolated PostgreSQL', () => {
       .from(nativeResultPublications)
       .where(eq(nativeResultPublications.eventPlanId, planId));
   }
+
+  it('retains loser feeds and a required reset across process restart, then publishes once', async () => {
+    await cluster.db.insert(user).values(nativeAdmin).onConflictDoNothing();
+    const members = await cluster.db
+      .insert(players)
+      .values(Array.from({ length: 5 }, (_, i) => ({ canonicalName: `Knockout ${i}` })))
+      .returning();
+    const planId = await createPlan(
+      cluster.db,
+      {
+        name: 'Durable double elimination',
+        eventDate: new Date('2026-10-22'),
+        structure: 'double_elimination',
+        rows: members.map((p, i) => ({
+          lineNumber: i + 1,
+          rawInput: p.canonicalName,
+          cleanedName: p.canonicalName,
+          playerId: p.id,
+          companyId: null,
+          resolutionMethod: 'manual',
+          divisionPreference: 'auto',
+        })),
+      },
+      nativeAdmin.id,
+    );
+    await freezeRoster(cluster.db, planId);
+    await generatePools(cluster.db, planId);
+    const a = await runtime();
+    await a.lock(nativeAdmin, planId);
+    for (let pass = 0; pass < 20; pass++) {
+      const ready = (await state(a, planId)).matches.find((m) => m.status === 'ready');
+      if (!ready || ready.bracketLane === 'reset') break;
+      await command(a, planId, {
+        kind: 'score',
+        matchId: ready.id,
+        expectedRevision: ready.revision,
+        score1: ready.bracketLane === 'final' ? 0 : 2,
+        score2: ready.bracketLane === 'final' ? 2 : 0,
+        outcome: 'played',
+      });
+    }
+    const pending = await state(a, planId);
+    const reset = pending.matches.find((m) => m.bracketLane === 'reset')!;
+    expect(reset.status).toBe('ready');
+    expect(reset.player1Id).toBeTruthy();
+    expect(reset.player2Id).toBeTruthy();
+    expect(pending.matches.some((m) => m.parent1Outcome === 'loser')).toBe(true);
+    await a.shutdown();
+    runtimes.delete(a);
+    const b = await runtime();
+    expect(await b.replay(planId)).toEqual(pending);
+    expect(await state(b, planId)).toEqual(pending);
+    await command(b, planId, {
+      kind: 'score',
+      matchId: reset.id,
+      expectedRevision: reset.revision,
+      score1: 2,
+      score2: 0,
+      outcome: 'played',
+    });
+    await command(b, planId, { kind: 'finalize' });
+    await awaitPublication(b, planId);
+    const finished = await state(b, planId);
+    expect(finished.matches.filter((m) => m.outcome === 'played')).toHaveLength(9);
+    expect(finished.publication!.tournamentIds).toHaveLength(1);
+    expect(await countPublications(planId)).toHaveLength(1);
+    expect(await b.replay(planId)).toEqual(finished);
+  });
 
   it('enforces expected stream versions across independent caches and deduplicates concurrent requests', async () => {
     const planId = await seedNativeDraft(cluster.db);

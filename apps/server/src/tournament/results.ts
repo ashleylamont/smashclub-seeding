@@ -1,3 +1,4 @@
+import { expectedBracketCount } from '@smashclub/shared';
 import { drawFinals } from './brackets';
 import { requireFact, resolved } from './facts';
 import type { TournamentState, CommandEnvelope } from './schemas';
@@ -7,11 +8,8 @@ export function sealResults(next: TournamentState, envelope: CommandEnvelope) {
     drawFinals(next, envelope);
   requireFact(
     next.brackets.length ===
-      (next.baseline!.structure === 'round_robin'
-        ? 1
-        : next.baseline!.structure === 'pools_finals'
-          ? 2
-          : 4) && next.matches.every(resolved),
+      expectedBracketCount(next.baseline!.structure, next.baseline!.structureOptions) &&
+      next.matches.every(resolved),
     'Complete the event stages and confirm pool finishing orders first.',
   );
   requireFact(
@@ -24,6 +22,7 @@ export function sealResults(next: TournamentState, envelope: CommandEnvelope) {
       ? {
           competitionFormat: next.baseline!.competitionFormat,
           structure: next.baseline!.structure,
+          structureOptions: next.baseline!.structureOptions,
           poolOrders: next.pools.map((p) => ({ division: p.division, order: p.order ?? [] })),
         }
       : {}),

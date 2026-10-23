@@ -15,3 +15,8 @@ export * from './identity/alias';
 export * from './challonge/extract';
 export * from './results';
 export * from './doubles';
+export * from './tournament/pools';
+export * from './tournament/advancement';
+export * from './tournament/structure';
+export * from './tournament/doubleElimination';
+export * from './tournament/standings';

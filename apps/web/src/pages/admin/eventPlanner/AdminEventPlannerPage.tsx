@@ -1,3 +1,5 @@
+import { NativeFormatEditor } from './TournamentFormatFields';
+import { isKnockout } from '@smashclub/shared';
 import { NewPlanForm } from './NewPlanForm';
 import { TournamentProjection } from './TournamentProjection';
 import { DoublesRosterStep } from './DoublesRosterStep';
@@ -119,9 +121,7 @@ function PlanWizard({
     queryFn: () => trpc.admin.eventPlanner.plan.query({ planId }),
   });
 
-  const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['admin', 'eventPlanner'] });
-  };
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin', 'eventPlanner'] });
 
   const close = useMutation({
     mutationFn: (status: 'complete' | 'cancelled') =>
@@ -169,7 +169,9 @@ function PlanWizard({
           >
             {entry.key === 'handoff' && view.plan.bracketMode === 'native'
               ? 'Run event'
-              : entry.label}
+              : entry.key === 'pools' && isKnockout(view.plan.structure)
+                ? 'Draw'
+                : entry.label}
           </Button>
         ))}
       </nav>
@@ -177,6 +179,11 @@ function PlanWizard({
   );
   const stepContent = (
     <>
+      {current === 'roster' &&
+        view.plan.status === 'draft' &&
+        view.plan.bracketMode === 'native' && (
+          <NativeFormatEditor view={view} onChanged={invalidate} />
+        )}
       {current === 'roster' &&
         (view.plan.competitionFormat === 'doubles' ? (
           <DoublesRosterStep view={view} onChanged={invalidate} />
@@ -195,11 +202,13 @@ function PlanWizard({
         <div className="page-header">
           <h2>
             {view.plan.name}{' '}
-            <span className="chip">{STATUS_LABEL[view.plan.status] ?? view.plan.status}</span>{' '}
+            <span className="chip">
+              {view.plan.status === 'pools_ready' && isKnockout(view.plan.structure)
+                ? 'Draw ready'
+                : (STATUS_LABEL[view.plan.status] ?? view.plan.status)}
+            </span>{' '}
             {['pools_ready', 'underway'].includes(view.plan.status) && (
-              <span className="chip">
-                Pool draw: {view.plan.softLockedAt ? 'soft-locked' : 'draft'}
-              </span>
+              <span className="chip">Draw: {view.plan.softLockedAt ? 'soft-locked' : 'draft'}</span>
             )}
           </h2>
           <span className="row-actions">
@@ -266,6 +275,7 @@ function PlanWizard({
             entrantCount={view.entries.length}
             competitionFormat={view.plan.competitionFormat ?? 'singles'}
             structure={view.plan.structure ?? 'dual_division'}
+            structureOptions={view.plan.structureOptions}
             upperSize={view.plan.upperTargetSize}
             eventDate={view.plan.eventDate}
           />
@@ -282,9 +292,12 @@ function PlanWizard({
           onReopened(id);
         }}
       />
-      {view.plan.status !== 'cancelled' && (
-        <HistoricalAdoption view={view} onChanged={invalidate} />
-      )}
+      {view.plan.status !== 'cancelled' &&
+        (adopted ||
+          ((view.plan.structure ?? 'dual_division') === 'dual_division' &&
+            view.plan.structureOptions?.consolation !== false)) && (
+          <HistoricalAdoption view={view} onChanged={invalidate} />
+        )}
       {adopted ? (
         <Disclosure
           title="Original plan — may differ from the event played"
@@ -332,10 +345,14 @@ function PlanSummary({ view }: { view: EventPlanView }) {
         <dt>Warnings</dt>
         <dd>{view.issues.warnings.length}</dd>
       </div>
-      <div className="stat">
-        <dt>Brackets attached</dt>
-        <dd>{attached.length}/4</dd>
-      </div>
+      {view.plan.bracketMode !== 'native' && (
+        <div className="stat">
+          <dt>Brackets attached</dt>
+          <dd>
+            {attached.length}/{view.brackets.length}
+          </dd>
+        </div>
+      )}
     </dl>
   );
 }
@@ -347,6 +364,7 @@ function availableSteps(view: EventPlanView): Set<StepKey> {
     steps.add('handoff');
   }
   if (view.divisions.some((division) => division.pools.length > 0)) steps.add('pools');
+  if (isKnockout(view.plan.structure) && view.plan.status !== 'draft') steps.add('pools');
   return steps;
 }
 

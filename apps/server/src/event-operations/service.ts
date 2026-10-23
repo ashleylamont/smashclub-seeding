@@ -31,7 +31,7 @@ import {
 } from '@smashclub/db';
 import { publicPlayerName, scoresIndicateBye, scoresIndicateForfeit } from '@smashclub/shared';
 import type { SessionUser } from '../auth';
-import { getPlan } from '../event-planner/plans';
+import { getPlan, type PlanView } from '../event-planner/plans';
 import { matchAvailability, stationAvailability } from './availability';
 import { isOperator, lockEvent, requireOperator } from './access';
 export { isOperator, lockEvent, requireOperator } from './access';
@@ -169,10 +169,11 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
       status: plan.status,
       softLockedAt: plan.softLockedAt?.toISOString() ?? null,
       bracketMode: plan.bracketMode,
-      ...({ competitionFormat: plan.competitionFormat, structure: plan.structure } as {
-        competitionFormat?: 'singles' | 'doubles';
-        structure?: 'dual_division' | 'pools_finals' | 'round_robin';
-      }),
+      ...({
+        competitionFormat: plan.competitionFormat,
+        structure: plan.structure,
+        structureOptions: plan.structureOptions,
+      } as Pick<PlanView['plan'], 'competitionFormat' | 'structure' | 'structureOptions'>),
       historicalResultsSlug,
       resultsSlug,
     },

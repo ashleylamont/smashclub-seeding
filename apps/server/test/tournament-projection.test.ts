@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { tournamentStructures } from '@smashclub/shared';
+import { tournamentStructures, isKnockout } from '@smashclub/shared';
 import {
   projectTournament,
   projectionInput,
@@ -48,17 +48,17 @@ function assertSchedule(
     }
   }
   for (const match of played.filter((m) => m.stage !== 'group'))
-    expect(match.startMinute).toBeGreaterThanOrEqual(format.poolEndMinute + 3);
-  for (let a = 0; a < played.length; a++) {
-    for (let b = a + 1; b < played.length; b++) {
-      const first = played[a]!,
-        second = played[b]!;
-      const stationReady =
-        first.station === second.station ? first.endMinute + options.turnaroundMinutes : 0;
-      const entrantReady = first.resources.some((id) => second.resources.includes(id))
-        ? first.endMinute + 3
-        : 0;
-      expect(second.startMinute).toBeGreaterThanOrEqual(Math.max(stationReady, entrantReady));
+    expect(match.startMinute).toBeGreaterThanOrEqual(
+      format.poolEndMinute + (format.pools.length ? 3 : 0),
+    );
+  const stationFree = new Map<number, number>(),
+    entrantFree = new Map<string, number>();
+  for (const match of played) {
+    expect(match.startMinute).toBeGreaterThanOrEqual(stationFree.get(match.station!) ?? 0);
+    stationFree.set(match.station!, match.endMinute + options.turnaroundMinutes);
+    for (const id of match.resources) {
+      expect(match.startMinute).toBeGreaterThanOrEqual(entrantFree.get(id) ?? 0);
+      entrantFree.set(id, match.endMinute + 3);
     }
   }
   for (const pool of format.pools) {
@@ -68,7 +68,9 @@ function assertSchedule(
   }
   for (const bracket of format.brackets) {
     expect(played.filter((m) => m.section === bracket.id)).toHaveLength(
-      Math.max(0, bracket.entrants - 1),
+      bracket.kind === 'double_elimination'
+        ? 2 * bracket.entrants - 1
+        : Math.max(0, bracket.entrants - 1),
     );
   }
 }
@@ -123,7 +125,7 @@ describe('draft tournament projections', () => {
         expect(format.totalMinutes).toBe(0);
       }
     }
-    expect(project({ entrantCount: 9 }).formats[0]!.issues[0]).toContain('at most eight');
+    expect(project({ entrantCount: 9 }).formats[0]!.issues).toEqual([]);
   });
 
   it('respects station capacity, entrants, feeder matches and stage/recovery breaks across the field', () => {
@@ -160,7 +162,7 @@ describe('draft tournament projections', () => {
   it('matches native finals counts, byes and first-round pairings for odd and even fields', () => {
     for (const count of [3, 5, 6, 7, 8, 9, 11, 12, 13, 17, 24, 33]) {
       for (const { value: structure } of tournamentStructures.filter(
-        (s) => s.value !== 'round_robin',
+        (s) => s.value !== 'round_robin' && !isKnockout(s.value),
       )) {
         const graph = projectionGraph(structure, count, null);
         if (graph.issues.length) continue;
@@ -236,9 +238,30 @@ describe('draft tournament projections', () => {
     }
   });
 
-  it('rejects unbounded, fractional and invalid timing input', () => {
+  it('accepts round robins beyond the former preview ceiling', () => {
+    const result = project({ entrantCount: 129 }).formats[0]!;
+    expect(result.issues).toEqual([]);
+    expect(result.setCount).toBe(8256);
+    expect(result.minimumSets).toBe(128);
+    expect(result.totalMinutes).toBeGreaterThan(0);
+  });
+
+  it('projects repeated round robins with the configured workload and guarantee', () => {
+    const once = project({ entrantCount: 9 }).formats[0]!;
+    const twice = project({ entrantCount: 9, structureOptions: { roundRobinMeetings: 2 } })
+      .formats[0]!;
+    expect(once.setCount).toBe(36);
+    expect(twice.setCount).toBe(72);
+    expect(twice.minimumSets).toBe(16);
+    expect(twice.totalMinutes).toBeGreaterThan(once.totalMinutes);
+    const pools = project({ entrantCount: 8, structureOptions: { roundRobinMeetings: 2 } })
+      .formats[1]!;
+    expect(pools.matches.filter((m) => m.stage === 'group')).toHaveLength(24);
+    expect(pools.brackets.map((b) => b.entrants)).toEqual([4, 4]);
+  });
+
+  it('rejects fractional counts, invalid variants and invalid timing input', () => {
     for (const patch of [
-      { entrantCount: 129 },
       { entrantCount: 1 },
       { stationCount: 0 },
       { stationCount: 33 },
@@ -247,6 +270,7 @@ describe('draft tournament projections', () => {
       { restMinutes: -1 },
       { upperSize: 2 },
       { turnaroundMinutes: 31 },
+      { structureOptions: { roundRobinMeetings: 0 } },
     ])
       expect(() => projectionInput.parse({ ...options, ...patch })).toThrow(
         /Too (small|big)|Invalid input/,

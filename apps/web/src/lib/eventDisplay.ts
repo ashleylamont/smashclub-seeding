@@ -26,6 +26,10 @@ export interface LiveMatch {
   nativeBracketId?: string | null;
   nativeRound?: number | null;
   nativeSlot?: number | null;
+  bracketLane?: string;
+  bracketRound?: number;
+  parent1Outcome?: 'winner' | 'loser';
+  parent2Outcome?: 'winner' | 'loser';
   parent1MatchId?: string | null;
   parent2MatchId?: string | null;
 }

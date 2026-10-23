@@ -1,3 +1,4 @@
+import { eliminationStandings } from '@smashclub/engine';
 import { memberIds } from './entrants';
 import { eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
@@ -70,8 +71,9 @@ export async function publishNativeResult(
     for (const bracket of result.brackets) {
       const matches = result.matches.filter(
         (m) =>
-          m.bracketId === bracket.id ||
-          (bracket.stage === 'main' && m.stage === 'group' && m.division === bracket.division),
+          !m.skipped &&
+          (m.bracketId === bracket.id ||
+            (bracket.stage === 'main' && m.stage === 'group' && m.division === bracket.division)),
       );
       if (!matches.length && !bracket.entrantIds.length) continue;
       const slug = `nemesis_${result.planId.replaceAll('-', '')}_${bracket.division}_${bracket.stage}_r${result.revision}`;
@@ -94,31 +96,36 @@ export async function publishNativeResult(
             resultRevision: result.revision,
             competitionFormat: result.competitionFormat ?? 'singles',
             structure: result.structure ?? 'dual_division',
+            structureOptions: result.structureOptions,
             division: bracket.division,
             stage: bracket.stage,
             tournamentType:
-              result.structure === 'round_robin' ? 'round robin' : 'single elimination',
+              result.structure === 'round_robin'
+                ? 'round robin'
+                : result.structure === 'double_elimination'
+                  ? 'double elimination'
+                  : 'single elimination',
           },
         })
         .returning();
       tournamentIds.push(tournament!.id);
       const finals = matches.filter((m) => m.bracketId === bracket.id);
-      const maxRound = Math.max(0, ...finals.map((m) => m.round));
-      const final = finals.find((m) => m.round === maxRound);
-      const ranks = new Map<string, number>();
+      const outcome = eliminationStandings(
+        bracket.entrantIds,
+        finals,
+        result.structure === 'double_elimination',
+      );
+      const ranks = new Map(outcome.standings.map((s) => [s.playerId, s.place]));
       if (result.structure === 'round_robin')
         result.poolOrders
           ?.find((p) => p.division === bracket.division)
           ?.order.forEach((id, i) => ranks.set(id, i + 1));
-      for (const match of finals) {
-        if (match.player1Id && match.player2Id && match.winnerId)
-          ranks.set(
-            match.winnerId === match.player1Id ? match.player2Id : match.player1Id,
-            2 ** (maxRound - match.round) + 1,
-          );
-      }
-      if (final?.winnerId) ranks.set(final.winnerId, 1);
-      if (bracket.entrantIds.length === 1) ranks.set(bracket.entrantIds[0]!, 1);
+      if (result.structure === 'round_robin_finals' && bracket.stage === 'main')
+        result.poolOrders
+          ?.find((p) => p.division === bracket.division)
+          ?.order.forEach((id, i) => {
+            if (!bracket.entrantIds.includes(id)) ranks.set(id, i + 1);
+          });
       const playerIds = [
         ...new Set([
           ...bracket.entrantIds,
@@ -153,7 +160,10 @@ export async function publishNativeResult(
           challongeMatchId: index + 1,
           resultStage: match.stage === 'group' ? 'group' : 'final',
           state: 'complete',
-          round: match.round,
+          round:
+            match.bracketLane === 'losers'
+              ? -(match.bracketRound ?? match.round)
+              : (match.bracketRound ?? match.round),
           identifier: match.label,
           suggestedPlayOrder: index + 1,
           p1ParticipantId: participant(match.player1Id),

@@ -1,11 +1,7 @@
 import { Checkbox } from '../../../components/ui/Checkbox';
 import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import {
-  tournamentStructures,
-  recommendedStructure,
-  type TournamentStructure,
-} from '@smashclub/shared';
+import { type TournamentStructure } from '@smashclub/shared';
 import { trpc } from '../../../lib/trpc';
 import type { EventPlanView } from '../../../lib/apiTypes';
 import { Button } from '../../../components/ui/Button';
@@ -93,29 +89,6 @@ export function DoublesRosterStep({
       </p>
       {editable && (
         <>
-          <label className="form-field">
-            <span className="form-label">Tournament structure</span>
-            <Select
-              value={view.plan.structure ?? 'dual_division'}
-              onValueChange={(value) => format.mutate({ structure: value as TournamentStructure })}
-            >
-              {tournamentStructures.map((s) => (
-                <SelectItem key={s.value} value={s.value}>
-                  {s.label}
-                </SelectItem>
-              ))}
-            </Select>
-          </label>
-          <p className="muted">
-            {tournamentStructures.find((s) => s.value === view.plan.structure)?.description}{' '}
-            Recommended for this roster:{' '}
-            {
-              tournamentStructures.find(
-                (s) => s.value === recommendedStructure(view.entries.length),
-              )?.label
-            }
-            .
-          </p>
           {view.plan.structure === 'dual_division' && (
             <p className="muted">
               Teams split evenly between Upper and Lower; review and reorder the frozen seeds before

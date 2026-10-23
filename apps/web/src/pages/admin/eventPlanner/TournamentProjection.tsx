@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   tournamentStructures,
+  type StructureOptions,
   type CompetitionFormat,
   type TournamentStructure,
 } from '@smashclub/shared';
@@ -29,15 +30,19 @@ export function TournamentProjection({
   entrantCount,
   competitionFormat,
   structure,
+  structureOptions = { roundRobinMeetings: 1 },
   upperSize,
   eventDate,
 }: {
   entrantCount: number;
   competitionFormat: CompetitionFormat;
   structure: TournamentStructure;
+  structureOptions?: StructureOptions;
   upperSize: number | null;
   eventDate: string;
 }) {
+  const [meetingsOverride, setMeetingsOverride] = useState<string | null>(null);
+  const meetings = meetingsOverride ?? String(structureOptions.roundRobinMeetings);
   const [countOverride, setCountOverride] = useState<string | null>(null);
   const count = countOverride ?? String(entrantCount || (competitionFormat === 'doubles' ? 8 : 16));
   const [upperOverride, setUpperOverride] = useState<string | null>(null);
@@ -59,6 +64,7 @@ export function TournamentProjection({
   const start = startOverride ?? defaultStart;
   const [tab, setTab] = useState('timeline');
   const input = {
+    structureOptions: { ...structureOptions, roundRobinMeetings: Number(meetings) },
     entrantCount: Number(count),
     upperSize: upper === '' ? null : Number(upper),
     stationCount: Number(timing.stationCount),
@@ -71,9 +77,9 @@ export function TournamentProjection({
     count.trim() !== '' &&
     Number.isInteger(input.entrantCount) &&
     input.entrantCount >= 2 &&
-    input.entrantCount <= 128 &&
-    (input.upperSize === null ||
-      (Number.isInteger(input.upperSize) && input.upperSize >= 3 && input.upperSize <= 125)) &&
+    Number.isSafeInteger(input.structureOptions.roundRobinMeetings) &&
+    input.structureOptions.roundRobinMeetings > 0 &&
+    (input.upperSize === null || (Number.isInteger(input.upperSize) && input.upperSize >= 3)) &&
     FIELDS.every(
       (f) =>
         timing[f.key].trim() !== '' &&
@@ -107,10 +113,19 @@ export function TournamentProjection({
             <Input
               type="number"
               min={2}
-              max={128}
               step={1}
               value={count}
               onChange={(e) => setCountOverride(e.target.value)}
+            />
+          </label>
+          <label>
+            Round-robin meetings per pairing
+            <Input
+              type="number"
+              min={1}
+              step={1}
+              value={meetings}
+              onChange={(e) => setMeetingsOverride(e.target.value)}
             />
           </label>
           <label>
@@ -151,7 +166,6 @@ export function TournamentProjection({
               <Input
                 type="number"
                 min={3}
-                max={125}
                 step={1}
                 value={upper}
                 placeholder="Even split"
@@ -177,13 +191,17 @@ export function TournamentProjection({
           )}{' '}
           Minutes per set includes every game in that set.
         </p>
-        {(countOverride !== null || upperOverride !== null || formatOverride !== null) && (
+        {(countOverride !== null ||
+          upperOverride !== null ||
+          formatOverride !== null ||
+          meetingsOverride !== null) && (
           <Button
             size="small"
             onClick={() => {
               setCountOverride(null);
               setUpperOverride(null);
               setFormatOverride(null);
+              setMeetingsOverride(null);
             }}
           >
             Use plan counts and format
@@ -191,8 +209,8 @@ export function TournamentProjection({
         )}
         {!valid && (
           <p role="alert">
-            Enter whole numbers within the shown limits: 2–128 entrants, 1–32 stations, and a valid
-            start time.
+            Enter whole numbers: at least 2 entrants, positive meetings per pairing, 1–32 stations,
+            and a valid start time.
           </p>
         )}
         {valid && query.isPending && <p role="status">Projecting the night…</p>}
@@ -257,6 +275,7 @@ export function TournamentProjection({
                 <div>
                   <dt>Played sets</dt>
                   <dd>
+                    {projection.conditionalSetCount ? 'Up to ' : ''}
                     {projection.setCount} <small>· {projection.byeCount} byes</small>
                   </dd>
                 </div>
@@ -266,6 +285,7 @@ export function TournamentProjection({
                 </div>
               </dl>
               <p className="muted">
+                {projection.conditionalSetCount > 0 && 'Includes a reset final if needed. '}
                 Set-length sensitivity: {projectedTime(start, projection.fastMinutes)}–
                 {projectedTime(start, projection.slowMinutes)} if sets take 20% less to 25% more
                 time (rounded to minutes). Allow extra venue time for check-in, disputes and

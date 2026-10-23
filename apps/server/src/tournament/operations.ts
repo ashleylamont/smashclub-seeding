@@ -1,3 +1,4 @@
+import { isKnockout } from '@smashclub/shared';
 import { hash, requireFact, resolved } from './facts';
 import { applyAttendance } from './attendance';
 import { replaceResult } from './replacement';
@@ -12,6 +13,10 @@ export const finalsToken = (state: TournamentState) =>
     lifecycle: state.lifecycle,
   });
 export function resetFinals(state: TournamentState) {
+  requireFact(
+    !isKnockout(state.baseline?.structure),
+    'A locked knockout draw can only be changed by creating a new draft.',
+  );
   requireFact(
     !state.matches.some(
       (m) =>
@@ -214,4 +219,14 @@ export function additionalDecision(
       return false;
   }
   return true;
+}
+
+export function canPauseDraw(state: TournamentState) {
+  return (
+    (!state.brackets.length || isKnockout(state.baseline!.structure)) &&
+    !state.reports.length &&
+    state.matches.every(
+      (m) => !m.started && (!resolved(m) || m.outcome === 'bye' || m.outcome === 'no_contest'),
+    )
+  );
 }

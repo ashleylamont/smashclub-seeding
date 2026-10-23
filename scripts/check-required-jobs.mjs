@@ -4,6 +4,7 @@ export const requiredJobs = [
   'format',
   'test',
   'e2e',
+  'e2e-report',
   'ui-quality',
   'build',
   'bundle-smoke',

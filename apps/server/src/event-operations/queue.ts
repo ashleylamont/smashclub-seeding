@@ -1,3 +1,4 @@
+import { buildRoundRobin } from '@smashclub/engine';
 import { eq } from 'drizzle-orm';
 import {
   eventMatches,
@@ -12,7 +13,9 @@ type Match = Pick<
   typeof eventMatches.$inferSelect,
   'id' | 'stage' | 'division' | 'poolIndex' | 'player1Id' | 'player2Id' | 'stationId' | 'status'
 > &
-  Partial<Pick<typeof eventMatches.$inferSelect, 'blockedReason'>> & {
+  Partial<
+    Pick<typeof eventMatches.$inferSelect, 'blockedReason' | 'nativeRound' | 'nativeSlot'>
+  > & {
     player1MemberIds?: string[];
     player2MemberIds?: string[];
   };
@@ -69,29 +72,49 @@ export function buildStationQueues(
         pool.flatMap((m) => [m.player1Id, m.player2Id].filter((id): id is string => Boolean(id))),
       ),
     ].sort();
-    const rotation: (string | null)[] = [...ids];
-    if (rotation.length % 2) rotation.push(null);
     const rounds: { round: number; matchIds: string[]; restingPlayerIds: string[] }[] = [];
-    for (let round = 1; round < rotation.length; round++) {
-      const matchIds: string[] = [];
-      const restingPlayerIds: string[] = [];
-      for (let i = 0; i < rotation.length / 2; i++) {
-        const a = rotation[i],
-          b = rotation[rotation.length - 1 - i];
-        if (!a || !b) {
-          if (a ?? b) restingPlayerIds.push((a ?? b)!);
-          continue;
+    // Newly generated native draws carry their chosen rounds. Older/imported
+    // draws retain the stable-ID circle order, using the same engine primitive.
+    if (pool.every((m) => (m.nativeRound ?? 0) > 0)) {
+      for (const round of [...new Set(pool.map((m) => m.nativeRound!))].sort((a, b) => a - b)) {
+        const inRound = pool
+          .filter((m) => m.nativeRound === round)
+          .sort((a, b) => (a.nativeSlot ?? 0) - (b.nativeSlot ?? 0) || a.id.localeCompare(b.id));
+        const playing = new Set(inRound.flatMap((m) => [m.player1Id, m.player2Id]));
+        rounds.push({
+          round,
+          matchIds: inRound.map((m) => m.id),
+          restingPlayerIds: ids.filter((id) => !playing.has(id)),
+        });
+        for (const m of inRound) roundById.set(m.id, round);
+      }
+    } else {
+      for (const pairing of buildRoundRobin(ids)) {
+        let entry = rounds.find((r) => r.round === pairing.round);
+        if (!entry) {
+          entry = { round: pairing.round, matchIds: [], restingPlayerIds: [] };
+          rounds.push(entry);
         }
         const found = pool.filter(
-          (m) => m.player1Id && m.player2Id && pairKey(m.player1Id, m.player2Id) === pairKey(a, b),
+          (m) =>
+            m.player1Id &&
+            m.player2Id &&
+            pairKey(m.player1Id, m.player2Id) === pairKey(pairing.player1Id, pairing.player2Id),
         );
         for (const match of found) {
-          matchIds.push(match.id);
-          roundById.set(match.id, round);
+          entry.matchIds.push(match.id);
+          roundById.set(match.id, pairing.round);
         }
       }
-      rounds.push({ round, matchIds: matchIds.sort(), restingPlayerIds });
-      rotation.splice(1, 0, rotation.pop()!);
+      for (const round of rounds) {
+        const playing = new Set(
+          pool
+            .filter((m) => round.matchIds.includes(m.id))
+            .flatMap((m) => [m.player1Id, m.player2Id]),
+        );
+        round.restingPlayerIds = ids.filter((id) => !playing.has(id));
+        round.matchIds.sort();
+      }
     }
     return { poolKey, rounds };
   });

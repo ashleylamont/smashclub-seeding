@@ -46,7 +46,9 @@ test('long player menus scroll to their last option and return to the first by k
   const player = attendance.getByRole('combobox', { name: 'Player', exact: true });
   await player.click();
   const menu = page.getByRole('listbox');
+  const empty = page.getByRole('option', { name: 'Choose a player', exact: true });
   await expect(menu).toBeInViewport();
+  await expect(empty).toBeFocused();
   const viewport = menu.locator('[data-radix-select-viewport]');
   const bounds = await viewport.evaluate((node) => ({
     height: node.clientHeight,
@@ -59,14 +61,18 @@ test('long player menus scroll to their last option and return to the first by k
   await expect(menu).toBeHidden();
   await expect(player).toBeFocused();
   await player.click();
+  // Radix focuses the selected item after positioning the menu. Let that
+  // finish before scrolling, otherwise initial focus can reset the viewport.
+  await expect(empty).toBeFocused();
   const last = page.getByRole('option', { name: 'Synthetic entrant 32', exact: true });
   await last.scrollIntoViewIfNeeded();
   await expect(last).toBeInViewport();
   await last.click();
   await expect(player).toHaveAttribute('data-value', fixture.overview.entrants[31]!.id);
   await player.click();
+  await expect(last).toBeFocused();
   await page.keyboard.press('Home');
-  await expect(page.getByRole('option', { name: 'Choose a player', exact: true })).toBeFocused();
+  await expect(empty).toBeFocused();
   await page.keyboard.press('ArrowDown');
   const first = page.getByRole('option', { name: 'Synthetic entrant 01', exact: true });
   await expect(first).toBeFocused();

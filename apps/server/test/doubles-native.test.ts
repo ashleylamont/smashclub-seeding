@@ -279,6 +279,67 @@ describe('native doubles through shipped APIs', () => {
     expect(preview.allowed).toBe(false);
     expect(preview.issues.join(' ')).toMatch(/fixed/);
   });
+  it('runs a configurable nine-team double round robin and retains its variant through correction and replay', async () => {
+    const { planId } = await draft(9, 'round_robin');
+    await caller().admin.eventPlanner.updateNativeFormat({
+      planId,
+      structure: 'round_robin',
+      structureOptions: { roundRobinMeetings: 2 },
+    });
+    expect((await caller().admin.eventPlanner.plan({ planId }))!.plan.structureOptions).toEqual({
+      roundRobinMeetings: 2,
+    });
+    await prepare(planId);
+    const locked = await runtime.state(planId);
+    expect(locked.baseline!.structureOptions).toEqual({ roundRobinMeetings: 2 });
+    expect(locked.matches).toHaveLength(72);
+    const snapshot = await caller().eventOps.snapshot({ planId });
+    expect(snapshot.poolRounds[0]!.rounds).toHaveLength(18);
+    for (const round of snapshot.poolRounds[0]!.rounds) {
+      const playing = locked.matches
+        .filter((m) => round.matchIds.includes(m.id))
+        .flatMap((m) => [m.player1Id, m.player2Id]);
+      expect(new Set(playing).size).toBe(playing.length);
+    }
+    await expect(
+      caller().admin.eventPlanner.updateNativeFormat({
+        planId,
+        structure: 'round_robin',
+        structureOptions: { roundRobinMeetings: 1 },
+      }),
+    ).rejects.toThrow(/draft|owned/);
+    await finishPools(planId);
+    await caller().eventOps.native.finalize({ planId });
+    const state = await runtime.state(planId);
+    expect(state.result!.structureOptions).toEqual({ roundRobinMeetings: 2 });
+    expect(state.result!.matches).toHaveLength(72);
+    const match = state.matches[0]!;
+    await caller().eventOps.live.command({
+      planId,
+      requestId: 'nine-team-correction',
+      command: {
+        kind: 'replaceResult',
+        resultId: state.result!.id,
+        reason: 'Reviewed nine-team standings',
+        corrections: [
+          {
+            matchId: match.id,
+            expectedRevision: match.revision,
+            score1: 0,
+            score2: 2,
+            outcome: 'played',
+          },
+        ],
+        roundRobinOrder: [...state.pools[0]!.order!].reverse(),
+      },
+    });
+    const corrected = await runtime.state(planId);
+    expect(corrected.result!.revision).toBe(2);
+    expect(corrected.result!.structureOptions).toEqual({ roundRobinMeetings: 2 });
+    expect(corrected.result!.matches).toHaveLength(72);
+    expect(await runtime.replay(planId)).toEqual(corrected);
+  });
+
   it('publishes reviewed round-robin corrections without double-counting earlier pair evidence', async () => {
     const { planId, members } = await draft(4, 'round_robin');
     await prepare(planId);

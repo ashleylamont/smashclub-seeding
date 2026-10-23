@@ -31,9 +31,20 @@ export function replaceResult(
       'Correction refers to a changed match or automatic bye.',
     );
     basis[m.id] = m.revision;
+    const correctedWinner = winner({ ...correction, kind: 'score' }, m);
+    if (state.baseline!.structure === 'double_elimination' && correctedWinner !== m.winnerId)
+      requireFact(
+        !state.matches.some(
+          (child) =>
+            child.parent1Id === m.id ||
+            child.parent2Id === m.id ||
+            child.activation?.matchId === m.id,
+        ),
+        'A winner change would invalidate recorded double-elimination routes or the reset final.',
+      );
     // A reviewed post-publication ruling changes result facts, never actual opponents or draws.
     Object.assign(m, correction, {
-      winnerId: winner({ ...correction, kind: 'score' }, m),
+      winnerId: correctedWinner,
       revision: m.revision + 1,
       resultCommandId: envelope.id,
       automaticFromRevision: null,

@@ -1,20 +1,23 @@
 # Native doubles and tournament structures
 
-Create a plan in **Admin → Event planner**, choose **Doubles — 2v2 (Nemesis)**, and save the draft. Select both registered players in each pair, optionally give the pair a public team name, and review the team count and structure recommendation. A person can enter only once in a competition. New players can be registered under Admin → Players before selecting their pair.
+Create a plan in **Admin → Event planner**, choose **Doubles — 2v2 (Nemesis)**, and save the draft. Select both registered players in each pair, optionally give the pair a public team name, and choose the structure and round-robin meetings per pairing. A person can enter only once in a competition. New players can be registered under Admin → Players before selecting their pair.
 
-| Structure | Recommended field | Behavior |
-| --- | --- | --- |
-| Open round robin | 2–5 teams / 4–10 people | Everyone plays everyone; a TO confirms final placements and resolves ties. No finals stage. |
-| Open pools and finals | 6–11 teams / 12–22 people | One competitive division, balanced pools of three to five teams, then championship and consolation. |
-| Upper / Lower pools and finals | 12+ teams / 24+ people | Two seeded divisions; each has its own pools, championship, and consolation. |
+| Structure | Behavior |
+| --- | --- |
+| Open round robin | Everyone plays everyone; a TO confirms final placements and resolves ties. No finals stage. |
+| Round robin → playoffs | One round robin followed by a configurable playoff cut and optional consolation. |
+| Single elimination | Seeded knockout from the start; byes advance automatically. |
+| Double elimination | Winners and losers brackets; a reset final is played only when required. |
+| Open pools and finals | One competitive division, balanced pools of three to five teams, then championship and optional consolation. |
+| Upper / Lower pools and finals | Two seeded divisions; each has its own pools and final brackets. |
 
-Recommendations are guidance. A single round robin permits two to eight entrants; two divisions require at least six entrants, with three in each. Open pools and finals require at least three entrants. The same native structures are available for singles; count people instead of teams when choosing a singles structure.
+There are no count-based structure recommendations. Round robin needs at least two entrants with no format-specific maximum; two divisions require at least six entrants, with three in each. Open pools and finals require at least three entrants. The same native structures are available for singles. Set **Round-robin meetings per pairing** to one for single round robin, two for double round robin, or another positive integer. This applies to all pools; return meetings alternate sides. Review the night preview to compare the resulting workload. [Tournament structures](tournament-structures.md) describes the shared generator and future format options.
 
-Freeze team seeds, review/reorder seeds, generate pools, and open the event desk. Locking the draw freezes pair membership. Set up stations with four working controller connections. One doubles match occupies one station and one simultaneous-match slot. Use the club's standard doubles gameplay rules consistently; the pair rating currently has one common doubles scope, rather than separate estimates for different gameplay rulesets.
+Freeze team seeds, review/reorder seeds, generate the draw, and open the event desk. Locking the draw freezes pair membership. Set up stations with four working controller connections. One doubles match occupies one station and one simultaneous-match slot. Use the club's standard doubles gameplay rules consistently; the pair rating currently has one common doubles scope, rather than separate estimates for different gameplay rulesets.
 
 The **Doubles player availability** controls hold a pair when either member is away. Attendance controls remove a no-show pair or withdraw the whole pair; a TO explicitly resolves the remaining forfeits. Partners cannot be substituted or added after draw lock. Played sets stay in history; byes, forfeits, and no-contests never create rating evidence.
 
-Either teammate can find the pair under their public names. Reports retain the individual reporter identity and use the existing approval/dispute policy. Confirm pool finishing orders in the planner. For a round robin, finalize directly afterward; for the other structures, create and finish the championship/consolation brackets first. A reviewed round-robin score correction must also include a reviewed complete finishing order.
+Either teammate can find the pair under their public names. Reports retain the individual reporter identity and use the existing approval/dispute policy. Confirm pool finishing orders in the planner. For a round robin, finalize directly afterward; for formats with pools and playoffs, create and finish the final brackets first. Standalone knockout starts at draw lock and finalizes after its last required match. A reviewed round-robin score correction must also include a reviewed complete finishing order.
 
 Results retain both members and one team-versus-team result per set. Player profiles show doubles results separately. Doubles does not alter singles ratings, singles activity periods, or singles breakthrough analysis. Singles recaps remain a singles feature; doubles publishes team standings, records, and bracket results. Public views use both players' public aliases.
 
@@ -53,6 +56,6 @@ The adjustment can absorb individual doubles aptitude, baseline error, and chemi
 
 Engine tests compare the residual optimizer with an independently solved MAP optimum, exercise expected and unexpected wins, historical offsets, side/partner symmetry, cold starts, drift, score weights, invalid inputs, and singles parity. A deterministic simulation checks prediction improvement on unseen matches when persistent pair effects actually exist; this establishes implementation behavior, not a measured improvement on club data.
 
-API tests run all three doubles structures through frozen planning, live ownership, publication, and replay. They cover duplicate/incomplete pairs, individual availability, immutable membership, corrected round-robin standings, public-name privacy, revision supersession, historical baselines, and isolation from singles ratings. PostgreSQL tests exercise concurrent teammate reports and reconstruction/correction after restarting independent Act runtimes. A browser rehearsal creates pairs through the shipped planner and finishes a round robin through the event desk and public results.
+API tests exercise doubles planning, live ownership, publication, and replay across pool, round-robin and knockout formats. They cover duplicate/incomplete pairs, individual availability, immutable membership, corrected round-robin standings, public-name privacy, revision supersession, historical baselines, and isolation from singles ratings. PostgreSQL tests exercise concurrent teammate reports and reconstruction/correction after restarting independent Act runtimes. A browser rehearsal creates pairs through the shipped planner and finishes a round robin through the event desk and public results.
 
 The existing `playerId` / `player1Id` / `player2Id` native transport fields remain compatibility keys. For a doubles entrant those keys identify the event entry, while `memberPlayerIds` identifies the actual people. No player record is created for a team. V1 baseline fields remain unchanged; V2 baselines and sealed results explicitly carry competition format, structure, and membership.

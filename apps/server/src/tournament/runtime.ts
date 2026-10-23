@@ -23,6 +23,7 @@ import {
   initialState,
   LiveState,
   type TournamentCommand,
+  type TournamentState,
 } from './schemas';
 import { stageNativeBaseline, migrateLegacyNativePlans } from './baseline';
 import { publishNativeResult, processNativeRatingIntents } from './publication';
@@ -71,6 +72,14 @@ function requireRecoveryAdmin(kind: string, role: string) {
 }
 
 /** Each runtime owns its cache and store; no process-global store injection. */
+function livePlanStatus(state: TournamentState) {
+  return state.lifecycle === 'finalized'
+    ? 'complete'
+    : state.lifecycle === 'cancelled'
+      ? 'cancelled'
+      : 'underway';
+}
+
 export function createNativeRuntime(
   db: Db,
   store: Store,
@@ -235,15 +244,11 @@ export function createNativeRuntime(
         id: planId,
         name: state.baseline.name,
         eventDate: new Date(state.baseline.eventDate).toISOString(),
-        status:
-          state.lifecycle === 'finalized'
-            ? 'complete'
-            : state.lifecycle === 'cancelled'
-              ? 'cancelled'
-              : 'underway',
+        status: livePlanStatus(state),
         bracketMode: 'native' as const,
         competitionFormat: state.baseline.competitionFormat ?? 'singles',
         structure: state.baseline.structure ?? 'dual_division',
+        structureOptions: state.baseline.structureOptions,
         liveOwned: true,
         drawPaused: state.lifecycle === 'unlocked',
         softLockedAt: new Date(state.baseline.capturedAt).toISOString(),
@@ -252,14 +257,16 @@ export function createNativeRuntime(
       cursor: state.sequence,
       unchanged: cursor === state.sequence,
       resync: cursor !== undefined && cursor !== state.sequence,
-      matches: state.matches.map((m) => ({
-        ...m,
-        player1Name: m.player1Id ? (names.get(m.player1Id) ?? 'Player') : 'TBD',
-        player2Name: m.player2Id ? (names.get(m.player2Id) ?? 'Player') : 'TBD',
-        pendingDisputeCount: state.reports.filter(
-          (r) => r.matchId === m.id && r.status === 'pending' && r.isDispute,
-        ).length,
-      })),
+      matches: state.matches
+        .filter((m) => !m.skipped)
+        .map((m) => ({
+          ...m,
+          player1Name: m.player1Id ? (names.get(m.player1Id) ?? 'Player') : 'TBD',
+          player2Name: m.player2Id ? (names.get(m.player2Id) ?? 'Player') : 'TBD',
+          pendingDisputeCount: state.reports.filter(
+            (r) => r.matchId === m.id && r.status === 'pending' && r.isDispute,
+          ).length,
+        })),
       entrants: state.entrants.map((e) => ({
         id: e.playerId,
         name: names.get(e.playerId) ?? 'Player',

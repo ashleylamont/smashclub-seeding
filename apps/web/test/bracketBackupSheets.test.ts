@@ -49,6 +49,46 @@ describe('TO bracket backup sheets', () => {
     expect(sheets[2].roster).toEqual([]);
   });
 
+  it('prints only the configured bracket roles and labels loser feeds honestly', () => {
+    const data = fixture();
+    data.plan.structure = 'double_elimination';
+    data.nativeBrackets = [
+      { id: 'draw', division: 'upper', stage: 'main', entrantIds: ['a', 'b'] },
+    ];
+    data.matches = [
+      {
+        ...data.matches[0],
+        id: 'winners',
+        stage: 'main',
+        nativeBracketId: 'draw',
+        label: 'Winners R1',
+        nativeRound: 1,
+      },
+      {
+        ...data.matches[0],
+        id: 'final',
+        stage: 'main',
+        nativeBracketId: 'draw',
+        label: 'Grand final',
+        nativeRound: 2,
+        player1Id: null,
+        player2Id: null,
+        parent1MatchId: 'winners',
+        parent2MatchId: 'winners',
+        parent2Outcome: 'loser',
+      },
+    ];
+    const sheets = bracketBackupSheets(data);
+    expect(sheets).toHaveLength(1);
+    expect(sheets[0]!.matches[1]!.player1).toBe('Winner of Winners R1');
+    expect(sheets[0]!.matches[1]!.player2).toBe('Loser of Winners R1');
+    data.plan.structure = 'round_robin';
+    expect(bracketBackupSheets(data)).toEqual([]);
+    data.plan.structure = 'round_robin_finals';
+    data.plan.structureOptions = { roundRobinMeetings: 1, consolation: true };
+    expect(bracketBackupSheets(data)).toHaveLength(2);
+  });
+
   it('prints an existing native draw in round and slot order with winner dependencies', () => {
     const data = fixture();
     data.nativeBrackets = [

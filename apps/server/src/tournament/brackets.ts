@@ -1,9 +1,6 @@
-import {
-  buildConsolationBracket,
-  championshipQualifiers,
-  consolationQualifiers,
-  standardBracketOrder,
-} from '../event-planner/advancement';
+import { finalsRoles, isKnockout } from '@smashclub/shared';
+import { instantiateElimination } from './structureAdapter';
+import { buildFormatFinals, buildEliminationTree } from '@smashclub/engine';
 import { requireFact, resolved, stableId } from './facts';
 import type { CommandEnvelope, TournamentState } from './schemas';
 
@@ -16,30 +13,54 @@ export function advance(state: TournamentState, at: number, commandId: string) {
   for (const match of [...state.matches].sort(
     (a, b) => a.round - b.round || a.id.localeCompare(b.id),
   )) {
-    if (match.parent1Id && match.parent2Id) {
-      const a = byId.get(match.parent1Id)!;
-      const b = byId.get(match.parent2Id)!;
-      if (!resolved(a) || !resolved(b)) continue;
-      const p1 = a.winnerId;
-      const p2 = b.winnerId;
-      if (p1 !== match.player1Id || p2 !== match.player2Id) {
-        requireFact(
-          !match.started && !resolved(match),
-          'A downstream match already has actual play.',
-        );
-        Object.assign(match, {
-          player1Id: p1,
-          player2Id: p2,
-          revision: match.revision + 1,
-          status: p1 && p2 ? 'ready' : 'blocked',
-        });
+    const parents = [match.parent1Id, match.parent2Id].filter((id): id is string => Boolean(id));
+    if (!parents.every((id) => resolved(byId.get(id)!))) continue;
+    if (match.activation) {
+      const parent = byId.get(match.activation.matchId)!;
+      if (!resolved(parent)) continue;
+      const required = match.activation.winnerSide === 1 ? parent.player1Id : parent.player2Id;
+      if (!required || parent.winnerId !== required) {
+        if (!resolved(match))
+          Object.assign(match, {
+            status: 'complete',
+            outcome: 'no_contest',
+            skipped: true,
+            completedAt: at,
+            revision: match.revision + 1,
+            resultCommandId: commandId,
+          });
+        continue;
       }
     }
+    const feed = (
+      id: string | null,
+      outcome: 'winner' | 'loser' | undefined,
+      current: string | null,
+    ) => {
+      if (!id) return current;
+      const parent = byId.get(id)!;
+      if (outcome !== 'loser') return parent.winnerId;
+      return parent.winnerId
+        ? parent.winnerId === parent.player1Id
+          ? parent.player2Id
+          : parent.player1Id
+        : null;
+    };
+    const p1 = feed(match.parent1Id, match.parent1Outcome, match.player1Id);
+    const p2 = feed(match.parent2Id, match.parent2Outcome, match.player2Id);
+    if (p1 !== match.player1Id || p2 !== match.player2Id) {
+      requireFact(
+        !match.started && !resolved(match),
+        'A downstream match already has actual play.',
+      );
+      Object.assign(match, {
+        player1Id: p1,
+        player2Id: p2,
+        revision: match.revision + 1,
+        status: p1 && p2 ? 'ready' : 'blocked',
+      });
+    }
     if (match.started || resolved(match)) continue;
-    const parentsResolved =
-      !match.parent1Id ||
-      (resolved(byId.get(match.parent1Id)!) && resolved(byId.get(match.parent2Id!)!));
-    if (!parentsResolved) continue;
     const players = [match.player1Id, match.player2Id].filter((p): p is string => Boolean(p));
     const remaining = players.filter((p) => !withdrawn.has(p));
     if (match.stage === 'group' && remaining.length === 1 && players.length === 2) {
@@ -68,6 +89,10 @@ export function advance(state: TournamentState, at: number, commandId: string) {
   }
 }
 export function drawFinals(state: TournamentState, envelope: CommandEnvelope) {
+  requireFact(
+    !isKnockout(state.baseline?.structure),
+    'Knockout brackets are chosen at draw lock and have no separate finals draw.',
+  );
   requireFact(!state.brackets.length, 'Finals have already been drawn.');
   requireFact(
     state.reports.every((r) => r.status !== 'pending'),
@@ -86,7 +111,7 @@ export function drawFinals(state: TournamentState, envelope: CommandEnvelope) {
     });
     return;
   }
-  for (const division of state.baseline!.structure === 'pools_finals'
+  for (const division of state.baseline!.structure !== 'dual_division' && state.baseline!.structure
     ? (['upper'] as const)
     : (['upper', 'lower'] as const)) {
     const finishers = state.pools
@@ -99,69 +124,20 @@ export function drawFinals(state: TournamentState, envelope: CommandEnvelope) {
           )
           .map((playerId, index) => ({ playerId, poolIndex: p.index, place: index + 1 })),
       );
-    for (const stage of ['main', 'consolation'] as const) {
-      const qualifiers =
-        stage === 'main' ? championshipQualifiers(finishers) : consolationQualifiers(finishers);
-      // Reuse the seed-integrity/rematch repair used by current native finals.
-      const drawInput =
-        stage === 'main'
-          ? qualifiers.map((q, index) => ({
-              ...q,
-              place:
-                qualifiers.filter((p, i) => i < index && p.poolIndex === q.poolIndex).length + 3,
-            }))
-          : qualifiers;
-      const entrantIds = drawInput.length
-        ? buildConsolationBracket(drawInput).entrants.map((p) => p.playerId)
-        : [];
+    for (const stage of finalsRoles(state.baseline!.structure, state.baseline!.structureOptions)) {
+      const entrantIds = buildFormatFinals(
+        state.baseline!.structure,
+        finishers,
+        stage,
+        state.baseline!.structureOptions,
+      ).map((p) => p.playerId);
       const bracketId = stableId(`${envelope.id}:${division}:${stage}`);
       state.brackets.push({ id: bracketId, division, stage, entrantIds });
-      let size = 2;
-      while (size < entrantIds.length) size *= 2;
-      const slots = entrantIds.length
-        ? standardBracketOrder(size).map((seed) => entrantIds[seed - 1] ?? null)
-        : [];
-      let previous: string[] = [];
-      for (let width = slots.length / 2, round = 1; width >= 1; width /= 2, round++) {
-        const current: string[] = [];
-        for (let slot = 0; slot < width; slot++) {
-          const id = stableId(`${bracketId}:${round}:${slot}`);
-          current.push(id);
-          const player1Id = round === 1 ? slots[slot * 2]! : null;
-          const player2Id = round === 1 ? slots[slot * 2 + 1]! : null;
-          state.matches.push({
-            id,
-            sourceKey: `native:${division}:${stage}:${round}:${slot}`,
-            division,
-            stage,
-            poolId: null,
-            bracketId,
-            round,
-            slot,
-            label: `${division} ${stage} · R${round} M${slot + 1}`,
-            parent1Id: round === 1 ? null : previous[slot * 2]!,
-            parent2Id: round === 1 ? null : previous[slot * 2 + 1]!,
-            player1Id,
-            player2Id,
-            status: player1Id && player2Id ? 'ready' : 'blocked',
-            outcome: null,
-            score1: null,
-            score2: null,
-            winnerId: null,
-            stationId: null,
-            revision: 0,
-            started: false,
-            completedAt: null,
-            automaticFromRevision: null,
-            resultCommandId: null,
-            liveScore1: null,
-            liveScore2: null,
-            progressRevision: 0,
-            blockedReason: null,
-          });
-        }
-        previous = current;
-      }
+      const tree = buildEliminationTree(
+        bracketId,
+        entrantIds.map((entrantId) => ({ kind: 'entrant', entrantId })),
+      );
+      state.matches.push(...instantiateElimination(tree, bracketId, division, stage));
     }
   }
   advance(state, envelope.at, envelope.id);

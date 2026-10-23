@@ -1,3 +1,4 @@
+import { isKnockout } from '@smashclub/shared';
 import { Select, SelectItem } from '../../../components/ui/Select';
 import { Button } from '../../../components/ui/Button';
 import { useMemo, useState } from 'react';
@@ -17,6 +18,20 @@ import { DIVISION_LABEL } from './labels';
  */
 
 export function PoolsStep({ view, onChanged }: { view: EventPlanView; onChanged: () => void }) {
+  if (isKnockout(view.plan.structure))
+    return (
+      <section className="card section">
+        <h3>Knockout draw ready</h3>
+        <p>
+          Open the event desk to lock the seeded draw and start matches. Winners and losers advance
+          along the chosen bracket; automatic byes use no played games.
+        </p>
+        <a className="btn btn-primary" href={`/admin/event-operations?plan=${view.plan.id}`}>
+          Open event desk
+        </a>
+      </section>
+    );
+
   return (
     <div>
       <div className="page-header">
@@ -24,7 +39,9 @@ export function PoolsStep({ view, onChanged }: { view: EventPlanView; onChanged:
         <span className="muted">
           {view.plan.structure === 'round_robin'
             ? 'Every entrant plays every other entrant. Confirm the finishing order after resolving ties, then finalize the event.'
-            : `Balanced pools of three to five ${view.plan.competitionFormat === 'doubles' ? 'teams' : 'players'}, striped across seed order. The upper half, rounded up, advances; everyone else enters consolation.`}
+            : view.plan.structure === 'round_robin_finals'
+              ? `Every entrant plays every other entrant. Confirm the finishing order, then advance ${view.plan.structureOptions?.playoffSize ?? 'everyone'} to playoffs${view.plan.structureOptions?.consolation ? ' with consolation for the remaining entrants' : ''}.`
+              : `Balanced pools of three to five ${view.plan.competitionFormat === 'doubles' ? 'teams' : 'players'}, striped across seed order. The upper half, rounded up, advances${view.plan.structureOptions?.consolation === false ? '.' : '; everyone else enters consolation.'}`}
         </span>
       </div>
       {view.divisions.map((division) => (

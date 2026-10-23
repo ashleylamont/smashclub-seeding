@@ -7,6 +7,7 @@ Start with the [project README](../README.md) for a quick start and repository m
 - [Deployment assurance](deployment-assurance.md): required database/image gates, reliability fixtures and publication policy.
 - [Development and deployment](development.md): local rehearsal, PostgreSQL, environment variables, initial import and Kubernetes.
 - [Run an event](event-guide.md): planner workflow, native Nemesis and external Challonge events, results and recaps.
+- [Tournament structures](tournament-structures.md): pure format compilation, configurable round robins, architecture review, and formats to explore.
 - [Rating and identity notes](rating-and-identity.md): source data, rating models, board versus seeding, names and account access.
 - [Native event desk and displays](event-night-refinements.md): stations, live scores, finals, finalization and overlay.
 - [Guest event night and score approval](guest-event-night.md): public player hub, guest passes and dispute policy.

@@ -1,3 +1,4 @@
+import { isKnockout } from '@smashclub/shared';
 import { Button } from '../../../components/ui/Button';
 import { useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
@@ -58,15 +59,21 @@ export function DivisionsStep({ view, onChanged }: { view: EventPlanView; onChan
             disabled={
               locked ||
               generate.isPending ||
-              view.divisions.some((division) => division.pools.length === 0)
+              view.divisions.some(
+                (division) => !isKnockout(view.plan.structure) && division.pools.length === 0,
+              )
             }
             onClick={() => generate.mutate()}
           >
             {generate.isPending
               ? 'Generating…'
               : view.plan.status === 'roster_frozen'
-                ? 'Generate pools'
-                : 'Regenerate pools'}
+                ? isKnockout(view.plan.structure)
+                  ? 'Generate draw'
+                  : 'Generate pools'
+                : isKnockout(view.plan.structure)
+                  ? 'Regenerate draw'
+                  : 'Regenerate pools'}
           </Button>
         </span>
       </div>

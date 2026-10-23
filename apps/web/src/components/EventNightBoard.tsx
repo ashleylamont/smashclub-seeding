@@ -229,11 +229,13 @@ export function EventBrackets({
               {rounds.map((round, index) => (
                 <section className="event-bracket-round" key={round}>
                   <h4>
-                    {index === rounds.length - 1
-                      ? 'Final'
-                      : index === rounds.length - 2
-                        ? 'Semi-finals'
-                        : `Round ${index + 1}`}
+                    {games.find((m) => m.nativeRound === round)?.bracketLane
+                      ? games.find((m) => m.nativeRound === round)!.label.split(' · ')[0]
+                      : index === rounds.length - 1
+                        ? 'Final'
+                        : index === rounds.length - 2
+                          ? 'Semi-finals'
+                          : `Round ${index + 1}`}
                   </h4>
                   {games
                     .filter((match) => match.nativeRound === round)
@@ -259,6 +261,7 @@ export function EventBrackets({
                             name: match.player1Name,
                             score: match.score1,
                             parent: match.parent1MatchId,
+                            parentOutcome: match.parent1Outcome,
                             characters: match.player1Characters,
                           },
                           {
@@ -266,6 +269,7 @@ export function EventBrackets({
                             name: match.player2Name,
                             score: match.score2,
                             parent: match.parent2MatchId,
+                            parentOutcome: match.parent2Outcome,
                             characters: match.player2Characters,
                           },
                         ].map((player, side) => (
@@ -277,7 +281,7 @@ export function EventBrackets({
                               {player.id
                                 ? player.name
                                 : player.parent
-                                  ? `Winner of ${labels.get(player.parent) ?? 'previous match'}`
+                                  ? `${player.parentOutcome === 'loser' ? 'Loser' : 'Winner'} of ${labels.get(player.parent) ?? 'previous match'}`
                                   : match.outcome === 'bye'
                                     ? 'Bye'
                                     : 'To be decided'}
