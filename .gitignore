@@ -11,6 +11,8 @@ dist/
 # Test artifacts
 coverage/
 playwright-report/
+blob-report/
+blob-reports/
 test-results/
 
 # macOS files

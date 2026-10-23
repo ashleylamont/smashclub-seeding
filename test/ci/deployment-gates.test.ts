@@ -18,7 +18,7 @@ it('all required jobs run and every skipped, missing, cancelled or failed depend
     /PostgreSQL gate|Missing required|publication|commit|main|Expected/,
   );
   for (const job of requiredJobs) {
-    expect(ci.jobs[job].if).toBeUndefined();
+    expect(ci.jobs[job].if).toBe(job === 'e2e-report' ? 'always()' : undefined);
     for (const result of ['skipped', 'failure', 'cancelled', undefined])
       expect(() => assertRequiredJobs({ ...results, [job]: { result } })).toThrow(job);
   }

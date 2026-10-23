@@ -45,6 +45,27 @@ pnpm test:e2e local-sign-in.spec.ts # optional focused browser run
 
 E2E always starts its own harness and ignores `DEV_CACHE_DIR`, preventing an unrelated local process or history cache from changing fixtures. Set `E2E_PORT` (default 3310) or `UI_PORT` (default 3411) when testing another checkout. E2E accepts `CHROMIUM_PATH` to use an explicitly chosen compatible browser. Failures retain screenshots and traces. See [UI review](ui-visual-review.md) and [deployment assurance](deployment-assurance.md) for review and CI requirements.
 
+CI splits the browser suite across four runners. Each shard owns a fresh database
+and API harness, runs one browser worker, and retains whole test files together.
+All four shards and the combined **Browser report** are required by **All checks**.
+The `browser-report` artifact contains the merged HTML report; failed traces and
+page captures are also available in artifacts suffixed with the shard number.
+Shard failures do not cancel the other shards. Retries remain disabled.
+
+To reproduce one shard locally, build once, then run:
+
+```bash
+pnpm --filter @smashclub/web build
+E2E_PORT=3311 pnpm --filter @smashclub/web test:e2e --shard=1/4
+```
+
+For concurrent local shards, give each a different `E2E_PORT` and `--output`
+directory. If collecting blob reports, also give each a different
+`PLAYWRIGHT_BLOB_OUTPUT_DIR`. Tests must create their own mutable event data or
+use a named seeded fixture; they must not depend on a different test file having
+run first. Do not solve missing controls or slow requests by increasing timeouts
+without inspecting the retained trace.
+
 `pnpm lint:fix` applies safe Oxlint fixes; `pnpm format` writes Prettier formatting. Oxlint checks workspace import direction and cycles, correctness, React hooks, accessibility, and bounded complexity. Existing large modules have named overrides. Prettier excludes generated migration snapshots, engine fixtures, legacy Python, and prose docs. `pnpm rank-eval` evaluates WHR variants against independent baselines.
 
 ### Troubleshooting

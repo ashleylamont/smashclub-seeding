@@ -61,29 +61,75 @@ jobs:
       - run: pnpm test
 
   e2e:
-    name: Browser event flows
+    name: Browser event flows (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
+    strategy:
+      # Finish every shard so one failure does not hide the other diagnostics.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-node-pnpm
       - run: pnpm --filter @smashclub/web exec playwright install --with-deps chromium
       - run: pnpm --filter @smashclub/web build
-      - run: pnpm test:e2e
+      # The root test:e2e command rebuilds. Use the already-built SPA here.
+      # Each runner owns a fresh harness; files stay together and use one worker.
+      - run: pnpm --filter @smashclub/web test:e2e --shard=${{ matrix.shard }}/4 --reporter=list,blob
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: browser-page-captures
+          name: browser-blob-report-${{ matrix.shard }}
+          overwrite: true
+          path: apps/web/blob-report
+          retention-days: 7
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-page-captures-${{ matrix.shard }}
+          overwrite: true
           path: apps/web/screenshots
           retention-days: 7
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: browser-test-results
+          name: browser-test-results-${{ matrix.shard }}
+          overwrite: true
           path: apps/web/test-results
           retention-days: 7
           if-no-files-found: ignore
+
+  e2e-report:
+    name: Browser report
+    if: always()
+    needs: e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-node-pnpm
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: browser-blob-report-*
+          path: apps/web/blob-reports
+          merge-multiple: true
+      - name: Require every shard report
+        run: |
+          node --input-type=module -e "import { readdirSync } from 'node:fs'; if (readdirSync('apps/web/blob-reports').filter(f => f.endsWith('.zip')).length !== 4) throw new Error('Expected all four browser shard reports');"
+      - run: pnpm --filter @smashclub/web exec playwright merge-reports --reporter=html ./blob-reports
+        env:
+          PLAYWRIGHT_HTML_OPEN: never
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-report
+          overwrite: true
+          path: apps/web/playwright-report
+          retention-days: 7
+          if-no-files-found: error
 
   ui-quality:
     name: UI accessibility and visuals
@@ -255,6 +301,7 @@ jobs:
         format,
         test,
         e2e,
+        e2e-report,
         ui-quality,
         build,
         bundle-smoke,
