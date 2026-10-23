@@ -192,6 +192,17 @@
   overflow: hidden;
   font: var(--fs-sm)/var(--line-body) var(--mono);
 }
+/* Popper menus use a native scroll viewport. Radix's mounting scroll arrows
+   scroll the focused option into view, which can undo a user's wheel scroll. */
+.ui-select-content .ui-select-viewport {
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) var(--surface);
+}
+.ui-select-content .ui-select-viewport::-webkit-scrollbar {
+  display: block;
+  width: var(--s2);
+}
 .ui-select-item {
   position: relative;
   display: flex;
@@ -212,10 +223,6 @@
 .ui-select-check {
   position: absolute;
   right: var(--s2);
-}
-.ui-select-scroll {
-  text-align: center;
-  padding: var(--s1);
 }
 .ui-checkbox {
   display: inline-flex;

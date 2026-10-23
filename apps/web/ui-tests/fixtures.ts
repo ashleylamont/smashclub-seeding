@@ -141,7 +141,7 @@ export async function mockEvent(page: Page, options: FixtureOptions = {}) {
     });
     await route.fulfill({ json: url.searchParams.get('batch') ? result : result[0] });
   });
-  return { snapshot, overview, submissions, starts, unexpected };
+  return { snapshot, overview, responses, submissions, starts, unexpected };
 }
 
 export async function ready(page: Page) {

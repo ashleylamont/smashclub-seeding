@@ -12,27 +12,21 @@ test('long player menus scroll to their last option and return to the first by k
     id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
     name: `Synthetic entrant ${String(index + 1).padStart(2, '0')}`,
   }));
-  await page.route('**/api/trpc/eventOps.attendeeRoster*', async (route) => {
-    const data = {
-      attendees: fixture.overview.entrants.map((entrant) => ({
-        entryId: entrant.id,
-        playerId: entrant.id,
-        rawInput: entrant.name,
-        cleanedName: entrant.name,
-        division: 'upper',
-        canonicalName: entrant.name,
-        displayName: entrant.name,
-        publicAlias: entrant.name,
-        companyCode: null,
-        companyName: null,
-      })),
-      companies: [],
-    };
-    const result = { result: { data } };
-    await route.fulfill({
-      json: new URL(route.request().url()).searchParams.has('batch') ? [result] : result,
-    });
-  });
+  fixture.responses['eventOps.attendeeRoster'] = {
+    attendees: fixture.overview.entrants.map((entrant) => ({
+      entryId: entrant.id,
+      playerId: entrant.id,
+      rawInput: entrant.name,
+      cleanedName: entrant.name,
+      division: 'upper',
+      canonicalName: entrant.name,
+      displayName: entrant.name,
+      publicAlias: entrant.name,
+      companyCode: null,
+      companyName: null,
+    })),
+    companies: [],
+  };
   await page.goto(`/operate/${PLAN_ID}`);
   await page.getByRole('tab', { name: 'Players', exact: true }).click();
   const roster = page.locator('section.card').filter({
@@ -61,11 +55,12 @@ test('long player menus scroll to their last option and return to the first by k
   await expect(menu).toBeHidden();
   await expect(player).toBeFocused();
   await player.click();
-  // Radix focuses the selected item after positioning the menu. Let that
-  // finish before scrolling, otherwise initial focus can reset the viewport.
   await expect(empty).toBeFocused();
   const last = page.getByRole('option', { name: 'Synthetic entrant 32', exact: true });
-  await last.scrollIntoViewIfNeeded();
+  // Exercise the user's scroll path. Mounting a scroll arrow must not scroll
+  // the previously focused option back into view and undo this wheel event.
+  await viewport.hover();
+  await page.mouse.wheel(0, bounds.scroll);
   await expect(last).toBeInViewport();
   await last.click();
   await expect(player).toHaveAttribute('data-value', fixture.overview.entrants[31]!.id);
