@@ -1,3 +1,4 @@
+import type { HistoricalAdoption } from './eventPlanningTypes';
 import {
   bigint,
   boolean,
@@ -12,7 +13,14 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import type { StructureOptions, TournamentStructure, CompetitionFormat } from '@smashclub/shared';
 import { user } from './auth';
+export type {
+  HistoricalAdoption,
+  HistoricalAdoptionBracket,
+  HistoricalAdoptionDifferences,
+  HistoricalAdoptionRecord,
+} from './eventPlanningTypes';
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -203,7 +211,7 @@ export type SetResultStage = 'group' | 'final';
 
 export const tournaments = pgTable('tournaments', {
   competitionFormat: text('competition_format')
-    .$type<'singles' | 'doubles'>()
+    .$type<CompetitionFormat>()
     .notNull()
     .default('singles'),
   provider: text('provider').$type<'challonge' | 'native'>().notNull().default('challonge'),
@@ -551,43 +559,6 @@ export const eventPlanStatusEnum = pgEnum('event_plan_status', [
   'cancelled',
 ]);
 
-export interface HistoricalAdoptionBracket {
-  division: 'upper' | 'lower';
-  stage: 'main' | 'consolation';
-  tournamentId: string;
-  name: string;
-  slug: string;
-  participantCount: number;
-  previousSlug: string | null;
-}
-export interface HistoricalAdoptionDifferences {
-  plannedOnly: { name: string; playerId: string | null }[];
-  actualOnly: { name: string; playerId: string | null }[];
-  divisionChanges: {
-    name: string;
-    playerId: string;
-    plannedDivision: 'upper' | 'lower';
-    actualDivision: 'upper' | 'lower';
-  }[];
-}
-export interface HistoricalAdoptionRecord {
-  adoptedAt: string;
-  adoptedBy: string;
-  previousStatus: string;
-  previousBrackets: {
-    division: 'upper' | 'lower';
-    stage: 'main' | 'consolation';
-    tournamentId: string | null;
-    challongeSlug: string | null;
-  }[];
-  brackets: HistoricalAdoptionBracket[];
-  differences: HistoricalAdoptionDifferences;
-  warnings: string[];
-}
-export interface HistoricalAdoption extends HistoricalAdoptionRecord {
-  history: HistoricalAdoptionRecord[];
-}
-
 export const eventPlans = pgTable('event_plans', {
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   resultsWithdrawnAt: timestamp('results_withdrawn_at', { withTimezone: true }),
@@ -601,13 +572,14 @@ export const eventPlans = pgTable('event_plans', {
     withdrawResults: boolean;
   }>(),
   competitionFormat: text('competition_format')
-    .$type<'singles' | 'doubles'>()
+    .$type<CompetitionFormat>()
     .notNull()
     .default('singles'),
-  structure: text('structure')
-    .$type<'dual_division' | 'pools_finals' | 'round_robin'>()
+  structure: text('structure').$type<TournamentStructure>().notNull().default('dual_division'),
+  structureOptions: jsonb('structure_options')
+    .$type<StructureOptions>()
     .notNull()
-    .default('dual_division'),
+    .default({ roundRobinMeetings: 1 }),
   usePairRatings: boolean('use_pair_ratings').notNull().default(false),
   nativeSeedContext: jsonb('native_seed_context').$type<Record<string, unknown>>(),
   bracketMode: text('bracket_mode').$type<'challonge' | 'native'>().notNull().default('challonge'),

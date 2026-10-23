@@ -33,6 +33,8 @@ export function dispatchMatch(
     const queues = buildStationQueues(
       next.matches.map((m) => ({
         ...m,
+        nativeRound: m.round || null,
+        nativeSlot: m.slot,
         poolIndex: next.pools.find((p) => p.id === m.poolId)?.index ?? null,
       })),
       next.stations,

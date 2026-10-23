@@ -1,0 +1,1 @@
+ALTER TABLE "event_plans" ADD COLUMN "structure_options" jsonb DEFAULT '{"roundRobinMeetings":1}'::jsonb NOT NULL;

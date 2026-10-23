@@ -14,7 +14,7 @@ async function mutate<T>(request: APIRequestContext, procedure: string, data: ob
   return (await response.json()).result.data as T;
 }
 
-test('creates fixed doubles pairs in the planner and runs an open round robin to public team results', async ({
+test('creates fixed doubles pairs in the planner and runs a configured double round robin to public team results', async ({
   page,
 }, testInfo) => {
   test.setTimeout(180_000);
@@ -34,9 +34,15 @@ test('creates fixed doubles pairs in the planner and runs an open round robin to
   await page.goto('/admin/event-planner');
   await chooseOption(page.getByRole('combobox', { name: 'Competition', exact: true }), 'doubles');
   await page.getByLabel('Event name', { exact: true }).fill('Browser doubles rehearsal');
+  await page
+    .getByRole('spinbutton', { name: 'Round-robin meetings per pairing', exact: true })
+    .fill('2');
   await page.getByRole('button', { name: 'Create doubles plan', exact: true }).click();
   await expect(page).toHaveURL(/plan=/);
   const planId = new URL(page.url()).searchParams.get('plan')!;
+  await expect(
+    page.getByRole('spinbutton', { name: 'Round-robin meetings per pairing', exact: true }),
+  ).toHaveValue('2');
   for (let i = 0; i < 4; i++) {
     for (const [button, player] of [
       ['Choose first player', players[i * 2]!],
@@ -75,7 +81,7 @@ test('creates fixed doubles pairs in the planner and runs an open round robin to
     matches: { id: string; revision: number; player1Name: string; player2Name: string }[];
   };
   const state = await query<State>(page.request, 'eventOps.snapshot', { planId });
-  expect(state.matches).toHaveLength(6);
+  expect(state.matches).toHaveLength(12);
   expect(
     state.matches.every((m) => m.player1Name.includes(' / ') && m.player2Name.includes(' / ')),
   ).toBe(true);

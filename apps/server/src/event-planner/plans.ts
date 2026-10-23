@@ -15,7 +15,14 @@ import {
   freezeExtendedNativePlan,
   validateDraftMembers,
 } from './nativePlanner';
-import type { CompetitionFormat, TournamentStructure } from '@smashclub/shared';
+import {
+  publicPlayerName,
+  isKnockout,
+  structureOptionsSchema,
+  type StructureOptions,
+  type CompetitionFormat,
+  type TournamentStructure,
+} from '@smashclub/shared';
 import { createHash } from 'node:crypto';
 import { and, asc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
@@ -34,7 +41,6 @@ import {
   tournaments,
 } from '@smashclub/db';
 import { normalizeTournamentId } from '@smashclub/engine';
-import { publicPlayerName } from '@smashclub/shared';
 import { latestRecomputeId } from '../recompute/recompute';
 import { resolvePlayerInputs } from '../identity/resolver';
 import type { ReviewCandidateSnapshot } from '../identity/candidates';
@@ -412,6 +418,7 @@ export interface CreatePlanInput {
   bracketMode?: 'native' | 'challonge';
   competitionFormat?: CompetitionFormat;
   structure?: TournamentStructure;
+  structureOptions?: Partial<StructureOptions>;
   usePairRatings?: boolean;
   name: string;
   eventDate: Date;
@@ -438,7 +445,8 @@ export async function createPlan(
   if (
     (input.bracketMode ?? 'native') !== 'native' &&
     (input.competitionFormat === 'doubles' ||
-      (input.structure && input.structure !== 'dual_division'))
+      (input.structure && input.structure !== 'dual_division') ||
+      (input.structureOptions?.roundRobinMeetings ?? 1) !== 1)
   )
     throw new EventPlanStateError('Doubles and open formats require Nemesis.');
   return db.transaction(async (tx) => {
@@ -449,6 +457,7 @@ export async function createPlan(
         bracketMode: input.bracketMode ?? 'native',
         competitionFormat: input.competitionFormat ?? 'singles',
         structure: input.structure ?? 'dual_division',
+        structureOptions: structureOptionsSchema.parse(input.structureOptions ?? {}),
         usePairRatings: input.usePairRatings ?? false,
         eventDate: input.eventDate,
         slugPrefix: input.slugPrefix ?? null,
@@ -857,7 +866,7 @@ async function generatePoolsUnlocked(db: Db, planId: string): Promise<void> {
   const view = await getPlan(db, planId);
   if (!view) throw new EventPlanStateError('That event plan no longer exists.');
   for (const division of view.divisions) {
-    if (division.size === 0 || division.pools.length === 0) {
+    if (division.size === 0 || (!isKnockout(plan.structure) && division.pools.length === 0)) {
       throw new EventPlanStateError(
         `The ${division.division} division does not divide into pools yet.`,
       );

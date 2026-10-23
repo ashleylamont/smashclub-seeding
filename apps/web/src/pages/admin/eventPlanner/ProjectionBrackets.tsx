@@ -3,10 +3,10 @@ import { type FormatProjection } from './projectionView';
 export function ProjectionBrackets({ projection }: { projection: FormatProjection }) {
   return (
     <div className="projection-layout">
-      <h4>Pool layout and advancement</h4>
+      <h4>Tournament structure and advancement</h4>
       <p className="muted">
-        Seed and pool-place placeholders show the shape of the night. A1 means first in pool A;
-        winners remain unknown.
+        Seeds, pool places and winner/loser feeds show the shape of the night. A1 means first in
+        pool A; future results remain unknown.
       </p>
       <div className="projection-pools">
         {projection.pools.map((pool) => (
@@ -20,8 +20,8 @@ export function ProjectionBrackets({ projection }: { projection: FormatProjectio
               ))}
             </ul>
             <p>
-              {(pool.entrants.length * (pool.entrants.length - 1)) / 2} sets · everyone plays
-              everyone
+              {pool.setCount ?? (pool.entrants.length * (pool.entrants.length - 1)) / 2} sets ·
+              everyone plays everyone
             </p>
             {pool.championship ? (
               <p>
@@ -38,11 +38,16 @@ export function ProjectionBrackets({ projection }: { projection: FormatProjectio
       {projection.brackets.map((bracket) => {
         const matches = projection.matches.filter((m) => m.section === bracket.id);
         const rounds = Math.max(1, ...matches.map((m) => m.round));
-        const firstRoundSize = matches.filter((m) => m.round === 1).length;
+        const general = bracket.kind === 'double_elimination';
+        const firstRoundSize = general
+          ? Math.max(1, ...matches.map((m) => m.slot + 1))
+          : matches.filter((m) => m.round === 1).length;
         const height = Math.max(90, firstRoundSize * 90);
         const pos = (round: number, slot: number) => ({
           x: (round - 1) * 250 + 10,
-          y: (slot * 2 ** (round - 1) + (2 ** (round - 1) - 1) / 2) * 90 + 8,
+          y: general
+            ? slot * 90 + 8
+            : (slot * 2 ** (round - 1) + (2 ** (round - 1) - 1) / 2) * 90 + 8,
         });
         return (
           <article key={bracket.id} className="projection-bracket">
@@ -94,7 +99,7 @@ export function ProjectionBrackets({ projection }: { projection: FormatProjectio
                         <rect x={x} y={y} width={220} height={64} />
                         <text x={x + 8} y={y + 17} className="projection-node-title">
                           {m.id}
-                          {m.bye ? ' · Bye' : ''}
+                          {m.bye ? ' · Bye' : m.conditional ? ' · If needed' : ''}
                         </text>
                         <text x={x + 8} y={y + 37}>
                           {m.sides[0]}

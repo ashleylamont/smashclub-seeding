@@ -1,8 +1,11 @@
+import { validateKnockoutBaseline } from './structureValidation';
+import { isKnockout, isSinglePool } from '@smashclub/shared';
+import { buildRoundRobin } from '@smashclub/engine';
 import { retireEvent } from './retirementDecision';
 import { sealResults } from './results';
 import { memberIds, changeAvailability } from './entrants';
 import { dispatchMatch } from './scheduling';
-import { additionalDecision, finalsToken, resetFinals } from './operations';
+import { additionalDecision, finalsToken, resetFinals, canPauseDraw } from './operations';
 import { drawFinals } from './brackets';
 import { hash, receiptKey, requireFact, resolved, sameScore } from './facts';
 import { applyScore, recordScore } from './scores';
@@ -21,7 +24,8 @@ export function captureBaseline(baseline: TournamentBaseline): TournamentState {
       baseline.competitionFormat && baseline.structure,
       'V2 baselines need a competition format and structure.',
     );
-  if (baseline.structure === 'round_robin')
+  const knockout = isKnockout(baseline.structure);
+  if (isSinglePool(baseline.structure))
     requireFact(
       baseline.pools.length === 1 && baseline.pools[0]!.division === 'upper',
       'An open round robin needs exactly one open pool.',
@@ -48,54 +52,69 @@ export function captureBaseline(baseline: TournamentBaseline): TournamentState {
   requireFact(
     baseline.matches.every(
       (m) =>
-        ['ready', 'blocked'].includes(m.status) &&
+        (knockout ? ['ready', 'blocked', 'complete'] : ['ready', 'blocked']).includes(m.status) &&
         !m.started &&
-        !m.outcome &&
-        m.player1Id &&
-        m.player2Id &&
-        m.player1Id !== m.player2Id &&
-        entrantIds.has(m.player1Id) &&
-        entrantIds.has(m.player2Id),
+        (!m.outcome || (knockout && ['bye', 'no_contest'].includes(m.outcome))) &&
+        (knockout || Boolean(m.player1Id && m.player2Id)) &&
+        !(m.player1Id && m.player1Id === m.player2Id) &&
+        (!m.player1Id || entrantIds.has(m.player1Id)) &&
+        (!m.player2Id || entrantIds.has(m.player2Id)),
     ),
     'Only an unplayed native draw can be adopted.',
   );
-  const assigned = baseline.pools.flatMap((p) => p.entrantIds);
-  requireFact(
-    assigned.length === entrantIds.size &&
-      new Set(assigned).size === entrantIds.size &&
-      assigned.every((id) => entrantIds.has(id)),
-    'Each entrant needs exactly one pool.',
-  );
-  requireFact(
-    new Set(baseline.pools.map((p) => p.id)).size === baseline.pools.length,
-    'Duplicate pool IDs.',
-  );
-  for (const pool of baseline.pools) {
-    const matches = baseline.matches.filter((m) => m.poolId === pool.id);
-    const pairs = matches.map((m) => [m.player1Id, m.player2Id].sort().join(':'));
+  if (knockout) validateKnockoutBaseline(baseline);
+  else {
+    const assigned = baseline.pools.flatMap((p) => p.entrantIds);
     requireFact(
-      matches.length === (pool.entrantIds.length * (pool.entrantIds.length - 1)) / 2 &&
-        new Set(pairs).size === matches.length,
-      'Baseline must contain the actual complete round-robin draw.',
+      assigned.length === entrantIds.size &&
+        new Set(assigned).size === entrantIds.size &&
+        assigned.every((id) => entrantIds.has(id)),
+      'Each entrant needs exactly one pool.',
     );
     requireFact(
-      matches.every(
-        (m) =>
-          m.division === pool.division &&
-          m.stage === 'group' &&
-          !m.parent1Id &&
-          !m.parent2Id &&
-          !m.bracketId &&
-          pool.entrantIds.includes(m.player1Id!) &&
-          pool.entrantIds.includes(m.player2Id!),
-      ),
-      'Baseline match is outside its pool draw.',
+      new Set(baseline.pools.map((p) => p.id)).size === baseline.pools.length,
+      'Duplicate pool IDs.',
+    );
+    for (const pool of baseline.pools) {
+      const matches = baseline.matches.filter((m) => m.poolId === pool.id);
+      const pairKey = (a: string, b: string) => JSON.stringify([a, b].sort());
+      const expected = buildRoundRobin(
+        pool.entrantIds,
+        baseline.structureOptions?.roundRobinMeetings ?? 1,
+      );
+      const counts = new Map<string, number>();
+      for (const match of matches) {
+        const key = pairKey(match.player1Id!, match.player2Id!);
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+      requireFact(
+        matches.length === expected.length &&
+          expected.every(
+            (m) =>
+              counts.get(pairKey(m.player1Id, m.player2Id)) ===
+              (baseline.structureOptions?.roundRobinMeetings ?? 1),
+          ),
+        'Baseline must contain the actual complete round-robin draw.',
+      );
+      requireFact(
+        matches.every(
+          (m) =>
+            m.division === pool.division &&
+            m.stage === 'group' &&
+            !m.parent1Id &&
+            !m.parent2Id &&
+            !m.bracketId &&
+            pool.entrantIds.includes(m.player1Id!) &&
+            pool.entrantIds.includes(m.player2Id!),
+        ),
+        'Baseline match is outside its pool draw.',
+      );
+    }
+    requireFact(
+      baseline.matches.every((m) => baseline.pools.some((p) => p.id === m.poolId)),
+      'Unknown baseline pool.',
     );
   }
-  requireFact(
-    baseline.matches.every((m) => baseline.pools.some((p) => p.id === m.poolId)),
-    'Unknown baseline pool.',
-  );
   return {
     ...initialState(),
     baseline,
@@ -104,6 +123,7 @@ export function captureBaseline(baseline: TournamentBaseline): TournamentState {
     entrants: baseline.entrants,
     pools: baseline.pools,
     matches: baseline.matches,
+    brackets: baseline.brackets ?? [],
     stations: baseline.stations,
     settings: baseline.settings,
     announcements: baseline.announcements,
@@ -296,12 +316,7 @@ export function decide(
       drawFinals(next, envelope);
       break;
     case 'unlock':
-      requireFact(
-        !next.brackets.length &&
-          !next.reports.length &&
-          next.matches.every((m) => !m.started && !resolved(m)),
-        'Play has started; reopening needs an explicit repair.',
-      );
+      requireFact(canPauseDraw(next), 'Play has started; reopening needs an explicit repair.');
       next.lifecycle = 'unlocked';
       break;
     case 'relock':

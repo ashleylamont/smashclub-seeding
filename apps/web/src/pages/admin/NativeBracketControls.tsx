@@ -1,3 +1,4 @@
+import { isKnockout } from '@smashclub/shared';
 import { useConfirmation } from '../../lib/confirmation';
 import { Button } from '../../components/ui/Button';
 import { useState } from 'react';
@@ -46,9 +47,18 @@ export function NativeBracketControls({
   return (
     <section className="card">
       <h3>
-        {structure === 'round_robin' ? 'Round-robin results' : 'Championship and consolation'}
+        {isKnockout(structure)
+          ? 'Knockout results'
+          : structure === 'round_robin'
+            ? 'Round-robin results'
+            : 'Championship and consolation'}
       </h3>
-      {structure === 'round_robin' ? (
+      {isKnockout(structure) ? (
+        <p>
+          The locked draw already contains the bracket. Complete all outstanding matches; a
+          double-elimination reset final runs only when required.
+        </p>
+      ) : structure === 'round_robin' ? (
         <p>
           Complete every pool match and confirm the final finishing order in the planner, including
           any tiebreak rulings. Then finalize the results.
@@ -56,10 +66,8 @@ export function NativeBracketControls({
       ) : (
         <>
           <p>
-            Finals can start while pools are still playing. Unknown qualifiers stay blocked until
-            their pool order is confirmed; then their places fill automatically. Top active entrants
-            advance to championship, and the rest enter consolation. Bye winners advance
-            automatically.
+            Resolve the pool matches and confirm finishing orders before drawing finals. Qualifiers
+            follow the chosen playoff and consolation settings. Bye winners advance automatically.
           </p>
           <Button
             type="submit"

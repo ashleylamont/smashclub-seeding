@@ -1,6 +1,15 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { eventPlanEntries, eventPlans, playerRatings, players, type Db } from '@smashclub/db';
-import { publicPlayerName, structureIssues, type TournamentStructure } from '@smashclub/shared';
+import {
+  publicPlayerName,
+  isKnockout,
+  isSinglePool,
+  finalsRoles,
+  structureIssues,
+  structureOptionsSchema,
+  type StructureOptions,
+  type TournamentStructure,
+} from '@smashclub/shared';
 import { NATURAL_TO_DISPLAY } from '@smashclub/engine';
 import { latestRecomputeId } from '../recompute/recompute';
 import { getRatingSettings } from '../settings';
@@ -9,7 +18,10 @@ import { EventPlanStateError, BRACKET_SLOTS, type PlanView } from './contracts';
 import { stripeIntoPools, poolLabel } from './pools';
 
 export const extendedNativePlan = (plan: typeof eventPlans.$inferSelect) =>
-  plan.competitionFormat === 'doubles' || plan.structure !== 'dual_division';
+  plan.competitionFormat === 'doubles' ||
+  plan.structure !== 'dual_division' ||
+  plan.structureOptions.roundRobinMeetings !== 1 ||
+  plan.structureOptions.consolation === false;
 
 /** The legacy transport calls its entrant key playerId; doubles use the entry UUID, never a fabricated player. */
 export async function getExtendedNativePlan(
@@ -92,10 +104,12 @@ export async function getExtendedNativePlan(
       candidates: [],
     };
   });
-  const blocking = structureIssues(plan.structure, entries.length).map((message) => ({
-    code: 'structure',
-    message,
-  }));
+  const blocking = structureIssues(plan.structure, entries.length, plan.structureOptions).map(
+    (message) => ({
+      code: 'structure',
+      message,
+    }),
+  );
   const seen = new Set<string>();
   for (const e of entries) {
     if (!e.playerId)
@@ -135,22 +149,23 @@ export async function getExtendedNativePlan(
     const members = entries
       .filter((e) => e.assignedDivision === division)
       .sort((a, b) => a.divisionSeed! - b.divisionSeed!);
-    const pools = members.length
-      ? (plan.structure === 'round_robin' ? [members] : stripeIntoPools(members)).map(
-          (group, poolIndex) => ({
-            poolIndex,
-            label: poolLabel(poolIndex),
-            members: group.map((e) => ({
-              entryId: e.id,
-              playerId: e.playerId!,
-              name: e.publicName ?? e.cleanedName,
-              seed: e.divisionSeed!,
-              snapshotRank: e.snapshotRank,
-              place: null,
-            })),
-          }),
-        )
-      : [];
+    const pools =
+      members.length && !isKnockout(plan.structure)
+        ? (isSinglePool(plan.structure) ? [members] : stripeIntoPools(members, plan.poolSize)).map(
+            (group, poolIndex) => ({
+              poolIndex,
+              label: poolLabel(poolIndex),
+              members: group.map((e) => ({
+                entryId: e.id,
+                playerId: e.playerId!,
+                name: e.publicName ?? e.cleanedName,
+                seed: e.divisionSeed!,
+                snapshotRank: e.snapshotRank,
+                place: null,
+              })),
+            }),
+          )
+        : [];
     return {
       division,
       size: members.length,
@@ -170,6 +185,7 @@ export async function getExtendedNativePlan(
       bracketMode: plan.bracketMode,
       competitionFormat: plan.competitionFormat,
       structure: plan.structure,
+      structureOptions: plan.structureOptions,
       usePairRatings: plan.usePairRatings,
       nativeSeedContext:
         plan.status === 'draft' && pairFit
@@ -196,7 +212,9 @@ export async function getExtendedNativePlan(
     divisions,
     issues: { blocking, warnings: [] },
     brackets: BRACKET_SLOTS.filter(
-      (s) => plan.structure === 'dual_division' || s.division === 'upper',
+      (s) =>
+        (plan.structure === 'dual_division' || s.division === 'upper') &&
+        finalsRoles(plan.structure, plan.structureOptions).includes(s.stage),
     ).map((s) => ({
       ...s,
       id: '',
@@ -291,6 +309,7 @@ export async function updateNativeFormat(
   planId: string,
   structure: TournamentStructure,
   usePairRatings?: boolean,
+  structureOptions?: StructureOptions,
 ) {
   await db.transaction(async (tx) => {
     const [plan] = await tx
@@ -302,7 +321,13 @@ export async function updateNativeFormat(
       throw new EventPlanStateError('Change the native format only while the roster is a draft.');
     await tx
       .update(eventPlans)
-      .set({ structure, ...(usePairRatings !== undefined ? { usePairRatings } : {}) })
+      .set({
+        structure,
+        ...(structureOptions !== undefined
+          ? { structureOptions: structureOptionsSchema.parse(structureOptions) }
+          : {}),
+        ...(usePairRatings !== undefined ? { usePairRatings } : {}),
+      })
       .where(and(eq(eventPlans.id, planId), eq(eventPlans.status, 'draft')));
   });
 }

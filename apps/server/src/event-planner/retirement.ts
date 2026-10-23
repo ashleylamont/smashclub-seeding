@@ -50,6 +50,7 @@ export async function applyPlanRetirement(
         bracketMode: plan.bracketMode,
         competitionFormat: plan.competitionFormat,
         structure: plan.structure,
+        structureOptions: plan.structureOptions,
         usePairRatings: plan.usePairRatings,
         poolSize: plan.poolSize,
         upperTargetSize: plan.upperTargetSize,

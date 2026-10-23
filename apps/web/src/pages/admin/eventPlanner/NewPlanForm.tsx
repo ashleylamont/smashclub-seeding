@@ -1,7 +1,10 @@
+import { TournamentFormatFields } from './TournamentFormatFields';
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  tournamentStructures,
+  isKnockout,
+  isSinglePool,
+  type StructureOptions,
   type CompetitionFormat,
   type TournamentStructure,
 } from '@smashclub/shared';
@@ -24,6 +27,9 @@ export function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void
   const [bracketMode, setBracketMode] = useState<'native' | 'challonge'>('native');
   const [competitionFormat, setCompetitionFormat] = useState<CompetitionFormat>('singles');
   const [structure, setStructure] = useState<TournamentStructure>('dual_division');
+  const [structureOptions, setStructureOptions] = useState<StructureOptions>({
+    roundRobinMeetings: 1,
+  });
 
   const previewRoster = useMutation({
     mutationFn: () => trpc.admin.eventPlanner.previewRoster.mutate({ text }),
@@ -41,6 +47,7 @@ export function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void
         bracketMode,
         competitionFormat,
         structure,
+        structureOptions,
         eventDate: new Date(eventDate).toISOString(),
         slugPrefix: slugPrefix.trim() === '' ? null : slugPrefix.trim(),
         upperTargetSize: upperSize,
@@ -86,22 +93,14 @@ export function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void
           </Select>
         </label>
         {bracketMode === 'native' && (
-          <label className="form-field">
-            <span className="form-label">Tournament structure</span>
-            <Select
-              value={structure}
-              onValueChange={(value) => setStructure(value as TournamentStructure)}
-            >
-              {tournamentStructures.map((s) => (
-                <SelectItem key={s.value} value={s.value}>
-                  {s.label}
-                </SelectItem>
-              ))}
-            </Select>
-            <span className="form-hint">
-              {tournamentStructures.find((s) => s.value === structure)?.description}
-            </span>
-          </label>
+          <TournamentFormatFields
+            structure={structure}
+            structureOptions={structureOptions}
+            onChange={(value) => {
+              setStructure(value.structure);
+              setStructureOptions(value.structureOptions);
+            }}
+          />
         )}
         <div className="form-grid">
           <label className="form-field">
@@ -135,14 +134,22 @@ export function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void
           <div className="form-field">
             <span className="form-label">Pool size</span>
             <Input
-              value={structure === 'round_robin' ? 'All entrants' : '4'}
+              value={
+                isKnockout(structure)
+                  ? 'No pool stage'
+                  : isSinglePool(structure)
+                    ? 'All entrants'
+                    : '4'
+              }
               readOnly
               aria-readonly="true"
             />
             <span className="form-hint">
-              {structure === 'round_robin'
-                ? 'One pool contains the whole field.'
-                : 'Pools balance around four entrants.'}
+              {isKnockout(structure)
+                ? 'Play starts in the seeded knockout bracket.'
+                : isSinglePool(structure)
+                  ? 'One pool contains the whole field.'
+                  : 'Pools balance around four entrants.'}
             </span>
           </div>
         </div>
@@ -188,6 +195,7 @@ export function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void
               if (selectedValue === 'challonge') {
                 setCompetitionFormat('singles');
                 setStructure('dual_division');
+                setStructureOptions({ roundRobinMeetings: 1 });
               }
             }}
           >
@@ -205,8 +213,8 @@ export function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void
         {competitionFormat === 'doubles' && (
           <div>
             <p>
-              Save the draft, then choose the two players in each pair. The roster recommends a
-              structure as teams are added.
+              Save the draft, then choose the two players in each pair. You can change the structure
+              and round-robin meetings while the roster is a draft.
             </p>
             <Button
               variant="primary"
@@ -274,6 +282,7 @@ export function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void
           entrantCount={total}
           competitionFormat={competitionFormat}
           structure={structure}
+          structureOptions={structureOptions}
           upperSize={upperSize}
           eventDate={eventDate}
         />

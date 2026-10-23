@@ -25,7 +25,7 @@ export const nativeBracketRouter = router({
       revisionToken: input.revisionToken,
       replaceExisting: Boolean(state.brackets.length),
     });
-    return { created: 4 };
+    return { created: (await api.state()).brackets.length };
   }),
   reset: authedProcedure.input(reviewed).mutation(async ({ ctx, input }) => {
     const api = await nativeEvent(ctx, input.planId, false, input);

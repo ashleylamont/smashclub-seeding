@@ -1,3 +1,4 @@
+import { buildPoolFinals } from '@smashclub/engine';
 import { randomUUID } from 'node:crypto';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import {
@@ -19,11 +20,6 @@ import {
 import { scoresIndicateUnplayed } from '@smashclub/shared';
 import type { SessionUser } from '../auth';
 import { getPlan } from '../event-planner/plans';
-import {
-  buildConsolationBracket,
-  consolationQualifiers,
-  winnersCount,
-} from '../event-planner/advancement';
 import { lockEvent, requireOperator } from './access';
 import { nativeBracketViews } from './nativeBracketViews';
 import {
@@ -105,19 +101,8 @@ export async function previewNativeBrackets(db: Db, planId: string) {
         place: index + 1,
       }));
     });
-    const championship = finishers
-      .filter(
-        (finisher) =>
-          finisher.place <=
-          winnersCount(finishers.filter((other) => other.poolIndex === finisher.poolIndex).length),
-      )
-      .map((finisher) => ({ ...finisher, place: finisher.place + 2 }));
-    // The same seed-integrity repair used for consolation avoids immediate
-    // pool rematches for championship qualifiers, including uneven fields.
-    const main = championship.length ? buildConsolationBracket(championship).entrants : [];
-    const consolation = consolationQualifiers(finishers).length
-      ? buildConsolationBracket(finishers).entrants
-      : [];
+    const main = buildPoolFinals(finishers, 'main');
+    const consolation = buildPoolFinals(finishers, 'consolation');
     return [
       {
         division: division.division,

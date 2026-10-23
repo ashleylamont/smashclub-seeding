@@ -1,3 +1,4 @@
+import { structureOptionsSchema, tournamentStructureSchema } from '@smashclub/shared';
 import { z } from 'zod';
 import { Retirement } from './recoverySchema';
 import { additionalCommands } from './commands';
@@ -29,6 +30,14 @@ export const LiveMatch = z.object({
   label: z.string(),
   parent1Id: id.nullable(),
   parent2Id: id.nullable(),
+  parent1Outcome: z.enum(['winner', 'loser']).optional(),
+  parent2Outcome: z.enum(['winner', 'loser']).optional(),
+  activation: z
+    .object({ matchId: id, winnerSide: z.union([z.literal(1), z.literal(2)]) })
+    .optional(),
+  skipped: z.boolean().optional(),
+  bracketLane: z.enum(['winners', 'losers', 'final', 'reset']).optional(),
+  bracketRound: revision.optional(),
   player1Id: id.nullable(),
   player2Id: id.nullable(),
   status: z.enum(['ready', 'playing', 'complete', 'blocked']),
@@ -95,7 +104,8 @@ export const LiveSettings = z.object({
 export const Baseline = z.object({
   version: z.union([z.literal(1), z.literal(2)]),
   competitionFormat: z.enum(['singles', 'doubles']).optional(),
-  structure: z.enum(['dual_division', 'pools_finals', 'round_robin']).optional(),
+  structure: tournamentStructureSchema.optional(),
+  structureOptions: structureOptionsSchema.optional(),
   planId: id,
   name: z.string(),
   eventDate: z.number(),
@@ -127,6 +137,7 @@ export const Baseline = z.object({
   entrants: z.array(Entrant),
   pools: z.array(Pool),
   matches: z.array(LiveMatch),
+  brackets: z.array(Bracket).optional(),
   stations: z.array(Station),
   settings: LiveSettings,
   announcements: z.array(Announcement).default([]),
@@ -151,7 +162,8 @@ export const Report = z.object({
 export const Result = z.object({
   version: z.union([z.literal(1), z.literal(2)]),
   competitionFormat: z.enum(['singles', 'doubles']).optional(),
-  structure: z.enum(['dual_division', 'pools_finals', 'round_robin']).optional(),
+  structure: tournamentStructureSchema.optional(),
+  structureOptions: structureOptionsSchema.optional(),
   poolOrders: z.array(z.object({ division: Division, order: z.array(id) })).optional(),
   id,
   planId: id,

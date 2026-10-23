@@ -1,3 +1,4 @@
+import { structureOptionsSchema, tournamentStructureSchema } from '@smashclub/shared';
 import { addDoublesPair, updateNativeFormat } from '../../event-planner/nativePlanner';
 import { projectTournament, projectionInput } from '../../event-planner/projection';
 import { previewPlanRecovery, recoverPlan } from '../../event-planner/recovery';
@@ -105,13 +106,20 @@ export const eventPlannerRouter = router({
     .input(
       z.object({
         planId: z.uuid(),
-        structure: z.enum(['dual_division', 'pools_finals', 'round_robin']),
+        structure: tournamentStructureSchema,
+        structureOptions: structureOptionsSchema.optional(),
         usePairRatings: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       await guard(() =>
-        updateNativeFormat(ctx.db, input.planId, input.structure, input.usePairRatings),
+        updateNativeFormat(
+          ctx.db,
+          input.planId,
+          input.structure,
+          input.usePairRatings,
+          input.structureOptions,
+        ),
       );
       return { ok: true };
     }),
@@ -141,9 +149,8 @@ export const eventPlannerRouter = router({
       z.object({
         bracketMode: z.enum(['native', 'challonge']).default('native'),
         competitionFormat: z.enum(['singles', 'doubles']).default('singles'),
-        structure: z
-          .enum(['dual_division', 'pools_finals', 'round_robin'])
-          .default('dual_division'),
+        structure: tournamentStructureSchema.default('dual_division'),
+        structureOptions: structureOptionsSchema.default({ roundRobinMeetings: 1 }),
         usePairRatings: z.boolean().default(false),
         name: z.string().trim().min(1).max(120),
         eventDate: z.iso.datetime(),

@@ -1,3 +1,4 @@
+import { isKnockout } from '@smashclub/shared';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -257,6 +258,8 @@ export class NativeEventApi {
     trial.brackets = [];
     trial.matches = trial.matches.filter((m) => !m.bracketId);
     const issues: string[] = [];
+    if (isKnockout(state.baseline!.structure))
+      issues.push('Knockout brackets are fixed at draw lock.');
     if (state.lifecycle !== 'locked') issues.push('The event is not open.');
     if (
       state.matches.some(

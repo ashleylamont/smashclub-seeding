@@ -93,6 +93,7 @@ test('uses doubles teams in a saved draft, shows finals and byes, and keeps what
     'admin.eventPlanner.createPlan',
     {
       name: 'Timeline draft rehearsal',
+      structureOptions: { roundRobinMeetings: 2 },
       eventDate: '2026-10-21T08:30:00Z',
       bracketMode: 'native',
       competitionFormat: 'doubles',
@@ -114,6 +115,9 @@ test('uses doubles teams in a saved draft, shows finals and byes, and keeps what
   await expect(preview.getByLabel('Projected teams')).toHaveValue('2');
   await expect(preview.getByLabel('Minutes per set', { exact: true })).toHaveValue('15');
   await expect(preview).toContainText('4 people in 2 fixed pairs');
+  await expect(preview.getByLabel('Round-robin meetings per pairing')).toHaveValue('2');
+  await expect(preview.locator('.projection-summary')).toContainText('2 sets');
+  await preview.getByLabel('Round-robin meetings per pairing').fill('1');
   await expect(preview.locator('.projection-summary')).toContainText('1 sets');
   await preview.getByLabel('Projected teams').fill('7');
   await chooseOption(
@@ -147,5 +151,6 @@ test('uses doubles teams in a saved draft, shows finals and byes, and keeps what
     'data-value',
     'round_robin',
   );
+  await expect(preview.getByLabel('Round-robin meetings per pairing')).toHaveValue('2');
   expect(await query(page.request, 'admin.eventPlanner.plan', { planId })).toEqual(before);
 });

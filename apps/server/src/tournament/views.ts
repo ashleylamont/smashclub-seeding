@@ -1,3 +1,4 @@
+import { eliminationStandings, buildFormatFinals, seedPoolFinishers } from '@smashclub/engine';
 import { available, memberIds, publicEntrantNames } from './entrants';
 import { asc, inArray } from 'drizzle-orm';
 import { players, playerCharacters, tournaments, type Db, type eventMatches } from '@smashclub/db';
@@ -6,54 +7,59 @@ import { buildStationQueues } from '../event-operations/queue';
 import { matchAvailability, stationAvailability } from '../event-operations/availability';
 import type { snapshot as sqlSnapshot } from '../event-operations/service';
 import { getPlan as sqlPlan, type PlanView } from '../event-planner/plans';
-import {
-  buildConsolationBracket,
-  championshipQualifiers,
-  consolationQualifiers,
-} from '../event-planner/advancement';
 import { resolved } from './facts';
 import type { TournamentState } from './schemas';
 
 export type EventSnapshot = Awaited<ReturnType<typeof sqlSnapshot>>;
 export function matchRows(state: TournamentState): (typeof eventMatches.$inferSelect & {
+  parent1Outcome?: 'winner' | 'loser';
+  parent2Outcome?: 'winner' | 'loser';
+  bracketLane?: string;
+  bracketRound?: number;
   player1MemberIds?: string[];
   player2MemberIds?: string[];
 })[] {
-  return state.matches.map((m) => ({
-    id: m.id,
-    eventPlanId: state.baseline!.planId,
-    sourceKey: m.sourceKey,
-    sourceSetId: null,
-    division: m.division,
-    stage: m.stage,
-    poolIndex: state.pools.find((p) => p.id === m.poolId)?.index ?? null,
-    label: m.label,
-    player1Id: m.player1Id,
-    player1MemberIds: state.entrants.find((e) => e.playerId === m.player1Id)?.memberPlayerIds,
-    player2MemberIds: state.entrants.find((e) => e.playerId === m.player2Id)?.memberPlayerIds,
-    player2Id: m.player2Id,
-    score1: m.score1,
-    score2: m.score2,
-    liveScore1: m.liveScore1,
-    liveScore2: m.liveScore2,
-    winnerId: m.winnerId,
-    outcome: m.outcome === 'no_contest' ? null : m.outcome,
-    status: m.status,
-    stationId: m.stationId,
-    blockedReason:
-      m.outcome === 'no_contest'
-        ? 'Both players withdrawn: no contest; no winner or score recorded'
-        : (m.blockedReason ??
-          (m.status === 'blocked' ? 'Waiting for previous round winners' : null)),
-    resultUpdatedAt: m.completedAt === null ? null : new Date(m.completedAt),
-    revision: m.revision,
-    syncState: 'local',
-    nativeBracketId: m.bracketId,
-    nativeRound: m.bracketId ? m.round : null,
-    nativeSlot: m.bracketId ? m.slot : null,
-    parent1MatchId: m.parent1Id,
-    parent2MatchId: m.parent2Id,
-  }));
+  return state.matches
+    .filter((m) => !m.skipped)
+    .map((m) => ({
+      id: m.id,
+      eventPlanId: state.baseline!.planId,
+      sourceKey: m.sourceKey,
+      sourceSetId: null,
+      division: m.division,
+      stage: m.stage,
+      poolIndex: state.pools.find((p) => p.id === m.poolId)?.index ?? null,
+      label: m.label,
+      player1Id: m.player1Id,
+      player1MemberIds: state.entrants.find((e) => e.playerId === m.player1Id)?.memberPlayerIds,
+      player2MemberIds: state.entrants.find((e) => e.playerId === m.player2Id)?.memberPlayerIds,
+      player2Id: m.player2Id,
+      score1: m.score1,
+      score2: m.score2,
+      liveScore1: m.liveScore1,
+      liveScore2: m.liveScore2,
+      winnerId: m.winnerId,
+      outcome: m.outcome === 'no_contest' ? null : m.outcome,
+      status: m.status,
+      stationId: m.stationId,
+      blockedReason:
+        m.outcome === 'no_contest'
+          ? 'Both players withdrawn: no contest; no winner or score recorded'
+          : (m.blockedReason ??
+            (m.status === 'blocked' ? 'Waiting for previous round winners' : null)),
+      resultUpdatedAt: m.completedAt === null ? null : new Date(m.completedAt),
+      revision: m.revision,
+      syncState: 'local',
+      nativeBracketId: m.bracketId,
+      nativeRound: m.round || null,
+      nativeSlot: m.round ? m.slot : null,
+      parent1Outcome: m.parent1Outcome,
+      parent2Outcome: m.parent2Outcome,
+      bracketLane: m.bracketLane,
+      bracketRound: m.bracketRound,
+      parent1MatchId: m.parent1Id,
+      parent2MatchId: m.parent2Id,
+    }));
 }
 export function schedules(state: TournamentState) {
   return state.pools.map((p) => ({
@@ -71,34 +77,21 @@ export function schedules(state: TournamentState) {
 export function bracketViews(state: TournamentState) {
   return state.brackets.map((b) => {
     const rounds = state.matches.filter((m) => m.bracketId === b.id);
-    const maxRound = Math.max(0, ...rounds.map((m) => m.round));
-    const final = rounds.find((m) => m.round === maxRound);
     const roundRobin = state.baseline!.structure === 'round_robin';
     const order = roundRobin ? state.pools[0]?.order : null;
+    const outcome = eliminationStandings(
+      b.entrantIds,
+      rounds,
+      state.baseline!.structure === 'double_elimination',
+    );
     const complete = roundRobin
       ? Boolean(order && state.matches.every(resolved))
-      : b.entrantIds.length === 0 || Boolean(final && resolved(final));
-    const winnerId = complete
-      ? roundRobin
-        ? (order?.[0] ?? null)
-        : (final?.winnerId ?? null)
-      : null;
+      : outcome.complete;
+    const winnerId = complete ? (roundRobin ? (order?.[0] ?? null) : outcome.winnerId) : null;
     const standings =
       roundRobin && complete
         ? (order ?? []).map((playerId, i) => ({ playerId, place: i + 1 }))
-        : complete
-          ? rounds.flatMap((m) =>
-              m.player1Id && m.player2Id && m.winnerId && resolved(m)
-                ? [
-                    {
-                      playerId: m.winnerId === m.player1Id ? m.player2Id : m.player1Id,
-                      place: 2 ** (maxRound - m.round) + 1,
-                    },
-                  ]
-                : [],
-            )
-          : [];
-    if (winnerId && !roundRobin) standings.push({ playerId: winnerId, place: 1 });
+        : outcome.standings;
     return {
       ...b,
       eventPlanId: state.baseline!.planId,
@@ -170,6 +163,7 @@ export async function eventView(db: Db, state: TournamentState): Promise<EventSn
       bracketMode: 'native',
       competitionFormat: baseline.competitionFormat ?? 'singles',
       structure: baseline.structure ?? 'dual_division',
+      structureOptions: baseline.structureOptions,
       softLockedAt: new Date(baseline.capturedAt).toISOString(),
       historicalResultsSlug: null,
       resultsSlug:
@@ -332,23 +326,32 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
         .sort((a, b) => a.place! - b.place!)
         .map((m, i) => ({ playerId: m.playerId, poolIndex: p.poolIndex, place: i + 1 })),
     );
+    const consolation = buildFormatFinals(
+      state.baseline!.structure,
+      finishers,
+      'consolation',
+      state.baseline!.structureOptions,
+    );
     return {
       division,
       size: entries.filter((e) => e.assignedDivision === division).length,
       poolCount: pools.length,
       pools,
       consolation:
-        state.baseline!.structure !== 'round_robin' &&
-        ordered &&
-        consolationQualifiers(finishers).length
-          ? buildConsolationBracket(consolationQualifiers(finishers))
+        state.baseline!.structure !== 'round_robin' && ordered && consolation.length
+          ? seedPoolFinishers(consolation)
           : null,
       championship:
         state.baseline!.structure !== 'round_robin' && ordered
-          ? championshipQualifiers(finishers).map((q) => ({
+          ? buildFormatFinals(
+              state.baseline!.structure,
+              finishers,
+              'main',
+              state.baseline!.structureOptions,
+            ).map((q) => ({
               playerId: q.playerId,
               name: entries.find((e) => e.playerId === q.playerId)!.publicName,
-              label: `Pool ${q.poolIndex + 1}`,
+              label: q.label,
             }))
           : [],
     };

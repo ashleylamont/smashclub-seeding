@@ -1,7 +1,8 @@
+import { finalsRoles, isKnockout, type StructureOptions } from '@smashclub/shared';
 import type { LiveMatch } from './eventDisplay';
 
 export type BracketBackupData = {
-  plan: { bracketMode: string };
+  plan: { bracketMode: string; structure?: string; structureOptions?: StructureOptions };
   nativeBrackets: { id: string; division: string; stage: string; entrantIds: string[] }[];
   brackets: { division: string; stage: string; slug: string | null }[];
   matches: LiveMatch[];
@@ -19,6 +20,7 @@ function blankMatches(data: BracketBackupData, division: string, stage: string) 
       player2: '',
       recorded: '',
     }));
+  if (isKnockout(data.plan.structure)) return [];
   const withdrawn = new Set(data.withdrawals?.map((item) => item.playerId) ?? []);
   const pools = new Map<number, Set<string>>();
   for (const match of data.matches.filter(
@@ -61,8 +63,16 @@ export function bracketBackupSheets(data: BracketBackupData) {
           ),
       ),
     ].sort((a, b) => a.localeCompare(b));
-  return (['upper', 'lower'] as const).flatMap((division) =>
-    (['main', 'consolation'] as const).map((stage) => {
+  const divisions =
+    data.plan.structure && data.plan.structure !== 'dual_division'
+      ? (['upper'] as const)
+      : (['upper', 'lower'] as const);
+  const roles =
+    data.plan.structure === 'round_robin'
+      ? []
+      : finalsRoles(data.plan.structure, data.plan.structureOptions);
+  return divisions.flatMap((division) =>
+    roles.map((stage) => {
       const bracket = data.nativeBrackets.find(
         (item) => item.division === division && item.stage === stage,
       );
@@ -84,20 +94,27 @@ export function bracketBackupSheets(data: BracketBackupData) {
             a.label.localeCompare(b.label, undefined, { numeric: true }),
         );
       const labels = new Map(matches.map((match) => [match.id, match.label]));
-      const player = (id: string | null, name: string | null, parent?: string | null) =>
+      const player = (
+        id: string | null,
+        name: string | null,
+        parent?: string | null,
+        outcome?: 'winner' | 'loser',
+      ) =>
         id
           ? (name ?? names.get(id) ?? 'Player')
           : parent
-            ? `Winner of ${labels.get(parent) ?? 'previous match'}`
+            ? `${outcome === 'loser' ? 'Loser' : 'Winner'} of ${labels.get(parent) ?? 'previous match'}`
             : '';
       return {
         key: `${division}:${stage}`,
-        title: `${division === 'upper' ? 'Upper' : 'Lower'} ${stage === 'main' ? 'Championship' : 'Consolation'}`,
+        title: `${data.plan.structure && data.plan.structure !== 'dual_division' ? 'Open' : division === 'upper' ? 'Upper' : 'Lower'} ${stage === 'main' ? 'Championship' : 'Consolation'}`,
         source:
           data.plan.bracketMode === 'native'
             ? bracket
               ? 'Generated Nemesis draw'
-              : 'Draw not generated yet — estimated paper template from current pool sizes'
+              : isKnockout(data.plan.structure)
+                ? 'Lock the draw to print its chosen match order'
+                : 'Draw not generated yet — estimated paper template from current pool sizes'
             : linked?.slug
               ? `Challonge: ${linked.slug}`
               : 'Challonge draw not attached — blank contingency worksheet',
@@ -115,8 +132,18 @@ export function bracketBackupSheets(data: BracketBackupData) {
                 key: match.id,
                 label: match.label,
                 round: match.nativeRound ? `Round ${match.nativeRound}` : '',
-                player1: player(match.player1Id, match.player1Name, match.parent1MatchId),
-                player2: player(match.player2Id, match.player2Name, match.parent2MatchId),
+                player1: player(
+                  match.player1Id,
+                  match.player1Name,
+                  match.parent1MatchId,
+                  match.parent1Outcome,
+                ),
+                player2: player(
+                  match.player2Id,
+                  match.player2Name,
+                  match.parent2MatchId,
+                  match.parent2Outcome,
+                ),
                 recorded:
                   match.status === 'complete'
                     ? match.outcome === 'bye'
