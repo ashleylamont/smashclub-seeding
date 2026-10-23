@@ -4,6 +4,41 @@ import { NativeTournament } from '../src/tournament/aggregate';
 import { pureBaseline, envelope } from './helpers/nativeLiveFixture';
 
 describe('pinned Act compatibility contract', () => {
+  it('explicit polling finds remote commits after an empty poll with notifications disabled', async () => {
+    const store = new InMemoryStore();
+    let handled = 0;
+    const build = () =>
+      act()
+        .withState(NativeTournament)
+        .on('BaselineCapturedV1')
+        .do(async function observeBaseline() {
+          handled++;
+        })
+        .to('poll-compatibility')
+        .build({ scoped: { store, cache: new InMemoryCache() }, listen: false });
+    const writer = build();
+    const worker = build();
+    try {
+      await worker.correlate();
+      await worker.drain();
+      await writer.do(
+        'CaptureNativeBaseline',
+        { stream: 'remote-poll-test', actor: { id: 'test', name: 'Test' } },
+        pureBaseline(),
+      );
+      await worker.correlate();
+      await worker.drain();
+      expect(handled).toBe(1);
+      await worker.correlate();
+      await worker.drain();
+      expect(handled).toBe(1);
+    } finally {
+      await writer.shutdown();
+      await worker.shutdown();
+      await store.dispose();
+    }
+  });
+
   it('allows no-event idempotent actions with reactions and emits only real commits', async () => {
     const store = new InMemoryStore();
     const app = act()

@@ -32,13 +32,17 @@ describe('native Act-PG integration on isolated PostgreSQL', () => {
     for (const runtime of runtimes) await runtime.shutdown();
     await cluster?.close();
   });
-  async function runtime(fault?: Parameters<typeof publishNativeResult>[2]) {
+  async function runtime(
+    fault?: Parameters<typeof publishNativeResult>[2],
+    configure?: (store: PostgresStore) => void,
+  ) {
     const store = new PostgresStore({
       connectionString: cluster.connectionString,
       schema: 'native_act',
       table: 'events',
     });
     await store.seed();
+    configure?.(store);
     const value = createNativeRuntime(cluster.db, store, fault);
     runtimes.add(value);
     return value;
@@ -95,7 +99,13 @@ describe('native Act-PG integration on isolated PostgreSQL', () => {
       if ((await state(runtime, planId)).publication) return;
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
-    throw new Error('Publication did not recover before deadline');
+    const positions = await cluster.pool.query(
+      'select stream, at, correlated_at, retry, blocked, error, leased_until, deferred_at from native_act.events_streams where source=$1',
+      [nativeStream(planId)],
+    );
+    throw new Error(
+      `Publication did not recover before deadline: ${JSON.stringify(positions.rows)}`,
+    );
   }
   async function countPublications(planId: string) {
     return cluster.db
@@ -339,7 +349,34 @@ describe('native Act-PG integration on isolated PostgreSQL', () => {
     expect((await state(a, planId)).publication).toBeNull();
     await a.shutdown();
     runtimes.delete(a);
-    const b = await runtime();
+    // Force a cold worker's empty claim to finish after its persisted retry
+    // timer fires. An empty claim must not permanently swallow that wake-up.
+    const stream = `native-publication:${nativeStream(planId)}`;
+    let due = 0;
+    let heldEmptyClaim = false;
+    const b = await runtime(undefined, (store) => {
+      const claim = store.claim.bind(store);
+      let first = true;
+      store.claim = async (...args) => {
+        const leases = await claim(...args);
+        if (first) {
+          first = false;
+          heldEmptyClaim = leases.length === 0;
+          await new Promise((resolve) => setTimeout(resolve, Math.max(0, due - Date.now()) + 50));
+        }
+        return leases;
+      };
+    });
+    // Set the due time after store setup, and poll before unrelated recovery
+    // transfers, so startup/migration speed cannot consume the test barrier.
+    due = Date.now() + 1000;
+    await cluster.pool.query(
+      'update native_act.events_streams set deferred_at=to_timestamp($2 / 1000.0) where stream=$1',
+      [stream, due],
+    );
+    await b.app.correlate({ after: -1, limit: 1000 });
+    await b.app.drain({ eventLimit: 1000 });
+    expect(heldEmptyClaim, 'the retry wake must land during an empty claim').toBe(true);
     await awaitPublication(b, planId);
     const live = await state(b, planId);
     expect(live.matches.filter((m) => m.parent1Id)).toHaveLength(4);
@@ -385,6 +422,22 @@ describe('native Act-PG integration on isolated PostgreSQL', () => {
           .where(eq(nativeRatingIntents.resultId, result.id))
       )[0]!.completedAt,
     ).not.toBeNull();
+  });
+
+  it('polls for a remote seal after recovery has become idle without a notification', async () => {
+    const planId = await seedNativeDraft(cluster.db);
+    const writer = await runtime();
+    await writer.lock(nativeAdmin, planId);
+    await completed(writer, planId);
+    const worker = await runtime();
+    await worker.recover();
+    expect((await state(worker, planId)).result).toBeNull();
+    await command(writer, planId, { kind: 'finalize' });
+    // listen:false is deliberate: the durable polling worker must also work
+    // after a missed notification, with no local write to re-arm Act.
+    await worker.recover();
+    expect((await state(worker, planId)).publication).not.toBeNull();
+    expect(await countPublications(planId)).toHaveLength(1);
   });
 
   it('rolls back failed publication SQL and deduplicates publication from two independent connections', async () => {

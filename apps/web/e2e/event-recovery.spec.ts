@@ -7,6 +7,7 @@ import {
   type Route,
 } from '@playwright/test';
 import { chooseOption } from '../test-support/controls';
+import { rpcProcedures, rpcReadDelivery, rpcResponse, rpcValue } from '../test-support/rpcBatch';
 
 type Match = {
   id: string;
@@ -165,34 +166,34 @@ async function editFinal(page: Page, match: Match, first: number, second: number
   await card.getByRole('spinbutton').nth(1).fill(String(second));
   return card;
 }
-function batchInput<T>(route: Route): T {
-  const body = route.request().postDataJSON();
-  return new URL(route.request().url()).searchParams.has('batch') ? body[0] : body;
+function hasProcedure(url: string, procedure: string) {
+  return rpcProcedures(url).includes(procedure);
+}
+function batchInput<T>(route: Route, procedure: string): T {
+  return rpcValue<T>(route.request().url(), route.request().postDataJSON(), procedure);
 }
 
 /** Delay background read delivery so polling cannot conceal a transport retry bug. */
 async function delaySnapshots(page: Page) {
-  const cached = new Map<string, APIResponse>();
-  let delayed = false;
-  await page.route(/\/api\/trpc\/eventOps\.(snapshot|guests\.matches)(?:\?|$)/, async (route) => {
-    const key = route.request().url();
-    if (delayed) {
-      expect(cached.has(key), 'only a previously observed real snapshot may be delayed').toBe(true);
-      await route.fulfill({ response: cached.get(key)! });
-      return;
-    }
-    const response = await route.fetch();
-    if (!delayed) cached.set(key, response);
-    await route.fulfill({ response: delayed ? cached.get(key)! : response });
-  });
+  const procedures = ['eventOps.snapshot', 'eventOps.guests.matches'];
+  const delivery = rpcReadDelivery(procedures);
+  const fulfill = async (route: Route, response: APIResponse) => {
+    await route.fulfill({
+      response,
+      json: delivery.deliver(route.request().url(), await response.json()),
+    });
+  };
+  await page.route(
+    (url) => procedures.some((procedure) => hasProcedure(url.href, procedure)),
+    async (route) => fulfill(route, await route.fetch()),
+  );
   return {
     async delay() {
-      await expect.poll(() => cached.size).toBe(2);
-      delayed = true;
+      await expect.poll(() => delivery.size).toBe(2);
+      delivery.delay();
     },
-    resume() {
-      delayed = false;
-    },
+    resume: delivery.resume,
+    fulfill,
   };
 }
 
@@ -216,14 +217,18 @@ for (const automatic of [false, true]) {
     const before = await history(request, night);
     const attempts: ScoreInput[] = [];
     const replies: unknown[] = [];
-    await page.route('**/api/trpc/eventOps.guests.submit*', async (route) => {
-      attempts.push(batchInput<ScoreInput>(route));
-      const response = await route.fetch(); // The real mutation commits before delivery is cut.
-      expect(response.ok(), await response.text()).toBe(true);
-      replies.push(await response.json());
-      if (attempts.length === 1) await route.abort('connectionreset');
-      else await route.fulfill({ response });
-    });
+    const procedure = 'eventOps.guests.submit';
+    await page.route(
+      (url) => hasProcedure(url.href, procedure),
+      async (route) => {
+        attempts.push(batchInput<ScoreInput>(route, procedure));
+        const response = await route.fetch(); // The real mutation commits before delivery is cut.
+        expect(response.ok(), await response.text()).toBe(true);
+        replies.push(rpcValue(route.request().url(), await response.json(), procedure));
+        if (attempts.length === 1) await route.abort('connectionreset');
+        else await reads.fulfill(route, response);
+      },
+    );
     const card = guestCard(page, match);
     await card.getByRole('spinbutton').nth(0).fill('2');
     await card.getByRole('spinbutton').nth(1).fill('1');
@@ -435,19 +440,27 @@ async function simultaneous<T>(
   });
   const inputs: T[] = [];
   for (const page of pages)
-    await page.route(`**/api/trpc/${procedure}*`, async (route) => {
-      inputs.push(batchInput<T>(route));
-      await gate;
-      await route.continue();
-    });
+    await page.route(
+      (url) => hasProcedure(url.href, procedure),
+      async (route) => {
+        inputs.push(batchInput<T>(route, procedure));
+        await gate;
+        await route.continue();
+      },
+    );
   const responses = pages.map((page) =>
-    page.waitForResponse((response) => response.url().includes(`/api/trpc/${procedure}`)),
+    page.waitForResponse((response) => hasProcedure(response.url(), procedure)),
   );
   try {
     await Promise.all(pages.map(click));
     await expect.poll(() => inputs.length).toBe(2);
     release();
-    return { inputs, responses: await Promise.all(responses) };
+    return {
+      inputs,
+      responses: await Promise.all(
+        responses.map(async (response) => rpcResponse(await response, procedure)),
+      ),
+    };
   } finally {
     release();
   }

@@ -329,6 +329,8 @@ export function createNativeRuntime(
   async function drainReactions() {
     // settle() schedules asynchronous work and returns void. Use the bounded,
     // synchronous correlate/drain APIs when a recovery caller awaits completion.
+    // Our pinned Act patch makes explicit correlate() calls probe again after
+    // idle: a remote commit or expired retry may have no local notification.
     let lastId = -1;
     for (let pass = 0; pass < 32; pass++) {
       const correlation = await app.correlate({ after: -1, limit: 1000 });
