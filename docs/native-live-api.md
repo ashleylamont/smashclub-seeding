@@ -85,6 +85,10 @@ confirmation or a different score sent to TO review, preserving the first result
 until a TO rules on the disagreement. TO-review pools retain pending submissions.
 Transport retries retain their request ID, and an automatic first result admits
 the concurrent second report without admitting a stale form after a TO correction.
+An unstarted pairing with a current pending report is omitted from station calls
+and cannot be dispatched by an attendee or TO until review. Rejection restores
+eligibility; approval records the result. Reports for older pairing/result
+revisions remain audit evidence without holding the current pairing or capacity.
 
 ## Organiser history
 

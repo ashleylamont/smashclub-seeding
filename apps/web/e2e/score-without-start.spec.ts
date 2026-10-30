@@ -16,15 +16,20 @@ type Match = {
   score1: number | null;
   score2: number | null;
   winnerId: string | null;
+  availability: { canStart: boolean; reasons: { code: string; message: string }[] };
 };
 type Snapshot = {
   matches: Match[];
   stations: { id: string; name: string }[];
-  stationQueues: { stationId: string; nextMatchId: string | null }[];
+  stationQueues: {
+    stationId: string;
+    nextMatchId: string | null;
+    upcoming: { matchId: string }[];
+  }[];
 };
 type LiveOverview = {
   audit: { kind: string; command: { matchId?: string } }[];
-  reports: { matchId: string; status: string; isDispute: boolean }[];
+  reports: { id: string; matchId: string; status: string; isDispute: boolean }[];
 };
 async function signIn(request: APIRequestContext, email: string) {
   const response = await request.post('/api/auth/sign-in/email', {
@@ -242,6 +247,103 @@ for (const actor of ['guest', 'signed-in'] as const)
             ['approved', false],
             ['pending', true],
           ]);
+        } else {
+          const queueIds = (view: Snapshot) =>
+            view.stationQueues.flatMap((queue) => [
+              queue.nextMatchId,
+              ...queue.upcoming.map((match) => match.matchId),
+            ]);
+          expect(after.matches.find((match) => match.id === target.id)!.availability).toMatchObject(
+            {
+              canStart: false,
+              reasons: expect.arrayContaining([
+                {
+                  code: 'score_review_pending',
+                  message: 'This match has a score awaiting TO review.',
+                },
+              ]),
+            },
+          );
+          expect(queueIds(after)).not.toContain(target.id);
+          const otherReady = after.matches.find(
+            (match) => match.division === 'upper' && match.id !== target.id,
+          )!;
+          expect(otherReady.availability.canStart).toBe(true);
+          expect(after.stationQueues.some((queue) => queue.nextMatchId !== null)).toBe(true);
+          const station = snapshot.stations.find((item) => item.name === 'Pool setup')!;
+          const input = {
+            planId,
+            matchId: target.id,
+            stationId: station.id,
+            expectedRevision: target.revision,
+          };
+          const session =
+            actor === 'guest'
+              ? await mutate<{ sessionToken: string }>(
+                  corroborator.request,
+                  'eventOps.guests.redeem',
+                  { planId, token },
+                )
+              : null;
+          const refused = await context.request.post(
+            `/api/trpc/${actor === 'guest' ? 'eventOps.guests.startPoolMatch' : 'eventOps.startPoolMatch'}`,
+            { data: session ? { ...input, sessionToken: session.sessionToken } : input },
+          );
+          expect(refused.status()).toBe(409);
+          expect((await refused.json()).error.message).toContain('score awaiting TO review');
+          const refusedTo = await page.request.post('/api/trpc/eventOps.updateMatch', {
+            data: {
+              matchId: target.id,
+              expectedRevision: target.revision,
+              stationId: station.id,
+              status: 'playing',
+            },
+          });
+          expect(refusedTo.status()).toBe(409);
+          expect((await refusedTo.json()).error.message).toContain('score awaiting TO review');
+          const firstReport = live.reports.find((report) => report.matchId === target.id)!;
+          await mutate(page.request, 'eventOps.reviewReport', {
+            reportId: firstReport.id,
+            approve: false,
+          });
+          const rejected = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
+          expect(
+            rejected.matches.find((match) => match.id === target.id)!.availability.canStart,
+          ).toBe(true);
+          expect(queueIds(rejected)).toContain(target.id);
+          const resubmission = {
+            planId,
+            matchId: target.id,
+            expectedRevision: target.revision,
+            requestId: crypto.randomUUID(),
+            score1: 2,
+            score2: 0,
+          };
+          await mutate(
+            context.request,
+            session ? 'eventOps.guests.submit' : 'eventOps.reportScore',
+            session
+              ? { ...resubmission, sessionToken: session.sessionToken }
+              : { ...resubmission, outcome: 'played' },
+          );
+          const pending = await query<LiveOverview>(page.request, 'eventOps.live.overview', {
+            planId,
+          });
+          const secondReport = pending.reports.find(
+            (report) => report.matchId === target.id && report.status === 'pending',
+          )!;
+          await mutate(page.request, 'eventOps.reviewReport', {
+            reportId: secondReport.id,
+            approve: true,
+          });
+          const approved = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
+          expect(approved.matches.find((match) => match.id === target.id)).toMatchObject({
+            status: 'complete',
+            started: false,
+            score1: 2,
+            score2: 0,
+          });
+          expect(queueIds(approved)).not.toContain(target.id);
         }
         await reporting.evaluate(() => scrollTo(0, 0));
         await reporting.screenshot({

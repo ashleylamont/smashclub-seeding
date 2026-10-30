@@ -8,6 +8,7 @@ import { matchAvailability, stationAvailability } from '../event-operations/avai
 import type { snapshot as sqlSnapshot } from '../event-operations/service';
 import { getPlan as sqlPlan, type PlanView } from '../event-planner/plans';
 import { resolved } from './facts';
+import { hasCurrentPendingScoreReview } from './scoreReview';
 import type { TournamentState } from './schemas';
 
 export type EventSnapshot = Awaited<ReturnType<typeof sqlSnapshot>>;
@@ -116,6 +117,11 @@ export async function eventView(db: Db, state: TournamentState): Promise<EventSn
         .orderBy(asc(playerCharacters.position))
     : [];
   const rows = matchRows(state);
+  const pendingReviewIds = new Set(
+    rows
+      .filter((match) => hasCurrentPendingScoreReview(match, state.reports))
+      .map((match) => match.id),
+  );
   const stations = state.stations
     .filter((s) => s.enabled)
     .map((s) => ({ id: s.id, name: s.name, eventPlanId: planId }));
@@ -134,6 +140,7 @@ export async function eventView(db: Db, state: TournamentState): Promise<EventSn
       poolSchedules,
       state.entrants.filter((e) => !available(e)).map((e) => e.playerId),
       open,
+      pendingReviewIds,
     ),
     members:
       state.baseline?.competitionFormat === 'doubles'
@@ -199,6 +206,13 @@ export async function eventView(db: Db, state: TournamentState): Promise<EventSn
         .map((c) => c.characterSlug),
       availability: (() => {
         const value = matchAvailability(m, rows, stations, poolSchedules, false, open);
+        if (pendingReviewIds.has(m.id)) {
+          value.canStart = false;
+          value.reasons.push({
+            code: 'score_review_pending',
+            message: 'This match has a score awaiting TO review.',
+          });
+        }
         if (
           state.entrants.some(
             (e) => [m.player1Id, m.player2Id].includes(e.playerId) && !available(e),

@@ -1,6 +1,7 @@
 import { available, matchMemberIds } from './entrants';
 import { buildStationQueues } from '../event-operations/queue';
 import { requireFact, resolved } from './facts';
+import { hasCurrentPendingScoreReview } from './scoreReview';
 import type { CommandEnvelope, TournamentState } from './schemas';
 export function dispatchMatch(
   next: TournamentState,
@@ -20,6 +21,10 @@ export function dispatchMatch(
   );
   basis[match.id] = match.revision;
   basis.resources = next.settings.resourceRevision;
+  requireFact(
+    !hasCurrentPendingScoreReview(match, next.reports),
+    'This match has a score awaiting TO review.',
+  );
   if (!envelope.operator)
     requireFact(
       next.settings.published &&
@@ -40,6 +45,12 @@ export function dispatchMatch(
       next.stations,
       next.pools.map((p) => ({ ...p, poolIndex: p.index })),
       next.entrants.filter((e) => !available(e)).map((e) => e.playerId),
+      true,
+      new Set(
+        next.matches
+          .filter((item) => hasCurrentPendingScoreReview(item, next.reports))
+          .map((item) => item.id),
+      ),
     );
     requireFact(
       queues.stationQueues.some(

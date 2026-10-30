@@ -59,6 +59,7 @@ export function buildStationQueues(
   schedules: readonly Schedule[],
   withdrawnIds: readonly string[] = [],
   eventOpen = true,
+  pendingReviewIds: ReadonlySet<string> = new Set(),
 ) {
   const ordered = [...matches].sort((a, b) => a.id.localeCompare(b.id));
   const keys = [
@@ -146,6 +147,7 @@ export function buildStationQueues(
     (m) =>
       eventOpen &&
       m.status === 'ready' &&
+      !pendingReviewIds.has(m.id) &&
       m.player1Id &&
       m.player2Id &&
       !withdrawnIds.includes(m.player1Id) &&

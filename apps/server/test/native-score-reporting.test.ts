@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { captureBaseline, decide, reduceDecision, stableId } from '../src/tournament/domain';
 import { envelope, pureBaseline, pureState } from './helpers/nativeLiveFixture';
+import { hasCurrentPendingScoreReview } from '../src/tournament/scoreReview';
 import type {
   CommandEnvelope,
   TournamentCommand,
@@ -23,6 +24,30 @@ const score = (match: TournamentState['matches'][number], score1 = 2, score2 = 0
   outcome: 'played' as const,
 });
 const attendee = { actorId: 'attendee', operator: false };
+
+function awaitingReview() {
+  const baseline = pureBaseline();
+  baseline.settings.scoreReportingMode = 'to_review';
+  baseline.stations.push({
+    id: stableId('station'),
+    name: 'Pool setup',
+    enabled: true,
+    revision: 0,
+  });
+  baseline.pools[0]!.selfRun = true;
+  const initial = captureBaseline(baseline);
+  return apply(initial, score(initial.matches[0]!), attendee);
+}
+
+function dispatch(state: TournamentState, match = state.matches[0]!): TournamentCommand {
+  return {
+    kind: 'dispatch',
+    matchId: match.id,
+    expectedRevision: match.revision,
+    expectedResourceRevision: state.settings.resourceRevision,
+    stationId: state.stations[0]!.id,
+  };
+}
 
 describe('reporting native played results independently of dispatch', () => {
   it.each([false, true])(
@@ -75,6 +100,40 @@ describe('reporting native played results independently of dispatch', () => {
     expect(reported.reports[0]).toMatchObject({ status: 'pending', autoApproved: false });
     expect(reported.matches[0]).toEqual(target);
     expect(reported.settings.resourceRevision).toBe(state.settings.resourceRevision);
+  });
+
+  it('blocks pending played-score calls for TOs and attendees without consuming capacity or blocking another match', () => {
+    const state = awaitingReview();
+    const target = state.matches[0]!;
+    expect(hasCurrentPendingScoreReview(target, state.reports)).toBe(true);
+    for (const actor of [{ operator: true }, attendee, { ...attendee, guest: true }])
+      expect(() => apply(state, dispatch(state), actor)).toThrow(/score awaiting TO review/);
+    expect(state.matches[0]).toMatchObject({ status: 'ready', started: false, stationId: null });
+    expect(state.matches.filter((match) => match.status === 'playing')).toHaveLength(0);
+    const unrelated = state.matches.find((match) => match.division === 'lower')!;
+    expect(
+      apply(state, dispatch(state, unrelated)).matches.find((match) => match.id === unrelated.id),
+    ).toMatchObject({ status: 'playing' });
+  });
+
+  it('restores call eligibility after rejection and completes the pairing after approval', () => {
+    const state = awaitingReview();
+    const review = { kind: 'review' as const, reportId: state.reports[0]!.id, expectedRevision: 0 };
+    const rejected = apply(state, { ...review, approve: false });
+    expect(hasCurrentPendingScoreReview(rejected.matches[0]!, rejected.reports)).toBe(false);
+    expect(apply(rejected, dispatch(rejected)).matches[0]!.status).toBe('playing');
+    const approved = apply(state, { ...review, approve: true });
+    expect(approved.matches[0]).toMatchObject({ status: 'complete', started: false });
+    expect(() => apply(approved, dispatch(approved))).toThrow(/not ready/);
+  });
+
+  it('does not let an obsolete report hold a changed pairing', () => {
+    const state = awaitingReview();
+    state.matches[0]!.player2Id = state.entrants[2]!.playerId;
+    state.matches[0]!.revision++;
+    expect(hasCurrentPendingScoreReview(state.matches[0]!, state.reports)).toBe(false);
+    expect(apply(state, dispatch(state)).matches[0]!.status).toBe('playing');
+    expect(state.reports[0]!.status).toBe('pending');
   });
 
   it.each(['to_review', 'approve_unless_disputed'] as const)(
