@@ -447,6 +447,13 @@ describe('standard native lifecycle uses Act without adoption', () => {
     }
     await operator.eventOps.native.finalize({ planId });
     expect((await operator.eventOps.overview({ planId })).plan.status).toBe('complete');
+    expect(
+      (await caller(null).eventOps.publicEvents()).find((event) => event.id === planId),
+    ).toMatchObject({
+      status: 'complete',
+      drawPaused: false,
+      competitionFormat: 'singles',
+    });
     const before = await runtime.state(planId);
     expect(before.publication).not.toBeNull();
     const final = before.matches.find((m) => m.stage === 'main' && m.outcome === 'played')!;

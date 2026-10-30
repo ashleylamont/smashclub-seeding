@@ -10,7 +10,7 @@ import {
   type eventMatchAudit,
   type eventAttendanceAudit,
 } from '@smashclub/db';
-import { publicPlayerName } from '@smashclub/shared';
+import { publicPlayerName, type CompetitionFormat } from '@smashclub/shared';
 import { requireOperator } from '../event-operations/access';
 import type { TrpcContext } from '../trpc/trpc';
 import { nativeEvent, reportViews, type NativeEventApi } from './api';
@@ -135,6 +135,8 @@ export async function nativePublicEvents(
       eventDate: string;
       status: string;
       bracketMode: 'native' | 'challonge';
+      competitionFormat: CompetitionFormat;
+      drawPaused: boolean;
     }[]
   >,
 ) {
@@ -161,6 +163,8 @@ export async function nativePublicEvents(
             ? 'cancelled'
             : 'underway',
       bracketMode: 'native' as const,
+      competitionFormat: state.baseline!.competitionFormat ?? 'singles',
+      drawPaused: state.lifecycle === 'unlocked',
     });
   }
   const owned = new Set((await ctx.db.select().from(nativeLiveHandoffs)).map((h) => h.eventPlanId));

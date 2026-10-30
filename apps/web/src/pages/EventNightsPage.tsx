@@ -1,17 +1,11 @@
 import { Button } from '../components/ui/Button';
 import { Disclosure } from '../components/ui/Disclosure';
-import { useQuery } from '@tanstack/react-query';
-import { trpc } from '../lib/trpc';
+import { usePublicEventNights } from '../lib/publicEvents';
 import './EventNights.css';
 
 const closed = (status: string) => ['complete', 'cancelled'].includes(status);
 export function EventNightsPage() {
-  const events = useQuery({
-    queryKey: ['publicEventNights'],
-    queryFn: () => trpc.eventOps.publicEvents.query(),
-    refetchInterval: 15_000,
-    retry: false,
-  });
+  const events = usePublicEventNights();
   const open = events.data?.filter((event) => !closed(event.status)) ?? [];
   const finished = events.data?.filter((event) => closed(event.status)) ?? [];
   return (
