@@ -22,11 +22,12 @@ import {
   matchesPool,
   eventPlayOpen,
   poolPath,
-  poolPolicy,
+  scoreApprovalPolicy,
   queueScoringIds,
   usePoolFilter,
   type PoolFlowData,
   type StartPoolMatch,
+  type ScoreApprovalPolicy,
 } from '../lib/poolFlow';
 import {
   includesPlayer,
@@ -90,9 +91,9 @@ function PlayerEvent({ planId }: { planId: string }) {
       </Notice>
     );
   const data: Snapshot & Partial<Pick<PoolFlowData, 'stationQueues' | 'poolRounds'>> = event.data;
-  const disputeMode =
-    data.settings.scoreReportingMode === 'approve_unless_disputed' &&
-    data.plan.bracketMode === 'native';
+  const hasAutomaticReports = data.matches.some(
+    (match) => scoreApprovalPolicy(data, match) !== 'review',
+  );
   const claim = claims.data?.find((claim) => claim.status === 'approved');
   const players = eventPlayers(data.matches);
   const selectedPlayer = players.some((player) => player.id === devicePlayer) ? devicePlayer : '';
@@ -111,7 +112,7 @@ function PlayerEvent({ planId }: { planId: string }) {
             ? reported.has(match.id)
             : view === 'all' || search
               ? ['ready', 'playing'].includes(match.status) ||
-                (disputeMode && match.status === 'complete') ||
+                (scoreApprovalPolicy(data, match) !== 'review' && match.status === 'complete') ||
                 reported.has(match.id)
               : queued.has(match.id) || reported.has(match.id) || selectedMatch === match.id) &&
       `${match.player1Name} ${match.player2Name} ${match.label} ${match.division}`
@@ -214,7 +215,7 @@ function PlayerEvent({ planId }: { planId: string }) {
                 <Select aria-label="Match view" value={view} onValueChange={setView}>
                   <SelectItem value="queue">Station matches & my reports</SelectItem>
                   <SelectItem value="all">
-                    {disputeMode ? 'All matches & results' : 'All open matches'}
+                    {hasAutomaticReports ? 'All matches & results' : 'All open matches'}
                   </SelectItem>
                   <SelectItem value="results">Recorded results</SelectItem>
                   <SelectItem value="mine" disabled={!selectedPlayer}>
@@ -237,11 +238,11 @@ function PlayerEvent({ planId }: { planId: string }) {
         <div className="ops-match-grid">
           {visible.map((match) => (
             <PlayerScoreCard
-              key={`${match.id}:${poolPolicy(data, match)?.selfRun && match.status === 'playing' ? 'playing' : 'regular'}`}
+              key={match.id}
               match={match}
               planId={planId}
               report={reports.data?.find((report) => report.matchId === match.id)}
-              disputeMode={disputeMode && !closed && playOpen}
+              approvalPolicy={!closed && playOpen ? scoreApprovalPolicy(data, match) : 'review'}
               enabled={
                 online &&
                 !event.isError &&
@@ -249,12 +250,10 @@ function PlayerEvent({ planId }: { planId: string }) {
                 !closed &&
                 playOpen &&
                 (['ready', 'playing'].includes(match.status) ||
-                  (disputeMode && match.status === 'complete'))
+                  (scoreApprovalPolicy(data, match) !== 'review' && match.status === 'complete'))
               }
               station={matchStation(data, match).name ?? undefined}
               status={matchStatus(data, match)}
-              selfRun={Boolean(poolPolicy(data, match)?.selfRun)}
-              autoAccept={Boolean(poolPolicy(data, match)?.autoAcceptScores)}
             />
           ))}
         </div>
@@ -291,9 +290,7 @@ function PlayerScoreCard({
   station,
   status,
   report,
-  selfRun,
-  autoAccept,
-  disputeMode,
+  approvalPolicy,
 }: {
   match: Match;
   planId: string;
@@ -301,9 +298,7 @@ function PlayerScoreCard({
   station?: string;
   status: string;
   report?: Awaited<ReturnType<typeof trpc.eventOps.myReports.query>>[number];
-  selfRun: boolean;
-  autoAccept: boolean;
-  disputeMode: boolean;
+  approvalPolicy: ScoreApprovalPolicy;
 }) {
   const reportStatus = report?.status;
   const cache = useQueryClient();
@@ -368,7 +363,7 @@ function PlayerScoreCard({
         <CompletedScoreReport
           match={match}
           enabled={enabled}
-          allowReports={disputeMode && match.outcome === 'played'}
+          allowReports={approvalPolicy !== 'review' && match.outcome === 'played'}
           onSubmit={reportResult}
           pendingReport={report?.status === 'pending' ? report : undefined}
           label="Confirmed"
@@ -393,17 +388,6 @@ function PlayerScoreCard({
           {sent === 'approved'
             ? 'Result confirmed.'
             : 'Score submitted for TO approval. An organiser can correct or reject it if needed.'}
-        </p>
-      ) : selfRun && match.status !== 'playing' ? (
-        <p className="pool-flow-selected-note">
-          {status === 'Play next' ? (
-            <>
-              Start this match from its station’s <a href="#pool-station-queues">Play next card</a>{' '}
-              first. Once it is playing, you can report the result here.
-            </>
-          ) : (
-            'Wait for a station call before starting this match.'
-          )}
         </p>
       ) : !enabled ? (
         <p className="muted">Match reporting is currently unavailable.</p>
@@ -468,14 +452,12 @@ function PlayerScoreCard({
               !match.player2Id
             }
           >
-            {disputeMode || (selfRun && autoAccept)
-              ? 'Confirm result'
-              : 'Submit score for approval'}
+            {approvalPolicy !== 'review' ? 'Confirm result' : 'Submit score for approval'}
           </Button>
           <p className="muted">
-            {disputeMode
+            {approvalPolicy === 'event'
               ? 'Results advance immediately. Later disagreements go to TO review.'
-              : selfRun && autoAccept
+              : approvalPolicy === 'pool'
                 ? 'This pool confirms submitted results immediately. Check the players and final score together.'
                 : 'A TO checks this score before it becomes a confirmed result.'}
           </p>

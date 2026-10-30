@@ -106,7 +106,9 @@ test('busy light TO desk keeps pending disputes readable and keyboard destinatio
   expect(fixture.unexpected).toEqual([]);
 });
 
-test('phone next-match start preserves revision and opens the reporting card', async ({ page }) => {
+test('phone reporting works before Start and retains its draft across station dispatch', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const fixture = await mockEvent(page, { role: 'player' });
   const queue = fixture.snapshot.stationQueues[0]!;
@@ -126,6 +128,10 @@ test('phone next-match start preserves revision and opens the reporting card', a
     ],
   });
   await page.goto(`/play/${PLAN_ID}`);
+  const card = page.locator('article.ops-match').filter({ hasText: next.label });
+  const score = card.getByRole('spinbutton').nth(0);
+  await score.fill('2');
+  await expect(card.getByRole('button', { name: 'Confirm result', exact: true })).toBeEnabled();
   const start = page.getByRole('button', { name: 'We’re here — start match' });
   await expect(start).toBeEnabled();
   await start.focus();
@@ -137,9 +143,11 @@ test('phone next-match start preserves revision and opens the reporting card', a
     stationId: queue.stationId,
     expectedRevision: revision,
   });
-  const card = page.locator('article.ops-match').filter({ hasText: next.label });
   await expect(card).toHaveCount(1);
   await expect(card).toContainText(next.player1Name!);
+  await expect(score).toHaveValue('2');
+  // Restore the ordinary empty score state for the existing visual baseline.
+  await score.fill('0');
   await ready(page);
   await accessible(page);
   await expect(page).toHaveScreenshot('next-match-phone.png');

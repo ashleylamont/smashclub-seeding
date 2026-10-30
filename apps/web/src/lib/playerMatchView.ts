@@ -1,4 +1,9 @@
-import { matchesPool, type PoolFlowData, type PoolFlowMatch } from './poolFlow';
+import {
+  scoreApprovalPolicy,
+  matchesPool,
+  type PoolFlowData,
+  type PoolFlowMatch,
+} from './poolFlow';
 
 export function includesPlayer(match: PoolFlowMatch, playerId: string) {
   return (
@@ -95,7 +100,8 @@ export function guestVisibleMatches(data: PoolFlowData | undefined, filters: Gue
             : view === 'matches' || search
               ? (match.status === 'ready' ||
                   match.status === 'playing' ||
-                  (disputeMode && match.status === 'complete') ||
+                  ((disputeMode || scoreApprovalPolicy(data, match) !== 'review') &&
+                    match.status === 'complete') ||
                   reportedIds.has(match.id)) &&
                 match.player1Id &&
                 match.player2Id

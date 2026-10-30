@@ -25,7 +25,7 @@ import { PoolFilter, PoolRoundSchedule, PoolStationQueue } from '../components/P
 import {
   poolPath,
   eventPlayOpen,
-  poolPolicy,
+  scoreApprovalPolicy,
   queueScoringIds,
   usePoolFilter,
   type PoolFlowData,
@@ -147,6 +147,9 @@ export function GuestEvent({ planId }: { planId: string }) {
   const disputeMode =
     (publicEvent.data ?? matches.data)?.settings.scoreReportingMode === 'approve_unless_disputed' &&
     (publicEvent.data ?? matches.data)?.plan.bracketMode === 'native';
+  const hasAutomaticReports = data?.matches.some(
+    (match) => scoreApprovalPolicy(data, match) !== 'review',
+  );
   const closed = data !== undefined && ['complete', 'cancelled'].includes(data.plan.status);
   const players = eventPlayers(data?.matches ?? []);
   const player = players.some((item) => item.id === selectedPlayer) ? selectedPlayer : '';
@@ -308,7 +311,7 @@ export function GuestEvent({ planId }: { planId: string }) {
                     <Select aria-label="Match view" value={view} onValueChange={setView}>
                       <SelectItem value="queue">Station matches & my reports</SelectItem>
                       <SelectItem value="matches">
-                        {disputeMode ? 'All matches & results' : 'All open matches'}
+                        {hasAutomaticReports ? 'All matches & results' : 'All open matches'}
                       </SelectItem>
                       <SelectItem value="results">Recorded results</SelectItem>
                       <SelectItem value="mine" disabled={!player}>
@@ -331,16 +334,14 @@ export function GuestEvent({ planId }: { planId: string }) {
             <div className="ops-match-grid">
               {visible.map((match) => (
                 <GuestScoreCard
-                  key={`${match.id}:${poolPolicy(data, match)?.selfRun && match.status === 'playing' ? 'playing' : 'regular'}`}
+                  key={match.id}
                   planId={planId}
                   session={canWrite && !closed ? session : null}
-                  disputeMode={disputeMode && !closed && playOpen}
+                  approvalPolicy={!closed && playOpen ? scoreApprovalPolicy(data, match) : 'review'}
                   match={match as GuestMatch}
                   report={matches.data?.reports.find((report) => report.matchId === match.id)}
                   status={matchStatus(data, match)}
                   station={matchStation(data, match).name ?? undefined}
-                  selfRun={Boolean(poolPolicy(data, match)?.selfRun)}
-                  autoAccept={Boolean(poolPolicy(data, match)?.autoAcceptScores)}
                 />
               ))}
             </div>
