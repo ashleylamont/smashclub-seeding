@@ -146,8 +146,12 @@ test('phone reporting works before Start and retains its draft across station di
   await expect(card).toHaveCount(1);
   await expect(card).toContainText(next.player1Name!);
   await expect(score).toHaveValue('2');
-  // Restore the ordinary empty score state for the existing visual baseline.
+  // Editing the earlier form scrolls away from the station. Preserve the
+  // post-dispatch viewport and focus state used by the station visual baseline.
+  const stationViewport = await page.evaluate(() => ({ x: scrollX, y: scrollY }));
   await score.fill('0');
+  await score.blur();
+  await page.evaluate(({ x, y }) => scrollTo(x, y), stationViewport);
   await ready(page);
   await accessible(page);
   await expect(page).toHaveScreenshot('next-match-phone.png');
