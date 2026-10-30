@@ -64,6 +64,13 @@ export function saveGuestSession(planId: string, session: GuestSession) {
   try {
     localStorage.setItem(key, JSON.stringify(session));
   } catch {
+    // A stale persistent copy must not shadow the replacement tab pass on reload
+    // when a full/disabled storage area allows reads but refuses new writes.
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      /* Storage access can be disabled completely. */
+    }
     try {
       sessionStorage.setItem(key, JSON.stringify(session));
     } catch {

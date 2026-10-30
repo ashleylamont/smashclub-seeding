@@ -57,6 +57,7 @@ describe('saved event guest access', () => {
   });
 
   it('falls back to tab storage when durable storage is unavailable', () => {
+    localStorage.setItem(key, JSON.stringify({ ...pass, sessionToken: 'old-pass'.repeat(5) }));
     vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
       throw new DOMException('Storage disabled', 'SecurityError');
     });
