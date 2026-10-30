@@ -14,7 +14,7 @@ Coverage includes:
 - Active and idle 1920×1080 OBS composition, transparent gameplay aperture and unclipped `Tech In Place` identity.
 - Phone bracket with a bye, unresolved dependency, uneven rounds and a long alias.
 
-The CI job **UI accessibility and visuals** runs Chromium on `macos-14`, matching the committed Darwin snapshot suffix. It contributes to **All checks** and uploads `ui-review` with its HTML report, traces and expected/actual/difference images. Database-backed event tests stay on Linux. Browser and font rendering are platform-dependent; a Linux run needs separately reviewed Linux baselines.
+The CI job **UI accessibility and visuals** runs Chromium on `macos-15`, matching the committed Darwin snapshot suffix. The explicit runner replaces `macos-14`, whose [scheduled brownouts and retirement](https://github.com/actions/runner-images/issues/13518) prevent the required job from running. It contributes to **All checks** and uploads `ui-review` with its HTML report, traces and expected/actual/difference images. Database-backed event tests stay on Linux. Browser and font rendering are platform-dependent; a Linux run needs separately reviewed Linux baselines. Runner upgrades retain the existing assertions, baselines and tolerance; review any rendering differences before updating individual images.
 
 ## Reviewing an intentional visual change
 
