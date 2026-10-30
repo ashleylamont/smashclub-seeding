@@ -22,7 +22,8 @@ import { lockEvent, requireOperator, snapshot, validateScore, applyScore } from 
 // each issued code valid for at least an hour.
 const INVITATION_ROTATION_MS = 15 * 60_000;
 const INVITATION_MS = 75 * 60_000;
-const SESSION_MS = 60 * 60_000;
+// Rate-limit accounting is independent of invitation and reporting-pass lifetime.
+const REDEMPTION_WINDOW_MS = 60 * 60_000;
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const randomToken = () => randomBytes(32).toString('base64url');
 const deny = () => {
@@ -40,7 +41,7 @@ const limited = () => {
 const publicSettings = (s?: typeof eventGuestSettings.$inferSelect) => ({
   enabled: s?.enabled ?? false,
   showOnOverlay: s?.showOnOverlay ?? false,
-  rotateInvitations: s?.rotateInvitations ?? true,
+  rotateInvitations: s?.rotateInvitations ?? false,
 });
 
 export async function guestSettings(db: Db, actor: SessionUser, planId: string) {
@@ -65,7 +66,7 @@ export async function configureGuests(
       .select()
       .from(eventGuestSettings)
       .where(eq(eventGuestSettings.eventPlanId, input.planId));
-    const rotateInvitations = input.rotateInvitations ?? previous?.rotateInvitations ?? true;
+    const rotateInvitations = input.rotateInvitations ?? previous?.rotateInvitations ?? false;
     const secret =
       !previous ||
       rotate ||
@@ -204,7 +205,7 @@ async function consumeRedemptionLimit(
           lt(eventGuestRateLimits.expiresAt, new Date(now)),
         ),
       );
-    const window = Math.floor(now / SESSION_MS);
+    const window = Math.floor(now / REDEMPTION_WINDOW_MS);
     const scopes = [
       { key: hash(`${settings.secret}:${ip}:${window}`), max: 240 },
       { key: hash(`${settings.secret}:event:${window}`), max: 1500 },
@@ -223,7 +224,7 @@ async function consumeRedemptionLimit(
           key: scope.key,
           eventPlanId: planId,
           count: 1,
-          expiresAt: new Date((window + 1) * SESSION_MS),
+          expiresAt: new Date((window + 1) * REDEMPTION_WINDOW_MS),
         })
         .onConflictDoUpdate({
           target: eventGuestRateLimits.key,
@@ -259,14 +260,13 @@ export async function redeemGuest(
     if (supplied.length !== expected.length || !timingSafeEqual(supplied, Buffer.from(expected)))
       return deny();
     const sessionToken = randomToken();
-    const expiresAt = new Date(now + SESSION_MS);
     await tx.insert(eventGuestSessions).values({
       eventPlanId: input.planId,
       tokenHash: hash(sessionToken),
       generation: hash(settings.secret),
-      expiresAt,
+      expiresAt: null,
     });
-    return { sessionToken, expiresAt: expiresAt.toISOString() };
+    return { sessionToken, expiresAt: null };
   });
 }
 export async function validateGuestSession(
@@ -285,9 +285,30 @@ export async function validateGuestSession(
         eq(eventGuestSessions.tokenHash, hash(input.sessionToken)),
       ),
     );
-  if (!guest || guest.expiresAt.getTime() <= now || guest.generation !== hash(settings.secret))
+  if (
+    !guest ||
+    (guest.expiresAt !== null && guest.expiresAt.getTime() <= now) ||
+    guest.generation !== hash(settings.secret)
+  )
     return deny();
   return guest;
+}
+
+/**
+ * Native commands commit in Act rather than this SQL transaction. Hold the same
+ * event-row lock used by reset/disable until the command finishes, so a revoked
+ * pass cannot slip through a validation-to-command gap.
+ */
+export async function withGuestSession<T>(
+  db: Db,
+  input: { planId: string; sessionToken: string },
+  native: NativeRuntime,
+  work: (guest: typeof eventGuestSessions.$inferSelect, readDb: Db) => Promise<T>,
+) {
+  return db.transaction(async (tx) => {
+    const guest = await validateGuestSession(tx, input, Date.now(), native);
+    return work(guest, tx);
+  });
 }
 export async function guestMatches(
   db: Db,
@@ -317,7 +338,7 @@ export async function guestMatches(
       ...(await loadStationQueues(tx, input.planId)),
       matches: data.matches,
       reports,
-      expiresAt: guest.expiresAt.toISOString(),
+      expiresAt: guest.expiresAt?.toISOString() ?? null,
     };
   });
 }

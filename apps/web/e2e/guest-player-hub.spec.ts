@@ -144,20 +144,20 @@ test('signed-out player hub browses without a pass and reuses a venue pass acros
     await visitor.goto(
       `/guest/${planId}?pool=upper%3A0#token=${encodeURIComponent(invitation.token)}`,
     );
-    await expect(visitor.locator('.guest-pass-expiry')).toContainText('remaining');
+    await expect(visitor.locator('.guest-pass-expiry')).toContainText('valid until revoked');
     await expect.poll(() => new URL(visitor.url()).hash).toBe('');
     await visitor.getByRole('link', { name: 'Event board →', exact: true }).click();
     await expect(visitor.getByLabel('Your pool')).toHaveAttribute('data-value', 'upper:0');
     await visitor.getByRole('link', { name: 'Player area · my matches & scores →' }).click();
-    await expect(visitor.locator('.guest-pass-expiry')).toContainText('remaining');
+    await expect(visitor.locator('.guest-pass-expiry')).toContainText('valid until revoked');
     await expect(visitor.getByLabel('Your pool')).toHaveAttribute('data-value', 'upper:0');
     await chooseOption(visitor.getByLabel('Match view', { exact: true }), 'matches');
     await expect(visitor.locator('article.ops-match input[type="number"]').first()).toBeVisible();
     await visitor.evaluate((id) => {
       const key = `nemesis:guest:${id}`;
-      const pass = JSON.parse(sessionStorage.getItem(key)!);
+      const pass = JSON.parse(localStorage.getItem(key)!);
       pass.expiresAt = new Date(Date.now() - 1000).toISOString();
-      sessionStorage.setItem(key, JSON.stringify(pass));
+      localStorage.setItem(key, JSON.stringify(pass));
     }, planId);
     await visitor.reload();
     await expect(
@@ -172,7 +172,7 @@ test('signed-out player hub browses without a pass and reuses a venue pass acros
       visitor.getByRole('heading', { name: 'Find your station', exact: true }),
     ).toBeVisible();
     await visitor.goto(`/guest/${planId}#token=${encodeURIComponent(invitation.token)}`);
-    await expect(visitor.locator('.guest-pass-expiry')).toContainText('remaining');
+    await expect(visitor.locator('.guest-pass-expiry')).toContainText('valid until revoked');
     await mutate(page.request, 'eventOps.guests.configure', {
       planId,
       enabled: false,
@@ -194,6 +194,93 @@ test('signed-out player hub browses without a pass and reuses a venue pass acros
     await expect(visitor.locator('article.ops-match')).toHaveCount(0);
   } finally {
     await guest.close();
+  }
+});
+
+test('guest access survives browser revisits and hours, retains passes on network errors, and resets without stale access', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  await signIn(page.request, 'admin@smashclub.dev');
+  const { planId } = await freshEvent(page.request, 'durable guest pass');
+  await mutate(page.request, 'eventOps.guests.configure', {
+    planId,
+    enabled: true,
+    showOnOverlay: false,
+  });
+  const invitation = await mutate<{ token: string; expiresAt: string | null }>(
+    page.request,
+    'eventOps.guests.invitation',
+    { planId },
+  );
+  expect(invitation.expiresAt).toBeNull();
+  let context = await browser.newContext({ baseURL, viewport: { width: 390, height: 844 } });
+  try {
+    const first = await context.newPage();
+    await first.goto(`/guest/${planId}#token=${encodeURIComponent(invitation.token)}`);
+    await expect(first.locator('.guest-pass-expiry')).toContainText('valid until revoked');
+    const persisted = await context.storageState();
+    await context.close();
+    context = await browser.newContext({
+      baseURL,
+      storageState: persisted,
+      viewport: { width: 390, height: 844 },
+    });
+    const returned = await context.newPage();
+    await returned.clock.install({ time: new Date(Date.now() + 8 * 60 * 60_000) });
+    await returned.goto(`/play/${planId}`);
+    await expect(returned.locator('.guest-pass-expiry')).toContainText('valid until revoked');
+    await chooseOption(returned.getByLabel('Match view', { exact: true }), 'matches');
+    await expect(returned.locator('article.ops-match input[type="number"]').first()).toBeVisible();
+    const guestRead = /\/api\/trpc\/[^?]*eventOps\.guests\.matches/;
+    await returned.route(guestRead, (route) => route.abort('failed'));
+    await expect(
+      returned.getByText('Reporting connection interrupted.', { exact: false }),
+    ).toBeVisible();
+    expect(
+      await returned.evaluate((id) => localStorage.getItem(`nemesis:guest:${id}`) !== null, planId),
+    ).toBe(true);
+    await expect(returned.getByRole('heading', { name: 'Refresh your guest pass' })).toHaveCount(0);
+    await returned.unroute(guestRead);
+    await expect(
+      returned.getByText('Reporting connection interrupted.', { exact: false }),
+    ).toHaveCount(0);
+    await mutate(page.request, 'eventOps.settings', {
+      planId,
+      published: false,
+      playerReports: true,
+    });
+    await expect(returned.getByRole('alert')).toContainText('This event is unavailable');
+    expect(
+      await returned.evaluate((id) => localStorage.getItem(`nemesis:guest:${id}`) !== null, planId),
+    ).toBe(true);
+    await mutate(page.request, 'eventOps.settings', {
+      planId,
+      published: true,
+      playerReports: true,
+    });
+    await expect(returned.locator('.guest-pass-expiry')).toContainText('valid until revoked');
+    await expect(returned.locator('article.ops-match input[type="number"]').first()).toBeVisible();
+    await mutate(page.request, 'eventOps.guests.rotate', { planId });
+    await expect(returned.getByRole('heading', { name: 'Refresh your guest pass' })).toBeVisible();
+    // Saved credentials are always revalidated, including after a reset.
+    expect(
+      await returned.evaluate((id) => localStorage.getItem(`nemesis:guest:${id}`) !== null, planId),
+    ).toBe(true);
+    await expect(returned.locator('article.ops-match input[type="number"]')).toHaveCount(0);
+    expect(await returned.locator('article.ops-match').count()).toBeGreaterThan(0);
+    const replacement = await mutate<{ token: string }>(
+      page.request,
+      'eventOps.guests.invitation',
+      { planId },
+    );
+    await returned.goto(`/guest/${planId}#token=${encodeURIComponent(replacement.token)}`);
+    await expect(returned.locator('.guest-pass-expiry')).toContainText('valid until revoked');
+    await chooseOption(returned.getByLabel('Match view', { exact: true }), 'matches');
+    await expect(returned.locator('article.ops-match input[type="number"]').first()).toBeVisible();
+  } finally {
+    await context.close();
   }
 });
 

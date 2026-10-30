@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { authedProcedure, publicProcedure, router } from '../trpc/trpc';
 import {
   validateGuestSession,
+  withGuestSession,
   configureGuests,
   guestInvitation,
   guestMatches,
@@ -28,35 +29,37 @@ export const guestRouter = router({
     .mutation(async ({ ctx, input }) => {
       const api = await nativeEvent(ctx, input.planId, true);
       if (!api) return startPoolMatch(ctx.db, null, input);
-      const guest = await validateGuestSession(ctx.db, input, Date.now(), ctx.nativeRuntime);
-      const actor = {
-        id: `guest:${guest.id}`,
-        guest: true,
-        name: 'Guest',
-        email: 'guest@internal',
-        role: 'user' as const,
-      };
-      const state = await api.state();
-      await nativeTransport(() =>
-        api.runtime.command(
-          actor,
-          input.planId,
-          input.requestId ??
-            `start:${input.matchId}:${input.expectedRevision}:${state.settings.resourceRevision}`,
-          {
-            kind: 'dispatch',
-            matchId: input.matchId,
-            expectedRevision: input.expectedRevision,
-            expectedResourceRevision: state.settings.resourceRevision,
-            stationId: input.stationId,
-          },
-          hash({
-            matchId: input.matchId,
-            stationId: input.stationId,
-            expectedRevision: input.expectedRevision,
-          }),
-        ),
-      );
+      await withGuestSession(ctx.db, input, api.runtime, async (guest, readDb) => {
+        const actor = {
+          id: `guest:${guest.id}`,
+          guest: true,
+          name: 'Guest',
+          email: 'guest@internal',
+          role: 'user' as const,
+        };
+        const state = await api.state();
+        await nativeTransport(() =>
+          api.runtime.command(
+            actor,
+            input.planId,
+            input.requestId ??
+              `start:${input.matchId}:${input.expectedRevision}:${state.settings.resourceRevision}`,
+            {
+              kind: 'dispatch',
+              matchId: input.matchId,
+              expectedRevision: input.expectedRevision,
+              expectedResourceRevision: state.settings.resourceRevision,
+              stationId: input.stationId,
+            },
+            hash({
+              matchId: input.matchId,
+              stationId: input.stationId,
+              expectedRevision: input.expectedRevision,
+            }),
+            readDb,
+          ),
+        );
+      });
       return (await api.snapshot()).matches.find((m) => m.id === input.matchId)!;
     }),
   settings: authedProcedure
@@ -100,7 +103,7 @@ export const guestRouter = router({
     return {
       ...data,
       reports: reportViews(await api.state()).filter((r) => r.guestSessionId === guest.id),
-      expiresAt: guest.expiresAt.toISOString(),
+      expiresAt: guest.expiresAt?.toISOString() ?? null,
     };
   }),
   submit: publicProcedure
@@ -116,25 +119,33 @@ export const guestRouter = router({
     .mutation(async ({ ctx, input }) => {
       const api = await nativeEvent(ctx, input.planId, true);
       if (!api) return submitGuest(ctx.db, input);
-      const guest = await validateGuestSession(ctx.db, input, Date.now(), ctx.nativeRuntime);
-      const actor = {
-        id: `guest:${guest.id}`,
-        guest: true,
-        name: 'Guest',
-        email: 'guest@internal',
-        role: 'user' as const,
-      };
-      const result = await nativeTransport(() =>
-        api.runtime.command(actor, input.planId, input.requestId, {
-          kind: 'score',
-          matchId: input.matchId,
-          expectedRevision: input.expectedRevision,
-          score1: input.score1,
-          score2: input.score2,
-          outcome: 'played',
-        }),
-      );
-      const report = (await api.state()).reports.find((r) => r.id === result.receipt.reportId)!;
-      return { reportId: report.id, status: report.status, isDispute: report.isDispute };
+      return withGuestSession(ctx.db, input, api.runtime, async (guest, readDb) => {
+        const actor = {
+          id: `guest:${guest.id}`,
+          guest: true,
+          name: 'Guest',
+          email: 'guest@internal',
+          role: 'user' as const,
+        };
+        const result = await nativeTransport(() =>
+          api.runtime.command(
+            actor,
+            input.planId,
+            input.requestId,
+            {
+              kind: 'score',
+              matchId: input.matchId,
+              expectedRevision: input.expectedRevision,
+              score1: input.score1,
+              score2: input.score2,
+              outcome: 'played',
+            },
+            undefined,
+            readDb,
+          ),
+        );
+        const report = (await api.state()).reports.find((r) => r.id === result.receipt.reportId)!;
+        return { reportId: report.id, status: report.status, isDispute: report.isDispute };
+      });
     }),
 });
