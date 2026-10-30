@@ -93,9 +93,9 @@ test('scannable guest QR accepts anonymous and unlinked reports, keeps approval 
     .last();
   await controls.getByLabel('Allow guest score reports', { exact: true }).click();
   await expect(controls.getByLabel('Allow guest score reports', { exact: true })).toBeChecked();
-  await controls.getByLabel('Show a rotating QR on the OBS overlay', { exact: true }).click();
+  await controls.getByLabel('Show the guest QR on the OBS overlay', { exact: true }).click();
   await expect(
-    controls.getByLabel('Show a rotating QR on the OBS overlay', { exact: true }),
+    controls.getByLabel('Show the guest QR on the OBS overlay', { exact: true }),
   ).toBeChecked();
   await controls.getByRole('button', { name: 'Generate guest QR', exact: true }).click();
   const qr = controls.getByRole('img', { name: 'Scan to report a match score' });
@@ -312,7 +312,6 @@ test('organisers print a permanent station QR before publication', async ({
     .last();
   await controls.getByLabel('Allow guest score reports', { exact: true }).click();
   await expect(controls.getByLabel('Allow guest score reports', { exact: true })).toBeChecked();
-  await controls.getByLabel('Keep QR invitations valid until revoked').click();
   await expect(controls.getByLabel('Keep QR invitations valid until revoked')).toBeChecked();
   await controls.getByRole('button', { name: 'Print station signs' }).click();
   const preview = page.getByRole('dialog', { name: 'Print station signs' });
@@ -362,7 +361,7 @@ test('organisers print a permanent station QR before publication', async ({
       stationId,
     );
     await expect(guest.locator('article.pool-flow-station')).toHaveCount(1);
-    await expect(guest.locator('.guest-pass-expiry')).toContainText('remaining');
+    await expect(guest.locator('.guest-pass-expiry')).toContainText('valid until revoked');
   } finally {
     await anonymous.close();
   }

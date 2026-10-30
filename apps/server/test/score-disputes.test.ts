@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import {
+  eventGuestSessions,
   eventMatches,
   eventMatchAudit,
   eventOperationSettings,
@@ -278,12 +279,14 @@ it('an obsolete pending report cannot veto a current score after an organiser ch
   expect(approved).toMatchObject({ status: 'approved', isDispute: false });
 });
 it('expired guest sessions and unpublished events cannot submit or dispute', async () => {
-  const { sessionToken, expiresAt } = await guest();
+  const { sessionToken } = await guest();
+  const expiresAt = Date.now() + 60 * 60_000;
+  await db.update(eventGuestSessions).set({ expiresAt: new Date(expiresAt) });
   const initial = await match();
   await reportScore(db, member, score(initial));
   const current = await match(initial.id);
   await expect(
-    submitGuest(db, { ...score(current), planId, sessionToken }, Date.parse(expiresAt)),
+    submitGuest(db, { ...score(current), planId, sessionToken }, expiresAt),
   ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   await db.update(eventOperationSettings).set({ published: false });
   await expect(submitGuest(db, { ...score(current), planId, sessionToken })).rejects.toMatchObject({

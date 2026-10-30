@@ -35,7 +35,7 @@ For a standalone browser screen, explicitly choose a shared window/screen or cam
 
 ## Invitations and announcements
 
-By default, a displayed QR invitation remains valid for 60–75 minutes. It rotates every 15 minutes while earlier invitations continue to work until their own expiry. Organisers can instead keep invitations valid until revoked and [print permanent station signs](station-signs.md). Scanning either invitation creates a separate one-hour guest reporting session. Expired or revoked passes direct the attendee to scan a valid QR code. Turning guest reporting off or revoking access invalidates existing passes.
+New guest reporting setups default to an invitation valid until revoked, suitable for [permanent station signs](station-signs.md). Optional rotating invitations remain valid for 60–75 minutes and change every 15 minutes. Scanning either invitation creates reporting access valid until explicitly revoked or the event stops accepting reports, surviving normal browser revisits without an hourly rescan. Existing events retain their invitation mode, and previously issued dated passes retain their expiry. Turning guest reporting off or revoking access invalidates existing passes; scan a current QR to restore access.
 
 Announcements default to five minutes in the TO form, with one-, ten- and thirty-minute options. Expired messages leave the public feed automatically.
 

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import {
+  eventGuestSessions,
   eventMatches,
   eventMatchAudit,
   eventOperationSettings,
@@ -187,10 +188,12 @@ it('guest reports without opt-in remain pending and closing the event prevents s
 });
 
 it('rejects expired guests and never auto-accepts an unstarted match', async () => {
-  const { sessionToken, expiresAt } = await guest();
+  const { sessionToken } = await guest();
+  const expiresAt = Date.now() + 60 * 60_000;
+  await db.update(eventGuestSessions).set({ expiresAt: new Date(expiresAt) });
   const m = await next();
   await expect(
-    startPoolMatch(db, null, { ...start(m), sessionToken }, Date.parse(expiresAt)),
+    startPoolMatch(db, null, { ...start(m), sessionToken }, expiresAt),
   ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   expect((await reportScore(db, member, score(m))).status).toBe('pending');
 });

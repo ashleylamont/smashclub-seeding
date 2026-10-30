@@ -76,9 +76,9 @@ export function GuestReportingControls({
     <section className="card guest-controls">
       <h3>Guest score reporting</h3>
       <p className="muted">
-        Choose whether QR invitations rotate or remain valid until revoked. Each scan gives one hour
-        of reporting access; players can scan the same permanent sign again. Scores follow the event
-        and pool approval settings.
+        Players scan once and keep reporting access until you revoke it or close the event. QR
+        invitations remain valid until revoked by default. Scores follow the event and pool approval
+        settings.
       </p>
       {settings.data && (
         <>
@@ -181,7 +181,7 @@ export function GuestReportingControls({
               {invitation.expiresAt
                 ? `Invitation expires in ${guestTimeLeft(invitation.expiresAt, now)}.`
                 : 'Invitation valid until revoked.'}{' '}
-              Guests get a temporary reporting pass.
+              Reporting access remains valid until revoked or the event closes.
               {!published && ' Reporting opens when the event is published.'}
             </p>
             <a href={link} rel="noreferrer">

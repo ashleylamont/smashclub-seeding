@@ -11,6 +11,7 @@ import { eventPlayers, useDevicePlayer } from '../lib/playerSelection';
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
+import { TRPCClientError } from '@trpc/client';
 import { trpc } from '../lib/trpc';
 import { useOnlineStatus } from '../lib/useOnlineStatus';
 import {
@@ -18,6 +19,7 @@ import {
   useGuestClock,
   readGuestSession,
   saveGuestSession,
+  guestSessionCurrent,
   type GuestSession,
 } from '../lib/guestReporting';
 import '../styles/event.css';
@@ -57,13 +59,14 @@ export function GuestEvent({ planId }: { planId: string }) {
   const [starting, setStarting] = useState<string | null>(null);
   const cache = useQueryClient();
   const [cacheId] = useState(() => crypto.randomUUID());
+  const [passVersion, setPassVersion] = useState(0);
   const redemption = useRef<{
     token: string;
     generation: number;
     promise: Promise<GuestSession>;
   } | null>(null);
-  const now = useGuestClock();
-  const valid = session !== null && Date.parse(session.expiresAt) > now;
+  const now = useGuestClock(Boolean(session?.expiresAt));
+  const valid = guestSessionCurrent(session, now);
   useEffect(() => {
     const acceptInvitation = () => {
       const token = new URLSearchParams(window.location.hash.slice(1)).get('token');
@@ -100,6 +103,7 @@ export function GuestEvent({ planId }: { planId: string }) {
         if (!active) return;
         setSession(value);
         saveGuestSession(planId, value);
+        setPassVersion((version) => version + 1);
       })
       .catch((cause) => {
         if (active)
@@ -117,13 +121,18 @@ export function GuestEvent({ planId }: { planId: string }) {
     };
   }, [invitation, invitationGeneration, planId]);
   const matches = useQuery({
-    queryKey: ['guestMatches', planId, cacheId, session?.expiresAt],
+    // The opaque version changes on re-redemption; credentials never enter query keys.
+    queryKey: ['guestMatches', planId, cacheId, passVersion],
     queryFn: () =>
       trpc.eventOps.guests.matches.mutate({ planId, sessionToken: session!.sessionToken }),
     enabled: valid && !redeeming,
     refetchInterval: 2500,
     retry: false,
   });
+  const accessDenied =
+    matches.error instanceof TRPCClientError && matches.error.data?.code === 'FORBIDDEN';
+  // FORBIDDEN also covers temporary event unavailability. Retain the saved pass
+  // and let the server revalidate it; only a successful redemption replaces it.
   const publicEvent = useQuery({
     queryKey: ['eventOpsPublic', planId],
     queryFn: () => trpc.eventOps.snapshot.query({ planId }),
@@ -234,6 +243,7 @@ export function GuestEvent({ planId }: { planId: string }) {
           session={session}
           now={now}
           error={matches.isError ? matches.error.message : null}
+          accessDenied={accessDenied}
         />
       )}
       {(!online || publicEvent.isError) && !unpublished && data && (
@@ -331,7 +341,7 @@ export function GuestEvent({ planId }: { planId: string }) {
             <div className="ops-match-grid">
               {visible.map((match) => (
                 <GuestScoreCard
-                  key={`${match.id}:${poolPolicy(data, match)?.selfRun && match.status === 'playing' ? 'playing' : 'regular'}`}
+                  key={match.id}
                   planId={planId}
                   session={canWrite && !closed ? session : null}
                   disputeMode={disputeMode && !closed && playOpen}
@@ -382,15 +392,17 @@ function GuestPassStatus({
   session,
   now,
   error,
+  accessDenied,
 }: {
   redeeming: boolean;
   valid: boolean;
   session: GuestSession | null;
   now: number;
   error: string | null;
+  accessDenied: boolean;
 }) {
   if (redeeming) return <LoadingState>Opening your guest pass…</LoadingState>;
-  if (!valid || error)
+  if (!valid || accessDenied)
     return (
       <section className="card">
         <h2>
@@ -412,9 +424,19 @@ function GuestPassStatus({
       </section>
     );
   return (
-    <p className="guest-pass-expiry">
-      Guest pass · {guestTimeLeft(session!.expiresAt, now)} remaining
-    </p>
+    <>
+      <p className="guest-pass-expiry">
+        {session!.expiresAt
+          ? `Guest pass · ${guestTimeLeft(session!.expiresAt, now)} remaining`
+          : 'Guest pass · valid until revoked'}
+      </p>
+      {error && (
+        <Notice tone="warning">
+          Reporting connection interrupted. Your pass is saved; reporting resumes when the
+          connection recovers.
+        </Notice>
+      )}
+    </>
   );
 }
 

@@ -135,7 +135,7 @@ jobs:
     name: UI accessibility and visuals
     # Chromium screenshots are platform-specific. Commit Darwin baselines from
     # this job; the database-backed event flows continue on Linux above.
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4

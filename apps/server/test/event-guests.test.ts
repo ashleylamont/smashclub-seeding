@@ -124,7 +124,7 @@ describe('guest reporting', () => {
       'during-event',
       now + 24 * 60 * 60_000,
     );
-    expect(Date.parse(guest.expiresAt)).toBe(now + 25 * 60 * 60_000);
+    expect(guest.expiresAt).toBeNull();
     expect(
       (await guestMatches(db, { planId, sessionToken: guest.sessionToken }, now + 24 * 60 * 60_000))
         .matches.length,
@@ -157,7 +157,12 @@ describe('guest reporting', () => {
     expect((await guestInvitation(db, planId, admin, now))!.expiresAt).not.toBeNull();
   });
   it('keeps a QR link usable for at least an hour across displayed code rotations', async () => {
-    await enable();
+    await configureGuests(db, admin, {
+      planId,
+      enabled: true,
+      showOnOverlay: false,
+      rotateInvitations: true,
+    });
     const issuedAt = Math.floor(now / 900_000) * 900_000 + 899_999;
     const invite = (await guestInvitation(db, planId, admin, issuedAt))!;
     expect(Date.parse(invite.expiresAt!) - issuedAt).toBeGreaterThanOrEqual(60 * 60_000);
@@ -169,7 +174,7 @@ describe('guest reporting', () => {
       'later-guest',
       issuedAt + 60 * 60_000,
     );
-    expect(Date.parse(guest.expiresAt)).toBe(issuedAt + 120 * 60_000);
+    expect(guest.expiresAt).toBeNull();
   });
   it('is opt-in and keeps overlay sharing separate, with no secrets in snapshot', async () => {
     expect(await guestInvitation(db, planId)).toBeNull();
@@ -239,7 +244,12 @@ describe('guest reporting', () => {
     ).toBe(retry.reportId);
   });
   it('rejects expired, tampered and other-event invitations and sessions', async () => {
-    await enable();
+    await configureGuests(db, admin, {
+      planId,
+      enabled: true,
+      showOnOverlay: false,
+      rotateInvitations: true,
+    });
     const invite = (await guestInvitation(db, planId, admin, now))!;
     const guest = await join();
     await expect(
@@ -248,8 +258,10 @@ describe('guest reporting', () => {
     await expect(
       redeemGuest(db, { planId, token: invite.token }, 'test', Date.parse(invite.expiresAt!)),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    // Passes issued before the durable-access migration keep their actual expiry.
+    await db.update(eventGuestSessions).set({ expiresAt: new Date(now + 60 * 60_000) });
     await expect(
-      guestMatches(db, { planId, sessionToken: guest.sessionToken }, Date.parse(guest.expiresAt)),
+      guestMatches(db, { planId, sessionToken: guest.sessionToken }, now + 60 * 60_000),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     const [other] = await db
       .insert(eventPlans)
@@ -263,6 +275,34 @@ describe('guest reporting', () => {
     await expect(
       guestMatches(db, { planId: other!.id, sessionToken: guest.sessionToken }, now),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+  it('keeps the default invitation and pass valid across event-night hours while retaining reset checks', async () => {
+    expect(
+      await configureGuests(db, admin, { planId, enabled: true, showOnOverlay: false }),
+    ).toMatchObject({ rotateInvitations: false });
+    const invite = (await guestInvitation(db, planId, admin, now))!;
+    expect(invite.expiresAt).toBeNull();
+    const guest = await join();
+    expect(guest.expiresAt).toBeNull();
+    const later = now + 8 * 60 * 60_000;
+    expect((await guestInvitation(db, planId, admin, later))!.token).toBe(invite.token);
+    expect(
+      (await guestMatches(db, { planId, sessionToken: guest.sessionToken }, later)).expiresAt,
+    ).toBeNull();
+    expect((await submitGuest(db, input(guest.sessionToken), later)).status).toBe('pending');
+    await rotateGuests(db, admin, planId);
+    await expect(submitGuest(db, input(guest.sessionToken), later)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    await expect(
+      redeemGuest(db, { planId, token: invite.token }, 'reset', later),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    const replacement = (await guestInvitation(db, planId, admin, later))!;
+    expect(replacement.token).not.toBe(invite.token);
+    const renewed = await redeemGuest(db, { planId, token: replacement.token }, 'reset', later);
+    expect(
+      (await guestMatches(db, { planId, sessionToken: renewed.sessionToken }, later)).reports,
+    ).toEqual([]);
   });
   it('disabling, rotating, unpublishing or closing revokes access immediately', async () => {
     await enable();
