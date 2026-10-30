@@ -1,6 +1,6 @@
 import { beginPlay, changeStation, configureDispatch, moveQueue, sharedDispatch } from './dispatch';
 import { isKnockout } from '@smashclub/shared';
-import { hash, requireFact, resolved } from './facts';
+import { hash, requireFact, resolved, unconfirmedCall } from './facts';
 import { applyAttendance } from './attendance';
 import { replaceResult } from './replacement';
 import type { CommandEnvelope, TournamentState } from './schemas';
@@ -25,6 +25,10 @@ export function resetFinals(state: TournamentState) {
         (m.started || (resolved(m) && m.outcome !== 'bye' && m.outcome !== 'no_contest')),
     ),
     'Finals have actual play and cannot be reset.',
+  );
+  requireFact(
+    !state.matches.some((m) => m.bracketId && unconfirmedCall(m)),
+    'Return untaken finals calls before resetting their draw.',
   );
   requireFact(
     !state.reports.some((r) => state.matches.some((m) => m.id === r.matchId && m.bracketId)),
@@ -180,6 +184,10 @@ export function additionalDecision(
       break;
     case 'resetQueue':
       requireFact(
+        !state.matches.some(unconfirmedCall),
+        'Return untaken calls before resetting the queue.',
+      );
+      requireFact(
         !state.reports.length &&
           !state.brackets.length &&
           state.matches.every((m) => !m.started && !resolved(m)),
@@ -221,7 +229,10 @@ export function canPauseDraw(state: TournamentState) {
     (!state.brackets.length || isKnockout(state.baseline!.structure)) &&
     !state.reports.length &&
     state.matches.every(
-      (m) => !m.started && (!resolved(m) || m.outcome === 'bye' || m.outcome === 'no_contest'),
+      (m) =>
+        m.status !== 'playing' &&
+        !m.started &&
+        (!resolved(m) || m.outcome === 'bye' || m.outcome === 'no_contest'),
     )
   );
 }

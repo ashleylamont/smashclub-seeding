@@ -293,7 +293,10 @@ export function decide(
       drawFinals(next, envelope);
       break;
     case 'unlock':
-      requireFact(canPauseDraw(next), 'Play has started; reopening needs an explicit repair.');
+      requireFact(
+        canPauseDraw(next),
+        'Play has started or a match has been called; return an untaken call before reopening, otherwise use explicit repair.',
+      );
       next.lifecycle = 'unlocked';
       break;
     case 'relock':

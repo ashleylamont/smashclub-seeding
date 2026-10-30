@@ -35,6 +35,9 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.dispatch-row > .chip {
+  margin-right: 8px;
+}
 .dispatch-row p {
   margin: 8px 0;
 }

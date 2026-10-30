@@ -134,6 +134,11 @@ describe('TO attention work list', () => {
     expect(result.dispatch.map((item) => item.station.id)).toEqual(['free']);
     expect(result.needsStations).toBe(false);
   });
+  it('accepts unnamed shared capacity as a complete resource setup', () => {
+    const shared = { ...data([match('ready')]), sharedDispatch: { capacity: 3 } };
+    expect(opsAttention(shared).needsStations).toBe(false);
+    expect(opsAttention({ ...shared, sharedDispatch: { capacity: 0 } }).needsStations).toBe(true);
+  });
   it('only flags station setup for a live queue and suppresses all action prompts on closed events', () => {
     expect(opsAttention(data([])).needsStations).toBe(false);
     expect(opsAttention(data([match('ready')])).needsStations).toBe(true);

@@ -54,9 +54,7 @@ live-score facts; it does not undo a result or make an unsafe bracket correction
 permissible. Recording a result releases occupancy normally. Reporting UI
 improvements that remove older self-run Start prerequisites are tracked in #53.
 
-Calls survive unrelated score updates. If a feeder correction legitimately
-changes an unplayed called pairing, its call is released; corrections cannot
-silently replace opponents once actual downstream play exists.
+Calls survive unrelated score updates. A feeder correction cannot change a currently called pairing until a TO explicitly returns the untaken call. Releasing an actually started set retains its actual-play facts, so corrections still require a ruling rather than silently replacing its opponents.
 
 ## Suggestions and availability
 

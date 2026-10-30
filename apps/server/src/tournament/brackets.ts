@@ -53,11 +53,10 @@ export function advance(state: TournamentState, at: number, commandId: string) {
         !match.started && !resolved(match),
         'A downstream match already has actual play.',
       );
-      if (match.calledAt != null && !match.started) {
-        match.stationId = null;
-        match.calledAt = null;
-        match.callLocation = null;
-      }
+      requireFact(
+        match.status !== 'playing',
+        'A downstream match has been called. Return an untaken call before changing its opponents.',
+      );
       Object.assign(match, {
         player1Id: p1,
         player2Id: p2,

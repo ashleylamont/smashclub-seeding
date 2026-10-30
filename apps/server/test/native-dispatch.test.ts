@@ -1,3 +1,7 @@
+import { finalsToken } from '../src/tournament/operations';
+import { attendancePreview } from '../src/tournament/attendance';
+import { buildEliminationTree } from '@smashclub/engine';
+import { instantiateElimination } from '../src/tournament/structureAdapter';
 import { describe, expect, it } from 'vitest';
 import { captureBaseline, decide, reduceDecision, stableId } from '../src/tournament/domain';
 import {
@@ -287,6 +291,153 @@ describe('shared native dispatch', () => {
       approve: false,
       expectedRevision: 0,
     });
+    expect(dispatchAvailability(state, state.matches[0]!).canDispatchOrdinary).toBe(true);
+  });
+
+  it('requires an explicit untaken-call return before changing a feeder winner and retains actual play after release', () => {
+    const baseline = pureBaseline();
+    baseline.version = 2;
+    baseline.competitionFormat = 'singles';
+    baseline.structure = 'single_elimination';
+    baseline.entrants = baseline.entrants.slice(0, 4);
+    baseline.pools = [];
+    const bracketId = stableId('correction-bracket');
+    baseline.brackets = [
+      {
+        id: bracketId,
+        division: 'upper',
+        stage: 'main',
+        entrantIds: baseline.entrants.map((e) => e.playerId),
+      },
+    ];
+    baseline.matches = instantiateElimination(
+      buildEliminationTree(
+        bracketId,
+        baseline.entrants.map((e) => ({ kind: 'entrant', entrantId: e.playerId })),
+      ),
+      bracketId,
+      'upper',
+      'main',
+    );
+    let state = setup(captureBaseline(baseline));
+    for (const match of state.matches.filter((m) => m.round === 1))
+      state = apply(state, {
+        kind: 'score',
+        matchId: match.id,
+        expectedRevision: 0,
+        score1: 2,
+        score2: 0,
+        outcome: 'played',
+      });
+    const final = state.matches.find((m) => m.round === 2)!;
+    const feeder = state.matches.find((m) => m.id === final.parent1Id)!;
+    state = call(state, final.id);
+    const originalOpponents = [
+      state.matches.find((m) => m.id === final.id)!.player1Id,
+      final.player2Id,
+    ];
+    const correction: TournamentCommand = {
+      kind: 'score',
+      matchId: feeder.id,
+      expectedRevision: feeder.revision,
+      score1: 0,
+      score2: 2,
+      outcome: 'played',
+    };
+    expect(() => apply(state, correction)).toThrow(/Return an untaken call/);
+    expect([state.matches.find((m) => m.id === final.id)!.player1Id, final.player2Id]).toEqual(
+      originalOpponents,
+    );
+    state = release(state, final.id);
+    state = apply(state, correction);
+    expect(state.matches.find((m) => m.id === final.id)!.player1Id).toBe(feeder.player2Id);
+    state = call(state, final.id);
+    state = apply(state, {
+      kind: 'beginPlay',
+      matchId: final.id,
+      expectedRevision: state.matches.find((m) => m.id === final.id)!.revision,
+      expectedResourceRevision: state.settings.resourceRevision,
+    });
+    state = release(state, final.id);
+    expect(state.matches.find((m) => m.id === final.id)!.started).toBe(true);
+    expect(() =>
+      apply(state, {
+        ...correction,
+        expectedRevision: state.matches.find((m) => m.id === feeder.id)!.revision,
+        score1: 2,
+        score2: 0,
+      }),
+    ).toThrow(/downstream actual play/);
+  });
+
+  it('requires explicit call return before no-show removal, queue reset or draw pause', () => {
+    let state = call(setup());
+    const entrant = state.matches[0]!.player1Id!;
+    const preview = attendancePreview(state, { action: 'no_show', playerId: entrant });
+    expect(preview.allowed).toBe(false);
+    expect(preview.issues.join(' ')).toMatch(/Return.*untaken call/);
+    expect(() => apply(state, { kind: 'resetQueue' })).toThrow(/Return untaken calls/);
+    expect(() => apply(state, { kind: 'unlock' })).toThrow(/called/);
+    state = release(state);
+    expect(attendancePreview(state, { action: 'no_show', playerId: entrant }).allowed).toBe(true);
+    expect(apply(state, { kind: 'resetQueue' }).matches.every((match) => !match.started)).toBe(
+      true,
+    );
+    expect(apply(state, { kind: 'unlock' }).lifecycle).toBe('unlocked');
+  });
+
+  it('preserves a called finals draw until the TO explicitly returns its untaken call', () => {
+    let state = setup();
+    for (const match of state.matches)
+      state = apply(state, {
+        kind: 'score',
+        matchId: match.id,
+        expectedRevision: match.revision,
+        score1: 2,
+        score2: 0,
+        outcome: 'played',
+      });
+    for (const pool of state.pools)
+      state = apply(state, {
+        kind: 'placements',
+        poolId: pool.id,
+        order: pool.entrantIds,
+        expectedRevision: pool.revision,
+        matchRevisions: Object.fromEntries(
+          state.matches
+            .filter((match) => match.poolId === pool.id)
+            .map((match) => [match.id, match.revision]),
+        ),
+      });
+    state = apply(state, { kind: 'drawFinals' });
+    const final = state.matches.find((match) => match.bracketId && match.status === 'ready')!;
+    state = call(state, final.id);
+    expect(() => apply(state, { kind: 'resetFinals', revisionToken: finalsToken(state) })).toThrow(
+      /Return untaken finals calls/,
+    );
+    state = release(state, final.id);
+    expect(
+      apply(state, { kind: 'resetFinals', revisionToken: finalsToken(state) }).brackets,
+    ).toEqual([]);
+  });
+
+  it('keeps historical reports from holding a new match revision', () => {
+    let state = setup();
+    state.settings.scoreReportingMode = 'to_review';
+    state = apply(
+      state,
+      {
+        kind: 'score',
+        matchId: state.matches[0]!.id,
+        expectedRevision: 0,
+        score1: 2,
+        score2: 0,
+        outcome: 'played',
+      },
+      false,
+    );
+    expect(dispatchAvailability(state, state.matches[0]!).canDispatchOrdinary).toBe(false);
+    state.matches[0]!.revision++;
     expect(dispatchAvailability(state, state.matches[0]!).canDispatchOrdinary).toBe(true);
   });
 

@@ -16,7 +16,7 @@ import { attendancePreview } from './attendance';
 import { drawFinals } from './brackets';
 import { finalsToken } from './operations';
 import { eventView, planView, matchRows } from './views';
-import { TournamentConflict, hash, stableId } from './facts';
+import { TournamentConflict, hash, stableId, unconfirmedCall } from './facts';
 import type { NativeRuntime } from './runtime';
 import type { TournamentCommand, TournamentState } from './schemas';
 
@@ -307,6 +307,8 @@ export class NativeEventApi {
       )
     )
       issues.push('Finals have actual play and cannot be reset.');
+    if (state.matches.some((m) => m.bracketId && unconfirmedCall(m)))
+      issues.push('Return untaken finals calls before changing their draw.');
     const resetIssues = [...issues];
     if (!replacing) resetIssues.push('No finals exist.');
     try {

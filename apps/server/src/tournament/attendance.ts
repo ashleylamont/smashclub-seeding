@@ -1,8 +1,8 @@
 import { isSinglePool, isKnockout } from '@smashclub/shared';
 import { buildRoundRobin } from '@smashclub/engine';
-import { hash, requireFact, resolved, stableId } from './facts';
+import { hash, requireFact, resolved, stableId, unconfirmedCall } from './facts';
 import { advance } from './brackets';
-import type { CommandEnvelope, TournamentState } from './schemas';
+import type { CommandEnvelope, TournamentState, Match } from './schemas';
 
 type Input = Extract<CommandEnvelope['command'], { kind: 'attendance' }>;
 const withdrawalWarning = (state: TournamentState) =>
@@ -17,12 +17,7 @@ export function attendancePreview(
 ) {
   const entrant = state.entrants.find((e) => e.playerId === input.playerId);
   const division = input.division ?? entrant?.division ?? 'lower';
-  const protectedPool = (id: string) =>
-    state.matches.some(
-      (m) =>
-        m.poolId === id &&
-        (m.started || resolved(m) || state.reports.some((r) => r.matchId === m.id)),
-    );
+  const protectedPool = (id: string) => poolHasCallsOrHistory(state, id);
   const open = state.pools
     .filter(
       (p) =>
@@ -55,6 +50,8 @@ export function attendancePreview(
   if (input.action === 'add' && input.poolIndex !== undefined && input.poolIndex !== pool?.index)
     issues.push('The smallest open pool changed.');
   const involved = state.matches.filter((m) => [m.player1Id, m.player2Id].includes(input.playerId));
+  if (needsCallReturn(input.action, involved))
+    issues.push('Return this entrant’s untaken call before changing the draw.');
   if (
     input.action === 'no_show' &&
     involved.some((m) => m.started || resolved(m) || state.reports.some((r) => r.matchId === m.id))
@@ -241,4 +238,19 @@ export function applyAttendance(state: TournamentState, envelope: CommandEnvelop
     state.pools = state.pools.filter((p) => p.entrantIds.length);
   }
   state.settings.resourceRevision++;
+}
+
+function poolHasCallsOrHistory(state: TournamentState, id: string) {
+  return state.matches.some(
+    (match) =>
+      match.poolId === id &&
+      (match.started ||
+        match.status === 'playing' ||
+        resolved(match) ||
+        state.reports.some((report) => report.matchId === match.id)),
+  );
+}
+
+function needsCallReturn(action: Input['action'], matches: readonly Match[]) {
+  return action !== 'withdraw' && matches.some(unconfirmedCall);
 }

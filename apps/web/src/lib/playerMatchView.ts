@@ -16,6 +16,17 @@ export function includesPlayer(match: PoolFlowMatch, playerId: string) {
 }
 
 export function matchStation(data: PoolFlowData, match: PoolFlowMatch) {
+  if (data.sharedDispatch) {
+    const active = match.status === 'playing';
+    return {
+      name: active
+        ? (data.stations.find((station) => station.id === match.stationId)?.name ??
+          match.callLocation ??
+          'Any available ordinary setup')
+        : null,
+      call: active ? (match.called ? 'Called' : 'Playing now') : null,
+    };
+  }
   const queue = data.stationQueues?.find(
     (item) =>
       item.currentMatchId === match.id ||
@@ -36,10 +47,11 @@ export function matchStation(data: PoolFlowData, match: PoolFlowMatch) {
 
 export function matchStatus(data: PoolFlowData, match: PoolFlowMatch) {
   if (match.status === 'complete') return 'Final result';
-  if (match.status === 'playing') return 'Playing now';
+  if (match.status === 'playing') return match.called ? 'Called' : 'Playing now';
   const call = matchStation(data, match).call;
   if (call) return call;
-  if (match.status === 'ready') return 'Waiting for station';
+  if (match.status === 'ready')
+    return data.sharedDispatch ? 'Awaiting TO call' : 'Waiting for station';
   return 'Waiting';
 }
 

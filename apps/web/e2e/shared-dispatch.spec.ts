@@ -40,7 +40,7 @@ async function mutate<T>(request: APIRequestContext, procedure: string, data: ob
   expect(response.ok(), await response.text()).toBe(true);
   return (await response.json()).result.data;
 }
-async function night(page: Page, name: string) {
+async function night(page: Page, name: string, named = true) {
   await signIn(page.request);
   const plans = await query<{ id: string; name: string }[]>(
     page.request,
@@ -79,13 +79,13 @@ async function night(page: Page, name: string) {
     await mutate(page.request, procedure, { planId });
   await mutate(page.request, 'eventOps.softLockPools', { planId, confirm: true });
   await mutate(page.request, 'eventOps.settings', { planId, published: true, playerReports: true });
-  await mutate(page.request, 'eventOps.saveStation', { planId, name: 'Main stage' });
+  if (named) await mutate(page.request, 'eventOps.saveStation', { planId, name: 'Main stage' });
   await page.goto(`/operate/${planId}`);
   const desk = page.getByRole('region', { name: 'TO match queue' });
   await expect(
     desk.getByRole('heading', { name: 'Use a flexible shared match queue' }),
   ).toBeVisible();
-  await desk.getByRole('checkbox', { name: 'Main stage', exact: true }).check();
+  if (named) await desk.getByRole('checkbox', { name: 'Main stage', exact: true }).check();
   // Selecting a separately reserved station must not double-count it in the
   // untouched default ordinary count.
   await expect(desk.getByRole('spinbutton', { name: 'Ordinary concurrent matches' })).toHaveValue(
@@ -164,6 +164,11 @@ test('shared queue: manual order, independent Main stage, capacity reduction and
     await board.goto(`/play/${planId}`);
     const calls = board.getByRole('region', { name: 'Match calls' });
     await expect(calls.getByText('Called · Window setup', { exact: true })).toBeVisible();
+    const personal = board.locator('article.ops-match').filter({ hasText: called.label });
+    await expect(personal.locator('.ops-match-meta')).toContainText('Called');
+    await expect(personal.locator('.ops-match-meta')).toContainText('Window setup');
+    await expect(personal.locator('.ops-match-meta')).not.toContainText('Playing now');
+
     await expect(board.getByRole('button', { name: 'Move up', exact: true })).toHaveCount(0);
     await expect(board.getByRole('button', { name: /Snooze/ })).toHaveCount(0);
     const response = await publicContext.request.get('/api/trpc/eventOps.live.dispatchDesk', {
@@ -251,8 +256,33 @@ test('shared queue on a phone: snooze/return, focused scoring, and accessible co
     path: testInfo.outputPath('shared-dispatch-phone-full.png'),
     fullPage: true,
   });
+  await desk
+    .locator('.dispatch-list article')
+    .first()
+    .evaluate((element) => {
+      const nav = document.querySelector('.app-nav')!.getBoundingClientRect().height;
+      const tabs = document.querySelector('.ops-workspace-nav')!.getBoundingClientRect().height;
+      window.scrollTo({
+        top: window.scrollY + element.getBoundingClientRect().top - nav - tabs - 16,
+        behavior: 'instant',
+      });
+    });
+  await page.screenshot({ path: testInfo.outputPath('shared-dispatch-phone-ready.png') });
+
   await testInfo.attach('shared-dispatch-phone', {
     path: testInfo.outputPath('shared-dispatch-phone.png'),
     contentType: 'image/png',
   });
+});
+
+test('ordinary-only setup does not require named stations', async ({ page }) => {
+  const { desk } = await night(page, 'Ordinary-only shared dispatch', false);
+  // Other workspace tabs retain hidden no-station choices; the attention
+  // panel must not flag a missing setup when ordinary capacity exists.
+  const attention = page.locator('.ops-attention');
+  await expect(attention.getByText('No stations configured', { exact: true })).toHaveCount(0);
+  await expect(attention.getByText('No match capacity configured', { exact: true })).toHaveCount(0);
+  await expect(desk.getByRole('combobox', { name: 'Named station', exact: true })).toHaveCount(0);
+  await desk.getByRole('button', { name: 'Call ordinary match', exact: true }).first().click();
+  await expect(desk.getByText('1 / 1 in use', { exact: true })).toBeVisible();
 });
