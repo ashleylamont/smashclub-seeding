@@ -14,6 +14,8 @@ export interface LiveMatch {
   winnerId: string | null;
   status: string;
   stationId: string | null;
+  called?: boolean;
+  callLocation?: string | null;
   outcome?: string | null;
   blockedReason?: string | null;
   player1Characters?: string[];
@@ -35,7 +37,7 @@ export interface LiveMatch {
 }
 export function liveSections(matches: readonly LiveMatch[]) {
   return {
-    playing: matches.filter((m) => m.status === 'playing'),
+    playing: matches.filter((m) => m.status === 'playing' && !m.called),
     ready: availableMatches(matches).filter((match) => match.availability?.canStart !== false),
     complete: matches.filter((m) => m.status === 'complete'),
     total: matches.length,

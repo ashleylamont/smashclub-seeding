@@ -1,3 +1,5 @@
+import { filterDeskMatches } from '../../lib/opsMatchFilter';
+import { DispatchDesk } from './DispatchDesk';
 import { DoublesAvailabilityControls } from './DoublesAvailabilityControls';
 import { PoolDrawControls } from './PoolDrawControls';
 import { NativeResultControls } from './NativeResultControls';
@@ -127,24 +129,13 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
   const available = availableMatches(data.matches).filter((match) => match.availability.canStart);
   const callable = new Set(available.map((match) => match.id));
   const pools = poolStandings(data.matches);
-  const matches = focusedMatchId
-    ? data.matches.filter((match) => match.id === focusedMatchId)
-    : (filter === 'ready' ? available : data.matches).filter(
-        (match) =>
-          (division === 'all' || match.division === division) &&
-          (filter === 'all' ||
-            (filter === 'active'
-              ? match.status !== 'complete'
-              : filter === 'waiting'
-                ? match.status === 'blocked' ||
-                  (match.status === 'ready' && !callable.has(match.id))
-                : match.status === filter)) &&
-          (poolFilter === 'all' ||
-            (match.stage === 'group' && `${match.division}:${match.poolIndex}` === poolFilter)) &&
-          `${match.player1Name} ${match.player2Name} ${match.label}`
-            .toLowerCase()
-            .includes(search.toLowerCase()),
-      );
+  const matches = filterDeskMatches(data.matches, available, callable, {
+    focusedMatchId,
+    filter,
+    division,
+    poolFilter,
+    search,
+  });
   const stageStation =
     data.stations.find((station) => station.id === stageStationId) ?? data.stations[0];
   const stageMatch = data.matches.find((match) => match.id === stageStation?.currentMatchId);
@@ -233,95 +224,120 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
           ))}
         </TabList>
         <TabPanel value="run">
-          <OpsMatchSummary
-            matches={data.matches}
-            callable={callable}
-            filter={filter}
-            onSelect={(status) => {
-              setFocusedMatchId(null);
-              setFilter(status);
-            }}
-          />
-          <section className="card ops-setup" id="match-desk" tabIndex={-1}>
-            <div>
-              <h3>Match desk</h3>
-              {!data.plan.softLockedAt && (
-                <p>
-                  Soft-lock pools in{' '}
-                  <Button
-                    size="small"
-                    type="submit"
-                    onClick={() => void workspace.changeSection('draw')}
-                  >
-                    Standings / draw
-                  </Button>{' '}
-                  to prepare matches.
-                </p>
-              )}
-            </div>
-            <Button
-              type="submit"
-              disabled={liveDisabled || !data.plan.softLockedAt}
-              onClick={() =>
-                void act(() => trpc.eventOps.prepare.mutate({ planId }), 'Match queue refreshed')
-              }
-            >
-              Prepare / refresh matches
-            </Button>
-          </section>
+          {data.plan.bracketMode === 'native' && (
+            <DispatchDesk
+              data={data}
+              disabled={liveDisabled || event.isError}
+              onReviewReports={() => void workspace.openControl('score-submissions')}
+              onMatch={(id) => {
+                setFocusedMatchId(id);
+                setFilter('all');
+                void workspace.openControl('match-desk');
+              }}
+            />
+          )}
+          {!data.sharedDispatch && (
+            <>
+              <OpsMatchSummary
+                matches={data.matches}
+                callable={callable}
+                filter={filter}
+                onSelect={(status) => {
+                  setFocusedMatchId(null);
+                  setFilter(status);
+                }}
+              />
+              <section className="card ops-setup" id="match-desk" tabIndex={-1}>
+                <div>
+                  <h3>Match desk</h3>
+                  {!data.plan.softLockedAt && (
+                    <p>
+                      Soft-lock pools in{' '}
+                      <Button
+                        size="small"
+                        type="submit"
+                        onClick={() => void workspace.changeSection('draw')}
+                      >
+                        Standings / draw
+                      </Button>{' '}
+                      to prepare matches.
+                    </p>
+                  )}
+                </div>
+                <Button
+                  type="submit"
+                  disabled={liveDisabled || !data.plan.softLockedAt}
+                  onClick={() =>
+                    void act(
+                      () => trpc.eventOps.prepare.mutate({ planId }),
+                      'Match queue refreshed',
+                    )
+                  }
+                >
+                  Prepare / refresh matches
+                </Button>
+              </section>
+            </>
+          )}
           {focusedMatchId && (
-            <p className="ops-focus-match card">
+            <p
+              className="ops-focus-match card"
+              id={data.sharedDispatch ? 'match-desk' : undefined}
+              tabIndex={-1}
+            >
               Showing the selected match.
               <Button size="small" type="submit" onClick={() => setFocusedMatchId(null)}>
                 Show all matches
               </Button>
             </p>
           )}
-          <div className="ops-toolbar" onChange={() => setFocusedMatchId(null)}>
-            <label>
-              View
-              <Select value={filter} onValueChange={setFilter}>
-                <SelectItem value="active">Unfinished</SelectItem>
-                <SelectItem value="ready">Ready to start</SelectItem>
-                <SelectItem value="playing">Playing</SelectItem>
-                <SelectItem value="waiting">Waiting for players or stations</SelectItem>
-                <SelectItem value="complete">Completed</SelectItem>
-                <SelectItem value="all">All matches</SelectItem>
-              </Select>
-            </label>
-            <label>
-              Division
-              <Select value={division} onValueChange={setDivision}>
-                <SelectItem value="all">Both divisions</SelectItem>
-                <SelectItem value="upper">Upper</SelectItem>
-                <SelectItem value="lower">Lower</SelectItem>
-              </Select>
-            </label>
-            <label>
-              Pool
-              <Select value={poolFilter} onValueChange={setPoolFilter}>
-                <SelectItem value="all">All pools and brackets</SelectItem>
-                {pools.map((pool) => (
-                  <SelectItem
-                    key={`${pool.division}:${pool.poolIndex}`}
-                    value={`${pool.division}:${pool.poolIndex}`}
-                  >
-                    {pool.division} Pool {String.fromCharCode(65 + pool.poolIndex)}
-                  </SelectItem>
-                ))}
-              </Select>
-            </label>
-            <label className="ops-search">
-              Find a player or match
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search the queue"
-              />
-            </label>
-          </div>
+          {!data.sharedDispatch && (
+            <div className="ops-toolbar" onChange={() => setFocusedMatchId(null)}>
+              <label>
+                View
+                <Select value={filter} onValueChange={setFilter}>
+                  <SelectItem value="active">Unfinished</SelectItem>
+                  <SelectItem value="ready">Ready to start</SelectItem>
+                  <SelectItem value="playing">Playing</SelectItem>
+                  <SelectItem value="waiting">Waiting for players or stations</SelectItem>
+                  <SelectItem value="complete">Completed</SelectItem>
+                  <SelectItem value="all">All matches</SelectItem>
+                </Select>
+              </label>
+              <label>
+                Division
+                <Select value={division} onValueChange={setDivision}>
+                  <SelectItem value="all">Both divisions</SelectItem>
+                  <SelectItem value="upper">Upper</SelectItem>
+                  <SelectItem value="lower">Lower</SelectItem>
+                </Select>
+              </label>
+              <label>
+                Pool
+                <Select value={poolFilter} onValueChange={setPoolFilter}>
+                  <SelectItem value="all">All pools and brackets</SelectItem>
+                  {pools.map((pool) => (
+                    <SelectItem
+                      key={`${pool.division}:${pool.poolIndex}`}
+                      value={`${pool.division}:${pool.poolIndex}`}
+                    >
+                      {pool.division} Pool {String.fromCharCode(65 + pool.poolIndex)}
+                    </SelectItem>
+                  ))}
+                </Select>
+              </label>
+              <label className="ops-search">
+                Find a player or match
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search the queue"
+                />
+              </label>
+            </div>
+          )}
           <div className="ops-match-grid">
-            {matches.map((match) => (
+            {(data.sharedDispatch && !focusedMatchId ? [] : matches).map((match) => (
               <MatchCard
                 key={match.id}
                 match={match}
@@ -333,7 +349,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
               />
             ))}
           </div>
-          {matches.length === 0 && (
+          {!data.sharedDispatch && matches.length === 0 && (
             <p className="card muted">
               {data.matches.length === 0
                 ? 'Generate pools in the planner, then prepare the match queue here.'
@@ -343,23 +359,25 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
             </p>
           )}
           <PlayerReports data={data} disabled={liveDisabled} act={act} />
-          <StationPoolControls
-            onMatch={(id) => {
-              setFocusedMatchId(id);
-              void workspace.openControl('match-desk');
-            }}
-            data={data}
-            disabled={liveDisabled}
-            act={act}
-            onPool={(key) => {
-              setFocusedMatchId(null);
-              setSearch('');
-              setPoolFilter(key);
-              setDivision('all');
-              setFilter('active');
-              void workspace.openControl('match-desk');
-            }}
-          />
+          {!data.sharedDispatch && (
+            <StationPoolControls
+              onMatch={(id) => {
+                setFocusedMatchId(id);
+                void workspace.openControl('match-desk');
+              }}
+              data={data}
+              disabled={liveDisabled}
+              act={act}
+              onPool={(key) => {
+                setFocusedMatchId(null);
+                setSearch('');
+                setPoolFilter(key);
+                setDivision('all');
+                setFilter('active');
+                void workspace.openControl('match-desk');
+              }}
+            />
+          )}
         </TabPanel>
         <TabPanel value="players">
           <ToPlayerFinder

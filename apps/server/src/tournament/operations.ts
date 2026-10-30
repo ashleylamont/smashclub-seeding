@@ -1,3 +1,4 @@
+import { beginPlay, changeStation, configureDispatch, moveQueue, sharedDispatch } from './dispatch';
 import { isKnockout } from '@smashclub/shared';
 import { hash, requireFact, resolved } from './facts';
 import { applyAttendance } from './attendance';
@@ -40,6 +41,15 @@ export function additionalDecision(
 ) {
   const command = envelope.command;
   switch (command.kind) {
+    case 'configureDispatch':
+      configureDispatch(state, command, basis);
+      break;
+    case 'queueMove':
+      moveQueue(state, command, basis);
+      break;
+    case 'beginPlay':
+      beginPlay(state, command, basis);
+      break;
     case 'poolOrders':
       requireFact(!state.brackets.length, 'Remove finals before changing qualifying orders.');
       requireFact(
@@ -77,6 +87,7 @@ export function additionalDecision(
       );
       basis[m.id] = m.revision;
       basis.progress = m.progressRevision;
+      m.started = true;
       m.liveScore1 = command.score1;
       m.liveScore2 = command.score2;
       m.progressRevision++;
@@ -98,12 +109,22 @@ export function additionalDecision(
       basis[m.id] = m.revision;
       basis.resources = state.settings.resourceRevision;
       m.status = command.status;
+      if (sharedDispatch(state)) m.held = command.status === 'blocked';
       m.stationId = command.stationId;
       m.blockedReason = command.reason;
+      if (sharedDispatch(state) && command.status === 'ready') {
+        m.stationId = null;
+        m.calledAt = null;
+        m.callLocation = null;
+      }
       state.settings.resourceRevision++;
       break;
     }
     case 'configurePools': {
+      requireFact(
+        !sharedDispatch(state) || command.pools.every((p) => !p.stationIds.length),
+        'Shared matches do not reserve stations by pool.',
+      );
       for (const setting of command.pools) {
         const pool = state.pools.find((p) => p.id === setting.poolId);
         requireFact(
@@ -129,35 +150,9 @@ export function additionalDecision(
       state.settings.resourceRevision++;
       break;
     }
-    case 'station': {
-      requireFact(
-        state.settings.resourceRevision === command.expectedResourceRevision,
-        'Stations changed.',
-      );
-      basis.resources = state.settings.resourceRevision;
-      const station = state.stations.find((s) => s.id === command.id);
-      if (command.name === null) {
-        requireFact(
-          station &&
-            !state.matches.some((m) => m.stationId === command.id && m.status === 'playing'),
-          'Station is still in use.',
-        );
-        state.stations = state.stations.filter((s) => s.id !== command.id);
-        for (const pool of state.pools)
-          if (pool.stationIds.includes(command.id)) {
-            pool.stationIds = pool.stationIds.filter((id) => id !== command.id);
-            pool.scheduleRevision++;
-          }
-        for (const m of state.matches) if (m.stationId === command.id) m.stationId = null;
-      } else if (station) {
-        station.name = command.name;
-        station.revision++;
-      } else
-        state.stations.push({ id: command.id, name: command.name, enabled: true, revision: 0 });
-      state.settings.capacity = state.stations.length;
-      state.settings.resourceRevision++;
+    case 'station':
+      changeStation(state, command, basis);
       break;
-    }
     case 'announce':
       state.announcements.push({
         id: envelope.id,

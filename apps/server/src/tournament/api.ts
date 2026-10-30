@@ -1,3 +1,4 @@
+import { sharedDispatch } from './dispatch';
 import { isKnockout } from '@smashclub/shared';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
@@ -184,7 +185,7 @@ export class NativeEventApi {
     const state = await this.state();
     if (!privateView && !state.settings.published)
       throw new TRPCError({ code: 'NOT_FOUND', message: 'This event is not published.' });
-    return eventView(this.ctx.db, state);
+    return eventView(this.ctx.db, state, privateView);
   }
   async plan() {
     return planView(this.ctx.db, await this.state());
@@ -252,7 +253,9 @@ export class NativeEventApi {
       const available = view.matches.find((row) => row.id === input.matchId)!.availability;
       const stationId =
         input.stationId === undefined
-          ? (m.stationId ?? available.eligibleStationIds[0] ?? null)
+          ? sharedDispatch(state)
+            ? null
+            : (m.stationId ?? available.eligibleStationIds[0] ?? null)
           : input.stationId;
       await this.execute({
         kind: 'dispatch',

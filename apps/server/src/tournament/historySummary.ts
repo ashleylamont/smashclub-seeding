@@ -49,6 +49,8 @@ export function describeDecision(
     summary,
     matchId,
   });
+  const dispatch = describeDispatchCommand(command, state, pairing, station);
+  if (dispatch) return { ...dispatch, matchId };
   switch (command.kind) {
     case 'score': {
       const pending = decision.after.reports?.some(
@@ -76,8 +78,6 @@ export function describeDecision(
         'Live score updated',
         result(command.score1, command.score2, 'in progress'),
       );
-    case 'dispatch':
-      return description('matches', 'Match started', `${pairing} · ${station(command.stationId)}`);
     case 'matchControl':
       return description(
         'matches',
@@ -178,5 +178,41 @@ export function describeDecision(
         'Result correction sealed',
         `${command.corrections.length} match corrections · ${command.reason}`,
       );
+    default:
+      throw new Error(`No history description for ${command.kind}`);
+  }
+}
+
+function describeDispatchCommand(
+  command: TournamentDecision['command'],
+  state: TournamentState,
+  pairing: string,
+  station: (id: string | null) => string,
+) {
+  switch (command.kind) {
+    case 'dispatch':
+      return {
+        category: 'matches' as const,
+        title:
+          command.callOnly ||
+          (state.settings.dispatchMode === 'shared' &&
+            !command.stationId &&
+            command.callOnly !== false)
+            ? 'Match called'
+            : 'Match started',
+        summary: `${pairing} · ${station(command.stationId)}${command.callLocation ? ` · ${command.callLocation}` : ''}`,
+      };
+    case 'beginPlay':
+      return { category: 'matches' as const, title: 'Called match started', summary: pairing };
+    case 'configureDispatch':
+      return {
+        category: 'settings' as const,
+        title: 'Shared match capacity configured',
+        summary: `${command.capacity} ordinary matches plus ${command.reservedStationIds.length} named stations`,
+      };
+    case 'queueMove':
+      return { category: 'matches' as const, title: 'TO queue reordered', summary: pairing };
+    default:
+      return null;
   }
 }

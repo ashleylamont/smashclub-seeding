@@ -20,7 +20,11 @@ import { NativeTournament } from '../src/tournament/aggregate';
 import { createNativeRuntime, nativeStream, type NativeRuntime } from '../src/tournament/runtime';
 import { processNativeRatingIntents, publishNativeResult } from '../src/tournament/publication';
 import { nativeEventHistory } from '../src/tournament/history';
-import type { TournamentCommand, TournamentResult } from '../src/tournament/schemas';
+import type {
+  TournamentCommand,
+  TournamentResult,
+  TournamentState,
+} from '../src/tournament/schemas';
 
 describe('native Act-PG integration on isolated PostgreSQL', () => {
   let cluster: Awaited<ReturnType<typeof postgresCluster>>;
@@ -113,6 +117,96 @@ describe('native Act-PG integration on isolated PostgreSQL', () => {
       .from(nativeResultPublications)
       .where(eq(nativeResultPublications.eventPlanId, planId));
   }
+
+  it('serializes shared calls across independent stores without double-booking ordinary capacity or named stations', async () => {
+    const planId = await seedNativeDraft(cluster.db);
+    const a = await runtime(),
+      b = await runtime();
+    await a.lock(nativeAdmin, planId);
+    const stationId = crypto.randomUUID();
+    await command(a, planId, {
+      kind: 'station',
+      id: stationId,
+      name: 'Main stage',
+      expectedResourceRevision: 0,
+    });
+    await command(a, planId, {
+      kind: 'configureDispatch',
+      capacity: 1,
+      reservedStationIds: [stationId],
+      expectedResourceRevision: 1,
+    });
+    const selected: TournamentState['matches'] = [];
+    const players = new Set<string>();
+    for (const match of (await state(a, planId)).matches) {
+      if (players.has(match.player1Id!) || players.has(match.player2Id!)) continue;
+      selected.push(match);
+      players.add(match.player1Id!);
+      players.add(match.player2Id!);
+      if (selected.length === 3) break;
+    }
+    expect(selected).toHaveLength(3);
+    await command(a, planId, {
+      kind: 'dispatch',
+      matchId: selected[0]!.id,
+      stationId,
+      expectedRevision: 0,
+      expectedResourceRevision: 2,
+      callOnly: false,
+    });
+    await b.transfer(planId);
+    const [beforeA, beforeB] = await Promise.all([state(a, planId), state(b, planId)]);
+    expect(beforeA.settings.resourceRevision).toBe(beforeB.settings.resourceRevision);
+    const attempts = await Promise.allSettled(
+      [a, b].map((r, index) =>
+        command(
+          r,
+          planId,
+          {
+            kind: 'dispatch',
+            matchId: selected[index + 1]!.id,
+            stationId: null,
+            callOnly: true,
+            expectedRevision: 0,
+            expectedResourceRevision: beforeA.settings.resourceRevision,
+          },
+          `ordinary-call-${index}`,
+        ),
+      ),
+    );
+    expect(attempts.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(attempts.filter((r) => r.status === 'rejected')).toHaveLength(1);
+    const current = await state(b, planId);
+    expect(current.matches.filter((m) => m.status === 'playing')).toHaveLength(2);
+    expect(current.matches.filter((m) => m.status === 'playing' && !m.stationId)).toHaveLength(1);
+    const called = current.matches.find((m) => m.status === 'playing' && !m.stationId)!;
+    expect(called.started).toBe(false);
+    await command(b, planId, {
+      kind: 'configureDispatch',
+      capacity: 0,
+      reservedStationIds: [stationId],
+      expectedResourceRevision: current.settings.resourceRevision,
+    });
+    const reduced = await state(a, planId);
+    expect(reduced.matches.filter((m) => m.status === 'playing')).toHaveLength(2);
+    await command(a, planId, {
+      kind: 'matchControl',
+      matchId: called.id,
+      status: 'ready',
+      stationId: null,
+      reason: null,
+      expectedRevision: 0,
+      expectedResourceRevision: reduced.settings.resourceRevision,
+    });
+    expect((await state(b, planId)).matches.find((m) => m.id === called.id)!.started).toBe(false);
+    const persisted = await state(b, planId);
+    expect(await a.replay(planId)).toEqual(persisted);
+    await a.shutdown();
+    runtimes.delete(a);
+    const restarted = await runtime();
+    expect(await state(restarted, planId)).toEqual(persisted);
+    expect(await restarted.replay(planId)).toEqual(persisted);
+  });
 
   it('retains loser feeds and a required reset across process restart, then publishes once', async () => {
     await cluster.db.insert(user).values(nativeAdmin).onConflictDoNothing();

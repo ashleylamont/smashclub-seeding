@@ -1,3 +1,4 @@
+import { dispatchAvailability, isReserved, sharedDispatch } from './dispatch';
 import { available, matchMemberIds } from './entrants';
 import { buildStationQueues } from '../event-operations/queue';
 import { requireFact, resolved } from './facts';
@@ -25,6 +26,31 @@ export function dispatchMatch(
     !hasCurrentPendingScoreReview(match, next.reports),
     'This match has a score awaiting TO review.',
   );
+  if (sharedDispatch(next)) {
+    requireFact(envelope.operator, 'An organiser calls matches from the shared queue.');
+    const availability = dispatchAvailability(next, match);
+    const allowed = command.stationId
+      ? isReserved(next, command.stationId) &&
+        availability.eligibleStationIds.includes(command.stationId)
+      : availability.canDispatchOrdinary;
+    requireFact(
+      allowed,
+      availability.reasons.map((r) => r.message).join(' ') ||
+        (command.stationId
+          ? 'Reserved station is unavailable.'
+          : 'Ordinary match capacity is full.'),
+    );
+    match.status = 'playing';
+    // A call reserves capacity without claiming that anyone has actually played.
+    // Explicit main-stage starts and optional beginPlay record that separate fact.
+    match.started ||=
+      command.callOnly === false || Boolean(command.stationId && command.callOnly !== true);
+    match.stationId = command.stationId;
+    match.calledAt = envelope.at;
+    match.callLocation = command.callLocation ?? null;
+    next.settings.resourceRevision++;
+    return;
+  }
   if (!envelope.operator)
     requireFact(
       next.settings.published &&

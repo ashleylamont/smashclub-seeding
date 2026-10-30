@@ -1,3 +1,5 @@
+import { importedOutcome, remoteValues } from './sourceResult';
+import type { dispatchDesk, SharedDispatchSummary } from '../tournament/dispatch';
 import type { MemberView } from '../tournament/entrants';
 import { attendeeScoreDecision, samePlayedScore } from './scorePolicy';
 import { loadStationQueues } from './queue';
@@ -29,7 +31,7 @@ import {
   tournaments,
   type Db,
 } from '@smashclub/db';
-import { publicPlayerName, scoresIndicateBye, scoresIndicateForfeit } from '@smashclub/shared';
+import { publicPlayerName } from '@smashclub/shared';
 import type { SessionUser } from '../auth';
 import { getPlan, type PlanView } from '../event-planner/plans';
 import { matchAvailability, stationAvailability } from './availability';
@@ -100,6 +102,8 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
     ...m,
     ...({} as { player1MemberIds?: string[]; player2MemberIds?: string[] }),
     resourceRevision: 0,
+    called: false,
+    callLocation: null as string | null,
     progressRevision: 0,
     started:
       m.status === 'playing' ||
@@ -159,6 +163,8 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
   ).map((p) => ({ ...p, playerName: p.playerId ? (names.get(p.playerId) ?? 'Player') : null }));
   return {
     ...(await loadStationQueues(db, planId)),
+    ...({} as { operatorDispatch?: ReturnType<typeof dispatchDesk> }),
+    sharedDispatch: null as SharedDispatchSummary | null,
     nativeBrackets: await nativeBracketViews(db, planId),
     plan: {
       id: plan.id,
@@ -224,29 +230,6 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
           .select()
           .from(eventPlanPoolPlacements)
           .where(eq(eventPlanPoolPlacements.eventPlanId, planId)),
-  };
-}
-function importedOutcome(s: typeof sets.$inferSelect): 'played' | 'bye' | 'forfeit' | null {
-  if (s.state !== 'complete') return null;
-  return scoresIndicateBye(s.scoresCsv)
-    ? 'bye'
-    : scoresIndicateForfeit(s.scoresCsv)
-      ? 'forfeit'
-      : !s.p1PlayerId || !s.p2PlayerId
-        ? 'bye'
-        : 'played';
-}
-function remoteValues(s: typeof sets.$inferSelect, firstPlayerId: string) {
-  const scores = s.scoresCsv?.match(/^(-?\d+)-(-?\d+)$/);
-  const flipped = s.p1PlayerId !== firstPlayerId;
-  return {
-    sourceSetId: s.id,
-    outcome: importedOutcome(s),
-    status: s.state === 'complete' ? ('complete' as const) : ('ready' as const),
-    score1: scores ? Number(scores[flipped ? 2 : 1]) : null,
-    score2: scores ? Number(scores[flipped ? 1 : 2]) : null,
-    winnerId: s.winner === 1 ? s.p1PlayerId : s.winner === 2 ? s.p2PlayerId : null,
-    syncState: 'synced' as const,
   };
 }
 export async function prepare(db: Db, planId: string) {
