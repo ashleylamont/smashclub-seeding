@@ -237,6 +237,7 @@ export async function stageNativeBaseline(
       })),
       prizes: await tx.select().from(eventPrizes).where(eq(eventPrizes.eventPlanId, planId)),
       settings: {
+        ...(!importing ? { poolOrderPolicy: 'unique_set_wins_v1' as const } : {}),
         published: settings?.published ?? false,
         playerReports: settings?.playerReports ?? false,
         scoreReportingMode: settings?.scoreReportingMode ?? 'to_review',

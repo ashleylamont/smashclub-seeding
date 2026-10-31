@@ -113,6 +113,45 @@ purposes. Do not send a cursor as a universal mutation precondition. Incremental
 transport delivery can be added independently; current clients receive consistent
 replacement snapshots from authoritative state.
 
+## Automatic pool orders
+
+Fresh, unplayed native pool draws capture `settings.poolOrderPolicy` as
+`unique_set_wins_v1`. When every pairing has an official outcome and no current
+score report awaits review, distinct set-win totals decide the full finishing
+order automatically. Played wins and explicit forfeits each count as one win;
+forfeits do not invent games. No game differential, head-to-head tiebreak or
+rating input chooses between equal win totals. Ties require an organiser's
+`placements`/`poolOrders` ruling in the planner.
+
+The recorded order contains every retained pool entrant, including withdrawals.
+All prior played results and identities remain intact. Outstanding withdrawal
+pairings still need explicit forfeits; a no-contest between two withdrawn
+entrants records no win. Native finals continue to exclude withdrawn entrants
+and compress the remaining places before applying existing qualification rules.
+Even a tie confined to withdrawn entrants or lower places requires a ruling:
+this first policy decides a unique **full** order, rather than inventing a
+partial-order or withdrawal tiebreak rule.
+
+The score/review command persists the chosen order, its placement revision and
+private result-basis provenance in the same `DecisionRecordedV2` fact. Public
+snapshots expose only coarse status/reason and placement source. The planner and
+finals preview distinguish automatic orders, organiser rulings, incomplete pools
+and pending review. Current pending reviews suspend an order; rejection restores
+a still-valid manual ruling. Reports from earlier result revisions do not suspend
+current standings. An actual result or roster correction invalidates that pool's
+ruling; identical score confirmations and availability changes preserve it.
+
+The policy is absent on existing handoffs and imported live events. They retain
+their organiser-confirmed behavior, with `DecisionRecordedV1` facts. No read,
+restart or replay upgrades an old event or recalculates historical decisions;
+both fact versions fold their persisted state directly. Existing finals remain
+frozen by the same call/play/history protections. A reviewed published correction
+that changes the original pool evidence exposes `retained_after_correction`
+status and `retained` placement source while preserving the recorded order and
+played finals. An explicitly supplied replacement round-robin order records new
+manual provenance. Finals still use the whole-event
+preview and draw workflow; rolling pool-to-finals release is separate work.
+
 ## Verification and recovery
 
 ```sh

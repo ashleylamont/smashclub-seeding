@@ -1,3 +1,4 @@
+import { publicPoolViews } from './poolOrders';
 import { isReserved, publicSettings, sharedDispatch } from './dispatch';
 import { publicEntrantNames } from './entrants';
 import { applyPlanRetirement } from '../event-planner/retirement';
@@ -46,6 +47,7 @@ async function replayNative(
         rebuilt = captureBaseline(Baseline.parse(event.data));
         break;
       case 'DecisionRecordedV1':
+      case 'DecisionRecordedV2':
       case 'ResultsSealedV1':
       case 'PlanRetiredV1':
         rebuilt = reduceDecision(rebuilt, Decision.parse(event.data));
@@ -275,7 +277,7 @@ export function createNativeRuntime(
         id: e.playerId,
         name: names.get(e.playerId) ?? 'Player',
       })),
-      pools: state.pools,
+      pools: publicPoolViews(state),
       nativeBrackets: state.brackets,
       stations: sharedDispatch(state)
         ? state.stations.filter((s) => isReserved(state, s.id))
@@ -307,6 +309,7 @@ export function createNativeRuntime(
     await app.query({ stream: nativeStream(planId) }, (event) => {
       if (
         event.name === 'DecisionRecordedV1' ||
+        event.name === 'DecisionRecordedV2' ||
         event.name === 'ResultsSealedV1' ||
         event.name === 'PlanRetiredV1'
       ) {

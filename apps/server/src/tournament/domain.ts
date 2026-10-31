@@ -1,3 +1,4 @@
+import { decidePoolOrders } from './poolOrders';
 import { stampReadySince, updateResources, sharedDispatch } from './dispatch';
 import { validateKnockoutBaseline } from './structureValidation';
 import { isKnockout, isSinglePool } from '@smashclub/shared';
@@ -130,6 +131,12 @@ export function captureBaseline(baseline: TournamentBaseline): TournamentState {
     announcements: baseline.announcements,
     prizes: baseline.prizes,
   };
+}
+
+function decisionFactVersion(state: TournamentState, kind: string) {
+  return state.settings.poolOrderPolicy && !['retire', 'finalize', 'replaceResult'].includes(kind)
+    ? (2 as const)
+    : (1 as const);
 }
 
 export function decide(
@@ -309,6 +316,7 @@ export function decide(
     default:
       requireFact(additionalDecision(next, envelope, basis), 'Unsupported command.');
   }
+  decidePoolOrders(previous, next, envelope, basis);
   stampReadySince(previous, next, envelope.at);
   const after: TournamentDecision['after'] = {};
   for (const field of [
@@ -331,7 +339,7 @@ export function decide(
   }
   if (command.kind === 'retire') after.entrants = structuredClone(next.entrants);
   return {
-    version: 1,
+    version: decisionFactVersion(next, command.kind),
     commandId: envelope.id,
     actorId: envelope.actorId,
     requestId: envelope.requestId,

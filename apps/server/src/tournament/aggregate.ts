@@ -12,7 +12,8 @@ export const NativeTournament = state({
   .emits({
     BaselineCapturedV1: Baseline,
     LegacyStateImportedV1: LiveState,
-    DecisionRecordedV1: Decision,
+    DecisionRecordedV1: Decision.extend({ version: z.literal(1) }),
+    DecisionRecordedV2: Decision.extend({ version: z.literal(2) }),
     ResultsSealedV1: Decision,
     PlanRetiredV1: Decision,
     PublicationRecordedV1: z.object({ resultId: z.uuid(), tournamentIds: z.array(z.uuid()) }),
@@ -21,6 +22,9 @@ export const NativeTournament = state({
     BaselineCapturedV1: ({ data }) => ({ current: [captureBaseline(data)] }),
     LegacyStateImportedV1: ({ data }) => ({ current: [data] }),
     DecisionRecordedV1: ({ data }, state) => ({
+      current: [reduceDecision(state.current[0], data)],
+    }),
+    DecisionRecordedV2: ({ data }, state) => ({
       current: [reduceDecision(state.current[0], data)],
     }),
     ResultsSealedV1: ({ data }, state) => ({ current: [reduceDecision(state.current[0], data)] }),
@@ -44,16 +48,13 @@ export const NativeTournament = state({
   .on({ ExecuteNativeCommand: Envelope })
   .emit((envelope, snapshot) => {
     const decision = decide(snapshot.state.current[0], envelope);
-    return decision
-      ? [
-          envelope.command.kind === 'retire'
-            ? 'PlanRetiredV1'
-            : ['finalize', 'replaceResult'].includes(envelope.command.kind)
-              ? 'ResultsSealedV1'
-              : 'DecisionRecordedV1',
-          decision,
-        ]
-      : undefined;
+    if (!decision) return undefined;
+    if (envelope.command.kind === 'retire') return ['PlanRetiredV1', decision];
+    if (['finalize', 'replaceResult'].includes(envelope.command.kind))
+      return ['ResultsSealedV1', decision];
+    return decision.version === 2
+      ? ['DecisionRecordedV2', { ...decision, version: 2 as const }]
+      : ['DecisionRecordedV1', { ...decision, version: 1 as const }];
   })
   .on({ ImportLegacyNativeState: LiveState })
   .emit((imported, snapshot) => {

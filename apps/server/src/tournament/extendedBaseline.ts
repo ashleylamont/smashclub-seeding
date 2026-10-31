@@ -180,6 +180,7 @@ export async function stageExtendedNativeBaseline(
     prizes: [],
     settings: {
       ...initialState().settings,
+      ...(!isKnockout(plan.structure) ? { poolOrderPolicy: 'unique_set_wins_v1' as const } : {}),
       published: settings?.published ?? false,
       playerReports: settings?.playerReports ?? false,
       scoreReportingMode: settings?.scoreReportingMode ?? 'to_review',
