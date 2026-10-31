@@ -436,6 +436,73 @@ describe('native rolling-finals progression', () => {
     expect(previewRollingFinals(state).freezeWarning).toContain('will not shrink or reseed');
   });
 
+  it('resolves recompressed places from the frozen eligible roster even when an excluded entrant returns and wins their pool', () => {
+    let state = withPools([5, 3]);
+    const excluded = state.entrants[0]!;
+    state = apply(state, {
+      kind: 'availability',
+      playerId: excluded.playerId,
+      availability: 'withdrawn',
+      expectedRevision: 0,
+      reason: 'Absent before creation',
+    });
+    state = apply(state, { kind: 'drawFinals' });
+    state = apply(state, {
+      kind: 'availability',
+      playerId: excluded.playerId,
+      availability: 'available',
+      expectedRevision: 1,
+      reason: 'Returned after creation',
+    });
+    const pool = state.pools[0]!;
+    state = completePool(state, pool.id);
+    expect(state.pools[0]!.order![0]).toBe(excluded.playerId);
+    expect(state.brackets.every((b) => !b.entrantIds.includes(excluded.playerId))).toBe(true);
+    const first = state.brackets
+      .find((b) => b.stage === 'main')!
+      .qualifierSlots!.find((s) => s.poolId === pool.id && s.place === 1)!;
+    expect(first.entrantId).toBe(pool.entrantIds[1]);
+    expect(
+      state.brackets.flatMap((b) => b.qualifierSlots!).filter((s) => s.poolId === pool.id),
+    ).toHaveLength(4);
+  });
+
+  it('waits for explicit pool forfeits after a late withdrawal, then records a real withdrawn qualifier as a forfeit instead of a bye', () => {
+    let state = apply(initial(), { kind: 'drawFinals' });
+    const pool = state.pools[0]!;
+    const withdrawn = pool.entrantIds[0]!;
+    state = apply(state, {
+      kind: 'availability',
+      playerId: withdrawn,
+      availability: 'withdrawn',
+      expectedRevision: 0,
+      reason: 'After field creation',
+    });
+    expect(state.matches.filter((m) => m.bracketId).every((m) => m.outcome === null)).toBe(true);
+    for (const m of state.matches.filter((m) => m.poolId === pool.id))
+      state = apply(
+        state,
+        [m.player1Id, m.player2Id].includes(withdrawn)
+          ? {
+              ...score(m),
+              outcome: 'forfeit',
+              score1: null,
+              score2: null,
+              winnerId: m.player1Id === withdrawn ? m.player2Id! : m.player1Id!,
+            }
+          : score(m),
+      );
+    const final = state.matches.find(
+      (m) => m.bracketId && [m.player1Id, m.player2Id].includes(withdrawn),
+    )!;
+    expect(state.pools[0]!.qualifierRoster).toContain(withdrawn);
+    expect(final.outcome).toBe('forfeit');
+    expect(final.winnerId).toBe(pool.entrantIds[3]);
+    expect(final.score1).toBeNull();
+    expect(final.score2).toBeNull();
+    expect([final.player1Id, final.player2Id]).toContain(withdrawn);
+  });
+
   it('exposes truthful coarse source metadata and separates an existing played draw from reset/recreation', () => {
     let state = apply(initial(), { kind: 'drawFinals' });
     const before = previewRollingFinals(state);
