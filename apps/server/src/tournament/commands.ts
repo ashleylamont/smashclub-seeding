@@ -9,6 +9,24 @@ const poolOrder = z.object({
   matchRevisions: z.record(id, revision),
 });
 export const additionalCommands = [
+  z.object({
+    kind: z.literal('configureDispatch'),
+    capacity: revision.max(128),
+    reservedStationIds: z.array(id).max(128),
+    expectedResourceRevision: revision,
+  }),
+  z.object({
+    kind: z.literal('queueMove'),
+    matchId: id,
+    beforeMatchId: id.nullable(),
+    expectedQueueRevision: revision,
+  }),
+  z.object({
+    kind: z.literal('beginPlay'),
+    matchId: id,
+    expectedRevision: revision,
+    expectedResourceRevision: revision,
+  }),
   RecoveryInput.extend({ kind: z.literal('retire'), expectedSequence: revision }),
   z.object({
     kind: z.literal('progress'),

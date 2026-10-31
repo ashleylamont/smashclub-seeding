@@ -87,3 +87,29 @@ it('respects server scheduling holds even when both players are idle', () => {
     liveSections([{ ...match, availability: { ...match.availability!, canStart: true } }]).ready,
   ).toHaveLength(1);
 });
+
+it('reserves called players without showing an untaken call as an active broadcast set', () => {
+  const pairing: LiveMatch = {
+    id: 'call',
+    division: 'upper',
+    stage: 'group',
+    poolIndex: 0,
+    label: 'A1',
+    player1Id: 'a',
+    player2Id: 'b',
+    player1Name: 'A',
+    player2Name: 'B',
+    score1: null,
+    score2: null,
+    winnerId: null,
+    stationId: null,
+    status: 'playing',
+    called: true,
+  };
+  const active = { ...pairing, id: 'actual-play', player1Id: 'c', player2Id: 'd', called: false };
+  const waiting = { ...pairing, id: 'same-player', status: 'ready', called: false, player2Id: 'e' };
+  const sections = liveSections([pairing, active, waiting]);
+  expect(sections.playing.map((m) => m.id)).toEqual(['actual-play']);
+  expect(sections.ready).toEqual([]);
+  expect(sections.total).toBe(3);
+});

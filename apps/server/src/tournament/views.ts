@@ -1,3 +1,11 @@
+import {
+  dispatchAvailability,
+  dispatchContext,
+  isReserved,
+  ordinaryUsage,
+  publicSettings,
+  sharedDispatch,
+} from './dispatch';
 import { eliminationStandings, buildFormatFinals, seedPoolFinishers } from '@smashclub/engine';
 import { available, memberIds, publicEntrantNames } from './entrants';
 import { asc, inArray } from 'drizzle-orm';
@@ -8,6 +16,7 @@ import { matchAvailability, stationAvailability } from '../event-operations/avai
 import type { snapshot as sqlSnapshot } from '../event-operations/service';
 import { getPlan as sqlPlan, type PlanView } from '../event-planner/plans';
 import { resolved } from './facts';
+import { hasCurrentPendingScoreReview } from './scoreReview';
 import type { TournamentState } from './schemas';
 
 export type EventSnapshot = Awaited<ReturnType<typeof sqlSnapshot>>;
@@ -16,6 +25,8 @@ export function matchRows(state: TournamentState): (typeof eventMatches.$inferSe
   parent2Outcome?: 'winner' | 'loser';
   bracketLane?: string;
   bracketRound?: number;
+  called: boolean;
+  callLocation: string | null;
   player1MemberIds?: string[];
   player2MemberIds?: string[];
 })[] {
@@ -41,7 +52,9 @@ export function matchRows(state: TournamentState): (typeof eventMatches.$inferSe
       winnerId: m.winnerId,
       outcome: m.outcome === 'no_contest' ? null : m.outcome,
       status: m.status,
-      stationId: m.stationId,
+      stationId: sharedDispatch(state) && !isReserved(state, m.stationId) ? null : m.stationId,
+      called: sharedDispatch(state) && m.status === 'playing' && !m.started,
+      callLocation: m.status === 'playing' ? (m.callLocation ?? null) : null,
       blockedReason:
         m.outcome === 'no_contest'
           ? 'Both players withdrawn: no contest; no winner or score recorded'
@@ -102,7 +115,11 @@ export function bracketViews(state: TournamentState) {
     };
   });
 }
-export async function eventView(db: Db, state: TournamentState): Promise<EventSnapshot> {
+export async function eventView(
+  db: Db,
+  state: TournamentState,
+  privateView = false,
+): Promise<EventSnapshot> {
   const baseline = state.baseline!;
   const planId = baseline.planId;
   const allPlayers = await db.select().from(players);
@@ -116,8 +133,16 @@ export async function eventView(db: Db, state: TournamentState): Promise<EventSn
         .orderBy(asc(playerCharacters.position))
     : [];
   const rows = matchRows(state);
+  const dispatch = sharedDispatch(state) ? dispatchContext(state) : undefined;
+  const pendingReviewIds =
+    dispatch?.pendingReports ??
+    new Set(
+      rows
+        .filter((match) => hasCurrentPendingScoreReview(match, state.reports))
+        .map((match) => match.id),
+    );
   const stations = state.stations
-    .filter((s) => s.enabled)
+    .filter((s) => s.enabled && (!sharedDispatch(state) || isReserved(state, s.id)))
     .map((s) => ({ id: s.id, name: s.name, eventPlanId: planId }));
   const poolSchedules = schedules(state);
   const open = state.lifecycle === 'locked';
@@ -130,13 +155,21 @@ export async function eventView(db: Db, state: TournamentState): Promise<EventSn
   return {
     ...buildStationQueues(
       rows,
-      stations,
+      sharedDispatch(state) ? [] : stations,
       poolSchedules,
       state.entrants.filter((e) => !available(e)).map((e) => e.playerId),
       open,
+      pendingReviewIds,
     ),
+    sharedDispatch: sharedDispatch(state)
+      ? {
+          capacity: state.settings.capacity,
+          active: ordinaryUsage(state),
+          overCapacity: Math.max(0, ordinaryUsage(state) - state.settings.capacity),
+        }
+      : null,
     members:
-      state.baseline?.competitionFormat === 'doubles'
+      (!sharedDispatch(state) || privateView) && state.baseline?.competitionFormat === 'doubles'
         ? state.entrants.flatMap((e) =>
             memberIds(e).map((id) => ({
               entrantId: e.playerId,
@@ -178,7 +211,7 @@ export async function eventView(db: Db, state: TournamentState): Promise<EventSn
       stage: t.challongeSlug.includes('_main') ? ('main' as const) : ('consolation' as const),
       slug: t.challongeSlug,
     })),
-    settings: state.settings,
+    settings: publicSettings(state),
     matches: rows.map((m) => ({
       ...m,
       resourceRevision: state.settings.resourceRevision,
@@ -198,7 +231,26 @@ export async function eventView(db: Db, state: TournamentState): Promise<EventSn
         .filter((c) => (m.player2MemberIds ?? [m.player2Id]).includes(c.playerId))
         .map((c) => c.characterSlug),
       availability: (() => {
+        const native = state.matches.find((row) => row.id === m.id)!;
+        if (sharedDispatch(state)) {
+          if (privateView) return dispatchAvailability(state, native, dispatch);
+          return {
+            canStart: false,
+            eligibleStationIds: [],
+            reasons:
+              m.status === 'ready'
+                ? [{ code: 'awaiting_call', message: 'An organiser will call this match.' }]
+                : [],
+          };
+        }
         const value = matchAvailability(m, rows, stations, poolSchedules, false, open);
+        if (pendingReviewIds.has(m.id)) {
+          value.canStart = false;
+          value.reasons.push({
+            code: 'score_review_pending',
+            message: 'This match has a score awaiting TO review.',
+          });
+        }
         if (
           state.entrants.some(
             (e) => [m.player1Id, m.player2Id].includes(e.playerId) && !available(e),

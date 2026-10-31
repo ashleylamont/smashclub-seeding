@@ -34,3 +34,8 @@ export const sameScore = (
   a.score2 === b.score2 &&
   a.winnerId === b.winnerId;
 export const resolved = (match: Match) => match.status === 'complete';
+
+/** A call without a start marker may still have begun physically. It must be
+ * explicitly returned before a structural change can replace its opponents. */
+export const unconfirmedCall = (match: Pick<Match, 'status' | 'started'>) =>
+  match.status === 'playing' && !match.started;

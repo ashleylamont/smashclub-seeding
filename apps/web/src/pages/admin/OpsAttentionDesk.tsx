@@ -96,14 +96,18 @@ export function OpsAttentionDesk({
         {needsStations && (
           <div className="ops-attention-setup">
             <p>
-              <strong>No stations configured</strong>
+              <strong>
+                {data.sharedDispatch ? 'No match capacity configured' : 'No stations configured'}
+              </strong>
               <br />
               <span className="muted">
-                Add your setups so players and TOs can see where matches should be played.
+                {data.sharedDispatch
+                  ? 'Set ordinary match capacity or add an available named station.'
+                  : 'Add your setups so players and TOs can see where matches should be played.'}
               </span>
             </p>
             <Button size="small" type="submit" onClick={() => onJump('station-controls')}>
-              Set up stations
+              {data.sharedDispatch ? 'Set up match capacity' : 'Set up stations'}
             </Button>
           </div>
         )}

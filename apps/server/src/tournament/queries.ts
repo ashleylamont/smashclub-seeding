@@ -1,3 +1,5 @@
+import { eventView } from './views';
+import { dispatchDesk } from './dispatch';
 import { memberIds } from './entrants';
 import { asc, eq } from 'drizzle-orm';
 import {
@@ -63,8 +65,13 @@ export async function nativeOverview(api: NativeEventApi) {
       details: a.command,
       createdAt: new Date(a.at),
     }));
+  const snapshot = await eventView(ctx.db, state, true);
   return {
-    ...(await api.snapshot(true)),
+    ...snapshot,
+    operatorDispatch: dispatchDesk(
+      state,
+      new Map(snapshot.entrants.map((entry) => [entry.id, entry.name])),
+    ),
     reports: reportViews(state),
     audit: [
       ...(imported.legacyAudit ?? []).map((a) => ({ ...a, createdAt: new Date(a.createdAt) })),

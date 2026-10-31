@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CompletedScoreReport, type ResultSubmission } from './CompletedScoreReport';
 import type { GuestSession } from '../lib/guestReporting';
+import type { ScoreApprovalPolicy } from '../lib/poolFlow';
 import { trpc } from '../lib/trpc';
 
 type GuestData = Awaited<ReturnType<typeof trpc.eventOps.guests.matches.mutate>>;
@@ -16,9 +17,7 @@ export function GuestScoreCard({
   report,
   status,
   station,
-  selfRun,
-  autoAccept,
-  disputeMode,
+  approvalPolicy,
 }: {
   planId: string;
   session: GuestSession | null;
@@ -26,9 +25,7 @@ export function GuestScoreCard({
   report?: GuestData['reports'][number];
   status: string;
   station?: string;
-  selfRun: boolean;
-  autoAccept: boolean;
-  disputeMode: boolean;
+  approvalPolicy: ScoreApprovalPolicy;
 }) {
   const cache = useQueryClient();
   const [score1, setScore1] = useState<ScoreInputValue>(0);
@@ -118,7 +115,7 @@ export function GuestScoreCard({
         <CompletedScoreReport
           match={match}
           enabled={Boolean(session)}
-          allowReports={disputeMode && match.outcome === 'played'}
+          allowReports={approvalPolicy !== 'review' && match.outcome === 'played'}
           onSubmit={reportResult}
           pendingReport={report?.status === 'pending' ? report : undefined}
         />
@@ -142,17 +139,6 @@ export function GuestScoreCard({
             Start a new report
           </Button>
         </>
-      ) : selfRun && match.status !== 'playing' ? (
-        <p className="pool-flow-selected-note">
-          {status === 'Play next' ? (
-            <>
-              Start this match from its station’s <a href="#pool-station-queues">Play next card</a>{' '}
-              first. Once it is playing, report the result here.
-            </>
-          ) : (
-            'Wait for a station call before starting this match.'
-          )}
-        </p>
       ) : (
         <form
           className="ops-score-form"
@@ -195,17 +181,17 @@ export function GuestScoreCard({
               score1 === '' ||
               score2 === '' ||
               score1 === score2 ||
+              !match.player1Id ||
+              !match.player2Id ||
               !['ready', 'playing'].includes(match.status)
             }
           >
-            {disputeMode || (selfRun && autoAccept)
-              ? 'Confirm result'
-              : 'Submit score for TO approval'}
+            {approvalPolicy !== 'review' ? 'Confirm result' : 'Submit score for TO approval'}
           </Button>
           <p className="muted">
-            {disputeMode
+            {approvalPolicy === 'event'
               ? 'Results advance immediately. Later disagreements go to TO review.'
-              : selfRun && autoAccept
+              : approvalPolicy === 'pool'
                 ? 'This pool confirms submitted results immediately. Check the players and final score together.'
                 : 'A TO checks this score before it becomes a confirmed result.'}{' '}
             For forfeits, byes or corrections, ask a TO.

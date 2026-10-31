@@ -54,6 +54,10 @@ export const LiveMatch = z.object({
   liveScore1: revision.nullable().default(null),
   liveScore2: revision.nullable().default(null),
   progressRevision: revision.default(0),
+  calledAt: z.number().nullable().optional(),
+  callLocation: z.string().max(100).nullable().optional(),
+  readySince: z.number().optional(),
+  held: z.boolean().optional(),
   blockedReason: z.string().nullable().default(null),
 });
 export const Entrant = z.object({
@@ -98,6 +102,11 @@ export const LiveSettings = z.object({
   playerReports: z.boolean(),
   scoreReportingMode: z.enum(['to_review', 'approve_unless_disputed']),
   capacity: revision,
+  // Absent on old journal facts: their station-bank semantics remain unchanged.
+  dispatchMode: z.literal('shared').optional(),
+  reservedStationIds: z.array(id).optional(),
+  queueOrder: z.array(id).optional(),
+  queueRevision: revision.optional(),
   resourceRevision: revision,
   reportingRevision: revision,
 });
@@ -239,6 +248,8 @@ export const Command = z.discriminatedUnion('kind', [
     kind: z.literal('dispatch'),
     matchId: id,
     stationId: id.nullable(),
+    callLocation: z.string().trim().max(100).nullable().optional(),
+    callOnly: z.boolean().optional(),
     expectedRevision: revision,
     expectedResourceRevision: revision,
   }),

@@ -1,3 +1,4 @@
+import { isReserved, publicSettings, sharedDispatch } from './dispatch';
 import { publicEntrantNames } from './entrants';
 import { applyPlanRetirement } from '../event-planner/retirement';
 import { TRPCError } from '@trpc/server';
@@ -276,8 +277,10 @@ export function createNativeRuntime(
       })),
       pools: state.pools,
       nativeBrackets: state.brackets,
-      stations: state.stations,
-      settings: state.settings,
+      stations: sharedDispatch(state)
+        ? state.stations.filter((s) => isReserved(state, s.id))
+        : state.stations,
+      settings: publicSettings(state),
       publication: state.result
         ? {
             resultId: state.result.id,

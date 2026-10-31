@@ -69,6 +69,27 @@ historical tournament IDs. Rating-intent completion is independent of the
 publication acknowledgement. The desk exposes both statuses and a recovery
 control, plus a reviewed score/forfeit correction form on sealed native events.
 
+### Reporting a played result
+
+Signed-in attendees and QR guests can report a known pairing directly from their
+matches, including a self-running pool match that has no recorded Start or station
+call. Queue order, occupied capacity and a pool scheduling hold do not prevent
+recording a set that was already played. Unknown opponents, withdrawn entrants,
+closed or paused events, reporting access and current pairing/result revisions
+still require their normal checks. Reporting does not create a dispatch or claim
+a station retroactively; main-stage broadcast starts remain explicit.
+
+The event's **Approve unless disputed** policy or a self-running pool's immediate
+score policy accepts the first valid result. Either policy permits an agreeing
+confirmation or a different score sent to TO review, preserving the first result
+until a TO rules on the disagreement. TO-review pools retain pending submissions.
+Transport retries retain their request ID, and an automatic first result admits
+the concurrent second report without admitting a stale form after a TO correction.
+An unstarted pairing with a current pending report is omitted from station calls
+and cannot be dispatched by an attendee or TO until review. Rejection restores
+eligibility; approval records the result. Reports for older pairing/result
+revisions remain audit evidence without holding the current pairing or capacity.
+
 ## Organiser history
 
 The TO desk and admin event workspace expose a **History** tab. It shows actors,

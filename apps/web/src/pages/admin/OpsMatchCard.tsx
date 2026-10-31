@@ -314,6 +314,7 @@ function eligibleStations(match: Match, stations: Overview['stations']) {
 }
 function matchLabel(match: Match, canStart: boolean) {
   if (match.status === 'complete') return 'Finished';
+  if (match.called) return 'Called';
   if (match.status === 'playing') return 'Playing now';
   return canStart ? 'Ready to start' : 'Waiting';
 }

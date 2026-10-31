@@ -1,5 +1,7 @@
 # Self-running pools and station queues
 
+Native TOs can instead use [shared match dispatch](shared-match-dispatch.md), with unnamed ordinary capacity and separately reserved key stations. The station-bank workflow below remains available for existing events until conversion and for external Challonge events.
+
 ## Set up once
 
 In the event desk, open **Divide stations between pools**, select the stations and choose how many each pool receives (usually two). Review the proposed groups and waves, then apply them together.

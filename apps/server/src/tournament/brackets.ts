@@ -53,6 +53,10 @@ export function advance(state: TournamentState, at: number, commandId: string) {
         !match.started && !resolved(match),
         'A downstream match already has actual play.',
       );
+      requireFact(
+        match.status !== 'playing',
+        'A downstream match has been called. Return an untaken call before changing its opponents.',
+      );
       Object.assign(match, {
         player1Id: p1,
         player2Id: p2,
@@ -60,7 +64,7 @@ export function advance(state: TournamentState, at: number, commandId: string) {
         status: p1 && p2 ? 'ready' : 'blocked',
       });
     }
-    if (match.started || resolved(match)) continue;
+    if (match.started || match.status === 'playing' || resolved(match)) continue;
     const players = [match.player1Id, match.player2Id].filter((p): p is string => Boolean(p));
     const remaining = players.filter((p) => !withdrawn.has(p));
     if (match.stage === 'group' && remaining.length === 1 && players.length === 2) {
@@ -70,7 +74,7 @@ export function advance(state: TournamentState, at: number, commandId: string) {
       continue;
     }
     if (remaining.length === 2) {
-      match.status = 'ready';
+      match.status = match.held ? 'blocked' : 'ready';
       continue;
     }
     // No game evidence for withdrawals, vacancies, or automatic byes.

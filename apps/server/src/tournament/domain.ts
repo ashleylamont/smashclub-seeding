@@ -1,3 +1,4 @@
+import { stampReadySince, updateResources, sharedDispatch } from './dispatch';
 import { validateKnockoutBaseline } from './structureValidation';
 import { isKnockout, isSinglePool } from '@smashclub/shared';
 import { buildRoundRobin } from '@smashclub/engine';
@@ -161,6 +162,7 @@ export function decide(
       [
         'relock',
         'resources',
+        'configureDispatch',
         'reporting',
         'poolResources',
         'station',
@@ -205,38 +207,9 @@ export function decide(
     case 'availability':
       changeAvailability(next, envelope, command, basis);
       break;
-    case 'resources': {
-      requireFact(
-        next.settings.resourceRevision === command.expectedResourceRevision,
-        'Resources changed.',
-      );
-      requireFact(
-        new Set(command.stations.map((s) => s.id)).size === command.stations.length,
-        'Duplicate station.',
-      );
-      requireFact(
-        next.matches.filter((m) => m.status === 'playing').length <= command.capacity,
-        'Capacity cannot strand playing matches.',
-      );
-      requireFact(
-        next.matches
-          .filter((m) => m.status === 'playing' && m.stationId)
-          .every((m) => command.stations.some((s) => s.id === m.stationId && s.enabled)),
-        'A reserved station is still in use.',
-      );
-      basis.resources = next.settings.resourceRevision;
-      next.settings.capacity = command.capacity;
-      next.settings.resourceRevision++;
-      next.stations = command.stations.map((s) => ({
-        ...s,
-        revision: (next.stations.find((old) => old.id === s.id)?.revision ?? -1) + 1,
-      }));
-      requireFact(
-        next.pools.every((p) => p.stationIds.every((id) => next.stations.some((s) => s.id === id))),
-        'A pool still reserves a station being removed.',
-      );
+    case 'resources':
+      updateResources(next, command, basis);
       break;
-    }
     case 'reporting':
       requireFact(
         next.settings.reportingRevision === command.expectedRevision,
@@ -251,6 +224,10 @@ export function decide(
       });
       break;
     case 'poolResources': {
+      requireFact(
+        !sharedDispatch(next) || !command.stationIds.length,
+        'Shared matches do not reserve stations by pool.',
+      );
       const pool = next.pools.find((p) => p.id === command.poolId);
       requireFact(
         pool && next.settings.resourceRevision === command.expectedResourceRevision,
@@ -316,7 +293,10 @@ export function decide(
       drawFinals(next, envelope);
       break;
     case 'unlock':
-      requireFact(canPauseDraw(next), 'Play has started; reopening needs an explicit repair.');
+      requireFact(
+        canPauseDraw(next),
+        'Play has started or a match has been called; return an untaken call before reopening, otherwise use explicit repair.',
+      );
       next.lifecycle = 'unlocked';
       break;
     case 'relock':
@@ -329,6 +309,7 @@ export function decide(
     default:
       requireFact(additionalDecision(next, envelope, basis), 'Unsupported command.');
   }
+  stampReadySince(previous, next, envelope.at);
   const after: TournamentDecision['after'] = {};
   for (const field of [
     'lifecycle',

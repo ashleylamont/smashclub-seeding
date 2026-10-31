@@ -56,6 +56,10 @@ export function applyScore(
             !item.started && !resolved(item),
             'Winner change needs a ruling for downstream actual play.',
           );
+          requireFact(
+            item.status !== 'playing',
+            'A downstream match has been called. Return an untaken call before changing its opponents.',
+          );
           descendants.add(item.id);
         }
       }
@@ -168,8 +172,13 @@ export function recordScore(
       'Too many score reports.',
     );
     const policy = next.settings.scoreReportingMode === 'approve_unless_disputed';
+    const pool = next.pools.find((p) => p.id === match.poolId);
+    // Approval is a result policy, not proof that a station call was recorded.
+    // A known pairing can be reported after actual play even when the queue or
+    // pool hold is behind. Pairing, permission and revision checks above still apply.
+    const automaticApproval = policy || Boolean(pool?.selfRun && pool.autoAcceptScores);
     const automaticResult =
-      policy &&
+      automaticApproval &&
       match.revision === command.expectedRevision + 1 &&
       match.automaticFromRevision === command.expectedRevision;
     requireFact(
@@ -177,7 +186,7 @@ export function recordScore(
       'This match changed. Refresh before reporting.',
     );
     requireFact(
-      !resolved(match) || (policy && match.outcome === 'played'),
+      !resolved(match) || (automaticApproval && match.outcome === 'played'),
       'An organiser must correct this result.',
     );
     const priorConflicts = next.reports.some(
@@ -195,16 +204,7 @@ export function recordScore(
         report.isDispute = true;
     const complete = resolved(match);
     const agrees = complete && sameScore(match, result);
-    const pool = next.pools.find((p) => p.id === match.poolId);
-    const selfRun = Boolean(
-      match.status === 'playing' &&
-      match.stationId &&
-      pool?.active &&
-      pool.selfRun &&
-      pool.autoAcceptScores &&
-      pool.stationIds.includes(match.stationId),
-    );
-    const accepted = agrees || (!complete && (policy || selfRun) && !priorConflicts);
+    const accepted = agrees || (!complete && automaticApproval && !priorConflicts);
     reportId = envelope.id;
     next.reports.push({
       id: reportId,

@@ -1,3 +1,6 @@
+import { players } from '@smashclub/db';
+import { publicEntrantNames } from './entrants';
+import { dispatchDesk } from './dispatch';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { authedProcedure, publicProcedure, router, type TrpcContext } from '../trpc/trpc';
@@ -27,6 +30,14 @@ async function transport<T>(work: () => Promise<T>) {
 
 /** Direct command/cursor/recovery API for the standard native lifecycle. */
 export const nativeLiveRouter = router({
+  dispatchDesk: authedProcedure.input(plan).query(async ({ ctx, input }) => {
+    await requireOperator(ctx.db, input.planId, ctx.user);
+    return transport(async () => {
+      const state = await runtime(ctx).state(input.planId);
+      const names = publicEntrantNames(await ctx.db.select().from(players), state.entrants);
+      return dispatchDesk(state, names);
+    });
+  }),
   command: authedProcedure
     .input(plan.extend({ requestId: z.string().min(1).max(128), command: Command }))
     .mutation(({ ctx, input }) =>

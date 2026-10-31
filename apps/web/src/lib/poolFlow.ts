@@ -27,7 +27,8 @@ export type PoolRounds = {
   rounds: { round: number; matchIds: string[]; restingPlayerIds: string[] }[];
 };
 export type PoolFlowData = {
-  plan: { id: string; status: string };
+  plan: { id: string; status: string; bracketMode?: string };
+  sharedDispatch?: { capacity: number; active: number; overCapacity: number } | null;
   settings?: { scoreReportingMode?: 'to_review' | 'approve_unless_disputed' };
   matches: PoolFlowMatch[];
   stations: { id: string; name: string; currentMatchId?: string | null }[];
@@ -66,6 +67,17 @@ export function poolPolicy(data: Pick<PoolFlowData, 'poolSchedules'>, match: Liv
         (pool) => pool.division === match.division && pool.poolIndex === match.poolIndex,
       )
     : undefined;
+}
+/** Immediate native results also remain available for corroboration or dispute. */
+export type ScoreApprovalPolicy = 'review' | 'event' | 'pool';
+export function scoreApprovalPolicy(
+  data: Pick<PoolFlowData, 'plan' | 'settings' | 'poolSchedules'> | undefined,
+  match: LiveMatch,
+): ScoreApprovalPolicy {
+  if (data?.plan.bracketMode !== 'native') return 'review';
+  if (data.settings?.scoreReportingMode === 'approve_unless_disputed') return 'event';
+  const pool = poolPolicy(data, match);
+  return pool?.selfRun && pool.autoAcceptScores ? 'pool' : 'review';
 }
 export function poolPath(path: string, selected: string) {
   return selected ? `${path}?pool=${encodeURIComponent(selected)}` : path;

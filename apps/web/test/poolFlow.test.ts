@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   matchesPool,
+  scoreApprovalPolicy,
   queueScoringIds,
   stationPreview,
   type PoolFlowMatch,
@@ -24,6 +25,28 @@ const match = (id: string, status = 'ready'): PoolFlowMatch => ({
   winnerId: null,
 });
 describe('pool display queue semantics', () => {
+  it('keeps native immediate-result review independent of station and scheduling state', () => {
+    const game = match('played');
+    const data = {
+      plan: { id: 'event', status: 'underway', bracketMode: 'native' },
+      settings: { scoreReportingMode: 'to_review' as const },
+      poolSchedules: [
+        {
+          division: 'upper',
+          poolIndex: 0,
+          active: false,
+          stationIds: [],
+          selfRun: true,
+          autoAcceptScores: true,
+        },
+      ],
+    };
+    expect(scoreApprovalPolicy(data, game)).toBe('pool');
+    expect(scoreApprovalPolicy(data, { ...game, division: 'lower' })).toBe('review');
+    expect(
+      scoreApprovalPolicy({ ...data, plan: { ...data.plan, bracketMode: 'challonge' } }, game),
+    ).toBe('review');
+  });
   it('keeps provisional upcoming visible on occupied stations without claiming it is startable', () => {
     const queue: StationQueue = {
       stationId: 'one',

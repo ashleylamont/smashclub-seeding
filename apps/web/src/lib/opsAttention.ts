@@ -12,6 +12,7 @@ export interface AttentionMatch {
 }
 interface AttentionData {
   plan: { status: string };
+  sharedDispatch?: { capacity: number } | null;
   matches: AttentionMatch[];
   reports: {
     id: string;
@@ -72,6 +73,7 @@ export function opsAttention(data: AttentionData) {
     needsStations:
       !closed &&
       !data.stations.length &&
+      (data.sharedDispatch?.capacity ?? 0) === 0 &&
       data.matches.some((match) => match.status === 'ready' || match.status === 'playing'),
   };
 }
