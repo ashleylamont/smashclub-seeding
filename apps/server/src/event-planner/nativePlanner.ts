@@ -16,6 +16,7 @@ import { getRatingSettings } from '../settings';
 import { loadDoublesRatings } from '../recompute/doubles';
 import { EventPlanStateError, BRACKET_SLOTS, type PlanView } from './contracts';
 import { stripeIntoPools, poolLabel } from './pools';
+import { describePairRating, frozenPairRating } from './pairRatings';
 
 export const extendedNativePlan = (plan: typeof eventPlans.$inferSelect) =>
   plan.competitionFormat === 'doubles' ||
@@ -100,6 +101,17 @@ export async function getExtendedNativePlan(
       currentScore: estimate.conservativeRating,
       currentMean: estimate.rating,
       currentSd: estimate.sd,
+      pairRating:
+        pair && pairFit
+          ? plan.status === 'draft'
+            ? describePairRating(
+                pairFit,
+                pair,
+                plan.eventDate.getTime() / 86400000,
+                plan.usePairRatings,
+              )
+            : frozenPairRating(plan.nativeSeedContext, row.id)
+          : undefined,
       lastPlayedDate: null,
       candidates: [],
     };
@@ -192,6 +204,9 @@ export async function getExtendedNativePlan(
           ? {
               ...pairFit.provenance,
               usePairRatings: plan.usePairRatings,
+              pairs: entries.flatMap((entry) =>
+                entry.pairRating ? [{ entryId: entry.id, rating: entry.pairRating }] : [],
+              ),
               members: entries.flatMap((e) =>
                 (e.memberPlayerIds ?? []).map((playerId) => ({
                   playerId,

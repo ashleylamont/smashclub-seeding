@@ -3,6 +3,7 @@ import { InMemoryStore } from '@rotorsoft/act';
 import { eq } from 'drizzle-orm';
 import {
   eventPlanEntries,
+  eventPlans,
   eventOperationSettings,
   playerRatings,
   players,
@@ -377,6 +378,7 @@ describe('native doubles through shipped APIs', () => {
     expect(corrected.result!.revision).toBe(2);
     expect(corrected.result!.matches).toHaveLength(state.matches.length);
     const after = await loadDoublesRatings(db, Date.parse('2026-10-10'));
+    expect(after.evidence(pair)).toEqual(before.evidence(pair));
     expect(after.rating(pair, at).rating).toBeLessThan(before.rating(pair, at).rating);
     expect(after.provenance.sourceResultIds).not.toContain(resultId);
     expect(after.provenance.sourceResultIds).toContain(corrected.result!.id);
@@ -390,6 +392,26 @@ describe('native doubles through shipped APIs', () => {
     );
     const profile = await caller().public.player({ playerId: members[7]!.id });
     expect(profile && 'doublesResults' in profile ? profile.doublesResults : []).toHaveLength(1);
+  });
+  it('retains pair evidence across a historical identity redirect without giving it to a new partner', async () => {
+    const { planId, members } = await draft(2, 'round_robin', '2026-10-02T00:00:00Z');
+    await prepare(planId);
+    await finishPools(planId);
+    await caller().eventOps.native.finalize({ planId });
+    const [survivor] = await db
+      .insert(players)
+      .values({ canonicalName: `Surviving identity ${crypto.randomUUID()}` })
+      .returning();
+    await caller().admin.mergePlayers({ fromPlayerId: members[0]!.id, intoPlayerId: survivor!.id });
+    const fit = await loadDoublesRatings(db, Date.parse('2026-10-03'));
+    expect(fit.evidence([survivor!.id, members[1]!.id])).toEqual({ playedSets: 1, eventDays: 1 });
+    expect(
+      fit.rating([survivor!.id, members[1]!.id], Date.parse('2026-10-03') / 86400000).adjustment,
+    ).not.toBe(0);
+    expect(fit.evidence([survivor!.id, members[2]!.id])).toEqual({ playedSets: 0, eventDays: 0 });
+    expect(
+      fit.rating([survivor!.id, members[2]!.id], Date.parse('2026-10-03') / 86400000).adjustment,
+    ).toBe(0);
   });
   it('seeds from singles skill rather than ranks, freezes provenance, and withholds later singles results', async () => {
     const { planId, members } = await draft(2, 'round_robin');
@@ -438,6 +460,124 @@ describe('native doubles through shipped APIs', () => {
     const baseline = (await runtime.state(planId)).baseline!;
     expect(baseline.ratingContext.doubles?.model).toBe('whr-pair-residual-v1');
     expect(baseline.ratingContext.doubles?.sourceResultIds).toEqual([]);
+  });
+  it('explains cold-pair seed changes, excludes same-day history, and freezes the exact breakdown', async () => {
+    const { planId, members } = await draft(2, 'round_robin', '2026-09-29T00:00:00Z');
+    const [opponent] = await db
+      .insert(players)
+      .values({ canonicalName: 'Singles baseline opponent' })
+      .returning();
+    const [singles] = await db
+      .insert(tournaments)
+      .values({
+        provider: 'native',
+        name: 'Earlier singles',
+        challongeSlug: `cold_pair_${crypto.randomUUID()}`,
+        eventDate: new Date('2026-09-01'),
+        challongeState: 'complete',
+        syncState: 'synced',
+      })
+      .returning();
+    await db.insert(sets).values(
+      Array.from({ length: 20 }, (_, i) => ({
+        tournamentId: singles!.id,
+        challongeMatchId: i + 1,
+        state: 'complete',
+        p1PlayerId: members[i % 2]!.id,
+        p2PlayerId: opponent!.id,
+        winner: 1,
+        scoresCsv: '2-0',
+      })),
+    );
+    const off = (await caller().admin.eventPlanner.plan({ planId }))!;
+    await caller().admin.eventPlanner.updateNativeFormat({
+      planId,
+      structure: 'round_robin',
+      usePairRatings: true,
+    });
+    const on = (await caller().admin.eventPlanner.plan({ planId }))!;
+    for (let i = 0; i < on.entries.length; i++) {
+      const entry = on.entries[i]!,
+        previous = off.entries[i]!;
+      expect(entry.currentMean).toBe(previous.currentMean);
+      expect(entry.currentScore).toBeLessThan(previous.currentScore!);
+      expect(entry.currentScore).toBeCloseTo(entry.currentMean! - 2 * entry.currentSd!, 10);
+      expect(entry.currentSd! ** 2).toBeCloseTo(
+        previous.currentSd! ** 2 + ((0.25 * 400) / Math.log(10)) ** 2,
+        7,
+      );
+      expect(entry.pairRating).toMatchObject({
+        enabled: true,
+        adjustment: 0,
+        playedSets: 0,
+        eventDays: 0,
+      });
+      expect(previous.pairRating).toMatchObject({ enabled: false, adjustment: 0, adjustmentSd: 0 });
+    }
+    // Different baseline SDs give different seed changes despite identical zero mean adjustments.
+    expect(on.entries[0]!.currentScore! - off.entries[0]!.currentScore!).not.toBeCloseTo(
+      on.entries[1]!.currentScore! - off.entries[1]!.currentScore!,
+      3,
+    );
+    await caller().admin.eventPlanner.freezeRoster({ planId });
+    const frozen = (await caller().admin.eventPlanner.plan({ planId }))!;
+    expect(frozen.entries.map((e) => e.pairRating)).toEqual(on.entries.map((e) => e.pairRating));
+
+    const { planId: earlier } = await caller().admin.eventPlanner.createPlan({
+      competitionFormat: 'doubles',
+      bracketMode: 'native',
+      structure: 'round_robin',
+      name: 'Earlier doubles sealed later',
+      eventDate: '2026-09-28T00:00:00Z',
+      rows: [],
+    });
+    for (let i = 0; i < 2; i++)
+      await caller().admin.eventPlanner.addDoublesPair({
+        planId: earlier,
+        playerId: members[i * 2]!.id,
+        partnerPlayerId: members[i * 2 + 1]!.id,
+      });
+    await prepare(earlier);
+    await finishPools(earlier);
+    await caller().eventOps.native.finalize({ planId: earlier });
+    const pair = [members[0]!.id, members[1]!.id] as const;
+    const sameDay = await loadDoublesRatings(db, Date.parse('2026-09-28T23:00:00Z'));
+    expect(sameDay.evidence(pair).playedSets).toBe(0);
+    expect(sameDay.rating(pair, Date.parse('2026-09-28') / 86400000).adjustment).toBe(0);
+    const previousDay = await loadDoublesRatings(db, Date.parse('2026-09-27'));
+    expect(previousDay.evidence(pair).playedSets).toBe(0);
+    const nextDay = await loadDoublesRatings(db, Date.parse('2026-09-29'));
+    expect(nextDay.evidence(pair)).toEqual({ playedSets: 1, eventDays: 1 });
+    expect(nextDay.rating(pair, Date.parse('2026-09-29') / 86400000).adjustment).not.toBe(0);
+    const later = (await caller().admin.eventPlanner.plan({ planId }))!;
+    expect(later.plan.nativeSeedContext).toEqual(frozen.plan.nativeSeedContext);
+    expect(
+      later.entries.map((e) => [
+        e.snapshotMean,
+        e.snapshotSd,
+        e.snapshotScore,
+        e.divisionSeed,
+        e.pairRating,
+      ]),
+    ).toEqual(
+      frozen.entries.map((e) => [
+        e.snapshotMean,
+        e.snapshotSd,
+        e.snapshotScore,
+        e.divisionSeed,
+        e.pairRating,
+      ]),
+    );
+    const { pairs: _pairs, ...oldContext } = frozen.plan.nativeSeedContext!;
+    await db
+      .update(eventPlans)
+      .set({ nativeSeedContext: oldContext })
+      .where(eq(eventPlans.id, planId));
+    const old = (await caller().admin.eventPlanner.plan({ planId }))!;
+    expect(old.entries.every((e) => e.pairRating === undefined)).toBe(true);
+    expect(old.entries.map((e) => e.snapshotScore)).toEqual(
+      frozen.entries.map((e) => e.snapshotScore),
+    );
   });
 });
 

@@ -160,7 +160,6 @@ function PlanWizard({
       <nav className="planner-steps" aria-label={adopted ? 'Original plan steps' : 'Planner steps'}>
         {steps.map((entry) => (
           <Button
-            variant="plain"
             key={entry.key}
             type="button"
             className={`admin-tab${current === entry.key ? ' active' : ''}`}

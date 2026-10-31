@@ -66,8 +66,57 @@ test('creates fixed doubles pairs in the planner and runs a configured double ro
   await expect(
     page.getByRole('combobox', { name: 'Tournament structure', exact: true }),
   ).toContainText('Open round robin');
+  type PairPlan = {
+    entries: {
+      id: string;
+      currentMean: number;
+      currentScore: number;
+      snapshotScore: number | null;
+      divisionSeed: number | null;
+      pairRating: { adjustment: number; playedSets: number };
+    }[];
+  };
+  const beforePairModel = await query<PairPlan>(page.request, 'admin.eventPlanner.plan', {
+    planId,
+  });
+  await page
+    .getByRole('checkbox', { name: 'Include experimental WHR pair adjustments in seeds' })
+    .click();
+  await expect(
+    page.getByRole('checkbox', { name: 'Include experimental WHR pair adjustments in seeds' }),
+  ).toBeChecked();
+  const ratings = page.getByRole('region', { name: 'Pair ratings', exact: true });
+  await expect(ratings.getByText('Mean adjustment +0', { exact: false })).toHaveCount(4);
+  await expect(ratings.getByText('No prior pair results', { exact: true })).toHaveCount(4);
+  const withPairModel = await query<PairPlan>(page.request, 'admin.eventPlanner.plan', { planId });
+  withPairModel.entries.forEach((entry, i) => {
+    expect(entry.currentMean).toBe(beforePairModel.entries[i]!.currentMean);
+    expect(entry.currentScore).toBeLessThan(beforePairModel.entries[i]!.currentScore);
+    expect(entry.pairRating.adjustment).toBe(0);
+    expect(entry.pairRating.playedSets).toBe(0);
+  });
+  await chooseOption(page.getByRole('combobox', { name: 'Sort pairs' }), 'skill_desc');
+  const expectedStrongest = [...withPairModel.entries].sort(
+    (a, b) => b.currentMean - a.currentMean,
+  )[0]!;
+  const firstPairRow = ratings
+    .getByRole('row')
+    .filter({ has: page.getByRole('cell') })
+    .first();
+  const firstPairName = await firstPairRow.getByRole('cell').first().innerText();
+  // The view changes order without persisting a roster or seed edit.
+  expect(firstPairName).toContain(
+    `Team ${withPairModel.entries.findIndex((e) => e.id === expectedStrongest.id) + 1}`,
+  );
+  expect(
+    (await query<PairPlan>(page.request, 'admin.eventPlanner.plan', { planId })).entries,
+  ).toEqual(withPairModel.entries);
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({
+    path: testInfo.outputPath('native-doubles-pair-evidence-phone.png'),
+    fullPage: true,
+  });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole('button', { name: 'Freeze team seeds', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Generate pools', exact: true })).toBeVisible();

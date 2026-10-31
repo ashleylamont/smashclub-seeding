@@ -75,6 +75,7 @@ export function fitDoubles(input: {
     return averagePairSkill(input.skillAt(pair[0], time), input.skillAt(pair[1], time));
   };
   const sets = input.sets.filter((s) => !s.outcome || s.outcome === 'played');
+  const evidence = new Map<string, { playedSets: number; days: Set<number> }>();
   const seen = new Set<string>();
   const fit = fitWhr({
     config,
@@ -87,6 +88,13 @@ export function fitDoubles(input: {
         throw new Error('A doubles match needs four distinct players.');
       const a = baseline(s.p1, s.time),
         b = baseline(s.p2, s.time);
+      for (const pair of [s.p1, s.p2]) {
+        const key = doublesPairKey(pair);
+        const record = evidence.get(key) ?? { playedSets: 0, days: new Set<number>() };
+        record.playedSets++;
+        record.days.add(s.time);
+        evidence.set(key, record);
+      }
       return {
         p1PlayerId: doublesPairKey(s.p1),
         p2PlayerId: doublesPairKey(s.p2),
@@ -118,6 +126,14 @@ export function fitDoubles(input: {
     iterations: fit.iterations,
     pairs: fit.playerIds(),
     baseline,
+    /** Evidence in this fitted history, not a per-query causal/prefix estimate. */
+    evidence: (pair: Pair) => {
+      const record = evidence.get(doublesPairKey(pair));
+      return {
+        playedSets: record?.playedSets ?? 0,
+        eventDays: record?.days.size ?? 0,
+      };
+    },
     rating,
     winProbability: (a: Pair, b: Pair, time: number) => {
       if (new Set([...a, ...b]).size !== 4)

@@ -47,6 +47,32 @@ describe('doubles strength and whole-history residuals', () => {
     expect(fit.rating(a, 0).adjustment).toBe(0);
     expect(fit.winProbability(a, b, 0)).toBeGreaterThan(0.5);
   });
+  it('adds prior uncertainty, not a learned mean penalty, to a cold pair seed', () => {
+    const fit = fitDoubles({ sets: [], skillAt: () => ({ rating: 1600, sd: 60 }) });
+    const base = fit.baseline(a, 0),
+      adjusted = fit.rating(a, 0);
+    expect(adjusted.rating).toBe(base.rating);
+    expect(adjusted.adjustment).toBe(0);
+    expect(adjusted.adjustmentSd).toBeCloseTo(0.25 * NATURAL_TO_DISPLAY, 10);
+    expect(adjusted.sd ** 2).toBeCloseTo(base.sd ** 2 + (0.25 * NATURAL_TO_DISPLAY) ** 2, 8);
+    expect(adjusted.conservativeRating).toBeCloseTo(base.rating - 2 * adjusted.sd, 10);
+    expect(adjusted.conservativeRating).toBeLessThan(base.conservativeRating);
+    expect(fit.evidence(a)).toEqual({ playedSets: 0, eventDays: 0 });
+  });
+  it('counts only this unordered pair’s played evidence, independently of margin weights', () => {
+    const fit = fitDoubles({
+      sets: [
+        ...history(2, 3, 0).map((s) => ({ ...s, p1Games: 3, p2Games: 0 })),
+        ...history(1, 2, 7),
+        { ...history(1, 1, 8)[0]!, outcome: 'forfeit' },
+      ],
+      skillAt: equal,
+    });
+    expect(fit.evidence(a)).toEqual({ playedSets: 5, eventDays: 2 });
+    expect(fit.evidence(['b', 'a'])).toEqual(fit.evidence(a));
+    expect(fit.evidence(['a', 'e'])).toEqual({ playedSets: 0, eventDays: 0 });
+    expect(fit.rating(['a', 'e'], 9).adjustment).toBe(0);
+  });
   it('recovers an independently solved MAP optimum with a known baseline advantage', () => {
     const tau = 0.4,
       offset = 200 / NATURAL_TO_DISPLAY;
