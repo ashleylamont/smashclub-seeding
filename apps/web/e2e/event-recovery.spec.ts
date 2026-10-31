@@ -293,10 +293,10 @@ for (const actor of ['guest', 'player']) {
     else {
       await signIn(page.request, 'player@smashclub.dev');
       await page.goto(`/play/${night.planId}`);
-      await chooseOption(page.getByLabel('Match view', { exact: true }), 'all');
+      await chooseOption(page.getByLabel('Match view', { exact: true }), 'matches');
     }
     const submitName =
-      actor === 'guest' ? 'Submit score for TO approval' : 'Submit score for approval';
+      actor === 'guest' ? 'Submit score for TO approval' : 'Submit score for TO approval';
     const match = night.overview.matches[0]!;
     const card = guestCard(page, match);
     await card.getByRole('spinbutton').nth(0).fill('2');

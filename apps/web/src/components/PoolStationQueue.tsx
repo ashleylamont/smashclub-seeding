@@ -387,8 +387,11 @@ export function PoolRoundSchedule({
           className="pool-flow-round-group"
           key={pool.poolKey}
         >
-          <a className="pool-flow-share" href={poolPath(`/live/${data.plan.id}`, pool.poolKey)}>
-            Open this pool’s board →
+          <a
+            className="pool-flow-share"
+            href={`${poolPath(`/play/${data.plan.id}`, pool.poolKey)}#event-pools`}
+          >
+            Open this pool →
           </a>
           <div className="pool-flow-round-grid">
             {pool.rounds.map((round) => (

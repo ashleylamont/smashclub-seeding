@@ -53,9 +53,10 @@ export function eventPlayers(
     };
   });
 }
-export function useDevicePlayer(planId: string) {
+export function useDevicePlayer(planId: string, initialPlayer?: string) {
   const key = `nemesis:player-filter:${planId}`;
   const [selected, setSelected] = useState(() => {
+    if (initialPlayer !== undefined) return initialPlayer;
     try {
       return localStorage.getItem(key) ?? '';
     } catch {

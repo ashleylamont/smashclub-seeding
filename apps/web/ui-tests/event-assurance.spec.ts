@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { AxeBuilder } from '@axe-core/playwright';
-import { mockEvent, PLAN_ID, PLAYER_NAME, ready } from './fixtures';
+import { bracketCaptureOptions, mockEvent, PLAN_ID, PLAYER_NAME, ready } from './fixtures';
 
 async function accessible(page: Parameters<typeof mockEvent>[0]) {
   expect(
@@ -60,12 +60,12 @@ test('light populated sixteen-slot bracket retains all rounds, byes and unresolv
   // Collect both viewport diffs; every mismatch still fails this test and CI.
   await expect
     .soft(brackets.locator('.event-bracket').first())
-    .toHaveScreenshot('wide-bracket-light.png');
+    .toHaveScreenshot('wide-bracket-light.png', bracketCaptureOptions);
   await page.setViewportSize({ width: 390, height: 844 });
   await accessible(page);
   await expect
     .soft(brackets.locator('.event-bracket').first())
-    .toHaveScreenshot('wide-bracket-light-phone.png');
+    .toHaveScreenshot('wide-bracket-light-phone.png', bracketCaptureOptions);
   const rounds = brackets.locator('.event-bracket-rounds').first();
   await rounds.focus();
   await expect(rounds).toBeFocused();

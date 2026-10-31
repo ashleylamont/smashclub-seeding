@@ -101,9 +101,7 @@ test('native event progresses from pools through reviewed finals to public club 
   await page.goto(`/live/${planId}`);
   await expect(page.getByRole('heading', { name })).toBeVisible();
   await expect(page.locator('.event-pool')).toHaveCount(4);
-  await expect(
-    page.getByRole('link', { name: 'Player area · my matches & scores →' }),
-  ).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Find my matches', exact: true })).toBeVisible();
   type Pool = {
     poolIndex: number;
     members: { playerId: string }[];

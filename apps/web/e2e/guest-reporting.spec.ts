@@ -118,7 +118,7 @@ test('scannable guest QR accepts anonymous and unlinked reports, keeps approval 
     });
     return jsQR(new Uint8ClampedArray(pixels.data), pixels.width, pixels.height)?.data ?? '';
   };
-  await expect.poll(decode).toContain(`/guest/${planId}#token=`);
+  await expect.poll(decode).toContain(`/play/${planId}#token=`);
   const invitationUrl = await decode();
   const invitationToken = new URL(invitationUrl).hash.slice('#token='.length);
   const anonymous = await browser.newContext({ baseURL, viewport: { width: 390, height: 844 } });
@@ -237,7 +237,7 @@ test('scannable guest QR accepts anonymous and unlinked reports, keeps approval 
     expect(
       jsQR(new Uint8ClampedArray(overlayPixels.data), overlayPixels.width, overlayPixels.height)
         ?.data,
-    ).toContain(`/guest/${planId}#token=`);
+    ).toContain(`/play/${planId}#token=`);
     await overlay.screenshot({
       path: testInfo.outputPath('guest-qr-and-result-flash.png'),
       omitBackground: true,
@@ -333,7 +333,7 @@ test('organisers print a permanent station QR before publication', async ({
     };
   });
   const link = jsQR(Uint8ClampedArray.from(pixels.bytes), pixels.width, pixels.height)?.data;
-  expect(link).toContain(`/guest/${planId}?station=${stationId}#token=persistent.`);
+  expect(link).toContain(`/play/${planId}?station=${stationId}#token=persistent.`);
   await page.emulateMedia({ media: 'print' });
   const allPdf = await page.pdf({ format: 'A4', preferCSSPageSize: true });
   expect(allPdf.toString('latin1').match(/\/Type \/Page\b/g)).toHaveLength(2);

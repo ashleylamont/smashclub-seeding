@@ -185,12 +185,18 @@ test('guests and signed-in attendees run a pool station and immediately advance 
     await expect(page.locator('.broadcast-deck')).toContainText('provisional');
     await expect(page.getByRole('button', { name: 'We’re here — start match' })).toHaveCount(0);
     await attendeeCard.getByRole('button', { name: 'Confirm result', exact: true }).click();
-    await expect(attendeeCard).toContainText('Confirmed: 2 – 0');
+    await expect(attendeeCard).toContainText('Confirmed result: 2 – 0');
     await page.goto(`/live/${planId}?pool=upper%3A0`);
     await expect(page.getByLabel('Your pool')).toHaveAttribute('data-value', 'upper:0');
     await page.locator('.pool-flow-round-group .ui-disclosure-trigger').click();
     await expect(page.locator('.pool-flow-round-grid')).toContainText('Resting:');
-    await expect(page.getByRole('button', { name: 'We’re here — start match' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'We’re here — start match' })).toHaveCount(2);
+    for (const name of ['Pool setup 1', 'Pool setup 2']) {
+      const setup = page
+        .locator('article.pool-flow-station')
+        .filter({ has: page.getByRole('heading', { name, exact: true }) });
+      await expect(setup.getByRole('button', { name: 'We’re here — start match' })).toBeEnabled();
+    }
   } finally {
     await guest.close();
     await attendee.close();

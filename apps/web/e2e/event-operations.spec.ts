@@ -125,14 +125,14 @@ test('rehearsal: two TOs, score approval, station safety, public board and OBS',
     await playerPage.goto(`/play/${planId}`);
     await chooseOption(
       playerPage.getByRole('combobox', { name: 'Match view', exact: true }),
-      'all',
+      'matches',
     );
     const playerCard = playerPage
       .locator('article.ops-match:visible')
       .filter({ hasText: playing.label });
     await playerCard.locator('input[type="number"]').nth(0).fill('2');
     await playerCard.locator('input[type="number"]').nth(1).fill('0');
-    await playerCard.getByRole('button', { name: 'Submit score for approval' }).click();
+    await playerCard.getByRole('button', { name: 'Submit score for TO approval' }).click();
     await expect(playerCard).toContainText(/submitted|pending/i);
     const pendingSnapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
     expect(pendingSnapshot.matches.find((match) => match.id === playing.id)!.status).toBe(
@@ -142,7 +142,7 @@ test('rehearsal: two TOs, score approval, station safety, public board and OBS',
     await expect(report).toBeVisible();
     await report.getByRole('button', { name: 'Approve', exact: true }).click();
     await expect(page.getByRole('status')).toContainText('Player score approved');
-    await expect(playerCard).toContainText('Confirmed: 2');
+    await expect(playerCard).toContainText('Confirmed result: 2');
 
     for (const message of [
       'Rehearsal notice oldest',
@@ -154,7 +154,11 @@ test('rehearsal: two TOs, score approval, station safety, public board and OBS',
     }
     await page.goto(`/live/${planId}`);
     await expect(page.getByRole('heading', { name: plan!.name })).toBeVisible();
-    await expect(page.locator('.app-nav')).toHaveCount(0);
+    await expect(page.locator('.app-nav')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Smash Club', exact: true })).toHaveAttribute(
+      'href',
+      '/',
+    );
     await expect(page.locator('.event-announcements')).toContainText('Rehearsal notice newest');
     await expect(page.locator('.event-announcements')).not.toContainText('Rehearsal notice oldest');
     await expect(page.getByRole('heading', { name: 'Confirmed pool standings' })).toBeVisible();
@@ -274,12 +278,12 @@ test('player score draft survives a station dispatch without changing its score 
     await playerPage.goto(`/play/${planId}`);
     await chooseOption(
       playerPage.getByRole('combobox', { name: 'Match view', exact: true }),
-      'all',
+      'matches',
     );
     const card = playerPage.locator('article.ops-match:visible').filter({ hasText: match.label });
     await card.locator('input[type="number"]').nth(0).fill('2');
     await card.locator('input[type="number"]').nth(1).fill('1');
-    const submit = card.getByRole('button', { name: 'Submit score for approval' });
+    const submit = card.getByRole('button', { name: 'Submit score for TO approval' });
     await expect(submit).toBeEnabled();
     await mutateData(page.request, 'eventOps.updateMatch', {
       matchId: match.id,
@@ -330,12 +334,12 @@ test('a rejected player score starts a new request even when its scores are unch
     await playerPage.goto(`/play/${planId}`);
     await chooseOption(
       playerPage.getByRole('combobox', { name: 'Match view', exact: true }),
-      'all',
+      'matches',
     );
     const card = playerPage.locator('article.ops-match:visible').filter({ hasText: match.label });
     await card.locator('input[type="number"]').nth(0).fill('2');
     await card.locator('input[type="number"]').nth(1).fill('1');
-    await card.getByRole('button', { name: 'Submit score for approval' }).click();
+    await card.getByRole('button', { name: 'Submit score for TO approval' }).click();
     await expect(card).toContainText('Score submitted for TO approval');
     const [first] = await query<Report[]>(playerContext.request, 'eventOps.myReports', { planId });
     expect(first!.status).toBe('pending');
@@ -347,7 +351,7 @@ test('a rejected player score starts a new request even when its scores are unch
     // Deliberately do not edit either score: the new-attempt action must replace the request ID.
     await expect(card.locator('input[type="number"]').nth(0)).toHaveValue('2');
     await expect(card.locator('input[type="number"]').nth(1)).toHaveValue('1');
-    await card.getByRole('button', { name: 'Submit score for approval' }).click();
+    await card.getByRole('button', { name: 'Submit score for TO approval' }).click();
     await expect(card).toContainText('Score submitted for TO approval');
     const reports = await query<Report[]>(playerContext.request, 'eventOps.myReports', { planId });
     expect(reports).toHaveLength(2);

@@ -1,208 +1,38 @@
-import { Button } from './ui/Button';
-import { ScoreFields, type ScoreInputValue } from './ScoreFields';
-import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { CompletedScoreReport, type ResultSubmission } from './CompletedScoreReport';
+import { EventScoreCard } from './EventScoreCard';
 import type { GuestSession } from '../lib/guestReporting';
-import type { ScoreApprovalPolicy } from '../lib/poolFlow';
 import { trpc } from '../lib/trpc';
+import type { ComponentProps } from 'react';
+export type { GuestMatch } from './EventScoreCard';
 
-type GuestData = Awaited<ReturnType<typeof trpc.eventOps.guests.matches.mutate>>;
-export type GuestMatch = GuestData['matches'][number];
-
+/** Compatibility adapter for callers with a venue guest pass. */
 export function GuestScoreCard({
   planId,
   session,
-  match,
-  report,
-  status,
-  station,
-  approvalPolicy,
-}: {
+  ...props
+}: Omit<ComponentProps<typeof EventScoreCard>, 'enabled' | 'onSubmit'> & {
   planId: string;
   session: GuestSession | null;
-  match: GuestMatch;
-  report?: GuestData['reports'][number];
-  status: string;
-  station?: string;
-  approvalPolicy: ScoreApprovalPolicy;
 }) {
   const cache = useQueryClient();
-  const [score1, setScore1] = useState<ScoreInputValue>(0);
-  const [score2, setScore2] = useState<ScoreInputValue>(0);
-  const [revision, setRevision] = useState(match.revision);
-  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
-  const [pending, setPending] = useState(false);
-  const [sent, setSent] = useState<'approved' | 'pending' | null>(null);
-  const [retryRejected, setRetryRejected] = useState(false);
-  const [error, setError] = useState('');
-  const stale = revision !== match.revision;
-  const reset = () => {
-    setRevision(match.revision);
-    setScore1(0);
-    setScore2(0);
-    setRequestId(crypto.randomUUID());
-    setError('');
-    setSent(null);
-  };
-  const reportResult = async (input: ResultSubmission) => {
-    if (!session) throw new Error('Scan a guest reporting QR to report a score.');
-    const result = await trpc.eventOps.guests.submit.mutate({
-      planId,
-      sessionToken: session.sessionToken,
-      matchId: match.id,
-      ...input,
-    });
-    await Promise.all([
-      cache.invalidateQueries({ queryKey: ['guestMatches', planId] }),
-      cache.invalidateQueries({ queryKey: ['eventOpsPublic', planId] }),
-    ]);
-    return result;
-  };
-  const submit = async () => {
-    if (!session || score1 === '' || score2 === '') return;
-    setPending(true);
-    setError('');
-    try {
-      const result = await trpc.eventOps.guests.submit.mutate({
-        planId,
-        sessionToken: session.sessionToken,
-        matchId: match.id,
-        expectedRevision: revision,
-        requestId,
-        score1,
-        score2,
-      });
-      setSent(result.status === 'approved' ? 'approved' : 'pending');
-      setRetryRejected(false);
-      await Promise.all([
-        cache.invalidateQueries({ queryKey: ['guestMatches', planId] }),
-        cache.invalidateQueries({ queryKey: ['eventOpsPublic', planId] }),
-      ]);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not send the score. Try again.');
-    } finally {
-      setPending(false);
-    }
-  };
   return (
-    <article className="card ops-match">
-      <div className="ops-match-meta">
-        <span>
-          {match.division} · {match.label}
-        </span>
-        <span>
-          {status}
-          {station ? ` · ${station}` : ''}
-        </span>
-      </div>
-      <h3>
-        {match.player1Name} vs {match.player2Name}
-      </h3>
-      {report && (
-        <p className="guest-report-status" role="status">
-          Your report: {report.score1} – {report.score2} ·{' '}
-          {report.status === 'approved'
-            ? 'Confirmed result'
-            : report.status === 'rejected'
-              ? 'Rejected by a TO'
-              : report.isDispute
-                ? 'Different score awaiting TO review'
-                : 'Awaiting TO approval'}
-        </p>
-      )}
-      {match.status === 'complete' ? (
-        <CompletedScoreReport
-          match={match}
-          enabled={Boolean(session)}
-          allowReports={approvalPolicy !== 'review' && match.outcome === 'played'}
-          onSubmit={reportResult}
-          pendingReport={report?.status === 'pending' ? report : undefined}
-        />
-      ) : match.status === 'blocked' ? (
-        <p>Waiting for earlier matches or a TO before this match can start.</p>
-      ) : !session ? (
-        <p>Scan a guest reporting QR to start matches and report scores.</p>
-      ) : report?.status === 'pending' || (sent && !report) ? (
-        <p>{sent === 'approved' ? 'Result confirmed.' : 'Thanks! A TO will review your score.'}</p>
-      ) : report?.status === 'approved' ? (
-        <p>Your report has been approved. Ask a TO if this match needs a correction.</p>
-      ) : report?.status === 'rejected' && !retryRejected ? (
-        <>
-          <p>Check the score with a TO before submitting again.</p>
-          <Button
-            onClick={() => {
-              reset();
-              setRetryRejected(true);
-            }}
-          >
-            Start a new report
-          </Button>
-        </>
-      ) : (
-        <form
-          className="ops-score-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void submit();
-          }}
-        >
-          {stale && (
-            <div role="alert">
-              <p>
-                Match details changed. Reload the match and check the players before submitting.
-              </p>
-              <Button type="button" onClick={reset}>
-                Reload match
-              </Button>
-            </div>
-          )}
-          <ScoreFields
-            player1Name={match.player1Name}
-            player2Name={match.player2Name}
-            score1={score1}
-            score2={score2}
-            onScore1={(value) => {
-              setScore1(value);
-              setRequestId(crypto.randomUUID());
-            }}
-            onScore2={(value) => {
-              setScore2(value);
-              setRequestId(crypto.randomUUID());
-            }}
-          />
-          <Button
-            type="submit"
-            pending={pending}
-            variant="primary"
-            disabled={
-              pending ||
-              stale ||
-              score1 === '' ||
-              score2 === '' ||
-              score1 === score2 ||
-              !match.player1Id ||
-              !match.player2Id ||
-              !['ready', 'playing'].includes(match.status)
-            }
-          >
-            {approvalPolicy !== 'review' ? 'Confirm result' : 'Submit score for TO approval'}
-          </Button>
-          <p className="muted">
-            {approvalPolicy === 'event'
-              ? 'Results advance immediately. Later disagreements go to TO review.'
-              : approvalPolicy === 'pool'
-                ? 'This pool confirms submitted results immediately. Check the players and final score together.'
-                : 'A TO checks this score before it becomes a confirmed result.'}{' '}
-            For forfeits, byes or corrections, ask a TO.
-          </p>
-        </form>
-      )}
-      {error && (
-        <p className="error-text" role="alert">
-          {error}
-        </p>
-      )}
-    </article>
+    <EventScoreCard
+      {...props}
+      enabled={Boolean(session)}
+      onSubmit={async (input) => {
+        if (!session) throw new Error('Scan a guest reporting QR to report a score.');
+        const result = await trpc.eventOps.guests.submit.mutate({
+          planId,
+          sessionToken: session.sessionToken,
+          matchId: props.match.id,
+          ...input,
+        });
+        await Promise.all([
+          cache.invalidateQueries({ queryKey: ['guestMatches', planId] }),
+          cache.invalidateQueries({ queryKey: ['eventOpsPublic', planId] }),
+        ]);
+        return result;
+      }}
+    />
   );
 }

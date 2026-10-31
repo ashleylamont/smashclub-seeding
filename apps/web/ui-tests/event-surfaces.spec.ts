@@ -1,7 +1,7 @@
 import { chooseOption, clearInput } from '../test-support/controls';
 import { expect, test } from '@playwright/test';
 import { AxeBuilder } from '@axe-core/playwright';
-import { mockEvent, PLAN_ID, PLAYER_NAME, ready } from './fixtures';
+import { bracketCaptureOptions, mockEvent, PLAN_ID, PLAYER_NAME, ready } from './fixtures';
 
 test('phone reporting preserves input, revision and pending feedback', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -174,6 +174,6 @@ test('phone bracket preserves bye, unresolved pairing and long alias labels', as
   await expect(brackets.getByRole('heading', { name: 'Final', exact: true })).toBeVisible();
   await ready(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await expect(brackets).toHaveScreenshot('bracket-phone.png');
+  await expect(brackets).toHaveScreenshot('bracket-phone.png', bracketCaptureOptions);
   expect(fixture.unexpected).toEqual([]);
 });

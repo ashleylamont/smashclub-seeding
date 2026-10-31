@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
 import publicSnapshot from './fixtures/snapshot.json' with { type: 'json' };
 import extra from './fixtures/overview-extra.json' with { type: 'json' };
 import guestSettings from './fixtures/guest-settings.json' with { type: 'json' };
@@ -8,6 +9,12 @@ type HistoryPage = Awaited<ReturnType<typeof trpc.eventOps.live.history.query>>;
 
 export const PLAN_ID = publicSnapshot.plan.id;
 export const PLAYER_NAME = 'Alex with a long tournament alias';
+// Component captures can extend beyond the viewport. Keep the site navigation
+// in document flow so its sticky position cannot obscure the draw halfway down
+// the image. Page captures and navigation/accessibility checks keep normal CSS.
+export const bracketCaptureOptions = {
+  stylePath: fileURLToPath(new URL('./bracket-capture.css', import.meta.url)),
+};
 export type FixtureOptions = {
   role?: 'admin' | 'player';
   idle?: boolean;

@@ -1,3 +1,4 @@
+import { useReportFeedback } from '../lib/useReportFeedback';
 import { Button } from './ui/Button';
 import { ScoreFields, type ScoreInputValue } from './ScoreFields';
 import { useState } from 'react';
@@ -20,6 +21,7 @@ export type ResultSubmission = {
 export function CompletedScoreReport({
   match,
   enabled,
+  reportingIdentity = 'reporter',
   allowReports,
   onSubmit,
   pendingReport,
@@ -27,6 +29,7 @@ export function CompletedScoreReport({
 }: {
   match: RecordedMatch;
   enabled: boolean;
+  reportingIdentity?: string;
   allowReports: boolean;
   pendingReport?: { score1: number | null; score2: number | null; isDispute: boolean };
   onSubmit: (input: ResultSubmission) => Promise<{ isDispute: boolean }>;
@@ -37,13 +40,12 @@ export function CompletedScoreReport({
   const [score2, setScore2] = useState<ScoreInputValue>(match.score2 ?? 0);
   const [revision, setRevision] = useState(match.revision);
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
-  const [pending, setPending] = useState(false);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const { pending, message, error, begin, update } = useReportFeedback(reportingIdentity);
+  const showEditor = editing && !message;
   const submit = async (first: ScoreInputValue, second: ScoreInputValue) => {
     if (first === '' || second === '') return;
-    setPending(true);
-    setError('');
+    if (!enabled) return;
+    begin();
     try {
       const result = await onSubmit({
         expectedRevision: revision,
@@ -51,17 +53,17 @@ export function CompletedScoreReport({
         score1: first,
         score2: second,
       });
-      setMessage(
-        result.isDispute
+      update({
+        message: result.isDispute
           ? 'Different score sent to the TOs for review. The recorded result stays official until they resolve it.'
           : 'Thanks — your score agrees with the recorded result.',
-      );
-      setEditing(false);
-      setRequestId(crypto.randomUUID());
+      });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not send this report. Try again.');
+      update({
+        error: cause instanceof Error ? cause.message : 'Could not send this report. Try again.',
+      });
     } finally {
-      setPending(false);
+      update({ pending: false });
     }
   };
   return (
@@ -99,8 +101,7 @@ export function CompletedScoreReport({
                       setScore1(match.score1 ?? 0);
                       setScore2(match.score2 ?? 0);
                       setRequestId(crypto.randomUUID());
-                      setError('');
-                      setMessage('');
+                      update({ error: '', message: '' });
                     }}
                   >
                     Reload match
@@ -117,14 +118,15 @@ export function CompletedScoreReport({
                 <Button
                   disabled={pending}
                   onClick={() => {
-                    setEditing(!editing);
-                    setMessage('');
+                    setEditing(!showEditor);
+                    setRequestId(crypto.randomUUID());
+                    update({ message: '' });
                   }}
                 >
                   Report a different score
                 </Button>
               </div>
-              {editing && (
+              {showEditor && (
                 <form
                   className="ops-score-form"
                   onSubmit={(event) => {
