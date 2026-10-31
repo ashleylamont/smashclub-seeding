@@ -150,6 +150,9 @@ export function DispatchSetup({
                   <Button
                     size="small"
                     disabled={disabled || Boolean(station.currentMatchId)}
+                    aria-describedby={
+                      station.currentMatchId ? `station-in-use-${station.id}` : undefined
+                    }
                     onClick={() =>
                       void run({
                         kind: 'resources',
@@ -166,6 +169,12 @@ export function DispatchSetup({
                   >
                     {station.enabled ? `Disable ${station.name}` : `Enable ${station.name}`}
                   </Button>
+                  {station.currentMatchId && (
+                    <p id={`station-in-use-${station.id}`}>
+                      Finish or release the active match before disabling this station. Its match
+                      and result history stay recorded.
+                    </p>
+                  )}
                   <Disclosure title={`Rename ${station.name}`}>
                     <form
                       onSubmit={async (event) => {
