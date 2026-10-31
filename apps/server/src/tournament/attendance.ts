@@ -1,3 +1,4 @@
+import { previewRestoration, restoreEntrant } from './restoration';
 import { isSinglePool, isKnockout } from '@smashclub/shared';
 import { buildRoundRobin } from '@smashclub/engine';
 import { hash, requireFact, resolved, stableId, unconfirmedCall } from './facts';
@@ -9,10 +10,23 @@ const withdrawalWarning = (state: TournamentState) =>
   isKnockout(state.baseline?.structure)
     ? 'Played results are retained; remaining knockout matches advance by forfeit.'
     : 'Played results are retained; remaining pool pairings await explicit forfeit decisions.';
+type AttendancePreview = ReturnType<typeof ordinaryAttendancePreview> & {
+  restoration?: ReturnType<typeof previewRestoration>['restoration'];
+};
 export function attendancePreview(
+  state: TournamentState,
+  input: Parameters<typeof ordinaryAttendancePreview>[1],
+): AttendancePreview {
+  return input.action === 'restore'
+    ? previewRestoration(state, input.playerId, input.reason)
+    : ordinaryAttendancePreview(state, input);
+}
+
+function ordinaryAttendancePreview(
   state: TournamentState,
   input: Omit<Input, 'kind' | 'revisionToken' | 'entrant' | 'reason' | 'approveRedistribution'> & {
     approveRedistribution?: boolean;
+    reason?: string;
   },
 ) {
   const entrant = state.entrants.find((e) => e.playerId === input.playerId);
@@ -118,6 +132,10 @@ export function applyAttendance(state: TournamentState, envelope: CommandEnvelop
     'The event changed since this preview. Review the updated attendance change.',
   );
   requireFact(preview.allowed, preview.issues.join(' '));
+  if (input.action === 'restore') {
+    restoreEntrant(state, envelope, input.playerId);
+    return;
+  }
   const pool = state.pools.find(
     (p) => p.division === preview.division && p.index === preview.poolIndex,
   );

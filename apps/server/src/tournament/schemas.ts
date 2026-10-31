@@ -341,7 +341,7 @@ export const Envelope = z.object({
 });
 /** Persist decided state changes; reducers do not rerun scheduling/draw policy. */
 export const Decision = z.object({
-  version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
   commandId: id,
   actorId: z.string(),
   requestId: z.string(),

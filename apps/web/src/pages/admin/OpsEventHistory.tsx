@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Button } from '../../components/ui/Button';
 import { Disclosure } from '../../components/ui/Disclosure';
@@ -26,13 +26,16 @@ export function OpsEventHistory({
   data,
   active,
   onMatch,
+  attendanceOnly = false,
 }: {
   data: Overview;
   active: boolean;
   onMatch: (id: string) => void;
+  attendanceOnly?: boolean;
 }) {
   const [search, setSearch] = useState('');
-  const [category, setCategory] = useState('all');
+  const [category, setCategory] = useState(attendanceOnly ? 'players' : 'all');
+  const titleId = useId();
   const history = useInfiniteQuery({
     queryKey: ['eventOps', data.plan.id, 'history'],
     initialPageParam: undefined as History['nextCursor'] | undefined,
@@ -44,18 +47,19 @@ export function OpsEventHistory({
     retry: false,
   });
   const entries = history.data?.pages.flatMap((page) => page.entries) ?? [];
-  const filtered = entries.filter(
+  const selected = entries.filter(
     (entry) =>
       (category === 'all' || entry.category === category) &&
       `${entry.title} ${entry.summary} ${entry.actor} ${entry.eventName}`
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
+  const filtered = attendanceOnly ? [...selected].reverse() : selected;
   return (
-    <section className="card ops-history" aria-labelledby="event-history-title">
+    <section className="card ops-history" aria-labelledby={titleId}>
       <div className="ops-history-heading">
         <div>
-          <h3 id="event-history-title">Event history</h3>
+          <h3 id={titleId}>{attendanceOnly ? 'Attendance history' : 'Event history'}</h3>
           <p className="muted">
             Who changed what, and when. Recorded events remain available after the event closes.
           </p>
@@ -79,16 +83,18 @@ export function OpsEventHistory({
       ) : (
         <>
           <div className="ops-history-filters">
-            <label>
-              Change type
-              <Select value={category} onValueChange={setCategory}>
-                {categories.map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </Select>
-            </label>
+            {!attendanceOnly && (
+              <label>
+                Change type
+                <Select value={category} onValueChange={setCategory}>
+                  {categories.map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </Select>
+              </label>
+            )}
             <label>
               Search loaded history
               <Input
@@ -115,15 +121,23 @@ export function OpsEventHistory({
             </Notice>
           )}
           <p className="muted">
-            {filtered.length} of {entries.length} loaded changes shown. Newest first. Filters apply
-            to loaded entries; load older changes to search further back.
+            {filtered.length} of {entries.length} loaded changes shown.{' '}
+            {attendanceOnly
+              ? 'Chronological order, earliest loaded change first.'
+              : 'Newest first.'}{' '}
+            Filters apply to loaded entries; load older changes to search further back.
           </p>
-          <ol className="ops-history-list" aria-label="Recorded event changes">
+          <ol
+            className="ops-history-list"
+            aria-label={attendanceOnly ? 'Recorded attendance changes' : 'Recorded event changes'}
+          >
             {filtered.map((entry) => (
               <HistoryRow
                 key={entry.id}
                 entry={entry}
-                canOpenMatch={data.matches.some((match) => match.id === entry.matchId)}
+                canOpenMatch={
+                  !attendanceOnly && data.matches.some((match) => match.id === entry.matchId)
+                }
                 onMatch={onMatch}
               />
             ))}

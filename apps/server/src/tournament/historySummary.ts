@@ -9,7 +9,11 @@ export type HistoryDescription = {
   matchId: string | null;
 };
 
-function decisionContext(decision: TournamentDecision, state: TournamentState) {
+function decisionContext(
+  decision: TournamentDecision,
+  state: TournamentState,
+  playerName?: (id: string | null) => string | undefined,
+) {
   const command = decision.command;
   const report =
     command.kind === 'review'
@@ -18,7 +22,10 @@ function decisionContext(decision: TournamentDecision, state: TournamentState) {
   const matchId = 'matchId' in command ? command.matchId : (report?.matchId ?? null);
   const match = (decision.after.matches ?? state.matches).find((item) => item.id === matchId);
   const player = (id: string | null) =>
-    state.entrants.find((item) => item.playerId === id)?.name ?? 'Player';
+    state.entrants.find((item) => item.playerId === id)?.name ??
+    state.baseline?.entrants.find((item) => item.playerId === id)?.name ??
+    playerName?.(id) ??
+    'Player';
   const pairing = match
     ? `${match.label}: ${player(match.player1Id)} vs ${player(match.player2Id)}`
     : 'Match';
@@ -32,8 +39,13 @@ function decisionContext(decision: TournamentDecision, state: TournamentState) {
 export function describeDecision(
   decision: TournamentDecision,
   state: TournamentState,
+  playerName?: (id: string | null) => string | undefined,
 ): HistoryDescription {
-  const { command, report, matchId, player, pairing, station } = decisionContext(decision, state);
+  const { command, report, matchId, player, pairing, station } = decisionContext(
+    decision,
+    state,
+    playerName,
+  );
   const result = (
     score1: number | null,
     score2: number | null,
@@ -93,7 +105,7 @@ export function describeDecision(
     case 'attendance':
       return description(
         'players',
-        'Attendance changed',
+        command.action === 'restore' ? 'Entrant restored' : 'Attendance changed',
         `${command.entrant?.name ?? player(command.playerId)} · ${command.action.replaceAll('_', ' ')}${command.reason ? ` · ${command.reason}` : ''}`,
       );
     case 'placements':

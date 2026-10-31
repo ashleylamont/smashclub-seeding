@@ -85,7 +85,7 @@ export const additionalCommands = [
   z.object({ kind: z.literal('cancel'), reason: z.string().trim().min(1).max(200) }),
   z.object({
     kind: z.literal('attendance'),
-    action: z.enum(['add', 'no_show', 'redistribute', 'withdraw']),
+    action: z.enum(['add', 'no_show', 'redistribute', 'withdraw', 'restore']),
     playerId: id,
     division: z.enum(['upper', 'lower']).optional(),
     poolIndex: revision.optional(),
