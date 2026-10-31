@@ -181,11 +181,19 @@ test('guests and signed-in attendees run a pool station and immediately advance 
     await attendeeCard.locator('input[type="number"]').nth(0).fill('2');
     await attendeeCard.locator('input[type="number"]').nth(1).fill('0');
     await page.goto(`/overlay/${planId}?station=${station.id}&pool=upper%3A0&controls=0`);
-    await expect(page.locator('.broadcast-rail-rule')).toContainText('COMING UP');
-    await expect(page.locator('.broadcast-deck')).toContainText('provisional');
+    const recent = page.getByRole('region', { name: 'Recent resolved sets' });
+    await expect(recent.locator('article')).toHaveCount(1);
+    await expect(recent.locator('article')).toHaveAttribute('data-match-id', first.id);
+    await expect(recent.locator('b')).toHaveText(['2', '1']);
+    await expect(recent.locator('small')).toHaveText('Upper · Pool A');
+    await expect(recent).not.toContainText(/COMING UP|PLAY NEXT|provisional/);
+    await expect(page.getByLabel('Current match')).toContainText(next.player1Name);
+    await expect(page.getByLabel('Current match')).toContainText(next.player2Name);
     await expect(page.getByRole('button', { name: 'We’re here — start match' })).toHaveCount(0);
     await attendeeCard.getByRole('button', { name: 'Confirm result', exact: true }).click();
     await expect(attendeeCard).toContainText('Confirmed result: 2 – 0');
+    await expect(recent.locator('article').first()).toHaveAttribute('data-match-id', next.id);
+    await expect(recent.locator('article').first().locator('b')).toHaveText(['2', '0']);
     await page.goto(`/live/${planId}?pool=upper%3A0`);
     await expect(page.getByLabel('Your pool')).toHaveAttribute('data-value', 'upper:0');
     await page.locator('.pool-flow-round-group .ui-disclosure-trigger').click();
@@ -254,7 +262,7 @@ test('a selected pool keeps its last next match visible on an unreserved station
   await expect(queues).not.toContainText('No station is assigned');
 });
 
-test('idle automatic overlay uses the Stage queue and labels later pairings as provisional', async ({
+test('idle overlay retains Stage focus and shows resolved sets without queue predictions', async ({
   page,
 }) => {
   await signIn(page.request, 'admin@smashclub.dev');
@@ -263,6 +271,7 @@ test('idle automatic overlay uses the Stage queue and labels later pairings as p
     'admin.eventPlanner.plans',
   );
   const planId = plans.find((plan) => plan.name === 'Nemesis · Rehearsal Night')!.id;
+  let resolvedIds: string[] = [];
   await page.route('**/api/trpc/eventOps.snapshot*', async (route) => {
     const remote = await route.fetch();
     const payload = await remote.json();
@@ -278,6 +287,27 @@ test('idle automatic overlay uses the Stage queue and labels later pairings as p
       next.player2Name = 'Queued Beta';
       later.player1Name = 'Later Gamma';
       later.player2Name = 'Later Delta';
+      const resolved = data.matches.filter((match: Match) => match.status === 'complete');
+      for (const match of resolved) match.resultUpdatedAt = '2026-01-01T00:00:00Z';
+      Object.assign(resolved[0], {
+        player1Name: 'Finished Alpha',
+        player2Name: 'Finished Beta',
+        score1: 2,
+        score2: 1,
+        winnerId: resolved[0].player1Id,
+        outcome: 'played',
+        resultUpdatedAt: '2026-10-04T00:00:02Z',
+      });
+      Object.assign(resolved[1], {
+        player1Name: 'Finished Gamma',
+        player2Name: 'Finished Delta',
+        score1: 2,
+        score2: 0,
+        winnerId: resolved[1].player1Id,
+        outcome: 'played',
+        resultUpdatedAt: '2026-10-04T00:00:01Z',
+      });
+      resolvedIds = [resolved[0].id, resolved[1].id];
       const stage = data.stations.find((station: { name: string }) => station.name === 'Stage');
       for (const match of data.matches)
         if (match.status === 'playing') {
@@ -302,15 +332,26 @@ test('idle automatic overlay uses the Stage queue and labels later pairings as p
   });
   await page.goto(`/overlay/${planId}?controls=0`);
   await expect(page.locator('.broadcast-topline')).toContainText('Stage');
-  const pairings = page.locator('.broadcast-deck article');
-  await expect(pairings).toHaveCount(2);
-  await expect(pairings.nth(0)).toContainText('Queued Alpha');
-  await expect(pairings.nth(0)).toContainText('Queued Beta');
-  await expect(pairings.nth(0).locator('small')).toContainText('PLAY NEXT');
-  await expect(pairings.nth(0)).not.toContainText('provisional');
-  await expect(pairings.nth(1)).toContainText('Later Gamma');
-  await expect(pairings.nth(1).locator('small')).toContainText('COMING UP · provisional');
+  const recent = page.getByRole('region', { name: 'Recent resolved sets' });
+  const results = recent.locator('article');
+  await expect(results).toHaveCount(2);
+  expect(
+    await results.evaluateAll((cards) => cards.map((card) => card.getAttribute('data-match-id'))),
+  ).toEqual(resolvedIds);
+  await expect(results.nth(0)).toContainText('Finished Alpha');
+  await expect(results.nth(0)).toContainText('Finished Beta');
+  await expect(results.nth(0).locator('b')).toHaveText(['2', '1']);
+  await expect(results.nth(1)).toContainText('Finished Gamma');
+  await expect(results.nth(1).locator('b')).toHaveText(['2', '0']);
+  await expect(results.nth(0).locator('small')).toContainText('Pool');
+  await expect(recent).not.toContainText(
+    /Queued Alpha|Queued Beta|Later Gamma|Later Delta|PLAY NEXT|COMING UP|provisional/,
+  );
+  await expect(page.getByLabel('Current match')).toContainText('AWAITING MATCH');
   await page.goto(`/overlay/${planId}?station=missing-station&controls=0`);
-  await expect(page.locator('.broadcast-wait')).toBeVisible();
-  await expect(page.locator('.broadcast-deck article')).toHaveCount(0);
+  await expect(page.getByLabel('Current match')).toContainText('AWAITING MATCH');
+  await expect(results).toHaveCount(2);
+  expect(
+    await results.evaluateAll((cards) => cards.map((card) => card.getAttribute('data-match-id'))),
+  ).toEqual(resolvedIds);
 });

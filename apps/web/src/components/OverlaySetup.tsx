@@ -120,6 +120,7 @@ export function OverlaySetup({
     <>
       <div
         className={`event-capture${stream ? ' has-local-video' : ''}`}
+        role="region"
         aria-label={stream ? 'Local game capture video' : 'Transparent game capture area'}
       >
         {stream && (
