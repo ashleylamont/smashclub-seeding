@@ -34,6 +34,7 @@ import { AttendeeList } from './AttendeeList';
 import { GuestReportingControls } from './GuestReportingControls';
 import { availableMatches, poolStandings } from '../../lib/eventQueue';
 import { OpsAttentionDesk } from './OpsAttentionDesk';
+import { MainStagePanel } from './MainStagePanel';
 
 export function AdminEventOperationsPage() {
   const search = useSearch({ strict: false }) as { plan?: string };
@@ -76,7 +77,6 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
   const online = useOnlineStatus();
   const confirmAction = useConfirmation();
   const workspace = useOpsWorkspace();
-  const [stageStationId, setStageStationId] = useState('');
   const cache = useQueryClient();
   const { data: session } = authClient.useSession();
   const currentUser = useCurrentUser(session);
@@ -136,9 +136,6 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
     poolFilter,
     search,
   });
-  const stageStation =
-    data.stations.find((station) => station.id === stageStationId) ?? data.stations[0];
-  const stageMatch = data.matches.find((match) => match.id === stageStation?.currentMatchId);
   return (
     <div className="ops-page">
       <header className="ops-heading">
@@ -485,44 +482,13 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
           )}
         </TabPanel>
         <TabPanel value="broadcast">
-          <section className="card ops-main-stage">
-            <h3>Main stage</h3>
-            <label>
-              Station
-              <Select
-                value={stageStationId || data.stations[0]?.id || ''}
-                onValueChange={setStageStationId}
-              >
-                {!data.stations.length && <SelectItem value="">No stations configured</SelectItem>}
-                {data.stations.map((station) => (
-                  <SelectItem key={station.id} value={station.id}>
-                    {station.name}
-                  </SelectItem>
-                ))}
-              </Select>
-            </label>
-            {stageMatch ? (
-              <MatchCard
-                key={stageMatch.id}
-                match={stageMatch}
-                stations={data.stations}
-                disabled={liveDisabled}
-                canStart={callable.has(stageMatch.id)}
-                native={data.plan.bracketMode === 'native'}
-                act={act}
-              />
-            ) : (
-              <p>No match playing at this station.</p>
-            )}
-            <a
-              className="btn"
-              href={`/overlay/${planId}${stageStation ? `?station=${stageStation.id}` : ''}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Open station overlay ↗
-            </a>
-          </section>
+          <MainStagePanel
+            data={data}
+            disabled={liveDisabled}
+            unavailable={event.isError}
+            callable={callable}
+            act={act}
+          />
           <OpsAnnouncements data={data} pending={pending} closed={closed} act={act} />
         </TabPanel>
         <TabPanel value="settings">

@@ -24,6 +24,7 @@ import type { Match, QualifierSlot, TournamentState } from './schemas';
 type SqlSnapshot = Awaited<ReturnType<typeof sqlSnapshot>>;
 type QualifierFields = Pick<Match, 'player1Qualifier' | 'player2Qualifier' | 'qualificationBlocks'>;
 export type EventSnapshot = Omit<SqlSnapshot, 'placements' | 'matches' | 'nativeBrackets'> & {
+  broadcastSides?: TournamentState['broadcastSides'];
   matches: (SqlSnapshot['matches'][number] & QualifierFields)[];
   nativeBrackets: (SqlSnapshot['nativeBrackets'][number] & { qualifierSlots?: QualifierSlot[] })[];
   placements: (Omit<SqlSnapshot['placements'][number], 'source'> & {
@@ -177,6 +178,7 @@ export async function eventView(
         .where(inArray(tournaments.id, state.publication.tournamentIds))
     : [];
   return {
+    ...(state.broadcastSides ? { broadcastSides: state.broadcastSides } : {}),
     ...buildStationQueues(
       rows,
       sharedDispatch(state) ? [] : stations,
