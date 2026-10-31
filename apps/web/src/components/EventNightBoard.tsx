@@ -1,6 +1,6 @@
 import { EventBracketLane } from './EventBracketLane';
 import { liveBracketLanes } from '../lib/eventBracket';
-import type { LiveMatch } from '../lib/eventDisplay';
+import type { LiveMatch, PoolQualifierSlot } from '../lib/eventDisplay';
 import { poolStandings } from '../lib/eventQueue';
 import { CharacterIcons } from './CharacterIcons';
 
@@ -24,6 +24,7 @@ export type NativeBracketView = {
   complete: boolean;
   winnerId: string | null;
   standings: { playerId: string; place: number }[];
+  qualifierSlots?: PoolQualifierSlot[];
 };
 export function EventStations({
   stations,
@@ -205,6 +206,12 @@ export function EventBrackets({
               <h3>
                 {bracket.division} · {bracket.stage === 'main' ? 'Championship' : 'Consolation'}
               </h3>
+              {bracket.qualifierSlots?.some((slot) => slot.status !== 'resolved') && (
+                <p className="event-live-note">
+                  Qualification is pending. Pool-place labels reserve draw positions; they do not
+                  assign a player or award a bye.
+                </p>
+              )}
               {bracket.complete && (
                 <p>
                   {bracket.winnerId ? (

@@ -1,5 +1,6 @@
 import type { LiveMatch } from './eventDisplay';
 import type { BracketFeed, EliminationLane } from './eliminationLayout';
+import { qualifierLabel } from './qualification';
 
 export function liveBracketFeeds(match: LiveMatch): BracketFeed[] {
   return ([0, 1] as const).flatMap((side) => {
@@ -15,6 +16,8 @@ export function liveBracketSide(match: LiveMatch, side: 0 | 1, labels: Map<strin
   // A completed automatic bye has no pending feeder, even if its source is recorded.
   if (match.status === 'complete' && match.outcome === 'bye') return 'Bye';
   if (match.status === 'complete') return 'No entrant';
+  const qualifier = side === 0 ? match.player1Qualifier : match.player2Qualifier;
+  if (qualifier) return qualifierLabel(qualifier);
   const feed = liveBracketFeeds(match).find((item) => item.side === side);
   return feed
     ? `${feed.outcome === 'loser' ? 'Loser' : 'Winner'} of ${labels.get(feed.matchId) ?? 'previous match'}`
@@ -27,6 +30,14 @@ export function liveBracketStatus(match: LiveMatch) {
     return match.outcome === 'forfeit' ? 'Forfeit' : 'Final result';
   }
   if (match.status === 'playing') return match.called ? 'Called' : 'Playing now';
+  if (match.qualificationBlocks?.some((source) => source.status === 'review_pending'))
+    return 'Qualification under review';
+  if (
+    [match.player1Qualifier, match.player2Qualifier].some(
+      (source) => source && source.status !== 'resolved',
+    )
+  )
+    return 'Waiting for qualifiers';
   if (match.bracketLane === 'reset' && match.status === 'blocked') return 'If needed';
   return match.status === 'blocked' ? 'Waiting for feeders' : 'Upcoming';
 }

@@ -1,4 +1,5 @@
 import { matchPresentation } from '../lib/matchPresentation';
+import { qualificationSummary } from '../lib/qualification';
 import type { LiveMatch } from '../lib/eventDisplay';
 import { useReportFeedback } from '../lib/useReportFeedback';
 import { Button } from './ui/Button';
@@ -113,9 +114,14 @@ export function EventScoreCard({
       ) : presentation.kind === 'no-contest' ? (
         <p>{presentation.result}</p>
       ) : presentation.kind === 'pending' ? (
-        <p>Awaiting opponent. The next entrant has not been confirmed yet.</p>
+        <p>
+          {presentation.result ?? 'Awaiting opponent. The next entrant has not been confirmed yet.'}
+        </p>
       ) : match.status === 'blocked' ? (
-        <p>Waiting for earlier matches or a TO before this match can start.</p>
+        <p>
+          {qualificationSummary(match) ??
+            'Waiting for earlier matches or a TO before this match can start.'}
+        </p>
       ) : !enabled ? (
         <p>{unavailableMessage}</p>
       ) : report?.status === 'pending' || (sent && !report) ? (
