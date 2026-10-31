@@ -18,7 +18,7 @@ Dependencies live in `apps/web/package.json` and the root `pnpm-lock.yaml`. Auth
 
 ## Tokens and ownership
 
-`apps/web/src/styles/tokens.css` owns the palettes, fonts, spacing, type sizes, line heights, control sizes, focus ring, semantic states and layer order. `styles/ui.css` owns shared control, card, chip, feedback, field, dialog and tab styling. `styles/event.css` owns shared player/guest/TO match presentation; public pages no longer import the admin operations stylesheet. Page CSS owns its composition, not replacement control rules.
+`apps/web/src/styles/tokens.css` owns the palettes, fonts, spacing, type sizes, line heights, control sizes, focus ring, semantic states and layer order. `styles/ui.css` owns shared control, card, chip, feedback, field, dialog and tab styling. `styles/event.css` owns shared player/guest/TO match presentation; public pages no longer import the admin operations stylesheet. `styles/event-board.css` supplies the shared app-themed pool/bracket/result panels used by player and TO pages. Standalone OBS keeps its event composition. Page CSS owns its composition, not replacement control rules.
 
 Keep the square arcade identity: dark field or light paper, Oswald headings, Inter reading text, JetBrains Mono numbers. Use `--s1` through `--s7` for spacing and `--fs-*` for type. Both the system light-theme block and explicit light-theme block currently carry the same palette; update them together. Text and control boundaries must remain readable in both themes. State labels, signs and messages carry meaning alongside color.
 

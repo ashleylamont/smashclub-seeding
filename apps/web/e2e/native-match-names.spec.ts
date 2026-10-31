@@ -119,8 +119,8 @@ test('an uneven native draw keeps meaningful names across player, TO, feeders, p
   const run = page.getByRole('tabpanel', { name: 'Run matches' });
   await chooseOption(run.getByRole('combobox', { name: 'View', exact: true }), 'all');
   await expect(run.locator('article.ops-match').filter({ hasText: first.label })).toBeVisible();
-  // The current knockout desk does not expose the print launcher. Verify the
-  // existing print-data consumer against the real API rather than inventing it.
+  // Keep the print-data consumer aligned with the authoritative naming projection.
+  // The TO launcher itself is exercised by native-draw-tools.spec.ts.
   const paper = bracketBackupSheets(await snapshot())[0]!;
   expect(paper.matches.map((m) => m.label).sort()).toEqual(before.map((m) => m.label).sort());
   expect(

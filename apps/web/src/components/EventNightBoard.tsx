@@ -1,3 +1,4 @@
+import '../pages/EventLive.css';
 import { EventBracketLane } from './EventBracketLane';
 import { Progress } from './ui/Progress';
 import { liveBracketLanes } from '../lib/eventBracket';

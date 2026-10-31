@@ -23,6 +23,9 @@
   margin-right: 8px;
 }
 .bracket-backup-page {
+  --text-h: #111;
+  --text: #111;
+  --text-soft: #333;
   box-sizing: border-box;
   margin: 20px auto;
   padding: 28px;
