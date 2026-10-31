@@ -20,7 +20,6 @@ import {
   type TournamentBaseline,
   type TournamentCommand,
   type TournamentDecision,
-  type TournamentCommand,
   type TournamentState,
 } from './schemas';
 export { hash, receiptKey, stableId, TournamentConflict } from './facts';
