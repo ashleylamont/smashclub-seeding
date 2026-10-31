@@ -121,7 +121,9 @@ export function PlayerHubBoard({
               className="btn"
               href={`/events/${encodeURIComponent(data.plan.resultsSlug ?? data.plan.historicalResultsSlug!)}`}
             >
-              Final standings and club results →
+              {data.plan.historicalResultsSlug
+                ? 'View historical results →'
+                : 'Final standings and club results →'}
             </a>
           </p>
         )}
