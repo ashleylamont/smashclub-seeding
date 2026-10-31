@@ -1,4 +1,15 @@
 import { availableMatches } from './eventQueue';
+export interface PoolQualifier {
+  poolId: string;
+  poolIndex: number;
+  division: string;
+  place: number;
+  status: 'pending' | 'resolved' | 'review_pending';
+}
+export interface PoolQualifierSlot extends PoolQualifier {
+  entrantId: string | null;
+  eligibleEntrantIds: string[];
+}
 export interface LiveMatch {
   id: string;
   division: string;
@@ -34,6 +45,9 @@ export interface LiveMatch {
   parent2Outcome?: 'winner' | 'loser';
   parent1MatchId?: string | null;
   parent2MatchId?: string | null;
+  player1Qualifier?: PoolQualifier;
+  player2Qualifier?: PoolQualifier;
+  qualificationBlocks?: PoolQualifier[];
 }
 export function liveSections(matches: readonly LiveMatch[]) {
   return {

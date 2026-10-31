@@ -1,3 +1,5 @@
+import { rollingFinals } from './qualifiers';
+import { previewRollingFinals } from './finalsPreview';
 import { poolOrderStatus } from './poolOrders';
 import { sharedDispatch } from './dispatch';
 import { isKnockout } from '@smashclub/shared';
@@ -293,6 +295,7 @@ export class NativeEventApi {
   }
   async previewFinals() {
     const state = await this.state();
+    if (rollingFinals(state)) return previewRollingFinals(state);
     const trial = structuredClone(state);
     const replacing = Boolean(state.brackets.length);
     trial.brackets = [];

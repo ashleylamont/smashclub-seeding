@@ -1,3 +1,5 @@
+import { drawRollingFinals } from './rollingFinals';
+import { rollingFinals } from './qualifiers';
 import { finalsRoles, isKnockout } from '@smashclub/shared';
 import { instantiateElimination } from './structureAdapter';
 import { buildFormatFinals, buildEliminationTree } from '@smashclub/engine';
@@ -13,6 +15,13 @@ export function advance(state: TournamentState, at: number, commandId: string) {
   for (const match of [...state.matches].sort(
     (a, b) => a.round - b.round || a.id.localeCompare(b.id),
   )) {
+    if (
+      match.qualificationBlocks?.length ||
+      [match.player1Qualifier, match.player2Qualifier].some(
+        (source) => source && source.status !== 'resolved',
+      )
+    )
+      continue;
     const parents = [match.parent1Id, match.parent2Id].filter((id): id is string => Boolean(id));
     if (!parents.every((id) => resolved(byId.get(id)!))) continue;
     if (match.activation) {
@@ -98,6 +107,11 @@ export function drawFinals(state: TournamentState, envelope: CommandEnvelope) {
     'Knockout brackets are chosen at draw lock and have no separate finals draw.',
   );
   requireFact(!state.brackets.length, 'Finals have already been drawn.');
+  if (rollingFinals(state) && state.baseline!.structure !== 'round_robin') {
+    drawRollingFinals(state, envelope);
+    advance(state, envelope.at, envelope.id);
+    return;
+  }
   requireFact(
     state.reports.every((r) => r.status !== 'pending'),
     'Resolve pending reports first.',

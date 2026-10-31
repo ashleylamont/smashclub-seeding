@@ -57,7 +57,7 @@ describe('automatic pool-order facts on isolated PostgreSQL', () => {
         if (
           args[0] === nativeStream(planId) &&
           args[1].some((message) => {
-            if (message.name !== 'DecisionRecordedV2') return false;
+            if (message.name !== 'DecisionRecordedV3') return false;
             const command = Decision.parse(message.data).command;
             return command.kind === 'score' && targets.has(command.matchId);
           })
@@ -97,7 +97,7 @@ describe('automatic pool-order facts on isolated PostgreSQL', () => {
     expect(saved.pools[0]!.orderDecision!.source).toBe('automatic');
     const events = await a.app.query_array({
       stream: nativeStream(planId),
-      names: ['DecisionRecordedV2'],
+      names: ['DecisionRecordedV3'],
       after: -1,
     });
     const placementEvents = events
@@ -129,7 +129,7 @@ describe('automatic pool-order facts on isolated PostgreSQL', () => {
     );
     expect(
       (await nativeEventHistory(restarted, cluster.db, planId)).entries.some(
-        (e) => e.eventName === 'DecisionRecordedV2',
+        (e) => e.eventName === 'DecisionRecordedV3',
       ),
     ).toBe(true);
 

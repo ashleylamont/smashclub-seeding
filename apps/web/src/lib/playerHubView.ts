@@ -55,18 +55,32 @@ export function playerHubView(data: HubData, player = '', selectedPool = '') {
       matchesPool(match, selectedPool) &&
       (!player || ownPools.has(poolKey(match) ?? '')),
   );
-  const nativeBrackets = (data.nativeBrackets ?? []).filter(
+  const assignedBrackets = (data.nativeBrackets ?? []).filter(
     (bracket) =>
-      !player ||
       bracket.entrantIds.some((id) => identities.has(id)) ||
       ownMatches.some((match) => match.nativeBracketId === bracket.id),
   );
+  const pendingBrackets =
+    player && !assignedBrackets.length
+      ? (data.nativeBrackets ?? []).filter((bracket) =>
+          bracket.qualifierSlots?.some(
+            (slot) =>
+              slot.status !== 'resolved' &&
+              slot.eligibleEntrantIds.some((id) => identities.has(id)),
+          ),
+        )
+      : [];
+  const nativeBrackets = player
+    ? (data.nativeBrackets ?? []).filter(
+        (bracket) => assignedBrackets.includes(bracket) || pendingBrackets.includes(bracket),
+      )
+    : (data.nativeBrackets ?? []);
   const divisions = new Set(ownMatches.map((match) => match.division));
   const linked =
     data.plan.bracketMode === 'native'
       ? []
       : (data.brackets ?? []).filter((bracket) => !player || divisions.has(bracket.division));
-  const bracketIds = new Set(nativeBrackets.map((bracket) => bracket.id));
+  const bracketIds = new Set(assignedBrackets.map((bracket) => bracket.id));
   const bracketMatches = data.matches.filter((match) =>
     player
       ? Boolean(match.nativeBracketId && bracketIds.has(match.nativeBracketId))
@@ -103,6 +117,8 @@ export function playerHubView(data: HubData, player = '', selectedPool = '') {
     ownPools,
     pools,
     nativeBrackets,
+    assignedBrackets,
+    pendingBrackets,
     linked,
     sections,
     results,

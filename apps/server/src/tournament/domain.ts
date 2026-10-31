@@ -1,4 +1,5 @@
-import { decidePoolOrders } from './poolOrders';
+import { reconcileRollingFinals, rollingFinals } from './qualifiers';
+import { decidePoolOrders, confirmPoolPlacements } from './poolOrders';
 import { stampReadySince, updateResources, sharedDispatch } from './dispatch';
 import { validateKnockoutBaseline } from './structureValidation';
 import { isKnockout, isSinglePool } from '@smashclub/shared';
@@ -8,7 +9,7 @@ import { sealResults } from './results';
 import { memberIds, changeAvailability } from './entrants';
 import { dispatchMatch } from './scheduling';
 import { additionalDecision, finalsToken, resetFinals, canPauseDraw } from './operations';
-import { drawFinals } from './brackets';
+import { advance, drawFinals } from './brackets';
 import { hash, receiptKey, requireFact, resolved, sameScore } from './facts';
 import { applyScore, recordScore } from './scores';
 import {
@@ -134,6 +135,8 @@ export function captureBaseline(baseline: TournamentBaseline): TournamentState {
 }
 
 function decisionFactVersion(state: TournamentState, kind: string) {
+  if (rollingFinals(state) && !['retire', 'finalize', 'replaceResult'].includes(kind))
+    return 3 as const;
   return state.settings.poolOrderPolicy && !['retire', 'finalize', 'replaceResult'].includes(kind)
     ? (2 as const)
     : (1 as const);
@@ -266,29 +269,9 @@ export function decide(
       next.settings.resourceRevision++;
       break;
     }
-    case 'placements': {
-      const pool = next.pools.find((p) => p.id === command.poolId);
-      requireFact(
-        pool && pool.revision === command.expectedRevision && !next.brackets.length,
-        'Pool placements changed or finals already exist.',
-      );
-      requireFact(
-        command.order.length === pool.entrantIds.length &&
-          new Set(command.order).size === pool.entrantIds.length &&
-          command.order.every((id) => pool.entrantIds.includes(id)),
-        'Placements must contain each pool entrant exactly once.',
-      );
-      const matches = next.matches.filter((m) => m.poolId === pool.id);
-      requireFact(
-        matches.every((m) => resolved(m) && command.matchRevisions[m.id] === m.revision),
-        'Resolve and review current pool results.',
-      );
-      basis[pool.id] = pool.revision;
-      for (const m of matches) basis[m.id] = m.revision;
-      pool.order = command.order;
-      pool.revision++;
+    case 'placements':
+      confirmPoolPlacements(next, command, basis);
       break;
-    }
     case 'drawFinals':
       if (command.revisionToken)
         requireFact(
@@ -317,6 +300,10 @@ export function decide(
       requireFact(additionalDecision(next, envelope, basis), 'Unsupported command.');
   }
   decidePoolOrders(previous, next, envelope, basis);
+  if (rollingFinals(next) && next.lifecycle === 'locked') {
+    reconcileRollingFinals(next, basis);
+    advance(next, envelope.at, envelope.id);
+  }
   stampReadySince(previous, next, envelope.at);
   const after: TournamentDecision['after'] = {};
   for (const field of [

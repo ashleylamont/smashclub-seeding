@@ -1,3 +1,4 @@
+import type { Match as NativeMatch } from '../tournament/schemas';
 import { importedOutcome, remoteValues } from './sourceResult';
 import type { dispatchDesk, SharedDispatchSummary } from '../tournament/dispatch';
 import type { MemberView } from '../tournament/entrants';
@@ -100,7 +101,10 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
     );
   const matches = rows.map((m) => ({
     ...m,
-    ...({} as { player1MemberIds?: string[]; player2MemberIds?: string[] }),
+    ...({} as { player1MemberIds?: string[]; player2MemberIds?: string[] } & Pick<
+      NativeMatch,
+      'player1Qualifier' | 'player2Qualifier' | 'qualificationBlocks'
+    >),
     resourceRevision: 0,
     called: false,
     callLocation: null as string | null,

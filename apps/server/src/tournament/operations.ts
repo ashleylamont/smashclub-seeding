@@ -1,3 +1,4 @@
+import { rollingFinals, requirePoolCorrectionAllowed } from './qualifiers';
 import { beginPlay, changeStation, configureDispatch, moveQueue, sharedDispatch } from './dispatch';
 import { isKnockout } from '@smashclub/shared';
 import { hash, requireFact, resolved, unconfirmedCall } from './facts';
@@ -36,6 +37,7 @@ export function resetFinals(state: TournamentState) {
   );
   state.matches = state.matches.filter((m) => !m.bracketId);
   state.brackets = [];
+  if (rollingFinals(state)) for (const pool of state.pools) delete pool.qualifierRoster;
   state.settings.resourceRevision++;
 }
 export function additionalDecision(
@@ -55,7 +57,10 @@ export function additionalDecision(
       beginPlay(state, command, basis);
       break;
     case 'poolOrders':
-      requireFact(!state.brackets.length, 'Remove finals before changing qualifying orders.');
+      requireFact(
+        !state.brackets.length || rollingFinals(state),
+        'Remove finals before changing qualifying orders.',
+      );
       requireFact(
         new Set(command.pools.map((p) => p.poolId)).size === command.pools.length,
         'Duplicate pool order.',
@@ -76,6 +81,8 @@ export function additionalDecision(
         );
         basis[p.id] = p.revision;
         for (const m of matches) basis[m.id] = m.revision;
+        if (rollingFinals(state) && hash(p.order) !== hash(order.order))
+          requirePoolCorrectionAllowed(state, p.id);
         p.order = order.order;
         p.revision++;
       }
@@ -113,7 +120,7 @@ export function additionalDecision(
       basis[m.id] = m.revision;
       basis.resources = state.settings.resourceRevision;
       m.status = command.status;
-      if (sharedDispatch(state)) m.held = command.status === 'blocked';
+      if (sharedDispatch(state) || rollingFinals(state)) m.held = command.status === 'blocked';
       m.stationId = command.stationId;
       m.blockedReason = command.reason;
       if (sharedDispatch(state) && command.status === 'ready') {
