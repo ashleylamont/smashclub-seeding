@@ -2,11 +2,15 @@
 
 ## Player entry
 
-The main navigation's **Event night** link (`/play`) lists explicitly published events. An unpublished planner draft never appears. An event's player hub (`/play/:planId`) can be opened without an account; the public event board remains at `/live/:planId`.
+The main navigation's **Event night** link (`/play`) lists explicitly published events. An unpublished planner draft never appears. The canonical event hub (`/play/:planId`) opens without an account and contains player matches, progress, station queues, pools, brackets and results. **Find my matches**, **What next**, **Pools**, **Brackets** and **Results** jump within the same event. A bracket without a published draw shows an honest pending message; the hub never infers bracket seeds from pool standings.
+
+Printed `/live/:planId` and `/guest/:planId` links open this same hub and retain pool, player, station and section context. Existing QR invitation fragments reach the hub before redemption and are then removed from the address. New reporting QR links target `/play/:planId`. The `/overlay/:planId` broadcast remains a separate purpose-built capture surface. The site brand links home.
 
 Players can find their pool, station queues, round schedule, standings and recorded results without signing in. Choosing a player for **My matches** only filters this device's view; it does not verify identity or grant permissions.
 
 Starting eligible self-running matches or reporting scores anonymously still requires the event's QR guest pass. A pass already redeemed on this browser is reused in the player hub, including after closing and reopening the browser. Revocation removes reporting access while leaving a published event browseable; scan the current QR to restore access. Private QR invitations are not exposed by the public event directory. The TO controls whether a QR appears on the overlay.
+
+Signed-in attendees and QR guests use the same match selection, score entry, confirmation, dispute and rejected-report recovery UI. A saved venue pass is selected when present, including when signed-in reporting is disabled. If both credentials are available, **Use signed-in reporting** / **Use venue guest pass** switches attribution explicitly. A guest permission polling failure disables guest writes without silently submitting under the signed-in account. Private reports and linked-profile feedback are scoped to the current account or guest pass; changing accounts retains editable score drafts but hides the previous reporter's feedback. Offline recovery and section navigation also retain score drafts, while a changed match revision requires explicit reload before submission.
 
 New guest reporting setups default to one reusable invitation and reporting passes valid until explicitly revoked. Organisers can [print station signs](station-signs.md) before the event. No hourly rescan is needed. **Revoke all guest passes**, disabling guest reporting, or changing invitation mode invalidates all previously issued invitations and passes; generate a new QR afterward. Unpublishing, pausing or closing the event prevents reporting through the normal event lifecycle checks.
 

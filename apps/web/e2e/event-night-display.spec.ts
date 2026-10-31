@@ -16,8 +16,11 @@ test('public night board and user-initiated overlay capture controls', async ({
   await page.goto(`/live/${plan.id}`);
   await expect(page.getByRole('heading', { name: 'Find your station', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Pool progress & standings' })).toBeVisible();
-  await page.getByText('More playing and ready matches', { exact: true }).click();
-  await expect(page.getByRole('heading', { name: /Ready to play/ })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/play/${plan.id}$`));
+  await page.getByRole('link', { name: 'Find my matches', exact: true }).click();
+  await expect(page.locator('article.ops-match').first()).toBeVisible();
+  await page.getByRole('link', { name: 'Results', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Recorded results' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('event-board-mobile.png'), fullPage: true });
   await page.addInitScript(() => {

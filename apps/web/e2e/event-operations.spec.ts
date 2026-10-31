@@ -142,7 +142,7 @@ test('rehearsal: two TOs, score approval, station safety, public board and OBS',
     await expect(report).toBeVisible();
     await report.getByRole('button', { name: 'Approve', exact: true }).click();
     await expect(page.getByRole('status')).toContainText('Player score approved');
-    await expect(playerCard).toContainText('Confirmed: 2');
+    await expect(playerCard).toContainText('Confirmed result: 2');
 
     for (const message of [
       'Rehearsal notice oldest',

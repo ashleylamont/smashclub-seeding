@@ -185,7 +185,7 @@ test('guests and signed-in attendees run a pool station and immediately advance 
     await expect(page.locator('.broadcast-deck')).toContainText('provisional');
     await expect(page.getByRole('button', { name: 'We’re here — start match' })).toHaveCount(0);
     await attendeeCard.getByRole('button', { name: 'Confirm result', exact: true }).click();
-    await expect(attendeeCard).toContainText('Confirmed: 2 – 0');
+    await expect(attendeeCard).toContainText('Confirmed result: 2 – 0');
     await page.goto(`/live/${planId}?pool=upper%3A0`);
     await expect(page.getByLabel('Your pool')).toHaveAttribute('data-value', 'upper:0');
     await page.locator('.pool-flow-round-group .ui-disclosure-trigger').click();

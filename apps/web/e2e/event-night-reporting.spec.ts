@@ -136,7 +136,7 @@ test('an unlinked signed-in attendee reports different players and loses the for
       reporting
         .locator('article.ops-match:visible')
         .filter({ hasText: chosen.find((match) => match.id === reports[0]!.matchId)!.label }),
-    ).toContainText('Confirmed: 2 – 1');
+    ).toContainText('Confirmed result: 2 – 1');
     await expect(
       reporting.getByRole('button', { name: 'Submit score for approval' }).first(),
     ).toBeVisible();

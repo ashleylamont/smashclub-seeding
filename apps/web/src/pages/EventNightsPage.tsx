@@ -40,7 +40,6 @@ export function EventNightsPage() {
               <a className="btn btn-primary" href={`/play/${event.id}`}>
                 Open event
               </a>
-              <a href={`/live/${event.id}`}>Public event board →</a>
             </article>
           ))}
         </div>
@@ -55,7 +54,7 @@ export function EventNightsPage() {
                   {new Date(event.eventDate).toLocaleDateString(undefined, { dateStyle: 'medium' })}{' '}
                   · {event.status === 'cancelled' ? 'Cancelled' : 'Finished'}
                 </p>
-                <a href={`/live/${event.id}`}>View results and event board →</a>
+                <a href={`/play/${event.id}#event-results`}>View results →</a>
               </article>
             ))}
           </div>

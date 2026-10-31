@@ -146,9 +146,11 @@ test('signed-out player hub browses without a pass and reuses a venue pass acros
     );
     await expect(visitor.locator('.guest-pass-expiry')).toContainText('valid until revoked');
     await expect.poll(() => new URL(visitor.url()).hash).toBe('');
-    await visitor.getByRole('link', { name: 'Event board →', exact: true }).click();
+    await visitor.getByRole('link', { name: 'Pools', exact: true }).click();
+    await expect(visitor).toHaveURL(new RegExp(`/play/${planId}.*#event-pools$`));
+    await expect(visitor.getByRole('heading', { name: 'Pool progress & standings' })).toBeVisible();
     await expect(visitor.getByLabel('Your pool')).toHaveAttribute('data-value', 'upper:0');
-    await visitor.getByRole('link', { name: 'Player area · my matches & scores →' }).click();
+    await visitor.getByRole('link', { name: 'Find my matches', exact: true }).click();
     await expect(visitor.locator('.guest-pass-expiry')).toContainText('valid until revoked');
     await expect(visitor.getByLabel('Your pool')).toHaveAttribute('data-value', 'upper:0');
     await chooseOption(visitor.getByLabel('Match view', { exact: true }), 'matches');

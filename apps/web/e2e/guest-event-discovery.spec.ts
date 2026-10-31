@@ -156,7 +156,7 @@ test('anonymous navigation finds only published events and an admin can opt into
     await card.getByRole('link', { name: 'Open event' }).click();
     await expect(guest).toHaveURL(new RegExp(`/play/${planId}`));
     await expect(guest.locator('h1')).toBeVisible();
-    await expect(guest.getByRole('link', { name: 'Event board →' })).toBeVisible();
+    await expect(guest.getByRole('link', { name: 'Pools', exact: true })).toBeVisible();
     await page.getByRole('tab', { name: 'Settings', exact: true }).click();
     await page.getByLabel('Publish live event page', { exact: true }).click();
     await expect(page.getByLabel('Publish live event page', { exact: true })).not.toBeChecked();
