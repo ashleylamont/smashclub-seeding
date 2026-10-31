@@ -1,4 +1,5 @@
 import { hasCurrentPendingScoreReview } from './scoreReview';
+import { matchNames } from './matchNames';
 import { available, memberIds } from './entrants';
 import { requireFact, resolved } from './facts';
 import type { Match, TournamentState, CommandEnvelope } from './schemas';
@@ -34,6 +35,7 @@ export function dispatchContext(state: TournamentState) {
   }
   return {
     ids,
+    labels: matchNames(state),
     busy,
     occupied,
     pools: new Map(state.pools.map((p) => [p.id, p])),
@@ -83,7 +85,11 @@ export function dispatchAvailability(
     .ids(match)
     .map((id) => context.busy.get(id))
     .find((m) => m && m.id !== match.id);
-  if (busy) add('player_busy', `An entrant or team member is already called in ${busy.label}.`);
+  if (busy)
+    add(
+      'player_busy',
+      `An entrant or team member is already called in ${context.labels.get(busy.id) ?? busy.label}.`,
+    );
   const eligibleStationIds = context.reservedStations
     .filter((station) => !context.occupied.has(station.id))
     .map((station) => station.id);

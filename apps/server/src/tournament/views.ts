@@ -1,4 +1,5 @@
 import { poolFinalsConsumed } from './qualifiers';
+import { matchNames } from './matchNames';
 import { poolOrderStatus, poolPlacementSource } from './poolOrders';
 import {
   dispatchAvailability,
@@ -49,6 +50,7 @@ export function matchRows(state: TournamentState): (typeof eventMatches.$inferSe
     player1MemberIds?: string[];
     player2MemberIds?: string[];
   })[] {
+  const labels = matchNames(state);
   return state.matches
     .filter((m) => !m.skipped)
     .map((m) => ({
@@ -59,7 +61,7 @@ export function matchRows(state: TournamentState): (typeof eventMatches.$inferSe
       division: m.division,
       stage: m.stage,
       poolIndex: state.pools.find((p) => p.id === m.poolId)?.index ?? null,
-      label: m.label,
+      label: labels.get(m.id) ?? m.label,
       player1Id: m.player1Id,
       ...(m.player1Qualifier ? { player1Qualifier: m.player1Qualifier } : {}),
       ...(m.player2Qualifier ? { player2Qualifier: m.player2Qualifier } : {}),
