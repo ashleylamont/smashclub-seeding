@@ -8,6 +8,7 @@ import { PoolFilter } from './PoolStationQueue';
 import { scoreApprovalPolicy } from '../lib/poolFlow';
 import { matchStatus, matchStation } from '../lib/playerMatchView';
 import { nextMeaningfulMatch } from '../lib/matchPresentation';
+import { playerJourney } from '../lib/playerJourney';
 import type { PlayerEventHub, PublicEventSnapshot } from '../lib/usePlayerEventHub';
 
 export function PlayerHubMatches({
@@ -34,7 +35,6 @@ export function PlayerHubMatches({
     playerMatches,
     completed,
     nextMatch,
-    waitingMatch,
     hiddenHistory,
     chooseMatch,
     visible,
@@ -48,6 +48,7 @@ export function PlayerHubMatches({
     playOpen,
     ownReports,
   } = hub;
+  const journey = player ? playerJourney(data, player) : undefined;
   return (
     <section id="my-matches" aria-label="Find my matches and report scores">
       <PlayerMatchFilter
@@ -69,7 +70,11 @@ export function PlayerHubMatches({
         </p>
       )}
       {playerName && (
-        <aside className="card player-event-progress" aria-label="Your progress">
+        <aside
+          className="card player-event-progress"
+          aria-label="Your progress"
+          data-journey-state={journey?.state}
+        >
           <h2>{playerName}’s progress</h2>
           <p>
             {completed} of {playerMatches.length} matches complete
@@ -79,23 +84,20 @@ export function PlayerHubMatches({
             max={Math.max(1, playerMatches.length)}
             aria-label="Your matches completed"
           />
-          <p>
-            {nextMatch ? (
-              <>
-                {matchStatus(data, nextMatch)} · {nextMatch.label}
-                {matchStation(data, nextMatch).name
-                  ? ` · ${matchStation(data, nextMatch).name}`
-                  : ''}
-              </>
-            ) : closed ? (
-              'This event is closed. Your recorded results and standings remain below.'
-            ) : waitingMatch ? (
-              `Waiting for a confirmed pairing · ${waitingMatch.label}. Follow the published draw below.`
-            ) : (
-              'Your scheduled matches are complete. Check your results and published bracket below; pool results do not imply a next-stage seed.'
-            )}
-          </p>
-          {nextMatch && <Button onClick={() => chooseMatch(nextMatch.id)}>Find next match</Button>}
+          <p>{journey?.summary}</p>
+          {journey?.consequences.length ? (
+            <dl className="player-event-next-rounds" aria-label="Possible next rounds">
+              {journey.consequences.map((item) => (
+                <div key={`${item.outcome}:${item.label}`}>
+                  <dt>{item.outcome}</dt>
+                  <dd>{item.label}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+          {nextMatch && journey?.state === 'active' && (
+            <Button onClick={() => chooseMatch(nextMatch.id)}>Find next match</Button>
+          )}
         </aside>
       )}
       <section className="pool-score-selection">

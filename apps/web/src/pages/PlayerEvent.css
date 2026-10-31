@@ -99,3 +99,20 @@
   align-items: center;
   gap: 0.5rem;
 }
+.player-event-next-rounds {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.75rem 0;
+}
+.player-event-next-rounds > div {
+  display: grid;
+  grid-template-columns: 6rem minmax(0, 1fr);
+  gap: 0.5rem;
+}
+.player-event-next-rounds dt {
+  font-weight: 600;
+}
+.player-event-next-rounds dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
