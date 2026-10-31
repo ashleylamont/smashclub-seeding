@@ -78,7 +78,9 @@ for (const width of [390, 1440])
     await page.getByRole('button', { name: 'Full draw & bracket standings' }).click();
     // Pool context survives, but the selected player's assigned finals still appear.
     await expect(
-      page.locator('article.ops-match').filter({ hasText: 'Championship final' }),
+      page
+        .locator('article.ops-match')
+        .filter({ has: page.locator('.ops-match-meta').filter({ hasText: 'Championship final' }) }),
     ).toBeVisible();
     await expect(page.getByLabel('Your pool')).toHaveAttribute(
       'data-value',
