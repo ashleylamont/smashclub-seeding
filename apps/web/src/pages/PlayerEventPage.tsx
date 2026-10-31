@@ -1,6 +1,7 @@
 import { PageHeader } from '../components/ui/PageHeader';
 import { LoadingState, Notice } from '../components/ui/Feedback';
 import { Button } from '../components/ui/Button';
+import { Progress } from '../components/ui/Progress';
 import { useParams } from '@tanstack/react-router';
 import { PlayerHubMatches } from '../components/PlayerHubMatches';
 import { PlayerHubBoard } from '../components/PlayerHubBoard';
@@ -53,100 +54,91 @@ export function PlayerEvent({ planId }: { planId: string }) {
     data?.announcements
       .filter((item) => !item.expiresAt || Date.parse(item.expiresAt) > now)
       .slice(0, 2) ?? [];
-  const progressMatches = data?.matches.filter((match) => matchesPool(match, selectedPool)) ?? [];
-  const progressComplete = progressMatches.filter((match) => match.status === 'complete').length;
-  if (unpublished) return <p role="alert">This event is unavailable or has not been published.</p>;
+  if (unpublished)
+    return <Notice tone="danger">This event is unavailable or has not been published.</Notice>;
   return (
     <div className="ops-page player-event-hub">
-      <PageHeader
-        title={publicEvent.data?.plan.name ?? 'Your event'}
-        description={
-          empty ? 'Event information and results.' : 'Choose your name to find your matches.'
-        }
-      />
-      {data && !empty && (
-        <aside className="player-event-overview" aria-label="Event progress">
-          <span>
-            {selectedPool ? 'Pool progress' : 'Event progress'} · {progressComplete} /{' '}
-            {progressMatches.length} sets complete
-          </span>
-          <progress
-            aria-label="Sets completed"
-            value={progressComplete}
-            max={Math.max(1, progressMatches.length)}
+      <div className="player-event-intro">
+        <PageHeader
+          title={publicEvent.data?.plan.name ?? 'Your event'}
+          description={
+            empty ? 'Event information and results.' : 'Choose your name to find your matches.'
+          }
+        />
+        {data && !empty && <EventProgress data={data} selectedPool={selectedPool} />}
+        <PlayerEventNavigation board={board} />
+        {empty && <EmptyEventMatches historical={Boolean(data?.plan.historicalResultsSlug)} />}
+        {claim && !empty && (
+          <p>
+            Your linked profile: <strong>{claim.playerName}</strong>.
+          </p>
+        )}
+        {announcements.length > 0 && (
+          <aside className="card event-announcements" aria-label="Announcements">
+            <strong>Announcements</strong>
+            <div>
+              {announcements.map((item) => (
+                <p key={item.id}>{item.message}</p>
+              ))}
+            </div>
+          </aside>
+        )}
+        {reporter && reportingVisible && (
+          <p className="muted">
+            {reporter === 'guest'
+              ? 'Reporting with your venue guest pass.'
+              : 'Reporting with your signed-in account.'}
+          </p>
+        )}
+        {session && signedCredential && !empty && (valid || reporter === 'guest') && (
+          <p>
+            <Button
+              size="small"
+              onClick={() => setReportingPreference(reporter === 'guest' ? 'signed-in' : 'guest')}
+            >
+              {reporter === 'guest' ? 'Use signed-in reporting' : 'Use venue guest pass'}
+            </Button>
+          </p>
+        )}
+        {closed && !player && (
+          <Notice>
+            This event is closed. Results remain available; ask a TO about corrections.
+          </Notice>
+        )}
+        {reportingVisible && !playOpen && (
+          <Notice tone="warning">
+            Match reporting opens when the organiser locks or resumes the pool draw.
+          </Notice>
+        )}
+        {reportingVisible && (reporter !== 'signed-in' || redeeming) && (
+          <GuestPassStatus
+            redeeming={redeeming}
+            valid={valid}
+            session={session}
+            now={now}
+            error={matches.isError ? matches.error.message : null}
+            accessDenied={accessDenied}
           />
-        </aside>
-      )}
-      <PlayerEventNavigation board={board} />
-      {empty && <EmptyEventMatches historical={Boolean(data?.plan.historicalResultsSlug)} />}
-      {claim && !empty && (
-        <p>
-          Your linked profile: <strong>{claim.playerName}</strong>.
-        </p>
-      )}
-      {announcements.length > 0 && (
-        <aside className="card event-announcements" aria-label="Announcements">
-          <strong>Announcements</strong>
-          <div>
-            {announcements.map((item) => (
-              <p key={item.id}>{item.message}</p>
-            ))}
-          </div>
-        </aside>
-      )}
-      {reporter && reportingVisible && (
-        <p className="muted">
-          {reporter === 'guest'
-            ? 'Reporting with your venue guest pass.'
-            : 'Reporting with your signed-in account.'}
-        </p>
-      )}
-      {session && signedCredential && !empty && (valid || reporter === 'guest') && (
-        <p>
-          <Button
-            size="small"
-            onClick={() => setReportingPreference(reporter === 'guest' ? 'signed-in' : 'guest')}
+        )}
+        {data && (
+          <p
+            className="event-connection player-event-connection"
+            role={!online || publicEvent.isError ? 'alert' : 'status'}
           >
-            {reporter === 'guest' ? 'Use signed-in reporting' : 'Use venue guest pass'}
-          </Button>
-        </p>
-      )}
-      {closed && (
-        <p className="card">
-          This event is closed. Results remain available; ask a TO about corrections.
-        </p>
-      )}
-      {reportingVisible && !playOpen && (
-        <p className="card">
-          Match reporting opens when the organiser locks or resumes the pool draw.
-        </p>
-      )}
-      {reportingVisible && (reporter !== 'signed-in' || redeeming) && (
-        <GuestPassStatus
-          redeeming={redeeming}
-          valid={valid}
-          session={session}
-          now={now}
-          error={matches.isError ? matches.error.message : null}
-          accessDenied={accessDenied}
-        />
-      )}
-      {data && (
-        <p
-          className="event-connection player-event-connection"
-          role={!online || publicEvent.isError ? 'alert' : 'status'}
-        >
-          {!online || publicEvent.isError
-            ? 'Live updates interrupted. Scores shown may be out of date.'
-            : 'Live event · results refresh automatically'}
-        </p>
-      )}
-      {!data && !unpublished && (
-        <GuestLoadState
-          pending={publicEvent.isPending}
-          onRetry={() => void publicEvent.refetch()}
-        />
-      )}
+            {!online || publicEvent.isError
+              ? 'Live updates interrupted. Scores shown may be out of date.'
+              : closed
+                ? 'Recorded tournament results'
+                : 'Live event · results refresh automatically'}
+          </p>
+        )}
+        {!data && !unpublished && (
+          <GuestLoadState
+            pending={publicEvent.isPending}
+            onRetry={() => void publicEvent.refetch()}
+          />
+        )}
+      </div>
       {data && (
         <>
           {signedIn && !empty && !data.settings.playerReports && !guestCredential && (
@@ -175,15 +167,41 @@ export function PlayerEvent({ planId }: { planId: string }) {
   );
 }
 
+function EventProgress({
+  data,
+  selectedPool,
+}: {
+  data: PublicEventSnapshot;
+  selectedPool: string;
+}) {
+  const matches = data.matches.filter((match) => matchesPool(match, selectedPool));
+  const complete = matches.filter((match) => match.status === 'complete').length;
+  return (
+    <aside className="player-event-overview" aria-label="Event progress">
+      <span>
+        {selectedPool ? 'Pool progress' : 'Event progress'} · {complete} / {matches.length} sets
+        complete
+      </span>
+      <Progress label="Sets completed" value={complete} max={Math.max(1, matches.length)} />
+    </aside>
+  );
+}
+
 function PlayerEventNavigation({ board }: { board: PlayerEventHub['board'] }) {
   return (
     <nav className="player-event-nav" aria-label="Event sections">
-      <a href="#my-matches">Find my matches</a>
-      <a href="#what-next">What next</a>
+      <Button asChild>
+        <a href="#my-matches">Find my matches</a>
+      </Button>
+      <Button asChild>
+        <a href="#what-next">What next</a>
+      </Button>
       {(board?.sections ?? ['pools', 'brackets', 'results']).map((section) => (
-        <a key={section} href={`#event-${section}`}>
-          {{ pools: 'Pools', brackets: 'Brackets', results: 'Results' }[section]}
-        </a>
+        <Button key={section} asChild>
+          <a href={`#event-${section}`}>
+            {{ pools: 'Pools', brackets: 'Brackets', results: 'Results' }[section]}
+          </a>
+        </Button>
       ))}
     </nav>
   );

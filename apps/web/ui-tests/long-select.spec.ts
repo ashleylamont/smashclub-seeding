@@ -34,7 +34,7 @@ test('long player menus scroll to their last option and return to the first by k
   });
   await expect(roster.locator('tbody tr')).toHaveCount(32);
   const attendance = page.locator('section.card').filter({
-    has: page.getByRole('heading', { name: 'Late arrivals and no-shows', exact: true }),
+    has: page.getByRole('heading', { name: 'Attendance changes', exact: true }),
   });
   await chooseOption(attendance.getByRole('combobox', { name: 'Change', exact: true }), 'withdraw');
   const player = attendance.getByRole('combobox', { name: 'Player', exact: true });
