@@ -129,6 +129,7 @@ test('phone reporting works before Start and retains its draft across station di
     ],
   });
   await page.goto(`/play/${PLAN_ID}`);
+  await ready(page);
   const card = page.locator('article.ops-match').filter({ hasText: next.label });
   const score = card.getByRole('spinbutton').nth(0);
   await score.fill('2');
@@ -147,12 +148,16 @@ test('phone reporting works before Start and retains its draft across station di
   await expect(card).toHaveCount(1);
   await expect(card).toContainText(next.player1Name!);
   await expect(score).toHaveValue('2');
-  // Editing the earlier form scrolls away from the station. Preserve the
-  // post-dispatch viewport and focus state used by the station visual baseline.
-  const stationViewport = await page.evaluate(() => ({ x: scrollX, y: scrollY }));
+  // Editing the earlier form scrolls away from the station. Re-anchor after
+  // fonts/layout settle instead of retaining a focus-scroll offset sampled
+  // before asynchronous rendering, which can shift this viewport by pixels.
   await score.fill('0');
   await score.blur();
-  await page.evaluate(({ x, y }) => scrollTo(x, y), stationViewport);
+  await ready(page);
+  await start.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    scrollTo(scrollX, scrollY + box.top + box.height / 2 - innerHeight / 2);
+  });
   await ready(page);
   await accessible(page);
   await expect(page).toHaveScreenshot('next-match-phone.png');
