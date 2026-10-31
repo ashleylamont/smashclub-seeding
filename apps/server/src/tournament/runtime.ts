@@ -32,6 +32,14 @@ import { publishNativeResult, processNativeRatingIntents } from './publication';
 import { captureBaseline, receiptKey, reduceDecision, TournamentConflict } from './domain';
 
 export const nativeStream = (planId: string) => `native:${planId}`;
+const isDecisionEvent = (name: string) =>
+  [
+    'DecisionRecordedV1',
+    'DecisionRecordedV2',
+    'DecisionRecordedV3',
+    'ResultsSealedV1',
+    'PlanRetiredV1',
+  ].includes(name);
 const systemActor = { id: 'native-publication', name: 'Native publication worker' };
 
 async function replayNative(
@@ -48,6 +56,7 @@ async function replayNative(
         break;
       case 'DecisionRecordedV1':
       case 'DecisionRecordedV2':
+      case 'DecisionRecordedV3':
       case 'ResultsSealedV1':
       case 'PlanRetiredV1':
         rebuilt = reduceDecision(rebuilt, Decision.parse(event.data));
@@ -307,12 +316,7 @@ export function createNativeRuntime(
       correctionOf: string | null;
     }[] = [];
     await app.query({ stream: nativeStream(planId) }, (event) => {
-      if (
-        event.name === 'DecisionRecordedV1' ||
-        event.name === 'DecisionRecordedV2' ||
-        event.name === 'ResultsSealedV1' ||
-        event.name === 'PlanRetiredV1'
-      ) {
+      if (isDecisionEvent(event.name)) {
         const data = Decision.parse(event.data);
         audit.push({
           kind: data.kind,

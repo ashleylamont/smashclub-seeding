@@ -18,6 +18,17 @@ const Prize = z.object({
   playerId: id.nullable(),
 });
 export const Division = z.enum(['upper', 'lower']);
+export const QualifierSource = z.object({
+  poolId: id,
+  poolIndex: revision,
+  division: Division,
+  place: revision.min(1),
+  status: z.enum(['pending', 'resolved', 'review_pending']),
+});
+export const QualifierSlot = QualifierSource.extend({
+  entrantId: id.nullable(),
+  eligibleEntrantIds: z.array(id),
+});
 export const LiveMatch = z.object({
   id,
   sourceKey: z.string(),
@@ -40,6 +51,9 @@ export const LiveMatch = z.object({
   bracketRound: revision.optional(),
   player1Id: id.nullable(),
   player2Id: id.nullable(),
+  player1Qualifier: QualifierSource.optional(),
+  player2Qualifier: QualifierSource.optional(),
+  qualificationBlocks: z.array(QualifierSource).optional(),
   status: z.enum(['ready', 'playing', 'complete', 'blocked']),
   outcome: z.enum(['played', 'bye', 'forfeit', 'no_contest']).nullable(),
   score1: revision.nullable(),
@@ -83,6 +97,7 @@ export const Pool = z.object({
   index: revision,
   entrantIds: z.array(id),
   order: z.array(id).nullable(),
+  qualifierRoster: z.array(id).optional(),
   revision,
   // Absent on old facts; these events retain explicit TO placement decisions.
   orderDecision: z
@@ -108,6 +123,7 @@ export const Bracket = z.object({
   division: Division,
   stage: z.enum(['main', 'consolation']),
   entrantIds: z.array(id),
+  qualifierSlots: z.array(QualifierSlot).optional(),
 });
 export const LiveSettings = z.object({
   published: z.boolean(),
@@ -117,6 +133,7 @@ export const LiveSettings = z.object({
   // Absent on old journal facts: their station-bank semantics remain unchanged.
   dispatchMode: z.literal('shared').optional(),
   poolOrderPolicy: z.literal('unique_set_wins_v1').optional(),
+  finalsProgression: z.literal('rolling_pool_places_v1').optional(),
   reservedStationIds: z.array(id).optional(),
   queueOrder: z.array(id).optional(),
   queueRevision: revision.optional(),
@@ -324,7 +341,7 @@ export const Envelope = z.object({
 });
 /** Persist decided state changes; reducers do not rerun scheduling/draw policy. */
 export const Decision = z.object({
-  version: z.union([z.literal(1), z.literal(2)]),
+  version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   commandId: id,
   actorId: z.string(),
   requestId: z.string(),
@@ -348,6 +365,8 @@ export const Decision = z.object({
   receiptKey: z.string(),
   receipt: Receipt,
 });
+export type QualifierSource = z.infer<typeof QualifierSource>;
+export type QualifierSlot = z.infer<typeof QualifierSlot>;
 export type Match = z.infer<typeof LiveMatch>;
 export type TournamentState = z.infer<typeof LiveState>;
 export type TournamentBaseline = z.infer<typeof Baseline>;

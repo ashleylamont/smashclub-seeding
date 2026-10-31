@@ -253,6 +253,13 @@ function PoolCard({
       <div className="pool-worksheet">
         <span className="form-label">Final order</span>
         {pool.orderStatus && <p className="muted">{pool.orderStatus.reason}</p>}
+        {pool.qualifierRoster && (
+          <p className="muted">
+            The finals field is fixed. Later withdrawals use availability or forfeits; returning
+            excluded entrants do not add finals places.
+          </p>
+        )}
+        {pool.orderLockedReason && <p className="muted">{pool.orderLockedReason}</p>}
         {pool.members.some((member) => member.withdrawn) && (
           <p className="muted">
             Include withdrawn entrants in the recorded finishing order. On confirmation, they are
@@ -264,7 +271,7 @@ function PoolCard({
           <label key={place} className="pool-place">
             <span>{ordinal(place + 1)}</span>
             <Select
-              disabled={locked || save.isPending}
+              disabled={locked || save.isPending || Boolean(pool.orderLockedReason)}
               value={order[place] ?? ''}
               aria-label={`${ordinal(place + 1)} place in pool ${pool.label}`}
               onValueChange={(selectedValue) => {
@@ -286,7 +293,7 @@ function PoolCard({
           variant="primary"
           size="small"
           type="button"
-          disabled={locked || !complete || save.isPending}
+          disabled={locked || !complete || save.isPending || Boolean(pool.orderLockedReason)}
           onClick={() => save.mutate()}
           title={
             complete ? 'Save this pool’s finishing order' : 'Every entrant needs exactly one place'

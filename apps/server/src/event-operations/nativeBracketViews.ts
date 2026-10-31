@@ -1,3 +1,4 @@
+import type { QualifierSlot } from '../tournament/schemas';
 import { eq } from 'drizzle-orm';
 import { eventMatches, eventNativeBrackets, type Db } from '@smashclub/db';
 import { isPendingSlot } from './nativeBracketSlots';
@@ -37,6 +38,7 @@ export async function nativeBracketViews(db: Db, planId: string) {
     if (winnerId) standings.push({ playerId: winnerId, place: 1 });
     return {
       ...bracket,
+      ...({} as { qualifierSlots?: QualifierSlot[] }),
       complete,
       winnerId,
       standings: standings.sort((a, b) => a.place - b.place),

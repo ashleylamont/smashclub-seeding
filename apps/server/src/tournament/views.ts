@@ -1,3 +1,4 @@
+import { poolFinalsConsumed } from './qualifiers';
 import { poolOrderStatus, poolPlacementSource } from './poolOrders';
 import {
   dispatchAvailability,
@@ -18,10 +19,13 @@ import type { snapshot as sqlSnapshot } from '../event-operations/service';
 import { getPlan as sqlPlan, type PlanView } from '../event-planner/plans';
 import { resolved } from './facts';
 import { hasCurrentPendingScoreReview } from './scoreReview';
-import type { TournamentState } from './schemas';
+import type { Match, QualifierSlot, TournamentState } from './schemas';
 
 type SqlSnapshot = Awaited<ReturnType<typeof sqlSnapshot>>;
-export type EventSnapshot = Omit<SqlSnapshot, 'placements'> & {
+type QualifierFields = Pick<Match, 'player1Qualifier' | 'player2Qualifier' | 'qualificationBlocks'>;
+export type EventSnapshot = Omit<SqlSnapshot, 'placements' | 'matches' | 'nativeBrackets'> & {
+  matches: (SqlSnapshot['matches'][number] & QualifierFields)[];
+  nativeBrackets: (SqlSnapshot['nativeBrackets'][number] & { qualifierSlots?: QualifierSlot[] })[];
   placements: (Omit<SqlSnapshot['placements'][number], 'source'> & {
     source: 'manual' | 'challonge' | 'automatic' | 'retained';
   })[];
@@ -33,16 +37,17 @@ export type EventSnapshot = Omit<SqlSnapshot, 'placements'> & {
     reason: string;
   }[];
 };
-export function matchRows(state: TournamentState): (typeof eventMatches.$inferSelect & {
-  parent1Outcome?: 'winner' | 'loser';
-  parent2Outcome?: 'winner' | 'loser';
-  bracketLane?: string;
-  bracketRound?: number;
-  called: boolean;
-  callLocation: string | null;
-  player1MemberIds?: string[];
-  player2MemberIds?: string[];
-})[] {
+export function matchRows(state: TournamentState): (typeof eventMatches.$inferSelect &
+  QualifierFields & {
+    parent1Outcome?: 'winner' | 'loser';
+    parent2Outcome?: 'winner' | 'loser';
+    bracketLane?: string;
+    bracketRound?: number;
+    called: boolean;
+    callLocation: string | null;
+    player1MemberIds?: string[];
+    player2MemberIds?: string[];
+  })[] {
   return state.matches
     .filter((m) => !m.skipped)
     .map((m) => ({
@@ -55,6 +60,9 @@ export function matchRows(state: TournamentState): (typeof eventMatches.$inferSe
       poolIndex: state.pools.find((p) => p.id === m.poolId)?.index ?? null,
       label: m.label,
       player1Id: m.player1Id,
+      ...(m.player1Qualifier ? { player1Qualifier: m.player1Qualifier } : {}),
+      ...(m.player2Qualifier ? { player2Qualifier: m.player2Qualifier } : {}),
+      ...(m.qualificationBlocks ? { qualificationBlocks: m.qualificationBlocks } : {}),
       player1MemberIds: state.entrants.find((e) => e.playerId === m.player1Id)?.memberPlayerIds,
       player2MemberIds: state.entrants.find((e) => e.playerId === m.player2Id)?.memberPlayerIds,
       player2Id: m.player2Id,
@@ -110,14 +118,17 @@ export function bracketViews(state: TournamentState) {
       rounds,
       state.baseline!.structure === 'double_elimination',
     );
+    const qualificationPending = b.qualifierSlots?.some((source) => source.status !== 'resolved');
     const complete = roundRobin
       ? Boolean(order && state.matches.every(resolved))
-      : outcome.complete;
+      : outcome.complete && !qualificationPending;
     const winnerId = complete ? (roundRobin ? (order?.[0] ?? null) : outcome.winnerId) : null;
     const standings =
       roundRobin && complete
         ? (order ?? []).map((playerId, i) => ({ playerId, place: i + 1 }))
-        : outcome.standings;
+        : qualificationPending
+          ? []
+          : outcome.standings;
     return {
       ...b,
       eventPlanId: state.baseline!.planId,
@@ -257,6 +268,13 @@ export async function eventView(
           };
         }
         const value = matchAvailability(m, rows, stations, poolSchedules, false, open);
+        if (native.qualificationBlocks?.length) {
+          value.canStart = false;
+          value.reasons.push({
+            code: 'qualification_pending',
+            message: native.blockedReason ?? 'Resolve the relevant pool qualification first.',
+          });
+        }
         if (pendingReviewIds.has(m.id)) {
           value.canStart = false;
           value.reasons.push({
@@ -374,6 +392,11 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
         poolIndex: p.index,
         label: `Pool ${p.index + 1}`,
         placementRevision: String(p.revision),
+        qualifierRoster: p.qualifierRoster,
+        orderLockedReason:
+          p.qualifierRoster && poolFinalsConsumed(state, p.id)
+            ? 'Finals already use this pool order. Called or played opponents and report history stay fixed.'
+            : undefined,
         orderStatus: poolOrderStatus(state, p),
         matchRevisions: state.matches
           .filter((m) => m.poolId === p.id)
@@ -394,7 +417,7 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
     const ordered = state.pools.filter((p) => p.division === division).every((p) => p.order);
     const finishers = pools.flatMap((p) =>
       p.members
-        .filter((m) => !m.withdrawn)
+        .filter((m) => (p.qualifierRoster ? p.qualifierRoster.includes(m.playerId) : !m.withdrawn))
         .sort((a, b) => a.place! - b.place!)
         .map((m, i) => ({ playerId: m.playerId, poolIndex: p.poolIndex, place: i + 1 })),
     );
