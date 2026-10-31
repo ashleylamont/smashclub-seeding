@@ -134,3 +134,22 @@ test('an updated match disables an old forfeit form without discarding its winne
   );
   expect(fixture.submissions).toHaveLength(0);
 });
+
+test('played-result and broadcast live-score drafts survive workspace navigation independently', async ({
+  page,
+}) => {
+  const { card } = await openDesk(page);
+  await card.getByRole('button', { name: 'Finish match', exact: true }).click();
+  await card.getByRole('spinbutton').first().fill('2');
+  await page.getByRole('tab', { name: 'Players', exact: true }).click();
+  await page.getByRole('tab', { name: 'Run matches', exact: true }).click();
+  await expect(card.getByRole('spinbutton').first()).toHaveValue('2');
+  await page.getByRole('tab', { name: 'Broadcast', exact: true }).click();
+  const broadcast = page.getByRole('tabpanel', { name: 'Broadcast', exact: true });
+  await broadcast.getByRole('button', { name: 'Update live score', exact: true }).click();
+  await broadcast.getByRole('spinbutton').first().fill('3');
+  await page.getByRole('tab', { name: 'Run matches', exact: true }).click();
+  await expect(card.getByRole('spinbutton').first()).toHaveValue('2');
+  await page.getByRole('tab', { name: 'Broadcast', exact: true }).click();
+  await expect(broadcast.getByRole('spinbutton').first()).toHaveValue('3');
+});
