@@ -1,0 +1,33 @@
+# Bracket renderer reliability (#80, #88)
+
+Decision: retain the native React renderer and share its pure lane geometry with the double-elimination planning preview. This is a bounded rendering change; it does not choose seeds, generate tournament commands, predict a winner, or create provisional finals before the server supplies a bracket.
+
+## Library comparison (source review, 31 October 2026)
+
+Versions below are the versions declared by the upstream source manifests inspected for this decision, not installed dependencies or claims about the latest npm release. No third-party runtime rendering spike was performed. The same acceptance requirements below apply to any future replacement; the table is an API/compatibility assessment, not a tested ranking of visual quality.
+
+| Candidate | Verified source fit | Integration cost / decision |
+| --- | --- | --- |
+| [brackets-viewer 1.9.1](https://github.com/Drarig29/brackets-viewer.js/blob/main/package.json) | [README](https://github.com/Drarig29/brackets-viewer.js#readme) supports SE, DE and round robin, vanilla JS, themes and crafted `brackets-model` data. No React peer dependency. | Strongest future replacement candidate. Requires a native-to-brackets-model stage/group/round/match adapter and an imperative DOM lifecycle. Our native parent winner/loser IDs, automatic byes, suppressed reset and no-contest semantics still need adapter tests. Adopting it alone does not prove keyboard, screen-reader, long-team or update correctness. |
+| [@g-loot/react-tournament-brackets 1.0.0](https://github.com/g-loot/react-tournament-brackets/blob/master/package.json) | [README](https://github.com/g-loot/react-tournament-brackets#readme) provides React SE/DE and SVG rendering. Manifest peers require React/React DOM `^18.1.0`, `react-svg-pan-zoom` and styled-components `^4.1.3`. | The application uses React 19.2.4. The declared peer range excludes it. A dependency upgrade/fork and SVG content/accessibility checks would precede adoption. Not a bounded fix for this application. |
+| [bracketry 1.1.3](https://github.com/sbachinin/bracketry/blob/main/package.json) | [README](https://github.com/sbachinin/bracketry#readme) describes mobile tuning, doubles, live updates and custom match markup. It explicitly targets SE and warns that DE is awkward and wastes space. | Useful for SE-only products; this application needs native DE winner/loser lanes and conditional finals. A second renderer or custom DE reconstruction would retain substantial local logic. |
+
+The native renderer already receives authoritative `nativeRound`, `nativeSlot`, `bracketLane`, `bracketRound`, parent IDs and parent outcomes. Its HTML text and normal overflow regions integrate directly with the existing React 19 application. Sharing the existing planning geometry avoids maintaining a second implementation of lane contraction and connector routing. This is the smallest change with directly executable evidence for the defects below. It is not evidence that third-party renderers fail the fixture matrix.
+
+## Concrete regressions and fixes
+
+The original public renderer's small status label called every completed non-bye a “Final result”, including the real public no-contest contract (`status: complete`, `winnerId: null`, `outcome: null`, and an explanatory `blockedReason`). A completed automatic bye with an unresolved source on its empty side still displayed “Winner/Loser of …”. Running the same no-contest case against the original `e32d53e` component fails with expected “No contest”, received “losers 1 · M1 · Final result”; the fixed component passes. Both states are covered by the browser regression named `completed byes and no contests do not claim unresolved entrants or a result winner`.
+
+The old pseudo-element drew a horizontal line after every card except the final sibling, without checking a parent ID; it could imply a connection that did not exist. The new SVG draws only explicit forward feeds inside the current lane. Cross-lane drops remain named in the destination card. Winners, losers and finals have separate labelled scroll regions. Native engine rounds are globally ordered: this change does **not** claim that real DE rounds collided or reproduce an earlier event's exact draw without its data.
+
+Wrapped HTML cards are measured, including actual participant row centers. Lane spacing uses the tallest card; text remains complete. Known winner/loser feeds leave the corresponding participant row, unknown feeds leave the source card center, and endpoints reach the actual destination side. The planning wrapper retains its prior compact card dimensions and offsets. Winner highlights require a completed match. Completed no-contests have no winner; a blocked reset says “If needed”; a reset suppressed by the server is not recreated. Empty, singleton and unpublished draws receive explicit text.
+
+## Acceptance evidence and limits
+
+`apps/web/test/eventBracket.test.ts` uses synthetic fixtures built with the real SE/DE engine. It checks semantic states and deterministic, bounded, disjoint geometry for 2, 3, 4, 7, 16, 32, 64 and 128 entrants. Local connectors must correspond exactly to supplied parent/outcome/side metadata. The existing planning geometry tests remain in place.
+
+`apps/web/ui-tests/bracket-reliability.spec.ts` checks desktop and 390px light/dark layouts, complete long doubles labels, bye versus pending winner/loser feeds, conditional reset, empty/singleton brackets, changed results, completed champion and omitted reset. A four-bracket case checks upper/lower championship/consolation labels, scores, unique match IDs and local-only feeds simultaneously. DOM assertions verify card bounds/non-overlap and SVG endpoints against measured participant rows after resizing. Axe, keyboard focus/ArrowRight scrolling and absence of page-wide horizontal overflow are checked. Screenshots are attached for review; they are not replacement Darwin pixel baselines.
+
+The existing `bracket-phone`, `wide-bracket-light` and `wide-bracket-light-phone` pixel gates remain enabled with their original tolerance and Darwin files. Their intended rendering changes require the normal [visual review procedure](ui-visual-review.md) on macOS. The sixteen-slot fixture still checks all rounds and final-card keyboard reachability.
+
+Remaining scope: provisional pool-to-finals paths before any native bracket exists, exact historical event reproduction without source data, manual assistive-technology review, and an executed equivalent-fixture comparison of the third-party candidates. No rolling-final promise is added. A pending draw remains pending; a connected historical Challonge bracket remains a discoverable external link.
