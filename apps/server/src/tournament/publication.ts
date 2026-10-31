@@ -1,4 +1,5 @@
 import { eliminationStandings } from '@smashclub/engine';
+import { matchNames } from './matchNames';
 import { memberIds } from './entrants';
 import { eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
@@ -22,6 +23,7 @@ export async function publishNativeResult(
   result: TournamentResult,
   fault?: (phase: 'beforeReceipt' | 'afterCommit', transaction?: Db) => Promise<void>,
 ) {
+  const labels = matchNames(result);
   const publication = await db.transaction(async (tx) => {
     const [handoff] = await tx
       .select()
@@ -164,7 +166,7 @@ export async function publishNativeResult(
             match.bracketLane === 'losers'
               ? -(match.bracketRound ?? match.round)
               : (match.bracketRound ?? match.round),
-          identifier: match.label,
+          identifier: labels.get(match.id)!,
           suggestedPlayOrder: index + 1,
           p1ParticipantId: participant(match.player1Id),
           p2ParticipantId: participant(match.player2Id),

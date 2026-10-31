@@ -1,4 +1,5 @@
 import type { TournamentDecision, TournamentState } from './schemas';
+import { matchNames } from './matchNames';
 
 export type HistoryCategory =
   'scores' | 'matches' | 'players' | 'draw' | 'settings' | 'results' | 'broadcast';
@@ -21,13 +22,17 @@ function decisionContext(
       : undefined;
   const matchId = 'matchId' in command ? command.matchId : (report?.matchId ?? null);
   const match = (decision.after.matches ?? state.matches).find((item) => item.id === matchId);
+  const labels = matchNames({
+    matches: decision.after.matches ?? state.matches,
+    brackets: decision.after.brackets ?? state.brackets,
+  });
   const player = (id: string | null) =>
     state.entrants.find((item) => item.playerId === id)?.name ??
     state.baseline?.entrants.find((item) => item.playerId === id)?.name ??
     playerName?.(id) ??
     'Player';
   const pairing = match
-    ? `${match.label}: ${player(match.player1Id)} vs ${player(match.player2Id)}`
+    ? `${labels.get(match.id) ?? match.label}: ${player(match.player1Id)} vs ${player(match.player2Id)}`
     : 'Match';
   const station = (id: string | null) =>
     id
