@@ -64,6 +64,8 @@ export interface PoolView {
   label: string;
   matchRevisions?: { id: string; revision: number }[];
   placementRevision?: string;
+  qualifierRoster?: string[];
+  orderLockedReason?: string;
   orderStatus?: {
     status:
       | 'automatic'

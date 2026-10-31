@@ -1,6 +1,7 @@
+import { rollingFinals, requirePoolCorrectionAllowed } from './qualifiers';
 import { hash, requireFact, resolved } from './facts';
 import { hasCurrentPendingScoreReview } from './scoreReview';
-import type { CommandEnvelope, TournamentState } from './schemas';
+import type { CommandEnvelope, TournamentCommand, TournamentState } from './schemas';
 
 type Pool = TournamentState['pools'][number];
 const matchesFor = (state: TournamentState, pool: Pool) =>
@@ -108,7 +109,12 @@ export function decidePoolOrders(
   envelope: CommandEnvelope,
   basis: Record<string, number>,
 ) {
-  if (!next.settings.poolOrderPolicy || next.brackets.length || next.lifecycle !== 'locked') return;
+  if (
+    !next.settings.poolOrderPolicy ||
+    (next.brackets.length && !rollingFinals(next)) ||
+    next.lifecycle !== 'locked'
+  )
+    return;
   for (const pool of next.pools) {
     const old = previous.pools.find((p) => p.id === pool.id);
     const resultBasis = poolResultBasis(next, pool);
@@ -209,5 +215,36 @@ export function recordReplacementPoolOrder(state: TournamentState, envelope: Com
     commandId: envelope.id,
     decidedAt: envelope.at,
   };
+  pool.revision++;
+}
+
+export function confirmPoolPlacements(
+  state: TournamentState,
+  command: Extract<TournamentCommand, { kind: 'placements' }>,
+  basis: Record<string, number>,
+) {
+  const pool = state.pools.find((p) => p.id === command.poolId);
+  requireFact(
+    pool &&
+      pool.revision === command.expectedRevision &&
+      (!state.brackets.length || rollingFinals(state)),
+    'Pool placements changed or finals already exist.',
+  );
+  requireFact(
+    command.order.length === pool.entrantIds.length &&
+      new Set(command.order).size === pool.entrantIds.length &&
+      command.order.every((id) => pool.entrantIds.includes(id)),
+    'Placements must contain each pool entrant exactly once.',
+  );
+  const matches = state.matches.filter((m) => m.poolId === pool.id);
+  requireFact(
+    matches.every((m) => resolved(m) && command.matchRevisions[m.id] === m.revision),
+    'Resolve and review current pool results.',
+  );
+  basis[pool.id] = pool.revision;
+  for (const m of matches) basis[m.id] = m.revision;
+  if (rollingFinals(state) && hash(pool.order) !== hash(command.order))
+    requirePoolCorrectionAllowed(state, pool.id);
+  pool.order = command.order;
   pool.revision++;
 }

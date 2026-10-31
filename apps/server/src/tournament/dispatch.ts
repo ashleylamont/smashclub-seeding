@@ -68,6 +68,11 @@ export function dispatchAvailability(
     add('opponents_unknown', 'Waiting for both opponents to be confirmed.');
   if ([match.parent1Id, match.parent2Id].some((id) => id && !context.complete.has(id)))
     add('dependency', 'Waiting for a feeder result.');
+  if (match.qualificationBlocks?.length)
+    add(
+      'qualification_pending',
+      match.blockedReason ?? 'A qualifying pool result or finishing order awaits review.',
+    );
   if (context.pendingReports.has(match.id))
     add('score_review_pending', 'This match has a score awaiting TO review.');
   const pool = context.pools.get(match.poolId ?? '');

@@ -1,4 +1,5 @@
 import type { LiveMatch } from './eventDisplay';
+import { qualificationSummary, qualifierLabel } from './qualification';
 
 type PresentedMatch = Pick<
   LiveMatch,
@@ -12,6 +13,9 @@ type PresentedMatch = Pick<
   | 'score1'
   | 'score2'
   | 'blockedReason'
+  | 'player1Qualifier'
+  | 'player2Qualifier'
+  | 'qualificationBlocks'
 >;
 
 /** A missing entrant is unresolved unless the recorded result explicitly says bye. */
@@ -59,7 +63,9 @@ export function matchPresentation(match: PresentedMatch) {
         ? `${winner} advances · ${loser} forfeits.`
         : kind === 'no-contest'
           ? 'No contest. No winner or score recorded.'
-          : null;
+          : kind === 'pending'
+            ? qualificationSummary(match)
+            : null;
   return {
     kind,
     title,
@@ -79,6 +85,8 @@ export function matchParticipantName(match: PresentedMatch, side: 0 | 1) {
   const id = side === 0 ? match.player1Id : match.player2Id;
   if (id) return (side === 0 ? match.player1Name : match.player2Name) || 'Player';
   const { kind } = matchPresentation(match);
+  const qualifier = side === 0 ? match.player1Qualifier : match.player2Qualifier;
+  if (kind === 'pending' && qualifier) return qualifierLabel(qualifier);
   return kind === 'bye' ? 'Bye' : kind === 'pending' ? 'Awaiting opponent' : 'No entrant';
 }
 

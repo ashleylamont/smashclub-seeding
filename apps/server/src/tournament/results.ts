@@ -1,3 +1,4 @@
+import { rollingFinals } from './qualifiers';
 import { expectedBracketCount } from '@smashclub/shared';
 import { drawFinals } from './brackets';
 import { requireFact, resolved } from './facts';
@@ -9,7 +10,8 @@ export function sealResults(next: TournamentState, envelope: CommandEnvelope) {
   requireFact(
     next.brackets.length ===
       expectedBracketCount(next.baseline!.structure, next.baseline!.structureOptions) &&
-      next.matches.every(resolved),
+      next.matches.every(resolved) &&
+      (!rollingFinals(next) || next.pools.every((p) => p.order)),
     'Complete the event stages and confirm pool finishing orders first.',
   );
   requireFact(

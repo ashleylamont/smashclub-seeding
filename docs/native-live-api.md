@@ -133,7 +133,8 @@ this first policy decides a unique **full** order, rather than inventing a
 partial-order or withdrawal tiebreak rule.
 
 The score/review command persists the chosen order, its placement revision and
-private result-basis provenance in the same `DecisionRecordedV2` fact. Public
+private result-basis provenance in the same `DecisionRecordedV2` fact (V3 on
+rolling-finals draws). Public
 snapshots expose only coarse status/reason and placement source. The planner and
 finals preview distinguish automatic orders, organiser rulings, incomplete pools
 and pending review. Current pending reviews suspend an order; rejection restores
@@ -141,16 +142,64 @@ a still-valid manual ruling. Reports from earlier result revisions do not suspen
 current standings. An actual result or roster correction invalidates that pool's
 ruling; identical score confirmations and availability changes preserve it.
 
-The policy is absent on existing handoffs and imported live events. They retain
-their organiser-confirmed behavior, with `DecisionRecordedV1` facts. No read,
-restart or replay upgrades an old event or recalculates historical decisions;
-both fact versions fold their persisted state directly. Existing finals remain
+The policy is absent on older handoffs and imported live events. They retain
+their organiser-confirmed behavior, with `DecisionRecordedV1` facts. Existing
+automatic-order events retain their captured V2 policy. No read, restart or replay
+upgrades an old event or recalculates historical decisions; every fact version
+folds its persisted state directly. Existing finals remain
 frozen by the same call/play/history protections. A reviewed published correction
 that changes the original pool evidence exposes `retained_after_correction`
 status and `retained` placement source while preserving the recorded order and
 played finals. An explicitly supplied replacement round-robin order records new
-manual provenance. Finals still use the whole-event
-preview and draw workflow; rolling pool-to-finals release is separate work.
+manual provenance.
+
+## Rolling finals and the frozen field
+
+Fresh native pool draws capture
+`settings.finalsProgression = rolling_pool_places_v1`. Their V3 decisions can
+reserve finals before every pool is finished. The preview uses the complete
+current active field and the existing `buildFormatFinals` qualification,
+seeding and rematch-repair policy. It never seeds only the pools that finished
+first. A held pool or unrelated pending score report does not prevent a known
+finals pairing using shared match capacity.
+
+Creating finals freezes each pool's eligible roster (`qualifierRoster`) and the
+entire bracket geometry. Before creation, withdrawn entrants are excluded and
+remaining finishing places are recompressed exactly as in the whole-event draw.
+The TO preview and early-create confirmation explain the boundary: after creation,
+withdrawals affect availability and forfeits; the field does not shrink or reseed,
+and restoring a previously excluded entrant does not add a finals place. A
+confirmed full pool order resolves source places against that frozen roster.
+Late additions, no-show removal and redistribution still require removing safe,
+unplayed finals first. Called opponents, actual play and report history retain
+their existing protections.
+
+`qualifierSlots` records the full ordered finals field independently from each
+bracket's resolved `entrantIds`. Public source metadata contains the pool ID,
+division, pool index, finishing place and `pending`/`resolved`/`review_pending`
+status, plus frozen eligible entrant IDs on bracket slots. Match sides expose
+`player1Qualifier`/`player2Qualifier`; actual `player1Id`/`player2Id` remain the
+only proof of an assigned opponent. A pending source beside a real structural
+bye remains blocked with no winner, score or automatic advancement.
+
+Automatic pool orders and explicit tie rulings fill existing slots atomically
+with their score/review/ruling command. `qualificationBlocks` carries unresolved
+or reviewed source dependencies through feeder ancestry, so dispatch explains
+the specific pool or review rather than a whole-stage gate. Disputes remain
+accepted after finals are called or played. They preserve actual opponent IDs
+and results while blocking new dependent calls; rejection restores eligibility.
+Released actual play remains reportable, and an explicit TO hold stays held.
+Corrections that would rewrite consumed qualifying evidence require the existing
+explicit repair/replacement workflow.
+
+Once a rolling draw exists, preview shows that same draw and its current sources;
+ordinary progression never recreates it. Safe unplayed reset is a separate
+reviewed action. Event closure and publication into club results and ratings
+remain explicit after every stage and required pool ruling is complete.
+
+Pre-rolling V1/V2 journals keep their captured whole-event draw behavior. Only
+fresh baselines opt in; reducers, restart and replay never synthesize or reselect
+qualifiers. Immutable V1 and pre-rolling V2 journal hashes cover that boundary.
 
 ## Verification and recovery
 

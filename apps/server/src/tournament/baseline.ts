@@ -31,6 +31,11 @@ import { Baseline, LiveState, initialState, type TournamentBaseline } from './sc
 import { stableId, TournamentConflict } from './domain';
 import { getRatingSettings } from '../settings';
 
+const freshPoolPolicies = {
+  poolOrderPolicy: 'unique_set_wins_v1',
+  finalsProgression: 'rolling_pool_places_v1',
+} as const;
+
 /** SQL commit is the ownership boundary; Act append can safely be retried later. */
 export async function stageNativeBaseline(
   db: Db,
@@ -237,7 +242,7 @@ export async function stageNativeBaseline(
       })),
       prizes: await tx.select().from(eventPrizes).where(eq(eventPrizes.eventPlanId, planId)),
       settings: {
-        ...(!importing ? { poolOrderPolicy: 'unique_set_wins_v1' as const } : {}),
+        ...(!importing ? freshPoolPolicies : {}),
         published: settings?.published ?? false,
         playerReports: settings?.playerReports ?? false,
         scoreReportingMode: settings?.scoreReportingMode ?? 'to_review',
