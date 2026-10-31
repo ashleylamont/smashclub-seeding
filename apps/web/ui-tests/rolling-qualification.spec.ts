@@ -135,5 +135,13 @@ for (const width of [390, 1440])
       .filter({ has: page.locator('.ops-match-meta').filter({ hasText: semiA!.label }) });
     await expect(assigned).toContainText(name(opponent));
     await expect(assigned.getByRole('spinbutton')).toHaveCount(2);
+    Object.assign(slots[0]!, { status: 'review_pending' });
+    Object.assign(semiA!, { status: 'playing', called: true, qualificationBlocks: [slots[0]] });
+    await page.reload();
+    await expect(assigned.getByRole('status')).toContainText('under review');
+    await expect(assigned.getByRole('status')).toContainText('Your recorded pairing is unchanged');
+    await expect(assigned).toContainText(name(opponent));
+    // A hold on later calls does not prevent recording games already played.
+    await expect(assigned.getByRole('spinbutton')).toHaveCount(2);
     expect(fixture.unexpected).toEqual([]);
   });
