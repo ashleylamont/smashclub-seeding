@@ -57,12 +57,13 @@ test('light populated sixteen-slot bracket retains all rounds, byes and unresolv
   await expect(brackets).toContainText(PLAYER_NAME);
   await ready(page);
   await accessible(page);
-  await expect(brackets.locator('.event-bracket').first()).toHaveScreenshot(
+  // Collect both viewport diffs; every mismatch still fails this test and CI.
+  await expect.soft(brackets.locator('.event-bracket').first()).toHaveScreenshot(
     'wide-bracket-light.png',
   );
   await page.setViewportSize({ width: 390, height: 844 });
   await accessible(page);
-  await expect(brackets.locator('.event-bracket').first()).toHaveScreenshot(
+  await expect.soft(brackets.locator('.event-bracket').first()).toHaveScreenshot(
     'wide-bracket-light-phone.png',
   );
   const rounds = brackets.locator('.event-bracket-rounds').first();
