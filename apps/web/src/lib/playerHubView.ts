@@ -20,6 +20,11 @@ export function resolveHubPlayer(
   return team && players.some((item) => item.id === team.id) ? team.id : '';
 }
 
+/** Keep the preference so a temporarily absent player can reappear on the next public poll. */
+export function effectivePlayerView(preferred: string, player: string) {
+  return preferred === 'mine' && !player ? 'matches' : preferred;
+}
+
 export function playerMatchProgress(matches: PoolFlowMatch[], closed: boolean) {
   return {
     completed: matches.filter((match) => match.status === 'complete').length,

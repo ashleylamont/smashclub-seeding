@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   playerBracketPath,
+  effectivePlayerView,
   playerMatchProgress,
   resolveHubPlayer,
   playerHubView,
@@ -234,5 +235,11 @@ describe('compact authoritative path and match history', () => {
       nextMatch: undefined,
       waitingMatch: undefined,
     });
+  });
+  it('temporarily falls back to Everyone while retaining a missing player view preference', () => {
+    expect(effectivePlayerView('mine', '')).toBe('matches');
+    expect(effectivePlayerView('mine', 'redrawn-player')).toBe('mine');
+    expect(effectivePlayerView('reports', '')).toBe('reports');
+    expect(effectivePlayerView('results', 'redrawn-player')).toBe('results');
   });
 });

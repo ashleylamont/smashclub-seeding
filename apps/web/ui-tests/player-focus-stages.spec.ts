@@ -32,8 +32,10 @@ for (const width of [390, 1440])
         .map((match) => match.id),
     );
     for (const queue of fixture.snapshot.stationQueues) {
-      if (queue.currentMatchId && completed.has(queue.currentMatchId)) queue.currentMatchId = null;
-      if (queue.nextMatchId && completed.has(queue.nextMatchId)) queue.nextMatchId = null;
+      if (queue.currentMatchId && completed.has(queue.currentMatchId))
+        Object.assign(queue, { currentMatchId: null });
+      if (queue.nextMatchId && completed.has(queue.nextMatchId))
+        Object.assign(queue, { nextMatchId: null });
       queue.upcoming = queue.upcoming.filter((item) => !completed.has(item.matchId));
     }
     for (const station of fixture.snapshot.stations)
@@ -147,5 +149,83 @@ test('stored doubles member focuses the public team, and closed events retain hi
     'id',
     'event-brackets',
   );
+  expect(fixture.unexpected).toEqual([]);
+});
+
+test('a removed player falls back to Everyone, reappears on polling, and respects an explicit Everyone choice', async ({
+  page,
+}) => {
+  const fixture = await mockEvent(page);
+  const originalMatches = [...fixture.snapshot.matches];
+  const player = originalMatches[0]!.player1Id!;
+  const withoutPlayer = originalMatches.filter(
+    (match) => match.player1Id !== player && match.player2Id !== player,
+  );
+  await page.addInitScript(
+    ({ planId, player }) => {
+      if (sessionStorage.getItem('fixture-player-initialised')) return;
+      localStorage.setItem(`nemesis:player-filter:${planId}`, player);
+      sessionStorage.setItem('fixture-player-initialised', 'yes');
+    },
+    { planId: PLAN_ID, player },
+  );
+  await page.goto(`/play/${PLAN_ID}?player=${player}`);
+  await expect(page.getByLabel('Show matches for')).toHaveAttribute('data-value', player);
+  await expect(page.getByLabel('Match view', { exact: true })).toHaveAttribute(
+    'data-value',
+    'mine',
+  );
+  fixture.snapshot.matches = withoutPlayer;
+  await expect(page.getByLabel('Show matches for')).toHaveAttribute('data-value', '');
+  await expect(page.getByLabel('Match view', { exact: true })).toHaveAttribute(
+    'data-value',
+    'matches',
+  );
+  await expect(
+    page.getByText('Your saved player is not in the current draw.', { exact: false }),
+  ).toBeVisible();
+  expect(await page.locator('article.ops-match').count()).toBeGreaterThan(0);
+  expect(new URL(page.url()).searchParams.get('player')).toBe(player);
+  expect(
+    await page.evaluate(
+      (planId) => localStorage.getItem(`nemesis:player-filter:${planId}`),
+      PLAN_ID,
+    ),
+  ).toBe(player);
+  fixture.snapshot.matches = originalMatches;
+  await expect(page.getByLabel('Show matches for')).toHaveAttribute('data-value', player);
+  await expect(page.getByLabel('Match view', { exact: true })).toHaveAttribute(
+    'data-value',
+    'mine',
+  );
+  // The printed selection remains a preference until the attendee deliberately clears it.
+  fixture.snapshot.matches = withoutPlayer;
+  await expect(page.getByLabel('Show matches for')).toHaveAttribute('data-value', '');
+  await chooseOption(page.getByLabel('Show matches for'), '');
+  expect(new URL(page.url()).searchParams.has('player')).toBe(false);
+  expect(
+    await page.evaluate(
+      (planId) => localStorage.getItem(`nemesis:player-filter:${planId}`),
+      PLAN_ID,
+    ),
+  ).toBeNull();
+  fixture.snapshot.matches = originalMatches;
+  await expect(page.locator('#event-pools .event-pool')).toHaveCount(
+    new Set(
+      originalMatches
+        .filter((match) => match.stage === 'group')
+        .map((match) => `${match.division}:${match.poolIndex}`),
+    ).size,
+  );
+  await expect(page.getByLabel('Show matches for')).toHaveAttribute('data-value', '');
+  await expect(page.getByLabel('Match view', { exact: true })).toHaveAttribute(
+    'data-value',
+    'matches',
+  );
+  await expect(
+    page.getByText('Your saved player is not in the current draw.', { exact: false }),
+  ).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByLabel('Show matches for')).toHaveAttribute('data-value', '');
   expect(fixture.unexpected).toEqual([]);
 });

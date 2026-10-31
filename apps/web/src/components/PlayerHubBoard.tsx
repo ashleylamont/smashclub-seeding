@@ -6,6 +6,7 @@ import { playerBracketPath, playerHubView } from '../lib/playerHubView';
 import { liveBracketSide, liveBracketStatus } from '../lib/eventBracket';
 import { Disclosure } from './ui/Disclosure';
 import { matchStation } from '../lib/playerMatchView';
+import { nextMeaningfulMatch } from '../lib/matchPresentation';
 import type { PublicEventSnapshot } from '../lib/usePlayerEventHub';
 
 export function PlayerHubBoard({
@@ -133,6 +134,7 @@ export function PlayerHubBoard({
             <MatchCard
               key={match.id}
               match={match}
+              nextMatch={nextMeaningfulMatch(data.matches, match)}
               station={matchStation(data, match).name ?? undefined}
             />
           ))}

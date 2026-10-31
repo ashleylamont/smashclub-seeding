@@ -7,6 +7,7 @@ import { PlayerMatchFilter } from './PlayerMatchFilter';
 import { PoolFilter } from './PoolStationQueue';
 import { scoreApprovalPolicy } from '../lib/poolFlow';
 import { matchStatus, matchStation } from '../lib/playerMatchView';
+import { nextMeaningfulMatch } from '../lib/matchPresentation';
 import type { PlayerEventHub, PublicEventSnapshot } from '../lib/usePlayerEventHub';
 
 export function PlayerHubMatches({
@@ -19,6 +20,7 @@ export function PlayerHubMatches({
   const {
     players,
     player,
+    selectedPlayer,
     playerName,
     setSelectedPlayer,
     view,
@@ -60,6 +62,12 @@ export function PlayerHubMatches({
           setSearch('');
         }}
       />
+      {selectedPlayer && !player && (
+        <p className="card">
+          Your saved player is not in the current draw. Showing Everyone until their pairings
+          appear. Choose Everyone to clear the saved selection.
+        </p>
+      )}
       {playerName && (
         <aside className="card player-event-progress" aria-label="Your progress">
           <h2>{playerName}’s progress</h2>
@@ -186,6 +194,7 @@ export function PlayerHubMatches({
               onSubmit={(input) => submitScore(match.id, input)}
               approvalPolicy={!closed && playOpen ? scoreApprovalPolicy(data, match) : 'review'}
               match={match}
+              nextMatch={nextMeaningfulMatch(data.matches, match)}
               report={ownReports?.find((report) => report.matchId === match.id)}
               status={matchStatus(data, match)}
               station={matchStation(data, match).name ?? undefined}

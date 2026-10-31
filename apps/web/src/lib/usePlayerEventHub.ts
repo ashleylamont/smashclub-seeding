@@ -17,6 +17,7 @@ import {
 import { guestVisibleMatches, includesPlayer, sortPlayerMatches } from './playerMatchView';
 import {
   playerHubView,
+  effectivePlayerView,
   playerMatchProgress,
   recentPlayerMatches,
   resolveHubPlayer,
@@ -42,7 +43,7 @@ export function usePlayerEventHub(planId: string) {
       window.history.replaceState(window.history.state, '', url);
     }
   };
-  const [view, setView] = useState(selectedPlayer ? 'mine' : 'queue');
+  const [preferredView, setView] = useState(selectedPlayer ? 'mine' : 'queue');
   const [selectedPool, setSelectedPool] = usePoolFilter();
   const [selectedStation, setSelectedStation] = useState(
     () => new URLSearchParams(window.location.search).get('station') ?? '',
@@ -103,6 +104,7 @@ export function usePlayerEventHub(planId: string) {
   const closed = data !== undefined && ['complete', 'cancelled'].includes(data.plan.status);
   const players = eventPlayers(data?.matches ?? []);
   const player = resolveHubPlayer(players, selectedPlayer, data?.entrants);
+  const view = effectivePlayerView(preferredView, player);
   const playerName = players.find((item) => item.id === player)?.name;
   const reportedIds = new Set(ownReports?.map((report) => report.matchId));
   const queuedIds = data ? queueScoringIds(data) : new Set<string>();
