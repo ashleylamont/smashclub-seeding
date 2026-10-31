@@ -333,3 +333,25 @@ for (const durablePass of [false, true])
     await expect(page.getByRole('complementary', { name: 'Announcements' })).toHaveCount(0);
     expect(fixture.unexpected).toEqual([]);
   });
+
+for (const drawn of [false, true])
+  test(`native ${drawn ? 'published' : 'pending'} brackets ignore legacy Challonge links`, async ({
+    page,
+  }) => {
+    const fixture = await mockEvent(page, { bracket: drawn });
+    Object.assign(fixture.snapshot, {
+      brackets: [{ division: 'upper', stage: 'main', slug: 'stale-external-draw' }],
+    });
+    await page.goto(`/play/${PLAN_ID}`);
+    await expect(page.locator('a[href*="challonge.com"]')).toHaveCount(0);
+    if (drawn) {
+      await expect(page.locator('.event-brackets')).toContainText('Semi-final A');
+      await expect(page.locator('#event-brackets')).not.toContainText('Brackets will appear here');
+    } else {
+      await expect(page.locator('#event-brackets')).toContainText(
+        'Brackets will appear here when the organisers publish the draw.',
+      );
+      await expect(page.locator('#event-brackets .event-bracket-match')).toHaveCount(0);
+    }
+    expect(fixture.unexpected).toEqual([]);
+  });

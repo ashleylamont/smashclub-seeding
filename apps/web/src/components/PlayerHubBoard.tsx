@@ -15,6 +15,7 @@ export function PlayerHubBoard({
   selectedPool: string;
   player: string;
 }) {
+  const linked = data.plan.bracketMode === 'native' ? [] : data.brackets;
   const poolResults = confirmedPoolGraphics(
     data.placements.filter(
       (place) => !selectedPool || `${place.division}:${place.poolIndex}` === selectedPool,
@@ -49,9 +50,9 @@ export function PlayerHubBoard({
           brackets={data.nativeBrackets ?? []}
           matches={data.matches}
           entrants={data.entrants}
-          linked={data.brackets}
+          linked={linked}
         />
-        {!data.nativeBrackets?.length && !data.brackets.some((item) => item.slug) && (
+        {!data.nativeBrackets?.length && !linked.some((item) => item.slug) && (
           <>
             <h2>Brackets</h2>
             <p>
