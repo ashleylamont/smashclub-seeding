@@ -1,3 +1,4 @@
+import { matchPresentation } from '../../lib/matchPresentation';
 import { useConfirmation } from '../../lib/confirmation';
 import { Select, SelectItem } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
@@ -54,14 +55,7 @@ export function MatchCard({
         <span>{match.label}</span>
         <span className="chip">{label}</span>
       </div>
-      <div className="ops-contestant">
-        <strong>{match.player1Name || 'Awaiting qualifier'}</strong>
-        <b>{match.score1 ?? '–'}</b>
-      </div>
-      <div className="ops-contestant">
-        <strong>{match.player2Name || 'Awaiting qualifier'}</strong>
-        <b>{match.score2 ?? '–'}</b>
-      </div>
+      <MatchContestants match={match} />
       {match.status === 'playing' && (
         <p className="ops-delivery">Live game score · match still in progress</p>
       )}
@@ -304,6 +298,25 @@ export function MatchCard({
   );
 }
 
+function MatchContestants({ match }: { match: Match }) {
+  const presentation = matchPresentation(match);
+  const absent = presentation.kind === 'bye' ? 'Bye' : 'Awaiting opponent';
+  return (
+    <>
+      {[
+        { name: match.player1Name, score: match.score1 },
+        { name: match.player2Name, score: match.score2 },
+      ].map((player, index) => (
+        <div className="ops-contestant" key={index}>
+          <strong>{player.name || absent}</strong>
+          {presentation.showScores && <b>{player.score ?? '–'}</b>}
+        </div>
+      ))}
+      {presentation.result && <p>{presentation.result}</p>}
+    </>
+  );
+}
+
 function eligibleStations(match: Match, stations: Overview['stations']) {
   return stations.filter(
     (station) =>
@@ -313,7 +326,8 @@ function eligibleStations(match: Match, stations: Overview['stations']) {
   );
 }
 function matchLabel(match: Match, canStart: boolean) {
-  if (match.status === 'complete') return 'Finished';
+  const presentation = matchPresentation(match);
+  if (presentation.status) return presentation.status;
   if (match.called) return 'Called';
   if (match.status === 'playing') return 'Playing now';
   return canStart ? 'Ready to start' : 'Waiting';

@@ -1,3 +1,4 @@
+import { matchPresentation } from '../../lib/matchPresentation';
 import { useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -21,9 +22,7 @@ export function ActiveCall({
   const confirm = useConfirmation();
   return (
     <article className="dispatch-row" data-match-id={match.id}>
-      <strong>
-        {match.player1Name} vs {match.player2Name}
-      </strong>
+      <strong>{matchPresentation(match).title}</strong>
       <p>
         {match.started ? 'Playing' : 'Called'} ·{' '}
         {desk.stations.find((s) => s.id === match.stationId)?.name ??
@@ -104,9 +103,7 @@ export function ReadyCall({
     [location, setLocation] = useState('');
   return (
     <article className="dispatch-row" data-match-id={match.id}>
-      <h4>
-        {match.player1Name} vs {match.player2Name}
-      </h4>
+      <h4>{matchPresentation(match).title}</h4>
       <span className="chip">{row.state === 'ready' ? 'Ready to call' : 'Waiting'}</span>
       <small>
         {match.label} · {row.reason}
