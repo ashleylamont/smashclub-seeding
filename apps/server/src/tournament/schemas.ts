@@ -84,6 +84,18 @@ export const Pool = z.object({
   entrantIds: z.array(id),
   order: z.array(id).nullable(),
   revision,
+  // Absent on old facts; these events retain explicit TO placement decisions.
+  orderDecision: z
+    .object({
+      source: z.enum(['automatic', 'manual']),
+      policy: z.literal('unique_set_wins_v1'),
+      order: z.array(id),
+      resultBasis: z.string().length(64),
+      matchRevisions: z.record(id, revision),
+      commandId: id,
+      decidedAt: z.number(),
+    })
+    .optional(),
   active: z.boolean(),
   stationIds: z.array(id),
   selfRun: z.boolean(),
@@ -104,6 +116,7 @@ export const LiveSettings = z.object({
   capacity: revision,
   // Absent on old journal facts: their station-bank semantics remain unchanged.
   dispatchMode: z.literal('shared').optional(),
+  poolOrderPolicy: z.literal('unique_set_wins_v1').optional(),
   reservedStationIds: z.array(id).optional(),
   queueOrder: z.array(id).optional(),
   queueRevision: revision.optional(),
@@ -311,7 +324,7 @@ export const Envelope = z.object({
 });
 /** Persist decided state changes; reducers do not rerun scheduling/draw policy. */
 export const Decision = z.object({
-  version: z.literal(1),
+  version: z.union([z.literal(1), z.literal(2)]),
   commandId: id,
   actorId: z.string(),
   requestId: z.string(),

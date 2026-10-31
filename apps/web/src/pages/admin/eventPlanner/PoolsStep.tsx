@@ -11,10 +11,8 @@ import { DIVISION_LABEL } from './labels';
  * Step 5 and step 7: the pool cards, and the worksheet that records how each
  * pool actually finished.
  *
- * The worksheet is manual on purpose for the first event. Round-robin ties
- * resolve under whatever tiebreak settings the Challonge tournament was created
- * with, and an admin reading the standings screen is a more trustworthy source
- * than this app re-deriving them from set results it did not referee.
+ * New native draws decide distinct set-win orders at the official result boundary.
+ * This worksheet remains the explicit ruling path for ties and legacy/remote draws.
  */
 
 export function PoolsStep({ view, onChanged }: { view: EventPlanView; onChanged: () => void }) {
@@ -254,6 +252,7 @@ function PoolCard({
 
       <div className="pool-worksheet">
         <span className="form-label">Final order</span>
+        {pool.orderStatus && <p className="muted">{pool.orderStatus.reason}</p>}
         {pool.members.some((member) => member.withdrawn) && (
           <p className="muted">
             Include withdrawn entrants in the recorded finishing order. On confirmation, they are
@@ -293,7 +292,11 @@ function PoolCard({
             complete ? 'Save this pool’s finishing order' : 'Every entrant needs exactly one place'
           }
         >
-          {save.isPending ? 'Saving…' : 'Confirm pool'}
+          {save.isPending
+            ? 'Saving…'
+            : pool.orderStatus?.status === 'automatic'
+              ? 'Record organiser ruling'
+              : 'Confirm pool'}
         </Button>
         {save.isError && <p className="error-text">{save.error.message}</p>}
       </div>

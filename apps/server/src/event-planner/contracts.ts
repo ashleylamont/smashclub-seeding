@@ -64,6 +64,17 @@ export interface PoolView {
   label: string;
   matchRevisions?: { id: string; revision: number }[];
   placementRevision?: string;
+  orderStatus?: {
+    status:
+      | 'automatic'
+      | 'manual'
+      | 'incomplete'
+      | 'review_pending'
+      | 'ruling_required'
+      | 'manual_required'
+      | 'retained_after_correction';
+    reason: string;
+  };
   members: {
     entryId: string;
     playerId: string;

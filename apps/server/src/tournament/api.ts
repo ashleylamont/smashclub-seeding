@@ -1,3 +1,4 @@
+import { poolOrderStatus } from './poolOrders';
 import { sharedDispatch } from './dispatch';
 import { isKnockout } from '@smashclub/shared';
 import { randomUUID } from 'node:crypto';
@@ -329,6 +330,12 @@ export class NativeEventApi {
       resetAllowed: !resetIssues.length,
       resetIssues,
       replacing,
+      poolOrders: state.pools.map((p) => ({
+        poolId: p.id,
+        division: p.division,
+        poolIndex: p.index,
+        ...poolOrderStatus(state, p),
+      })),
       revisionToken: finalsToken(state),
       brackets: trial.brackets.map((b) => ({
         ...b,

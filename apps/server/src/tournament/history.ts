@@ -96,6 +96,7 @@ export async function nativeEventHistory(
       'BaselineCapturedV1',
       'LegacyStateImportedV1',
       'DecisionRecordedV1',
+      'DecisionRecordedV2',
       'ResultsSealedV1',
       'PlanRetiredV1',
       'PublicationRecordedV1',
@@ -111,6 +112,7 @@ export async function nativeEventHistory(
     };
     if (
       event.name === 'DecisionRecordedV1' ||
+      event.name === 'DecisionRecordedV2' ||
       event.name === 'ResultsSealedV1' ||
       event.name === 'PlanRetiredV1'
     ) {

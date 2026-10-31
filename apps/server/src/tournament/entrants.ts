@@ -45,7 +45,10 @@ export function changeAvailability(
     };
   } else entrant.availability = command.availability;
   entrant.revision++;
-  if (command.availability === 'withdrawn')
+  if (
+    command.availability === 'withdrawn' &&
+    (!next.settings.poolOrderPolicy || !next.brackets.length)
+  )
     for (const pool of next.pools.filter((p) => p.entrantIds.includes(entrant.playerId))) {
       pool.order = null;
       pool.revision++;
