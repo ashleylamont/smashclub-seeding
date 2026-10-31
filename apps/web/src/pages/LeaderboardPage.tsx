@@ -9,6 +9,7 @@ import { useStoredFlag } from '../lib/useStoredFlag';
 import { Leaderboard, type PlayerTrend } from '../components/Leaderboard';
 import { RatingsOverTime } from '../components/RatingsOverTime';
 import { InfoTip } from '../components/InfoTip';
+import { LiveEventEntry } from '../components/LiveEventEntry';
 import './LeaderboardPage.css';
 
 /** How many recent results the form pips show. */
@@ -104,6 +105,7 @@ export function LeaderboardPage() {
   if (leaderboard.isPending) {
     return (
       <div className="page">
+        <LiveEventEntry />
         <div className="skeleton-hero" />
         <p className="loading-text">Loading rankings…</p>
       </div>
@@ -112,6 +114,7 @@ export function LeaderboardPage() {
   if (leaderboard.isError) {
     return (
       <div className="page">
+        <LiveEventEntry />
         <p className="error-text">Failed to load rankings: {leaderboard.error.message}</p>
         <p className="muted">
           The board is served by the club's own API — if this keeps happening the server is probably
@@ -178,6 +181,7 @@ export function LeaderboardPage() {
 
   return (
     <div className="page">
+      <LiveEventEntry />
       <header className="hero">
         <div className="hero-headline">
           <p className="hero-eyebrow">{coverage}</p>

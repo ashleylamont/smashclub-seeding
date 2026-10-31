@@ -17,6 +17,7 @@ it('lists only explicitly published events, prioritizes open nights and removes 
           eventDate: new Date('2026-09-19'),
           status: 'underway',
           bracketMode: 'native',
+          competitionFormat: 'doubles',
         },
         { name: 'Completed night', eventDate: new Date('2026-09-20'), status: 'complete' },
       ])
@@ -28,8 +29,11 @@ it('lists only explicitly published events, prioritizes open nights and removes 
       );
     const list = await publicEventNights(db);
     expect(list.map((event) => event.name)).toEqual(['Open night', 'Completed night']);
+    expect(list[0]).toMatchObject({ competitionFormat: 'doubles', drawPaused: false });
     expect(Object.keys(list[0]!).sort()).toEqual([
       'bracketMode',
+      'competitionFormat',
+      'drawPaused',
       'eventDate',
       'id',
       'name',

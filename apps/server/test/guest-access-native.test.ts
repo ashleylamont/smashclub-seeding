@@ -29,6 +29,40 @@ function caller(user: typeof nativeAdmin | null = nativeAdmin) {
     recomputeTrigger: new RecomputeTrigger(db),
   });
 }
+
+it('discovers native publication, format and draw pauses from authoritative live state', async () => {
+  const planId = await seedNativeDraft(db);
+  const to = caller();
+  const publicApi = caller(null);
+  const find = async () =>
+    (await publicApi.eventOps.publicEvents()).find((event) => event.id === planId);
+  await to.eventOps.settings({ planId, published: false, playerReports: false });
+  expect(await find()).toBeUndefined();
+  await to.eventOps.settings({ planId, published: true, playerReports: false });
+  expect(await find()).toMatchObject({
+    status: 'pools_ready',
+    drawPaused: false,
+    competitionFormat: 'singles',
+  });
+  await to.eventOps.softLockPools({ planId, confirm: true });
+  expect(await find()).toMatchObject({
+    status: 'underway',
+    drawPaused: false,
+    competitionFormat: 'singles',
+  });
+  await runtime.command(nativeAdmin, planId, 'pause-discovery', { kind: 'unlock' });
+  expect(await find()).toMatchObject({ status: 'underway', drawPaused: true });
+  await runtime.command(nativeAdmin, planId, 'resume-discovery', { kind: 'relock' });
+  expect(await find()).toMatchObject({ status: 'underway', drawPaused: false });
+  await to.eventOps.settings({ planId, published: false, playerReports: false });
+  expect(await find()).toBeUndefined();
+  await to.eventOps.settings({ planId, published: true, playerReports: false });
+  await runtime.command(nativeAdmin, planId, 'close-discovery', {
+    kind: 'cancel',
+    reason: 'Synthetic event finished',
+  });
+  expect(await find()).toMatchObject({ status: 'cancelled', drawPaused: false });
+});
 async function night() {
   const planId = await seedNativeDraft(db);
   const to = caller();
