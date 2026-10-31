@@ -71,7 +71,8 @@ export interface PoolView {
       | 'incomplete'
       | 'review_pending'
       | 'ruling_required'
-      | 'manual_required';
+      | 'manual_required'
+      | 'retained_after_correction';
     reason: string;
   };
   members: {

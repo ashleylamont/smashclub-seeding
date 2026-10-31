@@ -145,7 +145,11 @@ The policy is absent on existing handoffs and imported live events. They retain
 their organiser-confirmed behavior, with `DecisionRecordedV1` facts. No read,
 restart or replay upgrades an old event or recalculates historical decisions;
 both fact versions fold their persisted state directly. Existing finals remain
-frozen by the same call/play/history protections. Finals still use the whole-event
+frozen by the same call/play/history protections. A reviewed published correction
+that changes the original pool evidence exposes `retained_after_correction`
+status and `retained` placement source while preserving the recorded order and
+played finals. An explicitly supplied replacement round-robin order records new
+manual provenance. Finals still use the whole-event
 preview and draw workflow; rolling pool-to-finals release is separate work.
 
 ## Verification and recovery

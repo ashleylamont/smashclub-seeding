@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { captureBaseline, decide, hash, reduceDecision, stableId } from '../src/tournament/domain';
-import { poolOrderStatus, poolResultBasis } from '../src/tournament/poolOrders';
+import {
+  poolOrderStatus,
+  poolResultBasis,
+  poolPlacementSource,
+  publicPoolViews,
+} from '../src/tournament/poolOrders';
 import {
   Decision,
   Baseline,
@@ -101,6 +106,8 @@ describe('opted-in automatic pool orders', () => {
     expect(after.pools[0]!.orderDecision!.matchRevisions[matches.at(-1)!.id]).toBe(1);
     expect(after.pools[1]).toEqual(before.pools[1]);
     expect(poolOrderStatus(after, after.pools[0]!).status).toBe('automatic');
+    expect(publicPoolViews(after)[0]!.orderStatus.status).toBe('automatic');
+    expect(publicPoolViews(after)[0]).not.toHaveProperty('orderDecision');
     expect(decide(after, request)).toBeUndefined();
     expect(() => decide(after, { ...request, command: score(after.matches[0]!) })).toThrow(
       /identifier/,
@@ -337,5 +344,70 @@ describe('opted-in automatic pool orders', () => {
     // A persisted decision is the authority even when replay's present policy differs.
     const future = initial();
     expect(decisions.reduce(reduceDecision, future).pools).toEqual(state.pools);
+  });
+
+  it('retains original pool/finals provenance after a reviewed published correction without claiming current automatic ordering', () => {
+    let state = apply(complete(initial()), { kind: 'drawFinals' });
+    for (let round = 0; round < 5; round++) {
+      const ready = state.matches.filter((m) => m.bracketId && m.status === 'ready');
+      if (!ready.length) break;
+      for (const m of ready) state = apply(state, score(m));
+    }
+    state = apply(state, { kind: 'finalize' });
+    state.publication = { resultId: state.result!.id, tournamentIds: [] };
+    const originalDecision = structuredClone(state.pools[0]!.orderDecision);
+    const originalOrder = structuredClone(state.pools[0]!.order);
+    const actualFinals = structuredClone(state.matches.filter((m) => m.bracketId));
+    const m = state.matches[0]!;
+    state = apply(state, {
+      kind: 'replaceResult',
+      resultId: state.result!.id,
+      reason: 'Reviewed pool score correction after publication',
+      corrections: [
+        { matchId: m.id, expectedRevision: m.revision, score1: 0, score2: 2, outcome: 'played' },
+      ],
+    });
+    expect(state.pools[0]!.order).toEqual(originalOrder);
+    expect(state.pools[0]!.orderDecision).toEqual(originalDecision);
+    expect(state.matches.filter((m) => m.bracketId)).toEqual(actualFinals);
+    expect(poolOrderStatus(state, state.pools[0]!).status).toBe('retained_after_correction');
+    expect(publicPoolViews(state)[0]!.orderStatus.status).toBe('retained_after_correction');
+    expect(poolPlacementSource(state, state.pools[0]!)).toBe('retained');
+    expect(poolOrderStatus(state, state.pools[1]!).status).toBe('automatic');
+  });
+
+  it('records fresh manual provenance for an explicit replacement round-robin order', () => {
+    const baseline = pureBaseline();
+    baseline.version = 2;
+    baseline.competitionFormat = 'singles';
+    baseline.structure = 'round_robin';
+    baseline.entrants = baseline.entrants.filter((e) => e.division === 'upper');
+    baseline.pools = baseline.pools.filter((p) => p.division === 'upper');
+    baseline.matches = baseline.matches.filter((m) => m.division === 'upper');
+    baseline.settings.poolOrderPolicy = 'unique_set_wins_v1';
+    let state = apply(complete(captureBaseline(baseline)), { kind: 'finalize' });
+    state.publication = { resultId: state.result!.id, tournamentIds: [] };
+    expect(state.pools[0]!.orderDecision!.source).toBe('automatic');
+    const order = [...state.pools[0]!.order!].reverse();
+    const m = state.matches[0]!;
+    const request = envelope({
+      kind: 'replaceResult',
+      resultId: state.result!.id,
+      reason: 'Explicit revised round-robin ruling',
+      roundRobinOrder: order,
+      corrections: [
+        { matchId: m.id, expectedRevision: m.revision, score1: 0, score2: 2, outcome: 'played' },
+      ],
+    });
+    state = reduceDecision(state, Decision.parse(decide(state, request)!));
+    expect(state.pools[0]!.order).toEqual(order);
+    expect(state.pools[0]!.orderDecision).toMatchObject({
+      source: 'manual',
+      order,
+      commandId: request.id,
+      resultBasis: poolResultBasis(state, state.pools[0]!),
+    });
+    expect(poolOrderStatus(state, state.pools[0]!).status).toBe('manual');
+    expect(state.result!.poolOrders![0]!.order).toEqual(order);
   });
 });

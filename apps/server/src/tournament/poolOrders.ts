@@ -32,6 +32,16 @@ export function poolOrderStatus(state: TournamentState, pool: Pool) {
       status: 'review_pending' as const,
       reason: 'Resolve current score reports before deciding this pool order.',
     };
+  if (
+    pool.order &&
+    pool.orderDecision &&
+    pool.orderDecision.resultBasis !== poolResultBasis(state, pool)
+  )
+    return {
+      status: 'retained_after_correction' as const,
+      reason:
+        'A reviewed result correction changed this pool. Its recorded order and finals qualifiers remain fixed.',
+    };
   if (pool.order)
     return pool.orderDecision?.source === 'automatic'
       ? {
@@ -173,8 +183,31 @@ export function decidePoolOrders(
 
 /** Public status contains no command references, fingerprints or report details. */
 export function publicPoolViews(state: TournamentState) {
-  return state.pools.map(({ orderDecision: _decision, ...pool }) => ({
-    ...pool,
-    orderStatus: poolOrderStatus(state, pool),
-  }));
+  return state.pools.map((pool) => {
+    const orderStatus = poolOrderStatus(state, pool);
+    const { orderDecision: _decision, ...publicPool } = pool;
+    return { ...publicPool, orderStatus };
+  });
+}
+
+export function poolPlacementSource(state: TournamentState, pool: Pool) {
+  return pool.orderDecision && pool.orderDecision.resultBasis !== poolResultBasis(state, pool)
+    ? ('retained' as const)
+    : (pool.orderDecision?.source ?? 'manual');
+}
+
+/** Explicit post-publication round-robin rulings supersede automatic evidence. */
+export function recordReplacementPoolOrder(state: TournamentState, envelope: CommandEnvelope) {
+  if (!state.settings.poolOrderPolicy) return;
+  const pool = state.pools[0]!;
+  pool.orderDecision = {
+    source: 'manual',
+    policy: state.settings.poolOrderPolicy,
+    order: [...pool.order!],
+    resultBasis: poolResultBasis(state, pool),
+    matchRevisions: Object.fromEntries(matchesFor(state, pool).map((m) => [m.id, m.revision])),
+    commandId: envelope.id,
+    decidedAt: envelope.at,
+  };
+  pool.revision++;
 }

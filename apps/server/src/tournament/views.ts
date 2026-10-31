@@ -1,4 +1,4 @@
-import { poolOrderStatus } from './poolOrders';
+import { poolOrderStatus, poolPlacementSource } from './poolOrders';
 import {
   dispatchAvailability,
   dispatchContext,
@@ -23,7 +23,7 @@ import type { TournamentState } from './schemas';
 type SqlSnapshot = Awaited<ReturnType<typeof sqlSnapshot>>;
 export type EventSnapshot = Omit<SqlSnapshot, 'placements'> & {
   placements: (Omit<SqlSnapshot['placements'][number], 'source'> & {
-    source: 'manual' | 'challonge' | 'automatic';
+    source: 'manual' | 'challonge' | 'automatic' | 'retained';
   })[];
   poolOrders?: {
     poolId: string;
@@ -317,7 +317,7 @@ export async function eventView(
         poolIndex: p.index,
         playerId,
         place: i + 1,
-        source: p.orderDecision?.source ?? 'manual',
+        source: poolPlacementSource(state, p),
         createdAt: new Date(baseline.capturedAt),
         updatedAt: new Date(baseline.capturedAt),
       })),

@@ -1,3 +1,4 @@
+import { recordReplacementPoolOrder } from './poolOrders';
 import { requireFact } from './facts';
 import { winner } from './scores';
 import type { CommandEnvelope, TournamentState } from './schemas';
@@ -50,6 +51,7 @@ export function replaceResult(
       automaticFromRevision: null,
     });
   }
+  if (state.baseline!.structure === 'round_robin') recordReplacementPoolOrder(state, envelope);
   state.result = {
     ...state.result!,
     id: envelope.id,
