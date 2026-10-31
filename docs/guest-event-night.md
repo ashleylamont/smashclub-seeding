@@ -6,9 +6,15 @@ The main navigation's **Event night** link (`/play`) lists explicitly published 
 
 Players can find their pool, station queues, round schedule, standings and recorded results without signing in. Choosing a player for **My matches** only filters this device's view; it does not verify identity or grant permissions.
 
-Starting eligible self-running matches or reporting scores anonymously still requires the event's QR guest pass. A pass already redeemed on this browser is reused in the player hub. Expiry or revocation removes reporting access while leaving a published event browseable; scan the current QR to renew access. Private QR invitations are not exposed by the public event directory. The TO controls whether a QR appears on the overlay.
+Starting eligible self-running matches or reporting scores anonymously still requires the event's QR guest pass. A pass already redeemed on this browser is reused in the player hub, including after closing and reopening the browser. Revocation removes reporting access while leaving a published event browseable; scan the current QR to restore access. Private QR invitations are not exposed by the public event directory. The TO controls whether a QR appears on the overlay.
 
-The default invitation rotates during an event. Organisers who need signs printed ahead of time can [keep invitations valid until revoked and print station signs](station-signs.md). A guest pass still lasts one hour; scanning the same sign can renew it while the event and invitation remain valid.
+New guest reporting setups default to one reusable invitation and reporting passes valid until explicitly revoked. Organisers can [print station signs](station-signs.md) before the event. No hourly rescan is needed. **Revoke all guest passes**, disabling guest reporting, or changing invitation mode invalidates all previously issued invitations and passes; generate a new QR afterward. Unpublishing, pausing or closing the event prevents reporting through the normal event lifecycle checks.
+
+Rotating invitations remain available as an explicit choice: the displayed QR changes every 15 minutes and each issued invitation remains redeemable for at least an hour. This limits when someone can join; it does not put an hourly expiry on a newly redeemed reporting pass.
+
+Migration `0027_durable_guest_access` makes session expiry nullable and changes the default invitation mode. Existing invitation-mode choices, secrets, printed persistent signs and issued dated passes are preserved. Those older passes retain their original expiry; a new scan issues durable access. Legacy tab-stored passes are imported into browser-local storage without changing their expiry. When storage is unavailable, a pass still works in the current tab. Connection interruptions and temporarily unpublished events retain the saved pass. A rejected pass cannot report; successfully scanning a current invitation replaces it. Server validation remains authoritative on every guest request.
+
+Native guest score/start validation holds the credential event-row lock through the Act command append. A command committed before a reset remains recorded; reset waits for that command, and a pass validated after reset cannot write. Credentials are never included in the Act journal or public snapshots. Reporting access remains event-scoped and anonymous; choosing a player name only changes this device's view.
 
 ## Approve unless disputed
 

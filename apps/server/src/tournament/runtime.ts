@@ -140,8 +140,8 @@ export function createNativeRuntime(
       validateFoldedState: true,
     });
 
-  async function transfer(planId: string) {
-    const [handoff] = await db
+  async function transfer(planId: string, readDb = db) {
+    const [handoff] = await readDb
       .select()
       .from(nativeLiveHandoffs)
       .where(eq(nativeLiveHandoffs.eventPlanId, planId));
@@ -173,12 +173,15 @@ export function createNativeRuntime(
     requestId: string,
     input: TournamentCommand,
     inputHash?: string,
+    // Guest credentials may hold the SQL event row through the Act append. Use
+    // that transaction for prerequisite reads (also avoids PGlite self-deadlock).
+    readDb = db,
   ) {
     const parsed = Command.parse(input);
     requireRecoveryAdmin(parsed.kind, actor.role);
-    const operator = await isOperator(db, planId, actor);
-    if (!['score', 'dispatch'].includes(parsed.kind)) await requireOperator(db, planId, actor);
-    await transfer(planId);
+    const operator = await isOperator(readDb, planId, actor);
+    if (!['score', 'dispatch'].includes(parsed.kind)) await requireOperator(readDb, planId, actor);
+    await transfer(planId, readDb);
     const envelope = Envelope.parse({
       id: randomUUID(),
       requestId,

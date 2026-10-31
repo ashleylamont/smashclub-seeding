@@ -27,3 +27,5 @@ pnpm test:e2e                    # rebuilds the frontend first
 ```
 
 The frontend typecheck includes source, UI fixtures and browser tests. `apps/web/e2e/` tests use a fresh real API harness; `apps/web/ui-tests/` uses isolated API fixtures and macOS visual baselines. See [UI review](../../docs/ui-visual-review.md) before updating baselines. Character icon sources and refresh steps are in [public/characters/README.md](public/characters/README.md).
+
+The homepage's **Currently live** entry uses the public event discovery feed and refreshes every 15 seconds. It shows published events whose lifecycle is underway, whose draw is open, and whose scheduled start is within the previous 24 hours (start inclusive, end exclusive). The bounded start window prevents future prelocked draws and old unfinalized events from occupying the homepage, while supporting overnight play across local midnight. It compares ISO instants, independent of the viewer's timezone. This is homepage eligibility only: the event directory, public hub and reporting permissions continue to follow the authoritative event lifecycle.

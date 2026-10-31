@@ -32,7 +32,7 @@ An event using **Approve unless disputed** follows that event-level policy inste
 
 Signed-in attendees do not need a player profile link. Guests need a valid event QR session. Both routes enforce the same event, pool, station, availability and revision checks. Only the current queued match can be started. Two devices cannot claim the same match or double-book a player/station. Starts and results record the actual signed-in account or guest session in the audit history.
 
-For pre-event printing, see [Permanent station QR signs](station-signs.md). Select persistent invitations before printing; the default rotating invitations expire too soon for paper signs.
+For pre-event printing, see [Permanent station QR signs](station-signs.md). New guest reporting setups use persistent invitations; check the invitation mode before printing signs for older events. Rotating invitations expire too soon for paper signs.
 
 TOs can still correct completed pool results. Existing safeguards prevent changing advancement once downstream finals have started. Forfeits, withdrawals and other exceptional decisions remain TO actions. If immediate acceptance is disabled, a submitted score waits for TO approval and the station remains occupied until approval.
 

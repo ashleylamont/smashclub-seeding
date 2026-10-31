@@ -19,7 +19,7 @@ Nemesis also supports fixed-pair **2v2 doubles**, open round robins, and open po
 
 ## Nemesis path
 
-Open **Run event** from the planner. Set up stations and pool queues, assign TOs, and control which pools can play. TOs can start matches, save live game counts, confirm results and review attendee reports. An in-progress score does not become a rating result. Signed-in attendees can report under the event policy; guests use a time-limited QR pass. The public **Event night** hub lists published events and provides pools, queues and results without requiring a login. See [event desk and displays](event-night-refinements.md) and [guest reporting and disputes](guest-event-night.md).
+Open **Run event** from the planner. Set up stations and pool queues, assign TOs, and control which pools can play. TOs can start matches, save live game counts, confirm results and review attendee reports. An in-progress score does not become a rating result. Signed-in attendees can report under the event policy; guests use a revocable QR pass. The public **Event night** hub lists published events and provides pools, queues and results without requiring a login. See [event desk and displays](event-night-refinements.md) and [guest reporting and disputes](guest-event-night.md).
 
 Resolve all pool matches and confirm pool finishing orders in the planner. Ties require an organiser decision. The top half of active entrants in each pool, rounded up (at least two), qualify for championship; the rest enter consolation. Preview the four final draws, then create them. Byes advance without inventing played scores. Confirmed results advance winners, while pending reports wait for the policy or a TO decision.
 

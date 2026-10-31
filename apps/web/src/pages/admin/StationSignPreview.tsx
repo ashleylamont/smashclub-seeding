@@ -131,8 +131,8 @@ export function StationSignPreview({
                 <li>Agree on the final score and submit it together.</li>
               </ol>
               <p className="station-sign-note">
-                No account needed. Your guest pass lasts one hour; scan this sign again if it
-                expires. For a forfeit or correction, ask a tournament organiser.
+                No account needed. Scan once; your guest pass stays valid until an organiser revokes
+                it or closes the event. For a forfeit or correction, ask a tournament organiser.
               </p>
             </article>
           ))}

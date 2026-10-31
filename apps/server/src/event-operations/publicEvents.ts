@@ -10,6 +10,7 @@ export async function publicEventNights(db: Db) {
       eventDate: eventPlans.eventDate,
       status: eventPlans.status,
       bracketMode: eventPlans.bracketMode,
+      competitionFormat: eventPlans.competitionFormat,
     })
     .from(eventPlans)
     .innerJoin(eventOperationSettings, eq(eventOperationSettings.eventPlanId, eventPlans.id))
@@ -20,5 +21,9 @@ export async function publicEventNights(db: Db) {
       eventPlans.id,
     )
     .limit(50);
-  return events.map((event) => ({ ...event, eventDate: event.eventDate.toISOString() }));
+  return events.map((event) => ({
+    ...event,
+    eventDate: event.eventDate.toISOString(),
+    drawPaused: false,
+  }));
 }

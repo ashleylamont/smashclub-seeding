@@ -198,7 +198,7 @@ export const eventGuestSettings = pgTable('event_guest_settings', {
   eventPlanId: planId().primaryKey(),
   enabled: boolean('enabled').notNull().default(false),
   showOnOverlay: boolean('show_on_overlay').notNull().default(false),
-  rotateInvitations: boolean('rotate_invitations').notNull().default(true),
+  rotateInvitations: boolean('rotate_invitations').notNull().default(false),
   secret: text('secret').notNull(),
 });
 export const eventGuestSessions = pgTable(
@@ -208,7 +208,9 @@ export const eventGuestSessions = pgTable(
     eventPlanId: planId(),
     tokenHash: text('token_hash').notNull(),
     generation: text('generation').notNull(),
-    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    // Null means valid until explicit revocation or the event stops accepting reports.
+    // Existing dated passes keep their original expiry during an upgrade.
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('event_guest_sessions_token_idx').on(t.tokenHash)],
