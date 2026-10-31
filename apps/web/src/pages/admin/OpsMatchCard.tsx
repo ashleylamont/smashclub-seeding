@@ -1,4 +1,4 @@
-import { matchPresentation } from '../../lib/matchPresentation';
+import { matchParticipantName, matchPresentation } from '../../lib/matchPresentation';
 import { useConfirmation } from '../../lib/confirmation';
 import { Select, SelectItem } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
@@ -300,7 +300,6 @@ export function MatchCard({
 
 function MatchContestants({ match }: { match: Match }) {
   const presentation = matchPresentation(match);
-  const absent = presentation.kind === 'bye' ? 'Bye' : 'Awaiting opponent';
   return (
     <>
       {[
@@ -308,7 +307,7 @@ function MatchContestants({ match }: { match: Match }) {
         { name: match.player2Name, score: match.score2 },
       ].map((player, index) => (
         <div className="ops-contestant" key={index}>
-          <strong>{player.name || absent}</strong>
+          <strong>{matchParticipantName(match, index === 0 ? 0 : 1)}</strong>
           {presentation.showScores && <b>{player.score ?? '–'}</b>}
         </div>
       ))}

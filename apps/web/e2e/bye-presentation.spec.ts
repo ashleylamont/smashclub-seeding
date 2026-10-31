@@ -126,6 +126,11 @@ test('real native first-round and propagated byes show automatic advancement and
   await expect(card).toContainText('advanced automatically');
   await expect(card.getByRole('spinbutton')).toHaveCount(0);
   await expect(card.getByRole('button')).toHaveCount(0);
+  const recordedBye = page
+    .locator('#event-results .event-match')
+    .filter({ hasText: propagated.label });
+  await expect(recordedBye).toContainText('advanced automatically');
+  await expect(recordedBye).not.toContainText('TBD');
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
     expect(

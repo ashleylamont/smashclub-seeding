@@ -2,6 +2,34 @@ import { expect, test } from '@playwright/test';
 import { AxeBuilder } from '@axe-core/playwright';
 import { mockEvent, PLAN_ID, ready } from './fixtures';
 import { bracketFixture } from '../test/fixtures/brackets';
+import { chooseOption } from '../test-support/controls';
+
+test('TO contestant rows use actual participant IDs rather than TBD placeholders', async ({
+  page,
+}) => {
+  const fixture = await mockEvent(page, { role: 'admin', bracket: true });
+  const bye = fixture.overview.matches.find((match) => match.outcome === 'bye')!;
+  Object.assign(bye, { player2Id: null, player2Name: 'TBD' });
+  await page.goto(`/operate/${PLAN_ID}`);
+  await chooseOption(page.getByRole('combobox', { name: 'View', exact: true }), 'all');
+  const card = page.locator('article.ops-match').filter({ hasText: bye.label });
+  await expect(card).toContainText('advanced automatically');
+  await expect(card.locator('.ops-contestant').nth(1)).toContainText('Bye');
+  await expect(card).not.toContainText('TBD');
+  Object.assign(bye, {
+    player1Id: null,
+    player1Name: 'TBD',
+    player2Id: 'fixture-bea',
+    player2Name: 'Bea',
+    status: 'blocked',
+    outcome: null,
+    winnerId: null,
+  });
+  await expect(card.locator('.ops-contestant').nth(0)).toContainText('Awaiting opponent');
+  await expect(card.locator('.ops-contestant').nth(1)).toContainText('Bea');
+  await expect(card).not.toContainText('TBD');
+  expect(fixture.unexpected).toEqual([]);
+});
 
 for (const adapter of ['signed-in', 'guest'] as const)
   test(`${adapter} completed native byes never look like played scores or pending opponents`, async ({
@@ -10,7 +38,13 @@ for (const adapter of ['signed-in', 'guest'] as const)
     const fixture = await mockEvent(page, { role: 'player', bracket: true });
     const base = fixture.snapshot.matches.find((match) => match.nativeBracketId)!;
     const generated = bracketFixture(5, false);
-    const bye = generated.find((match) => match.outcome === 'bye')!;
+    const sourceBye = generated.find((match) => match.outcome === 'bye')!;
+    // Actual native projections use a nonempty placeholder for missing IDs.
+    const bye = {
+      ...sourceBye,
+      player1Name: sourceBye.player1Id ? sourceBye.player1Name : 'TBD',
+      player2Name: sourceBye.player2Id ? sourceBye.player2Name : 'TBD',
+    };
     // Reproduce a later automatic resolution with a recorded feeder and real winner identity.
     const propagated = {
       ...bye,
@@ -87,6 +121,7 @@ for (const adapter of ['signed-in', 'guest'] as const)
     const results = page.locator('#event-results');
     await expect(results).toContainText('advanced automatically');
     await expect(results).not.toContainText('To be decided');
+    await expect(results).not.toContainText('TBD');
     for (const viewport of [
       { width: 1440, height: 900 },
       { width: 390, height: 844 },

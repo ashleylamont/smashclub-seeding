@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { matchPresentation, nextMeaningfulMatch } from '../src/lib/matchPresentation';
+import {
+  matchParticipantName,
+  matchPresentation,
+  nextMeaningfulMatch,
+} from '../src/lib/matchPresentation';
 import { matchStatus } from '../src/lib/playerMatchView';
 import type { PoolFlowData, PoolFlowMatch } from '../src/lib/poolFlow';
 import { bracketFixture } from './fixtures/brackets';
@@ -8,6 +12,22 @@ const matches = bracketFixture(5, false);
 const bye = matches.find((match) => match.outcome === 'bye')!;
 
 describe('recorded match presentation', () => {
+  it('uses participant IDs instead of native TBD placeholders for absent sides', () => {
+    const second = {
+      ...bye,
+      player1Id: null,
+      player1Name: 'TBD',
+      player2Id: 'b',
+      player2Name: 'Bea',
+      winnerId: 'b',
+    };
+    expect(matchParticipantName(second, 0)).toBe('Bye');
+    expect(matchParticipantName(second, 1)).toBe('Bea');
+    const pending = { ...second, status: 'blocked', outcome: null, winnerId: null };
+    expect(matchPresentation(pending).title).toBe('Bea · Awaiting opponent');
+    expect(matchParticipantName(pending, 0)).toBe('Awaiting opponent');
+    expect(matchParticipantName(pending, 1)).toBe('Bea');
+  });
   it('names native first-round and propagated automatic byes without scores or reporting', () => {
     for (const match of [bye, { ...bye, parent1MatchId: 'resolved-feeder', score1: 99 }])
       expect(matchPresentation(match)).toMatchObject({

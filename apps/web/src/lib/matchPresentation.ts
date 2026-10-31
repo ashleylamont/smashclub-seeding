@@ -38,7 +38,7 @@ export function matchPresentation(match: PresentedMatch) {
     kind === 'bye'
       ? `${winner} · Bye`
       : kind === 'pending'
-        ? `${match.player1Name || match.player2Name || 'Match'} · Awaiting opponent`
+        ? `${(match.player1Id ? match.player1Name : match.player2Id ? match.player2Name : null) || 'Match'} · Awaiting opponent`
         : `${match.player1Name || 'Player'} vs ${match.player2Name || 'Opponent'}`;
   const status =
     kind === 'bye'
@@ -72,6 +72,14 @@ export function matchPresentation(match: PresentedMatch) {
         ? match.status === 'ready' || match.status === 'playing'
         : kind === 'played' && match.outcome === 'played'),
   };
+}
+
+/** Native snapshots may name an absent slot "TBD"; identity decides whether it is an entrant. */
+export function matchParticipantName(match: PresentedMatch, side: 0 | 1) {
+  const id = side === 0 ? match.player1Id : match.player2Id;
+  if (id) return (side === 0 ? match.player1Name : match.player2Name) || 'Player';
+  const { kind } = matchPresentation(match);
+  return kind === 'bye' ? 'Bye' : kind === 'pending' ? 'Awaiting opponent' : 'No entrant';
 }
 
 /** Only expose a later pairing once the authoritative snapshot places the winner in it. */

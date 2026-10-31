@@ -1,4 +1,4 @@
-import { matchPresentation } from '../lib/matchPresentation';
+import { matchParticipantName, matchPresentation } from '../lib/matchPresentation';
 import { CharacterIcons } from './CharacterIcons';
 import type { LiveMatch } from '../lib/eventDisplay';
 export function MatchCard({
@@ -41,12 +41,7 @@ export function MatchCard({
           key={i}
         >
           <span>
-            {p.name ||
-              (presentation.kind === 'bye'
-                ? 'Bye'
-                : presentation.kind === 'pending'
-                  ? 'Awaiting opponent'
-                  : 'No entrant')}
+            {matchParticipantName(match, i === 0 ? 0 : 1)}
             <CharacterIcons slugs={p.characters ?? []} />
           </span>
           {presentation.showScores && <strong>{p.score ?? '—'}</strong>}
