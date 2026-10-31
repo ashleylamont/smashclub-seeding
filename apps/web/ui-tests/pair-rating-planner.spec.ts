@@ -125,11 +125,19 @@ for (const theme of ['dark', 'light'] as const)
       const region = roster.getByRole('region', { name: 'Pair ratings', exact: true });
       if (width === 390) {
         await region.focus();
+        await region.evaluate((element) => {
+          element.addEventListener(
+            'scrollend',
+            () => element.setAttribute('data-scroll-settled', 'true'),
+            { once: true },
+          );
+        });
         await page.keyboard.press('ArrowRight');
+        await expect(region).toHaveAttribute('data-scroll-settled', 'true');
         await expect
           .poll(() => region.evaluate((element) => element.scrollLeft))
           .toBeGreaterThan(0);
-        // Cancel the native keyboard scroll before restoring the capture framing.
+        // Native keyboard scrolling has ended; restore the capture framing.
         await roster.getByRole('combobox', { name: 'Sort pairs' }).focus();
         await region.evaluate((element) => element.scrollTo({ left: 0, behavior: 'instant' }));
         await expect.poll(() => region.evaluate((element) => element.scrollLeft)).toBe(0);
@@ -144,6 +152,7 @@ for (const theme of ['dark', 'light'] as const)
       );
       await page.mouse.move(0, 0);
       expect(await region.evaluate((element) => element.scrollLeft)).toBe(0);
+      expect(fixture.unexpected).toEqual([]);
       await page.screenshot({
         ...bracketCaptureOptions,
         path: testInfo.outputPath(`pair-planner-${theme}-${width}.png`),
