@@ -100,7 +100,7 @@ test('attendance preview preserves completed play, rejects stale changes, and ho
   // arrival cannot move an open player menu out of the viewport.
   await expect(page.locator('#attendee-list tbody tr')).toHaveCount(16);
   const attendance = page.locator('section.card').filter({
-    has: page.getByRole('heading', { name: 'Late arrivals and no-shows', exact: true }),
+    has: page.getByRole('heading', { name: 'Attendance changes', exact: true }),
   });
   await attendance
     .getByLabel('Find player by public alias', { exact: true })

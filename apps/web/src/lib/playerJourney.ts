@@ -62,7 +62,7 @@ export function playerJourney(data: JourneyData, player: string): PlayerJourney 
   if (['complete', 'cancelled'].includes(data.plan.status))
     return result(
       'closed',
-      'This event is closed. Your recorded results and standings remain below.',
+      'This event is closed. Your recorded results and standings remain below; ask a TO about corrections.',
     );
   const board = playerHubView(data, player);
   if (data.withdrawals?.some((row) => board.identities.has(row.playerId)))

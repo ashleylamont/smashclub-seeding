@@ -386,6 +386,10 @@
               {
                 "element": "dialog",
                 "message": "Use the shared UI component for dialog."
+              },
+              {
+                "element": "progress",
+                "message": "Use shared ui/Progress so browser defaults cannot bypass app theme tokens."
               }
             ]
           }

@@ -443,6 +443,11 @@
   overflow-wrap: anywhere;
   min-width: 0;
 }
+.ops-attendance-history {
+  margin-top: var(--s5);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--border);
+}
 .ops-broadcast-preview b {
   margin-left: auto;
 }

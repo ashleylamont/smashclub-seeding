@@ -11,6 +11,7 @@ import { InfoTip } from '../components/InfoTip';
 import { Checkbox } from '../components/ui/Checkbox';
 import { Switch } from '../components/ui/Switch';
 import { Disclosure } from '../components/ui/Disclosure';
+import { Progress } from '../components/ui/Progress';
 import { useConfirmation } from '../lib/confirmation';
 import './UiGallery.css';
 
@@ -120,6 +121,8 @@ function ControlExamples() {
         <Notice tone="success">Result confirmed.</Notice>
         <Notice tone="warning">Live updates interrupted. Last received scores are shown.</Notice>
         <Notice tone="danger">Could not save. Try again.</Notice>
+        <p>6 of 10 sets complete</p>
+        <Progress label="Example sets completed" value={6} max={10} />
         <p>
           Ranked rating{' '}
           <InfoTip label="Ranked rating">

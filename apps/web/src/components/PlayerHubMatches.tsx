@@ -1,4 +1,5 @@
 import { Disclosure } from './ui/Disclosure';
+import { Progress } from './ui/Progress';
 import { Select, SelectItem } from './ui/Select';
 import { Input } from './ui/Input';
 import { Button } from './ui/Button';
@@ -79,10 +80,10 @@ export function PlayerHubMatches({
           <p>
             {completed} of {playerMatches.length} matches complete
           </p>
-          <progress
+          <Progress
             value={completed}
             max={Math.max(1, playerMatches.length)}
-            aria-label="Your matches completed"
+            label="Your matches completed"
           />
           <p>{journey?.summary}</p>
           {journey?.consequences.length ? (
@@ -105,8 +106,8 @@ export function PlayerHubMatches({
           <h2>{playerName ? `${playerName}’s matches` : 'Matches & results'}</h2>
           {playerName && (
             <p>
-              {visible.length} {visible.length === 1 ? 'match' : 'matches'} in this view · station
-              calls first
+              {visible.length} {visible.length === 1 ? 'match' : 'matches'} in this view
+              {!closed && ' · station calls first'}
             </p>
           )}
         </div>
@@ -205,7 +206,9 @@ export function PlayerHubMatches({
         </div>
         {hiddenHistory > 0 && (
           <p className="player-match-history">
-            Showing your upcoming matches, recent results and submitted reports.{' '}
+            {closed
+              ? 'Showing your recent results and submitted reports.'
+              : 'Showing your upcoming matches, recent results and submitted reports.'}{' '}
             <Button onClick={() => setView('results')}>View all your recorded results</Button>
           </p>
         )}

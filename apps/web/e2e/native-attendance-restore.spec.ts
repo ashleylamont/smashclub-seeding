@@ -124,7 +124,7 @@ test('a phone TO reviews restoration, handles a stale preview, preserves played/
   await page.goto(`/admin/event-operations?plan=${planId}&view=players`);
   await expect(page.locator('#attendee-list tbody tr')).toHaveCount(8);
   const controls = page.locator('section.card').filter({
-    has: page.getByRole('heading', { name: 'Late arrivals and no-shows', exact: true }),
+    has: page.getByRole('heading', { name: 'Attendance changes', exact: true }),
   });
   await chooseOption(controls.getByRole('combobox', { name: 'Change', exact: true }), 'withdraw');
   await chooseOption(controls.getByRole('combobox', { name: 'Player', exact: true }), target);
