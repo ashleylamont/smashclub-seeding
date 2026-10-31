@@ -2,7 +2,7 @@ import { Dialog } from './ui/Dialog';
 import { Button } from './ui/Button';
 import { Select, SelectItem } from './ui/Select';
 import { Disclosure } from './ui/Disclosure';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { captureError, LocalCapture } from '../lib/localCapture';
 
 /** Capture stays on this device: no upload, audio request, or automatic permission prompt. */
@@ -10,10 +10,12 @@ export function OverlaySetup({
   stations,
   focus,
   onFocus,
+  presentationControls,
 }: {
   stations: { id: string; name: string }[];
   focus: string;
   onFocus: (id: string) => void;
+  presentationControls?: ReactNode;
 }) {
   const [open, setOpen] = useState(() => new URLSearchParams(location.search).get('setup') === '1');
   const [showButton, setShowButton] = useState(
@@ -168,6 +170,7 @@ export function OverlaySetup({
               ))}
             </Select>
           </label>
+          {presentationControls}
           <Disclosure title="Use with OBS" defaultOpen>
             <ol>
               <li>Add this URL as a Browser Source at 1920 × 1080.</li>

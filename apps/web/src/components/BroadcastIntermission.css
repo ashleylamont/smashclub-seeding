@@ -1,0 +1,154 @@
+.event-overlay.is-intermission
+  > :is(.broadcast-rail, .broadcast-topline, .broadcast-matchup, .broadcast-footer),
+.event-overlay.is-intermission .event-capture {
+  display: none;
+}
+.broadcast-intermission {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--s5);
+  padding: 3vh 4vw;
+  background: var(--event-ink);
+  color: var(--event-bone);
+  font-family: var(--font-body);
+  font-size: clamp(14px, 1.1vw, 22px);
+}
+.intermission-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--s5);
+  border-bottom: 2px solid var(--event-red);
+  padding-bottom: var(--s4);
+}
+.broadcast-intermission .intermission-heading > svg {
+  width: clamp(32px, 3vw, 58px);
+  height: clamp(32px, 3vw, 58px);
+  flex-shrink: 0;
+  color: var(--event-red);
+}
+.intermission-heading > div {
+  flex: 1;
+  min-width: 0;
+}
+.intermission-heading h1 {
+  font-size: clamp(24px, 2.3vw, 44px);
+  line-height: 1.1;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.intermission-heading p {
+  margin: 0 0 var(--s2);
+  color: var(--event-muted);
+  font-size: 0.8em;
+}
+.intermission-heading > span {
+  color: var(--event-orange);
+}
+.intermission-content {
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+}
+.intermission-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s5);
+}
+.intermission-section-heading h2 {
+  margin: 0;
+  font-size: clamp(22px, 2vw, 38px);
+}
+.intermission-section-heading > span {
+  flex-shrink: 0;
+  color: var(--event-muted);
+}
+.intermission-standings {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.intermission-standings th {
+  text-align: left;
+  color: var(--event-muted);
+  font-size: 0.85em;
+}
+.intermission-standings th:first-child {
+  width: 54%;
+}
+.intermission-standings :is(th, td) {
+  padding: 1.2vh var(--s3);
+  border-bottom: 1px solid var(--event-rule);
+  overflow-wrap: anywhere;
+}
+.intermission-standings td:not(:first-child) {
+  font-family: var(--font-number);
+}
+.intermission-content .event-bracket-lane > h4 {
+  display: none;
+}
+.intermission-content .event-bracket-rounds {
+  max-height: none;
+}
+.intermission-content .event-bracket-match {
+  font-family: var(--font-body);
+  background: #201f1a;
+}
+.intermission-content .event-bracket-match small {
+  font-size: 0.8em;
+}
+.intermission-content .event-bracket-match > div {
+  font-size: 1em;
+}
+.intermission-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s3);
+  border-top: 1px solid var(--event-rule);
+  padding-top: var(--s3);
+}
+.intermission-footer p {
+  margin: 0;
+  max-width: 70%;
+  overflow-wrap: anywhere;
+}
+.intermission-footer > span {
+  font-family: var(--font-number);
+  color: var(--event-muted);
+}
+.intermission-controls {
+  display: flex;
+  gap: var(--s3);
+}
+.event-overlay.is-intermission .broadcast-offline {
+  left: 0;
+  z-index: 3;
+  font-size: clamp(12px, 1vw, 20px);
+}
+@media (max-width: 700px) {
+  .broadcast-intermission {
+    padding: var(--s4);
+    gap: var(--s3);
+  }
+  .intermission-heading > span {
+    display: none;
+  }
+  .intermission-heading > svg {
+    width: 32px;
+  }
+  .intermission-section-heading {
+    display: block;
+  }
+}
+
+.intermission-content .event-bracket-canvas {
+  margin-inline: auto;
+}
+.intermission-content .event-bracket-round h4 {
+  font-size: 0.85em;
+}

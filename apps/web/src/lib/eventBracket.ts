@@ -23,6 +23,13 @@ export function liveBracketSide(match: LiveMatch, side: 0 | 1, labels: Map<strin
     ? `${feed.outcome === 'loser' ? 'Loser' : 'Winner'} of ${labels.get(feed.matchId) ?? 'previous match'}`
     : 'To be decided';
 }
+export function liveBracketRound(match: LiveMatch) {
+  return match.bracketLane === 'reset'
+    ? 2
+    : match.bracketLane === 'final'
+      ? 1
+      : (match.bracketRound ?? match.nativeRound ?? 1);
+}
 export function liveBracketStatus(match: LiveMatch) {
   if (match.status === 'complete') {
     if (match.outcome === 'bye') return 'Bye';

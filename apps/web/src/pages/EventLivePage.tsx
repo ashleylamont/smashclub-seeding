@@ -1,3 +1,6 @@
+import { BroadcastIntermission } from '../components/BroadcastIntermission';
+import { BroadcastPresentationControls } from '../components/BroadcastPresentationControls';
+import { broadcastPresentation, progressInterval } from '../lib/broadcastProgress';
 import { PlayerEventAlias } from './GuestEventPage';
 import { Progress } from '../components/ui/Progress';
 import { useEffect, useState, type CSSProperties } from 'react';
@@ -40,6 +43,16 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
   const [focus, setFocus] = useState(
     () => new URLSearchParams(window.location.search).get('station') ?? '',
   );
+  const [presentation, setPresentation] = useState(() => broadcastPresentation(location.search));
+  const [cycleSeconds, setCycleSeconds] = useState(() => progressInterval(location.search));
+  const changePresentation = (mode: typeof presentation, seconds: number) => {
+    const url = new URL(location.href);
+    url.searchParams.set('presentation', mode);
+    url.searchParams.set('cycleSeconds', String(seconds));
+    history.replaceState(history.state, '', url);
+    setPresentation(mode);
+    setCycleSeconds(seconds);
+  };
   const changeFocus = (stationId: string) => {
     const url = new URL(window.location.href);
     if (stationId) url.searchParams.set('station', stationId);
@@ -117,9 +130,13 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
       : sections.playing[0];
   const displayPlayers = broadcastPlayers(data, onStream);
   const showName = data.plan.name.split(' · ')[0]!;
+  const intermission = presentation === 'progress' || (presentation === 'auto' && !onStream);
   if (overlay)
     return (
-      <div className="event-display event-overlay" style={variables}>
+      <div
+        className={`event-display event-overlay${intermission ? ' is-intermission' : ''}`}
+        style={variables}
+      >
         <aside className={`broadcast-rail${guestQr ? ' has-guest-pass' : ''}`}>
           <div className="broadcast-club">
             <NemesisMark />
@@ -194,6 +211,14 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
           stations={data.stations}
           focus={focusedStation?.id ?? focus}
           onFocus={changeFocus}
+          presentationControls={
+            <BroadcastPresentationControls
+              mode={presentation}
+              seconds={cycleSeconds}
+              onMode={(mode) => changePresentation(mode, cycleSeconds)}
+              onSeconds={(seconds) => changePresentation(presentation, seconds)}
+            />
+          }
         />
         <footer className="broadcast-footer">
           <BroadcastResults
@@ -202,6 +227,18 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
             announcement={announcement?.message ?? ''}
           />
         </footer>
+        {intermission && (
+          <BroadcastIntermission
+            data={{
+              ...data,
+              matches: visibleMatches,
+              nativeBrackets: selectedPool ? [] : data.nativeBrackets,
+            }}
+            seconds={cycleSeconds}
+            announcement={announcement?.message ?? ''}
+            controls={search.get('controls') !== '0'}
+          />
+        )}
         {(!online || query.isError) && (
           <div className="broadcast-offline" role="status">
             Connection interrupted · last received scores

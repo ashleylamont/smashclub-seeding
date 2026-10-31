@@ -3,6 +3,7 @@ import type { LiveMatch } from '../lib/eventDisplay';
 import { eliminationLaneLayout, type EliminationLane } from '../lib/eliminationLayout';
 import {
   liveBracketFeeds,
+  liveBracketRound,
   liveBracketSide,
   liveBracketStatus,
   liveBracketWinner,
@@ -16,12 +17,18 @@ export function EventBracketLane({
   title,
   label,
   labels,
+  roundWindow = false,
+  roundTitles,
+  cardWidth = 250,
 }: {
   matches: LiveMatch[];
   lane: EliminationLane;
   title: string;
   label: string;
   labels: Map<string, string>;
+  roundWindow?: boolean;
+  roundTitles?: string[];
+  cardWidth?: number;
 }) {
   const canvas = useRef<HTMLDivElement>(null);
   const [measurements, setMeasurements] = useState<
@@ -56,29 +63,40 @@ export function EventBracketLane({
     element.querySelectorAll('.event-bracket-match').forEach((card) => observer.observe(card));
     measure();
     return () => observer.disconnect();
-  }, [matches]);
+  }, [matches, cardWidth]);
   const geometry = {
-    width: 250,
+    width: cardWidth,
     height,
-    column: 286,
+    column: cardWidth + 36,
     row: height + 24,
     top: 40,
     side1: height / 2,
     side2: height * 0.8,
   };
   const rounds = [...new Set(matches.map((match) => match.nativeRound ?? 1))].sort((a, b) => a - b);
+  const windowRounds = [...new Set(matches.map(liveBracketRound))].sort((a, b) => a - b);
+  const windowSlots = new Map(
+    windowRounds.flatMap((round) =>
+      matches
+        .filter((match) => liveBracketRound(match) === round)
+        .sort((a, b) => (a.nativeSlot ?? 0) - (b.nativeSlot ?? 0) || a.id.localeCompare(b.id))
+        .map((match, index) => [match.id, index] as const),
+    ),
+  );
   const layout = eliminationLaneLayout(
     matches,
     lane,
     {
       id: (match) => match.id,
       round: (match) =>
-        lane === 'finals'
-          ? match.bracketLane === 'reset'
-            ? 2
-            : 1
-          : (match.bracketRound ?? rounds.indexOf(match.nativeRound ?? 1) + 1),
-      slot: (match) => match.nativeSlot ?? 0,
+        roundWindow
+          ? windowRounds.indexOf(liveBracketRound(match)) + 1
+          : lane === 'finals'
+            ? match.bracketLane === 'reset'
+              ? 2
+              : 1
+            : (match.bracketRound ?? rounds.indexOf(match.nativeRound ?? 1) + 1),
+      slot: (match) => (roundWindow ? (windowSlots.get(match.id) ?? 0) : (match.nativeSlot ?? 0)),
       feeds: liveBracketFeeds,
       targetPort: (match, side) => measurements[match.id]?.rows[side] ?? height / 2,
       sourcePort: (match, outcome) => {
@@ -105,6 +123,14 @@ export function EventBracketLane({
     },
     geometry,
   );
+  const canvasHeight = roundWindow
+    ? Math.max(
+        150,
+        ...layout.nodes.map(
+          (node) => node.y + (measurements[node.match.id]?.height ?? height) + 12,
+        ),
+      )
+    : layout.height;
   return (
     <section className="event-bracket-lane" data-bracket-lane={lane}>
       {title && <h4>{title}</h4>}
@@ -112,12 +138,12 @@ export function EventBracketLane({
         <div
           className="event-bracket-canvas"
           ref={canvas}
-          style={{ width: layout.width, height: layout.height }}
+          style={{ width: layout.width, height: canvasHeight }}
         >
           <svg
             className="event-bracket-lines"
             width={layout.width}
-            height={layout.height}
+            height={canvasHeight}
             aria-hidden="true"
           >
             {layout.edges.map((edge) => (
@@ -133,15 +159,20 @@ export function EventBracketLane({
             ))}
           </svg>
           {layout.rounds.map((round, index) => (
-            <section className="event-bracket-round" key={index} style={{ left: round.x }}>
+            <section
+              className="event-bracket-round"
+              key={index}
+              style={{ left: round.x, width: geometry.width }}
+            >
               <h4>
-                {title
-                  ? round.label
-                  : index === layout.rounds.length - 1
-                    ? 'Final'
-                    : index === layout.rounds.length - 2
-                      ? 'Semi-finals'
-                      : round.label}
+                {roundTitles?.[index] ??
+                  (title
+                    ? round.label
+                    : index === layout.rounds.length - 1
+                      ? 'Final'
+                      : index === layout.rounds.length - 2
+                        ? 'Semi-finals'
+                        : round.label)}
               </h4>
             </section>
           ))}
