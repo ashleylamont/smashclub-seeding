@@ -1,4 +1,25 @@
 /* Shared component appearance. Page CSS owns composition and content only. */
+.ui-progress {
+  appearance: none;
+  width: 100%;
+  height: var(--s2);
+  border: 0;
+  border-radius: var(--r1);
+  background: var(--surface-2);
+}
+.ui-progress::-webkit-progress-bar {
+  background: var(--surface-2);
+  border-radius: var(--r1);
+}
+.ui-progress::-webkit-progress-value {
+  background: var(--accent);
+  border-radius: var(--r1);
+}
+.ui-progress::-moz-progress-bar {
+  background: var(--accent);
+  border-radius: var(--r1);
+}
+
 .ui-button {
   cursor: pointer;
 }

@@ -104,9 +104,7 @@ export function AttendanceControls({
   return (
     <section className="card">
       <h3>
-        {data.plan.competitionFormat === 'doubles'
-          ? 'Pair withdrawals and no-shows'
-          : 'Late arrivals and no-shows'}
+        {data.plan.competitionFormat === 'doubles' ? 'Pair attendance' : 'Attendance changes'}
       </h3>
       <p className="muted">
         {data.plan.softLockedAt
@@ -310,7 +308,9 @@ export function AttendanceControls({
       )}
       {message && <p role="status">{message}</p>}
       {data.plan.liveOwned && (
-        <OpsEventHistory data={data} active={historyActive} attendanceOnly onMatch={() => {}} />
+        <div className="ops-attendance-history">
+          <OpsEventHistory data={data} active={historyActive} attendanceOnly onMatch={() => {}} />
+        </div>
       )}
     </section>
   );

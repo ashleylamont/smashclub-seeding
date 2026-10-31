@@ -1,36 +1,52 @@
 .player-event-hub {
   min-width: 0;
 }
+.player-event-intro {
+  display: grid;
+  gap: var(--s4);
+}
+.player-event-intro > * {
+  margin: 0;
+}
 .player-event-nav {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  margin: 0 0 1.5rem;
-}
-.player-event-nav a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 0.5rem 0.85rem;
-  border: 1px solid var(--border);
-  border-radius: 0.4rem;
-  color: var(--text);
-  background: var(--surface);
-  text-decoration: none;
-  font-weight: 600;
-}
-.player-event-nav a:hover {
-  text-decoration: underline;
-}
-.player-event-nav a:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
+  gap: var(--s2);
 }
 .player-event-hub section[id] {
   scroll-margin-top: calc(var(--nav-h, 80px) + 1rem);
 }
-.player-event-hub > section + section {
-  margin-top: 2rem;
+#my-matches {
+  display: grid;
+  gap: var(--s4);
+}
+.player-event-progress {
+  display: grid;
+  gap: var(--s2);
+  border-top: var(--s1) solid var(--accent);
+}
+.player-event-progress h2,
+.player-event-progress p {
+  margin: 0;
+}
+.player-event-progress > .btn {
+  justify-self: start;
+}
+.player-event-hub .pool-score-selection {
+  display: grid;
+  gap: var(--s3);
+}
+.player-event-hub .player-match-refine {
+  margin: 0;
+}
+.player-event-hub .ops-match-meta {
+  align-items: start;
+  font-size: var(--fs-xs);
+}
+.player-event-hub .guest-report-status {
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  color: var(--text-soft);
 }
 .player-event-progress progress {
   width: min(100%, 24rem);
@@ -46,33 +62,82 @@
 }
 @media (max-width: 600px) {
   .player-event-nav {
-    gap: 0.4rem;
+    gap: var(--s2);
   }
-  .player-event-nav a {
+  .player-event-nav .btn {
     flex: 1 0 auto;
     justify-content: center;
   }
 }
 
-.player-event-board-section {
-  background: var(--event-ink);
-  padding: clamp(1rem, 3vw, 2rem);
-  border: 1px solid var(--event-rule);
+.player-event-hub .player-event-board-section {
+  --event-ink: var(--bg-elev);
+  --event-bone: var(--text-h);
+  --event-red: var(--accent);
+  --event-orange: var(--warn);
+  --event-muted: var(--text-soft);
+  --event-rule: var(--border);
+  background: var(--bg-elev);
+  padding: var(--s5);
+  border: 1px solid var(--border);
+  font-family: var(--font-body);
+  color: var(--text);
+}
+.player-event-board-section h2 {
+  font-size: var(--fs-xl);
+  margin: 0;
+}
+.player-event-board-section h3 {
+  font-size: var(--fs-lg);
+}
+.player-event-board-section :is(.event-pool, .event-prize, .event-bracket-match) {
+  background: var(--surface);
+}
+.player-event-board-section :is(.event-stations, .event-pool-progress, .event-brackets) {
+  margin: var(--s4) 0;
+}
+.player-event-board-section :is(.event-live-note, .event-pool > p, .event-prize p) {
+  font-size: var(--fs-sm);
+  line-height: var(--line-body);
+}
+.player-event-board-section :is(.event-match-meta, .event-bracket-match small, .event-pool thead) {
+  font-size: var(--fs-xs);
+}
+.player-event-board-section :is(.event-bracket-match > div, .event-pool table) {
+  font-size: var(--fs-sm);
+}
+.player-event-board-section .event-pool td {
+  font-family: var(--font-number);
+}
+.player-event-board-section .event-match.is-playing {
+  background: var(--accent-bg);
+  color: var(--text-h);
+}
+.player-event-board-section .event-match.is-playing .event-match-meta {
+  color: var(--text-soft);
+}
+@media (max-width: 600px) {
+  .player-event-hub .player-event-board-section {
+    padding: var(--s4);
+  }
 }
 
 .player-event-overview {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
+  gap: var(--s3);
+  margin-bottom: 0;
   color: var(--text-soft);
 }
 .player-event-overview progress {
   width: min(100%, 15rem);
 }
 .player-event-connection {
+  padding: 0;
   color: var(--text-soft);
+  font-size: var(--fs-sm);
+  letter-spacing: normal;
 }
 .player-event-hub .event-announcements {
   border-color: var(--border-strong);
@@ -80,11 +145,11 @@
 }
 
 .player-event-board-group {
-  margin-top: 2rem;
+  min-width: 0;
 }
 .player-bracket-path {
   display: grid;
-  gap: 0.75rem;
+  gap: var(--s3);
   padding-left: 1.5rem;
 }
 .player-bracket-path li {
@@ -101,7 +166,7 @@
 }
 .player-event-next-rounds {
   display: grid;
-  gap: 0.4rem;
+  gap: var(--s2);
   margin: 0.75rem 0;
 }
 .player-event-next-rounds > div {

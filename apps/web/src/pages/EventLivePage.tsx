@@ -1,4 +1,5 @@
 import { PlayerEventAlias } from './GuestEventPage';
+import { Progress } from '../components/ui/Progress';
 import { useEffect, useState, type CSSProperties } from 'react';
 import { eventUnavailable } from '../lib/eventErrors';
 import { useQuery } from '@tanstack/react-query';
@@ -146,10 +147,10 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
               {String(sections.complete.length).padStart(2, '0')}
               <i>/{String(sections.total).padStart(2, '0')}</i>
             </strong>
-            <progress
+            <Progress
               value={sections.complete.length}
               max={Math.max(1, sections.total)}
-              aria-label="Sets completed"
+              label="Sets completed"
             />
             <small>SETS COMPLETE</small>
           </div>

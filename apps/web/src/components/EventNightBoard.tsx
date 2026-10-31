@@ -1,4 +1,5 @@
 import { EventBracketLane } from './EventBracketLane';
+import { Progress } from './ui/Progress';
 import { liveBracketLanes } from '../lib/eventBracket';
 import type { LiveMatch, PoolQualifierSlot } from '../lib/eventDisplay';
 import { poolStandings } from '../lib/eventQueue';
@@ -122,10 +123,10 @@ export function EventPools({
                 {pool.complete} / {pool.total} sets recorded
                 {names.length ? ` · ${names.join(', ')}` : ' · Any available station'}
               </p>
-              <progress
+              <Progress
                 value={pool.complete}
                 max={Math.max(1, pool.total)}
-                aria-label={`${pool.division} Pool ${String.fromCharCode(65 + pool.poolIndex)} progress`}
+                label={`${pool.division} Pool ${String.fromCharCode(65 + pool.poolIndex)} progress`}
               />
               <div className="event-pool-table">
                 <table>
@@ -196,7 +197,7 @@ export function EventBrackets({
   const names = new Map(entrants.map((player) => [player.id, player.name]));
   const labels = new Map(matches.map((match) => [match.id, match.label]));
   return (
-    <section className="event-brackets">
+    <section className="event-brackets live-event-brackets">
       <h2>Brackets</h2>
       {brackets.map((bracket) => {
         const games = matches.filter((match) => match.nativeBracketId === bracket.id);
