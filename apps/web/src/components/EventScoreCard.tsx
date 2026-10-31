@@ -115,7 +115,9 @@ export function EventScoreCard({
           <p>Check the score with a TO before submitting again.</p>
           <Button
             onClick={() => {
-              reset();
+              setRevision(match.revision);
+              setRequestId(crypto.randomUUID());
+              update({ error: '', sent: null });
               setRetryRejectedFor(reportingIdentity);
             }}
           >

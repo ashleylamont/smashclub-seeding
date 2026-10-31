@@ -7,6 +7,7 @@ import { PlayerHubBoard } from '../components/PlayerHubBoard';
 import { PoolRoundSchedule, PoolStationQueue } from '../components/PoolStationQueue';
 import { usePlayerEventHub } from '../lib/usePlayerEventHub';
 import { guestTimeLeft, type GuestSession } from '../lib/guestReporting';
+import { matchesPool } from '../lib/poolFlow';
 import '../styles/event.css';
 import './EventLive.css';
 import './PlayerEvent.css';
@@ -45,6 +46,12 @@ export function PlayerEvent({ planId }: { planId: string }) {
     canWrite,
     error,
   } = hub;
+  const announcements =
+    data?.announcements
+      .filter((item) => !item.expiresAt || Date.parse(item.expiresAt) > now)
+      .slice(0, 2) ?? [];
+  const progressMatches = data?.matches.filter((match) => matchesPool(match, selectedPool)) ?? [];
+  const progressComplete = progressMatches.filter((match) => match.status === 'complete').length;
   if (unpublished) return <p role="alert">This event is unavailable or has not been published.</p>;
   return (
     <div className="ops-page player-event-hub">
@@ -52,6 +59,19 @@ export function PlayerEvent({ planId }: { planId: string }) {
         title={publicEvent.data?.plan.name ?? 'Your event'}
         description="Choose your name to find your matches."
       />
+      {data && (
+        <aside className="player-event-overview" aria-label="Event progress">
+          <span>
+            {selectedPool ? 'Pool progress' : 'Event progress'} · {progressComplete} /{' '}
+            {progressMatches.length} sets complete
+          </span>
+          <progress
+            aria-label="Sets completed"
+            value={progressComplete}
+            max={Math.max(1, progressMatches.length)}
+          />
+        </aside>
+      )}
       <nav className="player-event-nav" aria-label="Event sections">
         <a href="#my-matches">Find my matches</a>
         <a href="#what-next">What next</a>
@@ -64,15 +84,16 @@ export function PlayerEvent({ planId }: { planId: string }) {
           Your linked profile: <strong>{claim.playerName}</strong>.
         </p>
       )}
-      {data?.announcements.length ? (
-        <aside className="card" aria-label="Announcements">
-          {data.announcements
-            .filter((item) => !item.expiresAt || Date.parse(item.expiresAt) > now)
-            .map((item) => (
+      {announcements.length > 0 && (
+        <aside className="card event-announcements" aria-label="Announcements">
+          <strong>Announcements</strong>
+          <div>
+            {announcements.map((item) => (
               <p key={item.id}>{item.message}</p>
             ))}
+          </div>
         </aside>
-      ) : null}
+      )}
       {reporter && !closed && (
         <p className="muted">
           {reporter === 'guest'
@@ -110,8 +131,15 @@ export function PlayerEvent({ planId }: { planId: string }) {
           accessDenied={accessDenied}
         />
       )}
-      {(!online || publicEvent.isError) && !unpublished && data && (
-        <p role="alert">Live updates interrupted. Scores shown may be out of date.</p>
+      {data && (
+        <p
+          className="event-connection player-event-connection"
+          role={!online || publicEvent.isError ? 'alert' : 'status'}
+        >
+          {!online || publicEvent.isError
+            ? 'Live updates interrupted. Scores shown may be out of date.'
+            : 'Live event · results refresh automatically'}
+        </p>
       )}
       {!data && !unpublished && (
         <GuestLoadState

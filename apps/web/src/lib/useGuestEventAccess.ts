@@ -26,7 +26,8 @@ export function useGuestEventAccess(planId: string) {
     generation: number;
     promise: Promise<GuestSession>;
   } | null>(null);
-  const now = useGuestClock(Boolean(session?.expiresAt));
+  // The hub also expires public announcements for anonymous and durable-pass viewers.
+  const now = useGuestClock();
   const valid = guestSessionCurrent(session, now);
   useEffect(() => {
     const acceptInvitation = () => {

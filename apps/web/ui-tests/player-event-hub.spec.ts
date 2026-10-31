@@ -300,3 +300,36 @@ test('guest permission polling failure disables writes without switching to the 
   await expect(card.getByRole('spinbutton').nth(0)).toHaveValue('2');
   expect(fixture.unexpected).toEqual([]);
 });
+
+for (const durablePass of [false, true])
+  test(`${durablePass ? 'durable guest pass' : 'anonymous viewer'} expires public announcements without another event update`, async ({
+    page,
+  }) => {
+    const fixture = await mockEvent(page);
+    Object.assign(fixture.snapshot, {
+      announcements: [
+        {
+          id: 'timed-announcement',
+          message: 'Timed venue announcement',
+          expiresAt: '2026-10-04T00:00:30Z',
+        },
+      ],
+    });
+    if (durablePass) {
+      const session = { sessionToken: 'durable-fixture-pass'.repeat(3), expiresAt: null };
+      fixture.responses['eventOps.guests.matches'] = { ...fixture.snapshot, reports: [] };
+      await page.addInitScript(
+        ({ planId, session }) =>
+          localStorage.setItem(`nemesis:guest:${planId}`, JSON.stringify(session)),
+        { planId: PLAN_ID, session },
+      );
+    }
+    await page.goto(`/play/${PLAN_ID}`);
+    await expect(page.getByText('Timed venue announcement', { exact: true })).toBeVisible();
+    if (durablePass)
+      await expect(page.locator('.guest-pass-expiry')).toContainText('valid until revoked');
+    await page.clock.setFixedTime(new Date('2026-10-04T00:01:00Z'));
+    await expect(page.getByText('Timed venue announcement', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('complementary', { name: 'Announcements' })).toHaveCount(0);
+    expect(fixture.unexpected).toEqual([]);
+  });

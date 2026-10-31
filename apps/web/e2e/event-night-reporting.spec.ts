@@ -95,16 +95,19 @@ test('an unlinked signed-in attendee reports different players and loses the for
         'Match reporting opens when the organiser locks or resumes the pool draw.',
       ),
     ).toBeVisible();
-    await expect(reporting.getByRole('button', { name: 'Submit score for approval' })).toHaveCount(
-      0,
-    );
+    await expect(
+      reporting.getByRole('button', { name: 'Submit score for TO approval' }),
+    ).toHaveCount(0);
     await mutate(page.request, 'eventOps.softLockPools', { planId, confirm: true });
     await expect(
       reporting.getByText(
         'Match reporting opens when the organiser locks or resumes the pool draw.',
       ),
     ).toHaveCount(0);
-    await chooseOption(reporting.getByRole('combobox', { name: 'Match view', exact: true }), 'all');
+    await chooseOption(
+      reporting.getByRole('combobox', { name: 'Match view', exact: true }),
+      'matches',
+    );
     const chosen = ['upper', 'lower'].map((division) =>
       snapshot.matches.find((match) => match.division === division)!,
     );
@@ -112,7 +115,7 @@ test('an unlinked signed-in attendee reports different players and loses the for
       const card = reporting.locator('article.ops-match:visible').filter({ hasText: match.label });
       await card.locator('input[type="number"]').nth(0).fill('2');
       await card.locator('input[type="number"]').nth(1).fill('1');
-      await card.getByRole('button', { name: 'Submit score for approval' }).click();
+      await card.getByRole('button', { name: 'Submit score for TO approval' }).click();
       await expect(card).toContainText('Score submitted for TO approval');
     }
     const reports = await query<{ id: string; matchId: string; status: string }[]>(
@@ -138,7 +141,7 @@ test('an unlinked signed-in attendee reports different players and loses the for
         .filter({ hasText: chosen.find((match) => match.id === reports[0]!.matchId)!.label }),
     ).toContainText('Confirmed result: 2 – 1');
     await expect(
-      reporting.getByRole('button', { name: 'Submit score for approval' }).first(),
+      reporting.getByRole('button', { name: 'Submit score for TO approval' }).first(),
     ).toBeVisible();
     await mutate(page.request, 'eventOps.settings', {
       planId,
@@ -149,9 +152,9 @@ test('an unlinked signed-in attendee reports different players and loses the for
       'This event is unavailable or has not been published.',
     );
     await expect(reporting.locator('article.ops-match:visible')).toHaveCount(0);
-    await expect(reporting.getByRole('button', { name: 'Submit score for approval' })).toHaveCount(
-      0,
-    );
+    await expect(
+      reporting.getByRole('button', { name: 'Submit score for TO approval' }),
+    ).toHaveCount(0);
   } finally {
     await attendee.close();
   }
