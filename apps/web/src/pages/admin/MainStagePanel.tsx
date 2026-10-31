@@ -1,3 +1,5 @@
+import { Button } from '../../components/ui/Button';
+import { Disclosure } from '../../components/ui/Disclosure';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { Select, SelectItem } from '../../components/ui/Select';
 import { BroadcastSideControls } from './BroadcastSideControls';
@@ -74,6 +76,25 @@ export function MainStagePanel({
       >
         Open station overlay ↗
       </a>
+      <Disclosure title="Intermission browser sources">
+        <p>
+          Auto shows tournament progress between games and returns to gameplay when this station
+          starts a match. Copy the chosen URL into OBS.
+        </p>
+        <div className="ops-broadcast-source-links">
+          {(['auto', 'progress'] as const).map((mode) => (
+            <Button asChild key={mode}>
+              <a
+                href={`/overlay/${encodeURIComponent(data.plan.id)}?${new URLSearchParams({ ...(station ? { station: station.id } : {}), presentation: mode, controls: '0' })}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {mode === 'auto' ? 'Automatic intermission overlay ↗' : 'Progress-only overlay ↗'}
+              </a>
+            </Button>
+          ))}
+        </div>
+      </Disclosure>
     </section>
   );
 }
