@@ -1,8 +1,21 @@
 import type { EventPlanView } from '../../../lib/apiTypes';
 
-export function PairRatingEvidence({ entry }: { entry: EventPlanView['entries'][number] }) {
+export function PairRatingEvidence({
+  entry,
+  frozen,
+}: {
+  entry: EventPlanView['entries'][number];
+  frozen: boolean;
+}) {
   const rating = entry.pairRating;
-  if (!rating) return <span className="muted">Breakdown unavailable for this frozen roster.</span>;
+  if (!rating)
+    return (
+      <div className="muted">
+        {frozen
+          ? 'Breakdown unavailable for this frozen roster.'
+          : 'Select two active members to calculate pair ratings.'}
+      </div>
+    );
   const adjustment = Math.round(rating.adjustment);
   return (
     <>

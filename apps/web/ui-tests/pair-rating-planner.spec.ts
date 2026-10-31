@@ -187,5 +187,12 @@ test('frozen roster sorts the displayed snapshots and marks old missing breakdow
   await chooseOption(page.getByRole('combobox', { name: 'Sort pairs' }), 'skill_desc');
   await expect(rows.nth(0)).toContainText('Charlie / Drew');
   await expect(rows.nth(0)).toContainText('1800 ± 80');
+  fixture.view.plan.status = 'draft';
+  fixture.view.entries[0]!.playerId = null;
+  fixture.view.issues.blocking = [{ code: 'unresolved_members', message: 'Resolve both members.' }];
+  await page.reload();
+  await expect(ratings).toContainText('Select two active members to calculate pair ratings.');
+  await expect(ratings).not.toContainText('Breakdown unavailable for this frozen roster.');
+  await expect(page.getByRole('button', { name: 'Freeze team seeds', exact: true })).toBeDisabled();
   expect(fixture.unexpected).toEqual([]);
 });

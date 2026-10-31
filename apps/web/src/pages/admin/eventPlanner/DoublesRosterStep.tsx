@@ -198,7 +198,7 @@ export function DoublesRosterStep({
                 <td>
                   {e.playerName}
                   {e.teamName && <> · {e.teamName}</>}
-                  <PairRatingEvidence entry={e} />
+                  <PairRatingEvidence entry={e} frozen={!editable} />
                   {editable && view.plan.structure === 'dual_division' && (
                     <Select
                       aria-label={`Division preference for ${e.playerName}`}
