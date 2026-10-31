@@ -1,3 +1,4 @@
+import '../styles/event-board.css';
 import { EventPools, EventBrackets } from './EventNightBoard';
 import { MatchCard } from './EventMatchCard';
 import { ResultGraphic } from './ResultGraphic';
@@ -46,7 +47,11 @@ export function PlayerHubBoard({
   );
   const sections = {
     pools: (
-      <section id="event-pools" aria-label="Pools" className="player-event-board-section">
+      <section
+        id="event-pools"
+        aria-label="Pools"
+        className="app-event-board player-event-board-section"
+      >
         <EventPools
           matches={board.pools}
           schedules={data.poolSchedules ?? []}
@@ -65,7 +70,11 @@ export function PlayerHubBoard({
       </section>
     ),
     brackets: (
-      <section id="event-brackets" aria-label="Brackets" className="player-event-board-section">
+      <section
+        id="event-brackets"
+        aria-label="Brackets"
+        className="app-event-board player-event-board-section"
+      >
         {player && board.nativeBrackets.length > 0 ? (
           <>
             <h2>{board.pendingBrackets.length ? 'Finals qualification' : 'Your bracket path'}</h2>
@@ -128,7 +137,7 @@ export function PlayerHubBoard({
       <section
         id="event-results"
         aria-label="Results"
-        className="player-event-board-section event-recent"
+        className="app-event-board player-event-board-section event-recent"
       >
         <h2>Recorded results</h2>
         <div className="event-results-grid">

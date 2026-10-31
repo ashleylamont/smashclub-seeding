@@ -70,58 +70,6 @@
   }
 }
 
-.player-event-hub .player-event-board-section {
-  --event-ink: var(--bg-elev);
-  --event-bone: var(--text-h);
-  --event-red: var(--accent);
-  --event-orange: var(--warn);
-  --event-muted: var(--text-soft);
-  --event-rule: var(--border);
-  background: var(--bg-elev);
-  padding: var(--s5);
-  border: 1px solid var(--border);
-  font-family: var(--font-body);
-  color: var(--text);
-}
-.player-event-board-section h2 {
-  font-size: var(--fs-xl);
-  margin: 0;
-}
-.player-event-board-section h3 {
-  font-size: var(--fs-lg);
-}
-.player-event-board-section :is(.event-pool, .event-prize, .event-bracket-match) {
-  background: var(--surface);
-}
-.player-event-board-section :is(.event-stations, .event-pool-progress, .event-brackets) {
-  margin: var(--s4) 0;
-}
-.player-event-board-section :is(.event-live-note, .event-pool > p, .event-prize p) {
-  font-size: var(--fs-sm);
-  line-height: var(--line-body);
-}
-.player-event-board-section :is(.event-match-meta, .event-bracket-match small, .event-pool thead) {
-  font-size: var(--fs-xs);
-}
-.player-event-board-section :is(.event-bracket-match > div, .event-pool table) {
-  font-size: var(--fs-sm);
-}
-.player-event-board-section .event-pool td {
-  font-family: var(--font-number);
-}
-.player-event-board-section .event-match.is-playing {
-  background: var(--accent-bg);
-  color: var(--text-h);
-}
-.player-event-board-section .event-match.is-playing .event-match-meta {
-  color: var(--text-soft);
-}
-@media (max-width: 600px) {
-  .player-event-hub .player-event-board-section {
-    padding: var(--s4);
-  }
-}
-
 .player-event-overview {
   display: flex;
   flex-wrap: wrap;

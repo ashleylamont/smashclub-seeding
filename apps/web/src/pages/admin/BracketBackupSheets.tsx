@@ -18,6 +18,8 @@ export function BracketBackupSheets({
     capturedAt: string;
   } | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const sheets = bracketBackupSheets(data);
+  if (!sheets.length) return null;
   return (
     <div className="bracket-backup-launch">
       <Button
@@ -26,7 +28,7 @@ export function BracketBackupSheets({
         ref={trigger}
         onClick={() =>
           setPreview({
-            sheets: bracketBackupSheets(data),
+            sheets,
             eventName: data.plan.name,
             capturedAt: new Date().toLocaleString(),
           })
@@ -34,7 +36,12 @@ export function BracketBackupSheets({
       >
         Print bracket backup sheets
       </Button>
-      <small>Four TO worksheets, including blank draws before finals are generated.</small>
+      <small>
+        {sheets.length} {sheets.length === 1 ? 'TO worksheet' : 'TO worksheets'}
+        {sheets.some((sheet) => sheet.blank)
+          ? ', including paper templates for draws not generated yet.'
+          : ', with the current draw and recorded results.'}
+      </small>
       {preview && (
         <PrintPreview
           {...preview}

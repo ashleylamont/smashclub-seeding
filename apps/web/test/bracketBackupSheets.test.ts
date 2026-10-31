@@ -163,4 +163,57 @@ describe('TO bracket backup sheets', () => {
     expect(sheet.matches[2].player1).toBe('Winner of Semi A');
     expect(sheet.matches[2].player2).toBe('Winner of Semi B');
   });
+  it('keeps pending qualifiers, actual byes, no contests and conditional resets distinct on paper', () => {
+    const data = fixture();
+    data.plan.structure = 'double_elimination';
+    data.nativeBrackets = [
+      { id: 'draw', division: 'upper', stage: 'main', entrantIds: ['a', 'b'] },
+    ];
+    const match = { ...data.matches[0]!, nativeBracketId: 'draw', stage: 'main' };
+    data.matches = [
+      {
+        ...match,
+        id: 'pending',
+        player1Id: null,
+        player1Name: null,
+        player1Qualifier: {
+          poolId: 'pool',
+          division: 'upper',
+          poolIndex: 0,
+          place: 1,
+          status: 'pending',
+        },
+      },
+      {
+        ...match,
+        id: 'bye',
+        player2Id: null,
+        player2Name: null,
+        status: 'complete',
+        outcome: 'bye',
+        winnerId: 'a',
+      },
+      {
+        ...match,
+        id: 'no-contest',
+        player2Id: null,
+        player2Name: null,
+        status: 'complete',
+        outcome: 'no_contest',
+      },
+      { ...match, id: 'reset', bracketLane: 'reset', status: 'blocked' },
+    ];
+    const rows = bracketBackupSheets(data)[0]!.matches;
+    expect(rows.find((row) => row.key === 'pending')!.player1).toContain('Pool A');
+    expect(rows.find((row) => row.key === 'pending')!.player1).toContain('place 1');
+    expect(rows.find((row) => row.key === 'bye')).toMatchObject({
+      player2: 'Bye',
+      recorded: 'Bye',
+    });
+    expect(rows.find((row) => row.key === 'no-contest')).toMatchObject({
+      player2: 'No entrant',
+      recorded: 'No contest',
+    });
+    expect(rows.find((row) => row.key === 'reset')!.recorded).toBe('If needed');
+  });
 });
