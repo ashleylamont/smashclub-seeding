@@ -12,11 +12,13 @@ import { additionalDecision, finalsToken, resetFinals, canPauseDraw } from './op
 import { advance, drawFinals } from './brackets';
 import { hash, receiptKey, requireFact, resolved, sameScore } from './facts';
 import { applyScore, recordScore } from './scores';
+import { changeBroadcastSides } from './broadcast';
 import {
   initialState,
   type CommandEnvelope,
   type TournamentBaseline,
   type TournamentDecision,
+  type TournamentCommand,
   type TournamentState,
 } from './schemas';
 export { hash, receiptKey, stableId, TournamentConflict } from './facts';
@@ -134,7 +136,9 @@ export function captureBaseline(baseline: TournamentBaseline): TournamentState {
   };
 }
 
-function decisionFactVersion(state: TournamentState, kind: string) {
+function decisionFactVersion(state: TournamentState, command: TournamentCommand) {
+  const kind = command.kind;
+  if (kind === 'broadcastSides') return 4 as const;
   if (rollingFinals(state) && !['retire', 'finalize', 'replaceResult'].includes(kind))
     return 3 as const;
   return state.settings.poolOrderPolicy && !['retire', 'finalize', 'replaceResult'].includes(kind)
@@ -189,6 +193,9 @@ export function decide(
   const basis: Record<string, number> = {};
   let reportId: string | null = null;
   switch (command.kind) {
+    case 'broadcastSides':
+      changeBroadcastSides(next, command, basis);
+      break;
     case 'retire':
       retireEvent(next, envelope, command);
       break;
@@ -299,12 +306,14 @@ export function decide(
     default:
       requireFact(additionalDecision(next, envelope, basis), 'Unsupported command.');
   }
-  decidePoolOrders(previous, next, envelope, basis);
-  if (rollingFinals(next) && next.lifecycle === 'locked') {
-    reconcileRollingFinals(next, basis);
-    advance(next, envelope.at, envelope.id);
+  if (command.kind !== 'broadcastSides') {
+    decidePoolOrders(previous, next, envelope, basis);
+    if (rollingFinals(next) && next.lifecycle === 'locked') {
+      reconcileRollingFinals(next, basis);
+      advance(next, envelope.at, envelope.id);
+    }
+    stampReadySince(previous, next, envelope.at);
   }
-  stampReadySince(previous, next, envelope.at);
   const after: TournamentDecision['after'] = {};
   for (const field of [
     'lifecycle',
@@ -320,13 +329,14 @@ export function decide(
     'announcements',
     'prizes',
     'retirement',
+    'broadcastSides',
   ] as const) {
     if (hash(previous[field] ?? null) !== hash(next[field] ?? null))
       Object.assign(after, { [field]: next[field] });
   }
   if (command.kind === 'retire') after.entrants = structuredClone(next.entrants);
   return {
-    version: decisionFactVersion(next, command.kind),
+    version: decisionFactVersion(next, command),
     commandId: envelope.id,
     actorId: envelope.actorId,
     requestId: envelope.requestId,

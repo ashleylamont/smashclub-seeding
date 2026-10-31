@@ -13,6 +13,7 @@ import { matchesPool, usePoolFilter } from '../lib/poolFlow';
 import { GuestOverlayQr } from '../components/GuestOverlayQr';
 import { BroadcastResults } from '../components/BroadcastResults';
 import { BroadcastRecentSets } from '../components/BroadcastRecentSets';
+import { broadcastPlayers } from '../lib/broadcastPlayers';
 import { recentResultCount } from '../lib/broadcastSidebar';
 import { useGuestClock } from '../lib/guestReporting';
 
@@ -113,6 +114,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
     : focus
       ? undefined
       : sections.playing[0];
+  const displayPlayers = broadcastPlayers(data, onStream);
   const showName = data.plan.name.split(' · ')[0]!;
   if (overlay)
     return (
@@ -170,21 +172,21 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
         </header>
         <div className="broadcast-matchup" aria-label="Current match">
           <div className="broadcast-fighter broadcast-fighter-one">
-            <span className="broadcast-side">P1</span>
+            <span className="broadcast-side">LEFT</span>
             <strong>
-              {onStream?.player1Name || (closed ? 'EVENT FINISHED' : 'AWAITING MATCH')}
+              {displayPlayers?.left.name || (closed ? 'EVENT FINISHED' : 'AWAITING MATCH')}
             </strong>
-            <CharacterIcons slugs={onStream?.player1Characters ?? []} />
-            <b>{onStream?.score1 ?? '—'}</b>
+            <CharacterIcons slugs={displayPlayers?.left.characters ?? []} />
+            <b>{displayPlayers?.left.score ?? '—'}</b>
           </div>
           <span className="broadcast-match-versus">VS</span>
           <div className="broadcast-fighter broadcast-fighter-two">
-            <b>{onStream?.score2 ?? '—'}</b>
+            <b>{displayPlayers?.right.score ?? '—'}</b>
             <strong>
-              {onStream?.player2Name || (closed ? 'EVENT FINISHED' : 'AWAITING MATCH')}
+              {displayPlayers?.right.name || (closed ? 'EVENT FINISHED' : 'AWAITING MATCH')}
             </strong>
-            <CharacterIcons slugs={onStream?.player2Characters ?? []} />
-            <span className="broadcast-side">P2</span>
+            <CharacterIcons slugs={displayPlayers?.right.characters ?? []} />
+            <span className="broadcast-side">RIGHT</span>
           </div>
         </div>
         <OverlaySetup

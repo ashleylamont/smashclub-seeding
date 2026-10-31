@@ -50,6 +50,12 @@ export function describeDecision(
     matchId,
   });
   const dispatch = describeDispatchCommand(command, state, pairing, station);
+  if (command.kind === 'broadcastSides')
+    return description(
+      'broadcast',
+      'Overlay sides changed',
+      `${station(command.stationId)} · ${pairing} · ${command.swapped ? 'Swapped left / right' : 'Recorded player order'}`,
+    );
   if (dispatch) return { ...dispatch, matchId };
   switch (command.kind) {
     case 'score': {

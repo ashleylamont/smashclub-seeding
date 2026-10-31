@@ -10,6 +10,16 @@ const poolOrder = z.object({
 });
 export const additionalCommands = [
   z.object({
+    kind: z.literal('broadcastSides'),
+    stationId: id,
+    matchId: id,
+    player1Id: id,
+    player2Id: id,
+    expectedMatchRevision: revision,
+    expectedRevision: revision,
+    swapped: z.boolean(),
+  }),
+  z.object({
     kind: z.literal('configureDispatch'),
     capacity: revision.max(128),
     reservedStationIds: z.array(id).max(128),
