@@ -46,6 +46,8 @@ export function PlayerEvent({ planId }: { planId: string }) {
     canWrite,
     error,
   } = hub;
+  const empty = data?.matches.length === 0;
+  const reportingVisible = !empty && !closed;
   const announcements =
     data?.announcements
       .filter((item) => !item.expiresAt || Date.parse(item.expiresAt) > now)
@@ -57,9 +59,11 @@ export function PlayerEvent({ planId }: { planId: string }) {
     <div className="ops-page player-event-hub">
       <PageHeader
         title={publicEvent.data?.plan.name ?? 'Your event'}
-        description="Choose your name to find your matches."
+        description={
+          empty ? 'Event information and results.' : 'Choose your name to find your matches.'
+        }
       />
-      {data && (
+      {data && !empty && (
         <aside className="player-event-overview" aria-label="Event progress">
           <span>
             {selectedPool ? 'Pool progress' : 'Event progress'} · {progressComplete} /{' '}
@@ -79,7 +83,8 @@ export function PlayerEvent({ planId }: { planId: string }) {
         <a href="#event-brackets">Brackets</a>
         <a href="#event-results">Results</a>
       </nav>
-      {claim && (
+      {empty && <EmptyEventMatches historical={Boolean(data?.plan.historicalResultsSlug)} />}
+      {claim && !empty && (
         <p>
           Your linked profile: <strong>{claim.playerName}</strong>.
         </p>
@@ -94,14 +99,14 @@ export function PlayerEvent({ planId }: { planId: string }) {
           </div>
         </aside>
       )}
-      {reporter && !closed && (
+      {reporter && reportingVisible && (
         <p className="muted">
           {reporter === 'guest'
             ? 'Reporting with your venue guest pass.'
             : 'Reporting with your signed-in account.'}
         </p>
       )}
-      {session && signedCredential && (valid || reporter === 'guest') && (
+      {session && signedCredential && !empty && (valid || reporter === 'guest') && (
         <p>
           <Button
             size="small"
@@ -116,12 +121,12 @@ export function PlayerEvent({ planId }: { planId: string }) {
           This event is closed. Results remain available; ask a TO about corrections.
         </p>
       )}
-      {!closed && !playOpen && (
+      {reportingVisible && !playOpen && (
         <p className="card">
           Match reporting opens when the organiser locks or resumes the pool draw.
         </p>
       )}
-      {!closed && (reporter !== 'signed-in' || redeeming) && (
+      {reportingVisible && (reporter !== 'signed-in' || redeeming) && (
         <GuestPassStatus
           redeeming={redeeming}
           valid={valid}
@@ -149,26 +154,30 @@ export function PlayerEvent({ planId }: { planId: string }) {
       )}
       {data && (
         <>
-          {signedIn && !data.settings.playerReports && !guestCredential && (
+          {signedIn && !empty && !data.settings.playerReports && !guestCredential && (
             <p className="banner banner-warning">
               Signed-in reporting is off for this event. Scan the event QR for guest access or ask a
               TO to record your score.
             </p>
           )}
-          <PlayerHubMatches hub={hub} data={data} />
-          <section id="what-next" aria-label="What next">
-            <PoolStationQueue
-              data={data}
-              selectedPool={selectedPool}
-              stationId={stationId}
-              playerId={player}
-              onStart={(input) => void start(input)}
-              onReport={chooseMatch}
-              pendingMatchId={starting}
-              disabled={!canWrite}
-            />
-            <PoolRoundSchedule data={data} selectedPool={selectedPool} playerId={player} />
-          </section>
+          {!empty && (
+            <>
+              <PlayerHubMatches hub={hub} data={data} />
+              <section id="what-next" aria-label="What next">
+                <PoolStationQueue
+                  data={data}
+                  selectedPool={selectedPool}
+                  stationId={stationId}
+                  playerId={player}
+                  onStart={(input) => void start(input)}
+                  onReport={chooseMatch}
+                  pendingMatchId={starting}
+                  disabled={!canWrite}
+                />
+                <PoolRoundSchedule data={data} selectedPool={selectedPool} playerId={player} />
+              </section>
+            </>
+          )}
           <PlayerHubBoard data={data} selectedPool={selectedPool} player={player} />
         </>
       )}
@@ -178,6 +187,30 @@ export function PlayerEvent({ planId }: { planId: string }) {
         </p>
       )}
     </div>
+  );
+}
+
+function EmptyEventMatches({ historical }: { historical: boolean }) {
+  return (
+    <>
+      <section id="my-matches" className="card" aria-label="Event schedule">
+        <h2>Matches & results</h2>
+        <p>
+          No matches in this view yet.{' '}
+          {historical
+            ? 'Open Results below for the imported event standings.'
+            : 'The organisers will publish pairings here when they are ready.'}
+        </p>
+      </section>
+      <section id="what-next" aria-label="What next">
+        <h2>What next</h2>
+        <p>
+          {historical
+            ? 'This event uses imported results. Match reporting is closed.'
+            : 'Check event announcements or ask an organiser about the next update.'}
+        </p>
+      </section>
+    </>
   );
 }
 

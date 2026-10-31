@@ -355,3 +355,27 @@ for (const drawn of [false, true])
     await expect(page.locator('a[href*="challonge.com"]')).toHaveCount(0);
     expect(fixture.unexpected).toEqual([]);
   });
+
+for (const role of [undefined, 'player'] as const)
+  test(`${role ?? 'anonymous'} empty phone hub explains the schedule before offering filters`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const fixture = await mockEvent(page, { role });
+    fixture.snapshot.matches.length = 0;
+    fixture.snapshot.stationQueues.length = 0;
+    fixture.snapshot.poolRounds.length = 0;
+    await page.goto(`/play/${PLAN_ID}`);
+    const notice = page.getByText('No matches in this view yet.', { exact: false });
+    await expect(notice).toBeVisible();
+    await expect(notice).toBeInViewport();
+    await expect(page.getByRole('combobox')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Submit score|start match/ })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Pool station queues' })).toHaveCount(0);
+    await expect(page.getByRole('progressbar', { name: 'Sets completed' })).toHaveCount(0);
+    for (const section of ['Pools', 'Brackets', 'Results', 'What next']) {
+      await page.getByRole('link', { name: section, exact: true }).click();
+      await expect(page.getByRole('region', { name: section, exact: true })).toBeInViewport();
+    }
+    expect(fixture.unexpected).toEqual([]);
+  });
