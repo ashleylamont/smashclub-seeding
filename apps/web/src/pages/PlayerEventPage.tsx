@@ -105,7 +105,7 @@ export function PlayerEvent({ planId }: { planId: string }) {
             This event is closed. Results remain available; ask a TO about corrections.
           </Notice>
         )}
-        {reportingVisible && !playOpen && (
+        {data && reportingVisible && !playOpen && (
           <Notice tone="warning">
             Match reporting opens when the organiser locks or resumes the pool draw.
           </Notice>
