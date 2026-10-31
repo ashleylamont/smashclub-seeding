@@ -223,6 +223,20 @@ export const Receipt = z.object({
   commandId: id.optional(),
 });
 export const LiveState = z.object({
+  // Absent on old facts; display preferences never participate in competitive state.
+  broadcastSides: z
+    .record(
+      id,
+      z.object({
+        matchId: id,
+        player1Id: id,
+        player2Id: id,
+        matchRevision: revision,
+        swapped: z.boolean(),
+        revision,
+      }),
+    )
+    .optional(),
   retirement: Retirement.optional(),
   baseline: Baseline.nullable(),
   lifecycle: z.enum(['absent', 'locked', 'unlocked', 'finalized', 'cancelled']),
@@ -341,7 +355,7 @@ export const Envelope = z.object({
 });
 /** Persist decided state changes; reducers do not rerun scheduling/draw policy. */
 export const Decision = z.object({
-  version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
   commandId: id,
   actorId: z.string(),
   requestId: z.string(),

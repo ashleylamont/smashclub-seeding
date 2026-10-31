@@ -98,6 +98,7 @@ export async function nativeEventHistory(
       'DecisionRecordedV1',
       'DecisionRecordedV2',
       'DecisionRecordedV3',
+      'DecisionRecordedV4',
       'ResultsSealedV1',
       'PlanRetiredV1',
       'PublicationRecordedV1',
@@ -115,6 +116,7 @@ export async function nativeEventHistory(
       event.name === 'DecisionRecordedV1' ||
       event.name === 'DecisionRecordedV2' ||
       event.name === 'DecisionRecordedV3' ||
+      event.name === 'DecisionRecordedV4' ||
       event.name === 'ResultsSealedV1' ||
       event.name === 'PlanRetiredV1'
     ) {
