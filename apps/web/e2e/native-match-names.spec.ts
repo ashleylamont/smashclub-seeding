@@ -72,7 +72,7 @@ test('an uneven native draw keeps meaningful names across player, TO, feeders, p
     true,
   );
   const snapshot = (procedure = 'eventOps.snapshot') =>
-    rpc<Parameters<typeof bracketBackupSheets>[0] & { matches: PoolFlowMatch[] }>(
+    rpc<Omit<Parameters<typeof bracketBackupSheets>[0], 'matches'> & { matches: PoolFlowMatch[] }>(
       page.request,
       procedure,
       { planId },
