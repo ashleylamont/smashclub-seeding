@@ -15,6 +15,32 @@ async function fits(page: Page) {
       })),
     )
     .toEqual({ width: true, height: true });
+  await expect
+    .poll(() =>
+      page
+        .locator(
+          '.intermission-heading h1, .intermission-section-heading h2, .intermission-section-heading > span, .intermission-standings td, .event-bracket-match small, .event-bracket-match > div > span',
+        )
+        .evaluateAll((elements) =>
+          elements
+            .filter((element) => {
+              const box = element.getBoundingClientRect();
+              return (
+                element.scrollWidth > element.clientWidth + 1 ||
+                box.right > innerWidth + 1 ||
+                box.left < -1
+              );
+            })
+            .map((element) => ({
+              text: element.textContent,
+              width: element.clientWidth,
+              scroll: element.scrollWidth,
+              right: element.getBoundingClientRect().right,
+              position: getComputedStyle(element).position,
+            })),
+        ),
+    )
+    .toEqual([]);
   for (const region of await page.locator('.event-bracket-rounds').all())
     expect(await region.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
       true,
