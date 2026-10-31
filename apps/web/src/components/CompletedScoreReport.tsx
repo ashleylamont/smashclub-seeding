@@ -1,16 +1,11 @@
+import { matchPresentation } from '../lib/matchPresentation';
+import type { LiveMatch } from '../lib/eventDisplay';
 import { useReportFeedback } from '../lib/useReportFeedback';
 import { Button } from './ui/Button';
 import { ScoreFields, type ScoreInputValue } from './ScoreFields';
 import { useState } from 'react';
 
-type RecordedMatch = {
-  revision: number;
-  score1: number | null;
-  score2: number | null;
-  player1Name: string | null;
-  player2Name: string | null;
-  pendingDisputeCount?: number;
-};
+type RecordedMatch = LiveMatch & { revision: number; pendingDisputeCount?: number };
 export type ResultSubmission = {
   expectedRevision: number;
   requestId: string;
@@ -35,6 +30,7 @@ export function CompletedScoreReport({
   onSubmit: (input: ResultSubmission) => Promise<{ isDispute: boolean }>;
   label?: string;
 }) {
+  const presentation = matchPresentation(match);
   const [editing, setEditing] = useState(false);
   const [score1, setScore1] = useState<ScoreInputValue>(match.score1 ?? 0);
   const [score2, setScore2] = useState<ScoreInputValue>(match.score2 ?? 0);
@@ -68,15 +64,13 @@ export function CompletedScoreReport({
   };
   return (
     <div>
-      <p>
-        {label}: {match.score1} – {match.score2}
-      </p>
+      <p>{presentation.result ?? `${label}: ${match.score1} – ${match.score2}`}</p>
       {Boolean(match.pendingDisputeCount) && (
         <p className="banner banner-warning">
           A different score has been reported. TO review is pending; this result remains official.
         </p>
       )}
-      {allowReports && (
+      {allowReports && presentation.canReport && (
         <>
           <p className="muted">
             You can confirm this score or flag a different result. A disagreement goes to the TOs

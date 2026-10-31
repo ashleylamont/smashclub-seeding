@@ -1,6 +1,16 @@
+import { matchParticipantName, matchPresentation } from '../lib/matchPresentation';
 import { CharacterIcons } from './CharacterIcons';
 import type { LiveMatch } from '../lib/eventDisplay';
-export function MatchCard({ match, station }: { match: LiveMatch; station?: string }) {
+export function MatchCard({
+  match,
+  station,
+  nextMatch,
+}: {
+  match: LiveMatch;
+  station?: string;
+  nextMatch?: LiveMatch;
+}) {
+  const presentation = matchPresentation(match);
   return (
     <article className={`event-match ${match.status === 'playing' ? 'is-playing' : ''}`}>
       <div className="event-match-meta">
@@ -31,13 +41,19 @@ export function MatchCard({ match, station }: { match: LiveMatch; station?: stri
           key={i}
         >
           <span>
-            {p.name || 'To be decided'}
+            {matchParticipantName(match, i === 0 ? 0 : 1)}
             <CharacterIcons slugs={p.characters ?? []} />
           </span>
-          <strong>{p.score ?? '—'}</strong>
+          {presentation.showScores && <strong>{p.score ?? '—'}</strong>}
         </div>
       ))}
-      {match.status === 'complete' && <span className="event-match-status">Final</span>}
+      {presentation.result && <p>{presentation.result}</p>}
+      {nextMatch && (
+        <p>
+          Next: {nextMatch.label} · {matchPresentation(nextMatch).title}
+        </p>
+      )}
+      {presentation.status && <span className="event-match-status">{presentation.status}</span>}
     </article>
   );
 }

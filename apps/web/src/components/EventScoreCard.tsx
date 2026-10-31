@@ -1,3 +1,5 @@
+import { matchPresentation } from '../lib/matchPresentation';
+import type { LiveMatch } from '../lib/eventDisplay';
 import { useReportFeedback } from '../lib/useReportFeedback';
 import { Button } from './ui/Button';
 import { ScoreFields, type ScoreInputValue } from './ScoreFields';
@@ -20,6 +22,7 @@ export function EventScoreCard({
   status,
   station,
   approvalPolicy,
+  nextMatch,
 }: {
   enabled: boolean;
   reportingIdentity?: string;
@@ -31,7 +34,9 @@ export function EventScoreCard({
   status: string;
   station?: string;
   approvalPolicy: ScoreApprovalPolicy;
+  nextMatch?: LiveMatch;
 }) {
+  const presentation = matchPresentation(match);
   const [score1, setScore1] = useState<ScoreInputValue>(0);
   const [score2, setScore2] = useState<ScoreInputValue>(0);
   const [revision, setRevision] = useState(match.revision);
@@ -74,14 +79,17 @@ export function EventScoreCard({
           {match.division} · {match.label}
         </span>
         <span>
-          {status}
+          {presentation.status ?? status}
           {station ? ` · ${station}` : ''}
         </span>
       </div>
-      <h3>
-        {match.player1Name} vs {match.player2Name}
-      </h3>
-      {report && (
+      <h3>{presentation.title}</h3>
+      {nextMatch && (
+        <p>
+          Next: {nextMatch.label} · {matchPresentation(nextMatch).title}
+        </p>
+      )}
+      {report && ['played', 'scheduled'].includes(presentation.kind) && (
         <p className="guest-report-status" role="status">
           Your report: {report.score1} – {report.score2} ·{' '}
           {report.status === 'approved'
@@ -98,10 +106,14 @@ export function EventScoreCard({
           match={match}
           reportingIdentity={reportingIdentity}
           enabled={enabled}
-          allowReports={approvalPolicy !== 'review' && match.outcome === 'played'}
+          allowReports={approvalPolicy !== 'review' && presentation.canReport}
           onSubmit={onSubmit}
           pendingReport={report?.status === 'pending' ? report : undefined}
         />
+      ) : presentation.kind === 'no-contest' ? (
+        <p>{presentation.result}</p>
+      ) : presentation.kind === 'pending' ? (
+        <p>Awaiting opponent. The next entrant has not been confirmed yet.</p>
       ) : match.status === 'blocked' ? (
         <p>Waiting for earlier matches or a TO before this match can start.</p>
       ) : !enabled ? (
