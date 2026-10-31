@@ -1,3 +1,4 @@
+import { matchPresentation } from './matchPresentation';
 import {
   scoreApprovalPolicy,
   matchesPool,
@@ -46,7 +47,8 @@ export function matchStation(data: PoolFlowData, match: PoolFlowMatch) {
 }
 
 export function matchStatus(data: PoolFlowData, match: PoolFlowMatch) {
-  if (match.status === 'complete') return 'Final result';
+  const presentation = matchPresentation(match);
+  if (presentation.status) return presentation.status;
   if (match.status === 'playing') return match.called ? 'Called' : 'Playing now';
   const call = matchStation(data, match).call;
   if (call) return call;

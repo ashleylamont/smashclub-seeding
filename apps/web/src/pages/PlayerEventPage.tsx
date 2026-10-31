@@ -5,8 +5,13 @@ import { useParams } from '@tanstack/react-router';
 import { PlayerHubMatches } from '../components/PlayerHubMatches';
 import { PlayerHubBoard } from '../components/PlayerHubBoard';
 import { PoolRoundSchedule, PoolStationQueue } from '../components/PoolStationQueue';
-import { usePlayerEventHub } from '../lib/usePlayerEventHub';
+import {
+  usePlayerEventHub,
+  type PlayerEventHub,
+  type PublicEventSnapshot,
+} from '../lib/usePlayerEventHub';
 import { guestTimeLeft, type GuestSession } from '../lib/guestReporting';
+import { Disclosure } from '../components/ui/Disclosure';
 import { matchesPool } from '../lib/poolFlow';
 import '../styles/event.css';
 import './EventLive.css';
@@ -38,13 +43,9 @@ export function PlayerEvent({ planId }: { planId: string }) {
     signedIn,
     guestCredential,
     selectedPool,
-    stationId,
     player,
-    start,
-    chooseMatch,
-    starting,
-    canWrite,
     error,
+    board,
   } = hub;
   const empty = data?.matches.length === 0;
   const reportingVisible = !empty && !closed;
@@ -76,13 +77,7 @@ export function PlayerEvent({ planId }: { planId: string }) {
           />
         </aside>
       )}
-      <nav className="player-event-nav" aria-label="Event sections">
-        <a href="#my-matches">Find my matches</a>
-        <a href="#what-next">What next</a>
-        <a href="#event-pools">Pools</a>
-        <a href="#event-brackets">Brackets</a>
-        <a href="#event-results">Results</a>
-      </nav>
+      <PlayerEventNavigation board={board} />
       {empty && <EmptyEventMatches historical={Boolean(data?.plan.historicalResultsSlug)} />}
       {claim && !empty && (
         <p>
@@ -164,17 +159,7 @@ export function PlayerEvent({ planId }: { planId: string }) {
             <>
               <PlayerHubMatches hub={hub} data={data} />
               <section id="what-next" aria-label="What next">
-                <PoolStationQueue
-                  data={data}
-                  selectedPool={selectedPool}
-                  stationId={stationId}
-                  playerId={player}
-                  onStart={(input) => void start(input)}
-                  onReport={chooseMatch}
-                  pendingMatchId={starting}
-                  disabled={!canWrite}
-                />
-                <PoolRoundSchedule data={data} selectedPool={selectedPool} playerId={player} />
+                <PlayerNextSteps hub={hub} data={data} />
               </section>
             </>
           )}
@@ -187,6 +172,58 @@ export function PlayerEvent({ planId }: { planId: string }) {
         </p>
       )}
     </div>
+  );
+}
+
+function PlayerEventNavigation({ board }: { board: PlayerEventHub['board'] }) {
+  return (
+    <nav className="player-event-nav" aria-label="Event sections">
+      <a href="#my-matches">Find my matches</a>
+      <a href="#what-next">What next</a>
+      {(board?.sections ?? ['pools', 'brackets', 'results']).map((section) => (
+        <a key={section} href={`#event-${section}`}>
+          {{ pools: 'Pools', brackets: 'Brackets', results: 'Results' }[section]}
+        </a>
+      ))}
+    </nav>
+  );
+}
+
+function PlayerNextSteps({ hub, data }: { hub: PlayerEventHub; data: PublicEventSnapshot }) {
+  const queues = (
+    <PoolStationQueue
+      data={data}
+      selectedPool={hub.selectedPool}
+      stationId={hub.stationId}
+      playerId={hub.player}
+      onStart={(input) => void hub.start(input)}
+      onReport={hub.chooseMatch}
+      pendingMatchId={hub.starting}
+      disabled={!hub.canWrite}
+    />
+  );
+  const rounds = (
+    <PoolRoundSchedule data={data} selectedPool={hub.selectedPool} playerId={hub.player} />
+  );
+  if (hub.closed)
+    return (
+      <Disclosure title="Schedule & station history">
+        {queues}
+        {rounds}
+      </Disclosure>
+    );
+  const poolMatches = hub.playerMatches.filter((match) => match.stage === 'group');
+  const finishedPoolMatches =
+    poolMatches.length > 0 && poolMatches.every((match) => match.status === 'complete');
+  return (
+    <>
+      {queues}
+      {hub.player && finishedPoolMatches ? (
+        <Disclosure title="Your pool schedule history">{rounds}</Disclosure>
+      ) : (
+        rounds
+      )}
+    </>
   );
 }
 

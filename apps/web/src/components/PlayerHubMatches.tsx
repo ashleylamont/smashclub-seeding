@@ -7,6 +7,7 @@ import { PlayerMatchFilter } from './PlayerMatchFilter';
 import { PoolFilter } from './PoolStationQueue';
 import { scoreApprovalPolicy } from '../lib/poolFlow';
 import { matchStatus, matchStation } from '../lib/playerMatchView';
+import { nextMeaningfulMatch } from '../lib/matchPresentation';
 import type { PlayerEventHub, PublicEventSnapshot } from '../lib/usePlayerEventHub';
 
 export function PlayerHubMatches({
@@ -19,6 +20,7 @@ export function PlayerHubMatches({
   const {
     players,
     player,
+    selectedPlayer,
     playerName,
     setSelectedPlayer,
     view,
@@ -32,6 +34,8 @@ export function PlayerHubMatches({
     playerMatches,
     completed,
     nextMatch,
+    waitingMatch,
+    hiddenHistory,
     chooseMatch,
     visible,
     stationId,
@@ -58,6 +62,12 @@ export function PlayerHubMatches({
           setSearch('');
         }}
       />
+      {selectedPlayer && !player && (
+        <p className="card">
+          Your saved player is not in the current draw. Showing Everyone until their pairings
+          appear. Choose Everyone to clear the saved selection.
+        </p>
+      )}
       {playerName && (
         <aside className="card player-event-progress" aria-label="Your progress">
           <h2>{playerName}’s progress</h2>
@@ -77,8 +87,12 @@ export function PlayerHubMatches({
                   ? ` · ${matchStation(data, nextMatch).name}`
                   : ''}
               </>
+            ) : closed ? (
+              'This event is closed. Your recorded results and standings remain below.'
+            ) : waitingMatch ? (
+              `Waiting for a confirmed pairing · ${waitingMatch.label}. Follow the published draw below.`
             ) : (
-              'All your scheduled matches are complete. Check results or ask a TO about the next stage.'
+              'Your scheduled matches are complete. Check your results and published bracket below; pool results do not imply a next-stage seed.'
             )}
           </p>
           {nextMatch && <Button onClick={() => chooseMatch(nextMatch.id)}>Find next match</Button>}
@@ -106,6 +120,12 @@ export function PlayerHubMatches({
           defaultOpen={!player}
         >
           <div className="player-match-controls">
+            {player && view === 'mine' && (
+              <p className="muted">
+                Next & recent matches include every stage. The pool filter refines standings and
+                station history.
+              </p>
+            )}
             <div className="player-match-secondary-filters">
               <PoolFilter
                 data={data}
@@ -137,7 +157,7 @@ export function PlayerHubMatches({
                   </SelectItem>
                   <SelectItem value="results">Recorded results</SelectItem>
                   <SelectItem value="mine" disabled={!player}>
-                    All selected player’s matches
+                    Selected player’s next & recent matches
                   </SelectItem>
                   <SelectItem value="reports">My reports</SelectItem>
                 </Select>
@@ -174,16 +194,23 @@ export function PlayerHubMatches({
               onSubmit={(input) => submitScore(match.id, input)}
               approvalPolicy={!closed && playOpen ? scoreApprovalPolicy(data, match) : 'review'}
               match={match}
+              nextMatch={nextMeaningfulMatch(data.matches, match)}
               report={ownReports?.find((report) => report.matchId === match.id)}
               status={matchStatus(data, match)}
               station={matchStation(data, match).name ?? undefined}
             />
           ))}
         </div>
+        {hiddenHistory > 0 && (
+          <p className="player-match-history">
+            Showing your upcoming matches, recent results and submitted reports.{' '}
+            <Button onClick={() => setView('results')}>View all your recorded results</Button>
+          </p>
+        )}
         {!visible.length && (
           <p className="card">
             {player
-              ? 'No matches for this player in this view. Try All selected player’s matches or clear the pool and station filters.'
+              ? 'No matches for this player in this view. Try Selected player’s next & recent matches or clear the pool and station filters.'
               : view === 'reports'
                 ? 'Your submitted scores will appear here.'
                 : 'No matches in this view yet. Choose a pool, search a player, or select All open matches.'}

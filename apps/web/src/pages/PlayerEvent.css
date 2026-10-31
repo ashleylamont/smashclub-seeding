@@ -78,3 +78,24 @@
   border-color: var(--border-strong);
   color: var(--text);
 }
+
+.player-event-board-group {
+  margin-top: 2rem;
+}
+.player-bracket-path {
+  display: grid;
+  gap: 0.75rem;
+  padding-left: 1.5rem;
+}
+.player-bracket-path li {
+  overflow-wrap: anywhere;
+}
+.player-bracket-path p {
+  margin: 0.25rem 0 0;
+}
+.player-match-history {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
