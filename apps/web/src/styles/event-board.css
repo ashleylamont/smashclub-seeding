@@ -1,0 +1,52 @@
+/* App-themed pool/bracket/result panels shared by player and TO pages. */
+.app-event-board {
+  --event-ink: var(--bg-elev);
+  --event-bone: var(--text-h);
+  --event-red: var(--accent);
+  --event-orange: var(--warn);
+  --event-muted: var(--text-soft);
+  --event-rule: var(--border);
+  background: var(--bg-elev);
+  padding: var(--s5);
+  border: 1px solid var(--border);
+  font-family: var(--font-body);
+  color: var(--text);
+}
+.app-event-board h2 {
+  font-size: var(--fs-xl);
+  margin: 0;
+}
+.app-event-board h3 {
+  font-size: var(--fs-lg);
+}
+.app-event-board :is(.event-pool, .event-prize, .event-bracket-match) {
+  background: var(--surface);
+}
+.app-event-board :is(.event-stations, .event-pool-progress, .event-brackets) {
+  margin: var(--s4) 0;
+}
+.app-event-board :is(.event-live-note, .event-pool > p, .event-prize p) {
+  font-size: var(--fs-sm);
+  line-height: var(--line-body);
+}
+.app-event-board :is(.event-match-meta, .event-bracket-match small, .event-pool thead) {
+  font-size: var(--fs-xs);
+}
+.app-event-board :is(.event-bracket-match > div, .event-pool table) {
+  font-size: var(--fs-sm);
+}
+.app-event-board .event-pool td {
+  font-family: var(--font-number);
+}
+.app-event-board .event-match.is-playing {
+  background: var(--accent-bg);
+  color: var(--text-h);
+}
+.app-event-board .event-match.is-playing .event-match-meta {
+  color: var(--text-soft);
+}
+@media (max-width: 600px) {
+  .app-event-board {
+    padding: var(--s4);
+  }
+}

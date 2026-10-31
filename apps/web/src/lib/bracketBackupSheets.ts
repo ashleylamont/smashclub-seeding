@@ -1,5 +1,6 @@
 import { finalsRoles, isKnockout, type StructureOptions } from '@smashclub/shared';
 import type { LiveMatch } from './eventDisplay';
+import { liveBracketSide, liveBracketStatus } from './eventBracket';
 
 export type BracketBackupData = {
   plan: { bracketMode: string; structure?: string; structureOptions?: StructureOptions };
@@ -94,17 +95,6 @@ export function bracketBackupSheets(data: BracketBackupData) {
             a.label.localeCompare(b.label, undefined, { numeric: true }),
         );
       const labels = new Map(matches.map((match) => [match.id, match.label]));
-      const player = (
-        id: string | null,
-        name: string | null,
-        parent?: string | null,
-        outcome?: 'winner' | 'loser',
-      ) =>
-        id
-          ? (name ?? names.get(id) ?? 'Player')
-          : parent
-            ? `${outcome === 'loser' ? 'Loser' : 'Winner'} of ${labels.get(parent) ?? 'previous match'}`
-            : '';
       return {
         key: `${division}:${stage}`,
         title: `${data.plan.structure && data.plan.structure !== 'dual_division' ? 'Open' : division === 'upper' ? 'Upper' : 'Lower'} ${stage === 'main' ? 'Championship' : 'Consolation'}`,
@@ -132,28 +122,30 @@ export function bracketBackupSheets(data: BracketBackupData) {
                 key: match.id,
                 label: match.label,
                 round: match.nativeRound ? `Round ${match.nativeRound}` : '',
-                player1: player(
-                  match.player1Id,
-                  match.player1Name,
-                  match.parent1MatchId,
-                  match.parent1Outcome,
+                player1: liveBracketSide(
+                  {
+                    ...match,
+                    player1Name: match.player1Name || names.get(match.player1Id ?? '') || null,
+                  },
+                  0,
+                  labels,
                 ),
-                player2: player(
-                  match.player2Id,
-                  match.player2Name,
-                  match.parent2MatchId,
-                  match.parent2Outcome,
+                player2: liveBracketSide(
+                  {
+                    ...match,
+                    player2Name: match.player2Name || names.get(match.player2Id ?? '') || null,
+                  },
+                  1,
+                  labels,
                 ),
                 recorded:
                   match.status === 'complete'
-                    ? match.outcome === 'bye'
-                      ? 'Bye'
-                      : match.outcome === 'forfeit'
-                        ? 'Forfeit'
-                        : match.outcome === 'played'
-                          ? `${match.score1 ?? '–'}–${match.score2 ?? '–'}`
-                          : 'Complete'
-                    : '',
+                    ? match.outcome === 'played'
+                      ? `${match.score1 ?? '–'}–${match.score2 ?? '–'}`
+                      : liveBracketStatus(match)
+                    : match.bracketLane === 'reset'
+                      ? 'If needed'
+                      : '',
               }))
             : blankMatches(data, division, stage),
       };

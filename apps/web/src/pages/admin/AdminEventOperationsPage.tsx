@@ -1,3 +1,4 @@
+import { NativeDrawTools } from './NativeDrawTools';
 import { filterDeskMatches } from '../../lib/opsMatchFilter';
 import { DispatchDesk } from './DispatchDesk';
 import { DoublesAvailabilityControls } from './DoublesAvailabilityControls';
@@ -470,6 +471,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
                 entrants={data.entrants}
                 closed={closed || Boolean(data.plan.drawPaused)}
               />
+              <NativeDrawTools data={data} />
               <NativeResultControls
                 data={data}
                 onChanged={() => cache.invalidateQueries({ queryKey: ['eventOps', planId] })}
