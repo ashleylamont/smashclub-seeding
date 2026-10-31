@@ -85,6 +85,23 @@
 
 /* ── roster ─────────────────────────────────────────────────────── */
 
+.pair-rating-table {
+  --table-min: 34rem;
+}
+
+.pair-rating-table :is(th, td) {
+  vertical-align: top;
+}
+
+.pair-rating-table td:first-child {
+  min-width: 12rem;
+}
+
+.pair-rating-table td:is(:nth-child(2), :nth-child(3)) {
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+
 .roster-table {
   display: flex;
   flex-direction: column;

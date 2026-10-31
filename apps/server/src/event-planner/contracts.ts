@@ -3,6 +3,7 @@ import type { CompetitionFormat, TournamentStructure, StructureOptions } from '@
 import type { Division, DivisionPreference, PlanIssue } from './divisions';
 import type { ConsolationBracket } from './advancement';
 import type { ReviewCandidateSnapshot } from '../identity/candidates';
+import type { PairRatingBreakdown } from './pairRatings';
 
 export type PlanStatus =
   'draft' | 'roster_frozen' | 'pools_ready' | 'underway' | 'complete' | 'cancelled';
@@ -39,6 +40,8 @@ export interface PlanEntryView {
   snapshotSd?: number | null;
   currentMean?: number;
   currentSd?: number;
+  /** Draft estimate or the breakdown captured with this frozen roster. */
+  pairRating?: PairRatingBreakdown;
   /** Registry name — an admin surface, so shown in full. */
   playerName: string | null;
   withdrawn?: boolean;

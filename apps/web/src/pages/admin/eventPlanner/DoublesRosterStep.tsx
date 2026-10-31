@@ -9,6 +9,9 @@ import { Input } from '../../../components/ui/Input';
 import { Select, SelectItem } from '../../../components/ui/Select';
 import { PlayerLookupModal } from '../../../components/PlayerLookupModal';
 import { IssueList } from './shared';
+import { PairRatingEvidence } from './PairRatingEvidence';
+
+type PairSort = 'roster' | 'skill_desc' | 'skill_asc' | 'seed_desc';
 
 export function DoublesRosterStep({
   view,
@@ -21,6 +24,7 @@ export function DoublesRosterStep({
     [second, setSecond] = useState(''),
     [teamName, setTeamName] = useState('');
   const [picking, setPicking] = useState<1 | 2 | null>(null);
+  const [sort, setSort] = useState<PairSort>('roster');
   const players = useQuery({
     queryKey: ['admin', 'players'],
     queryFn: () => trpc.admin.players.query(),
@@ -78,6 +82,19 @@ export function DoublesRosterStep({
     onSuccess: onChanged,
   });
   const errors = [add, remove, pin, freeze, reopen, format].filter((m) => m.isError);
+  const displayedEntries = [...view.entries].sort((a, b) => {
+    const skill = (e: (typeof view.entries)[number]) => e.snapshotMean ?? e.currentMean ?? 1500;
+    const seed = (e: (typeof view.entries)[number]) => e.snapshotScore ?? e.currentScore ?? 0;
+    const difference =
+      sort === 'skill_desc'
+        ? skill(b) - skill(a)
+        : sort === 'skill_asc'
+          ? skill(a) - skill(b)
+          : sort === 'seed_desc'
+            ? seed(b) - seed(a)
+            : 0;
+    return difference || a.sourceLineNumber - b.sourceLineNumber;
+  });
   return (
     <section className="card section">
       <h3>
@@ -86,6 +103,11 @@ export function DoublesRosterStep({
       <p>
         Each person can enter once. Pairs are fixed when the pool draw is locked. A missing partner
         holds the pair until they return or a TO records a withdrawal.
+      </p>
+      <p className="muted">
+        Seeding score = skill − 2 × SD. New pairs have a zero mean adjustment, but added pair
+        uncertainty can lower their seeding score. Only earlier finalized doubles nights supply pair
+        evidence.
       </p>
       {editable && (
         <>
@@ -98,6 +120,7 @@ export function DoublesRosterStep({
           <label>
             <Checkbox
               checked={view.plan.usePairRatings ?? false}
+              disabled={format.isPending}
               onCheckedChange={(checked) =>
                 format.mutate({
                   structure: view.plan.structure ?? 'dual_division',
@@ -108,8 +131,8 @@ export function DoublesRosterStep({
             Include experimental WHR pair adjustments in seeds
           </label>
           <p className="muted">
-            Default seeds use average player skill with team uncertainty. Pair adjustments learn
-            only from earlier finalized doubles nights and start at zero for new pairs.
+            With the model off, seeds use average singles skill and uncertainty. With it on, they
+            also include the pair’s mean adjustment and uncertainty.
           </p>
           <div className="admin-form-row">
             <Button onClick={() => setPicking(1)}>
@@ -145,22 +168,37 @@ export function DoublesRosterStep({
           }}
         />
       )}
-      <div className="table-scroll">
-        <table>
+      <label className="admin-form-row">
+        Sort pairs
+        <Select
+          aria-label="Sort pairs"
+          value={sort}
+          onValueChange={(value) => setSort(value as PairSort)}
+        >
+          <SelectItem value="roster">Roster order</SelectItem>
+          <SelectItem value="skill_desc">Skill: highest first</SelectItem>
+          <SelectItem value="skill_asc">Skill: lowest first</SelectItem>
+          <SelectItem value="seed_desc">Seeding score: highest first</SelectItem>
+        </Select>
+      </label>
+      <p className="muted">Sorting changes this view only; it does not change saved seeds.</p>
+      <div className="table-scroll" role="region" aria-label="Pair ratings" tabIndex={0}>
+        <table className="data-table pair-rating-table">
           <thead>
             <tr>
               <th>Pair</th>
-              <th>Skill ± SD</th>
-              <th>Seeding score</th>
+              <th className="num">Skill ± SD</th>
+              <th className="num">Seeding score</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {view.entries.map((e) => (
+            {displayedEntries.map((e) => (
               <tr key={e.id}>
                 <td>
                   {e.playerName}
                   {e.teamName && <> · {e.teamName}</>}
+                  <PairRatingEvidence entry={e} frozen={!editable} />
                   {editable && view.plan.structure === 'dual_division' && (
                     <Select
                       aria-label={`Division preference for ${e.playerName}`}
@@ -178,11 +216,11 @@ export function DoublesRosterStep({
                     </Select>
                   )}
                 </td>
-                <td>
+                <td className="num">
                   {Math.round(e.snapshotMean ?? e.currentMean ?? 1500)} ±{' '}
                   {Math.round(e.snapshotSd ?? e.currentSd ?? 0)}
                 </td>
-                <td>{Math.round(e.snapshotScore ?? e.currentScore ?? 0)}</td>
+                <td className="num">{Math.round(e.snapshotScore ?? e.currentScore ?? 0)}</td>
                 <td>
                   {editable && (
                     <Button
