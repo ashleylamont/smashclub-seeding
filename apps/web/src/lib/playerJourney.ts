@@ -150,6 +150,11 @@ export function playerJourney(data: JourneyData, player: string): PlayerJourney 
     (match) =>
       match.status === 'complete' && match.nativeBracketId && assigned.has(match.nativeBracketId),
   );
+  if (board.assignedBrackets.length && board.assignedBrackets.every((bracket) => bracket.complete))
+    return result(
+      'bracket_finished',
+      'Your published bracket run is finished. Your recorded results remain available while the event continues.',
+    );
   const terminalResults = bracketResults.filter(
     (match) =>
       !bracketResults.some(

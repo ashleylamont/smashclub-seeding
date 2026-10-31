@@ -126,6 +126,21 @@ describe('personal journey from published facts', () => {
       playerJourney(data([final], [bracket({ complete: true, winnerId: 'a' })]), 'a'),
     ).toMatchObject({ state: 'winner' });
   });
+  it('finishes a completed bracket without a champion, including after attendance is restored', () => {
+    for (const outcome of ['no_contest', null]) {
+      const noContest = match('final', {
+        status: 'complete',
+        outcome,
+        winnerId: null,
+        score1: null,
+        score2: null,
+      });
+      const snapshot = data([noContest], [bracket({ complete: true, winnerId: null })]);
+      expect(playerJourney(snapshot, 'a')).toMatchObject({ state: 'bracket_finished' });
+      expect(playerJourney(snapshot, 'a').summary).not.toContain('won');
+      expect(playerJourney(snapshot, 'a').summary).toContain('while the event continues');
+    }
+  });
   it('keeps completed pools awaiting qualification rather than declaring elimination or a finished event', () => {
     const pool = loss('pool', { stage: 'group', poolIndex: 0, nativeBracketId: null });
     const pending = {
