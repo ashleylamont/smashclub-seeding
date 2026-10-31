@@ -257,6 +257,7 @@ export function createNativeRuntime(
     );
     const names = publicEntrantNames(await db.select().from(players), state.entrants);
     const publicState = {
+      ...(state.broadcastSides ? { broadcastSides: state.broadcastSides } : {}),
       plan: {
         id: planId,
         name: state.baseline.name,

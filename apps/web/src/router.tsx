@@ -215,7 +215,10 @@ const eventOperateRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/operate/$planId',
   component: EventOperatorPage,
-  validateSearch: (search: Record<string, unknown>) => ({ view: opsSection(search.view) }),
+  validateSearch: (search: Record<string, unknown>) => ({
+    view: opsSection(search.view),
+    ...(typeof search.station === 'string' ? { station: search.station } : {}),
+  }),
 });
 const adminEventOperationsRoute = createRoute({
   getParentRoute: () => adminRoute,
@@ -223,6 +226,7 @@ const adminEventOperationsRoute = createRoute({
   component: AdminEventOperationsPage,
   validateSearch: (search: Record<string, unknown>) => ({
     ...(typeof search.plan === 'string' ? { plan: search.plan } : {}),
+    ...(typeof search.station === 'string' ? { station: search.station } : {}),
     view: opsSection(search.view),
   }),
 });

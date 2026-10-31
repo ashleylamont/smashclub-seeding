@@ -13,6 +13,7 @@ import { additionalDecision, finalsToken, resetFinals, canPauseDraw } from './op
 import { drawFinals } from './brackets';
 import { hash, receiptKey, requireFact, resolved, sameScore } from './facts';
 import { applyScore, recordScore } from './scores';
+import { changeBroadcastSides } from './broadcast';
 import {
   initialState,
   type CommandEnvelope,
@@ -137,8 +138,9 @@ export function captureBaseline(baseline: TournamentBaseline): TournamentState {
 }
 
 function decisionFactVersion(state: TournamentState, command: TournamentCommand) {
-  if (command.kind === 'attendance' && command.action === 'restore') return 4 as const;
   const kind = command.kind;
+  if (kind === 'broadcastSides' || (command.kind === 'attendance' && command.action === 'restore'))
+    return 4 as const;
   if (rollingFinals(state) && !['retire', 'finalize', 'replaceResult'].includes(kind))
     return 3 as const;
   return state.settings.poolOrderPolicy && !['retire', 'finalize', 'replaceResult'].includes(kind)
@@ -193,6 +195,9 @@ export function decide(
   const basis: Record<string, number> = {};
   let reportId: string | null = null;
   switch (command.kind) {
+    case 'broadcastSides':
+      changeBroadcastSides(next, command, basis);
+      break;
     case 'retire':
       retireEvent(next, envelope, command);
       break;
@@ -303,7 +308,8 @@ export function decide(
     default:
       requireFact(additionalDecision(next, envelope, basis), 'Unsupported command.');
   }
-  completeCommandProgression(previous, next, envelope, basis);
+  if (command.kind !== 'broadcastSides')
+    completeCommandProgression(previous, next, envelope, basis);
   const after: TournamentDecision['after'] = {};
   for (const field of [
     'lifecycle',
@@ -319,6 +325,7 @@ export function decide(
     'announcements',
     'prizes',
     'retirement',
+    'broadcastSides',
   ] as const) {
     if (hash(previous[field] ?? null) !== hash(next[field] ?? null))
       Object.assign(after, { [field]: next[field] });

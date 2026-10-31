@@ -223,6 +223,20 @@ export const Receipt = z.object({
   commandId: id.optional(),
 });
 export const LiveState = z.object({
+  // Absent on old facts; display preferences never participate in competitive state.
+  broadcastSides: z
+    .record(
+      id,
+      z.object({
+        matchId: id,
+        player1Id: id,
+        player2Id: id,
+        matchRevision: revision,
+        swapped: z.boolean(),
+        revision,
+      }),
+    )
+    .optional(),
   retirement: Retirement.optional(),
   baseline: Baseline.nullable(),
   lifecycle: z.enum(['absent', 'locked', 'unlocked', 'finalized', 'cancelled']),

@@ -62,6 +62,12 @@ export function describeDecision(
     matchId,
   });
   const dispatch = describeDispatchCommand(command, state, pairing, station);
+  if (command.kind === 'broadcastSides')
+    return description(
+      'broadcast',
+      'Overlay sides changed',
+      `${station(command.stationId)} · ${pairing} · ${command.swapped ? 'Swapped left / right' : 'Recorded player order'}`,
+    );
   if (dispatch) return { ...dispatch, matchId };
   switch (command.kind) {
     case 'score': {
@@ -103,11 +109,7 @@ export function describeDecision(
         `${player(command.playerId)} · ${command.availability} · ${command.reason}`,
       );
     case 'attendance':
-      return description(
-        'players',
-        command.action === 'restore' ? 'Entrant restored' : 'Attendance changed',
-        `${command.entrant?.name ?? player(command.playerId)} · ${command.action.replaceAll('_', ' ')}${command.reason ? ` · ${command.reason}` : ''}`,
-      );
+      return { ...describeAttendance(command, player), matchId };
     case 'placements':
       return description(
         'draw',
@@ -227,4 +229,15 @@ function describeDispatchCommand(
     default:
       return null;
   }
+}
+
+function describeAttendance(
+  command: Extract<TournamentDecision['command'], { kind: 'attendance' }>,
+  player: (id: string | null) => string,
+) {
+  return {
+    category: 'players' as const,
+    title: command.action === 'restore' ? 'Entrant restored' : 'Attendance changed',
+    summary: `${command.entrant?.name ?? player(command.playerId)} · ${command.action.replaceAll('_', ' ')}${command.reason ? ` · ${command.reason}` : ''}`,
+  };
 }
