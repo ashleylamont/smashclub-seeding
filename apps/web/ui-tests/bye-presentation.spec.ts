@@ -101,12 +101,16 @@ for (const adapter of ['signed-in', 'guest'] as const)
       const card = page.locator('article.ops-match').filter({ hasText: label });
       await expect(card).toContainText('Bye');
       await expect(card).toContainText('advanced automatically');
+      await expect(card).toContainText('Next: Pending feeder');
+      await expect(card).not.toContainText('TBD');
       await expect(card.getByRole('heading')).not.toContainText(' vs ');
       await expect(card.getByRole('spinbutton')).toHaveCount(0);
       await expect(card.getByRole('button')).toHaveCount(0);
       await expect(card).not.toContainText('Confirmed result:');
     }
-    const pendingCard = page.locator('article.ops-match').filter({ hasText: pending.label });
+    const pendingCard = page
+      .locator('article.ops-match')
+      .filter({ has: page.locator('.ops-match-meta').filter({ hasText: pending.label }) });
     await expect(pendingCard).toContainText('Awaiting opponent');
     await expect(pendingCard).not.toContainText('Bye');
     await expect(pendingCard.getByRole('spinbutton')).toHaveCount(0);

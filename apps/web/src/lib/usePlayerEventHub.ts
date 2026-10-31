@@ -15,6 +15,13 @@ import {
   type StartPoolMatch,
 } from './poolFlow';
 import { guestVisibleMatches, includesPlayer, sortPlayerMatches } from './playerMatchView';
+import {
+  playerHubView,
+  effectivePlayerView,
+  playerMatchProgress,
+  recentPlayerMatches,
+  resolveHubPlayer,
+} from './playerHubView';
 import type { ResultSubmission } from '../components/CompletedScoreReport';
 
 export function usePlayerEventHub(planId: string) {
@@ -23,11 +30,20 @@ export function usePlayerEventHub(planId: string) {
   const guest = useGuestEventAccess(planId);
   const { session, redeeming, matches, setError, setReportingPreference } = guest;
   const [search, setSearch] = useState('');
-  const [selectedPlayer, setSelectedPlayer] = useDevicePlayer(
+  const [selectedPlayer, persistSelectedPlayer] = useDevicePlayer(
     planId,
     new URLSearchParams(window.location.search).get('player') ?? undefined,
   );
-  const [view, setView] = useState(selectedPlayer ? 'mine' : 'queue');
+  const setSelectedPlayer = (id: string) => {
+    persistSelectedPlayer(id);
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('player')) {
+      if (id) url.searchParams.set('player', id);
+      else url.searchParams.delete('player');
+      window.history.replaceState(window.history.state, '', url);
+    }
+  };
+  const [preferredView, setView] = useState(selectedPlayer ? 'mine' : 'queue');
   const [selectedPool, setSelectedPool] = usePoolFilter();
   const [selectedStation, setSelectedStation] = useState(
     () => new URLSearchParams(window.location.search).get('station') ?? '',
@@ -87,7 +103,8 @@ export function usePlayerEventHub(planId: string) {
   );
   const closed = data !== undefined && ['complete', 'cancelled'].includes(data.plan.status);
   const players = eventPlayers(data?.matches ?? []);
-  const player = players.some((item) => item.id === selectedPlayer) ? selectedPlayer : '';
+  const player = resolveHubPlayer(players, selectedPlayer, data?.entrants);
+  const view = effectivePlayerView(preferredView, player);
   const playerName = players.find((item) => item.id === player)?.name;
   const reportedIds = new Set(ownReports?.map((report) => report.matchId));
   const queuedIds = data ? queueScoringIds(data) : new Set<string>();
@@ -103,11 +120,11 @@ export function usePlayerEventHub(planId: string) {
     stationQueue?.nextMatchId,
     ...(stationQueue?.upcoming.map((item) => item.matchId) ?? []),
   ]);
-  const visible = guestVisibleMatches(data, {
+  const matching = guestVisibleMatches(data, {
     stationId,
     stationMatchIds,
     selectedMatch,
-    selectedPool,
+    selectedPool: player && view === 'mine' ? '' : selectedPool,
     playerId: player,
     view,
     search,
@@ -115,6 +132,10 @@ export function usePlayerEventHub(planId: string) {
     reportedIds,
     queuedIds,
   });
+  const visible =
+    player && view === 'mine' ? recentPlayerMatches(matching, 3, reportedIds) : matching;
+  const hiddenHistory = matching.length - visible.length;
+  const board = data ? playerHubView(data, player, selectedPool) : undefined;
   const [initialSection] = useState(() =>
     /^#(?:my-matches|what-next|event-pools|event-brackets|event-results)$/.test(
       window.location.hash,
@@ -176,8 +197,7 @@ export function usePlayerEventHub(planId: string) {
           data.matches.filter((match) => includesPlayer(match, player)),
         )
       : [];
-  const completed = playerMatches.filter((match) => match.status === 'complete').length;
-  const nextMatch = playerMatches.find((match) => match.status !== 'complete');
+  const { completed, nextMatch, waitingMatch } = playerMatchProgress(playerMatches, closed);
   const submitScore = async (matchId: string, input: ResultSubmission) => {
     if (!canWrite || closed) throw new Error('Match reporting is currently unavailable.');
     const result =
@@ -223,6 +243,9 @@ export function usePlayerEventHub(planId: string) {
     playerMatches,
     completed,
     nextMatch,
+    waitingMatch,
+    board,
+    hiddenHistory,
     selectedPool,
     setSelectedPool,
     selectedStation,
