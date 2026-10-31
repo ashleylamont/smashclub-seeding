@@ -183,12 +183,12 @@ export function DoublesRosterStep({
       </label>
       <p className="muted">Sorting changes this view only; it does not change saved seeds.</p>
       <div className="table-scroll" role="region" aria-label="Pair ratings" tabIndex={0}>
-        <table className="pair-rating-table">
+        <table className="data-table pair-rating-table">
           <thead>
             <tr>
               <th>Pair</th>
-              <th>Skill ± SD</th>
-              <th>Seeding score</th>
+              <th className="num">Skill ± SD</th>
+              <th className="num">Seeding score</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -216,11 +216,11 @@ export function DoublesRosterStep({
                     </Select>
                   )}
                 </td>
-                <td>
+                <td className="num">
                   {Math.round(e.snapshotMean ?? e.currentMean ?? 1500)} ±{' '}
                   {Math.round(e.snapshotSd ?? e.currentSd ?? 0)}
                 </td>
-                <td>{Math.round(e.snapshotScore ?? e.currentScore ?? 0)}</td>
+                <td className="num">{Math.round(e.snapshotScore ?? e.currentScore ?? 0)}</td>
                 <td>
                   {editable && (
                     <Button

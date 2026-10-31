@@ -129,9 +129,10 @@ for (const theme of ['dark', 'light'] as const)
         await expect
           .poll(() => region.evaluate((element) => element.scrollLeft))
           .toBeGreaterThan(0);
-        await region.evaluate((element) => {
-          element.scrollLeft = 0;
-        });
+        // Cancel the native keyboard scroll before restoring the capture framing.
+        await roster.getByRole('combobox', { name: 'Sort pairs' }).focus();
+        await region.evaluate((element) => element.scrollTo({ left: 0, behavior: 'instant' }));
+        await expect.poll(() => region.evaluate((element) => element.scrollLeft)).toBe(0);
       }
       await ready(page);
       expect(
@@ -142,6 +143,7 @@ for (const theme of ['dark', 'light'] as const)
         true,
       );
       await page.mouse.move(0, 0);
+      expect(await region.evaluate((element) => element.scrollLeft)).toBe(0);
       await page.screenshot({
         ...bracketCaptureOptions,
         path: testInfo.outputPath(`pair-planner-${theme}-${width}.png`),

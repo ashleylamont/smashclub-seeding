@@ -86,15 +86,11 @@
 /* ── roster ─────────────────────────────────────────────────────── */
 
 .pair-rating-table {
-  width: 100%;
-  border-collapse: collapse;
+  --table-min: 34rem;
 }
 
 .pair-rating-table :is(th, td) {
-  padding: var(--s2);
-  text-align: left;
   vertical-align: top;
-  border-bottom: 1px solid var(--border);
 }
 
 .pair-rating-table td:first-child {
