@@ -1,6 +1,9 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { AxeBuilder } from '@axe-core/playwright';
 import { chooseOption } from '../test-support/controls';
+import type { trpc } from '../src/lib/trpc';
+
+type DispatchDesk = Awaited<ReturnType<typeof trpc.eventOps.live.dispatchDesk.query>>;
 
 type Match = {
   id: string;
@@ -285,4 +288,200 @@ test('ordinary-only setup does not require named stations', async ({ page }) => 
   await expect(desk.getByRole('combobox', { name: 'Named station', exact: true })).toHaveCount(0);
   await desk.getByRole('button', { name: 'Call ordinary match', exact: true }).first().click();
   await expect(desk.getByText('1 / 1 in use', { exact: true })).toBeVisible();
+});
+
+test('an unavailable named station rejects calls and returns with the same identity and result history', async ({
+  page,
+}, testInfo) => {
+  const { planId, desk } = await night(page, 'Named station availability');
+  const load = () => query<DispatchDesk>(page.request, 'eventOps.live.dispatchDesk', { planId });
+  const initial = await load();
+  const station = initial.stations.find((item) => item.name === 'Main stage')!;
+  const first = initial.queue.find((row) => row.eligibleStationIds.includes(station.id))!;
+  const row = desk.locator(`.dispatch-list [data-match-id="${first.matchId}"]`);
+  await chooseOption(row.getByRole('combobox', { name: 'Named station', exact: true }), station.id);
+  await row.getByRole('button', { name: 'Start named station' }).click();
+  await desk.getByRole('button', { name: 'Capacity and named stations', exact: true }).click();
+  const disable = desk.getByRole('button', { name: 'Disable Main stage', exact: true });
+  await expect(disable).toBeDisabled();
+  await expect(disable).toHaveAccessibleDescription(/Finish or release the active match/);
+  await expect(
+    desk.getByText('Finish or release the active match before disabling this station.', {
+      exact: false,
+    }),
+  ).toBeVisible();
+  const resourceCommand = (current: DispatchDesk, enabled: boolean) => ({
+    kind: 'resources',
+    capacity: current.capacity,
+    expectedResourceRevision: current.resourceRevision,
+    stations: current.stations.map((item) => ({
+      id: item.id,
+      name: item.name,
+      enabled: item.id === station.id ? enabled : item.enabled,
+      revision: item.revision,
+    })),
+  });
+  const reject = async (input: object, message: RegExp) => {
+    const response = await page.request.post('/api/trpc/eventOps.live.command', {
+      data: { planId, requestId: crypto.randomUUID(), command: input },
+    });
+    expect(response.ok()).toBe(false);
+    expect((await response.json()).error.message).toMatch(message);
+  };
+  const playing = await load();
+  await reject(resourceCommand(playing, false), /station is still in use/i);
+  await reject(
+    {
+      kind: 'station',
+      id: station.id,
+      name: null,
+      expectedResourceRevision: playing.resourceRevision,
+    },
+    /still in use/i,
+  );
+  expect((await load()).stations.find((item) => item.id === station.id)).toMatchObject({
+    enabled: true,
+    currentMatchId: first.matchId,
+  });
+  const beforeScore = await query<Overview>(page.request, 'eventOps.overview', { planId });
+  const firstMatch = beforeScore.matches.find((match) => match.id === first.matchId)!;
+  await mutate(page.request, 'eventOps.reportScore', {
+    matchId: firstMatch.id,
+    expectedRevision: firstMatch.revision,
+    requestId: crypto.randomUUID(),
+    score1: 2,
+    score2: 0,
+    outcome: 'played',
+  });
+  await expect(disable).toBeEnabled();
+  await disable.click();
+  await expect(desk.getByRole('button', { name: 'Enable Main stage', exact: true })).toBeEnabled();
+  const unavailable = await load();
+  expect(unavailable.capacity).toBe(initial.capacity);
+  expect(unavailable.active).toBe(0);
+  expect(unavailable.stations).toHaveLength(initial.stations.length);
+  expect(unavailable.stations.find((item) => item.id === station.id)).toMatchObject({
+    name: station.name,
+    enabled: false,
+    reserved: true,
+    currentMatchId: null,
+  });
+  expect(unavailable.queue.every((item) => !item.eligibleStationIds.includes(station.id))).toBe(
+    true,
+  );
+  const target = unavailable.queue.find((item) => item.canDispatchOrdinary)!;
+  const targetMatch = (
+    await query<Overview>(page.request, 'eventOps.overview', { planId })
+  ).matches.find((match) => match.id === target.matchId)!;
+  await reject(
+    {
+      kind: 'dispatch',
+      matchId: target.matchId,
+      stationId: station.id,
+      expectedRevision: targetMatch.revision,
+      expectedResourceRevision: unavailable.resourceRevision,
+      callOnly: false,
+    },
+    /station.*unavailable/i,
+  );
+  const blockedRow = desk.locator(`.dispatch-list [data-match-id="${target.matchId}"]`);
+  await expect(blockedRow.getByRole('button', { name: 'Call ordinary match' })).toBeEnabled();
+  await blockedRow.getByRole('combobox', { name: 'Named station', exact: true }).click();
+  await expect(
+    page.getByRole('option', { name: 'Main stage · unavailable', exact: true }),
+  ).toHaveAttribute('aria-disabled', 'true');
+  await page.keyboard.press('Escape');
+  await expect(blockedRow.getByRole('button', { name: 'Start named station' })).toBeDisabled();
+  const publicUnavailable = await query<Overview>(page.request, 'eventOps.snapshot', { planId });
+  expect(publicUnavailable.stations.some((item) => item.id === station.id)).toBe(false);
+  expect(publicUnavailable.matches.find((match) => match.id === firstMatch.id)).toMatchObject({
+    status: 'complete',
+    stationId: null,
+    score1: 2,
+    score2: 0,
+    revision: firstMatch.revision + 1,
+  });
+  await desk.getByRole('button', { name: 'Enable Main stage', exact: true }).click();
+  await expect(disable).toBeEnabled();
+  const available = await load();
+  expect(available.capacity).toBe(initial.capacity);
+  expect(available.stations.find((item) => item.id === station.id)).toMatchObject({
+    name: station.name,
+    enabled: true,
+    reserved: true,
+  });
+  expect(
+    available.queue.find((item) => item.matchId === target.matchId)!.eligibleStationIds,
+  ).toContain(station.id);
+  await chooseOption(
+    blockedRow.getByRole('combobox', { name: 'Named station', exact: true }),
+    station.id,
+  );
+  await blockedRow.getByRole('button', { name: 'Start named station' }).click();
+  await expect
+    .poll(
+      async () => (await load()).stations.find((item) => item.id === station.id)!.currentMatchId,
+    )
+    .toBe(target.matchId);
+  await expect(disable).toHaveAccessibleDescription(/Finish or release the active match/);
+  const active = await load();
+  expect(active.stations.find((item) => item.id === station.id)!.currentMatchId).toBe(
+    target.matchId,
+  );
+  expect(active.capacity).toBe(initial.capacity);
+  expect(active.active).toBe(0);
+  await reject(resourceCommand(active, false), /station is still in use/i);
+  // Availability changes are additive history; they never rewrite a completed set.
+  const history = await query<{
+    entries: {
+      matchId: string | null;
+      title: string;
+      details: { command?: { kind: string; stationId?: string } };
+    }[];
+  }>(page.request, 'eventOps.live.history', { planId });
+  expect(history.entries.filter((item) => item.title === 'Station capacity changed')).toHaveLength(
+    2,
+  );
+  expect(
+    history.entries.some(
+      (item) =>
+        item.matchId === firstMatch.id &&
+        item.details.command?.kind === 'dispatch' &&
+        item.details.command.stationId === station.id,
+    ),
+  ).toBe(true);
+  await page.reload();
+  await desk.getByRole('button', { name: 'Capacity and named stations', exact: true }).click();
+  await expect(
+    desk.getByRole('button', { name: 'Disable Main stage', exact: true }),
+  ).toBeDisabled();
+  expect(
+    (await query<Overview>(page.request, 'eventOps.overview', { planId })).matches.find(
+      (match) => match.id === firstMatch.id,
+    ),
+  ).toMatchObject({
+    status: 'complete',
+    stationId: null,
+    score1: 2,
+    score2: 0,
+    revision: firstMatch.revision + 1,
+  });
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(
+      (
+        await new AxeBuilder({ page })
+          .include('.dispatch-desk')
+          .withTags(['wcag2a', 'wcag2aa'])
+          .analyze()
+      ).violations,
+    ).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.screenshot({
+      path: testInfo.outputPath(`station-availability-${width}.png`),
+      fullPage: true,
+    });
+  }
 });
