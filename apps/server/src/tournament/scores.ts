@@ -41,6 +41,7 @@ export function applyScore(
   automatic: boolean,
   commandId: string,
 ) {
+  const changed = !resolved(match) || !sameScore(match, result);
   if (resolved(match)) {
     requireFact(match.outcome !== 'bye', 'An automatic bye is fixed by the draw.');
     if (match.stage === 'group' && state.brackets.length)
@@ -80,7 +81,7 @@ export function applyScore(
     revision: match.revision + 1,
   });
   match.resultCommandId = commandId;
-  if (match.poolId) {
+  if (match.poolId && (changed || !state.settings.poolOrderPolicy)) {
     const pool = state.pools.find((p) => p.id === match.poolId)!;
     pool.order = null;
     pool.revision++;

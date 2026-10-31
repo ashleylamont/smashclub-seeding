@@ -1,3 +1,4 @@
+import { poolOrderStatus } from './poolOrders';
 import {
   dispatchAvailability,
   dispatchContext,
@@ -19,7 +20,19 @@ import { resolved } from './facts';
 import { hasCurrentPendingScoreReview } from './scoreReview';
 import type { TournamentState } from './schemas';
 
-export type EventSnapshot = Awaited<ReturnType<typeof sqlSnapshot>>;
+type SqlSnapshot = Awaited<ReturnType<typeof sqlSnapshot>>;
+export type EventSnapshot = Omit<SqlSnapshot, 'placements'> & {
+  placements: (Omit<SqlSnapshot['placements'][number], 'source'> & {
+    source: 'manual' | 'challonge' | 'automatic';
+  })[];
+  poolOrders?: {
+    poolId: string;
+    division: 'upper' | 'lower';
+    poolIndex: number;
+    status: ReturnType<typeof poolOrderStatus>['status'];
+    reason: string;
+  }[];
+};
 export function matchRows(state: TournamentState): (typeof eventMatches.$inferSelect & {
   parent1Outcome?: 'winner' | 'loser';
   parent2Outcome?: 'winner' | 'loser';
@@ -290,6 +303,12 @@ export async function eventView(
     withdrawals: state.entrants
       .filter((e) => e.availability === 'withdrawn')
       .map((e) => ({ playerId: e.playerId })),
+    poolOrders: state.pools.map((p) => ({
+      poolId: p.id,
+      division: p.division,
+      poolIndex: p.index,
+      ...poolOrderStatus(state, p),
+    })),
     placements: state.pools.flatMap((p) =>
       (p.order ?? []).map((playerId, i) => ({
         id: `${p.id}:${playerId}`,
@@ -298,7 +317,7 @@ export async function eventView(
         poolIndex: p.index,
         playerId,
         place: i + 1,
-        source: 'manual' as const,
+        source: p.orderDecision?.source ?? 'manual',
         createdAt: new Date(baseline.capturedAt),
         updatedAt: new Date(baseline.capturedAt),
       })),
@@ -355,6 +374,7 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
         poolIndex: p.index,
         label: `Pool ${p.index + 1}`,
         placementRevision: String(p.revision),
+        orderStatus: poolOrderStatus(state, p),
         matchRevisions: state.matches
           .filter((m) => m.poolId === p.id)
           .map((m) => ({ id: m.id, revision: m.revision })),

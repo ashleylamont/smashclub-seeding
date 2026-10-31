@@ -132,7 +132,7 @@ export function applyAttendance(state: TournamentState, envelope: CommandEnvelop
       m.stationId = null;
       m.blockedReason = 'Player withdrawn: awaiting organiser forfeit decision';
     }
-    if (pool) {
+    if (pool && (!state.settings.poolOrderPolicy || !state.brackets.length)) {
       pool.order = null;
       pool.revision++;
     }

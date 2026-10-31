@@ -60,14 +60,15 @@ export function NativeBracketControls({
         </p>
       ) : structure === 'round_robin' ? (
         <p>
-          Complete every pool match and confirm the final finishing order in the planner, including
-          any tiebreak rulings. Then finalize the results.
+          Complete every pool match. New draws decide a unique set-win order automatically; confirm
+          any required tiebreak ruling in the planner. Then finalize the results.
         </p>
       ) : (
         <>
           <p>
-            Resolve the pool matches and confirm finishing orders before drawing finals. Qualifiers
-            follow the chosen playoff and consolation settings. Bye winners advance automatically.
+            Resolve the pool matches before drawing finals. New draws decide unique set-win orders
+            automatically; confirm any required tiebreak rulings in the planner. Qualifiers follow
+            the chosen playoff and consolation settings. Bye winners advance automatically.
           </p>
           <Button
             type="submit"
@@ -83,6 +84,13 @@ export function NativeBracketControls({
           </Button>
           {preview && (
             <div className="section">
+              {'poolOrders' in preview &&
+                preview.poolOrders.map((pool) => (
+                  <p key={pool.poolId} className="muted">
+                    {structure && structure !== 'dual_division' ? 'Open' : pool.division} pool{' '}
+                    {pool.poolIndex + 1}: {pool.reason}
+                  </p>
+                ))}
               {preview.issues.map((issue) => (
                 <p key={issue} className="error-text">
                   {issue}
