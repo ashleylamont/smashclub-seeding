@@ -80,7 +80,7 @@ export function playerHubView(data: HubData, player = '', selectedPool = '') {
     data.plan.bracketMode === 'native'
       ? []
       : (data.brackets ?? []).filter((bracket) => !player || divisions.has(bracket.division));
-  const bracketIds = new Set(nativeBrackets.map((bracket) => bracket.id));
+  const bracketIds = new Set(assignedBrackets.map((bracket) => bracket.id));
   const bracketMatches = data.matches.filter((match) =>
     player
       ? Boolean(match.nativeBracketId && bracketIds.has(match.nativeBracketId))

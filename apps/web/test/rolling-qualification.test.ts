@@ -129,6 +129,24 @@ describe('rolling qualification display', () => {
       ),
     ).toEqual([]);
     expect(view.sections[0]).toBe('pools');
+    // Someone else's eligible final in the same draw does not move an unqualified
+    // player's board ahead of their own unfinished pool.
+    const mixed = {
+      ...data,
+      matches: [
+        ...data.matches,
+        {
+          ...pending,
+          id: 'other-final',
+          revision: 0,
+          status: 'playing',
+          player1Id: 'c',
+          player2Id: 'd',
+        },
+      ],
+    };
+    expect(playerHubView(mixed, 'a').sections[0]).toBe('pools');
+    expect(playerHubView(mixed).sections[0]).toBe('brackets');
     const frozenOut = {
       ...data,
       entrants: [{ id: 'team', name: 'Team', memberPlayerIds: ['member'] }],
