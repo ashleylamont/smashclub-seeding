@@ -286,6 +286,55 @@ test('guest access survives browser revisits and hours, retains passes on networ
   }
 });
 
+test('a selected attendee keeps their draft through board navigation and Everyone, with selection restored on a revisit', async ({
+  page,
+  browser,
+  baseURL,
+}, testInfo) => {
+  await signIn(page.request, 'admin@smashclub.dev');
+  const { planId, snapshot } = await freshEvent(page.request, 'personal board draft');
+  const context = await browser.newContext({ baseURL, viewport: { width: 390, height: 844 } });
+  try {
+    await signIn(context.request, 'player@smashclub.dev');
+    const attendee = await context.newPage();
+    const match = snapshot.matches.find((item) => item.status === 'ready')!;
+    await attendee.goto(`/play/${planId}?player=${match.player1Id}`);
+    const card = attendee.locator('article.ops-match').filter({ hasText: match.label });
+    await card.getByRole('spinbutton').nth(0).fill('2');
+    for (const section of ['Brackets', 'Pools', 'Results', 'What next', 'Find my matches']) {
+      await attendee.getByRole('link', { name: section, exact: true }).click();
+      await expect(card.getByRole('spinbutton').nth(0)).toHaveValue('2');
+    }
+    await expect(attendee.locator('#event-pools .event-pool')).toHaveCount(1);
+    await chooseOption(attendee.getByLabel('Show matches for'), '');
+    await expect(card.getByRole('spinbutton').nth(0)).toHaveValue('2');
+    await expect(attendee.getByLabel('Show matches for')).toHaveAttribute('data-value', '');
+    expect(new URL(attendee.url()).searchParams.has('player')).toBe(false);
+    await chooseOption(attendee.getByLabel('Show matches for'), match.player1Id);
+    await expect(card.getByRole('spinbutton').nth(0)).toHaveValue('2');
+    await card.getByRole('button', { name: /Submit score/ }).click();
+    await expect(card).toContainText('Score submitted for TO approval');
+    await attendee.reload();
+    await expect(attendee.getByLabel('Show matches for')).toHaveAttribute(
+      'data-value',
+      match.player1Id,
+    );
+    await expect(card).toContainText('Your report: 2');
+    await attendee.screenshot({
+      path: testInfo.outputPath('personal-board-real-api-phone.png'),
+      fullPage: true,
+    });
+    await chooseOption(attendee.getByLabel('Show matches for'), '');
+    await attendee.reload();
+    await expect(attendee.getByLabel('Show matches for')).toHaveAttribute('data-value', '');
+    expect(
+      await attendee.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
+    ).toBe(true);
+  } finally {
+    await context.close();
+  }
+});
+
 test('QR and unlinked attendees confirm recorded results or flag a different score without overwriting it', async ({
   page,
   browser,
