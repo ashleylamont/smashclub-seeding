@@ -1,0 +1,445 @@
+{
+  "sourceCommit": "53cf0d2",
+  "baseline": {
+    "version": 1,
+    "planId": "64879f7d-6b96-5a01-a097-62d911a32d45",
+    "name": "Test night",
+    "eventDate": 1791072000000,
+    "capturedAt": 1791072000000,
+    "capturedBy": "native-admin",
+    "rankingRecomputeId": null,
+    "rankingSnapshotAt": null,
+    "ratingContext": {
+      "settingsVersion": 1,
+      "settings": {
+        "activityGraceEvents": 1,
+        "activityPenaltyPerEvent": 40,
+        "activityPenaltyCap": 120,
+        "provisionalEventCount": 2,
+        "provisionalMatchCount": 8,
+        "whrDriftVariancePerDay": 0.0002,
+        "whrPriorSd": 1.2,
+        "whrGamesWeight": 0.5,
+        "whrRookieDebutPrior": 1500,
+        "whrIsolationAnchor": false,
+        "leagueBandsCalibrated": false,
+        "leagueBandBasis": "skill",
+        "leagueBands": [
+          {
+            "name": "🏆 Champions",
+            "minRating": 1650
+          },
+          {
+            "name": "💼 Smashclub Full-Timers",
+            "minRating": 1525
+          },
+          {
+            "name": "🎓 Smashclub Grads",
+            "minRating": 1425
+          },
+          {
+            "name": "👶 Smashclub Interns",
+            "minRating": -1000000
+          }
+        ]
+      },
+      "rankingModel": null,
+      "rankingFitSettings": null,
+      "inputs": []
+    },
+    "poolSize": 4,
+    "upperTargetSize": 4,
+    "entrants": [
+      {
+        "id": "3fb89ebe-f0d6-5b8d-ac30-5db5132e4fb3",
+        "playerId": "4233ce48-ce35-5009-ab38-a03d637bd7d0",
+        "name": "upper 0",
+        "division": "upper",
+        "seed": 1,
+        "snapshotRank": 1,
+        "snapshotScore": 1200,
+        "availability": "available",
+        "revision": 0
+      },
+      {
+        "id": "c7ab4124-519a-5b4e-a6a2-1eb52ffb4e00",
+        "playerId": "9d4ac17f-1dcd-5481-a30b-39007106fe8d",
+        "name": "upper 1",
+        "division": "upper",
+        "seed": 2,
+        "snapshotRank": 2,
+        "snapshotScore": 1199,
+        "availability": "available",
+        "revision": 0
+      }
+    ],
+    "pools": [
+      {
+        "id": "0e9a7907-4ba2-5250-a67a-9eb859751b81",
+        "division": "upper",
+        "index": 0,
+        "entrantIds": [
+          "4233ce48-ce35-5009-ab38-a03d637bd7d0",
+          "9d4ac17f-1dcd-5481-a30b-39007106fe8d"
+        ],
+        "order": null,
+        "revision": 0,
+        "active": true,
+        "stationIds": [],
+        "selfRun": false,
+        "autoAcceptScores": false,
+        "scheduleRevision": 0
+      }
+    ],
+    "matches": [
+      {
+        "id": "86fab605-3bbd-5791-aee6-6dfe350f4a5c",
+        "sourceKey": "86fab605-3bbd-5791-aee6-6dfe350f4a5c",
+        "division": "upper",
+        "stage": "group",
+        "poolId": "0e9a7907-4ba2-5250-a67a-9eb859751b81",
+        "bracketId": null,
+        "round": 0,
+        "slot": 0,
+        "label": "86fab605-3bbd-5791-aee6-6dfe350f4a5c",
+        "parent1Id": null,
+        "parent2Id": null,
+        "player1Id": "4233ce48-ce35-5009-ab38-a03d637bd7d0",
+        "player2Id": "9d4ac17f-1dcd-5481-a30b-39007106fe8d",
+        "status": "ready",
+        "outcome": null,
+        "score1": null,
+        "score2": null,
+        "winnerId": null,
+        "stationId": null,
+        "revision": 0,
+        "started": false,
+        "completedAt": null,
+        "automaticFromRevision": null,
+        "resultCommandId": null,
+        "liveScore1": null,
+        "liveScore2": null,
+        "progressRevision": 0,
+        "blockedReason": null
+      }
+    ],
+    "stations": [],
+    "settings": {
+      "published": true,
+      "playerReports": true,
+      "scoreReportingMode": "approve_unless_disputed",
+      "capacity": 1,
+      "poolOrderPolicy": "unique_set_wins_v1",
+      "resourceRevision": 0,
+      "reportingRevision": 0,
+      "finalsProgression": "rolling_pool_places_v1"
+    },
+    "announcements": [],
+    "prizes": []
+  },
+  "decisions": [
+    {
+      "version": 3,
+      "commandId": "5d5b1593-d75a-5f6d-a3f0-afe6de2083b3",
+      "actorId": "native-admin",
+      "requestId": "pre-restore-v3:0",
+      "kind": "score",
+      "at": 1791072100000,
+      "basis": {
+        "86fab605-3bbd-5791-aee6-6dfe350f4a5c": 0,
+        "0e9a7907-4ba2-5250-a67a-9eb859751b81": 0
+      },
+      "after": {
+        "pools": [
+          {
+            "id": "0e9a7907-4ba2-5250-a67a-9eb859751b81",
+            "division": "upper",
+            "index": 0,
+            "entrantIds": [
+              "4233ce48-ce35-5009-ab38-a03d637bd7d0",
+              "9d4ac17f-1dcd-5481-a30b-39007106fe8d"
+            ],
+            "order": [
+              "4233ce48-ce35-5009-ab38-a03d637bd7d0",
+              "9d4ac17f-1dcd-5481-a30b-39007106fe8d"
+            ],
+            "revision": 1,
+            "active": true,
+            "stationIds": [],
+            "selfRun": false,
+            "autoAcceptScores": false,
+            "scheduleRevision": 0,
+            "orderDecision": {
+              "source": "automatic",
+              "policy": "unique_set_wins_v1",
+              "order": [
+                "4233ce48-ce35-5009-ab38-a03d637bd7d0",
+                "9d4ac17f-1dcd-5481-a30b-39007106fe8d"
+              ],
+              "resultBasis": "eaaf8bfa8977feb7754c48e7196cb06372df15ad8543ad6bcc84863335e1c4ee",
+              "matchRevisions": {
+                "86fab605-3bbd-5791-aee6-6dfe350f4a5c": 1
+              },
+              "commandId": "5d5b1593-d75a-5f6d-a3f0-afe6de2083b3",
+              "decidedAt": 1791072100000
+            }
+          }
+        ],
+        "matches": [
+          {
+            "id": "86fab605-3bbd-5791-aee6-6dfe350f4a5c",
+            "sourceKey": "86fab605-3bbd-5791-aee6-6dfe350f4a5c",
+            "division": "upper",
+            "stage": "group",
+            "poolId": "0e9a7907-4ba2-5250-a67a-9eb859751b81",
+            "bracketId": null,
+            "round": 0,
+            "slot": 0,
+            "label": "86fab605-3bbd-5791-aee6-6dfe350f4a5c",
+            "parent1Id": null,
+            "parent2Id": null,
+            "player1Id": "4233ce48-ce35-5009-ab38-a03d637bd7d0",
+            "player2Id": "9d4ac17f-1dcd-5481-a30b-39007106fe8d",
+            "status": "complete",
+            "outcome": "played",
+            "score1": 2,
+            "score2": 0,
+            "winnerId": "4233ce48-ce35-5009-ab38-a03d637bd7d0",
+            "stationId": null,
+            "revision": 1,
+            "started": false,
+            "completedAt": 1791072100000,
+            "automaticFromRevision": null,
+            "resultCommandId": "5d5b1593-d75a-5f6d-a3f0-afe6de2083b3",
+            "liveScore1": null,
+            "liveScore2": null,
+            "progressRevision": 0,
+            "blockedReason": null
+          }
+        ],
+        "settings": {
+          "published": true,
+          "playerReports": true,
+          "scoreReportingMode": "approve_unless_disputed",
+          "capacity": 1,
+          "poolOrderPolicy": "unique_set_wins_v1",
+          "resourceRevision": 1,
+          "reportingRevision": 0,
+          "finalsProgression": "rolling_pool_places_v1"
+        },
+        "reports": [
+          {
+            "id": "5d5b1593-d75a-5f6d-a3f0-afe6de2083b3",
+            "matchId": "86fab605-3bbd-5791-aee6-6dfe350f4a5c",
+            "actorId": "native-admin",
+            "requestId": "pre-restore-v3:0",
+            "submittedRevision": 0,
+            "expectedRevision": 0,
+            "score1": 2,
+            "score2": 0,
+            "winnerId": "4233ce48-ce35-5009-ab38-a03d637bd7d0",
+            "outcome": "played",
+            "status": "approved",
+            "autoApproved": false,
+            "isDispute": false,
+            "createdAt": 1791072100000
+          }
+        ]
+      },
+      "receiptKey": "e851ecac6b4f824fb4e4798362115d6c774d8818a93b3c97dffdfaa8d520e45e",
+      "command": {
+        "kind": "score",
+        "matchId": "86fab605-3bbd-5791-aee6-6dfe350f4a5c",
+        "expectedRevision": 0,
+        "score1": 2,
+        "score2": 0,
+        "outcome": "played"
+      },
+      "source": "operator",
+      "correctionOf": null,
+      "causation": [],
+      "receipt": {
+        "hash": "0af441c6ff69ad843aa32d99baaa0b08646166383120185c054dec1e18045af2",
+        "sequence": 2,
+        "reportId": "5d5b1593-d75a-5f6d-a3f0-afe6de2083b3",
+        "commandId": "5d5b1593-d75a-5f6d-a3f0-afe6de2083b3"
+      }
+    },
+    {
+      "version": 3,
+      "commandId": "6b1b9fa1-8c37-5be2-a396-881a6caa6696",
+      "actorId": "native-admin",
+      "requestId": "pre-restore-v3:1",
+      "kind": "placements",
+      "at": 1791072100000,
+      "basis": {
+        "0e9a7907-4ba2-5250-a67a-9eb859751b81": 1,
+        "86fab605-3bbd-5791-aee6-6dfe350f4a5c": 1
+      },
+      "after": {
+        "pools": [
+          {
+            "id": "0e9a7907-4ba2-5250-a67a-9eb859751b81",
+            "division": "upper",
+            "index": 0,
+            "entrantIds": [
+              "4233ce48-ce35-5009-ab38-a03d637bd7d0",
+              "9d4ac17f-1dcd-5481-a30b-39007106fe8d"
+            ],
+            "order": [
+              "9d4ac17f-1dcd-5481-a30b-39007106fe8d",
+              "4233ce48-ce35-5009-ab38-a03d637bd7d0"
+            ],
+            "revision": 2,
+            "active": true,
+            "stationIds": [],
+            "selfRun": false,
+            "autoAcceptScores": false,
+            "scheduleRevision": 0,
+            "orderDecision": {
+              "source": "manual",
+              "policy": "unique_set_wins_v1",
+              "order": [
+                "9d4ac17f-1dcd-5481-a30b-39007106fe8d",
+                "4233ce48-ce35-5009-ab38-a03d637bd7d0"
+              ],
+              "resultBasis": "eaaf8bfa8977feb7754c48e7196cb06372df15ad8543ad6bcc84863335e1c4ee",
+              "matchRevisions": {
+                "86fab605-3bbd-5791-aee6-6dfe350f4a5c": 1
+              },
+              "commandId": "6b1b9fa1-8c37-5be2-a396-881a6caa6696",
+              "decidedAt": 1791072100000
+            }
+          }
+        ]
+      },
+      "receiptKey": "713b039929d8b640cfafc992a1b7fcaf0a5b080f05022a066c8840cc23930413",
+      "command": {
+        "kind": "placements",
+        "poolId": "0e9a7907-4ba2-5250-a67a-9eb859751b81",
+        "order": ["9d4ac17f-1dcd-5481-a30b-39007106fe8d", "4233ce48-ce35-5009-ab38-a03d637bd7d0"],
+        "expectedRevision": 1,
+        "matchRevisions": {
+          "86fab605-3bbd-5791-aee6-6dfe350f4a5c": 1
+        }
+      },
+      "source": "operator",
+      "correctionOf": null,
+      "causation": ["5d5b1593-d75a-5f6d-a3f0-afe6de2083b3"],
+      "receipt": {
+        "hash": "cb663f4107d51c8569d80a73788934bf773f2b59ac947578c62e607d45e93a1e",
+        "sequence": 3,
+        "reportId": null,
+        "commandId": "6b1b9fa1-8c37-5be2-a396-881a6caa6696"
+      }
+    },
+    {
+      "version": 3,
+      "commandId": "69ee80ab-135e-5cfa-a46a-01bb1c52d650",
+      "actorId": "native-admin",
+      "requestId": "pre-restore-v3:2",
+      "kind": "score",
+      "at": 1791072100000,
+      "basis": {
+        "86fab605-3bbd-5791-aee6-6dfe350f4a5c": 1
+      },
+      "after": {
+        "matches": [
+          {
+            "id": "86fab605-3bbd-5791-aee6-6dfe350f4a5c",
+            "sourceKey": "86fab605-3bbd-5791-aee6-6dfe350f4a5c",
+            "division": "upper",
+            "stage": "group",
+            "poolId": "0e9a7907-4ba2-5250-a67a-9eb859751b81",
+            "bracketId": null,
+            "round": 0,
+            "slot": 0,
+            "label": "86fab605-3bbd-5791-aee6-6dfe350f4a5c",
+            "parent1Id": null,
+            "parent2Id": null,
+            "player1Id": "4233ce48-ce35-5009-ab38-a03d637bd7d0",
+            "player2Id": "9d4ac17f-1dcd-5481-a30b-39007106fe8d",
+            "status": "complete",
+            "outcome": "played",
+            "score1": 2,
+            "score2": 0,
+            "winnerId": "4233ce48-ce35-5009-ab38-a03d637bd7d0",
+            "stationId": null,
+            "revision": 2,
+            "started": false,
+            "completedAt": 1791072100000,
+            "automaticFromRevision": null,
+            "resultCommandId": "69ee80ab-135e-5cfa-a46a-01bb1c52d650",
+            "liveScore1": null,
+            "liveScore2": null,
+            "progressRevision": 0,
+            "blockedReason": null
+          }
+        ],
+        "settings": {
+          "published": true,
+          "playerReports": true,
+          "scoreReportingMode": "approve_unless_disputed",
+          "capacity": 1,
+          "poolOrderPolicy": "unique_set_wins_v1",
+          "resourceRevision": 2,
+          "reportingRevision": 0,
+          "finalsProgression": "rolling_pool_places_v1"
+        },
+        "reports": [
+          {
+            "id": "5d5b1593-d75a-5f6d-a3f0-afe6de2083b3",
+            "matchId": "86fab605-3bbd-5791-aee6-6dfe350f4a5c",
+            "actorId": "native-admin",
+            "requestId": "pre-restore-v3:0",
+            "submittedRevision": 0,
+            "expectedRevision": 0,
+            "score1": 2,
+            "score2": 0,
+            "winnerId": "4233ce48-ce35-5009-ab38-a03d637bd7d0",
+            "outcome": "played",
+            "status": "approved",
+            "autoApproved": false,
+            "isDispute": false,
+            "createdAt": 1791072100000
+          },
+          {
+            "id": "69ee80ab-135e-5cfa-a46a-01bb1c52d650",
+            "matchId": "86fab605-3bbd-5791-aee6-6dfe350f4a5c",
+            "actorId": "native-admin",
+            "requestId": "pre-restore-v3:2",
+            "submittedRevision": 1,
+            "expectedRevision": 1,
+            "score1": 2,
+            "score2": 0,
+            "winnerId": "4233ce48-ce35-5009-ab38-a03d637bd7d0",
+            "outcome": "played",
+            "status": "approved",
+            "autoApproved": false,
+            "isDispute": false,
+            "createdAt": 1791072100000
+          }
+        ]
+      },
+      "receiptKey": "6a416619975990c5fc45433391b4df3ee813a2803ea9d9002caa1cdb2f3626df",
+      "command": {
+        "kind": "score",
+        "matchId": "86fab605-3bbd-5791-aee6-6dfe350f4a5c",
+        "expectedRevision": 1,
+        "score1": 2,
+        "score2": 0,
+        "outcome": "played"
+      },
+      "source": "operator",
+      "correctionOf": "5d5b1593-d75a-5f6d-a3f0-afe6de2083b3",
+      "causation": ["5d5b1593-d75a-5f6d-a3f0-afe6de2083b3"],
+      "receipt": {
+        "hash": "068ab0964cb1e6b0712097ba4c48fc480b9db5a49bc80bde50cd58b7ffc01883",
+        "sequence": 4,
+        "reportId": "69ee80ab-135e-5cfa-a46a-01bb1c52d650",
+        "commandId": "69ee80ab-135e-5cfa-a46a-01bb1c52d650"
+      }
+    }
+  ],
+  "stateHash": "d3b352b9de9ac066897e6b25ac2d69801da4e3aefe1171d582bd490dac49850d"
+}

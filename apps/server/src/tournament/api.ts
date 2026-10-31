@@ -374,7 +374,8 @@ export class NativeEventApi {
     await this.execute({
       ...input,
       kind: 'attendance',
-      reason: input.reason ?? input.action,
+      reason:
+        input.action === 'restore' ? (input.reason?.trim() ?? '') : (input.reason ?? input.action),
       approveRedistribution: input.approveRedistribution ?? false,
       entrant,
     });

@@ -1,7 +1,9 @@
+import { publicPlayerName } from '@smashclub/shared';
 import { eq } from 'drizzle-orm';
 import {
   nativeLiveHandoffs,
   user,
+  players,
   type Db,
   type eventMatchAudit,
   type eventAttendanceAudit,
@@ -47,6 +49,9 @@ export async function nativeEventHistory(
       item.id,
       item.name,
     ]),
+  );
+  const playerNames = new Map(
+    (await db.select().from(players)).map((player) => [player.id, publicPlayerName(player)]),
   );
   const imported = handoff.baseline as ImportedAudit;
   const legacy = [...(imported.legacyAudit ?? []), ...(imported.legacyAttendance ?? [])].sort(
@@ -123,7 +128,7 @@ export async function nativeEventHistory(
       const decision = Decision.parse(event.data);
       return {
         ...common,
-        ...describeDecision(decision, state),
+        ...describeDecision(decision, state, (id) => (id ? playerNames.get(id) : undefined)),
         actor: actor?.name ?? names.get(decision.actorId) ?? 'Former participant',
         source: decision.source,
         details: {

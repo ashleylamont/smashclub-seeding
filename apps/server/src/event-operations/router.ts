@@ -1,3 +1,4 @@
+import type { previewRestoration } from '../tournament/restoration';
 import { memberIds } from '../tournament/entrants';
 import { extendedNativePlan } from '../event-planner/nativePlanner';
 import { nativeEvent, nativeEntity, reportViews } from '../tournament/api';
@@ -43,9 +44,13 @@ import {
 } from './attendance';
 import { deleteStation, saveStation } from './stations';
 import { attendeeRoster, updateAttendee } from './attendeeRoster';
+type AttendancePreview = Awaited<ReturnType<typeof previewAttendance>> & {
+  restoration?: ReturnType<typeof previewRestoration>['restoration'];
+};
 const attendanceInput = z.object({
   planId: z.string().uuid(),
-  action: z.enum(['add', 'withdraw', 'no_show', 'redistribute']),
+  requestId: z.string().min(1).max(128).optional(),
+  action: z.enum(['add', 'withdraw', 'no_show', 'redistribute', 'restore']),
   playerId: z.string().uuid(),
   division: z.enum(['upper', 'lower']).optional(),
   poolIndex: z.number().int().min(0).optional(),
@@ -205,11 +210,21 @@ export const eventOpsRouter = router({
   guests: guestRouter,
   delivery: eventDeliveryRouter,
   sources: sourceRefreshRouter,
-  previewAttendance: authedProcedure.input(attendanceInput).query(async ({ ctx, input }) => {
-    await requireOperator(ctx.db, input.planId, ctx.user);
-    const api = await nativeEvent(ctx, input.planId, false, input);
-    return api ? api.previewAttendance(input) : previewAttendance(ctx.db, input);
-  }),
+  previewAttendance: authedProcedure
+    .input(attendanceInput)
+    .query(async ({ ctx, input }): Promise<AttendancePreview> => {
+      await requireOperator(ctx.db, input.planId, ctx.user);
+      const api = await nativeEvent(ctx, input.planId, false, input);
+      if (api) return api.previewAttendance(input);
+      const { action, ...legacy } = input;
+      if (action === 'restore')
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message:
+            'Restoration is available for live native events. Remote and historical attendance needs its existing organiser workflow.',
+        });
+      return previewAttendance(ctx.db, { ...legacy, action });
+    }),
   softLockPools: authedProcedure
     .input(planInput.extend({ confirm: z.literal(true) }))
     .mutation(async ({ ctx, input }) => {
@@ -232,7 +247,15 @@ export const eventOpsRouter = router({
     .input(attendanceInput.extend({ revisionToken: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       const api = await nativeEvent(ctx, input.planId, false, input);
-      return api ? api.attendance(input) : applyAttendance(ctx.db, ctx.user, input);
+      if (api) return api.attendance(input);
+      const { action, ...legacy } = input;
+      if (action === 'restore')
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message:
+            'Restoration is available for live native events. Remote and historical attendance needs its existing organiser workflow.',
+        });
+      return applyAttendance(ctx.db, ctx.user, { ...legacy, action });
     }),
   resetOperations: authedProcedure.input(planInput).mutation(async ({ ctx, input }) => {
     const api = await nativeEvent(ctx, input.planId, false, input);
