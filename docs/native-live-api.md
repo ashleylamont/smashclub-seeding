@@ -201,6 +201,47 @@ Pre-rolling V1/V2 journals keep their captured whole-event draw behavior. Only
 fresh baselines opt in; reducers, restart and replay never synthesize or reselect
 qualifiers. Immutable V1 and pre-rolling V2 journal hashes cover that boundary.
 
+## Restoring withdrawn attendance
+
+The native TO **Players** controls include **Restore a withdrawn entrant** (or
+pair). Restore uses the existing `eventOps.previewAttendance` /
+`applyAttendance` path with `action: restore`; it requires a currently withdrawn
+entry, an organiser, an open event and a nonempty reason. The preview binds the
+entrant, reason, current results/reports, draw and resource state. Any relevant
+change requires a fresh preview. An optional `requestId` on attendance mutations
+keeps an exact transport retry tied to its original receipt.
+
+The preview separates safe unplayed pairings that can resume, existing actual
+play, held/reviewed pairings and retained results. Apply restores the existing
+entrant's availability without changing player/team identity, team membership
+or member snoozes. Only generated withdrawal holds on safe unstarted pairings
+are cleared. Resumed unplayed pairings get a fresh revision so an old forfeit
+form cannot overwrite the restoration; current pending reports keep their
+existing revision for normal review. Explicit TO holds and actual-play progress
+remain in place and use the existing match controls when needed.
+
+Played results, forfeits, byes and no-contests are not reversed. A restored
+entrant whose run already ended stays out of that run unless a separate reviewed
+ruling repairs the result/draw. Frozen `qualifierRoster` membership, source places,
+seeds and called/played opponents stay fixed. In particular, restoring an entrant
+excluded before early finals creation does not add a finals place. Before the
+first finals draw, restored eligibility remains subject to the recorded full
+pool order and existing qualification rules.
+
+New restore actions emit `DecisionRecordedV4` with all approved availability and
+safe match-state consequences in the same atomic fact. Existing V1/V2/V3 commands
+retain their versions and immutable journal hashes; no replay upgrades attendance
+or reruns restoration policy. Remote, historical and not-yet-live SQL workflows
+explicitly reject restore and keep their existing organiser procedures.
+
+The Players controls reuse the native **Attendance history** view of the existing
+event journal: attendance and availability changes show actor, time and reason
+in chronological order, earliest loaded entry first. **Load older changes** adds
+earlier pages. The general History tab retains its existing newest-first view.
+Imported attendance audits remain available through the same history; there is
+no second attendance journal. Restoration plus downstream result/route repair is
+separate from this basic presence-restoration workflow.
+
 ## Verification and recovery
 
 ```sh

@@ -1,3 +1,5 @@
+import { useOpsWorkspace } from '../../lib/opsWorkspace';
+import { OpsEventHistory } from './OpsEventHistory';
 import { Select, SelectItem } from '../../components/ui/Select';
 import { Input } from '../../components/ui/Input';
 import { Checkbox } from '../../components/ui/Checkbox';
@@ -9,7 +11,8 @@ type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 type Preview = Awaited<ReturnType<typeof trpc.eventOps.previewAttendance.query>>;
 type Input = {
   planId: string;
-  action: 'add' | 'withdraw' | 'no_show' | 'redistribute';
+  action: 'add' | 'withdraw' | 'no_show' | 'redistribute' | 'restore';
+  requestId?: string;
   playerId: string;
   division?: 'upper' | 'lower';
   reason?: string;
@@ -26,8 +29,9 @@ export function AttendanceControls({
   data: Overview;
   disabled: boolean;
 }) {
+  const historyActive = useOpsWorkspace().section === 'players';
   const cache = useQueryClient();
-  const [action, setAction] = useState<'add' | 'withdraw' | 'no_show' | 'redistribute'>(
+  const [action, setAction] = useState<Input['action']>(
     data.plan.competitionFormat === 'doubles' ? 'withdraw' : 'add',
   );
   const [query, setQuery] = useState('');
@@ -54,6 +58,7 @@ export function AttendanceControls({
   const inspect = async () => {
     const input: Input = {
       planId,
+      requestId: crypto.randomUUID(),
       action,
       playerId,
       reason,
@@ -85,7 +90,9 @@ export function AttendanceControls({
       setApprove(false);
       setPlayerId('');
       setMessage(
-        'Attendance updated. Refresh the match queue to see the current pools and matches.',
+        action === 'restore'
+          ? 'Attendance restored. Recorded results and any frozen finals field stay unchanged.'
+          : 'Attendance updated. Refresh the match queue to see the current pools and matches.',
       );
       await cache.invalidateQueries({ queryKey: ['eventOps', planId] });
     } catch (cause) {
@@ -116,6 +123,7 @@ export function AttendanceControls({
             value={action}
             onValueChange={(selectedValue) => {
               setAction(selectedValue as typeof action);
+              if (selectedValue === 'restore') setReason('');
               setPlayerId('');
               changed();
             }}
@@ -126,6 +134,11 @@ export function AttendanceControls({
             <SelectItem value="no_show">Remove a no-show</SelectItem>
             <SelectItem value="redistribute">Redistribute a two-player pool</SelectItem>
             <SelectItem value="withdraw">Withdraw an entrant after play</SelectItem>
+            {data.plan.liveOwned && (
+              <SelectItem value="restore">
+                Restore a withdrawn {data.plan.competitionFormat === 'doubles' ? 'pair' : 'entrant'}
+              </SelectItem>
+            )}
           </Select>
         </label>
         {action === 'add' && (
@@ -155,8 +168,10 @@ export function AttendanceControls({
             <SelectItem value="">Choose a player</SelectItem>
             {(action === 'add'
               ? (search.data ?? [])
-              : data.entrants.filter(
-                  (player) => !data.withdrawals.some((row) => row.playerId === player.id),
+              : data.entrants.filter((player) =>
+                  action === 'restore'
+                    ? data.withdrawals.some((row) => row.playerId === player.id)
+                    : !data.withdrawals.some((row) => row.playerId === player.id),
                 )
             ).map((player) => (
               <SelectItem key={player.id} value={player.id}>
@@ -189,20 +204,31 @@ export function AttendanceControls({
               changed();
             }}
             maxLength={200}
-            placeholder="Arrived late / unable to stay"
+            placeholder={
+              action === 'restore'
+                ? 'Why is this entrant returning?'
+                : 'Arrived late / unable to stay'
+            }
+            required={action === 'restore'}
           />
         </label>
-        <label className="ops-check">
-          <Checkbox
-            checked={ack}
-            onCheckedChange={(nextChecked) => {
-              setAck(nextChecked);
-              changed();
-            }}
-          />{' '}
-          I have reconciled the attendance change in any attached Challonge bracket.
-        </label>
-        <Button type="submit" disabled={!playerId} onClick={() => void inspect()}>
+        {action !== 'restore' && (
+          <label className="ops-check">
+            <Checkbox
+              checked={ack}
+              onCheckedChange={(nextChecked) => {
+                setAck(nextChecked);
+                changed();
+              }}
+            />{' '}
+            I have reconciled the attendance change in any attached Challonge bracket.
+          </label>
+        )}
+        <Button
+          type="submit"
+          disabled={!playerId || (action === 'restore' && !reason.trim())}
+          onClick={() => void inspect()}
+        >
           Preview attendance change
         </Button>
       </fieldset>
@@ -230,7 +256,10 @@ export function AttendanceControls({
               {warning}
             </p>
           ))}
-          {preview.result.affectedMatches.length > 0 && (
+          {preview.result.restoration && (
+            <RestorationConsequences impact={preview.result.restoration} />
+          )}
+          {preview.input.action !== 'restore' && preview.result.affectedMatches.length > 0 && (
             <ul>
               {preview.result.affectedMatches.map((match) => (
                 <li key={match.id}>
@@ -280,6 +309,50 @@ export function AttendanceControls({
         </p>
       )}
       {message && <p role="status">{message}</p>}
+      {data.plan.liveOwned && (
+        <OpsEventHistory data={data} active={historyActive} attendanceOnly onMatch={() => {}} />
+      )}
+    </section>
+  );
+}
+
+function RestorationConsequences({ impact }: { impact: NonNullable<Preview['restoration']> }) {
+  return (
+    <section aria-label="Restoration consequences">
+      <h5>What this restoration changes</h5>
+      <p>{impact.qualification.reason}</p>
+      {impact.slots.length > 0 && (
+        <p>
+          Reserved sources stay fixed:{' '}
+          {impact.slots
+            .map(
+              (slot) =>
+                `${slot.division} Pool ${String.fromCharCode(65 + slot.poolIndex)} place ${slot.place} (${slot.status.replaceAll('_', ' ')})`,
+            )
+            .join('; ')}
+          .
+        </p>
+      )}
+      <ul>
+        {impact.effects.map((effect) => (
+          <li key={effect.id}>
+            <strong>
+              {effect.player1Name} vs {effect.player2Name}
+            </strong>{' '}
+            · {effect.label} ·{' '}
+            {effect.effect === 'resumable'
+              ? 'Can resume'
+              : effect.effect === 'retained'
+                ? 'Result retained'
+                : effect.effect === 'existing'
+                  ? 'Existing play retained'
+                  : effect.effect === 'ruling'
+                    ? 'TO ruling or controls required'
+                    : 'Still waiting'}
+            <p>{effect.reason}</p>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

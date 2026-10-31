@@ -1,6 +1,7 @@
-import { reconcileRollingFinals, rollingFinals } from './qualifiers';
-import { decidePoolOrders, confirmPoolPlacements } from './poolOrders';
-import { stampReadySince, updateResources, sharedDispatch } from './dispatch';
+import { completeCommandProgression } from './progression';
+import { rollingFinals } from './qualifiers';
+import { confirmPoolPlacements } from './poolOrders';
+import { updateResources, sharedDispatch } from './dispatch';
 import { validateKnockoutBaseline } from './structureValidation';
 import { isKnockout, isSinglePool } from '@smashclub/shared';
 import { buildRoundRobin } from '@smashclub/engine';
@@ -9,7 +10,7 @@ import { sealResults } from './results';
 import { memberIds, changeAvailability } from './entrants';
 import { dispatchMatch } from './scheduling';
 import { additionalDecision, finalsToken, resetFinals, canPauseDraw } from './operations';
-import { advance, drawFinals } from './brackets';
+import { drawFinals } from './brackets';
 import { hash, receiptKey, requireFact, resolved, sameScore } from './facts';
 import { applyScore, recordScore } from './scores';
 import { changeBroadcastSides } from './broadcast';
@@ -17,6 +18,7 @@ import {
   initialState,
   type CommandEnvelope,
   type TournamentBaseline,
+  type TournamentCommand,
   type TournamentDecision,
   type TournamentCommand,
   type TournamentState,
@@ -138,7 +140,8 @@ export function captureBaseline(baseline: TournamentBaseline): TournamentState {
 
 function decisionFactVersion(state: TournamentState, command: TournamentCommand) {
   const kind = command.kind;
-  if (kind === 'broadcastSides') return 4 as const;
+  if (kind === 'broadcastSides' || (command.kind === 'attendance' && command.action === 'restore'))
+    return 4 as const;
   if (rollingFinals(state) && !['retire', 'finalize', 'replaceResult'].includes(kind))
     return 3 as const;
   return state.settings.poolOrderPolicy && !['retire', 'finalize', 'replaceResult'].includes(kind)
@@ -306,14 +309,8 @@ export function decide(
     default:
       requireFact(additionalDecision(next, envelope, basis), 'Unsupported command.');
   }
-  if (command.kind !== 'broadcastSides') {
-    decidePoolOrders(previous, next, envelope, basis);
-    if (rollingFinals(next) && next.lifecycle === 'locked') {
-      reconcileRollingFinals(next, basis);
-      advance(next, envelope.at, envelope.id);
-    }
-    stampReadySince(previous, next, envelope.at);
-  }
+  if (command.kind !== 'broadcastSides')
+    completeCommandProgression(previous, next, envelope, basis);
   const after: TournamentDecision['after'] = {};
   for (const field of [
     'lifecycle',
