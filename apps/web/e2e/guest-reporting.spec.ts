@@ -214,11 +214,11 @@ test('scannable guest QR accepts anonymous and unlinked reports, keeps approval 
     expect(flashBox!.y).toBeGreaterThanOrEqual(capture!.y + capture!.height - 1);
     expect(qrBox!.x + qrBox!.width).toBeLessThanOrEqual(capture!.x);
     expect(qrBox!.width).toBeCloseTo(qrBox!.height, 0);
-    const deck = await overlay.locator('.broadcast-deck').boundingBox();
-    const lastChallenger = await overlay.locator('.broadcast-deck article').last().boundingBox();
-    expect(lastChallenger!.y + lastChallenger!.height).toBeLessThanOrEqual(
-      deck!.y + deck!.height + 1,
-    );
+    const rail = overlay.getByRole('region', { name: 'Recent resolved sets' });
+    await expect(rail.locator(`[data-match-id="${first.id}"] b`)).toHaveText(['2', '1']);
+    const deck = await rail.boundingBox();
+    const lastResult = await rail.locator('article').last().boundingBox();
+    expect(lastResult!.y + lastResult!.height).toBeLessThanOrEqual(deck!.y + deck!.height + 1);
     const overlayPixels = await overlayQr.evaluate((element) => {
       const source = element as HTMLCanvasElement;
       const box = source.getBoundingClientRect();
@@ -251,6 +251,9 @@ test('scannable guest QR accepts anonymous and unlinked reports, keeps approval 
     await expect(overlay.getByTestId('broadcast-result-notice')).toHaveCount(0);
     // Corrections have their own wording and reduced-motion removes movement.
     await overlay.emulateMedia({ reducedMotion: 'reduce' });
+    const stableResult = rail.locator(`[data-match-id="${first.id}"]`);
+    await expect(stableResult).toBeVisible();
+    await stableResult.evaluate((element) => element.setAttribute('data-persisted-result', 'yes'));
     const scored = (
       await query<Overview>(page.request, 'eventOps.overview', { planId })
     ).matches.find((match) => match.id === first.id)!;
@@ -263,6 +266,9 @@ test('scannable guest QR accepts anonymous and unlinked reports, keeps approval 
       outcome: 'played',
     });
     await expect(flash).toContainText('CORRECTED');
+    await expect(stableResult).toHaveCount(1);
+    await expect(stableResult).toHaveAttribute('data-persisted-result', 'yes');
+    await expect(stableResult.locator('b')).toHaveText(['1', '2']);
     expect(await flash.evaluate((element) => getComputedStyle(element).animationName)).toBe('none');
     await expect(overlay.getByLabel('Recent match outcomes')).toContainText(
       `${first.player2Name} 2–1 ${first.player1Name}`,

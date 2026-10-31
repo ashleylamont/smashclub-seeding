@@ -9,12 +9,14 @@ import './EventLive.css';
 import { NemesisMark } from '../components/NemesisMark';
 import { CharacterIcons } from '../components/CharacterIcons';
 import { OverlaySetup } from '../components/OverlaySetup';
-import { matchesPool, stationPreview, usePoolFilter, type PoolFlowData } from '../lib/poolFlow';
+import { matchesPool, usePoolFilter } from '../lib/poolFlow';
 import { GuestOverlayQr } from '../components/GuestOverlayQr';
 import { BroadcastResults } from '../components/BroadcastResults';
+import { BroadcastRecentSets } from '../components/BroadcastRecentSets';
+import { recentResultCount } from '../lib/broadcastSidebar';
 import { useGuestClock } from '../lib/guestReporting';
 
-import { broadcastQueue, liveSections, overlayGeometry, type LiveMatch } from '../lib/eventDisplay';
+import { liveSections, overlayGeometry, type LiveMatch } from '../lib/eventDisplay';
 export function EventLivePage() {
   return <PlayerEventAlias />;
 }
@@ -71,8 +73,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
           : 'Loading live event…'}
       </div>
     );
-  const data: typeof query.data & Partial<Pick<PoolFlowData, 'stationQueues' | 'poolRounds'>> =
-    query.data;
+  const data = query.data;
   const announcement = data.announcements.find(
     (item) => !('expiresAt' in item) || !item.expiresAt || Date.parse(String(item.expiresAt)) > now,
   );
@@ -103,8 +104,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
         (item) => item.id === focus || item.name.toLowerCase() === focus.toLowerCase(),
       )
     : undefined;
-  // Keep the broadcast tied to its station between sets, so the next pairing
-  // comes from the same authoritative queue attendees use to start a match.
+  // Keep the current broadcast tied to its selected station between sets.
   const broadcastStation = focus
     ? focusedStation
     : (data.stations.find((item) => item.name.toLowerCase() === 'stage') ?? data.stations[0]);
@@ -113,18 +113,6 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
     : focus
       ? undefined
       : sections.playing[0];
-  const stationQueue = data.stationQueues?.find(
-    (queue) => queue.stationId === (broadcastStation?.id ?? onStream?.stationId),
-  );
-  const onDeck = stationQueue
-    ? stationPreview(stationQueue, data.matches).filter((match) => matchesPool(match, selectedPool))
-    : focus
-      ? []
-      : broadcastQueue(sections.ready);
-  const provisionalNext =
-    stationQueue !== undefined &&
-    (!stationQueue.nextMatchId || Boolean(stationQueue.currentMatchId));
-  const otherPlaying = sections.playing.filter((match) => match.id !== onStream?.id);
   const showName = data.plan.name.split(' · ')[0]!;
   if (overlay)
     return (
@@ -146,61 +134,10 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
               </span>
             )}
           </div>
-          <div className="broadcast-rail-rule">
-            <span>{provisionalNext ? 'COMING UP' : 'PLAY NEXT'}</span>
-            <span>↗</span>
-          </div>
-          <div className="broadcast-deck">
-            {onDeck.length ? (
-              onDeck.slice(0, otherPlaying.length ? 1 : guestQr ? 2 : 3).map((match, index) => (
-                <article key={match.id}>
-                  <span className="broadcast-queue-index">0{index + 1}</span>
-                  <div>
-                    <small>
-                      {match.division} /{' '}
-                      {match.stage === 'group'
-                        ? `POOL ${String.fromCharCode(65 + (match.poolIndex ?? 0))}`
-                        : match.stage}
-                      {stationQueue
-                        ? match.id === stationQueue.nextMatchId
-                          ? ' / PLAY NEXT'
-                          : ' / COMING UP · provisional'
-                        : ''}
-                    </small>
-                    <strong>{match.player1Name || 'TBD'}</strong>
-                    <span className="broadcast-versus">vs</span>
-                    <strong>{match.player2Name || 'TBD'}</strong>
-                  </div>
-                </article>
-              ))
-            ) : (
-              <p className="broadcast-wait">
-                Next challengers
-                <br />
-                coming up.
-              </p>
-            )}
-          </div>
-          {otherPlaying.length > 0 && (
-            <div className="broadcast-other-stations" aria-label="Other stations playing">
-              <span>OTHER STATIONS / PLAYING NOW</span>
-              {otherPlaying.slice(0, guestQr ? 1 : 2).map((match) => (
-                <article key={match.id}>
-                  <small>{station(match) ?? 'Unassigned setup'}</small>
-                  <strong>
-                    {match.player1Name}{' '}
-                    <b>
-                      {match.score1 ?? '–'}:{match.score2 ?? '–'}
-                    </b>{' '}
-                    {match.player2Name}
-                  </strong>
-                </article>
-              ))}
-              {otherPlaying.length > (guestQr ? 1 : 2) && (
-                <small>+ {otherPlaying.length - (guestQr ? 1 : 2)} more playing</small>
-              )}
-            </div>
-          )}
+          <BroadcastRecentSets
+            matches={visibleMatches}
+            count={recentResultCount(window.location.search)}
+          />
           <div className="broadcast-progress">
             <span>{selectedPool ? 'POOL PROGRESS' : 'EVENT PROGRESS'}</span>
             <strong>
