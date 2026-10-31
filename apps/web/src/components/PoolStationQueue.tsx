@@ -64,6 +64,48 @@ export function PoolStationQueue({
   disabled?: boolean;
   pendingMatchId?: string | null;
 }) {
+  if (data.sharedDispatch) {
+    const calls = data.matches.filter(
+      (match) =>
+        match.status === 'playing' &&
+        matchesPool(match, selectedPool) &&
+        (!playerId || includesPlayer(match, playerId)) &&
+        (!stationId || match.stationId === stationId),
+    );
+    return (
+      <section className="pool-flow-stations" id="pool-station-queues" aria-label="Match calls">
+        <h2>{playerId ? 'Your match calls' : 'Called and playing'}</h2>
+        {calls.length ? (
+          <div className="pool-flow-grid">
+            {calls.map((match) => (
+              <article className="pool-flow-station" key={match.id}>
+                <h3>
+                  {match.player1Name} vs {match.player2Name}
+                </h3>
+                <p>
+                  {match.called ? 'Called' : 'Playing'} ·{' '}
+                  {data.stations.find((s) => s.id === match.stationId)?.name ??
+                    match.callLocation ??
+                    'Any available ordinary setup'}
+                </p>
+                <small>{match.label}</small>
+                {onReport && (
+                  <Button disabled={disabled} onClick={() => onReport(match.id)}>
+                    Report score
+                  </Button>
+                )}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p>
+            No match calls in this view. Choose your name or search pairings to find an uncalled
+            match.
+          </p>
+        )}
+      </section>
+    );
+  }
   const closed = ['complete', 'cancelled'].includes(data.plan.status);
   const queues = data.stationQueues ?? [];
   const selectedSchedule = data.poolSchedules.find(

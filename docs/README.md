@@ -11,7 +11,8 @@ Start with the [project README](../README.md) for a quick start and repository m
 - [Rating and identity notes](rating-and-identity.md): source data, rating models, board versus seeding, names and account access.
 - [Native event desk and displays](event-night-refinements.md): stations, live scores, finals, finalization and overlay.
 - [Guest event night and score approval](guest-event-night.md): public player hub, guest passes and dispute policy.
-- [Station waves and self-running pools](pool-station-flow.md): pool reservations, queue rules and attendee starts.
+- [Shared match dispatch](shared-match-dispatch.md): ordinary capacity, named Main stage, flexible TO calls and player availability.
+- [Station waves and self-running pools](pool-station-flow.md): legacy/Challonge pool reservations, queue rules and attendee starts.
 - [Pool floor sheets](pool-floor-sheets.md): printable snapshots and QR links.
 - [Permanent station QR signs](station-signs.md): printable guest reporting invitations for stations.
 - [Historical event adoption](historical-event-adoption.md): associating completed imported brackets with a saved plan.

@@ -28,6 +28,7 @@ export type PoolRounds = {
 };
 export type PoolFlowData = {
   plan: { id: string; status: string; bracketMode?: string };
+  sharedDispatch?: { capacity: number; active: number; overCapacity: number } | null;
   settings?: { scoreReportingMode?: 'to_review' | 'approve_unless_disputed' };
   matches: PoolFlowMatch[];
   stations: { id: string; name: string; currentMatchId?: string | null }[];

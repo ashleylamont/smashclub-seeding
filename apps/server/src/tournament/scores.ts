@@ -56,6 +56,10 @@ export function applyScore(
             !item.started && !resolved(item),
             'Winner change needs a ruling for downstream actual play.',
           );
+          requireFact(
+            item.status !== 'playing',
+            'A downstream match has been called. Return an untaken call before changing its opponents.',
+          );
           descendants.add(item.id);
         }
       }

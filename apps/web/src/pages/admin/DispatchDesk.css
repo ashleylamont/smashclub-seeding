@@ -1,0 +1,70 @@
+.dispatch-desk {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.dispatch-setup,
+.dispatch-add-station,
+.dispatch-call-controls {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: end;
+}
+.dispatch-setup label,
+.dispatch-add-station label,
+.dispatch-call-controls label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.dispatch-setup fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  border: 1px solid var(--border);
+  padding: 12px;
+}
+.dispatch-setup fieldset label {
+  display: flex;
+  align-items: center;
+}
+.dispatch-row {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.dispatch-row > .chip {
+  margin-right: 8px;
+}
+.dispatch-row p {
+  margin: 8px 0;
+}
+.dispatch-row .ops-match-actions {
+  margin-top: 10px;
+}
+.dispatch-list {
+  padding-left: 24px;
+}
+.dispatch-summary strong {
+  font-size: 1.3rem;
+}
+.dispatch-availability {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 12px;
+}
+.dispatch-named-stations {
+  margin-top: 12px;
+}
+@media (max-width: 600px) {
+  .dispatch-call-controls > *,
+  .dispatch-setup > label,
+  .dispatch-add-station > label {
+    width: 100%;
+  }
+  .dispatch-desk .ops-match-actions {
+    flex-wrap: wrap;
+  }
+}
