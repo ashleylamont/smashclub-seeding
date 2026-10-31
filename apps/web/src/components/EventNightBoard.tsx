@@ -1,3 +1,5 @@
+import { EventBracketLane } from './EventBracketLane';
+import { liveBracketLanes } from '../lib/eventBracket';
 import type { LiveMatch } from '../lib/eventDisplay';
 import { poolStandings } from '../lib/eventQueue';
 import { CharacterIcons } from './CharacterIcons';
@@ -197,9 +199,6 @@ export function EventBrackets({
       <h2>Brackets</h2>
       {brackets.map((bracket) => {
         const games = matches.filter((match) => match.nativeBracketId === bracket.id);
-        const rounds = [...new Set(games.map((match) => match.nativeRound ?? 0))].sort(
-          (a, b) => a - b,
-        );
         return (
           <article className="event-bracket" key={bracket.id}>
             <header>
@@ -220,81 +219,30 @@ export function EventBrackets({
                 </p>
               )}
             </header>
-            <div
-              className="event-bracket-rounds"
-              role="region"
-              aria-label={`${bracket.division} ${bracket.stage} bracket rounds`}
-              tabIndex={0}
-            >
-              {rounds.map((round, index) => (
-                <section className="event-bracket-round" key={round}>
-                  <h4>
-                    {games.find((m) => m.nativeRound === round)?.bracketLane
-                      ? games.find((m) => m.nativeRound === round)!.label.split(' · ')[0]
-                      : index === rounds.length - 1
-                        ? 'Final'
-                        : index === rounds.length - 2
-                          ? 'Semi-finals'
-                          : `Round ${index + 1}`}
-                  </h4>
-                  {games
-                    .filter((match) => match.nativeRound === round)
-                    .sort((a, b) => (a.nativeSlot ?? 0) - (b.nativeSlot ?? 0))
-                    .map((match) => (
-                      <article
-                        className={`event-bracket-match ${match.status === 'playing' ? 'is-playing' : ''}`}
-                        key={match.id}
-                      >
-                        <small>
-                          {match.label} ·{' '}
-                          {match.status === 'playing'
-                            ? 'Playing now'
-                            : match.status === 'complete'
-                              ? match.outcome === 'bye'
-                                ? 'Bye'
-                                : 'Final result'
-                              : 'Upcoming'}
-                        </small>
-                        {[
-                          {
-                            id: match.player1Id,
-                            name: match.player1Name,
-                            score: match.score1,
-                            parent: match.parent1MatchId,
-                            parentOutcome: match.parent1Outcome,
-                            characters: match.player1Characters,
-                          },
-                          {
-                            id: match.player2Id,
-                            name: match.player2Name,
-                            score: match.score2,
-                            parent: match.parent2MatchId,
-                            parentOutcome: match.parent2Outcome,
-                            characters: match.player2Characters,
-                          },
-                        ].map((player, side) => (
-                          <div
-                            className={player.id && match.winnerId === player.id ? 'is-winner' : ''}
-                            key={side}
-                          >
-                            <span>
-                              {player.id
-                                ? player.name
-                                : player.parent
-                                  ? `${player.parentOutcome === 'loser' ? 'Loser' : 'Winner'} of ${labels.get(player.parent) ?? 'previous match'}`
-                                  : match.outcome === 'bye'
-                                    ? 'Bye'
-                                    : 'To be decided'}
-                              <CharacterIcons slugs={player.characters ?? []} />
-                            </span>
-                            <b>{player.score ?? '–'}</b>
-                          </div>
-                        ))}
-                      </article>
-                    ))}
-                </section>
-              ))}
-            </div>
+            {bracket.complete && bracket.entrantIds.length === 1 && bracket.winnerId && (
+              <p className="event-live-note">One entrant advances without a played set.</p>
+            )}
+            {!games.length &&
+              !(bracket.complete && bracket.entrantIds.length === 1 && bracket.winnerId) && (
+                <p className="event-live-note">
+                  {bracket.complete
+                    ? 'No sets in this bracket.'
+                    : 'The draw will appear when the organisers publish the bracket.'}
+                </p>
+              )}
+            {new Set(games.map((match) => match.nativeRound)).size > 1 && (
+              <p className="event-live-note">Scroll sideways to follow later rounds.</p>
+            )}
+            {liveBracketLanes(games).map((lane) => (
+              <EventBracketLane
+                key={lane.key}
+                matches={lane.matches}
+                lane={lane.key}
+                title={lane.title}
+                label={`${bracket.division} ${bracket.stage} ${lane.title || 'bracket rounds'}`}
+                labels={labels}
+              />
+            ))}
             {bracket.complete && bracket.standings.length > 0 && (
               <p className="event-live-note">
                 Final placings:{' '}

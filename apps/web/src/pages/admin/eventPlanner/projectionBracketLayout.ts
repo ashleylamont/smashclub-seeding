@@ -1,3 +1,4 @@
+import { eliminationLaneLayout } from '../../../lib/eliminationLayout';
 import { duration, projectedTime, type ProjectedMatch } from './projectionView';
 
 export type ProjectionLane = 'winners' | 'losers' | 'finals';
@@ -31,55 +32,20 @@ export function projectionPairing(match: ProjectedMatch, byId: Map<string, Proje
   });
 }
 
-/** Each bracket keeps its own rounds; loser rounds contract after every pair. */
+/** Planning and the public draw share the same lane geometry and feed routing. */
 export function projectionLaneLayout(matches: ProjectedMatch[], lane: ProjectionLane) {
-  const round = (match: ProjectedMatch) =>
-    lane === 'finals' ? (match.bracketLane === 'reset' ? 2 : 1) : (match.bracketRound ?? 1);
-  const nodes = matches
-    .toSorted((a, b) => round(a) - round(b) || a.slot - b.slot)
-    .map((match) => {
-      const column = round(match) - 1;
-      const power = lane === 'finals' ? 0 : lane === 'losers' ? Math.floor(column / 2) : column;
-      const row = match.slot * 2 ** power + (2 ** power - 1) / 2;
-      return {
-        match,
-        column,
-        x: column * bracketCard.column + 12,
-        y: bracketCard.top + row * bracketCard.row,
-      };
-    });
-  const byId = new Map(nodes.map((node) => [node.match.id, node]));
-  const edges = nodes.flatMap((node) =>
-    node.match.feeds.flatMap((feed) => {
-      const parent = byId.get(feed.matchId);
-      if (!parent) return []; // Cross-bracket drops are named in the destination card.
-      const x = parent.x + bracketCard.width;
-      const y = parent.y + (feed.outcome === 'loser' ? 59 : 39);
-      return [
-        {
-          from: parent.match.id,
-          to: node.match.id,
-          side: feed.side,
-          outcome: feed.outcome,
-          path: `M${x},${y} H${x + 18} V${node.y + (feed.side === 0 ? 39 : 59)} H${node.x}`,
-        },
-      ];
-    }),
+  return eliminationLaneLayout(
+    matches,
+    lane,
+    {
+      id: (match) => match.id,
+      round: (match) =>
+        lane === 'finals' ? (match.bracketLane === 'reset' ? 2 : 1) : (match.bracketRound ?? 1),
+      slot: (match) => match.slot,
+      feeds: (match) => match.feeds,
+    },
+    bracketCard,
   );
-  const columns = Math.max(1, ...nodes.map((node) => node.column + 1));
-  return {
-    nodes,
-    edges,
-    width: columns * bracketCard.column,
-    height: Math.max(
-      bracketCard.top + bracketCard.height + 12,
-      ...nodes.map((n) => n.y + bracketCard.height + 12),
-    ),
-    rounds: Array.from({ length: columns }, (_, i) => ({
-      x: i * bracketCard.column + 12,
-      label: lane === 'finals' ? (i === 0 ? 'Grand final' : 'Reset · if needed') : `Round ${i + 1}`,
-    })),
-  };
 }
 
 export function projectionWindow(projection: { matches: ProjectedMatch[]; totalMinutes: number }) {

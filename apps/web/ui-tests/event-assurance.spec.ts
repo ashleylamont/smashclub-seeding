@@ -73,7 +73,7 @@ test('light populated sixteen-slot bracket retains all rounds, byes and unresolv
   await rounds.evaluate((node) => {
     node.scrollLeft = node.scrollWidth;
   });
-  const final = rounds.locator('.event-bracket-round').last().locator('.event-bracket-match');
+  const final = rounds.locator('[data-match-id="wide-r4-0"]');
   await final.scrollIntoViewIfNeeded();
   await expect(final).toBeInViewport({ ratio: 1 });
 
