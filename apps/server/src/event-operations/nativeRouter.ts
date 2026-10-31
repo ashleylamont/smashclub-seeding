@@ -1,3 +1,4 @@
+import { rollingFinals } from '../tournament/qualifiers';
 import { nativeEvent } from '../tournament/api';
 import { finalsToken } from '../tournament/operations';
 import { TRPCError } from '@trpc/server';
@@ -20,6 +21,12 @@ export const nativeBracketRouter = router({
     const state = await api.state();
     if (finalsToken(state) !== input.revisionToken)
       throw new TRPCError({ code: 'CONFLICT', message: 'Preview finals again.' });
+    if (rollingFinals(state) && state.brackets.length)
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message:
+          'Finals already exist. Qualifiers resolve automatically; remove unplayed finals explicitly before creating a new draw.',
+      });
     await api.execute({
       kind: 'drawFinals',
       revisionToken: input.revisionToken,

@@ -23,7 +23,7 @@ export function PlayerHubBoard({
   const path = player
     ? playerBracketPath(
         data.matches.filter((match) =>
-          board.nativeBrackets.some((bracket) => bracket.id === match.nativeBracketId),
+          board.assignedBrackets.some((bracket) => bracket.id === match.nativeBracketId),
         ),
         player,
       )
@@ -76,21 +76,30 @@ export function PlayerHubBoard({
       >
         {player && board.nativeBrackets.length > 0 ? (
           <>
-            <h2>Your bracket path</h2>
-            <p className="event-live-note">
-              Published pairings and possible later rounds. Later opponents depend on confirmed
-              results.
-            </p>
-            <ol className="player-bracket-path">
-              {path.map((match) => (
-                <li key={match.id}>
-                  <strong>{match.label}</strong> · {liveBracketStatus(match)}
-                  <p>
-                    {liveBracketSide(match, 0, labels)} vs {liveBracketSide(match, 1, labels)}
-                  </p>
-                </li>
-              ))}
-            </ol>
+            <h2>{board.pendingBrackets.length ? 'Finals qualification' : 'Your bracket path'}</h2>
+            {board.pendingBrackets.length ? (
+              <p className="event-live-note">
+                Your pool order will determine your bracket. These draws show reserved pool places;
+                your finals opponents are not confirmed yet.
+              </p>
+            ) : (
+              <p className="event-live-note">
+                Published pairings and possible later rounds. Later opponents depend on confirmed
+                results.
+              </p>
+            )}
+            {path.length > 0 && (
+              <ol className="player-bracket-path">
+                {path.map((match) => (
+                  <li key={match.id}>
+                    <strong>{match.label}</strong> · {liveBracketStatus(match)}
+                    <p>
+                      {liveBracketSide(match, 0, labels)} vs {liveBracketSide(match, 1, labels)}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            )}
             {board.nativeBrackets.map((bracket) => {
               const place = bracket.standings.find((item) => board.identities.has(item.playerId));
               return place ? (
@@ -100,7 +109,7 @@ export function PlayerHubBoard({
                 </p>
               ) : null;
             })}
-            {!path.length && (
+            {!path.length && !board.pendingBrackets.length && (
               <p>Your bracket is published. Open the full draw for its current standings.</p>
             )}
             <Disclosure title="Full draw & bracket standings">{bracketView}</Disclosure>

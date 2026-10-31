@@ -85,6 +85,10 @@ export function dispatchMatch(
       'Only the next queued match can start here.',
     );
   }
+  requireFact(
+    !match.qualificationBlocks?.length,
+    match.blockedReason ?? 'Resolve the relevant pool qualification first.',
+  );
   const active = next.matches.filter((m) => m.status === 'playing');
   requireFact(active.length < next.settings.capacity, 'Shared match capacity is full.');
   requireFact(

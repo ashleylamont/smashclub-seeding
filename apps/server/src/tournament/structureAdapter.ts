@@ -1,6 +1,7 @@
 import type { StructureMatch } from '@smashclub/engine';
 import { stableId } from './facts';
-import type { Match } from './schemas';
+import { sourceDescriptor } from './qualifiers';
+import type { Match, QualifierSlot } from './schemas';
 
 /** Assign durable identities and operational fields to chosen engine matches. */
 export function instantiateElimination(
@@ -8,14 +9,21 @@ export function instantiateElimination(
   bracketId: string,
   division: 'upper' | 'lower',
   stage: 'main' | 'consolation',
+  qualifierSlots: readonly QualifierSlot[] = [],
 ): Match[] {
   const ids = new Map(tree.map((m) => [m.id, stableId(`${bracketId}:${m.round}:${m.slot}`)]));
   return tree.map((m) => {
     const [a, b] = m.sides;
     const parent = (s: typeof a) =>
       s.kind === 'winner' || s.kind === 'loser' ? ids.get(s.matchId)! : null;
-    const player1Id = a.kind === 'entrant' ? a.entrantId : null;
-    const player2Id = b.kind === 'entrant' ? b.entrantId : null;
+    const qualifier = (side: typeof a) =>
+      side.kind === 'pool_place'
+        ? qualifierSlots.find((q) => q.poolId === side.poolId && q.place === side.place)
+        : undefined;
+    const first = qualifier(a);
+    const second = qualifier(b);
+    const player1Id = a.kind === 'entrant' ? a.entrantId : (first?.entrantId ?? null);
+    const player2Id = b.kind === 'entrant' ? b.entrantId : (second?.entrantId ?? null);
     return {
       id: ids.get(m.id)!,
       sourceKey: `native:${division}:${stage}:${m.round}:${m.slot}`,
@@ -38,6 +46,8 @@ export function instantiateElimination(
       ...(m.bracketLane ? { bracketLane: m.bracketLane, bracketRound: m.bracketRound } : {}),
       player1Id,
       player2Id,
+      ...(first ? { player1Qualifier: sourceDescriptor(first) } : {}),
+      ...(second ? { player2Qualifier: sourceDescriptor(second) } : {}),
       status: player1Id && player2Id ? 'ready' : 'blocked',
       outcome: null,
       score1: null,

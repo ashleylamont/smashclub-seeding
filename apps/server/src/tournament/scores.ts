@@ -1,3 +1,4 @@
+import { rollingFinals, requirePoolCorrectionAllowed } from './qualifiers';
 import { advance } from './brackets';
 import { requireFact, resolved, sameScore } from './facts';
 import type { CommandEnvelope, Match, TournamentState } from './schemas';
@@ -44,11 +45,14 @@ export function applyScore(
   const changed = !resolved(match) || !sameScore(match, result);
   if (resolved(match)) {
     requireFact(match.outcome !== 'bye', 'An automatic bye is fixed by the draw.');
-    if (match.stage === 'group' && state.brackets.length)
-      requireFact(
-        sameScore(match, result),
-        'Finals use this pool result; a reviewed qualifier correction is required.',
-      );
+    if (match.stage === 'group' && state.brackets.length && !sameScore(match, result)) {
+      if (rollingFinals(state)) requirePoolCorrectionAllowed(state, match.poolId!);
+      else
+        requireFact(
+          false,
+          'Finals use this pool result; a reviewed qualifier correction is required.',
+        );
+    }
     if (match.winnerId !== result.winnerId) {
       const descendants = new Set([match.id]);
       for (const item of [...state.matches].sort((a, b) => a.round - b.round)) {
@@ -103,6 +107,13 @@ export function recordScore(
   for (const parentId of [match.parent1Id, match.parent2Id]) {
     if (parentId) basis[parentId] = next.matches.find((m) => m.id === parentId)!.revision;
   }
+  requireFact(
+    !match.qualificationBlocks?.length ||
+      match.started ||
+      match.status === 'playing' ||
+      resolved(match),
+    'Resolve the relevant pool qualification before recording an uncalled finals result.',
+  );
   const winnerId = winner(command, match);
   requireFact(
     ['ready', 'playing', 'complete'].includes(match.status) ||

@@ -1,4 +1,5 @@
 import { matchPresentation } from '../lib/matchPresentation';
+import { qualificationSummary } from '../lib/qualification';
 import type { LiveMatch } from '../lib/eventDisplay';
 import { useReportFeedback } from '../lib/useReportFeedback';
 import { Button } from './ui/Button';
@@ -37,6 +38,7 @@ export function EventScoreCard({
   nextMatch?: LiveMatch;
 }) {
   const presentation = matchPresentation(match);
+  const qualification = qualificationSummary(match);
   const [score1, setScore1] = useState<ScoreInputValue>(0);
   const [score2, setScore2] = useState<ScoreInputValue>(0);
   const [revision, setRevision] = useState(match.revision);
@@ -84,6 +86,9 @@ export function EventScoreCard({
         </span>
       </div>
       <h3>{presentation.title}</h3>
+      {qualification && presentation.kind === 'scheduled' && match.status !== 'blocked' && (
+        <p role="status">{qualification} Your recorded pairing is unchanged.</p>
+      )}
       {nextMatch && (
         <p>
           Next: {nextMatch.label} · {matchPresentation(nextMatch).title}
@@ -113,9 +118,11 @@ export function EventScoreCard({
       ) : presentation.kind === 'no-contest' ? (
         <p>{presentation.result}</p>
       ) : presentation.kind === 'pending' ? (
-        <p>Awaiting opponent. The next entrant has not been confirmed yet.</p>
+        <p>
+          {presentation.result ?? 'Awaiting opponent. The next entrant has not been confirmed yet.'}
+        </p>
       ) : match.status === 'blocked' ? (
-        <p>Waiting for earlier matches or a TO before this match can start.</p>
+        <p>{qualification ?? 'Waiting for earlier matches or a TO before this match can start.'}</p>
       ) : !enabled ? (
         <p>{unavailableMessage}</p>
       ) : report?.status === 'pending' || (sent && !report) ? (
