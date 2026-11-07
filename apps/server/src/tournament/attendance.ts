@@ -3,6 +3,7 @@ import { isSinglePool, isKnockout } from '@smashclub/shared';
 import { buildRoundRobin } from '@smashclub/engine';
 import { hash, requireFact, resolved, stableId, unconfirmedCall } from './facts';
 import { advance } from './brackets';
+import { qualifierFieldFrozen } from './qualifiers';
 import type { CommandEnvelope, TournamentState, Match } from './schemas';
 
 type Input = Extract<CommandEnvelope['command'], { kind: 'attendance' }>;
@@ -30,7 +31,7 @@ function ordinaryAttendancePreview(
   },
 ) {
   const entrant = state.entrants.find((e) => e.playerId === input.playerId);
-  const division = input.division ?? entrant?.division ?? 'lower';
+  const division = (input.action === 'add' ? input.division : entrant?.division) ?? 'lower';
   const protectedPool = (id: string) => poolHasCallsOrHistory(state, id);
   const open = state.pools
     .filter(
@@ -51,7 +52,7 @@ function ordinaryAttendancePreview(
     );
   if (!['locked', 'unlocked'].includes(state.lifecycle))
     issues.push('Attendance changes require an open locked event.');
-  if (input.action !== 'withdraw' && state.brackets.length)
+  if (input.action !== 'withdraw' && qualifierFieldFrozen(state, division))
     issues.push('Remove unplayed finals before changing the pool draw.');
   if (input.action === 'add' ? entrant : !entrant)
     issues.push(
@@ -150,7 +151,7 @@ export function applyAttendance(state: TournamentState, envelope: CommandEnvelop
       m.stationId = null;
       m.blockedReason = 'Player withdrawn: awaiting organiser forfeit decision';
     }
-    if (pool && (!state.settings.poolOrderPolicy || !state.brackets.length)) {
+    if (pool && (!state.settings.poolOrderPolicy || !qualifierFieldFrozen(state, pool.division))) {
       pool.order = null;
       pool.revision++;
     }

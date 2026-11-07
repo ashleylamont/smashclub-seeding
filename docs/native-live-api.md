@@ -155,9 +155,10 @@ manual provenance.
 
 ## Rolling finals and the frozen field
 
-Fresh native pool draws capture
-`settings.finalsProgression = rolling_pool_places_v1`. Their V3 decisions can
-reserve finals before every pool is finished. The preview uses the complete
+Native pool draws with
+`settings.finalsProgression = rolling_pool_places_v1` support the original
+rolling reservation policy. Their V3 decisions can reserve finals before every
+pool is finished. The preview uses the complete
 current active field and the existing `buildFormatFinals` qualification,
 seeding and rematch-repair policy. It never seeds only the pools that finished
 first. A held pool or unrelated pending score report does not prevent a known
@@ -200,6 +201,43 @@ remain explicit after every stage and required pool ruling is complete.
 Pre-rolling V1/V2 journals keep their captured whole-event draw behavior. Only
 fresh baselines opt in; reducers, restart and replay never synthesize or reselect
 qualifiers. Immutable V1 and pre-rolling V2 journal hashes cover that boundary.
+
+## Combined pool-place and WHR seeding
+
+For fresh native pool finals, the TO Draw view requests
+`seedPolicy: pool_place_whr_v1` on preview and generation. Each bracket waits for
+its selected finishing places to resolve, including any pending score review
+that affects them. The existing qualification cuts still select the field.
+Other brackets can be created as their qualifiers resolve. The first bracket
+created in a division freezes that division’s eligible pool rosters.
+
+The policy starts with conservative WHR from the frozen draw snapshot and
+subtracts 150 display points per place below first. Conservative WHR uses skill
+minus twice its uncertainty. Doubles use the conservative pair estimate frozen
+with the roster. Without a frozen score, seeding uses the event’s conservative
+prior. Pure pool-place seeding always gives the higher finish precedence. Pure
+WHR gives no credit for pool results. Under the combined policy, a 150-point
+strength gap offsets one place, and ties favor the higher finish, then pool order.
+Nearby seeds can swap to delay potential pool rematches, while the
+combined ranking determines byes and keeps the top seeds on separate paths.
+The rematch repair considers pairs separated by up to three provisional ranks.
+It keeps the top two in separate halves or top four in separate quarters and
+applies at most as many improving swaps as there are bracket slots. It minimizes earliest possible same-pool meetings
+round by round, followed by total seed displacement. This bounded search can
+retain rematches. The TO preview compares both policies on the same field.
+
+Generation binds the approval to the ready brackets and their eligible rosters.
+Pool play elsewhere can continue while the approval stays valid, until it
+changes which brackets are ready. V6 decisions persist the seeds and comparison
+so restart and replay retain the original draw. The generation mutation accepts a
+`requestId`. The TO retains it with the preview across a failed request, allowing
+a retry to recover the persisted receipt before checking freshness. Each new
+preview gets a new request ID, including after a reset that restores the same
+eligible field and approval token. Reusing an ID with a different payload fails.
+A correction that would change
+the inputs of a created bracket requires the existing explicit finals reset.
+API calls without a seed policy retain the original behavior, and existing
+rolling finals continue under their recorded policy.
 
 ## Restoring withdrawn attendance
 

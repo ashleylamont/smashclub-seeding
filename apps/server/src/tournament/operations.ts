@@ -1,3 +1,4 @@
+import { strengthFinalsToken } from './strengthFinals';
 import { rollingFinals } from './qualifiers';
 import { requirePoolOrderChangeAllowed } from './poolOrders';
 import { beginPlay, changeStation, configureDispatch, moveQueue, sharedDispatch } from './dispatch';
@@ -7,14 +8,20 @@ import { applyAttendance } from './attendance';
 import { replaceResult } from './replacement';
 import type { CommandEnvelope, TournamentState } from './schemas';
 
-export const finalsToken = (state: TournamentState) =>
-  hash({
-    pools: state.pools,
-    matches: state.matches,
-    reports: state.reports,
-    brackets: state.brackets,
-    lifecycle: state.lifecycle,
-  });
+export const finalsToken = (
+  state: TournamentState,
+  seedPolicy?: Extract<CommandEnvelope['command'], { kind: 'drawFinals' }>['seedPolicy'],
+) =>
+  seedPolicy
+    ? strengthFinalsToken(state)
+    : hash({
+        pools: state.pools,
+        matches: state.matches,
+        reports: state.reports,
+        brackets: state.brackets,
+        lifecycle: state.lifecycle,
+      });
+
 export function resetFinals(state: TournamentState) {
   requireFact(
     !isKnockout(state.baseline?.structure),

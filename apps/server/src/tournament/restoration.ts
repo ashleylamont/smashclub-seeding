@@ -2,6 +2,7 @@ import { advance } from './brackets';
 import { available } from './entrants';
 import { dispatchAvailability } from './dispatch';
 import { completeCommandProgression } from './progression';
+import { qualifierFieldFrozen } from './qualifiers';
 import { hash, requireFact, resolved, stableId } from './facts';
 import { hasCurrentPendingScoreReview } from './scoreReview';
 import type { CommandEnvelope, Match, TournamentState } from './schemas';
@@ -131,6 +132,7 @@ export function previewRestoration(state: TournamentState, playerId: string, rea
     .filter((m) => [m.player1Id, m.player2Id].includes(playerId))
     .map((m) => matchEffect(next, m));
   const frozen = pool?.qualifierRoster;
+  const awaitingDraw = pool && !qualifierFieldFrozen(state, pool.division);
   const qualification = frozen
     ? {
         status: frozen.includes(playerId)
@@ -141,11 +143,10 @@ export function previewRestoration(state: TournamentState, playerId: string, rea
           : 'This entrant was excluded when the finals field was frozen. Restoration does not add a finals place, reseed or change the recorded draw.',
       }
     : {
-        status: pool && !state.brackets.length ? ('unfrozen' as const) : ('fixed_draw' as const),
-        reason:
-          pool && !state.brackets.length
-            ? 'This entrant is eligible for a future finals draw, subject to the confirmed pool order. Prior results and tie rulings stay recorded.'
-            : 'The existing draw, used qualifiers and recorded outcomes stay fixed. Restoration does not add a finals place or put an eliminated entrant back into the bracket.',
+        status: awaitingDraw ? ('unfrozen' as const) : ('fixed_draw' as const),
+        reason: awaitingDraw
+          ? 'This entrant is eligible for a future finals draw, subject to the confirmed pool order. Prior results and tie rulings stay recorded.'
+          : 'The existing draw, used qualifiers and recorded outcomes stay fixed. Restoration does not add a finals place or put an eliminated entrant back into the bracket.',
       };
   const waitingMembers = entrant && !available(next.entrants.find((e) => e.id === entrant.id)!);
   return {

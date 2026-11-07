@@ -149,6 +149,14 @@ test('real native mixed-stage finals run a clear qualifier before its own pool t
   const firstPool = live.pools[0]!;
   const chosen = firstPool.entrantIds[0]!;
 
+  // Reserve a pool-place field through the existing API before exercising its TO view.
+  const rolling = await query<{ revisionToken: string }>(page.request, 'eventOps.native.preview', {
+    planId,
+  });
+  await mutate(page.request, 'eventOps.native.generate', {
+    planId,
+    revisionToken: rolling.revisionToken,
+  });
   await page.goto(`/admin/event-operations?plan=${planId}`);
   await page.getByRole('tab', { name: 'Standings / draw', exact: true }).click();
   const finals = page.locator('section.card').filter({
@@ -157,10 +165,7 @@ test('real native mixed-stage finals run a clear qualifier before its own pool t
   await finals.getByRole('button', { name: 'Preview finals', exact: true }).click();
   await expect(finals).toContainText('will not shrink or reseed');
   await expect(finals).toContainText('Upper Pool A · place 1');
-  await finals.getByRole('button', { name: 'Create these finals', exact: true }).click();
-  await expect(page.getByRole('alertdialog')).toContainText('fixes the current eligible field');
-  await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm', exact: true }).click();
-  await expect(finals.getByRole('status')).toContainText('Finals are ready');
+  await expect(finals.getByRole('button', { name: 'Finals already created' })).toBeDisabled();
   let snapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
   expect(
     snapshot.matches

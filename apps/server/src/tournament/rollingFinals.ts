@@ -3,15 +3,56 @@ import { finalsRoles } from '@smashclub/shared';
 import { instantiateElimination } from './structureAdapter';
 import { qualificationPlaces, reconcileRollingFinals } from './qualifiers';
 import { stableId } from './facts';
-import type { CommandEnvelope, QualifierSlot, TournamentState } from './schemas';
+import type { CommandEnvelope, QualifierSlot, StrengthSeeding, TournamentState } from './schemas';
+
+export function eligibleQualifierRoster(
+  state: TournamentState,
+  pool: TournamentState['pools'][number],
+) {
+  return (
+    pool.qualifierRoster ??
+    pool.entrantIds.filter(
+      (id) =>
+        !state.entrants.some(
+          (entrant) => entrant.playerId === id && entrant.availability === 'withdrawn',
+        ),
+    )
+  );
+}
+
+export function appendQualifierBracket(
+  state: TournamentState,
+  envelope: CommandEnvelope,
+  division: 'upper' | 'lower',
+  stage: 'main' | 'consolation',
+  slots: QualifierSlot[],
+  strengthSeeding?: StrengthSeeding,
+) {
+  const bracketId = stableId(`${envelope.id}:${division}:${stage}`);
+  state.brackets.push({
+    id: bracketId,
+    division,
+    stage,
+    entrantIds: slots.flatMap((source) => (source.entrantId ? [source.entrantId] : [])),
+    qualifierSlots: slots,
+    ...(strengthSeeding ? { strengthSeeding } : {}),
+  });
+  const tree = buildEliminationTree(
+    bracketId,
+    slots.map((source) => ({
+      kind: 'pool_place',
+      poolId: source.poolId,
+      place: source.place,
+    })),
+  );
+  state.matches.push(...instantiateElimination(tree, bracketId, division, stage, slots));
+}
 
 /** Reserve the complete chosen field once. Later withdrawals affect availability
  * and forfeits, never its qualification cut, seed policy or bracket geometry. */
 export function drawRollingFinals(state: TournamentState, envelope: CommandEnvelope) {
   for (const pool of state.pools) {
-    pool.qualifierRoster = pool.entrantIds.filter(
-      (id) => !state.entrants.some((e) => e.playerId === id && e.availability === 'withdrawn'),
-    );
+    pool.qualifierRoster = eligibleQualifierRoster(state, pool);
     pool.revision++;
   }
   const divisions =
@@ -45,23 +86,7 @@ export function drawRollingFinals(state: TournamentState, envelope: CommandEnvel
         stage,
         state.baseline!.structureOptions,
       ).map((q) => sources.get(q.playerId)!);
-      const bracketId = stableId(`${envelope.id}:${division}:${stage}`);
-      state.brackets.push({
-        id: bracketId,
-        division,
-        stage,
-        entrantIds: slots.flatMap((source) => (source.entrantId ? [source.entrantId] : [])),
-        qualifierSlots: slots,
-      });
-      const tree = buildEliminationTree(
-        bracketId,
-        slots.map((source) => ({
-          kind: 'pool_place',
-          poolId: source.poolId,
-          place: source.place,
-        })),
-      );
-      state.matches.push(...instantiateElimination(tree, bracketId, division, stage, slots));
+      appendQualifierBracket(state, envelope, division, stage, slots);
     }
   }
   reconcileRollingFinals(state, {});

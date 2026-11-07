@@ -130,12 +130,35 @@ export const Pool = z.object({
   scheduleRevision: revision.default(0),
 });
 export const Station = z.object({ id, name: z.string(), enabled: z.boolean(), revision });
+export const StrengthSeedPolicy = z.literal('pool_place_whr_v1');
+const SeedComparison = z.object({
+  byes: z.array(id),
+  rematchesByRound: z.array(revision),
+});
+const StrengthSeeding = z.object({
+  policy: StrengthSeedPolicy,
+  poolPlaceCost: z.number().positive(),
+  seeds: z.array(
+    z.object({
+      playerId: id,
+      place: revision.min(1),
+      strength: z.number(),
+      strengthSource: z.enum(['frozen', 'prior']),
+      combinedScore: z.number(),
+      provisionalSeed: revision.min(1),
+      bracketSeed: revision.min(1),
+      poolPlaceSeed: revision.min(1),
+    }),
+  ),
+  comparison: z.object({ poolPlaces: SeedComparison, combined: SeedComparison }),
+});
 export const Bracket = z.object({
   id,
   division: Division,
   stage: z.enum(['main', 'consolation']),
   entrantIds: z.array(id),
   qualifierSlots: z.array(QualifierSlot).optional(),
+  strengthSeeding: StrengthSeeding.optional(),
 });
 export const LiveSettings = z.object({
   published: z.boolean(),
@@ -349,6 +372,7 @@ export const Command = z.discriminatedUnion('kind', [
     kind: z.literal('drawFinals'),
     revisionToken: z.string().length(64).optional(),
     replaceExisting: z.boolean().optional(),
+    seedPolicy: StrengthSeedPolicy.optional(),
   }),
   z.object({ kind: z.literal('unlock') }),
   z.object({ kind: z.literal('relock') }),
@@ -367,7 +391,14 @@ export const Envelope = z.object({
 });
 /** Persist decided state changes; reducers do not rerun scheduling/draw policy. */
 export const Decision = z.object({
-  version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
+  version: z.union([
+    z.literal(1),
+    z.literal(2),
+    z.literal(3),
+    z.literal(4),
+    z.literal(5),
+    z.literal(6),
+  ]),
   commandId: id,
   actorId: z.string(),
   requestId: z.string(),
@@ -393,6 +424,7 @@ export const Decision = z.object({
 });
 export type QualifierSource = z.infer<typeof QualifierSource>;
 export type QualifierSlot = z.infer<typeof QualifierSlot>;
+export type StrengthSeeding = z.infer<typeof StrengthSeeding>;
 export type Match = z.infer<typeof LiveMatch>;
 export type TournamentState = z.infer<typeof LiveState>;
 export type TournamentBaseline = z.infer<typeof Baseline>;

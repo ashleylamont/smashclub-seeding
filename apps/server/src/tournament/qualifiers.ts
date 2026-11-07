@@ -12,6 +12,13 @@ export function sourceDescriptor(source: QualifierSource): QualifierSource {
 }
 type Pool = TournamentState['pools'][number];
 
+/** Earlier policies freeze the whole event. Combined draws freeze one division at a time. */
+export function qualifierFieldFrozen(state: TournamentState, division: Pool['division']) {
+  return state.brackets.some(
+    (bracket) => !bracket.strengthSeeding || bracket.division === division,
+  );
+}
+
 /** Rank bands compress around the eligible field without breaking any ties. */
 export function qualifierGroups(pool: Pool) {
   return (pool.qualifierDecision?.groups ?? [])
@@ -72,11 +79,18 @@ export function qualifierDependencies(state: TournamentState, match: Match): Qua
 }
 
 export function poolFinalsConsumed(state: TournamentState, poolId: string) {
-  return state.matches.some(
-    (m) =>
-      m.bracketId &&
-      protectedMatch(state, m) &&
-      qualifierDependencies(state, m).some((source) => source.poolId === poolId),
+  return (
+    state.brackets.some(
+      (bracket) =>
+        bracket.strengthSeeding &&
+        bracket.qualifierSlots?.some((source) => source.poolId === poolId),
+    ) ||
+    state.matches.some(
+      (m) =>
+        m.bracketId &&
+        protectedMatch(state, m) &&
+        qualifierDependencies(state, m).some((source) => source.poolId === poolId),
+    )
   );
 }
 

@@ -1,3 +1,4 @@
+import { StrengthFinalsReview } from './StrengthFinalsReview';
 import { qualifierLabel } from '../../lib/qualification';
 import type { PoolQualifier } from '../../lib/eventDisplay';
 import { isKnockout } from '@smashclub/shared';
@@ -6,7 +7,11 @@ import { Button } from '../../components/ui/Button';
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
-type Preview = Awaited<ReturnType<typeof trpc.eventOps.native.preview.query>>;
+import './NativeBracketControls.css';
+
+type Preview = Awaited<ReturnType<typeof trpc.eventOps.native.preview.query>> & {
+  requestId: string;
+};
 
 /** Only render for native events; remote handoff remains a separate workflow. */
 export function NativeBracketControls({
@@ -26,6 +31,10 @@ export function NativeBracketControls({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const combined = preview && 'seedPolicy' in preview ? preview : null;
+  const divisionLabel = (division: string) =>
+    structure && structure !== 'dual_division' ? 'Open' : division;
+  const stageLabel = (stage: string) => (stage === 'main' ? 'championship' : 'consolation');
   const name = (id: string | null, qualifier?: PoolQualifier) =>
     id?.startsWith('pending:')
       ? `Pool ${String.fromCharCode(65 + Number(id.split(':')[2]))} place ${id.split(':')[3]} TBD`
@@ -49,7 +58,7 @@ export function NativeBracketControls({
     }
   };
   return (
-    <section className="card">
+    <section className="card native-finals-controls">
       <h3>
         {isKnockout(structure)
           ? 'Knockout results'
@@ -70,17 +79,23 @@ export function NativeBracketControls({
       ) : (
         <>
           <p>
-            Preview finals to reserve the full field. New draws fill confirmed pool places
-            automatically; known finals can run while unrelated pools continue. Confirm any required
-            tiebreak rulings in the planner. Publication into club results happens only when you
-            finalize the completed event.
+            Preview the available finals and review their seeds before creating them. Confirm any
+            required tiebreak rulings in the planner. Finalize the completed event to publish club
+            results.
           </p>
           <Button
             type="submit"
             disabled={closed || busy}
             onClick={() =>
               void act(
-                async () => setPreview(await trpc.eventOps.native.preview.query({ planId })),
+                async () =>
+                  setPreview({
+                    ...(await trpc.eventOps.native.preview.query({
+                      planId,
+                      seedPolicy: 'pool_place_whr_v1',
+                    })),
+                    requestId: crypto.randomUUID(),
+                  }),
                 '',
               )
             }
@@ -90,7 +105,7 @@ export function NativeBracketControls({
           {preview && (
             <div className="section">
               {'rolling' in preview && <p>{preview.freezeWarning}</p>}
-              {'existing' in preview && preview.existing && (
+              {!combined && 'existing' in preview && preview.existing && (
                 <p>
                   Finals already exist. Qualifiers update automatically; this preview preserves the
                   current draw.
@@ -108,15 +123,29 @@ export function NativeBracketControls({
                   {issue}
                 </p>
               ))}
+              {combined && (
+                <>
+                  <p>
+                    Each bracket uses pool place and frozen WHR once its qualifiers are known.
+                    Already created brackets keep their seeds.
+                  </p>
+                  {combined.waitingStages.map(({ division, stage, waiting }) => (
+                    <p key={`${division}:${stage}`} className="muted">
+                      {divisionLabel(division)} {stageLabel(stage)} is waiting for{' '}
+                      {waiting.map(qualifierLabel).join(', ')}.
+                    </p>
+                  ))}
+                </>
+              )}
               {preview.brackets.map((bracket) => (
                 <div key={`${bracket.division}:${bracket.stage}`}>
                   <h4>
-                    {structure && structure !== 'dual_division' ? 'Open' : bracket.division}{' '}
-                    {bracket.stage === 'main' ? 'championship' : 'consolation'} ·{' '}
+                    {divisionLabel(bracket.division)} {stageLabel(bracket.stage)} ·{' '}
                     {'qualifierSlots' in bracket && bracket.qualifierSlots
                       ? bracket.qualifierSlots.length
                       : bracket.entrantIds.length}{' '}
                     entrants
+                    {'alreadyDrawn' in bracket && bracket.alreadyDrawn ? ' · Created' : ''}
                   </h4>
                   {bracket.roundOne.length ? (
                     <ol>
@@ -135,8 +164,17 @@ export function NativeBracketControls({
                       ))}
                     </ol>
                   ) : (
-                    <p>No entrants in this bracket.</p>
+                    <p>
+                      {bracket.entrantIds.length === 1
+                        ? 'One entrant advances automatically.'
+                        : 'No entrants in this bracket.'}
+                    </p>
                   )}
+                  {'strengthSeeding' in bracket &&
+                    bracket.strengthSeeding &&
+                    bracket.strengthSeeding.seeds.length > 0 && (
+                      <StrengthFinalsReview seeding={bracket.strengthSeeding} name={name} />
+                    )}
                 </div>
               ))}
               <Button
@@ -145,6 +183,13 @@ export function NativeBracketControls({
                 disabled={closed || busy || !preview.allowed}
                 onClick={async () => {
                   if (
+                    combined &&
+                    !(await confirmAction(
+                      'Create the ready brackets with these seeds? Their eligible fields and seed order will be fixed.',
+                    ))
+                  )
+                    return;
+                  if (
                     'rolling' in preview &&
                     preview.brackets.some((bracket) =>
                       bracket.qualifierSlots?.some((source) => source.status !== 'resolved'),
@@ -152,20 +197,29 @@ export function NativeBracketControls({
                     !(await confirmAction(preview.freezeWarning))
                   )
                     return;
-                  void act(async () => {
-                    await trpc.eventOps.native.generate.mutate({
-                      planId,
-                      revisionToken: preview.revisionToken,
-                    });
-                    setPreview(null);
-                  }, 'Finals are ready to progress as qualifiers resolve.');
+                  void act(
+                    async () => {
+                      await trpc.eventOps.native.generate.mutate({
+                        planId,
+                        revisionToken: preview.revisionToken,
+                        requestId: preview.requestId,
+                        seedPolicy: combined?.seedPolicy,
+                      });
+                      setPreview(null);
+                    },
+                    combined
+                      ? 'Ready finals created.'
+                      : 'Finals are ready to progress as qualifiers resolve.',
+                  );
                 }}
               >
-                {'existing' in preview && preview.existing
-                  ? 'Finals already created'
-                  : preview.replacing
-                    ? 'Replace unplayed finals with this draw'
-                    : 'Create these finals'}
+                {combined
+                  ? 'Create ready finals'
+                  : 'existing' in preview && preview.existing
+                    ? 'Finals already created'
+                    : preview.replacing
+                      ? 'Replace unplayed finals with this draw'
+                      : 'Create these finals'}
               </Button>
               {(preview.replacing || ('existing' in preview && preview.existing)) && (
                 <Button
@@ -180,7 +234,7 @@ export function NativeBracketControls({
                       void act(async () => {
                         await trpc.eventOps.native.reset.mutate({
                           planId,
-                          revisionToken: preview.revisionToken,
+                          revisionToken: combined?.resetRevisionToken ?? preview.revisionToken,
                         });
                         setPreview(null);
                       }, 'Unplayed finals removed. Pool orders and attendance can now be corrected.');

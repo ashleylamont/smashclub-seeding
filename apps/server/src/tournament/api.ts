@@ -1,5 +1,6 @@
 import { rollingFinals } from './qualifiers';
-import { previewRollingFinals } from './finalsPreview';
+import { canUseStrengthSeeding, type strengthSeedPolicy } from './strengthFinals';
+import { previewRollingFinals, previewStrengthFinals } from './finalsPreview';
 import { poolOrderStatus } from './poolOrders';
 import { sharedDispatch } from './dispatch';
 import { isKnockout } from '@smashclub/shared';
@@ -293,8 +294,10 @@ export class NativeEventApi {
       });
     return reportViews(await this.state()).find((r) => r.id === reportId)!;
   }
-  async previewFinals() {
+  async previewFinals(seedPolicy?: typeof strengthSeedPolicy) {
     const state = await this.state();
+    if (canUseStrengthSeeding(state) && (seedPolicy || state.brackets.length))
+      return previewStrengthFinals(state);
     if (rollingFinals(state)) return previewRollingFinals(state);
     const trial = structuredClone(state);
     const replacing = Boolean(state.brackets.length);

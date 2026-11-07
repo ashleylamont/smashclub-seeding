@@ -113,7 +113,7 @@ export function schedules(state: TournamentState) {
   }));
 }
 export function bracketViews(state: TournamentState) {
-  return state.brackets.map((b) => {
+  return state.brackets.map(({ strengthSeeding: _seedEvidence, ...b }) => {
     const rounds = state.matches.filter((m) => m.bracketId === b.id);
     const roundRobin = state.baseline!.structure === 'round_robin';
     const order = roundRobin ? state.pools[0]?.order : null;
