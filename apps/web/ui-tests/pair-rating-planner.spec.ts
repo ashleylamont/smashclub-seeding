@@ -72,7 +72,7 @@ async function planner(page: Page) {
       },
     })),
     divisions: [
-      { division: 'upper', size: 3, poolCount: 0, pools: [], consolation: null, championship: [] },
+      { division: 'upper', size: 0, poolCount: 0, pools: [], consolation: null, championship: [] },
     ],
     brackets: [],
     issues: { blocking: [], warnings: [] },
@@ -97,6 +97,9 @@ for (const theme of ['dark', 'light'] as const)
         if (request.method() === 'POST') writes.push(request.url());
       });
       await page.goto(`/admin/event-planner?plan=${PLAN_ID}&step=roster`);
+      const summary = page.locator('.plan-summary');
+      await expect(summary.locator('dt')).toHaveText(['Teams entered', 'Unresolved', 'Warnings']);
+      await expect(summary.locator('dd').first()).toHaveText('3');
       const roster = page.locator('section').filter({
         has: page.getByRole('heading', { name: 'Doubles roster · 3 teams / 6 players' }),
       });
@@ -170,10 +173,12 @@ test('frozen roster sorts the displayed snapshots and marks old missing breakdow
 }) => {
   const fixture = await planner(page);
   fixture.view.plan.status = 'roster_frozen';
+  fixture.view.divisions[0]!.size = 3;
   fixture.view.entries.forEach((entry, i) => {
     entry.snapshotMean = [1550, 1800, 1600][i]!;
     entry.snapshotSd = 80;
     entry.snapshotScore = entry.snapshotMean - 160;
+    entry.assignedDivision = 'upper';
     entry.divisionSeed = i + 1;
   });
   fixture.view.entries[0]!.pairRating = undefined;
@@ -196,3 +201,60 @@ test('frozen roster sorts the displayed snapshots and marks old missing breakdow
   await expect(page.getByRole('button', { name: 'Freeze team seeds', exact: true })).toBeDisabled();
   expect(fixture.unexpected).toEqual([]);
 });
+
+for (const [theme, width] of [
+  ['dark', 390],
+  ['dark', 1440],
+  ['light', 390],
+  ['light', 1440],
+] as const)
+  test(`dual-division planner separates the draft count and assigned sizes in ${theme} at ${width}px`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+    const { view, unexpected } = await planner(page);
+    view.plan.competitionFormat = 'singles';
+    view.plan.structure = 'dual_division';
+    view.plan.usePairRatings = false;
+    view.plan.upperTargetSize = 5;
+    view.entries = Array.from({ length: 8 }, (_, i) => ({
+      ...view.entries[0]!,
+      id: `entry-${i}`,
+      playerId: i === 7 ? null : `player-${i}`,
+      sourceLineNumber: i + 1,
+      pairRating: undefined,
+    }));
+    view.divisions.push({ ...view.divisions[0]!, division: 'lower' });
+    await page.goto(`/admin/event-planner?plan=${PLAN_ID}&step=roster`);
+    const summary = page.locator('.plan-summary');
+    await expect(summary.locator('dt')).toHaveText(['Players entered', 'Unresolved', 'Warnings']);
+    await expect(summary.locator('dd')).toHaveText(['8', '1', '0']);
+    await ready(page);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    expect(
+      (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze())
+        .violations,
+    ).toEqual([]);
+    await page.screenshot({
+      path: testInfo.outputPath(`draft-singles-${theme}-${width}.png`),
+      fullPage: true,
+    });
+
+    view.plan.status = 'roster_frozen';
+    view.entries[7]!.playerId = 'player-7';
+    for (const upper of [5, 4]) {
+      view.entries.forEach((entry, i) => {
+        entry.assignedDivision = i < upper ? 'upper' : 'lower';
+        entry.divisionSeed = i < upper ? i + 1 : i - upper + 1;
+      });
+      view.divisions[0]!.size = upper;
+      view.divisions[1]!.size = view.entries.length - upper;
+      await page.reload();
+      await expect(summary.locator('dt')).toHaveText(['Upper', 'Lower', 'Unresolved', 'Warnings']);
+      await expect(summary.locator('dd')).toHaveText([String(upper), String(8 - upper), '0', '0']);
+    }
+    expect(unexpected).toEqual([]);
+  });

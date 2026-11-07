@@ -17,7 +17,7 @@ import { DivisionsStep } from './DivisionsStep';
 import { PoolsStep } from './PoolsStep';
 import { HandoffStep } from './HandoffStep';
 import { HistoricalAdoption } from './HistoricalAdoption';
-import { STATUS_LABEL } from './labels';
+import { DIVISION_LABEL, STATUS_LABEL } from './labels';
 import './EventPlanner.css';
 
 /**
@@ -319,23 +319,28 @@ function PlanWizard({
 /** Counts, warnings and slugs at a glance — the compact event summary. */
 function PlanSummary({ view }: { view: EventPlanView }) {
   const attached = view.brackets.filter((bracket) => bracket.challongeSlug !== null);
+  const draft = view.plan.status === 'draft' && !view.plan.historicalAdoption;
+  const open = view.plan.structure && view.plan.structure !== 'dual_division';
   return (
     <dl className="plan-summary">
-      {view.divisions.map((division) => (
-        <div key={division.division} className="stat">
-          <dt>
-            {view.plan.structure && view.plan.structure !== 'dual_division'
-              ? 'Open'
-              : division.division === 'upper'
-                ? 'Upper'
-                : 'Lower'}
-          </dt>
-          <dd>
-            {division.size}{' '}
-            {division.poolCount > 0 && <span className="muted">· {division.poolCount} pools</span>}
-          </dd>
+      {draft ? (
+        <div className="stat">
+          <dt>{view.plan.competitionFormat === 'doubles' ? 'Teams entered' : 'Players entered'}</dt>
+          <dd>{view.entries.length}</dd>
         </div>
-      ))}
+      ) : (
+        view.divisions.map((division) => (
+          <div key={division.division} className="stat">
+            <dt>{open ? 'Open' : DIVISION_LABEL[division.division]}</dt>
+            <dd>
+              {division.size}{' '}
+              {division.poolCount > 0 && (
+                <span className="muted">· {division.poolCount} pools</span>
+              )}
+            </dd>
+          </div>
+        ))
+      )}
       <div className="stat">
         <dt>Unresolved</dt>
         <dd>{view.entries.filter((entry) => entry.playerId === null).length}</dd>

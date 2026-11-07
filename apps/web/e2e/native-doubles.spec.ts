@@ -67,6 +67,7 @@ test('creates fixed doubles pairs in the planner and runs a configured double ro
     page.getByRole('combobox', { name: 'Tournament structure', exact: true }),
   ).toContainText('Open round robin');
   type PairPlan = {
+    divisions: { division: string; size: number }[];
     entries: {
       id: string;
       currentMean: number;
@@ -79,6 +80,11 @@ test('creates fixed doubles pairs in the planner and runs a configured double ro
   const beforePairModel = await query<PairPlan>(page.request, 'admin.eventPlanner.plan', {
     planId,
   });
+  expect(beforePairModel.entries).toHaveLength(4);
+  expect(beforePairModel.divisions.map((division) => division.size)).toEqual([0]);
+  const summary = page.locator('.plan-summary');
+  await expect(summary.locator('dt').first()).toHaveText('Teams entered');
+  await expect(summary.locator('dd').first()).toHaveText('4');
   await page
     .getByRole('checkbox', { name: 'Include experimental WHR pair adjustments in seeds' })
     .click();
@@ -120,6 +126,10 @@ test('creates fixed doubles pairs in the planner and runs a configured double ro
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole('button', { name: 'Freeze team seeds', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Generate pools', exact: true })).toBeVisible();
+  await expect(summary.locator('dt').first()).toHaveText('Open');
+  await expect(summary.locator('dd').first()).toHaveText(/^4\b/);
+  const frozen = await query<PairPlan>(page.request, 'admin.eventPlanner.plan', { planId });
+  expect(frozen.divisions.map((division) => division.size)).toEqual([4]);
   await page.getByRole('button', { name: 'Generate pools', exact: true }).click();
   await expect(
     page.getByRole('heading', { level: 2, name: /Browser doubles rehearsal.*Pools ready/ }),
