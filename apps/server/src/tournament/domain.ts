@@ -137,8 +137,17 @@ export function captureBaseline(baseline: TournamentBaseline): TournamentState {
   };
 }
 
-function decisionFactVersion(state: TournamentState, command: TournamentCommand) {
+function decisionFactVersion(
+  previous: TournamentState,
+  state: TournamentState,
+  command: TournamentCommand,
+) {
   const kind = command.kind;
+  if (
+    !['retire', 'finalize', 'replaceResult'].includes(kind) &&
+    [previous, state].some((value) => value.pools.some((p) => p.qualifierDecision))
+  )
+    return 5 as const;
   if (kind === 'broadcastSides' || (command.kind === 'attendance' && command.action === 'restore'))
     return 4 as const;
   if (rollingFinals(state) && !['retire', 'finalize', 'replaceResult'].includes(kind))
@@ -332,7 +341,7 @@ export function decide(
   }
   if (command.kind === 'retire') after.entrants = structuredClone(next.entrants);
   return {
-    version: decisionFactVersion(next, command),
+    version: decisionFactVersion(previous, next, command),
     commandId: envelope.id,
     actorId: envelope.actorId,
     requestId: envelope.requestId,

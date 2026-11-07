@@ -16,6 +16,7 @@ export const NativeTournament = state({
     DecisionRecordedV2: Decision.extend({ version: z.literal(2) }),
     DecisionRecordedV3: Decision.extend({ version: z.literal(3) }),
     DecisionRecordedV4: Decision.extend({ version: z.literal(4) }),
+    DecisionRecordedV5: Decision.extend({ version: z.literal(5) }),
     ResultsSealedV1: Decision,
     PlanRetiredV1: Decision,
     PublicationRecordedV1: z.object({ resultId: z.uuid(), tournamentIds: z.array(z.uuid()) }),
@@ -33,6 +34,9 @@ export const NativeTournament = state({
       current: [reduceDecision(state.current[0], data)],
     }),
     DecisionRecordedV4: ({ data }, state) => ({
+      current: [reduceDecision(state.current[0], data)],
+    }),
+    DecisionRecordedV5: ({ data }, state) => ({
       current: [reduceDecision(state.current[0], data)],
     }),
     ResultsSealedV1: ({ data }, state) => ({ current: [reduceDecision(state.current[0], data)] }),
@@ -60,6 +64,7 @@ export const NativeTournament = state({
     if (envelope.command.kind === 'retire') return ['PlanRetiredV1', decision];
     if (['finalize', 'replaceResult'].includes(envelope.command.kind))
       return ['ResultsSealedV1', decision];
+    if (decision.version === 5) return ['DecisionRecordedV5', { ...decision, version: 5 as const }];
     if (decision.version === 4) return ['DecisionRecordedV4', { ...decision, version: 4 as const }];
     if (decision.version === 3) return ['DecisionRecordedV3', { ...decision, version: 3 as const }];
     return decision.version === 2

@@ -1,3 +1,4 @@
+import { poolLabel } from '../event-planner/pools';
 import { poolFinalsConsumed } from './qualifiers';
 import { matchNames } from './matchNames';
 import { poolOrderStatus, poolPlacementSource } from './poolOrders';
@@ -394,11 +395,14 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
       .filter((p) => p.division === division)
       .map((p) => ({
         poolIndex: p.index,
-        label: `Pool ${p.index + 1}`,
+        label: poolLabel(p.index),
         placementRevision: String(p.revision),
         qualifierRoster: p.qualifierRoster,
+        rulingOptions: p.qualifierRoster
+          ? p.qualifierDecision?.groups.flatMap((group) => group.map(() => group))
+          : undefined,
         orderLockedReason:
-          p.qualifierRoster && poolFinalsConsumed(state, p.id)
+          p.qualifierRoster && !p.qualifierDecision && poolFinalsConsumed(state, p.id)
             ? 'Finals already use this pool order. Called or played opponents and report history stay fixed.'
             : undefined,
         orderStatus: poolOrderStatus(state, p),

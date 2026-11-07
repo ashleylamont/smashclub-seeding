@@ -1,4 +1,5 @@
-import { rollingFinals, requirePoolCorrectionAllowed } from './qualifiers';
+import { rollingFinals } from './qualifiers';
+import { requirePoolOrderChangeAllowed } from './poolOrders';
 import { beginPlay, changeStation, configureDispatch, moveQueue, sharedDispatch } from './dispatch';
 import { isKnockout } from '@smashclub/shared';
 import { hash, requireFact, resolved, unconfirmedCall } from './facts';
@@ -81,8 +82,7 @@ export function additionalDecision(
         );
         basis[p.id] = p.revision;
         for (const m of matches) basis[m.id] = m.revision;
-        if (rollingFinals(state) && hash(p.order) !== hash(order.order))
-          requirePoolCorrectionAllowed(state, p.id);
+        requirePoolOrderChangeAllowed(state, p, order.order);
         p.order = order.order;
         p.revision++;
       }

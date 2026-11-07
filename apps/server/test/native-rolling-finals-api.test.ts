@@ -175,7 +175,8 @@ describe('rolling finals through the standard native API', () => {
     const pool = plan.divisions
       .find((d) => d.division === 'lower')!
       .pools.find((p) => p.poolIndex === tied.index)!;
-    expect(pool.orderStatus!.status).toBe('ruling_required');
+    expect(pool.orderStatus!.status).toBe('partial');
+    expect(pool.rulingOptions?.at(-1)).toEqual([tied.entrantIds.at(-1)]);
     expect(pool.orderLockedReason).toBeUndefined();
     await caller().admin.eventPlanner.savePoolPlacements({
       planId,

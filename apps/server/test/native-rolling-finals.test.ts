@@ -31,16 +31,14 @@ const score = (match: TournamentState['matches'][number], reverse = false) => ({
   score2: reverse ? 2 : 0,
   outcome: 'played' as const,
 });
-function completePool(state: TournamentState, poolId: string) {
+function completePool(state: TournamentState, poolId: string, cycleFrom?: number) {
   const pool = state.pools.find((p) => p.id === poolId)!;
-  for (const match of state.matches.filter((m) => m.poolId === poolId && m.status !== 'complete'))
-    state = apply(
-      state,
-      score(
-        match,
-        pool.entrantIds.indexOf(match.player1Id!) > pool.entrantIds.indexOf(match.player2Id!),
-      ),
-    );
+  for (const match of state.matches.filter((m) => m.poolId === poolId && m.status !== 'complete')) {
+    const a = pool.entrantIds.indexOf(match.player1Id!);
+    const b = pool.entrantIds.indexOf(match.player2Id!);
+    const cycle = cycleFrom === Math.min(a, b) && Math.abs(a - b) === 2;
+    state = apply(state, score(match, a > b !== cycle));
+  }
   return state;
 }
 function withPools(sizes: number[]) {
@@ -80,17 +78,20 @@ function withPools(sizes: number[]) {
   }
   return captureBaseline(baseline);
 }
-function confirm(state: TournamentState, poolId: string) {
+function placementCommand(state: TournamentState, poolId: string, order?: string[]) {
   const pool = state.pools.find((p) => p.id === poolId)!;
-  return apply(state, {
-    kind: 'placements',
+  return {
+    kind: 'placements' as const,
     poolId,
-    order: pool.entrantIds,
+    order: order ?? pool.entrantIds,
     expectedRevision: pool.revision,
     matchRevisions: Object.fromEntries(
       state.matches.filter((m) => m.poolId === poolId).map((m) => [m.id, m.revision]),
     ),
-  });
+  };
+}
+function confirm(state: TournamentState, poolId: string) {
+  return apply(state, placementCommand(state, poolId));
 }
 function shared(state: TournamentState) {
   return apply(state, {
@@ -102,6 +103,100 @@ function shared(state: TournamentState) {
 }
 
 describe('native rolling-finals progression', () => {
+  it('releases the clear 3–0 qualifier, then accepts only a tie ruling after actual play', () => {
+    let state = shared(withPools([4, 4]));
+    const [pool, other] = state.pools;
+    const [first, a, b, c] = pool!.entrantIds;
+    state = completePool(state, pool!.id, 1);
+    state = completePool(state, other!.id);
+    expect(state.pools[0]!.order).toBeNull();
+    expect(state.pools[0]!.qualifierDecision?.groups).toEqual([[first], [a, b, c]]);
+    const draw = previewRollingFinals(state);
+    expect(
+      draw.brackets
+        .flatMap((item) => item.qualifierSlots ?? [])
+        .filter((q) => q.poolId === pool!.id)
+        .map((q) => [q.place, q.status, q.entrantId])
+        .sort(),
+    ).toEqual([
+      [1, 'resolved', first],
+      [2, 'pending', null],
+      [3, 'pending', null],
+      [4, 'pending', null],
+    ]);
+    state = apply(state, { kind: 'drawFinals', revisionToken: draw.revisionToken });
+    const finals = state.matches.filter((m) => m.bracketId);
+    const known = finals.find((m) => m.player1Id === first || m.player2Id === first)!;
+    expect(dispatchAvailability(state, known).canDispatchOrdinary).toBe(true);
+    expect(
+      finals.some((m) =>
+        m.qualificationBlocks?.some((q) => q.poolId === pool!.id && q.place === 2),
+      ),
+    ).toBe(true);
+    state = apply(state, score(known));
+    const actual = state.matches.find((m) => m.id === known.id)!;
+    expect(() => apply(state, placementCommand(state, pool!.id, [a!, first!, b!, c!]))).toThrow(
+      /same set-win group/,
+    );
+    const poolSet = state.matches.find((m) => m.poolId === pool!.id)!;
+    expect(() => apply(state, score(poolSet, poolSet.winnerId === poolSet.player1Id))).toThrow(
+      /Finals already use/,
+    );
+    const command = envelope(placementCommand(state, pool!.id, [first!, c!, a!, b!]));
+    const fact = Decision.parse(decide(state, command)!);
+    expect(fact.version).toBe(5);
+    state = reduceDecision(state, fact);
+    expect(state.pools[0]!.order).toEqual([first, c, a, b]);
+    expect(state.matches.find((m) => m.id === actual.id)).toEqual(actual);
+    expect(decide(state, command)).toBeUndefined();
+  });
+
+  it('keeps a complete three-way tie pending and preserves manual-only event semantics', () => {
+    const initialState = withPools([3]);
+    const poolId = initialState.pools[0]!.id;
+    const tied = completePool(apply(initialState, { kind: 'drawFinals' }), poolId, 0);
+    expect(
+      tied.brackets
+        .flatMap((b) => b.qualifierSlots!)
+        .every((q) => q.status === 'pending' && !q.entrantId),
+    ).toBe(true);
+    const manual = structuredClone(initialState);
+    delete manual.settings.poolOrderPolicy;
+    const decided = completePool(apply(manual, { kind: 'drawFinals' }), poolId);
+    expect(decided.pools[0]!.qualifierDecision).toBeUndefined();
+    expect(
+      decided.brackets.flatMap((b) => b.qualifierSlots!).every((q) => q.status === 'pending'),
+    ).toBe(true);
+    expect(confirm(decided, poolId).pools[0]!.order).toEqual(initialState.pools[0]!.entrantIds);
+  });
+
+  it('suspends unconsumed partial qualification for a current review and recomputes a corrected band', () => {
+    let state = apply(withPools([4, 4]), { kind: 'drawFinals' });
+    const pool = state.pools[0]!;
+    state = completePool(state, pool.id, 1);
+    const evidence = state.pools[0]!.qualifierDecision!;
+    const firstSlot = (value: TournamentState) =>
+      value.brackets
+        .flatMap((b) => b.qualifierSlots!)
+        .find((q) => q.poolId === pool.id && q.place === 1)!;
+    expect(firstSlot(state).entrantId).toBe(pool.entrantIds[0]);
+    const match = state.matches.find(
+      (m) => m.poolId === pool.id && [m.player1Id, m.player2Id].includes(pool.entrantIds[0]!),
+    )!;
+    state.settings.scoreReportingMode = 'approve_unless_disputed';
+    state = apply(state, score(match, match.winnerId === match.player1Id), false);
+    expect(firstSlot(state)).toMatchObject({ status: 'review_pending', entrantId: null });
+    expect(state.pools[0]!.qualifierDecision).toEqual(evidence);
+    state = apply(state, {
+      kind: 'review',
+      reportId: state.reports.at(-1)!.id,
+      approve: true,
+      expectedRevision: match.revision,
+    });
+    expect(state.pools[0]!.qualifierDecision?.resultBasis).not.toBe(evidence.resultBasis);
+    expect(firstSlot(state)).toMatchObject({ status: 'pending', entrantId: null });
+  });
+
   it('reproduces the pre-rolling whole-event gate despite known eligible upper finals', () => {
     const baseline = pureBaseline();
     baseline.settings.poolOrderPolicy = 'unique_set_wins_v1';
@@ -465,6 +560,40 @@ describe('native rolling-finals progression', () => {
     expect(
       state.brackets.flatMap((b) => b.qualifierSlots!).filter((s) => s.poolId === pool.id),
     ).toHaveLength(4);
+  });
+
+  it('compresses tied bands against the frozen field without letting a restored excluded entrant qualify', () => {
+    let state = withPools([4, 4]);
+    const pool = state.pools[0]!;
+    const [first, excluded, a, b] = pool.entrantIds;
+    state = apply(state, {
+      kind: 'availability',
+      playerId: excluded!,
+      availability: 'withdrawn',
+      expectedRevision: 0,
+      reason: 'Before reservation',
+    });
+    state = apply(state, { kind: 'drawFinals' });
+    state = apply(state, {
+      kind: 'availability',
+      playerId: excluded!,
+      availability: 'available',
+      expectedRevision: 1,
+      reason: 'After reservation',
+    });
+    state = completePool(state, pool.id, 1);
+    const places = state.brackets
+      .flatMap((bracket) => bracket.qualifierSlots!)
+      .filter((slot) => slot.poolId === pool.id)
+      .sort((left, right) => left.place - right.place);
+    expect(places).toHaveLength(3);
+    expect(places[0]).toMatchObject({ entrantId: first, status: 'resolved' });
+    expect(places.slice(1)).toEqual([
+      expect.objectContaining({ status: 'pending', entrantId: null, candidateEntrantIds: [a, b] }),
+      expect.objectContaining({ status: 'pending', entrantId: null, candidateEntrantIds: [a, b] }),
+    ]);
+    state = apply(state, placementCommand(state, pool.id, [first!, b!, excluded!, a!]));
+    expect(state.brackets.flatMap((bracket) => bracket.entrantIds)).not.toContain(excluded);
   });
 
   it('waits for explicit pool forfeits after a late withdrawal, then records a real withdrawn qualifier as a forfeit instead of a bye', () => {

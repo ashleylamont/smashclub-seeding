@@ -66,7 +66,9 @@ export function playerHubView(data: HubData, player = '', selectedPool = '') {
           bracket.qualifierSlots?.some(
             (slot) =>
               slot.status !== 'resolved' &&
-              slot.eligibleEntrantIds.some((id) => identities.has(id)),
+              (slot.candidateEntrantIds ?? slot.eligibleEntrantIds).some((id) =>
+                identities.has(id),
+              ),
           ),
         )
       : [];
