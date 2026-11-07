@@ -1,0 +1,9 @@
+.native-finals-controls {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.native-finals-controls .strength-seeding-table th[scope='row'] {
+  min-width: 12rem;
+  white-space: normal;
+}

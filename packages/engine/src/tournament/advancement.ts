@@ -23,7 +23,7 @@ export function winnersCount(poolSize: number): number {
   return Math.min(poolSize, Math.max(2, Math.ceil(poolSize / 2)));
 }
 
-export function consolationQualifiers(finishers: readonly PoolFinisher[]): PoolFinisher[] {
+export function consolationQualifiers<T extends PoolFinisher>(finishers: readonly T[]): T[] {
   const counts = new Map<number, number>();
   for (const finisher of finishers)
     counts.set(finisher.poolIndex, (counts.get(finisher.poolIndex) ?? 0) + 1);
@@ -99,6 +99,63 @@ export function buildConsolationBracket(finishers: readonly PoolFinisher[]): Con
 
 /** Seed an already selected field. Qualification and bracket seeding are separate rules. */
 export function seedPoolFinishers(qualifiers: readonly PoolFinisher[]): ConsolationBracket {
+  return placeSeeds([...qualifiers].sort(comparePoolPlaces), repairPairings);
+}
+
+function comparePoolPlaces(a: PoolFinisher, b: PoolFinisher) {
+  return a.place - b.place || a.poolIndex - b.poolIndex;
+}
+
+export const FINALS_POOL_PLACE_COST = 150;
+
+export interface StrengthSeedInput extends PoolFinisher {
+  /** Frozen conservative WHR, on the display scale. */
+  strength: number;
+}
+
+export function seedFinalistsByStrength(qualifiers: readonly StrengthSeedInput[]) {
+  const ordered = qualifiers
+    .map((q) => ({
+      ...q,
+      combinedScore: q.strength - FINALS_POOL_PLACE_COST * (q.place - 1),
+    }))
+    .sort((a, b) => b.combinedScore - a.combinedScore || comparePoolPlaces(a, b));
+  const draw = placeSeeds(ordered, repairStrengthPairings);
+  const evidence = new Map(
+    ordered.map(({ playerId, strength, combinedScore }, index) => [
+      playerId,
+      { provisionalSeed: index + 1, strength, combinedScore },
+    ]),
+  );
+  return {
+    ...draw,
+    seeds: draw.entrants.map((entrant) => ({ ...entrant, ...evidence.get(entrant.playerId)! })),
+  };
+}
+
+/** Earliest possible same-pool meetings in the fixed single-elimination tree. */
+export function poolRematchRounds(draw: ConsolationBracket) {
+  const slots = new Map(standardBracketOrder(draw.bracketSize).map((seed, index) => [seed, index]));
+  const counts = Array<number>(Math.log2(draw.bracketSize)).fill(0);
+  const pools = new Map<number, number[]>();
+  for (const entrant of draw.entrants) {
+    const position = slots.get(entrant.bracketSeed)!;
+    const group = pools.get(entrant.poolIndex) ?? [];
+    for (const other of group) counts[meetingRound(position, other) - 1]!++;
+    group.push(position);
+    pools.set(entrant.poolIndex, group);
+  }
+  return counts;
+}
+
+function meetingRound(a: number, b: number) {
+  return 32 - Math.clz32(a ^ b);
+}
+
+function placeSeeds(
+  qualifiers: readonly PoolFinisher[],
+  repair: (slots: (Seeded | null)[], seedOrder: readonly number[]) => void,
+): ConsolationBracket {
   if (qualifiers.length === 0) {
     throw new Error('No consolation finishers to build a consolation bracket from.');
   }
@@ -113,16 +170,15 @@ export function seedPoolFinishers(qualifiers: readonly PoolFinisher[]): Consolat
     seen.add(key);
   }
 
-  const ordered = [...qualifiers].sort((a, b) => a.place - b.place || a.poolIndex - b.poolIndex);
-  const bracketSize = nextPowerOfTwo(ordered.length);
+  const bracketSize = nextPowerOfTwo(qualifiers.length);
   const seedOrder = standardBracketOrder(bracketSize);
 
   // Slot i holds the qualifier whose provisional seed is seedOrder[i]; slots
   // whose seed is past the end of the field are byes.
   const slots: (Seeded | null)[] = seedOrder.map((seed) =>
-    ordered[seed - 1] ? { finisher: ordered[seed - 1]!, provisionalSeed: seed } : null,
+    qualifiers[seed - 1] ? { finisher: qualifiers[seed - 1]!, provisionalSeed: seed } : null,
   );
-  repairPairings(slots, seedOrder);
+  repair(slots, seedOrder);
 
   const entrants: ConsolationEntrant[] = [];
   slots.forEach((occupant, index) => {
@@ -188,6 +244,75 @@ function repairPairings(slots: (Seeded | null)[], seedOrder: readonly number[]):
   }
 }
 
+/**
+ * Exchanges between nearby provisional seeds are a bounded local search.
+ * Protect the original bye recipients and top seed paths. Within those
+ * constraints prefer fewer opening rematches, then fewer early later-round
+ * meetings, then smaller displacement. No estimated winners are required.
+ */
+function repairStrengthPairings(slots: (Seeded | null)[], seedOrder: readonly number[]) {
+  const rounds = Math.log2(slots.length);
+  const positions = new Map(seedOrder.map((seed, index) => [seed, index]));
+  for (let pass = 0; pass < slots.length; pass++) {
+    const poolSlots = new Map<number, number[]>();
+    slots.forEach((slot, index) => {
+      if (!slot) return;
+      const group = poolSlots.get(slot.finisher.poolIndex) ?? [];
+      group.push(index);
+      poolSlots.set(slot.finisher.poolIndex, group);
+    });
+    if (poolSlots.size < 2) return;
+    let best: { positions: [number, number]; change: number[] } | undefined;
+    for (const [i, a] of slots.entries()) {
+      if (!a || !slots[i ^ 1]) continue;
+      for (let rank = a.provisionalSeed + 1; rank <= a.provisionalSeed + 3; rank++) {
+        const candidate = positions.get(rank);
+        if (candidate === undefined) continue;
+        const b = slots[candidate];
+        if (!b || !slots[candidate ^ 1]) continue;
+        if (
+          !sameSeedSection(a.provisionalSeed, i, candidate, rounds) ||
+          !sameSeedSection(b.provisionalSeed, candidate, i, rounds)
+        )
+          continue;
+        const change = Array<number>(rounds + 1).fill(0);
+        if (a.finisher.poolIndex !== b.finisher.poolIndex) {
+          countMovedRematches(change, poolSlots.get(a.finisher.poolIndex)!, i, candidate);
+          countMovedRematches(change, poolSlots.get(b.finisher.poolIndex)!, candidate, i);
+        }
+        change[rounds] =
+          displacementCost(a, seedOrder[candidate]!) +
+          displacementCost(b, seedOrder[i]!) -
+          displacementCost(a, seedOrder[i]!) -
+          displacementCost(b, seedOrder[candidate]!);
+        const firstRound = change.findIndex((value, round) => value !== (best?.change[round] ?? 0));
+        if (firstRound >= 0 && change[firstRound]! < (best?.change[firstRound] ?? 0)) {
+          best = { positions: [i, candidate], change };
+        }
+      }
+    }
+    if (!best) return;
+    const [i, j] = best.positions;
+    swap(slots, i, j);
+    positions.set(slots[i]!.provisionalSeed, i);
+    positions.set(slots[j]!.provisionalSeed, j);
+  }
+}
+
+function sameSeedSection(seed: number, from: number, to: number, rounds: number) {
+  if (seed <= 4 && rounds >= 3) return from >> (rounds - 2) === to >> (rounds - 2);
+  if (seed <= 2 && rounds >= 2) return from >> (rounds - 1) === to >> (rounds - 1);
+  return true;
+}
+
+function countMovedRematches(change: number[], poolSlots: number[], from: number, to: number) {
+  for (const other of poolSlots) {
+    if (other === from) continue;
+    change[meetingRound(from, other) - 1]!--;
+    change[meetingRound(to, other) - 1]!++;
+  }
+}
+
 /** Cost of the pairing `index` belongs to, plus its occupants' displacement. */
 function pairCost(
   slots: readonly (Seeded | null)[],
@@ -240,9 +365,9 @@ function nextPowerOfTwo(value: number): number {
 }
 
 /** Upper half of each pool, rounded up, in pool then place order. */
-export function championshipQualifiers(
-  finishers: readonly PoolFinisher[],
-): (PoolFinisher & { label: string })[] {
+export function championshipQualifiers<T extends PoolFinisher>(
+  finishers: readonly T[],
+): (T & { label: string })[] {
   const counts = new Map<number, number>();
   for (const finisher of finishers)
     counts.set(finisher.poolIndex, (counts.get(finisher.poolIndex) ?? 0) + 1);

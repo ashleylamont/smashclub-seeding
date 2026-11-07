@@ -4,6 +4,7 @@ import { postgresCluster } from './helpers/postgres';
 import { nativeAdmin, seedNativeDraft } from './helpers/nativeLiveFixture';
 import { createNativeRuntime, nativeStream, type NativeRuntime } from '../src/tournament/runtime';
 import { nativeEventHistory } from '../src/tournament/history';
+import { previewStrengthFinals } from '../src/tournament/finalsPreview';
 import { finalsToken } from '../src/tournament/operations';
 import { Decision, type TournamentCommand, type TournamentState } from '../src/tournament/schemas';
 
@@ -95,6 +96,35 @@ describe('rolling qualifier decisions on isolated PostgreSQL', () => {
       },
     };
   }
+
+  it('replays the same combined seeds and comparison after restart', async () => {
+    const planId = await seedNativeDraft(cluster.db);
+    const live = await runtime();
+    await live.lock(nativeAdmin, planId);
+    const state = await live.state(planId);
+    for (const pool of state.pools.filter((p) => p.division === 'upper'))
+      await complete(live, planId, pool.id);
+    const preview = previewStrengthFinals(await live.state(planId));
+    await live.command(nativeAdmin, planId, 'strength-seeded-upper', {
+      kind: 'drawFinals',
+      revisionToken: preview.revisionToken,
+      seedPolicy: preview.seedPolicy,
+    });
+    const saved = await live.state(planId);
+    expect(saved.brackets.map((b) => b.strengthSeeding)).toEqual(
+      preview.brackets.map((b) => b.strengthSeeding),
+    );
+    expect(saved.brackets).toHaveLength(2);
+    await live.shutdown();
+    runtimes.delete(live);
+    const restarted = await runtime();
+    expect(await restarted.state(planId)).toEqual(saved);
+    expect(await restarted.replay(planId)).toEqual(saved);
+    const history = await nativeEventHistory(restarted, cluster.db, planId);
+    expect(history.entries.some((entry) => entry.eventName === 'DecisionRecordedV6')).toBe(true);
+    const publicSnapshot = await restarted.snapshot(planId, false);
+    expect(publicSnapshot.nativeBrackets.some((b) => 'strengthSeeding' in b)).toBe(false);
+  });
 
   it('restarts from V5 place evidence and returns the original receipt for a repeated result', async () => {
     const planId = await seedNativeDraft(cluster.db);

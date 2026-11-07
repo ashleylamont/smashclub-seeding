@@ -1,4 +1,5 @@
 import { drawRollingFinals } from './rollingFinals';
+import { drawStrengthFinals } from './strengthFinals';
 import { rollingFinals } from './qualifiers';
 import { finalsRoles, isKnockout } from '@smashclub/shared';
 import { instantiateElimination } from './structureAdapter';
@@ -106,6 +107,11 @@ export function drawFinals(state: TournamentState, envelope: CommandEnvelope) {
     !isKnockout(state.baseline?.structure),
     'Knockout brackets are chosen at draw lock and have no separate finals draw.',
   );
+  if (envelope.command.kind === 'drawFinals' && envelope.command.seedPolicy) {
+    drawStrengthFinals(state, envelope);
+    advance(state, envelope.at, envelope.id);
+    return;
+  }
   requireFact(!state.brackets.length, 'Finals have already been drawn.');
   if (rollingFinals(state) && state.baseline!.structure !== 'round_robin') {
     drawRollingFinals(state, envelope);

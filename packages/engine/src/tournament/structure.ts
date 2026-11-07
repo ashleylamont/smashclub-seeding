@@ -113,17 +113,28 @@ export function buildPoolFinals(finishers: readonly PoolFinisher[], role: 'main'
   return qualifiers.length ? seedPoolFinishers(qualifiers).entrants : [];
 }
 
-/** Qualification policy shared by symbolic compilation, live finals and planner views. */
+/** Qualification is independent of the policy that seeds the selected field. */
+export function selectFormatFinalists<T extends PoolFinisher>(
+  structure: TournamentStructure | undefined,
+  finishers: readonly T[],
+  role: 'main' | 'consolation',
+  options?: Partial<StructureOptions>,
+): T[] {
+  if (!finalsRoles(structure, options).includes(role)) return [];
+  if (structure === 'round_robin_finals') {
+    const cut = options?.playoffSize ?? finishers.length;
+    return finishers.filter((f) => (role === 'main' ? f.place <= cut : f.place > cut));
+  }
+  return role === 'main' ? championshipQualifiers(finishers) : consolationQualifiers(finishers);
+}
+
 export function buildFormatFinals(
   structure: TournamentStructure | undefined,
   finishers: readonly PoolFinisher[],
   role: 'main' | 'consolation',
   options?: Partial<StructureOptions>,
 ) {
-  if (!finalsRoles(structure, options).includes(role)) return [];
-  if (structure !== 'round_robin_finals') return buildPoolFinals(finishers, role);
-  const cut = options?.playoffSize ?? finishers.length;
-  const selected = finishers.filter((f) => (role === 'main' ? f.place <= cut : f.place > cut));
+  const selected = selectFormatFinalists(structure, finishers, role, options);
   return selected.length ? seedPoolFinishers(selected).entrants : [];
 }
 

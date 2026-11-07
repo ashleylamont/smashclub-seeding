@@ -139,23 +139,29 @@ test('native event progresses from pools through reviewed finals to public club 
   await expect(page.locator('.ops-notice')).toContainText('Score recorded locally');
   snapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
   expect(snapshot.matches.find((match) => match.id === first.id)?.status).toBe('complete');
-  for (const match of snapshot.matches.filter((match) => match.status !== 'complete')) {
-    const order = before.divisions
-      .find((division) => division.division === match.division)!
-      .pools.find((pool) => pool.poolIndex === match.poolIndex)!
-      .members.map((member) => member.playerId);
-    const firstWins = order.indexOf(match.player1Id!) < order.indexOf(match.player2Id!);
-    const input = {
-      matchId: match.id,
-      expectedRevision: match.revision,
-      requestId: `native-pool-${match.id}`,
-      score1: firstWins ? 2 : 0,
-      score2: firstWins ? 0 : 2,
-      outcome: 'played',
-    };
-    const recorded = await mutate(page.request, 'eventOps.reportScore', input);
-    expect(await mutate(page.request, 'eventOps.reportScore', input)).toEqual(recorded);
-  }
+  const finishPools = async (division: string) => {
+    const current = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
+    for (const match of current.matches.filter(
+      (m) => !m.nativeBracketId && m.division === division && m.status !== 'complete',
+    )) {
+      const order = before.divisions
+        .find((item) => item.division === match.division)!
+        .pools.find((pool) => pool.poolIndex === match.poolIndex)!
+        .members.map((member) => member.playerId);
+      const firstWins = order.indexOf(match.player1Id!) < order.indexOf(match.player2Id!);
+      const input = {
+        matchId: match.id,
+        expectedRevision: match.revision,
+        requestId: `native-pool-${match.id}`,
+        score1: firstWins ? 2 : 0,
+        score2: firstWins ? 0 : 2,
+        outcome: 'played',
+      };
+      const recorded = await mutate(page.request, 'eventOps.reportScore', input);
+      expect(await mutate(page.request, 'eventOps.reportScore', input)).toEqual(recorded);
+    }
+  };
+  await finishPools('upper');
   // A score correction invalidates old placement revisions; the final reviewed
   // order is based on the corrected persisted match, before finals are drawn.
   const currentPools = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
@@ -179,21 +185,24 @@ test('native event progresses from pools through reviewed finals to public club 
     },
   });
   expect(stale.status()).toBe(409);
-  const scored = await query<Planner>(page.request, 'admin.eventPlanner.plan', { planId });
-  for (const division of scored.divisions)
+  const confirmPools = async (division: string) => {
+    const scored = await query<Planner>(page.request, 'admin.eventPlanner.plan', { planId });
+    const pools = scored.divisions.find((item) => item.division === division)!.pools;
     await mutate(page.request, 'admin.eventPlanner.savePoolPlacements', {
       planId,
-      division: division.division,
-      pools: division.pools.map((pool) => ({
+      division,
+      pools: pools.map((pool) => ({
         poolIndex: pool.poolIndex,
         playerIdsInOrder: pool.members.map((member) => member.playerId),
         expectedMatchRevisions: pool.matchRevisions,
         expectedPlacementRevision: pool.placementRevision,
       })),
     });
+  };
+  await confirmPools('upper');
   await page.goto(`/live/${planId}`);
   await expect(page.getByRole('heading', { name: 'Confirmed pool standings' })).toBeVisible();
-  await expect(page.locator('.event-pool-results .event-prize')).toHaveCount(4);
+  await expect(page.locator('.event-pool-results .event-prize')).toHaveCount(2);
   await page.goto(`/admin/event-operations?plan=${planId}`);
   await chooseOption(
     page
@@ -211,8 +220,56 @@ test('native event progresses from pools through reviewed finals to public club 
     finals.getByRole('heading', { name: 'upper championship · 4 entrants' }),
   ).toBeVisible();
   await expect(finals).toContainText('Bye');
-  await finals.getByRole('button', { name: 'Create these finals' }).click();
-  await expect(finals.getByRole('status')).toContainText('Finals are ready');
+  await finals.getByRole('button', { name: 'Compare seeding and byes' }).first().click();
+  const comparison = finals.getByRole('region', { name: 'Finals seeding comparison' });
+  await expect(comparison.getByRole('columnheader', { name: 'Combined score' })).toBeVisible();
+  await expect(comparison.getByRole('row')).toHaveCount(5);
+  await expect(finals.getByText(/lower championship is waiting for/)).toBeVisible();
+  const createReady = async () => {
+    await finals.getByRole('button', { name: 'Create ready finals', exact: true }).click();
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Confirm', exact: true })
+      .click();
+    await expect(finals.getByRole('status')).toContainText('Ready finals created');
+  };
+  await createReady();
+  snapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
+  expect(snapshot.nativeBrackets).toHaveLength(2);
+  expect(
+    snapshot.matches.some(
+      (m) => m.division === 'lower' && !m.nativeBracketId && m.status !== 'complete',
+    ),
+  ).toBe(true);
+  const early = snapshot.matches.find(
+    (m) => m.division === 'upper' && m.nativeBracketId && m.status === 'ready',
+  )!;
+  await mutate(page.request, 'eventOps.reportScore', {
+    matchId: early.id,
+    expectedRevision: early.revision,
+    requestId: 'early-upper-final',
+    score1: 2,
+    score2: 1,
+    outcome: 'played',
+  });
+  const playedUpper = (
+    await query<Snapshot>(page.request, 'eventOps.snapshot', { planId })
+  ).matches.find((m) => m.id === early.id)!;
+  await finishPools('lower');
+  await confirmPools('lower');
+  await finals.getByRole('button', { name: 'Preview finals', exact: true }).click();
+  await expect(
+    finals.getByRole('heading', { name: 'upper championship · 4 entrants · Created' }),
+  ).toBeVisible();
+  await createReady();
+  snapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
+  expect(snapshot.nativeBrackets).toHaveLength(4);
+  expect(snapshot.matches.find((m) => m.id === early.id)).toMatchObject({
+    player1Id: playedUpper.player1Id,
+    player2Id: playedUpper.player2Id,
+    revision: playedUpper.revision,
+    status: 'complete',
+  });
   for (let round = 0; round < 5; round++) {
     snapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
     const ready = snapshot.matches.filter(

@@ -171,8 +171,9 @@ test('TO desk automatically decides a unique pool, records an explicit tied-pool
   await finals.getByRole('button', { name: 'Preview finals', exact: true }).click();
   await expect(finals).toContainText('Decided automatically by distinct set-win totals');
   await expect(finals).toContainText('Finishing order confirmed by an organiser');
-  await finals.getByRole('button', { name: 'Create these finals', exact: true }).click();
-  await expect(finals.getByRole('status')).toContainText('Finals are ready');
+  await finals.getByRole('button', { name: 'Create ready finals', exact: true }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm', exact: true }).click();
+  await expect(finals.getByRole('status')).toContainText('Ready finals created');
   for (let round = 0; round < 4; round++) {
     snapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
     const ready = snapshot.matches.filter((m) => m.nativeBracketId && m.status === 'ready');

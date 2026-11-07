@@ -145,6 +145,11 @@ function decisionFactVersion(
   const kind = command.kind;
   if (
     !['retire', 'finalize', 'replaceResult'].includes(kind) &&
+    [previous, state].some((value) => value.brackets.some((b) => b.strengthSeeding))
+  )
+    return 6 as const;
+  if (
+    !['retire', 'finalize', 'replaceResult'].includes(kind) &&
     [previous, state].some((value) => value.pools.some((p) => p.qualifierDecision))
   )
     return 5 as const;
@@ -291,9 +296,13 @@ export function decide(
       confirmPoolPlacements(next, command, basis);
       break;
     case 'drawFinals':
+      requireFact(
+        !command.seedPolicy || (command.revisionToken && !command.replaceExisting),
+        'Preview combined finals before creating them.',
+      );
       if (command.revisionToken)
         requireFact(
-          finalsToken(next) === command.revisionToken,
+          finalsToken(next, command.seedPolicy) === command.revisionToken,
           'Finals changed since the preview.',
         );
       if (command.replaceExisting) resetFinals(next);

@@ -1,3 +1,4 @@
+import { StrengthSeedPolicy } from '../tournament/schemas';
 import { rollingFinals } from '../tournament/qualifiers';
 import { nativeEvent } from '../tournament/api';
 import { finalsToken } from '../tournament/operations';
@@ -9,31 +10,38 @@ import { previewNativeBrackets } from './nativeBrackets';
 const plan = z.object({ planId: z.uuid() });
 const reviewed = plan.extend({ revisionToken: z.string().length(64) });
 export const nativeBracketRouter = router({
-  preview: authedProcedure.input(plan).query(async ({ ctx, input }) => {
-    await requireOperator(ctx.db, input.planId, ctx.user);
-    const api = await nativeEvent(ctx, input.planId, false, input);
-    return api ? api.previewFinals() : previewNativeBrackets(ctx.db, input.planId);
-  }),
-  generate: authedProcedure.input(reviewed).mutation(async ({ ctx, input }) => {
-    const api = await nativeEvent(ctx, input.planId, false, input);
-    if (!api)
-      throw new TRPCError({ code: 'CONFLICT', message: 'Lock the pools before drawing finals.' });
-    const state = await api.state();
-    if (finalsToken(state) !== input.revisionToken)
-      throw new TRPCError({ code: 'CONFLICT', message: 'Preview finals again.' });
-    if (rollingFinals(state) && state.brackets.length)
-      throw new TRPCError({
-        code: 'CONFLICT',
-        message:
-          'Finals already exist. Qualifiers resolve automatically; remove unplayed finals explicitly before creating a new draw.',
+  preview: authedProcedure
+    .input(plan.extend({ seedPolicy: StrengthSeedPolicy.optional() }))
+    .query(async ({ ctx, input }) => {
+      await requireOperator(ctx.db, input.planId, ctx.user);
+      const api = await nativeEvent(ctx, input.planId, false, input);
+      return api
+        ? api.previewFinals(input.seedPolicy)
+        : previewNativeBrackets(ctx.db, input.planId);
+    }),
+  generate: authedProcedure
+    .input(reviewed.extend({ seedPolicy: StrengthSeedPolicy.optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const api = await nativeEvent(ctx, input.planId, false, input);
+      if (!api)
+        throw new TRPCError({ code: 'CONFLICT', message: 'Lock the pools before drawing finals.' });
+      const state = await api.state();
+      if (finalsToken(state, input.seedPolicy) !== input.revisionToken)
+        throw new TRPCError({ code: 'CONFLICT', message: 'Preview finals again.' });
+      if (!input.seedPolicy && rollingFinals(state) && state.brackets.length)
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message:
+            'Finals already exist. Qualifiers resolve automatically; remove unplayed finals explicitly before creating a new draw.',
+        });
+      await api.execute({
+        kind: 'drawFinals',
+        revisionToken: input.revisionToken,
+        replaceExisting: !input.seedPolicy && Boolean(state.brackets.length),
+        seedPolicy: input.seedPolicy,
       });
-    await api.execute({
-      kind: 'drawFinals',
-      revisionToken: input.revisionToken,
-      replaceExisting: Boolean(state.brackets.length),
-    });
-    return { created: (await api.state()).brackets.length };
-  }),
+      return { created: (await api.state()).brackets.length };
+    }),
   reset: authedProcedure.input(reviewed).mutation(async ({ ctx, input }) => {
     const api = await nativeEvent(ctx, input.planId, false, input);
     if (!api) throw new TRPCError({ code: 'CONFLICT', message: 'No live finals exist.' });

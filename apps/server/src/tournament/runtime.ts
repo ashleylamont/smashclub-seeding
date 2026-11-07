@@ -40,6 +40,7 @@ const isDecisionEvent = (name: string) =>
     'DecisionRecordedV3',
     'DecisionRecordedV4',
     'DecisionRecordedV5',
+    'DecisionRecordedV6',
     'ResultsSealedV1',
     'PlanRetiredV1',
   ].includes(name);
@@ -62,6 +63,7 @@ async function replayNative(
       case 'DecisionRecordedV3':
       case 'DecisionRecordedV4':
       case 'DecisionRecordedV5':
+      case 'DecisionRecordedV6':
       case 'ResultsSealedV1':
       case 'PlanRetiredV1':
         rebuilt = reduceDecision(rebuilt, Decision.parse(event.data));
@@ -295,7 +297,9 @@ export function createNativeRuntime(
         name: names.get(e.playerId) ?? 'Player',
       })),
       pools: publicPoolViews(state),
-      nativeBrackets: state.brackets,
+      nativeBrackets: privateView
+        ? state.brackets
+        : state.brackets.map(({ strengthSeeding: _seedEvidence, ...bracket }) => bracket),
       stations: sharedDispatch(state)
         ? state.stations.filter((s) => isReserved(state, s.id))
         : state.stations,
