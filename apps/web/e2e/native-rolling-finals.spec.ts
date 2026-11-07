@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import { AxeBuilder } from '@axe-core/playwright';
+import { chooseOption } from '../test-support/controls';
 
 type Source = {
   poolId: string;
@@ -68,7 +69,7 @@ async function signIn(request: APIRequestContext, email: string) {
   expect(response.ok(), await response.text()).toBe(true);
 }
 
-test('real native mixed-stage finals preserve held pools, truthful phone qualification, actual calls and reviewed identities', async ({
+test('real native mixed-stage finals run a clear qualifier before its own pool tie is ruled', async ({
   page,
   browser,
   baseURL,
@@ -145,9 +146,8 @@ test('real native mixed-stage finals preserve held pools, truthful phone qualifi
       expectedResourceRevision: live.settings.resourceRevision,
     },
   });
-  const firstPool = live.pools[0]!,
-    lastPool = live.pools[3]!;
-  const chosen = firstPool.entrantIds[1]!;
+  const firstPool = live.pools[0]!;
+  const chosen = firstPool.entrantIds[0]!;
 
   await page.goto(`/admin/event-operations?plan=${planId}`);
   await page.getByRole('tab', { name: 'Standings / draw', exact: true }).click();
@@ -168,6 +168,16 @@ test('real native mixed-stage finals preserve held pools, truthful phone qualifi
       .every((m) => m.status === 'blocked' && m.outcome === null && m.winnerId === null),
   ).toBe(true);
   const topology = snapshot.matches.filter((m) => m.nativeBracketId).map((m) => m.id);
+  const clearRoute = snapshot.matches.find((m) =>
+    [m.player1Qualifier, m.player2Qualifier].some(
+      (q) => q?.poolId === firstPool.id && q.place === 1,
+    ),
+  )!;
+  const otherSource = [clearRoute.player1Qualifier, clearRoute.player2Qualifier].find(
+    (q) => q && q.poolId !== firstPool.id,
+  )!;
+  const lastPool = live.pools.find((pool) => pool.id === otherSource.poolId)!;
+  expect(lastPool.id).not.toBe(heldPool.id);
 
   const context = await browser.newContext({ baseURL, viewport: { width: 390, height: 844 } });
   try {
@@ -192,12 +202,16 @@ test('real native mixed-stage finals preserve held pools, truthful phone qualifi
       fullPage: true,
     });
 
-    const finishPool = async (pool: Live['pools'][number]) => {
+    const finishPool = async (pool: Live['pools'][number], tie = false) => {
       const current = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
       for (const m of current.matches.filter(
         (m) => m.poolIndex === pool.index && m.nativeBracketId === null,
       )) {
-        const first = pool.entrantIds.indexOf(m.player1Id!) < pool.entrantIds.indexOf(m.player2Id!);
+        const a = pool.entrantIds.indexOf(m.player1Id!);
+        const b = pool.entrantIds.indexOf(m.player2Id!);
+        // Reverse just the middle-to-last set to leave the other three on one win each.
+        const cycle = tie && Math.min(a, b) === 1 && Math.max(a, b) === 3;
+        const first = a < b !== cycle;
         await mutate(page.request, 'eventOps.reportScore', {
           matchId: m.id,
           expectedRevision: m.revision,
@@ -208,12 +222,24 @@ test('real native mixed-stage finals preserve held pools, truthful phone qualifi
         });
       }
     };
-    await finishPool(firstPool);
+    await finishPool(firstPool, true);
     snapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
     const assigned = snapshot.matches.find(
       (m) => m.nativeBracketId && [m.player1Id, m.player2Id].includes(chosen),
     )!;
-    expect(assigned).toBeDefined();
+    expect(assigned.id).toBe(clearRoute.id);
+    expect(
+      snapshot.matches.some((m) =>
+        m.qualificationBlocks?.some(
+          (q) => q.poolId === firstPool.id && q.place === 2 && q.status === 'pending',
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      (await query<Live>(page.request, 'eventOps.live.snapshot', { planId })).pools.find(
+        (pool) => pool.id === firstPool.id,
+      )!.order,
+    ).toBeNull();
     expect(assigned.player1Id === null || assigned.player2Id === null).toBe(true);
     await phone.reload();
     await expect(
@@ -312,7 +338,82 @@ test('real native mixed-stage finals preserve held pools, truthful phone qualifi
       .withTags(['wcag2a', 'wcag2aa'])
       .analyze();
     expect(accessibility.violations).toEqual([]);
-    await page.reload();
+    await phone.goto(`/play/${planId}?player=${firstPool.entrantIds[1]}`);
+    await expect(
+      phone.getByRole('heading', { name: 'Finals qualification', exact: true }),
+    ).toBeVisible();
+    await expect(
+      phone.getByRole('heading', { name: 'Your bracket path', exact: true }),
+    ).toHaveCount(0);
+
+    await page.goto(`/admin/event-planner?plan=${planId}&step=pools`);
+    const ruling = page
+      .locator('.pool-card')
+      .filter({ hasText: 'Set wins decide the clear places' });
+    await expect(ruling).toHaveCount(1);
+    await expect(ruling.locator('.pool-place').first()).toContainText(
+      ready.player1Id === chosen ? ready.player1Name : ready.player2Name,
+    );
+    await expect(ruling.getByRole('combobox')).toHaveCount(3);
+    await expect(ruling.getByRole('button', { name: 'Record organiser ruling' })).toBeDisabled();
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const theme of ['dark', 'light']) {
+        await page.evaluate((value) => localStorage.setItem('smashclub:theme', value), theme);
+        await page.reload();
+        await expect(ruling).toBeVisible();
+        await page.evaluate(() => document.fonts.ready);
+        expect(
+          await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
+        ).toBe(true);
+        expect(
+          (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze())
+            .violations,
+        ).toEqual([]);
+        await page.screenshot({
+          path: testInfo.outputPath(`rolling-ruling-${theme}-${width}.png`),
+          fullPage: true,
+        });
+      }
+    }
+    const tiePlaces = ruling.getByRole('combobox');
+    const second = tiePlaces.nth(0);
+    await second.press('Enter');
+    const menu = page.getByRole('listbox');
+    const choices = menu.getByRole('option');
+    await expect(choices).toHaveCount(4);
+    await expect(choices.first()).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(choices.nth(1)).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(second).toHaveAttribute('data-value', firstPool.entrantIds[1]!);
+    await chooseOption(tiePlaces.nth(1), firstPool.entrantIds[2]!);
+    await chooseOption(tiePlaces.nth(2), firstPool.entrantIds[3]!);
+    const submitRuling = ruling.getByRole('button', { name: 'Record organiser ruling' });
+    await expect(submitRuling).toBeEnabled();
+    await submitRuling.click();
+    await expect
+      .poll(
+        async () =>
+          (await query<Live>(page.request, 'eventOps.live.snapshot', { planId })).pools.find(
+            (pool) => pool.id === firstPool.id,
+          )!.order,
+      )
+      .toEqual(firstPool.entrantIds);
+    const ruled = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
+    const played = snapshot.matches.find((m) => m.id === ready.id)!;
+    expect(ruled.matches.find((m) => m.id === ready.id)).toMatchObject({
+      revision: played.revision,
+      player1Id: played.player1Id,
+      player2Id: played.player2Id,
+      winnerId: played.winnerId,
+      score1: played.score1,
+      score2: played.score2,
+      outcome: played.outcome,
+    });
+
+    await page.goto(`/admin/event-operations?plan=${planId}`);
+    await expect(page.getByRole('region', { name: 'TO match queue', exact: true })).toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath('rolling-to-mixed-stage-desktop.png'),
       fullPage: true,

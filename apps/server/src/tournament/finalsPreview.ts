@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { drawFinals } from './brackets';
 import { finalsToken, resetFinals } from './operations';
 import { poolOrderStatus } from './poolOrders';
-import type { TournamentState } from './schemas';
+import { completeCommandProgression } from './progression';
+import type { CommandEnvelope, TournamentState } from './schemas';
 
 export const rollingFieldWarning =
   'Creating finals fixes the current eligible field, pool-place sources and seeds. Later withdrawals resolve by availability/forfeit; restoring an excluded entrant does not add a finals place. The draw will not shrink or reseed while other pools finish.';
@@ -14,14 +15,16 @@ export function previewRollingFinals(state: TournamentState) {
   if (state.lifecycle !== 'locked') issues.push('The event is not open.');
   if (!existing) {
     try {
-      drawFinals(trial, {
+      const envelope: CommandEnvelope = {
         id: randomUUID(),
         requestId: 'preview',
         actorId: 'preview',
         operator: true,
         at: Date.now(),
         command: { kind: 'drawFinals' },
-      });
+      };
+      drawFinals(trial, envelope);
+      completeCommandProgression(state, trial, envelope, {});
     } catch (error) {
       issues.push(error instanceof Error ? error.message : 'Cannot reserve finals.');
     }
@@ -45,11 +48,11 @@ export function previewRollingFinals(state: TournamentState) {
     resetAllowed: !resetIssues.length,
     resetIssues,
     revisionToken: finalsToken(state),
-    poolOrders: state.pools.map((p) => ({
+    poolOrders: trial.pools.map((p) => ({
       poolId: p.id,
       division: p.division,
       poolIndex: p.index,
-      ...poolOrderStatus(state, p),
+      ...poolOrderStatus(trial, p),
     })),
     brackets: trial.brackets.map((b) => ({
       ...b,

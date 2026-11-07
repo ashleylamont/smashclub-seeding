@@ -10,13 +10,39 @@ export function sourceDescriptor(source: QualifierSource): QualifierSource {
   const { poolId, poolIndex, division, place, status } = source;
   return { poolId, poolIndex, division, place, status };
 }
-export function qualificationStatus(state: TournamentState, poolId: string) {
-  const pool = state.pools.find((p) => p.id === poolId)!;
-  if (
-    state.matches.some((m) => m.poolId === poolId && hasCurrentPendingScoreReview(m, state.reports))
-  )
-    return 'review_pending' as const;
-  return pool.order ? ('resolved' as const) : ('pending' as const);
+type Pool = TournamentState['pools'][number];
+
+/** Rank bands compress around the eligible field without breaking any ties. */
+export function qualifierGroups(pool: Pool) {
+  return (pool.qualifierDecision?.groups ?? [])
+    .map((group) =>
+      group.filter((id) => !pool.qualifierRoster || pool.qualifierRoster.includes(id)),
+    )
+    .filter((group) => group.length > 0);
+}
+
+export function qualificationPlaces(
+  state: TournamentState,
+  pool: Pool,
+): Pick<QualifierSlot, 'status' | 'entrantId' | 'candidateEntrantIds'>[] {
+  const eligible = pool.qualifierRoster!;
+  const reviewPending = state.matches.some(
+    (m) => m.poolId === pool.id && hasCurrentPendingScoreReview(m, state.reports),
+  );
+  if (reviewPending) return eligible.map(() => ({ status: 'review_pending', entrantId: null }));
+  if (pool.order)
+    return pool.order
+      .filter((id) => eligible.includes(id))
+      .map((entrantId) => ({ status: 'resolved', entrantId }));
+  if (pool.qualifierDecision)
+    return qualifierGroups(pool).flatMap((group) =>
+      group.map(() =>
+        group.length === 1
+          ? { status: 'resolved', entrantId: group[0]! }
+          : { status: 'pending', entrantId: null, candidateEntrantIds: group },
+      ),
+    );
+  return eligible.map(() => ({ status: 'pending', entrantId: null }));
 }
 function protectedMatch(state: TournamentState, match: Match) {
   return (
@@ -77,25 +103,26 @@ export function reconcileRollingFinals(state: TournamentState, basis: Record<str
   let changed = false;
   const slots = new Map<string, QualifierSlot>();
   const consumed = new Map(state.pools.map((p) => [p.id, poolFinalsConsumed(state, p.id)]));
+  const places = new Map(
+    state.pools.filter((p) => p.qualifierRoster).map((p) => [p.id, qualificationPlaces(state, p)]),
+  );
   for (const bracket of state.brackets) {
     if (!bracket.qualifierSlots) continue;
     for (const slot of bracket.qualifierSlots) {
       const before = hash(slot);
-      const pool = state.pools.find((p) => p.id === slot.poolId)!;
-      const status = qualificationStatus(state, pool.id);
-      const selected =
-        status === 'resolved'
-          ? (pool.order!.filter((id) => pool.qualifierRoster!.includes(id))[slot.place - 1] ?? null)
-          : null;
+      const place = places.get(slot.poolId)?.[slot.place - 1];
+      requireFact(place, 'The finishing order no longer fills its frozen qualifier field.');
+      const { status, entrantId, candidateEntrantIds } = place;
       if (status === 'resolved') {
-        requireFact(selected, 'The finishing order no longer fills its frozen qualifier field.');
         requireFact(
-          !consumed.get(pool.id) || !slot.entrantId || slot.entrantId === selected,
+          !consumed.get(slot.poolId) || !slot.entrantId || slot.entrantId === entrantId,
           'A qualifier change would rewrite a called or played finals route.',
         );
       }
       slot.status = status;
-      if (status === 'resolved' || !consumed.get(pool.id)) slot.entrantId = selected;
+      if (status === 'resolved' || !consumed.get(slot.poolId)) slot.entrantId = entrantId;
+      if (candidateEntrantIds) slot.candidateEntrantIds = candidateEntrantIds;
+      else delete slot.candidateEntrantIds;
       slots.set(qualifierKey(slot), slot);
       changed ||= before !== hash(slot);
     }

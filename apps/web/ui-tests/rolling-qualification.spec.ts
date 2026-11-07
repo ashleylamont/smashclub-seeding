@@ -1,16 +1,24 @@
 import { expect, test } from '@playwright/test';
 import { AxeBuilder } from '@axe-core/playwright';
-import { mockEvent, PLAN_ID, ready } from './fixtures';
+import { bracketCaptureOptions, mockEvent, PLAN_ID, PLAYER_NAME, ready } from './fixtures';
+import { broadcastProgressPages } from '../src/lib/broadcastProgress';
 import type { PoolQualifierSlot } from '../src/lib/eventDisplay';
 
-for (const width of [390, 1440])
-  test(`${width}px pool-place draw stays provisional until the selected player is assigned`, async ({
+for (const [width, theme] of [
+  [390, 'dark'],
+  [390, 'light'],
+  [1440, 'dark'],
+  [1440, 'light'],
+] as const)
+  test(`${theme} ${width}px player path appears while other places in the same pool stay tied`, async ({
     page,
   }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
     const fixture = await mockEvent(page, { bracket: true, role: 'player', idle: true });
     const bracket = fixture.snapshot.nativeBrackets[0]!;
     const player = bracket.entrantIds[0]!;
+    fixture.snapshot.entrants.find((entrant) => entrant.id === player)!.name = PLAYER_NAME;
     const own = fixture.snapshot.matches.find(
       (m) => m.stage === 'group' && [m.player1Id, m.player2Id].includes(player),
     )!;
@@ -108,11 +116,13 @@ for (const width of [390, 1440])
     await page.screenshot({
       path: testInfo.outputPath(`pool-qualification-${width}.png`),
       fullPage: true,
+      ...bracketCaptureOptions,
     });
     // Publishing actual IDs changes personal ownership; a provisional slot alone never did.
     const opponent = poolEntrants(otherIndex)[0]!;
     Object.assign(slots[0]!, { status: 'resolved', entrantId: player });
     Object.assign(slots[1]!, { status: 'resolved', entrantId: opponent });
+    slots[3]!.candidateEntrantIds = poolEntrants(own.poolIndex!).filter((id) => id !== player);
     Object.assign(bracket, { entrantIds: [player, opponent] });
     const name = (id: string) => fixture.snapshot.entrants.find((e) => e.id === id)!.name;
     Object.assign(semiA!, {
@@ -135,6 +145,27 @@ for (const width of [390, 1440])
       .filter({ has: page.locator('.ops-match-meta').filter({ hasText: semiA!.label }) });
     await expect(assigned).toContainText(name(opponent));
     await expect(assigned.getByRole('spinbutton')).toHaveCount(2);
+    await graph.getByRole('button', { name: 'Full draw & bracket standings' }).click();
+    await expect(graph).toContainText(name(player));
+    await expect(graph).toContainText('Waiting for qualifiers');
+    await expect(graph).toContainText('place 2');
+    await ready(page);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    expect(
+      (
+        await new AxeBuilder({ page })
+          .include('#event-brackets')
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+          .analyze()
+      ).violations,
+    ).toEqual([]);
+    await page.screenshot({
+      path: testInfo.outputPath(`mixed-qualification-${theme}-${width}.png`),
+      fullPage: true,
+      ...bracketCaptureOptions,
+    });
     Object.assign(slots[0]!, { status: 'review_pending' });
     Object.assign(semiA!, { status: 'playing', called: true, qualificationBlocks: [slots[0]] });
     await page.reload();
@@ -143,5 +174,21 @@ for (const width of [390, 1440])
     await expect(assigned).toContainText(name(opponent));
     // A hold on later calls does not prevent recording games already played.
     await expect(assigned.getByRole('spinbutton')).toHaveCount(2);
+    if (width === 1440 && theme === 'dark') {
+      Object.assign(slots[0]!, { status: 'resolved' });
+      Object.assign(semiA!, { status: 'ready', called: false, qualificationBlocks: [] });
+      await page.goto(`/overlay/${PLAN_ID}?presentation=progress`);
+      const progress = page.getByRole('region', { name: 'Tournament progress' });
+      await expect(progress).toBeVisible();
+      const firstBracket = broadcastProgressPages(fixture.snapshot).findIndex(
+        (item) => item.kind === 'bracket',
+      );
+      for (let i = 0; i < firstBracket; i++)
+        await page.getByRole('button', { name: 'Next page', exact: true }).click();
+      await expect(progress).toContainText(name(player));
+      await expect(progress).toContainText('place 2');
+      await expect(progress).not.toContainText('TBD');
+      await page.screenshot({ path: testInfo.outputPath('mixed-qualification-obs.png') });
+    }
     expect(fixture.unexpected).toEqual([]);
   });

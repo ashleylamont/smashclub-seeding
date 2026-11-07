@@ -96,6 +96,61 @@ describe('rolling qualifier decisions on isolated PostgreSQL', () => {
     };
   }
 
+  it('restarts from V5 place evidence and returns the original receipt for a repeated result', async () => {
+    const planId = await seedNativeDraft(cluster.db);
+    const live = await runtime();
+    await live.lock(nativeAdmin, planId);
+    await live.command(nativeAdmin, planId, 'create-partial-field', { kind: 'drawFinals' });
+    const state = await live.state(planId);
+    const [first, other] = state.pools.filter((p) => p.division === 'upper');
+    await complete(live, planId, other!.id);
+    const [winner, a, b, c] = first!.entrantIds;
+    const last = state.matches.find(
+      (m) =>
+        m.poolId === first!.id &&
+        [m.player1Id, m.player2Id].includes(a!) &&
+        [m.player1Id, m.player2Id].includes(c!),
+    )!;
+    await complete(live, planId, first!.id, last.id);
+    const command = {
+      kind: 'score' as const,
+      matchId: last.id,
+      expectedRevision: last.revision,
+      score1: last.player1Id === c ? 2 : 0,
+      score2: last.player2Id === c ? 2 : 0,
+      outcome: 'played' as const,
+    };
+    const recorded = await live.command(nativeAdmin, planId, 'decide-partial-places', command);
+    const saved = await live.state(planId);
+    const pool = saved.pools.find((p) => p.id === first!.id)!;
+    expect(pool.order).toBeNull();
+    expect(pool.qualifierDecision?.groups).toEqual([[winner], [a, b, c]]);
+    const events = await live.app.query_array({
+      stream: nativeStream(planId),
+      names: ['DecisionRecordedV5'],
+      after: -1,
+    });
+    expect(events).toHaveLength(1);
+    const fact = Decision.parse(events[0]!.data);
+    expect(fact.after.pools?.find((p) => p.id === pool.id)?.qualifierDecision).toEqual(
+      pool.qualifierDecision,
+    );
+    expect(
+      fact.after.brackets
+        ?.flatMap((bracket) => bracket.qualifierSlots ?? [])
+        .find((q) => q.poolId === pool.id && q.place === 1),
+    ).toMatchObject({ status: 'resolved', entrantId: winner });
+    await live.shutdown();
+    runtimes.delete(live);
+    const restarted = await runtime();
+    expect(await restarted.state(planId)).toEqual(saved);
+    expect(await restarted.replay(planId)).toEqual(saved);
+    const retried = await restarted.command(nativeAdmin, planId, 'decide-partial-places', command);
+    expect(retried.receipt).toEqual(recorded.receipt);
+    const history = await nativeEventHistory(restarted, cluster.db, planId);
+    expect(history.entries.some((entry) => entry.eventName === 'DecisionRecordedV5')).toBe(true);
+  });
+
   it('atomically resolves a reserved field after a same-head last-score/create race and replays the exact choices after restart', async () => {
     const planId = await seedNativeDraft(cluster.db);
     const race = orderedRace(planId, 'reserve-field', 'last-pool-result');

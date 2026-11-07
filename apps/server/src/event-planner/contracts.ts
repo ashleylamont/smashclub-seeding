@@ -69,6 +69,8 @@ export interface PoolView {
   placementRevision?: string;
   qualifierRoster?: string[];
   orderLockedReason?: string;
+  /** Valid entrant IDs for each place in a tie ruling. Singleton places are fixed. */
+  rulingOptions?: string[][];
   orderStatus?: {
     status:
       | 'automatic'
@@ -76,6 +78,7 @@ export interface PoolView {
       | 'incomplete'
       | 'review_pending'
       | 'ruling_required'
+      | 'partial'
       | 'manual_required'
       | 'retained_after_correction';
     reason: string;
