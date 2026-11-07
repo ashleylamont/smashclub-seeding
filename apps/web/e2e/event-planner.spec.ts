@@ -99,6 +99,9 @@ test.describe('event planner', () => {
       .filter({ hasNot: page.locator('.roster-head') });
     await expect(page.locator('.roster-row.roster-head')).toHaveCount(1);
     await expect(page.locator('.roster-row.unresolved')).toHaveCount(0);
+    const summary = page.locator('.plan-summary');
+    await expect(summary.locator('dt')).toContainText(['Players entered']);
+    await expect(summary.locator('dd').first()).toHaveText('16');
 
     // The pasted line is kept beside what the club thinks it means.
     await expect(rows.nth(1)).toContainText(`1. ${names[0]}`);
@@ -108,6 +111,9 @@ test.describe('event planner', () => {
 
     // Divisions come off the frozen snapshot: eight and eight, seeded 1..8.
     await expect(page.locator('.division-column')).toHaveCount(2);
+    await expect(summary.locator('dt')).toContainText(['Upper', 'Lower']);
+    await expect(summary.locator('dd').first()).toHaveText('8 · 2 pools');
+    await expect(summary.locator('dd').nth(1)).toHaveText('8 · 2 pools');
     const upper = page.locator('.division-column').first();
     await expect(upper.locator('.division-row')).toHaveCount(8);
     const seeds = await upper

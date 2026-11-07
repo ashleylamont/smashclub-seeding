@@ -1,8 +1,11 @@
+import { readFileSync } from 'node:fs';
 import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import type { EventPlanView } from '../src/lib/apiTypes';
 import { chooseOption } from '../test-support/controls';
 import { bracketCaptureOptions, mockEvent, PLAN_ID, ready } from './fixtures';
+
+const captureStyle = readFileSync(bracketCaptureOptions.stylePath, 'utf8');
 
 async function planner(page: Page) {
   const fixture = await mockEvent(page, { role: 'admin' });
@@ -157,7 +160,8 @@ for (const theme of ['dark', 'light'] as const)
       expect(await region.evaluate((element) => element.scrollLeft)).toBe(0);
       expect(fixture.unexpected).toEqual([]);
       await page.screenshot({
-        ...bracketCaptureOptions,
+        style: captureStyle,
+        animations: 'disabled',
         path: testInfo.outputPath(`pair-planner-${theme}-${width}.png`),
         fullPage: true,
       });
@@ -214,22 +218,35 @@ for (const [theme, width] of [
     await page.setViewportSize({ width, height: 900 });
     await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
     const { view, unexpected } = await planner(page);
+    view.plan.name = 'Nemesis · Singles planning';
     view.plan.competitionFormat = 'singles';
     view.plan.structure = 'dual_division';
     view.plan.usePairRatings = false;
     view.plan.upperTargetSize = 5;
-    view.entries = Array.from({ length: 8 }, (_, i) => ({
-      ...view.entries[0]!,
-      id: `entry-${i}`,
-      playerId: i === 7 ? null : `player-${i}`,
-      sourceLineNumber: i + 1,
-      pairRating: undefined,
-    }));
+    view.entries = Array.from({ length: 8 }, (_, i) => {
+      const name = i === 0 ? 'Alex with a long tournament alias' : `Entrant ${i + 1}`;
+      return {
+        ...view.entries[0]!,
+        id: `entry-${i}`,
+        rawInput: name,
+        cleanedName: name,
+        playerId: i === 7 ? null : `player-${i}`,
+        playerName: i === 7 ? null : name,
+        publicName: i === 7 ? null : name,
+        currentRank: i === 7 ? null : i + 1,
+        sourceLineNumber: i + 1,
+        pairRating: undefined,
+      };
+    });
+    view.issues.blocking = [{ code: 'unresolved', message: 'Resolve the remaining roster entry.' }];
     view.divisions.push({ ...view.divisions[0]!, division: 'lower' });
     await page.goto(`/admin/event-planner?plan=${PLAN_ID}&step=roster`);
     const summary = page.locator('.plan-summary');
     await expect(summary.locator('dt')).toHaveText(['Players entered', 'Unresolved', 'Warnings']);
     await expect(summary.locator('dd')).toHaveText(['8', '1', '0']);
+    await expect(
+      page.getByRole('button', { name: 'Freeze roster & split divisions' }),
+    ).toBeDisabled();
     await ready(page);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
@@ -245,6 +262,9 @@ for (const [theme, width] of [
 
     view.plan.status = 'roster_frozen';
     view.entries[7]!.playerId = 'player-7';
+    view.entries[7]!.playerName = 'Entrant 8';
+    view.entries[7]!.publicName = 'Entrant 8';
+    view.issues.blocking = [];
     for (const upper of [5, 4]) {
       view.entries.forEach((entry, i) => {
         entry.assignedDivision = i < upper ? 'upper' : 'lower';
