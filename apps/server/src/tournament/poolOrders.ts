@@ -1,4 +1,4 @@
-import { rollingFinals, requirePoolCorrectionAllowed } from './qualifiers';
+import { rollingFinals, requirePoolCorrectionAllowed, qualifierGroups } from './qualifiers';
 import { hash, requireFact, resolved } from './facts';
 import { hasCurrentPendingScoreReview } from './scoreReview';
 import type { CommandEnvelope, TournamentCommand, TournamentState } from './schemas';
@@ -60,7 +60,12 @@ export function poolOrderStatus(state: TournamentState, pool: Pool) {
       status: 'manual_required' as const,
       reason: 'This event uses organiser-confirmed pool orders.',
     };
-  if (!uniqueSetWinOrder(state, pool))
+  if (pool.qualifierRoster && qualifierGroups(pool).some((group) => group.length === 1))
+    return {
+      status: 'partial' as const,
+      reason: 'Set wins decide the clear places. Confirm a ruling for the tied places.',
+    };
+  if (setWinGroups(state, pool, matches)?.length !== pool.entrantIds.length)
     return {
       status: 'ruling_required' as const,
       reason:
@@ -72,10 +77,14 @@ export function poolOrderStatus(state: TournamentState, pool: Pool) {
   };
 }
 
-/** Conservative V1 policy: no games, rating input, or implicit tie breaker. */
-function uniqueSetWinOrder(state: TournamentState, pool: Pool): string[] | null {
+/** Rank bands use official set wins alone. Array order inside a tie carries no rank. */
+function setWinGroups(
+  state: TournamentState,
+  pool: Pool,
+  matches: TournamentState['matches'],
+): string[][] | null {
   const wins = new Map(pool.entrantIds.map((id) => [id, 0]));
-  for (const m of matchesFor(state, pool)) {
+  for (const m of matches) {
     if (!resolved(m)) return null;
     if (m.outcome === 'no_contest') {
       if (
@@ -98,8 +107,26 @@ function uniqueSetWinOrder(state: TournamentState, pool: Pool): string[] | null 
       wins.set(m.winnerId, wins.get(m.winnerId)! + 1);
     }
   }
-  if (new Set(wins.values()).size !== pool.entrantIds.length) return null;
-  return [...pool.entrantIds].sort((a, b) => wins.get(b)! - wins.get(a)!);
+  const byWins = new Map<number, string[]>();
+  for (const [id, total] of wins) {
+    const group = byWins.get(total);
+    if (group) group.push(id);
+    else byWins.set(total, [id]);
+  }
+  return [...byWins].sort(([a], [b]) => b - a).map(([, group]) => group);
+}
+
+type ResultEvidence = Omit<NonNullable<Pool['qualifierDecision']>, 'policy' | 'groups'>;
+
+function decideQualifierBands(
+  groups: string[][] | null,
+  old: Pool['qualifierDecision'],
+  evidence: ResultEvidence,
+  pending: boolean,
+) {
+  if (!groups) return;
+  if (old?.resultBasis === evidence.resultBasis) return old;
+  if (!pending) return { policy: 'set_win_bands_v1' as const, groups, ...evidence };
 }
 
 /** Runs only while deciding a new opted-in command. Replay folds persisted facts. */
@@ -131,7 +158,14 @@ export function decidePoolOrders(
       !explicit || !pending,
       'Resolve current score reports before confirming pool placements.',
     );
-    const automatic = uniqueSetWinOrder(next, pool);
+    const groups = setWinGroups(next, pool, matches);
+    const automatic = groups?.length === pool.entrantIds.length ? groups.flat() : null;
+    const evidence = {
+      resultBasis,
+      matchRevisions: Object.fromEntries(matches.map((m) => [m.id, m.revision])),
+      commandId: envelope.id,
+      decidedAt: envelope.at,
+    };
     const retained =
       old?.orderDecision?.resultBasis === resultBasis &&
       (old.orderDecision.source === 'manual' || automatic)
@@ -141,10 +175,7 @@ export function decidePoolOrders(
               source: 'manual' as const,
               policy: next.settings.poolOrderPolicy,
               order: old.order,
-              resultBasis,
-              matchRevisions: Object.fromEntries(matches.map((m) => [m.id, m.revision])),
-              commandId: envelope.id,
-              decidedAt: envelope.at,
+              ...evidence,
             }
           : undefined;
     const order = pending ? null : explicit ? pool.order : (retained?.order ?? automatic);
@@ -154,10 +185,7 @@ export function decidePoolOrders(
             source: 'manual' as const,
             policy: next.settings.poolOrderPolicy,
             order,
-            resultBasis,
-            matchRevisions: Object.fromEntries(matches.map((m) => [m.id, m.revision])),
-            commandId: envelope.id,
-            decidedAt: envelope.at,
+            ...evidence,
           }
         : (retained ??
           (order
@@ -165,13 +193,15 @@ export function decidePoolOrders(
                 source: 'automatic' as const,
                 policy: next.settings.poolOrderPolicy,
                 order,
-                resultBasis,
-                matchRevisions: Object.fromEntries(matches.map((m) => [m.id, m.revision])),
-                commandId: envelope.id,
-                decidedAt: envelope.at,
+                ...evidence,
               }
             : undefined));
+    const qualifierDecision =
+      rollingFinals(next) && !decision && !automatic
+        ? decideQualifierBands(groups, old?.qualifierDecision, evidence, pending)
+        : undefined;
     if (
+      hash(pool.qualifierDecision ?? null) !== hash(qualifierDecision ?? null) ||
       hash(pool.order) !== hash(order) ||
       hash(pool.orderDecision ?? null) !== hash(decision ?? null)
     ) {
@@ -181,6 +211,8 @@ export function decidePoolOrders(
       pool.order = order;
       if (decision) pool.orderDecision = decision;
       else delete pool.orderDecision;
+      if (qualifierDecision) pool.qualifierDecision = qualifierDecision;
+      else delete pool.qualifierDecision;
       // Existing score/attendance paths may already have invalidated this version.
       if (pool.revision === old?.revision) pool.revision++;
     }
@@ -191,7 +223,7 @@ export function decidePoolOrders(
 export function publicPoolViews(state: TournamentState) {
   return state.pools.map((pool) => {
     const orderStatus = poolOrderStatus(state, pool);
-    const { orderDecision: _decision, ...publicPool } = pool;
+    const { orderDecision: _order, qualifierDecision: _qualifiers, ...publicPool } = pool;
     return { ...publicPool, orderStatus };
   });
 }
@@ -243,8 +275,26 @@ export function confirmPoolPlacements(
   );
   basis[pool.id] = pool.revision;
   for (const m of matches) basis[m.id] = m.revision;
-  if (rollingFinals(state) && hash(pool.order) !== hash(command.order))
-    requirePoolCorrectionAllowed(state, pool.id);
+  requirePoolOrderChangeAllowed(state, pool, command.order);
   pool.order = command.order;
   pool.revision++;
+}
+
+/** A first tie ruling can complete the order after finals consume a clear place.
+ * Every band must retain its entrants, which also protects compressed frozen places.
+ * Before finals reserve the field, organisers can still record a full order. */
+export function requirePoolOrderChangeAllowed(state: TournamentState, pool: Pool, order: string[]) {
+  if (!rollingFinals(state) || !pool.qualifierRoster || hash(pool.order) === hash(order)) return;
+  if (pool.order || !pool.qualifierDecision) {
+    requirePoolCorrectionAllowed(state, pool.id);
+    return;
+  }
+  let offset = 0;
+  for (const group of pool.qualifierDecision.groups) {
+    requireFact(
+      order.slice(offset, offset + group.length).every((id) => group.includes(id)),
+      'A tie ruling can only change places within the same set-win group.',
+    );
+    offset += group.length;
+  }
 }

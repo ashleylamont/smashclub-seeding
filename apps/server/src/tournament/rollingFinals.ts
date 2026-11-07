@@ -1,7 +1,7 @@
 import { buildEliminationTree, buildFormatFinals } from '@smashclub/engine';
 import { finalsRoles } from '@smashclub/shared';
 import { instantiateElimination } from './structureAdapter';
-import { qualificationStatus, reconcileRollingFinals } from './qualifiers';
+import { qualificationPlaces, reconcileRollingFinals } from './qualifiers';
 import { stableId } from './facts';
 import type { CommandEnvelope, QualifierSlot, TournamentState } from './schemas';
 
@@ -22,26 +22,22 @@ export function drawRollingFinals(state: TournamentState, envelope: CommandEnvel
     const sources = new Map<string, QualifierSlot>();
     const finishers = state.pools
       .filter((p) => p.division === division)
-      .flatMap((pool) =>
-        pool.qualifierRoster!.map((_, index) => {
+      .flatMap((pool) => {
+        const places = qualificationPlaces(state, pool);
+        return pool.qualifierRoster!.map((_, index) => {
           const place = index + 1;
           const playerId = stableId(`${pool.id}:qualifier:${place}`);
-          const status = qualificationStatus(state, pool.id);
           sources.set(playerId, {
             poolId: pool.id,
             poolIndex: pool.index,
             division,
             place,
-            status,
             eligibleEntrantIds: [...pool.qualifierRoster!],
-            entrantId:
-              status === 'resolved'
-                ? pool.order!.filter((id) => pool.qualifierRoster!.includes(id))[index]!
-                : null,
+            ...places[index]!,
           });
           return { playerId, poolIndex: pool.index, place };
-        }),
-      );
+        });
+      });
     for (const stage of finalsRoles(state.baseline!.structure, state.baseline!.structureOptions)) {
       const slots = buildFormatFinals(
         state.baseline!.structure,

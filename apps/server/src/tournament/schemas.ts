@@ -28,6 +28,7 @@ export const QualifierSource = z.object({
 export const QualifierSlot = QualifierSource.extend({
   entrantId: id.nullable(),
   eligibleEntrantIds: z.array(id),
+  candidateEntrantIds: z.array(id).optional(),
 });
 export const LiveMatch = z.object({
   id,
@@ -105,6 +106,17 @@ export const Pool = z.object({
       source: z.enum(['automatic', 'manual']),
       policy: z.literal('unique_set_wins_v1'),
       order: z.array(id),
+      resultBasis: z.string().length(64),
+      matchRevisions: z.record(id, revision),
+      commandId: id,
+      decidedAt: z.number(),
+    })
+    .optional(),
+  // Set-win bands for a completed pool whose full order still needs a ruling.
+  qualifierDecision: z
+    .object({
+      policy: z.literal('set_win_bands_v1'),
+      groups: z.array(z.array(id).min(1)),
       resultBasis: z.string().length(64),
       matchRevisions: z.record(id, revision),
       commandId: id,
@@ -355,7 +367,7 @@ export const Envelope = z.object({
 });
 /** Persist decided state changes; reducers do not rerun scheduling/draw policy. */
 export const Decision = z.object({
-  version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+  version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
   commandId: id,
   actorId: z.string(),
   requestId: z.string(),

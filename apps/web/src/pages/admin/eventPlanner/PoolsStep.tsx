@@ -1,7 +1,7 @@
 import { isKnockout } from '@smashclub/shared';
 import { Select, SelectItem } from '../../../components/ui/Select';
 import { Button } from '../../../components/ui/Button';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { trpc } from '../../../lib/trpc';
 import type { EventPlanDivision, EventPlanPool, EventPlanView } from '../../../lib/apiTypes';
@@ -107,6 +107,12 @@ function DivisionPools({
         }
         /{division.poolCount} pools confirmed. Resolve ties using the event rules before confirming.
       </p>
+      {division.pools.some((pool) => pool.qualifierRoster) && (
+        <p className="muted">
+          The finals field is fixed. Later withdrawals use availability or forfeits. Returning
+          entrants outside the field do not add finals places.
+        </p>
+      )}
       {locked && (
         <p className="muted">
           Placements are read-only while the event is closed or consolation is attached. Reconcile
@@ -168,7 +174,9 @@ function DivisionPools({
           <p className="muted">
             {division.pools.every((pool) => pool.members.every((member) => member.place !== null))
               ? 'No active entrants are eligible for consolation.'
-              : 'Confirm every pool’s finishing order to generate the consolation draw and its import list.'}
+              : division.pools.some((pool) => pool.qualifierRoster)
+                ? 'The event desk shows the live finals, including any places still awaiting a ruling.'
+                : 'Confirm every pool’s finishing order to generate the consolation draw and its import list.'}
           </p>
         ))}
     </div>
@@ -201,20 +209,22 @@ function PoolCard({
   locked: boolean;
   onChanged: () => void;
 }) {
-  const saved = useMemo(
-    () =>
-      pool.members.every((member) => member.place !== null)
-        ? [...pool.members].sort((a, b) => a.place! - b.place!).map((member) => member.playerId)
-        : [],
-    [pool.members],
-  );
-  const [order, setOrder] = useState<(string | '')[]>(
-    saved.length > 0 ? saved : pool.members.map(() => ''),
-  );
-  const [lastSaved, setLastSaved] = useState(saved);
-  if (saved !== lastSaved) {
-    setLastSaved(saved);
-    setOrder(saved.length > 0 ? saved : pool.members.map(() => ''));
+  const saved = pool.members.every((member) => member.place !== null)
+    ? [...pool.members].sort((a, b) => a.place! - b.place!).map((member) => member.playerId)
+    : pool.members.map((_, place) => {
+        const options = pool.rulingOptions?.[place];
+        return options?.length === 1 ? options[0]! : '';
+      });
+  const evidence = JSON.stringify([
+    pool.placementRevision,
+    pool.members.map((member) => member.playerId),
+    saved,
+  ]);
+  const [order, setOrder] = useState(saved);
+  const [lastEvidence, setLastEvidence] = useState(evidence);
+  if (evidence !== lastEvidence) {
+    setLastEvidence(evidence);
+    setOrder(saved);
   }
 
   const save = useMutation({
@@ -225,7 +235,7 @@ function PoolCard({
         pools: [
           {
             poolIndex: pool.poolIndex,
-            playerIdsInOrder: order as string[],
+            playerIdsInOrder: order,
             expectedMatchRevisions: pool.matchRevisions ?? [],
             expectedPlacementRevision: pool.placementRevision,
           },
@@ -234,6 +244,11 @@ function PoolCard({
     onSuccess: onChanged,
   });
 
+  const readOnly =
+    locked ||
+    save.isPending ||
+    Boolean(pool.orderLockedReason) ||
+    pool.orderStatus?.status === 'review_pending';
   const chosen = order.filter((id) => id !== '');
   const complete = chosen.length === pool.members.length && new Set(chosen).size === chosen.length;
 
@@ -253,12 +268,6 @@ function PoolCard({
       <div className="pool-worksheet">
         <span className="form-label">Final order</span>
         {pool.orderStatus && <p className="muted">{pool.orderStatus.reason}</p>}
-        {pool.qualifierRoster && (
-          <p className="muted">
-            The finals field is fixed. Later withdrawals use availability or forfeits; returning
-            excluded entrants do not add finals places.
-          </p>
-        )}
         {pool.orderLockedReason && <p className="muted">{pool.orderLockedReason}</p>}
         {pool.members.some((member) => member.withdrawn) && (
           <p className="muted">
@@ -267,33 +276,43 @@ function PoolCard({
             championship. Update linked Challonge brackets to match.
           </p>
         )}
-        {pool.members.map((_, place) => (
-          <label key={place} className="pool-place">
-            <span>{ordinal(place + 1)}</span>
-            <Select
-              disabled={locked || save.isPending || Boolean(pool.orderLockedReason)}
-              value={order[place] ?? ''}
-              aria-label={`${ordinal(place + 1)} place in pool ${pool.label}`}
-              onValueChange={(selectedValue) => {
-                const next = [...order];
-                next[place] = selectedValue;
-                setOrder(next);
-              }}
-            >
-              <SelectItem value="">—</SelectItem>
-              {pool.members.map((member) => (
-                <SelectItem key={member.playerId} value={member.playerId}>
-                  {member.name}
-                </SelectItem>
-              ))}
-            </Select>
-          </label>
-        ))}
+        {pool.members.map((_, place) => {
+          const options = pool.rulingOptions?.[place];
+          const members = options
+            ? pool.members.filter((member) => options.includes(member.playerId))
+            : pool.members;
+          return (
+            <div key={place} className="pool-place">
+              <span>{ordinal(place + 1)}</span>
+              {options?.length === 1 ? (
+                <span className="pool-place-name">{members[0]?.name}</span>
+              ) : (
+                <Select
+                  disabled={readOnly}
+                  value={order[place] ?? ''}
+                  aria-label={`${ordinal(place + 1)} place in pool ${pool.label}`}
+                  onValueChange={(selectedValue) => {
+                    const next = [...order];
+                    next[place] = selectedValue;
+                    setOrder(next);
+                  }}
+                >
+                  <SelectItem value="">—</SelectItem>
+                  {members.map((member) => (
+                    <SelectItem key={member.playerId} value={member.playerId}>
+                      {member.name}
+                    </SelectItem>
+                  ))}
+                </Select>
+              )}
+            </div>
+          );
+        })}
         <Button
           variant="primary"
           size="small"
           type="button"
-          disabled={locked || !complete || save.isPending || Boolean(pool.orderLockedReason)}
+          disabled={readOnly || !complete}
           onClick={() => save.mutate()}
           title={
             complete ? 'Save this pool’s finishing order' : 'Every entrant needs exactly one place'
@@ -301,7 +320,7 @@ function PoolCard({
         >
           {save.isPending
             ? 'Saving…'
-            : pool.orderStatus?.status === 'automatic'
+            : pool.orderStatus?.status === 'automatic' || pool.orderStatus?.status === 'partial'
               ? 'Record organiser ruling'
               : 'Confirm pool'}
         </Button>

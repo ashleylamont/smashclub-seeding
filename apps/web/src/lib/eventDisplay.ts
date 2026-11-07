@@ -9,6 +9,7 @@ export interface PoolQualifier {
 export interface PoolQualifierSlot extends PoolQualifier {
   entrantId: string | null;
   eligibleEntrantIds: string[];
+  candidateEntrantIds?: string[];
 }
 export interface LiveMatch {
   id: string;
