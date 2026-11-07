@@ -112,15 +112,15 @@ for (const theme of ['dark', 'light'] as const)
       await expect(rows.nth(0)).toContainText('No prior pair results');
       await expect(rows.nth(0)).toContainText('Mean adjustment +0 · pair SD 43');
       await expect(rows.nth(1)).toContainText('6 prior played sets · 2 nights');
-      await roster.getByRole('combobox', { name: 'Sort pairs' }).focus();
-      await page.keyboard.press('Enter');
+      const sort = roster.getByRole('combobox', { name: 'Sort pairs' });
+      await sort.press('Enter');
       await page.getByRole('option', { name: 'Skill: highest first', exact: true }).press('Enter');
       await expect(rows.nth(0)).toContainText('Ellis / Flynn');
-      await chooseOption(roster.getByRole('combobox', { name: 'Sort pairs' }), 'seed_desc');
+      await chooseOption(sort, 'seed_desc');
       await expect(rows.nth(0)).toContainText('Charlie / Drew');
-      await chooseOption(roster.getByRole('combobox', { name: 'Sort pairs' }), 'skill_asc');
+      await chooseOption(sort, 'skill_asc');
       await expect(rows.nth(0)).toContainText('Charlie / Drew');
-      await chooseOption(roster.getByRole('combobox', { name: 'Sort pairs' }), 'roster');
+      await chooseOption(sort, 'roster');
       await expect(rows.nth(0)).toContainText('Alex with a long tournament alias');
       expect(fixture.view.entries.map((e) => [e.id, e.snapshotScore, e.divisionSeed])).toEqual([
         ['pair-0', null, null],
@@ -130,7 +130,8 @@ for (const theme of ['dark', 'light'] as const)
       expect(writes).toEqual([]);
       const region = roster.getByRole('region', { name: 'Pair ratings', exact: true });
       if (width === 390) {
-        await region.focus();
+        // The menu restores focus asynchronously after closing.
+        await expect(sort).toBeFocused();
         await region.evaluate((element) => {
           element.addEventListener(
             'scrollend',
@@ -138,13 +139,14 @@ for (const theme of ['dark', 'light'] as const)
             { once: true },
           );
         });
-        await page.keyboard.press('ArrowRight');
+        await region.press('ArrowRight');
+        await expect(region).toBeFocused();
         await expect(region).toHaveAttribute('data-scroll-settled', 'true');
         await expect
           .poll(() => region.evaluate((element) => element.scrollLeft))
           .toBeGreaterThan(0);
         // Native keyboard scrolling has ended; restore the capture framing.
-        await roster.getByRole('combobox', { name: 'Sort pairs' }).focus();
+        await sort.focus();
         await region.evaluate((element) => element.scrollTo({ left: 0, behavior: 'instant' }));
         await expect.poll(() => region.evaluate((element) => element.scrollLeft)).toBe(0);
       }
