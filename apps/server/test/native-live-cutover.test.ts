@@ -97,6 +97,64 @@ describe('standard native lifecycle uses Act without adoption', () => {
     ).toBeNull();
     expect(await runtime.replay(planId)).toEqual(state);
   });
+  it('recovers a combined-finals creation retry and permits a new creation after reset', async () => {
+    const planId = await seedNativeDraft(db);
+    const operator = caller();
+    await operator.eventOps.softLockPools({ planId, confirm: true });
+    const initial = await runtime.state(planId);
+    for (const match of initial.matches.filter((item) => item.division === 'upper')) {
+      const pool = initial.pools.find((item) => item.id === match.poolId)!;
+      const firstWins =
+        pool.entrantIds.indexOf(match.player1Id!) < pool.entrantIds.indexOf(match.player2Id!);
+      await operator.eventOps.reportScore({
+        matchId: match.id,
+        expectedRevision: match.revision,
+        requestId: crypto.randomUUID(),
+        score1: firstWins ? 2 : 0,
+        score2: firstWins ? 0 : 2,
+        outcome: 'played',
+      });
+    }
+    const policy = { planId, seedPolicy: 'pool_place_whr_v1' as const };
+    const preview = await operator.eventOps.native.preview(policy);
+    expect(preview.allowed).toBe(true);
+    const input = {
+      ...policy,
+      revisionToken: preview.revisionToken,
+      requestId: crypto.randomUUID(),
+    };
+    const created = await operator.eventOps.native.generate(input);
+    const committed = await runtime.state(planId);
+    expect(created.created).toBe(2);
+    expect(await operator.eventOps.native.generate(input)).toEqual(created);
+    expect(await runtime.state(planId)).toEqual(committed);
+    await expect(
+      operator.eventOps.native.generate({ ...input, requestId: crypto.randomUUID() }),
+    ).rejects.toThrow(/preview/i);
+    const reset = await operator.eventOps.native.preview(policy);
+    await expect(
+      operator.eventOps.native.generate({ ...input, revisionToken: reset.revisionToken }),
+    ).rejects.toThrow(/identifier/i);
+    if (!('resetRevisionToken' in reset)) throw new Error('Expected combined finals preview.');
+    await operator.eventOps.native.reset({ planId, revisionToken: reset.resetRevisionToken });
+    const cleared = await runtime.state(planId);
+    expect(cleared.brackets).toHaveLength(0);
+    expect(await operator.eventOps.native.generate(input)).toEqual({ created: 0 });
+    expect(await runtime.state(planId)).toEqual(cleared);
+    const fresh = await operator.eventOps.native.preview(policy);
+    expect(fresh.revisionToken).toBe(input.revisionToken);
+    await operator.eventOps.native.generate({
+      ...input,
+      revisionToken: fresh.revisionToken,
+      requestId: crypto.randomUUID(),
+    });
+    const replacement = await runtime.state(planId);
+    expect(replacement.brackets).toHaveLength(2);
+    expect(replacement.brackets.map((bracket) => bracket.id)).not.toEqual(
+      committed.brackets.map((bracket) => bracket.id),
+    );
+    expect(await runtime.replay(planId)).toEqual(replacement);
+  });
   it('pauses an unplayed draw without handing ownership back to SQL', async () => {
     const planId = await seedNativeDraft(db);
     const operator = caller();

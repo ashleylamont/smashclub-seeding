@@ -9,7 +9,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
 import './NativeBracketControls.css';
 
-type Preview = Awaited<ReturnType<typeof trpc.eventOps.native.preview.query>>;
+type Preview = Awaited<ReturnType<typeof trpc.eventOps.native.preview.query>> & {
+  requestId: string;
+};
 
 /** Only render for native events; remote handoff remains a separate workflow. */
 export function NativeBracketControls({
@@ -87,12 +89,13 @@ export function NativeBracketControls({
             onClick={() =>
               void act(
                 async () =>
-                  setPreview(
-                    await trpc.eventOps.native.preview.query({
+                  setPreview({
+                    ...(await trpc.eventOps.native.preview.query({
                       planId,
                       seedPolicy: 'pool_place_whr_v1',
-                    }),
-                  ),
+                    })),
+                    requestId: crypto.randomUUID(),
+                  }),
                 '',
               )
             }
@@ -199,6 +202,7 @@ export function NativeBracketControls({
                       await trpc.eventOps.native.generate.mutate({
                         planId,
                         revisionToken: preview.revisionToken,
+                        requestId: preview.requestId,
                         seedPolicy: combined?.seedPolicy,
                       });
                       setPreview(null);

@@ -138,5 +138,41 @@ for (const theme of ['dark', 'light'] as const)
       await expect(confirmation).toContainText('seed order will be fixed');
       await page.keyboard.press('Escape');
       await expect(confirmation).not.toBeVisible();
+      const requests: Record<string, unknown>[] = [];
+      await page.route('**/api/trpc/eventOps.native.generate*', async (route) => {
+        const url = new URL(route.request().url());
+        const body = JSON.parse(route.request().postData() ?? '{}');
+        requests.push(url.searchParams.get('batch') ? body[0] : body);
+        if (requests.length === 1) {
+          await route.abort('failed');
+          return;
+        }
+        const result = { result: { data: { created: 1 } } };
+        await route.fulfill({ json: url.searchParams.get('batch') ? [result] : result });
+      });
+      for (let attempt = 0; attempt < 2; attempt++) {
+        await page.getByRole('button', { name: 'Create ready finals' }).click();
+        await confirmation.getByRole('button', { name: 'Confirm', exact: true }).click();
+        if (attempt === 0) {
+          await expect(page.getByRole('alert')).toBeVisible();
+          await expect(region).toBeVisible();
+          await page.screenshot({
+            path: testInfo.outputPath(`combined-finals-retry-${theme}-${width}.png`),
+            fullPage: true,
+            style: readFileSync(bracketCaptureOptions.stylePath, 'utf8'),
+          });
+        } else {
+          await expect(page.getByRole('status')).toContainText('Ready finals created');
+        }
+      }
+      expect(requests[0]?.requestId).toEqual(expect.any(String));
+      expect(requests[1]).toEqual(requests[0]);
+      await page.getByRole('button', { name: 'Preview finals', exact: true }).click();
+      await page.getByRole('button', { name: 'Create ready finals' }).click();
+      await confirmation.getByRole('button', { name: 'Confirm', exact: true }).click();
+      await expect(page.getByRole('status')).toContainText('Ready finals created');
+      expect(requests).toHaveLength(3);
+      expect(requests[2]?.requestId).not.toBe(requests[0]?.requestId);
+      expect(requests[2]?.revisionToken).toBe(requests[0]?.revisionToken);
       expect(fixture.unexpected).toEqual([]);
     });

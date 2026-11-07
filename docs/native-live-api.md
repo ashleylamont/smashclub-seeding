@@ -229,7 +229,12 @@ retain rematches. The TO preview compares both policies on the same field.
 Generation binds the approval to the ready brackets and their eligible rosters.
 Pool play elsewhere can continue while the approval stays valid, until it
 changes which brackets are ready. V6 decisions persist the seeds and comparison
-so restart and replay retain the original draw. A correction that would change
+so restart and replay retain the original draw. The generation mutation accepts a
+`requestId`. The TO retains it with the preview across a failed request, allowing
+a retry to recover the persisted receipt before checking freshness. Each new
+preview gets a new request ID, including after a reset that restores the same
+eligible field and approval token. Reusing an ID with a different payload fails.
+A correction that would change
 the inputs of a created bracket requires the existing explicit finals reset.
 API calls without a seed policy retain the original behavior, and existing
 rolling finals continue under their recorded policy.

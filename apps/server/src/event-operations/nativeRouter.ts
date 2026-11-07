@@ -1,6 +1,7 @@
 import { StrengthSeedPolicy } from '../tournament/schemas';
 import { rollingFinals } from '../tournament/qualifiers';
 import { nativeEvent } from '../tournament/api';
+import { receiptKey } from '../tournament/facts';
 import { finalsToken } from '../tournament/operations';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -20,15 +21,23 @@ export const nativeBracketRouter = router({
         : previewNativeBrackets(ctx.db, input.planId);
     }),
   generate: authedProcedure
-    .input(reviewed.extend({ seedPolicy: StrengthSeedPolicy.optional() }))
+    .input(
+      reviewed.extend({
+        seedPolicy: StrengthSeedPolicy.optional(),
+        requestId: z.uuid().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const api = await nativeEvent(ctx, input.planId, false, input);
       if (!api)
         throw new TRPCError({ code: 'CONFLICT', message: 'Lock the pools before drawing finals.' });
       const state = await api.state();
-      if (finalsToken(state, input.seedPolicy) !== input.revisionToken)
+      const receipt = input.requestId
+        ? state.receipts[receiptKey(ctx.user.id, input.requestId)]
+        : undefined;
+      if (!receipt && finalsToken(state, input.seedPolicy) !== input.revisionToken)
         throw new TRPCError({ code: 'CONFLICT', message: 'Preview finals again.' });
-      if (!input.seedPolicy && rollingFinals(state) && state.brackets.length)
+      if (!receipt && !input.seedPolicy && rollingFinals(state) && state.brackets.length)
         throw new TRPCError({
           code: 'CONFLICT',
           message:
