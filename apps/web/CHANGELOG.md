@@ -2,6 +2,12 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.7.1
+
+### Patch Changes
+
+- 9 November 2026 · **Fix** · Organisers can tab to the player claims and registry tables and use arrow keys to scroll through their columns on narrow screens. [#284](https://github.com/ashleylamont/smashclub-seeding/pull/284) · [build 89b8a93](https://github.com/ashleylamont/smashclub-seeding/commit/89b8a934140b0ae3bd6d87cb7a2d593c99f2e4ad)
+
 ## 0.7.0
 
 ### Minor Changes
