@@ -106,6 +106,7 @@ describe('publication ref policy', () => {
 it('publication runs reusable CI with read permissions and publishes its tested image for the same SHA', () => {
   expect(ci.on).toHaveProperty('workflow_call');
   expect(ci.on).toHaveProperty('pull_request');
+  expect(publish.on.push.branches).toEqual(['main']);
   expect(publish.on).not.toHaveProperty('pull_request_target');
   expect(publish.on).not.toHaveProperty('workflow_run');
   expect(publish.jobs.verify.uses).toBe('./.github/workflows/ci.yml');
@@ -131,9 +132,19 @@ it('publication runs reusable CI with read permissions and publishes its tested 
   });
 });
 
+it('batches pending notes on the default branch and supports an urgent manual run', () => {
+  expect(versionWorkflow.on).toEqual({
+    schedule: [{ cron: '23 * * * *' }],
+    workflow_dispatch: null,
+  });
+  expect(versionWorkflow.jobs.version.if).toBe("github.ref == 'refs/heads/main'");
+  const checkout = versionWorkflow.jobs.version.steps.find((step: { uses?: string }) =>
+    step.uses?.startsWith('actions/checkout@'),
+  );
+  expect(checkout.with).toMatchObject({ ref: 'main', 'persist-credentials': false });
+});
+
 it('uses repository-scoped credentials for version PRs and publishes releases after image publication', () => {
-  expect(versionWorkflow.on.push.branches).toEqual(['main']);
-  expect(versionWorkflow.on).not.toHaveProperty('pull_request');
   expect(versionWorkflow.permissions).toEqual({ contents: 'read' });
   const steps = versionWorkflow.jobs.version.steps;
   const token = steps.find((step: { id?: string }) => step.id === 'release-token');

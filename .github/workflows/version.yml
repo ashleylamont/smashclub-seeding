@@ -1,8 +1,9 @@
 name: Version Nemesis
 
 on:
-  push:
-    branches: [main]
+  schedule:
+    # Run away from the top of the hour, when GitHub Actions is busiest.
+    - cron: '23 * * * *'
   workflow_dispatch:
 
 permissions:
