@@ -2,6 +2,14 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.10.3
+
+### Patch Changes
+
+- 9 November 2026 · **Fix** · Let organisers confirm tied orders in larger native round-robin pools with the same match and placement revision checks. [#344](https://github.com/ashleylamont/smashclub-seeding/pull/344) · [build c142ce7](https://github.com/ashleylamont/smashclub-seeding/commit/c142ce7711ec95f0c6ac893375f227327bab1716)
+- 9 November 2026 · **Fix** · **Fix:** List pools that need a finishing-order decision in the organiser's attention summary and jump to the exact pool in Standings / draw. [#343](https://github.com/ashleylamont/smashclub-seeding/pull/343) · [build a33ce3d](https://github.com/ashleylamont/smashclub-seeding/commit/a33ce3d6af0012582d34466ebe7d5212eae18bb9)
+- 9 November 2026 · **Maintenance** · Keep pool-order presentation and worksheet lock explanations together in a focused server module. [#348](https://github.com/ashleylamont/smashclub-seeding/pull/348) · [build 88da9fd](https://github.com/ashleylamont/smashclub-seeding/commit/88da9fd902d4823ffeba8195e1144aa6cf306088)
+
 ## 0.10.2
 
 ### Patch Changes
