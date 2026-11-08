@@ -1,5 +1,5 @@
 import { TournamentFormatFields } from './TournamentFormatFields';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   isKnockout,
@@ -18,6 +18,7 @@ import { TournamentProjection } from './TournamentProjection';
 /** Steps 1 and 2: the event's details and the paste that starts it off. */
 export function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
   const queryClient = useQueryClient();
+  const poolSizeId = useId();
   const [name, setName] = useState('');
   const [eventDate, setEventDate] = useState(defaultEventDate());
   const [slugPrefix, setSlugPrefix] = useState('');
@@ -132,8 +133,12 @@ export function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void
             <span className="form-hint">Used to suggest Challonge slugs like june25_upper.</span>
           </label>
           <div className="form-field">
-            <span className="form-label">Pool size</span>
+            <label className="form-label" htmlFor={poolSizeId}>
+              Pool size
+            </label>
             <Input
+              id={poolSizeId}
+              aria-describedby={`${poolSizeId}-hint`}
               value={
                 isKnockout(structure)
                   ? 'No pool stage'
@@ -144,7 +149,7 @@ export function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void
               readOnly
               aria-readonly="true"
             />
-            <span className="form-hint">
+            <span className="form-hint" id={`${poolSizeId}-hint`}>
               {isKnockout(structure)
                 ? 'Play starts in the seeded knockout bracket.'
                 : isSinglePool(structure)
