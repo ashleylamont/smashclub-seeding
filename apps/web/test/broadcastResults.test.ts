@@ -65,6 +65,24 @@ describe('broadcast result feed', () => {
       'last',
     ]);
   });
+  it('describes admitted invalid byes without flashing an advancement', () => {
+    const missing = complete('missing', {
+      outcome: 'bye',
+      player2Id: null,
+      player2Name: 'TBD',
+      score1: null,
+      score2: null,
+      winnerId: null,
+    });
+    const mismatched = { ...missing, id: 'mismatched', winnerId: 'unrelated-entrant' };
+    expect(recentResults([missing, mismatched])).toEqual([mismatched]);
+    expect(resultHeadline(missing)).toBe('Bye recorded');
+    expect(resultHeadline(mismatched)).toBe('Bye recorded');
+    expect(newResultNotices([], [missing, mismatched])).toEqual([]);
+    const named = { ...mismatched, winnerId: mismatched.player1Id };
+    expect(newResultNotices([mismatched], [named])).toMatchObject([{ kind: 'correction' }]);
+  });
+
   it('uses winner-oriented scores and never celebrates a sentinel forfeit score', () => {
     expect(resultHeadline(complete('one', { score1: 1, score2: 2, winnerId: 'b' }))).toBe(
       'Beta 2–1 Alpha',

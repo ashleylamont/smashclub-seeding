@@ -49,6 +49,30 @@ describe('recorded match presentation', () => {
     expect(matchPresentation(second).result).toBe('Bea advanced automatically.');
   });
 
+  it.each([null, 'unrelated-entrant'])(
+    'keeps a recorded bye visible without inferring an entrant from winner ID %s',
+    (winnerId) => {
+      const imported = { ...bye, winnerId, player2Id: null, player2Name: 'TBD' };
+      expect(matchPresentation(imported)).toMatchObject({
+        kind: 'bye',
+        title: 'Bye',
+        status: 'Bye',
+        result: 'Bye recorded. No advancing entrant identified.',
+        showScores: false,
+        canReport: false,
+      });
+      expect(matchParticipantName(imported, 1)).toBe('Bye');
+      const unrelated = {
+        ...bye,
+        id: 'unrelated-match',
+        status: 'ready',
+        outcome: null,
+        player1Id: 'unrelated-entrant',
+      };
+      expect(nextMeaningfulMatch([unrelated], imported)).toBeUndefined();
+    },
+  );
+
   it('never infers an automatic bye from an unresolved qualifier, winner or loser feed', () => {
     for (const parent2Outcome of ['winner', 'loser'] as const) {
       const pending = {
