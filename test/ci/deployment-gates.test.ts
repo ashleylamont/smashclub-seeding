@@ -187,17 +187,17 @@ it('publication runs reusable CI with read permissions and publishes its tested 
   expect(publish.jobs.verify.permissions).toEqual({ contents: 'read' });
   expect(publish.jobs.publish.needs).toBe('verify');
   expect(publish.jobs.publish.if).toContain("needs.verify.result == 'success'");
-  const checkout = publish.jobs.publish.steps.find(
-    (step: { uses: string }) => step.uses === 'actions/checkout@v4',
+  const checkout = publish.jobs.publish.steps.find((step: { uses?: string }) =>
+    step.uses?.startsWith('actions/checkout@'),
   );
   expect(checkout.with.ref).toBe('${{ github.sha }}');
-  const artifact = publish.jobs.publish.steps.find(
-    (step: { uses: string }) => step.uses === 'actions/download-artifact@v4',
+  const artifact = publish.jobs.publish.steps.find((step: { uses?: string }) =>
+    step.uses?.startsWith('actions/download-artifact@'),
   );
   expect(artifact.with.name).toBe('verified-production-image');
   expect(
-    publish.jobs.publish.steps.some(
-      (step: { uses: string }) => step.uses === 'docker/build-push-action@v7',
+    publish.jobs.publish.steps.some((step: { uses?: string }) =>
+      step.uses?.startsWith('docker/build-push-action@'),
     ),
   ).toBe(false);
 });
