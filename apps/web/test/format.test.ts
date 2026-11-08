@@ -47,8 +47,11 @@ describe('orientScore', () => {
 
 describe('scoreCell', () => {
   it('names what happened when there is no scoreline', () => {
-    expect(scoreCell('99-0')).toBe('bye');
-    expect(scoreCell('-1-0')).toBe('forfeit');
+    expect(scoreCell('99-0')).toBe('Bye');
+    expect(scoreCell('-1-0')).toBe('Forfeit');
+    expect(scoreCell(null, 'forfeit')).toBe('Forfeit');
+    expect(scoreCell('5-0', 'forfeit')).toBe('Forfeit');
+    expect(scoreCell('5-0', null)).toBe('5-0');
     expect(scoreCell(null)).toBe('—');
   });
 

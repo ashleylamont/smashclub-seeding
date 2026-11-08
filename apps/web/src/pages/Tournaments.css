@@ -168,6 +168,10 @@
   color: var(--text-soft);
 }
 
+.set-outcome-chip {
+  margin-inline-end: var(--s2);
+}
+
 .excluded-chip {
   margin-left: var(--s2);
 }

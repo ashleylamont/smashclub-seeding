@@ -53,13 +53,23 @@ export function scoresIndicateUnplayed(scoresCsv: string | null | undefined): bo
   return scoresIndicateForfeit(scoresCsv) || scoresIndicateBye(scoresCsv);
 }
 
-/** Stored outcomes and imported score sentinels both exclude unplayed rating input. */
-export function isPlayedRatingResult(scoresCsv: string | null | undefined, raw?: unknown): boolean {
-  if (scoresIndicateUnplayed(scoresCsv)) return false;
+export type UnplayedOutcome = 'forfeit' | 'bye';
+
+/** Prefer a stored outcome, then recognise historical imported score sentinels. */
+export function unplayedResultOutcome(
+  scoresCsv: string | null | undefined,
+  raw?: unknown,
+): UnplayedOutcome | null {
   if (raw && typeof raw === 'object' && 'outcome' in raw) {
-    return raw.outcome !== 'forfeit' && raw.outcome !== 'bye';
+    if (raw.outcome === 'forfeit' || raw.outcome === 'bye') return raw.outcome;
   }
-  return true;
+  if (scoresIndicateBye(scoresCsv)) return 'bye';
+  if (scoresIndicateForfeit(scoresCsv)) return 'forfeit';
+  return null;
+}
+
+export function isPlayedRatingResult(scoresCsv: string | null | undefined, raw?: unknown): boolean {
+  return unplayedResultOutcome(scoresCsv, raw) === null;
 }
 
 /** Game-count sentinel check for callers with resolved scores rather than CSV. */

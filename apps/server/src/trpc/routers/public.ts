@@ -15,7 +15,7 @@ import {
   tournaments,
 } from '@smashclub/db';
 import { eventKeyOf, type WhrNightRating } from '@smashclub/engine';
-import { isPlayedRatingResult, includesResultStage, publicPlayerName } from '@smashclub/shared';
+import { includesResultStage, publicPlayerName, unplayedResultOutcome } from '@smashclub/shared';
 import { latestRecomputeId } from '../../recompute/recompute';
 import { getRatingSettings } from '../../settings';
 import { charactersByPlayer, charactersForPlayer } from '../../players/characters';
@@ -415,30 +415,36 @@ export const publicRouter = router({
               (a.finalRank ?? 1e9) - (b.finalRank ?? 1e9) ||
               (a.challongeSeed ?? 1e9) - (b.challongeSeed ?? 1e9),
           ),
-        sets: setRows.map((row) => ({
-          id: row.id,
-          round: row.round,
-          identifier: row.identifier,
-          state: row.state,
-          winner: row.winner,
-          scoresCsv: row.scoresCsv,
-          resultStage: row.resultStage,
-          excludedByResultsMode: !includesResultStage(tournament.resultsMode, row.resultStage),
-          excludedFromRatings:
-            row.excludedFromRatings ||
-            !isPlayedRatingResult(row.scoresCsv, row.raw) ||
-            !includesResultStage(tournament.resultsMode, row.resultStage),
-          completedAt: row.completedAt?.toISOString() ?? null,
-          /* Participant ids as well as names: a screen that wants a player's seed
+        sets: setRows.map((row) => {
+          const unplayedOutcome = unplayedResultOutcome(row.scoresCsv, row.raw);
+          const excludedByResultsMode = !includesResultStage(
+            tournament.resultsMode,
+            row.resultStage,
+          );
+          return {
+            id: row.id,
+            round: row.round,
+            identifier: row.identifier,
+            state: row.state,
+            winner: row.winner,
+            scoresCsv: row.scoresCsv,
+            unplayedOutcome,
+            resultStage: row.resultStage,
+            excludedByResultsMode,
+            excludedFromRatings:
+              row.excludedFromRatings || unplayedOutcome !== null || excludedByResultsMode,
+            completedAt: row.completedAt?.toISOString() ?? null,
+            /* Participant ids as well as names: a screen that wants a player's seed
            or company alongside a set should join on the id rather than match on
            a display name, which is neither unique nor stable. */
-          p1ParticipantId: row.p1ParticipantId,
-          p2ParticipantId: row.p2ParticipantId,
-          p1Name: row.p1ParticipantId ? (participantName.get(row.p1ParticipantId) ?? null) : null,
-          p2Name: row.p2ParticipantId ? (participantName.get(row.p2ParticipantId) ?? null) : null,
-          p1PlayerId: row.p1PlayerId,
-          p2PlayerId: row.p2PlayerId,
-        })),
+            p1ParticipantId: row.p1ParticipantId,
+            p2ParticipantId: row.p2ParticipantId,
+            p1Name: row.p1ParticipantId ? (participantName.get(row.p1ParticipantId) ?? null) : null,
+            p2Name: row.p2ParticipantId ? (participantName.get(row.p2ParticipantId) ?? null) : null,
+            p1PlayerId: row.p1PlayerId,
+            p2PlayerId: row.p2PlayerId,
+          };
+        }),
       };
     }),
 

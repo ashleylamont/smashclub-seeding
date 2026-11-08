@@ -1,9 +1,9 @@
 /** Small formatting helpers shared across pages. */
 
 import {
-  scoresIndicateBye,
-  scoresIndicateForfeit,
   scoresIndicateUnplayed,
+  unplayedResultOutcome,
+  type UnplayedOutcome,
 } from '@smashclub/shared';
 
 export function formatDate(iso: string | null | undefined): string {
@@ -92,13 +92,12 @@ export function orientScore(
   return games.length > 0 ? games.join(', ') : null;
 }
 
-/**
- * A set's score as a table cell reads it: player-one-first, as reported — but
- * `99-0` is a bye, not a 99-game whitewash, so it is named rather than printed.
- */
-export function scoreCell(scoresCsv: string | null | undefined): string {
-  if (!scoresCsv) return '—';
-  if (scoresIndicateBye(scoresCsv)) return 'bye';
-  if (scoresIndicateForfeit(scoresCsv)) return 'forfeit';
-  return scoresCsv;
+/** Score in reported player order, or the label for an unplayed outcome. */
+export function scoreCell(
+  scoresCsv: string | null | undefined,
+  outcome: UnplayedOutcome | null = unplayedResultOutcome(scoresCsv),
+): string {
+  if (outcome === 'bye') return 'Bye';
+  if (outcome === 'forfeit') return 'Forfeit';
+  return scoresCsv || '—';
 }

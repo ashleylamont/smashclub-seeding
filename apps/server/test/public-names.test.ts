@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { playerClaims, players, tournaments, user, type Db } from '@smashclub/db';
+import { playerClaims, players, sets, tournaments, user, type Db } from '@smashclub/db';
 import { appRouter } from '../src/trpc/router';
 import type { TrpcContext } from '../src/trpc/trpc';
 import { loadEnv } from '../src/env';
@@ -126,6 +126,25 @@ describe('public routes publish aliases, never canonical names', () => {
     // shortening is applied to what the entrant typed into Challonge.
     expect(names).toEqual(['Falco L', 'Fox M', 'Samus A']);
     expectNoFullNames('public.tournament', tournament);
+  });
+
+  it('publishes unplayed outcome labels without classifying a played 5–0 as a forfeit', async () => {
+    await db
+      .update(sets)
+      .set({
+        scoresCsv: '5-0',
+        raw: { outcome: 'forfeit', provider: 'native', note: 'private note' },
+      })
+      .where(eq(sets.challongeMatchId, 11));
+    await db.update(sets).set({ scoresCsv: '-1-0' }).where(eq(sets.challongeMatchId, 12));
+    await db.update(sets).set({ scoresCsv: '5-0' }).where(eq(sets.challongeMatchId, 13));
+    const tournament = await anonymous().public.tournament({ slug: 'weekly1' });
+    expect(tournament?.sets).toMatchObject([
+      { unplayedOutcome: 'forfeit', winner: 1, excludedFromRatings: true },
+      { unplayedOutcome: 'forfeit', winner: 1, excludedFromRatings: true },
+      { unplayedOutcome: null, winner: 1, scoresCsv: '5-0', excludedFromRatings: false },
+    ]);
+    expect(JSON.stringify(tournament)).not.toContain('private note');
   });
 
   it('recap — the surface that gets shared outside the club', async () => {
