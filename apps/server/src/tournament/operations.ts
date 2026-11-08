@@ -1,6 +1,6 @@
 import { strengthFinalsToken } from './strengthFinals';
 import { rollingFinals } from './qualifiers';
-import { requirePoolOrderChangeAllowed } from './poolOrders';
+import { canConfirmPoolOrder, requirePoolOrderChangeAllowed } from './poolOrders';
 import { beginPlay, changeStation, configureDispatch, moveQueue, sharedDispatch } from './dispatch';
 import { isKnockout } from '@smashclub/shared';
 import { hash, requireFact, resolved, TournamentConflict, unconfirmedCall } from './facts';
@@ -70,16 +70,16 @@ export function additionalDecision(
       break;
     case 'poolOrders':
       requireFact(
-        !state.brackets.length || rollingFinals(state),
-        'Remove finals before changing qualifying orders.',
-      );
-      requireFact(
         new Set(command.pools.map((p) => p.poolId)).size === command.pools.length,
         'Duplicate pool order.',
       );
       for (const order of command.pools) {
         const p = state.pools.find((p) => p.id === order.poolId);
         requireFact(p && p.revision === order.expectedRevision, 'Pool order changed.');
+        requireFact(
+          canConfirmPoolOrder(state, p),
+          'Remove finals before changing qualifying orders.',
+        );
         requireFact(
           order.order.length === p.entrantIds.length &&
             new Set(order.order).size === p.entrantIds.length &&

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { eventMatches, eventNativeBrackets, type Db } from '@smashclub/db';
-import { standardBracketOrder } from '../event-planner/advancement';
+import { nativeBracketDraw } from './nativeBracketDraw';
 import { getPlan } from '../event-planner/plans';
 
 export function reject(message: string): never {
@@ -17,11 +17,7 @@ export const isPendingSlot = (id: string | null | undefined) => Boolean(id?.star
 export function nativeDraw(entrantIds: readonly string[]) {
   if (new Set(entrantIds).size !== entrantIds.length)
     reject('A native bracket cannot contain the same entrant twice.');
-  let size = 2;
-  while (size < entrantIds.length) size *= 2;
-  return entrantIds.length
-    ? standardBracketOrder(size).map((seed) => entrantIds[seed - 1] ?? null)
-    : [];
+  return nativeBracketDraw(entrantIds);
 }
 
 export function pairSlots(slots: (string | null)[]) {

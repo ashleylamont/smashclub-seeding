@@ -1,6 +1,7 @@
 import { rollingFinals, requirePoolCorrectionAllowed, qualifierGroups } from './qualifiers';
 import { hash, requireFact, resolved } from './facts';
 import { hasCurrentPendingScoreReview } from './scoreReview';
+import { hasLegacyQualifier } from './legacyFinalQualifiers';
 import type { CommandEnvelope, TournamentCommand, TournamentState } from './schemas';
 
 type Pool = TournamentState['pools'][number];
@@ -250,6 +251,14 @@ export function recordReplacementPoolOrder(state: TournamentState, envelope: Com
   pool.revision++;
 }
 
+export function canConfirmPoolOrder(state: TournamentState, pool: Pool) {
+  return (
+    !state.brackets.length ||
+    rollingFinals(state) ||
+    (!pool.order && hasLegacyQualifier(state, pool.id, 'pending'))
+  );
+}
+
 export function confirmPoolPlacements(
   state: TournamentState,
   command: Extract<TournamentCommand, { kind: 'placements' }>,
@@ -257,9 +266,7 @@ export function confirmPoolPlacements(
 ) {
   const pool = state.pools.find((p) => p.id === command.poolId);
   requireFact(
-    pool &&
-      pool.revision === command.expectedRevision &&
-      (!state.brackets.length || rollingFinals(state)),
+    pool && pool.revision === command.expectedRevision && canConfirmPoolOrder(state, pool),
     'Pool placements changed or finals already exist.',
   );
   requireFact(

@@ -61,7 +61,10 @@ function protectedMatch(state: TournamentState, match: Match) {
 }
 
 /** Both winner and loser feeds inherit the qualification history of their actual pairing. */
-export function qualifierDependencies(state: TournamentState, match: Match): QualifierSource[] {
+export function qualifierDependencies(
+  state: Pick<TournamentState, 'matches'>,
+  match: Match,
+): QualifierSource[] {
   const sources = new Map<string, QualifierSource>();
   const seen = new Set<string>();
   const visit = (item: Match) => {
