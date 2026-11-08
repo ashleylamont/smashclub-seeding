@@ -2,6 +2,18 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.2.2
+
+### Patch Changes
+
+- 8 November 2026 · **Fix** · Queue reset responses now distinguish clearing live setup from deleting an unplayed queue and report how many matches were actually deleted. [#199](https://github.com/ashleylamont/smashclub-seeding/pull/199) · [build ff69000](https://github.com/ashleylamont/smashclub-seeding/commit/ff69000ed6b7b30100910c313950983770b9af53)
+- 8 November 2026 · **Improvement** · See guest access and reporting interruptions once above the player match list, including when opening a filtered link. Match cards keep their scores and review status. [#192](https://github.com/ashleylamont/smashclub-seeding/pull/192) · [build b71492d](https://github.com/ashleylamont/smashclub-seeding/commit/b71492d1e87b099cf5365b4e9a2123678be8cdb6)
+- 8 November 2026 · **Maintenance** · Separate tournament format rules from rating and provider code. CI reports which workspace tests a format or rating change affects while keeping the existing integration checks. [#197](https://github.com/ashleylamont/smashclub-seeding/pull/197) · [build 8446fb4](https://github.com/ashleylamont/smashclub-seeding/commit/8446fb4184bda4f6a85223452c4396585b10b31b)
+- 8 November 2026 · **Improvement** · OBS intermission now includes linked bracket pairings and results, with separate labels for pending opponents, byes and forfeits. [#202](https://github.com/ashleylamont/smashclub-seeding/pull/202) · [build e228401](https://github.com/ashleylamont/smashclub-seeding/commit/e2284017612c6d44537407aa80a92ba9b6ba769b)
+- 8 November 2026 · **Maintenance** · Update the GitHub Actions used for CI and releases to revisions that support the runner’s Node 24 runtime. Nemesis still builds with its pinned Node 22 and pnpm versions. [#171](https://github.com/ashleylamont/smashclub-seeding/pull/171) · [build 412767c](https://github.com/ashleylamont/smashclub-seeding/commit/412767cb70e58cea964d5daf363aa2e2cded7b5c)
+- 8 November 2026 · **Fix** · Protect published elimination standings by rejecting a winner reversal that would change a recorded downstream pairing. Score fixes that keep the winner and corrections to terminal matches remain available. [#203](https://github.com/ashleylamont/smashclub-seeding/pull/203) · [build 5d60cf9](https://github.com/ashleylamont/smashclub-seeding/commit/5d60cf90355f00a5cf1eae73f935ba60b77f71fb)
+- 8 November 2026 · **Fix** · Recover older native finals with unresolved pool places. Confirming those places fills the original draw while preserving fixed seeds and recorded results. [#195](https://github.com/ashleylamont/smashclub-seeding/pull/195) · [build 7b44f4d](https://github.com/ashleylamont/smashclub-seeding/commit/7b44f4d088aff038fede4b0d01fcf06e88828269)
+
 ## 0.2.1
 
 ### Patch Changes
