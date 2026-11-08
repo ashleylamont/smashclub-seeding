@@ -2,6 +2,12 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.1.7
+
+### Patch Changes
+
+- 8 November 2026 · **Improvement** · Find the changelog, app version and build in the site footer. Colour-coded category labels make release notes and historical entries easier to scan. [#172](https://github.com/ashleylamont/smashclub-seeding/pull/172) · [build 45a20eb](https://github.com/ashleylamont/smashclub-seeding/commit/45a20eb91d82f5cbea5479522a1eaefee83153dd)
+
 ## 0.1.6
 
 ### Patch Changes
