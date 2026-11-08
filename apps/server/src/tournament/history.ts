@@ -9,7 +9,11 @@ import {
   type eventMatchAudit,
   type eventAttendanceAudit,
 } from '@smashclub/db';
-import { nativeStream, type NativeRuntime } from './runtime';
+import {
+  nativeDecisionEventNames as decisionNames,
+  nativeStream,
+  type NativeRuntime,
+} from './runtime';
 import { Baseline, Decision, LiveState, type TournamentBaseline } from './schemas';
 import { describeDecision, type HistoryCategory, type HistoryContext } from './historySummary';
 
@@ -32,20 +36,6 @@ type ImportedAudit = {
   legacyAttendance?: (typeof eventAttendanceAudit.$inferSelect)[];
 };
 
-const decisionNames = [
-  'DecisionRecordedV1',
-  'DecisionRecordedV2',
-  'DecisionRecordedV3',
-  'DecisionRecordedV4',
-  'DecisionRecordedV5',
-  'DecisionRecordedV6',
-  'DecisionRecordedV7',
-  'DecisionRecordedV8',
-  'DecisionRecordedV9',
-  'DecisionRecordedV10',
-  'ResultsSealedV1',
-  'PlanRetiredV1',
-];
 const historyNames = [
   'BaselineCapturedV1',
   'LegacyStateImportedV1',

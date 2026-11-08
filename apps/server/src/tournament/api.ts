@@ -104,7 +104,16 @@ export async function nativeEvent(
       ),
     );
   await ctx.nativeRuntime.transfer(planId);
-  return new NativeEventApi(ctx, ctx.nativeRuntime, planId, plan.publicCode, intent);
+  const saved = handoff?.baseline;
+  const importedLegacy = Boolean(saved && typeof saved === 'object' && 'importedState' in saved);
+  return new NativeEventApi(
+    ctx,
+    ctx.nativeRuntime,
+    planId,
+    plan.publicCode,
+    intent,
+    importedLegacy,
+  );
 }
 function hasEntity(
   state: TournamentState,
@@ -194,6 +203,7 @@ export class NativeEventApi {
     readonly planId: string,
     readonly publicCode: number,
     readonly intent?: { requestId?: string; [key: string]: unknown },
+    readonly importedLegacy = false,
   ) {}
   async state() {
     const state = await this.runtime.state(this.planId);
@@ -238,7 +248,11 @@ export class NativeEventApi {
     return { ...(await eventView(this.ctx.db, state, privateView)), publicCode: this.publicCode };
   }
   async plan() {
-    return planView(this.ctx.db, await this.state());
+    return planView(
+      this.ctx.db,
+      await this.state(),
+      this.importedLegacy && this.ctx.user?.role === 'admin',
+    );
   }
   async report(input: {
     matchId: string;

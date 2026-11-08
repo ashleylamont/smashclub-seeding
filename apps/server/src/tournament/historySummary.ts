@@ -80,6 +80,8 @@ export function describeDecision(
   const attendance = describeAttendance(command, player);
   if (attendance) return { ...attendance, matchId };
   switch (command.kind) {
+    case 'restoreLegacyPoolOrder':
+      return description('draw', 'Original pool order restored', command.reason);
     case 'score': {
       const pending = decision.after.reports?.some(
         (item) => item.id === decision.receipt.reportId && item.status === 'pending',

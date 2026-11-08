@@ -5,7 +5,8 @@ import { publicEntrantNames } from './entrants';
 import { applyPlanRetirement } from '../event-planner/retirement';
 import { TRPCError } from '@trpc/server';
 import { randomUUID } from 'node:crypto';
-import { act, ConcurrencyError, InMemoryCache, type Store } from '@rotorsoft/act';
+import { ZodError } from 'zod';
+import { act, ConcurrencyError, InMemoryCache, type Query, type Store } from '@rotorsoft/act';
 import { PostgresStore } from '@rotorsoft/act-pg';
 import { and, eq, isNull } from 'drizzle-orm';
 import {
@@ -26,67 +27,67 @@ import {
   initialState,
   LiveState,
   type TournamentCommand,
+  type TournamentDecision,
   type TournamentState,
 } from './schemas';
+import {
+  canReviewLegacyPoolOrder,
+  legacyPoolOrderEvidence,
+  legacyRepairToken,
+  legacyRepairUnavailable,
+} from './legacyPoolOrderRepair';
 import { stageNativeBaseline, migrateLegacyNativePlans } from './baseline';
 import { publishNativeResult, processNativeRatingIntents } from './publication';
 import { supersededPlayedSetViews } from './resultEvidence';
 import { captureBaseline, receiptKey, reduceDecision, TournamentConflict } from './domain';
+import { hash } from './facts';
 
 export const nativeStream = (planId: string) => `native:${planId}`;
-const isDecisionEvent = (name: string) =>
-  [
-    'DecisionRecordedV1',
-    'DecisionRecordedV2',
-    'DecisionRecordedV3',
-    'DecisionRecordedV4',
-    'DecisionRecordedV5',
-    'DecisionRecordedV6',
-    'DecisionRecordedV7',
-    'DecisionRecordedV8',
-    'DecisionRecordedV9',
-    'DecisionRecordedV10',
-    'ResultsSealedV1',
-    'PlanRetiredV1',
-  ].includes(name);
+export const nativeDecisionEventNames: readonly string[] = [
+  'DecisionRecordedV1',
+  'DecisionRecordedV2',
+  'DecisionRecordedV3',
+  'DecisionRecordedV4',
+  'DecisionRecordedV5',
+  'DecisionRecordedV6',
+  'DecisionRecordedV7',
+  'DecisionRecordedV8',
+  'DecisionRecordedV9',
+  'DecisionRecordedV10',
+  'DecisionRecordedV11',
+  'ResultsSealedV1',
+  'PlanRetiredV1',
+];
+const isDecisionEvent = (name: string) => nativeDecisionEventNames.includes(name);
 const systemActor = { id: 'native-publication', name: 'Native publication worker' };
 
+type JournalFact = { id: number; name: string; created: Date; data: unknown };
+
 async function replayNative(
-  query: (fold: (event: { name: string; data: unknown }) => void) => Promise<unknown>,
+  query: (fold: (event: JournalFact) => void) => Promise<unknown>,
+  observe?: ReturnType<typeof legacyPoolOrderEvidence>['observe'],
 ) {
   let rebuilt = initialState();
   await query((event) => {
-    switch (event.name) {
-      case 'LegacyStateImportedV1':
-        rebuilt = LiveState.parse(event.data);
-        break;
-      case 'BaselineCapturedV1':
-        rebuilt = captureBaseline(Baseline.parse(event.data));
-        break;
-      case 'DecisionRecordedV1':
-      case 'DecisionRecordedV2':
-      case 'DecisionRecordedV3':
-      case 'DecisionRecordedV4':
-      case 'DecisionRecordedV5':
-      case 'DecisionRecordedV6':
-      case 'DecisionRecordedV7':
-      case 'DecisionRecordedV8':
-      case 'DecisionRecordedV9':
-      case 'DecisionRecordedV10':
-      case 'ResultsSealedV1':
-      case 'PlanRetiredV1':
-        rebuilt = reduceDecision(rebuilt, Decision.parse(event.data));
-        break;
-      case 'PublicationRecordedV1':
-        rebuilt = {
-          ...rebuilt,
-          publication: event.data as NonNullable<typeof rebuilt.publication>,
-          sequence: rebuilt.sequence + 1,
-        };
-        break;
-      default:
-        throw new TournamentConflict(`Unsupported native event schema: ${String(event.name)}`);
+    const previous = rebuilt;
+    let decision: TournamentDecision | undefined;
+    if (isDecisionEvent(event.name)) {
+      decision = Decision.parse(event.data);
+      rebuilt = reduceDecision(rebuilt, decision);
+    } else if (event.name === 'LegacyStateImportedV1') {
+      rebuilt = LiveState.parse(event.data);
+    } else if (event.name === 'BaselineCapturedV1') {
+      rebuilt = captureBaseline(Baseline.parse(event.data));
+    } else if (event.name === 'PublicationRecordedV1') {
+      rebuilt = {
+        ...rebuilt,
+        publication: event.data as NonNullable<typeof rebuilt.publication>,
+        sequence: rebuilt.sequence + 1,
+      };
+    } else {
+      throw new TournamentConflict(`Unsupported native event schema: ${String(event.name)}`);
     }
+    observe?.(event, previous, rebuilt, decision);
   });
   return rebuilt;
 }
@@ -97,6 +98,78 @@ function requireRecoveryAdmin(kind: string, role: string) {
       code: 'FORBIDDEN',
       message: 'Only an administrator can reset or delete an event.',
     });
+  if (kind === 'restoreLegacyPoolOrder' && role !== 'admin')
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Only an administrator can restore a legacy pool order.',
+    });
+}
+
+const maxLegacyRepairFacts = 400;
+const legacyRepairPageSize = 16;
+
+async function reviewLegacyPoolOrder(
+  current: TournamentState,
+  poolId: string,
+  query: (options: Omit<Query, 'stream'>) => Promise<JournalFact[]>,
+) {
+  const unavailable = { allowed: false as const, reason: legacyRepairUnavailable };
+  const pool = current.pools.find(({ id }) => id === poolId);
+  if (!pool || !canReviewLegacyPoolOrder(current, pool)) return unavailable;
+  if (current.sequence > maxLegacyRepairFacts)
+    return {
+      allowed: false as const,
+      reason: 'This journal is too large for a verified placement review.',
+    };
+
+  const proof = legacyPoolOrderEvidence(poolId);
+  try {
+    const replayed = await replayNative(async (fold) => {
+      let after = -1;
+      let count = 0;
+      while (count <= current.sequence) {
+        const limit = Math.min(legacyRepairPageSize, current.sequence - count + 1);
+        const page = await query({
+          stream_exact: true,
+          after,
+          backward: false,
+          with_snaps: false,
+          with_pii: false,
+          limit,
+        });
+        count += page.length;
+        if (count > current.sequence) throw new TournamentConflict(legacyRepairUnavailable);
+        page.forEach(fold);
+        if (page.length < limit) break;
+        after = page.at(-1)!.id;
+      }
+    }, proof.observe);
+    const evidence = proof.forPool(current, pool);
+    const replayedPool = replayed.pools.find(({ id }) => id === poolId);
+    if (
+      !evidence ||
+      replayed.sequence !== current.sequence ||
+      !replayedPool ||
+      !canReviewLegacyPoolOrder(replayed, replayedPool) ||
+      hash(replayedPool) !== hash(pool) ||
+      replayed.result?.id !== current.result?.id
+    )
+      return unavailable;
+    return {
+      allowed: true as const,
+      evidence,
+      expectedSequence: current.sequence,
+      expectedPoolRevision: pool.revision,
+      revisionToken: legacyRepairToken(current, pool, evidence),
+      places: evidence.order.map((id, index) => ({
+        place: index + 1,
+        name: current.entrants.find(({ playerId }) => playerId === id)?.name ?? 'Player',
+      })),
+    };
+  } catch (error) {
+    if (error instanceof TournamentConflict || error instanceof ZodError) return unavailable;
+    throw error;
+  }
 }
 
 /** Each runtime owns its cache and store; no process-global store injection. */
@@ -393,6 +466,12 @@ export function createNativeRuntime(
     transfer,
     snapshot,
     replay,
+    reviewLegacyPoolOrder: async (planId: string, poolId: string) =>
+      reviewLegacyPoolOrder(
+        (await app.load(NativeTournament, nativeStream(planId))).state.current[0],
+        poolId,
+        (options) => app.query_array({ ...options, stream: nativeStream(planId) }),
+      ),
     recover,
     drainReactions,
     recoverPublication,

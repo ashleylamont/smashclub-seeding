@@ -12,6 +12,81 @@ type StrengthPreview = Extract<
 >;
 const callIssue = 'Return untaken finals calls before resetting their draw.';
 
+function legacyWorksheet(names: string[]): EventPlanView {
+  return {
+    plan: {
+      id: PLAN_ID,
+      name: 'Nemesis · Legacy finals',
+      eventDate: '2026-10-05T08:00:00Z',
+      slugPrefix: null,
+      status: 'underway',
+      softLockedAt: '2026-10-05T08:00:00Z',
+      softLockedBy: null,
+      bracketMode: 'native',
+      historicalAdoption: null,
+      upperTargetSize: null,
+      poolSize: 4,
+      rankingSnapshotAt: null,
+      createdAt: '2026-10-04T00:00:00Z',
+    },
+    entries: names.map((name, index) => ({
+      id: `entry-${index}`,
+      sourceLineNumber: index + 1,
+      rawInput: name,
+      cleanedName: name,
+      companyCode: null,
+      playerId: `player-${index}`,
+      playerName: name,
+      publicName: name,
+      withdrawn: index === 0,
+      playerStatus: 'active',
+      resolutionMethod: 'manual',
+      divisionPreference: 'auto',
+      assignedDivision: 'upper',
+      snapshotRank: null,
+      snapshotScore: null,
+      divisionSeed: index + 1,
+      currentRank: null,
+      currentScore: null,
+      lastPlayedDate: null,
+      candidates: [],
+    })),
+    divisions: [
+      {
+        division: 'upper',
+        size: names.length,
+        poolCount: 1,
+        fixedLegacyFinals: true,
+        championship: [],
+        consolation: null,
+        pools: [
+          {
+            poolIndex: 0,
+            label: 'A',
+            orderLockedReason:
+              'The finals draw is in use. Confirmed places stay recorded after withdrawals.',
+            orderStatus: {
+              status: 'manual',
+              reason: 'Finishing order confirmed by an organiser.',
+            },
+            members: names.map((name, index) => ({
+              entryId: `entry-${index}`,
+              playerId: `player-${index}`,
+              name,
+              seed: index + 1,
+              place: index + 1,
+              snapshotRank: null,
+              withdrawn: index === 0,
+            })),
+          },
+        ],
+      },
+    ],
+    brackets: [],
+    issues: { blocking: [], warnings: [] },
+  };
+}
+
 for (const theme of ['dark', 'light'] as const)
   for (const width of [390, 1440])
     test(`${theme} ${width}px legacy worksheet keeps confirmed places after a withdrawal`, async ({
@@ -26,78 +101,7 @@ for (const theme of ['dark', 'light'] as const)
         'Charlie',
         'Drew',
       ];
-      const view: EventPlanView = {
-        plan: {
-          id: PLAN_ID,
-          name: 'Nemesis · Legacy finals',
-          eventDate: '2026-10-05T08:00:00Z',
-          slugPrefix: null,
-          status: 'underway',
-          softLockedAt: '2026-10-05T08:00:00Z',
-          softLockedBy: null,
-          bracketMode: 'native',
-          historicalAdoption: null,
-          upperTargetSize: null,
-          poolSize: 4,
-          rankingSnapshotAt: null,
-          createdAt: '2026-10-04T00:00:00Z',
-        },
-        entries: names.map((name, index) => ({
-          id: `entry-${index}`,
-          sourceLineNumber: index + 1,
-          rawInput: name,
-          cleanedName: name,
-          companyCode: null,
-          playerId: `player-${index}`,
-          playerName: name,
-          publicName: name,
-          withdrawn: index === 0,
-          playerStatus: 'active',
-          resolutionMethod: 'manual',
-          divisionPreference: 'auto',
-          assignedDivision: 'upper',
-          snapshotRank: null,
-          snapshotScore: null,
-          divisionSeed: index + 1,
-          currentRank: null,
-          currentScore: null,
-          lastPlayedDate: null,
-          candidates: [],
-        })),
-        divisions: [
-          {
-            division: 'upper',
-            size: names.length,
-            poolCount: 1,
-            fixedLegacyFinals: true,
-            championship: [],
-            consolation: null,
-            pools: [
-              {
-                poolIndex: 0,
-                label: 'A',
-                orderLockedReason:
-                  'The finals draw is in use. Confirmed places stay recorded after withdrawals.',
-                orderStatus: {
-                  status: 'manual',
-                  reason: 'Finishing order confirmed by an organiser.',
-                },
-                members: names.map((name, index) => ({
-                  entryId: `entry-${index}`,
-                  playerId: `player-${index}`,
-                  name,
-                  seed: index + 1,
-                  place: index + 1,
-                  snapshotRank: null,
-                  withdrawn: index === 0,
-                })),
-              },
-            ],
-          },
-        ],
-        brackets: [],
-        issues: { blocking: [], warnings: [] },
-      };
+      const view = legacyWorksheet(names);
       responses['admin.eventPlanner.plan'] = view;
       await page.goto(`/admin/event-planner?plan=${PLAN_ID}&step=pools`);
       const pool = page.locator('.pool-card').filter({ hasText: 'Pool A' });
@@ -168,6 +172,200 @@ for (const theme of ['dark', 'light'] as const)
           );
         await expect(confirm).toBeEnabled();
       }
+      expect(unexpected).toEqual([]);
+    });
+
+for (const theme of ['dark', 'light'] as const)
+  for (const width of [390, 1440])
+    test(`${theme} ${width}px administrator reviews an original legacy pool order before restoring it`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const { responses, queryResponses, unexpected } = await mockEvent(page, { role: 'admin' });
+      const names = [
+        'Alexandria with a long tournament alias from Western Sydney',
+        'Beatrice',
+        'Charlie',
+        'Drew',
+      ];
+      const view = legacyWorksheet(names);
+      const archived = width === 1440;
+      view.plan.status = archived ? 'complete' : 'underway';
+      const division = view.divisions[0]!;
+      const pool = division.pools[0]!;
+      const poolId = '095a046a-6391-4a41-ab13-1d22822269f6';
+      const unavailablePoolId = '9495a86a-0a93-4f60-b1a2-68b9995511a3';
+      pool.legacyOrderRepairPoolId = poolId;
+      pool.orderLockedReason =
+        'The confirmed order is missing. Check the journal for the original places.';
+      delete pool.orderStatus;
+      pool.members.forEach((member) => (member.place = null));
+      if (archived && theme === 'light') {
+        const other = legacyWorksheet(['Eve', 'Fiona', 'George', 'Haru']);
+        view.entries.push(
+          ...other.entries.map((entry) => ({
+            ...entry,
+            id: `other-${entry.id}`,
+            playerId: `other-${entry.playerId}`,
+          })),
+        );
+        division.pools.push({
+          ...pool,
+          label: 'B',
+          poolIndex: 1,
+          legacyOrderRepairPoolId: unavailablePoolId,
+          members: other.divisions[0]!.pools[0]!.members.map((member) => ({
+            ...member,
+            entryId: `other-${member.entryId}`,
+            playerId: `other-${member.playerId}`,
+            place: null,
+          })),
+        });
+        division.poolCount = 2;
+        division.size = view.entries.length;
+      }
+      responses['admin.eventPlanner.plan'] = view;
+      const order = [2, 1, 3, 0].map((index) => pool.members[index]!);
+      let lookups = 0;
+      queryResponses.set('eventOps.live.previewLegacyPoolOrderRepair', (input) => {
+        if ((input as { poolId: string }).poolId === unavailablePoolId)
+          return {
+            allowed: false,
+            reason: 'This journal is too large for a verified placement review.',
+          };
+        expect(input).toEqual({ planId: PLAN_ID, poolId });
+        lookups++;
+        return {
+          allowed: true,
+          evidence: {
+            order: order.map(({ playerId }) => playerId),
+            confirmation: {
+              source: archived ? 'confirmed' : 'imported',
+              id: 18,
+              at: Date.parse('2026-10-05T09:00:00Z'),
+            },
+            withdrawal: {
+              id: 21,
+              at: Date.parse('2026-10-05T10:00:00Z'),
+              playerId: order[3]!.playerId,
+            },
+          },
+          places: order.map(({ name }, index) => ({ place: index + 1, name })),
+          expectedSequence: 25 + lookups,
+          expectedPoolRevision: 3,
+          revisionToken: String(lookups).repeat(64),
+        };
+      });
+      const writes: Record<string, unknown>[] = [];
+      const staleFirst = !archived && theme === 'dark';
+      const retryFirst = !archived && theme === 'light';
+      await page.route('**/api/trpc/eventOps.live.restoreLegacyPoolOrder*', async (route) => {
+        const batched = new URL(route.request().url()).searchParams.has('batch');
+        const body = route.request().postDataJSON();
+        writes.push(batched ? body[0] : body);
+        if (writes.length === 1 && retryFirst) return route.abort();
+        if (writes.length === 1 && staleFirst) {
+          const conflict = {
+            error: {
+              code: -32009,
+              message: 'The event changed since this review. Check the journal again.',
+              data: { code: 'CONFLICT', httpStatus: 409 },
+            },
+          };
+          return route.fulfill({ json: batched ? [conflict] : conflict });
+        }
+        delete pool.legacyOrderRepairPoolId;
+        pool.orderLockedReason =
+          'The finals draw is in use. Confirmed places stay recorded after withdrawals.';
+        order.forEach((member, index) => (member.place = index + 1));
+        const result = { result: { data: { sequence: 27 } } };
+        return route.fulfill({ json: batched ? [result] : result });
+      });
+
+      await page.goto(`/admin/event-planner?plan=${PLAN_ID}&step=pools`);
+      const card = page
+        .locator('.pool-card')
+        .filter({ has: page.getByRole('heading', { name: 'Pool A', exact: true }) });
+      const check = card.getByRole('button', {
+        name: 'Check journal for original order in Upper Pool A',
+      });
+      await expect(check).toBeVisible();
+      expect(lookups).toBe(0);
+      await ready(page);
+      await page.screenshot({
+        fullPage: true,
+        path: testInfo.outputPath('legacy-repair-worksheet.png'),
+      });
+
+      if (archived && theme === 'light') {
+        const unsupported = page
+          .locator('.pool-card')
+          .filter({ has: page.getByRole('heading', { name: 'Pool B', exact: true }) });
+        const checkOther = unsupported.getByRole('button', {
+          name: 'Check journal for original order in Upper Pool B',
+        });
+        await checkOther.press('Enter');
+        const noEvidence = page.getByRole('dialog', { name: 'Upper Pool B · Original order' });
+        await expect(
+          noEvidence.getByText('This journal is too large for a verified placement review.'),
+        ).toBeVisible();
+        await expect(
+          noEvidence.getByRole('button', { name: 'Restore original order' }),
+        ).toHaveCount(0);
+        await page.keyboard.press('Escape');
+        await expect(checkOther).toBeFocused();
+      }
+
+      await check.press('Enter');
+      const dialog = page.getByRole('dialog', { name: 'Upper Pool A · Original order' });
+      await expect(dialog.getByRole('heading', { name: 'Confirmed places' })).toBeFocused();
+      await expect(dialog.getByRole('listitem')).toHaveText(order.map(({ name }) => name));
+      await expect(dialog).toHaveAccessibleDescription(/finals draw and all recorded results/);
+      const restore = dialog.getByRole('button', { name: 'Restore original order', exact: true });
+      await expect(restore).toBeDisabled();
+      expect(writes).toEqual([]);
+      await ready(page);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      await page.screenshot({
+        path: testInfo.outputPath('legacy-repair-review.png'),
+      });
+      await dialog
+        .getByRole('textbox', { name: 'Reason for restoration' })
+        .fill('Verified the original journal');
+      await restore.press('Enter');
+      if (staleFirst) {
+        await expect(dialog.getByRole('alert')).toContainText('The event changed');
+        await expect(restore).toHaveCount(0);
+        await dialog.getByRole('button', { name: 'Check journal again' }).press('Enter');
+        await expect(restore).toBeEnabled();
+        await restore.press('Enter');
+      } else if (retryFirst) {
+        const retry = dialog.getByRole('button', { name: 'Retry restoration' });
+        await expect(retry).toBeEnabled();
+        await expect(
+          dialog.getByRole('textbox', { name: 'Reason for restoration' }),
+        ).toBeDisabled();
+        await retry.press('Enter');
+      }
+      await expect(dialog).toBeHidden();
+      await expect(check).toHaveCount(0);
+      await expect(card.getByRole('heading', { name: 'Pool A' })).toBeFocused();
+      await expect(card.getByRole('listitem').filter({ hasText: order[0]!.name })).toContainText(
+        '1st',
+      );
+      expect(writes).toHaveLength(staleFirst || retryFirst ? 2 : 1);
+      expect(writes.at(-1)).toMatchObject({
+        planId: PLAN_ID,
+        poolId,
+        reason: 'Verified the original journal',
+        expectedSequence: staleFirst ? 27 : 26,
+        expectedPoolRevision: 3,
+      });
+      expect(writes.at(-1)).not.toHaveProperty('evidence');
+      if (retryFirst) expect(writes[0]).toEqual(writes[1]);
+      if (staleFirst) expect(writes[0]!.requestId).not.toBe(writes[1]!.requestId);
       expect(unexpected).toEqual([]);
     });
 
