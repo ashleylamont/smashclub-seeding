@@ -2,6 +2,13 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.7.4
+
+### Patch Changes
+
+- 9 November 2026 · **Improvement** · Review conflicting score reports directly from Needs attention. The match desk puts the recorded and submitted results beside the decision buttons and makes the review shortcut work by keyboard. [#297](https://github.com/ashleylamont/smashclub-seeding/pull/297) · [build 651c025](https://github.com/ashleylamont/smashclub-seeding/commit/651c02523cd2fdd3d1c7c182eda5913551c57856)
+- 9 November 2026 · **Maintenance** · Run database-backed browser event flows during final build verification for verified automatic version pull requests. [#298](https://github.com/ashleylamont/smashclub-seeding/pull/298) · [build ddbaf2d](https://github.com/ashleylamont/smashclub-seeding/commit/ddbaf2d6b88209d4b88b879c022a183101b288a3)
+
 ## 0.7.3
 
 ### Patch Changes
