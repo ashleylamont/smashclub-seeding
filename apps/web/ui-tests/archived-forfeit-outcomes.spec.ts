@@ -53,6 +53,15 @@ const tournament: TournamentData = {
       unplayedOutcome: 'bye',
       excludedFromRatings: true,
     },
+    {
+      ...played,
+      id: 'd',
+      resultStage: 'final',
+      round: 3,
+      identifier: 'upper Championship · R3 M1',
+      displayLabel: 'Semi-final 1',
+      scoresCsv: '2-1',
+    },
   ],
 };
 
@@ -83,6 +92,12 @@ for (const theme of ['dark', 'light'] as const) {
       await expect(rows.nth(0)).not.toContainText(/5-0|Played/);
       await expect(rows.nth(1).getByRole('cell', { name: '5-0', exact: true })).toBeVisible();
       await expect(rows.nth(2).getByText('Bye', { exact: true })).toBeVisible();
+      await expect(rows.nth(2).getByRole('cell', { name: 'C', exact: true })).toBeVisible();
+      const namedSet = rows.nth(3);
+      const label = namedSet.getByRole('cell', { name: 'Semi-final 1', exact: true });
+      await expect(label).toHaveAttribute('title', 'upper Championship · R3 M1');
+      await expect(label).toHaveCSS('white-space', 'nowrap');
+      await expect(namedSet.getByRole('cell', { name: '2-1', exact: true })).toBeVisible();
       await ready(page);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
       expect(
@@ -94,6 +109,11 @@ for (const theme of ['dark', 'light'] as const) {
         for (let step = 0; step < 8; step++) await table.press('ArrowRight');
         await expect.poll(() => table.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
       }
+      await table.evaluate((element) => {
+        element.scrollLeft = 0;
+      });
+      await page.evaluate(() => scrollTo(0, 0));
+      await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
       await page.screenshot({ path: testInfo.outputPath('archived-outcomes.png'), fullPage: true });
     });
   }
