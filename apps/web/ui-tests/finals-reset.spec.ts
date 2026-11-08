@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import type { Command, Desk } from '../src/pages/admin/dispatchTypes';
 import type { trpc } from '../src/lib/trpc';
 import type { EventPlanView } from '../src/lib/apiTypes';
+import { chooseOption } from '../test-support/controls';
 import { mockEvent, PLAN_ID, ready } from './fixtures';
 
 type StrengthPreview = Extract<
@@ -76,7 +77,7 @@ for (const theme of ['dark', 'light'] as const)
                 poolIndex: 0,
                 label: 'A',
                 orderLockedReason:
-                  'Finals already use this pool order. Its confirmed places stay recorded after withdrawals.',
+                  'The finals draw is in use. Confirmed places stay recorded after withdrawals.',
                 orderStatus: {
                   status: 'manual',
                   reason: 'Finishing order confirmed by an organiser.',
@@ -103,8 +104,11 @@ for (const theme of ['dark', 'light'] as const)
       const withdrawn = pool.getByRole('listitem').filter({ hasText: names[0]! });
       await expect(withdrawn).toContainText('Withdrawn');
       await expect(withdrawn).toContainText('1st');
-      await expect(pool.getByRole('combobox', { name: '1st place in pool A' })).toBeDisabled();
-      await expect(pool.getByRole('button', { name: 'Confirm pool' })).toBeDisabled();
+      await expect(pool.getByRole('combobox')).toHaveCount(0);
+      await expect(pool.getByRole('button', { name: 'Confirm pool' })).toHaveCount(0);
+      await expect(pool.getByText('Finishing order confirmed by an organiser.')).toBeVisible();
+      await expect(pool.getByText(/Confirmed places stay recorded/)).toBeVisible();
+      await expect(page.getByText(/Resolve ties using the event rules/)).toHaveCount(0);
       await expect(page.getByText('Championship qualifiers', { exact: true })).toHaveCount(0);
       await expect(page.getByText('Consolation draw', { exact: true })).toHaveCount(0);
       await expect(page.getByText(/excluded from advancement/)).toHaveCount(0);
@@ -123,6 +127,47 @@ for (const theme of ['dark', 'light'] as const)
         body: await page.screenshot({ fullPage: true }),
         contentType: 'image/png',
       });
+      if (theme === 'dark' && width === 390) {
+        const upper = view.divisions[0]!;
+        const fixed = upper.pools[0]!;
+        const extraPool = (label: string, poolIndex: number) => ({
+          label,
+          poolIndex,
+          members: fixed.members.map((member) => ({
+            ...member,
+            entryId: `${label}-${member.entryId}`,
+            playerId: `${label}-${member.playerId}`,
+            name: `${member.name} ${label}`,
+            withdrawn: false,
+            place: null,
+          })),
+        });
+        const pending = extraPool('B', 1);
+        const missing = extraPool('C', 2);
+        upper.pools.push(pending, {
+          ...missing,
+          orderLockedReason:
+            'The confirmed order is missing. This worksheet cannot restore it after finals used it.',
+        });
+        upper.poolCount = upper.pools.length;
+        upper.size = upper.pools.flatMap(({ members }) => members).length;
+        await page.reload();
+        await expect(page.getByText(/Resolve ties using the event rules/)).toBeVisible();
+        const pendingCard = page.locator('.pool-card').filter({ hasText: 'Pool B' });
+        const missingCard = page.locator('.pool-card').filter({ hasText: 'Pool C' });
+        await expect(pool.getByRole('combobox')).toHaveCount(0);
+        await expect(missingCard.getByText(/The confirmed order is missing/)).toBeVisible();
+        await expect(missingCard.getByRole('combobox')).toHaveCount(0);
+        await expect(missingCard.getByRole('button', { name: 'Confirm pool' })).toHaveCount(0);
+        const confirm = pendingCard.getByRole('button', { name: 'Confirm pool' });
+        await expect(confirm).toBeDisabled();
+        for (const [i, place] of ['1st', '2nd', '3rd', '4th'].entries())
+          await chooseOption(
+            pendingCard.getByRole('combobox', { name: `${place} place in pool B` }),
+            pending.members[i]!.playerId,
+          );
+        await expect(confirm).toBeEnabled();
+      }
       expect(unexpected).toEqual([]);
     });
 

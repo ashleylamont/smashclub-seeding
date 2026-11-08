@@ -180,15 +180,23 @@ export function hasLegacyQualifier(
 
 /** SQL-era draws can store fixed entrant IDs without pool-place descriptors. */
 export function hasFixedLegacyPoolQualifiers(state: TournamentState, pool: Pool) {
-  return (
-    !state.settings.poolOrderPolicy &&
-    (hasLegacyQualifier(state, pool.id, 'resolved') ||
-      state.brackets.some(
-        (bracket) =>
-          bracket.division === pool.division &&
-          bracket.entrantIds.some((id) => pool.entrantIds.includes(id)),
-      ))
-  );
+  if (state.settings.poolOrderPolicy || rollingFinals(state)) return false;
+  if (hasLegacyQualifier(state, pool.id, 'resolved')) return true;
+  return state.matches.some((match) => {
+    if (!match.bracketId || match.division !== pool.division || match.round !== 1) return false;
+    const bracket = state.brackets.find(
+      ({ id, division }) => id === match.bracketId && division === pool.division,
+    );
+    return sides.some(({ player, qualifier }) => {
+      const entrantId = match[player];
+      return (
+        entrantId !== null &&
+        !match[qualifier] &&
+        pool.entrantIds.includes(entrantId) &&
+        bracket?.entrantIds.includes(entrantId)
+      );
+    });
+  });
 }
 
 /** Confirm only the reserved places belonging to the submitted pool orders.

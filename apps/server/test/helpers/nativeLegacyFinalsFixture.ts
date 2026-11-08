@@ -9,6 +9,7 @@ import { nativeDraw, pendingSlot } from '../../src/event-operations/nativeBracke
 import { prepare, reportScore } from '../../src/event-operations/service';
 import { getPlan, savePoolPlacements } from '../../src/event-planner/plans';
 import { attendancePreview } from '../../src/tournament/attendance';
+import { hasFixedLegacyPoolQualifiers } from '../../src/tournament/legacyFinalQualifiers';
 import { eventView, planView } from '../../src/tournament/views';
 import { nativeStream, type NativeRuntime } from '../../src/tournament/runtime';
 import type { Match, TournamentState } from '../../src/tournament/schemas';
@@ -120,6 +121,9 @@ export async function verifyMixedLegacyFinalsRecovery(
     expect(await runtime.replay(planId)).toEqual(imported);
 
     const pending = imported.pools.find((pool) => pool.division === 'upper' && pool.index === 1)!;
+    const fixed = imported.pools.find((pool) => pool.division === 'upper' && pool.index === 0)!;
+    expect(hasFixedLegacyPoolQualifiers(imported, pending)).toBe(false);
+    expect(hasFixedLegacyPoolQualifiers(imported, fixed)).toBe(true);
     const caller = appRouter.createCaller({
       db,
       nativeRuntime: runtime,
@@ -170,9 +174,21 @@ export async function verifyMixedLegacyFinalsRecovery(
     const beforeOrder = await runtime.state(planId);
     const order = pending.entrantIds.toReversed();
     const plan = (await caller.admin.eventPlanner.plan({ planId }))!;
-    const worksheet = plan.divisions
-      .find(({ division }) => division === pending.division)!
-      .pools.find(({ poolIndex }) => poolIndex === pending.index)!;
+    const upper = plan.divisions.find(({ division }) => division === pending.division)!;
+    expect(upper).toMatchObject({ fixedLegacyFinals: true, championship: [], consolation: null });
+    expect(
+      upper.pools.find(({ poolIndex }) => poolIndex === fixed.index)?.orderLockedReason,
+    ).toContain('Confirmed places stay recorded');
+    const worksheet = upper.pools.find(({ poolIndex }) => poolIndex === pending.index)!;
+    expect(worksheet.orderLockedReason).toBeUndefined();
+    const damaged = structuredClone(beforeOrder);
+    damaged.pools.find(({ id }) => id === fixed.id)!.order = null;
+    const damagedView = await planView(db, damaged);
+    const damagedPool = damagedView.divisions
+      .find(({ division }) => division === fixed.division)!
+      .pools.find(({ poolIndex }) => poolIndex === fixed.index)!;
+    expect(damagedPool.orderLockedReason).toContain('The confirmed order is missing');
+    expect(damagedPool.orderStatus).toBeUndefined();
     const submitted = {
       planId,
       division: pending.division,
@@ -354,7 +370,7 @@ async function verifyLegacyWithdrawal(
       .find(({ division }) => division === pending.division)!
       .pools.find(({ poolIndex }) => poolIndex === pending.index),
   ).toMatchObject({
-    orderLockedReason: expect.stringContaining('confirmed places stay recorded'),
+    orderLockedReason: expect.stringContaining('Confirmed places stay recorded'),
     members: expect.arrayContaining([
       expect.objectContaining({
         playerId: withdrawal.playerId,

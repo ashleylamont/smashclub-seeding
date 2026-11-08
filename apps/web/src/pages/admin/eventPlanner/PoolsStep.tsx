@@ -89,6 +89,11 @@ function DivisionPools({
     );
   }
 
+  const confirmedPools = division.pools.filter((pool) =>
+    pool.members.every((member) => member.place !== null),
+  ).length;
+  const canResolveTies =
+    !division.fixedLegacyFinals || division.pools.some((pool) => !pool.orderLockedReason);
   return (
     <div className="card section">
       <div className="page-header">
@@ -101,11 +106,8 @@ function DivisionPools({
         </h4>
       </div>
       <p className="muted">
-        {
-          division.pools.filter((pool) => pool.members.every((member) => member.place !== null))
-            .length
-        }
-        /{division.poolCount} pools confirmed. Resolve ties using the event rules before confirming.
+        {confirmedPools}/{division.poolCount} pools confirmed.
+        {canResolveTies && ' Resolve ties using the event rules before confirming.'}
       </p>
       {division.fixedLegacyFinals ? (
         <p className="muted">
@@ -204,21 +206,49 @@ function nameOf(division: EventPlanDivision, playerId: string): string {
  * Places are chosen with selects rather than drag rows so the whole thing works
  * on a phone at the venue and from a keyboard.
  */
-function PoolCard({
-  planId,
-  divisionKey,
-  pool,
-  locked,
-  fixedLegacyFinals,
-  onChanged,
-}: {
+type PoolCardProps = {
   planId: string;
   divisionKey: 'upper' | 'lower';
   pool: EventPlanPool;
   locked: boolean;
   fixedLegacyFinals: boolean;
   onChanged: () => void;
-}) {
+};
+
+function PoolCard({ pool, fixedLegacyFinals, ...editor }: PoolCardProps) {
+  return (
+    <div className="pool-card">
+      <h5>Pool {pool.label}</h5>
+      <ol className="pool-members">
+        {pool.members.map((member) => (
+          <li key={member.playerId}>
+            <span className="seed-number">{member.seed}</span> {member.name}
+            {member.withdrawn && <span className="chip">Withdrawn</span>}
+            {member.place !== null && <span className="chip">{ordinal(member.place)}</span>}
+          </li>
+        ))}
+      </ol>
+
+      <div className="pool-worksheet">
+        <span className="form-label">Final order</span>
+        {pool.orderStatus && <p className="muted">{pool.orderStatus.reason}</p>}
+        {pool.orderLockedReason && <p className="muted">{pool.orderLockedReason}</p>}
+        {(!fixedLegacyFinals || !pool.orderLockedReason) && (
+          <PoolOrderEditor pool={pool} fixedLegacyFinals={fixedLegacyFinals} {...editor} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PoolOrderEditor({
+  planId,
+  divisionKey,
+  pool,
+  locked,
+  fixedLegacyFinals,
+  onChanged,
+}: PoolCardProps) {
   const saved = pool.members.every((member) => member.place !== null)
     ? [...pool.members].sort((a, b) => a.place! - b.place!).map((member) => member.playerId)
     : pool.members.map((_, place) => {
@@ -263,80 +293,64 @@ function PoolCard({
   const complete = chosen.length === pool.members.length && new Set(chosen).size === chosen.length;
 
   return (
-    <div className="pool-card">
-      <h5>Pool {pool.label}</h5>
-      <ol className="pool-members">
-        {pool.members.map((member) => (
-          <li key={member.playerId}>
-            <span className="seed-number">{member.seed}</span> {member.name}
-            {member.withdrawn && <span className="chip">Withdrawn</span>}
-            {member.place !== null && <span className="chip">{ordinal(member.place)}</span>}
-          </li>
-        ))}
-      </ol>
-
-      <div className="pool-worksheet">
-        <span className="form-label">Final order</span>
-        {pool.orderStatus && <p className="muted">{pool.orderStatus.reason}</p>}
-        {pool.orderLockedReason && <p className="muted">{pool.orderLockedReason}</p>}
-        {!fixedLegacyFinals && pool.members.some((member) => member.withdrawn) && (
-          <p className="muted">
-            Include withdrawn entrants in the recorded finishing order. On confirmation, they are
-            excluded from advancement: the upper half of active entrants, rounded up, advance to
-            championship. Update linked Challonge brackets to match.
-          </p>
-        )}
-        {pool.members.map((_, place) => {
-          const options = pool.rulingOptions?.[place];
-          const members = options
-            ? pool.members.filter((member) => options.includes(member.playerId))
-            : pool.members;
-          return (
-            <div key={place} className="pool-place">
-              <span>{ordinal(place + 1)}</span>
-              {options?.length === 1 ? (
-                <span className="pool-place-name">{members[0]?.name}</span>
-              ) : (
-                <Select
-                  disabled={readOnly}
-                  value={order[place] ?? ''}
-                  aria-label={`${ordinal(place + 1)} place in pool ${pool.label}`}
-                  onValueChange={(selectedValue) => {
-                    const next = [...order];
-                    next[place] = selectedValue;
-                    setOrder(next);
-                  }}
-                >
-                  <SelectItem value="">—</SelectItem>
-                  {members.map((member) => (
-                    <SelectItem key={member.playerId} value={member.playerId}>
-                      {member.name}
-                    </SelectItem>
-                  ))}
-                </Select>
-              )}
-            </div>
-          );
-        })}
-        <Button
-          variant="primary"
-          size="small"
-          type="button"
-          disabled={readOnly || !complete}
-          onClick={() => save.mutate()}
-          title={
-            complete ? 'Save this pool’s finishing order' : 'Every entrant needs exactly one place'
-          }
-        >
-          {save.isPending
-            ? 'Saving…'
-            : pool.orderStatus?.status === 'automatic' || pool.orderStatus?.status === 'partial'
-              ? 'Record organiser ruling'
-              : 'Confirm pool'}
-        </Button>
-        {save.isError && <p className="error-text">{save.error.message}</p>}
-      </div>
-    </div>
+    <>
+      {!fixedLegacyFinals && pool.members.some((member) => member.withdrawn) && (
+        <p className="muted">
+          Include withdrawn entrants in the recorded finishing order. On confirmation, they are
+          excluded from advancement: the upper half of active entrants, rounded up, advance to
+          championship. Update linked Challonge brackets to match.
+        </p>
+      )}
+      {pool.members.map((_, place) => {
+        const options = pool.rulingOptions?.[place];
+        const members = options
+          ? pool.members.filter((member) => options.includes(member.playerId))
+          : pool.members;
+        return (
+          <div key={place} className="pool-place">
+            <span>{ordinal(place + 1)}</span>
+            {options?.length === 1 ? (
+              <span className="pool-place-name">{members[0]?.name}</span>
+            ) : (
+              <Select
+                disabled={readOnly}
+                value={order[place] ?? ''}
+                aria-label={`${ordinal(place + 1)} place in pool ${pool.label}`}
+                onValueChange={(selectedValue) => {
+                  const next = [...order];
+                  next[place] = selectedValue;
+                  setOrder(next);
+                }}
+              >
+                <SelectItem value="">—</SelectItem>
+                {members.map((member) => (
+                  <SelectItem key={member.playerId} value={member.playerId}>
+                    {member.name}
+                  </SelectItem>
+                ))}
+              </Select>
+            )}
+          </div>
+        );
+      })}
+      <Button
+        variant="primary"
+        size="small"
+        type="button"
+        disabled={readOnly || !complete}
+        onClick={() => save.mutate()}
+        title={
+          complete ? 'Save this pool’s finishing order' : 'Every entrant needs exactly one place'
+        }
+      >
+        {save.isPending
+          ? 'Saving…'
+          : pool.orderStatus?.status === 'automatic' || pool.orderStatus?.status === 'partial'
+            ? 'Record organiser ruling'
+            : 'Confirm pool'}
+      </Button>
+      {save.isError && <p className="error-text">{save.error.message}</p>}
+    </>
   );
 }
 
