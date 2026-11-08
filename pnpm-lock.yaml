@@ -149,6 +149,9 @@ importers:
       '@smashclub/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@smashclub/tournament-formats':
+        specifier: workspace:*
+        version: link:../../packages/tournament-formats
       '@tanstack/react-query':
         specifier: ^5.101.4
         version: 5.101.4(react@19.2.8)
@@ -186,9 +189,6 @@ importers:
       '@smashclub/server':
         specifier: workspace:*
         version: link:../server
-      '@smashclub/tournament-formats':
-        specifier: workspace:*
-        version: link:../../packages/tournament-formats
       '@types/node':
         specifier: ^24.12.0
         version: 24.13.3
