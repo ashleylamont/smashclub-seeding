@@ -4,6 +4,7 @@ import { AxeBuilder } from '@axe-core/playwright';
 import type { PublicEventNight } from '../src/lib/publicEvents';
 import { rpcProcedures } from '../test-support/rpcBatch';
 import { mockEvent, PLAN_ID, ready } from './fixtures';
+import { footerMetadataCaptureStyle } from './captureStyles';
 
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const markdown = readFileSync(new URL('../CHANGELOG.md', import.meta.url), 'utf8');
@@ -239,4 +240,30 @@ test('the standalone OBS display stays outside the shared app footer', async ({ 
   await expect(page.getByRole('region', { name: 'Tournament progress' })).toBeVisible();
   await expect(page.locator('.app-footer')).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Changelog' })).toHaveCount(0);
+});
+
+test('footer screenshot metadata stays fixed while the normal DOM shows the actual values', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockHome(page);
+  await page.goto('/');
+  const footer = page.getByRole('contentinfo');
+  const versionLabel = footer.locator('.app-version');
+  const buildLabel = footer.locator('.build-label');
+  await expect(versionLabel).toHaveText(`v${version}`);
+  await expect(buildLabel).toHaveText(buildSha?.slice(0, 7) || 'dev');
+  await ready(page);
+  const capture = { style: footerMetadataCaptureStyle };
+  const original = await footer.screenshot(capture);
+
+  await versionLabel.evaluate((element) => {
+    element.textContent = 'v123.456.789';
+  });
+  await buildLabel.evaluate((element) => {
+    element.textContent = '123abcd';
+  });
+  await expect(versionLabel).toHaveText('v123.456.789');
+  await expect(buildLabel).toHaveText('123abcd');
+  expect(await footer.screenshot(capture)).toEqual(original);
 });

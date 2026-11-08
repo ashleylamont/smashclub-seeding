@@ -1,0 +1,17 @@
+/* Fixture text for screenshot comparison only. Keep the rest of the actual
+   footer visible, and verify the live version and build in the DOM separately. */
+.app-footer :is(.app-version, .build-label) {
+  font-size: 0;
+}
+
+.app-footer :is(.app-version, .build-label)::before {
+  font-size: var(--fs-xs);
+}
+
+.app-footer .app-version::before {
+  content: 'v0.1.3';
+}
+
+.app-footer .build-label::before {
+  content: 'dev';
+}

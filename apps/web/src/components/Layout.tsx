@@ -149,19 +149,22 @@ export function Layout() {
         {/* The build this page was served from, so "is prod actually on the
             new image?" is answerable without kubectl. */}
         <span className="build-tag">
-          v{APP_VERSION} <span aria-hidden="true">·</span> build{' '}
-          {BUILD_COMMIT_URL ? (
-            <a
-              href={BUILD_COMMIT_URL}
-              target="_blank"
-              rel="noreferrer"
-              title={BUILD_SHA ?? undefined}
-            >
-              {BUILD_LABEL}
-            </a>
-          ) : (
-            BUILD_LABEL
-          )}
+          <span className="app-version">v{APP_VERSION}</span> <span aria-hidden="true">·</span>{' '}
+          build{' '}
+          <span className="build-label">
+            {BUILD_COMMIT_URL ? (
+              <a
+                href={BUILD_COMMIT_URL}
+                target="_blank"
+                rel="noreferrer"
+                title={BUILD_SHA ?? undefined}
+              >
+                {BUILD_LABEL}
+              </a>
+            ) : (
+              BUILD_LABEL
+            )}
+          </span>
         </span>
       </footer>
     </div>
