@@ -238,6 +238,34 @@ test('shared queue on a phone: snooze/return, focused scoring, and accessible co
   await chooseOption(desk.getByRole('combobox', { name: 'Queue view', exact: true }), 'ready');
   const row = desk.locator(`[data-match-id="${target.id}"]`);
   await row.getByRole('button', { name: 'Call ordinary match' }).click();
+  const snooze = page.getByRole('button', { name: `Snooze ${target.player1Name}`, exact: true });
+  const availability = desk.locator('.dispatch-availability .dispatch-row').filter({ has: snooze });
+  await expect(snooze).toBeDisabled();
+  await expect(
+    availability.getByText('Return the untaken call before changing availability.'),
+  ).toBeVisible();
+  await availability.getByRole('button', { name: /^Open call for / }).press('Enter');
+  const returnCall = row.getByRole('button', { name: 'Return untaken call', exact: true });
+  await expect(returnCall).toBeFocused();
+  await returnCall.press('Enter');
+  await expect(snooze).toBeEnabled();
+  expect(
+    (await query<Overview>(page.request, 'eventOps.overview', { planId })).matches.find(
+      (match) => match.id === target.id,
+    ),
+  ).toMatchObject({
+    status: 'ready',
+    started: false,
+    called: false,
+    player1Id: target.player1Id,
+    player2Id: target.player2Id,
+  });
+  await snooze.press('Enter');
+  await expect(desk.locator(`.dispatch-list [data-match-id="${target.id}"]`)).toHaveCount(0);
+  await desk
+    .getByRole('button', { name: `Return ${target.player1Name}`, exact: true })
+    .press('Enter');
+  await row.getByRole('button', { name: 'Call ordinary match' }).click();
   await desk
     .locator(`[data-match-id="${target.id}"]`)
     .getByRole('button', { name: 'Score / details' })

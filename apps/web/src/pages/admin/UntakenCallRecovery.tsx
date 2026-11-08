@@ -12,10 +12,12 @@ export function UntakenCallRecovery({
   matchIds,
   desk,
   showInstructions = true,
+  disabled = false,
 }: {
   matchIds: string[];
   desk: UntakenCallDesk;
   showInstructions?: boolean;
+  disabled?: boolean;
 }) {
   const calls = desk.calls.filter((match) => matchIds.includes(match.id));
   if (!calls.length) return null;
@@ -34,6 +36,7 @@ export function UntakenCallRecovery({
               <span>{pairing}</span>
               <Button
                 size="small"
+                disabled={disabled}
                 aria-label={`Open call for ${pairing}`}
                 onClick={() => desk.open(match.id)}
               >
