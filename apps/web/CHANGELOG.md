@@ -2,6 +2,21 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.2.0
+
+### Minor Changes
+
+- 8 November 2026 · **Feature** · Open WHR impact on a rated match to see how including that result affected the night’s skill estimate, with context for score evidence and uncertainty. [#176](https://github.com/ashleylamont/smashclub-seeding/pull/176) · [build 989a949](https://github.com/ashleylamont/smashclub-seeding/commit/989a94907e044d4847cc1bb1a99700510badc9b8)
+
+### Patch Changes
+
+- 8 November 2026 · **Maintenance** · Show which checks a pull request affects and skip PostgreSQL and legacy Python checks for changes limited to the frontend or documentation. [#186](https://github.com/ashleylamont/smashclub-seeding/pull/186) · [build 1c7490d](https://github.com/ashleylamont/smashclub-seeding/commit/1c7490d634b50be6d8ec6c48ca6eca71e089ad72)
+- 8 November 2026 · **Fix** · Ask organisers to acknowledge a linked Challonge roster update only when the current attendance preview requires it. [#184](https://github.com/ashleylamont/smashclub-seeding/pull/184) · [build 0fc04c6](https://github.com/ashleylamont/smashclub-seeding/commit/0fc04c6ca97574446ebc900697424eeb70cf0d79)
+
+  Each updated relocation preview requires fresh approval. Long player aliases now stay within the phone attendance form.
+
+- 8 November 2026 · **Fix** · Public brackets and OBS show forfeits, byes and no-contests without imported placeholder game scores. Played results still show their recorded scores. [#183](https://github.com/ashleylamont/smashclub-seeding/pull/183) · [build ff6eb59](https://github.com/ashleylamont/smashclub-seeding/commit/ff6eb59d0673bc8a99da06d94c0187cb99888f57)
+
 ## 0.1.9
 
 ### Patch Changes
