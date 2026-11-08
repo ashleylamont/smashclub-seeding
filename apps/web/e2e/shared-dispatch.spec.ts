@@ -20,6 +20,7 @@ type Match = {
   revision: number;
 };
 type Overview = {
+  plan: { drawPaused: boolean };
   matches: Match[];
   stations: { id: string; name: string }[];
   settings: { resourceRevision: number };
@@ -484,4 +485,46 @@ test('an unavailable named station rejects calls and returns with the same ident
       fullPage: true,
     });
   }
+});
+
+test('organisers can return a blocking call from the draw panel and resume in one step', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const { planId, desk } = await night(page, 'Pause an unplayed draw', false);
+  const ready = desk.locator('.dispatch-list [data-match-id]').first();
+  const matchId = (await ready.getAttribute('data-match-id'))!;
+  await ready.getByRole('button', { name: 'Call ordinary match' }).click();
+  await expect(desk.getByRole('button', { name: 'Return untaken call' })).toBeVisible();
+  const blocked = await page.request.post('/api/trpc/eventOps.unlockPools', {
+    data: { planId, confirm: true },
+  });
+  expect(blocked.ok()).toBe(false);
+  expect((await blocked.json()).error.message).toContain(
+    'Return all untaken calls before pausing the draw.',
+  );
+
+  const drawTab = page.getByRole('tab', { name: 'Standings / draw', exact: true });
+  const draw = page.getByRole('tabpanel', { name: 'Standings / draw', exact: true });
+  await drawTab.click();
+  await expect(draw.getByRole('button', { name: 'Pause unplayed draw' })).toHaveCount(0);
+  await draw.getByRole('button', { name: /^Open call for/ }).press('Enter');
+  const returnCall = desk.locator(`[data-match-id="${matchId}"]`).getByRole('button', {
+    name: 'Return untaken call',
+  });
+  await expect(returnCall).toBeFocused();
+  await returnCall.press('Enter');
+  await expect(returnCall).toHaveCount(0);
+  const before = await query<Overview>(page.request, 'eventOps.overview', { planId });
+
+  await drawTab.click();
+  await draw.getByRole('button', { name: 'Pause unplayed draw' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm', exact: true }).click();
+  await expect(draw.getByRole('heading', { name: 'Pool draw: Paused' })).toBeVisible();
+  await draw.getByRole('button', { name: 'Resume pool draw' }).click();
+  await expect(draw.getByRole('heading', { name: 'Pool draw: Soft-locked' })).toBeVisible();
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  const resumed = await query<Overview>(page.request, 'eventOps.overview', { planId });
+  expect(resumed.plan.drawPaused).toBe(false);
+  expect(resumed.matches).toEqual(before.matches);
 });

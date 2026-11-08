@@ -15,7 +15,7 @@ import { OpsAccessControls } from './OpsAccessControls';
 import { OpsEventHistory } from './OpsEventHistory';
 import { Tabs, TabList, Tab, TabPanel } from '../../components/ui/Tabs';
 import { LoadingState, Notice } from '../../components/ui/Feedback';
-import { OPS_SECTIONS, useOpsWorkspace } from '../../lib/opsWorkspace';
+import { OPS_SECTIONS, returnCallControlId, useOpsWorkspace } from '../../lib/opsWorkspace';
 import { MatchCard } from './OpsMatchCard';
 import { PlayerReports, AuditList } from './OpsPlayerReports';
 import { ScorePolicyControls } from './ScorePolicyControls';
@@ -401,7 +401,13 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
           <AttendanceControls planId={planId} data={data} disabled={pending || closed} />
         </TabPanel>
         <TabPanel value="draw">
-          <PoolDrawControls data={data} closed={closed} pending={pending} act={act} />
+          <PoolDrawControls
+            data={data}
+            closed={closed}
+            pending={pending}
+            act={act}
+            onOpenCall={(matchId) => void workspace.openControl(returnCallControlId(matchId))}
+          />
           {pools.length > 0 && (
             <section className="card">
               <h3>Pool standings</h3>

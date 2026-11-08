@@ -1,4 +1,5 @@
 import { Button } from '../../components/ui/Button';
+import { matchPresentation } from '../../lib/matchPresentation';
 import { useConfirmation } from '../../lib/confirmation';
 import { trpc } from '../../lib/trpc';
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
@@ -7,25 +8,29 @@ export function PoolDrawControls({
   closed,
   pending,
   act,
+  onOpenCall,
 }: {
   data: Overview;
   closed: boolean;
   pending: boolean;
   act: (work: () => Promise<unknown>, message: string) => Promise<unknown>;
+  onOpenCall: (matchId: string) => void;
 }) {
   const confirmAction = useConfirmation();
   const planId = data.plan.id;
-  const canSoftLock =
-    data.plan.drawPaused || (data.plan.status === 'pools_ready' && !data.plan.softLockedAt);
+  const paused = data.plan.drawPaused;
+  const canSoftLock = paused || (data.plan.status === 'pools_ready' && !data.plan.softLockedAt);
+  const blocker = !paused && !closed ? data.poolDrawPauseBlocker : null;
   const canUnlock = data.plan.liveOwned
-    ? !data.plan.drawPaused &&
-      !closed &&
-      !data.reports.length &&
-      data.matches.every((m) => !m.started && m.status !== 'complete')
+    ? !paused && !closed && blocker === null
     : data.plan.status === 'pools_ready' && Boolean(data.plan.softLockedAt);
+  const calls =
+    blocker?.kind === 'untaken_calls' && data.sharedDispatch
+      ? data.matches.filter(({ id }) => blocker.matchIds.includes(id))
+      : [];
   return (
     <section className="card ops-setup">
-      <div>
+      <div className="ops-pool-draw-description">
         <h3>
           Pool draw:{' '}
           {data.plan.drawPaused ? 'Paused' : data.plan.softLockedAt ? 'Soft-locked' : 'Draft'}
@@ -40,6 +45,26 @@ export function PoolDrawControls({
         {data.plan.softLockedAt && (
           <p className="muted">Soft-locked {new Date(data.plan.softLockedAt).toLocaleString()}.</p>
         )}
+        {blocker && <p>{blocker.message}</p>}
+        {calls.length > 0 && (
+          <ul className="ops-pause-calls">
+            {calls.map((match) => {
+              const pairing = matchPresentation(match).title;
+              return (
+                <li key={match.id}>
+                  <span>{pairing}</span>
+                  <Button
+                    size="small"
+                    aria-label={`Open call for ${pairing}`}
+                    onClick={() => onOpenCall(match.id)}
+                  >
+                    Open call
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
       {canSoftLock && (
         <Button
@@ -47,16 +72,16 @@ export function PoolDrawControls({
           disabled={pending}
           onClick={async () => {
             if (
-              await confirmAction(
-                data.plan.drawPaused
-                  ? 'Resume this draw with its current pools and opponents?'
-                  : 'Soft-lock this pool draw? Existing players will keep their pools and opponents, and the initial match queue will be prepared.',
-              )
+              !paused &&
+              !(await confirmAction(
+                'Soft-lock this pool draw? Existing players will keep their pools and opponents, and the initial match queue will be prepared.',
+              ))
             )
-              void act(
-                () => trpc.eventOps.softLockPools.mutate({ planId, confirm: true }),
-                'Pool draw soft-locked',
-              );
+              return;
+            void act(
+              () => trpc.eventOps.softLockPools.mutate({ planId, confirm: true }),
+              paused ? 'Pool draw resumed' : 'Pool draw soft-locked',
+            );
           }}
         >
           {data.plan.drawPaused ? 'Resume pool draw' : 'Soft-lock pool draw'}

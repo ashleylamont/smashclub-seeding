@@ -291,6 +291,7 @@ export const eventOpsRouter = router({
     if (api) return nativeOverview(api);
     return {
       ...(await snapshot(ctx.db, input.planId, true)),
+      poolDrawPauseBlocker: null,
       reports: (
         await ctx.db
           .select()

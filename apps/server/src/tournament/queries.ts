@@ -1,5 +1,6 @@
 import { eventView } from './views';
 import { dispatchDesk } from './dispatch';
+import { poolDrawPauseBlocker } from './operations';
 import { memberIds } from './entrants';
 import { asc, eq } from 'drizzle-orm';
 import {
@@ -68,6 +69,7 @@ export async function nativeOverview(api: NativeEventApi) {
   const snapshot = await eventView(ctx.db, state, true);
   return {
     ...snapshot,
+    poolDrawPauseBlocker: poolDrawPauseBlocker(state),
     operatorDispatch: dispatchDesk(
       state,
       new Map(snapshot.entrants.map((entry) => [entry.id, entry.name])),
