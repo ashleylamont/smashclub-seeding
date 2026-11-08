@@ -86,6 +86,14 @@ it('accepts only explicit PR skips from a successful plan', () => {
   }
 });
 
+it('runs browser shards independently of full typecheck and build', () => {
+  expect(ci.jobs.e2e.needs).toBeUndefined();
+  expect(ci.jobs.typecheck.steps).toContainEqual(
+    expect.objectContaining({ run: 'pnpm typecheck' }),
+  );
+  expect(ci.jobs.build.steps).toContainEqual(expect.objectContaining({ run: 'pnpm build' }));
+});
+
 it('scopes PR skips to web or prose and keeps broader candidates advisory', () => {
   const note = '.changeset/example.md';
   const web = 'apps/web/src/pages/Example.tsx';
