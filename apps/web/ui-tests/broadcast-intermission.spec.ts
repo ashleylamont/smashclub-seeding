@@ -4,6 +4,7 @@ import { mockEvent, PLAN_ID, ready } from './fixtures';
 import { bracketFixture, TEAM_ALIAS } from '../test/fixtures/brackets';
 import { chooseOption } from '../test-support/controls';
 import { broadcastProgressPages } from '../src/lib/broadcastProgress';
+import type { LiveMatch } from '../src/lib/eventDisplay';
 import type { PublicFinalsField } from '../src/lib/qualification';
 
 async function fits(page: Page) {
@@ -229,6 +230,138 @@ test('reduced motion retains manual pages, and interruptions keep the last known
   await expect(progress).toBeVisible();
   await expect(progress).toContainText('Page 2 /');
 });
+
+for (const [width, theme] of [
+  [1280, 'dark'],
+  [1920, 'light'],
+] as const) {
+  test(`${width}px linked finals show published matches without guessing the draw`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height: (width * 9) / 16 });
+    await page.emulateMedia({ colorScheme: theme });
+    await page.clock.install({ time: new Date('2026-10-04T00:00:00Z') });
+    const fixture = await mockEvent(page, { idle: true });
+    const [station, other] = fixture.snapshot.stations;
+    const pool = fixture.snapshot.matches.find((match) => match.stage === 'group')!;
+    const linked = (label: string, facts: Partial<LiveMatch> = {}): LiveMatch => ({
+      ...pool,
+      id: `linked-${label}`,
+      label,
+      sourceSetId: `source-${label}`,
+      nativeBracketId: null,
+      poolIndex: null,
+      division: 'upper',
+      stage: 'main',
+      status: 'ready',
+      outcome: null,
+      score1: null,
+      score2: null,
+      winnerId: null,
+      stationId: null,
+      called: false,
+      ...facts,
+    });
+    const played = linked('Imported played set', {
+      status: 'complete',
+      outcome: 'played',
+      score1: 2,
+      score2: 0,
+      winnerId: pool.player1Id,
+      player1Name: TEAM_ALIAS,
+      player2Name: `West · ${TEAM_ALIAS}`,
+    });
+    const forfeit = linked('Imported forfeit', {
+      status: 'complete',
+      outcome: 'forfeit',
+      score1: -1,
+      score2: 0,
+      winnerId: pool.player2Id,
+    });
+    const bye = linked('Imported bye', {
+      status: 'complete',
+      outcome: 'bye',
+      score1: 99,
+      score2: 0,
+      winnerId: pool.player1Id,
+      player2Id: null,
+    });
+    const pending = linked('Imported pending set', {
+      status: 'blocked',
+      player1Id: null,
+      player2Id: null,
+      player1Name: 'TBD',
+      player2Name: 'TBD',
+    });
+    const lower = linked('Imported consolation set', {
+      division: 'lower',
+      stage: 'consolation',
+    });
+    fixture.responses['eventOps.snapshot'] = {
+      ...fixture.snapshot,
+      plan: { ...fixture.snapshot.plan, bracketMode: 'challonge' },
+      nativeBrackets: [],
+      matches: [pool, played, forfeit, bye, pending, lower],
+      brackets: [
+        { division: 'upper', stage: 'main', slug: 'linked-upper' },
+        { division: 'lower', stage: 'consolation', slug: 'linked-lower' },
+      ],
+    };
+    await page.goto(`/overlay/${PLAN_ID}?station=${station!.id}&presentation=auto&controls=0`);
+    const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
+    await expect(progress.getByRole('heading', { name: /pool/i })).toBeVisible();
+    await page.keyboard.press('ArrowRight');
+    const upper = progress.getByRole('table', { name: 'Linked Upper Championship bracket' });
+    await expect(progress).toContainText('Section 1 / 2');
+    await expect(upper.getByRole('row', { name: /Imported played set/ })).toContainText('2–0');
+    await expect(upper.getByRole('row', { name: /Imported played set/ })).toContainText(
+      `${TEAM_ALIAS} · Winner`,
+    );
+    await expect(upper.getByRole('row', { name: /Imported forfeit/ })).toContainText('Forfeit');
+    await expect(upper.getByRole('row', { name: /Imported bye/ })).toContainText('Bye');
+    await expect(upper).not.toContainText(/-1–0|99–0/);
+    await expect(progress.locator('path[data-feed-from]')).toHaveCount(0);
+    await fits(page);
+    await page.screenshot({ path: testInfo.outputPath(`intermission-linked-${width}.png`) });
+    expect(
+      (
+        await new AxeBuilder({ page })
+          .include('.broadcast-intermission')
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+          .analyze()
+      ).violations,
+    ).toEqual([]);
+
+    await page.keyboard.press('ArrowRight');
+    await expect(progress).toContainText('Section 2 / 2');
+    await expect(upper).toContainText('Awaiting opponent');
+    await expect(upper).not.toContainText('TBD');
+    await fits(page);
+    await page.keyboard.press('ArrowRight');
+    const lowerTable = progress.getByRole('table', { name: 'Linked Lower Consolation bracket' });
+    await expect(lowerTable).toContainText(lower.label);
+
+    Object.assign(lower, { status: 'playing', stationId: other!.id });
+    await page.clock.runFor(5000);
+    await expect(lowerTable).toContainText('Playing');
+    Object.assign(lower, { stationId: station!.id });
+    await page.clock.runFor(5000);
+    await expect(progress).not.toBeVisible();
+    await expect(page.getByRole('region', { name: 'Transparent game capture area' })).toBeVisible();
+    Object.assign(lower, {
+      status: 'complete',
+      outcome: 'played',
+      score1: 1,
+      score2: 2,
+      winnerId: lower.player2Id,
+    });
+    await page.clock.runFor(5000);
+    await expect(progress).toBeVisible();
+    await page.keyboard.press('ArrowLeft');
+    await expect(lowerTable).toContainText('1–2');
+    expect(fixture.unexpected).toEqual([]);
+  });
+}
 
 for (const [width, height, theme] of [
   [390, 844, 'dark'],

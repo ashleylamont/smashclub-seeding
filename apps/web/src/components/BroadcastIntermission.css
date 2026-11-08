@@ -93,6 +93,16 @@
 .intermission-qualification td:nth-child(2) {
   font-family: inherit;
 }
+.intermission-linked th:first-child,
+.intermission-linked th:last-child {
+  width: 20%;
+}
+.intermission-linked td:not(:first-child) {
+  font-family: inherit;
+}
+.intermission-linked-score {
+  font-family: var(--font-number);
+}
 .intermission-content .event-bracket-lane > h4 {
   display: none;
 }
