@@ -4,7 +4,7 @@ import { projectTournament, projectionInput } from '../../event-planner/projecti
 import { previewPlanRecovery, recoverPlan } from '../../event-planner/recovery';
 import { nativePlanList } from '../../tournament/queries';
 import { nativeEvent } from '../../tournament/api';
-import { POOL_ORDER_ENTRANT_LIMITS } from '../../tournament/poolOrders';
+import { MIN_POOL_ORDER_ENTRANTS, poolOrderRevisionToken } from '../../tournament/poolOrders';
 import {
   historicalCandidates,
   previewHistoricalAdoption,
@@ -55,6 +55,7 @@ const historicalSchema = z.object({
     .length(4),
 });
 const preferenceSchema = z.enum(['auto', 'upper', 'lower']);
+const maxExplicitPoolOrderEntrants = 16;
 
 /** Translate the planner's own errors into the tRPC codes a client can act on. */
 async function guard<T>(run: () => Promise<T>): Promise<T> {
@@ -291,17 +292,31 @@ export const eventPlannerRouter = router({
         division: divisionSchema,
         pools: z
           .array(
-            z.object({
-              poolIndex: z.number().int().nonnegative(),
-              playerIdsInOrder: z
-                .array(z.uuid())
-                .min(POOL_ORDER_ENTRANT_LIMITS.min)
-                .max(POOL_ORDER_ENTRANT_LIMITS.max),
-              expectedPlacementRevision: z.string().optional(),
-              expectedMatchRevisions: z
-                .array(z.object({ id: z.uuid(), revision: z.number().int().nonnegative() }))
-                .optional(),
-            }),
+            z
+              .object({
+                poolIndex: z.number().int().nonnegative(),
+                playerIdsInOrder: z.array(z.uuid()).min(MIN_POOL_ORDER_ENTRANTS),
+                expectedPlacementRevision: z.string().optional(),
+                expectedMatchRevisions: z
+                  .array(z.object({ id: z.uuid(), revision: z.number().int().nonnegative() }))
+                  .optional(),
+                expectedMatchRevisionToken: z
+                  .string()
+                  .regex(/^[a-f0-9]{64}$/)
+                  .optional(),
+              })
+              .refine(
+                (p) =>
+                  p.expectedMatchRevisionToken === undefined ||
+                  p.expectedMatchRevisions === undefined,
+                'Send either the match revision token or explicit match revisions.',
+              )
+              .refine(
+                (p) =>
+                  p.expectedMatchRevisionToken !== undefined ||
+                  p.playerIdsInOrder.length <= maxExplicitPoolOrderEntrants,
+                `Use the current native planner to confirm a pool of more than ${maxExplicitPoolOrderEntrants} entrants.`,
+              ),
           )
           .max(64),
       }),
@@ -317,6 +332,21 @@ export const eventPlannerRouter = router({
               (pool) => pool.division === input.division && pool.index === p.poolIndex,
             );
             if (!pool) throw new TRPCError({ code: 'NOT_FOUND' });
+            // Reuse this exact snapshot for the token and the command's atomic revision checks.
+            const matchRevisions = Object.fromEntries(
+              (p.expectedMatchRevisions ?? state.matches.filter((m) => m.poolId === pool.id)).map(
+                (m) => [m.id, m.revision],
+              ),
+            );
+            if (
+              p.expectedMatchRevisionToken !== undefined &&
+              p.expectedMatchRevisionToken !== poolOrderRevisionToken(pool, matchRevisions)
+            )
+              throw new TRPCError({
+                code: 'CONFLICT',
+                message:
+                  'Pool matches or placements changed. Refresh and review the finishing order before confirming.',
+              });
             return {
               poolId: pool.id,
               order: p.playerIdsInOrder,
@@ -324,16 +354,17 @@ export const eventPlannerRouter = router({
                 p.expectedPlacementRevision === undefined
                   ? pool.revision
                   : Number(p.expectedPlacementRevision),
-              matchRevisions: Object.fromEntries(
-                (p.expectedMatchRevisions ?? state.matches.filter((m) => m.poolId === pool.id)).map(
-                  (m) => [m.id, m.revision],
-                ),
-              ),
+              matchRevisions,
             };
           }),
         });
         return { ok: true };
       }
+      if (input.pools.some((pool) => pool.expectedMatchRevisionToken !== undefined))
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Match revision tokens are available for native live pools.',
+        });
       await guard(() => savePoolPlacements(ctx.db, input.planId, input.division, input.pools));
       return { ok: true };
     }),

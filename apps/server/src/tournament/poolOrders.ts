@@ -10,7 +10,15 @@ import { hasLegacyQualifier } from './legacyFinalQualifiers';
 import type { CommandEnvelope, TournamentCommand, TournamentState } from './schemas';
 
 type Pool = TournamentState['pools'][number];
-export const POOL_ORDER_ENTRANT_LIMITS = { min: 2, max: 16 } as const;
+export const MIN_POOL_ORDER_ENTRANTS = 2;
+
+/** Compact worksheet evidence for one pool and all its current match revisions. */
+export function poolOrderRevisionToken(
+  pool: Pick<Pool, 'id' | 'revision'>,
+  matchRevisions: Readonly<Record<string, number>>,
+) {
+  return hash([pool.id, pool.revision, matchRevisions]);
+}
 
 const matchesFor = (state: TournamentState, pool: Pool) =>
   state.matches.filter((m) => m.poolId === pool.id);
@@ -314,10 +322,8 @@ export function canConfirmPoolOrder(state: TournamentState, pool: Pool) {
 
 /** Additional confirmation limits on the planner's normal write path. */
 export function plannerPoolOrderBlocker(state: TournamentState, pool: Pool) {
-  const { min, max } = POOL_ORDER_ENTRANT_LIMITS;
-  const count = pool.entrantIds.length;
-  if (count < min || count > max)
-    return `This pool has ${count} ${count === 1 ? 'entrant' : 'entrants'}. The planner can confirm orders for pools of ${min}–${max} entrants.`;
+  if (pool.entrantIds.length < MIN_POOL_ORDER_ENTRANTS)
+    return 'A pool needs at least two entrants before its order can be confirmed.';
   if (state.lifecycle === 'unlocked') return 'Resume the pool draw to confirm this order.';
   if (!canConfirmPoolOrder(state, pool))
     return 'This pool order cannot be confirmed while the finals draw is in use.';

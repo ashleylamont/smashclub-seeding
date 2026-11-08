@@ -5,6 +5,7 @@ import {
   canConfirmPoolOrder,
   canReviewFrozenPoolResult,
   plannerPoolOrderBlocker,
+  poolOrderRevisionToken,
   poolOrderStatus,
   poolPlacementSource,
 } from './poolOrders';
@@ -503,6 +504,9 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
     const divisionPools = state.pools.filter((p) => p.division === division);
     const pools = divisionPools.map((p) => {
       const orderLockedReason = worksheetOrderLock(state, p, fixedLegacyFinals);
+      const matchRevisions = state.matches
+        .filter((m) => m.poolId === p.id)
+        .map((m) => ({ id: m.id, revision: m.revision }));
       return {
         poolIndex: p.index,
         label: poolLabel(p.index),
@@ -516,9 +520,11 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
           fixedLegacyFinals && orderLockedReason && !p.order
             ? undefined
             : poolOrderStatus(state, p),
-        matchRevisions: state.matches
-          .filter((m) => m.poolId === p.id)
-          .map((m) => ({ id: m.id, revision: m.revision })),
+        matchRevisions,
+        matchRevisionToken: poolOrderRevisionToken(
+          p,
+          Object.fromEntries(matchRevisions.map(({ id, revision }) => [id, revision])),
+        ),
         members: p.entrantIds.map((playerId) => {
           const e = entries.find((e) => e.playerId === playerId)!;
           return {
