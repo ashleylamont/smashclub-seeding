@@ -9,6 +9,7 @@ export const requiredJobs = [
   'e2e',
   'e2e-report',
   'ui-portable',
+  'ui-portable-2',
   'ui-quality',
   'build',
   'bundle-smoke',
@@ -33,10 +34,22 @@ export function assertRequiredJobs(results, { event, reportOnly } = {}) {
     if (result !== 'success' && !(result === 'skipped' && skips.includes(name)))
       throw new Error(`${name} did not pass (${result ?? 'missing'})`);
   }
-  const portableCases = results['ui-portable'].outputs?.ui_case_set;
+  const first = results['ui-portable'].outputs;
+  const second = results['ui-portable-2'].outputs;
   const darwinCases = results['ui-quality'].outputs?.ui_case_set;
-  if (!/^[a-f0-9]{64}$/.test(portableCases) || portableCases !== darwinCases)
+  if (
+    !/^[a-f0-9]{64}$/.test(darwinCases) ||
+    first?.ui_case_set !== darwinCases ||
+    second?.ui_case_set !== darwinCases
+  )
     throw new Error('Portable and Darwin jobs did not verify the same UI case set.');
+  if (
+    first.ui_portable_shard !== '1/2' ||
+    second.ui_portable_shard !== '2/2' ||
+    !/^[a-f0-9]{64}$/.test(first.ui_portable_plan) ||
+    first.ui_portable_plan !== second.ui_portable_plan
+  )
+    throw new Error('Portable UI jobs did not pass both shards of the same plan.');
 }
 if (process.env.RESULTS) {
   assertRequiredJobs(JSON.parse(process.env.RESULTS), {
