@@ -131,6 +131,7 @@ for (const theme of ['dark', 'light'] as const)
 
       await page.goto(`/operate/${PLAN_ID}?view=history`);
       await page.getByRole('button', { name: 'Open match', exact: true }).click();
+      await expect(page.locator('#match-desk')).toBeFocused();
       const card = page.locator('article.ops-match:visible').filter({ hasText: match.label });
       await card.getByRole('button', { name: 'Correct score' }).press('Enter');
       await card.getByRole('spinbutton').last().fill('3');
