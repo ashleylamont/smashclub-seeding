@@ -19,6 +19,7 @@ export function progressInterval(search: string) {
   return seconds === 15 || seconds === 60 ? seconds : 30;
 }
 export type ProgressData = {
+  publicCode?: number;
   plan: { id: string; name: string; status: string };
   matches: LiveMatch[];
   nativeBrackets: NativeBracketView[];

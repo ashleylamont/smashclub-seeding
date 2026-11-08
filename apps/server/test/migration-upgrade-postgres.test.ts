@@ -80,7 +80,12 @@ it('upgrades pre-stage history and pre-soft-lock operations, preserving data and
     ids[2],
   ]);
   await migrate(drizzle(cluster.pool), { migrationsFolder });
-  const draws = (await cluster.pool.query('SELECT id, soft_locked_at FROM event_plans')).rows;
+  const draws = (
+    await cluster.pool.query('SELECT id, soft_locked_at, public_code FROM event_plans')
+  ).rows;
+  const publicCodes = draws.map(({ public_code }) => public_code);
+  expect(new Set(publicCodes).size).toBe(ids.length);
+  expect(publicCodes.every((code) => Number.isInteger(code) && code >= 1_000_000)).toBe(true);
   expect(draws.find((p) => p.id === ids[0]).soft_locked_at).toBeNull();
   expect(draws.filter((p) => p.id !== ids[0]).every((p) => p.soft_locked_at !== null)).toBe(true);
   expect(
@@ -128,6 +133,19 @@ it('upgrades pre-stage history and pre-soft-lock operations, preserving data and
         )
       ).rows,
     ).toEqual(ledger);
+    expect(
+      (await recovered.pool.query('SELECT id, public_code FROM event_plans ORDER BY id')).rows,
+    ).toEqual(
+      draws
+        .map(({ id, public_code }) => ({ id, public_code }))
+        .sort((first, second) => first.id.localeCompare(second.id)),
+    );
+    const [created] = (
+      await recovered.pool.query(
+        "INSERT INTO event_plans (name, event_date) VALUES ('New public-code plan', '2026-10-01') RETURNING public_code",
+      )
+    ).rows;
+    expect(created.public_code).toBeGreaterThan(Math.max(...publicCodes));
     await expect(
       recovered.pool.query(
         "INSERT INTO tournaments (challonge_slug, name) VALUES ('synthetic-old', 'Duplicate')",

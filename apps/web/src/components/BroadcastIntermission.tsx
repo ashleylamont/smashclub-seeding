@@ -123,7 +123,7 @@ export function BroadcastIntermission({
               : 'Tournament progress'}
         </span>
       </header>
-      <main className="intermission-content" key={page.key}>
+      <div className="intermission-content" key={page.key}>
         {page.kind === 'pool' ? (
           <PoolPage page={page} closed={closed} />
         ) : page.kind === 'qualification' ? (
@@ -183,12 +183,14 @@ export function BroadcastIntermission({
               {data.matches.length} sets complete
             </p>
             <p>
-              Full event information and recorded results at {location.origin}/play/
-              {encodeURIComponent(data.plan.id)}
+              Full event information and recorded results at {location.origin}
+              {data.publicCode === undefined
+                ? `/play/${encodeURIComponent(data.plan.id)}`
+                : `/e/${data.publicCode}`}
             </p>
           </div>
         )}
-      </main>
+      </div>
       <footer className="intermission-footer">
         <p>
           {announcement ||

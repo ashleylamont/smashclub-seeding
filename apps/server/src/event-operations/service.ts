@@ -44,7 +44,7 @@ const fail = (
 ): never => {
   throw new TRPCError({ code, message });
 };
-export async function snapshot(db: Db, planId: string, privateView = false) {
+export async function readSqlSnapshotSource(db: Db, planId: string, privateView = false) {
   const [plan] = await db.select().from(eventPlans).where(eq(eventPlans.id, planId));
   if (!plan || plan.deletedAt) return fail('NOT_FOUND', 'Event not found.');
   const [live] = await db
@@ -61,6 +61,11 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
     .from(eventOperationSettings)
     .where(eq(eventOperationSettings.eventPlanId, planId));
   if (!privateView && !settings?.published) fail('NOT_FOUND', 'This event is not published.');
+  return { plan, settings };
+}
+
+export async function snapshot(db: Db, planId: string, privateView = false) {
+  const { plan, settings } = await readSqlSnapshotSource(db, planId, privateView);
   const names = new Map((await db.select().from(players)).map((p) => [p.id, publicPlayerName(p)]));
   const rows = await db
     .select()
@@ -166,6 +171,7 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
     await db.select().from(eventPrizes).where(eq(eventPrizes.eventPlanId, planId))
   ).map((p) => ({ ...p, playerName: p.playerId ? (names.get(p.playerId) ?? 'Player') : null }));
   return {
+    publicCode: plan.publicCode,
     ...(await loadStationQueues(db, planId)),
     ...({} as { operatorDispatch?: ReturnType<typeof dispatchDesk> }),
     sharedDispatch: null as SharedDispatchSummary | null,

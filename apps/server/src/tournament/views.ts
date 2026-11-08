@@ -39,7 +39,11 @@ type MatchViewFields = Pick<
   Match,
   'player1Qualifier' | 'player2Qualifier' | 'qualificationBlocks'
 > & { labelFromStructure?: true };
-export type EventSnapshot = Omit<SqlSnapshot, 'placements' | 'matches' | 'nativeBrackets'> & {
+export type EventSnapshot = Omit<
+  SqlSnapshot,
+  'placements' | 'matches' | 'nativeBrackets' | 'publicCode'
+> & {
+  publicCode?: number;
   broadcastSides?: TournamentState['broadcastSides'];
   matches: (SqlSnapshot['matches'][number] & MatchViewFields & { reviewPoolGames?: true })[];
   nativeBrackets: (SqlSnapshot['nativeBrackets'][number] & { qualifierSlots?: QualifierSlot[] })[];

@@ -4,9 +4,70 @@ import { expect, test, type Page } from '@playwright/test';
 import { mockEvent, PLAN_ID, ready } from './fixtures';
 import { bracketFixture, TEAM_ALIAS } from '../test/fixtures/brackets';
 import { chooseOption } from '../test-support/controls';
+import { rpcProcedures } from '../test-support/rpcBatch';
 import { broadcastProgressPages } from '../src/lib/broadcastProgress';
 import type { LiveMatch } from '../src/lib/eventDisplay';
 import type { PublicFinalsField } from '../src/lib/qualification';
+
+for (const theme of ['dark', 'light'] as const)
+  for (const width of [390, 1440])
+    test(`${theme} ${width}px broadcast summary uses the short code on its own origin`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.emulateMedia({ colorScheme: theme });
+      await page.addInitScript((theme) => localStorage.setItem('smashclub:theme', theme), theme);
+      const { snapshot, responses, unexpected } = await mockEvent(page, { idle: true });
+      const publicCode = 1000427;
+      const event = {
+        ...snapshot,
+        publicCode,
+        matches:
+          width === 390
+            ? []
+            : snapshot.matches.filter(({ status }) => status === 'complete').slice(0, 1),
+        nativeBrackets: [],
+        plan: { ...snapshot.plan, status: width === 390 ? 'underway' : 'complete' },
+      };
+      responses['eventOps.snapshot'] = event;
+      responses['eventOps.resolvePublicCode'] = { planId: PLAN_ID };
+      await page.goto(`/overlay/${PLAN_ID}?presentation=progress&controls=0`);
+      const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
+      await expect(progress).toBeVisible();
+      if (width !== 390) await page.keyboard.press('ArrowLeft');
+      const shortUrl = `${new URL(page.url()).origin}/e/${publicCode}`;
+      await expect(progress).toContainText(
+        `Full event information and recorded results at ${shortUrl}`,
+      );
+      await fits(page);
+      expect(
+        (await new AxeBuilder({ page }).include('.broadcast-intermission').analyze()).violations,
+      ).toEqual([]);
+      await page.screenshot({
+        path: testInfo.outputPath('broadcast-short-link.png'),
+        fullPage: true,
+      });
+
+      if (theme === 'dark' && width === 390)
+        await page.route(
+          (url) => rpcProcedures(url.href).includes('eventOps.resolvePublicCode'),
+          (route) => route.abort(),
+          { times: 1 },
+        );
+      await page.goto(`${shortUrl}?pool=upper%3A0#results`);
+      if (theme === 'dark' && width === 390) {
+        await expect(page.getByRole('alert')).toContainText('Could not open the event link.');
+        await page.getByRole('button', { name: 'Try again' }).press('Enter');
+      }
+      await expect(page).toHaveURL(
+        (url) =>
+          url.pathname === `/play/${PLAN_ID}` &&
+          url.searchParams.get('pool') === 'upper:0' &&
+          url.hash === '#results',
+      );
+      await expect(page.getByRole('heading', { name: snapshot.plan.name })).toBeVisible();
+      expect(unexpected).toEqual([]);
+    });
 
 async function fits(page: Page) {
   await ready(page);

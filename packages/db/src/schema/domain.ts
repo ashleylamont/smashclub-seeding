@@ -18,12 +18,6 @@ import {
 import { sql } from 'drizzle-orm';
 import type { StructureOptions, TournamentStructure, CompetitionFormat } from '@smashclub/shared';
 import { user } from './auth';
-export type {
-  HistoricalAdoption,
-  HistoricalAdoptionBracket,
-  HistoricalAdoptionDifferences,
-  HistoricalAdoptionRecord,
-} from './eventPlanningTypes';
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -612,6 +606,9 @@ export const eventPlans = pgTable('event_plans', {
   nativeSeedContext: jsonb('native_seed_context').$type<Record<string, unknown>>(),
   bracketMode: text('bracket_mode').$type<'challonge' | 'native'>().notNull().default('challonge'),
   id: uuid('id').primaryKey().defaultRandom(),
+  publicCode: integer('public_code')
+    .generatedAlwaysAsIdentity({ minValue: 1_000_000, startWith: 1_000_000, maxValue: 99_999_999 })
+    .unique(),
   name: text('name').notNull(),
   eventDate: timestamp('event_date', { withTimezone: true }).notNull(),
   /** Actual imported results supersede this plan; original planning tables remain intact. */

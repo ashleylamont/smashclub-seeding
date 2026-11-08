@@ -14,6 +14,7 @@ type Match = {
   poolIndex: number | null;
 };
 type Snapshot = {
+  publicCode: number;
   matches: Match[];
   nativeBrackets: { complete: boolean; winnerId: string | null }[];
   plan: { status: string; bracketMode: string };
@@ -319,6 +320,15 @@ test('native event progresses from pools through reviewed finals to public club 
     fullPage: true,
   });
   await page.setViewportSize({ width: 1440, height: 900 });
+  const sealed = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
+  expect(sealed.plan.status).toBe('complete');
+  expect(sealed.publicCode).toBe(snapshot.publicCode);
+  expect(String(sealed.publicCode)).toMatch(/^[1-9]\d{6,7}$/);
+  await page.goto(`/e/${sealed.publicCode}#results`);
+  await expect(page).toHaveURL(
+    (url) => url.pathname === `/play/${planId}` && url.hash === '#results',
+  );
+  await expect(page.getByRole('heading', { name: 'Recorded results' })).toBeVisible();
   await page.goto('/admin/tournaments');
   const resultRow = page.getByRole('row').filter({ hasText: `${name} Upper Main` });
   await expect(resultRow).toContainText('Saved in Nemesis');

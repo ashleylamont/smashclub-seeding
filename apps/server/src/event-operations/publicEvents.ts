@@ -1,5 +1,9 @@
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
-import { eventOperationSettings, eventPlans, type Db } from '@smashclub/db';
+import { TRPCError } from '@trpc/server';
+import { eventOperationSettings, eventPlans, nativeLiveHandoffs, type Db } from '@smashclub/db';
+import type { TrpcContext } from '../trpc/trpc';
+import { nativeEvent } from '../tournament/api';
+import { readSqlSnapshotSource } from './service';
 
 /** Public event discovery contains no roster drafts, operator accounts or guest credentials. */
 export async function publicEventNights(db: Db) {
@@ -26,4 +30,28 @@ export async function publicEventNights(db: Db) {
     eventDate: event.eventDate.toISOString(),
     drawPaused: false,
   }));
+}
+
+export async function resolvePublicEventCode(ctx: TrpcContext, code: number) {
+  const unavailable = () => new TRPCError({ code: 'NOT_FOUND', message: 'Event not found.' });
+  const [plan] = await ctx.db
+    .select({ id: eventPlans.id, handoff: nativeLiveHandoffs.eventPlanId })
+    .from(eventPlans)
+    .leftJoin(nativeLiveHandoffs, eq(nativeLiveHandoffs.eventPlanId, eventPlans.id))
+    .where(and(eq(eventPlans.publicCode, code), isNull(eventPlans.deletedAt)));
+  if (!plan) throw unavailable();
+  try {
+    // Guessable codes must check SQL publication before a canonical read can hand off ownership.
+    if (plan.handoff) {
+      const api = await nativeEvent(ctx, plan.id);
+      if (!api) throw unavailable();
+      await api.publishedState();
+    } else {
+      await readSqlSnapshotSource(ctx.db, plan.id);
+    }
+  } catch (error) {
+    if (error instanceof TRPCError && error.code === 'NOT_FOUND') throw unavailable();
+    throw error;
+  }
+  return { planId: plan.id };
 }

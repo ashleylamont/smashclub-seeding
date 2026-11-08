@@ -251,7 +251,13 @@ test('independent OBS and player views follow native play, confirmed results and
 
     const hub = await publicContext.newPage();
     await hub.setViewportSize({ width: 390, height: 844 });
-    await hub.goto(`/play/${planId}?player=${next.player1Id}`);
+    const publicCode = snapshot.publicCode;
+    expect(String(publicCode)).toMatch(/^[1-9]\d{6,7}$/);
+    await hub.goto(`/e/${publicCode}?player=${next.player1Id}`);
+    await expect(hub).toHaveURL(
+      (url) =>
+        url.pathname === `/play/${planId}` && url.searchParams.get('player') === next.player1Id,
+    );
     const hubCard = hub.locator('article.ops-match').filter({ hasText: next.label });
     await expect(hubCard).toContainText('Playing now · Stage');
 
@@ -293,6 +299,28 @@ test('independent OBS and player views follow native play, confirmed results and
     await expect(abandoned).toContainText('No result recorded');
     await expect(obs).toHaveURL(/presentation=auto/);
     await obs.screenshot({ path: testInfo.outputPath('real-intermission-cancelled.png') });
+    await obs.keyboard.press('ArrowLeft');
+    await expect(
+      progress.getByRole('heading', { name: 'Recorded tournament results' }),
+    ).toBeVisible();
+    const shortUrl = `${new URL(obs.url()).origin}/e/${publicCode}`;
+    await expect(progress).toContainText(
+      `Full event information and recorded results at ${shortUrl}`,
+    );
+    await obs.screenshot({ path: testInfo.outputPath('real-intermission-short-link-1920.png') });
+    await hub.goto(`${shortUrl}#results`);
+    await expect(hub).toHaveURL(
+      (url) => url.pathname === `/play/${planId}` && url.hash === '#results',
+    );
+    await expect(results.getByRole('heading', { name: 'Recorded results' })).toBeVisible();
+    for (const path of ['/e/99999999', '/e/not-a-code']) {
+      await hub.goto(path);
+      await expect(hub.getByRole('alert')).toContainText(
+        'This event is unavailable or has not been published.',
+      );
+      await expect(hub).toHaveURL((url) => url.pathname === path);
+      await expect(hub.getByRole('button', { name: 'Try again' })).toHaveCount(0);
+    }
   } finally {
     await publicContext.close();
   }
