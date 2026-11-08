@@ -47,7 +47,7 @@ export function PoolDrawControls({
         )}
         {blocker && <p>{blocker.message}</p>}
         {calls.length > 0 && (
-          <ul className="ops-pause-calls">
+          <ul className="ops-call-links">
             {calls.map((match) => {
               const pairing = matchPresentation(match).title;
               return (

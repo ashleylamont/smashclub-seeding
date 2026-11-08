@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { InMemoryStore } from '@rotorsoft/act';
+import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { eq, inArray } from 'drizzle-orm';
 import {
+  eventOperators,
   eventPlans,
   nativeResultPublications,
   players,
@@ -23,6 +25,7 @@ import { loadSinglesHistory } from '../src/recompute/inputs';
 import { captureBaseline } from '../src/tournament/domain';
 import { publishNativeResult } from '../src/tournament/publication';
 import { attendancePreview } from '../src/tournament/attendance';
+import type { SessionUser } from '../src/auth';
 
 describe('native format lifecycle through shipped APIs', () => {
   let db: Db, close: () => Promise<void>, runtime: NativeRuntime;
@@ -35,15 +38,33 @@ describe('native format lifecycle through shipped APIs', () => {
     await runtime.shutdown();
     await close();
   });
-  const caller = () =>
-    appRouter.createCaller({
-      db,
-      user: nativeAdmin,
-      nativeRuntime: runtime,
-      env: loadEnv({ DATABASE_URL: 'pglite://memory', NODE_ENV: 'test' }),
-      challonge: new ChallongeClient({}),
-      recomputeTrigger: new RecomputeTrigger(db),
+  const context = (actor: SessionUser | null) => ({
+    db,
+    user: actor,
+    nativeRuntime: runtime,
+    env: loadEnv({ DATABASE_URL: 'pglite://memory', NODE_ENV: 'test' }),
+    challonge: new ChallongeClient({}),
+    recomputeTrigger: new RecomputeTrigger(db),
+  });
+  const caller = (actor: SessionUser | null = nativeAdmin) =>
+    appRouter.createCaller(context(actor));
+  async function rpc(path: string, input: object, actor: SessionUser | null) {
+    const response = await fetchRequestHandler({
+      endpoint: '/trpc',
+      router: appRouter,
+      req: new Request(`http://localhost/trpc/${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(input),
+      }),
+      createContext: () => context(actor),
     });
+    const body = (await response.json()) as {
+      error?: { message: string; data: Record<string, unknown> };
+      result?: { data: { reportId: string } };
+    };
+    return { status: response.status, body };
+  }
   async function draft(
     count: number,
     structure: TournamentStructure,
@@ -272,6 +293,148 @@ describe('native format lifecycle through shipped APIs', () => {
         final.matches.filter((m) => m.outcome === 'played').length,
       );
       expect(await runtime.replay(planId)).toEqual(final);
+    },
+  );
+
+  it.each(['score', 'approval'] as const)(
+    'returns scoped recovery for a blocked feeder %s and retries after the call returns',
+    async (entry) => {
+      const planId = await draft(4, 'single_elimination');
+      await caller().eventOps.settings({
+        planId,
+        published: true,
+        playerReports: true,
+        scoreReportingMode: 'approve_unless_disputed',
+      });
+      let state = await runtime.state(planId);
+      const command = (input: Parameters<NativeRuntime['command']>[3]) =>
+        caller().eventOps.live.command({ planId, requestId: crypto.randomUUID(), command: input });
+      await command({
+        kind: 'configureDispatch',
+        capacity: 2,
+        reservedStationIds: [],
+        expectedResourceRevision: state.settings.resourceRevision,
+      });
+      for (const match of state.matches.filter((m) => m.round === 1))
+        await caller().eventOps.reportScore({
+          matchId: match.id,
+          expectedRevision: match.revision,
+          requestId: crypto.randomUUID(),
+          score1: 2,
+          score2: 0,
+          outcome: 'played',
+        });
+      state = await runtime.state(planId);
+      const final = state.matches.find((m) => m.round === 2)!;
+      const feeder = state.matches.find((m) => m.id === final.parent1Id)!;
+      await command({
+        kind: 'dispatch',
+        matchId: final.id,
+        stationId: null,
+        expectedRevision: final.revision,
+        expectedResourceRevision: state.settings.resourceRevision,
+      });
+      const input = {
+        matchId: feeder.id,
+        expectedRevision: feeder.revision,
+        requestId: 'retry-feeder-correction',
+        score1: 0,
+        score2: 2,
+        outcome: 'played',
+      } as const;
+      const assigned = {
+        id: crypto.randomUUID(),
+        name: 'Assigned organiser',
+        email: `${crypto.randomUUID()}@example.test`,
+        role: 'user',
+      } as const;
+      await db.insert(user).values(assigned);
+      await db.insert(eventOperators).values({ eventPlanId: planId, userId: assigned.id });
+      await caller().eventOps.guests.configure({ planId, enabled: true, showOnOverlay: false });
+      const invitation = await caller().eventOps.guests.invitation({ planId });
+      const pass = await caller(null).eventOps.guests.redeem({ planId, token: invitation!.token });
+      const guestInput = { ...input, ...pass, planId, requestId: 'guest-feeder-correction' };
+      const guestReport = await rpc('eventOps.guests.submit', guestInput, null);
+      expect(guestReport).toMatchObject({
+        status: 200,
+        body: { result: { data: { status: 'pending' } } },
+      });
+      const staleGuest = await rpc(
+        'eventOps.guests.submit',
+        {
+          ...guestInput,
+          expectedRevision: feeder.revision + 1,
+          requestId: 'stale-guest-correction',
+        },
+        null,
+      );
+      expect(staleGuest.status).toBe(409);
+      expect(staleGuest.body.error!.data).not.toHaveProperty('returnUntakenCallMatchIds');
+      const report = { reportId: guestReport.body.result!.data.reportId, approve: true };
+      const attendee = { ...assigned, id: crypto.randomUUID() };
+      const denied = await rpc('eventOps.reviewReport', report, attendee);
+      expect(denied.status).toBe(403);
+      expect(denied.body.error!.data).not.toHaveProperty('returnUntakenCallMatchIds');
+      const staleAttendee = await rpc(
+        'eventOps.reportScore',
+        { ...input, expectedRevision: feeder.revision + 1 },
+        attendee,
+      );
+      expect(staleAttendee.status).toBe(409);
+      expect(staleAttendee.body.error!.data).not.toHaveProperty('returnUntakenCallMatchIds');
+      const staleOperator = await rpc(
+        'eventOps.reportScore',
+        { ...input, expectedRevision: feeder.revision + 1 },
+        nativeAdmin,
+      );
+      expect(staleOperator.status).toBe(409);
+      expect(staleOperator.body.error!.data).not.toHaveProperty('returnUntakenCallMatchIds');
+      const before = await runtime.state(planId);
+      const attempt = () =>
+        entry === 'score'
+          ? rpc('eventOps.reportScore', input, nativeAdmin)
+          : rpc('eventOps.reviewReport', report, assigned);
+      expect(await attempt()).toMatchObject({
+        status: 409,
+        body: { error: { data: { returnUntakenCallMatchIds: [final.id] } } },
+      });
+      expect(await runtime.state(planId)).toEqual(before);
+      await command({
+        kind: 'matchControl',
+        matchId: final.id,
+        stationId: null,
+        status: 'ready',
+        reason: null,
+        expectedRevision: final.revision,
+        expectedResourceRevision: before.settings.resourceRevision,
+      });
+      expect((await attempt()).status).toBe(200);
+      const corrected = await runtime.state(planId);
+      const correctedFinal = corrected.matches.find((m) => m.id === final.id)!;
+      expect(correctedFinal.player1Id).toBe(feeder.player2Id);
+      expect(await runtime.replay(planId)).toEqual(corrected);
+      await command({
+        kind: 'dispatch',
+        matchId: correctedFinal.id,
+        stationId: null,
+        callOnly: false,
+        expectedRevision: correctedFinal.revision,
+        expectedResourceRevision: corrected.settings.resourceRevision,
+      });
+      const actualPlay = await rpc(
+        'eventOps.reportScore',
+        {
+          ...input,
+          expectedRevision: corrected.matches.find((m) => m.id === feeder.id)!.revision,
+          requestId: 'feeder-after-start',
+          score1: 2,
+          score2: 0,
+        },
+        nativeAdmin,
+      );
+      expect(actualPlay.status).toBe(409);
+      expect(actualPlay.body.error!.message).toMatch(/downstream actual play/);
+      expect(actualPlay.body.error!.data).not.toHaveProperty('returnUntakenCallMatchIds');
     },
   );
 

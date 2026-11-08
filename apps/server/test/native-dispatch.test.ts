@@ -1,7 +1,8 @@
 import { finalsToken } from '../src/tournament/operations';
 import { reviewFinalsReset } from '../src/tournament/finalsPreview';
 import { attendancePreview } from '../src/tournament/attendance';
-import { buildEliminationTree } from '@smashclub/tournament-formats';
+import { buildDoubleEliminationTree, buildEliminationTree } from '@smashclub/tournament-formats';
+import { UntakenFeederCallsConflict } from '../src/tournament/facts';
 import { instantiateElimination } from '../src/tournament/structureAdapter';
 import { describe, expect, it } from 'vitest';
 import { captureBaseline, decide, reduceDecision, stableId } from '../src/tournament/domain';
@@ -369,6 +370,67 @@ describe('shared native dispatch', () => {
         score2: 0,
       }),
     ).toThrow(/downstream actual play/);
+  });
+
+  it('prioritizes actual play over an untaken call on another feeder path', () => {
+    const baseline = pureBaseline();
+    baseline.version = 2;
+    baseline.competitionFormat = 'singles';
+    baseline.structure = 'double_elimination';
+    baseline.entrants = baseline.entrants.slice(0, 4);
+    baseline.pools = [];
+    const bracketId = stableId('correction-fork');
+    baseline.brackets = [
+      {
+        id: bracketId,
+        division: 'upper',
+        stage: 'main',
+        entrantIds: baseline.entrants.map((e) => e.playerId),
+      },
+    ];
+    baseline.matches = instantiateElimination(
+      buildDoubleEliminationTree(
+        bracketId,
+        baseline.entrants.map((e) => ({ kind: 'entrant', entrantId: e.playerId })),
+      ),
+      bracketId,
+      'upper',
+      'main',
+    );
+    let state = setup(captureBaseline(baseline), 2);
+    for (const match of state.matches.filter((m) => m.round === 1))
+      state = apply(state, {
+        kind: 'score',
+        matchId: match.id,
+        expectedRevision: match.revision,
+        score1: 2,
+        score2: 0,
+        outcome: 'played',
+      });
+    const feeder = state.matches.find((m) => m.round === 1)!;
+    const descendants = state.matches.filter(
+      (m) => m.parent1Id === feeder.id || m.parent2Id === feeder.id,
+    );
+    expect(descendants).toHaveLength(2);
+    const [untaken, started] = descendants;
+    state = call(state, untaken!.id);
+    state = call(state, started!.id);
+    const correction: TournamentCommand = {
+      kind: 'score',
+      matchId: feeder.id,
+      expectedRevision: feeder.revision,
+      score1: 0,
+      score2: 2,
+      outcome: 'played',
+    };
+    expect(() => apply(state, correction)).toThrow(UntakenFeederCallsConflict);
+    state = apply(state, {
+      kind: 'beginPlay',
+      matchId: started!.id,
+      expectedRevision: state.matches.find((m) => m.id === started!.id)!.revision,
+      expectedResourceRevision: state.settings.resourceRevision,
+    });
+    expect(() => apply(state, correction)).toThrow(/downstream actual play/);
   });
 
   it('requires explicit call return before no-show removal, queue reset or draw pause', () => {

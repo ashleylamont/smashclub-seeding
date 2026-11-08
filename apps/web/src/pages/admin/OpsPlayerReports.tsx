@@ -1,15 +1,20 @@
+import { useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { trpc } from '../../lib/trpc';
+import { returnUntakenCallMatchIds } from '../../lib/eventErrors';
+import { ScoreCallRecovery, type ScoreCallDesk } from './ScoreCallRecovery';
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 type Action = (work: () => Promise<unknown>, message?: string) => Promise<void>;
 export function PlayerReports({
   data,
   disabled,
   act,
+  callDesk,
 }: {
   data: Overview;
   disabled: boolean;
   act: Action;
+  callDesk: ScoreCallDesk;
 }) {
   return (
     <section className="card" id="score-submissions">
@@ -18,11 +23,12 @@ export function PlayerReports({
         Review pending scores and disagreements. A conflicting report does not replace the recorded
         result until a TO accepts the correction.
       </p>
-      <ReportRows data={data} disabled={disabled} act={act} />
+      <ReportRows data={data} disabled={disabled} act={act} callDesk={callDesk} />
     </section>
   );
 }
-function ReportRows({ data, disabled, act }: { data: Overview; disabled: boolean; act: Action }) {
+function ReportRows({ data, disabled, act, callDesk }: Parameters<typeof PlayerReports>[0]) {
+  const [callConflict, setCallConflict] = useState<{ reportId: string; matchIds: string[] }>();
   const reports = data.reports
     .filter((report) => report.status === 'pending')
     .sort((a, b) => Number(b.isDispute) - Number(a.isDispute));
@@ -62,16 +68,27 @@ function ReportRows({ data, disabled, act }: { data: Overview; disabled: boolean
                   ? ' · stale: match has changed'
                   : ''}
               </p>
+              {callConflict?.reportId === report.id &&
+                match?.revision === report.expectedRevision && (
+                  <ScoreCallRecovery matchIds={callConflict.matchIds} desk={callDesk} />
+                )}
             </div>
             <Button
               size="small"
               type="submit"
               disabled={disabled || match?.revision !== report.expectedRevision}
               onClick={() =>
-                void act(
-                  () => trpc.eventOps.reviewReport.mutate({ reportId: report.id, approve: true }),
-                  'Player score approved',
-                )
+                void act(async () => {
+                  try {
+                    await trpc.eventOps.reviewReport.mutate({ reportId: report.id, approve: true });
+                  } catch (cause) {
+                    setCallConflict({
+                      reportId: report.id,
+                      matchIds: returnUntakenCallMatchIds(cause),
+                    });
+                    throw cause;
+                  }
+                }, 'Player score approved')
               }
             >
               {report.isDispute ? 'Use submitted result' : 'Approve'}
