@@ -1,3 +1,4 @@
+import { canCustomizeResultGraphic, resultGraphicScope } from './resultGraphicAccess';
 import { previewDoublesSubstitution, applyDoublesSubstitution } from './doublesSubstitutionRouter';
 import { previewLateDoublesPair, applyLateDoublesPair } from './lateDoublesPairRouter';
 import type { previewRestoration } from '../tournament/restoration';
@@ -69,6 +70,9 @@ const planInput = z.object({
 });
 export const eventOpsRouter = router({
   live: nativeLiveRouter,
+  canCustomizeResultGraphic: authedProcedure
+    .input(resultGraphicScope)
+    .query(({ ctx, input }) => canCustomizeResultGraphic(ctx.db, ctx.user, input)),
   publicEvents: publicProcedure.query(({ ctx }) =>
     nativePublicEvents(ctx, () => publicEventNights(ctx.db)),
   ),

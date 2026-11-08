@@ -61,6 +61,7 @@ export function PlayerHubBoard({
         (!player || board.ownPools.has(`${place.division}:${place.poolIndex}`)),
     ),
     data.entrants,
+    data.plan.structure,
   );
   const sections = {
     pools: (
@@ -223,13 +224,21 @@ export function PlayerHubBoard({
                   <h3>{pool.title}</h3>
                   <ol className="event-pool-ranking">
                     {pool.results.map((result) => (
-                      <li key={result.alias}>
+                      <li key={result.entryKey}>
                         <span>{result.place}</span> {result.alias}
                       </li>
                     ))}
                   </ol>
                   <ResultGraphic
                     title={`${data.plan.name} · ${pool.title}`}
+                    context={{
+                      eventName: data.plan.name,
+                      eventDate: data.plan.eventDate,
+                      format: data.plan.competitionFormat ?? 'singles',
+                      scopeLabel: pool.title,
+                      kind: 'pool',
+                      source: { planId: data.plan.id },
+                    }}
                     results={pool.results}
                   />
                 </article>

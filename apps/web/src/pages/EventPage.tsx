@@ -24,6 +24,13 @@ function EventOverview({ data }: { data: EventOverviewData }) {
   const open = data.structure && data.structure !== 'dual_division';
   const doubles = data.competitionFormat === 'doubles';
   const roundRobin = data.structure === 'round_robin';
+  const graphicEvent = {
+    eventName: data.name,
+    eventDate: data.date,
+    format: data.competitionFormat ?? 'singles',
+  } as const;
+  const divisionLabel = (division: 'upper' | 'lower') =>
+    open ? 'Open' : division === 'upper' ? 'Upper' : 'Lower';
   return (
     <div>
       <div className="page-header event-header">
@@ -57,7 +64,7 @@ function EventOverview({ data }: { data: EventOverviewData }) {
         .filter((division) => division.players.length > 0)
         .map((division) => (
           <section className="section" key={division.division}>
-            <h2>{open ? 'Open' : division.division === 'upper' ? 'Upper' : 'Lower'} standings</h2>
+            <h2>{divisionLabel(division.division)} standings</h2>
             <p className="muted">
               Finishing places are within this division. Ties and missing placements remain visible.
               W-L excludes byes and setup results.
@@ -69,12 +76,24 @@ function EventOverview({ data }: { data: EventOverviewData }) {
                 .filter((bracket) => bracket.division === division.division)
                 .every((bracket) => bracket.isComplete) && (
                 <ResultGraphic
-                  title={`${data.name} · ${open ? 'Open' : division.division === 'upper' ? 'Upper' : 'Lower'}`}
+                  title={`${data.name} · ${divisionLabel(division.division)}`}
+                  context={{
+                    ...graphicEvent,
+                    kind: 'division',
+                    scopeLabel: `${divisionLabel(division.division)} standings`,
+                    source: {
+                      tournamentIds: data.brackets
+                        .filter((bracket) => bracket.division === division.division)
+                        .map((bracket) => bracket.tournamentId),
+                    },
+                  }}
                   results={division.players
                     .filter((player) => player.place !== null && !player.provisional)
                     .map((player) => ({
                       place: player.place!,
                       alias: player.name,
+                      entryKey: player.entryKey,
+                      graphic: player.graphic,
                       detail: `${player.wins} wins · ${player.losses} losses`,
                     }))}
                 />
@@ -105,9 +124,23 @@ function EventOverview({ data }: { data: EventOverviewData }) {
               {bracket.isComplete && (
                 <ResultGraphic
                   title={bracket.name}
+                  context={{
+                    ...graphicEvent,
+                    kind: 'bracket',
+                    scopeLabel:
+                      bracket.division && bracket.stage
+                        ? `${divisionLabel(bracket.division)} ${bracket.stage === 'consolation' ? 'consolation' : roundRobin ? 'round robin' : 'championship'}`
+                        : bracket.name,
+                    source: { tournamentIds: [bracket.tournamentId] },
+                  }}
                   results={bracket.players
                     .filter((player) => player.place !== null && !player.provisional)
-                    .map((player) => ({ place: player.place!, alias: player.name }))}
+                    .map((player) => ({
+                      place: player.place!,
+                      alias: player.name,
+                      entryKey: player.entryKey,
+                      graphic: player.graphic,
+                    }))}
                 />
               )}
               {bracket.roleSource === 'unclassified' ? (

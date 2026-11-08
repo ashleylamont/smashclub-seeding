@@ -12,14 +12,17 @@ describe('downloadable public results', () => {
     expect(svg).toContain('A &amp; B');
     expect(escapeSvg("a'b")).toBe('a&apos;b');
   });
-  it('preserves tied places and limits the graphic to eight results', () => {
-    const svg = resultsSvg(
-      'Finals',
-      Array.from({ length: 9 }, (_, i) => ({ place: i < 2 ? 1 : i, alias: `Entrant ${i}` })),
-    );
+  it('includes all tied eighth places and preserves full pool standings', () => {
+    const rows = [1, 2, 3, 3, 5, 6, 7, 8, 8, 10].map((place, i) => ({
+      place,
+      alias: `Entrant ${i}`,
+    }));
+    const svg = resultsSvg('Finals', rows);
     expect(svg).toContain('Entrant 7');
-    expect(svg).not.toContain('Entrant 8');
-    expect(svg.match(/font-size="32">1<\/text>/g)).toHaveLength(2);
+    expect(svg).toContain('Entrant 8');
+    expect(svg).not.toContain('Entrant 9');
+    expect(svg.match(/font-size="32">8<\/text>/g)).toHaveLength(2);
+    expect(resultsSvg('Pool', rows, 'pool')).toContain('Entrant 9');
   });
 });
 
@@ -38,7 +41,18 @@ it('exports confirmed placements separately by pool and only resolves public ali
   expect(pools).toHaveLength(2);
   expect(pools[0]).toEqual({
     title: 'Upper · Pool A',
-    results: [{ place: 2, alias: 'Alias A', detail: 'Confirmed pool placement' }],
+    results: [{ place: 2, alias: 'Alias A', entryKey: 'a', detail: 'Confirmed pool placement' }],
   });
   expect(pools[1]!.title).toBe('Upper · Pool B');
+});
+
+it('names confirmed pools by actual structure and continues lettering after Z', () => {
+  const entries = [{ id: 'a', name: 'Alias A' }];
+  const open = [{ division: 'upper', poolIndex: 26, playerId: 'a', place: 1 }];
+  expect(confirmedPoolGraphics(open, entries, 'pools_finals')[0]?.title).toBe('Open · Pool AA');
+  expect(confirmedPoolGraphics(open, entries, 'dual_division')[0]?.title).toBe('Upper · Pool AA');
+  const roundRobin = [{ ...open[0]!, poolIndex: 0 }];
+  expect(confirmedPoolGraphics(roundRobin, entries, 'round_robin')[0]?.title).toBe(
+    'Open round robin',
+  );
 });

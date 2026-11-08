@@ -1,31 +1,70 @@
 import { players, type Db } from '@smashclub/db';
 import { publicParticipantName, publicPlayerName } from '@smashclub/shared';
-import { historicalPlayerIds } from '../identity/playerIds';
+import { playerIdResolver } from '../identity/playerIds';
+import { charactersByPlayer } from '../players/characters';
 
-export async function publicParticipantNames(
+export interface ResultGraphicIdentity {
+  teamName: string | null;
+  members: { name: string; character: string | null }[];
+}
+
+type Participant = {
+  id: string;
+  playerId?: string | null;
+  memberPlayerIds?: string[] | null;
+  teamName?: string | null;
+  cleanedName: string;
+  canonicalName: string | null;
+  displayName: string | null;
+};
+
+export async function publicParticipantNames(db: Db, rows: readonly Participant[]) {
+  const presentation = await publicParticipantPresentation(db, rows);
+  return new Map([...presentation].map(([id, { name }]) => [id, name]));
+}
+
+export async function publicParticipantPresentation(
   db: Db,
-  rows: readonly {
-    id: string;
-    memberPlayerIds?: string[] | null;
-    teamName?: string | null;
-    cleanedName: string;
-    canonicalName: string | null;
-    displayName: string | null;
-  }[],
+  rows: readonly Participant[],
+  includeGraphics = false,
 ) {
-  const profiles = new Map((await db.select().from(players)).map((p) => [p.id, p]));
-  const canonical = await historicalPlayerIds(db);
+  const profiles = await db.select().from(players);
+  const names = new Map(profiles.map((p) => [p.id, publicPlayerName(p)]));
+  const canonical = playerIdResolver(profiles);
+  const characters = includeGraphics
+    ? await charactersByPlayer(db, [
+        ...new Set(
+          rows
+            .flatMap((p) =>
+              p.memberPlayerIds?.length ? p.memberPlayerIds : p.playerId ? [p.playerId] : [],
+            )
+            .map(canonical),
+        ),
+      ])
+    : undefined;
   return new Map(
-    rows.map((p) => [
-      p.id,
-      p.memberPlayerIds?.length
-        ? `${p.teamName ? `${p.teamName} (` : ''}${p.memberPlayerIds
-            .map((id) => {
-              const player = profiles.get(canonical(id));
-              return player ? publicPlayerName(player) : 'Player';
-            })
+    rows.map((p) => {
+      const team = p.memberPlayerIds?.length ? p.memberPlayerIds.map(canonical) : undefined;
+      const name = team
+        ? `${p.teamName ? `${p.teamName} (` : ''}${team
+            .map((id) => names.get(id) ?? 'Player')
             .join(' / ')}${p.teamName ? ')' : ''}`
-        : publicParticipantName(p),
-    ]),
+        : publicParticipantName(p);
+      const graphic: ResultGraphicIdentity | undefined = characters && {
+        teamName: team ? (p.teamName ?? null) : null,
+        members: team
+          ? team.map((id) => ({
+              name: names.get(id) ?? 'Player',
+              character: characters.get(id)?.[0] ?? null,
+            }))
+          : [
+              {
+                name,
+                character: (p.playerId && characters.get(canonical(p.playerId))?.[0]) || null,
+              },
+            ],
+      };
+      return [p.id, { name, graphic }];
+    }),
   );
 }

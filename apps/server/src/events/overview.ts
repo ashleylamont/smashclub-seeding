@@ -1,4 +1,4 @@
-import { publicParticipantNames } from './participantNames';
+import { publicParticipantPresentation, type ResultGraphicIdentity } from './participantNames';
 import { asc, eq, inArray, isNotNull } from 'drizzle-orm';
 import {
   eventPlanBrackets,
@@ -26,6 +26,7 @@ export interface EventOverviewPlayer {
   playerId: string | null;
   entryKey: string;
   name: string;
+  graphic?: ResultGraphicIdentity;
   place: number | null;
   placeSource: PlaceSource;
   inFinalStage: boolean;
@@ -147,7 +148,7 @@ export async function loadEventOverview(db: Db, slug: string): Promise<EventOver
     .leftJoin(players, eq(tournamentParticipants.playerId, players.id))
     .leftJoin(companies, eq(players.companyId, companies.id))
     .where(inArray(tournamentParticipants.tournamentId, ids));
-  const participantNames = await publicParticipantNames(db, participants);
+  const participantPresentation = await publicParticipantPresentation(db, participants, true);
   const setRows = await db.select().from(sets).where(inArray(sets.tournamentId, ids));
   const warnings: string[] =
     anchorPlanIds.size > 1
@@ -278,7 +279,7 @@ export async function loadEventOverview(db: Db, slug: string): Promise<EventOver
             : p.playerId
               ? `player:${p.playerId}`
               : `participant:${p.id}`,
-          name: participantNames.get(p.id)!,
+          ...participantPresentation.get(p.id)!,
           place: places.get(p.id) ?? null,
           placeSource: places.has(p.id) ? placeSource : ('unavailable' as const),
           inFinalStage: finalIds.has(p.id),
