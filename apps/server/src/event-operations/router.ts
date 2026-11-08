@@ -1,4 +1,5 @@
 import type { previewRestoration } from '../tournament/restoration';
+import type { EventSnapshot } from '../tournament/views';
 import { memberIds } from '../tournament/entrants';
 import { extendedNativePlan } from '../event-planner/nativePlanner';
 import { nativeEvent, nativeEntity, reportViews } from '../tournament/api';
@@ -278,10 +279,12 @@ export const eventOpsRouter = router({
       )
       .orderBy(desc(eventScoreReports.createdAt));
   }),
-  snapshot: publicProcedure.input(planInput).query(async ({ ctx, input }) => {
-    const api = await nativeEvent(ctx, input.planId, false, input);
-    return api ? api.snapshot() : snapshot(ctx.db, input.planId);
-  }),
+  snapshot: publicProcedure
+    .input(planInput)
+    .query(async ({ ctx, input }): Promise<EventSnapshot> => {
+      const api = await nativeEvent(ctx, input.planId, false, input);
+      return api ? api.snapshot() : snapshot(ctx.db, input.planId);
+    }),
   overview: authedProcedure.input(planInput).query(async ({ ctx, input }) => {
     await requireOperator(ctx.db, input.planId, ctx.user);
     const api = await nativeEvent(ctx, input.planId, false, input);

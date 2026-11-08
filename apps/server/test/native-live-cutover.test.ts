@@ -101,6 +101,28 @@ describe('standard native lifecycle uses Act without adoption', () => {
     const planId = await seedNativeDraft(db);
     const operator = caller();
     await operator.eventOps.softLockPools({ planId, confirm: true });
+    const publicSnapshot = () => caller(null).eventOps.snapshot({ planId });
+    const before = await publicSnapshot();
+    expect(before.nativeBrackets).toEqual([]);
+    expect(before.pendingFinals?.map(({ division, stage }) => `${division}:${stage}`)).toEqual([
+      'upper:main',
+      'upper:consolation',
+      'lower:main',
+      'lower:consolation',
+    ]);
+    for (const field of before.pendingFinals!) {
+      expect(field.slots).toHaveLength(4);
+      for (const slot of field.slots) {
+        expect(slot).toEqual({
+          division: field.division,
+          poolId: expect.any(String),
+          poolIndex: expect.any(Number),
+          place: expect.any(Number),
+          status: 'pending',
+          entrantId: null,
+        });
+      }
+    }
     const initial = await runtime.state(planId);
     for (const match of initial.matches.filter((item) => item.division === 'upper')) {
       const pool = initial.pools.find((item) => item.id === match.poolId)!;
@@ -115,6 +137,14 @@ describe('standard native lifecycle uses Act without adoption', () => {
         outcome: 'played',
       });
     }
+    const ready = (await publicSnapshot()).pendingFinals!;
+    const upper = ready.filter((field) => field.division === 'upper');
+    expect(upper).toHaveLength(2);
+    expect(upper.flatMap((field) => field.slots)).toEqual(
+      Array.from({ length: 8 }, () =>
+        expect.objectContaining({ status: 'resolved', entrantId: expect.any(String) }),
+      ),
+    );
     const policy = { planId, seedPolicy: 'pool_place_whr_v1' as const };
     const preview = await operator.eventOps.native.preview(policy);
     expect(preview.allowed).toBe(true);
@@ -126,6 +156,16 @@ describe('standard native lifecycle uses Act without adoption', () => {
     const created = await operator.eventOps.native.generate(input);
     const committed = await runtime.state(planId);
     expect(created.created).toBe(2);
+    const mixed = await publicSnapshot();
+    expect(mixed.pendingFinals).toEqual(ready.filter((field) => field.division === 'lower'));
+    expect(mixed.nativeBrackets).toHaveLength(2);
+    for (const bracket of mixed.nativeBrackets) {
+      const previewField = upper.find((field) => field.stage === bracket.stage)!;
+      expect(bracket.entrantIds).toEqual(
+        expect.arrayContaining(previewField.slots.map(({ entrantId }) => entrantId)),
+      );
+    }
+
     expect(await operator.eventOps.native.generate(input)).toEqual(created);
     expect(await runtime.state(planId)).toEqual(committed);
     await expect(

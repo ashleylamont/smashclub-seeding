@@ -62,10 +62,8 @@ type StrengthStage = {
   ready: { slots: QualifierSlot[]; seeding: StrengthSeeding } | null;
 };
 
-/** Each stage can commit once its own field is exact. Other pools can still run. */
-export function planStrengthFinals(state: TournamentState) {
+function strengthFinalsFields(state: TournamentState) {
   const { structure, structureOptions } = state.baseline!;
-  const strengths = frozenStrengths(state);
   const divisions =
     structure && structure !== 'dual_division'
       ? (['upper'] as const)
@@ -73,7 +71,7 @@ export function planStrengthFinals(state: TournamentState) {
   const rosters = new Map(
     state.pools.map((pool) => [pool.id, eligibleQualifierRoster(state, pool)]),
   );
-  const stages = divisions.flatMap((division) => {
+  const fields = divisions.map((division) => {
     const places = state.pools
       .filter((pool) => pool.division === division)
       .flatMap((pool) => {
@@ -94,17 +92,48 @@ export function planStrengthFinals(state: TournamentState) {
           }),
         );
       });
-    const planned = finalsRoles(structure, structureOptions).flatMap<StrengthStage>((stage) => {
+    const stages = finalsRoles(structure, structureOptions).flatMap((stage) => {
       if (
         state.brackets.some((bracket) => bracket.division === division && bracket.stage === stage)
       )
         return [];
-      const selected = selectFormatFinalists(structure, places, stage, structureOptions);
+      return [
+        { stage, selected: selectFormatFinalists(structure, places, stage, structureOptions) },
+      ];
+    });
+    return { division, stages };
+  });
+  return { fields, rosters };
+}
+
+/** Public qualifier sources without candidates, eligibility rosters or hypothetical seeds. */
+export function pendingStrengthFinals(state: TournamentState) {
+  if (state.lifecycle !== 'locked' || !canUseStrengthSeeding(state)) return [];
+  return strengthFinalsFields(state).fields.flatMap(({ division, stages }) =>
+    stages
+      .filter(({ selected }) => selected.length)
+      .map(({ stage, selected }) => ({
+        division,
+        stage,
+        slots: selected.map(({ source }) => ({
+          ...sourceDescriptor(source),
+          entrantId: source.entrantId,
+        })),
+      })),
+  );
+}
+
+/** Each stage can commit once its own field is exact. Other pools can still run. */
+export function planStrengthFinals(state: TournamentState) {
+  const { fields, rosters } = strengthFinalsFields(state);
+  const strengths = frozenStrengths(state);
+  const stages = fields.flatMap(({ division, stages }) => {
+    const planned = stages.map<StrengthStage>(({ stage, selected }) => {
       const waiting = selected
         .map(({ source }) => source)
         .filter((source) => source.status !== 'resolved')
         .map(sourceDescriptor);
-      if (waiting.length) return [{ division, stage, waiting, ready: null }];
+      if (waiting.length) return { division, stage, waiting, ready: null };
       const field = selected.map(({ playerId, poolIndex, place }) => ({
         playerId,
         poolIndex,
@@ -138,17 +167,15 @@ export function planStrengthFinals(state: TournamentState) {
           combined: combined ? comparison(combined) : noEntrants,
         },
       };
-      return [
-        {
-          division,
-          stage,
-          waiting,
-          ready: {
-            slots: seeding.seeds.map(({ playerId }) => byPlayer.get(playerId)!),
-            seeding,
-          },
+      return {
+        division,
+        stage,
+        waiting,
+        ready: {
+          slots: seeding.seeds.map(({ playerId }) => byPlayer.get(playerId)!),
+          seeding,
         },
-      ];
+      };
     });
     // An empty stage cannot freeze eligibility while every playable stage is waiting.
     const canFreeze =

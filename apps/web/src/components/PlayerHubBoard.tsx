@@ -1,5 +1,6 @@
 import '../styles/event-board.css';
 import { EventPools, EventBrackets } from './EventNightBoard';
+import { PendingFinals } from './PendingFinals';
 import { MatchCard } from './EventMatchCard';
 import { ResultGraphic } from './ResultGraphic';
 import { confirmedPoolGraphics } from '../lib/resultGraphic';
@@ -37,6 +38,16 @@ export function PlayerHubBoard({
       linked={board.linked}
     />
   );
+  const pendingFinals = (data.pendingFinals ?? []).flatMap((field) => {
+    if (!player) return [field];
+    if (board.assignedBrackets.length) return [];
+    const slots = field.slots.filter((slot) =>
+      slot.entrantId
+        ? board.identities.has(slot.entrantId)
+        : board.ownPools.has(`${slot.division}:${slot.poolIndex}`),
+    );
+    return slots.length ? [{ ...field, slots }] : [];
+  });
   const poolResults = confirmedPoolGraphics(
     data.placements.filter(
       (place) =>
@@ -119,18 +130,23 @@ export function PlayerHubBoard({
         ) : (
           bracketView
         )}
-        {!board.nativeBrackets.length && !board.linked.some((item) => item.slug) && (
-          <>
-            <h2>Brackets</h2>
-            <p>
-              {data.plan.structure === 'round_robin'
-                ? 'This event uses pool standings to decide the result; there is no finals bracket.'
-                : player
-                  ? 'Brackets will appear here for this player when the organisers publish the draw. Pool results do not imply a bracket seed.'
-                  : 'Brackets will appear here when the organisers publish the draw. Pool results do not imply a bracket seed.'}
-            </p>
-          </>
+        {pendingFinals.length > 0 && (
+          <PendingFinals fields={pendingFinals} entrants={data.entrants} />
         )}
+        {!pendingFinals.length &&
+          !board.nativeBrackets.length &&
+          !board.linked.some((item) => item.slug) && (
+            <>
+              <h2>Brackets</h2>
+              <p>
+                {data.plan.structure === 'round_robin'
+                  ? 'This event uses pool standings to decide the result; there is no finals bracket.'
+                  : player
+                    ? 'Brackets will appear here for this player when the organisers publish the draw. Pool results do not imply a bracket seed.'
+                    : 'Brackets will appear here when the organisers publish the draw. Pool results do not imply a bracket seed.'}
+              </p>
+            </>
+          )}
       </section>
     ),
     results: (
