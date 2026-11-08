@@ -49,6 +49,25 @@ jobs:
       - uses: ./.github/actions/setup-node-pnpm
       - run: pnpm format:check
 
+  changeset:
+    name: Changeset
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-node-pnpm
+        if: github.event_name == 'pull_request'
+      - name: Check release note
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/check-changeset.mjs "$BASE_SHA"
+      - name: Confirm release-note gate applies to pull requests
+        if: github.event_name != 'pull_request'
+        run: echo 'Changeset validation runs on pull requests.'
+
   test:
     name: Unit tests
     runs-on: ubuntu-latest
@@ -299,6 +318,7 @@ jobs:
         typecheck,
         lint,
         format,
+        changeset,
         test,
         e2e,
         e2e-report,
