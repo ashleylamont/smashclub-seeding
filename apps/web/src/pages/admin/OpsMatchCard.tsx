@@ -1,4 +1,5 @@
 import { matchParticipantName, matchPresentation } from '../../lib/matchPresentation';
+import { linkedFinalCaption } from '../../lib/linkedFinalCaption';
 import { useConfirmation } from '../../lib/confirmation';
 import { Select, SelectItem } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
@@ -34,10 +35,11 @@ export function MatchCard({
   const untakenCall = active && (liveOwned ? match.started === false : match.called);
   const hasLiveScore = typeof match.liveScore1 === 'number' || typeof match.liveScore2 === 'number';
   const label = matchLabel(match, canStart, untakenCall);
+  const caption = linkedFinalCaption(match)?.text ?? match.label;
   return (
     <article className={`card ops-match ops-match-${match.status}`}>
       <div className="ops-match-meta">
-        <span>{match.label}</span>
+        <span>{caption}</span>
         <span className="chip">{label}</span>
       </div>
       <MatchContestants match={match} />
@@ -69,7 +71,7 @@ export function MatchCard({
       <label className="ops-station">
         Station
         <Select
-          aria-label={`Station for ${match.label}`}
+          aria-label={`Station for ${caption}`}
           value={match.stationId ?? ''}
           disabled={disabled || match.status === 'complete'}
           onValueChange={(selectedValue) =>
