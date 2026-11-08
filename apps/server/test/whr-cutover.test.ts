@@ -20,7 +20,7 @@ import {
 } from '@smashclub/db';
 import { defaultRatingSettings, ratingSettingsSchema } from '@smashclub/shared';
 import { getRatingSettings } from '../src/settings';
-import { latestRecomputeId, runRecompute } from '../src/recompute/recompute';
+import { latestRecomputeId, needsRatingRecompute, runRecompute } from '../src/recompute/recompute';
 
 const migrationsFolder = fileURLToPath(new URL('../../../packages/db/migrations', import.meta.url));
 
@@ -147,12 +147,18 @@ it.each(['glicko2', 'whr'])(
       expect(saved.rating).not.toHaveProperty('activeModel');
       expect(saved.rating).not.toHaveProperty('tau');
       expect(await latestRecomputeId(db)).toBeNull();
+      expect(await needsRatingRecompute(db)).toBe(true);
       expect((await db.select().from(sets))[0]).toEqual(match);
       expect((await db.select().from(recomputes))[0]).toEqual(oldRun);
       expect((await db.select().from(ratingEvents))[0]).toEqual(event);
 
       const run = await runRecompute(db);
       expect(run.model).toBe('whr');
+      expect(await latestRecomputeId(db)).toBe(run.recomputeId);
+      expect(await needsRatingRecompute(db)).toBe(false);
+      // A deployment with existing WHR data keeps serving it during the history backfill.
+      await db.update(recomputes).set({ stats: {} }).where(eq(recomputes.id, run.recomputeId));
+      expect(await needsRatingRecompute(db)).toBe(true);
       expect(await latestRecomputeId(db)).toBe(run.recomputeId);
       expect(
         await db.select().from(playerRatings).where(eq(playerRatings.recomputeId, run.recomputeId)),

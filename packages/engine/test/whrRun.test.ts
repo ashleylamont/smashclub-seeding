@@ -468,3 +468,41 @@ describe('rookie-island calibration', () => {
     expect(run.leaderboard.find((r) => r.playerId === 'regular')!.isProvisional).toBe(false);
   });
 });
+
+it('separates changes during an absence, results on return and the attendance penalty', () => {
+  const tournaments = [
+    tournament('debut', '2026-07-01'),
+    tournament('missed', '2026-08-01'),
+    tournament('return', '2026-09-01'),
+  ];
+  const sets = [
+    makeSet('debut', 'returning', 'bridge', 1),
+    makeSet('missed', 'bridge', 'newcomer', 1),
+    makeSet('return', 'returning', 'newcomer', 1),
+  ];
+  const input = { tournaments, settings: { ...settings, activityGraceEvents: 0 } };
+  const prefix = runWhrModel({ ...input, sets: sets.slice(0, -1) });
+  const full = runWhrModel({ ...input, sets });
+  const nights = full.nightRatings.filter(({ playerId }) => playerId === 'returning');
+  const [debut, missed, returned] = nights;
+  expect(nights.map(({ played }) => played)).toEqual([true, false, true]);
+  expect(missed!.preRating).toBeCloseTo(debut!.postRating, 8);
+  expect(missed!.postRating).not.toBeCloseTo(missed!.preRating, 3);
+  expect(missed!.prePenalty).toBe(0);
+  expect(missed!.postPenalty).toBeGreaterThan(0);
+  expect(returned!.preRating).toBeCloseTo(missed!.postRating, 8);
+  expect(returned!.prePenalty).toBe(missed!.postPenalty);
+  expect(returned!.postPenalty).toBe(0);
+  expect(missed!.postRating).toBeCloseTo(
+    prefix.leaderboard.find(({ playerId }) => playerId === 'returning')!.rating,
+    8,
+  );
+  expect(returned!.postRating).toBeCloseTo(
+    full.leaderboard.find(({ playerId }) => playerId === 'returning')!.rating,
+    8,
+  );
+  expect(full.events.filter(({ playerId }) => playerId === 'returning')).toHaveLength(2);
+  expect(full.nightRatings.find(({ playerId }) => playerId === 'newcomer')?.eventKey).toBe(
+    '2026-08-01',
+  );
+});

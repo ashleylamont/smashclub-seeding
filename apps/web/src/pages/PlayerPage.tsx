@@ -15,6 +15,7 @@ import {
 import { trpc } from '../lib/trpc';
 import type { PlayerData, PlayerEventView } from '../lib/apiTypes';
 import { CharacterIcons } from '../components/CharacterIcons';
+import { PlayerRatingNight } from '../components/PlayerRatingNight';
 import { InfoTip } from '../components/InfoTip';
 import { formatDate, tierClass } from '../lib/format';
 import './PlayerPage.css';
@@ -46,26 +47,39 @@ export function PlayerPage() {
 }
 
 function PlayerProfile({ data }: { data: PlayerData }) {
-  const { player, rating } = data;
+  const { player, rating, nights } = data;
   // The server types these rows loosely (Record<string, unknown>); see PlayerEventView.
   const events = data.events as unknown as PlayerEventView[];
   const chartData = useMemo(() => {
-    const nights = new Map<string, PlayerEventView>();
+    const attendedNights = new Map<string, PlayerEventView>();
     for (const event of events)
-      nights.set(event.tournamentDate?.slice(0, 10) ?? event.tournamentId, event);
-    return [...nights.values()].map((event, idx) => ({
+      attendedNights.set(event.tournamentDate?.slice(0, 10) ?? event.tournamentId, event);
+    const points = nights?.length
+      ? nights.map((night) => ({
+          ...night,
+          date: `${night.eventKey}T12:00:00Z`,
+          tournament: attendedNights.get(night.eventKey)?.tournamentName ?? 'Club night',
+        }))
+      : [...attendedNights.values()].map((event) => ({
+          ...event,
+          date: event.tournamentDate,
+          tournament: event.tournamentName,
+          played: true,
+        }));
+    return points.map((point, idx) => ({
       idx: idx + 1,
-      tournament: event.tournamentName,
-      date: formatDate(event.tournamentDate),
-      rating: event.postRating,
-      band: [event.postRating - 2 * event.postRd, event.postRating + 2 * event.postRd] as [
+      tournament: point.tournament,
+      date: formatDate(point.date),
+      played: point.played,
+      rating: point.postRating,
+      band: [point.postRating - 2 * point.postRd, point.postRating + 2 * point.postRd] as [
         number,
         number,
       ],
-      rd: event.postRd,
-      revised: event.revisedRating,
+      rd: point.postRd,
+      revised: point.revisedRating,
     }));
-  }, [events]);
+  }, [events, nights]);
 
   /**
    * Only draw the hindsight series when it actually disagrees somewhere —
@@ -235,24 +249,24 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         <div className="stat">
           <dt>Skill estimate</dt>
           <dd className="num">{rating ? rating.skillRating.toFixed(0) : '—'}</dd>
-          <p className="stat-detail">
+          <dd className="stat-detail">
             Best guess at how good you are, from results alone. The rating above is this number less
             any penalty for missed club nights — with none owing, the two are the same.
-          </p>
+          </dd>
         </div>
         <div className="stat">
           <dt>Record</dt>
           <dd className="num">
             {rating ? `${rating.wins}–${rating.losses}` : `${wins}–${matches.length - wins}`}
           </dd>
-          <p className="stat-detail">
+          <dd className="stat-detail">
             {winRate != null ? `${winRate}% of sets won` : 'No sets played'}
-          </p>
+          </dd>
         </div>
         <div className="stat">
           <dt>Events</dt>
           <dd className="num">{rating ? rating.eventCount : '—'}</dd>
-          <p className="stat-detail">
+          <dd className="stat-detail">
             {rating
               ? [
                   // Only worth stating when it differs — i.e. when they entered
@@ -265,20 +279,20 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                   .filter(Boolean)
                   .join(' · ')
               : ''}
-          </p>
+          </dd>
         </div>
         <div className="stat">
           <dt>Confidence</dt>
           <dd className="num">{rating ? `${(rating.sampleConfidence * 100).toFixed(0)}%` : '—'}</dd>
-          <p className="stat-detail">{confidenceExplainer}</p>
+          <dd className="stat-detail">{confidenceExplainer}</dd>
         </div>
         {activity && (
           <div className={`stat${activity.penalised ? ' stat-penalised' : ''}`}>
             <dt>Attendance</dt>
             <dd className="num">{activity.headline}</dd>
-            <p className="stat-detail">
+            <dd className="stat-detail">
               {activity.standing} {activity.now} {activity.next}
-            </p>
+            </dd>
           </div>
         )}
       </dl>
@@ -291,11 +305,16 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         </p>
       )}
 
+      {nights?.length > 0 && <PlayerRatingNight key={player.id} nights={nights} />}
+
       {chartData.length > 0 && (
         <section className="section rating-chart">
           <h3>Rating history</h3>
           <p className="muted chart-caption">
-            WHR estimate after each club night. The shaded band is ±2 standard deviations.
+            {nights?.length
+              ? 'WHR estimates include club nights the player missed.'
+              : 'WHR estimate after each played club night.'}{' '}
+            The shaded band is ±2 standard deviations.
             {showRevised && ' The dashed line shows the current fit’s revised historical estimate.'}
           </p>
           <ResponsiveContainer width="100%" height={320}>
@@ -321,7 +340,10 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                   return (
                     <div className="custom-tooltip">
                       <p className="tooltip-label">{d.tournament}</p>
-                      <p>{d.date}</p>
+                      <p>
+                        {d.date}
+                        {!d.played && ' · No rated sets'}
+                      </p>
                       <p className="num">
                         {d.rating.toFixed(0)} ± {d.rd.toFixed(0)}
                       </p>
@@ -416,7 +438,12 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         {events.length === 0 ? (
           <p className="muted">No match history available for this player.</p>
         ) : (
-          <div className="match-history-scroll table-scroll">
+          <div
+            className="match-history-scroll table-scroll"
+            role="region"
+            aria-label="Match results"
+            tabIndex={0}
+          >
             <table className="match-table data-table">
               <thead>
                 <tr>

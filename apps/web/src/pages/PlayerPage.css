@@ -102,7 +102,7 @@
   margin-bottom: var(--s1);
 }
 
-.profile-stats dd {
+.profile-stats dd.num {
   margin: 0;
   font-size: var(--fs-xl);
   font-weight: 700;
@@ -110,10 +110,12 @@
   line-height: 1;
 }
 
-.stat-detail {
+.profile-stats .stat-detail {
+  font-family: var(--font-body);
+  font-weight: 400;
   color: var(--text-soft);
   font-size: var(--fs-xs);
-  margin-top: var(--s2);
+  margin: var(--s2) 0 0;
   line-height: 1.45;
 }
 
@@ -125,7 +127,7 @@
 
 /* Only the tile whose number is currently costing the player something takes
    the warning colour; being merely away is not a fault. */
-.profile-stats .stat-penalised dd {
+.profile-stats .stat-penalised dd.num {
   color: var(--warn);
 }
 
@@ -285,4 +287,33 @@
   .match-table th {
     position: static;
   }
+}
+
+.rating-night-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  margin-block-end: var(--s3);
+}
+
+.rating-night-heading h2 {
+  margin: 0;
+}
+
+.rating-night-values {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr));
+  gap: var(--s3) var(--s4);
+  margin-block: var(--s3) 0;
+}
+
+.rating-night-values dt {
+  color: var(--text-soft);
+}
+
+.rating-night-values dd {
+  margin: var(--s1) 0 0;
+  color: var(--text-h);
 }

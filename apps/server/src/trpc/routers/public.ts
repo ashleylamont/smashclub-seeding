@@ -8,12 +8,13 @@ import {
   playerRatings,
   players,
   ratingEvents,
+  ratingNights,
   recomputes,
   sets,
   tournamentParticipants,
   tournaments,
 } from '@smashclub/db';
-import { eventKeyOf } from '@smashclub/engine';
+import { eventKeyOf, type WhrNightRating } from '@smashclub/engine';
 import { isPlayedRatingResult, includesResultStage, publicPlayerName } from '@smashclub/shared';
 import { latestRecomputeId } from '../../recompute/recompute';
 import { getRatingSettings } from '../../settings';
@@ -173,6 +174,7 @@ export const publicRouter = router({
     const recomputeId = await latestRecomputeId(ctx.db);
     let ratingRow = null;
     let events: Record<string, unknown>[] = [];
+    let nights: Omit<WhrNightRating, 'playerId'>[] = [];
     if (recomputeId) {
       const [rating] = await ctx.db
         .select()
@@ -184,6 +186,23 @@ export const publicRouter = router({
           ),
         );
       ratingRow = rating ?? null;
+
+      nights = await ctx.db
+        .select({
+          eventKey: ratingNights.eventKey,
+          played: ratingNights.played,
+          preRating: ratingNights.preRating,
+          postRating: ratingNights.postRating,
+          postRd: ratingNights.postRd,
+          revisedRating: ratingNights.revisedRating,
+          prePenalty: ratingNights.prePenalty,
+          postPenalty: ratingNights.postPenalty,
+        })
+        .from(ratingNights)
+        .where(
+          and(eq(ratingNights.recomputeId, recomputeId), eq(ratingNights.playerId, input.playerId)),
+        )
+        .orderBy(asc(ratingNights.eventKey));
 
       const opponents = players; // alias for readability in the join below
       const eventRows = await ctx.db
@@ -247,6 +266,7 @@ export const publicRouter = router({
       },
       rating: ratingRow,
       events,
+      nights,
       model: 'whr' as const,
       ratingScope: 'night' as const,
       doublesResults: await playerDoublesHistory(ctx.db, input.playerId),

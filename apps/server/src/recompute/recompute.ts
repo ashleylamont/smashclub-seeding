@@ -1,12 +1,18 @@
 import { loadSinglesHistory } from './inputs';
 import { and, eq, sql } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
-import { playerRatings, ratingEvents, recomputes, settings as ratingConfig } from '@smashclub/db';
+import {
+  playerRatings,
+  ratingEvents,
+  ratingNights,
+  recomputes,
+  settings as ratingConfig,
+} from '@smashclub/db';
 import { calibrateLeagueBands, runWhrModel, type LeaderboardRow } from '@smashclub/engine';
 import { getRatingSettings, updateRatingSettings } from '../settings';
 
 export const ENGINE_VERSION = '2.0.0';
-const EVENT_INSERT_CHUNK = 500;
+const RATING_INSERT_CHUNK = 500;
 
 /**
  * Full rating recompute: loads every rateable set (complete, both players
@@ -94,6 +100,7 @@ async function computeRatings(
       players: leaderboard.length,
       sets: engineSets.length,
       events: ratingEventRows.length,
+      ratingNights: run.nightRatings.length,
       ...modelStats,
     };
 
@@ -111,8 +118,8 @@ async function computeRatings(
           ? version
           : await updateRatingSettings(writer, effectiveSettings);
 
-      for (let offset = 0; offset < ratingEventRows.length; offset += EVENT_INSERT_CHUNK) {
-        const chunk = ratingEventRows.slice(offset, offset + EVENT_INSERT_CHUNK);
+      for (let offset = 0; offset < ratingEventRows.length; offset += RATING_INSERT_CHUNK) {
+        const chunk = ratingEventRows.slice(offset, offset + RATING_INSERT_CHUNK);
         await writer.insert(ratingEvents).values(
           chunk.map((event) => ({
             recomputeId,
@@ -134,6 +141,11 @@ async function computeRatings(
             revisedSd: event.revisedSd ?? null,
           })),
         );
+      }
+
+      for (let offset = 0; offset < run.nightRatings.length; offset += RATING_INSERT_CHUNK) {
+        const chunk = run.nightRatings.slice(offset, offset + RATING_INSERT_CHUNK);
+        await writer.insert(ratingNights).values(chunk.map((night) => ({ ...night, recomputeId })));
       }
 
       if (leaderboard.length > 0) {
@@ -197,9 +209,9 @@ async function computeRatings(
 }
 
 /** Latest completed WHR run with current history semantics; no legacy fallback. */
-export async function latestRecomputeId(db: Db): Promise<string | null> {
+async function latestCompletedRecompute(db: Db) {
   const [row] = await db
-    .select({ id: recomputes.id })
+    .select({ id: recomputes.id, stats: recomputes.stats })
     .from(recomputes)
     .where(
       and(
@@ -210,5 +222,14 @@ export async function latestRecomputeId(db: Db): Promise<string | null> {
     )
     .orderBy(sql`${recomputes.startedAt} desc`)
     .limit(1);
-  return row?.id ?? null;
+  return row;
+}
+
+export async function latestRecomputeId(db: Db): Promise<string | null> {
+  return (await latestCompletedRecompute(db))?.id ?? null;
+}
+
+export async function needsRatingRecompute(db: Db): Promise<boolean> {
+  const stats = (await latestCompletedRecompute(db))?.stats;
+  return !stats || typeof stats !== 'object' || !('ratingNights' in stats);
 }
