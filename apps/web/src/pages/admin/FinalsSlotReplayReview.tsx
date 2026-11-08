@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { TRPCClientError } from '@trpc/client';
 import { Button } from '../../components/ui/Button';
 import { Field } from '../../components/ui/Field';
@@ -6,6 +6,7 @@ import { Notice } from '../../components/ui/Feedback';
 import { useConfirmation } from '../../lib/confirmation';
 import { qualifierLabel } from '../../lib/qualification';
 import { trpc } from '../../lib/trpc';
+import { UntakenCallRecovery, type UntakenCallDesk } from './UntakenCallRecovery';
 
 type Input = Parameters<typeof trpc.eventOps.live.previewFinalsSlotReplay.query>[0];
 type Preview = Awaited<ReturnType<typeof trpc.eventOps.live.previewFinalsSlotReplay.query>>;
@@ -13,12 +14,14 @@ type Consolation = NonNullable<Extract<Preview, { allowed: true }>['companion']>
 
 export function FinalsSlotReplayReview({
   score,
+  callDesk,
   stale,
   disabled,
   act,
   close,
 }: {
   score: Input;
+  callDesk?: UntakenCallDesk;
   stale: boolean;
   disabled: boolean;
   act: (work: () => Promise<unknown>, message?: string) => Promise<void>;
@@ -33,14 +36,33 @@ export function FinalsSlotReplayReview({
   const summary = useRef<HTMLElement>(null);
   const reviewButton = useRef<HTMLButtonElement>(null);
   const restoreReviewFocus = useRef(false);
+  const openedCall = useRef<string | null>(null);
   useEffect(() => {
     if (preview) summary.current?.focus();
   }, [preview]);
   useEffect(() => {
-    if (busy || disabled || !restoreReviewFocus.current) return;
-    restoreReviewFocus.current = false;
-    reviewButton.current?.focus();
-  }, [busy, disabled]);
+    if (busy || disabled) return;
+    if (restoreReviewFocus.current) {
+      restoreReviewFocus.current = false;
+      reviewButton.current?.focus();
+      return;
+    }
+    if (!openedCall.current || stale || !callDesk) return;
+    if (callDesk.calls.some(({ id }) => id === openedCall.current)) return;
+    openedCall.current = null;
+    if (document.activeElement === document.body) reviewButton.current?.focus();
+  }, [busy, callDesk, disabled, stale]);
+  const callIds =
+    preview && 'returnCallMatchIds' in preview ? (preview.returnCallMatchIds ?? []) : [];
+  const callsStillOpen = callDesk?.calls.some(({ id }) => callIds.includes(id));
+  const openRecoveryCall = useCallback(
+    (id: string) => {
+      openedCall.current = id;
+      callDesk?.open(id);
+    },
+    [callDesk],
+  );
+  const canOpenCall = callDesk && !disabled && !stale && !busy;
   const names = preview?.entrantNames;
   const name = (id: string | null) => (id ? (names?.[id] ?? 'Player') : 'No entrant');
   const review = async () => {
@@ -167,7 +189,24 @@ export function FinalsSlotReplayReview({
               />
             </>
           ) : (
-            <Notice tone="warning">{preview.issues.join(' ')}</Notice>
+            <>
+              {canOpenCall && callIds.length && !callsStillOpen ? (
+                <p className="muted">Refresh the finals review before continuing.</p>
+              ) : (
+                <Notice tone="warning">
+                  {canOpenCall && callsStillOpen
+                    ? 'Return this call, then refresh the finals review.'
+                    : preview.issues.join(' ')}
+                </Notice>
+              )}
+              {canOpenCall && (
+                <UntakenCallRecovery
+                  matchIds={callIds}
+                  desk={{ ...callDesk, open: openRecoveryCall }}
+                  showInstructions={false}
+                />
+              )}
+            </>
           )}
         </section>
       )}

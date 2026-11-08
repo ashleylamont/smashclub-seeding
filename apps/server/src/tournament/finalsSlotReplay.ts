@@ -20,13 +20,25 @@ type ReplayCommand = Extract<
   CommandEnvelope['command'],
   { kind: 'replayFinalsSlotV1' | 'replayFinalsRoutesV2' }
 >;
-type ReplayScore = Pick<ReplayCommand, 'matchId' | 'expectedRevision' | 'score1' | 'score2'>;
+export type ReplayScore = Pick<ReplayCommand, 'matchId' | 'expectedRevision' | 'score1' | 'score2'>;
 
-function blocked(issue: string, qualifierChanges: QualifierChange[] = []) {
-  return { preview: { allowed: false as const, issues: [issue], qualifierChanges }, plan: null };
+function blocked(
+  issue: string,
+  qualifierChanges: QualifierChange[] = [],
+  returnCallCandidate?: string,
+) {
+  return {
+    preview: { allowed: false as const, issues: [issue], qualifierChanges },
+    plan: null,
+    returnCallCandidate,
+  };
 }
 
-function reviewFinalsSlotReplay(state: TournamentState, input: ReplayScore, reviewVersion: 1 | 2) {
+export function reviewFinalsSlotReplay(
+  state: TournamentState,
+  input: ReplayScore,
+  reviewVersion: 1 | 2 = 1,
+) {
   const { matchId, expectedRevision, score1, score2 } = input;
   const source = state.matches.find(({ id }) => id === matchId);
   if (source?.revision !== expectedRevision)
@@ -81,7 +93,8 @@ function reviewFinalsSlotReplay(state: TournamentState, input: ReplayScore, revi
     reviewVersion === 2 && qualifierChanges.length > 1
       ? reciprocalRoutes(state, qualifierChanges)
       : undefined;
-  if (routes && !routes.allowed) return blocked(routes.issue, qualifierChanges);
+  if (routes && !routes.allowed)
+    return blocked(routes.issue, qualifierChanges, routes.returnCallCandidate);
   if (!routes && qualifierChanges.length !== 1)
     return blocked(
       qualifierChanges.length
@@ -233,14 +246,6 @@ function previewConsolation(
     afterEntrantId: change.afterEntrantId!,
     downstream: downstream.map(({ id, label }) => ({ id, label: labels.get(id) ?? label })),
   };
-}
-
-export function previewFinalsSlotReplay(
-  state: TournamentState,
-  input: ReplayScore,
-  reviewVersion: 1 | 2 = 1,
-) {
-  return reviewFinalsSlotReplay(state, input, reviewVersion).preview;
 }
 
 export function replayFinalsSlot(

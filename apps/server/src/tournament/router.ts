@@ -7,7 +7,7 @@ import { authedProcedure, publicProcedure, router, type TrpcContext } from '../t
 import { requireOperator } from '../event-operations/access';
 import { Command, PoolGameCorrection } from './schemas';
 import { FinalsSlotReplayScore } from './commands';
-import { previewFinalsSlotReplay } from './finalsSlotReplay';
+import { previewFinalsSlotReplay } from './finalsReplayPreview';
 import { reviewPoolGameCorrection } from './poolGameCorrection';
 import { TournamentConflict } from './domain';
 import { nativeEventHistory } from './history';
