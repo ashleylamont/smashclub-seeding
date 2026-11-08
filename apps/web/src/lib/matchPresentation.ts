@@ -18,15 +18,33 @@ type PresentedMatch = Pick<
   | 'qualificationBlocks'
 >;
 
+/** The native start fact also distinguishes calls on named stations. */
+export function isUntakenCall(
+  match: Pick<LiveMatch, 'status' | 'called'> & { started?: boolean },
+  liveOwned: boolean | undefined,
+) {
+  return (
+    match.status === 'playing' &&
+    (liveOwned && typeof match.started === 'boolean' ? !match.started : match.called === true)
+  );
+}
+
+export function recordedScoreText(
+  { score1, score2 }: Pick<LiveMatch, 'score1' | 'score2'>,
+  separator = '–',
+) {
+  if (score1 == null && score2 == null) return null;
+  return `${score1 ?? '–'}${separator}${score2 ?? '–'}`;
+}
+
 /** Native station scores remain empty until a game count has been entered. */
 export function stationScoreText(
-  { score1, score2 }: Pick<LiveMatch, 'score1' | 'score2'>,
+  match: Pick<LiveMatch, 'score1' | 'score2'>,
   liveOwned: boolean | undefined,
   separator = '–',
 ) {
-  if (liveOwned && score1 === null && score2 === null) return 'vs';
-  const missingScore = liveOwned ? '–' : 0;
-  return `${score1 ?? missingScore}${separator}${score2 ?? missingScore}`;
+  if (liveOwned) return recordedScoreText(match, separator) ?? 'vs';
+  return `${match.score1 ?? 0}${separator}${match.score2 ?? 0}`;
 }
 
 export function recordedByeWinner(match: PresentedMatch) {

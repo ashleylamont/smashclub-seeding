@@ -1,3 +1,4 @@
+import { isUntakenCall } from './matchPresentation';
 import type { trpc } from './trpc';
 
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
@@ -9,6 +10,7 @@ export type FinderData = Pick<
   | 'stations'
   | 'stationQueues'
   | 'poolSchedules'
+  | 'sharedDispatch'
   | 'withdrawals'
   | 'reports'
 >;
@@ -58,9 +60,14 @@ export function playerEventStatus(data: FinderData, playerId: string) {
     withdrawnIds.has(match.player1Id) &&
     withdrawnIds.has(match.player2Id);
   const outstanding = matches.filter((match) => match.status !== 'complete' && !noContest(match));
-  const playing = outstanding.filter((match) => match.status === 'playing');
+  const current = outstanding
+    .filter((match) => match.status === 'playing')
+    .map((match) => ({
+      match,
+      state: isUntakenCall(match, data.plan.liveOwned) ? ('called' as const) : ('playing' as const),
+    }));
   const next =
-    closed || withdrawn || playing.length
+    closed || withdrawn || current.length
       ? []
       : data.stationQueues.flatMap((queue) => {
           const match = outstanding.find(
@@ -100,7 +107,7 @@ export function playerEventStatus(data: FinderData, playerId: string) {
   return {
     matches,
     outstanding,
-    playing,
+    current,
     next,
     pools,
     pending,

@@ -117,6 +117,9 @@ test('TO finds an entrant, follows their current station call, and opens the exa
   });
   await page.getByRole('tab', { name: 'Players', exact: true }).click();
   await expect(finder).toContainText('Playing · Station 1');
+  await expect(finder.locator('.to-player-call')).toContainText(
+    `${called.player1Name} vs ${called.player2Name}`,
+  );
   await expect(finder).not.toContainText('Play next ·');
   await finder.locator('.ui-disclosure-trigger').click();
   await expect(finder.locator('.to-player-matches')).toContainText('Playing now');

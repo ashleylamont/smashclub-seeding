@@ -9,7 +9,14 @@ import {
   type FinderMatch,
 } from '../../lib/toPlayerFinder';
 import { poolTitle } from '../../lib/poolFlow';
+import { recordedScoreText } from '../../lib/matchPresentation';
+import { matchStation } from '../../lib/playerMatchView';
 import './ToPlayerFinder.css';
+
+function currentMatchLabel(state: 'called' | 'playing', closed: boolean) {
+  if (state === 'called') return closed ? 'Last recorded call' : 'Called';
+  return closed ? 'Last recorded as playing' : 'Playing';
+}
 
 export function ToPlayerFinder({
   data,
@@ -56,6 +63,11 @@ export function ToPlayerFinder({
           {!results.length && <p>No event players match that name.</p>}
           {results.slice(0, 12).map((item) => {
             const info = playerEventStatus(data, item.id);
+            const current =
+              info.current.find(({ state }) => state === 'playing') ?? info.current[0];
+            const badge = info.withdrawn
+              ? 'Withdrawn'
+              : current && currentMatchLabel(current.state, info.closed);
             return (
               <Button
                 type="submit"
@@ -68,13 +80,7 @@ export function ToPlayerFinder({
                 <span>
                   {info.pools.map((pool) => poolTitle(pool.key, data.plan.structure)).join(' · ') ||
                     'No pool matches yet'}
-                  {info.withdrawn
-                    ? ' · Withdrawn'
-                    : info.playing.length
-                      ? info.closed
-                        ? ' · Last recorded playing'
-                        : ' · Playing'
-                      : ''}
+                  {badge && ` · ${badge}`}
                 </span>
                 {results.filter((result) => result.name === item.name).length > 1 && (
                   <small>Player ID …{item.id.slice(-8)}</small>
@@ -103,19 +109,33 @@ export function ToPlayerFinder({
               Withdrawn from this event. Outstanding matches may still need a TO forfeit decision.
             </p>
           )}
-          {status.playing.map((match) => (
-            <div className="to-player-call" key={match.id}>
-              <strong>
-                {status.closed ? 'Last recorded match' : 'Playing'} ·{' '}
-                {data.stations.find((station) => station.id === match.stationId)?.name ??
-                  'No station assigned'}
-              </strong>
-              <p>
-                {match.player1Name} {match.score1 ?? 0} – {match.score2 ?? 0} {match.player2Name}
-              </p>
-              {matchLink(match, 'Open current match')}
-            </div>
-          ))}
+          {status.current.map(({ match, state }) => {
+            const location = data.sharedDispatch
+              ? matchStation(data, match).name
+              : (data.stations.find((station) => station.id === match.stationId)?.name ??
+                match.callLocation);
+            const score =
+              state === 'playing'
+                ? recordedScoreText(
+                    {
+                      score1: match.liveScore1 ?? match.score1,
+                      score2: match.liveScore2 ?? match.score2,
+                    },
+                    ' – ',
+                  )
+                : null;
+            return (
+              <div className="to-player-call" key={match.id}>
+                <strong>
+                  {currentMatchLabel(state, status.closed)} · {location ?? 'No station assigned'}
+                </strong>
+                <p>
+                  {match.player1Name} {score ?? 'vs'} {match.player2Name}
+                </p>
+                {matchLink(match, 'Open current match')}
+              </div>
+            );
+          })}
           {status.next.map(({ match, station }) => (
             <div className="to-player-call" key={match.id}>
               <strong>Play next · {station.name}</strong>
@@ -123,7 +143,7 @@ export function ToPlayerFinder({
               {matchLink(match, 'Open next match')}
             </div>
           ))}
-          {!status.closed && !status.withdrawn && !status.playing.length && !status.next.length && (
+          {!status.closed && !status.withdrawn && !status.current.length && !status.next.length && (
             <p className="to-player-alert">
               {!status.matches.length
                 ? 'No matches prepared for this entrant yet.'
@@ -173,23 +193,29 @@ export function ToPlayerFinder({
               title={<> Remaining matches and waiting reasons ({status.outstanding.length}) </>}
             >
               <ul className="to-player-matches">
-                {status.outstanding.map((match) => (
-                  <li key={match.id}>
-                    <strong>
-                      vs {match.player1Id === player.id ? match.player2Name : match.player1Name}
-                    </strong>
-                    <small>{match.label}</small>
-                    <p>
-                      {match.status === 'playing'
-                        ? status.closed
-                          ? 'Last recorded as playing'
-                          : 'Playing now'
-                        : match.availability.reasons.map((reason) => reason.message).join(' ') ||
-                          'Players are available; follow the station queue for the next call.'}
-                    </p>
-                    {matchLink(match, 'Open match')}
-                  </li>
-                ))}
+                {status.outstanding.map((match) => {
+                  const current = status.current.find(
+                    (assignment) => assignment.match.id === match.id,
+                  );
+                  const message = current
+                    ? status.closed
+                      ? currentMatchLabel(current.state, true)
+                      : current.state === 'called'
+                        ? 'Called · waiting to start'
+                        : 'Playing now'
+                    : match.availability.reasons.map((reason) => reason.message).join(' ') ||
+                      'Players are available; follow the station queue for the next call.';
+                  return (
+                    <li key={match.id}>
+                      <strong>
+                        vs {match.player1Id === player.id ? match.player2Name : match.player1Name}
+                      </strong>
+                      <small>{match.label}</small>
+                      <p>{message}</p>
+                      {matchLink(match, 'Open match')}
+                    </li>
+                  );
+                })}
               </ul>
             </Disclosure>
           )}

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   matchParticipantName,
   matchPresentation,
+  recordedScoreText,
   stationScoreText,
   nextMeaningfulMatch,
 } from '../src/lib/matchPresentation';
@@ -180,4 +181,10 @@ it('distinguishes an unset native station score from a saved zero and keeps link
   expect(stationScoreText({ score1: 0, score2: 0 }, true)).toBe('0–0');
   expect(stationScoreText({ score1: 2, score2: 1 }, true, ' – ')).toBe('2 – 1');
   expect(stationScoreText(unscored, undefined, ' – ')).toBe('0 – 0');
+});
+
+it('recorded game counts distinguish a missing side from explicit zero', () => {
+  expect(recordedScoreText({ score1: null, score2: null })).toBeNull();
+  expect(recordedScoreText({ score1: 0, score2: null }, ' – ')).toBe('0 – –');
+  expect(recordedScoreText({ score1: 0, score2: 0 })).toBe('0–0');
 });

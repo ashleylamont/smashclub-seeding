@@ -23,11 +23,11 @@ for (const theme of ['dark', 'light'] as const)
       const initialProgress = match.progressRevision;
       const alias = 'Alexandria with a long tournament alias from Western Sydney';
       Object.assign(match, {
-        label: 'Pool A · Round 1',
         player1Name: alias,
         status: 'playing',
         started: false,
         called: true,
+        callLocation: 'Window setup',
         stationId: null,
         score1: null,
         score2: null,
@@ -35,6 +35,8 @@ for (const theme of ['dark', 'light'] as const)
         liveScore2: null,
         resourceRevision: 12,
       });
+      const participant = overview.entrants.find((entrant) => entrant.id === match.player1Id)!;
+      participant.name = alias;
       overview.reports = [];
       const desk: Desk = {
         mode: 'shared',
@@ -111,7 +113,37 @@ for (const theme of ['dark', 'light'] as const)
       const card = page.locator('article.ops-match:visible').filter({ hasText: alias });
       const begin = active.getByRole('button', { name: 'Mark playing' });
       await expect(active.getByRole('button', { name: 'Return untaken call' })).toBeEnabled();
-      await active.getByRole('button', { name: 'Score / details' }).press('Enter');
+      const playersTab = page.getByRole('tab', { name: 'Players', exact: true });
+      const finder = page.getByRole('region', { name: 'Find a player', exact: true });
+      const current = finder.locator('.to-player-call');
+      const row = finder.locator('.to-player-matches li').filter({
+        has: page.getByText(match.label, { exact: true }),
+      });
+      const openCurrent = () =>
+        current.getByRole('button', { name: 'Open current match' }).press('Enter');
+      await playersTab.press('Enter');
+      await finder.getByLabel('Player name', { exact: true }).fill(alias);
+      const result = finder.getByRole('button', { name: new RegExp(alias) });
+      await expect(result).toContainText(' · Called');
+      await page.keyboard.press('Tab');
+      await expect(result).toBeFocused();
+      await result.press('Enter');
+      await expect(current).toContainText('Called · Window setup');
+      await expect(current).toContainText(`${alias} vs ${match.player2Name}`);
+      await finder
+        .getByRole('button', { name: /^Remaining matches and waiting reasons/ })
+        .press('Enter');
+      await expect(row).toContainText('Called · waiting to start');
+      await capture(page, testInfo.outputPath('finder-called.png'));
+      expect(
+        (
+          await new AxeBuilder({ page })
+            .include('.ops-page')
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+            .analyze()
+        ).violations,
+      ).toEqual([]);
+      await openCurrent();
       await expect(card.getByText('Called', { exact: true })).toBeVisible();
       await expect(card.getByText('Waiting for play to start')).toBeVisible();
       await expect(card.getByText(/Live game score/)).toHaveCount(0);
@@ -140,6 +172,12 @@ for (const theme of ['dark', 'light'] as const)
         },
       ]);
       await capture(page, testInfo.outputPath('started.png'));
+      await playersTab.press('Enter');
+      await expect(current).toContainText('Playing · Window setup');
+      await expect(current).toContainText(`${alias} vs ${match.player2Name}`);
+      await expect(row).toContainText('Playing now');
+      await capture(page, testInfo.outputPath('finder-started.png'));
+      await openCurrent();
 
       await card.getByRole('button', { name: 'Update live score' }).press('Enter');
       await card.getByRole('button', { name: 'Save live score' }).press('Enter');
@@ -155,6 +193,10 @@ for (const theme of ['dark', 'light'] as const)
         },
       ]);
       await capture(page, testInfo.outputPath('provisional.png'));
+      await playersTab.press('Enter');
+      await expect(current).toContainText(`${alias} 0 – 0 ${match.player2Name}`);
+      await capture(page, testInfo.outputPath('finder-provisional.png'));
+      await openCurrent();
 
       await card.getByRole('button', { name: 'Finish match' }).press('Enter');
       await card.getByRole('spinbutton').first().fill('2');
@@ -176,6 +218,8 @@ for (const theme of ['dark', 'light'] as const)
         }),
       ]);
       await capture(page, testInfo.outputPath('recorded.png'));
+      await playersTab.press('Enter');
+      await expect(finder.getByRole('button', { name: 'Open current match' })).toHaveCount(0);
       expect(unexpected).toEqual([]);
     });
 
@@ -190,6 +234,16 @@ test('native station details respect the started fact independently of the share
   await expect(card.getByText('Called', { exact: true })).toBeVisible();
   await expect(card.getByText('Waiting for play to start')).toBeVisible();
   await expect(card.getByRole('button', { name: 'Return to queue' })).toBeEnabled();
+  await page.getByRole('tab', { name: 'Players', exact: true }).press('Enter');
+  const finder = page.getByRole('region', { name: 'Find a player', exact: true });
+  const playerName = overview.entrants.find(({ id }) => id === match.player1Id)!.name;
+  await finder.getByLabel('Player name').fill(playerName);
+  await finder
+    .locator('.to-player-result')
+    .filter({ has: page.getByText(playerName, { exact: true }) })
+    .press('Enter');
+  const station = overview.stations.find(({ id }) => id === match.stationId)!;
+  await expect(finder.locator('.to-player-call')).toContainText(`Called · ${station.name}`);
   expect(unexpected).toEqual([]);
 });
 
@@ -217,3 +271,49 @@ test('Broadcast details distinguish a named station call from started play', asy
   await capture(page, testInfo.outputPath('broadcast-started.png'));
   expect(unexpected).toEqual([]);
 });
+
+for (const native of [true, false]) {
+  test(`closed finder describes the last ${native ? 'native call' : 'linked assignment'} from recorded facts`, async ({
+    page,
+  }) => {
+    const { overview, responses, unexpected } = await mockEvent(page, { role: 'admin' });
+    Object.assign(overview.plan, {
+      status: 'cancelled',
+      bracketMode: native ? 'native' : 'challonge',
+      liveOwned: native,
+    });
+    responses['eventOps.delivery.status'] = { configured: false };
+    const match = overview.matches.find((row) => row.status === 'playing')!;
+    Object.assign(match, {
+      called: native || undefined,
+      started: native ? false : undefined,
+      score1: native ? null : 0,
+      score2: native ? null : 2,
+      liveScore1: null,
+      liveScore2: null,
+    });
+    const station = overview.stations.find(({ id }) => id === match.stationId)!;
+    await page.goto(`/operate/${PLAN_ID}?view=players`);
+    const finder = page.getByRole('region', { name: 'Find a player', exact: true });
+    const state = native ? 'Last recorded call' : 'Last recorded as playing';
+    const playerName = overview.entrants.find(({ id }) => id === match.player1Id)!.name;
+    await finder.getByLabel('Player name').fill(playerName);
+    const result = finder
+      .locator('.to-player-result')
+      .filter({ has: page.getByText(playerName, { exact: true }) });
+    await expect(result).toContainText(state);
+    await result.press('Enter');
+    await expect(finder).toContainText('Event closed · these are the last recorded assignments.');
+    const current = finder.locator('.to-player-call');
+    await expect(current).toContainText(`${state} · ${station.name}`);
+    await expect(current).toContainText(
+      `${match.player1Name} ${native ? 'vs' : '0 – 2'} ${match.player2Name}`,
+    );
+    await finder
+      .getByRole('button', { name: /^Remaining matches and waiting reasons/ })
+      .press('Enter');
+    await expect(finder.locator('.to-player-matches')).toContainText(state);
+    await expect(finder.getByRole('button', { name: 'Open next match' })).toHaveCount(0);
+    expect(unexpected).toEqual([]);
+  });
+}

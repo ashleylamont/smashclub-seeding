@@ -81,7 +81,7 @@ describe('TO player finder', () => {
       { division: 'upper', poolIndex: 0, active: false, stationIds: ['one'] },
     ] as FinderData['poolSchedules'];
     const status = playerEventStatus(view, 'alex');
-    expect(status.playing[0]?.id).toBe('current');
+    expect(status.current[0]).toMatchObject({ match: { id: 'current' }, state: 'playing' });
     expect(status.next).toEqual([]);
     expect(status.pools[0]).toMatchObject({
       held: true,
@@ -91,6 +91,24 @@ describe('TO player finder', () => {
     view.matches.pop();
     view.withdrawals = [{ playerId: 'alex' }];
     expect(playerEventStatus(view, 'alex')).toMatchObject({ withdrawn: true, next: [] });
+  });
+  it('distinguishes native calls from starts and preserves the old status fallback', () => {
+    const view = data([
+      match('untaken', 'bea', { status: 'playing', started: false, called: false }),
+      match('started', 'chris', { status: 'playing', started: true, called: true }),
+      match('ready', 'dana', { started: false, called: true }),
+      match('legacy', 'elliot', { status: 'playing' }),
+    ]);
+    view.plan.liveOwned = true;
+    const summary = playerEventStatus(view, 'alex');
+    expect(summary.current.map(({ match: current, state }) => [current.id, state])).toEqual([
+      ['untaken', 'called'],
+      ['started', 'playing'],
+      ['legacy', 'playing'],
+    ]);
+    expect(summary.next).toEqual([]);
+    view.plan.liveOwned = false;
+    expect(playerEventStatus(view, 'bea').current[0]?.state).toBe('playing');
   });
   it('does not call players in closed events even when stored projections still have a next match', () => {
     const view = data([match('next', 'bea')]);
@@ -118,7 +136,7 @@ describe('TO player finder', () => {
     expect(playerEventStatus(view, 'new')).toMatchObject({
       matches: [],
       outstanding: [],
-      playing: [],
+      current: [],
       next: [],
     });
   });
