@@ -2,6 +2,18 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.10.1
+
+### Patch Changes
+
+- 9 November 2026 · **Fix** · **Fix:** Show organisers why an active match blocks snoozing a player. Jump to the exact Return untaken call control when the pairing is still waiting to start. [#335](https://github.com/ashleylamont/smashclub-seeding/pull/335) · [build 7f38278](https://github.com/ashleylamont/smashclub-seeding/commit/7f3827872efcfc51c5fcb4dedc518f85beb2e8cb)
+- 9 November 2026 · **Fix** · Make attendance restoration previews easier to scan by separating qualification from match consequences and showing blockers before a restoration can be reviewed. [#325](https://github.com/ashleylamont/smashclub-seeding/pull/325) · [build d547ef4](https://github.com/ashleylamont/smashclub-seeding/commit/d547ef4b914b6659385724c917861d906f6324aa)
+- 9 November 2026 · **Fix** · Use consistent linked finals names in the organiser’s match queue and bracket backup sheets while keeping the provider’s match identifier. [#323](https://github.com/ashleylamont/smashclub-seeding/pull/323) · [build 3fce44e](https://github.com/ashleylamont/smashclub-seeding/commit/3fce44ebd3ea96732c557b402830f8eba68ccfc6)
+- 9 November 2026 · **Fix** · Show structural set names on archived native results when the stored bracket and published set links verify the match position. [#333](https://github.com/ashleylamont/smashclub-seeding/pull/333) · [build f875fc6](https://github.com/ashleylamont/smashclub-seeding/commit/f875fc6a546a8b4af9e7e6c9d1ed494edb60e237)
+- 9 November 2026 · **Fix** · Show which sets advance by forfeit when an entrant withdraws, and which need the organiser to record the forfeit. The preview distinguishes calls awaiting a start from sets already in progress. [#329](https://github.com/ashleylamont/smashclub-seeding/pull/329) · [build 59f13bd](https://github.com/ashleylamont/smashclub-seeding/commit/59f13bd43820f92154ff7fd96ac2336623558da6)
+- 9 November 2026 · **Maintenance** · Allow two ordinary main builds to verify concurrently while retaining full verification for every commit and a single image publication job at a time. [#332](https://github.com/ashleylamont/smashclub-seeding/pull/332) · [build 4fb82ff](https://github.com/ashleylamont/smashclub-seeding/commit/4fb82ffbb6c576b2c8c796b34403dcdf36d758f0)
+- 9 November 2026 · **Maintenance** · Wait for the published tournament link before the finals replay browser test checks archived results. [#327](https://github.com/ashleylamont/smashclub-seeding/pull/327) · [build e04d2e8](https://github.com/ashleylamont/smashclub-seeding/commit/e04d2e82788da8740dd019060557843b5cc5c83a)
+
 ## 0.10.0
 
 ### Minor Changes
