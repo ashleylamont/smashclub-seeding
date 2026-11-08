@@ -5,7 +5,12 @@ import {
   redirect,
   lazyRouteComponent,
 } from '@tanstack/react-router';
+import { TRPCClientError } from '@trpc/client';
 import { Layout } from './components/Layout';
+import { Button } from './components/ui/Button';
+import { eventUnavailable } from './lib/eventErrors';
+import { LoadingState, Notice } from './components/ui/Feedback';
+import { trpc } from './lib/trpc';
 import { LeaderboardPage } from './pages/LeaderboardPage';
 import { PlayerPage } from './pages/PlayerPage';
 import { TournamentsPage } from './pages/TournamentsPage';
@@ -211,6 +216,34 @@ const eventPlayRoute = createRoute({
   path: '/play/$planId',
   component: PlayerEventPage,
 });
+const eventShortLinkRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/e/$code',
+  beforeLoad: async ({ params, location }) => {
+    const { planId } = await trpc.eventOps.resolvePublicCode.query({ code: params.code });
+    throw redirect({
+      to: '/play/$planId',
+      params: { planId },
+      search: () => location.search,
+      hash: location.hash,
+      replace: true,
+    });
+  },
+  pendingComponent: () => <LoadingState>Opening event…</LoadingState>,
+  errorComponent: ({ error }) => {
+    if (
+      eventUnavailable(error) ||
+      (error instanceof TRPCClientError && error.data?.code === 'BAD_REQUEST')
+    )
+      return <Notice tone="danger">This event is unavailable or has not been published.</Notice>;
+    return (
+      <>
+        <Notice tone="danger">Could not open the event link.</Notice>
+        <Button onClick={() => window.location.reload()}>Try again</Button>
+      </>
+    );
+  },
+});
 const eventOperateRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/operate/$planId',
@@ -250,6 +283,7 @@ const routeTree = rootRoute.addChildren([
   eventLiveRoute,
   eventOverlayRoute,
   eventPlayRoute,
+  eventShortLinkRoute,
   eventOperateRoute,
   eventGuestRoute,
   indexRoute,

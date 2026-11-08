@@ -4,7 +4,7 @@ import { memberIds } from '../tournament/entrants';
 import { extendedNativePlan } from '../event-planner/nativePlanner';
 import { nativeEvent, nativeEntity, reportViews } from '../tournament/api';
 import { nativeOverview, nativePublicEvents, nativeRoster } from '../tournament/queries';
-import { publicEventNights } from './publicEvents';
+import { publicEventNights, resolvePublicEventCode } from './publicEvents';
 import { nativeLiveRouter } from '../tournament/router';
 import { startPoolMatch } from './selfService';
 import { nativeBracketRouter } from './nativeRouter';
@@ -280,6 +280,9 @@ export const eventOpsRouter = router({
       )
       .orderBy(desc(eventScoreReports.createdAt));
   }),
+  resolvePublicCode: publicProcedure
+    .input(z.object({ code: z.string().regex(/^[1-9]\d{6,7}$/) }))
+    .query(({ ctx, input }) => resolvePublicEventCode(ctx, Number(input.code))),
   snapshot: publicProcedure
     .input(planInput)
     .query(async ({ ctx, input }): Promise<EventSnapshot> => {

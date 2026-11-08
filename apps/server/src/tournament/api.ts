@@ -108,7 +108,7 @@ export async function nativeEvent(
       ),
     );
   await ctx.nativeRuntime.transfer(planId);
-  return new NativeEventApi(ctx, ctx.nativeRuntime, planId, intent);
+  return new NativeEventApi(ctx, ctx.nativeRuntime, planId, plan.publicCode, intent);
 }
 function hasEntity(
   state: TournamentState,
@@ -192,6 +192,7 @@ export class NativeEventApi {
     readonly ctx: TrpcContext,
     readonly runtime: NativeRuntime,
     readonly planId: string,
+    readonly publicCode: number,
     readonly intent?: { requestId?: string; [key: string]: unknown },
   ) {}
   async state() {
@@ -221,11 +222,15 @@ export class NativeEventApi {
         : undefined,
     );
   }
-  async snapshot(privateView = false) {
+  async publishedState() {
     const state = await this.state();
-    if (!privateView && !state.settings.published)
+    if (!state.settings.published)
       throw new TRPCError({ code: 'NOT_FOUND', message: 'This event is not published.' });
-    return eventView(this.ctx.db, state, privateView);
+    return state;
+  }
+  async snapshot(privateView = false) {
+    const state = privateView ? await this.state() : await this.publishedState();
+    return { ...(await eventView(this.ctx.db, state, privateView)), publicCode: this.publicCode };
   }
   async plan() {
     return planView(this.ctx.db, await this.state());

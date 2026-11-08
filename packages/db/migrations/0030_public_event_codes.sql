@@ -1,0 +1,2 @@
+ALTER TABLE "event_plans" ADD COLUMN "public_code" integer NOT NULL GENERATED ALWAYS AS IDENTITY (sequence name "event_plans_public_code_seq" INCREMENT BY 1 MINVALUE 1000000 MAXVALUE 99999999 START WITH 1000000 CACHE 1);--> statement-breakpoint
+ALTER TABLE "event_plans" ADD CONSTRAINT "event_plans_public_code_unique" UNIQUE("public_code");
