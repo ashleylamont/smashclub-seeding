@@ -109,8 +109,8 @@ for (const { mode, entry, theme, width } of cases)
       if (submissions.length > 1) Object.assign(report, { status: 'approved' });
       await route.fulfill({ json: batched ? [result] : result });
     });
-    const returnPath = mode === 'shared' ? 'live.command' : 'updateMatch';
-    await page.route(`**/api/trpc/eventOps.${returnPath}*`, async (route) => {
+    const returnPath = `/api/trpc/eventOps.${mode === 'shared' ? 'live.command' : 'updateMatch'}`;
+    await page.route(`**${returnPath}*`, async (route) => {
       const batched = new URL(route.request().url()).searchParams.has('batch');
       const body = route.request().postDataJSON();
       const input = batched ? body[0] : body;
@@ -159,7 +159,16 @@ for (const { mode, entry, theme, width } of cases)
       mode === 'shared' ? 'Return untaken call' : 'Return to queue',
     );
     expect(returns).toHaveLength(0);
-    await returnCall.press('Enter');
+    // The recovery link hides while the return is pending, before its request can complete.
+    const [returned] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.request().method() === 'POST' && new URL(response.url()).pathname === returnPath,
+      ),
+      returnCall.press('Enter'),
+    ]);
+    expect(returned.ok()).toBe(true);
+    await expect(submit).toBeEnabled();
     await expect(open).toHaveCount(0);
     expect(returns).toEqual([
       expect.objectContaining({

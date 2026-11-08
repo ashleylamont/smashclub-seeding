@@ -279,13 +279,16 @@ describe('native Act-PG integration on isolated PostgreSQL', () => {
             callOnly: true,
             expectedRevision: 0,
             expectedResourceRevision: beforeA.settings.resourceRevision,
+            expectedOrdinaryCapacity: 1,
           },
           `ordinary-call-${index}`,
         ),
       ),
     );
     expect(attempts.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
-    expect(attempts.filter((r) => r.status === 'rejected')).toHaveLength(1);
+    expect(attempts.filter((r) => r.status === 'rejected')).toMatchObject([
+      { reason: { message: expect.stringMatching(/ordinary capacity|capacity is full/i) } },
+    ]);
     const current = await state(b, planId);
     expect(current.matches.filter((m) => m.status === 'playing')).toHaveLength(2);
     expect(current.matches.filter((m) => m.status === 'playing' && !m.stationId)).toHaveLength(1);

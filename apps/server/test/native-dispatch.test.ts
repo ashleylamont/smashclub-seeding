@@ -120,6 +120,84 @@ describe('shared native dispatch', () => {
     expect(call(state).matches[0]!.status).toBe('playing');
   });
 
+  it('keeps a reviewed ordinary call valid through unrelated station and score changes', () => {
+    const baseline = pureState();
+    const stationId = stableId('named station');
+    baseline.stations = [{ id: stationId, name: 'Main stage', enabled: true, revision: 0 }];
+    const state = setup(baseline, 1, [stationId]);
+    const target = state.matches[0]!;
+    const unrelated = state.matches.find((m) => m.division === 'lower')!;
+    const expectedResourceRevision = state.settings.resourceRevision;
+    const request = {
+      kind: 'dispatch',
+      matchId: target.id,
+      stationId: null,
+      callOnly: true,
+      expectedRevision: target.revision,
+      expectedResourceRevision,
+    } as const;
+    const changes: TournamentCommand[] = [
+      { kind: 'station', id: stationId, name: 'Broadcast', expectedResourceRevision },
+      {
+        kind: 'score',
+        matchId: unrelated.id,
+        expectedRevision: unrelated.revision,
+        score1: 2,
+        score2: 0,
+        outcome: 'played',
+      },
+    ];
+    for (const change of changes) {
+      const updated = apply(state, change);
+      const current = updated.matches[0]!;
+      expect(current).toEqual(target);
+      expect(dispatchAvailability(updated, current)).toEqual(dispatchAvailability(state, target));
+      expect(() => apply(updated, request)).toThrow(/resources changed/);
+      expect(() => apply(updated, { ...request, stationId, expectedOrdinaryCapacity: 1 })).toThrow(
+        /resources changed/,
+      );
+      expect(() =>
+        apply(updated, { ...request, callOnly: false, expectedOrdinaryCapacity: 1 }),
+      ).toThrow(/resources changed/);
+      expect(apply(updated, { ...request, expectedOrdinaryCapacity: 1 }).matches[0]).toMatchObject({
+        status: 'playing',
+        started: false,
+        stationId: null,
+      });
+    }
+  });
+
+  it('revalidates ordinary call consent and admission against current state', () => {
+    const state = setup();
+    const match = state.matches[0]!;
+    const request = {
+      kind: 'dispatch',
+      matchId: match.id,
+      stationId: null,
+      callOnly: true,
+      expectedRevision: match.revision,
+      expectedResourceRevision: state.settings.resourceRevision,
+      expectedOrdinaryCapacity: 1,
+    } as const;
+    expect(() => apply(setup(state, 2), request)).toThrow(/resources changed/);
+    expect(() => apply(state, { ...request, expectedRevision: match.revision + 1 })).toThrow(
+      /pairing or resources changed/i,
+    );
+    const other = state.matches.find((m) => m.division === 'lower')!;
+    expect(() => apply(call(state, other.id), request)).toThrow(/capacity/);
+    const snoozed = apply(state, {
+      kind: 'availability',
+      playerId: match.player1Id!,
+      expectedRevision: 0,
+      availability: 'snoozed',
+      reason: 'Stepped away',
+    });
+    expect(() => apply(snoozed, request)).toThrow(/unavailable/);
+    expect(() => apply(apply(state, { kind: 'unlock' }), request)).toThrow(/relock/i);
+    expect(() => apply(state, request, false)).toThrow(/organiser calls/);
+    expect(() => apply(pureState(), request)).toThrow(/resources changed/);
+  });
+
   it('rechecks capacity, feeder readiness, availability and doubles members rather than trusting suggestions', () => {
     let state = setup();
     const before = state;

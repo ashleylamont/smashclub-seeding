@@ -331,6 +331,7 @@ export const Command = z.discriminatedUnion('kind', [
     callOnly: z.boolean().optional(),
     expectedRevision: revision,
     expectedResourceRevision: revision,
+    expectedOrdinaryCapacity: revision.optional(),
   }),
   z.object({
     kind: z.literal('availability'),

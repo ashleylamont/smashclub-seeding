@@ -136,6 +136,7 @@ export function ReadyCall({
               stationId: null,
               expectedRevision: match.revision,
               expectedResourceRevision: desk.resourceRevision,
+              expectedOrdinaryCapacity: desk.capacity,
               callLocation: location.trim() || null,
               callOnly: true,
             })
