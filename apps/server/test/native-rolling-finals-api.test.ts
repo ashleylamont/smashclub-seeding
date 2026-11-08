@@ -244,6 +244,13 @@ describe('rolling finals through the standard native API', () => {
       outcome: 'played',
     });
     expect(report.status).toBe('pending');
+    const overview = await caller().eventOps.overview({ planId });
+    const pendingOrder =
+      'poolOrders' in overview
+        ? overview.poolOrders?.find((order) => order.poolId === consumed.poolId)
+        : undefined;
+    expect(pendingOrder?.status).toBe('review_pending');
+    expect(pendingOrder).not.toHaveProperty('plannerConfirmation');
     expect((await live.state(planId)).matches.find((m) => m.id === actual.id)!.winnerId).toBe(
       actual.winnerId,
     );

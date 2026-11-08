@@ -59,6 +59,7 @@ export type EventSnapshot = Omit<
     poolIndex: number;
     status: ReturnType<typeof poolOrderStatus>['status'];
     reason: string;
+    plannerConfirmation?: { available: true } | { available: false; reason: string };
   }[];
 };
 export function matchRows(state: TournamentState): (typeof eventMatches.$inferSelect &
@@ -371,12 +372,31 @@ export async function eventView(
     withdrawals: state.entrants
       .filter((e) => e.availability === 'withdrawn')
       .map((e) => ({ playerId: e.playerId })),
-    poolOrders: state.pools.map((p) => ({
-      poolId: p.id,
-      division: p.division,
-      poolIndex: p.index,
-      ...poolOrderStatus(state, p),
-    })),
+    poolOrders: state.pools.map((pool) => {
+      const order = {
+        poolId: pool.id,
+        division: pool.division,
+        poolIndex: pool.index,
+        ...poolOrderStatus(state, pool),
+      };
+      if (
+        !privateView ||
+        !['locked', 'unlocked'].includes(state.lifecycle) ||
+        !['ruling_required', 'partial', 'manual_required'].includes(order.status)
+      )
+        return order;
+      const lockedReason =
+        worksheetOrderLock(state, pool, hasFixedLegacyFinals(state, pool.division)) ??
+        (canConfirmPoolOrder(state, pool)
+          ? undefined
+          : 'This pool order cannot be confirmed while the finals draw is in use.');
+      return {
+        ...order,
+        plannerConfirmation: lockedReason
+          ? { available: false, reason: lockedReason }
+          : { available: true },
+      };
+    }),
     placements: state.pools.flatMap((p) =>
       (p.order ?? []).map((playerId, i) => ({
         id: `${p.id}:${playerId}`,
@@ -391,6 +411,15 @@ export async function eventView(
       })),
     ),
   };
+}
+
+function hasFixedLegacyFinals(state: TournamentState, division: 'upper' | 'lower') {
+  return (
+    !state.settings.poolOrderPolicy &&
+    !rollingFinals(state) &&
+    state.baseline!.structure !== 'round_robin' &&
+    state.brackets.some((bracket) => bracket.division === division)
+  );
 }
 
 function worksheetOrderLock(
@@ -471,11 +500,7 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
       ? (['upper'] as const)
       : (['upper', 'lower'] as const)
   ).map((division) => {
-    const fixedLegacyFinals =
-      !state.settings.poolOrderPolicy &&
-      !rollingFinals(state) &&
-      state.baseline!.structure !== 'round_robin' &&
-      state.brackets.some((bracket) => bracket.division === division);
+    const fixedLegacyFinals = hasFixedLegacyFinals(state, division);
     const divisionPools = state.pools.filter((p) => p.division === division);
     const pools = divisionPools.map((p) => {
       const orderLockedReason = worksheetOrderLock(state, p, fixedLegacyFinals);
