@@ -71,7 +71,10 @@ if (mode !== undefined) {
     throw new Error('Darwin baseline tests require macOS.');
   if (process.env.GITHUB_OUTPUT)
     appendFileSync(process.env.GITHUB_OUTPUT, `ui_case_set=${caseSet}\n`);
-  execFileSync('pnpm', ['test:ui', '--update-snapshots=none', ...partitions[mode]], {
+  const hostedPortable =
+    mode === 'portable' && process.platform === 'linux' && process.env.GITHUB_ACTIONS === 'true';
+  const workers = hostedPortable ? ['--workers=3'] : [];
+  execFileSync('pnpm', ['test:ui', '--update-snapshots=none', ...partitions[mode], ...workers], {
     cwd: web,
     stdio: 'inherit',
   });
