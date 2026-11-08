@@ -53,6 +53,49 @@ describe('rolling finals through the standard native API', () => {
     )!;
   }
 
+  it('marks generated qualifier waits only for organisers and preserves explicit holds with the same reason', async () => {
+    const planId = await seedNativeDraft(db);
+    const api = caller();
+    await api.eventOps.softLockPools({ planId, confirm: true });
+    await api.eventOps.settings({ planId, published: true, playerReports: true });
+    const preview = await api.eventOps.native.preview({ planId });
+    await api.eventOps.native.generate({ planId, revisionToken: preview.revisionToken });
+    const [station] = await api.eventOps.saveStation({ planId, name: 'Review station' });
+    const before = await api.eventOps.overview({ planId });
+    const waiting = before.matches.find(
+      (match) => 'qualificationWait' in match && match.qualificationWait === true,
+    )!;
+    expect(waiting).toMatchObject({ status: 'blocked', qualificationBlocks: expect.any(Array) });
+    expect(
+      (await caller(null).eventOps.snapshot({ planId })).matches.find(
+        ({ id }) => id === waiting.id,
+      ),
+    ).not.toHaveProperty('qualificationWait');
+
+    await api.eventOps.updateMatch({
+      matchId: waiting.id,
+      expectedRevision: waiting.revision,
+      expectedResourceRevision: waiting.resourceRevision,
+      status: 'blocked',
+      stationId: station!.id,
+      blockedReason: waiting.blockedReason,
+    });
+    const held = (await live.state(planId)).matches.find(({ id }) => id === waiting.id)!;
+    expect(held).toMatchObject({
+      held: true,
+      stationId: station!.id,
+      blockedReason: waiting.blockedReason,
+    });
+    const after = (await api.eventOps.overview({ planId })).matches.find(
+      ({ id }) => id === waiting.id,
+    );
+    expect(after).toMatchObject({
+      qualificationBlocks: waiting.qualificationBlocks,
+      blockedReason: waiting.blockedReason,
+    });
+    expect(after).not.toHaveProperty('qualificationWait');
+  });
+
   it('creates a full field with held unresolved pools, releases known finals into shared capacity, and keeps publication separate', async () => {
     const planId = await seedNativeDraft(db);
     await caller().eventOps.softLockPools({ planId, confirm: true });
@@ -244,6 +287,13 @@ describe('rolling finals through the standard native API', () => {
       outcome: 'played',
     });
     expect(report.status).toBe('pending');
+    const overview = await caller().eventOps.overview({ planId });
+    const pendingOrder =
+      'poolOrders' in overview
+        ? overview.poolOrders?.find((order) => order.poolId === consumed.poolId)
+        : undefined;
+    expect(pendingOrder?.status).toBe('review_pending');
+    expect(pendingOrder).not.toHaveProperty('plannerConfirmation');
     expect((await live.state(planId)).matches.find((m) => m.id === actual.id)!.winnerId).toBe(
       actual.winnerId,
     );

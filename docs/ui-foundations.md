@@ -66,13 +66,13 @@ The assigned-TO and admin routes share the same six destinations. `?view=` selec
 | Run matches | Playing matches first, start/finish, score review and stations. Choose Ready to start for eligible pairings. Pool setup is a secondary disclosure. |
 | Players | Find a player, follow their match or pool, adjust attendance. |
 | Standings / draw | Pool standings, soft-lock, advancement, native finals and external bracket handoff. |
-| Broadcast | Choose a station, update its live score or finish its match using the shared score card; open its overlay, manage announcements and awards. |
+| Broadcast | Choose a station, start a ready pairing on a free reserved station in shared dispatch, update its live score or finish its match, and manage its overlay, announcements and awards. |
 | History | Recorded changes, actors and timestamps, score/correction evidence, publication and imported audit; search loaded entries, filter and load older records. |
 | Settings | Score policy, publication, guest QR access, TO access and reset. |
 
 Attention links switch destination, open ancestor disclosures, scroll and focus the relevant control. Switching tabs preserves edits; a full refresh still discards local drafts as before. The attention summary stays visible across destinations. Broadcast uses the same match controls and API; the OBS display remains a separate transparent composition. Its event title wraps instead of clipping, and idle/result rails use literal states without fallback announcements.
 
-The initial Broadcast destination is a station selector plus the shared score card. Dedicated main-stage assignment, richer desk shortcuts and a unified public event hub need their own design and API review.
+Richer desk shortcuts and a unified public event hub need their own design and API review.
 
 ## Copy audit
 

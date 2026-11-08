@@ -219,7 +219,14 @@ function PlayerProfile({ data }: { data: PlayerData }) {
               <CharacterIcons slugs={player.characters} size="lg" />
             </div>
           )}
-          <ProfileAccountAction player={player} />
+          <div className="ui-actions profile-actions">
+            <ProfileAccountAction player={player} />
+            <Button asChild size="small">
+              <Link to="/head-to-head" search={{ first: player.id }}>
+                Compare head to head
+              </Link>
+            </Button>
+          </div>
         </div>
 
         {/* The headline figure is the ranked number — the club rating — because
@@ -442,6 +449,15 @@ function PlayerProfile({ data }: { data: PlayerData }) {
               : 'WHR fits whole nights. Individual sets have no exact rating delta.'}
           </p>
         )}
+        {matches.length > 0 && (
+          <p className="muted chart-caption">
+            Each set starts at one evidence unit. The saved margin weight adds units for each game
+            beyond a one-game winning margin, up to two units total. Evidence units weight the WHR
+            fit.
+            {recomputeId &&
+              ' Pre-night win estimates use earlier rated sets and both players’ uncertainty.'}
+          </p>
+        )}
         {events.length === 0 ? (
           <p className="muted">No match history available for this player.</p>
         ) : (
@@ -465,7 +481,7 @@ function ProfileAccountAction({ player }: { player: PlayerData['player'] }) {
   const search = { claim: player.id };
   if (!session)
     return (
-      <Button asChild className="profile-account-action">
+      <Button asChild>
         <Link to="/login" search={search}>
           {player.verified ? 'Sign in to edit your profile' : 'Sign in to claim this profile'}
         </Link>
@@ -475,7 +491,7 @@ function ProfileAccountAction({ player }: { player: PlayerData['player'] }) {
   const current = claims.data?.find(({ status }) => status === 'approved' || status === 'pending');
   if (current?.playerId === player.id)
     return (
-      <Button asChild className="profile-account-action">
+      <Button asChild>
         <Link
           to="/me"
           search={search}
@@ -488,7 +504,7 @@ function ProfileAccountAction({ player }: { player: PlayerData['player'] }) {
 
   if (current || player.verified) return null;
   return (
-    <Button asChild className="profile-account-action">
+    <Button asChild>
       <Link to="/me" search={search}>
         Claim this profile
       </Link>

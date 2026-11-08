@@ -1,24 +1,29 @@
 import { Disclosure } from '../../components/ui/Disclosure';
 import { Button } from '../../components/ui/Button';
 import { opsAttention } from '../../lib/opsAttention';
+import type { poolStandings } from '../../lib/eventQueue';
+import { poolOrderControlId, type OpsSection } from '../../lib/opsWorkspace';
+import { poolTitle } from '../../lib/poolFlow';
 import type { trpc } from '../../lib/trpc';
 import './OpsAttentionDesk.css';
 
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 export function OpsAttentionDesk({
   data,
+  pools,
   onMatch,
   onJump,
 }: {
   data: Overview;
+  pools: ReturnType<typeof poolStandings>;
   onMatch: (matchId: string) => void;
-  onJump: (id: string) => void;
+  onJump: (id: string, section?: OpsSection) => void;
 }) {
-  const { reports, decisions, dispatch, needsStations } = opsAttention(data);
+  const { reports, decisions, poolRulings, dispatch, needsStations } = opsAttention(data, pools);
   const stale = reports.filter((report) => report.stale).length;
   const disputes = reports.filter((report) => report.isDispute);
   const firstDispute = disputes.find((report) => !report.stale) ?? disputes[0];
-  const count = reports.length + decisions.length + (needsStations ? 1 : 0);
+  const count = reports.length + decisions.length + poolRulings.length + (needsStations ? 1 : 0);
   if (['complete', 'cancelled'].includes(data.plan.status)) return null;
   return (
     <section className="card ops-attention" aria-labelledby="ops-attention-title">
@@ -80,6 +85,27 @@ export function OpsAttentionDesk({
                   </Button>
                 </li>
               ))}
+            </ul>
+          </Disclosure>
+        )}
+        {poolRulings.length > 0 && (
+          <Disclosure title={`Pool orders · ${poolRulings.length}`} className="ops-attention-group">
+            <ul>
+              {poolRulings.map(({ poolId, division, poolIndex }) => {
+                const title = poolTitle(`${division}:${poolIndex}`, data.plan.structure, 'heading');
+                return (
+                  <li key={poolId}>
+                    <strong>{title}</strong>
+                    <Button
+                      size="small"
+                      aria-label={`Review pool order for ${title}`}
+                      onClick={() => onJump(poolOrderControlId(poolId), 'draw')}
+                    >
+                      Review pool order
+                    </Button>
+                  </li>
+                );
+              })}
             </ul>
           </Disclosure>
         )}

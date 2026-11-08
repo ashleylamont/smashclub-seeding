@@ -6,6 +6,7 @@ import {
 } from '../lib/broadcastProgress';
 import { liveBracketWinner } from '../lib/eventBracket';
 import { linkedFinalCaption } from '../lib/linkedFinalCaption';
+import { poolTitle } from '../lib/poolFlow';
 import { matchParticipantName, matchPresentation } from '../lib/matchPresentation';
 import {
   finalsFieldLabel,
@@ -125,7 +126,14 @@ export function BroadcastIntermission({
       </header>
       <div className="intermission-content" key={page.key}>
         {page.kind === 'pool' ? (
-          <PoolPage page={page} closed={closed} />
+          <PoolPage
+            page={page}
+            closed={closed}
+            structure={data.plan.structure}
+            confirmedRoundRobin={pages.some((item) => item.kind === 'round-robin-results')}
+          />
+        ) : page.kind === 'round-robin-results' ? (
+          <RoundRobinResultsPage page={page} entrants={data.entrants} />
         ) : page.kind === 'qualification' ? (
           <QualificationPage page={page} entrants={data.entrants} />
         ) : page.kind === 'linked' ? (
@@ -223,18 +231,64 @@ export function BroadcastIntermission({
   );
 }
 
+function RoundRobinResultsPage({
+  page,
+  entrants,
+}: {
+  page: Extract<ProgressPage, { kind: 'round-robin-results' }>;
+  entrants: ProgressData['entrants'];
+}) {
+  const names = new Map(entrants.map(({ id, name }) => [id, name]));
+  return (
+    <>
+      <div className="intermission-section-heading">
+        <h2>Round-robin results</h2>
+        <span>
+          Section {page.part} / {page.parts}
+        </span>
+      </div>
+      {page.winnerId && <p>Confirmed winner · {names.get(page.winnerId) ?? 'Player'}</p>}
+      <table
+        className="intermission-standings intermission-round-robin"
+        aria-label="Confirmed round-robin standings"
+      >
+        <thead>
+          <tr>
+            <th scope="col">Place</th>
+            <th scope="col">Entrant</th>
+          </tr>
+        </thead>
+        <tbody>
+          {page.standings.map(({ place, playerId }) => (
+            <tr key={playerId}>
+              <td>{place}</td>
+              <td>{names.get(playerId) ?? 'Player'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
 function PoolPage({
   page,
   closed,
+  structure,
+  confirmedRoundRobin,
 }: {
   page: Extract<ProgressPage, { kind: 'pool' }>;
   closed: boolean;
+  structure?: string;
+  confirmedRoundRobin: boolean;
 }) {
   return (
     <>
       <div className="intermission-section-heading">
         <h2>
-          {page.pool.division} · Pool {String.fromCharCode(65 + page.pool.poolIndex)}
+          {confirmedRoundRobin
+            ? 'Round-robin set records'
+            : poolTitle(`${page.pool.division}:${page.pool.poolIndex}`, structure, 'heading')}
         </h2>
         <span>
           {page.pool.complete} / {page.pool.total} sets complete · Section {page.part} /{' '}
@@ -242,9 +296,11 @@ function PoolPage({
         </span>
       </div>
       <p>
-        {closed
-          ? 'Standings from recorded pool results.'
-          : 'Live standings for review. Pool order and final seeds are separate decisions.'}
+        {confirmedRoundRobin
+          ? 'Set and game records. Confirmed places are shown separately.'
+          : closed
+            ? 'Standings from recorded pool results.'
+            : 'Live standings for review. Pool order and final seeds are separate decisions.'}
       </p>
       <table className="intermission-standings">
         <thead>

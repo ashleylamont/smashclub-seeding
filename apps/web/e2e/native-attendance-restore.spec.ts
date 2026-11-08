@@ -4,6 +4,7 @@ import { chooseOption } from '../test-support/controls';
 
 type Match = {
   id: string;
+  label: string;
   player1Id: string | null;
   player2Id: string | null;
   nativeBracketId: string | null;
@@ -185,9 +186,10 @@ test('a phone TO reviews restoration, handles a stale preview, preserves played/
   const impact = controls.getByRole('region', { name: 'Restoration consequences', exact: true });
   await expect(impact).toContainText('This entrant was excluded when the finals field was frozen');
   await expect(impact).toContainText('Can resume');
-  await expect(impact).toContainText('Result retained');
+  await expect(impact).toContainText('Played result stays recorded.');
+  await expect(impact).toContainText('Recorded forfeit stays in place.');
   await expect(impact).toContainText('separate organiser ruling');
-  await expect(impact).toContainText('Reserved sources stay fixed');
+  await expect(impact).toContainText('Reserved places:');
   await page.screenshot({
     path: testInfo.outputPath('restore-reviewed-impact-phone.png'),
     fullPage: true,
@@ -264,4 +266,119 @@ test('a phone TO reviews restoration, handles a stale preview, preserves played/
     path: testInfo.outputPath('restore-attendance-history-phone.png'),
     fullPage: true,
   });
+});
+
+test('knockout attendance previews use the live match name for withdrawal and restoration', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(120_000);
+  const login = await page.request.post('/api/auth/sign-in/email', {
+    data: { email: 'admin@smashclub.dev', password: 'devpassword123' },
+  });
+  expect(login.ok()).toBe(true);
+  const suffix = crypto.randomUUID().slice(0, 8);
+  const rows = [];
+  for (const [index, letter] of ['A', 'B', 'C', 'D'].entries()) {
+    const name = `ZZ Attendance Rehearsal Player ${letter} ${suffix}`;
+    const { playerId } = await mutate<{ playerId: string }>(page.request, 'admin.createPlayer', {
+      canonicalName: name,
+      displayName: name,
+      characters: [],
+      companyCode: null,
+    });
+    rows.push({
+      lineNumber: index + 1,
+      rawInput: name,
+      cleanedName: name,
+      playerId,
+      companyId: null,
+      resolutionMethod: 'manual',
+    });
+  }
+  const { planId } = await mutate<{ planId: string }>(
+    page.request,
+    'admin.eventPlanner.createPlan',
+    {
+      name: 'Knockout attendance rehearsal',
+      bracketMode: 'native',
+      structure: 'single_elimination',
+      eventDate: '2026-10-31T08:30:00Z',
+      rows,
+    },
+  );
+  for (const procedure of [
+    'admin.eventPlanner.freezeRoster',
+    'admin.eventPlanner.generatePools',
+    'eventOps.softLockPools',
+  ])
+    await mutate(page.request, procedure, { planId, confirm: true });
+  const snapshot = () => query<Snapshot>(page.request, 'eventOps.overview', { planId });
+  const match = (await snapshot()).matches.find((m) => m.label === 'Semi-final 1')!;
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/operate/${planId}?view=players`);
+  const controls = page.locator('section.card').filter({
+    has: page.getByRole('heading', { name: 'Attendance changes', exact: true }),
+  });
+
+  for (const action of ['withdraw', 'restore'] as const) {
+    await chooseOption(controls.getByRole('combobox', { name: 'Change', exact: true }), action);
+    await chooseOption(
+      controls.getByRole('combobox', { name: 'Player', exact: true }),
+      match.player1Id!,
+    );
+    await controls.getByLabel('Reason', { exact: true }).fill('Rehearse this attendance change');
+    await controls
+      .getByRole('button', { name: 'Preview attendance change', exact: true })
+      .press('Enter');
+    const preview = controls.locator('.ops-attendance-preview');
+    await expect(preview).toContainText(match.label);
+    await expect(preview).not.toContainText('R1 M1');
+    if (action === 'restore') {
+      await expect(preview.getByRole('heading', { name: 'Restoration preview' })).toBeVisible();
+      await expect(preview.getByRole('heading', { name: 'Qualification' })).toBeVisible();
+      await expect(preview.getByRole('heading', { name: 'Matches' })).toBeVisible();
+      await expect(preview).toContainText('No matches become ready to call.');
+      await expect(preview).toContainText('Recorded forfeit stays in place.');
+      await expect(preview).not.toContainText('new match(es)');
+    }
+    const affected = await query<{ affectedMatches: Pick<Match, 'id' | 'label' | 'status'>[] }>(
+      page.request,
+      'eventOps.previewAttendance',
+      { planId, action, playerId: match.player1Id, reason: 'Rehearse this attendance change' },
+    );
+    expect(affected.affectedMatches).toEqual([
+      { id: match.id, label: match.label, status: action === 'withdraw' ? 'ready' : 'complete' },
+    ]);
+    for (const [width, height] of [
+      [390, 844],
+      [1440, 900],
+    ]) {
+      await page.setViewportSize({ width, height });
+      for (const colorScheme of ['dark', 'light'] as const) {
+        await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+        await page.evaluate(() => scrollTo(0, 0));
+        await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
+        await expect
+          .poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth))
+          .toBeLessThanOrEqual(0);
+        expect(
+          (
+            await new AxeBuilder({ page })
+              .include('.ops-attendance-preview')
+              .withTags(['wcag2a', 'wcag2aa'])
+              .analyze()
+          ).violations,
+        ).toEqual([]);
+        await page.screenshot({
+          path: testInfo.outputPath(`${action}-${width}-${colorScheme}.png`),
+          fullPage: true,
+        });
+      }
+    }
+    if (action === 'withdraw') {
+      await controls.getByRole('button', { name: 'Apply this change', exact: true }).click();
+      await expect(controls.getByText('Attendance updated.', { exact: false })).toBeVisible();
+      expect((await snapshot()).matches.find((m) => m.id === match.id)?.outcome).toBe('forfeit');
+    }
+  }
 });

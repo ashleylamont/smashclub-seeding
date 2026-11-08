@@ -1,5 +1,6 @@
 import type { NativeBracketView } from '../components/EventNightBoard';
 import { includesPlayer } from './playerMatchView';
+import { isNativeRoundRobin } from './eventBracket';
 import { matchesPool, poolKey, type PoolFlowData, type PoolFlowMatch } from './poolFlow';
 
 export type HubBoardSection = 'brackets' | 'pools' | 'results';
@@ -55,14 +56,15 @@ export function playerHubView(data: HubData, player = '', selectedPool = '') {
       matchesPool(match, selectedPool) &&
       (!player || ownPools.has(poolKey(match) ?? '')),
   );
-  const assignedBrackets = (data.nativeBrackets ?? []).filter(
+  const eliminationBrackets = isNativeRoundRobin(data.plan) ? [] : (data.nativeBrackets ?? []);
+  const assignedBrackets = eliminationBrackets.filter(
     (bracket) =>
       bracket.entrantIds.some((id) => identities.has(id)) ||
       ownMatches.some((match) => match.nativeBracketId === bracket.id),
   );
   const pendingBrackets =
     player && !assignedBrackets.length
-      ? (data.nativeBrackets ?? []).filter((bracket) =>
+      ? eliminationBrackets.filter((bracket) =>
           bracket.qualifierSlots?.some(
             (slot) =>
               slot.status !== 'resolved' &&
@@ -73,10 +75,10 @@ export function playerHubView(data: HubData, player = '', selectedPool = '') {
         )
       : [];
   const nativeBrackets = player
-    ? (data.nativeBrackets ?? []).filter(
+    ? eliminationBrackets.filter(
         (bracket) => assignedBrackets.includes(bracket) || pendingBrackets.includes(bracket),
       )
-    : (data.nativeBrackets ?? []);
+    : eliminationBrackets;
   const divisions = new Set(ownMatches.map((match) => match.division));
   const linked =
     data.plan.bracketMode === 'native'

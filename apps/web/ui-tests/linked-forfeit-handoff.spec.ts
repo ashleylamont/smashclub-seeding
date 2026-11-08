@@ -101,12 +101,47 @@ for (const theme of ['dark', 'light'] as const) {
       await page.getByRole('tab', { name: 'Run matches', exact: true }).press('Enter');
       const run = page.getByRole('tabpanel', { name: 'Run matches', exact: true });
       await chooseOption(run.getByRole('combobox', { name: 'View', exact: true }), 'complete');
-      const storedMatch = run.locator('article.ops-match').filter({ hasText: played.label });
-      await expect(storedMatch.getByText(played.label, { exact: true })).toBeVisible();
-      await expect(storedMatch).toContainText(played.player1Name!);
+      const caption = 'Upper Championship · M9';
+      const playedCard = run.locator('article.ops-match').filter({ hasText: caption });
+      await expect(playedCard.getByText(caption, { exact: true })).toBeVisible();
+      await expect(
+        playedCard.getByRole('combobox', { name: `Station for ${caption}`, exact: true }),
+      ).toBeVisible();
+      await expect(playedCard).toContainText(played.player1Name!);
+      const forfeitCard = run.locator('article.ops-match').filter({
+        hasText: 'Upper Championship · M8',
+      });
+      await expect(forfeitCard).toContainText(PLAYER_NAME);
+      await expect(forfeitCard).toContainText('Jordan with a long tournament alias');
       await page.evaluate(() => scrollTo(0, 0));
       await ready(page);
       await page.screenshot({ path: testInfo.outputPath('linked-run.png'), fullPage: true });
+      await run
+        .getByRole('button', { name: 'Pool queues and stations', exact: true })
+        .press('Enter');
+      const trigger = run.getByRole('button', { name: 'Print bracket backup sheets', exact: true });
+      await trigger.press('Enter');
+      const print = page.getByRole('dialog', { name: 'Print bracket backup sheets' });
+      const sheet = print.locator('.bracket-backup-page').filter({
+        has: page.getByRole('heading', { name: 'Upper Championship', exact: true }),
+      });
+      for (const identifier of ['M8', 'M9'])
+        await expect(sheet.getByRole('cell', { name: identifier, exact: true })).toBeVisible();
+      await expect(sheet).toContainText('Online: 2–1');
+      await expect(sheet).not.toContainText('upper main ·');
+      await expect(sheet).toContainText(PLAYER_NAME);
+      await ready(page);
+      await sheet.screenshot({ path: testInfo.outputPath('linked-bracket-sheet.png') });
+      expect(
+        (
+          await new AxeBuilder({ page })
+            .include('.bracket-backup-dialog')
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+            .analyze()
+        ).violations,
+      ).toEqual([]);
+      await page.keyboard.press('Escape');
+      await expect(trigger).toBeFocused();
       expect(fixture.unexpected).toEqual([]);
     });
   }

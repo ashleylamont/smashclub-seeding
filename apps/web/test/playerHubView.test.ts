@@ -134,6 +134,25 @@ describe('focused player board and stage order', () => {
     expect(playerHubView(knockout, 'a').pools).toEqual([]);
   });
 
+  it('keeps recorded sets and removes the synthetic round-robin draw only for explicit native format', () => {
+    const data = event([match('pool', { status: 'complete' })]);
+    data.plan.status = 'complete';
+    data.plan.structure = 'round_robin';
+    const view = playerHubView(data, 'a', 'upper:0');
+    expect(view.assignedBrackets).toEqual([]);
+    expect(view.nativeBrackets).toEqual([]);
+    expect(view.results.map(({ id }) => id)).toEqual(['pool']);
+    expect(view.sections[0]).toBe('results');
+    for (const plan of [
+      { ...data.plan, structure: undefined },
+      { ...data.plan, structure: 'round_robin_finals' },
+      { ...data.plan, bracketMode: 'challonge' },
+    ])
+      expect(playerHubView({ ...data, plan }, 'a').nativeBrackets.map(({ id }) => id)).toEqual([
+        'upper',
+      ]);
+  });
+
   it('resolves doubles members to their team pool, bracket and standings identity', () => {
     const data = event([
       match('team-pool', { player1Id: 'team', player1MemberIds: ['member', 'partner'] }),

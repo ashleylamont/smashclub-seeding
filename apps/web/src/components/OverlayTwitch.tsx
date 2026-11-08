@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { twitchChannel } from '../lib/twitchChannel';
+import { twitchChannel } from '@smashclub/shared';
 import { Button } from './ui/Button';
 import { Field } from './ui/Field';
 

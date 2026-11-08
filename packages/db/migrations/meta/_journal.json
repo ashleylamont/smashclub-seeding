@@ -218,6 +218,20 @@
       "when": 1794138820973,
       "tag": "0030_public_event_codes",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1794150381399,
+      "tag": "0031_event_twitch_promotion",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1794156390480,
+      "tag": "0032_head_to_head_pair_lookup",
+      "breakpoints": true
     }
   ]
 }

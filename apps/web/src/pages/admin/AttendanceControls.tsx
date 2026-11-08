@@ -13,6 +13,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 type Preview = Awaited<ReturnType<typeof trpc.eventOps.previewAttendance.query>>;
+const withdrawalStatusLabels = {
+  called: 'Called, awaiting start',
+  playing: 'In progress',
+  held: 'Started, on hold',
+};
 type Input = {
   planId: string;
   action: 'add' | 'withdraw' | 'no_show' | 'redistribute' | 'restore';
@@ -324,6 +329,7 @@ function AttendancePreviewPanel({
   onApprove: (checked: boolean) => void;
   onApply: () => void;
 }) {
+  const restoring = preview.input.action === 'restore';
   const returnCallIds = preview.result.returnCallMatchIds;
   const callsStillOpen = callDesk.calls.some(({ id }) => returnCallIds?.includes(id));
   const apply = (
@@ -339,7 +345,7 @@ function AttendancePreviewPanel({
   return (
     <div className="ops-attendance-preview">
       <h4 ref={headingRef} tabIndex={-1}>
-        Change preview
+        {restoring ? 'Restoration preview' : 'Change preview'}
       </h4>
       {preview.input.action === 'add' && preview.result.poolIndex !== null && (
         <p>
@@ -347,10 +353,12 @@ function AttendancePreviewPanel({
           {String.fromCharCode(65 + preview.result.poolIndex)}
         </p>
       )}
-      <p>
-        {preview.result.addedMatches} new match(es) · {preview.result.affectedMatches.length}{' '}
-        affected existing match(es)
-      </p>
+      {!restoring && (
+        <p>
+          {preview.result.addedMatches} new match(es) · {preview.result.affectedMatches.length}{' '}
+          affected existing match(es)
+        </p>
+      )}
       {returnCallIds && !callsStillOpen ? (
         <p className="muted">Refresh the preview before applying this change.</p>
       ) : (
@@ -363,21 +371,35 @@ function AttendancePreviewPanel({
       {returnCallIds && (
         <UntakenCallRecovery matchIds={returnCallIds} desk={callDesk} showInstructions={false} />
       )}
-      {preview.result.warnings.map((warning) => (
-        <p className="muted" key={warning}>
-          {warning}
-        </p>
-      ))}
-      {preview.result.restoration && (
-        <RestorationConsequences impact={preview.result.restoration} />
+      {!restoring &&
+        preview.result.warnings.map((warning) => (
+          <p className="muted" key={warning}>
+            {warning}
+          </p>
+        ))}
+      {preview.result.allowed && preview.result.restoration && (
+        <RestorationConsequences
+          impact={preview.result.restoration}
+          warnings={preview.result.warnings}
+        />
       )}
-      {preview.input.action !== 'restore' && preview.result.affectedMatches.length > 0 && (
+      {!restoring && preview.result.affectedMatches.length > 0 && (
         <ul>
-          {preview.result.affectedMatches.map((match) => (
-            <li key={match.id}>
-              {match.label} · {returnCallIds?.includes(match.id) ? 'called' : match.status}
-            </li>
-          ))}
+          {preview.result.affectedMatches.map((match) => {
+            const withdrawal = preview.result.withdrawalMatches?.[match.id];
+            const status = withdrawal?.state
+              ? withdrawalStatusLabels[withdrawal.state]
+              : returnCallIds?.includes(match.id)
+                ? 'called'
+                : match.status;
+            return (
+              <li key={match.id}>
+                {match.label} · {status}
+                {withdrawal?.forfeit === 'automatic' && ' · Forfeit on apply'}
+                {withdrawal?.forfeit === 'organiser' && ' · Record forfeit after withdrawal'}
+              </li>
+            );
+          })}
         </ul>
       )}
       {preview.result.relocations.length > 0 && (
@@ -428,14 +450,21 @@ function AttendancePreviewPanel({
   );
 }
 
-function RestorationConsequences({ impact }: { impact: NonNullable<Preview['restoration']> }) {
+function RestorationConsequences({
+  impact,
+  warnings,
+}: {
+  impact: NonNullable<Preview['restoration']>;
+  warnings: readonly string[];
+}) {
   return (
-    <section aria-label="Restoration consequences">
-      <h5>What this restoration changes</h5>
+    <section aria-label="Restoration consequences" className="ops-restoration-consequences">
+      <p>Restoring attendance keeps the same entrant and recorded outcomes.</p>
+      <h5>Qualification</h5>
       <p>{impact.qualification.reason}</p>
       {impact.slots.length > 0 && (
         <p>
-          Reserved sources stay fixed:{' '}
+          Reserved places:{' '}
           {impact.slots
             .map(
               (slot) =>
@@ -445,26 +474,23 @@ function RestorationConsequences({ impact }: { impact: NonNullable<Preview['rest
           .
         </p>
       )}
-      <ul>
-        {impact.effects.map((effect) => (
-          <li key={effect.id}>
-            <strong>
-              {effect.player1Name} vs {effect.player2Name}
-            </strong>{' '}
-            · {effect.label} ·{' '}
-            {effect.effect === 'resumable'
-              ? 'Can resume'
-              : effect.effect === 'retained'
-                ? 'Result retained'
-                : effect.effect === 'existing'
-                  ? 'Existing play retained'
-                  : effect.effect === 'ruling'
-                    ? 'TO ruling or controls required'
-                    : 'Still waiting'}
-            <p>{effect.reason}</p>
-          </li>
-        ))}
-      </ul>
+      <h5>Matches</h5>
+      {warnings.map((warning) => (
+        <p key={warning}>{warning}</p>
+      ))}
+      {impact.effects.length > 0 && (
+        <ul>
+          {impact.effects.map((effect) => (
+            <li key={effect.id}>
+              <strong>
+                {effect.player1Name} vs {effect.player2Name}
+              </strong>{' '}
+              · {effect.label}
+              <p>{effect.reason}</p>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

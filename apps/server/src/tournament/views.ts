@@ -1,12 +1,18 @@
-import { poolFinalsConsumed, rollingFinals } from './qualifiers';
-import { hasFixedLegacyPoolQualifiers, legacyQualifierSlots } from './legacyFinalQualifiers';
+import { isGeneratedQualificationWait } from './qualifiers';
+import { legacyQualifierSlots } from './legacyFinalQualifiers';
 import { projectMatchLabels } from './matchNames';
 import {
-  canConfirmPoolOrder,
   canReviewFrozenPoolResult,
+  poolOrderRevisionToken,
   poolOrderStatus,
   poolPlacementSource,
 } from './poolOrders';
+import {
+  eventPoolOrderViews,
+  hasFixedLegacyFinals,
+  worksheetOrderLock,
+  type PoolOrderView,
+} from './poolOrderViews';
 import {
   dispatchAvailability,
   dispatchContext,
@@ -43,24 +49,19 @@ type MatchViewFields = Pick<
 > & { labelFromStructure?: true };
 export type EventSnapshot = Omit<
   SqlSnapshot,
-  'placements' | 'matches' | 'nativeBrackets' | 'publicCode'
+  'placements' | 'matches' | 'nativeBrackets' | 'publicCode' | 'twitchBroadcast'
 > & {
   publicCode?: number;
   broadcastSides?: TournamentState['broadcastSides'];
   supersededPlayedSets?: ReturnType<typeof supersededPlayedSetViews>;
-  matches: (SqlSnapshot['matches'][number] & MatchViewFields & { reviewPoolGames?: true })[];
+  matches: (SqlSnapshot['matches'][number] &
+    MatchViewFields & { reviewPoolGames?: true; qualificationWait?: true })[];
   nativeBrackets: (SqlSnapshot['nativeBrackets'][number] & { qualifierSlots?: QualifierSlot[] })[];
   pendingFinals?: ReturnType<typeof pendingStrengthFinals>;
   placements: (Omit<SqlSnapshot['placements'][number], 'source'> & {
     source: 'manual' | 'challonge' | 'automatic' | 'retained';
   })[];
-  poolOrders?: {
-    poolId: string;
-    division: 'upper' | 'lower';
-    poolIndex: number;
-    status: ReturnType<typeof poolOrderStatus>['status'];
-    reason: string;
-  }[];
+  poolOrders?: PoolOrderView[];
 };
 export function matchRows(state: TournamentState): (typeof eventMatches.$inferSelect &
   MatchViewFields & {
@@ -192,11 +193,12 @@ export async function eventView(
     if (!mains.has(row.playerId)) mains.set(row.playerId, row.characterSlug);
   const rows = matchRows(state);
   const reviewableMatches = new Set<string>();
+  const qualificationWaits = new Set<string>();
   if (privateView) {
     const reviewablePools = new Set(
       state.pools.filter((pool) => canReviewFrozenPoolResult(state, pool)).map(({ id }) => id),
     );
-    for (const match of state.matches)
+    for (const match of state.matches) {
       if (
         match.stage === 'group' &&
         match.status === 'complete' &&
@@ -205,6 +207,8 @@ export async function eventView(
         reviewablePools.has(match.poolId)
       )
         reviewableMatches.add(match.id);
+      if (isGeneratedQualificationWait(state, match)) qualificationWaits.add(match.id);
+    }
   }
   const dispatch = sharedDispatch(state) ? dispatchContext(state) : undefined;
   const pendingReviewIds =
@@ -293,6 +297,7 @@ export async function eventView(
     matches: rows.map((m) => ({
       ...m,
       ...(reviewableMatches.has(m.id) ? { reviewPoolGames: true as const } : {}),
+      ...(qualificationWaits.has(m.id) ? { qualificationWait: true as const } : {}),
       resourceRevision: state.settings.resourceRevision,
       progressRevision: state.matches.find((row) => row.id === m.id)!.progressRevision,
       started: state.matches.find((row) => row.id === m.id)!.started,
@@ -385,12 +390,7 @@ export async function eventView(
     withdrawals: state.entrants
       .filter((e) => e.availability === 'withdrawn')
       .map((e) => ({ playerId: e.playerId })),
-    poolOrders: state.pools.map((p) => ({
-      poolId: p.id,
-      division: p.division,
-      poolIndex: p.index,
-      ...poolOrderStatus(state, p),
-    })),
+    poolOrders: eventPoolOrderViews(state, privateView),
     placements: state.pools.flatMap((p) =>
       (p.order ?? []).map((playerId, i) => ({
         id: `${p.id}:${playerId}`,
@@ -405,22 +405,6 @@ export async function eventView(
       })),
     ),
   };
-}
-
-function worksheetOrderLock(
-  state: TournamentState,
-  pool: TournamentState['pools'][number],
-  fixedLegacyFinals: boolean,
-) {
-  if (fixedLegacyFinals && !canConfirmPoolOrder(state, pool)) {
-    if (pool.order)
-      return 'The finals draw is in use. Confirmed places stay recorded after withdrawals.';
-    if (hasFixedLegacyPoolQualifiers(state, pool))
-      return 'The confirmed order is missing. This worksheet cannot restore it after finals used it.';
-    return 'This pool order cannot be confirmed while the finals draw is in use.';
-  }
-  if (pool.qualifierRoster && !pool.qualifierDecision && poolFinalsConsumed(state, pool.id))
-    return 'Finals already use this pool order. Called or played opponents and report history stay fixed.';
 }
 
 export async function planView(db: Db, state: TournamentState): Promise<PlanView> {
@@ -485,14 +469,13 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
       ? (['upper'] as const)
       : (['upper', 'lower'] as const)
   ).map((division) => {
-    const fixedLegacyFinals =
-      !state.settings.poolOrderPolicy &&
-      !rollingFinals(state) &&
-      state.baseline!.structure !== 'round_robin' &&
-      state.brackets.some((bracket) => bracket.division === division);
+    const fixedLegacyFinals = hasFixedLegacyFinals(state, division);
     const divisionPools = state.pools.filter((p) => p.division === division);
     const pools = divisionPools.map((p) => {
       const orderLockedReason = worksheetOrderLock(state, p, fixedLegacyFinals);
+      const matchRevisions = state.matches
+        .filter((m) => m.poolId === p.id)
+        .map((m) => ({ id: m.id, revision: m.revision }));
       return {
         poolIndex: p.index,
         label: poolLabel(p.index),
@@ -506,9 +489,11 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
           fixedLegacyFinals && orderLockedReason && !p.order
             ? undefined
             : poolOrderStatus(state, p),
-        matchRevisions: state.matches
-          .filter((m) => m.poolId === p.id)
-          .map((m) => ({ id: m.id, revision: m.revision })),
+        matchRevisions,
+        matchRevisionToken: poolOrderRevisionToken(
+          p,
+          Object.fromEntries(matchRevisions.map(({ id, revision }) => [id, revision])),
+        ),
         members: p.entrantIds.map((playerId) => {
           const e = entries.find((e) => e.playerId === playerId)!;
           return {

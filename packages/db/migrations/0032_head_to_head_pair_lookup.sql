@@ -1,0 +1,1 @@
+CREATE INDEX "sets_completed_player_pair_idx" ON "sets" USING btree ("p1_player_id","p2_player_id") WHERE "sets"."state" = 'complete';

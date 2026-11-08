@@ -51,15 +51,27 @@ export function LiveEventEntry() {
                     })}
                   </p>
                 </div>
-                <Button asChild variant="primary">
-                  <Link
-                    to="/play/$planId"
-                    params={{ planId: event.id }}
-                    aria-describedby={`home-live-${event.id}`}
-                  >
-                    Open live tournament
-                  </Link>
-                </Button>
+                <div className="home-live-actions">
+                  <Button asChild variant="primary">
+                    <Link
+                      to="/play/$planId"
+                      params={{ planId: event.id }}
+                      aria-describedby={`home-live-${event.id}`}
+                    >
+                      Open live tournament
+                    </Link>
+                  </Button>
+                  {event.twitchPromotion && Date.parse(event.twitchPromotion.expiresAt) > now && (
+                    <a
+                      href={`https://www.twitch.tv/${event.twitchPromotion.channel}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-describedby={`home-live-${event.id}`}
+                    >
+                      Watch on Twitch
+                    </a>
+                  )}
+                </div>
               </li>
             ))}
           </ul>

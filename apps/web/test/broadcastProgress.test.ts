@@ -156,4 +156,44 @@ describe('OBS intermission source choices and bounded pages', () => {
       { kind: 'summary', key: 'summary' },
     ]);
   });
+
+  it('uses the confirmed round-robin standings in order and skips empty result records', () => {
+    const data = fixture(8, false);
+    data.plan = {
+      ...data.plan,
+      status: 'complete',
+      bracketMode: 'native',
+      structure: 'round_robin',
+    };
+    data.matches = [];
+    const result = data.nativeBrackets[0]!;
+    result.complete = true;
+    result.winnerId = 'entrant-7';
+    result.standings = [...result.entrantIds]
+      .reverse()
+      .map((playerId, i) => ({ playerId, place: i + 1 }));
+    const pages = broadcastProgressPages(data);
+    expect(pages.map(({ kind }) => kind)).toEqual([
+      'round-robin-results',
+      'round-robin-results',
+      'summary',
+    ]);
+    const standingsPages = pages.filter(({ kind }) => kind === 'round-robin-results');
+    expect(standingsPages.map(({ standings }) => standings.length)).toEqual([6, 2]);
+    expect(standingsPages.flatMap(({ standings }) => standings)).toEqual(result.standings);
+    expect(standingsPages.every(({ winnerId }) => winnerId === result.winnerId)).toBe(true);
+
+    const cancelled = {
+      ...data,
+      plan: { ...data.plan, status: 'cancelled' },
+      nativeBrackets: [{ ...result, complete: false, standings: [], winnerId: null }],
+    };
+    expect(broadcastProgressPages(cancelled)).toEqual([{ kind: 'summary', key: 'summary' }]);
+    for (const plan of [
+      { ...data.plan, structure: undefined },
+      { ...data.plan, structure: 'round_robin_finals' },
+      { ...data.plan, bracketMode: 'challonge' },
+    ])
+      expect(broadcastProgressPages({ ...data, plan })[0]?.kind).toBe('bracket');
+  });
 });

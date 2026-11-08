@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { twitchChannel } from '../src/lib/twitchChannel';
+import { twitchChannel } from '@smashclub/shared';
 
 describe('Twitch channel input', () => {
   it.each([

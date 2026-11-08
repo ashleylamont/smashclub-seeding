@@ -8,6 +8,7 @@ import { extendedNativePlan } from '../event-planner/nativePlanner';
 import { nativeEvent, nativeEntity, reportViews } from '../tournament/api';
 import { nativeOverview, nativePublicEvents, nativeRoster } from '../tournament/queries';
 import { publicEventNights, resolvePublicEventCode } from './publicEvents';
+import { setTwitchPromotion, TwitchPromotionInput } from './twitchPromotion';
 import { nativeLiveRouter } from '../tournament/router';
 import { startPoolMatch } from './selfService';
 import { nativeBracketRouter } from './nativeRouter';
@@ -48,9 +49,11 @@ import {
 } from './attendance';
 import { deleteStation, saveStation } from './stations';
 import { attendeeRoster, updateAttendee } from './attendeeRoster';
+import type { attendancePreview } from '../tournament/attendance';
 type AttendancePreview = Awaited<ReturnType<typeof previewAttendance>> & {
   restoration?: ReturnType<typeof previewRestoration>['restoration'];
   returnCallMatchIds?: string[];
+  withdrawalMatches?: ReturnType<typeof attendancePreview>['withdrawalMatches'];
 };
 const attendanceInput = z.object({
   planId: z.string().uuid(),
@@ -76,6 +79,9 @@ export const eventOpsRouter = router({
   publicEvents: publicProcedure.query(({ ctx }) =>
     nativePublicEvents(ctx, () => publicEventNights(ctx.db)),
   ),
+  setTwitchPromotion: authedProcedure
+    .input(TwitchPromotionInput)
+    .mutation(({ ctx, input }) => setTwitchPromotion(ctx, input)),
   attendeeRoster: authedProcedure.input(planInput).query(async ({ ctx, input }) => {
     const api = await nativeEvent(ctx, input.planId, false, input);
     return api ? nativeRoster(api) : attendeeRoster(ctx.db, input.planId, ctx.user);

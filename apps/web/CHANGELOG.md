@@ -2,6 +2,87 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.10.3
+
+### Patch Changes
+
+- 9 November 2026 · **Fix** · Let organisers confirm tied orders in larger native round-robin pools with the same match and placement revision checks. [#344](https://github.com/ashleylamont/smashclub-seeding/pull/344) · [build c142ce7](https://github.com/ashleylamont/smashclub-seeding/commit/c142ce7711ec95f0c6ac893375f227327bab1716)
+- 9 November 2026 · **Fix** · **Fix:** List pools that need a finishing-order decision in the organiser's attention summary and jump to the exact pool in Standings / draw. [#343](https://github.com/ashleylamont/smashclub-seeding/pull/343) · [build a33ce3d](https://github.com/ashleylamont/smashclub-seeding/commit/a33ce3d6af0012582d34466ebe7d5212eae18bb9)
+- 9 November 2026 · **Maintenance** · Keep pool-order presentation and worksheet lock explanations together in a focused server module. [#348](https://github.com/ashleylamont/smashclub-seeding/pull/348) · [build 88da9fd](https://github.com/ashleylamont/smashclub-seeding/commit/88da9fd902d4823ffeba8195e1144aa6cf306088)
+
+## 0.10.2
+
+### Patch Changes
+
+- 9 November 2026 · **Fix** · Separate the live pool standings from confirmed finishing orders and show the organiser which pools need a ruling or score review. [#337](https://github.com/ashleylamont/smashclub-seeding/pull/337) · [build 5e8c5f4](https://github.com/ashleylamont/smashclub-seeding/commit/5e8c5f4f885dda7f870d6f9bd3e5ced12a11d39c)
+- 9 November 2026 · **Maintenance** · Let the secure Twitch browser fixture recover from one local asset socket reset during startup. [#341](https://github.com/ashleylamont/smashclub-seeding/pull/341) · [build 3586883](https://github.com/ashleylamont/smashclub-seeding/commit/3586883c2d034dbb87ad9b9378a17cfbfa23f699)
+
+## 0.10.1
+
+### Patch Changes
+
+- 9 November 2026 · **Fix** · **Fix:** Show organisers why an active match blocks snoozing a player. Jump to the exact Return untaken call control when the pairing is still waiting to start. [#335](https://github.com/ashleylamont/smashclub-seeding/pull/335) · [build 7f38278](https://github.com/ashleylamont/smashclub-seeding/commit/7f3827872efcfc51c5fcb4dedc518f85beb2e8cb)
+- 9 November 2026 · **Fix** · Make attendance restoration previews easier to scan by separating qualification from match consequences and showing blockers before a restoration can be reviewed. [#325](https://github.com/ashleylamont/smashclub-seeding/pull/325) · [build d547ef4](https://github.com/ashleylamont/smashclub-seeding/commit/d547ef4b914b6659385724c917861d906f6324aa)
+- 9 November 2026 · **Fix** · Use consistent linked finals names in the organiser’s match queue and bracket backup sheets while keeping the provider’s match identifier. [#323](https://github.com/ashleylamont/smashclub-seeding/pull/323) · [build 3fce44e](https://github.com/ashleylamont/smashclub-seeding/commit/3fce44ebd3ea96732c557b402830f8eba68ccfc6)
+- 9 November 2026 · **Fix** · Show structural set names on archived native results when the stored bracket and published set links verify the match position. [#333](https://github.com/ashleylamont/smashclub-seeding/pull/333) · [build f875fc6](https://github.com/ashleylamont/smashclub-seeding/commit/f875fc6a546a8b4af9e7e6c9d1ed494edb60e237)
+- 9 November 2026 · **Fix** · Show which sets advance by forfeit when an entrant withdraws, and which need the organiser to record the forfeit. The preview distinguishes calls awaiting a start from sets already in progress. [#329](https://github.com/ashleylamont/smashclub-seeding/pull/329) · [build 59f13bd](https://github.com/ashleylamont/smashclub-seeding/commit/59f13bd43820f92154ff7fd96ac2336623558da6)
+- 9 November 2026 · **Maintenance** · Allow two ordinary main builds to verify concurrently while retaining full verification for every commit and a single image publication job at a time. [#332](https://github.com/ashleylamont/smashclub-seeding/pull/332) · [build 4fb82ff](https://github.com/ashleylamont/smashclub-seeding/commit/4fb82ffbb6c576b2c8c796b34403dcdf36d758f0)
+- 9 November 2026 · **Maintenance** · Wait for the published tournament link before the finals replay browser test checks archived results. [#327](https://github.com/ashleylamont/smashclub-seeding/pull/327) · [build e04d2e8](https://github.com/ashleylamont/smashclub-seeding/commit/e04d2e82788da8740dd019060557843b5cc5c83a)
+
+## 0.10.0
+
+### Minor Changes
+
+- 9 November 2026 · **Feature** · Compare two players’ recorded singles sets, games, and current WHR odds on a shareable head-to-head page. Find it from Rankings or start with one player already selected from their profile. [#322](https://github.com/ashleylamont/smashclub-seeding/pull/322) · [build 397374a](https://github.com/ashleylamont/smashclub-seeding/commit/397374a5f503bd174fc41bfd22b9fa422493a17b)
+
+### Patch Changes
+
+- 9 November 2026 · **Fix** · Show the same native bracket match names in attendance previews and the organiser’s match queue. [#320](https://github.com/ashleylamont/smashclub-seeding/pull/320) · [build ef266ef](https://github.com/ashleylamont/smashclub-seeding/commit/ef266ef402cf454fa15c461a85004d25476f4805)
+- 9 November 2026 · **Fix** · Explain singles match evidence in player history and show the pre-night WHR win estimate when both players have connected earlier rated results. [#319](https://github.com/ashleylamont/smashclub-seeding/pull/319) · [build 0c6ea36](https://github.com/ashleylamont/smashclub-seeding/commit/0c6ea36f01171f21d44ae9ca99aa8772cd6ef77a)
+
+## 0.9.2
+
+### Patch Changes
+
+- 9 November 2026 · **Fix** · Show the same finals caption in the OBS result flash and recent-results rail for native and linked brackets. [#317](https://github.com/ashleylamont/smashclub-seeding/pull/317) · [build 1d226b6](https://github.com/ashleylamont/smashclub-seeding/commit/1d226b6b6831c95623b0364593f68f074d556654)
+- 9 November 2026 · **Maintenance** · Stabilize the homepage browser test that checks live event discovery after a draw is paused. [#316](https://github.com/ashleylamont/smashclub-seeding/pull/316) · [build 15463b3](https://github.com/ashleylamont/smashclub-seeding/commit/15463b360d8973d11b51aef61c1205c6c4baec80)
+
+## 0.9.1
+
+### Patch Changes
+
+- 9 November 2026 · **Fix** · Keep pure round-robin results with the confirmed pool standings on the player hub and show the organiser’s confirmed order on OBS. [#311](https://github.com/ashleylamont/smashclub-seeding/pull/311) · [build cd0d8a3](https://github.com/ashleylamont/smashclub-seeding/commit/cd0d8a39af78347e198abcd4ab82b5248d0b2575)
+- 9 November 2026 · **Fix** · Print each structurally named bracket match with one caption on the organiser’s backup worksheet. The match order and feeder instructions are still shown. [#313](https://github.com/ashleylamont/smashclub-seeding/pull/313) · [build 6180f10](https://github.com/ashleylamont/smashclub-seeding/commit/6180f10e9909f75509d9426b7e3375416c78d425)
+- 9 November 2026 · **Fix** · Improve light-theme contrast for the main-character and administrator badges. [#312](https://github.com/ashleylamont/smashclub-seeding/pull/312) · [build 8cade51](https://github.com/ashleylamont/smashclub-seeding/commit/8cade5170f8d2f3219201595e57438226cfe36d7)
+
+## 0.9.0
+
+### Minor Changes
+
+- 9 November 2026 · **Feature** · Start a ready pairing at a free reserved station directly from Broadcast. Choose the pairing on the selected station, then use the same live score and finish controls as before. [#309](https://github.com/ashleylamont/smashclub-seeding/pull/309) · [build ee0d464](https://github.com/ashleylamont/smashclub-seeding/commit/ee0d4645af67fec2765542379652f1189157e303)
+
+### Patch Changes
+
+- 9 November 2026 · **Fix** · Show the configured meetings per pairing on native pool schedules. Linked and older schedules show their recorded rounds without claiming a draw format. [#306](https://github.com/ashleylamont/smashclub-seeding/pull/306) · [build 8dedf09](https://github.com/ashleylamont/smashclub-seeding/commit/8dedf091bf24102dcefbc6a2224aa91cbc076d5f)
+- 9 November 2026 · **Maintenance** · Run the station-round contrast check with the opened pairing in view while keeping the whole event hub in scope. [#307](https://github.com/ashleylamont/smashclub-seeding/pull/307) · [build ba9a0d5](https://github.com/ashleylamont/smashclub-seeding/commit/ba9a0d57cc442de7f5afc4472a780c5afb5ce156)
+
+## 0.8.0
+
+### Minor Changes
+
+- 9 November 2026 · **Feature** · Organisers can announce a Twitch stream from Broadcast for an open, published event. Viewers can follow the Twitch link from the homepage or load the player on the event page when there is room. Announcements expire after four hours or when stopped. Unpublishing hides the stream, and republishing resumes an unexpired announcement. [#303](https://github.com/ashleylamont/smashclub-seeding/pull/303) · [build 4417d63](https://github.com/ashleylamont/smashclub-seeding/commit/4417d631c5656ae7b0937ad3c3ee17f3072018a0)
+
+### Patch Changes
+
+- 9 November 2026 · **Fix** · Open events show their actual pool and round-robin names on player screens and the broadcast progress view. Pool names continue from Z to AA, while existing pool links and filters keep working. [#304](https://github.com/ashleylamont/smashclub-seeding/pull/304) · [build 5e9769f](https://github.com/ashleylamont/smashclub-seeding/commit/5e9769f97aae951b2ebcfcef0923fe57fb77d085)
+
+## 0.7.4
+
+### Patch Changes
+
+- 9 November 2026 · **Improvement** · Review conflicting score reports directly from Needs attention. The match desk puts the recorded and submitted results beside the decision buttons and makes the review shortcut work by keyboard. [#297](https://github.com/ashleylamont/smashclub-seeding/pull/297) · [build 651c025](https://github.com/ashleylamont/smashclub-seeding/commit/651c02523cd2fdd3d1c7c182eda5913551c57856)
+- 9 November 2026 · **Maintenance** · Run database-backed browser event flows during final build verification for verified automatic version pull requests. [#298](https://github.com/ashleylamont/smashclub-seeding/pull/298) · [build ddbaf2d](https://github.com/ashleylamont/smashclub-seeding/commit/ddbaf2d6b88209d4b88b879c022a183101b288a3)
+
 ## 0.7.3
 
 ### Patch Changes

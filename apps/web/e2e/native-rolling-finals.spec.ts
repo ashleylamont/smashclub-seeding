@@ -32,7 +32,7 @@ type Match = {
 };
 type Snapshot = {
   matches: Match[];
-  plan: { status: string };
+  plan: { status: string; resultsSlug: string | null };
   poolSchedules: { poolIndex: number; active: boolean }[];
 };
 type Live = {
@@ -588,12 +588,17 @@ test('organiser replays one played finals slot and the original remains visible 
       await report(next, next.player1Id!);
     }
     await mutate(page.request, 'eventOps.native.finalize', { planId });
-    const sealed = await query<{ plan: { resultsSlug: string } }>(
-      page.request,
-      'eventOps.snapshot',
-      { planId },
-    );
-    await phone.goto(`/tournaments/${sealed.plan.resultsSlug}`);
+    let resultsSlug: string | null = null;
+    await expect
+      .poll(
+        async () => {
+          resultsSlug = (await snapshot()).plan.resultsSlug;
+          return resultsSlug;
+        },
+        { message: 'Wait for the finalized replay archive to publish' },
+      )
+      .toBeTruthy();
+    await phone.goto(`/tournaments/${resultsSlug}`);
     const published = phone.getByRole('row').filter({ hasText: 'Superseded advancement' });
     await expect(published).toHaveCount(1);
     for (const name of originalNames) await expect(published).toContainText(name);

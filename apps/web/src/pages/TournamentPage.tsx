@@ -244,7 +244,7 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
                 <tr>
                   <th>Stage</th>
                   <th title="Winners rounds are W1, W2…; losers rounds are L1, L2…">Round</th>
-                  <th title="Challonge's identifier for this set in the bracket">Set</th>
+                  <th>Set</th>
                   <th className="col-fill">Match</th>
                   <th>Score</th>
                   <th>Status</th>
@@ -276,7 +276,12 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
                             ? roundLabel(set.round)
                             : '—'}
                       </td>
-                      <td className="mono">{set.identifier ?? '—'}</td>
+                      <td
+                        className={set.displayLabel ? 'mono set-structural-label' : 'mono'}
+                        title={set.displayLabel ? (set.identifier ?? undefined) : undefined}
+                      >
+                        {set.displayLabel ?? set.identifier ?? '—'}
+                      </td>
                       <td>
                         <SetLine set={set} />
                         {set.excludedFromRatings && (

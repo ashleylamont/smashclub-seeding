@@ -1,8 +1,10 @@
 import { NativeDrawTools } from './NativeDrawTools';
 import { filterDeskMatches } from '../../lib/opsMatchFilter';
 import { DispatchDesk } from './DispatchDesk';
+import { useDispatchCommand } from './dispatchCommand';
 import { DoublesAvailabilityControls } from './DoublesAvailabilityControls';
 import { PoolDrawControls } from './PoolDrawControls';
+import { OpsPoolStandings } from './OpsPoolStandings';
 import { NativeResultControls } from './NativeResultControls';
 import { Button } from '../../components/ui/Button';
 import { Select, SelectItem } from '../../components/ui/Select';
@@ -10,6 +12,7 @@ import { Input } from '../../components/ui/Input';
 import { Disclosure } from '../../components/ui/Disclosure';
 import { OpsMatchSummary } from './OpsMatchSummary';
 import { OpsAnnouncements } from './OpsAnnouncements';
+import { OpsTwitchPromotion } from './OpsTwitchPromotion';
 import { OpsAccessControls } from './OpsAccessControls';
 import { OpsEventHistory } from './OpsEventHistory';
 import { Tabs, TabList, Tab, TabPanel } from '../../components/ui/Tabs';
@@ -35,6 +38,7 @@ import { AttendanceControls } from './AttendanceControls';
 import { AttendeeList } from './AttendeeList';
 import { GuestReportingControls } from './GuestReportingControls';
 import { availableMatches, poolStandings } from '../../lib/eventQueue';
+import { poolTitle } from '../../lib/poolFlow';
 import { OpsAttentionDesk } from './OpsAttentionDesk';
 import { MainStagePanel } from './MainStagePanel';
 
@@ -111,6 +115,10 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
       setPending(false);
     }
   };
+  const closed = ['complete', 'cancelled'].includes(event.data?.plan.status ?? '');
+  const liveDisabled = !online || pending || closed || Boolean(event.data?.plan.drawPaused);
+  const dispatchDisabled = liveDisabled || event.isError;
+  const dispatch = useDispatchCommand(planId, dispatchDisabled);
   if (event.isPending) return <LoadingState>Opening event…</LoadingState>;
   if (!event.data)
     return (
@@ -124,9 +132,6 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
       </section>
     );
   const data = event.data;
-  const closed = ['complete', 'cancelled'].includes(data.plan.status);
-  const liveDisabled = !online || pending || closed || Boolean(data.plan.drawPaused);
-  const dispatchDisabled = liveDisabled || event.isError;
   const available = availableMatches(data.matches).filter((match) => match.availability.canStart);
   const callable = new Set(available.map((match) => match.id));
   const pools = poolStandings(data.matches);
@@ -187,7 +192,8 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
       </header>
       <OpsAttentionDesk
         data={data}
-        onJump={(id) => void workspace.openControl(id)}
+        pools={pools}
+        onJump={(id, section) => void workspace.openControl(id, section)}
         onMatch={(id) => {
           setFocusedMatchId(id);
           setDivision('all');
@@ -227,7 +233,8 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
           {data.plan.bracketMode === 'native' && (
             <DispatchDesk
               data={data}
-              disabled={dispatchDisabled}
+              dispatch={dispatch}
+              callDesk={callDesk}
               onReviewReports={openScoreSubmissions}
               onMatch={(id) => {
                 setFocusedMatchId(id);
@@ -321,7 +328,11 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
                       key={`${pool.division}:${pool.poolIndex}`}
                       value={`${pool.division}:${pool.poolIndex}`}
                     >
-                      {pool.division} Pool {String.fromCharCode(65 + pool.poolIndex)}
+                      {poolTitle(
+                        `${pool.division}:${pool.poolIndex}`,
+                        data.plan.structure,
+                        'caption',
+                      )}
                     </SelectItem>
                   ))}
                 </Select>
@@ -420,59 +431,13 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
             onOpenCall={(matchId) => void workspace.openControl(returnCallControlId(matchId))}
           />
           {pools.length > 0 && (
-            <section className="card">
-              <h3>Pool standings</h3>
-              <p className="muted">
-                Ordered by wins, then game difference for review. Ties and final advancement must be
-                confirmed in the planner.
-              </p>
-              <div className="ops-bottom-grid">
-                {pools.map((pool) => (
-                  <div key={`${pool.division}:${pool.poolIndex}`}>
-                    <h4>
-                      {pool.division} · Pool {String.fromCharCode(65 + pool.poolIndex)}{' '}
-                      <span className="muted">
-                        {pool.complete}/{pool.total} sets
-                      </span>
-                    </h4>
-                    <table className="ops-standings">
-                      <thead>
-                        <tr>
-                          <th>Player</th>
-                          <th>W–L</th>
-                          <th>Games ±</th>
-                          <th>To play</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pool.players.map((player) => (
-                          <tr key={player.id}>
-                            <td>{player.name}</td>
-                            <td>
-                              {player.wins}–{player.losses}
-                            </td>
-                            <td>
-                              {player.differential > 0 ? '+' : ''}
-                              {player.differential}
-                            </td>
-                            <td>{player.remaining}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ))}
-              </div>
-              {admin ? (
-                <a href={`/admin/event-planner?plan=${planId}&step=pools`}>
-                  Review and confirm advancement →
-                </a>
-              ) : (
-                <p className="muted">
-                  Ask an event administrator to confirm advancement in the planner.
-                </p>
-              )}
-            </section>
+            <OpsPoolStandings
+              pools={pools}
+              data={data}
+              admin={admin}
+              closed={closed}
+              onReviewScores={openScoreSubmissions}
+            />
           )}
           {data.plan.bracketMode === 'native' ? (
             <>
@@ -503,10 +468,17 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
         <TabPanel value="broadcast">
           <MainStagePanel
             data={data}
+            dispatch={dispatch}
             disabled={liveDisabled}
             unavailable={event.isError}
             callable={callable}
             act={act}
+          />
+          <OpsTwitchPromotion
+            data={data}
+            disabled={!online || pending || event.isError}
+            act={act}
+            refresh={event.refetch}
           />
           <OpsAnnouncements data={data} pending={pending} closed={closed} act={act} />
         </TabPanel>

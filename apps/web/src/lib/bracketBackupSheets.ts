@@ -7,6 +7,7 @@ import {
 import { knockoutMatchName, selectFormatFinalists } from '@smashclub/tournament-formats';
 import type { LiveMatch } from './eventDisplay';
 import { liveBracketSide, liveBracketStatus } from './eventBracket';
+import { linkedFinalCaption } from './linkedFinalCaption';
 
 export type BracketBackupData = {
   plan: {
@@ -112,7 +113,9 @@ export function bracketBackupSheets(data: BracketBackupData) {
             (a.nativeSlot ?? 0) - (b.nativeSlot ?? 0) ||
             a.label.localeCompare(b.label, undefined, { numeric: true }),
         );
-      const labels = new Map(matches.map((match) => [match.id, match.label]));
+      const labels = new Map(
+        matches.map((match) => [match.id, linkedFinalCaption(match)?.identifier ?? match.label]),
+      );
       return {
         key: `${division}:${stage}`,
         title: `${data.plan.structure && data.plan.structure !== 'dual_division' ? 'Open' : division === 'upper' ? 'Upper' : 'Lower'} ${stage === 'main' ? 'Championship' : 'Consolation'}`,
@@ -138,8 +141,11 @@ export function bracketBackupSheets(data: BracketBackupData) {
           matches.length || bracket
             ? matches.map((match) => ({
                 key: match.id,
-                label: match.label,
-                round: match.nativeRound ? `Round ${match.nativeRound}` : '',
+                label: labels.get(match.id)!,
+                round:
+                  match.nativeRound && !match.labelFromStructure
+                    ? `Round ${match.nativeRound}`
+                    : '',
                 player1: liveBracketSide(
                   {
                     ...match,

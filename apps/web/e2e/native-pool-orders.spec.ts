@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
+import { AxeBuilder } from '@axe-core/playwright';
 import { chooseOption } from '../test-support/controls';
 
 async function query<T>(request: APIRequestContext, procedure: string, input?: object): Promise<T> {
@@ -26,7 +27,7 @@ type Match = {
 };
 type Snapshot = {
   matches: Match[];
-  poolOrders: { poolIndex: number; status: string }[];
+  poolOrders: { poolIndex: number; status: string; plannerConfirmation?: { available: boolean } }[];
   placements: { poolIndex: number; source: string }[];
   nativeBrackets: { complete: boolean }[];
 };
@@ -41,7 +42,8 @@ type Planner = { divisions: { division: string; pools: Pool[] }[] };
 
 test('TO desk automatically decides a unique pool, records an explicit tied-pool ruling, then draws and completes finals', async ({
   page,
-}) => {
+  request,
+}, testInfo) => {
   test.setTimeout(180_000);
   await page.request.post('/api/auth/sign-in/email', {
     data: { email: 'admin@smashclub.dev', password: 'devpassword123' },
@@ -134,6 +136,16 @@ test('TO desk automatically decides a unique pool, records an explicit tied-pool
   await expect(page.locator('.ops-notice')).toContainText('Score recorded locally');
   snapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
   expect(snapshot.poolOrders.map((p) => p.status)).toEqual(['automatic', 'ruling_required']);
+  const publicOrders = (await query<Snapshot>(request, 'eventOps.snapshot', { planId })).poolOrders;
+  expect(publicOrders).toHaveLength(2);
+  for (const pool of publicOrders) expect(pool).not.toHaveProperty('plannerConfirmation');
+  const privateOrders = (await query<Snapshot>(page.request, 'eventOps.overview', { planId }))
+    .poolOrders;
+  expect(privateOrders[0]).not.toHaveProperty('plannerConfirmation');
+  expect(privateOrders[1]).toMatchObject({
+    status: 'ruling_required',
+    plannerConfirmation: { available: true },
+  });
   expect(
     snapshot.placements
       .filter((p) => p.poolIndex === firstPool.poolIndex)
@@ -155,7 +167,64 @@ test('TO desk automatically decides a unique pool, records an explicit tied-pool
     },
   });
   expect(stale.status()).toBe(409);
-  await page.goto(`/admin/event-planner?plan=${planId}&step=pools`);
+  const standings = page.getByRole('region', { name: 'Pool standings', exact: true });
+  const automatic = standings.getByRole('region', { name: 'Open · Pool A', exact: true });
+  const tied = standings.getByRole('region', { name: 'Open · Pool B', exact: true });
+  const plannerLink = standings.getByRole('link', { name: 'Confirm pool orders in planner' });
+  const captureStandings = async (phase: string) => {
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const theme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+        await page.evaluate(async () => {
+          await document.fonts.ready;
+          // Let the responsive navigation finish reflowing after the viewport change.
+          await new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          );
+          scrollTo(0, 0);
+        });
+        await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+        expect(
+          (
+            await new AxeBuilder({ page })
+              .include(
+                '#ops-pool-standings-title, section[aria-labelledby="ops-pool-standings-title"]',
+              )
+              .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+              .analyze()
+          ).violations,
+        ).toEqual([]);
+        await page.screenshot({
+          path: testInfo.outputPath(`standings-${phase}-${width}-${theme}.png`),
+          fullPage: true,
+        });
+      }
+    }
+  };
+  const attention = page.getByRole('region', { name: /Needs attention/ });
+  const attentionHeading = attention.getByRole('heading', { name: /Needs attention/ });
+  const poolOrders = attention.getByRole('button', { name: 'Pool orders · 1', exact: true });
+  await expect(attentionHeading).toHaveText('Needs attention 1');
+  await poolOrders.press('Enter');
+  await attention
+    .getByRole('button', { name: 'Review pool order for Open · Pool B' })
+    .press('Enter');
+  await expect(page.getByRole('tab', { name: 'Standings / draw', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(tied.getByRole('heading', { name: /Open · Pool B/ })).toBeFocused();
+  await expect(standings).toContainText('Confirmed finishing orders are recorded separately.');
+  await expect(automatic).toContainText('Decided automatically by distinct set-win totals');
+  await expect(tied).toContainText('Set wins do not decide a unique full order');
+  await expect(plannerLink).toHaveAttribute(
+    'href',
+    `/admin/event-planner?plan=${planId}&step=pools`,
+  );
+  await captureStandings('ruling-required');
+  await plannerLink.press('Enter');
   const cards = page.locator('.pool-card');
   await expect(cards.nth(0)).toContainText('Decided automatically by distinct set-win totals');
   await expect(cards.nth(1)).toContainText('Set wins do not decide a unique full order');
@@ -165,6 +234,12 @@ test('TO desk automatically decides a unique pool, records an explicit tied-pool
   await expect(cards.nth(1)).toContainText('Finishing order confirmed by an organiser');
   await page.goto(`/admin/event-operations?plan=${planId}`);
   await page.getByRole('tab', { name: 'Standings / draw', exact: true }).click();
+  await expect(automatic).toContainText('Decided automatically by distinct set-win totals');
+  await expect(tied).toContainText('Finishing order confirmed by an organiser');
+  await expect(plannerLink).toHaveCount(0);
+  await expect(attentionHeading).toHaveText('Needs attention 0');
+  await expect(poolOrders).toHaveCount(0);
+  await captureStandings('confirmed');
   const finals = page.locator('section.card').filter({
     has: page.getByRole('heading', { name: 'Championship and consolation', exact: true }),
   });

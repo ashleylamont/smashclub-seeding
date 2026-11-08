@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import {
   eventMatches,
+  eventNativeBrackets,
   eventOperationSettings,
+  eventPlanBrackets,
   eventPlanEntries,
   eventPlans,
   playerClaims,
@@ -24,9 +26,13 @@ import {
   previewNativeBrackets,
   resetNativeBrackets,
 } from '../src/event-operations/nativeBrackets';
-import { getPlan, savePoolPlacements } from '../src/event-planner/plans';
+import { BRACKET_SLOTS, getPlan, savePoolPlacements } from '../src/event-planner/plans';
 import { latestRecomputeId, runRecompute } from '../src/recompute/recompute';
 import { loadEventOverview } from '../src/events/overview';
+import { loadEnv } from '../src/env';
+import { RecomputeTrigger } from '../src/recompute/trigger';
+import { publicRouter } from '../src/trpc/routers/public';
+import { fixtureClient } from './helpers/challongeFixtures';
 import { createTestDb } from './helpers/testDb';
 let db: Db;
 let close: () => Promise<void>;
@@ -214,6 +220,119 @@ describe('native brackets', () => {
     expect(
       (await db.select().from(eventMatches)).every((match) => match.sourceSetId === null),
     ).toBe(true);
+  });
+
+  it('projects archive captions from exact legacy publication links and the complete stored draw', async () => {
+    // The normal planner creates these slots before legacy finalization links the results.
+    await db
+      .insert(eventPlanBrackets)
+      .values(BRACKET_SLOTS.map((slot) => ({ eventPlanId: planId, ...slot })));
+    await finishPools();
+    await generate();
+    for (;;) {
+      const ready = (await db.select().from(eventMatches)).filter(
+        (match) => match.nativeBracketId && match.status === 'ready',
+      );
+      if (!ready.length) break;
+      for (const match of ready) await score(match);
+    }
+    await finalizeNativeEvent(db, admin, planId);
+    const publicApi = publicRouter.createCaller({
+      db,
+      user: null,
+      env: loadEnv({
+        NODE_ENV: 'test',
+        DATABASE_URL: 'postgres://unused',
+        BETTER_AUTH_SECRET: 'test-secret-test-secret-test',
+      }),
+      challonge: fixtureClient([]),
+      recomputeTrigger: new RecomputeTrigger(db, 1_000_000),
+    });
+    const tournament = (await db.select().from(tournaments)).find((row) =>
+      row.challongeSlug.endsWith('_upper_consolation'),
+    );
+    const read = () => publicApi.tournament({ slug: tournament!.challongeSlug });
+    const archive = (await read())!;
+    const stored = await db.select().from(sets).where(eq(sets.tournamentId, archive.id));
+    expect(archive.sets.map(({ displayLabel }) => displayLabel).sort()).toEqual([
+      'Final',
+      'Semi-final 1',
+      'Semi-final 2',
+    ]);
+    expect(archive.sets.some((set) => set.unplayedOutcome === 'bye' && set.displayLabel)).toBe(
+      true,
+    );
+    expect(archive.sets.map(({ id, identifier }) => ({ id, identifier }))).toEqual(
+      stored
+        .sort((a, b) => a.suggestedPlayOrder! - b.suggestedPlayOrder!)
+        .map(({ id, identifier }) => ({ id, identifier })),
+    );
+    expect(JSON.stringify(archive)).not.toMatch(/canonicalName|eventMatchId|sourceSetId|parent1/);
+    const fallback = {
+      ...archive,
+      sets: archive.sets.map(({ displayLabel: _displayLabel, ...set }) => set),
+    };
+
+    const final = archive.sets.find((set) => set.displayLabel === 'Final')!;
+    const [source] = await db
+      .select()
+      .from(eventMatches)
+      .where(eq(eventMatches.sourceSetId, final.id));
+    await db
+      .update(eventMatches)
+      .set({ parent1MatchId: null })
+      .where(eq(eventMatches.id, source!.id));
+    expect(await read()).toEqual(fallback);
+    await db
+      .update(eventMatches)
+      .set({ parent1MatchId: source!.parent1MatchId, sourceSetId: null })
+      .where(eq(eventMatches.id, source!.id));
+    expect(await read()).toEqual(fallback);
+    await db
+      .update(eventMatches)
+      .set({ sourceSetId: final.id })
+      .where(eq(eventMatches.id, source!.id));
+
+    const record = stored.find((set) => set.id === final.id)!;
+    await db
+      .update(sets)
+      .set({ raw: { provider: 'native' } })
+      .where(eq(sets.id, final.id));
+    expect(await read()).toEqual(fallback);
+    await db.update(sets).set({ raw: record.raw }).where(eq(sets.id, final.id));
+
+    const otherScope = (await db.select().from(eventPlanBrackets)).find(
+      (link) => link.tournamentId !== tournament!.id,
+    )!;
+    await db
+      .update(eventPlanBrackets)
+      .set({ tournamentId: tournament!.id })
+      .where(eq(eventPlanBrackets.id, otherScope.id));
+    expect(await read()).toEqual(fallback);
+    await db
+      .update(eventPlanBrackets)
+      .set({ tournamentId: otherScope.tournamentId })
+      .where(eq(eventPlanBrackets.id, otherScope.id));
+
+    const [bracket] = await db
+      .select()
+      .from(eventNativeBrackets)
+      .where(eq(eventNativeBrackets.id, source!.nativeBracketId!));
+    await db
+      .update(eventNativeBrackets)
+      .set({ entrantIds: bracket!.entrantIds.slice(0, 2) })
+      .where(eq(eventNativeBrackets.id, bracket!.id));
+    expect(await read()).toEqual(fallback);
+    await db
+      .update(eventNativeBrackets)
+      .set({ entrantIds: bracket!.entrantIds })
+      .where(eq(eventNativeBrackets.id, bracket!.id));
+    expect(await read()).toEqual(archive);
+    await db
+      .update(tournaments)
+      .set({ provider: 'challonge' })
+      .where(eq(tournaments.id, archive.id));
+    expect(await read()).toEqual({ ...fallback, provider: 'challonge' });
   });
 
   it('draws honest byes and completes all four brackets into history exactly once', async () => {

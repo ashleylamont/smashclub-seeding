@@ -499,8 +499,11 @@ it('queues exact-build verification and registry writes while superseding PR che
   expect(publish.jobs.verify.needs).toBe('classify');
   expect(publish.jobs.verify.if).toBe('${{ !cancelled() }}');
   expect(publish.jobs.verify.concurrency).toEqual({
-    group:
-      "${{ (github.event_name == 'workflow_dispatch' || needs.classify.outputs.lane == 'ordinary') && 'publish-verification-main-ordinary' || 'publish-verification-refs/heads/main' }}",
+    group: [
+      "${{ (github.event_name == 'workflow_dispatch' || needs.classify.outputs.lane == 'ordinary') && 'publish-verification-main-ordinary'",
+      "|| (needs.classify.outputs.lane == 'ordinary-2' && 'publish-verification-main-ordinary-2')",
+      "|| 'publish-verification-refs/heads/main' }}",
+    ].join(' '),
     queue: 'max',
   });
   expect(publish.jobs.publish.concurrency).toEqual({

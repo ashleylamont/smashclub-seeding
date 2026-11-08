@@ -151,6 +151,114 @@ describe('native format lifecycle through shipped APIs', () => {
     expect(preview.allowed).toBe(true);
     await caller().eventOps.native.generate({ planId, revisionToken: preview.revisionToken });
   }
+
+  it('confirms and publishes a tied 17-player round robin through the planner', async () => {
+    const planId = await draft(17, 'round_robin');
+    const original = await runtime.state(planId);
+    const [pool] = original.pools;
+    expect(original.pools).toHaveLength(1);
+    expect(original.matches).toHaveLength(136);
+    const worksheet = async () =>
+      (await caller().admin.eventPlanner.plan({ planId }))!.divisions[0]!.pools[0]!;
+    const staleToken = (await worksheet()).matchRevisionToken;
+    const positions = new Map(pool!.entrantIds.map((id, index) => [id, index]));
+    for (const match of original.matches) {
+      const difference =
+        (positions.get(match.player2Id!)! - positions.get(match.player1Id!)! + 17) % 17;
+      const firstWins = difference <= 8;
+      await caller().eventOps.reportScore({
+        matchId: match.id,
+        expectedRevision: match.revision,
+        requestId: match.id,
+        score1: firstWins ? 2 : 0,
+        score2: firstWins ? 0 : 2,
+        outcome: 'played',
+      });
+    }
+    const ready = await runtime.state(planId);
+    expect(ready.matches.every((m) => m.status === 'complete')).toBe(true);
+    expect(
+      pool!.entrantIds.map((id) => ready.matches.filter((m) => m.winnerId === id).length),
+    ).toEqual(Array(17).fill(8));
+    const overview = await caller().eventOps.overview({ planId });
+    expect('poolOrders' in overview && overview.poolOrders?.[0]).toMatchObject({
+      status: 'ruling_required',
+      plannerConfirmation: { available: true },
+    });
+    const current = await worksheet();
+    expect(current.matchRevisionToken).toMatch(/^[a-f0-9]{64}$/);
+    expect(current.matchRevisionToken).not.toBe(staleToken);
+    expect(current.matchRevisions).toHaveLength(136);
+    const order = [...pool!.entrantIds].reverse();
+    const input = {
+      poolIndex: current.poolIndex,
+      playerIdsInOrder: order,
+      expectedPlacementRevision: current.placementRevision,
+      expectedMatchRevisionToken: current.matchRevisionToken,
+    };
+    const save = (
+      change: Partial<typeof input> & {
+        expectedMatchRevisions?: typeof current.matchRevisions;
+      } = {},
+      actor: SessionUser | null = nativeAdmin,
+    ) =>
+      rpc(
+        'admin.eventPlanner.savePoolPlacements',
+        { planId, division: 'upper', pools: [{ ...input, ...change }] },
+        actor,
+      );
+
+    expect((await save({}, null)).status).toBe(401);
+    expect((await save({ expectedMatchRevisions: current.matchRevisions })).status).toBe(400);
+    expect(
+      (
+        await save({
+          expectedMatchRevisions: current.matchRevisions,
+          expectedMatchRevisionToken: undefined,
+        })
+      ).status,
+    ).toBe(400);
+    expect((await save({ expectedMatchRevisionToken: 'invalid' })).status).toBe(400);
+    expect(await save({ expectedMatchRevisionToken: staleToken })).toMatchObject({
+      status: 409,
+      body: { error: { message: expect.stringContaining('changed') } },
+    });
+    expect(
+      await save({ expectedPlacementRevision: String(ready.pools[0]!.revision - 1) }),
+    ).toMatchObject({
+      status: 409,
+      body: { error: { message: 'Pool order changed.' } },
+    });
+    for (const invalid of [
+      order.slice(1),
+      [order[1]!, ...order.slice(1)],
+      [crypto.randomUUID(), ...order.slice(1)],
+    ]) {
+      expect(await save({ playerIdsInOrder: invalid })).toMatchObject({
+        status: 409,
+        body: { error: { message: 'Include every pool entrant once.' } },
+      });
+    }
+    expect((await runtime.state(planId)).sequence).toBe(ready.sequence);
+    expect((await save()).status).toBe(200);
+    const confirmed = await runtime.state(planId);
+    expect(confirmed.pools[0]!.order).toEqual(order);
+    expect(confirmed.matches).toEqual(ready.matches);
+    expect(confirmed.brackets).toEqual([]);
+
+    await caller().eventOps.native.finalize({ planId });
+    const result = await caller(null).eventOps.snapshot({ planId });
+    expect(result.plan.status).toBe('complete');
+    expect(result.matches).toHaveLength(136);
+    expect(result.matches.every((m) => m.stage === 'group' && m.nativeBracketId === null)).toBe(
+      true,
+    );
+    expect(result.placements.map(({ playerId, place }) => [playerId, place])).toEqual(
+      order.map((id, index) => [id, index + 1]),
+    );
+    expect(await runtime.replay(planId)).toEqual(await runtime.state(planId));
+  }, 120_000);
+
   for (const scenario of [
     { structure: 'single_elimination', count: 3, played: 2, brackets: 1 },
     { structure: 'single_elimination', count: 8, played: 7, brackets: 1 },
@@ -261,9 +369,17 @@ describe('native format lifecycle through shipped APIs', () => {
     async (structure) => {
       const planId = await draft(5, structure);
       const state = await runtime.state(planId);
-      const playerId = state.matches.find((m) => m.status === 'ready')!.player1Id!;
+      const ready = state.matches.find((m) => m.status === 'ready')!;
+      const playerId = ready.player1Id!;
       const preview = attendancePreview(state, { action: 'withdraw', playerId });
       expect(preview.allowed).toBe(true);
+      expect(preview.withdrawalMatches).toEqual({ [ready.id]: { forfeit: 'automatic' } });
+      const closed = attendancePreview(
+        { ...state, lifecycle: 'cancelled' },
+        { action: 'withdraw', playerId },
+      );
+      expect(closed.allowed).toBe(false);
+      expect(closed.withdrawalMatches?.[ready.id]?.forfeit).toBeUndefined();
       await caller().eventOps.live.command({
         planId,
         requestId: crypto.randomUUID(),
@@ -295,6 +411,25 @@ describe('native format lifecycle through shipped APIs', () => {
       expect(await runtime.replay(planId)).toEqual(final);
     },
   );
+
+  it.each([
+    ['single_elimination', 'playing', 'organiser'],
+    ['single_elimination', 'held', 'organiser'],
+    ['single_elimination', 'ready', 'automatic'],
+    ['double_elimination', 'playing', 'organiser'],
+    ['single_elimination', 'called', 'automatic'],
+    ['round_robin', 'called', 'organiser'],
+  ] as const)('previews and applies %s withdrawal while %s', async (structure, phase, forfeit) => {
+    const { planId, resolved } = await verifyWithdrawalPreview(
+      draft,
+      runtime,
+      caller().eventOps,
+      structure,
+      phase,
+      forfeit,
+    );
+    expect(await runtime.replay(planId)).toEqual(resolved);
+  });
 
   it.each(['score', 'approval'] as const)(
     'returns scoped recovery for a blocked feeder %s and retries after the call returns',
@@ -688,3 +823,156 @@ describe('native format lifecycle through shipped APIs', () => {
     expect(plan!.structure).toBe('single_elimination');
   });
 });
+
+async function verifyWithdrawalPreview(
+  draft: (count: number, structure: TournamentStructure) => Promise<string>,
+  runtime: NativeRuntime,
+  api: ReturnType<typeof appRouter.createCaller>['eventOps'],
+  structure: TournamentStructure,
+  phase: 'playing' | 'held' | 'ready' | 'called',
+  forfeit: 'automatic' | 'organiser',
+) {
+  const planId = await draft(4, structure);
+  const started = phase === 'playing' || phase === 'held';
+  const command = (input: Parameters<NativeRuntime['command']>[3]) =>
+    api.live.command({ planId, requestId: crypto.randomUUID(), command: input });
+  const stationId = crypto.randomUUID();
+  let state = await runtime.state(planId);
+  await command({
+    kind: 'station',
+    id: stationId,
+    name: 'Stage',
+    expectedResourceRevision: state.settings.resourceRevision,
+  });
+  state = await runtime.state(planId);
+  await command({
+    kind: 'configureDispatch',
+    capacity: 2,
+    reservedStationIds: [stationId],
+    expectedResourceRevision: state.settings.resourceRevision,
+  });
+  state = await runtime.state(planId);
+
+  if (structure === 'single_elimination' && phase !== 'called') {
+    for (const match of state.matches.filter((m) => m.round === 1))
+      await api.reportScore({
+        matchId: match.id,
+        expectedRevision: match.revision,
+        requestId: crypto.randomUUID(),
+        score1: 2,
+        score2: 0,
+        outcome: 'played',
+      });
+    state = await runtime.state(planId);
+  }
+  const target = state.matches.find((m) => m.status === 'ready')!;
+  if (phase !== 'ready')
+    await command({
+      kind: 'dispatch',
+      matchId: target.id,
+      stationId,
+      callOnly: phase === 'called',
+      expectedRevision: target.revision,
+      expectedResourceRevision: state.settings.resourceRevision,
+    });
+  if (started) {
+    const match = (await runtime.state(planId)).matches.find(({ id }) => id === target.id)!;
+    await api.updateLiveScore({
+      matchId: match.id,
+      expectedRevision: match.revision,
+      expectedProgressRevision: match.progressRevision,
+      score1: 1,
+      score2: 0,
+    });
+  }
+
+  if (phase === 'held') {
+    state = await runtime.state(planId);
+    await command({
+      kind: 'matchControl',
+      matchId: target.id,
+      status: 'blocked',
+      stationId: null,
+      expectedRevision: target.revision,
+      expectedResourceRevision: state.settings.resourceRevision,
+      reason: 'Stage paused',
+    });
+  }
+
+  const before = await runtime.state(planId);
+  const beforeMatch = before.matches.find(({ id }) => id === target.id)!;
+  const input = {
+    planId,
+    action: 'withdraw' as const,
+    playerId: target.player1Id!,
+    reason: 'Left the venue',
+  };
+  const preview = await api.previewAttendance(input);
+  expect(preview.allowed).toBe(true);
+  expect(preview.returnCallMatchIds).toBeUndefined();
+  expect(preview.withdrawalMatches?.[target.id]).toEqual({
+    ...(phase !== 'ready' && { state: phase }),
+    forfeit,
+  });
+  expect(preview.warnings.some((warning) => warning.includes('Calls awaiting'))).toBe(
+    phase === 'called',
+  );
+  expect(preview.warnings.some((warning) => warning.includes('Outstanding pool pairings'))).toBe(
+    structure === 'round_robin',
+  );
+  expect(await runtime.state(planId)).toEqual(before);
+
+  await api.applyAttendance({
+    ...input,
+    revisionToken: preview.revisionToken,
+    requestId: crypto.randomUUID(),
+  });
+  const after = await runtime.state(planId);
+  const afterMatch = after.matches.find(({ id }) => id === target.id)!;
+  expect(afterMatch).toMatchObject({
+    player1Id: beforeMatch.player1Id,
+    player2Id: beforeMatch.player2Id,
+    sourceKey: beforeMatch.sourceKey,
+    stationId: null,
+    started,
+    score1: null,
+    score2: null,
+    liveScore1: beforeMatch.liveScore1,
+    liveScore2: beforeMatch.liveScore2,
+    progressRevision: beforeMatch.progressRevision,
+  });
+  expect(afterMatch).toMatchObject(
+    forfeit === 'organiser'
+      ? {
+          status: 'blocked',
+          outcome: null,
+          winnerId: null,
+          revision: beforeMatch.revision,
+          blockedReason:
+            phase === 'held'
+              ? 'Stage paused'
+              : 'Player withdrawn: awaiting organiser forfeit decision',
+        }
+      : { status: 'complete', outcome: 'forfeit', winnerId: target.player2Id },
+  );
+  const downstream = after.matches.filter(
+    (m) => m.parent1Id === target.id || m.parent2Id === target.id,
+  );
+  expect(structure === 'double_elimination' ? downstream.map(({ status }) => status) : []).toEqual(
+    structure === 'double_elimination' ? ['blocked', 'blocked'] : [],
+  );
+  if (forfeit === 'organiser')
+    await api.reportScore({
+      matchId: target.id,
+      expectedRevision: afterMatch.revision,
+      requestId: crypto.randomUUID(),
+      score1: 0,
+      score2: 0,
+      winnerId: target.player2Id!,
+      outcome: 'forfeit',
+    });
+  const resolved = await runtime.state(planId);
+  for (const completed of before.matches.filter((m) => m.status === 'complete'))
+    expect(resolved.matches.find(({ id }) => id === completed.id)).toEqual(completed);
+  return { planId, resolved };
+}

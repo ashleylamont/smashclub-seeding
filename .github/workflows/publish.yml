@@ -37,7 +37,10 @@ jobs:
     if: ${{ !cancelled() }}
     concurrency:
       # Preserve the original main queue for releases already waiting there.
-      group: ${{ (github.event_name == 'workflow_dispatch' || needs.classify.outputs.lane == 'ordinary') && 'publish-verification-main-ordinary' || 'publish-verification-refs/heads/main' }}
+      group: >-
+        ${{ (github.event_name == 'workflow_dispatch' || needs.classify.outputs.lane == 'ordinary') && 'publish-verification-main-ordinary'
+        || (needs.classify.outputs.lane == 'ordinary-2' && 'publish-verification-main-ordinary-2')
+        || 'publish-verification-refs/heads/main' }}
       queue: max
     uses: ./.github/workflows/ci.yml
     permissions:

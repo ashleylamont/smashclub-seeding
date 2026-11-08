@@ -19,8 +19,14 @@ type Match = {
   status: string;
   bracketLane?: string;
   outcome: string | null;
+  player1Name: string;
+  player2Name: string;
 };
-type Snapshot = { matches: Match[]; poolSchedules: { division: string; poolIndex: number }[] };
+type Snapshot = {
+  matches: Match[];
+  poolSchedules: { division: string; poolIndex: number }[];
+  poolRounds: { rounds: { matchIds: string[] }[] }[];
+};
 async function scoreReady(request: APIRequestContext, planId: string, reset: boolean) {
   for (let i = 0; i < 100; i++) {
     const ready = (await query<Snapshot>(request, 'eventOps.snapshot', { planId })).matches.filter(
@@ -144,6 +150,26 @@ for (const [structure, played] of [
       published: true,
       playerReports: true,
     });
+    if (structure === 'round_robin_finals') {
+      const snapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
+      expect(snapshot.poolRounds).toHaveLength(1);
+      expect(snapshot.poolRounds[0]!.rounds).toHaveLength(10);
+      expect(snapshot.poolRounds[0]!.rounds.flatMap(({ matchIds }) => matchIds)).toHaveLength(20);
+      const [first] = snapshot.matches;
+      await page.goto(`/play/${planId}?pool=upper%3A0#what-next`);
+      const schedule = page.locator('.pool-flow-rounds');
+      await expect(
+        schedule.getByText('Draw format · 2 meetings per pairing', { exact: true }),
+      ).toBeVisible();
+      await schedule.getByRole('button', { name: /10 rounds/ }).press('Enter');
+      await expect(schedule.getByRole('heading', { name: /^Round \d+$/ })).toHaveCount(10);
+      await expect(
+        schedule
+          .getByRole('listitem')
+          .filter({ hasText: first!.player1Name })
+          .filter({ hasText: first!.player2Name }),
+      ).toHaveCount(2);
+    }
     await scoreReady(page.request, planId, structure === 'double_elimination');
     if (structure === 'round_robin_finals') {
       const view = await query<{

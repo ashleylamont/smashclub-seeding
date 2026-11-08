@@ -182,6 +182,16 @@
   font-size: var(--fs-xs);
 }
 
+/* Keep the row steady while estimates load inside the scroll region. */
+.whr-forecast {
+  min-block-size: 2lh;
+  white-space: nowrap;
+}
+
+.whr-forecast > span {
+  display: block;
+}
+
 /*
  * Outcome is carried by a coloured left edge *and* by the W/L glyph in the
  * result column, so it never depends on colour alone.
@@ -324,7 +334,7 @@
   color: var(--text-h);
 }
 
-.profile-account-action {
+.profile-actions {
   margin-top: var(--s3);
 }
 

@@ -148,7 +148,12 @@ it('reads independent effects from the published night and rejects a cached effe
       forecast: null,
     });
     const secondSide = await api.whrResultImpact({ ...input, playerId: returner!.id });
-    expect(secondSide).toMatchObject({ status: 'available', firstNight: false });
+    expect(secondSide).toMatchObject({
+      status: 'available',
+      firstNight: false,
+      forecast: null,
+      forecastUnavailable: 'first_night',
+    });
     expect(secondSide.status === 'available' && secondSide.effectPoints).toBeLessThan(0);
 
     const full = [
@@ -241,6 +246,114 @@ it('reads independent effects from the published night and rejects a cached effe
       reason: 'older_run',
     });
   } finally {
+    await close();
+  }
+});
+
+it('uses only connected rated history from before the night and the run’s saved margin weight', async () => {
+  const { db, close } = await createTestDb();
+  try {
+    const [left, bridge, right, isolated, isolatedOpponent] = await db
+      .insert(players)
+      .values(
+        ['Left', 'Bridge', 'Right', 'Isolated', 'Isolated opponent'].map((canonicalName) => ({
+          canonicalName,
+        })),
+      )
+      .returning({ id: players.id });
+    const [earlier, night, otherBracket, later] = await db
+      .insert(tournaments)
+      .values(
+        ['2026-01-01T08', '2026-01-15T08', '2026-01-15T10', '2026-02-01T08'].map((date, index) => ({
+          challongeSlug: `prefix-${index}`,
+          name: `Bracket ${index}`,
+          eventDate: new Date(`${date}:00:00Z`),
+        })),
+      )
+      .returning({ id: tournaments.id });
+    const played = (
+      tournamentId: string,
+      challongeMatchId: number,
+      p1PlayerId: string,
+      p2PlayerId: string,
+    ) => ({
+      tournamentId,
+      challongeMatchId,
+      p1PlayerId,
+      p2PlayerId,
+      state: 'complete',
+      winner: 1 as const,
+      scoresCsv: '3-0',
+    });
+    const history = [
+      played(earlier!.id, 1, left!.id, bridge!.id),
+      played(earlier!.id, 2, bridge!.id, right!.id),
+      played(earlier!.id, 3, isolated!.id, isolatedOpponent!.id),
+      {
+        ...played(earlier!.id, 4, right!.id, isolated!.id),
+        raw: { outcome: 'forfeit' },
+      },
+    ];
+    await db.insert(sets).values(history);
+    await db.insert(sets).values(played(night!.id, 5, bridge!.id, isolated!.id));
+    const [connected, disconnected] = await db
+      .insert(sets)
+      .values([
+        played(otherBracket!.id, 6, left!.id, right!.id),
+        played(otherBracket!.id, 7, left!.id, isolated!.id),
+      ])
+      .returning({ id: sets.id });
+
+    const settings = { ...defaultRatingSettings, whrGamesWeight: 0.25 };
+    await updateRatingSettings(db, settings);
+    const initial = await runRecompute(db);
+    await updateRatingSettings(db, { ...settings, whrGamesWeight: 1 });
+    // Isolate the public work budget from other cases in this file.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2030-01-01T00:00:00Z'));
+    const api = publicCaller(db);
+    const get = (setId: string, playerId = left!.id, recomputeId = initial.recomputeId) =>
+      api.whrResultImpact({ setId, playerId, recomputeId });
+    const withOdds = await get(connected!.id);
+    const reverse = await get(connected!.id, right!.id);
+    expect(withOdds).toMatchObject({
+      status: 'available',
+      evidenceWeight: 1.5,
+      gamesWeight: 0.25,
+      forecastUnavailable: null,
+      forecast: { winProbability: expect.any(Number) },
+    });
+    if (withOdds.status !== 'available' || reverse.status !== 'available')
+      throw new Error('Expected both sides of the published set');
+    expect(withOdds.forecast!.winProbability + reverse.forecast!.winProbability).toBeCloseTo(1);
+    const preNightFit = fitWhr({
+      sets: history.slice(0, 3).map(({ p1PlayerId, p2PlayerId, winner }) => ({
+        p1PlayerId,
+        p2PlayerId,
+        winner,
+        time: 0,
+        trials: 1.5,
+      })),
+    });
+    expect(withOdds.forecast!.winProbability).toBeCloseTo(
+      preNightFit.winProbability(left!.id, right!.id, 14),
+      8,
+    );
+    const withoutOdds = await get(disconnected!.id);
+    expect(withoutOdds).toMatchObject({
+      status: 'available',
+      firstNight: false,
+      forecast: null,
+      forecastUnavailable: 'disconnected',
+    });
+
+    await updateRatingSettings(db, settings);
+    await db.insert(sets).values(played(later!.id, 8, right!.id, isolated!.id));
+    const extended = await runRecompute(db);
+    expect(await get(disconnected!.id, left!.id, extended.recomputeId)).toEqual(withoutOdds);
+    expect(await get(connected!.id, left!.id, extended.recomputeId)).toEqual(withOdds);
+  } finally {
+    vi.useRealTimers();
     await close();
   }
 });

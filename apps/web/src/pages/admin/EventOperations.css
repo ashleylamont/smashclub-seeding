@@ -282,6 +282,12 @@
   padding: var(--s4);
   margin-top: 20px;
 }
+.ops-restoration-consequences h5 {
+  margin-block: var(--s3) var(--s1);
+}
+.ops-restoration-consequences li + li {
+  margin-block-start: var(--s2);
+}
 .ops-attendance-review-facts {
   display: grid;
   gap: var(--s2);
@@ -449,10 +455,25 @@
   display: grid;
   gap: var(--s4);
 }
-.ops-main-stage > label {
+.ops-main-stage > label,
+.ops-stage-start > label {
   display: grid;
   gap: var(--s2);
   max-width: 28rem;
+}
+.ops-stage-start {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s3);
+  justify-items: start;
+}
+.ops-stage-start > label {
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+}
+.ops-stage-pairing {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 .ops-pool-settings > .ui-disclosure-trigger {
   font-family: var(--display);
@@ -520,4 +541,14 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--s3);
+}
+
+.ops-twitch-promotion,
+.ops-twitch-promotion form {
+  display: grid;
+  gap: var(--s2);
+}
+
+.ops-twitch-promotion .ui-field {
+  max-width: 36rem;
 }

@@ -1,59 +1,36 @@
 import { ActiveCall, ReadyCall } from './DispatchCall';
 import { DispatchSetup } from './DispatchSetup';
-import type { Overview, Run } from './dispatchTypes';
-import { useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { UntakenCallRecovery, type UntakenCallDesk } from './UntakenCallRecovery';
+import type { Overview } from './dispatchTypes';
+import type { DispatchCommandController } from './dispatchCommand';
+import { useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Disclosure } from '../../components/ui/Disclosure';
 import { Input } from '../../components/ui/Input';
 import { Select, SelectItem } from '../../components/ui/Select';
-import { trpc } from '../../lib/trpc';
 import './DispatchDesk.css';
 
 export function DispatchDesk({
   data,
-  disabled,
+  dispatch,
+  callDesk,
   onMatch,
   onReviewReports,
 }: {
   data: Overview;
-  disabled: boolean;
+  dispatch: DispatchCommandController;
+  callDesk: UntakenCallDesk;
   onMatch: (id: string) => void;
   onReviewReports: () => void;
 }) {
-  const cache = useQueryClient();
-  const [pending, setPending] = useState(false),
-    [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [view, setView] = useState('ready');
   const [limit, setLimit] = useState(12);
-  const retry = useRef<{ input: string; id: string } | null>(null);
   if (!data.operatorDispatch) return null;
   const desk = data.operatorDispatch;
-  const busy = disabled || pending;
-  const run: Run = async (command) => {
-    if (busy) return false;
-    setPending(true);
-    setError('');
-    const input = JSON.stringify(command);
-    if (retry.current?.input !== input) retry.current = { input, id: crypto.randomUUID() };
-    try {
-      await trpc.eventOps.live.command.mutate({
-        planId: data.plan.id,
-        requestId: retry.current.id,
-        command,
-      });
-      retry.current = null;
-      await cache.invalidateQueries({ queryKey: ['eventOps', data.plan.id] });
-      return true;
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not change the match queue.');
-      return false;
-    } finally {
-      setPending(false);
-    }
-  };
+  const { busy, error, run } = dispatch;
   const shared = desk.mode === 'shared';
+  const activeMatches = data.matches.filter((match) => match.status === 'playing');
   const matchesById = new Map(data.matches.map((match) => [match.id, match]));
   const queue = desk.queue.flatMap((row) => {
     const match = matchesById.get(row.matchId);
@@ -218,61 +195,68 @@ export function DispatchDesk({
             </p>
             <div className="dispatch-availability">
               {desk.entrants.map((entrant) => {
-                const playing = data.matches.some(
-                  (m) => m.status === 'playing' && [m.player1Id, m.player2Id].includes(entrant.id),
+                const matches = activeMatches.filter(
+                  (match) => match.player1Id === entrant.id || match.player2Id === entrant.id,
                 );
+                const availabilityDisabled =
+                  busy || matches.length > 0 || entrant.availability === 'withdrawn';
                 return (
                   <div className="dispatch-row" key={entrant.id}>
                     <strong>{entrant.name}</strong> · {entrant.availability}
-                    <Button
-                      size="small"
-                      disabled={busy || playing || entrant.availability === 'withdrawn'}
-                      onClick={() =>
-                        void run({
-                          kind: 'availability',
-                          playerId: entrant.id,
-                          expectedRevision: entrant.revision,
-                          availability:
-                            entrant.availability === 'snoozed' ? 'available' : 'snoozed',
-                          reason:
-                            entrant.availability === 'snoozed'
-                              ? 'TO marked entrant returned'
-                              : 'TO marked entrant away',
-                        })
-                      }
-                    >
-                      {entrant.availability === 'snoozed'
-                        ? `Return ${entrant.name}`
-                        : `Snooze ${entrant.name}`}
-                    </Button>
-                    {entrant.members.length > 1 &&
-                      entrant.members.map((member) => {
-                        const name =
-                          data.members?.find((m) => m.playerId === member.id)?.name ??
-                          'Team member';
-                        return (
-                          <Button
-                            key={member.id}
-                            size="small"
-                            disabled={busy || playing || entrant.availability === 'withdrawn'}
-                            onClick={() =>
-                              void run({
-                                kind: 'availability',
-                                playerId: member.id,
-                                expectedRevision: entrant.revision,
-                                availability:
-                                  member.availability === 'snoozed' ? 'available' : 'snoozed',
-                                reason:
-                                  member.availability === 'snoozed'
-                                    ? 'TO marked member returned'
-                                    : 'TO marked member away',
-                              })
-                            }
-                          >
-                            {member.availability === 'snoozed' ? 'Return' : 'Snooze'} {name}
-                          </Button>
-                        );
-                      })}
+                    <div className="ops-match-actions">
+                      <Button
+                        size="small"
+                        disabled={availabilityDisabled}
+                        onClick={() =>
+                          void run({
+                            kind: 'availability',
+                            playerId: entrant.id,
+                            expectedRevision: entrant.revision,
+                            availability:
+                              entrant.availability === 'snoozed' ? 'available' : 'snoozed',
+                            reason:
+                              entrant.availability === 'snoozed'
+                                ? 'TO marked entrant returned'
+                                : 'TO marked entrant away',
+                          })
+                        }
+                      >
+                        {entrant.availability === 'snoozed'
+                          ? `Return ${entrant.name}`
+                          : `Snooze ${entrant.name}`}
+                      </Button>
+                      {entrant.members.length > 1 &&
+                        entrant.members.map((member) => {
+                          const name =
+                            data.members?.find((m) => m.playerId === member.id)?.name ??
+                            'Team member';
+                          return (
+                            <Button
+                              key={member.id}
+                              size="small"
+                              disabled={availabilityDisabled}
+                              onClick={() =>
+                                void run({
+                                  kind: 'availability',
+                                  playerId: member.id,
+                                  expectedRevision: entrant.revision,
+                                  availability:
+                                    member.availability === 'snoozed' ? 'available' : 'snoozed',
+                                  reason:
+                                    member.availability === 'snoozed'
+                                      ? 'TO marked member returned'
+                                      : 'TO marked member away',
+                                })
+                              }
+                            >
+                              {member.availability === 'snoozed' ? 'Return' : 'Snooze'} {name}
+                            </Button>
+                          );
+                        })}
+                    </div>
+                    {matches.length > 0 && (
+                      <AvailabilityBlocker matches={matches} callDesk={callDesk} busy={busy} />
+                    )}
                   </div>
                 );
               })}
@@ -306,5 +290,36 @@ export function DispatchDesk({
         </>
       )}
     </section>
+  );
+}
+
+function AvailabilityBlocker({
+  matches,
+  callDesk,
+  busy,
+}: {
+  matches: Overview['matches'];
+  callDesk: UntakenCallDesk;
+  busy: boolean;
+}) {
+  if (matches.some((match) => match.started)) {
+    return (
+      <p className="muted">
+        Finish the started match or release its setup before changing availability.
+      </p>
+    );
+  }
+  return (
+    <>
+      <p className="muted">
+        Return the untaken {matches.length === 1 ? 'call' : 'calls'} before changing availability.
+      </p>
+      <UntakenCallRecovery
+        matchIds={matches.map(({ id }) => id)}
+        desk={callDesk}
+        showInstructions={false}
+        disabled={busy}
+      />
+    </>
   );
 }

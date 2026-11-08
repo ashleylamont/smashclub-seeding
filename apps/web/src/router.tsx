@@ -38,7 +38,7 @@ import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
 import { AdminAccountsPage } from './pages/admin/AdminAccountsPage';
 import { AdminBreakthroughPage } from './pages/admin/AdminBreakthroughPage';
 import { opsSection } from './lib/opsWorkspace';
-import { profileClaimSearch } from './lib/profileClaim';
+import { playerIdFromSearch, profileClaimSearch } from './lib/profileClaim';
 import { breakthroughSearch } from './lib/breakthrough';
 
 const rootRoute = createRootRoute({ component: Layout });
@@ -47,6 +47,16 @@ const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
   component: LeaderboardPage,
+});
+
+const headToHeadRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/head-to-head',
+  validateSearch: (search: Record<string, unknown>): { first?: string; second?: string } => ({
+    first: playerIdFromSearch(search.first),
+    second: playerIdFromSearch(search.second),
+  }),
+  component: lazyRouteComponent(() => import('./pages/HeadToHeadPage'), 'HeadToHeadPage'),
 });
 
 const playerRoute = createRoute({
@@ -291,6 +301,7 @@ const routeTree = rootRoute.addChildren([
   eventGuestRoute,
   indexRoute,
   playerRoute,
+  headToHeadRoute,
   tournamentsRoute,
   tournamentRoute,
   eventRoute,

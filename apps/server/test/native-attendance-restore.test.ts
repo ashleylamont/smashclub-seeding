@@ -148,8 +148,12 @@ describe('explicit native attendance restoration', () => {
         action: 'restore',
         playerId: state.entrants[0]!.playerId,
         reason: '  ',
-      }).issues,
-    ).toContain('Give a reason for restoring this entrant.');
+      }),
+    ).toMatchObject({
+      allowed: false,
+      issues: ['Give a reason for restoring this entrant.'],
+      warnings: [],
+    });
     expect(() => apply(state, attendance(state, 'restore'), false)).toThrow(/organiser/);
     state.lifecycle = 'finalized';
     expect(
@@ -367,14 +371,14 @@ describe('explicit native attendance restoration', () => {
       reason: 'Returned after forfeit',
     });
     expect(preview.restoration?.qualification.status).toBe('frozen_included');
-    expect(preview.warnings.join(' ')).toContain('No new match');
+    expect(preview.warnings).toContain('No matches become ready to call.');
     state = apply(state, attendance(state, 'restore', target, 'Returned after forfeit'));
     expect(state.matches.filter((m) => [m.player1Id, m.player2Id].includes(target))).toEqual(
       completed,
     );
   });
 
-  it('does not revive a knockout route already decided by withdrawal', () => {
+  it('uses the live match name and preserves a knockout route already decided by withdrawal', () => {
     const baseline = pureBaseline();
     baseline.version = 2;
     baseline.competitionFormat = 'singles';
@@ -400,19 +404,43 @@ describe('explicit native attendance restoration', () => {
       'main',
     );
     let state = captureBaseline(baseline);
+    const playerId = state.entrants[0]!.playerId;
+    const match = state.matches.find((m) => [m.player1Id, m.player2Id].includes(playerId))!;
+    const label = 'Semi-final 1';
+    const withdrawal = attendancePreview(state, { action: 'withdraw', playerId });
+    expect(withdrawal.affectedMatches).toEqual([{ id: match.id, label, status: 'ready' }]);
+
+    const partial = { ...state, matches: [match] };
+    expect(attendancePreview(partial, { action: 'withdraw', playerId }).affectedMatches).toEqual([
+      { id: match.id, label: match.label, status: 'ready' },
+    ]);
+
     state = apply(state, attendance(state, 'withdraw'));
     const before = structuredClone(state.matches);
-    const preview = attendancePreview(state, {
-      action: 'restore',
-      playerId: state.entrants[0]!.playerId,
-      reason: 'Returned to the venue',
-    });
+    const reason = 'Returned to the venue';
+    const preview = attendancePreview(state, { action: 'restore', playerId, reason });
+    expect(preview.affectedMatches).toEqual([{ id: match.id, label, status: 'complete' }]);
     expect(preview.restoration?.qualification.status).toBe('fixed_draw');
-    state = apply(
-      state,
-      attendance(state, 'restore', state.entrants[0]!.playerId, 'Returned to the venue'),
-    );
+    expect(preview.restoration?.effects).toMatchObject([
+      { id: match.id, label, status: 'complete', outcome: 'forfeit', effect: 'retained' },
+    ]);
+    const partialAfterWithdrawal = { ...state, matches: before.filter((m) => m.id === match.id) };
+    expect(
+      attendancePreview(partialAfterWithdrawal, { action: 'restore', playerId, reason }).restoration
+        ?.effects,
+    ).toMatchObject([{ id: match.id, label: match.label, outcome: 'forfeit', effect: 'retained' }]);
+
+    const request = envelope({
+      kind: 'attendance',
+      action: 'restore',
+      playerId,
+      reason,
+      revisionToken: preview.revisionToken,
+      approveRedistribution: false,
+    });
+    state = LiveState.parse(reduceDecision(state, Decision.parse(decide(state, request)!)));
     expect(state.matches).toEqual(before);
+    expect(decide(state, request)).toBeUndefined();
   });
 
   it('folds immutable V1/V2/V3 journals with exact historical hashes and no version upgrade when restore is unused', () => {
