@@ -17,11 +17,9 @@ on:
 permissions:
   contents: read
 
-# A pull request that gets pushed to again does not need its superseded run
-# finished. Runs on main are never cancelled — main's history is the record of
-# what was green.
+# Superseded PR checks can be cancelled. The Publish caller queues exact builds per ref.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-verification
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}-verification
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
