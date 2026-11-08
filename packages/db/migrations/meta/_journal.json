@@ -204,6 +204,13 @@
       "when": 1794098038024,
       "tag": "0028_rating_nights",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1794109249895,
+      "tag": "0029_whr_result_impact_lookup",
+      "breakpoints": true
     }
   ]
 }

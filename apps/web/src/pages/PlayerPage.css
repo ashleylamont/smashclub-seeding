@@ -176,6 +176,15 @@
   white-space: nowrap;
 }
 
+.whr-impact-action {
+  margin-block-start: var(--s2);
+}
+
+.whr-impact-details {
+  display: grid;
+  gap: var(--s2);
+}
+
 /*
  * Outcome is carried by a coloured left edge *and* by the W/L glyph in the
  * result column, so it never depends on colour alone.

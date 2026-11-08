@@ -1,0 +1,1 @@
+CREATE INDEX "rating_events_recompute_set_idx" ON "rating_events" USING btree ("recompute_id","set_id");

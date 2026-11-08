@@ -1,13 +1,34 @@
-import { and, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, lt } from 'drizzle-orm';
 import { sets, tournaments, type Db } from '@smashclub/db';
 import { parseScoresCsv, type EngineSet, type EngineTournament } from '@smashclub/engine';
 import { includesResultStage, isPlayedRatingResult } from '@smashclub/shared';
-import { nativeHistory } from '../events/nativeHistory';
+import { loadNativeHistory } from '../events/nativeHistory';
 
-export async function loadSinglesHistory(db: Db) {
-  const { superseded } = await nativeHistory(db);
+interface SinglesHistoryBudget {
+  before: Date;
+  maxTournaments: number;
+  maxSets: number;
+  maxNativeRows: number;
+}
 
-  const tournamentRows = await db
+interface SinglesHistory {
+  engineSets: EngineSet[];
+  engineTournaments: EngineTournament[];
+}
+
+export function loadSinglesHistory(db: Db): Promise<SinglesHistory>;
+export function loadSinglesHistory(
+  db: Db,
+  budget: SinglesHistoryBudget,
+): Promise<SinglesHistory | null>;
+export async function loadSinglesHistory(
+  db: Db,
+  budget?: SinglesHistoryBudget,
+): Promise<SinglesHistory | null> {
+  const native = await loadNativeHistory(db, budget?.maxNativeRows);
+  if (!native) return null;
+
+  const tournamentQuery = db
     .select({
       id: tournaments.id,
       eventDate: tournaments.eventDate,
@@ -16,7 +37,17 @@ export async function loadSinglesHistory(db: Db) {
       resultsMode: tournaments.resultsMode,
     })
     .from(tournaments)
-    .where(and(isNotNull(tournaments.eventDate), eq(tournaments.competitionFormat, 'singles')));
+    .where(
+      and(
+        isNotNull(tournaments.eventDate),
+        eq(tournaments.competitionFormat, 'singles'),
+        budget ? lt(tournaments.eventDate, budget.before) : undefined,
+      ),
+    );
+  const tournamentRows = await (budget
+    ? tournamentQuery.limit(budget.maxTournaments + 1)
+    : tournamentQuery);
+  if (budget && tournamentRows.length > budget.maxTournaments) return null;
 
   const engineTournaments: EngineTournament[] = tournamentRows.map((row) => ({
     id: row.id,
@@ -27,24 +58,26 @@ export async function loadSinglesHistory(db: Db) {
   const tournamentIds = engineTournaments.map((t) => t.id);
   const modes = new Map(tournamentRows.map((t) => [t.id, t.resultsMode]));
 
+  const setQuery = db
+    .select()
+    .from(sets)
+    .where(
+      and(
+        inArray(sets.tournamentId, tournamentIds),
+        eq(sets.state, 'complete'),
+        eq(sets.excludedFromRatings, false),
+        isNotNull(sets.p1PlayerId),
+        isNotNull(sets.p2PlayerId),
+        isNotNull(sets.winner),
+      ),
+    );
   const setRows = tournamentIds.length
-    ? await db
-        .select()
-        .from(sets)
-        .where(
-          and(
-            inArray(sets.tournamentId, tournamentIds),
-            eq(sets.state, 'complete'),
-            eq(sets.excludedFromRatings, false),
-            isNotNull(sets.p1PlayerId),
-            isNotNull(sets.p2PlayerId),
-            isNotNull(sets.winner),
-          ),
-        )
+    ? await (budget ? setQuery.limit(budget.maxSets + 1) : setQuery)
     : [];
+  if (budget && setRows.length > budget.maxSets) return null;
 
   const engineSets: EngineSet[] = setRows
-    .filter((row) => !superseded.has(row.tournamentId))
+    .filter((row) => !native.superseded.has(row.tournamentId))
     .filter((row) => includesResultStage(modes.get(row.tournamentId) ?? 'auto', row.resultStage))
     .filter((row) => row.p1PlayerId !== row.p2PlayerId)
     /*

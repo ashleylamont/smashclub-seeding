@@ -51,3 +51,11 @@ Forecasts use WHR's logistic probability with the summed uncertainty of both pla
 ## Data cutover
 
 See [WHR-only migration](whr-only-migration.md) for configuration migration, canonical reader gating and deployment rehearsal.
+
+## Result impact on a player's match log
+
+The player can open WHR impact for a rated singles set. The estimate compares the player's raw skill at the end of that UTC club night with the same estimate after refitting without the chosen set. Both fits keep every other rated result through that night, the published settings, and the original debut priors. Attendance, later events and administrative outcomes such as byes and forfeits stay outside the calculation. The model estimates each omission independently, so the effects generally do not sum to the whole night's change.
+
+The app rounds the displayed effect to the nearest five points and describes smaller effects in words. The uncertainty band comes from the published pre-night skill estimate. The pre-night win chance uses the published means and uncertainty with the usual WHR probability calibration, and appears only when both entrants have prior rated history. That forecast describes what the model estimated before the night. It is distinct from the impact of including the actual result.
+
+Recomputes record fingerprints of the prepared inputs for each night. The public reader verifies the current canonical prefix in a read-only repeatable-read transaction before returning a result, including a cache hit. It uses the current rating engine version and verifies convergence and agreement with the published estimate before caching a fresh pair of effects. Bump the `whr-prefix-v1` marker when the canonical fit preparation, fitter or omission method changes. A stale, unverified or nonconverged run returns an unavailable state. Bounded queries, per-process request and refit budgets and a small cache limit the public work.

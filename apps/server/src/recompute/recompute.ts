@@ -8,7 +8,13 @@ import {
   recomputes,
   settings as ratingConfig,
 } from '@smashclub/db';
-import { calibrateLeagueBands, runWhrModel, type LeaderboardRow } from '@smashclub/engine';
+import {
+  calibrateLeagueBands,
+  prepareWhrHistory,
+  runWhrModel,
+  type LeaderboardRow,
+} from '@smashclub/engine';
+import { whrPrefixFingerprints } from './whrProvenance';
 import { getRatingSettings, updateRatingSettings } from '../settings';
 
 export const ENGINE_VERSION = '2.0.0';
@@ -101,6 +107,15 @@ async function computeRatings(
       sets: engineSets.length,
       events: ratingEventRows.length,
       ratingNights: run.nightRatings.length,
+      whrPrefixFingerprints: Object.fromEntries(
+        whrPrefixFingerprints(
+          prepareWhrHistory({
+            sets: engineSets,
+            tournaments: engineTournaments,
+            settings: effectiveSettings,
+          }),
+        ),
+      ),
       ...modelStats,
     };
 
