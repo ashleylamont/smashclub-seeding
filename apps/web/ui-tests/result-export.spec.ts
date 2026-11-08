@@ -4,6 +4,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { mockEvent, PLAN_ID, ready } from './fixtures';
 import { AxeBuilder } from '@axe-core/playwright';
 import { chooseOption } from '../test-support/controls';
+import { FIGHTER_ART_CREDIT } from '../src/lib/resultGraphic';
 
 test(
   'actual downloaded results SVG keeps wide aliases inside the exported canvas',
@@ -131,7 +132,13 @@ async function exerciseCharacterPack(page: Page, dialog: Locator, image: Locator
     [805, 300], // Another player with the same main.
     [1195, 300], // Matching filename whose file cannot decode.
   ];
-  const fallback = await pixels(image, positions);
+  const defaultPixels = await pixels(image, positions);
+  const winnerArtPoints: [number, number][] = [
+    [165, 630],
+    [230, 685],
+    [295, 740],
+  ];
+  const bundledWinner = await pixels(image, winnerArtPoints);
   const mario = {
     name: 'mario.png',
     mimeType: 'image/png',
@@ -150,7 +157,7 @@ async function exerciseCharacterPack(page: Page, dialog: Locator, image: Locator
   expect(chooser.isMultiple()).toBe(true);
   await chooser.setFiles([mario, { ...mario, name: 'MARIO.PNG' }]);
   await expect(dialog.getByText('Choose only one artwork file for mario.')).toBeVisible();
-  expect(await pixels(image, positions)).toEqual(fallback);
+  expect(await pixels(image, positions)).toEqual(defaultPixels);
 
   await input.setInputFiles([
     mario,
@@ -163,28 +170,29 @@ async function exerciseCharacterPack(page: Page, dialog: Locator, image: Locator
   const marioPixel = [139, 50, 79, 255];
   expect(await pixels(image, positions)).toEqual([
     marioPixel,
-    fallback[1],
+    defaultPixels[1],
     marioPixel,
-    fallback[3],
+    defaultPixels[3],
   ]);
   await writeFile(output, await previewBytes(image));
 
   const label = dialog.getByRole('combobox', { name: 'Character label' });
   await chooseOption(label, { label: 'No character label' });
   await expect(dialog.getByText('4 images selected. Pack artwork used in 1 panel.')).toBeVisible();
+  expect(await pixels(image, winnerArtPoints)).not.toEqual(bundledWinner);
   expect(await pixels(image, positions)).toEqual([
-    fallback[0],
-    fallback[1],
+    defaultPixels[0],
+    defaultPixels[1],
     marioPixel,
-    fallback[3],
+    defaultPixels[3],
   ]);
   await chooseOption(label, { label: 'Luigi' });
   await expect(dialog.getByText('4 images selected. Pack artwork used in 2 panels.')).toBeVisible();
   expect(await pixels(image, positions)).toEqual([
     [95, 79, 206, 255],
-    fallback[1],
+    defaultPixels[1],
     marioPixel,
-    fallback[3],
+    defaultPixels[3],
   ]);
 }
 
@@ -222,7 +230,7 @@ for (const theme of ['dark', 'light'] as const)
           members: [
             {
               name: index === 0 ? '名前 / WIDE 🎮' : `Tag ${index}A`,
-              character: index < 2 ? 'mario' : index === 2 ? 'link' : null,
+              character: ['mario', 'mario', 'link', 'steve'][index] ?? null,
             },
             { name: index === 0 ? 'Wide second public tag' : `Tag ${index}B`, character: null },
           ],
@@ -280,6 +288,12 @@ for (const theme of ['dark', 'light'] as const)
         authorizationInputs.push(input);
         return organizer;
       });
+      const requestedPortraits: string[] = [];
+      page.on('request', (request) => {
+        const url = new URL(request.url());
+        const filename = /\/portraits\/full\/([^/]+\.png)$/.exec(url.pathname)?.[1];
+        if (filename && request.resourceType() === 'fetch') requestedPortraits.push(filename);
+      });
       await page.goto('/events/championship');
       if (!completedDivision) {
         await expect(
@@ -291,12 +305,15 @@ for (const theme of ['dark', 'light'] as const)
       }
       const trigger = page.getByRole('button', { name: `Preview results PNG for ${scopeLabel}` });
       await ready(page);
+      expect(requestedPortraits).toEqual([]);
       await page.screenshot({ path: testInfo.outputPath('event-route.png'), fullPage: true });
       await trigger.focus();
       await trigger.press('Enter');
       const dialog = page.getByRole('dialog', { name: 'Results graphic' });
       const image = dialog.getByRole('img', { name: new RegExp(scopeLabel) });
       await expect(image).toBeVisible();
+      await expect(dialog.getByText(FIGHTER_ART_CREDIT, { exact: true })).toBeVisible();
+      expect([...requestedPortraits].sort()).toEqual(['link.png', 'mario.png']);
       await expect
         .poll(() => drawn.includes('CONFIRMED FINISHES THROUGH 8TH / DOUBLES'))
         .toBe(true);
@@ -307,6 +324,8 @@ for (const theme of ['dark', 'light'] as const)
       const lastRender = drawn.slice(drawn.lastIndexOf('NEMESIS / SMASH CLUB'));
       expect(lastRender.filter((label) => label === '8')).toHaveLength(2);
       expect(drawn).toContain('Mario');
+      expect(drawn).toContain('Steve');
+      expect(drawn).toContain(FIGHTER_ART_CREDIT);
       expect(drawn).toContain('6 NOV 2026');
 
       const placements = dialog.getByRole('button', { name: 'Placements in this graphic' });
@@ -535,10 +554,26 @@ test('large tie stays complete within the mobile canvas limit', async ({ page },
   expect(fixture.unexpected).toEqual([]);
 });
 
-test('signed-in readers can download the default PNG when organiser access fails', async ({
+test('a live poll preserves the preview even when organiser access and portrait fetch fail', async ({
   page,
-}) => {
+}, testInfo) => {
+  const drawn = await captureGraphicText(page);
   const fixture = await mockEvent(page, { role: 'player' });
+  const lowerPool = fixture.snapshot.placements.find(({ division }) => division === 'lower')!;
+  const entrant = fixture.snapshot.entrants.find(({ id }) => id === lowerPool.playerId)!;
+  Object.assign(entrant, {
+    graphic: { teamName: null, members: [{ name: entrant.name, character: 'link' }] },
+  });
+  const linkPortrait = (url: URL) =>
+    url.pathname.endsWith('/portraits/full/link.png') && !url.searchParams.has('import');
+  const portraitFailure = page.waitForResponse(
+    (response) => linkPortrait(new URL(response.url())) && response.status() === 404,
+  );
+  let portraitRequests = 0;
+  await page.route(linkPortrait, (route) => {
+    portraitRequests++;
+    return route.fulfill({ status: 404 });
+  });
   await page.route(/\/api\/trpc\/eventOps\.canCustomizeResultGraphic(?:\?|$)/, async (route) => {
     const response = {
       error: {
@@ -554,13 +589,40 @@ test('signed-in readers can download the default PNG when organiser access fails
   const lookup = page.waitForResponse((response) =>
     response.url().includes('canCustomizeResultGraphic'),
   );
-  await page.getByRole('button', { name: 'Preview results PNG for Lower · Pool A' }).click();
-  await lookup;
+  const trigger = page.getByRole('button', { name: 'Preview results PNG for Lower · Pool A' });
+  await trigger.click();
+  await Promise.all([lookup, portraitFailure]);
   const dialog = page.getByRole('dialog', { name: 'Results graphic' });
-  await expect(dialog.getByRole('img', { name: /Lower · Pool A/ })).toBeVisible();
+  const image = dialog.getByRole('img', { name: /Lower · Pool A/ });
+  await expect(image).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Customize graphic' })).toHaveCount(0);
+  await expect(dialog.getByText(FIGHTER_ART_CREDIT, { exact: true })).toHaveCount(0);
+  await expect.poll(() => drawn.includes('Link')).toBe(true);
+  expect(drawn).not.toContain(FIGHTER_ART_CREDIT);
+  const imageUrl = await image.getAttribute('src');
+  const preview = await previewBytes(image);
+  const refreshedAlias = 'Refreshed public alias';
+  entrant.name = refreshedAlias;
+  Object.assign(entrant, {
+    graphic: { teamName: null, members: [{ name: refreshedAlias, character: 'link' }] },
+  });
+  await expect(
+    page.locator('.event-pool-ranking').getByText(refreshedAlias, { exact: false }),
+  ).toBeAttached({ timeout: 10_000 });
+  await expect(image).toHaveAttribute('src', imageUrl!);
+  expect(portraitRequests).toBe(1);
+
   const downloaded = page.waitForEvent('download');
   await dialog.getByRole('button', { name: 'Download PNG ↓' }).click();
-  expect((await downloaded).suggestedFilename()).toBe('nemesis-lower-pool-a-results.png');
+  const file = await downloaded;
+  expect(file.suggestedFilename()).toBe('nemesis-lower-pool-a-results.png');
+  const filename = testInfo.outputPath('live-poll-results.png');
+  await file.saveAs(filename);
+  expect(await readFile(filename)).toEqual(preview);
+
+  await page.keyboard.press('Escape');
+  await trigger.click();
+  await dialog.getByRole('button', { name: 'Placements in this graphic' }).click();
+  await expect(dialog.getByText(`${refreshedAlias} (Link)`, { exact: false })).toBeVisible();
   expect(fixture.unexpected).toEqual([]);
 });

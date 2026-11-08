@@ -35,33 +35,73 @@ export async function resolveCharacterPortraits(
   rows: readonly GraphicResult[],
   individual: GraphicPortraits,
   pack: CharacterPortraitPack,
+  bundledCache: Map<string, HTMLCanvasElement | null>,
   signal: AbortSignal,
 ) {
   const keysByCharacter = new Map<string, string[]>();
-  if (pack.size)
-    rows.forEach((row, rowIndex) =>
-      graphicMembers(row).forEach(({ character }, index) => {
-        const key = graphicMemberKey(row, rowIndex, index);
-        if (!character || individual[key] || !pack.has(character)) return;
-        const keys = keysByCharacter.get(character);
-        if (keys) keys.push(key);
-        else keysByCharacter.set(character, [key]);
-      }),
-    );
+  rows.forEach((row, rowIndex) =>
+    graphicMembers(row).forEach(({ character }, index) => {
+      const key = graphicMemberKey(row, rowIndex, index);
+      if (!character || !isCharacterSlug(character) || individual[key]) return;
+      const keys = keysByCharacter.get(character);
+      if (keys) keys.push(key);
+      else keysByCharacter.set(character, [key]);
+    }),
+  );
 
   const portraits = { ...individual };
+  const bundled = new Set<string>();
+  const pending: [string, string[]][] = [];
   let applied = 0;
   let unreadable = 0;
   for (const [character, keys] of keysByCharacter) {
     if (signal.aborted) break;
+    const file = pack.get(character);
+    if (file) {
+      try {
+        // Decode one used local file at a time and reuse it for matching panels.
+        const portrait = await readResultPortrait(file, PACK_PORTRAIT_EDGE);
+        for (const key of keys) portraits[key] = portrait;
+        applied += keys.length;
+        continue;
+      } catch {
+        unreadable++;
+      }
+    }
+    pending.push([character, keys]);
+  }
+
+  if (pending.length && !signal.aborted) {
+    const source = await import('./resultGraphicBundledArt').catch(() => null);
+    if (!source || signal.aborted) return { portraits, bundled, applied, unreadable };
+    const request = new AbortController();
+    const stop = () => request.abort();
+    signal.addEventListener('abort', stop, { once: true });
+    if (signal.aborted) stop();
+    const timeout = window.setTimeout(stop, 6000);
+    let next = 0;
+    const load = async () => {
+      while (!request.signal.aborted && next < pending.length) {
+        const [slug, keys] = pending[next++]!;
+        let portrait = bundledCache.get(slug);
+        if (portrait === undefined) {
+          portrait = (await source.loadBundledResultPortrait(slug, request.signal)) ?? null;
+          if (request.signal.aborted) return;
+          bundledCache.set(slug, portrait);
+        }
+        if (!portrait) continue;
+        for (const key of keys) {
+          portraits[key] = portrait;
+          bundled.add(key);
+        }
+      }
+    };
     try {
-      // Decode one used file at a time and reuse it for every matching panel.
-      const portrait = await readResultPortrait(pack.get(character)!, PACK_PORTRAIT_EDGE);
-      for (const key of keys) portraits[key] = portrait;
-      applied += keys.length;
-    } catch {
-      unreadable++;
+      await Promise.all(Array.from({ length: Math.min(4, pending.length) }, load));
+    } finally {
+      window.clearTimeout(timeout);
+      signal.removeEventListener('abort', stop);
     }
   }
-  return { portraits, applied, unreadable };
+  return { portraits, bundled, applied, unreadable };
 }
