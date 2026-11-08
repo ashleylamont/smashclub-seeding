@@ -2,6 +2,14 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.1.1
+
+### Patch Changes
+
+- 8 November 2026 · **Improvement** · Browse dated changes by build and version, with change categories and screenshots for selected features. [#155](https://github.com/ashleylamont/smashclub-seeding/pull/155) · [build 087de18](https://github.com/ashleylamont/smashclub-seeding/commit/087de18551fd55dc0e32dea71f8aa89d9890fce2)
+- 8 November 2026 · **Fix** · Keep long event names, recent results and the score-reporting QR visible together in the OBS gameplay overlay. [#153](https://github.com/ashleylamont/smashclub-seeding/pull/153) · [build 8b5c3c0](https://github.com/ashleylamont/smashclub-seeding/commit/8b5c3c05ecb57fd7e72c9f13618c8e3fc1332547)
+- 8 November 2026 · **Fix** · Show how each club night changed a player's skill estimate and attendance penalty, including revisions while they were away. [#154](https://github.com/ashleylamont/smashclub-seeding/pull/154) · [build 6f6c690](https://github.com/ashleylamont/smashclub-seeding/commit/6f6c6908e989d9e23ec100649620e11d6c162cce)
+
 ## 0.1.0
 
 Released 8 November 2026 · [release build cecd3d4](https://github.com/ashleylamont/smashclub-seeding/commit/cecd3d4297b78b3fd03531e5f7c016578fa97739)
