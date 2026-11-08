@@ -13,7 +13,18 @@ export const FinalsDivisionResetScope = z.object({
   bracketIds: z.array(id).min(1).max(2),
 });
 export type FinalsDivisionResetScope = z.infer<typeof FinalsDivisionResetScope>;
+export const FinalsSlotReplayScore = z.object({
+  matchId: id,
+  expectedRevision: revision,
+  score1: revision.max(5),
+  score2: revision.max(5),
+});
 export const additionalCommands = [
+  FinalsSlotReplayScore.extend({
+    kind: z.literal('replayFinalsSlotV1'),
+    revisionToken: z.string().length(64),
+    reason: z.string().trim().min(1).max(500),
+  }),
   z.object({
     kind: z.literal('broadcastSides'),
     stationId: id,

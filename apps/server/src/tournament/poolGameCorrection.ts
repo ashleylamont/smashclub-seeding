@@ -1,5 +1,5 @@
 import { hash, requireFact } from './facts';
-import { canReviewFrozenPoolGames, poolResultBasis } from './poolOrders';
+import { canReviewFrozenPoolResult, poolResultBasis } from './poolOrders';
 import type { PoolGameCorrectionInput, TournamentState } from './schemas';
 
 export function reviewPoolGameCorrection(state: TournamentState, input: PoolGameCorrectionInput) {
@@ -23,7 +23,7 @@ export function reviewPoolGameCorrection(state: TournamentState, input: PoolGame
   );
   const pool = state.pools.find(({ id }) => id === match.poolId);
   requireFact(
-    pool && canReviewFrozenPoolGames(state, pool),
+    pool && canReviewFrozenPoolResult(state, pool),
     'Review requires a frozen automatic pool order and no pool scores awaiting review.',
   );
   const brackets = state.brackets.filter(

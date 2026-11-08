@@ -436,3 +436,176 @@ test('real native mixed-stage finals run a clear qualifier before its own pool t
     await context.close();
   }
 });
+
+test('organiser replays one played finals slot and the original remains visible as history', async ({
+  page,
+  browser,
+  baseURL,
+}, testInfo) => {
+  test.setTimeout(180_000);
+  await signIn(page.request, 'admin@smashclub.dev');
+  const players = (
+    await query<{ id: string; canonicalName: string; status: string }[]>(
+      page.request,
+      'admin.players',
+      {},
+    )
+  )
+    .filter(({ status }) => status === 'active')
+    .slice(0, 16);
+  expect(players).toHaveLength(16);
+  const { planId } = await mutate<{ planId: string }>(
+    page.request,
+    'admin.eventPlanner.createPlan',
+    {
+      name: 'Played finals replay rehearsal',
+      eventDate: '2026-10-31T08:00:00Z',
+      bracketMode: 'native',
+      structure: 'pools_finals',
+      structureOptions: { roundRobinMeetings: 1, consolation: false },
+      rows: players.map(({ id, canonicalName }, i) => ({
+        lineNumber: i + 1,
+        rawInput: canonicalName,
+        cleanedName: canonicalName,
+        playerId: id,
+        companyId: null,
+        resolutionMethod: 'manual',
+      })),
+    },
+  );
+  for (const procedure of [
+    'admin.eventPlanner.freezeRoster',
+    'admin.eventPlanner.generatePools',
+    'eventOps.softLockPools',
+  ])
+    await mutate(page.request, procedure, {
+      planId,
+      ...(procedure === 'eventOps.softLockPools' ? { confirm: true } : {}),
+    });
+  await mutate(page.request, 'eventOps.settings', {
+    planId,
+    published: true,
+    playerReports: true,
+  });
+  const live = await query<Live>(page.request, 'eventOps.live.snapshot', { planId });
+  const snapshot = () => query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
+  const report = (match: Match, winner: string) =>
+    mutate(page.request, 'eventOps.reportScore', {
+      matchId: match.id,
+      expectedRevision: match.revision,
+      requestId: crypto.randomUUID(),
+      score1: match.player1Id === winner ? 2 : 1,
+      score2: match.player2Id === winner ? 2 : 1,
+      outcome: 'played',
+    });
+  for (const match of (await snapshot()).matches) {
+    const pool = live.pools.find(({ index }) => index === match.poolIndex)!;
+    await report(
+      match,
+      pool.entrantIds.find((id) => [match.player1Id, match.player2Id].includes(id))!,
+    );
+  }
+  const drawArgs = { planId, seedPolicy: 'pool_place_whr_v1' };
+  const draw = await query<{ revisionToken: string }>(
+    page.request,
+    'eventOps.native.preview',
+    drawArgs,
+  );
+  await mutate(page.request, 'eventOps.native.generate', {
+    ...drawArgs,
+    revisionToken: draw.revisionToken,
+  });
+  const firstPool = live.pools[0]!;
+  const alice = firstPool.entrantIds[1]!;
+  const bea = firstPool.entrantIds[2]!;
+  const drawn = await snapshot();
+  const original = drawn.matches.find((match) =>
+    [match.player1Qualifier, match.player2Qualifier].some(
+      (qualifier) => qualifier?.poolId === firstPool.id && qualifier.place === 2,
+    ),
+  )!;
+  const originalNames = [original.player1Name, original.player2Name];
+  const chris = original.player1Id === alice ? original.player2Id : original.player1Id;
+  const source = drawn.matches.find(
+    (match) =>
+      !match.nativeBracketId &&
+      [match.player1Id, match.player2Id].includes(alice) &&
+      [match.player1Id, match.player2Id].includes(bea),
+  )!;
+  await report(original, alice);
+
+  await page.goto(`/operate/${planId}?view=history`);
+  const item = page
+    .getByRole('list', { name: 'Recorded event changes' })
+    .getByRole('listitem')
+    .filter({ hasText: source.label })
+    .filter({ hasText: source.player1Name })
+    .filter({ hasText: source.player2Name });
+  await item.getByRole('button', { name: 'Open match' }).click();
+  const card = page.locator('article.ops-match:visible').filter({ hasText: source.label });
+  await card.getByRole('button', { name: 'Correct score' }).click();
+  await card
+    .getByRole('spinbutton')
+    .nth(0)
+    .fill(source.player1Id === bea ? '2' : '1');
+  await card
+    .getByRole('spinbutton')
+    .nth(1)
+    .fill(source.player2Id === bea ? '2' : '1');
+  await card.getByRole('button', { name: 'Review finals replay' }).click();
+  const review = card.getByRole('region', { name: 'Finals replay review' });
+  await expect(review).toContainText('Played set kept in history');
+  await expect(review).toContainText('Replay pairing');
+  await card.getByRole('textbox', { name: 'Reason for replay' }).fill('Checked both pool slips');
+  await card.getByRole('button', { name: 'Correct score and create replay' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm', exact: true }).click();
+  await expect(page.getByText('Pool score corrected · replay pairing created')).toBeVisible();
+
+  const changed = await snapshot();
+  expect(changed.matches.some(({ id }) => id === original.id)).toBe(false);
+  const replay = changed.matches.find(
+    (match) =>
+      match.nativeBracketId === original.nativeBracketId &&
+      [match.player1Id, match.player2Id].includes(bea) &&
+      [match.player1Id, match.player2Id].includes(chris),
+  )!;
+  expect(replay).toMatchObject({ status: 'ready', winnerId: null });
+  expect(replay.id).not.toBe(original.id);
+
+  const context = await browser.newContext({ baseURL, viewport: { width: 390, height: 844 } });
+  try {
+    const phone = await context.newPage();
+    await phone.goto(`/play/${planId}#event-results`);
+    const history = phone.getByRole('region', { name: 'Played before a finals replay' });
+    for (const name of originalNames) await expect(history).toContainText(name);
+    await expect(history).toContainText('The replay determines who advances.');
+    await expect(history.getByRole('button')).toHaveCount(0);
+    await phone.screenshot({ path: testInfo.outputPath('replay-player-history.png') });
+    await report(replay, bea);
+    for (;;) {
+      const next = (await snapshot()).matches.find((match) => match.status === 'ready');
+      if (!next) break;
+      await report(next, next.player1Id!);
+    }
+    await mutate(page.request, 'eventOps.native.finalize', { planId });
+    const sealed = await query<{ plan: { resultsSlug: string } }>(
+      page.request,
+      'eventOps.snapshot',
+      { planId },
+    );
+    await phone.goto(`/tournaments/${sealed.plan.resultsSlug}`);
+    const published = phone.getByRole('row').filter({ hasText: 'Superseded advancement' });
+    await expect(published).toHaveCount(1);
+    for (const name of originalNames) await expect(published).toContainText(name);
+    await expect(
+      published.getByRole('cell', {
+        name: original.player1Id === alice ? '2-1' : '1-2',
+        exact: true,
+      }),
+    ).toBeVisible();
+    await published.scrollIntoViewIfNeeded();
+    await phone.screenshot({ path: testInfo.outputPath('replay-published-tournament.png') });
+  } finally {
+    await context.close();
+  }
+});

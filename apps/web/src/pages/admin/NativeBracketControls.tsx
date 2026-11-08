@@ -209,7 +209,17 @@ export function NativeBracketControls({
                   {'strengthSeeding' in bracket &&
                     bracket.strengthSeeding &&
                     bracket.strengthSeeding.seeds.length > 0 && (
-                      <StrengthFinalsReview seeding={bracket.strengthSeeding} name={name} />
+                      <StrengthFinalsReview
+                        seeding={bracket.strengthSeeding}
+                        name={name}
+                        replayed={Boolean(
+                          'supersededPlayedSets' in data &&
+                          data.supersededPlayedSets?.some(
+                            (set) =>
+                              set.division === bracket.division && set.stage === bracket.stage,
+                          ),
+                        )}
+                      />
                     )}
                 </div>
               ))}
