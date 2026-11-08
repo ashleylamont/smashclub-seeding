@@ -16,7 +16,7 @@ test(
     entrant.name = 'W'.repeat(48);
     await page.goto(`/live/${PLAN_ID}`);
     const downloadPromise = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'Download results graphic ↓' }).first().click();
+    await page.getByRole('button', { name: 'Download SVG ↓' }).first().click();
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toBe('smash-club-results.svg');
     const path = testInfo.outputPath('wide-alias-results.svg');
@@ -240,7 +240,7 @@ for (const theme of ['dark', 'light'] as const)
       await page
         .locator('.result-graphic-actions')
         .filter({ has: trigger })
-        .getByRole('button', { name: 'Download results graphic ↓' })
+        .getByRole('button', { name: 'Download SVG ↓' })
         .click();
       const svgFile = await legacy;
       const svgPath = testInfo.outputPath('tied-results.svg');
@@ -323,7 +323,7 @@ test('large tie stays complete within the mobile canvas limit', async ({ page },
 
   await page.keyboard.press('Escape');
   const legacy = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download results graphic ↓' }).click();
+  await page.getByRole('button', { name: 'Download SVG ↓' }).click();
   const svgPath = testInfo.outputPath('large-tie-results.svg');
   await (await legacy).saveAs(svgPath);
   const svg = await readFile(svgPath, 'utf8');

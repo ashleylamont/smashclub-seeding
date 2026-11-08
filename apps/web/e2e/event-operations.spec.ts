@@ -164,7 +164,7 @@ test('rehearsal: two TOs, score approval, station safety, public board and OBS',
     await expect(page.getByRole('heading', { name: 'Confirmed pool standings' })).toBeVisible();
     const downloadPromise = page.waitForEvent('download');
     await page
-      .getByRole('button', { name: /Download results graphic/ })
+      .getByRole('button', { name: /Download SVG/ })
       .first()
       .click();
     const download = await downloadPromise;

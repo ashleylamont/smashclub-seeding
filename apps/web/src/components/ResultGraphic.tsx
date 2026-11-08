@@ -58,7 +58,7 @@ export function ResultGraphic({
           )
         }
       >
-        Download results graphic ↓
+        Download SVG ↓
       </Button>
     </div>
   );
