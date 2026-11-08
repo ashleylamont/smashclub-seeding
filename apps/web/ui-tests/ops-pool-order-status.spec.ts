@@ -1,3 +1,4 @@
+import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import { mockEvent, PLAN_ID, ready } from './fixtures';
 
@@ -70,3 +71,64 @@ test('linked and older standings keep the recorded-order fallback without a plan
   await page.screenshot({ path: testInfo.outputPath('linked-pool-standings.png'), fullPage: true });
   expect(fixture.unexpected).toEqual([]);
 });
+
+for (const theme of ['dark', 'light'] as const) {
+  for (const width of [390, 1440]) {
+    test(`${theme} ${width}px blocked pool orders explain why confirmation is unavailable`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const fixture = await mockEvent(page, { role: 'admin', idle: true });
+      Object.assign(fixture.overview.plan, { drawPaused: true });
+      Object.assign(fixture.overview, {
+        poolOrders: [
+          {
+            division: 'upper',
+            poolIndex: 0,
+            status: 'manual_required',
+            plannerConfirmation: {
+              available: false,
+              reason: 'Relock the draw before confirming this pool order.',
+            },
+          },
+          {
+            division: 'lower',
+            poolIndex: 0,
+            status: 'ruling_required',
+            plannerConfirmation: {
+              available: false,
+              reason:
+                'This pool has 17 entrants. The planner can confirm orders for pools of 2–16 entrants.',
+            },
+          },
+        ],
+      });
+
+      await page.goto(`/operate/${PLAN_ID}?view=draw`);
+      const standings = page.getByRole('region', { name: 'Pool standings', exact: true });
+      await expect(standings).toContainText('Relock the draw before confirming this pool order.');
+      await expect(standings).toContainText(
+        'The planner can confirm orders for pools of 2–16 entrants.',
+      );
+      await expect(standings.getByRole('link', { name: /planner/ })).toHaveCount(0);
+      await ready(page);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      expect(
+        (
+          await new AxeBuilder({ page })
+            .include('section[aria-labelledby="ops-pool-standings-title"]')
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+            .analyze()
+        ).violations,
+      ).toEqual([]);
+      await page.screenshot({
+        path: testInfo.outputPath('blocked-pool-standings.png'),
+        fullPage: true,
+      });
+      expect(fixture.unexpected).toEqual([]);
+    });
+  }
+}

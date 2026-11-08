@@ -4,6 +4,7 @@ import { projectMatchLabels } from './matchNames';
 import {
   canConfirmPoolOrder,
   canReviewFrozenPoolResult,
+  plannerPoolOrderBlocker,
   poolOrderStatus,
   poolPlacementSource,
 } from './poolOrders';
@@ -387,9 +388,7 @@ export async function eventView(
         return order;
       const lockedReason =
         worksheetOrderLock(state, pool, hasFixedLegacyFinals(state, pool.division)) ??
-        (canConfirmPoolOrder(state, pool)
-          ? undefined
-          : 'This pool order cannot be confirmed while the finals draw is in use.');
+        plannerPoolOrderBlocker(state, pool);
       return {
         ...order,
         plannerConfirmation: lockedReason

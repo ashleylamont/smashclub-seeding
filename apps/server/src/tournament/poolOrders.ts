@@ -10,6 +10,8 @@ import { hasLegacyQualifier } from './legacyFinalQualifiers';
 import type { CommandEnvelope, TournamentCommand, TournamentState } from './schemas';
 
 type Pool = TournamentState['pools'][number];
+export const POOL_ORDER_ENTRANT_LIMITS = { min: 2, max: 16 } as const;
+
 const matchesFor = (state: TournamentState, pool: Pool) =>
   state.matches.filter((m) => m.poolId === pool.id);
 
@@ -308,6 +310,17 @@ export function canConfirmPoolOrder(state: TournamentState, pool: Pool) {
     rollingFinals(state) ||
     (!pool.order && hasLegacyQualifier(state, pool.id, 'pending'))
   );
+}
+
+/** Additional confirmation limits on the planner's normal write path. */
+export function plannerPoolOrderBlocker(state: TournamentState, pool: Pool) {
+  const { min, max } = POOL_ORDER_ENTRANT_LIMITS;
+  const count = pool.entrantIds.length;
+  if (count < min || count > max)
+    return `This pool has ${count} ${count === 1 ? 'entrant' : 'entrants'}. The planner can confirm orders for pools of ${min}–${max} entrants.`;
+  if (state.lifecycle === 'unlocked') return 'Relock the draw before confirming this pool order.';
+  if (!canConfirmPoolOrder(state, pool))
+    return 'This pool order cannot be confirmed while the finals draw is in use.';
 }
 
 export function confirmPoolPlacements(

@@ -4,6 +4,7 @@ import { projectTournament, projectionInput } from '../../event-planner/projecti
 import { previewPlanRecovery, recoverPlan } from '../../event-planner/recovery';
 import { nativePlanList } from '../../tournament/queries';
 import { nativeEvent } from '../../tournament/api';
+import { POOL_ORDER_ENTRANT_LIMITS } from '../../tournament/poolOrders';
 import {
   historicalCandidates,
   previewHistoricalAdoption,
@@ -292,7 +293,10 @@ export const eventPlannerRouter = router({
           .array(
             z.object({
               poolIndex: z.number().int().nonnegative(),
-              playerIdsInOrder: z.array(z.uuid()).min(2).max(16),
+              playerIdsInOrder: z
+                .array(z.uuid())
+                .min(POOL_ORDER_ENTRANT_LIMITS.min)
+                .max(POOL_ORDER_ENTRANT_LIMITS.max),
               expectedPlacementRevision: z.string().optional(),
               expectedMatchRevisions: z
                 .array(z.object({ id: z.uuid(), revision: z.number().int().nonnegative() }))
