@@ -675,7 +675,7 @@
 }
 
 .chip.chip-accent {
-  color: var(--accent);
+  color: var(--accent-chip-text);
   border-color: var(--accent-border);
   background: var(--accent-bg);
 }
