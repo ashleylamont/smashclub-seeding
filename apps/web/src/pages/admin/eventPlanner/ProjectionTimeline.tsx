@@ -5,6 +5,7 @@ import { type FormatProjection, type ProjectedMatch, projectedTime } from './pro
 import {
   projectionColor,
   projectionDuration,
+  projectionMatchCode,
   projectionMatchName,
   projectionPairing,
 } from './projectionBracketLayout';
@@ -22,6 +23,7 @@ export function ProjectionTimeline({
   const selected = projection.matches.find((m) => m.id === selectedId);
   const played = projection.matches.filter((m) => !m.bye);
   const byId = new Map(projection.matches.map((m) => [m.id, m]));
+  const bracketLabels = new Map(projection.brackets.map((bracket) => [bracket.id, bracket.label]));
   const doubleElimination = projection.brackets.some((b) => b.kind === 'double_elimination');
   const width = Math.max(700, Math.min(6000, projection.totalMinutes * 5));
   const scale = width / Math.max(1, projection.totalMinutes);
@@ -71,22 +73,34 @@ export function ProjectionTimeline({
                   )}
                 {played
                   .filter((m) => m.station === i + 1)
-                  .map((match) => (
-                    <Button
-                      key={match.id}
-                      className={`projection-bar ${projectionColor(match)}${match.conditional ? ' projection-conditional' : ''}`}
-                      style={{
-                        left: match.startMinute * scale,
-                        width: Math.max(3, (match.endMinute - match.startMinute) * scale),
-                      }}
-                      aria-label={`${projectionMatchName(match)}${match.conditional ? ' (if needed)' : ''}: ${projectionPairing(match, byId).join(' versus ')}, ${projectedTime(start, match.startMinute)} to ${projectedTime(start, match.endMinute)}`}
-                      aria-pressed={match.id === selectedId}
-                      title={`${match.label}: ${match.sides.join(' vs ')} · ${projectedTime(start, match.startMinute)}`}
-                      onClick={() => setSelectedId(match.id)}
-                    >
-                      {projectionMatchName(match)}
-                    </Button>
-                  ))}
+                  .map((match) => {
+                    const code = projectionMatchCode(match);
+                    const name = projectionMatchName(match);
+                    const pairing = projectionPairing(match, byId);
+                    const bracket =
+                      bracketLabels.size > 1 ? bracketLabels.get(match.section) : undefined;
+                    const contextualName = bracket ? `${name} · ${bracket}` : name;
+                    const accessibleName =
+                      code === name || match.bracketLane === 'reset'
+                        ? contextualName
+                        : `${code} · ${contextualName}`;
+                    return (
+                      <Button
+                        key={match.id}
+                        className={`projection-bar ${projectionColor(match)}${match.conditional ? ' projection-conditional' : ''}`}
+                        style={{
+                          left: match.startMinute * scale,
+                          width: Math.max(3, (match.endMinute - match.startMinute) * scale),
+                        }}
+                        aria-label={`${accessibleName}: ${pairing.join(' versus ')}, ${projectedTime(start, match.startMinute)} to ${projectedTime(start, match.endMinute)}`}
+                        aria-pressed={match.id === selectedId}
+                        title={`${match.displayName ? contextualName : match.label}: ${pairing.join(' vs ')} · ${projectedTime(start, match.startMinute)}`}
+                        onClick={() => setSelectedId(match.id)}
+                      >
+                        {code}
+                      </Button>
+                    );
+                  })}
               </div>
             </div>
           ))}
@@ -96,7 +110,8 @@ export function ProjectionTimeline({
         {selected ? (
           <p>
             <strong>
-              {projectionMatchName(selected)} · {selected.label}
+              {projectionMatchName(selected)} ·{' '}
+              {bracketLabels.get(selected.section) ?? selected.label}
             </strong>
             <br />
             {projectionPairing(selected, byId).join(' vs ')} · Station {selected.station} ·{' '}
@@ -113,8 +128,8 @@ export function ProjectionTimeline({
           <p className="muted">Select a set to inspect its pairing, station and feeder matches.</p>
         )}
       </div>
-      <Disclosure title="Provisional run sheet and CSV">
-        <RunSheet matches={played} start={start} byId={byId} />
+      <Disclosure className="projection-run-sheet" title="Provisional run sheet and CSV">
+        <RunSheet matches={played} start={start} byId={byId} bracketLabels={bracketLabels} />
       </Disclosure>
       <p className="muted">
         {projection.pools.length > 0 ? (
@@ -143,21 +158,24 @@ function RunSheet({
   matches,
   start,
   byId,
+  bracketLabels,
 }: {
   matches: ProjectedMatch[];
   start: string;
-  byId: Map<string, ProjectedMatch>;
+  byId: ReadonlyMap<string, ProjectedMatch>;
+  bracketLabels: ReadonlyMap<string, string>;
 }) {
+  // Preserve the existing keys and feeder references for downloaded run sheets.
   const csv = [
     ['Set', 'Stage', 'Station', 'Start', 'End', 'Side A', 'Side B', 'After'],
     ...matches.map((m) => [
-      projectionMatchName(m),
+      projectionMatchCode(m),
       m.label,
       String(m.station),
       projectedTime(start, m.startMinute),
       projectedTime(start, m.endMinute),
-      ...projectionPairing(m, byId),
-      m.dependsOn.map((id) => projectionMatchName(byId.get(id)!)).join(' / '),
+      ...projectionPairing(m, byId, 'code'),
+      m.dependsOn.map((id) => projectionMatchCode(byId.get(id)!)).join(' / '),
     ]),
   ]
     .map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(','))
@@ -193,7 +211,7 @@ function RunSheet({
             {matches.map((m) => (
               <tr key={m.id}>
                 <td>{projectionMatchName(m)}</td>
-                <td>{m.label}</td>
+                <td>{bracketLabels.get(m.section) ?? m.label}</td>
                 <td>{m.station}</td>
                 <td>
                   {projectedTime(start, m.startMinute)}–{projectedTime(start, m.endMinute)}

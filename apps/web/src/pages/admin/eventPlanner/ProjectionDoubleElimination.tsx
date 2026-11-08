@@ -2,6 +2,7 @@ import type { FormatProjection, ProjectedMatch } from './projectionView';
 import {
   bracketCard,
   projectionLaneLayout,
+  projectionMatchCode,
   projectionMatchName,
   projectionPairing,
   type ProjectionLane,
@@ -96,11 +97,13 @@ export function ProjectionDoubleElimination({
                   </strong>
                 ))}
                 {layout.nodes.map(({ match, x, y }) => {
-                  const sides = projectionPairing(match, byId);
+                  const sides = projectionPairing(match, byId, 'code');
+                  const pairing = projectionPairing(match, byId);
+                  const name = projectionMatchName(match);
                   return (
                     <article
                       key={match.id}
-                      aria-label={`${projectionMatchName(match)}: ${sides.join(' versus ')}`}
+                      aria-label={`${name}: ${pairing.join(' versus ')}`}
                       data-match-id={match.id}
                       className={`projection-set${match.bye ? ' projection-set-bye' : ''}${match.conditional ? ' projection-set-conditional' : ''}`}
                       style={{
@@ -111,7 +114,7 @@ export function ProjectionDoubleElimination({
                       }}
                     >
                       <header>
-                        <strong>{projectionMatchName(match)}</strong>
+                        <strong title={name}>{projectionMatchCode(match)}</strong>
                         {match.bye ? (
                           <span>Bye</span>
                         ) : match.conditional ? (
@@ -121,7 +124,7 @@ export function ProjectionDoubleElimination({
                       {sides.map((side, i) => (
                         <p
                           key={i}
-                          title={side}
+                          title={pairing[i]}
                           className={
                             match.feeds.some((f) => f.side === i && f.outcome === 'loser')
                               ? 'projection-side-drop'

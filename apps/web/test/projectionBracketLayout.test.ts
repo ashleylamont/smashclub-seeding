@@ -5,6 +5,7 @@ import {
   projectionDuration,
   projectionFinish,
   projectionLaneLayout,
+  projectionMatchCode,
   projectionMatchName,
   projectionPairing,
 } from '../src/pages/admin/eventPlanner/projectionBracketLayout';
@@ -72,8 +73,8 @@ describe('double-elimination preview layout', () => {
   );
 
   it('connects local winner feeds and names cross-bracket loser drops without drawing through another lane', () => {
-    const a = match('winners', 1),
-      b = match('winners', 1, 1),
+    const a = { ...match('winners', 1), displayName: 'Winners semi-final 1' },
+      b = { ...match('winners', 1, 1), displayName: 'Winners semi-final 2' },
       final = match('winners', 2);
     final.feeds = [a, b].map((m, side) => ({
       matchId: m.id,
@@ -87,16 +88,25 @@ describe('double-elimination preview layout', () => {
       side: side as 0 | 1,
     }));
     const all = new Map([a, b, final, lower].map((m) => [m.id, m]));
-    expect(projectionPairing(final, all)).toEqual(['Winner W1.1', 'Winner W1.2']);
-    expect(projectionPairing(lower, all)).toEqual(['Loser W1.1', 'Loser W1.2']);
-    expect(projectionPairing({ ...lower, sides: ['Bye', 'Loser W1.2'] }, all)).toEqual([
-      'Bye',
-      'Loser W1.2',
+    const withBye: ProjectedMatch = { ...lower, sides: ['Bye', 'Loser W1.2'] };
+    const withSeeds: ProjectedMatch = { ...a, sides: ['O seed 1', 'O seed 8'] };
+    expect(projectionPairing(final, all, 'code')).toEqual(['Winner W1.1', 'Winner W1.2']);
+    expect(projectionPairing(lower, all, 'code')).toEqual(['Loser W1.1', 'Loser W1.2']);
+    expect(projectionPairing(withBye, all, 'code')).toEqual(['Bye', 'Loser W1.2']);
+    expect(projectionPairing(withSeeds, all, 'code')).toEqual(['Seed 1', 'Seed 8']);
+
+    expect(projectionMatchName(a)).toBe('Winners semi-final 1');
+    expect(projectionMatchName(match('winners', 1))).toBe('W1.1');
+    expect(projectionPairing(final, all)).toEqual([
+      'Winner of Winners semi-final 1',
+      'Winner of Winners semi-final 2',
     ]);
-    expect(projectionPairing({ ...a, sides: ['O seed 1', 'O seed 8'] }, all)).toEqual([
-      'Seed 1',
-      'Seed 8',
+    expect(projectionPairing(lower, all)).toEqual([
+      'Loser of Winners semi-final 1',
+      'Loser of Winners semi-final 2',
     ]);
+    expect(projectionPairing(withBye, all)).toEqual(['Bye', 'Loser of Winners semi-final 2']);
+    expect(projectionPairing(withSeeds, all)).toEqual(['Seed 1', 'Seed 8']);
     const winners = projectionLaneLayout([a, b, final], 'winners');
     expect(winners.edges.map((e) => [e.from, e.to, e.side])).toEqual([
       [a.id, final.id, 0],
@@ -116,8 +126,10 @@ describe('double-elimination preview layout', () => {
     expect(layout.rounds.map((r) => r.label)).toEqual(['Grand final', 'Reset · if needed']);
     expect(layout.nodes.map((n) => n.x)).toEqual([12, 276]);
     expect(layout.edges.map((edge) => edge.outcome)).toEqual(['winner', 'loser']);
+    expect(projectionMatchCode(grand)).toBe('Grand final');
+    expect(projectionMatchCode(reset)).toBe('Reset final');
     expect(projectionMatchName(grand)).toBe('Grand final');
-    expect(projectionMatchName(reset)).toBe('Reset final');
+    expect(projectionMatchName(reset)).toBe('Reset final (if needed)');
     expect(projectionDuration({ matches: [grand, reset], totalMinutes: 82 })).toBe('1h 10m–1h 22m');
     expect(projectionDuration({ matches: [grand], totalMinutes: 70 })).toBe('1h 10m');
     expect(projectionFinish({ matches: [grand, reset], totalMinutes: 82 }, '23:40')).toBe(

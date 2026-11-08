@@ -1,5 +1,6 @@
 import { type FormatProjection } from './projectionView';
 import { ProjectionDoubleElimination } from './ProjectionDoubleElimination';
+import { projectionMatchName, projectionPairing } from './projectionBracketLayout';
 
 export function ProjectionBrackets({ projection }: { projection: FormatProjection }) {
   return (
@@ -43,6 +44,7 @@ export function ProjectionBrackets({ projection }: { projection: FormatProjectio
           return (
             <ProjectionDoubleElimination key={bracket.id} bracket={bracket} matches={matches} />
           );
+        const byId = new Map(matches.map((match) => [match.id, match]));
         const rounds = Math.max(1, ...matches.map((m) => m.round));
         const firstRoundSize = matches.filter((m) => m.round === 1).length;
         const height = Math.max(90, firstRoundSize * 90);
@@ -77,7 +79,7 @@ export function ProjectionBrackets({ projection }: { projection: FormatProjectio
                 >
                   {matches.flatMap((m) =>
                     m.dependsOn.map((id) => {
-                      const parent = matches.find((p) => p.id === id)!;
+                      const parent = byId.get(id)!;
                       const a = pos(parent.round, parent.slot),
                         b = pos(m.round, m.slot);
                       return (
@@ -91,22 +93,24 @@ export function ProjectionBrackets({ projection }: { projection: FormatProjectio
                   )}
                   {matches.map((m) => {
                     const { x, y } = pos(m.round, m.slot);
+                    const name = projectionMatchName(m);
+                    const sides = projectionPairing(m, byId);
                     return (
                       <g key={m.id} className={`projection-node projection-${m.stage}`}>
                         <title>
-                          {m.id}: {m.sides.join(' vs ')}
+                          {name}: {sides.join(' vs ')}
                           {m.bye ? ' — automatic bye' : ''}
                         </title>
                         <rect x={x} y={y} width={220} height={64} />
                         <text x={x + 8} y={y + 17} className="projection-node-title">
-                          {m.id}
+                          {name}
                           {m.bye ? ' · Bye' : m.conditional ? ' · If needed' : ''}
                         </text>
                         <text x={x + 8} y={y + 37}>
-                          {m.sides[0]}
+                          {sides[0]}
                         </text>
                         <text x={x + 8} y={y + 55}>
-                          {m.sides[1]}
+                          {sides[1]}
                         </text>
                       </g>
                     );

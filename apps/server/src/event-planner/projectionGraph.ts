@@ -5,6 +5,7 @@ import {
 } from '@smashclub/shared';
 import {
   compileTournament,
+  knockoutMatchName,
   poolLabel,
   type StructureMatch,
   type TournamentSlot,
@@ -13,6 +14,8 @@ import {
 export interface ProjectionMatch {
   id: string;
   label: string;
+  /** Knockout wording for the preview. The existing label and keys back the CSV. */
+  displayName?: string;
   stage: 'group' | 'main' | 'consolation';
   section: string;
   round: number;
@@ -88,6 +91,7 @@ export function projectionGraph(
               id: `${division.id}${stage.role === 'main' ? 'M' : 'C'}`,
               label: `${division.label} ${stage.role === 'main' ? 'championship' : 'consolation'}`,
               stage: stage.role,
+              entrants: stage.entrants.length,
             },
       ];
     }),
@@ -117,6 +121,8 @@ export function projectionGraph(
   const loserResources = new Map<string, string[]>();
   for (const match of graph.matches) {
     const view = stageViews.get(match.stageId)!;
+    const displayName =
+      view.stage === 'group' ? undefined : knockoutMatchName(match, view.entrants);
     const sideResources = match.sides.map((s) =>
       s.kind === 'bye'
         ? []
@@ -138,6 +144,7 @@ export function projectionGraph(
             ? 'Reset final (if needed)'
             : `${match.bracketLane === 'winners' ? 'Winners ' : match.bracketLane === 'losers' ? 'Losers ' : ''}round ${match.bracketRound ?? match.round}, set ${match.slot + 1}`
       }`,
+      ...(displayName ? { displayName } : {}),
       stage: view.stage,
       section: view.id,
       round: match.round,

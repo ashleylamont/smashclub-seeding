@@ -211,6 +211,46 @@ describe('draft tournament projections', () => {
     }
   });
 
+  it('adds structural names without replacing the projected match keys or feeds', () => {
+    const eight = projectionGraph('double_elimination', 8, null);
+    const byId = new Map(eight.matches.map((match) => [match.id, match]));
+    expect(byId.get('OM-3-1')).toMatchObject({
+      displayName: 'Winners semi-final 1',
+      label: 'Open championship · Winners round 2, set 1',
+      sides: ['Winner OM-1-1', 'Winner OM-1-2'],
+      dependsOn: ['OM-1-1', 'OM-1-2'],
+    });
+    expect(byId.get('OM-9-1')).toMatchObject({
+      displayName: 'Reset final (if needed)',
+      conditional: true,
+      dependsOn: ['OM-8-1'],
+    });
+
+    const five = projectionGraph('single_elimination', 5, null);
+    expect(five.matches[0]).toMatchObject({
+      id: 'OM-1-1',
+      displayName: 'Quarter-final 1',
+      bye: true,
+    });
+    expect(five.matches.at(-1)).toMatchObject({ id: 'OM-3-1', displayName: 'Final' });
+
+    const uneven = projectionGraph('dual_division', 17, 10);
+    expect(uneven.matches.find((match) => match.stage === 'group')).not.toHaveProperty(
+      'displayName',
+    );
+    expect(uneven.matches.find((match) => match.id === 'UM-1-1')).toMatchObject({
+      displayName: 'Quarter-final 1',
+      bye: true,
+    });
+    expect(uneven.matches.find((match) => match.id === 'LC-1-1')).toMatchObject({
+      displayName: 'Semi-final 1',
+      bye: true,
+    });
+    expect(
+      projectionGraph('dual_division', 6, 3).matches.find((match) => match.id === 'UC-1-1'),
+    ).toMatchObject({ displayName: 'Uncontested bracket', bye: true });
+  });
+
   it('uses the actual uneven split and the same 3–5 entrant pool balancing as the planner', () => {
     const result = project({ entrantCount: 17, upperSize: 10 }).formats[2]!;
     expect(result.pools.map((p) => p.entrants.length)).toEqual([3, 3, 4, 3, 4]);
