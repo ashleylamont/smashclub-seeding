@@ -261,9 +261,17 @@ describe('native format lifecycle through shipped APIs', () => {
     async (structure) => {
       const planId = await draft(5, structure);
       const state = await runtime.state(planId);
-      const playerId = state.matches.find((m) => m.status === 'ready')!.player1Id!;
+      const ready = state.matches.find((m) => m.status === 'ready')!;
+      const playerId = ready.player1Id!;
       const preview = attendancePreview(state, { action: 'withdraw', playerId });
       expect(preview.allowed).toBe(true);
+      expect(preview.withdrawalMatches).toEqual({ [ready.id]: { forfeit: 'automatic' } });
+      const closed = attendancePreview(
+        { ...state, lifecycle: 'cancelled' },
+        { action: 'withdraw', playerId },
+      );
+      expect(closed.allowed).toBe(false);
+      expect(closed.withdrawalMatches?.[ready.id]?.forfeit).toBeUndefined();
       await caller().eventOps.live.command({
         planId,
         requestId: crypto.randomUUID(),
@@ -295,6 +303,25 @@ describe('native format lifecycle through shipped APIs', () => {
       expect(await runtime.replay(planId)).toEqual(final);
     },
   );
+
+  it.each([
+    ['single_elimination', 'playing', 'organiser'],
+    ['single_elimination', 'held', 'organiser'],
+    ['single_elimination', 'ready', 'automatic'],
+    ['double_elimination', 'playing', 'organiser'],
+    ['single_elimination', 'called', 'automatic'],
+    ['round_robin', 'called', 'organiser'],
+  ] as const)('previews and applies %s withdrawal while %s', async (structure, phase, forfeit) => {
+    const { planId, resolved } = await verifyWithdrawalPreview(
+      draft,
+      runtime,
+      caller().eventOps,
+      structure,
+      phase,
+      forfeit,
+    );
+    expect(await runtime.replay(planId)).toEqual(resolved);
+  });
 
   it.each(['score', 'approval'] as const)(
     'returns scoped recovery for a blocked feeder %s and retries after the call returns',
@@ -688,3 +715,156 @@ describe('native format lifecycle through shipped APIs', () => {
     expect(plan!.structure).toBe('single_elimination');
   });
 });
+
+async function verifyWithdrawalPreview(
+  draft: (count: number, structure: TournamentStructure) => Promise<string>,
+  runtime: NativeRuntime,
+  api: ReturnType<typeof appRouter.createCaller>['eventOps'],
+  structure: TournamentStructure,
+  phase: 'playing' | 'held' | 'ready' | 'called',
+  forfeit: 'automatic' | 'organiser',
+) {
+  const planId = await draft(4, structure);
+  const started = phase === 'playing' || phase === 'held';
+  const command = (input: Parameters<NativeRuntime['command']>[3]) =>
+    api.live.command({ planId, requestId: crypto.randomUUID(), command: input });
+  const stationId = crypto.randomUUID();
+  let state = await runtime.state(planId);
+  await command({
+    kind: 'station',
+    id: stationId,
+    name: 'Stage',
+    expectedResourceRevision: state.settings.resourceRevision,
+  });
+  state = await runtime.state(planId);
+  await command({
+    kind: 'configureDispatch',
+    capacity: 2,
+    reservedStationIds: [stationId],
+    expectedResourceRevision: state.settings.resourceRevision,
+  });
+  state = await runtime.state(planId);
+
+  if (structure === 'single_elimination' && phase !== 'called') {
+    for (const match of state.matches.filter((m) => m.round === 1))
+      await api.reportScore({
+        matchId: match.id,
+        expectedRevision: match.revision,
+        requestId: crypto.randomUUID(),
+        score1: 2,
+        score2: 0,
+        outcome: 'played',
+      });
+    state = await runtime.state(planId);
+  }
+  const target = state.matches.find((m) => m.status === 'ready')!;
+  if (phase !== 'ready')
+    await command({
+      kind: 'dispatch',
+      matchId: target.id,
+      stationId,
+      callOnly: phase === 'called',
+      expectedRevision: target.revision,
+      expectedResourceRevision: state.settings.resourceRevision,
+    });
+  if (started) {
+    const match = (await runtime.state(planId)).matches.find(({ id }) => id === target.id)!;
+    await api.updateLiveScore({
+      matchId: match.id,
+      expectedRevision: match.revision,
+      expectedProgressRevision: match.progressRevision,
+      score1: 1,
+      score2: 0,
+    });
+  }
+
+  if (phase === 'held') {
+    state = await runtime.state(planId);
+    await command({
+      kind: 'matchControl',
+      matchId: target.id,
+      status: 'blocked',
+      stationId: null,
+      expectedRevision: target.revision,
+      expectedResourceRevision: state.settings.resourceRevision,
+      reason: 'Stage paused',
+    });
+  }
+
+  const before = await runtime.state(planId);
+  const beforeMatch = before.matches.find(({ id }) => id === target.id)!;
+  const input = {
+    planId,
+    action: 'withdraw' as const,
+    playerId: target.player1Id!,
+    reason: 'Left the venue',
+  };
+  const preview = await api.previewAttendance(input);
+  expect(preview.allowed).toBe(true);
+  expect(preview.returnCallMatchIds).toBeUndefined();
+  expect(preview.withdrawalMatches?.[target.id]).toEqual({
+    ...(phase !== 'ready' && { state: phase }),
+    forfeit,
+  });
+  expect(preview.warnings.some((warning) => warning.includes('Calls awaiting'))).toBe(
+    phase === 'called',
+  );
+  expect(preview.warnings.some((warning) => warning.includes('Outstanding pool pairings'))).toBe(
+    structure === 'round_robin',
+  );
+  expect(await runtime.state(planId)).toEqual(before);
+
+  await api.applyAttendance({
+    ...input,
+    revisionToken: preview.revisionToken,
+    requestId: crypto.randomUUID(),
+  });
+  const after = await runtime.state(planId);
+  const afterMatch = after.matches.find(({ id }) => id === target.id)!;
+  expect(afterMatch).toMatchObject({
+    player1Id: beforeMatch.player1Id,
+    player2Id: beforeMatch.player2Id,
+    sourceKey: beforeMatch.sourceKey,
+    stationId: null,
+    started,
+    score1: null,
+    score2: null,
+    liveScore1: beforeMatch.liveScore1,
+    liveScore2: beforeMatch.liveScore2,
+    progressRevision: beforeMatch.progressRevision,
+  });
+  expect(afterMatch).toMatchObject(
+    forfeit === 'organiser'
+      ? {
+          status: 'blocked',
+          outcome: null,
+          winnerId: null,
+          revision: beforeMatch.revision,
+          blockedReason:
+            phase === 'held'
+              ? 'Stage paused'
+              : 'Player withdrawn: awaiting organiser forfeit decision',
+        }
+      : { status: 'complete', outcome: 'forfeit', winnerId: target.player2Id },
+  );
+  const downstream = after.matches.filter(
+    (m) => m.parent1Id === target.id || m.parent2Id === target.id,
+  );
+  expect(structure === 'double_elimination' ? downstream.map(({ status }) => status) : []).toEqual(
+    structure === 'double_elimination' ? ['blocked', 'blocked'] : [],
+  );
+  if (forfeit === 'organiser')
+    await api.reportScore({
+      matchId: target.id,
+      expectedRevision: afterMatch.revision,
+      requestId: crypto.randomUUID(),
+      score1: 0,
+      score2: 0,
+      winnerId: target.player2Id!,
+      outcome: 'forfeit',
+    });
+  const resolved = await runtime.state(planId);
+  for (const completed of before.matches.filter((m) => m.status === 'complete'))
+    expect(resolved.matches.find(({ id }) => id === completed.id)).toEqual(completed);
+  return { planId, resolved };
+}

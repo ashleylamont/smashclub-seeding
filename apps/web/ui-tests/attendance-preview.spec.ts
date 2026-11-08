@@ -113,6 +113,109 @@ for (const theme of ['dark', 'light'] as const) {
   }
 }
 
+for (const [theme, width, called] of [
+  ['dark', 390, false],
+  ['light', 390, true],
+  ['dark', 1440, true],
+  ['light', 1440, false],
+] as const) {
+  test(`${theme} ${width}px withdrawal preview explains ${called ? 'a call awaiting play' : 'a started set'}`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+    const fixture = await mockEvent(page, { role: 'admin' });
+    Object.assign(fixture.overview.plan, {
+      bracketMode: 'native',
+      liveOwned: true,
+      structure: 'double_elimination',
+    });
+    const entrant = fixture.overview.entrants[0]!;
+    entrant.name = 'Alex with a long tournament alias and an attendance update';
+    const revisionToken = 'reviewed-withdrawal';
+    fixture.responses['eventOps.previewAttendance'] = {
+      allowed: true,
+      issues: [],
+      warnings: [
+        'Completed results stay recorded.',
+        ...(called
+          ? [
+              'Calls awaiting a confirmed start are released. Confirm the start first if play is underway.',
+            ]
+          : []),
+      ],
+      requiresExternalAcknowledgement: false,
+      requiresRedistributionApproval: false,
+      relocations: [],
+      affectedMatches: [
+        { id: 'finals-match', label: 'Winners quarter-final 1', status: 'playing' },
+      ],
+      withdrawalMatches: {
+        'finals-match': {
+          state: called ? 'called' : 'playing',
+          forfeit: called ? 'automatic' : 'organiser',
+        },
+      },
+      addedMatches: 0,
+      revisionToken,
+    };
+    fixture.responses['eventOps.applyAttendance'] = { ok: true };
+
+    await page.goto(`/operate/${PLAN_ID}?view=players`);
+    const attendance = page.locator('section.card').filter({
+      has: page.getByRole('heading', { name: 'Attendance changes', exact: true }),
+    });
+    await expect(attendance).toBeVisible();
+    await ready(page);
+    await chooseAttendanceOption(
+      attendance.getByRole('combobox', { name: 'Change', exact: true }),
+      'withdraw',
+    );
+    await chooseAttendanceOption(
+      attendance.getByRole('combobox', { name: 'Player', exact: true }),
+      entrant.id,
+    );
+    const preview = attendance.getByRole('button', { name: 'Preview attendance change' });
+    await preview.press('Enter');
+    const consequence = called
+      ? 'Called, awaiting start · Forfeit on apply'
+      : 'In progress · Record forfeit after withdrawal';
+    await expect(
+      attendance.getByText(`Winners quarter-final 1 · ${consequence}`, { exact: true }),
+    ).toBeVisible();
+    await expect(attendance.getByText('Completed results stay recorded.')).toBeVisible();
+    await expect(attendance.getByText(/Confirm the start first/)).toHaveCount(called ? 1 : 0);
+    await expect(attendance.getByRole('button', { name: /Return/ })).toHaveCount(0);
+    const apply = attendance.getByRole('button', { name: 'Apply this change' });
+    await expect(apply).toBeEnabled();
+
+    await page.evaluate(() => scrollTo(0, 0));
+    await ready(page);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    expect(
+      (
+        await new AxeBuilder({ page })
+          .include('.ops-page')
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+          .analyze()
+      ).violations,
+    ).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath('withdrawal-preview.png'), fullPage: true });
+    const submitted = page.waitForRequest((request) =>
+      request.url().includes('eventOps.applyAttendance'),
+    );
+    await apply.press('Enter');
+    const request = await submitted;
+    const body = request.postDataJSON();
+    const input = new URL(request.url()).searchParams.has('batch') ? body[0] : body;
+    expect(input).toMatchObject({ playerId: entrant.id, action: 'withdraw', revisionToken });
+    await expect(attendance.getByRole('status')).toContainText('Attendance updated');
+    expect(fixture.unexpected).toEqual([]);
+  });
+}
+
 test('each new relocation preview needs fresh approval while a no-show can stay in its pool', async ({
   page,
 }) => {
