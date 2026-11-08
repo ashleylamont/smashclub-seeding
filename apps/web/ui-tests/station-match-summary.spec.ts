@@ -1,13 +1,20 @@
 import { AxeBuilder } from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { mockEvent, PLAN_ID, ready } from './fixtures';
 
-async function capture(page: Page, selector: string, path: string) {
-  // Use the same settled page position for contrast analysis and the capture.
-  await page.evaluate(() => scrollTo(0, 0));
+async function capture(page: Page, selector: string, path: string, contrastTarget?: Locator) {
+  const scrollToTop = () => page.evaluate(() => scrollTo(0, 0));
+  const expectTop = () => expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
+  await scrollToTop();
   await ready(page);
-  await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
+  await expectTop();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  if (contrastTarget) {
+    // Analyze the open round where a player can read it, while scanning the entire hub.
+    await contrastTarget.evaluate((row) => row.scrollIntoView({ block: 'center' }));
+    await ready(page);
+    await expect(contrastTarget).toBeInViewport({ ratio: 1 });
+  }
   expect(
     (
       await new AxeBuilder({ page })
@@ -16,6 +23,10 @@ async function capture(page: Page, selector: string, path: string) {
         .analyze()
     ).violations,
   ).toEqual([]);
+  if (contrastTarget) {
+    await scrollToTop();
+    await expectTop();
+  }
   await page.screenshot({ path, fullPage: true });
 }
 
@@ -95,7 +106,12 @@ for (const theme of ['dark', 'light'] as const)
       await expect(disclosure).toBeFocused();
       await expect(roundRow.getByText('Called', { exact: true })).toBeVisible();
       await expect(roundRow.getByText('Playing now', { exact: true })).toHaveCount(0);
-      await capture(page, '.player-event-hub', testInfo.outputPath('player-round-called.png'));
+      await capture(
+        page,
+        '.player-event-hub',
+        testInfo.outputPath('player-round-called.png'),
+        roundRow,
+      );
 
       Object.assign(match, { called: false, started: true });
       await page.reload();
