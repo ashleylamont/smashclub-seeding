@@ -2,6 +2,13 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.2.4
+
+### Patch Changes
+
+- 8 November 2026 · **Fix** · Keep confirmed pool places visible after a withdrawal from a legacy native finals draw. The organiser worksheet points to the existing draw and keeps the original finishing order. [#210](https://github.com/ashleylamont/smashclub-seeding/pull/210) · [build 726e037](https://github.com/ashleylamont/smashclub-seeding/commit/726e037c0da666ed466f3e6d20966e0180cd74bf)
+- 8 November 2026 · **Maintenance** · Split the event archive browser checks into shorter scenarios while retaining coverage for results, prizes and cancelled events. [#215](https://github.com/ashleylamont/smashclub-seeding/pull/215) · [build 7c5145a](https://github.com/ashleylamont/smashclub-seeding/commit/7c5145a4b43b91156df1a040f6c6307122f15073)
+
 ## 0.2.3
 
 ### Patch Changes
