@@ -1,13 +1,34 @@
-import { and, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, lt, sql } from 'drizzle-orm';
 import { sets, tournaments, type Db } from '@smashclub/db';
 import { parseScoresCsv, type EngineSet, type EngineTournament } from '@smashclub/engine';
-import { includesResultStage, isPlayedRatingResult } from '@smashclub/shared';
-import { nativeHistory } from '../events/nativeHistory';
+import { includesResultStage, isPlayedRatingResult, type UnplayedOutcome } from '@smashclub/shared';
+import { loadNativeHistory } from '../events/nativeHistory';
 
-export async function loadSinglesHistory(db: Db) {
-  const { superseded } = await nativeHistory(db);
+interface SinglesHistoryBudget {
+  before: Date;
+  maxTournaments: number;
+  maxSets: number;
+  maxNativeRows: number;
+}
 
-  const tournamentRows = await db
+interface SinglesHistory {
+  engineSets: EngineSet[];
+  engineTournaments: EngineTournament[];
+}
+
+export function loadSinglesHistory(db: Db): Promise<SinglesHistory>;
+export function loadSinglesHistory(
+  db: Db,
+  budget: SinglesHistoryBudget,
+): Promise<SinglesHistory | null>;
+export async function loadSinglesHistory(
+  db: Db,
+  budget?: SinglesHistoryBudget,
+): Promise<SinglesHistory | null> {
+  const native = await loadNativeHistory(db, budget?.maxNativeRows);
+  if (!native) return null;
+
+  const tournamentQuery = db
     .select({
       id: tournaments.id,
       eventDate: tournaments.eventDate,
@@ -16,7 +37,17 @@ export async function loadSinglesHistory(db: Db) {
       resultsMode: tournaments.resultsMode,
     })
     .from(tournaments)
-    .where(and(isNotNull(tournaments.eventDate), eq(tournaments.competitionFormat, 'singles')));
+    .where(
+      and(
+        isNotNull(tournaments.eventDate),
+        eq(tournaments.competitionFormat, 'singles'),
+        budget ? lt(tournaments.eventDate, budget.before) : undefined,
+      ),
+    );
+  const tournamentRows = await (budget
+    ? tournamentQuery.limit(budget.maxTournaments + 1)
+    : tournamentQuery);
+  if (budget && tournamentRows.length > budget.maxTournaments) return null;
 
   const engineTournaments: EngineTournament[] = tournamentRows.map((row) => ({
     id: row.id,
@@ -27,24 +58,43 @@ export async function loadSinglesHistory(db: Db) {
   const tournamentIds = engineTournaments.map((t) => t.id);
   const modes = new Map(tournamentRows.map((t) => [t.id, t.resultsMode]));
 
+  const setQuery = db
+    .select({
+      id: sets.id,
+      tournamentId: sets.tournamentId,
+      p1PlayerId: sets.p1PlayerId,
+      p2PlayerId: sets.p2PlayerId,
+      winner: sets.winner,
+      suggestedPlayOrder: sets.suggestedPlayOrder,
+      completedAt: sets.completedAt,
+      challongeMatchId: sets.challongeMatchId,
+      resultStage: sets.resultStage,
+      scoresCsv: sets.scoresCsv,
+      // Only the recognised top-level outcome reaches the shared classifier.
+      // Provider payloads and arbitrary values of `outcome` stay in the database.
+      storedOutcome: sql<UnplayedOutcome | null>`case ${sets.raw}->'outcome'
+        when '"bye"'::jsonb then 'bye'
+        when '"forfeit"'::jsonb then 'forfeit'
+      end`,
+    })
+    .from(sets)
+    .where(
+      and(
+        inArray(sets.tournamentId, tournamentIds),
+        eq(sets.state, 'complete'),
+        eq(sets.excludedFromRatings, false),
+        isNotNull(sets.p1PlayerId),
+        isNotNull(sets.p2PlayerId),
+        isNotNull(sets.winner),
+      ),
+    );
   const setRows = tournamentIds.length
-    ? await db
-        .select()
-        .from(sets)
-        .where(
-          and(
-            inArray(sets.tournamentId, tournamentIds),
-            eq(sets.state, 'complete'),
-            eq(sets.excludedFromRatings, false),
-            isNotNull(sets.p1PlayerId),
-            isNotNull(sets.p2PlayerId),
-            isNotNull(sets.winner),
-          ),
-        )
+    ? await (budget ? setQuery.limit(budget.maxSets + 1) : setQuery)
     : [];
+  if (budget && setRows.length > budget.maxSets) return null;
 
   const engineSets: EngineSet[] = setRows
-    .filter((row) => !superseded.has(row.tournamentId))
+    .filter((row) => !native.superseded.has(row.tournamentId))
     .filter((row) => includesResultStage(modes.get(row.tournamentId) ?? 'auto', row.resultStage))
     .filter((row) => row.p1PlayerId !== row.p2PlayerId)
     /*
@@ -55,7 +105,7 @@ export async function loadSinglesHistory(db: Db) {
      * is re-read here and the ratings come out right on the next recompute
      * rather than on the next re-sync.
      */
-    .filter((row) => isPlayedRatingResult(row.scoresCsv, row.raw))
+    .filter((row) => isPlayedRatingResult(row.scoresCsv, { outcome: row.storedOutcome }))
     .map((row) => {
       // Game counts feed WHR's evidence weighting (a 3-0 outrates a 3-2);
       // Unplayed scores were excluded above; unknown played scores count once.

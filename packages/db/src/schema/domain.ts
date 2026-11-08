@@ -4,6 +4,7 @@ import {
   boolean,
   date,
   doublePrecision,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -339,39 +340,43 @@ export const recomputes = pgTable('recomputes', {
   finishedAt: timestamp('finished_at', { withTimezone: true }),
 });
 
-export const ratingEvents = pgTable('rating_events', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  recomputeId: uuid('recompute_id')
-    .notNull()
-    .references(() => recomputes.id, { onDelete: 'cascade' }),
-  playerId: uuid('player_id')
-    .notNull()
-    .references(() => players.id, { onDelete: 'cascade' }),
-  seq: integer('seq').notNull(),
-  setId: uuid('set_id').references(() => sets.id, { onDelete: 'cascade' }),
-  tournamentId: uuid('tournament_id')
-    .notNull()
-    .references(() => tournaments.id, { onDelete: 'cascade' }),
-  isDecay: boolean('is_decay').notNull().default(false),
-  won: boolean('won'),
-  opponentPlayerId: uuid('opponent_player_id').references(() => players.id, {
-    onDelete: 'cascade',
-  }),
-  preRating: doublePrecision('pre_rating').notNull(),
-  postRating: doublePrecision('post_rating').notNull(),
-  preRd: doublePrecision('pre_rd').notNull(),
-  postRd: doublePrecision('post_rd').notNull(),
-  preVol: doublePrecision('pre_vol').notNull(),
-  postVol: doublePrecision('post_vol').notNull(),
-  weight: doublePrecision('weight').notNull(),
-  /**
-   * Current full-history estimate at this night. In engine v2, pre/post columns
-   * repeat pre/post-night estimates on each set, never per-match deltas. Legacy
-   * runs keep their original values and semantics for provenance.
-   */
-  revisedRating: doublePrecision('revised_rating'),
-  revisedSd: doublePrecision('revised_sd'),
-});
+export const ratingEvents = pgTable(
+  'rating_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    recomputeId: uuid('recompute_id')
+      .notNull()
+      .references(() => recomputes.id, { onDelete: 'cascade' }),
+    playerId: uuid('player_id')
+      .notNull()
+      .references(() => players.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    setId: uuid('set_id').references(() => sets.id, { onDelete: 'cascade' }),
+    tournamentId: uuid('tournament_id')
+      .notNull()
+      .references(() => tournaments.id, { onDelete: 'cascade' }),
+    isDecay: boolean('is_decay').notNull().default(false),
+    won: boolean('won'),
+    opponentPlayerId: uuid('opponent_player_id').references(() => players.id, {
+      onDelete: 'cascade',
+    }),
+    preRating: doublePrecision('pre_rating').notNull(),
+    postRating: doublePrecision('post_rating').notNull(),
+    preRd: doublePrecision('pre_rd').notNull(),
+    postRd: doublePrecision('post_rd').notNull(),
+    preVol: doublePrecision('pre_vol').notNull(),
+    postVol: doublePrecision('post_vol').notNull(),
+    weight: doublePrecision('weight').notNull(),
+    /**
+     * Current full-history estimate at this night. In engine v2, pre/post columns
+     * repeat pre/post-night estimates on each set, never per-match deltas. Legacy
+     * runs keep their original values and semantics for provenance.
+     */
+    revisedRating: doublePrecision('revised_rating'),
+    revisedSd: doublePrecision('revised_sd'),
+  },
+  (table) => [index('rating_events_recompute_set_idx').on(table.recomputeId, table.setId)],
+);
 
 export const ratingNights = pgTable(
   'rating_nights',

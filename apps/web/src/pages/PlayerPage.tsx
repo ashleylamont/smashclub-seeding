@@ -1,4 +1,5 @@
 import { Select, SelectItem } from '../components/ui/Select';
+import { Button } from '../components/ui/Button';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
@@ -16,6 +17,7 @@ import { trpc } from '../lib/trpc';
 import type { PlayerData, PlayerEventView } from '../lib/apiTypes';
 import { CharacterIcons } from '../components/CharacterIcons';
 import { PlayerRatingNight } from '../components/PlayerRatingNight';
+import { WhrResultImpact } from '../components/WhrResultImpact';
 import { InfoTip } from '../components/InfoTip';
 import { formatDate, tierClass } from '../lib/format';
 import './PlayerPage.css';
@@ -47,7 +49,8 @@ export function PlayerPage() {
 }
 
 function PlayerProfile({ data }: { data: PlayerData }) {
-  const { player, rating, nights } = data;
+  const { player, rating, nights, recomputeId } = data;
+  const [impactSetId, setImpactSetId] = useState<string | null>(null);
   // The server types these rows loosely (Record<string, unknown>); see PlayerEventView.
   const events = data.events as unknown as PlayerEventView[];
   const chartData = useMemo(() => {
@@ -432,7 +435,9 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         )}
         {events.length > 0 && (
           <p className="muted chart-caption">
-            WHR fits whole nights. Individual sets have no exact rating delta.
+            {recomputeId
+              ? 'WHR fits whole nights. Open WHR impact to see how one set affected that night’s estimate.'
+              : 'WHR fits whole nights. Individual sets have no exact rating delta.'}
           </p>
         )}
         {events.length === 0 ? (
@@ -473,6 +478,20 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                         {event.isRookie && (
                           <span className="chip chip-warning rookie-chip">rookie</span>
                         )}
+                        {recomputeId && event.setId && !event.isDecay && event.won != null && (
+                          <div className="whr-impact-action">
+                            <Button
+                              size="small"
+                              aria-label={`WHR impact for ${event.tournamentName} against ${event.opponentName ?? 'this opponent'}`}
+                              onClick={(e) => {
+                                e.currentTarget.focus();
+                                setImpactSetId(event.setId);
+                              }}
+                            >
+                              WHR impact
+                            </Button>
+                          </div>
+                        )}
                       </td>
                       <td>
                         {event.isDecay ? '—' : event.resultStage === 'group' ? 'Pool' : 'Bracket'}
@@ -509,6 +528,14 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           </div>
         )}
       </section>
+      {recomputeId && impactSetId && (
+        <WhrResultImpact
+          playerId={player.id}
+          setId={impactSetId}
+          recomputeId={recomputeId}
+          onClose={() => setImpactSetId(null)}
+        />
+      )}
     </div>
   );
 }

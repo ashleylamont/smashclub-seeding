@@ -2,8 +2,12 @@ import { expect, test, type Page } from '@playwright/test';
 import { AxeBuilder } from '@axe-core/playwright';
 import { rpcProcedures } from '../test-support/rpcBatch';
 import { ready } from './fixtures';
+import type { trpc } from '../src/lib/trpc';
 
 const playerId = 'ac184b5a-fba4-4bc9-9ee9-c1610d3c8373';
+const recomputeId = '9c935fcc-1df1-4a9b-b2fc-733150e1bc4f';
+type Impact = Awaited<ReturnType<typeof trpc.public.whrResultImpact.query>>;
+const setIds = ['47ea5b38-8fb2-4690-9c2c-2652c3ba515e', '3acb2905-3434-4721-9a5f-5b5265b64255'];
 const nights = [
   {
     eventKey: '2025-07-31',
@@ -37,8 +41,10 @@ const nights = [
   },
 ];
 
-async function mockProfile(page: Page) {
+async function mockProfile(page: Page, impact?: Impact) {
+  const state = { impact, impactCalls: 0 };
   const profile = {
+    recomputeId: impact ? recomputeId : undefined,
     player: {
       id: playerId,
       name: 'Returning Player With An Exceptionally Long Tournament Alias',
@@ -85,7 +91,7 @@ async function mockProfile(page: Page) {
         tournamentId: `bracket-${seq}`,
         tournamentName: `Singles bracket ${seq + 1}`,
         tournamentDate: `${night.eventKey}T08:30:00Z`,
-        setId: `set-${seq}`,
+        setId: setIds[seq],
         resultStage: 'final',
         isRookie: false,
         opponentPlayerId: null,
@@ -99,11 +105,17 @@ async function mockProfile(page: Page) {
     if (url.endsWith('/api/live'))
       return route.fulfill({ contentType: 'text/event-stream', body: ': fixture\n\n' });
     const results = rpcProcedures(url).map((procedure) => {
+      if (procedure === 'public.whrResultImpact') {
+        state.impactCalls++;
+        expect(state.impact).toBeDefined();
+        return { result: { data: state.impact } };
+      }
       expect(procedure).toBe('public.player');
       return { result: { data: profile } };
     });
     await route.fulfill({ json: new URL(url).searchParams.has('batch') ? results : results[0] });
   });
+  return state;
 }
 
 for (const theme of ['dark', 'light'] as const) {
@@ -144,6 +156,66 @@ for (const theme of ['dark', 'light'] as const) {
       await expect(page.getByRole('heading', { name: 'Match log (2 sets)' })).toBeVisible();
       await page.evaluate(() => scrollTo(0, 0));
       await page.screenshot({ path: testInfo.outputPath('night-missed.png'), fullPage: true });
+    });
+  }
+}
+
+for (const theme of ['dark', 'light'] as const) {
+  for (const width of [390, 1440]) {
+    test(`WHR result impact opens on demand at ${width}px in ${theme} mode`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ colorScheme: theme });
+      const result = {
+        status: 'available' as const,
+        effectPoints: 27.6,
+        preNightSd: 110,
+        firstNight: true,
+        evidenceWeight: 1.5,
+        forecast: null,
+      };
+      const fixture = await mockProfile(page, result);
+      await page.goto(`/players/${playerId}`);
+      const trigger = page.getByRole('button', { name: /WHR impact for Singles bracket 2/ });
+      await expect(trigger).toBeVisible();
+      expect(fixture.impactCalls).toBe(0);
+      await trigger.focus();
+      await page.keyboard.press('Enter');
+      const dialog = page.getByRole('dialog', { name: 'WHR impact' });
+      await expect(dialog).toContainText('About 30 points higher');
+      await expect(dialog).toContainText('first rated night');
+      await expect(dialog).toContainText('The set counted as ×1.5 evidence');
+      await expect(dialog).toContainText('impacts do not add up');
+      expect(fixture.impactCalls).toBe(1);
+      await ready(page);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+      expect(
+        (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
+      ).toEqual([]);
+      await dialog.screenshot({ path: testInfo.outputPath('whr-impact.png') });
+      await page.keyboard.press('Escape');
+      await expect(dialog).toHaveCount(0);
+      await expect(trigger).toBeFocused();
+
+      fixture.impact = {
+        ...result,
+        effectPoints: -0.8,
+        firstNight: false,
+        forecast: { winProbability: 0.642, opponentSkill: 1512 },
+      };
+      await page.keyboard.press('Enter');
+      await expect(dialog).toContainText('Slightly lower skill estimate');
+      await expect(dialog).toContainText('±220 points');
+      await expect(dialog).toContainText('chance of winning at about 65%');
+      await page.keyboard.press('Escape');
+      await expect(trigger).toBeFocused();
+
+      fixture.impact = { status: 'unavailable', reason: 'history_changed' };
+      await page.keyboard.press('Enter');
+      await expect(dialog).toContainText('Check again after ratings are recomputed');
+      await expect(dialog).not.toContainText('points lower');
+      expect(fixture.impactCalls).toBe(3);
     });
   }
 }

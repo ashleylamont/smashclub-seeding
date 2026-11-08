@@ -17,6 +17,7 @@ import {
 import { eventKeyOf, type WhrNightRating } from '@smashclub/engine';
 import { includesResultStage, publicPlayerName, unplayedResultOutcome } from '@smashclub/shared';
 import { latestRecomputeId } from '../../recompute/recompute';
+import { readWhrResultImpact } from '../../recompute/whrResultImpact';
 import { getRatingSettings } from '../../settings';
 import { charactersByPlayer, charactersForPlayer } from '../../players/characters';
 import { loadRecap } from '../../recap/recap';
@@ -265,6 +266,7 @@ export const publicRouter = router({
         characters: await charactersForPlayer(ctx.db, input.playerId),
       },
       rating: ratingRow,
+      recomputeId,
       events,
       nights,
       model: 'whr' as const,
@@ -272,6 +274,10 @@ export const publicRouter = router({
       doublesResults: await playerDoublesHistory(ctx.db, input.playerId),
     };
   }),
+
+  whrResultImpact: publicProcedure
+    .input(z.object({ playerId: z.uuid(), setId: z.uuid(), recomputeId: z.uuid() }))
+    .query(({ ctx, input }) => readWhrResultImpact(ctx.db, input)),
 
   /** Full rating history for every ranked player (the RatingsOverTime chart). */
   ratingHistory: publicProcedure.query(async ({ ctx }) => {

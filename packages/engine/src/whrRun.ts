@@ -1,7 +1,14 @@
 import type { RatingSettings } from '@smashclub/shared';
 import { isPlayedSet } from './results';
 import { attendanceOf, eventKeyOf } from './events';
-import { DISPLAY_CENTRE, NATURAL_TO_DISPLAY, fitWhr, whrSetTrials, type WhrFit } from './whr';
+import {
+  DISPLAY_CENTRE,
+  NATURAL_TO_DISPLAY,
+  fitWhr,
+  whrSetTrials,
+  type WhrFit,
+  type WhrSet,
+} from './whr';
 import { compareNullableNumbers, compareSetsInBracket, compareStrings } from './setOrder';
 import { activityPenaltyFor, rankScores, type LeaderboardRow, type PlayerScore } from './score';
 import type { EngineSet, EngineTournament, RatingEvent } from './types';
@@ -80,11 +87,14 @@ interface NightPlan {
   revisedSd: number;
 }
 
-export function runWhrModel(input: {
+interface WhrModelInput {
   sets: readonly EngineSet[];
   tournaments: readonly EngineTournament[];
   settings: RatingSettings;
-}): WhrRunResult {
+}
+
+/** Canonical played-set order, evidence weights and debut priors for WHR. */
+export function prepareWhrHistory(input: WhrModelInput) {
   const { settings } = input;
   const tournamentById = new Map(input.tournaments.map((t) => [t.id, t]));
   /**
@@ -120,19 +130,7 @@ export function runWhrModel(input: {
         compareSetsInBracket(a.set, b.set),
     );
 
-  if (rateable.length === 0) {
-    return {
-      events: [],
-      nightRatings: [],
-      leaderboard: [],
-      converged: true,
-      iterations: 0,
-      periods: 0,
-      previousRanks: new Map(),
-    };
-  }
-
-  const originDay = rateable[0]!.day;
+  const originDay = rateable[0]?.day ?? 0;
 
   /*
    * A player who debuts in a rookie bracket gets the rookie prior rather than
@@ -157,6 +155,59 @@ export function runWhrModel(input: {
     }
   }
 
+  const fitSets: WhrSet[] = rateable.map(({ set, day, trials }) => ({
+    p1PlayerId: set.p1PlayerId,
+    p2PlayerId: set.p2PlayerId,
+    winner: set.winner,
+    time: day - originDay,
+    trials,
+  }));
+  const prefixEnds = new Map<string, number>();
+  for (const [index, { eventKey }] of rateable.entries()) prefixEnds.set(eventKey, index + 1);
+  return {
+    rateable,
+    fitSets,
+    originDay,
+    prefixEnds,
+    priorMeans,
+    fitConfig: {
+      driftVariancePerDay: settings.whrDriftVariancePerDay,
+      priorSd: settings.whrPriorSd,
+    },
+    gamesWeight: settings.whrGamesWeight,
+    rookieDebutPrior: settings.whrRookieDebutPrior,
+  };
+}
+
+export type PreparedWhrHistory = ReturnType<typeof prepareWhrHistory>;
+
+/** Refit the same night, optionally leaving out one set while keeping the debut priors. */
+export function fitWhrPrefix(
+  history: PreparedWhrHistory,
+  eventKey: string,
+  omitIndex?: number,
+): WhrFit {
+  const prefix = history.fitSets.slice(0, history.prefixEnds.get(eventKey) ?? 0);
+  if (omitIndex !== undefined) prefix.splice(omitIndex, 1);
+  return fitWhr({ sets: prefix, config: history.fitConfig, priorMeans: history.priorMeans });
+}
+
+export function runWhrModel(input: WhrModelInput): WhrRunResult {
+  const { settings } = input;
+  const history = prepareWhrHistory(input);
+  const { rateable, originDay, priorMeans } = history;
+  if (rateable.length === 0) {
+    return {
+      events: [],
+      nightRatings: [],
+      leaderboard: [],
+      converged: true,
+      iterations: 0,
+      periods: 0,
+      previousRanks: new Map(),
+    };
+  }
+
   /**
    * One fit per history prefix: `fits[k]` sees events 0..k and nothing later.
    * This is what freezes the ledger — event k's numbers depend only on what
@@ -165,26 +216,8 @@ export function runWhrModel(input: {
    * hindsight track. A dozen events over ~1,000 sets makes this a dozen small
    * fits, each linear per iteration — cheap enough to keep the property.
    */
-  const orderedEventKeys = [...new Set(rateable.map((r) => r.eventKey))];
-  const eventIndexByKey = new Map(orderedEventKeys.map((key, index) => [key, index]));
-  const fitPrefix = (upToEventIndex: number): WhrFit =>
-    fitWhr({
-      sets: rateable
-        .filter((r) => eventIndexByKey.get(r.eventKey)! <= upToEventIndex)
-        .map(({ set, day, trials }) => ({
-          p1PlayerId: set.p1PlayerId,
-          p2PlayerId: set.p2PlayerId,
-          winner: set.winner,
-          time: day - originDay,
-          trials,
-        })),
-      config: {
-        driftVariancePerDay: settings.whrDriftVariancePerDay,
-        priorSd: settings.whrPriorSd,
-      },
-      priorMeans,
-    });
-  const fits = orderedEventKeys.map((_, index) => fitPrefix(index));
+  const orderedEventKeys = [...history.prefixEnds.keys()];
+  const fits = orderedEventKeys.map((eventKey) => fitWhrPrefix(history, eventKey));
   const fullFit = fits[fits.length - 1]!;
 
   // Evaluate every player from their debut onward, including nights they miss.
