@@ -104,6 +104,34 @@ export function applyScore(
   advance(state, at, commandId);
 }
 
+export function appendOperatorScoreReport(
+  state: TournamentState,
+  envelope: CommandEnvelope,
+  score: Pick<
+    Extract<CommandEnvelope['command'], { kind: 'score' }>,
+    'matchId' | 'expectedRevision' | 'score1' | 'score2' | 'outcome'
+  >,
+  winnerId: string,
+) {
+  state.reports.push({
+    id: envelope.id,
+    matchId: score.matchId,
+    actorId: envelope.actorId,
+    requestId: envelope.requestId,
+    submittedRevision: score.expectedRevision,
+    expectedRevision: score.expectedRevision,
+    score1: score.score1,
+    score2: score.score2,
+    winnerId,
+    outcome: score.outcome,
+    status: 'approved',
+    autoApproved: false,
+    isDispute: false,
+    createdAt: envelope.at,
+  });
+  return envelope.id;
+}
+
 export function recordScore(
   next: TournamentState,
   envelope: CommandEnvelope,
@@ -181,23 +209,7 @@ export function recordScore(
         resultCommandId: envelope.id,
       });
     } else applyScore(next, match, result, envelope.at, false, envelope.id);
-    reportId = envelope.id;
-    next.reports.push({
-      id: reportId,
-      matchId: match.id,
-      actorId: envelope.actorId,
-      requestId: envelope.requestId,
-      submittedRevision: command.expectedRevision,
-      expectedRevision: command.expectedRevision,
-      score1: command.score1,
-      score2: command.score2,
-      winnerId,
-      outcome: command.outcome,
-      status: 'approved',
-      autoApproved: false,
-      isDispute: false,
-      createdAt: envelope.at,
-    });
+    reportId = appendOperatorScoreReport(next, envelope, command, winnerId);
   } else {
     requireFact(
       next.settings.published &&

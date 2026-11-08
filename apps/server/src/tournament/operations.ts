@@ -53,9 +53,14 @@ export function finalsDivisionResetToken(state: TournamentState, scope: FinalsDi
 export function finalsResetBlockers(state: TournamentState, scope?: FinalsDivisionResetScope) {
   const issues: string[] = [];
   const finals = scopedFinals(state, scope);
+  const archived =
+    state.supersededPlayedSets?.filter(
+      ({ match }) => !scope || (match.bracketId && scope.bracketIds.includes(match.bracketId)),
+    ) ?? [];
   if (isKnockout(state.baseline?.structure))
     issues.push('A locked knockout draw can only be changed by creating a new draft.');
   if (
+    archived.length ||
     finals.some(
       (match) =>
         match.started ||
@@ -66,7 +71,10 @@ export function finalsResetBlockers(state: TournamentState, scope?: FinalsDivisi
   const untakenCallIds = finals.filter(unconfirmedCall).map(({ id }) => id);
   if (untakenCallIds.length)
     issues.push('Return untaken finals calls before resetting their draw.');
-  const finalsIds = new Set(finals.map(({ id }) => id));
+  const finalsIds = new Set([
+    ...finals.map(({ id }) => id),
+    ...archived.map(({ match }) => match.id),
+  ]);
   if (state.reports.some((report) => finalsIds.has(report.matchId)))
     issues.push('Finals have report history.');
   return { issues, untakenCallIds };

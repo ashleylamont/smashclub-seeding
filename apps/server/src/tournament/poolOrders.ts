@@ -124,6 +124,20 @@ function setWinGroups(
 
 type ResultEvidence = Omit<NonNullable<Pool['qualifierDecision']>, 'policy' | 'groups'>;
 
+export function poolOrderEvidence(
+  state: TournamentState,
+  pool: Pool,
+  envelope: CommandEnvelope,
+  matches = matchesFor(state, pool),
+): ResultEvidence {
+  return {
+    resultBasis: poolResultBasis(state, pool),
+    matchRevisions: Object.fromEntries(matches.map(({ id, revision }) => [id, revision])),
+    commandId: envelope.id,
+    decidedAt: envelope.at,
+  };
+}
+
 function automaticOrder(pool: Pool, groups: string[][] | null) {
   return groups?.length === pool.entrantIds.length ? groups.flat() : null;
 }
@@ -138,7 +152,11 @@ function sameAutomaticOrder(pool: Pool, order: string[] | null) {
   );
 }
 
-export function canReviewFrozenPoolGames(state: TournamentState, pool: Pool) {
+export function automaticPoolOrder(state: TournamentState, pool: Pool) {
+  return automaticOrder(pool, setWinGroups(state, pool, matchesFor(state, pool)));
+}
+
+export function canReviewFrozenPoolResult(state: TournamentState, pool: Pool) {
   if (
     state.lifecycle !== 'locked' ||
     state.settings.poolOrderPolicy !== 'unique_set_wins_v1' ||
@@ -183,13 +201,14 @@ export function decidePoolOrders(
     return;
   for (const pool of next.pools) {
     const old = previous.pools.find((p) => p.id === pool.id);
-    const resultBasis = poolResultBasis(next, pool);
+    const matches = matchesFor(next, pool);
+    const evidence = poolOrderEvidence(next, pool, envelope, matches);
+    const { resultBasis } = evidence;
     const explicit =
       envelope.command.kind === 'placements'
         ? envelope.command.poolId === pool.id
         : envelope.command.kind === 'poolOrders' &&
           envelope.command.pools.some((p) => p.poolId === pool.id);
-    const matches = matchesFor(next, pool);
     const pending = matches.some((m) => hasCurrentPendingScoreReview(m, next.reports));
     // Keep a manual ruling through harmless confirmations and suspended reviews.
     // An actual result/roster change makes its evidence stale.
@@ -199,12 +218,6 @@ export function decidePoolOrders(
     );
     const groups = setWinGroups(next, pool, matches);
     const automatic = automaticOrder(pool, groups);
-    const evidence = {
-      resultBasis,
-      matchRevisions: Object.fromEntries(matches.map((m) => [m.id, m.revision])),
-      commandId: envelope.id,
-      decidedAt: envelope.at,
-    };
     const retainsFrozenOrder =
       old && strengthFinalsUsePool(next, pool.id) && sameAutomaticOrder(old, automatic);
     const retained =
@@ -284,10 +297,7 @@ export function recordReplacementPoolOrder(state: TournamentState, envelope: Com
     source: 'manual',
     policy: state.settings.poolOrderPolicy,
     order: [...pool.order!],
-    resultBasis: poolResultBasis(state, pool),
-    matchRevisions: Object.fromEntries(matchesFor(state, pool).map((m) => [m.id, m.revision])),
-    commandId: envelope.id,
-    decidedAt: envelope.at,
+    ...poolOrderEvidence(state, pool, envelope),
   };
   pool.revision++;
 }

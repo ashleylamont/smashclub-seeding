@@ -54,6 +54,31 @@
 .player-event-hub .event-results-grid {
   min-width: 0;
 }
+.player-event-archived-sets {
+  display: grid;
+  gap: var(--s2);
+  margin-block-start: var(--s4);
+}
+.player-event-archived-sets > :is(h3, p, ul) {
+  margin: 0;
+}
+.player-event-archived-sets ul {
+  display: grid;
+  gap: var(--s2);
+  padding: 0;
+  list-style: none;
+}
+.player-event-archived-sets li {
+  display: grid;
+  gap: var(--s1);
+  width: fit-content;
+  min-width: min(100%, 24rem);
+  max-width: 100%;
+  padding: var(--s3);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
 .player-event-hub .event-match {
   min-width: 0;
 }

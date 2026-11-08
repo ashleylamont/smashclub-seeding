@@ -4,7 +4,7 @@ import type { trpc } from './trpc';
 type EventSnapshot = Awaited<ReturnType<typeof trpc.eventOps.snapshot.query>>;
 export type PublicFinalsField = NonNullable<EventSnapshot['pendingFinals']>[number];
 
-export function qualifierLabel(source: PoolQualifier) {
+export function qualifierLabel(source: Pick<PoolQualifier, 'division' | 'poolIndex' | 'place'>) {
   const division = source.division === 'upper' ? 'Upper' : 'Lower';
   return `${division} Pool ${String.fromCharCode(65 + source.poolIndex)} · place ${source.place}`;
 }

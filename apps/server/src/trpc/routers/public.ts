@@ -1,3 +1,4 @@
+import { hasSupersededAdvancement } from '../../tournament/resultEvidence';
 import { playerDoublesHistory } from '../../events/playerDoublesHistory';
 import { publicParticipantNames } from '../../events/participantNames';
 import { z } from 'zod';
@@ -431,6 +432,9 @@ export const publicRouter = router({
             id: row.id,
             round: row.round,
             identifier: row.identifier,
+            ...(hasSupersededAdvancement(row.raw)
+              ? { advancementDisposition: 'superseded' as const }
+              : {}),
             state: row.state,
             winner: row.winner,
             scoresCsv: row.scoresCsv,

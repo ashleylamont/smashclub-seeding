@@ -6,6 +6,8 @@ import { z } from 'zod';
 import { authedProcedure, publicProcedure, router, type TrpcContext } from '../trpc/trpc';
 import { requireOperator } from '../event-operations/access';
 import { Command, PoolGameCorrection } from './schemas';
+import { FinalsSlotReplayScore } from './commands';
+import { previewFinalsSlotReplay } from './finalsSlotReplay';
 import { reviewPoolGameCorrection } from './poolGameCorrection';
 import { TournamentConflict } from './domain';
 import { nativeEventHistory } from './history';
@@ -49,6 +51,28 @@ export const nativeLiveRouter = router({
           score,
         );
         return { previousScore: [match.score1!, match.score2!] as const, revisionToken };
+      });
+    }),
+  previewFinalsSlotReplay: authedProcedure
+    .input(plan.extend(FinalsSlotReplayScore.shape))
+    .query(async ({ ctx, input: { planId, ...score } }) => {
+      await requireOperator(ctx.db, planId, ctx.user);
+      return transport(async () => {
+        const state = await runtime(ctx).state(planId);
+        const preview = previewFinalsSlotReplay(state, score);
+        if (!preview.qualifierChanges.length) return { ...preview, entrantNames: {} };
+        const names = publicEntrantNames(await ctx.db.select().from(players), state.entrants);
+        const ids = preview.qualifierChanges.flatMap((change) => [
+          change.beforeEntrantId,
+          change.afterEntrantId,
+        ]);
+        if (preview.allowed) ids.push(preview.original.player1Id, preview.original.player2Id);
+        return {
+          ...preview,
+          entrantNames: Object.fromEntries<string>(
+            ids.flatMap((id) => (id ? [[id, names.get(id) ?? 'Player']] : [])),
+          ),
+        };
       });
     }),
   command: authedProcedure

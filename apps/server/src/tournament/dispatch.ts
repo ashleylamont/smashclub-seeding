@@ -119,9 +119,12 @@ export function dispatchQueue(state: TournamentState) {
       if (parent) downstreamCount.set(parent, (downstreamCount.get(parent) ?? 0) + 1);
   const baseTime = state.baseline?.capturedAt ?? 0;
   const lastPlayed = new Map<string, number>();
-  for (const m of state.matches.filter((m) => resolved(m) && m.completedAt !== null))
-    for (const id of context.ids(m))
-      lastPlayed.set(id, Math.max(lastPlayed.get(id) ?? baseTime, m.completedAt!));
+  const archivedMatches = state.supersededPlayedSets?.map(({ match }) => match) ?? [];
+  for (const match of [...state.matches, ...archivedMatches]) {
+    if (!resolved(match) || match.completedAt === null) continue;
+    for (const id of context.ids(match))
+      lastPlayed.set(id, Math.max(lastPlayed.get(id) ?? baseTime, match.completedAt));
+  }
   const order = new Map((state.settings.queueOrder ?? []).map((id, i) => [id, i]));
   const pending = state.matches
     .filter((m) => !resolved(m))

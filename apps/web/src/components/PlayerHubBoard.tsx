@@ -21,6 +21,11 @@ export function PlayerHubBoard({
   player: string;
 }) {
   const board = playerHubView(data, player, selectedPool);
+  const superseded = (data.supersededPlayedSets ?? []).filter((set) =>
+    player
+      ? [set.player1Id, set.player2Id].some((id) => id && board.identities.has(id))
+      : !selectedPool,
+  );
   const labels = new Map(data.matches.map((match) => [match.id, match.label]));
   const path = player
     ? playerBracketPath(
@@ -176,7 +181,7 @@ export function PlayerHubBoard({
             />
           ))}
         </div>
-        {!board.results.length && (
+        {!board.results.length && !superseded.length && (
           <p>
             {board.closed
               ? 'No recorded sets in this view.'
@@ -186,6 +191,29 @@ export function PlayerHubBoard({
         <p className="event-live-note">
           Set results are shown as recorded. They do not imply final tournament placements.
         </p>
+        {superseded.length > 0 && (
+          <section
+            className="player-event-archived-sets"
+            aria-label="Played before a finals replay"
+          >
+            <h3>Played before a finals replay</h3>
+            <p>The replay determines who advances.</p>
+            <ul>
+              {superseded.map((set) => (
+                <li key={set.matchId}>
+                  <strong>{set.label}</strong>
+                  <span>
+                    {set.player1Name}{' '}
+                    <span className="mono">
+                      {set.score1}–{set.score2}
+                    </span>{' '}
+                    {set.player2Name}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         {poolResults.length > 0 && (
           <section className="event-pool-results">
             <h2>Confirmed pool standings</h2>

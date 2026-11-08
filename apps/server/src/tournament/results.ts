@@ -18,6 +18,25 @@ export function sealResults(next: TournamentState, envelope: CommandEnvelope) {
     next.reports.every((r) => r.status !== 'pending'),
     'Resolve pending reports before finalizing.',
   );
+  const archived = next.supersededPlayedSets ?? [];
+  const active = new Map(next.matches.map((match) => [match.id, match]));
+  const bracketIds = new Set(next.brackets.map(({ id }) => id));
+  const replacements = new Set(archived.map(({ replacementMatchId }) => replacementMatchId));
+  const originalIds = new Set(archived.map(({ match }) => match.id));
+  requireFact(
+    archived.length === replacements.size &&
+      archived.length === originalIds.size &&
+      archived.every(
+        ({ match, replacementMatchId }) =>
+          match.bracketId &&
+          bracketIds.has(match.bracketId) &&
+          match.outcome === 'played' &&
+          !match.skipped &&
+          !active.has(match.id) &&
+          active.get(replacementMatchId)?.bracketId === match.bracketId,
+      ),
+    'Review the recorded finals replay before sealing its results.',
+  );
   next.result = {
     version: next.baseline!.version,
     ...(next.baseline!.version === 2
@@ -39,6 +58,7 @@ export function sealResults(next: TournamentState, envelope: CommandEnvelope) {
     entrants: structuredClone(next.entrants),
     brackets: structuredClone(next.brackets),
     matches: structuredClone(next.matches),
+    ...(archived.length ? { supersededPlayedSets: structuredClone(archived) } : {}),
   };
   next.lifecycle = 'finalized';
 }

@@ -7,10 +7,30 @@ import { ScoreFields, type ScoreInputValue } from '../../components/ScoreFields'
 import { trpc } from '../../lib/trpc';
 import { returnUntakenCallMatchIds } from '../../lib/eventErrors';
 import { UntakenCallRecovery, type UntakenCallDesk } from './UntakenCallRecovery';
+import { FinalsSlotReplayReview } from './FinalsSlotReplayReview';
 import type { Overview } from './dispatchTypes';
 
 type Match = Overview['matches'][number];
+type Outcome = 'played' | 'forfeit' | 'bye';
 type Action = (work: () => Promise<unknown>, message?: string) => Promise<void>;
+
+function replayScoreDraft(
+  match: Match,
+  winnerId: string | undefined,
+  expectedRevision: number,
+  score1: ScoreInputValue,
+  score2: ScoreInputValue,
+) {
+  if (
+    !winnerId ||
+    score1 === '' ||
+    score2 === '' ||
+    score1 === score2 ||
+    (score1 > score2 ? match.player1Id : match.player2Id) === winnerId
+  )
+    return;
+  return { planId: match.eventPlanId, matchId: match.id, expectedRevision, score1, score2 };
+}
 
 function isPoolGameCorrection(match: Match, score1: ScoreInputValue, score2: ScoreInputValue) {
   return (
@@ -39,11 +59,12 @@ export function MatchScoring({
 }) {
   const confirmAction = useConfirmation();
   const [editing, setEditing] = useState<'live' | 'final' | null>(null);
+  const [replaySource, setReplaySource] = useState<string>();
   const [revision, setRevision] = useState(match.revision);
   const [progressRevision, setProgressRevision] = useState(match.progressRevision);
   const [score1, setScore1] = useState<ScoreInputValue>(match.score1 ?? 0);
   const [score2, setScore2] = useState<ScoreInputValue>(match.score2 ?? 0);
-  const [outcome, setOutcome] = useState<'played' | 'forfeit' | 'bye'>('played');
+  const [outcome, setOutcome] = useState<Outcome>('played');
   const [winnerId, setWinnerId] = useState(match.winnerId ?? match.player1Id ?? '');
   const [requestId, setRequestId] = useState('');
   const [callConflict, setCallConflict] = useState<{ requestId: string; matchIds: string[] }>();
@@ -59,11 +80,19 @@ export function MatchScoring({
   const requireDecisive = editing === 'final' && outcome === 'played';
   const needsScores = editing === 'live' || outcome === 'played';
   const reviewPoolGames = requireDecisive && isPoolGameCorrection(match, score1, score2);
+  const replayScore = requireDecisive
+    ? replayScoreDraft(match, replaySource, revision, score1, score2)
+    : undefined;
   const participatingWinner = [match.player1Id, match.player2Id].some(
     (id) => Boolean(id) && id === winnerId,
   );
   const begin = (mode: 'live' | 'final', resultType?: 'forfeit') => {
     setEditing(mode);
+    setReplaySource(
+      'reviewPoolGames' in match && match.reviewPoolGames
+        ? (match.winnerId ?? undefined)
+        : undefined,
+    );
     setRevision(match.revision);
     setProgressRevision(match.progressRevision);
     setScore1(match.score1 ?? 0);
@@ -144,7 +173,7 @@ export function MatchScoring({
             event.preventDefault();
             if (disabled || reviewing || stale || (needsScores && (score1 === '' || score2 === '')))
               return;
-            if (requireDecisive && score1 === score2) return;
+            if (replayScore || (requireDecisive && score1 === score2)) return;
             if (!needsScores && !participatingWinner) return;
             if (
               editing === 'final' &&
@@ -246,82 +275,118 @@ export function MatchScoring({
             </p>
           )}
           {editing === 'final' && (
-            <>
-              <label>
-                Result type
-                <Select
-                  disabled={reviewing}
-                  value={outcome}
-                  onValueChange={(selectedValue) => {
-                    setOutcome(selectedValue as typeof outcome);
-                    setWinnerId('');
-                    setRequestId(crypto.randomUUID());
-                  }}
-                >
-                  <SelectItem value="played">Played match</SelectItem>
-                  <SelectItem value="forfeit" disabled={!match.player1Id || !match.player2Id}>
-                    Forfeit
-                  </SelectItem>
-                  <SelectItem value="bye">Bye</SelectItem>
-                </Select>
-              </label>
-              {outcome !== 'played' && (
-                <label>
-                  Winner
-                  <Select
-                    value={winnerId}
-                    onValueChange={(selectedValue) => {
-                      setWinnerId(selectedValue);
-                      setRequestId(crypto.randomUUID());
-                    }}
-                  >
-                    <SelectItem value="">Choose the advancing player</SelectItem>
-                    {[
-                      { id: match.player1Id, name: match.player1Name },
-                      { id: match.player2Id, name: match.player2Name },
-                    ]
-                      .filter((player) => player.id)
-                      .map((player) => (
-                        <SelectItem key={player.id!} value={player.id!}>
-                          {player.name}
-                        </SelectItem>
-                      ))}
-                  </Select>
-                </label>
-              )}
-            </>
+            <OutcomeFields
+              match={match}
+              outcome={outcome}
+              winnerId={winnerId}
+              disabled={reviewing}
+              onOutcome={(value) => {
+                setOutcome(value);
+                setWinnerId('');
+                setRequestId(crypto.randomUUID());
+              }}
+              onWinner={(id) => {
+                setWinnerId(id);
+                setRequestId(crypto.randomUUID());
+              }}
+            />
           )}
           {callDesk && !stale && callConflict?.requestId === requestId && (
             <UntakenCallRecovery matchIds={callConflict.matchIds} desk={callDesk} />
           )}
+          {replayScore && (
+            <FinalsSlotReplayReview
+              key={requestId}
+              score={replayScore}
+              stale={stale}
+              disabled={disabled}
+              act={act}
+              close={() => setEditing(null)}
+            />
+          )}
           <div className="ops-match-actions">
-            <Button
-              type="submit"
-              variant="primary"
-              aria-disabled={reviewing || undefined}
-              disabled={
-                disabled ||
-                stale ||
-                (needsScores && [score1, score2].includes('')) ||
-                (!needsScores && !participatingWinner) ||
-                (requireDecisive && score1 === score2)
-              }
-            >
-              {editing === 'live'
-                ? 'Save live score'
-                : outcome === 'forfeit'
-                  ? 'Confirm forfeit'
-                  : approvedToken
-                    ? 'Retry correction'
-                    : reviewPoolGames
-                      ? 'Review correction'
-                      : 'Confirm result'}
-            </Button>
+            {!replayScore && (
+              <Button
+                type="submit"
+                variant="primary"
+                aria-disabled={reviewing || undefined}
+                disabled={
+                  disabled ||
+                  stale ||
+                  (needsScores && [score1, score2].includes('')) ||
+                  (!needsScores && !participatingWinner) ||
+                  (requireDecisive && score1 === score2)
+                }
+              >
+                {editing === 'live'
+                  ? 'Save live score'
+                  : outcome === 'forfeit'
+                    ? 'Confirm forfeit'
+                    : approvedToken
+                      ? 'Retry correction'
+                      : reviewPoolGames
+                        ? 'Review correction'
+                        : 'Confirm result'}
+              </Button>
+            )}
             <Button type="button" disabled={reviewing} onClick={() => setEditing(null)}>
               Cancel
             </Button>
           </div>
         </form>
+      )}
+    </>
+  );
+}
+
+function OutcomeFields({
+  match,
+  outcome,
+  winnerId,
+  disabled,
+  onOutcome,
+  onWinner,
+}: {
+  match: Match;
+  outcome: Outcome;
+  winnerId: string;
+  disabled: boolean;
+  onOutcome: (outcome: Outcome) => void;
+  onWinner: (winnerId: string) => void;
+}) {
+  return (
+    <>
+      <label>
+        Result type
+        <Select
+          disabled={disabled}
+          value={outcome}
+          onValueChange={(value) => onOutcome(value as Outcome)}
+        >
+          <SelectItem value="played">Played match</SelectItem>
+          <SelectItem value="forfeit" disabled={!match.player1Id || !match.player2Id}>
+            Forfeit
+          </SelectItem>
+          <SelectItem value="bye">Bye</SelectItem>
+        </Select>
+      </label>
+      {outcome !== 'played' && (
+        <label>
+          Winner
+          <Select value={winnerId} onValueChange={onWinner}>
+            <SelectItem value="">Choose the advancing player</SelectItem>
+            {[
+              { id: match.player1Id, name: match.player1Name },
+              { id: match.player2Id, name: match.player2Name },
+            ]
+              .filter((player) => player.id)
+              .map((player) => (
+                <SelectItem key={player.id!} value={player.id!}>
+                  {player.name}
+                </SelectItem>
+              ))}
+          </Select>
+        </label>
       )}
     </>
   );
