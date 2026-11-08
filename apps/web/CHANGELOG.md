@@ -2,6 +2,14 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.1.5
+
+### Patch Changes
+
+- 8 November 2026 · **Improvement** · The OBS intermission shows which pool places feed upcoming finals and names confirmed qualifiers while the draw is pending. [#164](https://github.com/ashleylamont/smashclub-seeding/pull/164) · [build c870337](https://github.com/ashleylamont/smashclub-seeding/commit/c8703371def0358c2770c77c9d49f270b2db57c8)
+
+  ![OBS intermission showing a confirmed entrant and the pool places still awaiting qualification](./public/changelog/obs-finals-qualification.png)
+
 ## 0.1.4
 
 ### Patch Changes
