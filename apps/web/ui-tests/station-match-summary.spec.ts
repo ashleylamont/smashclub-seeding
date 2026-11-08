@@ -54,6 +54,8 @@ for (const theme of ['dark', 'light'] as const)
       const playerUrl = `/play/${PLAN_ID}?player=${match.player1Id}#what-next`;
       await page.goto(playerUrl);
       const next = page.getByRole('region', { name: 'What next' });
+      // Let the deep link finish scrolling before capture resets the viewport.
+      await expect(next).toBeInViewport();
       const playerStation = next
         .getByRole('article')
         .filter({ has: page.getByRole('heading', { name: station.name, exact: true }) });
@@ -81,6 +83,7 @@ for (const theme of ['dark', 'light'] as const)
       Object.assign(snapshot, { sharedDispatch: shared, stationQueues: [] });
       Object.assign(overview, { sharedDispatch: shared, stationQueues: [] });
       await page.goto(playerUrl);
+      await expect(next).toBeInViewport();
       const calls = next.getByRole('region', { name: 'Match calls' });
       const rounds = next.locator('.pool-flow-rounds');
       const disclosure = rounds.getByRole('button', { name: /Upper Pool A.*rounds/i });
