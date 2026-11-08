@@ -1,6 +1,6 @@
 import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
-import type { Command, Desk } from '../src/pages/admin/dispatchTypes';
+import type { Command, Desk, Overview } from '../src/pages/admin/dispatchTypes';
 import type { trpc } from '../src/lib/trpc';
 import type { EventPlanView } from '../src/lib/apiTypes';
 import { chooseOption } from '../test-support/controls';
@@ -224,6 +224,7 @@ for (const theme of ['dark', 'light'] as const)
         resetIssues: [callIssue, 'Finals have report history.'],
         resetCallMatchIds: [],
         resetRevisionToken: 'blocked-token',
+        divisionResets: [],
         revisionToken: 'reviewed-draw',
         poolOrders: [],
         waitingStages: [],
@@ -359,5 +360,350 @@ for (const mode of ['live', 'legacy_locked', 'legacy_unlocked'] as const)
     await expect(page.getByRole('status')).toContainText(
       mode === 'live' ? 'Queue setup reset.' : 'Unplayed queue cleared.',
     );
+    expect(unexpected).toEqual([]);
+  });
+
+const scopedRemovalCases = [
+  { theme: 'dark', width: 390, mode: 'shared', change: null },
+  { theme: 'light', width: 390, mode: 'station', change: null },
+  { theme: 'dark', width: 1440, mode: 'station', change: 'removed' },
+  { theme: 'light', width: 1440, mode: 'shared', change: 'replaced' },
+] as const;
+
+for (const { theme, width, mode, change } of scopedRemovalCases)
+  test(`${theme} ${width}px ${mode} reviews and removes just the Upper finals`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+    const { overview, responses, unexpected } = await mockEvent(page, {
+      role: 'admin',
+      idle: true,
+    });
+    Object.assign(overview.plan, {
+      bracketMode: 'native',
+      drawPaused: false,
+      liveOwned: true,
+      structure: 'dual_division',
+    });
+    const call = overview.matches.find(
+      (match) => match.division === 'upper' && match.status === 'ready',
+    )!;
+    const station = mode === 'station' ? overview.stations[0]! : null;
+    const alias = 'Alexandria with a long tournament alias from Western Sydney';
+    const upperScope = {
+      division: 'upper' as const,
+      bracketIds: ['upper-main', 'upper-consolation'],
+    };
+    const lowerScope = { division: 'lower' as const, bracketIds: ['lower-main'] };
+    Object.assign(
+      overview.entrants.find(({ id }) => id === call.player1Id)!,
+      { name: alias },
+    );
+    Object.assign(call, {
+      player1Name: alias,
+      label: 'Upper championship final',
+      status: 'playing',
+      started: false,
+      called: mode === 'shared',
+      stationId: station?.id ?? null,
+      resourceRevision: 12,
+      nativeBracketId: upperScope.bracketIds[0],
+      stage: 'main',
+      poolIndex: null,
+      nativeRound: 1,
+      nativeSlot: 0,
+    });
+    if (station) Object.assign(station, { currentMatchId: call.id, status: 'occupied' });
+    const [lowerFirst, lowerSecond] = overview.entrants.slice(-2);
+    const lowerFinal = {
+      ...call,
+      id: 'recorded-lower-final',
+      nativeBracketId: lowerScope.bracketIds[0]!,
+      nativeRound: 1,
+      nativeSlot: 0,
+      parent1MatchId: null,
+      parent2MatchId: null,
+      poolIndex: null,
+      division: 'lower' as const,
+      label: 'Lower championship final',
+      status: 'complete' as const,
+      stationId: null,
+      called: false,
+      started: true,
+      outcome: 'played' as const,
+      score1: 2,
+      score2: 1,
+      player1Id: lowerFirst!.id,
+      player1Name: lowerFirst!.name,
+      player2Id: lowerSecond!.id,
+      player2Name: lowerSecond!.name,
+      winnerId: lowerFirst!.id,
+    };
+    Object.assign(overview, { matches: [...overview.matches, lowerFinal] });
+    const desk: Desk = {
+      mode,
+      capacity: 2,
+      active: 1,
+      overCapacity: 0,
+      resourceRevision: 12,
+      queueRevision: 0,
+      stations: [],
+      entrants: [],
+      pools: [],
+      queue: [
+        {
+          matchId: call.id,
+          state: 'called',
+          waitingSince: 0,
+          downstream: 0,
+          reason: 'Awaiting actual play',
+          canStart: false,
+          canDispatchOrdinary: false,
+          eligibleStationIds: [],
+          reasons: [],
+        },
+      ],
+    };
+    Object.assign(overview, {
+      operatorDispatch: desk,
+      sharedDispatch: mode === 'shared' ? { active: 1, capacity: 2, overCapacity: 0 } : null,
+    });
+    const upper = {
+      scope: upperScope,
+      revisionToken: 'upper-call-review',
+      resetAllowed: false,
+      resetIssues: [callIssue],
+      resetCallMatchIds: [call.id],
+    };
+    const playedIssue = 'Finals have actual play and cannot be reset.';
+    const lower = {
+      scope: lowerScope,
+      revisionToken: 'lower-played-review',
+      resetAllowed: false,
+      resetIssues: [playedIssue],
+      resetCallMatchIds: [],
+    };
+    const preview: StrengthPreview = {
+      seedPolicy: 'pool_place_whr_v1',
+      existing: true,
+      allowed: false,
+      issues: [],
+      replacing: false,
+      resetAllowed: false,
+      resetIssues: [playedIssue, callIssue],
+      resetCallMatchIds: [],
+      resetRevisionToken: 'blocked-global-review',
+      divisionResets: [upper, lower],
+      revisionToken: 'draw-preview',
+      poolOrders: [],
+      waitingStages: [],
+      brackets: [
+        {
+          id: upperScope.bracketIds[0]!,
+          division: 'upper',
+          stage: 'main',
+          entrantIds: [call.player1Id!, call.player2Id!],
+          alreadyDrawn: true,
+          roundOne: [{ player1Id: call.player1Id, player2Id: call.player2Id }],
+          previewMatches: [],
+        },
+        {
+          id: upperScope.bracketIds[1]!,
+          division: 'upper',
+          stage: 'consolation',
+          entrantIds: [call.player2Id!],
+          alreadyDrawn: true,
+          roundOne: [],
+          previewMatches: [],
+        },
+        {
+          id: lowerScope.bracketIds[0]!,
+          division: 'lower',
+          stage: 'main',
+          entrantIds: [lowerFinal.player1Id, lowerFinal.player2Id],
+          alreadyDrawn: true,
+          roundOne: [{ player1Id: lowerFinal.player1Id, player2Id: lowerFinal.player2Id }],
+          previewMatches: [],
+        },
+      ],
+    };
+    const nativeBrackets: Overview['nativeBrackets'] = preview.brackets.map(
+      ({ id, division, stage, entrantIds }) => ({
+        id,
+        division,
+        stage,
+        entrantIds,
+        eventPlanId: PLAN_ID,
+        createdAt: '2026-10-04T00:00:00Z',
+        complete: id !== upperScope.bracketIds[0],
+        winnerId:
+          division === 'lower'
+            ? lowerFinal.winnerId
+            : entrantIds.length === 1
+              ? entrantIds[0]!
+              : null,
+        standings: [],
+      }),
+    );
+    Object.assign(overview, { nativeBrackets });
+    responses['eventOps.native.preview'] = preview;
+    const returnPath = `/api/trpc/eventOps.${mode === 'shared' ? 'live.command' : 'updateMatch'}`;
+    const returned: object[] = [];
+    await page.route(`**${returnPath}*`, async (route) => {
+      const batched = new URL(route.request().url()).searchParams.has('batch');
+      const body = route.request().postDataJSON();
+      const input = batched ? body[0] : body;
+      returned.push(mode === 'shared' ? input.command : input);
+      Object.assign(call, { status: 'ready', started: false, called: false, stationId: null });
+      if (station) Object.assign(station, { currentMatchId: null, status: 'free' });
+      desk.queue = [];
+      desk.active = 0;
+      Object.assign(upper, {
+        resetAllowed: true,
+        resetIssues: [],
+        resetCallMatchIds: [],
+        revisionToken: 'upper-returned-review',
+      });
+      if (change) {
+        preview.resetAllowed = true;
+        preview.resetIssues = [];
+        preview.resetRevisionToken = 'allowed-global-review';
+        preview.divisionResets =
+          change === 'removed'
+            ? [lower]
+            : [
+                {
+                  ...upper,
+                  scope: { ...upperScope, bracketIds: ['replacement-upper-main'] },
+                  revisionToken: 'replacement-review',
+                },
+                lower,
+              ];
+      }
+      const result = { result: { data: {} } };
+      await route.fulfill({ json: batched ? [result] : result });
+    });
+    const removals: object[] = [];
+    await page.route('**/api/trpc/eventOps.native.reset*', async (route) => {
+      const batched = new URL(route.request().url()).searchParams.has('batch');
+      const body = route.request().postDataJSON();
+      removals.push(batched ? body[0] : body);
+      if (removals.length === 1 && !change) {
+        await route.abort();
+        return;
+      }
+      Object.assign(overview, {
+        nativeBrackets: nativeBrackets.filter(({ division }) => division !== 'upper'),
+      });
+      overview.matches = overview.matches.filter(
+        (match) => !upperScope.bracketIds.includes(match.nativeBracketId ?? ''),
+      );
+      const result = { result: { data: { removed: 2 } } };
+      await route.fulfill({ json: batched ? [result] : result });
+    });
+
+    await page.goto(`/operate/${PLAN_ID}?view=draw`);
+    const drawTab = page.getByRole('tab', { name: 'Standings / draw', exact: true });
+    const draw = page.getByRole('tabpanel', { name: 'Standings / draw', exact: true });
+    const previewButton = draw.getByRole('button', { name: 'Preview finals', exact: true });
+    const removal = draw.getByRole('region', { name: 'Finals removal' });
+    const scope = removal.getByRole('combobox', { name: 'Finals to remove' });
+    const removeUpper = removal.getByRole('button', { name: 'Remove unplayed Upper finals' });
+    const open = removal.getByRole('button', { name: /^Open call for/ });
+    await previewButton.press('Enter');
+    await expect(removal.getByRole('button', { name: 'Remove unplayed finals' })).toBeDisabled();
+    await chooseOption(scope, 'lower');
+    await expect(
+      removal.getByRole('button', { name: 'Remove unplayed Lower finals' }),
+    ).toBeDisabled();
+    await expect(removal).toContainText(playedIssue);
+    await expect(open).toHaveCount(0);
+
+    await scope.press('Enter');
+    await page.getByRole('option', { name: 'Upper finals only' }).press('Enter');
+    await expect(removeUpper).toBeDisabled();
+    await expect(open).toHaveAccessibleName(new RegExp(alias));
+    const published = draw.getByRole('region', { name: 'Tournament draw', exact: true });
+    await expect(published.getByRole('heading', { name: 'lower · Championship' })).toBeVisible();
+    await expect(published).toContainText(`Winner · ${lowerFirst!.name}`);
+    await ready(page);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+    expect((await new AxeBuilder({ page }).include('.ops-page').analyze()).violations).toEqual([]);
+    await page.evaluate(() => scrollTo(0, 0));
+    await page.screenshot({
+      path: testInfo.outputPath('scoped-finals-return-required.png'),
+      fullPage: true,
+    });
+    await removal.screenshot({ path: testInfo.outputPath('scoped-finals-controls.png') });
+
+    await open.press('Enter');
+    const returnCall = page.locator(`[id="return-call-${call.id}"]`);
+    await expect(returnCall).toBeFocused();
+    await expect
+      .poll(() =>
+        returnCall.evaluate((element) => {
+          const box = element.getBoundingClientRect();
+          return element.contains(
+            document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2),
+          );
+        }),
+      )
+      .toBe(true);
+    expect(returned).toEqual([]);
+    await page.screenshot({ path: testInfo.outputPath('scoped-finals-return-focus.png') });
+    const [reply] = await Promise.all([
+      page.waitForResponse((response) => new URL(response.url()).pathname === returnPath),
+      returnCall.press('Enter'),
+    ]);
+    expect(reply.ok()).toBe(true);
+    expect(returned).toEqual([
+      expect.objectContaining({
+        matchId: call.id,
+        expectedRevision: call.revision,
+        expectedResourceRevision: 12,
+        status: 'ready',
+      }),
+    ]);
+    await drawTab.press('Enter');
+    if (change) {
+      await expect(removal).toContainText('The selected draw changed. Preview finals again.');
+      await expect(removeUpper).toBeDisabled();
+      expect(removals).toEqual([]);
+      // A fresh review may select the replacement but the earlier review cannot.
+      preview.divisionResets = [upper, lower];
+      await previewButton.press('Enter');
+      await chooseOption(scope, 'upper');
+    }
+    await expect(removeUpper).toBeEnabled();
+    await expect(open).toHaveCount(0);
+    await page.screenshot({
+      path: testInfo.outputPath('scoped-finals-reviewed.png'),
+      fullPage: true,
+    });
+    const dialog = page.getByRole('alertdialog');
+    const confirm = dialog.getByRole('button', { name: 'Confirm', exact: true });
+    await removeUpper.press('Enter');
+    await expect(dialog).toContainText('Pool results and the other division will stay recorded.');
+    await page.screenshot({ path: testInfo.outputPath('scoped-finals-confirmation.png') });
+    expect(removals).toEqual([]);
+    await confirm.press('Enter');
+    if (!change) {
+      await expect(draw.getByRole('alert')).toBeVisible();
+      await removeUpper.press('Enter');
+      await confirm.press('Enter');
+    }
+    await expect(draw.getByRole('status')).toContainText('Unplayed Upper finals removed.');
+    await expect(published.getByRole('heading', { name: 'lower · Championship' })).toBeVisible();
+    await expect(published.getByRole('heading', { name: 'upper · Championship' })).toHaveCount(0);
+    expect(removals).toEqual(
+      Array.from({ length: change ? 1 : 2 }, () => ({
+        planId: PLAN_ID,
+        scope: upperScope,
+        revisionToken: 'upper-returned-review',
+        requestId: expect.any(String),
+      })),
+    );
+    if (!change) expect(removals[1]).toEqual(removals[0]);
     expect(unexpected).toEqual([]);
   });

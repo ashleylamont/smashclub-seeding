@@ -49,6 +49,7 @@ for (const theme of ['dark', 'light'] as const)
         resetAllowed: false,
         resetIssues: ['No finals exist.'],
         resetCallMatchIds: [],
+        divisionResets: [],
         resetRevisionToken: 'reset-token',
         revisionToken: 'draw-token',
         poolOrders: [],

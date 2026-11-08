@@ -2,17 +2,23 @@ import { randomUUID } from 'node:crypto';
 import { appendQualifierBracket } from './rollingFinals';
 import { planStrengthFinals, strengthFinalsToken, strengthSeedPolicy } from './strengthFinals';
 import { advance, drawFinals } from './brackets';
-import { finalsResetBlockers, finalsToken } from './operations';
+import {
+  finalsDivisionResetScopes,
+  finalsDivisionResetToken,
+  finalsResetBlockers,
+  finalsToken,
+} from './operations';
 import { poolOrderStatus } from './poolOrders';
 import { completeCommandProgression } from './progression';
 import { matchRows } from './views';
+import type { FinalsDivisionResetScope } from './commands';
 import type { CommandEnvelope, TournamentState } from './schemas';
 
 export const rollingFieldWarning =
   'Creating finals fixes the current eligible field, pool-place sources and seeds. Later withdrawals resolve by availability/forfeit; restoring an excluded entrant does not add a finals place. The draw will not shrink or reseed while other pools finish.';
 
-export function reviewFinalsReset(state: TournamentState) {
-  const { issues, untakenCallIds } = finalsResetBlockers(state);
+export function reviewFinalsReset(state: TournamentState, scope?: FinalsDivisionResetScope) {
+  const { issues, untakenCallIds } = finalsResetBlockers(state, scope);
   if (state.lifecycle !== 'locked') issues.unshift('The event is not open.');
   if (!state.brackets.length) issues.push('No finals exist.');
   return {
@@ -113,6 +119,11 @@ export function previewStrengthFinals(state: TournamentState) {
     replacing: false,
     ...reviewFinalsReset(state),
     resetRevisionToken: finalsToken(state),
+    divisionResets: finalsDivisionResetScopes(state).map((scope) => ({
+      scope,
+      revisionToken: finalsDivisionResetToken(state, scope),
+      ...reviewFinalsReset(state, scope),
+    })),
     revisionToken: strengthFinalsToken(state, plan),
     poolOrders,
     waitingStages: plan.stages

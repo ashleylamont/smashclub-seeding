@@ -15,3 +15,10 @@
 .finals-reset-actions > ul {
   margin-block: var(--s2);
 }
+
+.finals-reset-scope {
+  display: grid;
+  gap: var(--s1);
+  max-width: 20rem;
+  margin-block-end: var(--s2);
+}

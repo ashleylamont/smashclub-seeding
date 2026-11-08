@@ -173,6 +173,14 @@ export function describeDecision(
     case 'drawFinals':
       return description('draw', 'Finals drawn', 'The chosen finals pairings were recorded.');
     case 'resetFinals':
+      if (command.scope) {
+        const division = command.scope.division === 'upper' ? 'Upper' : 'Lower';
+        return description(
+          'draw',
+          `Unplayed ${division} finals reset`,
+          `${division} finals were cleared before play.`,
+        );
+      }
       return description('draw', 'Unplayed finals reset', 'Finals were cleared before play.');
     case 'resetQueue':
       return description('draw', 'Unplayed match queue reset', 'Pool assignments were retained.');

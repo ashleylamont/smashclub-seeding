@@ -8,6 +8,11 @@ const poolOrder = z.object({
   expectedRevision: revision,
   matchRevisions: z.record(id, revision),
 });
+export const FinalsDivisionResetScope = z.object({
+  division: z.enum(['upper', 'lower']),
+  bracketIds: z.array(id).min(1).max(2),
+});
+export type FinalsDivisionResetScope = z.infer<typeof FinalsDivisionResetScope>;
 export const additionalCommands = [
   z.object({
     kind: z.literal('broadcastSides'),
@@ -90,7 +95,11 @@ export const additionalCommands = [
     description: z.string().max(500).nullable(),
     playerId: id.nullable(),
   }),
-  z.object({ kind: z.literal('resetFinals'), revisionToken: z.string().length(64) }),
+  z.object({
+    kind: z.literal('resetFinals'),
+    revisionToken: z.string().length(64),
+    scope: FinalsDivisionResetScope.optional(),
+  }),
   z.object({ kind: z.literal('resetQueue') }),
   z.object({ kind: z.literal('cancel'), reason: z.string().trim().min(1).max(200) }),
   z.object({

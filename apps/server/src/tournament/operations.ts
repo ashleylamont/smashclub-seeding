@@ -1,4 +1,4 @@
-import { strengthFinalsToken } from './strengthFinals';
+import { canUseStrengthSeeding, strengthFinalsToken } from './strengthFinals';
 import { rollingFinals } from './qualifiers';
 import { canConfirmPoolOrder, requirePoolOrderChangeAllowed } from './poolOrders';
 import { beginPlay, changeStation, configureDispatch, moveQueue, sharedDispatch } from './dispatch';
@@ -6,6 +6,7 @@ import { isKnockout } from '@smashclub/shared';
 import { hash, requireFact, resolved, TournamentConflict, unconfirmedCall } from './facts';
 import { applyAttendance } from './attendance';
 import { replaceResult } from './replacement';
+import type { FinalsDivisionResetScope } from './commands';
 import type { CommandEnvelope, TournamentState } from './schemas';
 
 export const finalsToken = (
@@ -22,9 +23,36 @@ export const finalsToken = (
         lifecycle: state.lifecycle,
       });
 
-export function finalsResetBlockers(state: TournamentState) {
+export function finalsDivisionResetScopes(state: TournamentState): FinalsDivisionResetScope[] {
+  const structure = state.baseline?.structure;
+  if ((structure && structure !== 'dual_division') || !canUseStrengthSeeding(state)) return [];
+  return (['upper', 'lower'] as const).flatMap((division) => {
+    const bracketIds = state.brackets.filter((b) => b.division === division).map((b) => b.id);
+    return bracketIds.length ? [{ division, bracketIds }] : [];
+  });
+}
+
+function scopedFinals(state: TournamentState, scope?: FinalsDivisionResetScope) {
+  const bracketIds = scope && new Set(scope.bracketIds);
+  return state.matches.filter((m) => m.bracketId && (!bracketIds || bracketIds.has(m.bracketId)));
+}
+
+export function finalsDivisionResetToken(state: TournamentState, scope: FinalsDivisionResetScope) {
+  const matches = scopedFinals(state, scope);
+  const ids = new Set(matches.map(({ id }) => id));
+  return hash({
+    scope,
+    lifecycle: state.lifecycle,
+    brackets: state.brackets.filter((b) => b.division === scope.division),
+    pools: state.pools.filter((p) => p.division === scope.division),
+    matches,
+    reports: state.reports.filter((r) => ids.has(r.matchId)),
+  });
+}
+
+export function finalsResetBlockers(state: TournamentState, scope?: FinalsDivisionResetScope) {
   const issues: string[] = [];
-  const finals = state.matches.filter((match) => match.bracketId);
+  const finals = scopedFinals(state, scope);
   if (isKnockout(state.baseline?.structure))
     issues.push('A locked knockout draw can only be changed by creating a new draft.');
   if (
@@ -42,6 +70,27 @@ export function finalsResetBlockers(state: TournamentState) {
   if (state.reports.some((report) => finalsIds.has(report.matchId)))
     issues.push('Finals have report history.');
   return { issues, untakenCallIds };
+}
+
+function resetFinalsDivision(state: TournamentState, scope: FinalsDivisionResetScope) {
+  const [blocker] = finalsResetBlockers(state, scope).issues;
+  if (blocker) throw new TournamentConflict(blocker);
+
+  const bracketIds = new Set(scope.bracketIds);
+  const matchIds = new Set(scopedFinals(state, scope).map(({ id }) => id));
+  state.matches = state.matches.filter((m) => !matchIds.has(m.id));
+  state.brackets = state.brackets.filter((b) => !bracketIds.has(b.id));
+  for (const pool of state.pools) {
+    if (pool.division !== scope.division || !pool.qualifierRoster) continue;
+    delete pool.qualifierRoster;
+    pool.revision++;
+  }
+  const order = state.settings.queueOrder;
+  if (order?.some((id) => matchIds.has(id))) {
+    state.settings.queueOrder = order.filter((id) => !matchIds.has(id));
+    state.settings.queueRevision = (state.settings.queueRevision ?? 0) + 1;
+  }
+  state.settings.resourceRevision++;
 }
 
 export function resetFinals(state: TournamentState) {
@@ -193,13 +242,28 @@ export function additionalDecision(
       else state.prizes.push(command);
       break;
     }
-    case 'resetFinals':
+    case 'resetFinals': {
+      if (command.scope) {
+        const { scope, revisionToken } = command;
+        const reviewedScope = finalsDivisionResetScopes(state).find(
+          ({ division }) => division === scope.division,
+        );
+        requireFact(
+          reviewedScope &&
+            hash(reviewedScope) === hash(scope) &&
+            finalsDivisionResetToken(state, reviewedScope) === revisionToken,
+          'Finals changed since the preview.',
+        );
+        resetFinalsDivision(state, reviewedScope);
+        break;
+      }
       requireFact(
         finalsToken(state) === command.revisionToken,
         'Finals changed since the preview.',
       );
       resetFinals(state);
       break;
+    }
     case 'resetQueue':
       requireFact(
         !state.matches.some(unconfirmedCall),
