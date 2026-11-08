@@ -89,7 +89,7 @@ for (const theme of ['dark', 'light'] as const) {
             status: 'manual_required',
             plannerConfirmation: {
               available: false,
-              reason: 'Relock the draw before confirming this pool order.',
+              reason: 'Resume the pool draw to confirm this order.',
             },
           },
           {
@@ -107,7 +107,7 @@ for (const theme of ['dark', 'light'] as const) {
 
       await page.goto(`/operate/${PLAN_ID}?view=draw`);
       const standings = page.getByRole('region', { name: 'Pool standings', exact: true });
-      await expect(standings).toContainText('Relock the draw before confirming this pool order.');
+      await expect(standings).toContainText('Resume the pool draw to confirm this order.');
       await expect(standings).toContainText(
         'The planner can confirm orders for pools of 2–16 entrants.',
       );

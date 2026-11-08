@@ -318,7 +318,7 @@ export function plannerPoolOrderBlocker(state: TournamentState, pool: Pool) {
   const count = pool.entrantIds.length;
   if (count < min || count > max)
     return `This pool has ${count} ${count === 1 ? 'entrant' : 'entrants'}. The planner can confirm orders for pools of ${min}–${max} entrants.`;
-  if (state.lifecycle === 'unlocked') return 'Relock the draw before confirming this pool order.';
+  if (state.lifecycle === 'unlocked') return 'Resume the pool draw to confirm this order.';
   if (!canConfirmPoolOrder(state, pool))
     return 'This pool order cannot be confirmed while the finals draw is in use.';
 }

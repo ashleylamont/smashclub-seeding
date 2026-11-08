@@ -121,7 +121,7 @@ describe('round-robin planner confirmation guidance', () => {
         status: 'manual_required',
         plannerConfirmation: {
           available: false,
-          reason: 'Relock the draw before confirming this pool order.',
+          reason: 'Resume the pool draw to confirm this order.',
         },
       });
       const relocked = reduceDecision(paused, decide(paused, envelope({ kind: 'relock' }))!);
