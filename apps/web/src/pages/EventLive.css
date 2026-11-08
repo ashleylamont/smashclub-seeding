@@ -521,6 +521,27 @@
   letter-spacing: 0;
   text-transform: none;
 }
+.broadcast-twitch-link {
+  color: var(--event-bone);
+  font-size: clamp(12px, 1.1vw, 20px);
+  letter-spacing: 0;
+  text-transform: none;
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+  flex-shrink: 0;
+}
+.broadcast-twitch-short {
+  display: none;
+}
+.broadcast-topline.has-twitch-link > span:nth-child(2) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Leave room for the separately positioned Display setup trigger. */
+.event-overlay:has(> .overlay-setup-toggle) .broadcast-topline.has-twitch-link {
+  padding-right: max(2vw, calc(1vw + 6.5rem));
+}
 .broadcast-matchup {
   position: absolute;
   left: 20vw;
@@ -751,6 +772,15 @@
   }
   .event-overlay .broadcast-topline > span:last-child {
     display: none;
+  }
+  .broadcast-topline.has-twitch-link {
+    gap: var(--s2);
+  }
+  .broadcast-topline .broadcast-twitch-url {
+    display: none;
+  }
+  .broadcast-topline .broadcast-twitch-short {
+    display: inline;
   }
 }
 .broadcast-rail.has-guest-pass .broadcast-identity {
@@ -1118,6 +1148,18 @@
 .overlay-setup .ui-select {
   width: 100%;
   margin-top: var(--s2);
+}
+.overlay-twitch-setting {
+  display: grid;
+  gap: var(--s3);
+  justify-items: start;
+}
+.overlay-twitch-setting .ui-field {
+  width: 100%;
+}
+.overlay-twitch-setting .ui-field label,
+.overlay-twitch-setting p {
+  margin: 0;
 }
 .overlay-setup .ui-disclosure {
   border-top: 1px solid var(--event-rule);
