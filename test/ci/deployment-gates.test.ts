@@ -140,6 +140,8 @@ it('uses repository-scoped credentials for version PRs and publishes releases af
   expect(token.with).toMatchObject({
     'permission-contents': 'write',
     'permission-pull-requests': 'write',
+    'client-id':
+      '${{ vars.NEMESIS_RELEASE_APP_CLIENT_ID || secrets.NEMESIS_RELEASE_APP_CLIENT_ID }}',
   });
   const changesets = steps.find((step: { id?: string }) => step.id === 'changesets');
   expect(changesets.with).toMatchObject({
@@ -148,7 +150,9 @@ it('uses repository-scoped credentials for version PRs and publishes releases af
     'push-git-tags': false,
     'create-github-releases': false,
   });
-  expect(steps.at(-1).run).toContain('--auto --merge');
+  expect(
+    steps.find((step: { name?: string }) => step.name?.startsWith('Queue the version PR')).run,
+  ).toContain('--auto --merge');
   expect(publish.jobs.release.needs).toBe('publish');
   expect(publish.jobs.release.if).toContain('needs.publish.outputs.version');
   expect(publish.jobs.release.permissions).toEqual({ contents: 'write' });
