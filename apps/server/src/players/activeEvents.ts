@@ -21,7 +21,7 @@ export async function requireInactiveIdentities(db: Db, ids: string[], runtime?:
     });
   const activeNames: string[] = [];
   for (const handoff of handoffs) {
-    await runtime!.transfer(handoff.eventPlanId);
+    await runtime!.transfer(handoff.eventPlanId, db);
     const state = await runtime!.state(handoff.eventPlanId);
     if (
       !['finalized', 'cancelled'].includes(state.lifecycle) &&

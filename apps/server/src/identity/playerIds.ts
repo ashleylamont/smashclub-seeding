@@ -1,3 +1,4 @@
+import { asc, inArray } from 'drizzle-orm';
 import { players, type Db } from '@smashclub/db';
 
 /** Identity redirects apply to historical exports; the journal retains actual entrant IDs. */
@@ -18,4 +19,15 @@ export function playerIdResolver(
     }
     return id;
   };
+}
+
+/** Call inside the writer's SQL transaction, before checking live membership.
+ * Order competing writers by player ID and allow unrelated FK readers. */
+export async function lockPlayerRows(tx: Db, ids: string[]) {
+  return tx
+    .select()
+    .from(players)
+    .where(inArray(players.id, ids))
+    .orderBy(asc(players.id))
+    .for('no key update');
 }

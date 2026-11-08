@@ -7,6 +7,7 @@ import {
   players,
   tournamentParticipants,
 } from '@smashclub/db';
+import { lockPlayerRows } from '../identity/playerIds';
 import { backfillPlayerEverywhere } from '../identity/matching';
 import { requireInactiveIdentities } from './activeEvents';
 import type { NativeRuntime } from '../tournament/runtime';
@@ -24,14 +25,22 @@ export async function mergePlayers(
   nativeRuntime?: NativeRuntime,
 ): Promise<void> {
   if (fromPlayerId === intoPlayerId) throw new Error('Cannot merge a player into themselves.');
-  const [from] = await db.select().from(players).where(eq(players.id, fromPlayerId));
-  const [into] = await db.select().from(players).where(eq(players.id, intoPlayerId));
-  if (!from || !into) throw new Error('Both players must exist.');
-  if (from.status === 'merged') throw new Error(`${from.canonicalName} is already merged.`);
-  if (into.status === 'merged') throw new Error(`Cannot merge into a tombstoned player.`);
+  await db.transaction(async (tx) => {
+    const identities = await lockPlayerRows(tx, [fromPlayerId, intoPlayerId]);
+    const from = identities.find(({ id }) => id === fromPlayerId);
+    const into = identities.find(({ id }) => id === intoPlayerId);
+    if (!from || !into) throw new Error('Both players must exist.');
+    if (from.status === 'merged') throw new Error(`${from.canonicalName} is already merged.`);
+    if (into.status === 'merged') throw new Error(`Cannot merge into a tombstoned player.`);
 
-  await requireInactiveIdentities(db, [fromPlayerId, intoPlayerId], nativeRuntime);
+    await requireInactiveIdentities(tx, [fromPlayerId, intoPlayerId], nativeRuntime);
+    await redirectPlayer(tx, from, intoPlayerId);
+  });
+  await backfillPlayerEverywhere(db, [intoPlayerId]);
+}
 
+async function redirectPlayer(db: Db, from: typeof players.$inferSelect, intoPlayerId: string) {
+  const fromPlayerId = from.id;
   // Move aliases; drop those that would collide with an existing alias of B.
   const aliases = await db
     .select()
@@ -116,6 +125,4 @@ export async function mergePlayers(
     .update(players)
     .set({ status: 'merged', mergedIntoPlayerId: intoPlayerId, updatedAt: new Date() })
     .where(eq(players.id, fromPlayerId));
-
-  await backfillPlayerEverywhere(db, [intoPlayerId]);
 }
