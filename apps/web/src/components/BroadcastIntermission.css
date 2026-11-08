@@ -87,6 +87,12 @@
 .intermission-standings td:not(:first-child) {
   font-family: var(--font-number);
 }
+.intermission-qualification th:first-child {
+  width: 38%;
+}
+.intermission-qualification td:nth-child(2) {
+  font-family: inherit;
+}
 .intermission-content .event-bracket-lane > h4 {
   display: none;
 }

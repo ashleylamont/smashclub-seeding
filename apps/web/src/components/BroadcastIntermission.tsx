@@ -4,6 +4,12 @@ import {
   type ProgressData,
   type ProgressPage,
 } from '../lib/broadcastProgress';
+import {
+  finalsFieldLabel,
+  plannedFinalsSeeding,
+  qualifierDetail,
+  qualifierLabel,
+} from '../lib/qualification';
 import { EventBracketLane } from './EventBracketLane';
 import { NemesisMark } from './NemesisMark';
 import { Button } from './ui/Button';
@@ -113,6 +119,8 @@ export function BroadcastIntermission({
       <main className="intermission-content" key={page.key}>
         {page.kind === 'pool' ? (
           <PoolPage page={page} />
+        ) : page.kind === 'qualification' ? (
+          <QualificationPage page={page} entrants={data.entrants} />
         ) : page.kind === 'bracket' ? (
           <>
             <div className="intermission-section-heading">
@@ -236,6 +244,43 @@ function PoolPage({ page }: { page: Extract<ProgressPage, { kind: 'pool' }> }) {
                 {player.differential}
               </td>
               <td>{player.remaining}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
+function QualificationPage({
+  page,
+  entrants,
+}: {
+  page: Extract<ProgressPage, { kind: 'qualification' }>;
+  entrants: ProgressData['entrants'];
+}) {
+  const names = new Map(entrants.map(({ id, name }) => [id, name]));
+  return (
+    <>
+      <div className="intermission-section-heading">
+        <h2>{finalsFieldLabel(page)} qualification</h2>
+        <span>
+          Section {page.part} / {page.parts}
+        </span>
+      </div>
+      <p>Pairings appear after the draw is published. {plannedFinalsSeeding}</p>
+      <table className="intermission-standings intermission-qualification">
+        <thead>
+          <tr>
+            <th>Qualifying place</th>
+            <th>Entrant or status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {page.slots.map((slot) => (
+            <tr key={`${slot.poolId}:${slot.place}`}>
+              <td>{qualifierLabel(slot)}</td>
+              <td>{qualifierDetail(slot, names) ?? 'Awaiting qualification'}</td>
             </tr>
           ))}
         </tbody>

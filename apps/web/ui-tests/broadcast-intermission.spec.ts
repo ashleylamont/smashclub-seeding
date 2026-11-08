@@ -4,6 +4,7 @@ import { mockEvent, PLAN_ID, ready } from './fixtures';
 import { bracketFixture, TEAM_ALIAS } from '../test/fixtures/brackets';
 import { chooseOption } from '../test-support/controls';
 import { broadcastProgressPages } from '../src/lib/broadcastProgress';
+import type { PublicFinalsField } from '../src/lib/qualification';
 
 async function fits(page: Page) {
   await ready(page);
@@ -228,3 +229,109 @@ test('reduced motion retains manual pages, and interruptions keep the last known
   await expect(progress).toBeVisible();
   await expect(progress).toContainText('Page 2 /');
 });
+
+for (const [width, height, theme] of [
+  [390, 844, 'dark'],
+  [1280, 720, 'dark'],
+  [1920, 1080, 'light'],
+] as const) {
+  test(`${width}px intermission pages show qualifiers before pairings are published`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height });
+    await page.emulateMedia({ colorScheme: theme });
+    await page.clock.install({ time: new Date('2026-10-04T00:00:00Z') });
+    const fixture = await mockEvent(page, { idle: true, bracket: true });
+    const { snapshot } = fixture;
+    const id = snapshot.nativeBrackets[0]!.entrantIds[0]!;
+    snapshot.entrants.find((entrant) => entrant.id === id)!.name = TEAM_ALIAS;
+    const fields: PublicFinalsField[] = (['upper', 'lower'] as const).map((division) => ({
+      division,
+      stage: 'main',
+      slots: [0, 1].flatMap((poolIndex) =>
+        [1, 2, 3].map((place) => ({
+          poolId: `${division}-${poolIndex}`,
+          poolIndex,
+          place,
+          division,
+          status:
+            division === 'lower' && poolIndex === 1
+              ? 'review_pending'
+              : division === 'upper' && poolIndex === 0 && place === 1
+                ? 'resolved'
+                : 'pending',
+          entrantId: division === 'upper' && poolIndex === 0 && place === 1 ? id : null,
+        })),
+      ),
+    }));
+    const pools = {
+      ...snapshot,
+      matches: snapshot.matches.filter((match) => !match.nativeBracketId),
+      nativeBrackets: [],
+      pendingFinals: fields,
+    };
+    fixture.responses['eventOps.snapshot'] = pools;
+    await page.goto(`/overlay/${PLAN_ID}?presentation=progress&controls=0`);
+    const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
+    await expect(progress.getByRole('table')).toBeVisible();
+    const pages = broadcastProgressPages(pools);
+    const firstQualifier = pages.findIndex((item) => item.kind === 'qualification');
+    const upperHeading = progress.getByRole('heading', {
+      name: 'Upper Championship qualification',
+    });
+    const lowerHeading = progress.getByRole('heading', {
+      name: 'Lower Championship qualification',
+    });
+    const seen = new Set<string>();
+    for (let index = 0; index < pages.length; index++) {
+      await expect(progress).toContainText(`Page ${index + 1} / ${pages.length}`);
+      if (index >= firstQualifier) {
+        await fits(page);
+        const table = progress.getByRole('table');
+        const labels = await table.getByRole('row').getByRole('cell').allTextContents();
+        labels.filter((label) => label.includes('Pool')).forEach((label) => seen.add(label));
+        await expect(progress.locator('.event-bracket-match')).toHaveCount(0);
+        if (index === firstQualifier) {
+          await expect(upperHeading).toBeVisible();
+          await expect(table).toContainText(TEAM_ALIAS);
+          await expect(table).toContainText('Awaiting qualification');
+          await expect(progress).toContainText('Section 1 / 2');
+          await page.screenshot({
+            path: testInfo.outputPath(`intermission-qualification-${width}.png`),
+          });
+          expect(
+            (
+              await new AxeBuilder({ page })
+                .include('.broadcast-intermission')
+                .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+                .analyze()
+            ).violations,
+          ).toEqual([]);
+        }
+      }
+      if (index < pages.length - 1) await page.keyboard.press('ArrowRight');
+    }
+    expect(seen.size).toBe(12);
+    await expect(lowerHeading).toBeVisible();
+    await expect(progress).toContainText('Under score review');
+
+    // The next poll publishes one bracket while keeping the other field and its active page.
+    const mixed = { ...snapshot, pendingFinals: fields.slice(1) };
+    fixture.responses['eventOps.snapshot'] = mixed;
+    const mixedPages = broadcastProgressPages(mixed);
+    const lastPage = `Page ${mixedPages.length} / ${mixedPages.length}`;
+    await expect
+      .poll(async () => {
+        await page.clock.runFor(2000);
+        return progress.getByText(lastPage, { exact: false }).isVisible();
+      })
+      .toBe(true);
+    await expect(lowerHeading).toBeVisible();
+    await expect(progress).toContainText('Section 2 / 2');
+    const firstDraw = mixedPages.findIndex((item) => item.kind === 'bracket');
+    for (let i = mixedPages.length - 1; i > firstDraw; i--) await page.keyboard.press('ArrowLeft');
+    await expect(progress.locator('.event-bracket-match').first()).toBeVisible();
+    await expect(upperHeading).toHaveCount(0);
+    expect(fixture.unexpected).toEqual([]);
+  });
+}

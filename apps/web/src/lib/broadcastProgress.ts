@@ -6,6 +6,7 @@ import {
 } from './eventBracket';
 import { poolStandings } from './eventQueue';
 import type { LiveMatch } from './eventDisplay';
+import type { PublicFinalsField } from './qualification';
 import type { NativeBracketView } from '../components/EventNightBoard';
 
 export type BroadcastPresentation = 'gameplay' | 'auto' | 'progress';
@@ -21,6 +22,7 @@ export type ProgressData = {
   plan: { id: string; name: string; status: string };
   matches: LiveMatch[];
   nativeBrackets: NativeBracketView[];
+  pendingFinals?: PublicFinalsField[];
   entrants: { id: string; name: string }[];
 };
 type Pool = ReturnType<typeof poolStandings>[number];
@@ -37,6 +39,7 @@ export type ProgressPage =
       part: number;
       parts: number;
     }
+  | (PublicFinalsField & { kind: 'qualification'; key: string; part: number; parts: number })
   | { kind: 'summary'; key: 'summary' };
 
 const chunks = <T>(items: T[], count: number): T[][] =>
@@ -128,6 +131,20 @@ export function broadcastProgressPages(data: ProgressData): ProgressPage[] {
         });
       });
     }
+  }
+  for (const { division, stage, slots } of data.pendingFinals ?? []) {
+    const parts = chunks(slots, 4);
+    parts.forEach((slots, index) =>
+      pages.push({
+        kind: 'qualification',
+        key: `qualification:${division}:${stage}:${index}`,
+        division,
+        stage,
+        slots,
+        part: index + 1,
+        parts: parts.length,
+      }),
+    );
   }
   if (!pages.length || ['complete', 'cancelled'].includes(data.plan.status))
     pages.push({ kind: 'summary', key: 'summary' });
