@@ -33,7 +33,7 @@ export function replaceResult(
     );
     basis[m.id] = m.revision;
     const correctedWinner = winner({ ...correction, kind: 'score' }, m);
-    if (state.baseline!.structure === 'double_elimination' && correctedWinner !== m.winnerId)
+    if (correctedWinner !== m.winnerId)
       requireFact(
         !state.matches.some(
           (child) =>
@@ -41,7 +41,9 @@ export function replaceResult(
             child.parent2Id === m.id ||
             child.activation?.matchId === m.id,
         ),
-        'A winner change would invalidate recorded double-elimination routes or the reset final.',
+        state.baseline!.structure === 'double_elimination'
+          ? 'A winner change would invalidate recorded double-elimination routes or the reset final.'
+          : 'A winner change would invalidate a recorded downstream pairing.',
       );
     // A reviewed post-publication ruling changes result facts, never actual opponents or draws.
     Object.assign(m, correction, {

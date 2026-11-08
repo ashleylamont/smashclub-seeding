@@ -3,6 +3,7 @@ import { InMemoryStore } from '@rotorsoft/act';
 import { eq, inArray } from 'drizzle-orm';
 import {
   eventPlans,
+  nativeResultPublications,
   players,
   user,
   sets,
@@ -18,6 +19,7 @@ import { appRouter } from '../src/trpc/router';
 import { loadEnv } from '../src/env';
 import { ChallongeClient } from '../src/challonge/client';
 import { RecomputeTrigger } from '../src/recompute/trigger';
+import { loadSinglesHistory } from '../src/recompute/inputs';
 import { captureBaseline } from '../src/tournament/domain';
 import { publishNativeResult } from '../src/tournament/publication';
 import { attendancePreview } from '../src/tournament/attendance';
@@ -358,6 +360,153 @@ describe('native format lifecycle through shipped APIs', () => {
     });
     const corrected = await runtime.state(planId);
     expect(corrected.result!.revision).toBe(2);
+    expect(await runtime.replay(planId)).toEqual(corrected);
+  });
+
+  it.each([
+    { structure: 'single_elimination', count: 4, finalOutcome: 'played' },
+    { structure: 'pools_finals', count: 7, finalOutcome: 'played' },
+    { structure: 'single_elimination', count: 4, finalOutcome: 'forfeit' },
+  ] as const)(
+    'protects published $structure feeder routes through a $finalOutcome final',
+    async ({ structure, count, finalOutcome }) => {
+      const planId = await draft(count, structure, { consolation: false });
+      if (!isKnockout(structure)) await finishPools(planId);
+      if (finalOutcome === 'forfeit') {
+        const opening = (await runtime.state(planId)).matches.filter((m) => m.status === 'ready');
+        for (const match of opening)
+          await caller().eventOps.reportScore({
+            matchId: match.id,
+            expectedRevision: match.revision,
+            requestId: crypto.randomUUID(),
+            score1: 2,
+            score2: 0,
+            outcome: 'played',
+          });
+        const current = await runtime.state(planId);
+        const playerId = current.matches.find((m) => m.round === 2)!.player2Id!;
+        const preview = attendancePreview(current, { action: 'withdraw', playerId });
+        await caller().eventOps.live.command({
+          planId,
+          requestId: 'withdraw-before-final',
+          command: {
+            kind: 'attendance',
+            action: 'withdraw',
+            playerId,
+            reason: 'Left before the final',
+            approveRedistribution: false,
+            revisionToken: preview.revisionToken,
+          },
+        });
+      }
+      await scoreReady(planId);
+      await caller().eventOps.native.finalize({ planId });
+      const sealed = await runtime.state(planId);
+      const final = sealed.matches.find((m) => m.bracketId && m.round === 2)!;
+      const feeder = sealed.matches.find((m) => m.id === final.parent1Id)!;
+      expect(final).toMatchObject({ outcome: finalOutcome, player1Id: feeder.winnerId });
+      expect(feeder.winnerId).toBe(feeder.player1Id);
+      const tournamentIds = sealed.publication!.tournamentIds;
+      const published = async () => {
+        const publications = await db
+          .select()
+          .from(nativeResultPublications)
+          .where(eq(nativeResultPublications.eventPlanId, planId))
+          .orderBy(nativeResultPublications.revision);
+        const standings = await db
+          .select()
+          .from(tournamentParticipants)
+          .where(inArray(tournamentParticipants.tournamentId, tournamentIds))
+          .orderBy(tournamentParticipants.id);
+        const { engineSets } = await loadSinglesHistory(db);
+        return {
+          publications,
+          standings,
+          ratingInputs: engineSets
+            .filter((set) => tournamentIds.includes(set.tournamentId))
+            .toSorted((a, b) => a.id.localeCompare(b.id)),
+        };
+      };
+      const before = await published();
+      expect(before.publications.map((publication) => publication.resultId)).toEqual([
+        sealed.result!.id,
+      ]);
+      expect(before.standings.find((p) => p.playerId === feeder.player2Id)?.finalRank).toBe(3);
+      expect(before.ratingInputs).toHaveLength(
+        sealed.matches.filter((m) => m.outcome === 'played').length,
+      );
+      await expect(
+        caller().eventOps.live.command({
+          planId,
+          requestId: 'reverse-published-feeder',
+          command: {
+            kind: 'replaceResult',
+            resultId: sealed.result!.id,
+            reason: 'Reviewed semifinal winner',
+            corrections: [
+              {
+                matchId: feeder.id,
+                expectedRevision: feeder.revision,
+                score1: 0,
+                score2: 2,
+                outcome: 'played',
+              },
+            ],
+          },
+        }),
+      ).rejects.toThrow(/winner change would invalidate a recorded downstream pairing/i);
+      expect(await runtime.state(planId)).toEqual(sealed);
+      expect(await runtime.replay(planId)).toEqual(sealed);
+      expect(await published()).toEqual(before);
+    },
+  );
+
+  it('publishes same-winner feeder edits and terminal winner corrections', async () => {
+    const planId = await draft(4, 'single_elimination');
+    await scoreReady(planId);
+    await caller().eventOps.native.finalize({ planId });
+    const sealed = await runtime.state(planId);
+    const final = sealed.matches.find((m) => m.round === 2)!;
+    const feeder = sealed.matches.find((m) => m.id === final.parent1Id)!;
+    await caller().eventOps.live.command({
+      planId,
+      requestId: 'correct-without-changing-feeders',
+      command: {
+        kind: 'replaceResult',
+        resultId: sealed.result!.id,
+        reason: 'Reviewed game score and terminal winner',
+        corrections: [
+          {
+            matchId: feeder.id,
+            expectedRevision: feeder.revision,
+            score1: 3,
+            score2: 0,
+            outcome: 'played',
+          },
+          {
+            matchId: final.id,
+            expectedRevision: final.revision,
+            score1: 0,
+            score2: 2,
+            outcome: 'played',
+          },
+        ],
+      },
+    });
+    const corrected = await runtime.state(planId);
+    expect(corrected.result).toMatchObject({
+      revision: 2,
+      replacesResultId: sealed.result!.id,
+    });
+    expect(corrected.matches.find((m) => m.id === feeder.id)).toMatchObject({
+      winnerId: feeder.winnerId,
+      score1: 3,
+    });
+    expect(corrected.matches.find((m) => m.id === final.id)).toMatchObject({
+      player1Id: final.player1Id,
+      player2Id: final.player2Id,
+      winnerId: final.player2Id,
+    });
     expect(await runtime.replay(planId)).toEqual(corrected);
   });
 
