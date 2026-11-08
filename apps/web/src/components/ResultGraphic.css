@@ -1,0 +1,51 @@
+.result-graphic-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.result-graphic-preview {
+  display: grid;
+  justify-items: start;
+  gap: var(--s3);
+}
+
+.result-graphic-preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 54svh;
+  object-fit: contain;
+}
+
+.result-graphic-preview p {
+  margin: 0;
+}
+
+.result-graphic-preview .ui-disclosure {
+  width: 100%;
+  min-width: 0;
+}
+
+.result-graphic-choices {
+  display: grid;
+  gap: var(--s3);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  margin-top: var(--s3);
+}
+
+.result-graphic-choices .ui-field {
+  min-width: 0;
+}
+
+.result-graphic-placements {
+  margin-block: var(--s2);
+  overflow-wrap: anywhere;
+}
+
+.result-graphic-portrait {
+  display: grid;
+  justify-items: start;
+  gap: var(--s2);
+  margin-top: var(--s3);
+}

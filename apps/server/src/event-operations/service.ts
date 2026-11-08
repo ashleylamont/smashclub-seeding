@@ -27,15 +27,16 @@ import {
   eventStations,
   eventWithdrawals,
   eventPoolSchedules,
-  playerCharacters,
   players,
   sets,
   tournaments,
   type Db,
 } from '@smashclub/db';
 import { publicPlayerName } from '@smashclub/shared';
+import type { ResultGraphicIdentity } from '../events/participantNames';
 import type { SessionUser } from '../auth';
 import { getPlan, type PlanView } from '../event-planner/plans';
+import { charactersByPlayer } from '../players/characters';
 import { matchAvailability, stationAvailability } from './availability';
 import { isOperator, lockEvent, requireOperator } from './access';
 import { operatorTwitchPromotion, publicTwitchPromotion } from './twitchPromotion';
@@ -86,20 +87,26 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
     .select()
     .from(eventPoolSchedules)
     .where(eq(eventPoolSchedules.eventPlanId, planId));
-  const participantIds = [
-    ...new Set(
-      rows.flatMap((match) =>
-        [match.player1Id, match.player2Id].filter((id): id is string => Boolean(id)),
-      ),
-    ),
-  ];
-  const characters = participantIds.length
-    ? await db
+  // Archived plans are planning intent, not evidence of attendance or finishes.
+  const entrantIds = plan.historicalAdoption
+    ? []
+    : (
+        await db
+          .select({ id: eventPlanEntries.playerId })
+          .from(eventPlanEntries)
+          .where(eq(eventPlanEntries.eventPlanId, planId))
+      ).flatMap(({ id }) => (id ? [id] : []));
+  const placements = plan.historicalAdoption
+    ? []
+    : await db
         .select()
-        .from(playerCharacters)
-        .where(inArray(playerCharacters.playerId, participantIds))
-        .orderBy(asc(playerCharacters.position))
-    : [];
+        .from(eventPlanPoolPlacements)
+        .where(eq(eventPlanPoolPlacements.eventPlanId, planId));
+  const placedIds = new Set(placements.map(({ playerId }) => playerId));
+  const matchEntrantIds = rows.flatMap(({ player1Id, player2Id }) =>
+    [player1Id, player2Id].filter((id) => id !== null),
+  );
+  const characters = await charactersByPlayer(db, [...new Set([...placedIds, ...matchEntrantIds])]);
   const disputes = await db
     .select({ matchId: eventScoreReports.matchId })
     .from(eventScoreReports)
@@ -130,12 +137,8 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
     score2: m.status === 'playing' ? (m.liveScore2 ?? m.score2) : m.score2,
     player1Name: m.player1Id ? (names.get(m.player1Id) ?? 'Player') : 'TBD',
     player2Name: m.player2Id ? (names.get(m.player2Id) ?? 'Player') : 'TBD',
-    player1Characters: characters
-      .filter((c) => c.playerId === m.player1Id)
-      .map((c) => c.characterSlug),
-    player2Characters: characters
-      .filter((c) => c.playerId === m.player2Id)
-      .map((c) => c.characterSlug),
+    player1Characters: (m.player1Id && characters.get(m.player1Id)) || [],
+    player2Characters: (m.player2Id && characters.get(m.player2Id)) || [],
     availability: matchAvailability(
       m,
       rows,
@@ -164,15 +167,21 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
           )
       : [];
   const resultsSlug = nativeResults.at(0)?.slug ?? historicalResultsSlug;
-  // Archived plans are planning intent, not evidence of attendance or finishes.
-  const entrants = plan.historicalAdoption
-    ? []
-    : (
-        await db
-          .select({ id: eventPlanEntries.playerId })
-          .from(eventPlanEntries)
-          .where(eq(eventPlanEntries.eventPlanId, planId))
-      ).flatMap((p) => (p.id ? [{ id: p.id, name: names.get(p.id) ?? 'Player' }] : []));
+  const entrants: { id: string; name: string; graphic?: ResultGraphicIdentity }[] = entrantIds.map(
+    (id) => {
+      const name = names.get(id) ?? 'Player';
+      return {
+        id,
+        name,
+        ...(placedIds.has(id) && {
+          graphic: {
+            teamName: null,
+            members: [{ name, character: characters.get(id)?.[0] ?? null }],
+          },
+        }),
+      };
+    },
+  );
   const prizes = (
     await db.select().from(eventPrizes).where(eq(eventPrizes.eventPlanId, planId))
   ).map((p) => ({ ...p, playerName: p.playerId ? (names.get(p.playerId) ?? 'Player') : null }));
@@ -246,12 +255,7 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
       .select({ playerId: eventWithdrawals.playerId })
       .from(eventWithdrawals)
       .where(eq(eventWithdrawals.eventPlanId, planId)),
-    placements: plan.historicalAdoption
-      ? []
-      : await db
-          .select()
-          .from(eventPlanPoolPlacements)
-          .where(eq(eventPlanPoolPlacements.eventPlanId, planId)),
+    placements,
   };
 }
 export async function prepare(db: Db, planId: string) {

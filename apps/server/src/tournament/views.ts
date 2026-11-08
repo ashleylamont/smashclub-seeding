@@ -31,6 +31,7 @@ import { available, memberIds, publicEntrantNames } from './entrants';
 import { asc, inArray } from 'drizzle-orm';
 import { players, playerCharacters, tournaments, type Db, type eventMatches } from '@smashclub/db';
 import { publicPlayerName } from '@smashclub/shared';
+import type { ResultGraphicIdentity } from '../events/participantNames';
 import { buildStationQueues } from '../event-operations/queue';
 import { matchAvailability, stationAvailability } from '../event-operations/availability';
 import type { snapshot as sqlSnapshot } from '../event-operations/service';
@@ -208,6 +209,10 @@ export async function eventView(
         .where(inArray(playerCharacters.playerId, ids))
         .orderBy(asc(playerCharacters.position))
     : [];
+  const placedIds = new Set(state.pools.flatMap(({ order }) => order ?? []));
+  const mains = new Map<string, string>();
+  for (const row of characters)
+    if (!mains.has(row.playerId)) mains.set(row.playerId, row.characterSlug);
   const rows = matchRows(state);
   const reviewableMatches = new Set<string>();
   const qualificationWaits = new Set<string>();
@@ -371,6 +376,15 @@ export async function eventView(
       id: e.playerId,
       name: names.get(e.playerId) ?? 'Player',
       memberPlayerIds: e.memberPlayerIds,
+      ...(placedIds.has(e.playerId) && {
+        graphic: {
+          teamName: e.teamName ?? null,
+          members: memberIds(e).map((id) => ({
+            name: names.get(id) ?? 'Player',
+            character: mains.get(id) ?? null,
+          })),
+        } satisfies ResultGraphicIdentity,
+      }),
     })),
     prizes: state.prizes.map((p) => ({
       ...p,

@@ -36,3 +36,8 @@ If a completed external event diverged from its saved plan, use [historical even
 ## Results and analysis
 
 The tournaments list groups brackets from the same event date. Event pages show division standings, eligible pool and bracket records, and recaps. Player profiles show match stages and rating history. **Admin → Breakthroughs** compares actual wins with expectations based on earlier nights; unfinished events are marked provisional. An event's public board and overlay show live operations, while the saved plan remains the record of intended seeds and pool assignments.
+
+
+Choose **Preview results PNG** on a completed bracket or division, or under confirmed pool standings on the event board. Bracket and division graphics include places through eighth and everyone tied at the cutoff. Pool graphics show the confirmed places for that pool. The PNG uses the same artwork as the preview. The standard image is 1920 × 1080. Larger fields extend the layout and may be scaled to fit browser image limits. The SVG download keeps the same places in a scalable list.
+
+The landscape graphic gives the winner a taller panel and places the remaining finishers beside it. When a portrait is absent, Nemesis uses original artwork based on the public tag. Character labels default to each member's current profile choice when available and may differ from the fighter used in a match. Organisers and admins can change a label or choose a portrait file they have permission to use. The browser uses the local file only in the current preview and download. Closing the preview clears these choices.

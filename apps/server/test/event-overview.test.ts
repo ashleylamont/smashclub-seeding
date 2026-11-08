@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import {
+  eventOperators,
   eventPlans,
+  user,
   eventPlanBrackets,
   players,
   sets,
@@ -10,6 +12,8 @@ import {
   type Db,
 } from '@smashclub/db';
 import { importRegistryPlayers } from '../src/bootstrap/importRegistry';
+import { canCustomizeResultGraphic } from '../src/event-operations/resultGraphicAccess';
+import { nativeAdmin } from './helpers/nativeLiveFixture';
 import { loadEventOverview } from '../src/events/overview';
 import { loadRecap } from '../src/recap/recap';
 import { createTestDb } from './helpers/testDb';
@@ -252,4 +256,43 @@ it('isolates same-date saved plans and leaves historical unlinked brackets toget
   expect((await loadRecap(db, 'historic-upper'))!.tournaments.map((t) => t.id).sort()).toEqual(
     [historic, historicCons].sort(),
   );
+});
+
+it('limits local result art choices to admin or a common explicit organiser plan', async () => {
+  const to = { ...nativeAdmin, id: 'graphic-to', role: 'user' as const };
+  await db.insert(user).values(to);
+  const [first, second] = await db
+    .insert(eventPlans)
+    .values([
+      { name: 'First', eventDate: new Date('2026-10-01') },
+      { name: 'Second', eventDate: new Date('2026-10-01') },
+    ])
+    .returning();
+  await db.insert(eventOperators).values({ eventPlanId: first!.id, userId: to.id });
+  const main = await bracket('first', 'First Upper Main');
+  const consolation = await bracket('first_cons', 'First Upper Consolation');
+  const other = await bracket('second', 'Second Upper Main');
+  const unlinked = await bracket('unlinked', 'Old night');
+  await db.insert(eventPlanBrackets).values([
+    { eventPlanId: first!.id, tournamentId: main, division: 'upper', stage: 'main' },
+    { eventPlanId: first!.id, tournamentId: consolation, division: 'upper', stage: 'consolation' },
+    { eventPlanId: second!.id, tournamentId: other, division: 'upper', stage: 'main' },
+  ]);
+  expect(await canCustomizeResultGraphic(db, to, { planId: first!.id })).toBe(true);
+  expect(await canCustomizeResultGraphic(db, to, { planId: second!.id })).toBe(false);
+  expect(await canCustomizeResultGraphic(db, to, { tournamentIds: [main, consolation] })).toBe(
+    true,
+  );
+  expect(await canCustomizeResultGraphic(db, to, { tournamentIds: [main, other] })).toBe(false);
+  expect(await canCustomizeResultGraphic(db, to, { tournamentIds: [main, unlinked] })).toBe(false);
+  expect(await canCustomizeResultGraphic(db, nativeAdmin, { tournamentIds: [unlinked] })).toBe(
+    true,
+  );
+  await db.insert(eventPlanBrackets).values({
+    eventPlanId: second!.id,
+    tournamentId: main,
+    division: 'lower',
+    stage: 'main',
+  });
+  expect(await canCustomizeResultGraphic(db, to, { tournamentIds: [main] })).toBe(false);
 });

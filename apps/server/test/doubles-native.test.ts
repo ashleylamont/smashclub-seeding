@@ -2,7 +2,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { InMemoryStore } from '@rotorsoft/act';
 import { eq } from 'drizzle-orm';
 import {
+  eventOperators,
   eventPlanEntries,
+  playerCharacters,
   eventPlans,
   eventOperationSettings,
   playerRatings,
@@ -179,7 +181,35 @@ describe('native doubles through shipped APIs', () => {
         .select()
         .from(tournaments)
         .where(eq(tournaments.id, complete.publication!.tournamentIds[0]!));
-      const event = await caller().public.eventOverview({ slug: tournament!.challongeSlug });
+      const member = members[0]!;
+      await db.insert(playerCharacters).values([
+        { playerId: member.id, position: 1, characterSlug: 'luigi' },
+        { playerId: member.id, position: 0, characterSlug: 'mario' },
+      ]);
+      const to = { ...nativeAdmin, id: `graphic-to-${planId}`, role: 'user' as const };
+      await db.insert(user).values({ ...to, email: `${to.id}@example.test` });
+      await db.insert(eventOperators).values({ eventPlanId: planId, userId: to.id });
+      expect(
+        await caller(to).eventOps.canCustomizeResultGraphic({
+          tournamentIds: [...publishedIds],
+        }),
+      ).toBe(true);
+      await expect(
+        caller(null).eventOps.canCustomizeResultGraphic({
+          tournamentIds: [...publishedIds],
+        }),
+      ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+      const event = await caller(null).public.eventOverview({ slug: tournament!.challongeSlug });
+      expect(
+        event!.divisions.flatMap((d) => d.players).find((p) => p.graphic?.teamName === 'Pair 0')
+          ?.graphic,
+      ).toEqual({
+        teamName: 'Pair 0',
+        members: [
+          { name: member.displayName, character: 'mario' },
+          { name: members[1]!.displayName, character: null },
+        ],
+      });
       expect(event!.warnings).toEqual([]);
       expect(event!.divisions.every((d) => d.notice === null)).toBe(true);
       expect(event!.divisions.flatMap((d) => d.players)).toHaveLength(count);
@@ -316,7 +346,7 @@ describe('native doubles through shipped APIs', () => {
     await expect(guest.eventOps.previewDoublesSubstitution(change)).rejects.toMatchObject({
       code: 'UNAUTHORIZED',
     });
-    const attendee = caller({ ...nativeAdmin, id: 'substitution-attendee', role: 'user' });
+    const attendee = caller({ ...nativeAdmin, id: 'substitution-attendee', role: 'user' as const });
     await expect(attendee.eventOps.previewDoublesSubstitution(change)).rejects.toMatchObject({
       code: 'FORBIDDEN',
     });
@@ -908,7 +938,11 @@ async function verifyUntakenCallAndReportGuards(
     mode: 'to_review',
     expectedRevision: reporting.settings.reportingRevision,
   });
-  const attendee = caller({ ...nativeAdmin, id: 'substitution-pending-report', role: 'user' });
+  const attendee = caller({
+    ...nativeAdmin,
+    id: 'substitution-pending-report',
+    role: 'user' as const,
+  });
   const other = state.matches.find(
     (m) => m.id !== match.id && [m.player1Id, m.player2Id].includes(entrant.id),
   )!;
