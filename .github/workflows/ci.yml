@@ -99,7 +99,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-node-pnpm
       - run: pnpm --filter @smashclub/web exec playwright install --with-deps chromium
-      - run: pnpm --filter @smashclub/web build
+      # Typecheck and Build check TypeScript separately. The shard only needs the SPA.
+      - run: pnpm --filter @smashclub/web exec vite build
       # The root test:e2e command rebuilds. Use the already-built SPA here.
       # Each runner owns a fresh harness; files stay together and use one worker.
       - name: Run browser shard
