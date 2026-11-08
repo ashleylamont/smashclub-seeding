@@ -10,7 +10,9 @@ html="$web/local-tip12-spike.html"
 page="$web/src/local-tip12-spike.tsx"
 viewer_spec="$web/ui-tests/local-renderer-spike.spec.ts"
 tip12_spec="$web/ui-tests/local-tip12-replay.spec.ts"
-files=("$original_board" "$original_css" "$html" "$page" "$viewer_spec" "$tip12_spec")
+fixtures="$web/ui-tests/local-renderer-fixtures.ts"
+react_spec="$web/ui-tests/local-react-renderer-spike.spec.ts"
+files=("$original_board" "$original_css" "$html" "$page" "$viewer_spec" "$tip12_spec" "$fixtures" "$react_spec")
 for file in "${files[@]}"; do
   if [[ -e "$file" || -L "$file" ]]; then
     printf 'Scratch path exists: %s\n' "$file" >&2
@@ -50,5 +52,19 @@ cp "$probe/tip12.html" "$html"
 cp "$probe/tip12.tsx" "$page"
 cp "$probe/viewer.spec.ts" "$viewer_spec"
 cp "$probe/tip12.spec.ts" "$tip12_spec"
+cp "$probe/fixtures.ts" "$fixtures"
+cp "$probe/react/viewer.spec.ts" "$react_spec"
 
-pnpm --filter @smashclub/web test:ui local-renderer-spike.spec.ts local-tip12-replay.spec.ts "$@"
+cp "$probe/react/package.json" "$probe/react/package-lock.json" "$probe/react/entry.tsx" "$scratch/"
+npm ci --ignore-scripts --no-audit --no-fund --prefix "$scratch"
+repo="$PWD"
+(
+  cd "$scratch"
+  npm exec --yes --package esbuild@0.25.12 -- esbuild entry.tsx --bundle \
+    --alias:nemesis-probe-fixtures="$repo/$fixtures" \
+    --alias:nemesis-bracket-side="$repo/$web/src/lib/eventBracket.ts" \
+    --define:process.env.NODE_ENV='"development"' --outfile=react-viewer.js
+)
+
+pnpm --filter @smashclub/web test:ui \
+  local-renderer-spike.spec.ts local-tip12-replay.spec.ts local-react-renderer-spike.spec.ts "$@"

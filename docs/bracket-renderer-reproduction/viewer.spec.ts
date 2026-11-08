@@ -2,15 +2,9 @@ import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import type { LiveMatch } from '../src/lib/eventDisplay';
-import { bracketFixture, TEAM_ALIAS } from '../test/fixtures/brackets';
+import { fixtures, TEAM_ALIAS } from './local-renderer-fixtures';
 
 const bundle = `${process.env.NEMESIS_RENDERER_PROBE_DIR}/package/dist`;
-const stageNames = [
-  'Upper Championship',
-  'Upper Consolation',
-  'Lower Championship',
-  'Lower Consolation',
-];
 const lanes = ['winners', 'losers', 'finals'];
 const lane = (match: LiveMatch) =>
   match.bracketLane === 'final' || match.bracketLane === 'reset'
@@ -27,33 +21,6 @@ const status = new Map([
   ['playing', 3],
   ['complete', 4],
 ]);
-
-type Shape = 'se' | 'de' | 'mixed';
-
-function fixtures(shape: Shape) {
-  const stages = shape === 'mixed' ? stageNames : [shape === 'de' ? 'Native DE' : 'Native SE'];
-  const size = shape === 'mixed' ? 4 : 7;
-  const double = shape === 'de';
-  return stages.map((name, index) => {
-    const graph = bracketFixture(size, double);
-    const played = graph.find((match) => match.player1Id && match.player2Id)!;
-    Object.assign(played, {
-      status: 'complete',
-      outcome: 'played',
-      winnerId: played.player2Id,
-      score1: 1,
-      score2: 2,
-    });
-    const noContest = double ? graph.find((match) => lane(match) === 'losers') : undefined;
-    if (noContest) {
-      Object.assign(noContest, {
-        status: 'complete',
-        blockedReason: 'Both players withdrew · no contest',
-      });
-    }
-    return { name, index, size, double, graph, played, noContest };
-  });
-}
 
 function viewerModel(fields: ReturnType<typeof fixtures>) {
   const stages = fields.map(({ name, index, size, double }) => ({
