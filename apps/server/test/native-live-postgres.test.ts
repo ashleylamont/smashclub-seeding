@@ -159,8 +159,9 @@ describe('native Act-PG integration on isolated PostgreSQL', () => {
       approveRedistribution: false,
     };
     const firstAttendance = await command(writer, planId, attendance, 'paused-withdrawal');
-    // Cross the checkpoint threshold and leave authoritative decisions after it.
-    for (let i = 0; i < 22; i++)
+    // Baseline, pause and withdrawal are three patches. Reach two checkpoints
+    // at the 20-patch interval and stop at the second one.
+    for (let i = 0; i < 37; i++)
       await command(writer, planId, {
         kind: 'resources',
         capacity: 2,
@@ -184,9 +185,15 @@ describe('native Act-PG integration on isolated PostgreSQL', () => {
     runtimes.delete(writer);
     const stored = await storedRows();
     const authoritative = stored.filter(({ name }) => name !== '__snapshot__');
-    const checkpoint = stored.findLast(({ name }) => name === '__snapshot__');
-    expect(checkpoint).toBeDefined();
-    expect(authoritative.at(-1)!.version).toBeGreaterThan(checkpoint!.version);
+    const checkpoints = stored.filter(({ name }) => name === '__snapshot__');
+    expect(checkpoints).toHaveLength(2);
+    expect(checkpoints[0]!.version).toBeLessThan(authoritative.at(-1)!.version);
+    expect(stored.at(-1)?.name).toBe('__snapshot__');
+    expect(
+      authoritative.every(
+        (row, index) => index === 0 || row.version > authoritative[index - 1]!.version,
+      ),
+    ).toBe(true);
     // Only this test stream's derived rows are lost. Domain rows retain their
     // original event IDs, versions and payloads, including the resulting gaps.
     await cluster.pool.query('delete from native_act.events where stream=$1 and name=$2', [
