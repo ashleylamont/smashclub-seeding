@@ -27,7 +27,8 @@ export function EventScoreCard({
 }: {
   enabled: boolean;
   reportingIdentity?: string;
-  unavailableMessage?: string;
+  /** Pass null when the match list already explains why reporting is unavailable. */
+  unavailableMessage?: string | null;
   pendingMessage?: string;
   onSubmit: (input: ResultSubmission) => Promise<{ status: string; isDispute: boolean }>;
   match: PoolFlowMatch & { pendingDisputeCount?: number };
@@ -111,7 +112,8 @@ export function EventScoreCard({
           match={match}
           reportingIdentity={reportingIdentity}
           enabled={enabled}
-          allowReports={approvalPolicy !== 'review' && presentation.canReport}
+          allowReports={approvalPolicy !== 'review'}
+          showUnavailableHint={unavailableMessage !== null}
           onSubmit={onSubmit}
           pendingReport={report?.status === 'pending' ? report : undefined}
         />
@@ -124,7 +126,7 @@ export function EventScoreCard({
       ) : match.status === 'blocked' ? (
         <p>{qualification ?? 'Waiting for earlier matches or a TO before this match can start.'}</p>
       ) : !enabled ? (
-        <p>{unavailableMessage}</p>
+        unavailableMessage && <p>{unavailableMessage}</p>
       ) : report?.status === 'pending' || (sent && !report) ? (
         <p role="status">{sent === 'approved' ? 'Result confirmed.' : pendingMessage}</p>
       ) : report?.status === 'approved' ? (

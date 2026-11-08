@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Disclosure } from './ui/Disclosure';
 import { Progress } from './ui/Progress';
 import { Select, SelectItem } from './ui/Select';
@@ -15,9 +16,11 @@ import type { PlayerEventHub, PublicEventSnapshot } from '../lib/usePlayerEventH
 export function PlayerHubMatches({
   hub,
   data,
+  reportingStatus,
 }: {
   hub: PlayerEventHub;
   data: PublicEventSnapshot;
+  reportingStatus: ReactNode;
 }) {
   const {
     players,
@@ -52,6 +55,7 @@ export function PlayerHubMatches({
   const journey = player ? playerJourney(data, player) : undefined;
   return (
     <section id="my-matches" aria-label="Find my matches and report scores">
+      {reportingStatus}
       <PlayerMatchFilter
         players={players}
         value={player}
@@ -184,11 +188,7 @@ export function PlayerHubMatches({
               enabled={
                 canWrite && !closed && ['ready', 'playing', 'complete'].includes(match.status)
               }
-              unavailableMessage={
-                reporter
-                  ? 'Match reporting is currently unavailable. Your score draft is kept while live updates recover.'
-                  : 'Scan a guest reporting QR to start matches and report scores.'
-              }
+              unavailableMessage={null}
               pendingMessage={
                 reporter === 'signed-in'
                   ? 'Score submitted for TO approval. An organiser can correct or reject it if needed.'

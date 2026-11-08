@@ -142,7 +142,7 @@ test('home discovers open events, offers every format and keeps guest access on 
     await open.click();
     await expect(visitor).toHaveURL(new RegExp(`/play/${singles.planId}$`));
     await expect(visitor.getByRole('heading', { name: singlesName, exact: true })).toBeVisible();
-    await expect(visitor.getByRole('heading', { name: 'Scan in to report a score' })).toBeVisible();
+    await expect(visitor.getByText(/scan a guest reporting QR or ask a TO/)).toBeVisible();
     const doubles = await create(doublesName, 'doubles');
     await prepare(doubles, true);
     await publish(doubles);
