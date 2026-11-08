@@ -278,23 +278,28 @@
   padding: var(--s4);
   margin-top: 20px;
 }
-.ops-substitution-pairs {
+.ops-attendance-review-facts {
   display: grid;
   gap: var(--s2);
   margin-block: var(--s3);
 }
-.ops-substitution-pairs dt {
+.ops-attendance-review-facts dt {
   font-weight: 600;
 }
-.ops-substitution-pairs dd {
+.ops-attendance-review-facts dd {
   margin: 0;
   overflow-wrap: anywhere;
 }
-.ops-substitution-confirm {
+.ops-attendance-confirm {
   margin-block-start: var(--s3);
 }
-.ops-substitution-confirm button {
+.ops-attendance-confirm button {
   margin-block-start: var(--s2);
+}
+.ops-late-pair-player {
+  display: grid;
+  align-content: start;
+  gap: var(--s2);
 }
 /* Let the attendee table scroll inside its grid cell on narrow screens. */
 .ops-attendee-list {

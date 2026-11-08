@@ -1,5 +1,6 @@
 import { isKnockout } from '@smashclub/shared';
 import { DoublesSubstitutionForm } from './DoublesSubstitutionForm';
+import { LateDoublesPairForm } from './LateDoublesPairForm';
 import { useOpsWorkspace } from '../../lib/opsWorkspace';
 import { OpsEventHistory } from './OpsEventHistory';
 import { UntakenCallRecovery, type UntakenCallDesk } from './UntakenCallRecovery';
@@ -21,7 +22,7 @@ type Input = {
   reason?: string;
 };
 
-type AttendanceAction = Input['action'] | 'substitute';
+type AttendanceAction = Input['action'] | 'substitute' | 'late_pair';
 
 type AttendanceReview = {
   result: Preview;
@@ -61,7 +62,7 @@ export function AttendanceControls({
     data.plan.competitionFormat === 'doubles' ? 'withdraw' : 'add',
   );
   const doubles = data.plan.competitionFormat === 'doubles';
-  const canSubstitute = doubles && data.plan.liveOwned && !isKnockout(data.plan.structure);
+  const doublesPoolWorkflow = doubles && data.plan.liveOwned && !isKnockout(data.plan.structure);
   const [query, setQuery] = useState('');
   const [playerId, setPlayerId] = useState('');
   const [division, setDivision] = useState<'upper' | 'lower'>('upper');
@@ -134,8 +135,8 @@ export function AttendanceControls({
       <p className="muted">
         {data.plan.softLockedAt
           ? doubles
-            ? canSubstitute
-              ? 'Substitute a member before play, remove a no-show pair, or withdraw a pair after play.'
+            ? doublesPoolWorkflow
+              ? 'Add a late pair to an unplayed pool, substitute a member, or record a no-show or withdrawal.'
               : 'Remove an unplayed no-show pair, or withdraw a pair after play.'
             : 'Late arrivals go to the smallest open pool in their division. A no-show leaves their pool; played entrants use withdrawal instead.'
           : 'Soft-lock the pool draw before using local attendance changes. Draft pools can be rebalanced in the planner.'}
@@ -158,8 +159,11 @@ export function AttendanceControls({
             {data.plan.competitionFormat !== 'doubles' && (
               <SelectItem value="add">Add a late arrival</SelectItem>
             )}
-            {canSubstitute && (
-              <SelectItem value="substitute">Substitute a doubles member</SelectItem>
+            {doublesPoolWorkflow && (
+              <>
+                <SelectItem value="late_pair">Add a late doubles pair</SelectItem>
+                <SelectItem value="substitute">Substitute a doubles member</SelectItem>
+              </>
             )}
             <SelectItem value="no_show">Remove a no-show</SelectItem>
             <SelectItem value="redistribute">Redistribute a two-player pool</SelectItem>
@@ -171,7 +175,7 @@ export function AttendanceControls({
             )}
           </Select>
         </label>
-        {action !== 'substitute' && (
+        {action !== 'substitute' && action !== 'late_pair' && (
           <>
             {action === 'add' && (
               <label>
@@ -264,8 +268,11 @@ export function AttendanceControls({
           </>
         )}
       </fieldset>
-      {action === 'substitute' && canSubstitute && (
+      {action === 'substitute' && doublesPoolWorkflow && (
         <DoublesSubstitutionForm data={data} disabled={disabled} callDesk={callDesk} />
+      )}
+      {action === 'late_pair' && doublesPoolWorkflow && (
+        <LateDoublesPairForm data={data} disabled={disabled} callDesk={callDesk} />
       )}
       {search.isError && <p role="alert">{search.error.message}</p>}
       {preview && (

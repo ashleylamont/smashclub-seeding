@@ -47,3 +47,21 @@ export const resolved = (match: Match) => match.status === 'complete';
  * explicitly returned before a structural change can replace its opponents. */
 export const unconfirmedCall = (match: Pick<Match, 'status' | 'started'>) =>
   match.status === 'playing' && !match.started;
+
+export function hasRecordedMatchEvidence(match: Match, reported: ReadonlySet<string>) {
+  return (
+    match.started ||
+    resolved(match) ||
+    match.outcome !== null ||
+    match.score1 !== null ||
+    match.score2 !== null ||
+    match.liveScore1 !== null ||
+    match.liveScore2 !== null ||
+    match.progressRevision !== 0 ||
+    match.completedAt !== null ||
+    match.automaticFromRevision !== null ||
+    match.resultCommandId !== null ||
+    match.winnerId !== null ||
+    reported.has(match.id)
+  );
+}

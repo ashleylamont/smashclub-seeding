@@ -89,6 +89,11 @@ export const nativeLiveRouter = router({
             code: 'BAD_REQUEST',
             message: 'Use the reviewed attendance workflow to add a late arrival.',
           });
+        if (input.command.kind === 'addLateDoublesPair')
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Use the reviewed late doubles pair workflow.',
+          });
         const live = runtime(ctx);
         const response = await live.command(ctx.user, input.planId, input.requestId, input.command);
         if (['finalize', 'replaceResult'].includes(input.command.kind)) {

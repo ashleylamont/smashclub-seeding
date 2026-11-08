@@ -41,6 +41,7 @@ const decisionNames = [
   'DecisionRecordedV6',
   'DecisionRecordedV7',
   'DecisionRecordedV8',
+  'DecisionRecordedV10',
   'ResultsSealedV1',
   'PlanRetiredV1',
 ];

@@ -36,6 +36,7 @@ export interface PlanEntryView {
   teamName?: string | null;
   memberPlayerIds?: string[];
   memberSubstituted?: true;
+  latePair?: true;
   memberNames?: string[];
   snapshotMean?: number | null;
   snapshotSd?: number | null;

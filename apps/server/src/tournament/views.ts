@@ -412,6 +412,7 @@ function worksheetOrderLock(
 export async function planView(db: Db, state: TournamentState): Promise<PlanView> {
   const draft = (await sqlPlan(db, state.baseline!.planId))!;
   const profiles = new Map((await db.select().from(players)).map((p) => [p.id, p]));
+  const originalEntrantIds = new Set(state.baseline!.entrants.map(({ id }) => id));
   const entries = state.entrants.map((e, i) => {
     const old = draft.entries.find((old) => old.id === e.id);
     const p = profiles.get(e.playerId);
@@ -419,6 +420,8 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
       ?.map((id) => profiles.get(id))
       .filter((p) => p !== undefined);
     const pairName = pairProfiles?.map(publicPlayerName).join(' / ');
+    const latePair = e.memberPlayerIds && !originalEntrantIds.has(e.id);
+    const noFrozenPairRating = e.memberSubstituted || latePair;
     return {
       ...old,
       id: e.id,
@@ -437,8 +440,9 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
         snapshotMean: e.snapshotMean,
         snapshotSd: e.snapshotSd,
       }),
-      ...(e.memberSubstituted && {
-        memberSubstituted: true as const,
+      ...(e.memberSubstituted && { memberSubstituted: true as const }),
+      ...(latePair && { latePair: true as const }),
+      ...(noFrozenPairRating && {
         pairRating: undefined,
         currentMean: undefined,
         currentSd: undefined,
@@ -455,9 +459,9 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
       divisionSeed: e.seed,
       snapshotRank: e.snapshotRank,
       snapshotScore: e.snapshotScore,
-      currentRank: e.memberSubstituted ? null : (old?.currentRank ?? null),
-      currentScore: e.memberSubstituted ? null : (old?.currentScore ?? null),
-      lastPlayedDate: e.memberSubstituted ? null : (old?.lastPlayedDate ?? null),
+      currentRank: noFrozenPairRating ? null : (old?.currentRank ?? null),
+      currentScore: noFrozenPairRating ? null : (old?.currentScore ?? null),
+      lastPlayedDate: noFrozenPairRating ? null : (old?.lastPlayedDate ?? null),
       withdrawn: e.availability === 'withdrawn',
       candidates: old?.candidates ?? [],
     };

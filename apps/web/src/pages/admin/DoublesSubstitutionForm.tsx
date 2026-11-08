@@ -213,7 +213,7 @@ export function DoublesSubstitutionForm({
             Substitution preview
           </h4>
           {review.result.oldMembers && review.result.newMembers && (
-            <dl className="ops-substitution-pairs">
+            <dl className="ops-attendance-review-facts">
               <div>
                 <dt>Current pair</dt>
                 <dd>{review.result.oldMembers.join(' / ')}</dd>
@@ -243,7 +243,7 @@ export function DoublesSubstitutionForm({
             showInstructions={false}
           />
           {review.result.allowed && (
-            <div className="ops-substitution-confirm">
+            <div className="ops-attendance-confirm">
               <p>The schedule and recorded results stay in place.</p>
               {data.plan.structure !== 'round_robin' && (
                 <p className="muted">

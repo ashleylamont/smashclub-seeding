@@ -1,4 +1,5 @@
 import { previewDoublesSubstitution, applyDoublesSubstitution } from './doublesSubstitutionRouter';
+import { previewLateDoublesPair, applyLateDoublesPair } from './lateDoublesPairRouter';
 import type { previewRestoration } from '../tournament/restoration';
 import type { EventSnapshot } from '../tournament/views';
 import { memberIds } from '../tournament/entrants';
@@ -215,6 +216,8 @@ export const eventOpsRouter = router({
   sources: sourceRefreshRouter,
   previewDoublesSubstitution,
   applyDoublesSubstitution,
+  previewLateDoublesPair,
+  applyLateDoublesPair,
   previewAttendance: authedProcedure
     .input(attendanceInput)
     .query(async ({ ctx, input }): Promise<AttendancePreview> => {

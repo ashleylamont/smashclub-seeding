@@ -85,8 +85,10 @@ export function DoublesRosterStep({
   const displayedEntries = [...view.entries].sort((a, b) => {
     const skill = (e: (typeof view.entries)[number]) => e.snapshotMean ?? e.currentMean ?? 1500;
     const seed = (e: (typeof view.entries)[number]) => e.snapshotScore ?? e.currentScore ?? 0;
-    if (sort !== 'roster' && a.memberSubstituted !== b.memberSubstituted)
-      return Number(Boolean(a.memberSubstituted)) - Number(Boolean(b.memberSubstituted));
+    const noRating = (entry: (typeof view.entries)[number]) =>
+      Boolean(entry.memberSubstituted || entry.latePair);
+    if (sort !== 'roster' && noRating(a) !== noRating(b))
+      return Number(noRating(a)) - Number(noRating(b));
     const difference =
       sort === 'skill_desc'
         ? skill(b) - skill(a)
@@ -103,8 +105,11 @@ export function DoublesRosterStep({
         Doubles roster · {view.entries.length} teams / {view.entries.length * 2} players
       </h3>
       <p>
-        Each person can enter once. Pair slots are fixed when the pool draw is locked. A missing
-        partner holds the pair until they return or a TO reviews attendance.
+        Each person can enter once.{' '}
+        {view.plan.softLockedAt
+          ? 'Existing pairs keep their seeds. Pair attendance in Run event shows which changes are available.'
+          : 'Pair slots are fixed when the pool draw is locked.'}{' '}
+        A missing partner holds the pair until they return or a TO reviews attendance.
       </p>
       <p className="muted">
         Seeding score = skill − 2 × SD. New pairs have a zero mean adjustment, but added pair
@@ -202,6 +207,8 @@ export function DoublesRosterStep({
                   {e.teamName && <> · {e.teamName}</>}
                   {e.memberSubstituted ? (
                     <div className="muted">Substitute pair · original pool seed retained</div>
+                  ) : e.latePair ? (
+                    <div className="muted">Late pair · admitted after pool lock</div>
                   ) : (
                     <PairRatingEvidence entry={e} frozen={!editable} />
                   )}
@@ -223,12 +230,14 @@ export function DoublesRosterStep({
                   )}
                 </td>
                 <td className="num">
-                  {e.memberSubstituted
+                  {e.memberSubstituted || e.latePair
                     ? '—'
                     : `${Math.round(e.snapshotMean ?? e.currentMean ?? 1500)} ± ${Math.round(e.snapshotSd ?? e.currentSd ?? 0)}`}
                 </td>
                 <td className="num">
-                  {e.memberSubstituted ? '—' : Math.round(e.snapshotScore ?? e.currentScore ?? 0)}
+                  {e.memberSubstituted || e.latePair
+                    ? '—'
+                    : Math.round(e.snapshotScore ?? e.currentScore ?? 0)}
                 </td>
                 <td>
                   {editable && (

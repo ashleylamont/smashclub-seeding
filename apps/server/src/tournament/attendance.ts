@@ -1,8 +1,9 @@
 import { previewRestoration, restoreEntrant } from './restoration';
-import { isSinglePool, isKnockout } from '@smashclub/shared';
+import { isKnockout } from '@smashclub/shared';
 import { buildRoundRobin } from '@smashclub/tournament-formats';
-import { hash, requireFact, resolved, stableId, unconfirmedCall } from './facts';
+import { hash, requireFact, resolved, unconfirmedCall } from './facts';
 import { advance } from './brackets';
+import { attendancePoolCandidates, poolMatch, lastPoolRound } from './poolAttendance';
 import { qualifierFieldFrozen } from './qualifiers';
 import {
   hasFixedLegacyPoolQualifiers,
@@ -42,23 +43,14 @@ function ordinaryAttendancePreview(
   const entrant = state.entrants.find((e) => e.playerId === input.playerId);
   const division = (input.action === 'add' ? input.division : entrant?.division) ?? 'lower';
   const protectedPool = (id: string) => poolHasCallsOrHistory(state, id);
-  const open = state.pools
-    .filter(
-      (p) =>
-        p.division === division &&
-        !protectedPool(p.id) &&
-        (isSinglePool(state.baseline?.structure) || p.entrantIds.length < 5),
-    )
-    .sort((a, b) => a.entrantIds.length - b.entrantIds.length || a.index - b.index);
+  const open = attendancePoolCandidates(state, division).filter((p) => !protectedPool(p.id));
   const pool =
     input.action === 'add'
       ? open[0]
       : state.pools.find((p) => p.entrantIds.includes(input.playerId));
   const issues: string[] = [];
   if (state.baseline?.competitionFormat === 'doubles' && input.action === 'add')
-    issues.push(
-      'Doubles pairs are fixed at draw lock. Add or change pairs in the draft before locking.',
-    );
+    issues.push('Use the reviewed late-pair workflow to add a doubles pair.');
   if (!['locked', 'unlocked'].includes(state.lifecycle))
     issues.push('Attendance changes require an open locked event.');
   issues.push(...finalsRosterIssues(state, input.action, division, pool?.id));
@@ -253,10 +245,7 @@ export function applyAttendance(state: TournamentState, envelope: CommandEnvelop
       );
       // Retain the chosen order. New pairings occupy later circle rounds so
       // a newcomer cannot appear twice in an existing round.
-      const addedRoundOffset = Math.max(
-        0,
-        ...state.matches.filter((m) => m.poolId === changed.id).map((m) => m.round),
-      );
+      const addedRoundOffset = lastPoolRound(state, changed.id);
       for (const pairing of buildRoundRobin(
         changed.entrantIds,
         state.baseline?.structureOptions?.roundRobinMeetings ?? 1,
@@ -269,37 +258,9 @@ export function applyAttendance(state: TournamentState, envelope: CommandEnvelop
             [m.player1Id, m.player2Id].includes(p2),
         );
         if (existing.length >= pairing.meeting) continue;
-        const id = stableId(`${envelope.id}:${changed.id}:${pairing.meeting}:${p1}:${p2}`);
-        state.matches.push({
-          id,
-          sourceKey: id,
-          division: changed.division,
-          stage: 'group',
-          poolId: changed.id,
-          bracketId: null,
-          round: addedRoundOffset + pairing.round,
-          slot: pairing.slot,
-          label: `${changed.division} pool ${changed.index + 1}`,
-          parent1Id: null,
-          parent2Id: null,
-          player1Id: p1,
-          player2Id: p2,
-          status: 'ready',
-          outcome: null,
-          score1: null,
-          score2: null,
-          winnerId: null,
-          stationId: null,
-          revision: 0,
-          started: false,
-          completedAt: null,
-          automaticFromRevision: null,
-          resultCommandId: null,
-          liveScore1: null,
-          liveScore2: null,
-          progressRevision: 0,
-          blockedReason: null,
-        });
+        state.matches.push(
+          poolMatch(changed, envelope.id, pairing, addedRoundOffset + pairing.round),
+        );
       }
     }
     state.pools = state.pools.filter((p) => p.entrantIds.length);

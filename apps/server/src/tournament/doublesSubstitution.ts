@@ -1,6 +1,6 @@
 import { isKnockout } from '@smashclub/shared';
 import { memberIds } from './entrants';
-import { hash, requireFact, resolved, unconfirmedCall } from './facts';
+import { hash, requireFact, hasRecordedMatchEvidence, unconfirmedCall } from './facts';
 import { qualifierFieldFrozen } from './qualifiers';
 import type { Match, TournamentCommand, TournamentState } from './schemas';
 
@@ -53,25 +53,7 @@ export function reviewDoublesSubstitution(state: TournamentState, input: Doubles
     matches.some((match) => match.poolId !== pool?.id || match.stage !== 'group')
   )
     issues.push('The pair must have only scheduled matches in its own pool.');
-  if (
-    archivedMatchIds.length ||
-    matches.some(
-      (match) =>
-        match.started ||
-        resolved(match) ||
-        match.outcome !== null ||
-        match.score1 !== null ||
-        match.score2 !== null ||
-        match.liveScore1 !== null ||
-        match.liveScore2 !== null ||
-        match.progressRevision !== 0 ||
-        match.completedAt !== null ||
-        match.automaticFromRevision !== null ||
-        match.resultCommandId !== null ||
-        match.winnerId !== null ||
-        reported.has(match.id),
-    )
-  )
+  if (archivedMatchIds.length || matches.some((match) => hasRecordedMatchEvidence(match, reported)))
     issues.push(
       'This pair has recorded play, a result, or a score report. Substitution is unavailable.',
     );

@@ -288,6 +288,12 @@ function describeAttendance(
         title: 'Player availability changed',
         summary: `${player(command.playerId)} · ${command.availability} · ${command.reason}`,
       };
+    case 'addLateDoublesPair':
+      return {
+        category: 'players' as const,
+        title: 'Late doubles pair admitted',
+        summary: `${command.identity?.memberNames.join(' / ')} · ${command.reason}`,
+      };
     case 'substituteDoublesMember':
       return {
         category: 'players' as const,
