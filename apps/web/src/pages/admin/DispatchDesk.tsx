@@ -54,19 +54,33 @@ export function DispatchDesk({
     }
   };
   const shared = desk.mode === 'shared';
-  const readyIds = desk.queue
-    .filter((r) => data.matches.find((m) => m.id === r.matchId)?.status === 'ready')
-    .map((r) => r.matchId);
-  const visibleIds = readyIds.filter((id) => {
-    const row = desk.queue.find((item) => item.matchId === id)!;
-    const match = data.matches.find((item) => item.id === id)!;
-    return (
-      (view === 'all' || (view === 'ready' ? row.state === 'ready' : row.state === 'blocked')) &&
-      `${match.player1Name} ${match.player2Name} ${match.label}`
-        .toLowerCase()
-        .includes(search.toLowerCase())
-    );
+  const matchesById = new Map(data.matches.map((match) => [match.id, match]));
+  const queue = desk.queue.flatMap((row) => {
+    const match = matchesById.get(row.matchId);
+    return match ? [{ match, row }] : [];
   });
+  const queuePairings = queue.filter(({ match }) => match.status === 'ready');
+  const heldPairings = queue.filter(({ match }) => match.status === 'blocked');
+  const pairingsInView = queuePairings.filter(
+    ({ row }) =>
+      view === 'all' || (view === 'ready' ? row.state === 'ready' : row.state === 'blocked'),
+  );
+  const visiblePairings = pairingsInView.filter(({ match }) =>
+    `${match.player1Name} ${match.player2Name} ${match.label}`
+      .toLowerCase()
+      .includes(search.toLowerCase()),
+  );
+  let emptyMessage = 'No pairings in the queue.';
+  if (pairingsInView.length) {
+    emptyMessage = 'No pairings match this search. Clear the search to see this view.';
+  } else if (queuePairings.length) {
+    emptyMessage =
+      view === 'ready'
+        ? 'No pairings ready to call. Choose Waiting to see what is blocking them.'
+        : 'No pairings waiting. Choose Ready to call to see available pairings.';
+  } else if (heldPairings.length) {
+    emptyMessage = 'No pairings in the queue. Check Held matches and unresolved opponents.';
+  }
   return (
     <section className="dispatch-desk" aria-label="TO match queue">
       {error && (
@@ -120,8 +134,8 @@ export function DispatchDesk({
               <p>No current calls.</p>
             )}
           </section>
-          <section className="card">
-            <h3>Ready and waiting pairings</h3>
+          <section className="card dispatch-pairings">
+            <h3>Pairings</h3>
             <div className="dispatch-call-controls">
               <label>
                 Find a pairing
@@ -143,22 +157,17 @@ export function DispatchDesk({
                   }}
                 >
                   <SelectItem value="ready">Ready to call</SelectItem>
-                  <SelectItem value="waiting">Waiting for players or capacity</SelectItem>
-                  <SelectItem value="all">All known pairings</SelectItem>
+                  <SelectItem value="waiting">Waiting</SelectItem>
+                  <SelectItem value="all">All queue pairings</SelectItem>
                 </Select>
               </label>
             </div>
-            <p className="muted">
-              Suggestions favour players waiting longer, then matches that release a later round.
-              Move a pairing up or down to change the TO order.
-            </p>
-            <ol className="dispatch-list">
-              {visibleIds.slice(0, limit).map((id) => {
-                const index = readyIds.indexOf(id);
-                const match = data.matches.find((m) => m.id === id)!;
-                const row = desk.queue.find((r) => r.matchId === id)!;
+            <ol className="dispatch-list" hidden={!visiblePairings.length}>
+              {visiblePairings.slice(0, limit).map((pairing) => {
+                const { match, row } = pairing;
+                const index = queuePairings.indexOf(pairing);
                 return (
-                  <li key={id}>
+                  <li key={match.id}>
                     <ReadyCall
                       match={match}
                       row={row}
@@ -167,39 +176,41 @@ export function DispatchDesk({
                       disabled={busy}
                       onMatch={onMatch}
                       onReviewReports={onReviewReports}
-                      previous={readyIds[index - 1]}
-                      afterNext={readyIds[index + 2] ?? null}
-                      last={index === readyIds.length - 1}
+                      previous={queuePairings[index - 1]?.match.id}
+                      afterNext={queuePairings[index + 2]?.match.id ?? null}
+                      last={index === queuePairings.length - 1}
                     />
                   </li>
                 );
               })}
             </ol>
-            {visibleIds.length > limit && (
+            {visiblePairings.length > limit && (
               <Button onClick={() => setLimit(limit + 12)}>Show more pairings</Button>
             )}
-            {!visibleIds.length && (
-              <p>No known ready pairings. Check held matches and pool qualification.</p>
-            )}
+            {!visiblePairings.length && <p role="status">{emptyMessage}</p>}
+            <Disclosure title="How queue order works">
+              <p className="muted">
+                Suggested order groups pairings by how long players have waited. Within each group,
+                matches with more downstream pairings come first. Move a pairing up or down to
+                override the suggested order.
+              </p>
+            </Disclosure>
           </section>
-          <Disclosure title="Held matches and unresolved opponents" className="card">
-            {desk.queue
-              .filter((r) => data.matches.find((m) => m.id === r.matchId)?.status === 'blocked')
-              .map((row) => {
-                const match = data.matches.find((m) => m.id === row.matchId)!;
-                return (
-                  <div key={match.id} className="dispatch-row">
-                    <strong>
-                      {match.player1Name} vs {match.player2Name}
-                    </strong>
-                    <p>{row.reasons.map((r) => r.message).join(' ')}</p>
-                    <Button disabled={busy} onClick={() => onMatch(match.id)}>
-                      Review {match.label}
-                    </Button>
-                  </div>
-                );
-              })}
-          </Disclosure>
+          {heldPairings.length > 0 && (
+            <Disclosure title="Held matches and unresolved opponents" className="card">
+              {heldPairings.map(({ match, row }) => (
+                <div key={match.id} className="dispatch-row">
+                  <strong>
+                    {match.player1Name} vs {match.player2Name}
+                  </strong>
+                  <p>{row.reasons.map((r) => r.message).join(' ')}</p>
+                  <Button disabled={busy} onClick={() => onMatch(match.id)}>
+                    Review {match.label}
+                  </Button>
+                </div>
+              ))}
+            </Disclosure>
+          )}
           <Disclosure title="Player availability and pool holds" className="card">
             <p>
               Snooze lasts until a TO marks the player available. Their matches stay in the draw;

@@ -108,8 +108,8 @@ export function ReadyCall({
       <h4>{matchPresentation(match).title}</h4>
       <span className="chip">{row.state === 'ready' ? 'Ready to call' : 'Waiting'}</span>
       <small>
-        {match.label} · {row.reason}
-        {row.downstream ? ` · releases ${row.downstream} feeder path(s)` : ''}
+        {match.label}
+        {row.reason === 'TO order' && ' · TO order'}
       </small>
       {row.reasons.length > 0 && <p>{row.reasons.map((r) => r.message).join(' ')}</p>}
       {row.reasons.some((reason) => reason.code === 'score_review_pending') && (
