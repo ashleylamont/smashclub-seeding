@@ -27,7 +27,7 @@ export type PoolRounds = {
   rounds: { round: number; matchIds: string[]; restingPlayerIds: string[] }[];
 };
 export type PoolFlowData = {
-  plan: { id: string; status: string; bracketMode?: string };
+  plan: { id: string; status: string; bracketMode?: string; liveOwned?: boolean };
   sharedDispatch?: { capacity: number; active: number; overCapacity: number } | null;
   settings?: { scoreReportingMode?: 'to_review' | 'approve_unless_disputed' };
   matches: PoolFlowMatch[];

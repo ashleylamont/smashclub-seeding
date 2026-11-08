@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   matchParticipantName,
   matchPresentation,
+  stationScoreText,
   nextMeaningfulMatch,
 } from '../src/lib/matchPresentation';
 import { matchStatus } from '../src/lib/playerMatchView';
@@ -171,4 +172,12 @@ describe('recorded match presentation', () => {
     ).toBeUndefined();
     expect(nextMeaningfulMatch([assigned], { ...bye, outcome: 'forfeit' })).toBeUndefined();
   });
+});
+
+it('distinguishes an unset native station score from a saved zero and keeps linked formatting', () => {
+  const unscored = { score1: null, score2: null };
+  expect(stationScoreText(unscored, true)).toBe('vs');
+  expect(stationScoreText({ score1: 0, score2: 0 }, true)).toBe('0–0');
+  expect(stationScoreText({ score1: 2, score2: 1 }, true, ' – ')).toBe('2 – 1');
+  expect(stationScoreText(unscored, undefined, ' – ')).toBe('0 – 0');
 });

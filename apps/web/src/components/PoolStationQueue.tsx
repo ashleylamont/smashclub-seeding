@@ -12,8 +12,8 @@ import {
   type StartPoolMatch,
 } from '../lib/poolFlow';
 import { CharacterIcons } from './CharacterIcons';
-import { includesPlayer } from '../lib/playerMatchView';
-import { matchPresentation } from '../lib/matchPresentation';
+import { includesPlayer, matchStatus } from '../lib/playerMatchView';
+import { matchPresentation, stationScoreText } from '../lib/matchPresentation';
 import './PoolStationQueue.css';
 
 export function PoolFilter({
@@ -214,9 +214,7 @@ export function PoolStationQueue({
                     {current.player1Name}
                     <CharacterIcons slugs={current.player1Characters ?? []} />
                   </strong>
-                  <b>
-                    {current.score1 ?? 0} – {current.score2 ?? 0}
-                  </b>
+                  <b>{stationScoreText(current, data.plan.liveOwned, ' – ')}</b>
                   <strong>
                     {current.player2Name}
                     <CharacterIcons slugs={current.player2Characters ?? []} />
@@ -419,7 +417,7 @@ export function PoolRoundSchedule({
                             : match.status === 'complete'
                               ? `${match.score1 ?? '–'}–${match.score2 ?? '–'} · complete`
                               : match.status === 'playing'
-                                ? 'Playing now'
+                                ? matchStatus(data, match)
                                 : 'Upcoming'}
                         </small>
                       </li>

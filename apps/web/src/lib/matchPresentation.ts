@@ -18,6 +18,17 @@ type PresentedMatch = Pick<
   | 'qualificationBlocks'
 >;
 
+/** Native station scores remain empty until a game count has been entered. */
+export function stationScoreText(
+  { score1, score2 }: Pick<LiveMatch, 'score1' | 'score2'>,
+  liveOwned: boolean | undefined,
+  separator = '–',
+) {
+  if (liveOwned && score1 === null && score2 === null) return 'vs';
+  const missingScore = liveOwned ? '–' : 0;
+  return `${score1 ?? missingScore}${separator}${score2 ?? missingScore}`;
+}
+
 export function recordedByeWinner(match: PresentedMatch) {
   const { winnerId } = match;
   if (match.status !== 'complete' || match.outcome !== 'bye' || !winnerId) return null;
