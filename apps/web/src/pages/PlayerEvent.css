@@ -181,3 +181,17 @@
   border-top: 1px solid var(--border);
   overflow-wrap: anywhere;
 }
+
+.event-twitch {
+  max-inline-size: 42rem;
+}
+
+.event-twitch-player {
+  display: block;
+  width: min(100%, 640px);
+  height: auto;
+  min-height: 300px;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  margin-top: var(--s2);
+}

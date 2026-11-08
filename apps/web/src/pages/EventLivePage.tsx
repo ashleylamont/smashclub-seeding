@@ -14,7 +14,7 @@ import { NemesisMark } from '../components/NemesisMark';
 import { CharacterIcons } from '../components/CharacterIcons';
 import { OverlaySetup } from '../components/OverlaySetup';
 import { OverlayTwitchLink, OverlayTwitchSetting } from '../components/OverlayTwitch';
-import { twitchChannel } from '../lib/twitchChannel';
+import { twitchChannel } from '@smashclub/shared';
 import { matchesPool, usePoolFilter } from '../lib/poolFlow';
 import { GuestOverlayQr } from '../components/GuestOverlayQr';
 import { BroadcastResults } from '../components/BroadcastResults';

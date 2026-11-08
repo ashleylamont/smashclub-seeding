@@ -1,3 +1,8 @@
+import {
+  nativeTwitchOpen,
+  publicTwitchPromotion,
+  readTwitchPromotion,
+} from '../event-operations/twitchPromotion';
 import { rollingFinals } from './qualifiers';
 import { canUseStrengthSeeding, type strengthSeedPolicy } from './strengthFinals';
 import {
@@ -234,8 +239,14 @@ export class NativeEventApi {
     return state;
   }
   async snapshot(privateView = false) {
+    // Read presentation first so an already committed Act visibility change always wins.
+    const twitch = privateView ? undefined : await readTwitchPromotion(this.ctx.db, this.planId);
     const state = privateView ? await this.state() : await this.publishedState();
-    return { ...(await eventView(this.ctx.db, state, privateView)), publicCode: this.publicCode };
+    return {
+      ...(await eventView(this.ctx.db, state, privateView)),
+      publicCode: this.publicCode,
+      ...publicTwitchPromotion(twitch, nativeTwitchOpen(state)),
+    };
   }
   async plan() {
     return planView(this.ctx.db, await this.state());

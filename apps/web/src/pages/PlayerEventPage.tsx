@@ -5,6 +5,7 @@ import { Progress } from '../components/ui/Progress';
 import { useParams } from '@tanstack/react-router';
 import { PlayerHubMatches } from '../components/PlayerHubMatches';
 import { PlayerHubBoard } from '../components/PlayerHubBoard';
+import { EventTwitchPromotion } from '../components/EventTwitchPromotion';
 import { PoolRoundSchedule, PoolStationQueue } from '../components/PoolStationQueue';
 import {
   usePlayerEventHub,
@@ -72,6 +73,12 @@ export function PlayerEvent({ planId }: { planId: string }) {
         />
         {data && !empty && <EventProgress data={data} selectedPool={selectedPool} />}
         <PlayerEventNavigation board={board} empty={empty} nextLabel={labels.next} />
+        <EventTwitchPromotion
+          data={data}
+          closed={closed}
+          interrupted={updatesInterrupted}
+          now={now}
+        />
         {empty && (
           <EmptyEventMatches
             closed={closed}

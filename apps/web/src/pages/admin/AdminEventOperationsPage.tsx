@@ -10,6 +10,7 @@ import { Input } from '../../components/ui/Input';
 import { Disclosure } from '../../components/ui/Disclosure';
 import { OpsMatchSummary } from './OpsMatchSummary';
 import { OpsAnnouncements } from './OpsAnnouncements';
+import { OpsTwitchPromotion } from './OpsTwitchPromotion';
 import { OpsAccessControls } from './OpsAccessControls';
 import { OpsEventHistory } from './OpsEventHistory';
 import { Tabs, TabList, Tab, TabPanel } from '../../components/ui/Tabs';
@@ -507,6 +508,12 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
             unavailable={event.isError}
             callable={callable}
             act={act}
+          />
+          <OpsTwitchPromotion
+            data={data}
+            disabled={!online || pending || event.isError}
+            act={act}
+            refresh={event.refetch}
           />
           <OpsAnnouncements data={data} pending={pending} closed={closed} act={act} />
         </TabPanel>

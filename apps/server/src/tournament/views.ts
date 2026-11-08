@@ -42,7 +42,7 @@ type MatchViewFields = Pick<
 > & { labelFromStructure?: true };
 export type EventSnapshot = Omit<
   SqlSnapshot,
-  'placements' | 'matches' | 'nativeBrackets' | 'publicCode'
+  'placements' | 'matches' | 'nativeBrackets' | 'publicCode' | 'twitchBroadcast'
 > & {
   publicCode?: number;
   broadcastSides?: TournamentState['broadcastSides'];
