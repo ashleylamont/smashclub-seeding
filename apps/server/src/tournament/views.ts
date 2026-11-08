@@ -419,6 +419,21 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
       companyCode: old?.companyCode ?? null,
       playerId: e.playerId,
       playerName: p?.canonicalName ?? e.name,
+      ...(e.memberPlayerIds && {
+        primaryPlayerId: e.memberPlayerIds[0] ?? null,
+        partnerPlayerId: e.memberPlayerIds[1] ?? null,
+        memberPlayerIds: e.memberPlayerIds,
+        memberNames: pairProfiles?.map((profile) => profile.canonicalName),
+        teamName: e.teamName,
+        snapshotMean: e.snapshotMean,
+        snapshotSd: e.snapshotSd,
+      }),
+      ...(e.memberSubstituted && {
+        memberSubstituted: true as const,
+        pairRating: undefined,
+        currentMean: undefined,
+        currentSd: undefined,
+      }),
       publicName: pairName
         ? `${e.teamName ? `${e.teamName} (` : ''}${pairName}${e.teamName ? ')' : ''}`
         : p
@@ -431,9 +446,9 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
       divisionSeed: e.seed,
       snapshotRank: e.snapshotRank,
       snapshotScore: e.snapshotScore,
-      currentRank: old?.currentRank ?? null,
-      currentScore: old?.currentScore ?? null,
-      lastPlayedDate: old?.lastPlayedDate ?? null,
+      currentRank: e.memberSubstituted ? null : (old?.currentRank ?? null),
+      currentScore: e.memberSubstituted ? null : (old?.currentScore ?? null),
+      lastPlayedDate: e.memberSubstituted ? null : (old?.lastPlayedDate ?? null),
       withdrawn: e.availability === 'withdrawn',
       candidates: old?.candidates ?? [],
     };

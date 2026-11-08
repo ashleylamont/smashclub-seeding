@@ -144,7 +144,7 @@ export function AttendeeList({ planId, closed }: { planId: string; closed: boole
                 <tbody>
                   {filtered.map((row) => (
                     <AttendeeRow
-                      key={row.entryId}
+                      key={row.playerId}
                       planId={planId}
                       row={row}
                       companies={roster.data!.companies}

@@ -107,6 +107,9 @@ export async function nativeRoster(api: NativeEventApi) {
   await requireOperator(ctx.db, planId, ctx.user!);
   const state = await api.state();
   const profile = await ctx.db.select().from(players);
+  const originalNames = new Map(
+    state.baseline?.entrants.map((entrant) => [entrant.id, entrant.name]),
+  );
   const companyOptions = await ctx.db.select().from(companies).orderBy(asc(companies.name));
   return {
     attendees: state.entrants
@@ -120,8 +123,8 @@ export async function nativeRoster(api: NativeEventApi) {
             {
               entryId: e.id,
               playerId: memberId,
-              rawInput: e.name,
-              cleanedName: e.name,
+              rawInput: originalNames.get(e.id) ?? e.name,
+              cleanedName: originalNames.get(e.id) ?? e.name,
               division: e.division,
               canonicalName: p.canonicalName,
               displayName: p.displayName,

@@ -77,6 +77,8 @@ export function describeDecision(
       `${station(command.stationId)} · ${pairing} · ${command.swapped ? 'Swapped left / right' : 'Recorded player order'}`,
     );
   if (dispatch) return { ...dispatch, matchId };
+  const attendance = describeAttendance(command, player);
+  if (attendance) return { ...attendance, matchId };
   switch (command.kind) {
     case 'score': {
       const pending = decision.after.reports?.some(
@@ -110,14 +112,6 @@ export function describeDecision(
         command.status === 'blocked' ? 'Match held' : 'Match made ready',
         `${pairing} · ${station(command.stationId)}${command.reason ? ` · ${command.reason}` : ''}`,
       );
-    case 'availability':
-      return description(
-        'players',
-        'Player availability changed',
-        `${player(command.playerId)} · ${command.availability} · ${command.reason}`,
-      );
-    case 'attendance':
-      return { ...describeAttendance(command, player), matchId };
     case 'placements':
       return description(
         'draw',
@@ -249,12 +243,29 @@ function describeDispatchCommand(
 }
 
 function describeAttendance(
-  command: Extract<TournamentDecision['command'], { kind: 'attendance' }>,
+  command: TournamentDecision['command'],
   player: (id: string | null) => string,
 ) {
-  return {
-    category: 'players' as const,
-    title: command.action === 'restore' ? 'Entrant restored' : 'Attendance changed',
-    summary: `${command.entrant?.name ?? player(command.playerId)} · ${command.action.replaceAll('_', ' ')}${command.reason ? ` · ${command.reason}` : ''}`,
-  };
+  switch (command.kind) {
+    case 'availability':
+      return {
+        category: 'players' as const,
+        title: 'Player availability changed',
+        summary: `${player(command.playerId)} · ${command.availability} · ${command.reason}`,
+      };
+    case 'substituteDoublesMember':
+      return {
+        category: 'players' as const,
+        title: 'Doubles substitute confirmed',
+        summary: `${command.identity?.oldMemberNames.join(' / ')} → ${command.identity?.newMemberNames.join(' / ')} · ${command.reason}`,
+      };
+    case 'attendance':
+      return {
+        category: 'players' as const,
+        title: command.action === 'restore' ? 'Entrant restored' : 'Attendance changed',
+        summary: `${command.entrant?.name ?? player(command.playerId)} · ${command.action.replaceAll('_', ' ')}${command.reason ? ` · ${command.reason}` : ''}`,
+      };
+    default:
+      return null;
+  }
 }

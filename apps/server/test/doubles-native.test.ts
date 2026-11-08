@@ -37,10 +37,10 @@ describe('native doubles through shipped APIs', () => {
     await runtime.shutdown();
     await close();
   });
-  const caller = () =>
+  const caller = (actor: typeof nativeAdmin | null = nativeAdmin) =>
     appRouter.createCaller({
       db,
-      user: nativeAdmin,
+      user: actor,
       nativeRuntime: runtime,
       env: loadEnv({ DATABASE_URL: 'pglite://memory', NODE_ENV: 'test' }),
       challonge: new ChallongeClient({}),
@@ -280,6 +280,210 @@ describe('native doubles through shipped APIs', () => {
     expect(preview.allowed).toBe(false);
     expect(preview.issues.join(' ')).toMatch(/fixed/);
   });
+  it('substitutes one member in the same pool slot without moving or reattributing recorded results', async () => {
+    const { planId } = await draft(8, 'pools_finals');
+    await expect(
+      caller().eventOps.previewDoublesSubstitution({
+        planId,
+        entrantId: crypto.randomUUID(),
+        outgoingPlayerId: crypto.randomUUID(),
+        incomingPlayerId: crypto.randomUUID(),
+        reason: 'Do not adopt a draft',
+      }),
+    ).rejects.toThrow(/soft-locked/);
+    expect((await runtime.state(planId)).baseline).toBeNull();
+    await prepare(planId);
+    const operator = caller(),
+      guest = caller(null);
+    const [incoming] = await db
+      .insert(players)
+      .values({ canonicalName: 'Private Substitute', displayName: 'Substitute Alias' })
+      .returning();
+    const locked = await runtime.state(planId);
+    const entrant = locked.entrants.find((e) => e.playerId === locked.pools[0]!.entrantIds[0])!;
+    const oldMemberIds = entrant.memberPlayerIds!;
+    const match = locked.matches.find((m) => [m.player1Id, m.player2Id].includes(entrant.id))!;
+    const other = locked.matches.find(
+      (m) => m.poolId === match.poolId && ![m.player1Id, m.player2Id].includes(entrant.id),
+    )!;
+    const change = {
+      planId,
+      entrantId: entrant.id,
+      outgoingPlayerId: oldMemberIds[1]!,
+      incomingPlayerId: incoming!.id,
+      reason: 'The original partner could not attend',
+    };
+    await expect(guest.eventOps.previewDoublesSubstitution(change)).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
+    const attendee = caller({ ...nativeAdmin, id: 'substitution-attendee', role: 'user' });
+    await expect(attendee.eventOps.previewDoublesSubstitution(change)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    const duplicate = await operator.eventOps.previewDoublesSubstitution({
+      ...change,
+      incomingPlayerId: locked.entrants.find((e) => e.id !== entrant.id)!.memberPlayerIds![0]!,
+    });
+    expect(duplicate.issues.join(' ')).toMatch(/already has an entry/);
+    const held = locked.matches.find(
+      (m) => m.id !== match.id && [m.player1Id, m.player2Id].includes(entrant.id),
+    )!;
+    await operator.eventOps.updateMatch({
+      matchId: held.id,
+      expectedRevision: held.revision,
+      status: 'blocked',
+      blockedReason: 'Keep this TO hold',
+    });
+    await operator.eventOps.guests.configure({ planId, enabled: true, showOnOverlay: false });
+    const invitation = (await operator.eventOps.guests.invitation({ planId }))!;
+    const { sessionToken } = await guest.eventOps.guests.redeem({
+      planId,
+      token: invitation.token,
+    });
+    const preview = await operator.eventOps.previewDoublesSubstitution(change);
+    expect(preview).toMatchObject({
+      allowed: true,
+      seed: entrant.seed,
+      poolIndex: locked.pools[0]!.index,
+      newMembers: [preview.oldMembers![0], 'Substitute Alias'],
+      affectedMatchCount: 3,
+    });
+    await operator.eventOps.reportScore({
+      matchId: other.id,
+      expectedRevision: other.revision,
+      requestId: 'unaffected-same-pool-result',
+      score1: 2,
+      score2: 1,
+      outcome: 'played',
+    });
+    const before = await runtime.state(planId);
+    const submission = {
+      ...change,
+      requestId: 'reviewed-substitution',
+      revisionToken: preview.revisionToken,
+    };
+    const result = await operator.eventOps.applyDoublesSubstitution(submission);
+    expect(await operator.eventOps.applyDoublesSubstitution(submission)).toEqual(result);
+    await expect(
+      operator.eventOps.applyDoublesSubstitution({ ...submission, reason: 'Different reason' }),
+    ).rejects.toThrow(/already used/);
+
+    const after = await runtime.state(planId);
+    expect(after.baseline).toEqual(locked.baseline);
+    expect(after.pools).toEqual(before.pools);
+    expect(after.reports).toEqual(before.reports);
+    expect(after.matches).toEqual(
+      before.matches.map((m) =>
+        [m.player1Id, m.player2Id].includes(entrant.id) ? { ...m, revision: m.revision + 1 } : m,
+      ),
+    );
+    const newMemberIds = [oldMemberIds[0], incoming!.id];
+    expect(after.entrants.find((e) => e.id === entrant.id)).toMatchObject({
+      playerId: entrant.playerId,
+      seed: entrant.seed,
+      division: entrant.division,
+      memberPlayerIds: newMemberIds,
+      memberSubstituted: true,
+      snapshotScore: null,
+      snapshotMean: null,
+      snapshotSd: null,
+      snapshotRank: null,
+    });
+    const privatePlan = (await operator.admin.eventPlanner.plan({ planId }))!;
+    const entry = privatePlan.entries.find((e) => e.id === entrant.id)!;
+    expect(entry).toMatchObject({
+      primaryPlayerId: oldMemberIds[0],
+      partnerPlayerId: incoming!.id,
+      memberPlayerIds: newMemberIds,
+      divisionSeed: entrant.seed,
+      memberSubstituted: true,
+      currentScore: null,
+    });
+    expect(entry.pairRating).toBeUndefined();
+    const roster = await operator.eventOps.attendeeRoster({ planId });
+    expect(roster.attendees.filter((row) => row.entryId === entrant.id)).toMatchObject([
+      { playerId: oldMemberIds[0], rawInput: entrant.name },
+      { playerId: incoming!.id, rawInput: entrant.name },
+    ]);
+    const guestBoard = await guest.eventOps.guests.matches({ planId, sessionToken });
+    if (!('entrants' in guestBoard)) throw new Error('Expected the native guest board.');
+    const publicPair = guestBoard.entrants.find((e) => e.id === entrant.id)!;
+    expect(publicPair).toMatchObject({ memberPlayerIds: newMemberIds });
+    expect(publicPair.name).toContain('Substitute Alias');
+    expect(JSON.stringify(guestBoard)).not.toContain('Private Substitute');
+
+    const score = {
+      matchId: match.id,
+      expectedRevision: match.revision,
+      requestId: 'old-pair-score-form',
+      score1: 2,
+      score2: 0,
+    };
+    await expect(attendee.eventOps.reportScore({ ...score, outcome: 'played' })).rejects.toThrow(
+      /changed/,
+    );
+    await expect(guest.eventOps.guests.submit({ planId, sessionToken, ...score })).rejects.toThrow(
+      /changed/,
+    );
+    expect((await runtime.state(planId)).reports).toEqual(before.reports);
+    const audit = (await operator.eventOps.live.history({ planId })).entries.filter(
+      ({ title }) => title === 'Doubles substitute confirmed',
+    );
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({ eventName: 'DecisionRecordedV8', actor: nativeAdmin.name });
+    expect(audit[0]!.summary).toContain(
+      `${preview.oldMembers!.join(' / ')} → ${preview.newMembers!.join(' / ')}`,
+    );
+    expect(audit[0]!.summary).toContain(change.reason);
+    expect(await runtime.replay(planId)).toEqual(after);
+
+    await operator.eventOps.updateMatch({
+      matchId: held.id,
+      expectedRevision: held.revision + 1,
+      status: 'ready',
+    });
+    await finishPools(planId);
+    const draw = { planId, seedPolicy: 'pool_place_whr_v1' as const };
+    const finals = await operator.eventOps.native.preview(draw);
+    expect(finals.allowed).toBe(true);
+    await operator.eventOps.native.generate({ ...draw, revisionToken: finals.revisionToken });
+    const frozen = await operator.eventOps.previewDoublesSubstitution({
+      ...change,
+      outgoingPlayerId: incoming!.id,
+      incomingPlayerId: oldMemberIds[1]!,
+    });
+    expect(frozen.allowed).toBe(false);
+    expect(frozen.issues.join(' ')).toMatch(/qualification has already been confirmed or used/);
+    const drawn = await runtime.state(planId);
+    const qualifier = drawn.brackets
+      .flatMap((b) => b.strengthSeeding?.seeds ?? [])
+      .find((s) => s.playerId === entrant.id);
+    expect(qualifier).toMatchObject({ strengthSource: 'prior' });
+    await scoreReady(planId);
+    await operator.eventOps.native.finalize({ planId });
+    const sealed = await runtime.state(planId);
+    const historical = (await db.select().from(tournamentParticipants)).filter((p) =>
+      sealed.publication!.tournamentIds.includes(p.tournamentId),
+    );
+    expect(historical.some((p) => p.memberPlayerIds?.includes(incoming!.id))).toBe(true);
+    expect(historical.some((p) => p.memberPlayerIds?.includes(oldMemberIds[1]!))).toBe(false);
+    expect(sealed.result?.matches.find((m) => m.id === other.id)).toEqual(
+      before.matches.find((m) => m.id === other.id),
+    );
+  });
+
+  it('requires explicit return of untaken calls and rejects reports or previously started matches', async () => {
+    const { planId } = await draft(4, 'round_robin');
+    await prepare(planId);
+    const [incoming] = await db
+      .insert(players)
+      .values({ canonicalName: 'Another Substitute' })
+      .returning();
+    expect(
+      await verifyUntakenCallAndReportGuards(planId, incoming!.id, runtime, caller),
+    ).toMatchObject({ status: 'ready', started: true });
+  });
+
   it('runs a configurable nine-team double round robin and retains its variant through correction and replay', async () => {
     const { planId } = await draft(9, 'round_robin');
     await caller().admin.eventPlanner.updateNativeFormat({
@@ -637,3 +841,105 @@ describe('doubles domain invariants', () => {
     expect(captureBaseline(Baseline.parse(b))).toEqual(captureBaseline(b));
   });
 });
+
+async function verifyUntakenCallAndReportGuards(
+  planId: string,
+  incomingPlayerId: string,
+  runtime: NativeRuntime,
+  caller: (actor?: typeof nativeAdmin | null) => ReturnType<typeof appRouter.createCaller>,
+) {
+  const operator = caller();
+  const state = await runtime.state(planId);
+  const match = state.matches[0]!,
+    entrant = state.entrants.find((e) => e.id === match.player1Id)!;
+  const change = {
+    planId,
+    entrantId: entrant.id,
+    outgoingPlayerId: entrant.memberPlayerIds![1]!,
+    incomingPlayerId,
+    reason: 'Emergency substitute',
+  };
+  const initial = await operator.eventOps.previewDoublesSubstitution(change);
+  expect(initial.allowed).toBe(true);
+  const command = (command: Parameters<typeof operator.eventOps.live.command>[0]['command']) =>
+    operator.eventOps.live.command({ planId, command, requestId: crypto.randomUUID() });
+  await command({
+    kind: 'configureDispatch',
+    capacity: 1,
+    reservedStationIds: [],
+    expectedResourceRevision: state.settings.resourceRevision,
+  });
+  const dispatch = async () =>
+    command({
+      kind: 'dispatch',
+      matchId: match.id,
+      expectedRevision: match.revision,
+      expectedResourceRevision: (await runtime.state(planId)).settings.resourceRevision,
+      stationId: null,
+      callOnly: true,
+    });
+  const returnCall = async () =>
+    operator.eventOps.updateMatch({
+      matchId: match.id,
+      expectedRevision: match.revision,
+      status: 'ready',
+      stationId: null,
+    });
+  await dispatch();
+  await expect(
+    operator.eventOps.applyDoublesSubstitution({
+      ...change,
+      requestId: 'stale-after-call',
+      revisionToken: initial.revisionToken,
+    }),
+  ).rejects.toThrow(/changed since this preview/);
+  expect(await operator.eventOps.previewDoublesSubstitution(change)).toMatchObject({
+    allowed: false,
+    returnCallMatchIds: [match.id],
+  });
+  await returnCall();
+  expect((await operator.eventOps.previewDoublesSubstitution(change)).allowed).toBe(true);
+
+  const reporting = await runtime.state(planId);
+  await command({
+    kind: 'reporting',
+    published: true,
+    playerReports: true,
+    mode: 'to_review',
+    expectedRevision: reporting.settings.reportingRevision,
+  });
+  const attendee = caller({ ...nativeAdmin, id: 'substitution-pending-report', role: 'user' });
+  const other = state.matches.find(
+    (m) => m.id !== match.id && [m.player1Id, m.player2Id].includes(entrant.id),
+  )!;
+  const report = await attendee.eventOps.reportScore({
+    matchId: other.id,
+    expectedRevision: other.revision,
+    requestId: 'pending-before-substitution',
+    score1: 2,
+    score2: 0,
+    outcome: 'played',
+  });
+  await operator.eventOps.reviewReport({ reportId: report.id, approve: false });
+  const rejected = await operator.eventOps.previewDoublesSubstitution(change);
+  expect(rejected.allowed).toBe(false);
+  expect(rejected.issues.join(' ')).toMatch(/score report/);
+
+  await dispatch();
+  await command({
+    kind: 'beginPlay',
+    matchId: match.id,
+    expectedRevision: match.revision,
+    expectedResourceRevision: (await runtime.state(planId)).settings.resourceRevision,
+  });
+  await returnCall();
+  const started = await operator.eventOps.previewDoublesSubstitution({
+    ...change,
+    entrantId: match.player2Id!,
+    outgoingPlayerId: state.entrants.find((e) => e.id === match.player2Id)!.memberPlayerIds![0]!,
+  });
+  expect(started.allowed).toBe(false);
+  expect(started.returnCallMatchIds).toEqual([]);
+  expect(started.issues.join(' ')).toMatch(/recorded play/);
+  return (await runtime.state(planId)).matches.find(({ id }) => id === match.id);
+}

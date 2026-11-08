@@ -1,3 +1,5 @@
+import { isKnockout } from '@smashclub/shared';
+import { DoublesSubstitutionForm } from './DoublesSubstitutionForm';
 import { useOpsWorkspace } from '../../lib/opsWorkspace';
 import { OpsEventHistory } from './OpsEventHistory';
 import { UntakenCallRecovery, type UntakenCallDesk } from './UntakenCallRecovery';
@@ -18,6 +20,8 @@ type Input = {
   division?: 'upper' | 'lower';
   reason?: string;
 };
+
+type AttendanceAction = Input['action'] | 'substitute';
 
 type AttendanceReview = {
   result: Preview;
@@ -53,9 +57,11 @@ export function AttendanceControls({
   const historyActive = useOpsWorkspace().section === 'players';
   const cache = useQueryClient();
   const previewHeading = useRef<HTMLHeadingElement>(null);
-  const [action, setAction] = useState<Input['action']>(
+  const [action, setAction] = useState<AttendanceAction>(
     data.plan.competitionFormat === 'doubles' ? 'withdraw' : 'add',
   );
+  const doubles = data.plan.competitionFormat === 'doubles';
+  const canSubstitute = doubles && data.plan.liveOwned && !isKnockout(data.plan.structure);
   const [query, setQuery] = useState('');
   const [playerId, setPlayerId] = useState('');
   const [division, setDivision] = useState<'upper' | 'lower'>('upper');
@@ -127,7 +133,11 @@ export function AttendanceControls({
       </h3>
       <p className="muted">
         {data.plan.softLockedAt
-          ? 'Late arrivals go to the smallest open pool in their division. A no-show leaves their pool; played entrants use withdrawal instead.'
+          ? doubles
+            ? canSubstitute
+              ? 'Substitute a member before play, remove a no-show pair, or withdraw a pair after play.'
+              : 'Remove an unplayed no-show pair, or withdraw a pair after play.'
+            : 'Late arrivals go to the smallest open pool in their division. A no-show leaves their pool; played entrants use withdrawal instead.'
           : 'Soft-lock the pool draw before using local attendance changes. Draft pools can be rebalanced in the planner.'}
       </p>
       <fieldset
@@ -148,6 +158,9 @@ export function AttendanceControls({
             {data.plan.competitionFormat !== 'doubles' && (
               <SelectItem value="add">Add a late arrival</SelectItem>
             )}
+            {canSubstitute && (
+              <SelectItem value="substitute">Substitute a doubles member</SelectItem>
+            )}
             <SelectItem value="no_show">Remove a no-show</SelectItem>
             <SelectItem value="redistribute">Redistribute a two-player pool</SelectItem>
             <SelectItem value="withdraw">Withdraw an entrant after play</SelectItem>
@@ -158,95 +171,102 @@ export function AttendanceControls({
             )}
           </Select>
         </label>
-        {action === 'add' && (
-          <label>
-            Find player by public alias
-            <Input
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPlayerId('');
-                changed();
-              }}
-              maxLength={100}
-              placeholder="Start typing a player alias"
-            />
-          </label>
-        )}
-        <label>
-          {data.plan.competitionFormat === 'doubles' ? 'Pair' : 'Player'}
-          <Select
-            value={playerId}
-            onValueChange={(selectedValue) => {
-              setPlayerId(selectedValue);
-              changed();
-            }}
-          >
-            <SelectItem value="">Choose a player</SelectItem>
-            {(action === 'add'
-              ? (search.data ?? [])
-              : data.entrants.filter((player) =>
+        {action !== 'substitute' && (
+          <>
+            {action === 'add' && (
+              <label>
+                Find player by public alias
+                <Input
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setPlayerId('');
+                    changed();
+                  }}
+                  maxLength={100}
+                  placeholder="Start typing a player alias"
+                />
+              </label>
+            )}
+            <label>
+              {data.plan.competitionFormat === 'doubles' ? 'Pair' : 'Player'}
+              <Select
+                value={playerId}
+                onValueChange={(selectedValue) => {
+                  setPlayerId(selectedValue);
+                  changed();
+                }}
+              >
+                <SelectItem value="">Choose a player</SelectItem>
+                {(action === 'add'
+                  ? (search.data ?? [])
+                  : data.entrants.filter((player) =>
+                      action === 'restore'
+                        ? data.withdrawals.some((row) => row.playerId === player.id)
+                        : !data.withdrawals.some((row) => row.playerId === player.id),
+                    )
+                ).map((player) => (
+                  <SelectItem key={player.id} value={player.id}>
+                    {player.name}
+                  </SelectItem>
+                ))}
+              </Select>
+            </label>
+            {action === 'add' && (
+              <label>
+                Division
+                <Select
+                  value={division}
+                  onValueChange={(selectedValue) => {
+                    setDivision(selectedValue as typeof division);
+                    changed();
+                  }}
+                >
+                  <SelectItem value="upper">Upper</SelectItem>
+                  <SelectItem value="lower">Lower</SelectItem>
+                </Select>
+              </label>
+            )}
+            <label>
+              Reason
+              <Input
+                value={reason}
+                onChange={(e) => {
+                  setReason(e.target.value);
+                  changed();
+                }}
+                maxLength={200}
+                placeholder={
                   action === 'restore'
-                    ? data.withdrawals.some((row) => row.playerId === player.id)
-                    : !data.withdrawals.some((row) => row.playerId === player.id),
-                )
-            ).map((player) => (
-              <SelectItem key={player.id} value={player.id}>
-                {player.name}
-              </SelectItem>
-            ))}
-          </Select>
-        </label>
-        {action === 'add' && (
-          <label>
-            Division
-            <Select
-              value={division}
-              onValueChange={(selectedValue) => {
-                setDivision(selectedValue as typeof division);
-                changed();
+                    ? 'Why is this entrant returning?'
+                    : 'Arrived late / unable to stay'
+                }
+                required={action === 'restore'}
+              />
+            </label>
+            <Button
+              type="submit"
+              disabled={!playerId || (action === 'restore' && !reason.trim())}
+              onClick={() => {
+                setPreview(null);
+                void inspect({
+                  planId,
+                  requestId: crypto.randomUUID(),
+                  action,
+                  playerId,
+                  reason,
+                  ...(action === 'add' ? { division } : {}),
+                });
               }}
             >
-              <SelectItem value="upper">Upper</SelectItem>
-              <SelectItem value="lower">Lower</SelectItem>
-            </Select>
-          </label>
+              Preview attendance change
+            </Button>
+          </>
         )}
-        <label>
-          Reason
-          <Input
-            value={reason}
-            onChange={(e) => {
-              setReason(e.target.value);
-              changed();
-            }}
-            maxLength={200}
-            placeholder={
-              action === 'restore'
-                ? 'Why is this entrant returning?'
-                : 'Arrived late / unable to stay'
-            }
-            required={action === 'restore'}
-          />
-        </label>
-        <Button
-          type="submit"
-          disabled={!playerId || (action === 'restore' && !reason.trim())}
-          onClick={() => {
-            setPreview(null);
-            void inspect({
-              planId,
-              requestId: crypto.randomUUID(),
-              action,
-              playerId,
-              reason,
-              ...(action === 'add' ? { division } : {}),
-            });
-          }}
-        >
-          Preview attendance change
-        </Button>
       </fieldset>
+      {action === 'substitute' && canSubstitute && (
+        <DoublesSubstitutionForm data={data} disabled={disabled} callDesk={callDesk} />
+      )}
       {search.isError && <p role="alert">{search.error.message}</p>}
       {preview && (
         <AttendancePreviewPanel

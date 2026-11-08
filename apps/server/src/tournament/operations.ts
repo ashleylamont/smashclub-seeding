@@ -5,6 +5,7 @@ import { beginPlay, changeStation, configureDispatch, moveQueue, sharedDispatch 
 import { isKnockout } from '@smashclub/shared';
 import { hash, requireFact, resolved, TournamentConflict, unconfirmedCall } from './facts';
 import { applyAttendance } from './attendance';
+import { substituteDoublesMember } from './doublesSubstitution';
 import { replaceResult } from './replacement';
 import type { FinalsDivisionResetScope } from './commands';
 import type { CommandEnvelope, TournamentState } from './schemas';
@@ -290,6 +291,9 @@ export function additionalDecision(
         m.blockedReason = null;
       }
       state.settings.resourceRevision++;
+      break;
+    case 'substituteDoublesMember':
+      substituteDoublesMember(state, command, basis);
       break;
     case 'attendance':
       applyAttendance(state, envelope, command);

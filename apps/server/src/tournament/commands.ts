@@ -13,7 +13,24 @@ export const FinalsDivisionResetScope = z.object({
   bracketIds: z.array(id).min(1).max(2),
 });
 export type FinalsDivisionResetScope = z.infer<typeof FinalsDivisionResetScope>;
+export const DoublesSubstitutionInput = z.object({
+  entrantId: id,
+  outgoingPlayerId: id,
+  incomingPlayerId: id,
+  reason: z.string().trim().min(1).max(200),
+});
+const DoublesSubstitutionIdentity = z.object({
+  name: z.string(),
+  oldMemberNames: z.tuple([z.string(), z.string()]),
+  newMemberNames: z.tuple([z.string(), z.string()]),
+  incomingAliases: z.array(id),
+});
 export const additionalCommands = [
+  DoublesSubstitutionInput.extend({
+    kind: z.literal('substituteDoublesMember'),
+    revisionToken: z.string().length(64),
+    identity: DoublesSubstitutionIdentity.nullable(),
+  }),
   z.object({
     kind: z.literal('broadcastSides'),
     stationId: id,
