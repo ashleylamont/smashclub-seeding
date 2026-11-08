@@ -136,6 +136,19 @@ test('home discovers open events, offers every format and keeps guest access on 
       timeout: 20_000,
     });
     await expect(open).toHaveCount(1);
+    await page.goto(`/operate/${singles.planId}?view=broadcast`);
+    const broadcast = page.getByRole('region', { name: 'Public Twitch stream' });
+    await broadcast
+      .getByRole('textbox', { name: 'Twitch channel name or link' })
+      .fill('https://www.twitch.tv/Rehearsal_Stream');
+    await broadcast.getByRole('button', { name: 'Announce Twitch stream' }).click();
+    await expect(broadcast).toContainText('Shown to viewers');
+    await visitor.reload();
+    const watch = visitor.getByRole('link', { name: 'Watch on Twitch' });
+    await expect(entry.getByRole('link', { name: 'Watch on Twitch' })).toHaveAttribute(
+      'href',
+      'https://www.twitch.tv/rehearsal_stream',
+    );
     await visitor.screenshot({
       path: testInfo.outputPath('home-live-desktop.png'),
     });
@@ -143,6 +156,8 @@ test('home discovers open events, offers every format and keeps guest access on 
     await expect(visitor).toHaveURL(new RegExp(`/play/${singles.planId}$`));
     await expect(visitor.getByRole('heading', { name: singlesName, exact: true })).toBeVisible();
     await expect(visitor.getByText(/scan a guest reporting QR or ask a TO/)).toBeVisible();
+    await expect(watch).toHaveAttribute('href', 'https://www.twitch.tv/rehearsal_stream');
+    await expect(visitor.getByRole('button', { name: 'Load Twitch player' })).toHaveCount(0);
     const doubles = await create(doublesName, 'doubles');
     await prepare(doubles, true);
     await publish(doubles);
@@ -160,7 +175,11 @@ test('home discovers open events, offers every format and keeps guest access on 
     await visitor.screenshot({
       path: testInfo.outputPath('home-live-multiple-phone.png'),
     });
-    await entry.locator('li').filter({ hasText: doublesName }).getByRole('link').click();
+    await entry
+      .locator('li')
+      .filter({ hasText: doublesName })
+      .getByRole('link', { name: 'Open live tournament' })
+      .click();
     await expect(visitor).toHaveURL(new RegExp(`/play/${doubles.planId}$`));
     await expect(visitor.getByRole('heading', { name: doublesName, exact: true })).toBeVisible();
     await mutate(page.request, 'eventOps.guests.configure', {
@@ -176,7 +195,11 @@ test('home discovers open events, offers every format and keeps guest access on 
     await visitor.goto(`/guest/${singles.planId}#token=${encodeURIComponent(invitation.token)}`);
     await expect(visitor.locator('.guest-pass-expiry')).toContainText('valid until revoked');
     await visitor.goto('/');
-    await entry.locator('li').filter({ hasText: singlesName }).getByRole('link').click();
+    await entry
+      .locator('li')
+      .filter({ hasText: singlesName })
+      .getByRole('link', { name: 'Open live tournament' })
+      .click();
     await expect(visitor.locator('.guest-pass-expiry')).toContainText('valid until revoked');
     await chooseOption(visitor.getByLabel('Match view', { exact: true }), 'matches');
     await expect(visitor.locator('article.ops-match input[type="number"]').first()).toBeVisible();
@@ -189,7 +212,13 @@ test('home discovers open events, offers every format and keeps guest access on 
     await expect(open).toHaveCount(1, { timeout: 20_000 });
     await expect(entry).not.toContainText(doublesName);
     await publish(singles, false);
+    await expect(broadcast).toContainText('Hidden while unpublished');
+    await broadcast.getByRole('button', { name: 'Stop Twitch announcement' }).click();
+    await expect(broadcast.getByRole('button', { name: 'Stop Twitch announcement' })).toHaveCount(
+      0,
+    );
     await expect(entry).toContainText('No tournament is live right now.', { timeout: 20_000 });
+    await expect(watch).toHaveCount(0);
     await mutate(page.request, 'eventOps.live.command', {
       ...doubles,
       requestId: crypto.randomUUID(),

@@ -100,7 +100,18 @@ for (const theme of ['light', 'dark'] as const) {
       await page.setViewportSize(viewport);
       await page.emulateMedia({ colorScheme: theme });
       const fixture = await mockHome(page);
-      fixture.events = [event('singles', 'singles'), event('doubles', 'doubles')];
+      const twitchRequests: string[] = [];
+      page.on('request', (request) => {
+        if (new URL(request.url()).hostname.endsWith('twitch.tv'))
+          twitchRequests.push(request.url());
+      });
+      fixture.events = [
+        {
+          ...event('singles', 'singles'),
+          twitchPromotion: { channel: 'club_stream', expiresAt: '2026-10-31T10:00:00Z' },
+        },
+        event('doubles', 'doubles'),
+      ];
       await page.goto('/');
       const entry = page.getByRole('region', { name: 'Currently live' });
       await expect(entry).toContainText('2 live tournaments · choose yours.');
@@ -110,6 +121,13 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(choices.nth(1)).toHaveAttribute('href', '/play/doubles');
       await expect(entry.locator('li').nth(0)).toContainText('Singles');
       await expect(entry.locator('li').nth(1)).toContainText('Doubles');
+      const watch = entry.getByRole('link', { name: 'Watch on Twitch' });
+      await expect(watch).toHaveCount(1);
+      await expect(watch).toHaveAttribute('href', 'https://www.twitch.tv/club_stream');
+      await expect(
+        entry.locator('li').first().getByRole('link', { name: 'Watch on Twitch' }),
+      ).toBeVisible();
+      expect(twitchRequests).toEqual([]);
       await choices.first().focus();
       await expect(choices.first()).toBeFocused();
       expect(
@@ -125,6 +143,9 @@ for (const theme of ['light', 'dark'] as const) {
         path: testInfo.outputPath(`home-live-${viewport.width}-${theme}.png`),
         fullPage: true,
       });
+      await page.clock.fastForward(60 * 60_000);
+      await expect(watch).toHaveCount(0);
+      await expect(choices).toHaveCount(2);
       // The page clock also expires stale events without a navigation or API change.
       await page.clock.fastForward(24 * 60 * 60_000);
       await expect(entry).toContainText('No tournament is live right now.');

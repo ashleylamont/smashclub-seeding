@@ -65,3 +65,25 @@
     gap: var(--s2);
   }
 }
+
+.home-live-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s2);
+}
+
+.home-live-actions > a:not(.btn) {
+  text-decoration: underline;
+}
+
+@media (max-width: 560px) {
+  .home-live-actions {
+    justify-content: flex-start;
+  }
+
+  .home-live-actions > .btn {
+    flex-basis: 100%;
+  }
+}

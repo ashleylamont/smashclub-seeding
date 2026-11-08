@@ -521,3 +521,13 @@
   flex-wrap: wrap;
   gap: var(--s3);
 }
+
+.ops-twitch-promotion,
+.ops-twitch-promotion form {
+  display: grid;
+  gap: var(--s2);
+}
+
+.ops-twitch-promotion .ui-field {
+  max-width: 36rem;
+}
