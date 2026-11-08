@@ -4,6 +4,7 @@ import { buildRoundRobin } from '@smashclub/engine';
 import { hash, requireFact, resolved, stableId, unconfirmedCall } from './facts';
 import { advance } from './brackets';
 import { qualifierFieldFrozen } from './qualifiers';
+import { hasLegacyQualifier, legacyPendingRosterMessage } from './legacyFinalQualifiers';
 import type { CommandEnvelope, TournamentState, Match } from './schemas';
 
 type Input = Extract<CommandEnvelope['command'], { kind: 'attendance' }>;
@@ -52,8 +53,7 @@ function ordinaryAttendancePreview(
     );
   if (!['locked', 'unlocked'].includes(state.lifecycle))
     issues.push('Attendance changes require an open locked event.');
-  if (input.action !== 'withdraw' && qualifierFieldFrozen(state, division))
-    issues.push('Remove unplayed finals before changing the pool draw.');
+  issues.push(...finalsRosterIssues(state, input.action, division, pool?.id));
   if (input.action === 'add' ? entrant : !entrant)
     issues.push(
       input.action === 'add'
@@ -124,6 +124,19 @@ function ordinaryAttendancePreview(
       lifecycle: state.lifecycle,
     }),
   };
+}
+
+function finalsRosterIssues(
+  state: TournamentState,
+  action: Input['action'],
+  division: TournamentState['pools'][number]['division'],
+  poolId: string | undefined,
+) {
+  if (action !== 'withdraw' && qualifierFieldFrozen(state, division))
+    return ['Remove unplayed finals before changing the pool draw.'];
+  if (action === 'withdraw' && poolId && hasLegacyQualifier(state, poolId, 'pending'))
+    return [legacyPendingRosterMessage];
+  return [];
 }
 
 export function applyAttendance(state: TournamentState, envelope: CommandEnvelope, input: Input) {

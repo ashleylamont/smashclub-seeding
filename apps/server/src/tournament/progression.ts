@@ -1,6 +1,7 @@
 import { decidePoolOrders } from './poolOrders';
 import { reconcileRollingFinals, rollingFinals } from './qualifiers';
 import { advance } from './brackets';
+import { resolveLegacyFinalQualifiers } from './legacyFinalQualifiers';
 import { stampReadySince } from './dispatch';
 import type { CommandEnvelope, TournamentState } from './schemas';
 
@@ -16,6 +17,17 @@ export function completeCommandProgression(
   if (rollingFinals(next) && next.lifecycle === 'locked') {
     reconcileRollingFinals(next, basis);
     advance(next, envelope.at, envelope.id);
+  } else if (next.lifecycle === 'locked') {
+    const { command } = envelope;
+    const poolIds =
+      command.kind === 'placements'
+        ? [command.poolId]
+        : command.kind === 'poolOrders'
+          ? command.pools.map(({ poolId }) => poolId)
+          : [];
+    if (poolIds.length)
+      for (const matches of resolveLegacyFinalQualifiers(next, poolIds, basis))
+        advance({ ...next, matches }, envelope.at, envelope.id);
   }
   stampReadySince(previous, next, envelope.at);
 }

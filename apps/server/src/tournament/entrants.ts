@@ -1,6 +1,7 @@
 import { publicPlayerName } from '@smashclub/shared';
 import { requireFact } from './facts';
 import { advance } from './brackets';
+import { hasLegacyQualifier, legacyPendingRosterMessage } from './legacyFinalQualifiers';
 import type { CommandEnvelope, TournamentCommand, TournamentState } from './schemas';
 
 export type Entrant = TournamentState['entrants'][number];
@@ -43,7 +44,18 @@ export function changeAvailability(
       ...entrant.memberAvailability,
       [command.playerId]: command.availability,
     };
-  } else entrant.availability = command.availability;
+  } else {
+    const changesEligibility =
+      (entrant.availability === 'withdrawn') !== (command.availability === 'withdrawn');
+    if (changesEligibility) {
+      const pool = next.pools.find((p) => p.entrantIds.includes(entrant.playerId));
+      requireFact(
+        !pool || !hasLegacyQualifier(next, pool.id, 'pending'),
+        legacyPendingRosterMessage,
+      );
+    }
+    entrant.availability = command.availability;
+  }
   entrant.revision++;
   if (
     command.availability === 'withdrawn' &&

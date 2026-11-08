@@ -30,6 +30,7 @@ import { getPlan } from '../event-planner/plans';
 import { Baseline, LiveState, initialState, type TournamentBaseline } from './schemas';
 import { stableId, TournamentConflict } from './domain';
 import { getRatingSettings } from '../settings';
+import { importLegacyFinalQualifiers } from './legacyFinalQualifiers';
 
 const freshPoolPolicies = {
   poolOrderPolicy: 'unique_set_wins_v1',
@@ -252,6 +253,7 @@ export async function stageNativeBaseline(
       },
     });
     if (importing) {
+      const legacyFinals = importLegacyFinalQualifiers(baseline, legacyBrackets, legacyReports);
       const imported = LiveState.parse({
         ...initialState(),
         baseline,
@@ -264,15 +266,10 @@ export async function stageNativeBaseline(
               : 'locked',
         entrants: baseline.entrants,
         pools: baseline.pools,
-        matches: baseline.matches,
+        matches: legacyFinals.matches,
         stations: baseline.stations,
         settings: baseline.settings,
-        brackets: legacyBrackets.map((b) => ({
-          id: b.id,
-          division: b.division,
-          stage: b.stage,
-          entrantIds: b.entrantIds,
-        })),
+        brackets: legacyFinals.brackets,
         reports: legacyReports.map((r) => ({
           ...r,
           actorId: r.userId ?? `guest:${r.guestSessionId}`,

@@ -3,6 +3,7 @@ import { available } from './entrants';
 import { dispatchAvailability } from './dispatch';
 import { completeCommandProgression } from './progression';
 import { qualifierFieldFrozen } from './qualifiers';
+import { hasLegacyQualifier, legacyPendingRosterMessage } from './legacyFinalQualifiers';
 import { hash, requireFact, resolved, stableId } from './facts';
 import { hasCurrentPendingScoreReview } from './scoreReview';
 import type { CommandEnvelope, Match, TournamentState } from './schemas';
@@ -106,6 +107,8 @@ export function previewRestoration(state: TournamentState, playerId: string, rea
   if (!['locked', 'unlocked'].includes(state.lifecycle))
     issues.push('Attendance changes require an open locked event.');
   if (entrant?.availability !== 'withdrawn') issues.push('Choose a currently withdrawn entrant.');
+  if (pool && hasLegacyQualifier(state, pool.id, 'pending'))
+    issues.push(legacyPendingRosterMessage);
   if (!reason.trim()) issues.push('Give a reason for restoring this entrant.');
   const next = structuredClone(state);
   if (!issues.length) {

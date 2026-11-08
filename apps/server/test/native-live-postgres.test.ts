@@ -15,9 +15,15 @@ import {
 import { createPlan, freezeRoster, generatePools } from '../src/event-planner/plans';
 import { postgresCluster } from './helpers/postgres';
 import { nativeAdmin, seedNativeDraft, envelope } from './helpers/nativeLiveFixture';
+import { verifyMixedLegacyFinalsRecovery } from './helpers/nativeLegacyFinalsFixture';
 import { stageNativeBaseline } from '../src/tournament/baseline';
 import { NativeTournament } from '../src/tournament/aggregate';
-import { createNativeRuntime, nativeStream, type NativeRuntime } from '../src/tournament/runtime';
+import {
+  createNativeRuntime,
+  createPostgresNativeRuntime,
+  nativeStream,
+  type NativeRuntime,
+} from '../src/tournament/runtime';
 import { processNativeRatingIntents, publishNativeResult } from '../src/tournament/publication';
 import { nativeEventHistory } from '../src/tournament/history';
 import type {
@@ -117,6 +123,19 @@ describe('native Act-PG integration on isolated PostgreSQL', () => {
       .from(nativeResultPublications)
       .where(eq(nativeResultPublications.eventPlanId, planId));
   }
+
+  it('retains fixed seeds and prior play while filling legacy finals after a durable restart', async () => {
+    const { continued, restarted, replayed, eventNames } = await verifyMixedLegacyFinalsRecovery(
+      cluster.db,
+      () => createPostgresNativeRuntime(cluster.db, cluster.connectionString),
+    );
+    expect(restarted).toEqual(continued);
+    expect(replayed).toEqual(continued);
+    expect(eventNames[0]).toBe('LegacyStateImportedV1');
+    expect(eventNames.slice(1)).toEqual(
+      Array.from({ length: continued.sequence - 1 }, () => 'DecisionRecordedV1'),
+    );
+  });
 
   it('serializes shared calls across independent stores without double-booking ordinary capacity or named stations', async () => {
     const planId = await seedNativeDraft(cluster.db);

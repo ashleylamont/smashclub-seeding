@@ -1,5 +1,6 @@
 import { poolLabel } from '../event-planner/pools';
 import { poolFinalsConsumed } from './qualifiers';
+import { legacyQualifierSlots } from './legacyFinalQualifiers';
 import { matchNames } from './matchNames';
 import { poolOrderStatus, poolPlacementSource } from './poolOrders';
 import {
@@ -124,7 +125,9 @@ export function bracketViews(state: TournamentState) {
       rounds,
       state.baseline!.structure === 'double_elimination',
     );
-    const qualificationPending = b.qualifierSlots?.some((source) => source.status !== 'resolved');
+    const importedSlots = legacyQualifierSlots(state, rounds);
+    const qualifierSlots = b.qualifierSlots ?? (importedSlots.length ? importedSlots : undefined);
+    const qualificationPending = qualifierSlots?.some((source) => source.status !== 'resolved');
     const complete = roundRobin
       ? Boolean(order && state.matches.every(resolved))
       : outcome.complete && !qualificationPending;
@@ -137,6 +140,7 @@ export function bracketViews(state: TournamentState) {
           : outcome.standings;
     return {
       ...b,
+      ...(qualifierSlots ? { qualifierSlots } : {}),
       eventPlanId: state.baseline!.planId,
       createdAt: new Date(state.baseline!.capturedAt),
       complete,
