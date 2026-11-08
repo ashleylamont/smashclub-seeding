@@ -30,6 +30,7 @@ import {
 } from './schemas';
 import { stageNativeBaseline, migrateLegacyNativePlans } from './baseline';
 import { publishNativeResult, processNativeRatingIntents } from './publication';
+import { supersededPlayedSetViews } from './resultEvidence';
 import { captureBaseline, receiptKey, reduceDecision, TournamentConflict } from './domain';
 
 export const nativeStream = (planId: string) => `native:${planId}`;
@@ -41,6 +42,7 @@ const isDecisionEvent = (name: string) =>
     'DecisionRecordedV4',
     'DecisionRecordedV5',
     'DecisionRecordedV6',
+    'DecisionRecordedV7',
     'DecisionRecordedV8',
     'ResultsSealedV1',
     'PlanRetiredV1',
@@ -65,6 +67,7 @@ async function replayNative(
       case 'DecisionRecordedV4':
       case 'DecisionRecordedV5':
       case 'DecisionRecordedV6':
+      case 'DecisionRecordedV7':
       case 'DecisionRecordedV8':
       case 'ResultsSealedV1':
       case 'PlanRetiredV1':
@@ -99,6 +102,20 @@ function livePlanStatus(state: TournamentState) {
     : state.lifecycle === 'cancelled'
       ? 'cancelled'
       : 'underway';
+}
+
+function publicationSummary(state: TournamentState, blocked: boolean) {
+  if (!state.result) return null;
+  return {
+    resultId: state.result.id,
+    revision: state.result.revision,
+    status: state.publication
+      ? ('published' as const)
+      : blocked
+        ? ('blocked' as const)
+        : ('pending' as const),
+    tournamentIds: state.publication?.tournamentIds ?? [],
+  };
 }
 
 export function createNativeRuntime(
@@ -283,6 +300,9 @@ export function createNativeRuntime(
       cursor: state.sequence,
       unchanged: cursor === state.sequence,
       resync: cursor !== undefined && cursor !== state.sequence,
+      ...(state.supersededPlayedSets
+        ? { supersededPlayedSets: supersededPlayedSetViews(state, names) }
+        : {}),
       matches: state.matches
         .filter((m) => !m.skipped)
         .map((m) => ({
@@ -306,18 +326,7 @@ export function createNativeRuntime(
         ? state.stations.filter((s) => isReserved(state, s.id))
         : state.stations,
       settings: publicSettings(state),
-      publication: state.result
-        ? {
-            resultId: state.result.id,
-            revision: state.result.revision,
-            status: state.publication
-              ? ('published' as const)
-              : publicationBlocked
-                ? ('blocked' as const)
-                : ('pending' as const),
-            tournamentIds: state.publication?.tournamentIds ?? [],
-          }
-        : null,
+      publication: publicationSummary(state, publicationBlocked),
     };
     if (!privateView) return { ...publicState, reports: [], audit: [] };
     const audit: {

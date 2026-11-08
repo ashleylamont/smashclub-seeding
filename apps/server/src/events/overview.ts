@@ -11,6 +11,7 @@ import {
 } from '@smashclub/db';
 import { eventKeyOf } from '@smashclub/engine';
 import { nativeHistory } from './nativeHistory';
+import { hasSupersededAdvancement } from '../tournament/resultEvidence';
 import {
   compareEventBrackets,
   eventCanonicalSlug,
@@ -178,7 +179,9 @@ export async function loadEventOverview(db: Db, slug: string): Promise<EventOver
     const byId = new Map(ps.map((p) => [p.id, p]));
     const bracketSets = setRows.filter((s) => s.tournamentId === t.id);
     const finalSets = bracketSets.filter(
-      (s) => nativeRole?.structure === 'round_robin' || s.resultStage === 'final',
+      (s) =>
+        !hasSupersededAdvancement(s.raw) &&
+        (nativeRole?.structure === 'round_robin' || s.resultStage === 'final'),
     );
     const finalIds = new Set(
       finalSets
@@ -225,8 +228,10 @@ export async function loadEventOverview(db: Db, slug: string): Promise<EventOver
         if (s.resultStage === 'group') {
           if (won) r.poolWins++;
           else r.poolLosses++;
-        } else if (won) r.bracketWins++;
-        else r.bracketLosses++;
+        } else if (!hasSupersededAdvancement(s.raw)) {
+          if (won) r.bracketWins++;
+          else r.bracketLosses++;
+        }
         records.set(id, r);
       }
     }

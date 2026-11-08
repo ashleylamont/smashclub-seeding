@@ -2,7 +2,7 @@ import { isKnockout } from '@smashclub/shared';
 import { memberIds } from './entrants';
 import { hash, requireFact, resolved, unconfirmedCall } from './facts';
 import { qualifierFieldFrozen } from './qualifiers';
-import type { TournamentCommand, TournamentState } from './schemas';
+import type { Match, TournamentCommand, TournamentState } from './schemas';
 
 type Command = Extract<TournamentCommand, { kind: 'substituteDoublesMember' }>;
 export type DoublesSubstitution = Omit<Command, 'kind' | 'revisionToken'>;
@@ -17,9 +17,12 @@ export function reviewDoublesSubstitution(state: TournamentState, input: Doubles
   const incomingEntered = state.entrants.some((item) =>
     memberIds(item).some((playerId) => incomingIds.has(playerId)),
   );
-  const matches = state.matches.filter(
-    (match) => entrant && [match.player1Id, match.player2Id].includes(entrant.playerId),
-  );
+  const involvesEntrant = (match: Match) =>
+    entrant && [match.player1Id, match.player2Id].includes(entrant.playerId);
+  const matches = state.matches.filter(involvesEntrant);
+  const archivedMatchIds = (state.supersededPlayedSets ?? [])
+    .filter(({ match }) => involvesEntrant(match))
+    .map(({ match }) => match.id);
   const reported = new Set(state.reports.map((report) => report.matchId));
   const finalsFrozen = pool ? qualifierFieldFrozen(state, pool.division) : false;
   const calls = matches.filter(unconfirmedCall).map((match) => match.id);
@@ -51,6 +54,7 @@ export function reviewDoublesSubstitution(state: TournamentState, input: Doubles
   )
     issues.push('The pair must have only scheduled matches in its own pool.');
   if (
+    archivedMatchIds.length ||
     matches.some(
       (match) =>
         match.started ||
@@ -94,6 +98,7 @@ export function reviewDoublesSubstitution(state: TournamentState, input: Doubles
       lifecycle: state.lifecycle,
       finalsFrozen,
       matches,
+      archivedMatchIds,
       reported: matches.filter((match) => reported.has(match.id)).map((match) => match.id),
       incomingEntered,
       outgoingPlayerId,

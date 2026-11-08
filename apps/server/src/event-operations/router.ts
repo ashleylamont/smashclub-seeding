@@ -352,7 +352,7 @@ export const eventOpsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const api = await nativeEntity(ctx, input.matchId, 'match', input);
+      const api = await nativeEntity(ctx, input.matchId, 'match', input, true);
       return api ? api.report(input) : reportScore(ctx.db, ctx.user, input);
     }),
   reviewReport: authedProcedure

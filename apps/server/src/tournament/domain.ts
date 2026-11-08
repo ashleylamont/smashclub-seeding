@@ -9,6 +9,7 @@ import { retireEvent } from './retirementDecision';
 import { sealResults } from './results';
 import { memberIds, changeAvailability } from './entrants';
 import { dispatchMatch } from './scheduling';
+import { replayFinalsSlot } from './finalsSlotReplay';
 import { additionalDecision, finalsToken, resetFinals, poolDrawPauseBlocker } from './operations';
 import { drawFinals } from './brackets';
 import { hash, receiptKey, requireFact, resolved, sameScore } from './facts';
@@ -143,6 +144,7 @@ function decisionFactVersion(
   command: TournamentCommand,
 ) {
   const kind = command.kind;
+  if (kind === 'replayFinalsSlotV1') return 7 as const;
   if (kind === 'substituteDoublesMember') return 8 as const;
   if (
     !['retire', 'finalize', 'replaceResult'].includes(kind) &&
@@ -161,6 +163,11 @@ function decisionFactVersion(
   return state.settings.poolOrderPolicy && !['retire', 'finalize', 'replaceResult'].includes(kind)
     ? (2 as const)
     : (1 as const);
+}
+
+function correctedScoreCommand(state: TournamentState, command: TournamentCommand) {
+  if (command.kind !== 'score' && command.kind !== 'replayFinalsSlotV1') return null;
+  return state.matches.find((match) => match.id === command.matchId)?.resultCommandId ?? null;
 }
 
 export function decide(
@@ -219,6 +226,9 @@ export function decide(
       break;
     case 'score':
       reportId = recordScore(next, envelope, command, basis);
+      break;
+    case 'replayFinalsSlotV1':
+      reportId = replayFinalsSlot(next, envelope, command, basis);
       break;
     case 'review': {
       const report = next.reports.find((r) => r.id === command.reportId);
@@ -345,6 +355,7 @@ export function decide(
     'prizes',
     'retirement',
     'broadcastSides',
+    'supersededPlayedSets',
   ] as const) {
     if (hash(previous[field] ?? null) !== hash(next[field] ?? null))
       Object.assign(after, { [field]: next[field] });
@@ -362,10 +373,7 @@ export function decide(
     receiptKey: key,
     command,
     source: envelope.operator ? 'operator' : envelope.guest ? 'guest' : 'attendee',
-    correctionOf:
-      command.kind === 'score'
-        ? (previous.matches.find((m) => m.id === command.matchId)?.resultCommandId ?? null)
-        : null,
+    correctionOf: correctedScoreCommand(previous, command),
     causation: [
       ...new Set(
         previous.matches

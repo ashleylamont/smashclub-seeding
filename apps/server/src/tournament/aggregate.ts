@@ -18,6 +18,7 @@ export const NativeTournament = state({
     DecisionRecordedV4: Decision.extend({ version: z.literal(4) }),
     DecisionRecordedV5: Decision.extend({ version: z.literal(5) }),
     DecisionRecordedV6: Decision.extend({ version: z.literal(6) }),
+    DecisionRecordedV7: Decision.extend({ version: z.literal(7) }),
     DecisionRecordedV8: Decision.extend({ version: z.literal(8) }),
     ResultsSealedV1: Decision,
     PlanRetiredV1: Decision,
@@ -42,6 +43,9 @@ export const NativeTournament = state({
       current: [reduceDecision(state.current[0], data)],
     }),
     DecisionRecordedV6: ({ data }, state) => ({
+      current: [reduceDecision(state.current[0], data)],
+    }),
+    DecisionRecordedV7: ({ data }, state) => ({
       current: [reduceDecision(state.current[0], data)],
     }),
     DecisionRecordedV8: ({ data }, state) => ({
@@ -73,6 +77,7 @@ export const NativeTournament = state({
     if (['finalize', 'replaceResult'].includes(envelope.command.kind))
       return ['ResultsSealedV1', decision];
     if (decision.version === 8) return ['DecisionRecordedV8', { ...decision, version: 8 as const }];
+    if (decision.version === 7) return ['DecisionRecordedV7', { ...decision, version: 7 as const }];
     if (decision.version === 6) return ['DecisionRecordedV6', { ...decision, version: 6 as const }];
     if (decision.version === 5) return ['DecisionRecordedV5', { ...decision, version: 5 as const }];
     if (decision.version === 4) return ['DecisionRecordedV4', { ...decision, version: 4 as const }];

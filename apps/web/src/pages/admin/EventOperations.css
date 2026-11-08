@@ -8,6 +8,14 @@
   align-items: center;
 }
 
+.ops-finals-replay-review {
+  display: grid;
+  gap: var(--s2);
+}
+.ops-finals-replay-review > :is(p, h4, ul) {
+  margin: 0;
+}
+
 .ops-pool-draw-description {
   min-width: 0;
   max-width: 100%;

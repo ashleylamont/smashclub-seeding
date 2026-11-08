@@ -1,4 +1,5 @@
 import { eliminationStandings } from '@smashclub/tournament-formats';
+import { resultMatchEvidence } from './resultEvidence';
 import { matchNames } from './matchNames';
 import { memberIds } from './entrants';
 import { eq, inArray, isNull, sql } from 'drizzle-orm';
@@ -13,9 +14,33 @@ import {
   type Db,
 } from '@smashclub/db';
 import { hash, TournamentConflict } from './domain';
-import type { TournamentResult } from './schemas';
+import type { Match, SupersededPlayedSet, TournamentResult } from './schemas';
 import { runRecompute } from '../recompute/recompute';
 import { historicalPlayerIds } from '../identity/playerIds';
+
+function publicationSetIdentity(
+  result: TournamentResult,
+  match: Match,
+  label: string,
+  superseded?: SupersededPlayedSet,
+) {
+  return {
+    identifier: superseded ? `${superseded.label} · Superseded advancement` : label,
+    raw: {
+      provider: 'native',
+      eventMatchId: match.id,
+      resultId: result.id,
+      resultRevision: result.revision,
+      outcome: match.outcome,
+      ...(superseded
+        ? {
+            advancementDisposition: 'superseded',
+            replacementMatchId: superseded.replacementMatchId,
+          }
+        : {}),
+    },
+  };
+}
 
 /** Only sealed facts are exported. Profile/draw/rating reads cannot change this result. */
 export async function publishNativeResult(
@@ -24,6 +49,7 @@ export async function publishNativeResult(
   fault?: (phase: 'beforeReceipt' | 'afterCommit', transaction?: Db) => Promise<void>,
 ) {
   const labels = matchNames(result);
+  const evidence = resultMatchEvidence(result);
   const publication = await db.transaction(async (tx) => {
     const [handoff] = await tx
       .select()
@@ -71,12 +97,15 @@ export async function publishNativeResult(
         );
     }
     for (const bracket of result.brackets) {
-      const matches = result.matches.filter(
-        (m) =>
-          !m.skipped &&
-          (m.bracketId === bracket.id ||
-            (bracket.stage === 'main' && m.stage === 'group' && m.division === bracket.division)),
+      const setsForBracket = evidence.filter(
+        ({ match }) =>
+          !match.skipped &&
+          (match.bracketId === bracket.id ||
+            (bracket.stage === 'main' &&
+              match.stage === 'group' &&
+              match.division === bracket.division)),
       );
+      const matches = setsForBracket.map(({ match }) => match);
       if (!matches.length && !bracket.entrantIds.length) continue;
       const slug = `nemesis_${result.planId.replaceAll('-', '')}_${bracket.division}_${bracket.stage}_r${result.revision}`;
       const [tournament] = await tx
@@ -111,7 +140,7 @@ export async function publishNativeResult(
         })
         .returning();
       tournamentIds.push(tournament!.id);
-      const finals = matches.filter((m) => m.bracketId === bracket.id);
+      const finals = result.matches.filter((m) => !m.skipped && m.bracketId === bracket.id);
       const outcome = eliminationStandings(
         bracket.entrantIds,
         finals,
@@ -156,7 +185,7 @@ export async function publishNativeResult(
         .returning();
       const participantIds = new Map(playerIds.map((id, i) => [id, participants[i]!.id]));
       const participant = (id: string | null) => (id ? (participantIds.get(id) ?? null) : null);
-      for (const [index, match] of matches.entries())
+      for (const [index, { match, superseded }] of setsForBracket.entries())
         await tx.insert(sets).values({
           tournamentId: tournament!.id,
           challongeMatchId: index + 1,
@@ -166,7 +195,7 @@ export async function publishNativeResult(
             match.bracketLane === 'losers'
               ? -(match.bracketRound ?? match.round)
               : (match.bracketRound ?? match.round),
-          identifier: labels.get(match.id)!,
+          ...publicationSetIdentity(result, match, labels.get(match.id)!, superseded),
           suggestedPlayOrder: index + 1,
           p1ParticipantId: participant(match.player1Id),
           p2ParticipantId: participant(match.player2Id),
@@ -182,13 +211,6 @@ export async function publishNativeResult(
           scoresCsv: match.outcome === 'played' ? `${match.score1}-${match.score2}` : null,
           excludedFromRatings: match.outcome !== 'played',
           completedAt: new Date(match.completedAt ?? result.sealedAt),
-          raw: {
-            provider: 'native',
-            eventMatchId: match.id,
-            resultId: result.id,
-            resultRevision: result.revision,
-            outcome: match.outcome,
-          },
         });
     }
     await fault?.('beforeReceipt', tx);

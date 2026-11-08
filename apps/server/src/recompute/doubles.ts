@@ -6,6 +6,7 @@ import {
   type DoublesSet,
   type SkillEstimate,
 } from '@smashclub/engine';
+import { resultMatchEvidence } from '../tournament/resultEvidence';
 import { Result } from '../tournament/schemas';
 import { historicalPlayerIds } from '../identity/playerIds';
 import { loadSinglesHistory } from './inputs';
@@ -32,7 +33,7 @@ export async function loadDoublesRatings(db: Db, before: number) {
     )
       continue;
     sourceResultIds.push(result.id);
-    for (const match of result.matches) {
+    for (const { match } of resultMatchEvidence(result)) {
       if (match.outcome !== 'played' || !match.winnerId || !match.player1Id || !match.player2Id)
         continue;
       const a = result.entrants

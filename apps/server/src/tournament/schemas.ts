@@ -75,6 +75,12 @@ export const LiveMatch = z.object({
   held: z.boolean().optional(),
   blockedReason: z.string().nullable().default(null),
 });
+const SupersededPlayedSet = z.object({
+  match: LiveMatch,
+  replacementMatchId: id,
+  label: z.string(),
+  sourcePoolMatchId: id,
+});
 export const Entrant = z.object({
   id,
   /** V1 transport name: an entrant key, equal to entry ID for doubles. */
@@ -251,6 +257,7 @@ export const Result = z.object({
   entrants: z.array(Entrant),
   brackets: z.array(Bracket),
   matches: z.array(LiveMatch),
+  supersededPlayedSets: z.array(SupersededPlayedSet).optional(),
 });
 export const Receipt = z.object({
   hash: z.string(),
@@ -274,6 +281,7 @@ export const LiveState = z.object({
     )
     .optional(),
   retirement: Retirement.optional(),
+  supersededPlayedSets: z.array(SupersededPlayedSet).optional(),
   baseline: Baseline.nullable(),
   lifecycle: z.enum(['absent', 'locked', 'unlocked', 'finalized', 'cancelled']),
   sequence: revision,
@@ -408,6 +416,7 @@ export const Decision = z.object({
     z.literal(4),
     z.literal(5),
     z.literal(6),
+    z.literal(7),
     z.literal(8),
   ]),
   commandId: id,
@@ -437,6 +446,7 @@ export type QualifierSource = z.infer<typeof QualifierSource>;
 export type QualifierSlot = z.infer<typeof QualifierSlot>;
 export type StrengthSeeding = z.infer<typeof StrengthSeeding>;
 export type Match = z.infer<typeof LiveMatch>;
+export type SupersededPlayedSet = z.infer<typeof SupersededPlayedSet>;
 export type TournamentState = z.infer<typeof LiveState>;
 export type TournamentBaseline = z.infer<typeof Baseline>;
 export type TournamentResult = z.infer<typeof Result>;

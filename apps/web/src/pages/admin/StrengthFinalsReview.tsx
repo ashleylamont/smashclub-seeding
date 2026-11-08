@@ -14,13 +14,20 @@ function meetingCounts(rounds: number[]) {
 export function StrengthFinalsReview({
   seeding,
   name,
+  replayed,
 }: {
   seeding: Seeding;
   name: (id: string) => string;
+  replayed: boolean;
 }) {
   const byeNames = (ids: string[]) => ids.map(name).join(', ') || 'None';
   return (
-    <Disclosure title="Compare seeding and byes">
+    <Disclosure title={replayed ? 'Original seeding and byes' : 'Compare seeding and byes'}>
+      {replayed && (
+        <p>
+          These seeds are the original draw record. See the current bracket for replay pairings.
+        </p>
+      )}
       <p>
         The combined score subtracts {seeding.poolPlaceCost} points per place below first from
         conservative WHR (skill minus twice its uncertainty). The rating is frozen before play.

@@ -3,7 +3,7 @@ import { hasFixedLegacyPoolQualifiers, legacyQualifierSlots } from './legacyFina
 import { projectMatchLabels } from './matchNames';
 import {
   canConfirmPoolOrder,
-  canReviewFrozenPoolGames,
+  canReviewFrozenPoolResult,
   poolOrderStatus,
   poolPlacementSource,
 } from './poolOrders';
@@ -30,6 +30,7 @@ import { matchAvailability, stationAvailability } from '../event-operations/avai
 import type { snapshot as sqlSnapshot } from '../event-operations/service';
 import { getPlan as sqlPlan, type PlanView } from '../event-planner/plans';
 import { resolved } from './facts';
+import { supersededPlayedSetViews } from './resultEvidence';
 import { hasCurrentPendingScoreReview } from './scoreReview';
 import { pendingStrengthFinals } from './strengthFinals';
 import type { Match, QualifierSlot, TournamentState } from './schemas';
@@ -41,6 +42,7 @@ type MatchViewFields = Pick<
 > & { labelFromStructure?: true };
 export type EventSnapshot = Omit<SqlSnapshot, 'placements' | 'matches' | 'nativeBrackets'> & {
   broadcastSides?: TournamentState['broadcastSides'];
+  supersededPlayedSets?: ReturnType<typeof supersededPlayedSetViews>;
   matches: (SqlSnapshot['matches'][number] & MatchViewFields & { reviewPoolGames?: true })[];
   nativeBrackets: (SqlSnapshot['nativeBrackets'][number] & { qualifierSlots?: QualifierSlot[] })[];
   pendingFinals?: ReturnType<typeof pendingStrengthFinals>;
@@ -183,7 +185,7 @@ export async function eventView(
   const reviewableMatches = new Set<string>();
   if (privateView) {
     const reviewablePools = new Set(
-      state.pools.filter((pool) => canReviewFrozenPoolGames(state, pool)).map(({ id }) => id),
+      state.pools.filter((pool) => canReviewFrozenPoolResult(state, pool)).map(({ id }) => id),
     );
     for (const match of state.matches)
       if (
@@ -216,6 +218,9 @@ export async function eventView(
     : [];
   return {
     ...(state.broadcastSides ? { broadcastSides: state.broadcastSides } : {}),
+    ...(state.supersededPlayedSets
+      ? { supersededPlayedSets: supersededPlayedSetViews(state, names) }
+      : {}),
     ...buildStationQueues(
       rows,
       sharedDispatch(state) ? [] : stations,

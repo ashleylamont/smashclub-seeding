@@ -164,18 +164,12 @@ export function describeDecision(
         'Prize saved',
         `${command.title}${command.playerId ? ` · ${player(command.playerId)}` : ''}`,
       );
+    case 'replayFinalsSlotV1':
+      return describeFinalsReplay(decision, command.reason, matchId, player);
     case 'drawFinals':
       return description('draw', 'Finals drawn', 'The chosen finals pairings were recorded.');
     case 'resetFinals':
-      if (command.scope) {
-        const division = command.scope.division === 'upper' ? 'Upper' : 'Lower';
-        return description(
-          'draw',
-          `Unplayed ${division} finals reset`,
-          `${division} finals were cleared before play.`,
-        );
-      }
-      return description('draw', 'Unplayed finals reset', 'Finals were cleared before play.');
+      return describeFinalsReset(command, matchId);
     case 'resetQueue':
       return description('draw', 'Unplayed match queue reset', 'Pool assignments were retained.');
     case 'unlock':
@@ -205,6 +199,47 @@ export function describeDecision(
     default:
       throw new Error(`No history description for ${command.kind}`);
   }
+}
+
+function describeFinalsReset(
+  command: Extract<TournamentDecision['command'], { kind: 'resetFinals' }>,
+  matchId: string | null,
+): HistoryDescription {
+  if (!command.scope)
+    return {
+      category: 'draw',
+      title: 'Unplayed finals reset',
+      summary: 'Finals were cleared before play.',
+      matchId,
+    };
+  const division = command.scope.division === 'upper' ? 'Upper' : 'Lower';
+  return {
+    category: 'draw',
+    title: `Unplayed ${division} finals reset`,
+    summary: `${division} finals were cleared before play.`,
+    matchId,
+  };
+}
+
+function describeFinalsReplay(
+  decision: TournamentDecision,
+  reason: string,
+  sourceMatchId: string | null,
+  player: (id: string | null) => string,
+): HistoryDescription {
+  const archived = decision.after.supersededPlayedSets?.at(-1);
+  const replacement = decision.after.matches?.find(
+    (match) => match.id === archived?.replacementMatchId,
+  );
+  const base = { category: 'draw' as const, title: 'Finals replay scheduled' };
+  if (!archived || !replacement) return { ...base, matchId: sourceMatchId, summary: reason };
+  const oldPairing = `${player(archived.match.player1Id)} vs ${player(archived.match.player2Id)}`;
+  const newPairing = `${player(replacement.player1Id)} vs ${player(replacement.player2Id)}`;
+  return {
+    ...base,
+    matchId: replacement.id,
+    summary: `${oldPairing} ${archived.match.score1}–${archived.match.score2} stays recorded with superseded advancement. Replay ${newPairing}. ${reason}`,
+  };
 }
 
 function describeDispatchCommand(

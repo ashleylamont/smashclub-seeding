@@ -110,11 +110,25 @@ export async function nativeEvent(
   await ctx.nativeRuntime.transfer(planId);
   return new NativeEventApi(ctx, ctx.nativeRuntime, planId, intent);
 }
+function hasEntity(
+  state: TournamentState,
+  id: string,
+  kind: 'match' | 'report',
+  includeArchived: boolean,
+) {
+  if (kind === 'report') return state.reports.some((report) => report.id === id);
+  return (
+    state.matches.some((match) => match.id === id) ||
+    (includeArchived && state.supersededPlayedSets?.some(({ match }) => match.id === id))
+  );
+}
+
 export async function nativeEntity(
   ctx: TrpcContext,
   id: string,
   kind: 'match' | 'report',
   intent?: { requestId?: string; [key: string]: unknown },
+  includeArchived = false,
 ) {
   const table = kind === 'match' ? eventMatches : eventScoreReports;
   const [row] = await ctx.db
@@ -129,8 +143,7 @@ export async function nativeEntity(
       const api = await nativeEvent(ctx, planId, false, intent);
       if (api) {
         const state = await api.state();
-        if ((kind === 'match' ? state.matches : state.reports).some((entity) => entity.id === id))
-          return api;
+        if (hasEntity(state, id, kind, includeArchived)) return api;
       }
       index.delete(planId);
     }
@@ -139,8 +152,7 @@ export async function nativeEntity(
       const api = await nativeEvent(ctx, handoff.eventPlanId, false, intent);
       if (!api) continue;
       const state = await api!.state();
-      if ((kind === 'match' ? state.matches : state.reports).some((row) => row.id === id))
-        return api;
+      if (hasEntity(state, id, kind, includeArchived)) return api;
     }
   return null;
 }
@@ -227,7 +239,8 @@ export class NativeEventApi {
     outcome: 'played' | 'forfeit' | 'bye';
     winnerId?: string;
   }) {
-    const previous = reportViews(await this.state()).find(
+    const state = await this.state();
+    const previous = reportViews(state).find(
       (r) => r.actorId === this.ctx.user!.id && r.requestId === input.requestId,
     );
     if (previous) {
@@ -245,6 +258,11 @@ export class NativeEventApi {
         });
       return previous;
     }
+    if (state.supersededPlayedSets?.some(({ match }) => match.id === input.matchId))
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'This played set is archived. Use the replacement pairing for new scores.',
+      });
     if (input.outcome === 'bye')
       throw new TRPCError({
         code: 'BAD_REQUEST',
@@ -260,8 +278,7 @@ export class NativeEventApi {
       },
       input.requestId,
     );
-    const state = await this.state();
-    return reportViews(state).find((r) => r.id === response.receipt.reportId)!;
+    return reportViews(await this.state()).find((r) => r.id === response.receipt.reportId)!;
   }
   async updateMatch(input: {
     matchId: string;
