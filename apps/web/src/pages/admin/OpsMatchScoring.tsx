@@ -298,6 +298,7 @@ export function MatchScoring({
             <FinalsSlotReplayReview
               key={requestId}
               score={replayScore}
+              callDesk={callDesk}
               stale={stale}
               disabled={disabled}
               act={act}

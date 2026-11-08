@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import type { trpc } from '../src/lib/trpc';
+import type { Desk } from '../src/pages/admin/dispatchTypes';
 import { bracketCaptureOptions, mockEvent, PLAN_ID, ready, type FixtureOptions } from './fixtures';
 
 type Preview = Awaited<ReturnType<typeof trpc.eventOps.live.previewFinalsSlotReplay.query>>;
@@ -26,6 +27,7 @@ for (const theme of ['dark', 'light'] as const)
         await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
         const options: FixtureOptions = {
           role: 'admin',
+          idle: reciprocal,
           history: [
             {
               entries: [
@@ -80,6 +82,33 @@ for (const theme of ['dark', 'light'] as const)
           winnerId: alice,
           outcome: 'played',
         });
+        const consolation = fixture.overview.matches.find((row) => row.status === 'ready')!;
+        const desk: Desk = {
+          mode: 'shared',
+          capacity: 2,
+          active: 0,
+          overCapacity: 0,
+          resourceRevision: 12,
+          queueRevision: 0,
+          stations: [],
+          entrants: [],
+          pools: [],
+          queue: [],
+        };
+        const shared = { active: 0, capacity: 2, overCapacity: 0 };
+        if (reciprocal) {
+          Object.assign(fixture.overview, { operatorDispatch: desk, sharedDispatch: shared });
+          Object.assign(consolation, {
+            label: 'Upper Consolation Semi-final',
+            stage: 'consolation',
+            player1Id: bea,
+            player1Name: entrantNames[bea],
+            player2Id: opponent.id,
+            player2Name: entrantNames[opponent.id],
+            stationId: null,
+            started: false,
+          });
+        }
         const changed = {
           bracketId: 'upper-championship',
           division: 'upper',
@@ -116,7 +145,7 @@ for (const theme of ['dark', 'light'] as const)
           downstream: [{ id: 'final', label: 'Upper Championship Final' }],
           ...(reciprocal && {
             companion: {
-              matchId: 'consolation',
+              matchId: consolation.id,
               label: 'Upper Consolation Semi-final',
               player1Id: bea,
               player2Id: opponent.id,
@@ -139,16 +168,57 @@ for (const theme of ['dark', 'light'] as const)
           return preview;
         });
         const submissions: Command[] = [];
+        const returns: Command['command'][] = [];
+        const keepOtherFocus = theme === 'light' && width === 1440;
+        let finishReturn: (() => void) | undefined;
+        const callIssue =
+          'Return any untaken call on the consolation route before reviewing this change.';
         await page.route('**/api/trpc/eventOps.live.command*', async (route) => {
           const batched = new URL(route.request().url()).searchParams.has('batch');
           const body = route.request().postDataJSON();
-          submissions.push(batched ? body[0] : body);
-          if (reciprocal && submissions.length === 1) {
+          const input: Command = batched ? body[0] : body;
+          if (input.command.kind === 'matchControl') {
+            returns.push(input.command);
+            if (keepOtherFocus)
+              await new Promise<void>((resolve) => {
+                finishReturn = resolve;
+              });
+            Object.assign(consolation, { status: 'ready', called: false, resourceRevision: 13 });
+            desk.queue = [];
+            desk.active = shared.active = 0;
+            desk.resourceRevision = 13;
             preview = { ...approved, revisionToken: 'b'.repeat(64) };
+            const result = { result: { data: {} } };
+            await route.fulfill({ json: batched ? [result] : result });
+            return;
+          }
+          submissions.push(input);
+          if (reciprocal && submissions.length === 1) {
+            Object.assign(consolation, { status: 'playing', called: true, resourceRevision: 12 });
+            desk.active = shared.active = 1;
+            desk.queue = [
+              {
+                matchId: consolation.id,
+                state: 'called',
+                waitingSince: 0,
+                downstream: 0,
+                reason: 'Waiting time, then draw order',
+                canStart: false,
+                canDispatchOrdinary: false,
+                eligibleStationIds: [],
+                reasons: [],
+              },
+            ];
+            preview = {
+              allowed: false,
+              issues: [callIssue],
+              qualifierChanges: [changed, companionChange],
+              entrantNames,
+              returnCallMatchIds: [consolation.id],
+            };
             const conflict = {
               error: {
-                message:
-                  'Return any untaken call on the consolation route before reviewing this change.',
+                message: callIssue,
                 code: -32009,
                 data: { code: 'CONFLICT', httpStatus: 409 },
               },
@@ -242,6 +312,56 @@ for (const theme of ['dark', 'light'] as const)
           const rereview = card.getByRole('button', { name: 'Review finals replay' });
           await expect(rereview).toBeFocused();
           await rereview.press('Enter');
+          const openCall = details.getByRole('button', { name: /^Open call for Bea/ });
+          await expect(openCall).toBeVisible();
+          await expect(apply).toHaveCount(0);
+          await expect(card.getByRole('spinbutton').last()).toHaveValue('3');
+          expect(returns).toHaveLength(0);
+          expect(submissions).toHaveLength(1);
+          await openCall.scrollIntoViewIfNeeded();
+          await checkRoute(page);
+          await page.screenshot({
+            path: testInfo.outputPath('consolation-call-recovery.png'),
+            fullPage: true,
+            style: readFileSync(bracketCaptureOptions.stylePath, 'utf8'),
+          });
+          await openCall.press('Enter');
+          const returnCall = page.locator(`[id="return-call-${consolation.id}"]`);
+          await expect(returnCall).toBeFocused();
+          await expect(returnCall).toHaveText('Return untaken call');
+          const returned = page.waitForResponse(
+            (response) =>
+              response.request().method() === 'POST' &&
+              new URL(response.url()).pathname === '/api/trpc/eventOps.live.command',
+          );
+          await returnCall.press('Enter');
+          const runTab = page.getByRole('tab', { name: 'Run matches' });
+          if (keepOtherFocus) {
+            await expect.poll(() => Boolean(finishReturn)).toBe(true);
+            await runTab.focus();
+            finishReturn?.();
+          }
+          expect((await returned).ok()).toBe(true);
+          expect(returns).toEqual([
+            {
+              kind: 'matchControl',
+              matchId: consolation.id,
+              expectedRevision: consolation.revision,
+              expectedResourceRevision: 12,
+              status: 'ready',
+              stationId: null,
+              reason: null,
+            },
+          ]);
+          await expect(details).toContainText('Refresh the finals review before continuing.');
+          await expect(openCall).toHaveCount(0);
+          await expect(apply).toHaveCount(0);
+          expect(submissions).toHaveLength(1);
+          expect(previews).toHaveLength(3);
+          await expect(card.getByRole('spinbutton').last()).toHaveValue('3');
+          const refresh = card.getByRole('button', { name: 'Refresh finals review' });
+          await expect(keepOtherFocus ? runTab : refresh).toBeFocused();
+          await refresh.press('Enter');
           await expect(card.getByRole('textbox', { name: 'Reason for replay' })).toHaveValue(
             'Checked the pool sheet',
           );
@@ -278,7 +398,7 @@ for (const theme of ['dark', 'light'] as const)
           expect(submissions[1]?.command).toMatchObject({ revisionToken: 'b'.repeat(64) });
         }
         expect(submissions.at(-1)).toEqual(submissions.at(-2));
-        expect(previews).toHaveLength(reciprocal ? 3 : 2);
+        expect(previews).toHaveLength(reciprocal ? 4 : 2);
         for (const input of previews)
           expect(input).toEqual({
             planId: PLAN_ID,

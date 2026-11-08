@@ -698,24 +698,52 @@ describe('reciprocal finals routes on PostgreSQL', () => {
       expectedResourceRevision: (await state()).settings.resourceRevision,
     });
     const called = await state();
+    await expect(v2()).resolves.toMatchObject({
+      allowed: false,
+      returnCallMatchIds: [consolationRoot.id],
+    });
+    const legacyPreview = await eventOps.live.previewFinalsSlotReplay({ planId, ...reviewInput });
+    expect(legacyPreview).toMatchObject({ allowed: false });
+    expect(legacyPreview).not.toHaveProperty('returnCallMatchIds');
+    const otherUser = fixture.caller({ ...nativeAdmin, id: crypto.randomUUID(), role: 'user' });
+    await expect(
+      otherUser.eventOps.live.previewFinalsSlotReplay({
+        planId,
+        ...reviewInput,
+        reviewVersion: 2,
+      }),
+    ).rejects.toThrow(/organiser|assigned|access/i);
+    expect(await state()).toEqual(called);
     await expect(send(attempt)).rejects.toThrow(/return any untaken call/i);
     expect(await state()).toEqual(called);
-    const move = async (status: 'blocked' | 'ready') => {
+    const move = async (status: 'blocked' | 'ready', matchId = consolationRoot.id) => {
       const current = await state();
       return send({
         kind: 'matchControl',
-        matchId: consolationRoot.id,
-        expectedRevision: current.matches.find(({ id }) => id === consolationRoot.id)!.revision,
+        matchId,
+        expectedRevision: current.matches.find(({ id }) => id === matchId)!.revision,
         expectedResourceRevision: current.settings.resourceRevision,
         status,
         stationId: null,
         reason: status === 'blocked' ? 'Organiser hold' : null,
       });
     };
+    const championshipFinal = called.matches.find(
+      ({ parent1Id, parent2Id }) => parent1Id === original.id || parent2Id === original.id,
+    )!;
+    await move('blocked', championshipFinal.id);
+    const bothBlocked = await state();
+    expect(await v2()).not.toHaveProperty('returnCallMatchIds');
+    expect(await state()).toEqual(bothBlocked);
+    await move('ready', championshipFinal.id);
+
     await move('ready');
     const afterReturn = await reviewCommand();
+    expect(afterReturn.revisionToken).not.toBe(attempt.revisionToken);
+    await expect(send(attempt)).rejects.toThrow(/review the replay again/i);
     await move('blocked');
     const held = await state();
+    expect(await v2()).not.toHaveProperty('returnCallMatchIds');
     await expect(send(afterReturn)).rejects.toThrow(/organiser hold/i);
     expect(await state()).toEqual(held);
     await move('ready');
@@ -731,12 +759,60 @@ describe('reciprocal finals routes on PostgreSQL', () => {
     const pending = await attendee.eventOps.reportScore(fixture.score(ready, ready.player1Id!));
     expect(pending.status).toBe('pending');
     const submitted = await state();
+    expect(await v2()).not.toHaveProperty('returnCallMatchIds');
     await expect(send(afterHold)).rejects.toThrow(/consolation route has score report history/i);
     expect(await state()).toEqual(submitted);
     await eventOps.reviewReport({ reportId: pending.id, approve: false });
     const rejected = await state();
     await expect(send(afterHold)).rejects.toThrow(/consolation route has score report history/i);
     expect(await state()).toEqual(rejected);
+  });
+
+  it('leaves started consolation play protected without a Return link', async () => {
+    const { planId, eventOps, state, report, send, reviewInput, original, pool, alice } =
+      await fixture.prepare({ consolation: true });
+    await report(original, alice);
+    const mainPlayed = await state();
+    const opener = mainPlayed.matches.find(
+      (match) =>
+        match.stage === 'consolation' &&
+        [match.player1Qualifier, match.player2Qualifier].some(
+          (source) => source?.poolId === pool.id && source.place === 3,
+        ),
+    )!;
+    await send({
+      kind: 'configureDispatch',
+      capacity: 2,
+      reservedStationIds: [],
+      expectedResourceRevision: mainPlayed.settings.resourceRevision,
+    });
+    await send({
+      kind: 'dispatch',
+      matchId: opener.id,
+      stationId: null,
+      callOnly: true,
+      expectedRevision: opener.revision,
+      expectedResourceRevision: (await state()).settings.resourceRevision,
+    });
+    const called = await state();
+    await send({
+      kind: 'beginPlay',
+      matchId: opener.id,
+      expectedRevision: opener.revision,
+      expectedResourceRevision: called.settings.resourceRevision,
+    });
+    const started = await state();
+    const preview = await eventOps.live.previewFinalsSlotReplay({
+      planId,
+      ...reviewInput,
+      reviewVersion: 2,
+    });
+    expect(preview).toMatchObject({
+      allowed: false,
+      issues: ['The affected consolation route already has play or results.'],
+    });
+    expect(preview).not.toHaveProperty('returnCallMatchIds');
+    expect(await state()).toEqual(started);
   });
 
   it('leaves an already recorded consolation bye and its route for a separate ruling', async () => {

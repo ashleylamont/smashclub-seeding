@@ -1,4 +1,6 @@
+import { sharedDispatch } from './dispatch';
 import { available } from './entrants';
+import { unconfirmedCall } from './facts';
 import { qualifierKey } from './qualifiers';
 import type { Match, TournamentState } from './schemas';
 
@@ -34,7 +36,8 @@ export function openingRoute(state: TournamentState, change: QualifierChange) {
     return opening;
 }
 
-type Reviewed<T> = { allowed: true; value: T } | { allowed: false; issue: string };
+type Reviewed<T> =
+  { allowed: true; value: T } | { allowed: false; issue: string; returnCallCandidate?: string };
 
 export type ConsolationRoute = {
   root: NonNullable<ReturnType<typeof openingRoute>>;
@@ -127,6 +130,10 @@ function reviewedConsolationMatch(
     return {
       allowed: false,
       issue: 'Return any untaken call on the consolation route before reviewing this change.',
+      returnCallCandidate:
+        sharedDispatch(state) && unconfirmedCall(match) && match.stationId === null
+          ? match.id
+          : undefined,
     };
   if (match.status !== 'ready' || route.some((m) => m.stationId))
     return {
