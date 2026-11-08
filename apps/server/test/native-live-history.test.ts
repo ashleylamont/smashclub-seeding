@@ -218,5 +218,26 @@ describe('organiser event history', () => {
     );
     expect(entries.some((entry) => entry.matchId === match!.id)).toBe(true);
     expect(entries.find((entry) => entry.matchId === match!.id)!.category).toBe('scores');
+
+    const imported = await runtime.state(planId);
+    const ready = imported.matches.find((item) => item.status === 'ready')!;
+    await runtime.command(nativeAdmin, planId, 'imported-shared-queue', {
+      kind: 'configureDispatch',
+      capacity: 1,
+      reservedStationIds: [],
+      expectedResourceRevision: imported.settings.resourceRevision,
+    });
+    await runtime.command(nativeAdmin, planId, 'imported-queue-move', {
+      kind: 'queueMove',
+      matchId: ready.id,
+      beforeMatchId: null,
+      expectedQueueRevision: (await runtime.state(planId)).settings.queueRevision ?? 0,
+    });
+    const nativePage = await caller().eventOps.live.history({ planId, limit: 1 });
+    expect(nativePage.entries[0]).toMatchObject({
+      title: 'TO queue reordered',
+      matchId: ready.id,
+      summary: expect.stringMatching(/Player \d+ vs Player \d+/),
+    });
   });
 });
