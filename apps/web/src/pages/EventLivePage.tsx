@@ -134,6 +134,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
       </section>
     );
   const closed = ['complete', 'cancelled'].includes(data.plan.status);
+  const closedLabel = data.plan.status === 'cancelled' ? 'EVENT CANCELLED' : 'EVENT FINISHED';
   const visibleMatches = data.matches.filter((match) => matchesPool(match, selectedPool));
   const sections = liveSections(visibleMatches);
   const geometry = overlayGeometry(window.location.search);
@@ -154,11 +155,12 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
   const broadcastStation = focus
     ? focusedStation
     : (data.stations.find((item) => item.name.toLowerCase() === 'stage') ?? data.stations[0]);
+  const playing = closed ? [] : sections.playing;
   const onStream = broadcastStation
-    ? sections.playing.find((match) => match.stationId === broadcastStation.id)
+    ? playing.find((match) => match.stationId === broadcastStation.id)
     : focus
       ? undefined
-      : sections.playing[0];
+      : playing[0];
   const displayPlayers = broadcastPlayers(data, onStream);
   const [showName, ...editionParts] = data.plan.name.split(' · ');
   const edition = editionParts.join(' · ');
@@ -206,37 +208,39 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
         </aside>
         <header className="broadcast-topline">
           <span>
-            <i /> {closed ? 'EVENT FINISHED' : onStream ? 'PLAYING NOW' : 'WAITING FOR A MATCH'}
+            <i /> {closed ? closedLabel : onStream ? 'PLAYING NOW' : 'WAITING FOR A MATCH'}
           </span>
           <span>
             {broadcastStation?.name ??
               (onStream ? station(onStream) : null) ??
               (focus ? 'Selected station' : 'Main broadcast')}{' '}
             /{' '}
-            {onStream?.stage === 'group'
-              ? 'ROUND ROBIN'
-              : (onStream?.stage?.toUpperCase() ?? 'NEXT SET SOON')}
+            {closed
+              ? 'NO ACTIVE SET'
+              : onStream?.stage === 'group'
+                ? 'ROUND ROBIN'
+                : (onStream?.stage?.toUpperCase() ?? 'NEXT SET SOON')}
           </span>
           <span>nemesis.ashl.dev</span>
         </header>
-        <div className="broadcast-matchup" aria-label="Current match">
-          <div className="broadcast-fighter broadcast-fighter-one">
-            <span className="broadcast-side">LEFT</span>
-            <strong>
-              {displayPlayers?.left.name || (closed ? 'EVENT FINISHED' : 'AWAITING MATCH')}
-            </strong>
-            <CharacterIcons slugs={displayPlayers?.left.characters ?? []} />
-            <b>{displayPlayers?.left.score ?? '—'}</b>
-          </div>
-          <span className="broadcast-match-versus">VS</span>
-          <div className="broadcast-fighter broadcast-fighter-two">
-            <b>{displayPlayers?.right.score ?? '—'}</b>
-            <strong>
-              {displayPlayers?.right.name || (closed ? 'EVENT FINISHED' : 'AWAITING MATCH')}
-            </strong>
-            <CharacterIcons slugs={displayPlayers?.right.characters ?? []} />
-            <span className="broadcast-side">RIGHT</span>
-          </div>
+        <div className="broadcast-matchup" aria-label={closed ? undefined : 'Current match'}>
+          {!closed && (
+            <>
+              <div className="broadcast-fighter broadcast-fighter-one">
+                <span className="broadcast-side">LEFT</span>
+                <strong>{displayPlayers?.left.name || 'AWAITING MATCH'}</strong>
+                <CharacterIcons slugs={displayPlayers?.left.characters ?? []} />
+                <b>{displayPlayers?.left.score ?? '—'}</b>
+              </div>
+              <span className="broadcast-match-versus">VS</span>
+              <div className="broadcast-fighter broadcast-fighter-two">
+                <b>{displayPlayers?.right.score ?? '—'}</b>
+                <strong>{displayPlayers?.right.name || 'AWAITING MATCH'}</strong>
+                <CharacterIcons slugs={displayPlayers?.right.characters ?? []} />
+                <span className="broadcast-side">RIGHT</span>
+              </div>
+            </>
+          )}
         </div>
         <OverlaySetup
           stations={data.stations}

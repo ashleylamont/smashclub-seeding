@@ -19,6 +19,7 @@ export function EventBracketLane({
   label,
   labels,
   roundWindow = false,
+  recordedOnly = false,
   roundTitles,
   cardWidth = 250,
 }: {
@@ -28,6 +29,7 @@ export function EventBracketLane({
   label: string;
   labels: Map<string, string>;
   roundWindow?: boolean;
+  recordedOnly?: boolean;
   roundTitles?: string[];
   cardWidth?: number;
 }) {
@@ -178,18 +180,25 @@ export function EventBracketLane({
             </section>
           ))}
           {layout.nodes.map(({ match, x, y }) => {
-            const { showScores } = matchPresentation(match);
+            const unresolved = recordedOnly && match.status !== 'complete';
+            const presentation = matchPresentation(match);
+            const status = unresolved
+              ? presentation.kind === 'no-contest'
+                ? 'No contest'
+                : 'No result recorded'
+              : liveBracketStatus(match);
+            const showScores = !unresolved && presentation.showScores;
             const scores = showScores ? [match.score1, match.score2] : [null, null];
             return (
               <article
-                className={`event-bracket-match${match.status === 'playing' ? ' is-playing' : ''}`}
+                className={`event-bracket-match${!unresolved && match.status === 'playing' ? ' is-playing' : ''}`}
                 key={match.id}
                 data-match-id={match.id}
-                aria-label={`${match.label}: ${liveBracketStatus(match)}`}
+                aria-label={`${match.label}: ${status}`}
                 style={{ left: x, top: y, width: geometry.width }}
               >
                 <small>
-                  {match.label} · {liveBracketStatus(match)}
+                  {match.label} · {status}
                 </small>
                 {([0, 1] as const).map((side) => {
                   const id = side === 0 ? match.player1Id : match.player2Id;

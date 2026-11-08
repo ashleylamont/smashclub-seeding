@@ -99,6 +99,7 @@ export function BroadcastIntermission({
     return () => window.removeEventListener('keydown', key);
   }, [keys]);
   const page = pages[index]!;
+  const closed = ['complete', 'cancelled'].includes(data.plan.status);
   const labels = new Map(data.matches.map((match) => [match.id, match.label]));
   const next = (direction: number) =>
     setCurrent(pages[(index + direction + pages.length) % pages.length]!.key);
@@ -120,11 +121,11 @@ export function BroadcastIntermission({
       </header>
       <main className="intermission-content" key={page.key}>
         {page.kind === 'pool' ? (
-          <PoolPage page={page} />
+          <PoolPage page={page} closed={closed} />
         ) : page.kind === 'qualification' ? (
           <QualificationPage page={page} entrants={data.entrants} />
         ) : page.kind === 'linked' ? (
-          <LinkedBracketPage page={page} />
+          <LinkedBracketPage page={page} closed={closed} />
         ) : page.kind === 'bracket' ? (
           <>
             <div className="intermission-section-heading">
@@ -152,6 +153,7 @@ export function BroadcastIntermission({
                 label="Bracket progress section"
                 labels={labels}
                 roundWindow
+                recordedOnly={closed}
                 cardWidth={Math.max(250, Math.round(viewportWidth / 4))}
                 roundTitles={page.roundTitles}
               />
@@ -166,7 +168,7 @@ export function BroadcastIntermission({
         ) : (
           <div className="intermission-summary">
             <h2>
-              {['complete', 'cancelled'].includes(data.plan.status)
+              {closed
                 ? 'Recorded tournament results'
                 : data.matches.length
                   ? 'Tournament progress'
@@ -186,7 +188,7 @@ export function BroadcastIntermission({
       <footer className="intermission-footer">
         <p>
           {announcement ||
-            (['complete', 'cancelled'].includes(data.plan.status)
+            (closed
               ? 'Recorded tournament results'
               : 'Live records · final places depend on confirmed results')}
         </p>
@@ -214,7 +216,13 @@ export function BroadcastIntermission({
   );
 }
 
-function PoolPage({ page }: { page: Extract<ProgressPage, { kind: 'pool' }> }) {
+function PoolPage({
+  page,
+  closed,
+}: {
+  page: Extract<ProgressPage, { kind: 'pool' }>;
+  closed: boolean;
+}) {
   return (
     <>
       <div className="intermission-section-heading">
@@ -226,14 +234,18 @@ function PoolPage({ page }: { page: Extract<ProgressPage, { kind: 'pool' }> }) {
           {page.parts}
         </span>
       </div>
-      <p>Live standings for review. Pool order and final seeds are separate decisions.</p>
+      <p>
+        {closed
+          ? 'Standings from recorded pool results.'
+          : 'Live standings for review. Pool order and final seeds are separate decisions.'}
+      </p>
       <table className="intermission-standings">
         <thead>
           <tr>
             <th>Player</th>
             <th>Sets W–L</th>
             <th>Games ±</th>
-            <th>To play</th>
+            <th>{closed ? 'No result' : 'To play'}</th>
           </tr>
         </thead>
         <tbody>
@@ -256,7 +268,13 @@ function PoolPage({ page }: { page: Extract<ProgressPage, { kind: 'pool' }> }) {
   );
 }
 
-function LinkedBracketPage({ page }: { page: Extract<ProgressPage, { kind: 'linked' }> }) {
+function LinkedBracketPage({
+  page,
+  closed,
+}: {
+  page: Extract<ProgressPage, { kind: 'linked' }>;
+  closed: boolean;
+}) {
   const heading = `Linked ${finalsFieldLabel(page.bracket)} bracket`;
   return (
     <>
@@ -279,14 +297,16 @@ function LinkedBracketPage({ page }: { page: Extract<ProgressPage, { kind: 'link
           {page.matches.map((match) => {
             const presentation = matchPresentation(match);
             const status =
-              presentation.status ??
-              (match.called
-                ? 'Called'
-                : match.status === 'playing'
-                  ? 'Playing'
-                  : match.status === 'blocked'
-                    ? 'On hold'
-                    : 'Upcoming');
+              closed && match.status !== 'complete' && presentation.kind !== 'no-contest'
+                ? 'No result recorded'
+                : (presentation.status ??
+                  (match.called
+                    ? 'Called'
+                    : match.status === 'playing'
+                      ? 'Playing'
+                      : match.status === 'blocked'
+                        ? 'On hold'
+                        : 'Upcoming'));
             return (
               <tr key={match.id}>
                 <td>{match.label}</td>
