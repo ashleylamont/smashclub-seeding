@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { trpc } from '../../lib/trpc';
 import { returnUntakenCallMatchIds } from '../../lib/eventErrors';
+import { matchPresentation } from '../../lib/matchPresentation';
 import { UntakenCallRecovery, type UntakenCallDesk } from './UntakenCallRecovery';
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 type Action = (work: () => Promise<unknown>, message?: string) => Promise<void>;
@@ -17,12 +18,13 @@ export function PlayerReports({
   callDesk: UntakenCallDesk;
 }) {
   return (
-    <section className="card" id="score-submissions">
-      <h3>Score submissions</h3>
-      <p className="muted">
-        Review pending scores and disagreements. A conflicting report does not replace the recorded
-        result until a TO accepts the correction.
-      </p>
+    <section
+      className="card"
+      id="score-submissions"
+      aria-labelledby="score-submissions-title"
+      tabIndex={-1}
+    >
+      <h3 id="score-submissions-title">Score submissions</h3>
       <ReportRows data={data} disabled={disabled} act={act} callDesk={callDesk} />
     </section>
   );
@@ -36,6 +38,7 @@ function ReportRows({ data, disabled, act, callDesk }: Parameters<typeof PlayerR
     <div>
       {reports.map((report) => {
         const match = data.matches.find((match) => match.id === report.matchId);
+        const recordedOutcome = report.isDispute && match && matchPresentation(match, true).result;
         return (
           <div
             className="ops-report"
@@ -45,20 +48,26 @@ function ReportRows({ data, disabled, act, callDesk }: Parameters<typeof PlayerR
           >
             <div>
               {report.isDispute && (
-                <p className="error-text">
-                  <strong>Conflicting report · TO review</strong>
-                  <br />
-                  {match?.status === 'complete' ? (
-                    <>
-                      Recorded result: {match.player1Name} {match.score1}–{match.score2}{' '}
-                      {match.player2Name}. This report proposes:
-                    </>
-                  ) : (
-                    'Conflicting submissions; no result recorded. This report proposes:'
-                  )}
-                </p>
+                <>
+                  <p className="error-text">
+                    <strong>Conflicting report</strong>
+                  </p>
+                  <p>
+                    {recordedOutcome ? (
+                      <>Recorded outcome · {recordedOutcome}</>
+                    ) : match?.status === 'complete' ? (
+                      <>
+                        Recorded result · {match.player1Name} {match.score1}–{match.score2}{' '}
+                        {match.player2Name}
+                      </>
+                    ) : (
+                      'No result recorded.'
+                    )}
+                  </p>
+                </>
               )}
               <strong>
+                {report.isDispute ? 'Submitted result · ' : 'Pending score · '}
                 {match?.player1Name ?? 'Player'} {report.score1} – {report.score2}{' '}
                 {match?.player2Name ?? 'Player'}
               </strong>

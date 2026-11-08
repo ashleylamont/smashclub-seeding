@@ -19,6 +19,7 @@ interface AttentionData {
     matchId: string;
     status: string;
     expectedRevision: number;
+    isDispute?: boolean;
     score1: number | null;
     score2: number | null;
   }[];

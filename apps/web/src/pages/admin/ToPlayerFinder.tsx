@@ -15,10 +15,12 @@ export function ToPlayerFinder({
   data,
   onMatch,
   onPool,
+  onReviewReports,
 }: {
   data: FinderData;
   onMatch: (id: string) => void;
   onPool: (key: string) => void;
+  onReviewReports: () => void;
 }) {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
@@ -161,7 +163,9 @@ export function ToPlayerFinder({
             <p className="to-player-alert">
               {status.pending.length} score{' '}
               {status.pending.length === 1 ? 'submission awaits' : 'submissions await'} TO review.{' '}
-              <a href="#score-submissions">Review score submissions</a>
+              <Button size="small" onClick={onReviewReports}>
+                Review score submissions
+              </Button>
             </p>
           )}
           {status.outstanding.length > 0 && (
