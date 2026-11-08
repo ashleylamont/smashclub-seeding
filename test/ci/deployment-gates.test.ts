@@ -301,6 +301,62 @@ it('uses repository-scoped credentials for version PRs and publishes releases af
   expect(publish.jobs.release.permissions).toEqual({ contents: 'write' });
 });
 
+describe('version preflight', () => {
+  const steps = versionWorkflow.jobs.version.steps;
+  const preflight = steps.find((step: { id?: string }) => step.id === 'empty-changesets');
+
+  it('checks current main on push before setup, token creation and versioning', () => {
+    expect(versionWorkflow.on).toHaveProperty('workflow_dispatch');
+    expect(steps[0].with.ref).toBe('main');
+    expect(steps[1]).toBe(preflight);
+    expect(preflight.if).toContain("github.event_name == 'push'");
+    for (const step of steps.slice(2, 5)) {
+      expect(step.if).toContain("steps.empty-changesets.outputs.skip != 'true'");
+    }
+    expect(steps.slice(2, 5).map((step: { uses: string }) => step.uses.split('@')[0])).toEqual([
+      './.github/actions/setup-node-pnpm',
+      'actions/create-github-app-token',
+      'changesets/action',
+    ]);
+  });
+
+  it.each([
+    { entries: [], expected: 'skip=true\n' },
+    { entries: ['candidate.md'], expected: '' },
+    { entries: ['pre.json'], expected: '' },
+    { entries: ['pre/note.md'], expected: '' },
+    { entries: ['unexpected'], expected: '' },
+    { entries: [], missingDirectory: true, expected: '' },
+    { entries: [], failedInspection: true, expected: '' },
+  ])('emits a skip only for a known empty directory (%j)', (scenario) => {
+    const cwd = mkdtempSync(join(tmpdir(), 'nemesis-version-preflight-'));
+    const output = join(cwd, 'output');
+    try {
+      if (!scenario.missingDirectory) {
+        for (const name of ['README.md', 'config.json', 'changelog.mjs', ...scenario.entries]) {
+          const file = join(cwd, '.changeset', name);
+          mkdirSync(dirname(file), { recursive: true });
+          writeFileSync(file, '');
+        }
+      }
+      writeFileSync(output, '');
+      const result = spawnSync('/bin/bash', ['-eo', 'pipefail', '-c', preflight.run], {
+        cwd,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          GITHUB_OUTPUT: output,
+          ...(scenario.failedInspection && { PATH: '' }),
+        },
+      });
+      expect(result.status, result.stderr).toBe(0);
+      expect(readFileSync(output, 'utf8')).toBe(scenario.expected);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+});
+
 it('extracts the current app version notes for publication', () => {
   const { version } = JSON.parse(readFileSync('apps/web/package.json', 'utf8'));
   const notes = execFileSync(process.execPath, ['scripts/release-notes.mjs', version], {
