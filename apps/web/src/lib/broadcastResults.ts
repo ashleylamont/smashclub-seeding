@@ -1,4 +1,5 @@
 import type { LiveMatch } from './eventDisplay';
+import { linkedFinalCaption } from './linkedFinalCaption';
 import { recordedByeWinner } from './matchPresentation';
 
 export type ResultMatch = LiveMatch & {
@@ -48,6 +49,10 @@ export function newResultNotices(
       ];
     });
 }
+export function verifiedResultCaption(match: ResultMatch) {
+  return match.labelFromStructure ? match.label : linkedFinalCaption(match)?.text;
+}
+
 export function resultHeadline(match: ResultMatch): string {
   if (match.outcome === 'bye') {
     const winner = recordedByeWinner(match);

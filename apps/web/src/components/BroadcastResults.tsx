@@ -4,6 +4,7 @@ import {
   recentResults,
   resultFingerprint,
   resultHeadline,
+  verifiedResultCaption,
   type ResultMatch,
   type ResultNotice,
 } from '../lib/broadcastResults';
@@ -84,11 +85,12 @@ export function BroadcastResults({
             <div className="broadcast-result-copy">
               <strong>{resultHeadline(match)}</strong>
               <small>
-                {match.division} /{' '}
-                {match.stage === 'group'
-                  ? `Pool ${String.fromCharCode(65 + (match.poolIndex ?? 0))}`
-                  : match.stage}{' '}
-                · {match.label}
+                {verifiedResultCaption(match) ??
+                  `${match.division} / ${
+                    match.stage === 'group'
+                      ? `Pool ${String.fromCharCode(65 + (match.poolIndex ?? 0))}`
+                      : match.stage
+                  } · ${match.label}`}
               </small>
             </div>
             <span className="broadcast-result-bars" aria-hidden="true">
