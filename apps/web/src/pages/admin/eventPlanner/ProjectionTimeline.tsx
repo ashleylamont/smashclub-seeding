@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { Button } from '../../../components/ui/Button';
 import { Disclosure } from '../../../components/ui/Disclosure';
-import { type FormatProjection, type ProjectedMatch, projectedTime } from './projectionView';
+import { ProjectionRunSheet } from './ProjectionRunSheet';
+import { type FormatProjection, projectedTime } from './projectionView';
 import {
   projectionColor,
   projectionDuration,
-  projectionMatchCode,
+  projectionFeederName,
   projectionMatchName,
   projectionPairing,
+  projectionTimelineName,
 } from './projectionBracketLayout';
 
 export function ProjectionTimeline({
@@ -23,7 +25,9 @@ export function ProjectionTimeline({
   const selected = projection.matches.find((m) => m.id === selectedId);
   const played = projection.matches.filter((m) => !m.bye);
   const byId = new Map(projection.matches.map((m) => [m.id, m]));
-  const bracketLabels = new Map(projection.brackets.map((bracket) => [bracket.id, bracket.label]));
+  const sections = new Map(
+    [...projection.pools, ...projection.brackets].map(({ id, label }) => [id, label]),
+  );
   const doubleElimination = projection.brackets.some((b) => b.kind === 'double_elimination');
   const width = Math.max(700, Math.min(6000, projection.totalMinutes * 5));
   const scale = width / Math.max(1, projection.totalMinutes);
@@ -43,6 +47,8 @@ export function ProjectionTimeline({
             <span className="projection-consolation">Consolation</span>
           </>
         )}
+        {projection.brackets.length > 0 && <span>QF: quarter-final · SF: semi-final</span>}
+        {projection.pools.length > 0 && <span>R/S: round/set</span>}
         <span>Empty space: turnaround, recovery or waiting for a feeder match.</span>
       </p>
       <div
@@ -74,16 +80,25 @@ export function ProjectionTimeline({
                 {played
                   .filter((m) => m.station === i + 1)
                   .map((match) => {
-                    const code = projectionMatchCode(match);
                     const name = projectionMatchName(match);
                     const pairing = projectionPairing(match, byId);
-                    const bracket =
-                      bracketLabels.size > 1 ? bracketLabels.get(match.section) : undefined;
-                    const contextualName = bracket ? `${name} · ${bracket}` : name;
+                    const section = sections.get(match.section);
+                    const showSection = match.stage === 'group' || projection.brackets.length > 1;
+                    const fullName = showSection && section ? `${name} · ${section}` : name;
+                    const compactName = projectionTimelineName(match);
+                    const compactSection = showSection
+                      ? section
+                          ?.replace(/^Upper /, 'U ')
+                          .replace(/^Lower /, 'L ')
+                          .replace(/^Open /, '')
+                          .replace(/championship$/, 'champ')
+                          .replace(/consolation$/, 'cons')
+                      : undefined;
+                    const barLabel = compactSection
+                      ? `${compactName} ${compactSection}`
+                      : compactName;
                     const accessibleName =
-                      code === name || match.bracketLane === 'reset'
-                        ? contextualName
-                        : `${code} · ${contextualName}`;
+                      barLabel === fullName ? fullName : `${fullName} (${barLabel})`;
                     return (
                       <Button
                         key={match.id}
@@ -94,10 +109,11 @@ export function ProjectionTimeline({
                         }}
                         aria-label={`${accessibleName}: ${pairing.join(' versus ')}, ${projectedTime(start, match.startMinute)} to ${projectedTime(start, match.endMinute)}`}
                         aria-pressed={match.id === selectedId}
-                        title={`${match.displayName ? contextualName : match.label}: ${pairing.join(' vs ')} · ${projectedTime(start, match.startMinute)}`}
+                        title={`${fullName}: ${pairing.join(' vs ')} · ${projectedTime(start, match.startMinute)}`}
                         onClick={() => setSelectedId(match.id)}
                       >
-                        {code}
+                        <span>{compactName}</span>
+                        {compactSection && <span>{compactSection}</span>}
                       </Button>
                     );
                   })}
@@ -110,8 +126,7 @@ export function ProjectionTimeline({
         {selected ? (
           <p>
             <strong>
-              {projectionMatchName(selected)} ·{' '}
-              {bracketLabels.get(selected.section) ?? selected.label}
+              {projectionMatchName(selected)} · {sections.get(selected.section) ?? selected.label}
             </strong>
             <br />
             {projectionPairing(selected, byId).join(' vs ')} · Station {selected.station} ·{' '}
@@ -120,7 +135,9 @@ export function ProjectionTimeline({
               <>
                 {' '}
                 · After{' '}
-                {selected.dependsOn.map((id) => projectionMatchName(byId.get(id)!)).join(' and ')}
+                {selected.dependsOn
+                  .map((id) => projectionFeederName(byId.get(id)!, selected.section, sections))
+                  .join(' and ')}
               </>
             )}
           </p>
@@ -129,7 +146,7 @@ export function ProjectionTimeline({
         )}
       </div>
       <Disclosure className="projection-run-sheet" title="Provisional run sheet and CSV">
-        <RunSheet matches={played} start={start} byId={byId} bracketLabels={bracketLabels} />
+        <ProjectionRunSheet matches={played} start={start} byId={byId} sections={sections} />
       </Disclosure>
       <p className="muted">
         {projection.pools.length > 0 ? (
@@ -150,81 +167,6 @@ export function ProjectionTimeline({
         )}{' '}
         Total play window: {projectionDuration(projection)}.
       </p>
-    </>
-  );
-}
-
-function RunSheet({
-  matches,
-  start,
-  byId,
-  bracketLabels,
-}: {
-  matches: ProjectedMatch[];
-  start: string;
-  byId: ReadonlyMap<string, ProjectedMatch>;
-  bracketLabels: ReadonlyMap<string, string>;
-}) {
-  // Preserve the existing keys and feeder references for downloaded run sheets.
-  const csv = [
-    ['Set', 'Stage', 'Station', 'Start', 'End', 'Side A', 'Side B', 'After'],
-    ...matches.map((m) => [
-      projectionMatchCode(m),
-      m.label,
-      String(m.station),
-      projectedTime(start, m.startMinute),
-      projectedTime(start, m.endMinute),
-      ...projectionPairing(m, byId, 'code'),
-      m.dependsOn.map((id) => projectionMatchCode(byId.get(id)!)).join(' / '),
-    ]),
-  ]
-    .map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(','))
-    .join('\r\n');
-  return (
-    <>
-      <a
-        className="btn btn-small"
-        download="tournament-projection.csv"
-        href={`data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`}
-      >
-        Download projected run sheet
-      </a>
-      <div
-        className="projection-scroll"
-        role="region"
-        aria-label="Projected run sheet"
-        tabIndex={0}
-      >
-        <table className="data-table">
-          <caption>Approximate run order; changes with results and set lengths</caption>
-          <thead>
-            <tr>
-              <th>Set</th>
-              <th>Stage</th>
-              <th>Station</th>
-              <th>Time</th>
-              <th>Pairing</th>
-              <th>After</th>
-            </tr>
-          </thead>
-          <tbody>
-            {matches.map((m) => (
-              <tr key={m.id}>
-                <td>{projectionMatchName(m)}</td>
-                <td>{bracketLabels.get(m.section) ?? m.label}</td>
-                <td>{m.station}</td>
-                <td>
-                  {projectedTime(start, m.startMinute)}–{projectedTime(start, m.endMinute)}
-                </td>
-                <td>{projectionPairing(m, byId).join(' vs ')}</td>
-                <td>
-                  {m.dependsOn.map((id) => projectionMatchName(byId.get(id)!)).join(', ') || '—'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
     </>
   );
 }

@@ -8,7 +8,7 @@ export function ProjectionBrackets({ projection }: { projection: FormatProjectio
       <h4>Tournament structure and advancement</h4>
       <p className="muted">
         {projection.pools.length > 0
-          ? 'Seeds, pool places and winner/loser feeds show the shape of the night. A1 means first in pool A; future results remain unknown.'
+          ? 'Seeds, pool places and winner/loser feeds show the shape of the night. Future results remain unknown.'
           : 'Follow seeded entrants through each bracket. Feeder references show where a pairing comes from; future results remain unknown.'}
       </p>
       <div className="projection-pools">

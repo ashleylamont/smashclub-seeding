@@ -235,6 +235,10 @@ describe('draft tournament projections', () => {
     expect(five.matches.at(-1)).toMatchObject({ id: 'OM-3-1', displayName: 'Final' });
 
     const uneven = projectionGraph('dual_division', 17, 10);
+    expect(uneven.matches.find((match) => match.id === 'UC-1-1')).toMatchObject({
+      sides: ['UA3', 'UC4'],
+      poolPlaceNames: ['Upper pool A · place 3', 'Upper pool C · place 4'],
+    });
     expect(uneven.matches.find((match) => match.stage === 'group')).not.toHaveProperty(
       'displayName',
     );
