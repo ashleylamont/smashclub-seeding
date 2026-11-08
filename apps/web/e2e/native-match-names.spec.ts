@@ -89,11 +89,12 @@ test('an uneven native draw keeps meaningful names across player, TO, feeders, p
       'Semi-final 2',
     ].sort(),
   );
+  expect(before.every((m) => m.labelFromStructure === true)).toBe(true);
   expect(before.some((m) => m.outcome === 'bye')).toBe(true);
   for (const procedure of ['eventOps.live.snapshot', 'eventOps.overview'])
-    expect((await snapshot(procedure)).matches.map((m) => [m.id, m.label])).toEqual(
-      before.map((m) => [m.id, m.label]),
-    );
+    expect(
+      (await snapshot(procedure)).matches.map((m) => [m.id, m.label, m.labelFromStructure]),
+    ).toEqual(before.map((m) => [m.id, m.label, m.labelFromStructure]));
   const first = before.find((m) => m.status === 'ready' && m.label.startsWith('Quarter-final'))!;
   expect(first).toBeTruthy();
   await page.setViewportSize({ width: 390, height: 844 });

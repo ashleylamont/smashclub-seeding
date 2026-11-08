@@ -1,6 +1,7 @@
 import type { Match, TournamentState } from './schemas';
 
 type Draw = Pick<TournamentState, 'matches' | 'brackets'>;
+type ProjectedMatchLabel = { label: string; labelFromStructure?: true };
 
 function roundName(remaining: number) {
   if (remaining === 0) return 'Final';
@@ -15,11 +16,11 @@ function knockoutName(match: Match, rounds: number, entrants: number) {
   if (match.bracketLane === 'losers')
     return match.bracketRound
       ? `Losers round ${match.bracketRound} · Match ${match.slot + 1}`
-      : match.label;
+      : undefined;
   if (entrants === 1) return 'Uncontested bracket';
   const round = match.bracketRound ?? match.round;
   const remaining = rounds - round;
-  if (remaining < 0 || round < 1) return match.label;
+  if (remaining < 0 || round < 1) return undefined;
   const name = `${roundName(remaining)}${remaining ? ` ${match.slot + 1}` : ''}`;
   return match.bracketLane === 'winners' ? `Winners ${name.toLowerCase()}` : name;
 }
@@ -27,8 +28,8 @@ function knockoutName(match: Match, rounds: number, entrants: number) {
 /** Presentation only: never rename stored facts, source keys, links or receipts.
  * Entrant count comes from the fixed draw, including reserved qualifier places;
  * results, withdrawals and byes cannot turn an earlier round into a final. */
-export function matchNames(draw: Draw): Map<string, string> {
-  const labels = new Map(draw.matches.map((match) => [match.id, match.label]));
+export function projectMatchLabels(draw: Draw): Map<string, ProjectedMatchLabel> {
+  const labels = new Map<string, ProjectedMatchLabel>();
   const brackets = draw.brackets.filter((bracket) => bracket.entrantIds.length);
   const divisions = new Set(brackets.map((bracket) => bracket.division));
   const stages = new Set(brackets.map((bracket) => bracket.stage));
@@ -70,8 +71,18 @@ export function matchNames(draw: Draw): Map<string, string> {
       .join(' · ');
     for (const match of matches) {
       const name = knockoutName(match, rounds, entrants);
-      labels.set(match.id, `${context ? `${context} · ` : ''}${name}`);
+      labels.set(match.id, {
+        label: `${context ? `${context} · ` : ''}${name ?? match.label}`,
+        ...(name === undefined ? {} : { labelFromStructure: true }),
+      });
     }
   }
   return labels;
+}
+
+export function matchNames(draw: Draw): Map<string, string> {
+  const labels = projectMatchLabels(draw);
+  return new Map(
+    draw.matches.map((match) => [match.id, labels.get(match.id)?.label ?? match.label]),
+  );
 }

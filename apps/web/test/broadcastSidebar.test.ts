@@ -22,4 +22,20 @@ describe('bounded broadcast result rail', () => {
       resultStageLabel({ ...match, division: 'lower', stage: 'consolation', label: 'Final' }),
     ).toBe('Lower · Consolation · Final');
   });
+
+  it('uses verified structural labels with or without bracket context already supplied', () => {
+    const match = {
+      division: 'upper',
+      stage: 'main',
+      nativeBracketId: 'native-draw',
+      labelFromStructure: true,
+    } as ResultMatch;
+    expect(resultStageLabel({ ...match, label: 'Upper · Championship · Semi-final 2' })).toBe(
+      'Upper · Championship · Semi-final 2',
+    );
+    expect(resultStageLabel({ ...match, label: 'Final' })).toBe('Final');
+    expect(resultStageLabel({ ...match, labelFromStructure: undefined, label: 'R1 M1' })).toBe(
+      'Upper · Championship · R1 M1',
+    );
+  });
 });
