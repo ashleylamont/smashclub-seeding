@@ -2,6 +2,17 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.9.0
+
+### Minor Changes
+
+- 9 November 2026 · **Feature** · Start a ready pairing at a free reserved station directly from Broadcast. Choose the pairing on the selected station, then use the same live score and finish controls as before. [#309](https://github.com/ashleylamont/smashclub-seeding/pull/309) · [build ee0d464](https://github.com/ashleylamont/smashclub-seeding/commit/ee0d4645af67fec2765542379652f1189157e303)
+
+### Patch Changes
+
+- 9 November 2026 · **Fix** · Show the configured meetings per pairing on native pool schedules. Linked and older schedules show their recorded rounds without claiming a draw format. [#306](https://github.com/ashleylamont/smashclub-seeding/pull/306) · [build 8dedf09](https://github.com/ashleylamont/smashclub-seeding/commit/8dedf091bf24102dcefbc6a2224aa91cbc076d5f)
+- 9 November 2026 · **Maintenance** · Run the station-round contrast check with the opened pairing in view while keeping the whole event hub in scope. [#307](https://github.com/ashleylamont/smashclub-seeding/pull/307) · [build ba9a0d5](https://github.com/ashleylamont/smashclub-seeding/commit/ba9a0d57cc442de7f5afc4472a780c5afb5ce156)
+
 ## 0.8.0
 
 ### Minor Changes
