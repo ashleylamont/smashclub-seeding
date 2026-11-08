@@ -2,6 +2,14 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.1.2
+
+### Patch Changes
+
+- 8 November 2026 · **Fix** · Show forfeits and byes by name in archived tournament results, including older Nemesis events. [#156](https://github.com/ashleylamont/smashclub-seeding/pull/156) · [build d485d4c](https://github.com/ashleylamont/smashclub-seeding/commit/d485d4cd7cd359f8402b9e3f64a912547e70d7b3)
+- 8 November 2026 · **Maintenance** · Generate version PRs from pending Changesets and publish the verified app image and GitHub release after the version merges. [#158](https://github.com/ashleylamont/smashclub-seeding/pull/158) · [build 38e555b](https://github.com/ashleylamont/smashclub-seeding/commit/38e555b9fa7e77c27c9bcf138c0bc812c52ab9a2)
+- 8 November 2026 · **Maintenance** · Accept the release App Client ID from GitHub Actions secrets or variables. [#159](https://github.com/ashleylamont/smashclub-seeding/pull/159) · [build 74e037b](https://github.com/ashleylamont/smashclub-seeding/commit/74e037bd6c3c81ca43721e7e25f150dd8d8f6ff3)
+
 ## 0.1.1
 
 ### Patch Changes
