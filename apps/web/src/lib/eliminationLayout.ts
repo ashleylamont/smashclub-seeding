@@ -10,6 +10,12 @@ export type BracketGeometry = {
 };
 export type BracketFeed = { matchId: string; side: 0 | 1; outcome: 'winner' | 'loser' };
 
+export function eliminationLaneRow(lane: EliminationLane, column: number, slot: number) {
+  const power = lane === 'finals' ? 0 : lane === 'losers' ? Math.floor(column / 2) : column;
+  const span = 2 ** power;
+  return slot * span + (span - 1) / 2;
+}
+
 /** Explicit round/slot positions only. Cross-lane feeds remain named on the card. */
 export function eliminationLaneLayout<T>(
   matches: readonly T[],
@@ -33,8 +39,7 @@ export function eliminationLaneLayout<T>(
     )
     .map((match) => {
       const column = Math.max(0, read.round(match) - 1);
-      const power = lane === 'finals' ? 0 : lane === 'losers' ? Math.floor(column / 2) : column;
-      const row = read.slot(match) * 2 ** power + (2 ** power - 1) / 2;
+      const row = eliminationLaneRow(lane, column, read.slot(match));
       return { match, column, x: column * card.column + 12, y: card.top + row * card.row };
     });
   const byId = new Map(nodes.map((node) => [read.id(node.match), node]));

@@ -57,6 +57,16 @@ export function liveBracketStatus(match: LiveMatch, recordedOnly = false) {
 export function liveBracketWinner(match: LiveMatch, id: string | null) {
   return Boolean(id && match.status === 'complete' && match.winnerId === id);
 }
+/** Pending routes leave the card center. Recorded routes leave the actual advancing row. */
+export function liveBracketSourceSide(match: LiveMatch, outcome: BracketFeed['outcome']) {
+  const winner = liveBracketWinner(match, match.player1Id)
+    ? 0
+    : liveBracketWinner(match, match.player2Id)
+      ? 1
+      : null;
+  if (outcome === 'winner') return winner;
+  return winner !== null && match.player1Id && match.player2Id ? (winner === 0 ? 1 : 0) : null;
+}
 export function liveBracketLanes(matches: LiveMatch[]) {
   if (!matches.length) return [];
   if (!matches.some((match) => match.bracketLane))

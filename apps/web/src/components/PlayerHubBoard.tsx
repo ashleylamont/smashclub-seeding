@@ -6,6 +6,7 @@ import { ResultGraphic } from './ResultGraphic';
 import { confirmedPoolGraphics } from '../lib/resultGraphic';
 import { playerBracketPath, playerHubView } from '../lib/playerHubView';
 import { liveBracketSide, liveBracketStatus } from '../lib/eventBracket';
+import { formatDate } from '../lib/format';
 import { Disclosure } from './ui/Disclosure';
 import { matchStation } from '../lib/playerMatchView';
 import { matchPresentation, nextMeaningfulMatch } from '../lib/matchPresentation';
@@ -42,6 +43,13 @@ export function PlayerHubBoard({
       entrants={data.entrants}
       linked={board.linked}
       recordedOnly={board.closed}
+      graphicContext={{
+        eventName: data.plan.name,
+        eventDate: formatDate(data.plan.eventDate),
+        format: data.plan.competitionFormat ?? 'singles',
+        structure: data.plan.structure,
+        state: board.closed ? 'closed' : data.plan.drawPaused ? 'paused' : 'published',
+      }}
     />
   );
   const pendingFinals = (board.closed ? [] : (data.pendingFinals ?? [])).flatMap((field) => {
