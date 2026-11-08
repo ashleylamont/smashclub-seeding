@@ -411,10 +411,7 @@ test('signed-in visitors without reporting access get one account notice and one
   await expect(
     matches.getByText('Signed-in reporting is off for this event.', { exact: false }),
   ).toHaveCount(1);
-  await expect(matches.getByRole('heading', { name: 'Scan in to report a score' })).toBeVisible();
-  await expect(
-    matches.getByText('Scan a guest reporting QR or ask a TO', { exact: false }),
-  ).toHaveCount(1);
+  await expect(matches.getByText(/scan a guest reporting QR or ask a TO/)).toHaveCount(1);
   await expect(matches.getByRole('spinbutton')).toHaveCount(0);
   expect(fixture.unexpected).toEqual([]);
 });
@@ -459,6 +456,10 @@ for (const theme of ['dark', 'light'] as const)
       ).toHaveCount(1);
       await page.getByRole('link', { name: 'Find my matches' }).press('Enter');
       await ready(page);
+      const access = matches.getByText(/scan a guest reporting QR or ask a TO/);
+      const firstMatchName = open.first().getByRole('heading', { level: 3 });
+      await expect(access).toBeInViewport({ ratio: 1 });
+      await expect(firstMatchName).toBeInViewport({ ratio: 1 });
       await page.screenshot({ path: testInfo.outputPath('filtered-entry.png') });
       await open.first().scrollIntoViewIfNeeded();
       await page.screenshot({ path: testInfo.outputPath('open-matches.png') });
@@ -466,12 +467,8 @@ for (const theme of ['dark', 'light'] as const)
       await page.screenshot({ path: testInfo.outputPath('recorded-matches.png') });
       await page.getByRole('link', { name: 'Find my matches' }).press('Enter');
 
-      const access = matches.getByRole('heading', { name: 'Scan in to report a score' });
-      await expect(access).toBeInViewport();
-      await expect(page.getByRole('heading', { name: 'Scan in to report a score' })).toHaveCount(1);
-      await expect(
-        matches.getByText('Scan a guest reporting QR or ask a TO', { exact: false }),
-      ).toBeVisible();
+      await expect(access).toHaveCount(1);
+      await expect(matches.getByRole('heading', { name: /report a score/i })).toHaveCount(0);
       await expect(
         open.getByText('Scan a guest reporting QR to start matches and report scores.'),
       ).toHaveCount(0);

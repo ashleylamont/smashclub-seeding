@@ -318,20 +318,14 @@ function GuestPassStatus({
   accessDenied: boolean;
 }) {
   if (redeeming) return <LoadingState>Opening your guest pass…</LoadingState>;
+  const passInstructions =
+    'To start a match or report a score, scan a guest reporting QR or ask a TO for a pass.';
+  if (!session && !error && !accessDenied) return <p className="muted">{passInstructions}</p>;
   if (!valid || accessDenied)
     return (
       <section className="card">
-        <h2>
-          {session && !valid
-            ? 'Your guest pass has expired'
-            : error
-              ? 'Refresh your guest pass'
-              : 'Scan in to report a score'}
-        </h2>
-        <p>
-          Scan a guest reporting QR or ask a TO for a pass to start matches or report scores. You
-          can browse without a pass.
-        </p>
+        <h2>{session && !valid ? 'Your guest pass has expired' : 'Refresh your guest pass'}</h2>
+        <p>{passInstructions} You can browse without a pass.</p>
         {error && (
           <p className="banner banner-warning" role="alert">
             {error} If this pass was revoked, ask a TO for a new QR.

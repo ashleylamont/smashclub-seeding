@@ -91,7 +91,7 @@ test('signed-out player hub browses without a pass and reuses a venue pass acros
   try {
     const visitor = await guest.newPage();
     await visitor.goto(`/play/${planId}?pool=upper%3A0`);
-    await expect(visitor.getByRole('heading', { name: 'Scan in to report a score' })).toBeVisible();
+    await expect(visitor.getByText(/scan a guest reporting QR or ask a TO/)).toBeVisible();
     await expect(visitor.getByLabel('Your pool')).toHaveAttribute('data-value', 'upper:0');
     const focusedPlayer = snapshot.matches[0]!.player1Id;
     await chooseOption(visitor.getByLabel('Show matches for'), focusedPlayer);
