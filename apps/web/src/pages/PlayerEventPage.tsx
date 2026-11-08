@@ -214,6 +214,9 @@ function PlayerNextSteps({ hub, data }: { hub: PlayerEventHub; data: PublicEvent
       selectedPool={hub.selectedPool}
       playerId={hub.player}
       recordedOnly={hub.closed}
+      meetingsPerPairing={
+        data.plan.liveOwned ? data.plan.structureOptions?.roundRobinMeetings : undefined
+      }
     />
   );
   if (hub.closed) return <Disclosure title="Pool schedule history">{rounds}</Disclosure>;

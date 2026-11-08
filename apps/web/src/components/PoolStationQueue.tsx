@@ -339,11 +339,13 @@ export function PoolRoundSchedule({
   selectedPool = '',
   playerId = '',
   recordedOnly = false,
+  meetingsPerPairing,
 }: {
   data: PoolFlowData;
   selectedPool?: string;
   playerId?: string;
   recordedOnly?: boolean;
+  meetingsPerPairing?: number;
 }) {
   const groups = (data.poolRounds ?? [])
     .filter((pool) => !selectedPool || pool.poolKey === selectedPool)
@@ -377,7 +379,14 @@ export function PoolRoundSchedule({
     <section className="pool-flow-rounds">
       <div className="pool-flow-heading">
         <h2>{playerId ? 'Your pool rounds' : 'Pool rounds'}</h2>
-        <span>Everyone meets once</span>
+        {meetingsPerPairing !== undefined &&
+          Number.isSafeInteger(meetingsPerPairing) &&
+          meetingsPerPairing > 0 && (
+            <span>
+              Draw format · {meetingsPerPairing} {meetingsPerPairing === 1 ? 'meeting' : 'meetings'}{' '}
+              per pairing
+            </span>
+          )}
       </div>
       {!recordedOnly && (
         <p className="pool-flow-note">

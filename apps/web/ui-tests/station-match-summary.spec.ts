@@ -113,3 +113,85 @@ for (const theme of ['dark', 'light'] as const)
       await expect(roundRow.getByText('2–1 · complete', { exact: true })).toBeVisible();
       expect(unexpected).toEqual([]);
     });
+
+for (const theme of ['dark', 'light'] as const)
+  for (const width of [390, 1440])
+    test(`${theme} ${width}px pool schedule describes the frozen format for actual single and repeated meetings`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const { snapshot, unexpected } = await mockEvent(page);
+      const plan = Object.assign(snapshot.plan, { structureOptions: { roundRobinMeetings: 1 } });
+      const pool = snapshot.poolRounds.find(({ poolKey }) => poolKey === 'upper:0')!;
+      const first = snapshot.matches.find(({ id }) => id === pool.rounds[0]!.matchIds[0])!;
+      const alias = 'Alexandria with a long tournament alias from Western Sydney';
+      snapshot.entrants.find(({ id }) => id === first.player1Id)!.name = alias;
+      for (const match of snapshot.matches) {
+        if (match.player1Id === first.player1Id) match.player1Name = alias;
+        if (match.player2Id === first.player1Id) match.player2Name = alias;
+      }
+      const url = `/play/${PLAN_ID}?pool=upper%3A0#what-next`;
+      const schedule = page.locator('.pool-flow-rounds');
+      const format = schedule.getByText(/^Draw format/);
+      const pairing = schedule.getByRole('listitem').filter({ hasText: alias }).filter({
+        hasText: first.player2Name!,
+      });
+      const openSchedule = async (rounds: number) => {
+        const disclosure = schedule.getByRole('button', { name: new RegExp(`${rounds} rounds`) });
+        await disclosure.press('Enter');
+        await expect(disclosure).toBeFocused();
+        await expect(schedule.getByRole('heading', { name: /^Round \d+$/ })).toHaveCount(rounds);
+        const firstRound = schedule.getByRole('heading', { name: 'Round 1', exact: true });
+        await firstRound.scrollIntoViewIfNeeded();
+        await expect(firstRound).toBeInViewport();
+      };
+
+      await page.goto(url);
+      await expect(format).toHaveText('Draw format · 1 meeting per pairing');
+      await openSchedule(5);
+      await expect(pairing).toHaveCount(1);
+      await capture(page, '.player-event-hub', testInfo.outputPath('one-meeting.png'));
+
+      // The next leg uses new match IDs and later rounds, like a generated repeat.
+      for (const round of pool.rounds.slice()) {
+        const matchIds = round.matchIds.map((id) => {
+          const original = snapshot.matches.find((match) => match.id === id)!;
+          const repeated = { ...original, id: `second-${id}` };
+          snapshot.matches.push(repeated);
+          return repeated.id;
+        });
+        pool.rounds.push({ ...round, round: round.round + 5, matchIds });
+      }
+      plan.structureOptions.roundRobinMeetings = 2;
+      await page.reload();
+      await expect(format).toHaveText('Draw format · 2 meetings per pairing');
+      await openSchedule(10);
+      await expect(pairing).toHaveCount(2);
+      await capture(page, '.player-event-hub', testInfo.outputPath('two-meetings.png'));
+
+      if (width === 390) {
+        // SQL always serializes its default, even when imported pairings repeat.
+        Object.assign(plan, {
+          bracketMode: 'challonge',
+          liveOwned: false,
+          structureOptions: { roundRobinMeetings: 1 },
+        });
+        await page.reload();
+        await openSchedule(10);
+        await expect(format).toHaveCount(0);
+        await expect(pairing).toHaveCount(2);
+        await capture(page, '.player-event-hub', testInfo.outputPath('linked-schedule.png'));
+      } else {
+        Object.assign(plan, { structureOptions: undefined, status: 'complete' });
+        await page.reload();
+        await page
+          .getByRole('button', { name: 'Pool schedule history', exact: true })
+          .press('Enter');
+        await openSchedule(10);
+        await expect(format).toHaveCount(0);
+        await expect(pairing).toHaveCount(2);
+        await capture(page, '.player-event-hub', testInfo.outputPath('old-archived-schedule.png'));
+      }
+      expect(unexpected).toEqual([]);
+    });
