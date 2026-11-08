@@ -1,26 +1,50 @@
 import { eventPlans, nativeResultPublications, type Db } from '@smashclub/db';
-import { isNotNull } from 'drizzle-orm';
+import { and, inArray, isNotNull, sql } from 'drizzle-orm';
 
 /** Publication receipts define effective history without deleting prior revisions. */
 export async function nativeHistory(db: Db) {
   return (await loadNativeHistory(db))!;
 }
 
+/** Use receipt membership as the authority even if a tournament's raw metadata is missing. */
+export async function nativeHistoryForTournaments(
+  db: Db,
+  tournamentIds: string[],
+  legacyPlanIds: string[],
+  maxRows: number,
+) {
+  const matchedPlans = tournamentIds.length
+    ? await db
+        .selectDistinct({ id: nativeResultPublications.eventPlanId })
+        .from(nativeResultPublications)
+        .where(
+          sql`${nativeResultPublications.tournamentIds} ?| array[${sql.join(tournamentIds, sql`, `)}]::text[]`,
+        )
+        .limit(maxRows + 1)
+    : [];
+  if (matchedPlans.length > maxRows) return null;
+  const planIds = [...new Set([...matchedPlans.map(({ id }) => id), ...legacyPlanIds])];
+  return loadNativeHistory(db, maxRows, planIds);
+}
+
 /** A budgeted caller must reject overflow before considering results authoritative. */
-export async function loadNativeHistory(db: Db, maxRows?: number) {
+export async function loadNativeHistory(db: Db, maxRows?: number, planIds?: string[]) {
   const receiptQuery = db
     .select({
       eventPlanId: nativeResultPublications.eventPlanId,
       revision: nativeResultPublications.revision,
       tournamentIds: nativeResultPublications.tournamentIds,
     })
-    .from(nativeResultPublications);
+    .from(nativeResultPublications)
+    .where(planIds && inArray(nativeResultPublications.eventPlanId, planIds));
   const receipts = await (maxRows === undefined ? receiptQuery : receiptQuery.limit(maxRows + 1));
   if (maxRows !== undefined && receipts.length > maxRows) return null;
   const withdrawnQuery = db
     .select({ id: eventPlans.id })
     .from(eventPlans)
-    .where(isNotNull(eventPlans.resultsWithdrawnAt));
+    .where(
+      and(isNotNull(eventPlans.resultsWithdrawnAt), planIds && inArray(eventPlans.id, planIds)),
+    );
   const withdrawnRows = await (maxRows === undefined
     ? withdrawnQuery
     : withdrawnQuery.limit(maxRows + 1));

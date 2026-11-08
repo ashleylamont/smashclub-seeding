@@ -311,6 +311,9 @@ export const sets = pgTable(
   },
   (table) => [
     uniqueIndex('sets_challonge_match_idx').on(table.tournamentId, table.challongeMatchId),
+    index('sets_completed_player_pair_idx')
+      .on(table.p1PlayerId, table.p2PlayerId)
+      .where(sql`${table.state} = 'complete'`),
   ],
 );
 

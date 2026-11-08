@@ -24,6 +24,7 @@ import { charactersByPlayer, charactersForPlayer } from '../../players/character
 import { loadRecap } from '../../recap/recap';
 import { loadEventOverview } from '../../events/overview';
 import { nativeHistory } from '../../events/nativeHistory';
+import { headToHeadInput, readHeadToHead } from '../../events/headToHead';
 import { publicProcedure, router } from '../trpc';
 
 const playerName = publicPlayerName;
@@ -275,6 +276,10 @@ export const publicRouter = router({
       doublesResults: await playerDoublesHistory(ctx.db, input.playerId),
     };
   }),
+
+  headToHead: publicProcedure
+    .input(headToHeadInput)
+    .query(({ ctx, input }) => readHeadToHead(ctx.db, input)),
 
   whrResultImpact: publicProcedure
     .input(z.object({ playerId: z.uuid(), setId: z.uuid(), recomputeId: z.uuid() }))
