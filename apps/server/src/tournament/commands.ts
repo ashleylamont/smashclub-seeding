@@ -31,11 +31,27 @@ const DoublesSubstitutionIdentity = z.object({
   newMemberNames: z.tuple([z.string(), z.string()]),
   incomingAliases: z.array(id),
 });
+export const LateDoublesPairInput = z.object({
+  division: z.enum(['upper', 'lower']),
+  memberPlayerIds: z.tuple([id, id]),
+  reason: z.string().trim().min(1).max(200),
+});
 const ConfirmFinalsReplay = FinalsSlotReplayScore.extend({
   revisionToken: z.string().length(64),
   reason: z.string().trim().min(1).max(500),
 });
 export const additionalCommands = [
+  LateDoublesPairInput.extend({
+    kind: z.literal('addLateDoublesPair'),
+    revisionToken: z.string().length(64),
+    identity: z
+      .object({
+        name: z.string(),
+        memberNames: z.tuple([z.string(), z.string()]),
+        memberAliases: z.array(id),
+      })
+      .nullable(),
+  }),
   ConfirmFinalsReplay.extend({ kind: z.literal('replayFinalsSlotV1') }),
   ConfirmFinalsReplay.extend({ kind: z.literal('replayFinalsRoutesV2') }),
   DoublesSubstitutionInput.extend({

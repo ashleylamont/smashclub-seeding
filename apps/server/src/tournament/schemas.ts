@@ -428,6 +428,7 @@ export const Decision = z.object({
     z.literal(7),
     z.literal(8),
     z.literal(9),
+    z.literal(10),
   ]),
   commandId: id,
   actorId: z.string(),

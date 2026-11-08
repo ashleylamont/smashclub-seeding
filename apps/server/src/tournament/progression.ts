@@ -23,7 +23,11 @@ export function completeCommandProgression(
   )
     return;
   // The original draw and every unaffected pairing already have their recorded state.
-  if (envelope.command.kind === 'substituteDoublesMember') return;
+  if (
+    envelope.command.kind === 'substituteDoublesMember' ||
+    envelope.command.kind === 'addLateDoublesPair'
+  )
+    return;
   decidePoolOrders(previous, next, envelope, basis);
   if (rollingFinals(next) && next.lifecycle === 'locked') {
     reconcileRollingFinals(next, basis);

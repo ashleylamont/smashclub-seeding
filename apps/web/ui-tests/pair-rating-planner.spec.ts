@@ -216,7 +216,7 @@ test('frozen roster sorts the displayed snapshots and marks old missing breakdow
 
 for (const theme of ['dark', 'light'] as const)
   for (const width of [390, 1440])
-    test(`the substitute pair has no inherited rating at ${width}px in ${theme}`, async ({
+    test(`late and substitute pairs have no frozen rating at ${width}px in ${theme}`, async ({
       page,
     }, testInfo) => {
       await page.setViewportSize({ width, height: 900 });
@@ -238,7 +238,26 @@ for (const theme of ['dark', 'light'] as const)
         assignedDivision: 'upper',
         divisionSeed: 1,
       });
+      Object.assign(fixture.view.entries[1]!, {
+        playerName:
+          'Willa with a long late-arrival alias / Miles with an equally long teammate alias',
+        latePair: true,
+        snapshotMean: null,
+        snapshotSd: null,
+        snapshotScore: null,
+        currentMean: undefined,
+        currentSd: undefined,
+        currentScore: null,
+        pairRating: undefined,
+        assignedDivision: 'upper',
+        divisionSeed: 4,
+      });
       await page.goto(`/admin/event-planner?plan=${PLAN_ID}&step=roster`);
+      await expect(
+        page.getByText('Existing pairs keep their seeds. Pair attendance in Run event', {
+          exact: false,
+        }),
+      ).toBeVisible();
       const ratings = page.getByRole('region', { name: 'Pair ratings', exact: true });
       const rows = ratings.getByRole('row').filter({ has: page.getByRole('cell') });
       const substituted = rows.filter({ hasText: 'Substitute pair' });
@@ -246,7 +265,11 @@ for (const theme of ['dark', 'light'] as const)
       await expect(substituted).toContainText('original pool seed retained');
       await expect(substituted.getByRole('cell', { name: '—', exact: true })).toHaveCount(2);
       await chooseOption(page.getByRole('combobox', { name: 'Sort pairs' }), 'skill_desc');
-      await expect(rows.last()).toContainText('Substitute pair');
+      const latePair = rows.filter({ hasText: 'Late pair · admitted after pool lock' });
+      await expect(latePair).toContainText('Willa with a long late-arrival alias');
+      await expect(latePair.getByRole('cell', { name: '—', exact: true })).toHaveCount(2);
+      await expect(rows.nth(1)).toContainText('Substitute pair');
+      await expect(rows.last()).toContainText('Late pair');
       await ready(page);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,
@@ -259,7 +282,7 @@ for (const theme of ['dark', 'light'] as const)
       await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
       await page.screenshot({
         style: captureStyle,
-        path: testInfo.outputPath('substitute-pair-planner.png'),
+        path: testInfo.outputPath('admitted-pair-planner.png'),
         fullPage: true,
       });
       expect(fixture.unexpected).toEqual([]);

@@ -245,7 +245,7 @@ describe('native doubles through shipped APIs', () => {
     const fit = await loadDoublesRatings(db, Date.parse('2026-10-01T12:00:00Z'));
     expect(fit.pairs).toEqual([]);
   });
-  it('holds both members’ matches consistently in the public queue and rejects live pair additions', async () => {
+  it('holds both members’ matches consistently and rejects doubles through the singles Add path', async () => {
     const { planId } = await draft(4, 'round_robin');
     await prepare(planId);
     await caller().eventOps.saveStation({ planId, name: 'Four-controller station' });
@@ -278,7 +278,7 @@ describe('native doubles through shipped APIs', () => {
       division: 'upper',
     });
     expect(preview.allowed).toBe(false);
-    expect(preview.issues.join(' ')).toMatch(/fixed/);
+    expect(preview.issues.join(' ')).toMatch(/late-pair workflow/);
   });
   it('substitutes one member in the same pool slot without moving or reattributing recorded results', async () => {
     const { planId } = await draft(8, 'pools_finals');

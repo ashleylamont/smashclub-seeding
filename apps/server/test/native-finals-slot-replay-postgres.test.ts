@@ -580,11 +580,35 @@ describe('reciprocal finals routes on PostgreSQL', () => {
     expect(await runtime.replay(planId)).toEqual(published);
   });
 
-  it('reconstructs a V9 doubles replay after a V8 substitution in the same journal', async () => {
+  it('reconstructs reciprocal finals replay, late admission and substitution in one journal', async () => {
+    const lateMembers = await pg.db
+      .insert(players)
+      .values([
+        { canonicalName: 'Mixed journal late player one', displayName: 'Late One' },
+        { canonicalName: 'Mixed journal late player two', displayName: 'Late Two' },
+      ])
+      .returning();
+    const lateMemberIds: [string, string] = [lateMembers[0]!.id, lateMembers[1]!.id];
     const context = await fixture.prepare({
       doubles: true,
       consolation: true,
       substituteBeforePlay: true,
+      beforePoolPlay: async (planId) => {
+        const { eventOps } = fixture.caller();
+        const change = {
+          planId,
+          division: 'lower' as const,
+          memberPlayerIds: lateMemberIds,
+          reason: 'Both registered players arrived before their pool started',
+        };
+        const preview = await eventOps.previewLateDoublesPair(change);
+        if (!preview.allowed) throw new Error(preview.issues.join(' '));
+        await eventOps.applyLateDoublesPair({
+          ...change,
+          requestId: 'mixed-journal-late-doubles-admission',
+          revisionToken: preview.revisionToken,
+        });
+      },
     });
     const { planId, eventOps, state, report, send, reviewInput, reviewedCommand, original, alice } =
       context;
@@ -602,12 +626,19 @@ describe('reciprocal finals routes on PostgreSQL', () => {
       memberPlayerIds,
       memberSubstituted: true,
     });
+    const latePair = saved.entrants.find(
+      (entrant) => entrant.memberPlayerIds?.[0] === lateMemberIds[0],
+    );
+    expect(latePair).toMatchObject({ division: 'lower', memberPlayerIds: lateMemberIds });
+    expect(saved.baseline?.entrants.some(({ id }) => id === latePair?.id)).toBe(false);
+    expect(saved.supersededPlayedSets?.[0]?.match.id).toBe(original.id);
     const history = await eventOps.live.history({ planId, limit: 100 });
+    const mixedVersions = ['DecisionRecordedV8', 'DecisionRecordedV9', 'DecisionRecordedV10'];
     expect(
       history.entries
-        .filter(({ eventName }) => ['DecisionRecordedV8', 'DecisionRecordedV9'].includes(eventName))
+        .filter(({ eventName }) => mixedVersions.includes(eventName))
         .map(({ eventName }) => eventName),
-    ).toEqual(['DecisionRecordedV9', 'DecisionRecordedV8']);
+    ).toEqual(['DecisionRecordedV9', 'DecisionRecordedV10', 'DecisionRecordedV8']);
     await pg.pool.query('delete from native_act.events where stream=$1 and name=$2', [
       nativeStream(planId),
       '__snapshot__',
