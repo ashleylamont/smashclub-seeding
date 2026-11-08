@@ -204,6 +204,8 @@ test('home discovers open events, offers every format and keeps guest access on 
     await chooseOption(visitor.getByLabel('Match view', { exact: true }), 'matches');
     await expect(visitor.locator('article.ops-match input[type="number"]').first()).toBeVisible();
     await visitor.goto('/');
+    // Wait for the initial discovery request before exercising the next poll.
+    await expect(open).toHaveCount(2);
     await mutate(page.request, 'eventOps.live.command', {
       ...doubles,
       requestId: crypto.randomUUID(),
