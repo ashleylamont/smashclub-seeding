@@ -145,7 +145,11 @@ test('stored doubles member focuses the public team, and closed events retain hi
     'This event is closed',
   );
   await expect(page.getByRole('button', { name: 'Find next match' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Schedule & station history' })).toBeVisible();
+  const schedule = page.getByRole('region', { name: 'Pool schedule', exact: true });
+  await expect(
+    schedule.getByRole('button', { name: 'Pool schedule history', exact: true }),
+  ).toBeVisible();
+  await expect(page.locator('#pool-station-queues')).toHaveCount(0);
   await expect(page.locator('article.ops-match input')).toHaveCount(0);
   await expect(page.locator('.player-event-board-section').first()).toHaveAttribute(
     'id',
