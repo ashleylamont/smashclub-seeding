@@ -148,8 +148,12 @@ describe('explicit native attendance restoration', () => {
         action: 'restore',
         playerId: state.entrants[0]!.playerId,
         reason: '  ',
-      }).issues,
-    ).toContain('Give a reason for restoring this entrant.');
+      }),
+    ).toMatchObject({
+      allowed: false,
+      issues: ['Give a reason for restoring this entrant.'],
+      warnings: [],
+    });
     expect(() => apply(state, attendance(state, 'restore'), false)).toThrow(/organiser/);
     state.lifecycle = 'finalized';
     expect(
@@ -367,7 +371,7 @@ describe('explicit native attendance restoration', () => {
       reason: 'Returned after forfeit',
     });
     expect(preview.restoration?.qualification.status).toBe('frozen_included');
-    expect(preview.warnings.join(' ')).toContain('No new match');
+    expect(preview.warnings).toContain('No matches become ready to call.');
     state = apply(state, attendance(state, 'restore', target, 'Returned after forfeit'));
     expect(state.matches.filter((m) => [m.player1Id, m.player2Id].includes(target))).toEqual(
       completed,

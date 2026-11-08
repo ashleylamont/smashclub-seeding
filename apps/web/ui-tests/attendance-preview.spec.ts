@@ -175,3 +175,131 @@ test('each new relocation preview needs fresh approval while a no-show can stay 
   await expect(approval).toHaveAccessibleName(/keep the two-player pool for now/);
   await expect(apply).toBeEnabled();
 });
+
+test('restoration preview leads with blockers and separates qualification from match actions', async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ colorScheme: 'light' });
+  const fixture = await mockEvent(page, { role: 'admin' });
+  const entrant = fixture.overview.entrants[0]!;
+  const opponent = fixture.overview.entrants[1]!;
+  entrant.name = 'Alex with a long tournament alias returning to the same event';
+  Object.assign(fixture.overview, { withdrawals: [{ playerId: entrant.id }] });
+  const preview = {
+    allowed: false,
+    issues: [
+      'This pool has reserved finals places. Confirm its finishing order before changing its active roster.',
+    ],
+    warnings: [
+      'An entrant or team-member availability hold still applies.',
+      'No matches become ready to call.',
+    ],
+    requiresExternalAcknowledgement: false,
+    requiresRedistributionApproval: false,
+    relocations: [],
+    addedMatches: 0,
+    affectedMatches: [{ id: 'started', label: 'Pool A · Round 2', status: 'blocked' }],
+    revisionToken: 'blocked-restoration',
+    restoration: {
+      qualification: {
+        status: 'frozen_included',
+        reason:
+          'The frozen finals field and used routes stay fixed. Only existing reserved places can apply.',
+      },
+      slots: [{ division: 'upper', poolIndex: 0, place: 1, status: 'review_pending' }],
+      effects: [
+        {
+          id: 'started',
+          player1Name: entrant.name,
+          player2Name: opponent.name,
+          label: 'Pool A · Round 2',
+          effect: 'ruling',
+          reason:
+            'Actual play and the original pairing stay recorded. Resume it through the TO match controls.',
+        },
+        {
+          id: 'waiting',
+          player1Name: entrant.name,
+          player2Name: opponent.name,
+          label: 'Pool A · Round 3',
+          effect: 'waiting',
+          reason: 'This match has a score awaiting TO review.',
+        },
+      ],
+    },
+  };
+  fixture.responses['eventOps.previewAttendance'] = preview;
+  fixture.responses['eventOps.delivery.status'] = { configured: false };
+
+  await page.goto(`/operate/${PLAN_ID}?view=players`);
+  const attendance = page.locator('section.card').filter({
+    has: page.getByRole('heading', { name: 'Attendance changes', exact: true }),
+  });
+  await chooseAttendanceOption(
+    attendance.getByRole('combobox', { name: 'Change', exact: true }),
+    'restore',
+  );
+  await chooseAttendanceOption(
+    attendance.getByRole('combobox', { name: 'Player', exact: true }),
+    entrant.id,
+  );
+  await attendance.getByLabel('Reason', { exact: true }).fill('Returned after a withdrawal');
+  const previewButton = attendance.getByRole('button', { name: 'Preview attendance change' });
+  const apply = attendance.getByRole('button', { name: 'Apply this change' });
+  const consequences = attendance.getByRole('region', { name: 'Restoration consequences' });
+
+  await previewButton.press('Enter');
+  await expect(attendance.getByRole('heading', { name: 'Restoration preview' })).toBeVisible();
+  await expect(attendance.getByText(/Confirm its finishing order/)).toBeVisible();
+  await expect(consequences).toHaveCount(0);
+  await expect(attendance.getByText('No matches become ready to call.')).toHaveCount(0);
+  await expect(apply).toBeDisabled();
+  await page.evaluate(() => scrollTo(0, 0));
+  await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
+  await ready(page);
+  await page.screenshot({
+    path: testInfo.outputPath('restoration-blocked-phone.png'),
+    fullPage: true,
+  });
+
+  fixture.responses['eventOps.previewAttendance'] = {
+    ...preview,
+    allowed: true,
+    issues: [],
+    revisionToken: 'reviewed-restoration',
+  };
+  await previewButton.press('Enter');
+  await expect(consequences.getByRole('heading', { name: 'Qualification' })).toBeVisible();
+  await expect(consequences).toContainText(
+    'Reserved places: upper Pool A place 1 (review pending).',
+  );
+  await expect(consequences.getByRole('heading', { name: 'Matches' })).toBeVisible();
+  await expect(consequences).toContainText('No matches become ready to call.');
+  await expect(consequences).toContainText(
+    'An entrant or team-member availability hold still applies.',
+  );
+  await expect(consequences).toContainText('Resume it through the TO match controls.');
+  await expect(consequences).toContainText('This match has a score awaiting TO review.');
+  await expect(attendance.getByText(/Confirm its finishing order/)).toHaveCount(0);
+  await previewButton.focus();
+  await page.keyboard.press('Tab');
+  await expect(apply).toBeFocused();
+  await expect(apply).toBeEnabled();
+  await ready(page);
+  expect(
+    (
+      await new AxeBuilder({ page })
+        .include('.ops-attendance-preview')
+        .withTags(['wcag2a', 'wcag2aa'])
+        .analyze()
+    ).violations,
+  ).toEqual([]);
+  await page.evaluate(() => scrollTo(0, 0));
+  await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
+  await page.screenshot({
+    path: testInfo.outputPath('restoration-waiting-phone.png'),
+    fullPage: true,
+  });
+  expect(fixture.unexpected).toEqual([]);
+});

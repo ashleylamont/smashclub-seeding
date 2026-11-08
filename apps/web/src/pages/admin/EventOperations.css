@@ -282,6 +282,12 @@
   padding: var(--s4);
   margin-top: 20px;
 }
+.ops-restoration-consequences h5 {
+  margin-block: var(--s3) var(--s1);
+}
+.ops-restoration-consequences li + li {
+  margin-block-start: var(--s2);
+}
 .ops-attendance-review-facts {
   display: grid;
   gap: var(--s2);
