@@ -194,22 +194,28 @@
   font-size: var(--fs-xs);
   color: var(--text-soft);
   text-align: center;
-  /* Tagline and build stamp sit side by side, and wrap to two centred rows on a
-     phone rather than squeezing the tagline. */
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
   gap: var(--s1) var(--s3);
 }
 
-.build-tag a {
+.app-footer a {
   color: inherit;
   text-decoration-color: var(--border);
   text-underline-offset: 2px;
 }
 
-.build-tag a:hover,
-.build-tag a:focus-visible {
+.app-footer > a {
+  /* Enlarge the text link's target within the existing footer padding. */
+  padding-block: var(--s1);
+  margin-block: calc(-1 * var(--s1));
+  text-decoration: underline;
+}
+
+.app-footer a:hover,
+.app-footer a:focus-visible {
   color: var(--accent);
   text-decoration-color: currentColor;
 }

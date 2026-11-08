@@ -35,3 +35,40 @@
   margin-block: var(--s3);
   border: 1px solid var(--border-strong);
 }
+
+.changelog-page .changelog-archive {
+  border-block-start: 1px solid var(--border-strong);
+  padding-block-start: var(--s4);
+}
+
+.changelog-page .changelog-release-tier {
+  color: var(--text-soft);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  letter-spacing: 0.08em;
+}
+
+.changelog-page .changelog-category {
+  margin-inline-end: var(--s2);
+  color: var(--text-h);
+}
+
+.changelog-category-milestone {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.changelog-category-feature {
+  border-color: var(--tier-1);
+  background: var(--tier-1-bg);
+}
+
+.changelog-category-improvement {
+  border-color: var(--good);
+  background: var(--good-bg);
+}
+
+.changelog-category-fix {
+  border-color: var(--warn);
+  background: var(--warn-bg);
+}

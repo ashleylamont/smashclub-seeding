@@ -1,3 +1,5 @@
+import { version } from '../../package.json';
+
 /*
  * Which build is this?
  *
@@ -10,6 +12,9 @@
  * nothing at runtime and cannot drift from the bundle it ships in. A local
  * `pnpm dev`/`pnpm build` leaves it unset, which reads as "dev".
  */
+
+/** Application version from the same manifest used by Changesets. */
+export const APP_VERSION = version;
 
 const sha = import.meta.env.VITE_BUILD_SHA?.trim();
 

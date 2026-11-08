@@ -1,4 +1,3 @@
-import { Link } from '@tanstack/react-router';
 import { Button } from '../components/ui/Button';
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -193,8 +192,6 @@ export function LeaderboardPage() {
               Ranked on your skill estimate, less a penalty for missed club nights. {policyLine} The
               smaller figure is the estimate and its ± band — play more and the band narrows.
             </InfoTip>
-            <span aria-hidden="true"> · </span>
-            <Link to="/changelog">Changelog</Link>
           </p>
         </div>
 
