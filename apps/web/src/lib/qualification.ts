@@ -1,8 +1,29 @@
 import type { LiveMatch, PoolQualifier } from './eventDisplay';
+import type { trpc } from './trpc';
+
+type EventSnapshot = Awaited<ReturnType<typeof trpc.eventOps.snapshot.query>>;
+export type PublicFinalsField = NonNullable<EventSnapshot['pendingFinals']>[number];
 
 export function qualifierLabel(source: PoolQualifier) {
   const division = source.division === 'upper' ? 'Upper' : 'Lower';
   return `${division} Pool ${String.fromCharCode(65 + source.poolIndex)} · place ${source.place}`;
+}
+
+export const plannedFinalsSeeding = 'Planned seeding combines pool place and frozen WHR rating.';
+
+export function finalsFieldLabel({
+  division,
+  stage,
+}: Pick<PublicFinalsField, 'division' | 'stage'>) {
+  return `${division === 'upper' ? 'Upper' : 'Lower'} ${stage === 'main' ? 'Championship' : 'Consolation'}`;
+}
+
+export function qualifierDetail(
+  { status, entrantId }: PublicFinalsField['slots'][number],
+  names: ReadonlyMap<string, string>,
+) {
+  if (status === 'review_pending') return 'Under score review';
+  return status === 'resolved' ? (entrantId && names.get(entrantId)) || 'Confirmed' : null;
 }
 
 /** Public source facts explain a hold without exposing reports or guessing an entrant. */
