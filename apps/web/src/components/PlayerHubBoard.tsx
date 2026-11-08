@@ -141,9 +141,11 @@ export function PlayerHubBoard({
               <p>
                 {data.plan.structure === 'round_robin'
                   ? 'This event uses pool standings to decide the result; there is no finals bracket.'
-                  : player
-                    ? 'Brackets will appear here for this player when the organisers publish the draw. Pool results do not imply a bracket seed.'
-                    : 'Brackets will appear here when the organisers publish the draw. Pool results do not imply a bracket seed.'}
+                  : board.closed
+                    ? `No bracket is recorded for this ${player ? 'player' : 'event'}.`
+                    : player
+                      ? 'Brackets will appear here for this player when the organisers publish the draw. Pool results do not imply a bracket seed.'
+                      : 'Brackets will appear here when the organisers publish the draw. Pool results do not imply a bracket seed.'}
               </p>
             </>
           )}
@@ -166,7 +168,13 @@ export function PlayerHubBoard({
             />
           ))}
         </div>
-        {!board.results.length && <p>Results appear here once confirmed.</p>}
+        {!board.results.length && (
+          <p>
+            {board.closed
+              ? 'No recorded sets in this view.'
+              : 'Results appear here once confirmed.'}
+          </p>
+        )}
         <p className="event-live-note">
           Set results are shown as recorded. They do not imply final tournament placements.
         </p>
@@ -207,7 +215,7 @@ export function PlayerHubBoard({
         )}
         {!player && data.prizes.length > 0 && (
           <>
-            <h2>On the line</h2>
+            <h2>{board.closed ? 'Prizes' : 'On the line'}</h2>
             <div className="event-results-grid">
               {data.prizes.map((prize) => (
                 <article className="event-prize" key={prize.id}>
