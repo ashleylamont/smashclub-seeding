@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { InMemoryStore } from '@rotorsoft/act';
 import {
   eventMatches,
+  eventNativeBrackets,
   eventPlans,
   eventOperationSettings,
   nativeLiveHandoffs,
@@ -97,6 +98,48 @@ describe('standard native lifecycle uses Act without adoption', () => {
     ).toBeNull();
     expect(await runtime.replay(planId)).toEqual(state);
   });
+  it('identifies a stored SQL finals draw when the live desk cannot remove it', async () => {
+    const planId = await seedNativeDraft(db);
+    try {
+      const operator = caller();
+      await operator.eventOps.prepare({ planId });
+      const before = await operator.eventOps.native.preview({ planId });
+      expect(before).toMatchObject({
+        replacing: false,
+        resetAllowed: false,
+        resetIssues: ['There are no native finals to remove.'],
+        resetCallMatchIds: [],
+      });
+      await generateNativeBrackets(db, nativeAdmin, planId, before.revisionToken);
+      const stored = () =>
+        db.select().from(eventNativeBrackets).where(eq(eventNativeBrackets.eventPlanId, planId));
+      const draws = await stored();
+      expect(draws).toHaveLength(4);
+
+      const preview = await operator.eventOps.native.preview({ planId });
+      expect(preview).toMatchObject({
+        replacing: true,
+        resetAllowed: false,
+        resetIssues: [
+          'This draw is stored in the older event system. Removal here requires a live draw.',
+        ],
+        resetCallMatchIds: [],
+      });
+      await expect(
+        operator.eventOps.native.reset({ planId, revisionToken: preview.revisionToken }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(await stored()).toEqual(draws);
+      expect(
+        await db
+          .select()
+          .from(nativeLiveHandoffs)
+          .where(eq(nativeLiveHandoffs.eventPlanId, planId)),
+      ).toHaveLength(0);
+    } finally {
+      await db.delete(eventPlans).where(eq(eventPlans.id, planId));
+    }
+  });
+
   it('recovers a combined-finals creation retry and permits a new creation after reset', async () => {
     const planId = await seedNativeDraft(db);
     const operator = caller();

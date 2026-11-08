@@ -80,7 +80,12 @@ async function previewLegacyFinals(db: Db, planId: string) {
   return {
     ...preview,
     resetAllowed: false,
-    resetIssues: [...preview.resetIssues, 'No live finals exist.'],
+    resetIssues: preview.replacing
+      ? [
+          ...preview.resetIssues,
+          'This draw is stored in the older event system. Removal here requires a live draw.',
+        ]
+      : preview.resetIssues,
     resetCallMatchIds,
   };
 }
