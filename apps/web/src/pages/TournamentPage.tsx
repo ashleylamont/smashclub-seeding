@@ -238,7 +238,7 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
         {data.sets.length === 0 ? (
           <p className="muted">No sets yet.</p>
         ) : (
-          <div className="table-scroll">
+          <div className="table-scroll" role="region" aria-label="Tournament sets" tabIndex={0}>
             <table className="data-table sets-table">
               <thead>
                 <tr>
@@ -253,7 +253,10 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
               </thead>
               <tbody>
                 {visibleSets.map((set) => {
-                  const state = setStateLabel(set.state);
+                  const state =
+                    set.unplayedOutcome && set.state === 'complete'
+                      ? { label: 'Complete', hint: 'Resolved without a played score.' }
+                      : setStateLabel(set.state);
                   return (
                     <tr
                       key={set.id}
@@ -278,7 +281,7 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
                         <SetLine set={set} />
                         {set.excludedFromRatings && (
                           <span
-                            className="chip chip-danger excluded-chip"
+                            className="chip excluded-chip"
                             title={
                               set.excludedByResultsMode
                                 ? 'Group results are ignored by this tournament’s Final stage only setting'
@@ -289,7 +292,9 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
                           </span>
                         )}
                       </td>
-                      <td className="mono">{scoreCell(set.scoresCsv)}</td>
+                      <td className="mono">
+                        {set.unplayedOutcome ? '—' : scoreCell(set.scoresCsv)}
+                      </td>
                       <td title={state.hint}>{state.label}</td>
                       <td className="mono">
                         {set.completedAt ? formatDateTime(set.completedAt) : '—'}
@@ -320,6 +325,9 @@ function SetLine({ set }: { set: TournamentSet }) {
   const p2 = set.p2Name ?? 'TBD';
   return (
     <span className="set-line">
+      {set.unplayedOutcome && (
+        <span className="chip set-outcome-chip">{scoreCell(null, set.unplayedOutcome)}</span>
+      )}
       <span className={set.winner === 1 ? 'set-winner' : undefined}>{p1}</span>
       <span className="muted"> vs </span>
       <span className={set.winner === 2 ? 'set-winner' : undefined}>{p2}</span>
