@@ -186,8 +186,17 @@ test('TO live scores stay unfinished while station options and pool holds follow
     label: 'Station A',
   });
   await upperCard.getByRole('button', { name: 'Start match', exact: true }).click();
-  await upperCard.getByRole('button', { name: 'Update live score', exact: true }).click();
+  const stationScore = page
+    .locator('.ops-station-tile')
+    .filter({ hasText: 'Station A' })
+    .locator('b');
+  await expect(stationScore).toHaveText('vs');
+  const updateLive = upperCard.getByRole('button', { name: 'Update live score', exact: true });
   const saveLive = upperCard.getByRole('button', { name: 'Save live score', exact: true });
+  await updateLive.click();
+  await saveLive.click();
+  await expect(stationScore).toHaveText('0–0');
+  await updateLive.click();
   await expect(saveLive).toBeEnabled();
   await clearInput(upperCard.getByRole('spinbutton').nth(0));
   await expect(saveLive).toBeDisabled();
@@ -198,6 +207,7 @@ test('TO live scores stay unfinished while station options and pool holds follow
   await upperCard.getByRole('button', { name: 'Save live score', exact: true }).click();
   await expect(page.locator('.ops-notice')).toContainText('Live score updated');
   await expect(upperCard).toContainText('Live game score · match still in progress');
+  await expect(stationScore).toHaveText('1–0');
   let live = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
   expect(live.matches.find((match) => match.id === upper.id)).toMatchObject({
     status: 'playing',

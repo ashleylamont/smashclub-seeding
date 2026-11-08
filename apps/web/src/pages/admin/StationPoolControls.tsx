@@ -10,6 +10,7 @@ import { BracketBackupSheets } from './BracketBackupSheets';
 import { trpc } from '../../lib/trpc';
 import { poolStandings } from '../../lib/eventQueue';
 import { poolLabel } from '../../lib/poolStationPlan';
+import { stationScoreText } from '../../lib/matchPresentation';
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 type Action = (work: () => Promise<unknown>, message?: string) => Promise<void>;
 
@@ -70,10 +71,7 @@ export function StationPoolControls({
                 {match ? (
                   <>
                     <p>
-                      {match.player1Name}{' '}
-                      <b>
-                        {match.score1 ?? 0}–{match.score2 ?? 0}
-                      </b>{' '}
+                      {match.player1Name} <b>{stationScoreText(match, data.plan.liveOwned)}</b>{' '}
                       {match.player2Name}
                     </p>
                     <small>{match.label}</small>

@@ -13,6 +13,8 @@ type Match = {
   player1Name: string;
   player2Name: string;
   status: string;
+  division: 'upper' | 'lower';
+  poolIndex: number | null;
   started: boolean;
   called: boolean;
   callLocation: string | null;
@@ -172,6 +174,17 @@ test('shared queue: manual order, independent Main stage, capacity reduction and
     await expect(personal.locator('.ops-match-meta')).toContainText('Called');
     await expect(personal.locator('.ops-match-meta')).toContainText('Window setup');
     await expect(personal.locator('.ops-match-meta')).not.toContainText('Playing now');
+    const rounds = board.locator('.pool-flow-rounds');
+    const poolLetter = String.fromCharCode(65 + called.poolIndex!);
+    await rounds
+      .getByRole('button', {
+        name: new RegExp(`${called.division} Pool ${poolLetter}.*rounds`, 'i'),
+      })
+      .press('Enter');
+    const pairing = rounds
+      .getByRole('listitem')
+      .filter({ hasText: `${called.player1Name} vs ${called.player2Name}` });
+    await expect(pairing.getByText('Called', { exact: true })).toBeVisible();
 
     await expect(board.getByRole('button', { name: 'Move up', exact: true })).toHaveCount(0);
     await expect(board.getByRole('button', { name: /Snooze/ })).toHaveCount(0);
