@@ -1,14 +1,24 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { InMemoryStore } from '@rotorsoft/act';
 import { eq } from 'drizzle-orm';
-import { eventPlans, eventPlanEntries, nativeLiveHandoffs, players, type Db } from '@smashclub/db';
+import {
+  eventOperators,
+  eventPlans,
+  eventPlanEntries,
+  nativeLiveHandoffs,
+  players,
+  user,
+  type Db,
+} from '@smashclub/db';
 import { createTestDb } from './helpers/testDb';
 import { nativeAdmin, seedNativeDraft } from './helpers/nativeLiveFixture';
-import { createNativeRuntime, type NativeRuntime } from '../src/tournament/runtime';
+import { createNativeRuntime, nativeStream, type NativeRuntime } from '../src/tournament/runtime';
 import { appRouter } from '../src/trpc/router';
 import { loadEnv } from '../src/env';
 import { ChallongeClient } from '../src/challonge/client';
 import { RecomputeTrigger } from '../src/recompute/trigger';
+import { Decision } from '../src/tournament/schemas';
+import { receiptKey } from '../src/tournament/facts';
 
 describe('TO restoration through the standard native API', () => {
   let db: Db, close: () => Promise<void>, live: NativeRuntime;
@@ -20,10 +30,10 @@ describe('TO restoration through the standard native API', () => {
     await live.shutdown();
     await close();
   });
-  function caller(actor: typeof nativeAdmin | null = nativeAdmin) {
+  function caller(actor: typeof nativeAdmin | null = nativeAdmin, nativeRuntime = live) {
     return appRouter.createCaller({
       db,
-      nativeRuntime: live,
+      nativeRuntime,
       user: actor,
       env: loadEnv({ DATABASE_URL: 'pglite://memory', NODE_ENV: 'test' }),
       challonge: new ChallongeClient({}),
@@ -134,6 +144,125 @@ describe('TO restoration through the standard native API', () => {
         .from(nativeLiveHandoffs)
         .where(eq(nativeLiveHandoffs.eventPlanId, remoteId)),
     ).toHaveLength(0);
+  });
+
+  it('requires reviewed Add, recovers its exact counts and still checks organiser access on retry', async () => {
+    const planId = await seedNativeDraft(db);
+    await caller().eventOps.softLockPools({ planId, confirm: true });
+    const organiser = {
+      ...nativeAdmin,
+      id: 'late-add-to',
+      email: 'late-add-to@example.test',
+      role: 'user' as const,
+    };
+    await db.insert(user).values(organiser);
+    await db.insert(eventOperators).values({ eventPlanId: planId, userId: organiser.id });
+    const [late] = await db.insert(players).values({ canonicalName: 'Late arrival' }).returning();
+    const input = {
+      planId,
+      action: 'add' as const,
+      playerId: late!.id,
+      division: 'upper' as const,
+      requestId: 'reviewed-add',
+    };
+    const api = caller(organiser).eventOps;
+    const preview = await api.previewAttendance(input);
+    expect(preview.allowed).toBe(true);
+    const approved = { ...input, revisionToken: preview.revisionToken };
+    const before = await live.replay(planId);
+    await expect(
+      api.live.command({
+        planId,
+        requestId: 'forged-add',
+        command: {
+          ...approved,
+          kind: 'attendance',
+          reason: 'Fabricated identity',
+          approveRedistribution: false,
+          entrant: {
+            id: crypto.randomUUID(),
+            name: 'Invented identity',
+            snapshotRank: null,
+            snapshotScore: null,
+          },
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('reviewed attendance'),
+    });
+    expect(await live.replay(planId)).toEqual(before);
+    const original = await api.applyAttendance(approved);
+    expect(original).toEqual({
+      applied: true,
+      addedMatches: preview.addedMatches,
+      affectedMatches: 0,
+    });
+    const saved = await live.replay(planId);
+    expect(saved.entrants.find(({ playerId }) => playerId === late!.id)?.name).toBe('Late arrival');
+    expect(await api.applyAttendance(approved)).toEqual(original);
+    const outsider = { ...organiser, id: 'unassigned-late-add-to' };
+    await expect(caller(outsider).eventOps.applyAttendance(approved)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    await db.delete(eventOperators).where(eq(eventOperators.eventPlanId, planId));
+    await expect(api.applyAttendance(approved)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(await live.replay(planId)).toEqual(saved);
+  });
+
+  it('replays an older Add receipt without counts and keeps its compatible response', async () => {
+    const planId = await seedNativeDraft(db);
+    const api = caller().eventOps;
+    await api.softLockPools({ planId, confirm: true });
+    const [late] = await db
+      .insert(players)
+      .values({ canonicalName: 'Legacy late arrival' })
+      .returning();
+    const requestId = 'old-add-receipt';
+    const input = {
+      planId,
+      playerId: late!.id,
+      action: 'add' as const,
+      division: 'upper' as const,
+      requestId,
+    };
+    const preview = await api.previewAttendance(input);
+    const approved = { ...input, revisionToken: preview.revisionToken };
+    await api.applyAttendance(approved);
+
+    const stream = nativeStream(planId);
+    const facts = await live.app.query_array({ stream, stream_exact: true, after: -1 });
+    expect(facts).toHaveLength(2);
+    const [baseline, added] = facts;
+    const decision = Decision.parse(added!.data);
+    expect(decision.requestId).toBe(requestId);
+    // Open a fresh runtime on the historical receipt shape with its original intent hash.
+    const { attendanceEffect: _counts, ...oldReceipt } = decision.receipt;
+    const store = new InMemoryStore();
+    await store.commit(stream, [{ name: baseline!.name, data: baseline!.data }], baseline!.meta);
+    await store.commit(
+      stream,
+      [{ name: added!.name, data: { ...decision, receipt: oldReceipt } }],
+      added!.meta,
+    );
+    const legacyRuntime = createNativeRuntime(db, store);
+    try {
+      const legacyApi = caller(nativeAdmin, legacyRuntime).eventOps;
+      const saved = await legacyRuntime.replay(planId);
+      const receipt = saved.receipts[receiptKey(nativeAdmin.id, requestId)];
+      expect(receipt).toBeDefined();
+      expect(receipt).not.toHaveProperty('attendanceEffect');
+      const currentPreview = await legacyApi.previewAttendance(input);
+      expect(currentPreview.affectedMatches.length).toBeGreaterThan(0);
+      expect(await legacyApi.applyAttendance(approved)).toEqual({
+        applied: true,
+        addedMatches: currentPreview.addedMatches,
+        affectedMatches: currentPreview.affectedMatches.length,
+      });
+      expect(await legacyRuntime.replay(planId)).toEqual(saved);
+    } finally {
+      await legacyRuntime.shutdown();
+    }
   });
 
   it('retains named additions, no-shows and redistribution history alongside withdrawal/restoration reasons', async () => {
