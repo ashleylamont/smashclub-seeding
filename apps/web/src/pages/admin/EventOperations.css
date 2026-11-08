@@ -8,6 +8,10 @@
   align-items: center;
 }
 
+.ops-match-grid > .ops-match:has(.ops-finals-replay-review[data-multiple-places]) {
+  grid-column: 1 / -1;
+  width: min(100%, 44rem);
+}
 .ops-finals-replay-review {
   display: grid;
   gap: var(--s2);

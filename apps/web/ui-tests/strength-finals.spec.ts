@@ -258,5 +258,21 @@ for (const theme of ['dark', 'light'] as const)
       expect(requests).toHaveLength(3);
       expect(requests[2]?.requestId).not.toBe(requests[0]?.requestId);
       expect(requests[2]?.revisionToken).toBe(requests[0]?.revisionToken);
+      const drawn = preview.brackets[0]!;
+      drawn.alreadyDrawn = true;
+      drawn.entrantIds = [
+        first!.id,
+        third!.id,
+        fixture.snapshot.entrants.find(
+          ({ id }) => id !== first!.id && id !== second!.id && id !== third!.id,
+        )!.id,
+      ];
+      await page.getByRole('button', { name: 'Preview finals', exact: true }).click();
+      const originalSeeding = page.getByRole('button', { name: 'Original seeding and byes' });
+      await expect(originalSeeding).toBeVisible();
+      await originalSeeding.press('Enter');
+      await expect(
+        page.getByText('These seeds are the original draw record.', { exact: false }),
+      ).toBeVisible();
       expect(fixture.unexpected).toEqual([]);
     });

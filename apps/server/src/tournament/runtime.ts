@@ -44,6 +44,7 @@ const isDecisionEvent = (name: string) =>
     'DecisionRecordedV6',
     'DecisionRecordedV7',
     'DecisionRecordedV8',
+    'DecisionRecordedV9',
     'ResultsSealedV1',
     'PlanRetiredV1',
   ].includes(name);
@@ -69,6 +70,7 @@ async function replayNative(
       case 'DecisionRecordedV6':
       case 'DecisionRecordedV7':
       case 'DecisionRecordedV8':
+      case 'DecisionRecordedV9':
       case 'ResultsSealedV1':
       case 'PlanRetiredV1':
         rebuilt = reduceDecision(rebuilt, Decision.parse(event.data));
