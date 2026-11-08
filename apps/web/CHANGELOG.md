@@ -2,6 +2,13 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.2.7
+
+### Patch Changes
+
+- 8 November 2026 · **Maintenance** · Run browser behavior and accessibility checks on Linux and keep screenshot baseline comparisons on macOS. Both remain required in CI and publish separate review artifacts. [#227](https://github.com/ashleylamont/smashclub-seeding/pull/227) · [build 88acd8c](https://github.com/ashleylamont/smashclub-seeding/commit/88acd8ccd5c4aaf2f9325cb81722027419c4d06a)
+- 8 November 2026 · **Improvement** · Player match logs show approximate WHR impact next to each rated set as you scroll. [#226](https://github.com/ashleylamont/smashclub-seeding/pull/226) · [build 29572be](https://github.com/ashleylamont/smashclub-seeding/commit/29572be20cbfd258460c7ec3f8bb192c9c80b86a)
+
 ## 0.2.6
 
 ### Patch Changes
