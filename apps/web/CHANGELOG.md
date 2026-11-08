@@ -2,6 +2,18 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.5.0
+
+### Minor Changes
+
+- 8 November 2026 · **Feature** · Review a corrected pool winner and replay one affected finals slot. [#265](https://github.com/ashleylamont/smashclub-seeding/pull/265) · [build d299850](https://github.com/ashleylamont/smashclub-seeding/commit/d299850eb410112be4f05755911fc10fb138a01f)
+
+  Organisers can replay a single already-played opening set after any downstream calls are returned, provided no downstream pairing has started, resolved or received a report. The original score stays in history and eligible sets count for ratings. Only the replacement pairing can advance. Corrections affecting multiple finals slots show the affected places for further review.
+
+- 8 November 2026 · **Feature** · Show a short link to the event on the broadcast progress summary. [#268](https://github.com/ashleylamont/smashclub-seeding/pull/268) · [build da9980b](https://github.com/ashleylamont/smashclub-seeding/commit/da9980b406f3c4f877e0bb1039b1e8aaa57f0948)
+
+  A link such as `/e/1000000` opens the same public event page for live progress and recorded results. Existing event links still work.
+
 ## 0.4.3
 
 ### Patch Changes
