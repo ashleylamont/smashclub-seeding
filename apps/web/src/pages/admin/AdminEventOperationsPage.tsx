@@ -78,6 +78,7 @@ export function AssignedEventOperationsPage() {
 export function EventOperationsPanel({ planId }: { planId: string }) {
   const online = useOnlineStatus();
   const workspace = useOpsWorkspace();
+  const openScoreSubmissions = () => void workspace.openControl('score-submissions');
   const cache = useQueryClient();
   const { data: session } = authClient.useSession();
   const currentUser = useCurrentUser(session);
@@ -126,9 +127,6 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
   const closed = ['complete', 'cancelled'].includes(data.plan.status);
   const liveDisabled = !online || pending || closed || Boolean(data.plan.drawPaused);
   const dispatchDisabled = liveDisabled || event.isError;
-  const disputes = data.reports.filter(
-    (report) => report.status === 'pending' && report.isDispute,
-  ).length;
   const available = availableMatches(data.matches).filter((match) => match.availability.canStart);
   const callable = new Set(available.map((match) => match.id));
   const pools = poolStandings(data.matches);
@@ -214,21 +212,6 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
           {notice}
         </p>
       )}
-      {disputes > 0 && (
-        <p className="banner banner-warning" role="status">
-          <strong>
-            {disputes} conflicting {disputes === 1 ? 'score needs' : 'scores need'} TO review.
-          </strong>{' '}
-          Recorded results stay in place.{' '}
-          <Button
-            size="small"
-            type="submit"
-            onClick={() => void workspace.openControl('score-submissions')}
-          >
-            Review disagreements
-          </Button>
-        </p>
-      )}
       <Tabs
         value={workspace.section}
         onValueChange={(value) => void workspace.changeSection(value)}
@@ -245,7 +228,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
             <DispatchDesk
               data={data}
               disabled={dispatchDisabled}
-              onReviewReports={() => void workspace.openControl('score-submissions')}
+              onReviewReports={openScoreSubmissions}
               onMatch={(id) => {
                 setFocusedMatchId(id);
                 setFilter('all');
@@ -401,6 +384,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
         <TabPanel value="players">
           <ToPlayerFinder
             data={data}
+            onReviewReports={openScoreSubmissions}
             onMatch={(id) => {
               setFocusedMatchId(id);
               setSearch('');
@@ -528,7 +512,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
         </TabPanel>
         <TabPanel value="settings">
           <ScorePolicyControls
-            onReports={() => void workspace.openControl('score-submissions')}
+            onReports={openScoreSubmissions}
             data={data}
             admin={admin}
             disabled={pending || closed}

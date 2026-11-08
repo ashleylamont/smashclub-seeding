@@ -16,6 +16,8 @@ export function OpsAttentionDesk({
 }) {
   const { reports, decisions, dispatch, needsStations } = opsAttention(data);
   const stale = reports.filter((report) => report.stale).length;
+  const disputes = reports.filter((report) => report.isDispute);
+  const firstDispute = disputes.find((report) => !report.stale) ?? disputes[0];
   const count = reports.length + decisions.length + (needsStations ? 1 : 0);
   if (['complete', 'cancelled'].includes(data.plan.status)) return null;
   return (
@@ -25,9 +27,20 @@ export function OpsAttentionDesk({
           <h3 id="ops-attention-title">
             Needs attention <span className="chip">{count}</span>
           </h3>
-          <p className="muted">
-            {count ? 'Review pending decisions below.' : 'No decisions pending.'}
-          </p>
+          {firstDispute ? (
+            <div className="ui-actions">
+              <p className="muted" role="status">
+                {disputes.length} conflicting score {disputes.length === 1 ? 'report' : 'reports'}
+              </p>
+              <Button size="small" onClick={() => onJump(`score-report-${firstDispute.id}`)}>
+                Review disagreements
+              </Button>
+            </div>
+          ) : (
+            <p className="muted">
+              {count ? 'Review pending decisions below.' : 'No decisions pending.'}
+            </p>
+          )}
         </div>
       </div>
       <div className="ops-attention-groups">
@@ -53,7 +66,9 @@ export function OpsAttentionDesk({
                       {report.match?.label ?? 'Match unavailable'} ·{' '}
                       {report.stale
                         ? 'Match changed — check the current result before rejecting or correcting.'
-                        : 'Awaiting TO approval'}
+                        : report.isDispute
+                          ? 'Conflicting submission'
+                          : 'Awaiting TO approval'}
                     </span>
                   </div>
                   <Button

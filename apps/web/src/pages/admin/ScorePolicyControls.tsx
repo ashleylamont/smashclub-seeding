@@ -16,7 +16,9 @@ export function ScorePolicyControls({
   act: (work: () => Promise<unknown>, message?: string) => Promise<void>;
 }) {
   const mode = data.settings.scoreReportingMode ?? 'to_review';
-  const disputes = data.reports.filter((report) => report.status === 'pending' && report.isDispute);
+  const hasDisputes = data.reports.some(
+    (report) => report.status === 'pending' && report.isDispute,
+  );
   return (
     <section className="card" aria-labelledby="score-policy-heading">
       <h3 id="score-policy-heading">Score approval</h3>
@@ -67,16 +69,10 @@ export function ScorePolicyControls({
         TO decisions. Resolve disputes before finalising the event; downstream play can prevent
         changing a winner.
       </p>
-      {disputes.length > 0 && (
-        <p role="status">
-          <strong>
-            {disputes.length} conflicting {disputes.length === 1 ? 'report needs' : 'reports need'}{' '}
-            review.
-          </strong>{' '}
-          <Button size="small" type="submit" onClick={onReports}>
-            Review score submissions
-          </Button>
-        </p>
+      {hasDisputes && (
+        <Button size="small" onClick={onReports}>
+          Review score submissions
+        </Button>
       )}
     </section>
   );

@@ -96,11 +96,9 @@ test('anonymous navigation finds only published events and an admin can opt into
       'eventOps.guests.redeem',
       { planId, token: invitation.token },
     );
-    const before = await query<{ matches: { id: string; revision: number; status: string }[] }>(
-      anonymous.request,
-      'eventOps.snapshot',
-      { planId },
-    );
+    const before = await query<{
+      matches: { id: string; revision: number; status: string; player1Name: string }[];
+    }>(anonymous.request, 'eventOps.snapshot', { planId });
     const match = before.matches.find((item) => item.status === 'ready')!;
     await mutate(anonymous.request, 'eventOps.guests.submit', {
       planId,
@@ -131,18 +129,74 @@ test('anonymous navigation finds only published events and an admin can opt into
     );
     expect(dispute).toMatchObject({ isDispute: true, status: 'pending' });
     await page.reload();
-    await page.getByRole('tab', { name: 'Run matches', exact: true }).click();
+    await page.getByRole('button', { name: 'Review disagreements', exact: true }).press('Enter');
+    await expect(page.getByRole('tab', { name: 'Run matches', exact: true })).toHaveAttribute(
+      'data-state',
+      'active',
+    );
     const report = page.locator('.ops-report').filter({ hasText: 'Conflicting report' });
-    await expect(report).toContainText('Recorded result:');
+    await expect(report).toBeFocused();
+    await expect(report).toContainText('Recorded result ·');
+    await expect(report).toContainText('Submitted result ·');
     await expect(report.getByRole('button', { name: 'Use submitted result' })).toBeEnabled();
+    await page.getByRole('tab', { name: 'Players', exact: true }).press('Enter');
+    const finder = page.getByRole('region', { name: 'Find a player' });
+    await finder.getByRole('searchbox').fill(match.player1Name);
+    await finder
+      .getByRole('button')
+      .filter({ has: page.getByText(match.player1Name, { exact: true }) })
+      .press('Enter');
+    await finder.getByRole('button', { name: 'Review score submissions' }).press('Enter');
+    await expect(page.getByRole('region', { name: 'Score submissions' })).toBeFocused();
     await report.getByRole('button', { name: 'Keep recorded result' }).click();
     await expect(report).toHaveCount(0);
     const after = await query<{
-      matches: { id: string; score1: number; score2: number; pendingDisputeCount: number }[];
+      matches: {
+        id: string;
+        player1Id: string;
+        revision: number;
+        score1: number | null;
+        score2: number | null;
+        pendingDisputeCount: number;
+      }[];
     }>(anonymous.request, 'eventOps.snapshot', { planId });
-    expect(after.matches.find((item) => item.id === match.id)).toMatchObject({
+    const recorded = after.matches.find((item) => item.id === match.id)!;
+    expect(recorded).toMatchObject({
       score1: 2,
       score2: 0,
+      pendingDisputeCount: 0,
+    });
+    await mutate(anonymous.request, 'eventOps.guests.submit', {
+      planId,
+      sessionToken: secondPass.sessionToken,
+      matchId: match.id,
+      expectedRevision: recorded.revision,
+      requestId: crypto.randomUUID(),
+      score1: 1,
+      score2: 2,
+    });
+    await mutate(page.request, 'eventOps.reportScore', {
+      matchId: match.id,
+      expectedRevision: recorded.revision,
+      requestId: crypto.randomUUID(),
+      winnerId: recorded.player1Id,
+      score1: 0,
+      score2: 0,
+      outcome: 'forfeit',
+    });
+    await page.reload();
+    await page.getByRole('button', { name: 'Review disagreements', exact: true }).press('Enter');
+    await expect(report).toBeFocused();
+    await expect(report).toContainText(`Recorded outcome · ${match.player1Name} advances`);
+    await expect(report).toContainText('forfeits.');
+    await expect(report.getByRole('button', { name: 'Use submitted result' })).toBeDisabled();
+    await report.getByRole('button', { name: 'Keep recorded result' }).click();
+    await expect(report).toHaveCount(0);
+    const final = await query<typeof after>(anonymous.request, 'eventOps.snapshot', { planId });
+    expect(final.matches.find((item) => item.id === match.id)).toMatchObject({
+      outcome: 'forfeit',
+      score1: null,
+      score2: null,
       pendingDisputeCount: 0,
     });
     await guest.reload();
