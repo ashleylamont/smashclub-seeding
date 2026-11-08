@@ -1,4 +1,4 @@
-import Markdown from 'markdown-to-jsx';
+import { Markdown } from 'markdown-to-jsx';
 import changelog from '../../CHANGELOG.md?raw';
 import { PageHeader } from '../components/ui/PageHeader';
 import './ChangelogPage.css';
