@@ -1,6 +1,8 @@
 import type { TournamentStructure } from '@smashclub/shared';
 import { poolLabel } from '@smashclub/tournament-formats';
 
+export const FIGHTER_ART_CREDIT = 'Fighter artwork © Nintendo and respective rights holders';
+
 export interface GraphicMember {
   name: string;
   character: string | null;

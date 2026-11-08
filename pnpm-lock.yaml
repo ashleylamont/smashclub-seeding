@@ -207,6 +207,9 @@ importers:
       jsqr:
         specifier: ^1.4.0
         version: 1.4.0
+      smash-ultimate-assets:
+        specifier: 0.1.1
+        version: 0.1.1
       typescript:
         specifier: ~5.9.3
         version: 5.9.3
@@ -3076,6 +3079,9 @@ packages:
   sisteransi@1.0.5:
     resolution: {integrity: sha512-bLGGlR1QxBcynn2d5YmDX4MGjlZvy2MRBDRNHLJ8VI6l6+9FUiyTFNJ0IveOSP0bcXgVDPRcfGqA0pjaqUpfVg==}
 
+  smash-ultimate-assets@0.1.1:
+    resolution: {integrity: sha512-qXi7mY5aEEH5maz4QW9lgcGEBTpWR9XOMcoU/LQyfnB07KEvZRP4mBH+41+hpMk/eAPUu5WVPeQGphqeQU9HWQ==}
+
   sonic-boom@4.2.1:
     resolution: {integrity: sha512-w6AxtubXa2wTXAUsZMMWERrsIRAdrK0Sc+FUytWvYAhBJLyuI4llrMIC1DtlNSdI99EI86KZum2MMq3EAZlF9Q==}
 
@@ -5592,6 +5598,8 @@ snapshots:
   signal-exit@4.1.0: {}
 
   sisteransi@1.0.5: {}
+
+  smash-ultimate-assets@0.1.1: {}
 
   sonic-boom@4.2.1:
     dependencies:

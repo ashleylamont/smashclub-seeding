@@ -8,6 +8,7 @@ import { LoadingState, Notice } from './ui/Feedback';
 import { Input } from './ui/Input';
 import { Select, SelectItem } from './ui/Select';
 import {
+  FIGHTER_ART_CREDIT,
   graphicMemberKey,
   graphicMembers,
   rankedGraphicResults,
@@ -27,24 +28,31 @@ import {
 } from '../lib/resultGraphicPortraitPack';
 import './ResultGraphic.css';
 
-export function ResultGraphic({
-  title,
-  context,
-  results,
-}: {
+type ResultGraphicProps = {
   title: string;
   context: GraphicContext;
   results: readonly GraphicResult[];
-}) {
-  const [open, setOpen] = useState(false);
-  if (!results.length) return null;
+};
+
+export function ResultGraphic(props: ResultGraphicProps) {
+  return props.results.length ? <ResultGraphicActions {...props} /> : null;
+}
+
+function ResultGraphicActions({ title, context, results }: ResultGraphicProps) {
+  const [snapshot, setSnapshot] = useState<{
+    context: GraphicContext;
+    results: readonly GraphicResult[];
+  }>();
   return (
     <div className="result-graphic-actions">
       <Dialog
         title="Results graphic"
-        description={context.scopeLabel}
-        open={open}
-        onOpenChange={setOpen}
+        description={snapshot?.context.scopeLabel ?? context.scopeLabel}
+        open={Boolean(snapshot)}
+        onOpenChange={(open) => {
+          // Keep the preview and download on the same standings while the page polls.
+          setSnapshot(open ? { context, results } : undefined);
+        }}
         trigger={
           <Button type="button" aria-label={`Preview results PNG for ${context.scopeLabel}`}>
             Preview results PNG
@@ -53,7 +61,7 @@ export function ResultGraphic({
         wide
         className="result-graphic-dialog"
       >
-        {open && <ResultGraphicPreview context={context} results={results} />}
+        {snapshot && <ResultGraphicPreview {...snapshot} />}
       </Dialog>
       <Button
         type="button"
@@ -99,8 +107,9 @@ function ResultGraphicSession({
 }) {
   const rows = useMemo(() => rankedGraphicResults(results, context.kind), [results, context.kind]);
   const [overrides, setOverrides] = useState<Record<string, string>>({});
-  const [portraits, setPortraits] = useState<GraphicPortraits>({});
+  const [portraits, setPortraits] = useState<GraphicPortraits>(noPortraits);
   const [pack, setPack] = useState<CharacterPortraitPack>(noCharacterPack);
+  const bundledCache = useRef(new Map<string, HTMLCanvasElement | null>());
   const access = useQuery({
     queryKey: ['canCustomizeResultGraphic', userId, context.source],
     queryFn: () => trpc.eventOps.canCustomizeResultGraphic.query(context.source),
@@ -133,12 +142,13 @@ function ResultGraphicSession({
     pack: CharacterPortraitPack;
     applied: number;
     unreadable: number;
+    hasBundledArtwork: boolean;
     image: { blob: Blob; url: string } | null;
   }>();
   useEffect(() => {
     const controller = new AbortController();
     let url: string | undefined;
-    const receive = (blob: Blob | null, applied = 0, unreadable = 0) => {
+    const receive = (blob: Blob | null, applied = 0, unreadable = 0, hasBundledArtwork = false) => {
       if (controller.signal.aborted) return;
       url = blob ? URL.createObjectURL(blob) : undefined;
       setOutput({
@@ -148,13 +158,25 @@ function ResultGraphicSession({
         pack: previewPack,
         applied,
         unreadable,
+        hasBundledArtwork,
         image: blob && url ? { blob, url } : null,
       });
     };
-    void resolveCharacterPortraits(previewRows, previewPortraits, previewPack, controller.signal)
-      .then(async ({ portraits, applied, unreadable }) => {
+    void resolveCharacterPortraits(
+      previewRows,
+      previewPortraits,
+      previewPack,
+      bundledCache.current,
+      controller.signal,
+    )
+      .then(async ({ portraits, bundled, applied, unreadable }) => {
         if (controller.signal.aborted) return;
-        receive(await renderResultsPng(context, previewRows, portraits), applied, unreadable);
+        receive(
+          await renderResultsPng(context, previewRows, portraits, bundled),
+          applied,
+          unreadable,
+          bundled.size > 0,
+        );
       })
       .catch(() => receive(null));
     return () => {
@@ -193,6 +215,7 @@ function ResultGraphicSession({
         Character labels and artwork follow current profile mains or organiser choices. They may
         differ from the characters played at this event.
       </p>
+      {current?.image && current.hasBundledArtwork && <p className="muted">{FIGHTER_ART_CREDIT}</p>}
       <Disclosure title="Placements in this graphic">
         <ul className="result-graphic-placements">
           {previewRows.map((row, index) => (
@@ -451,8 +474,8 @@ function CharacterArtworkPicker({
       )}
       {unreadable > 0 && (
         <Notice tone="warning">
-          Could not open {unreadable} {unreadable === 1 ? 'image' : 'images'}. Those panels use the
-          original tag artwork.
+          Could not open {unreadable} {unreadable === 1 ? 'image' : 'images'}. Those panels use
+          bundled artwork when available, or the original tag artwork.
         </Notice>
       )}
       {error && <Notice tone="warning">{error}</Notice>}

@@ -1,6 +1,7 @@
 import { characterName, isCharacterSlug } from '@smashclub/shared';
 import { NEMESIS_MARK_PATHS } from './nemesisMark';
 import {
+  FIGHTER_ART_CREDIT,
   graphicMemberKey,
   graphicMembers,
   type GraphicContext,
@@ -158,7 +159,8 @@ function artwork(
   ctx: CanvasRenderingContext2D,
   name: string,
   { x, y, width, height }: Rect,
-  portrait?: HTMLCanvasElement,
+  portrait: HTMLCanvasElement | undefined,
+  bundled: boolean,
 ) {
   const seed = Array.from(name).reduce((sum, glyph) => sum + glyph.codePointAt(0)!, 0);
   const [dark, middle, light] = palettes[seed % palettes.length]!;
@@ -185,14 +187,15 @@ function artwork(
   ctx.lineWidth = 1;
   for (const inset of [9, 15]) ctx.strokeRect(inset, inset, width - 2 * inset, height - 2 * inset);
   if (portrait) {
-    const scale = Math.max(width / portrait.width, height / portrait.height);
+    const fit = bundled ? Math.min : Math.max;
+    const scale = fit(width / portrait.width, height / portrait.height);
     const drawnWidth = portrait.width * scale;
     const drawnHeight = portrait.height * scale;
     ctx.globalAlpha = 1;
     ctx.drawImage(
       portrait,
       (width - drawnWidth) / 2,
-      (height - drawnHeight) / 2,
+      bundled ? height - drawnHeight : (height - drawnHeight) / 2,
       drawnWidth,
       drawnHeight,
     );
@@ -234,6 +237,7 @@ function drawTile(
   { bounds, row, champion }: Tile,
   rowIndex: number,
   portraits: GraphicPortraits,
+  bundled: ReadonlySet<string>,
 ) {
   const { x, y, width, height } = bounds;
   const members = graphicMembers(row);
@@ -244,7 +248,8 @@ function drawTile(
   const portraitWidth = width / members.length;
   ctx.save();
   ctx.translate(x, y);
-  members.forEach(({ name }, index) =>
+  members.forEach(({ name }, index) => {
+    const key = graphicMemberKey(row, rowIndex, index);
     artwork(
       ctx,
       name,
@@ -254,9 +259,10 @@ function drawTile(
         width: portraitWidth,
         height: portraitHeight,
       },
-      portraits[graphicMemberKey(row, rowIndex, index)],
-    ),
-  );
+      portraits[key],
+      bundled.has(key),
+    );
+  });
   if (paired) {
     ctx.fillStyle = ink;
     ctx.fillRect(portraitWidth - 1, 0, 2, portraitHeight);
@@ -344,7 +350,8 @@ function drawTile(
 export async function renderResultsPng(
   context: GraphicContext,
   rows: Rows,
-  portraits: GraphicPortraits = {},
+  portraits: GraphicPortraits,
+  bundled: ReadonlySet<string>,
 ): Promise<Blob | null> {
   const { tiles, height } = layout(rows);
   // Keep every recorded place even in unusually large pools or ties. Fit older
@@ -384,11 +391,15 @@ export async function renderResultsPng(
   label(ctx, context.eventName, PADDING, 76, WIDTH - 2 * PADDING, `700 37px ${headings}`, paper);
   label(ctx, context.scopeLabel, PADDING, 96, WIDTH - 2 * PADDING, `700 16px ${reading}`, paper);
 
-  tiles.forEach((tile, index) => drawTile(ctx, tile, index, portraits));
+  tiles.forEach((tile, index) => drawTile(ctx, tile, index, portraits, bundled));
 
   const footer =
     context.kind === 'pool' ? 'CONFIRMED POOL PLACES' : 'CONFIRMED FINISHES THROUGH 8TH';
   const caption = `${footer}  /  ${context.format.toUpperCase()}`;
   label(ctx, caption, PADDING, height - 20, WIDTH - 2 * PADDING, `700 12px ${mono}`, muted);
+  if (bundled.size) {
+    ctx.textAlign = 'right';
+    label(ctx, FIGHTER_ART_CREDIT, WIDTH - PADDING, height - 20, 440, `500 11px ${reading}`, muted);
+  }
   return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
 }
