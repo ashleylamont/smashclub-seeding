@@ -1,10 +1,11 @@
 import { useOpsWorkspace } from '../../lib/opsWorkspace';
 import { OpsEventHistory } from './OpsEventHistory';
+import { UntakenCallRecovery, type UntakenCallDesk } from './UntakenCallRecovery';
 import { Select, SelectItem } from '../../components/ui/Select';
 import { Input } from '../../components/ui/Input';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { Button } from '../../components/ui/Button';
-import { useState } from 'react';
+import { useRef, useState, type Ref } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
@@ -42,13 +43,16 @@ export function AttendanceControls({
   planId,
   data,
   disabled,
+  callDesk,
 }: {
   planId: string;
   data: Overview;
   disabled: boolean;
+  callDesk: UntakenCallDesk;
 }) {
   const historyActive = useOpsWorkspace().section === 'players';
   const cache = useQueryClient();
+  const previewHeading = useRef<HTMLHeadingElement>(null);
   const [action, setAction] = useState<Input['action']>(
     data.plan.competitionFormat === 'doubles' ? 'withdraw' : 'add',
   );
@@ -70,23 +74,16 @@ export function AttendanceControls({
     setMessage('');
     setError('');
   };
-  const inspect = async () => {
-    const input: Input = {
-      planId,
-      requestId: crypto.randomUUID(),
-      action,
-      playerId,
-      reason,
-      ...(action === 'add' ? { division } : {}),
-    };
-    setPreview(null);
+  const inspect = async (input: Input, refocus = false) => {
     setBusy(true);
     setError('');
     setMessage('');
     try {
+      const result = await trpc.eventOps.previewAttendance.query(input);
+      if (refocus) previewHeading.current?.focus();
       setPreview({
         input,
-        result: await trpc.eventOps.previewAttendance.query(input),
+        result,
         externalAcknowledged: false,
         redistributionApproved: false,
       });
@@ -235,7 +232,17 @@ export function AttendanceControls({
         <Button
           type="submit"
           disabled={!playerId || (action === 'restore' && !reason.trim())}
-          onClick={() => void inspect()}
+          onClick={() => {
+            setPreview(null);
+            void inspect({
+              planId,
+              requestId: crypto.randomUUID(),
+              action,
+              playerId,
+              reason,
+              ...(action === 'add' ? { division } : {}),
+            });
+          }}
         >
           Preview attendance change
         </Button>
@@ -246,6 +253,9 @@ export function AttendanceControls({
           preview={preview}
           entrants={data.entrants}
           disabled={busy || disabled}
+          callDesk={callDesk}
+          headingRef={previewHeading}
+          onRefresh={() => void inspect(preview.input, true)}
           onAcknowledge={(externalAcknowledged) => setPreview({ ...preview, externalAcknowledged })}
           onApprove={(redistributionApproved) => setPreview({ ...preview, redistributionApproved })}
           onApply={() => void apply()}
@@ -270,6 +280,9 @@ function AttendancePreviewPanel({
   preview,
   entrants,
   disabled,
+  callDesk,
+  headingRef,
+  onRefresh,
   onAcknowledge,
   onApprove,
   onApply,
@@ -277,13 +290,30 @@ function AttendancePreviewPanel({
   preview: AttendanceReview;
   entrants: Overview['entrants'];
   disabled: boolean;
+  callDesk: UntakenCallDesk;
+  headingRef: Ref<HTMLHeadingElement>;
+  onRefresh: () => void;
   onAcknowledge: (checked: boolean) => void;
   onApprove: (checked: boolean) => void;
   onApply: () => void;
 }) {
+  const returnCallIds = preview.result.returnCallMatchIds;
+  const callsStillOpen = callDesk.calls.some(({ id }) => returnCallIds?.includes(id));
+  const apply = (
+    <Button
+      variant="primary"
+      type="submit"
+      disabled={disabled || !canApplyAttendance(preview)}
+      onClick={onApply}
+    >
+      Apply this change
+    </Button>
+  );
   return (
     <div className="ops-attendance-preview">
-      <h4>Change preview</h4>
+      <h4 ref={headingRef} tabIndex={-1}>
+        Change preview
+      </h4>
       {preview.input.action === 'add' && preview.result.poolIndex !== null && (
         <p>
           Automatic placement: {preview.result.division} · Pool{' '}
@@ -294,11 +324,18 @@ function AttendancePreviewPanel({
         {preview.result.addedMatches} new match(es) · {preview.result.affectedMatches.length}{' '}
         affected existing match(es)
       </p>
-      {preview.result.issues.map((issue) => (
-        <p className="error-text" key={issue}>
-          {issue}
-        </p>
-      ))}
+      {returnCallIds && !callsStillOpen ? (
+        <p className="muted">Refresh the preview before applying this change.</p>
+      ) : (
+        preview.result.issues.map((issue) => (
+          <p className="error-text" key={issue}>
+            {issue}
+          </p>
+        ))
+      )}
+      {returnCallIds && (
+        <UntakenCallRecovery matchIds={returnCallIds} desk={callDesk} showInstructions={false} />
+      )}
       {preview.result.warnings.map((warning) => (
         <p className="muted" key={warning}>
           {warning}
@@ -311,7 +348,7 @@ function AttendancePreviewPanel({
         <ul>
           {preview.result.affectedMatches.map((match) => (
             <li key={match.id}>
-              {match.label} · {match.status}
+              {match.label} · {returnCallIds?.includes(match.id) ? 'called' : match.status}
             </li>
           ))}
         </ul>
@@ -350,14 +387,16 @@ function AttendancePreviewPanel({
             : ''}
         </label>
       )}
-      <Button
-        variant="primary"
-        type="submit"
-        disabled={disabled || !canApplyAttendance(preview)}
-        onClick={onApply}
-      >
-        Apply this change
-      </Button>
+      {returnCallIds ? (
+        <div className="ops-match-actions">
+          <Button disabled={disabled} onClick={onRefresh}>
+            Refresh attendance preview
+          </Button>
+          {apply}
+        </div>
+      ) : (
+        apply
+      )}
     </div>
   );
 }

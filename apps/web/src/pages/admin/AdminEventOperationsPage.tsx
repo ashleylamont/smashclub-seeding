@@ -17,7 +17,7 @@ import { LoadingState, Notice } from '../../components/ui/Feedback';
 import { OPS_SECTIONS, returnCallControlId, useOpsWorkspace } from '../../lib/opsWorkspace';
 import { MatchCard } from './OpsMatchCard';
 import { PlayerReports, AuditList } from './OpsPlayerReports';
-import type { ScoreCallDesk } from './ScoreCallRecovery';
+import type { UntakenCallDesk } from './UntakenCallRecovery';
 import { ScorePolicyControls } from './ScorePolicyControls';
 import { StationPoolControls } from './StationPoolControls';
 import { NativeBracketControls } from './NativeBracketControls';
@@ -140,7 +140,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
     search,
   });
   const untakenCalls = data.matches.filter((match) => match.status === 'playing' && !match.started);
-  const callDesk: ScoreCallDesk = {
+  const callDesk: UntakenCallDesk = {
     shared: Boolean(data.sharedDispatch),
     calls: dispatchDisabled ? [] : untakenCalls,
     open: (id) => {
@@ -418,7 +418,12 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
             }}
           />
           {/* Keep open attendance menus clear of shifts from the separately loaded roster. */}
-          <AttendanceControls planId={planId} data={data} disabled={pending || closed} />
+          <AttendanceControls
+            planId={planId}
+            data={data}
+            disabled={pending || closed}
+            callDesk={callDesk}
+          />
           <AttendeeList planId={planId} closed={closed} />
         </TabPanel>
         <TabPanel value="draw">

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { trpc } from '../../lib/trpc';
 import { returnUntakenCallMatchIds } from '../../lib/eventErrors';
-import { ScoreCallRecovery, type ScoreCallDesk } from './ScoreCallRecovery';
+import { UntakenCallRecovery, type UntakenCallDesk } from './UntakenCallRecovery';
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 type Action = (work: () => Promise<unknown>, message?: string) => Promise<void>;
 export function PlayerReports({
@@ -14,7 +14,7 @@ export function PlayerReports({
   data: Overview;
   disabled: boolean;
   act: Action;
-  callDesk: ScoreCallDesk;
+  callDesk: UntakenCallDesk;
 }) {
   return (
     <section className="card" id="score-submissions">
@@ -70,7 +70,7 @@ function ReportRows({ data, disabled, act, callDesk }: Parameters<typeof PlayerR
               </p>
               {callConflict?.reportId === report.id &&
                 match?.revision === report.expectedRevision && (
-                  <ScoreCallRecovery matchIds={callConflict.matchIds} desk={callDesk} />
+                  <UntakenCallRecovery matchIds={callConflict.matchIds} desk={callDesk} />
                 )}
             </div>
             <Button

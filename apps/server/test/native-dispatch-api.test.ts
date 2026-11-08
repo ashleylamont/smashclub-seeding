@@ -233,6 +233,70 @@ describe('shared dispatch through the application API', () => {
     expect(await runtime.state(planId)).toEqual(played);
   });
 
+  it('offers the exact no-show call to an organiser and requires a fresh attendance review after returning it', async () => {
+    const { planId, api } = await night();
+    const before = await api.eventOps.overview({ planId });
+    const match = before.matches.find((row) => row.status === 'ready')!;
+    const draft = {
+      planId,
+      requestId: 'no-show-draft',
+      action: 'no_show' as const,
+      playerId: match.player1Id!,
+      reason: 'Did not arrive',
+    };
+    await api.eventOps.live.command({
+      planId,
+      requestId: 'call-before-no-show',
+      command: {
+        kind: 'dispatch',
+        matchId: match.id,
+        stationId: null,
+        callOnly: true,
+        expectedRevision: match.revision,
+        expectedResourceRevision: before.settings.resourceRevision,
+        expectedOrdinaryCapacity: before.sharedDispatch!.capacity,
+      },
+    });
+    const blocked = await api.eventOps.previewAttendance(draft);
+    expect(blocked).toMatchObject({ allowed: false, returnCallMatchIds: [match.id] });
+    await expect(caller(null).eventOps.previewAttendance(draft)).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
+    const other = caller({ ...nativeAdmin, id: 'unassigned-player', role: 'user' });
+    await expect(other.eventOps.previewAttendance(draft)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    const oldRequest = { ...draft, revisionToken: blocked.revisionToken };
+    await expect(api.eventOps.applyAttendance(oldRequest)).rejects.toThrow(/untaken call/);
+    const called = await runtime.state(planId);
+    await api.eventOps.updateMatch({
+      matchId: match.id,
+      status: 'ready',
+      stationId: null,
+      expectedRevision: called.matches.find(({ id }) => id === match.id)!.revision,
+      expectedResourceRevision: called.settings.resourceRevision,
+    });
+    const returned = await runtime.state(planId);
+    expect(returned.entrants).toEqual(called.entrants);
+    expect(returned.matches.map(({ id }) => id)).toEqual(called.matches.map(({ id }) => id));
+    await expect(api.eventOps.applyAttendance(oldRequest)).rejects.toThrow(
+      /changed since this preview/,
+    );
+    const refreshed = await api.eventOps.previewAttendance(draft);
+    expect(refreshed.allowed).toBe(true);
+    expect(refreshed).not.toHaveProperty('returnCallMatchIds');
+    const approvedRequest = { ...draft, revisionToken: refreshed.revisionToken };
+    await api.eventOps.applyAttendance(approvedRequest);
+    const after = await runtime.state(planId);
+    expect(after.matches).toEqual(
+      returned.matches.filter((row) => ![row.player1Id, row.player2Id].includes(draft.playerId)),
+    );
+    expect(after.entrants.some(({ playerId }) => playerId === draft.playerId)).toBe(false);
+    await api.eventOps.applyAttendance(approvedRequest);
+    expect(await runtime.state(planId)).toEqual(after);
+    expect(await runtime.replay(planId)).toEqual(after);
+  });
+
   it('keeps operator holds through unrelated scores and resumes pools independently', async () => {
     const { planId, api } = await night();
     const before = await api.eventOps.overview({ planId });

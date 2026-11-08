@@ -517,6 +517,7 @@ describe('shared native dispatch', () => {
     const preview = attendancePreview(state, { action: 'no_show', playerId: entrant });
     expect(preview.allowed).toBe(false);
     expect(preview.issues.join(' ')).toMatch(/Return.*untaken call/);
+    expect(preview.returnCallMatchIds).toEqual([state.matches[0]!.id]);
     expect(() => apply(state, { kind: 'resetQueue' })).toThrow(/Return untaken calls/);
     expect(() => apply(state, { kind: 'unlock' })).toThrow(/called/);
     state = release(state);
@@ -527,6 +528,36 @@ describe('shared native dispatch', () => {
       snapshot.matches.map(({ id, player1Id, player2Id }) => [id, player1Id, player2Id]);
     expect(pairings(reset)).toEqual(pairings(state));
     expect(apply(state, { kind: 'unlock' }).lifecycle).toBe('unlocked');
+  });
+
+  it('offers every exact no-show call only while return is the sole attendance blocker', () => {
+    const state = call(setup());
+    const entrant = state.matches[0]!.player1Id!;
+    const second = state.matches[1]!;
+    const unrelated = state.matches.find(
+      (match) => ![match.player1Id, match.player2Id].includes(entrant),
+    )!;
+    // Dispatch admission disallows a new simultaneous call for either entrant.
+    // The preview still needs to describe all exact calls in retained data.
+    second.status = 'playing';
+    unrelated.status = 'playing';
+    const preview = (snapshot: TournamentState) =>
+      attendancePreview(snapshot, { action: 'no_show', playerId: entrant });
+    expect(preview(state)).toMatchObject({
+      allowed: false,
+      issues: ['Return this entrant’s untaken calls before changing the draw.'],
+      returnCallMatchIds: [state.matches[0]!.id, second.id],
+    });
+    expect(preview({ ...state, lifecycle: 'cancelled' }).returnCallMatchIds).toBeUndefined();
+    second.started = true;
+    expect(preview(state)).toMatchObject({
+      allowed: false,
+      issues: expect.arrayContaining(['This player has match history. Record a withdrawal.']),
+    });
+    expect(preview(state).returnCallMatchIds).toBeUndefined();
+    expect(
+      attendancePreview(state, { action: 'withdraw', playerId: entrant }).returnCallMatchIds,
+    ).toBeUndefined();
   });
 
   it('preserves a called finals draw until the TO explicitly returns its untaken call', () => {

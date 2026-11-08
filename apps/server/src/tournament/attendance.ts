@@ -9,7 +9,7 @@ import {
   hasLegacyQualifier,
   legacyPendingRosterMessage,
 } from './legacyFinalQualifiers';
-import type { CommandEnvelope, TournamentState, Match } from './schemas';
+import type { CommandEnvelope, Match, TournamentState } from './schemas';
 
 type Input = Extract<CommandEnvelope['command'], { kind: 'attendance' }>;
 const withdrawalWarning = (state: TournamentState) =>
@@ -69,13 +69,8 @@ function ordinaryAttendancePreview(
   if (input.action === 'add' && input.poolIndex !== undefined && input.poolIndex !== pool?.index)
     issues.push('The smallest open pool changed.');
   const involved = state.matches.filter((m) => [m.player1Id, m.player2Id].includes(input.playerId));
-  if (needsCallReturn(input.action, involved))
-    issues.push('Return this entrant’s untaken call before changing the draw.');
-  if (
-    input.action === 'no_show' &&
-    involved.some((m) => m.started || resolved(m) || state.reports.some((r) => r.matchId === m.id))
-  )
-    issues.push('This player has match history. Record a withdrawal.');
+  const matchReview = reviewAffectedMatches(input.action, involved, state.reports);
+  issues.push(...matchReview.issues);
   const remaining =
     pool?.entrantIds.filter((id) => input.action !== 'no_show' || id !== input.playerId) ?? [];
   if (input.action === 'no_show' && remaining.length < 2)
@@ -106,6 +101,9 @@ function ordinaryAttendancePreview(
   return {
     allowed: !issues.length,
     issues,
+    ...(input.action === 'no_show' && matchReview.untakenCallIds.length > 0 && issues.length === 1
+      ? { returnCallMatchIds: matchReview.untakenCallIds }
+      : {}),
     warnings: input.action === 'withdraw' ? [withdrawalWarning(state)] : [],
     requiresExternalAcknowledgement: false,
     requiresRedistributionApproval: Boolean(relocations.length),
@@ -128,6 +126,31 @@ function ordinaryAttendancePreview(
       lifecycle: state.lifecycle,
     }),
   };
+}
+
+function reviewAffectedMatches(
+  action: Input['action'],
+  matches: readonly Match[],
+  reports: TournamentState['reports'],
+) {
+  const untakenCallIds =
+    action === 'withdraw' ? [] : matches.filter(unconfirmedCall).map(({ id }) => id);
+  const issues: string[] = [];
+  if (untakenCallIds.length)
+    issues.push(
+      untakenCallIds.length === 1
+        ? 'Return this entrant’s untaken call before changing the draw.'
+        : 'Return this entrant’s untaken calls before changing the draw.',
+    );
+  if (
+    action === 'no_show' &&
+    matches.some(
+      (match) =>
+        match.started || resolved(match) || reports.some((report) => report.matchId === match.id),
+    )
+  )
+    issues.push('This player has match history. Record a withdrawal.');
+  return { issues, untakenCallIds };
 }
 
 function finalsRosterIssues(
@@ -289,8 +312,4 @@ function poolHasCallsOrHistory(state: TournamentState, id: string) {
         resolved(match) ||
         state.reports.some((report) => report.matchId === match.id)),
   );
-}
-
-function needsCallReturn(action: Input['action'], matches: readonly Match[]) {
-  return action !== 'withdraw' && matches.some(unconfirmedCall);
 }

@@ -47,6 +47,7 @@ import { deleteStation, saveStation } from './stations';
 import { attendeeRoster, updateAttendee } from './attendeeRoster';
 type AttendancePreview = Awaited<ReturnType<typeof previewAttendance>> & {
   restoration?: ReturnType<typeof previewRestoration>['restoration'];
+  returnCallMatchIds?: string[];
 };
 const attendanceInput = z.object({
   planId: z.string().uuid(),
