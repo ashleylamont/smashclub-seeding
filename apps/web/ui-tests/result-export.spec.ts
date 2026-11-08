@@ -77,6 +77,46 @@ async function previewBytes(image: Locator) {
   );
 }
 
+async function makeSyntheticPortrait(page: Page) {
+  const data = await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1536;
+    canvas.height = 2048;
+    const ctx = canvas.getContext('2d')!;
+    ctx.scale(6.4, 6.4);
+    ctx.fillStyle = '#0b8c86';
+    ctx.fillRect(0, 0, 240, 320);
+    ctx.fillStyle = '#69e3cf';
+    ctx.beginPath();
+    ctx.moveTo(0, 290);
+    ctx.lineTo(240, 91);
+    ctx.lineTo(240, 320);
+    ctx.lineTo(0, 320);
+    ctx.fill();
+    ctx.fillStyle = '#142c45';
+    ctx.beginPath();
+    ctx.arc(120, 156, 64, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.fillRect(58, 196, 124, 115);
+    ctx.fillStyle = '#ffbd70';
+    ctx.fillRect(73, 142, 94, 31);
+    return canvas.toDataURL('image/png').split(',')[1]!;
+  });
+  return Buffer.from(data, 'base64');
+}
+
+async function pixels(image: Locator, points: [number, number][]) {
+  return image.evaluate(async (element: HTMLImageElement, coordinates) => {
+    await element.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = element.naturalWidth;
+    canvas.height = element.naturalHeight;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(element, 0, 0);
+    return coordinates.map(([x, y]) => Array.from(ctx.getImageData(x, y, 1, 1).data));
+  }, points);
+}
+
 for (const theme of ['dark', 'light'] as const)
   for (const width of [390, 1440])
     test(`${theme} ${width}px exports the same PNG it previews with a tied doubles field`, async ({
@@ -148,6 +188,22 @@ for (const theme of ['dark', 'light'] as const)
         brackets,
         warnings: [],
       };
+      let sessionUserId = 'fixture-organiser-a';
+      if (organizer) {
+        await page.route('**/api/auth/get-session', (route) =>
+          route.fulfill({
+            json: {
+              user: { id: sessionUserId, name: 'Fixture organiser', emailVerified: true },
+              session: {
+                id: sessionUserId,
+                userId: sessionUserId,
+                expiresAt: '2027-01-01T00:00:00Z',
+                token: 'local-fixture',
+              },
+            },
+          }),
+        );
+      }
       const authorizationInputs: unknown[] = [];
       fixture.queryResponses.set('eventOps.canCustomizeResultGraphic', (input) => {
         authorizationInputs.push(input);
@@ -178,7 +234,7 @@ for (const theme of ['dark', 'light'] as const)
       expect(drawn).toContain('Tag 8B');
       expect(drawn).not.toContain('Tag 9A');
       const lastRender = drawn.slice(drawn.lastIndexOf('NEMESIS / SMASH CLUB'));
-      expect(lastRender.filter((label) => label === '08')).toHaveLength(2);
+      expect(lastRender.filter((label) => label === '8')).toHaveLength(2);
       expect(drawn).toContain('Mario');
       expect(drawn).toContain('6 NOV 2026');
 
@@ -190,11 +246,12 @@ for (const theme of ['dark', 'light'] as const)
       await expect(dialog.getByText(/名前 \/ WIDE 🎮 \(Mario\)/)).toBeVisible();
       await placements.press('Enter');
       const source = await image.getAttribute('src');
+      const defaultArtwork = organizer ? await previewBytes(image) : null;
       if (organizer) {
         await expect
           .poll(() => authorizationInputs)
           .toEqual([{ tournamentIds: [brackets[0]!.tournamentId] }]);
-        const customize = dialog.getByRole('button', { name: 'Choose character labels' });
+        const customize = dialog.getByRole('button', { name: 'Customize graphic' });
         await customize.press('Enter');
         await chooseOption(dialog.getByRole('combobox', { name: 'Character label' }), {
           label: 'Luigi',
@@ -202,6 +259,40 @@ for (const theme of ['dark', 'light'] as const)
         await expect.poll(() => image.getAttribute('src')).not.toEqual(source);
         await expect.poll(() => drawn.includes('Luigi')).toBe(true);
         expect(entrants[0]!.graphic.members[0]!.character).toBe('mario');
+
+        const fileInput = dialog.getByLabel('Portrait file');
+        const portrait = {
+          name: 'original-test-portrait.png',
+          mimeType: 'image/png',
+          buffer: await makeSyntheticPortrait(page),
+        };
+        const position: [number, number][] = [
+          [270, 300],
+          [460, 300],
+        ];
+        const beforeArt = await previewBytes(image);
+        const fallbackPixels = await pixels(image, position);
+        const apiWrites: string[] = [];
+        page.on('request', (request) => {
+          if (request.method() === 'POST' && new URL(request.url()).pathname.startsWith('/api/'))
+            apiWrites.push(request.url());
+        });
+        await fileInput.setInputFiles({
+          name: 'not-an-image.txt',
+          mimeType: 'text/plain',
+          buffer: Buffer.from('not an image'),
+        });
+        await expect(dialog.getByText('Choose a PNG, JPEG or WebP portrait.')).toBeVisible();
+        expect(await previewBytes(image)).toEqual(beforeArt);
+        await fileInput.setInputFiles(portrait);
+        await expect(dialog.getByRole('button', { name: 'Remove portrait' })).toBeEnabled();
+        expect(await pixels(image, position)).toEqual([[11, 140, 134, 255], fallbackPixels[1]]);
+        await dialog.getByRole('button', { name: 'Remove portrait' }).press('Enter');
+        await expect.poll(() => previewBytes(image)).toEqual(beforeArt);
+        await fileInput.setInputFiles(portrait);
+        await expect(dialog.getByRole('button', { name: 'Remove portrait' })).toBeEnabled();
+        expect(await pixels(image, position)).toEqual([[11, 140, 134, 255], fallbackPixels[1]]);
+        expect(apiWrites).toEqual([]);
       } else {
         await expect
           .poll(() => authorizationInputs)
@@ -210,9 +301,7 @@ for (const theme of ['dark', 'light'] as const)
               ? [{ tournamentIds: brackets.map(({ tournamentId }) => tournamentId) }]
               : [],
           );
-        await expect(dialog.getByRole('button', { name: 'Choose character labels' })).toHaveCount(
-          0,
-        );
+        await expect(dialog.getByRole('button', { name: 'Customize graphic' })).toHaveCount(0);
       }
       const preview = await previewBytes(image);
       const filename = testInfo.outputPath('confirmed-results.png');
@@ -228,12 +317,31 @@ for (const theme of ['dark', 'light'] as const)
       expect(await readFile(filename)).toEqual(preview);
       expect(preview.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
       expect(preview.readUInt32BE(16)).toBe(1920);
-      expect(preview.readUInt32BE(20)).toBe(1080);
+      expect(preview.readUInt32BE(20)).toBe(1332);
       await ready(page);
       expect(
         (await new AxeBuilder({ page }).include('.result-graphic-dialog').analyze()).violations,
       ).toEqual([]);
       await page.screenshot({ path: testInfo.outputPath('event-preview.png'), fullPage: true });
+      if (organizer) {
+        sessionUserId = 'fixture-organiser-b';
+        await page.evaluate(() => {
+          window.dispatchEvent(
+            new StorageEvent('storage', {
+              key: 'better-auth.message',
+              newValue: JSON.stringify({ event: 'session', data: { trigger: 'updateUser' } }),
+            }),
+          );
+        });
+        await expect.poll(() => authorizationInputs.length).toBe(2);
+        await expect.poll(() => previewBytes(image)).toEqual(defaultArtwork);
+        await dialog.getByRole('button', { name: 'Customize graphic' }).press('Enter');
+        await expect(dialog.getByRole('button', { name: 'Choose portrait…' })).toBeVisible();
+        await expect(dialog.getByRole('button', { name: 'Remove portrait' })).toHaveCount(0);
+        await expect(dialog.getByRole('combobox', { name: 'Character label' })).toContainText(
+          'Use profile choice',
+        );
+      }
       await page.keyboard.press('Escape');
       await expect(trigger).toBeFocused();
       const legacy = page.waitForEvent('download');
@@ -315,9 +423,9 @@ test('large tie stays complete within the mobile canvas limit', async ({ page },
       await node.decode();
       return [node.naturalWidth, node.naturalHeight];
     }),
-  ).toEqual([1619, 4096]);
+  ).toEqual([1539, 4096]);
   const lastRender = drawn.slice(drawn.lastIndexOf('NEMESIS / SMASH CLUB'));
-  expect(lastRender.filter((label) => label === '08')).toHaveLength(63);
+  expect(lastRender.filter((label) => label === '8')).toHaveLength(63);
   expect(lastRender).toContain('Wide public tag 70');
   await writeFile(testInfo.outputPath('large-tie-results.png'), await previewBytes(image));
 
@@ -370,7 +478,7 @@ test('signed-in readers can download the default PNG when organiser access fails
   await lookup;
   const dialog = page.getByRole('dialog', { name: 'Results graphic' });
   await expect(dialog.getByRole('img', { name: /Lower · Pool A/ })).toBeVisible();
-  await expect(dialog.getByRole('button', { name: 'Choose character labels' })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: 'Customize graphic' })).toHaveCount(0);
   const downloaded = page.waitForEvent('download');
   await dialog.getByRole('button', { name: 'Download PNG ↓' }).click();
   expect((await downloaded).suggestedFilename()).toBe('nemesis-lower-pool-a-results.png');

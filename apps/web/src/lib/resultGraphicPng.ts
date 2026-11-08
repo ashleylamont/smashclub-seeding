@@ -1,20 +1,25 @@
 import { characterName, isCharacterSlug } from '@smashclub/shared';
 import { NEMESIS_MARK_PATHS } from './nemesisMark';
-import { graphicMembers, type GraphicContext, type GraphicResult } from './resultGraphic';
+import {
+  graphicMemberKey,
+  graphicMembers,
+  type GraphicContext,
+  type GraphicResult,
+} from './resultGraphic';
 
 const WIDTH = 960;
-const PADDING = 36;
+const PADDING = 40;
 const GAP = 12;
-const HEADER = 132;
-const TILE = 114;
+const HEADER = 108;
+const FIELD_HEIGHT = 380;
+const FOOTER = 52;
+const OVERFLOW_HEIGHT = 114;
 const OVERFLOW_COLUMNS = 4;
-const MIN_FIELD_HEIGHT = 366;
-const FOOTER = 42;
 const MAX_CANVAS_EDGE = 4096;
-const ink = '#181613';
-const paper = '#f3ebda';
-const orange = '#ff6543';
-const muted = '#bdb2a3';
+const ink = '#171619';
+const paper = '#fff4e5';
+const orange = '#ff6847';
+const muted = '#c7bdb1';
 const mono = '"JetBrains Mono", monospace';
 const headings = 'Oswald, sans-serif';
 const reading = 'Inter, sans-serif';
@@ -23,59 +28,66 @@ const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 type Rect = { x: number; y: number; width: number; height: number };
 type Rows = readonly GraphicResult[];
 type Tile = { bounds: Rect; row: GraphicResult; champion: boolean };
+export type GraphicPortraits = Readonly<Record<string, HTMLCanvasElement | undefined>>;
 
 function layout(rows: Rows) {
+  const field = { x: PADDING, y: HEADER, width: WIDTH - 2 * PADDING, height: FIELD_HEIGHT };
   const champion = rows[0]?.place === 1 && rows[1]?.place !== 1 ? rows[0] : undefined;
-  const rest = champion ? rows.slice(1) : rows;
-  const besideChampion = champion ? rest.slice(0, 9) : rest;
-  const overflow = champion ? rest.slice(besideChampion.length) : [];
-  const heroWidth = !rest.length ? WIDTH - 2 * PADDING : rest.length <= 2 ? 360 : 270;
-  const gridX = PADDING + (champion ? heroWidth + GAP : 0);
-  const columns = Math.min(besideChampion.length, champion ? 3 : 4);
-  const rowCount = columns ? Math.ceil(besideChampion.length / columns) : 0;
-  const tileHeight = Math.max(TILE, Math.floor((MIN_FIELD_HEIGHT + GAP) / (rowCount || 1)) - GAP);
-  const bodyHeight = rowCount ? rowCount * (tileHeight + GAP) - GAP : MIN_FIELD_HEIGHT;
   const tiles: Tile[] = [];
-  if (champion) {
-    tiles.push({
-      bounds: { x: PADDING, y: HEADER, width: heroWidth, height: bodyHeight },
-      row: champion,
-      champion: true,
-    });
-  }
-  if (columns) {
-    const width = (WIDTH - PADDING - gridX - (columns - 1) * GAP) / columns;
-    besideChampion.forEach((row, index) => {
+  const band = (entries: Rows, { x, y, width, height }: Rect) => {
+    const tileWidth = (width - (entries.length - 1) * GAP) / entries.length;
+    entries.forEach((row, index) => {
       tiles.push({
-        bounds: {
-          x: gridX + (index % columns) * (width + GAP),
-          y: HEADER + Math.floor(index / columns) * (tileHeight + GAP),
-          width,
-          height: tileHeight,
-        },
+        bounds: { x: x + index * (tileWidth + GAP), y, width: tileWidth, height },
         row,
         champion: false,
       });
     });
-    const overflowX = (WIDTH - OVERFLOW_COLUMNS * width - (OVERFLOW_COLUMNS - 1) * GAP) / 2;
-    overflow.forEach((row, index) => {
-      tiles.push({
-        bounds: {
-          x: overflowX + (index % OVERFLOW_COLUMNS) * (width + GAP),
-          y: HEADER + bodyHeight + GAP + Math.floor(index / OVERFLOW_COLUMNS) * (TILE + GAP),
-          width,
-          height: TILE,
-        },
-        row,
-        champion: false,
-      });
-    });
-  }
-  return {
-    tiles,
-    height:
-      HEADER + bodyHeight + Math.ceil(overflow.length / OVERFLOW_COLUMNS) * (TILE + GAP) + FOOTER,
   };
+
+  let visible: number;
+  if (champion) {
+    const heroWidth = rows.length === 1 ? field.width : 272;
+    tiles.push({ bounds: { ...field, width: heroWidth }, row: champion, champion: true });
+    const upper = rows.slice(1, 4);
+    const lower = rows.slice(4, 8);
+    const support = {
+      ...field,
+      x: field.x + heroWidth + GAP,
+      width: field.width - heroWidth - GAP,
+    };
+    const upperHeight = lower.length ? 212 : field.height;
+    if (upper.length) band(upper, { ...support, height: upperHeight });
+    if (lower.length)
+      band(lower, {
+        ...support,
+        y: field.y + upperHeight + GAP,
+        height: field.height - upperHeight - GAP,
+      });
+    visible = 1 + upper.length + lower.length;
+  } else {
+    const upper = rows.slice(0, OVERFLOW_COLUMNS);
+    const lower = rows.slice(OVERFLOW_COLUMNS, 2 * OVERFLOW_COLUMNS);
+    const upperHeight = lower.length ? (field.height - GAP) / 2 : field.height;
+    if (upper.length) band(upper, { ...field, height: upperHeight });
+    if (lower.length)
+      band(lower, { ...field, y: field.y + upperHeight + GAP, height: upperHeight });
+    visible = upper.length + lower.length;
+  }
+
+  let height = HEADER + FIELD_HEIGHT;
+  for (let start = visible; start < rows.length; start += OVERFLOW_COLUMNS) {
+    const entries = rows.slice(start, start + OVERFLOW_COLUMNS);
+    const tileWidth = (field.width - (OVERFLOW_COLUMNS - 1) * GAP) / OVERFLOW_COLUMNS;
+    band(entries, {
+      ...field,
+      y: height + GAP,
+      height: OVERFLOW_HEIGHT,
+      width: entries.length * tileWidth + (entries.length - 1) * GAP,
+    });
+    height += OVERFLOW_HEIGHT + GAP;
+  }
+  return { tiles, height: height + FOOTER };
 }
 
 function label(
@@ -116,7 +128,7 @@ function streak(ctx: CanvasRenderingContext2D, width: number, height: number, co
 function mark(ctx: CanvasRenderingContext2D, x: number, y: number) {
   ctx.save();
   ctx.translate(x, y);
-  ctx.scale(0.36, 0.36);
+  ctx.scale(0.25, 0.25);
   ctx.fillStyle = orange;
   const fillPath = ctx.fill.bind(ctx);
   fillPath(new Path2D(NEMESIS_MARK_PATHS[0]));
@@ -135,123 +147,205 @@ function displayDate(date: string | null) {
   }).format(new Date(date));
 }
 
+const palettes = [
+  ['#482b31', '#a95548', '#ff9877'],
+  ['#263c49', '#486c79', '#a1d1ce'],
+  ['#3e304b', '#765475', '#e6aecb'],
+  ['#323b30', '#657a59', '#c5d7a0'],
+] as const;
+
 function artwork(
   ctx: CanvasRenderingContext2D,
   name: string,
   { x, y, width, height }: Rect,
-  champion: boolean,
+  portrait?: HTMLCanvasElement,
 ) {
-  ctx.fillStyle = champion ? '#ddc8af' : '#514139';
-  ctx.fillRect(x, y, width, height);
-  const initials = Array.from(segmenter.segment(name.trim()), ({ segment }) => segment)
-    .slice(0, 2)
-    .join('');
-  ctx.textAlign = 'center';
-  label(
-    ctx,
-    initials.toLocaleUpperCase('en-AU'),
-    x + width / 2,
-    y + height * 0.69,
-    width - 8,
-    `700 ${Math.min(52, width / 2.35)}px ${headings}`,
-    champion ? ink : paper,
-  );
-  ctx.textAlign = 'left';
-}
-
-function drawTile(ctx: CanvasRenderingContext2D, { bounds, row, champion }: Tile) {
-  const { x, y, width, height } = bounds;
-  const accent = champion ? ink : orange;
-  const foreground = champion ? ink : paper;
-  const secondary = champion ? '#584739' : muted;
-  const members = graphicMembers(row);
-  const teamName = row.graphic?.teamName;
+  const seed = Array.from(name).reduce((sum, glyph) => sum + glyph.codePointAt(0)!, 0);
+  const [dark, middle, light] = palettes[seed % palettes.length]!;
   ctx.save();
   ctx.translate(x, y);
-  ctx.fillStyle = champion ? paper : '#2a2520';
-  ctx.fillRect(0, 0, width, height);
-  ctx.save();
   ctx.beginPath();
   ctx.rect(0, 0, width, height);
   ctx.clip();
-  ctx.translate(champion ? width * 0.38 : width - 75, 0);
-  streak(ctx, champion ? width : 108, height, champion ? '#e9dac4' : '#383027');
+  const gradient = ctx.createLinearGradient(0, height, width, 0);
+  gradient.addColorStop(0, dark);
+  gradient.addColorStop(1, middle);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+  ctx.save();
+  ctx.translate(width * 0.26, 0);
+  ctx.globalAlpha = 0.24;
+  streak(ctx, width * 0.91, height, light);
+  ctx.translate(width * 0.22, 0);
+  streak(ctx, width * 0.36, height, dark);
   ctx.restore();
 
-  const ordinal = String(row.place).padStart(2, '0');
-  label(
-    ctx,
-    ordinal,
-    13,
-    champion ? 98 : 36,
-    width - 26,
-    champion ? `700 104px ${headings}` : `700 33px ${headings}`,
-    accent,
-  );
-  if (champion) {
-    label(ctx, 'WINNER', 16, 122, width - 32, `700 12px ${mono}`, secondary);
+  ctx.strokeStyle = light;
+  ctx.globalAlpha = 0.28;
+  ctx.lineWidth = 1;
+  for (const inset of [9, 15]) ctx.strokeRect(inset, inset, width - 2 * inset, height - 2 * inset);
+  if (portrait) {
+    const scale = Math.max(width / portrait.width, height / portrait.height);
+    const drawnWidth = portrait.width * scale;
+    const drawnHeight = portrait.height * scale;
+    ctx.globalAlpha = 1;
+    ctx.drawImage(
+      portrait,
+      (width - drawnWidth) / 2,
+      (height - drawnHeight) / 2,
+      drawnWidth,
+      drawnHeight,
+    );
+  } else {
+    const initials = Array.from(segmenter.segment(name.trim()), ({ segment }) => segment)
+      .slice(0, 2)
+      .join('')
+      .toLocaleUpperCase('en-AU');
+    ctx.globalAlpha = 0.82;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    label(
+      ctx,
+      initials,
+      width / 2,
+      height * 0.59,
+      width - 22,
+      `700 ${Math.min(width * 0.37, height * 0.63)}px ${headings}`,
+      light,
+    );
   }
-  const expanded = height > TILE;
-  const cell = champion
-    ? Math.min(94, (width - 48) / members.length)
-    : expanded
-      ? Math.min(94, Math.floor((height - TILE) * 0.7))
-      : 30;
-  const artworkY = champion ? 133 : expanded ? 16 : 7;
-  const artworkX = champion ? 16 : width - 12 - members.length * (cell + 6) + 6;
+  ctx.restore();
+}
+
+function nameSize(
+  ctx: CanvasRenderingContext2D,
+  name: string,
+  preferred: number,
+  minimum: number,
+  width: number,
+) {
+  ctx.font = `700 ${preferred}px ${reading}`;
+  const measured = ctx.measureText(name).width;
+  return Math.max(minimum, Math.min(preferred, Math.floor((preferred * width) / measured)));
+}
+
+function drawTile(
+  ctx: CanvasRenderingContext2D,
+  { bounds, row, champion }: Tile,
+  rowIndex: number,
+  portraits: GraphicPortraits,
+) {
+  const { x, y, width, height } = bounds;
+  const members = graphicMembers(row);
+  const teamName = row.graphic?.teamName;
+  const paired = members.length > 1;
+  const captionHeight = champion ? (paired ? 88 : 75) : paired ? 63 : 47;
+  const portraitHeight = height - captionHeight;
+  const portraitWidth = width / members.length;
+  ctx.save();
+  ctx.translate(x, y);
   members.forEach(({ name }, index) =>
     artwork(
       ctx,
       name,
-      { x: artworkX + index * (cell + 6), y: artworkY, width: cell, height: cell },
-      champion,
+      {
+        x: index * portraitWidth,
+        y: 0,
+        width: portraitWidth,
+        height: portraitHeight,
+      },
+      portraits[graphicMemberKey(row, rowIndex, index)],
     ),
   );
+  if (paired) {
+    ctx.fillStyle = ink;
+    ctx.fillRect(portraitWidth - 1, 0, 2, portraitHeight);
+  }
 
-  const body = champion
-    ? height - 110
-    : expanded
-      ? Math.max(56 + Math.round((height - TILE) * 0.58), artworkY + cell + 24)
-      : 56;
+  const place = String(row.place);
+  const rankSize = champion ? 88 : height > 180 ? 54 : 41;
+  ctx.fillStyle = ink;
+  ctx.globalAlpha = 0.89;
+  const rankWidth = Math.max(champion ? 68 : 43, place.length * rankSize * 0.59 + 16);
+  ctx.fillRect(0, 0, rankWidth, rankSize + (champion ? 14 : 8));
+  ctx.globalAlpha = 1;
+  label(
+    ctx,
+    place,
+    champion ? 11 : 7,
+    rankSize,
+    rankWidth - 8,
+    `700 ${rankSize}px ${headings}`,
+    paper,
+  );
+  if (champion) {
+    ctx.textAlign = 'right';
+    ctx.fillStyle = ink;
+    ctx.fillRect(width - 116, 0, 116, 27);
+    label(ctx, 'WINNER', width - 12, 18, 92, `700 12px ${mono}`, paper);
+  }
+  ctx.textAlign = 'left';
+  ctx.fillStyle = champion ? paper : '#242024';
+  ctx.fillRect(0, portraitHeight, width, captionHeight);
+  ctx.fillStyle = orange;
+  ctx.fillRect(0, portraitHeight, width, champion ? 5 : 3);
+  const foreground = champion ? ink : paper;
+  const secondary = champion ? '#624944' : muted;
+  ctx.textAlign = 'center';
   if (teamName) {
     label(
       ctx,
       teamName,
-      14,
-      body,
-      width - 28,
-      `700 ${champion ? 22 : 14}px ${reading}`,
-      foreground,
+      width / 2,
+      portraitHeight + (champion ? 26 : 16),
+      width - 18,
+      `700 ${champion ? 18 : 11}px ${mono}`,
+      secondary,
     );
   }
   members.forEach(({ name, character }, index) => {
-    const two = members.length > 1;
-    const step = champion ? 38 : 23;
-    const nameY = body + (teamName ? (champion ? 25 : 17) : 0) + index * step;
     const characterLabel = character && isCharacterSlug(character) ? characterName(character) : '';
-    const size = champion ? (two ? 20 : 28) : two ? 13 : 19;
-    const minSize = champion ? (two ? 15 : 20) : two ? 11 : 14;
-    ctx.font = `700 ${size}px ${reading}`;
-    const measured = ctx.measureText(name).width;
-    const fitted = Math.max(minSize, Math.min(size, Math.floor((size * (width - 28)) / measured)));
-    label(ctx, name, 14, nameY, width - 28, `700 ${fitted}px ${reading}`, foreground);
-    if (characterLabel) {
+    if (paired) {
+      const inset = champion ? 14 : 8;
+      const baseY = portraitHeight + (champion ? (teamName ? 52 : 34) : teamName ? 35 : 25);
+      const y = baseY + index * (champion ? 24 : 18);
+      const characterFont = `500 ${champion ? 12 : 9}px ${reading}`;
+      ctx.font = characterFont;
+      const characterWidth = Math.min(width * 0.34, ctx.measureText(characterLabel).width);
+      const nameWidth = width - inset * 2 - (characterWidth ? characterWidth + 8 : 0);
+      const size = nameSize(ctx, name, champion ? 22 : 15, champion ? 15 : 11, nameWidth);
+      ctx.textAlign = 'left';
+      label(ctx, name, inset, y, nameWidth, `700 ${size}px ${reading}`, foreground);
+      ctx.textAlign = 'right';
+      if (characterLabel)
+        label(ctx, characterLabel, width - inset, y, characterWidth, characterFont, secondary);
+      return;
+    }
+
+    const labelWidth = width - 22;
+    const nameY = portraitHeight + (champion ? 47 : 29);
+    const size = nameSize(ctx, name, champion ? 39 : 25, champion ? 24 : 15, labelWidth);
+    label(ctx, name, width / 2, nameY, labelWidth, `700 ${size}px ${reading}`, foreground);
+    if (characterLabel)
       label(
         ctx,
         characterLabel,
-        14,
+        width / 2,
         nameY + (champion ? 17 : 12),
-        width - 28,
+        labelWidth,
         `500 ${champion ? 13 : 10}px ${reading}`,
         secondary,
       );
-    }
   });
   ctx.restore();
 }
 
 /** Draw the original Nemesis artwork and result facts into the export. */
-export async function renderResultsPng(context: GraphicContext, rows: Rows): Promise<Blob | null> {
+export async function renderResultsPng(
+  context: GraphicContext,
+  rows: Rows,
+  portraits: GraphicPortraits = {},
+): Promise<Blob | null> {
   const { tiles, height } = layout(rows);
   // Keep every recorded place even in unusually large pools or ties. Fit older
   // mobile canvas limits by scaling the whole graphic after it exceeds 4096px.
@@ -274,23 +368,23 @@ export async function renderResultsPng(context: GraphicContext, rows: Rows): Pro
   ctx.fillRect(0, 0, WIDTH, height);
   ctx.fillStyle = orange;
   ctx.fillRect(0, 0, WIDTH, 6);
-  mark(ctx, PADDING, 24);
-  label(ctx, 'NEMESIS  /  SMASH CLUB', 84, 47, 550, `700 13px ${mono}`, orange);
+  mark(ctx, PADDING, 18);
+  label(ctx, 'NEMESIS  /  SMASH CLUB', 72, 38, 550, `700 12px ${mono}`, orange);
   ctx.textAlign = 'right';
   label(
     ctx,
     displayDate(context.eventDate).toLocaleUpperCase('en-AU'),
     WIDTH - PADDING,
-    47,
+    40,
     232,
     `700 13px ${mono}`,
     muted,
   );
   ctx.textAlign = 'left';
-  label(ctx, context.eventName, PADDING, 93, WIDTH - 2 * PADDING, `700 40px ${headings}`, paper);
-  label(ctx, context.scopeLabel, PADDING, 117, WIDTH - 2 * PADDING, `700 16px ${reading}`, paper);
+  label(ctx, context.eventName, PADDING, 76, WIDTH - 2 * PADDING, `700 37px ${headings}`, paper);
+  label(ctx, context.scopeLabel, PADDING, 96, WIDTH - 2 * PADDING, `700 16px ${reading}`, paper);
 
-  for (const tile of tiles) drawTile(ctx, tile);
+  tiles.forEach((tile, index) => drawTile(ctx, tile, index, portraits));
 
   const footer =
     context.kind === 'pool' ? 'CONFIRMED POOL PLACES' : 'CONFIRMED FINISHES THROUGH 8TH';

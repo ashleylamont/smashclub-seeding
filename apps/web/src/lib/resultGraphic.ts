@@ -59,6 +59,10 @@ export function rankedGraphicResults(
     .sort((a, b) => a.place - b.place);
 }
 
+export function graphicMemberKey(row: GraphicResult, rowIndex: number, memberIndex: number) {
+  return `${row.entryKey ?? rowIndex}:${memberIndex}`;
+}
+
 export function graphicMembers(result: GraphicResult): readonly GraphicMember[] {
   return result.graphic?.members.length
     ? result.graphic.members

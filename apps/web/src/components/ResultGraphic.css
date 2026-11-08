@@ -42,3 +42,10 @@
   margin-block: var(--s2);
   overflow-wrap: anywhere;
 }
+
+.result-graphic-portrait {
+  display: grid;
+  justify-items: start;
+  gap: var(--s2);
+  margin-top: var(--s3);
+}

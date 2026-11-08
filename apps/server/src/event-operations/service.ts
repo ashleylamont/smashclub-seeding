@@ -103,12 +103,10 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
         .from(eventPlanPoolPlacements)
         .where(eq(eventPlanPoolPlacements.eventPlanId, planId));
   const placedIds = new Set(placements.map(({ playerId }) => playerId));
-  const characters = await charactersByPlayer(db, [
-    ...new Set([
-      ...placedIds,
-      ...rows.flatMap((match) => [match.player1Id, match.player2Id].filter((id) => id !== null)),
-    ]),
-  ]);
+  const matchEntrantIds = rows.flatMap(({ player1Id, player2Id }) =>
+    [player1Id, player2Id].filter((id) => id !== null),
+  );
+  const characters = await charactersByPlayer(db, [...new Set([...placedIds, ...matchEntrantIds])]);
   const disputes = await db
     .select({ matchId: eventScoreReports.matchId })
     .from(eventScoreReports)

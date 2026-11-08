@@ -1,22 +1,25 @@
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CHARACTERS, characterName, isCharacterSlug } from '@smashclub/shared';
 import { Button } from './ui/Button';
 import { Dialog } from './ui/Dialog';
 import { Disclosure } from './ui/Disclosure';
 import { LoadingState, Notice } from './ui/Feedback';
+import { Input } from './ui/Input';
 import { Select, SelectItem } from './ui/Select';
 import {
+  graphicMemberKey,
   graphicMembers,
   rankedGraphicResults,
   resultsSvg,
   type GraphicContext,
   type GraphicResult,
 } from '../lib/resultGraphic';
-import { renderResultsPng } from '../lib/resultGraphicPng';
+import { renderResultsPng, type GraphicPortraits } from '../lib/resultGraphicPng';
 import { authClient } from '../lib/auth';
 import { trpc } from '../lib/trpc';
 import { downloadBlob } from '../lib/shareCard';
+import { readResultPortrait, RESULT_PORTRAIT_TYPES } from '../lib/resultGraphicPortrait';
 import './ResultGraphic.css';
 
 export function ResultGraphic({
@@ -66,27 +69,39 @@ export function ResultGraphic({
 
 const profileDefault = '__profile_default__';
 
-function memberKey(row: GraphicResult, rowIndex: number, index: number) {
-  return `${row.entryKey ?? rowIndex}:${index}`;
-}
+const noPortraits: GraphicPortraits = {};
 
-function ResultGraphicPreview({
-  context,
-  results,
-}: {
+function ResultGraphicPreview(props: {
   context: GraphicContext;
   results: readonly GraphicResult[];
 }) {
+  const { data: session } = authClient.useSession();
+  const userId = session?.user.id;
+  const { source, kind, scopeLabel } = props.context;
+  const artworkScope = JSON.stringify([userId, source, kind, scopeLabel]);
+  return <ResultGraphicSession key={artworkScope} userId={userId} {...props} />;
+}
+
+function ResultGraphicSession({
+  context,
+  results,
+  userId,
+}: {
+  context: GraphicContext;
+  results: readonly GraphicResult[];
+  userId: string | undefined;
+}) {
   const rows = useMemo(() => rankedGraphicResults(results, context.kind), [results, context.kind]);
   const [overrides, setOverrides] = useState<Record<string, string>>({});
-  const { data: session } = authClient.useSession();
+  const [portraits, setPortraits] = useState<GraphicPortraits>({});
   const access = useQuery({
-    queryKey: ['canCustomizeResultGraphic', session?.user.id, context.source],
+    queryKey: ['canCustomizeResultGraphic', userId, context.source],
     queryFn: () => trpc.eventOps.canCustomizeResultGraphic.query(context.source),
-    enabled: Boolean(session?.user.id),
+    enabled: Boolean(userId),
     retry: false,
   });
-  const canCustomize = Boolean(session && access.data);
+  const canCustomize = Boolean(userId && access.data);
+  const previewPortraits = canCustomize ? portraits : noPortraits;
   const previewRows = useMemo(
     () =>
       canCustomize && Object.keys(overrides).length
@@ -95,7 +110,7 @@ function ResultGraphicPreview({
             graphic: {
               teamName: row.graphic?.teamName ?? null,
               members: graphicMembers(row).map((member, index) => {
-                const choice = overrides[memberKey(row, rowIndex, index)];
+                const choice = overrides[graphicMemberKey(row, rowIndex, index)];
                 return choice === undefined ? member : { ...member, character: choice || null };
               }),
             },
@@ -106,6 +121,7 @@ function ResultGraphicPreview({
   const [output, setOutput] = useState<{
     context: GraphicContext;
     rows: readonly GraphicResult[];
+    portraits: GraphicPortraits;
     image: { blob: Blob; url: string } | null;
   }>();
   useEffect(() => {
@@ -117,16 +133,24 @@ function ResultGraphicPreview({
       setOutput({
         context,
         rows: previewRows,
+        portraits: previewPortraits,
         image: blob && url ? { blob, url } : null,
       });
     };
-    void renderResultsPng(context, previewRows).then(receive, () => receive(null));
+    void renderResultsPng(context, previewRows, previewPortraits).then(receive, () =>
+      receive(null),
+    );
     return () => {
       active = false;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [context, previewRows]);
-  const current = output?.rows === previewRows && output.context === context ? output : undefined;
+  }, [context, previewRows, previewPortraits]);
+  const current =
+    output?.rows === previewRows &&
+    output.context === context &&
+    output.portraits === previewPortraits
+      ? output
+      : undefined;
   const fileLabel = context.scopeLabel
     .normalize('NFKD')
     .replace(/[^a-z0-9]+/gi, '-')
@@ -167,7 +191,22 @@ function ResultGraphicPreview({
           ))}
         </ul>
       </Disclosure>
-      {canCustomize && <ArtworkChoices rows={rows} overrides={overrides} onChange={setOverrides} />}
+      {canCustomize && (
+        <ArtworkChoices
+          rows={rows}
+          overrides={overrides}
+          portraits={portraits}
+          onChange={setOverrides}
+          onPortraitChange={(member, portrait) =>
+            setPortraits((current) => {
+              const next = { ...current };
+              if (portrait) next[member] = portrait;
+              else delete next[member];
+              return next;
+            })
+          }
+        />
+      )}
       <Button
         type="button"
         variant="primary"
@@ -186,30 +225,45 @@ function ResultGraphicPreview({
 function ArtworkChoices({
   rows,
   overrides,
+  portraits,
   onChange,
+  onPortraitChange,
 }: {
   rows: readonly GraphicResult[];
   overrides: Record<string, string>;
+  portraits: GraphicPortraits;
   onChange: (next: Record<string, string>) => void;
+  onPortraitChange: (member: string, portrait: HTMLCanvasElement | null) => void;
 }) {
   const prefix = useId();
   const members = rows.flatMap((row, rowIndex) =>
     graphicMembers(row).map(({ name }, index) => ({
-      value: memberKey(row, rowIndex, index),
+      value: graphicMemberKey(row, rowIndex, index),
       label: `${row.place} · ${name}`,
     })),
   );
+  const fileInput = useRef<HTMLInputElement>(null);
   const [selected, setSelected] = useState('');
+  const [reading, setReading] = useState(false);
+  const [fileError, setFileError] = useState('');
   const selectedMember = members.some(({ value }) => value === selected)
     ? selected
     : (members[0]?.value ?? '');
   return (
-    <Disclosure title="Choose character labels">
-      <p className="muted">Changes apply only to this export.</p>
+    <Disclosure title="Customize graphic">
+      <p className="muted">Character choices and portraits apply only to this export.</p>
       <div className="result-graphic-choices">
         <div className="ui-field">
           <label htmlFor={`${prefix}-member`}>Entrant or team member</label>
-          <Select id={`${prefix}-member`} value={selectedMember} onValueChange={setSelected}>
+          <Select
+            id={`${prefix}-member`}
+            value={selectedMember}
+            disabled={reading}
+            onValueChange={(member) => {
+              setSelected(member);
+              setFileError('');
+            }}
+          >
             {members.map(({ value, label }) => (
               <SelectItem key={value} value={value}>
                 {label}
@@ -238,6 +292,61 @@ function ArtworkChoices({
             ))}
           </Select>
         </div>
+      </div>
+      <div className="result-graphic-portrait">
+        <p id={`${prefix}-portrait-hint`} className="muted">
+          Choose a PNG, JPEG or WebP you have permission to use. The file stays in this browser.
+        </p>
+        <div className="result-graphic-actions">
+          <Button
+            type="button"
+            size="small"
+            disabled={!selectedMember || reading}
+            aria-describedby={`${prefix}-portrait-hint`}
+            onClick={() => fileInput.current?.click()}
+          >
+            {reading
+              ? 'Reading portrait…'
+              : portraits[selectedMember]
+                ? 'Replace portrait…'
+                : 'Choose portrait…'}
+          </Button>
+          {portraits[selectedMember] && (
+            <Button
+              type="button"
+              size="small"
+              disabled={reading}
+              onClick={() => {
+                onPortraitChange(selectedMember, null);
+                setFileError('');
+              }}
+            >
+              Remove portrait
+            </Button>
+          )}
+        </div>
+        <Input
+          ref={fileInput}
+          type="file"
+          tabIndex={-1}
+          aria-label="Portrait file"
+          className="visually-hidden"
+          accept={RESULT_PORTRAIT_TYPES.join(',')}
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            event.currentTarget.value = '';
+            if (!file || !selectedMember) return;
+            setReading(true);
+            setFileError('');
+            void readResultPortrait(file)
+              .then(
+                (image) => onPortraitChange(selectedMember, image),
+                (error: Error) => setFileError(error.message),
+              )
+              .finally(() => setReading(false));
+          }}
+        />
+        {fileError && <Notice tone="warning">{fileError}</Notice>}
       </div>
     </Disclosure>
   );
