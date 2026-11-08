@@ -11,7 +11,7 @@ for (const theme of ['dark', 'light'] as const) {
     }, testInfo) => {
       await page.setViewportSize({ width, height: 900 });
       await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
-      const { responses, unexpected } = await mockEvent(page, { role: 'admin' });
+      const { responses, queryResponses, unexpected } = await mockEvent(page, { role: 'admin' });
       const members = Array.from({ length: 17 }, (_, index) => ({
         entryId: `entry-${index}`,
         playerId: `player-${index}`,
@@ -78,10 +78,6 @@ for (const theme of ['dark', 'light'] as const) {
                     'Set wins do not decide a unique full order. Confirm the finishing order.',
                 },
                 placementRevision: '7',
-                matchRevisions: Array.from({ length: 136 }, (_, i) => ({
-                  id: `set-${i}`,
-                  revision: 1,
-                })),
                 matchRevisionToken,
               },
             ],
@@ -90,7 +86,10 @@ for (const theme of ['dark', 'light'] as const) {
         brackets: [],
         issues: { blocking: [], warnings: [] },
       };
-      responses['admin.eventPlanner.plan'] = view;
+      queryResponses.set('admin.eventPlanner.plan', (input) => {
+        expect(input).toEqual({ planId: PLAN_ID, revisionEvidence: 'compact' });
+        return view;
+      });
       responses['admin.eventPlanner.savePoolPlacements'] = { ok: true };
       await page.goto(`/admin/event-planner?plan=${PLAN_ID}&step=pools`);
       const pool = page.locator('.pool-card');

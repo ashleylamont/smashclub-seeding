@@ -169,6 +169,27 @@ export function bracketViews(state: TournamentState) {
     };
   });
 }
+function livePlanFields(
+  state: TournamentState,
+): Pick<EventSnapshot['plan'], 'status' | 'softLockedAt'> {
+  return {
+    status:
+      state.lifecycle === 'finalized'
+        ? 'complete'
+        : state.lifecycle === 'cancelled'
+          ? 'cancelled'
+          : 'underway',
+    softLockedAt: new Date(state.baseline!.capturedAt).toISOString(),
+  };
+}
+
+function publishedBracketScope(slug: string) {
+  return {
+    division: slug.includes('_upper_') ? ('upper' as const) : ('lower' as const),
+    stage: slug.includes('_main') ? ('main' as const) : ('consolation' as const),
+  };
+}
+
 export async function eventView(
   db: Db,
   state: TournamentState,
@@ -176,6 +197,7 @@ export async function eventView(
 ): Promise<EventSnapshot> {
   const baseline = state.baseline!;
   const planId = baseline.planId;
+  const { status, softLockedAt } = livePlanFields(state);
   const allPlayers = await db.select().from(players);
   const names = publicEntrantNames(allPlayers, state.entrants);
   const ids = state.entrants.flatMap(memberIds);
@@ -264,17 +286,12 @@ export async function eventView(
       drawPaused: state.lifecycle === 'unlocked',
       name: baseline.name,
       eventDate: new Date(baseline.eventDate).toISOString(),
-      status:
-        state.lifecycle === 'finalized'
-          ? 'complete'
-          : state.lifecycle === 'cancelled'
-            ? 'cancelled'
-            : 'underway',
+      status,
       bracketMode: 'native',
       competitionFormat: baseline.competitionFormat ?? 'singles',
       structure: baseline.structure ?? 'dual_division',
       structureOptions: baseline.structureOptions,
-      softLockedAt: new Date(baseline.capturedAt).toISOString(),
+      softLockedAt,
       historicalResultsSlug: null,
       resultsSlug:
         historical.find(
@@ -284,8 +301,7 @@ export async function eventView(
         )?.challongeSlug ?? null,
     },
     brackets: historical.map((t) => ({
-      division: t.challongeSlug.includes('_upper_') ? ('upper' as const) : ('lower' as const),
-      stage: t.challongeSlug.includes('_main') ? ('main' as const) : ('consolation' as const),
+      ...publishedBracketScope(t.challongeSlug),
       slug: t.challongeSlug,
     })),
     settings: publicSettings(state),
@@ -393,7 +409,11 @@ export async function eventView(
   };
 }
 
-export async function planView(db: Db, state: TournamentState): Promise<PlanView> {
+export async function planView(
+  db: Db,
+  state: TournamentState,
+  revisionEvidence?: 'compact',
+): Promise<PlanView> {
   const draft = (await sqlPlan(db, state.baseline!.planId))!;
   const profiles = new Map((await db.select().from(players)).map((p) => [p.id, p]));
   const originalEntrantIds = new Set(state.baseline!.entrants.map(({ id }) => id));
@@ -459,9 +479,7 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
     const divisionPools = state.pools.filter((p) => p.division === division);
     const pools = divisionPools.map((p) => {
       const orderLockedReason = worksheetOrderLock(state, p, fixedLegacyFinals);
-      const matchRevisions = state.matches
-        .filter((m) => m.poolId === p.id)
-        .map((m) => ({ id: m.id, revision: m.revision }));
+      const matches = state.matches.filter((m) => m.poolId === p.id);
       return {
         poolIndex: p.index,
         label: poolLabel(p.index),
@@ -475,10 +493,12 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
           fixedLegacyFinals && orderLockedReason && !p.order
             ? undefined
             : poolOrderStatus(state, p),
-        matchRevisions,
+        ...(revisionEvidence !== 'compact' && {
+          matchRevisions: matches.map(({ id, revision }) => ({ id, revision })),
+        }),
         matchRevisionToken: poolOrderRevisionToken(
           p,
-          Object.fromEntries(matchRevisions.map(({ id, revision }) => [id, revision])),
+          Object.fromEntries(matches.map(({ id, revision }) => [id, revision])),
         ),
         members: p.entrantIds.map((playerId) => {
           const e = entries.find((e) => e.playerId === playerId)!;
@@ -533,26 +553,29 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
       })),
     };
   });
-  const event = await eventView(db, state);
   const publishedRows = state.publication?.tournamentIds.length
     ? await db
-        .select()
+        .select({ id: tournaments.id, slug: tournaments.challongeSlug })
         .from(tournaments)
         .where(inArray(tournaments.id, state.publication.tournamentIds))
     : [];
+  const publishedBrackets = publishedRows.map((row) => ({
+    ...row,
+    ...publishedBracketScope(row.slug),
+  }));
   return {
     ...draft,
     entries,
     divisions,
-    plan: { ...draft.plan, status: event.plan.status, softLockedAt: event.plan.softLockedAt },
+    plan: { ...draft.plan, ...livePlanFields(state) },
     brackets: draft.brackets.map((b) => {
-      const published = event.brackets.find(
+      const published = publishedBrackets.find(
         (p) => p.division === b.division && p.stage === b.stage,
       );
       return {
         ...b,
         challongeSlug: published?.slug ?? null,
-        tournamentId: publishedRows.find((t) => t.challongeSlug === published?.slug)?.id ?? null,
+        tournamentId: published?.id ?? null,
       };
     }),
   };
