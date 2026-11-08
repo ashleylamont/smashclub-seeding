@@ -15,6 +15,7 @@ export function MatchCard({
   disabled,
   canStart,
   native,
+  liveOwned,
   act,
   callDesk,
 }: {
@@ -23,12 +24,16 @@ export function MatchCard({
   disabled: boolean;
   canStart: boolean;
   native: boolean;
+  liveOwned: boolean;
   act: Action;
   callDesk?: UntakenCallDesk;
 }) {
   const confirmAction = useConfirmation();
   const eligible = eligibleStations(match, stations);
-  const label = matchLabel(match, canStart);
+  const active = match.status === 'playing';
+  const untakenCall = active && (liveOwned ? match.started === false : match.called);
+  const hasLiveScore = typeof match.liveScore1 === 'number' || typeof match.liveScore2 === 'number';
+  const label = matchLabel(match, canStart, untakenCall);
   return (
     <article className={`card ops-match ops-match-${match.status}`}>
       <div className="ops-match-meta">
@@ -36,8 +41,14 @@ export function MatchCard({
         <span className="chip">{label}</span>
       </div>
       <MatchContestants match={match} />
-      {match.status === 'playing' && (
-        <p className="ops-delivery">Live game score · match still in progress</p>
+      {active && (
+        <p className="ops-delivery">
+          {untakenCall
+            ? 'Waiting for play to start'
+            : liveOwned && !hasLiveScore
+              ? 'Match in progress'
+              : 'Live game score · match still in progress'}
+        </p>
       )}
       {!native && (
         <p className="ops-delivery">
@@ -182,10 +193,10 @@ function eligibleStations(match: Match, stations: Overview['stations']) {
         station.currentMatchId === match.id),
   );
 }
-function matchLabel(match: Match, canStart: boolean) {
+function matchLabel(match: Match, canStart: boolean, untakenCall: boolean) {
   const presentation = matchPresentation(match);
   if (presentation.status) return presentation.status;
-  if (match.called) return 'Called';
+  if (untakenCall) return 'Called';
   if (match.status === 'playing') return 'Playing now';
   return canStart ? 'Ready to start' : 'Waiting';
 }

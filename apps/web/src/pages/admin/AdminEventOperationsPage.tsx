@@ -362,6 +362,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
                 disabled={liveDisabled}
                 canStart={callable.has(match.id)}
                 native={data.plan.bracketMode === 'native'}
+                liveOwned={data.plan.liveOwned}
                 act={act}
                 callDesk={callDesk}
               />

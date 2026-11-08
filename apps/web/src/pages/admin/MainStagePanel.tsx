@@ -62,6 +62,7 @@ export function MainStagePanel({
             disabled={disabled}
             canStart={callable.has(match.id)}
             native={data.plan.bracketMode === 'native'}
+            liveOwned={data.plan.liveOwned}
             act={act}
           />
         </>
