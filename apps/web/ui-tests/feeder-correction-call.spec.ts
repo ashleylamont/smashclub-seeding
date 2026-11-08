@@ -31,7 +31,7 @@ for (const theme of ['dark', 'light'] as const)
           },
         ],
       };
-      const { overview, unexpected } = await mockEvent(page, options);
+      const { overview, queryResponses, unexpected } = await mockEvent(page, options);
       const match = overview.matches.find(
         (row) => row.status === 'complete' && row.stage === 'group',
       )!;
@@ -47,17 +47,12 @@ for (const theme of ['dark', 'light'] as const)
         winnerId: match.player1Id,
         outcome: 'played',
       });
-      const previews: object[] = [];
+      const previews: unknown[] = [];
       const submissions: { requestId: string; command: { poolGameCorrectionToken: string } }[] = [];
       let revisionToken = 'a'.repeat(64);
-      await page.route('**/api/trpc/eventOps.live.previewPoolGameCorrection*', async (route) => {
-        const params = new URL(route.request().url()).searchParams;
-        const input = JSON.parse(params.get('input')!);
-        previews.push(params.has('batch') ? input[0] : input);
-        const result = {
-          result: { data: { previousScore: [match.score1, match.score2], revisionToken } },
-        };
-        await route.fulfill({ json: params.has('batch') ? [result] : result });
+      queryResponses.set('eventOps.live.previewPoolGameCorrection', (input) => {
+        previews.push(input);
+        return { previousScore: [match.score1, match.score2], revisionToken };
       });
       await page.route('**/api/trpc/eventOps.live.command*', async (route) => {
         const batched = new URL(route.request().url()).searchParams.has('batch');
@@ -90,6 +85,30 @@ for (const theme of ['dark', 'light'] as const)
         await route.fulfill({ json: batched ? [result] : result });
       });
       await page.goto(`/operate/${PLAN_ID}?view=history`);
+      const input = {
+        planId: PLAN_ID,
+        matchId: match.id,
+        expectedRevision: revision,
+        score1: 2,
+        score2: 1,
+      };
+      if (theme === 'dark' && width === 390) {
+        const batch = await page.evaluate(async (input) => {
+          const query = new URLSearchParams({
+            batch: '1',
+            input: JSON.stringify({ 0: { planId: input.planId }, 1: input }),
+          });
+          const response = await fetch(
+            `/api/trpc/eventOps.overview,eventOps.live.previewPoolGameCorrection?${query}`,
+          );
+          return response.json();
+        }, input);
+        expect(batch).toMatchObject([
+          { result: { data: { plan: { id: PLAN_ID } } } },
+          { result: { data: { previousScore: [2, 0], revisionToken } } },
+        ]);
+        expect(previews.splice(0)).toEqual([input]);
+      }
       await page.getByRole('button', { name: 'Open match', exact: true }).click();
       const card = page.locator('article.ops-match:visible').filter({ hasText: match.label });
       await card.getByRole('button', { name: 'Correct score' }).click();
@@ -134,13 +153,6 @@ for (const theme of ['dark', 'light'] as const)
       await expect(
         page.getByRole('status').filter({ hasText: /Pool score corrected/ }),
       ).toBeVisible();
-      const input = {
-        planId: PLAN_ID,
-        matchId: match.id,
-        expectedRevision: revision,
-        score1: 2,
-        score2: 1,
-      };
       expect(previews).toEqual([input, input, input]);
       expect(submissions).toHaveLength(3);
       expect(submissions[0]!.command.poolGameCorrectionToken).toBe('a'.repeat(64));

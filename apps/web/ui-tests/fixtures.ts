@@ -57,6 +57,7 @@ export async function mockEvent(page: Page, options: FixtureOptions = {}) {
   const submissions: Record<string, unknown>[] = [];
   const starts: Record<string, unknown>[] = [];
   const unexpected: string[] = [];
+  const queryResponses = new Map<string, (input: unknown) => unknown>();
   const responses: Record<string, unknown> = {
     'me.whoami': user,
     'me.claims': [],
@@ -98,6 +99,12 @@ export async function mockEvent(page: Page, options: FixtureOptions = {}) {
     if (options.loading && url.pathname.includes('eventOps.snapshot')) await options.loading;
     const procedures = decodeURIComponent(url.pathname.replace('/api/trpc/', '')).split(',');
     const result = procedures.map((procedure, index) => {
+      const queryResponse = queryResponses.get(procedure);
+      if (queryResponse) {
+        const inputs = JSON.parse(url.searchParams.get('input') ?? '{}');
+        const input = url.searchParams.has('batch') ? inputs[index] : inputs;
+        return { result: { data: queryResponse(input) } };
+      }
       if (procedure === 'eventOps.live.history') {
         if (options.historyFailure)
           return {
@@ -148,7 +155,7 @@ export async function mockEvent(page: Page, options: FixtureOptions = {}) {
     });
     await route.fulfill({ json: url.searchParams.get('batch') ? result : result[0] });
   });
-  return { snapshot, overview, responses, submissions, starts, unexpected };
+  return { snapshot, overview, responses, queryResponses, submissions, starts, unexpected };
 }
 
 export async function ready(page: Page) {
