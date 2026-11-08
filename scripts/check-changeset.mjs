@@ -7,17 +7,17 @@ const changelog = 'apps/web/CHANGELOG.md';
 const notePath = /^\.changeset\/(?!README\.md$)[^/]+\.md$/;
 const versionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
+const bumpsByPart = ['major', 'minor', 'patch'];
+
+function noteBump(source) {
+  const match = /^---\r?\n([\s\S]+?)\r?\n---\r?\n([\s\S]*)$/.exec(source);
+  if (!match?.[2].trim()) return;
+  const bumps = parse(match[1]);
+  if (bumps && Object.keys(bumps).length === 1 && bumpsByPart.includes(bumps['@smashclub/web']))
+    return bumps['@smashclub/web'];
+}
+
 export function assertAppChangeset(changes, read, { releaseOnly = false } = {}) {
-  const validNote = (source) => {
-    const match = /^---\r?\n([\s\S]+?)\r?\n---\r?\n([\s\S]*)$/.exec(source);
-    if (!match?.[2].trim()) return false;
-    const bumps = parse(match[1]);
-    return (
-      bumps &&
-      Object.keys(bumps).length === 1 &&
-      ['patch', 'minor', 'major'].includes(bumps['@smashclub/web'])
-    );
-  };
   const editsPackage = changes.some(([status, path]) => status === 'M' && path === appPackage);
   const before = editsPackage ? JSON.parse(read('base', appPackage)) : {};
   const after = editsPackage ? JSON.parse(read('HEAD', appPackage)) : {};
@@ -27,7 +27,7 @@ export function assertAppChangeset(changes, read, { releaseOnly = false } = {}) 
   const additions = changes.filter(([status, path]) => status === 'A' && notePath.test(path));
   if (additions.length && !releaseOnly && oldVersion === newVersion) {
     for (const [, path] of additions) {
-      if (!validNote(read('HEAD', path))) throw new Error(`Invalid Nemesis Changeset in ${path}`);
+      if (!noteBump(read('HEAD', path))) throw new Error(`Invalid Nemesis Changeset in ${path}`);
     }
     return;
   }
@@ -46,15 +46,22 @@ export function assertAppChangeset(changes, read, { releaseOnly = false } = {}) 
     releaseFiles &&
     versioned &&
     JSON.stringify(oldPackage) === JSON.stringify(newPackage) &&
-    consumed.every(([, path]) => validNote(read('base', path)))
+    versionPattern.test(oldVersion) &&
+    versionPattern.test(newVersion)
   ) {
-    if (versionPattern.test(oldVersion) && versionPattern.test(newVersion)) {
-      const previous = oldVersion.split('.').map(Number);
-      const next = newVersion.split('.').map(Number);
-      const firstChange = next.findIndex((number, index) => number !== previous[index]);
+    const bumps = consumed.map(([, path]) => noteBump(read('base', path)));
+    if (bumps.every(Boolean)) {
+      const bumpPart = bumpsByPart.findIndex((bump) => bumps.includes(bump));
+      const parts = oldVersion.split('.');
+      parts[bumpPart] = String(BigInt(parts[bumpPart]) + 1n);
+      parts.fill('0', bumpPart + 1);
+      const expectedVersion = parts.join('.');
+      if (newVersion !== expectedVersion)
+        throw new Error(
+          `Consumed Changesets require Nemesis ${expectedVersion}, got ${newVersion}.`,
+        );
       const heading = /^## (.+)$/m.exec(read('HEAD', changelog))?.[1];
-      if (firstChange !== -1 && next[firstChange] > previous[firstChange] && heading === newVersion)
-        return;
+      if (heading === newVersion) return;
     }
   }
 
@@ -64,10 +71,19 @@ export function assertAppChangeset(changes, read, { releaseOnly = false } = {}) 
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const base = process.argv[2];
-  if (!/^[a-f0-9]{40}$/.test(base)) throw new Error('Expected the pull request base commit SHA');
+  const expectedHead = process.argv[2];
+  if (!/^[a-f0-9]{40}$/.test(expectedHead))
+    throw new Error('Expected the pull request head commit SHA');
   const git = (...args) => execFileSync('git', args, { encoding: 'utf8' });
-  const fields = git('diff', '--no-renames', '--name-status', '-z', base, 'HEAD').split('\0');
+  // The event's base can be older than the base GitHub used to build the tested merge.
+  const [merge, base, head, ...extraParents] = git('rev-list', '--parents', '-n', '1', 'HEAD')
+    .trim()
+    .split(' ');
+  if (!head || extraParents.length)
+    throw new Error('Expected a two-parent pull request merge commit');
+  if (head !== expectedHead)
+    throw new Error('Checked-out merge does not match the expected pull request head');
+  const fields = git('diff', '--no-renames', '--name-status', '-z', base, merge).split('\0');
   fields.pop();
   const changes = [];
   for (let index = 0; index < fields.length; index += 2) {
@@ -75,7 +91,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   }
   assertAppChangeset(
     changes,
-    (revision, path) => git('show', `${revision === 'base' ? base : revision}:${path}`),
+    (revision, path) => git('show', `${revision === 'base' ? base : merge}:${path}`),
     { releaseOnly: process.env.GITHUB_HEAD_REF === 'changeset-release/main' },
   );
 }

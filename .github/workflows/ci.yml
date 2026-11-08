@@ -62,8 +62,8 @@ jobs:
       - name: Check release note
         if: github.event_name == 'pull_request'
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: node scripts/check-changeset.mjs "$BASE_SHA"
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/check-changeset.mjs "$PR_HEAD_SHA"
       - name: Confirm release-note gate applies to pull requests
         if: github.event_name != 'pull_request'
         run: echo 'Changeset validation runs on pull requests.'

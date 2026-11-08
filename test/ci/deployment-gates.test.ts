@@ -1,5 +1,8 @@
-import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 import { describe, expect, it } from 'vitest';
 import { assertAppChangeset } from '../../scripts/check-changeset.mjs';
@@ -180,6 +183,66 @@ describe('Changeset merge gate', () => {
     return '## 0.1.1\n\n### Patch Changes\n\n- Keep the QR visible.';
   };
 
+  it('validates the tested merge when main has advanced through a release', () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'nemesis-changeset-gate-'));
+    const git = (...args: string[]) =>
+      execFileSync(
+        'git',
+        ['-c', 'user.name=CI Test', '-c', 'user.email=ci@example.invalid', ...args],
+        { cwd, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null' } },
+      ).trim();
+    const write = (path: string, contents: string) => {
+      const destination = join(cwd, path);
+      mkdirSync(dirname(destination), { recursive: true });
+      writeFileSync(destination, contents);
+    };
+    const commit = (message: string) => {
+      git('add', '--all');
+      git('commit', '--quiet', '-m', message);
+      return git('rev-parse', 'HEAD');
+    };
+    const script = fileURLToPath(new URL('../../scripts/check-changeset.mjs', import.meta.url));
+    const check = (expectedHead: string) =>
+      spawnSync(process.execPath, [script, expectedHead], {
+        cwd,
+        encoding: 'utf8',
+        env: { ...process.env, GITHUB_HEAD_REF: 'feature' },
+      });
+
+    try {
+      git('init', '--quiet', '--initial-branch=main');
+      write(appPackage, JSON.stringify({ version: '0.1.4' }));
+      write(changelog, '## 0.1.4\n');
+      write('.changeset/previous.md', valid);
+      const eventBase = commit('Before release');
+      git('switch', '--quiet', '--create', 'feature');
+      write(note, valid);
+      const feature = commit('Feature with Changeset');
+      const nonMerge = check(feature);
+
+      git('switch', '--quiet', 'main');
+      write(appPackage, JSON.stringify({ version: '0.1.5' }));
+      write(changelog, '## 0.1.5\n\n## 0.1.4\n');
+      git('rm', '--quiet', '.changeset/previous.md');
+      const testedBase = commit('Version Nemesis');
+      git('merge', '--quiet', '--no-ff', '--no-edit', 'feature');
+
+      expect(git('rev-parse', 'HEAD^1')).toBe(testedBase);
+      expect(git('diff', '--name-only', eventBase, 'HEAD')).toContain(appPackage);
+      const result = check(feature);
+      expect(result.status, result.stderr).toBe(0);
+      expect(nonMerge.stderr).toContain('two-parent pull request merge commit');
+      expect(check(eventBase).stderr).toContain('does not match the expected pull request head');
+      const checkStep = ci.jobs.changeset.steps.find(
+        (step: { name?: string }) => step.name === 'Check release note',
+      );
+      expect(checkStep.env).toEqual({ PR_HEAD_SHA: '${{ github.event.pull_request.head.sha }}' });
+      expect(checkStep.run).toBe('node scripts/check-changeset.mjs "$PR_HEAD_SHA"');
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   it('requires a new valid note for regular changes', () => {
     expect(() =>
       assertAppChangeset(
@@ -232,5 +295,36 @@ describe('Changeset merge gate', () => {
         path === changelog ? '## 0.1.0' : read(revision, path),
       ),
     ).toThrow(/Add a new/);
+  });
+
+  it('requires the exact highest version bump among consumed Changesets', () => {
+    const release = (oldVersion: string, newVersion: string, bumps: string[]) => {
+      const notes = new Map(
+        bumps.map((bump) => [`.changeset/${bump}.md`, valid.replace('patch', bump)]),
+      );
+      const changes = [
+        ...[...notes.keys()].map((path) => ['D', path]),
+        ['M', appPackage],
+        ['M', changelog],
+      ];
+      return () =>
+        assertAppChangeset(
+          changes,
+          (revision, path) => {
+            if (path === appPackage)
+              return JSON.stringify({ version: revision === 'base' ? oldVersion : newVersion });
+            if (path === changelog) return `## ${newVersion}\n`;
+            return notes.get(path)!;
+          },
+          { releaseOnly: true },
+        );
+    };
+    expect(release('0.1.7', '0.1.8', ['patch'])).not.toThrow();
+    expect(release('0.1.7', '0.1.9', ['patch'])).toThrow(/require Nemesis 0\.1\.8/);
+    expect(release('0.1.7', '0.2.0', ['patch', 'minor'])).not.toThrow();
+    expect(release('0.1.7', '0.1.8', ['patch', 'minor'])).toThrow(/require Nemesis 0\.2\.0/);
+    expect(release('0.1.7', '0.2.7', ['patch', 'minor'])).toThrow(/require Nemesis 0\.2\.0/);
+    expect(release('0.1.7', '1.0.0', ['patch', 'minor', 'major'])).not.toThrow();
+    expect(release('1.2.3', '2.0.0', ['major', 'patch'])).not.toThrow();
   });
 });
