@@ -1,58 +1,31 @@
 import { ActiveCall, ReadyCall } from './DispatchCall';
 import { DispatchSetup } from './DispatchSetup';
-import type { Overview, Run } from './dispatchTypes';
-import { useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import type { Overview } from './dispatchTypes';
+import type { DispatchCommandController } from './dispatchCommand';
+import { useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Disclosure } from '../../components/ui/Disclosure';
 import { Input } from '../../components/ui/Input';
 import { Select, SelectItem } from '../../components/ui/Select';
-import { trpc } from '../../lib/trpc';
 import './DispatchDesk.css';
 
 export function DispatchDesk({
   data,
-  disabled,
+  dispatch,
   onMatch,
   onReviewReports,
 }: {
   data: Overview;
-  disabled: boolean;
+  dispatch: DispatchCommandController;
   onMatch: (id: string) => void;
   onReviewReports: () => void;
 }) {
-  const cache = useQueryClient();
-  const [pending, setPending] = useState(false),
-    [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [view, setView] = useState('ready');
   const [limit, setLimit] = useState(12);
-  const retry = useRef<{ input: string; id: string } | null>(null);
   if (!data.operatorDispatch) return null;
   const desk = data.operatorDispatch;
-  const busy = disabled || pending;
-  const run: Run = async (command) => {
-    if (busy) return false;
-    setPending(true);
-    setError('');
-    const input = JSON.stringify(command);
-    if (retry.current?.input !== input) retry.current = { input, id: crypto.randomUUID() };
-    try {
-      await trpc.eventOps.live.command.mutate({
-        planId: data.plan.id,
-        requestId: retry.current.id,
-        command,
-      });
-      retry.current = null;
-      await cache.invalidateQueries({ queryKey: ['eventOps', data.plan.id] });
-      return true;
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not change the match queue.');
-      return false;
-    } finally {
-      setPending(false);
-    }
-  };
+  const { busy, error, run } = dispatch;
   const shared = desk.mode === 'shared';
   const matchesById = new Map(data.matches.map((match) => [match.id, match]));
   const queue = desk.queue.flatMap((row) => {
