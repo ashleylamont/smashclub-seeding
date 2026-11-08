@@ -4,6 +4,7 @@ import { DispatchDesk } from './DispatchDesk';
 import { useDispatchCommand } from './dispatchCommand';
 import { DoublesAvailabilityControls } from './DoublesAvailabilityControls';
 import { PoolDrawControls } from './PoolDrawControls';
+import { OpsPoolStandings } from './OpsPoolStandings';
 import { NativeResultControls } from './NativeResultControls';
 import { Button } from '../../components/ui/Button';
 import { Select, SelectItem } from '../../components/ui/Select';
@@ -429,63 +430,13 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
             onOpenCall={(matchId) => void workspace.openControl(returnCallControlId(matchId))}
           />
           {pools.length > 0 && (
-            <section className="card">
-              <h3>Pool standings</h3>
-              <p className="muted">
-                Ordered by wins, then game difference for review. Ties and final advancement must be
-                confirmed in the planner.
-              </p>
-              <div className="ops-bottom-grid">
-                {pools.map((pool) => (
-                  <div key={`${pool.division}:${pool.poolIndex}`}>
-                    <h4>
-                      {poolTitle(
-                        `${pool.division}:${pool.poolIndex}`,
-                        data.plan.structure,
-                        'heading',
-                      )}{' '}
-                      <span className="muted">
-                        {pool.complete}/{pool.total} sets
-                      </span>
-                    </h4>
-                    <table className="ops-standings">
-                      <thead>
-                        <tr>
-                          <th>Player</th>
-                          <th>W–L</th>
-                          <th>Games ±</th>
-                          <th>To play</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pool.players.map((player) => (
-                          <tr key={player.id}>
-                            <td>{player.name}</td>
-                            <td>
-                              {player.wins}–{player.losses}
-                            </td>
-                            <td>
-                              {player.differential > 0 ? '+' : ''}
-                              {player.differential}
-                            </td>
-                            <td>{player.remaining}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ))}
-              </div>
-              {admin ? (
-                <a href={`/admin/event-planner?plan=${planId}&step=pools`}>
-                  Review and confirm advancement →
-                </a>
-              ) : (
-                <p className="muted">
-                  Ask an event administrator to confirm advancement in the planner.
-                </p>
-              )}
-            </section>
+            <OpsPoolStandings
+              pools={pools}
+              data={data}
+              admin={admin}
+              closed={closed}
+              onReviewScores={openScoreSubmissions}
+            />
           )}
           {data.plan.bracketMode === 'native' ? (
             <>

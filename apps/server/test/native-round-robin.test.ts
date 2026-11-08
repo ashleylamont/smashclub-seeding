@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { buildRoundRobin } from '@smashclub/tournament-formats';
 import { pureBaseline, envelope } from './helpers/nativeLiveFixture';
-import { captureBaseline, stableId } from '../src/tournament/domain';
+import { captureBaseline, decide, reduceDecision, stableId } from '../src/tournament/domain';
 import { applyAttendance, attendancePreview } from '../src/tournament/attendance';
+import { eventView } from '../src/tournament/views';
+import { createTestDb } from './helpers/testDb';
 
 function baseline(count: number, meetings: number) {
   const value = pureBaseline();
@@ -87,5 +89,81 @@ describe('round-robin variant lifecycle rules', () => {
     };
     applyAttendance(state, envelope(removal), removal);
     expect(state.matches).toEqual(previous);
+  });
+});
+
+describe('round-robin planner confirmation guidance', () => {
+  it('requires relocking a paused draw before offering confirmation', async () => {
+    const { db, close } = await createTestDb();
+    try {
+      const state = captureBaseline(baseline(4, 1));
+      for (const entrant of state.entrants) entrant.availability = 'withdrawn';
+      for (const match of state.matches) {
+        match.status = 'complete';
+        match.outcome = 'no_contest';
+      }
+      const pool = state.pools[0]!;
+      const paused = reduceDecision(state, decide(state, envelope({ kind: 'unlock' }))!);
+      const confirmation = envelope({
+        kind: 'poolOrders',
+        pools: [
+          {
+            poolId: pool.id,
+            expectedRevision: pool.revision,
+            order: pool.entrantIds,
+            matchRevisions: Object.fromEntries(state.matches.map((m) => [m.id, m.revision])),
+          },
+        ],
+      });
+      expect(paused.lifecycle).toBe('unlocked');
+      expect(() => decide(paused, confirmation)).toThrow(/Relock/);
+      expect((await eventView(db, paused, true)).poolOrders?.[0]).toMatchObject({
+        status: 'manual_required',
+        plannerConfirmation: {
+          available: false,
+          reason: 'Resume the pool draw to confirm this order.',
+        },
+      });
+      const relocked = reduceDecision(paused, decide(paused, envelope({ kind: 'relock' }))!);
+      expect((await eventView(db, relocked, true)).poolOrders?.[0]).toMatchObject({
+        plannerConfirmation: { available: true },
+      });
+      expect(decide(relocked, confirmation)).toBeDefined();
+    } finally {
+      await close();
+    }
+  });
+
+  it('only offers confirmation through the planner up to its existing entrant limit', async () => {
+    const { db, close } = await createTestDb();
+    try {
+      for (const count of [16, 17]) {
+        const state = captureBaseline(baseline(count, 1));
+        for (const match of state.matches) {
+          match.status = 'complete';
+          match.outcome = 'played';
+          match.score1 = 2;
+          match.score2 = 0;
+          match.winnerId = match.player1Id;
+          match.started = true;
+        }
+        expect((await eventView(db, state, true)).poolOrders?.[0]).toMatchObject({
+          status: 'manual_required',
+          plannerConfirmation:
+            count === 16
+              ? { available: true }
+              : {
+                  available: false,
+                  reason:
+                    'This pool has 17 entrants. The planner can confirm orders for pools of 2–16 entrants.',
+                },
+        });
+        expect((await eventView(db, state)).poolOrders?.[0]).not.toHaveProperty(
+          'plannerConfirmation',
+        );
+      }
+    } finally {
+      await close();
+    }
   });
 });

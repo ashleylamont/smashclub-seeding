@@ -176,6 +176,15 @@ export async function verifyMixedLegacyFinalsRecovery(
     for (const match of imported.matches.filter((m) => m.poolId === pending.id))
       await scoreActMatch(runtime, planId, match);
     const beforeOrder = await runtime.state(planId);
+    const privateView = await caller.eventOps.overview({ planId });
+    const privateOrders = 'poolOrders' in privateView ? privateView.poolOrders : undefined;
+    expect(privateOrders?.find(({ poolId }) => poolId === pending.id)).toMatchObject({
+      status: 'manual_required',
+      plannerConfirmation: { available: true },
+    });
+    expect(
+      (await eventView(db, beforeOrder)).poolOrders?.find(({ poolId }) => poolId === pending.id),
+    ).not.toHaveProperty('plannerConfirmation');
     const order = pending.entrantIds.toReversed();
     const plan = (await caller.admin.eventPlanner.plan({ planId }))!;
     const upper = plan.divisions.find(({ division }) => division === pending.division)!;
@@ -193,6 +202,12 @@ export async function verifyMixedLegacyFinalsRecovery(
       .pools.find(({ poolIndex }) => poolIndex === fixed.index)!;
     expect(damagedPool.orderLockedReason).toContain('The confirmed order is missing');
     expect(damagedPool.orderStatus).toBeUndefined();
+    expect(
+      (await eventView(db, damaged, true)).poolOrders?.find(({ poolId }) => poolId === fixed.id),
+    ).toMatchObject({
+      status: 'manual_required',
+      plannerConfirmation: { available: false, reason: damagedPool.orderLockedReason },
+    });
     const submitted = {
       planId,
       division: pending.division,
