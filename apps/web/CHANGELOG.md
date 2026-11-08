@@ -2,6 +2,22 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.7.0
+
+### Minor Changes
+
+- 9 November 2026 · **Feature** · Start a player profile claim from the public profile and keep the selected player through sign-in. Check approval and edit your main characters from your account once the claim is approved. [#281](https://github.com/ashleylamont/smashclub-seeding/pull/281) · [build b089c4e](https://github.com/ashleylamont/smashclub-seeding/commit/b089c4ebea13feef536a2e9654f69fbc596c1801)
+- 8 November 2026 · **Feature** · Review a championship replay and its unplayed consolation pairing together. [#276](https://github.com/ashleylamont/smashclub-seeding/pull/276) · [build f0b4248](https://github.com/ashleylamont/smashclub-seeding/commit/f0b4248fc5af4c7325b0f3cf98b09ff9536203e2)
+
+  When a corrected pool score swaps two qualifiers across the championship cut, organisers can review both pairings in one action. The original played set stays in history and the new championship replay determines advancement. The consolation pairing can be updated if its route is ready and has no calls, play, reports or holds.
+
+- 9 November 2026 · **Feature** · Let organisers admit a late doubles pair to an eligible pool after soft-lock. The preview shows added sets and prospective finals places. Existing teams, seeds and match rounds stay in place. [#277](https://github.com/ashleylamont/smashclub-seeding/pull/277) · [build 143da59](https://github.com/ashleylamont/smashclub-seeding/commit/143da59e1aa5f2d3e212a9badd060055e619ad58)
+
+### Patch Changes
+
+- 8 November 2026 · **Fix** · Keep profile details, linked providers and unsaved edits tied to the signed-in account when switching accounts in the same tab. [#275](https://github.com/ashleylamont/smashclub-seeding/pull/275) · [build db5e252](https://github.com/ashleylamont/smashclub-seeding/commit/db5e252eaa7d0cb06cdaaaa093f03da64a231ad1)
+- 9 November 2026 · **Maintenance** · Stabilise station summary visual checks by waiting for the player deep link to scroll before taking captures. [#278](https://github.com/ashleylamont/smashclub-seeding/pull/278) · [build c2d0f73](https://github.com/ashleylamont/smashclub-seeding/commit/c2d0f732a0a6652657e3c1b30f33ac08373819e5)
+
 ## 0.6.0
 
 ### Minor Changes
