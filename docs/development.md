@@ -140,13 +140,13 @@ The public `/api/live` streams have global and per-IP connection caps, a maximum
 
 ## Versioned releases
 
-Nemesis has one application version, tracked in `apps/web/package.json`, covering the web app, API and the rest of the deployed image. After a user-facing change, run `pnpm changeset`, select `@smashclub/web`, choose the SemVer bump and describe the change from a player or organiser's perspective. Commit the generated note with the change. Fixes generally use patch releases and new capabilities use minor releases.
+Nemesis has one application version, tracked in `apps/web/package.json`, covering the web app, API and the rest of the deployed image. Each pull request adds a `@smashclub/web` Changeset with `pnpm changeset`. Choose the SemVer bump and describe the change in terms a player or organiser can understand. Use the [note format](../.changeset/README.md) for a change category and optional screenshots. The required **All checks** gate verifies that the PR adds a valid note. A release-only PR passes by consuming existing notes and updating the version and changelog.
 
-To cut a release, branch from current `main`, run `pnpm changeset version` and review the version and entries written to [the changelog](../apps/web/CHANGELOG.md). Open a release PR and merge it after CI passes. Tag the merged commit on `main` with an annotated `vMAJOR.MINOR.PATCH` tag matching the app version and push the tag to GitHub. For example, for version 0.1.0:
+To cut a release, fetch `origin/main`, branch from it, run `pnpm changeset version` and review the version and entries written to [the changelog](../apps/web/CHANGELOG.md). Open a release PR and merge it after CI passes. Tag the merged commit on `main` with an annotated `vMAJOR.MINOR.PATCH` tag matching the app version and push the tag to GitHub. For example, for version 0.1.0:
 
 ```bash
 git tag -a v0.1.0 <merged-release-commit> -m "Nemesis 0.1.0"
 git push origin refs/tags/v0.1.0
 ```
 
-The tag runs full CI, publishes the verified application image under the numeric version and creates the GitHub Release with that version's changelog entry. The in-app `/changelog` uses the same Markdown file. Entries under “Before versioned releases” use historical Git dates in Sydney time.
+The tag runs full CI, publishes the verified application image under the numeric version and creates the GitHub Release with that version's changelog entry. The in-app `/changelog` uses the same Markdown file. Changesets includes each note’s Sydney merge date and source build. The in-app version heading links to the tagged release, and entries from before versioning retain their original dates and Git builds.

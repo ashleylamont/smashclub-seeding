@@ -9,4 +9,5 @@ const changelog = readFileSync(new URL('../apps/web/CHANGELOG.md', import.meta.u
 const section = changelog.split(/^## /m).find((section) => section.startsWith(`${version}\n`));
 const notes = section?.slice(version.length).trim();
 if (!notes) throw new Error(`Missing release notes for version ${version}`);
-process.stdout.write(`${notes}\n`);
+const publicScreenshots = `https://raw.githubusercontent.com/ashleylamont/smashclub-seeding/v${version}/apps/web/public/changelog/`;
+process.stdout.write(`${notes.replaceAll('](./public/changelog/', `](${publicScreenshots}`)}\n`);
