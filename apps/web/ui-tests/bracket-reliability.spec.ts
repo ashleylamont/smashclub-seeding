@@ -168,9 +168,10 @@ for (const theme of ['dark', 'light'] as const)
       await boundedCards(brackets);
       await connectedRows(brackets);
       await page.setViewportSize({ width, height: 900 });
-      expect(
-        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
-      ).toBe(true);
+      // Wait for responsive navigation and bracket layout to settle after the viewport change.
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
+        .toBe(true);
       expect(
         (
           await new AxeBuilder({ page })
