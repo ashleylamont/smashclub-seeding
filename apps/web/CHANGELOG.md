@@ -2,6 +2,12 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.2.10
+
+### Patch Changes
+
+- 8 November 2026 · **Fix** · Keep the recorded pairing in organiser history when an unplayed finals draw is reset or the same match slot receives different qualifiers. [#236](https://github.com/ashleylamont/smashclub-seeding/pull/236) · [build fda7ab4](https://github.com/ashleylamont/smashclub-seeding/commit/fda7ab4ee7b68a7029b8a202b0d72c4236f965e2)
+
 ## 0.2.9
 
 ### Patch Changes
