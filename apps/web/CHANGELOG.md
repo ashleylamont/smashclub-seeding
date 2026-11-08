@@ -2,6 +2,12 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.7.2
+
+### Patch Changes
+
+- 9 November 2026 · **Improvement** · See bracket round names on the planner timeline and download a run sheet with match and feeder names. The original set-code CSV remains available for existing spreadsheets. [#286](https://github.com/ashleylamont/smashclub-seeding/pull/286) · [build 2970e89](https://github.com/ashleylamont/smashclub-seeding/commit/2970e890536e9e319d922856f9eb22f5285ce212)
+
 ## 0.7.1
 
 ### Patch Changes
