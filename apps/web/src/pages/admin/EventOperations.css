@@ -246,6 +246,12 @@
   cursor: pointer;
   border: 1px solid var(--border);
 }
+.ops-copy-label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s1);
+  margin-block-end: var(--s2);
+}
 .ops-attendance-fields {
   min-inline-size: 0;
   border: 0;

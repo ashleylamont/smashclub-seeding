@@ -1,5 +1,5 @@
 import type { Match as NativeMatch } from '../tournament/schemas';
-import { importedOutcome, remoteValues } from './sourceResult';
+import { compareImportedResult, importedOutcome, remoteValues } from './sourceResult';
 import type { dispatchDesk, SharedDispatchSummary } from '../tournament/dispatch';
 import type { MemberView } from '../tournament/entrants';
 import { attendeeScoreDecision, samePlayedScore } from './scorePolicy';
@@ -348,20 +348,13 @@ export async function prepare(db: Db, planId: string) {
         continue;
       }
       if (!row.sourceSetId) continue;
+      const { agrees, score1, score2 } = compareImportedResult(previous, row);
       if (
         previous.status === 'complete' &&
         (previous.syncState === 'pending' ||
           previous.syncState === 'error' ||
           (previous.revision > 0 && previous.syncState === 'local'))
       ) {
-        const agrees =
-          row.status === 'complete' &&
-          row.player1Id === previous.player1Id &&
-          row.player2Id === previous.player2Id &&
-          row.score1 === previous.score1 &&
-          row.score2 === previous.score2 &&
-          row.winnerId === previous.winnerId &&
-          row.outcome === previous.outcome;
         await tx
           .update(eventMatches)
           .set({
@@ -405,8 +398,8 @@ export async function prepare(db: Db, planId: string) {
         sourceSetId: row.sourceSetId,
         player1Id: row.player1Id ?? null,
         player2Id: row.player2Id ?? null,
-        score1: row.score1 ?? null,
-        score2: row.score2 ?? null,
+        score1,
+        score2,
         winnerId: row.winnerId ?? null,
         outcome: row.outcome ?? null,
         syncState: 'synced' as const,

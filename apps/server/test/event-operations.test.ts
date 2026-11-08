@@ -302,6 +302,65 @@ describe('event operations', () => {
     expect(rows.find((m) => m.sourceSetId && m.stage === 'group')!.outcome).toBe('bye');
     expect(rows.find((m) => m.stage === 'main')!.outcome).toBe('forfeit');
   });
+  it('reconciles a manually imported forfeit only when the pairing and winner agree', async () => {
+    const [tournament] = await db
+      .insert(tournaments)
+      .values({ challongeSlug: 'forfeit-handoff', name: 'Forfeit handoff' })
+      .returning();
+    await db.insert(eventPlanBrackets).values({
+      eventPlanId: planId,
+      division: 'upper',
+      stage: 'main',
+      tournamentId: tournament!.id,
+    });
+    const [remote] = await db
+      .insert(sets)
+      .values({
+        tournamentId: tournament!.id,
+        challongeMatchId: 12,
+        resultStage: 'final',
+        state: 'open',
+        p1PlayerId: ids[0],
+        p2PlayerId: ids[2],
+      })
+      .returning();
+    await prepare(db, planId);
+    const localResult = async () =>
+      (await db.select().from(eventMatches).where(eq(eventMatches.sourceSetId, remote!.id)))[0]!;
+    await reportScore(db, admin, {
+      ...score(await localResult(), 'local-forfeit'),
+      outcome: 'forfeit',
+      winnerId: ids[2],
+      score1: 0,
+      score2: 0,
+    });
+    const recorded = await localResult();
+    expect(recorded).toMatchObject({ outcome: 'forfeit', winnerId: ids[2], syncState: 'pending' });
+    const cases = [
+      { p1PlayerId: ids[2], p2PlayerId: ids[0], winner: 1, scoresCsv: '0--1' },
+      { p1PlayerId: ids[0], p2PlayerId: ids[2], winner: 1, scoresCsv: '0--1' },
+      { p1PlayerId: ids[0], p2PlayerId: ids[2], winner: 2, scoresCsv: '0-2' },
+      { p1PlayerId: ids[0], p2PlayerId: ids[2], winner: null, scoresCsv: '-1-0' },
+    ];
+    for (const different of cases) {
+      await db
+        .update(sets)
+        .set({ ...different, state: 'complete' })
+        .where(eq(sets.id, remote!.id));
+      await prepare(db, planId);
+      expect(await localResult()).toMatchObject({ syncState: 'error', winnerId: ids[2] });
+    }
+    await db.update(sets).set({ winner: 2, scoresCsv: '-1-0' }).where(eq(sets.id, remote!.id));
+    for (let refresh = 0; refresh < 2; refresh++) {
+      await prepare(db, planId);
+      expect(await localResult()).toEqual({
+        ...recorded,
+        syncState: 'synced',
+        blockedReason: null,
+      });
+    }
+    expect(await db.select().from(eventMatchAudit)).toHaveLength(1);
+  });
   it('imports group results with correct orientation and refreshes unknown finals without overwriting local scores', async () => {
     const matches = await ready();
     const group = matches.find((m) => m.division === 'upper')!;

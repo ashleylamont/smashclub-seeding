@@ -5,6 +5,21 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { trpc } from '../../lib/trpc';
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
+
+function handoffResult(match: Overview['matches'][number]) {
+  if (match.outcome !== 'forfeit')
+    return `${match.label}: ${match.player1Name} ${match.score1 ?? '–'} – ${match.score2 ?? '–'} ${match.player2Name} (${match.outcome ?? 'result'}; ${match.syncState})`;
+
+  const firstWon = match.winnerId === match.player1Id;
+  if (!match.winnerId || (!firstWon && match.winnerId !== match.player2Id))
+    return `${match.label}: ${match.player1Name} vs ${match.player2Name} · Forfeit recorded, winner unavailable (${match.syncState})`;
+
+  const [winner, opponent] = firstWon
+    ? [match.player1Name, match.player2Name]
+    : [match.player2Name, match.player1Name];
+  return `${match.label}: ${winner} wins by forfeit against ${opponent} (${match.syncState})`;
+}
+
 export function ScoreHandoff({
   planId,
   data,
@@ -62,12 +77,7 @@ export function ScoreHandoff({
   const undelivered = data.matches.filter(
     (match) => match.status === 'complete' && match.syncState !== 'synced',
   );
-  const summary = undelivered
-    .map(
-      (match) =>
-        `${match.label}: ${match.player1Name} ${match.score1 ?? '–'} – ${match.score2 ?? '–'} ${match.player2Name} (${match.outcome ?? 'result'}; ${match.syncState})`,
-    )
-    .join('\n');
+  const summary = undelivered.map(handoffResult).join('\n');
   const deliver = async (match: Overview['matches'][number]) => {
     setPending(match.id);
     setError('');
@@ -96,8 +106,10 @@ export function ScoreHandoff({
         Challonge handoff <span className="chip">{undelivered.length} local result(s)</span>
       </h3>
       <p className="muted">
-        Local scores are retained here. Linked brackets remain the official bracket record. Refresh
-        all linked brackets after a manual update to reconcile their results.
+        Local results are retained here. Linked brackets remain the official record.
+        {undelivered.some((match) => match.outcome === 'forfeit') &&
+          ' Enter forfeits in Challonge.'}{' '}
+        Refresh all linked brackets after a manual update to reconcile their results.
       </p>
       <Button
         type="submit"

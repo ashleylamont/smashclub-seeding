@@ -1,5 +1,5 @@
 import { scoresIndicateBye, scoresIndicateForfeit } from '@smashclub/shared';
-import type { sets } from '@smashclub/db';
+import type { eventMatches, sets } from '@smashclub/db';
 
 export function importedOutcome(s: typeof sets.$inferSelect): 'played' | 'bye' | 'forfeit' | null {
   if (s.state !== 'complete') return null;
@@ -22,5 +22,34 @@ export function remoteValues(s: typeof sets.$inferSelect, firstPlayerId: string)
     score2: scores ? Number(scores[flipped ? 1 : 2]) : null,
     winnerId: s.winner === 1 ? s.p1PlayerId : s.winner === 2 ? s.p2PlayerId : null,
     syncState: 'synced' as const,
+  };
+}
+
+export function compareImportedResult(
+  previous: typeof eventMatches.$inferSelect,
+  incoming: typeof eventMatches.$inferInsert,
+) {
+  const sameRecordedResult =
+    previous.status === 'complete' &&
+    incoming.status === 'complete' &&
+    incoming.player1Id === previous.player1Id &&
+    incoming.player2Id === previous.player2Id &&
+    incoming.winnerId === previous.winnerId &&
+    incoming.outcome === previous.outcome;
+  // Challonge's negative DQ sentinel and the local wire placeholder describe
+  // the same forfeit once the pairing, winner and outcome agree.
+  const sameForfeit =
+    sameRecordedResult &&
+    incoming.outcome === 'forfeit' &&
+    incoming.player1Id &&
+    incoming.player2Id &&
+    incoming.player1Id !== incoming.player2Id &&
+    (incoming.winnerId === incoming.player1Id || incoming.winnerId === incoming.player2Id);
+  const score1 = sameForfeit ? previous.score1 : incoming.score1;
+  const score2 = sameForfeit ? previous.score2 : incoming.score2;
+  return {
+    agrees: sameRecordedResult && score1 === previous.score1 && score2 === previous.score2,
+    score1: score1 ?? null,
+    score2: score2 ?? null,
   };
 }
