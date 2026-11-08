@@ -242,6 +242,64 @@ test('completed byes and no contests do not claim unresolved entrants or a resul
   expect(fixture.unexpected).toEqual([]);
 });
 
+test('public and OBS bracket cards suppress imported scores for unplayed results', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  const { fixture, matches } = await graphFixture(page, 7, false);
+  const played = matches.find((match) => match.outcome === 'played')!;
+  const bye = matches.find((match) => match.outcome === 'bye')!;
+  const [forfeit, noContest] = matches.filter((match) => match.status === 'ready');
+  Object.assign(forfeit!, {
+    status: 'complete',
+    outcome: 'forfeit',
+    winnerId: forfeit!.player1Id,
+  });
+  Object.assign(noContest!, {
+    status: 'complete',
+    blockedReason: 'Both players withdrawn: no contest; no winner or score recorded',
+  });
+  // Imported TIP12 matches can retain numeric placeholders for unplayed outcomes.
+  for (const match of [bye, forfeit!, noContest!]) Object.assign(match, { score1: 0, score2: 0 });
+  const outcomes = [
+    { match: played, label: 'Final result', scores: ['1', '2'], winners: 1 },
+    { match: bye, label: 'Bye', scores: [], winners: 1 },
+    { match: forfeit!, label: 'Forfeit', scores: [], winners: 1 },
+    { match: noContest!, label: 'No contest', scores: [], winners: 0 },
+  ];
+
+  for (const { route, pageLimit } of [
+    { route: `/play/${PLAN_ID}`, pageLimit: 1 },
+    { route: `/overlay/${PLAN_ID}?presentation=progress`, pageLimit: 4 },
+  ]) {
+    await page.goto(route);
+    await expect(page.locator('.event-bracket-match').first()).toBeVisible();
+    const pending = new Set(outcomes);
+    for (let index = 0; index < pageLimit && pending.size > 0; index++) {
+      if (index > 0) {
+        await page.getByRole('button', { name: 'Next page', exact: true }).click();
+        await expect(
+          page.getByRole('region', { name: 'Tournament progress', exact: true }),
+        ).toContainText(`Page ${index + 1} /`);
+      }
+      for (const outcome of pending) {
+        const card = page.getByRole('article', {
+          name: `${outcome.match.label}: ${outcome.label}`,
+          exact: true,
+        });
+        if (!(await card.isVisible())) continue;
+        const scores = card.locator('[aria-label^="Score "]');
+        if (outcome.scores.length) await expect(scores).toHaveText(outcome.scores);
+        else await expect(scores).toHaveCount(0);
+        await expect(card.locator('.is-winner')).toHaveCount(outcome.winners);
+        pending.delete(outcome);
+      }
+    }
+    expect([...pending].map(({ label }) => label)).toEqual([]);
+  }
+  expect(fixture.unexpected).toEqual([]);
+});
+
 test('changed result and grand-final completion update the draw without inventing a reset', async ({
   page,
 }) => {
