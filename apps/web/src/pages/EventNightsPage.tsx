@@ -27,7 +27,7 @@ export function EventNightsPage() {
       <section aria-label="Open event nights">
         <h2>Open events</h2>
         {!events.isPending && !events.isError && !open.length && (
-          <p>No events are published yet.</p>
+          <p>{finished.length ? 'No open events right now.' : 'No events are published yet.'}</p>
         )}
         <div className="event-nights-grid">
           {open.map((event) => (
@@ -54,7 +54,11 @@ export function EventNightsPage() {
                   {new Date(event.eventDate).toLocaleDateString(undefined, { dateStyle: 'medium' })}{' '}
                   · {event.status === 'cancelled' ? 'Cancelled' : 'Finished'}
                 </p>
-                <a href={`/play/${event.id}#event-results`}>View results →</a>
+                {event.status === 'cancelled' ? (
+                  <a href={`/play/${event.id}`}>View event →</a>
+                ) : (
+                  <a href={`/play/${event.id}#event-results`}>View results →</a>
+                )}
               </article>
             ))}
           </div>

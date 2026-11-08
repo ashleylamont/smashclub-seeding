@@ -214,11 +214,21 @@ export function PlayerHubMatches({
         )}
         {!visible.length && (
           <p className="card">
-            {player
-              ? 'No matches for this player in this view. Try Selected player’s next & recent matches or clear the pool and station filters.'
-              : view === 'reports'
-                ? 'Your submitted scores will appear here.'
-                : 'No matches in this view yet. Choose a pool, search a player, or select All open matches.'}
+            {closed ? (
+              <>
+                No matches in this view. Change the filters or go to{' '}
+                <a className="link-button" href="#event-results">
+                  Recorded results
+                </a>
+                .
+              </>
+            ) : player ? (
+              'No matches for this player in this view. Try Selected player’s next & recent matches or clear the pool and station filters.'
+            ) : view === 'reports' ? (
+              'Your submitted scores will appear here.'
+            ) : (
+              'No matches in this view yet. Choose a pool, search a player, or select All open matches.'
+            )}
           </p>
         )}
       </section>

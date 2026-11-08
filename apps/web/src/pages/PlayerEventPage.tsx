@@ -45,6 +45,13 @@ export function PlayerEvent({ planId }: { planId: string }) {
   } = hub;
   const empty = data?.matches.length === 0;
   const reportingVisible = !empty && !closed;
+  const hasRecordedResults =
+    data?.matches.some((match) => match.status === 'complete') ||
+    Boolean(data?.placements.length || data?.plan.resultsSlug || data?.plan.historicalResultsSlug);
+  const updatesInterrupted = !online || publicEvent.isError;
+  const reportingStatus = (
+    <MatchReportingStatus hub={hub} hasRecordedResults={hasRecordedResults} />
+  );
   const announcements =
     data?.announcements
       .filter((item) => !item.expiresAt || Date.parse(item.expiresAt) > now)
@@ -62,7 +69,12 @@ export function PlayerEvent({ planId }: { planId: string }) {
         />
         {data && !empty && <EventProgress data={data} selectedPool={selectedPool} />}
         <PlayerEventNavigation board={board} />
-        {empty && <EmptyEventMatches historical={Boolean(data?.plan.historicalResultsSlug)} />}
+        {empty && (
+          <EmptyEventMatches
+            closed={closed}
+            historical={Boolean(data?.plan.historicalResultsSlug)}
+          />
+        )}
         {claim && !empty && (
           <p>
             Your linked profile: <strong>{claim.playerName}</strong>.
@@ -95,13 +107,13 @@ export function PlayerEvent({ planId }: { planId: string }) {
             </Button>
           </p>
         )}
-        {(!data || (closed && empty)) && <MatchReportingStatus hub={hub} />}
-        {data && (
+        {(!data || (closed && empty)) && reportingStatus}
+        {data && (!closed || hasRecordedResults || updatesInterrupted) && (
           <p
             className="event-connection player-event-connection"
-            role={!online || publicEvent.isError ? 'alert' : 'status'}
+            role={updatesInterrupted ? 'alert' : 'status'}
           >
-            {!online || publicEvent.isError
+            {updatesInterrupted
               ? 'Live updates interrupted. Scores shown may be out of date.'
               : closed
                 ? 'Recorded tournament results'
@@ -119,11 +131,7 @@ export function PlayerEvent({ planId }: { planId: string }) {
         <>
           {!empty && (
             <>
-              <PlayerHubMatches
-                hub={hub}
-                data={data}
-                reportingStatus={<MatchReportingStatus hub={hub} />}
-              />
+              <PlayerHubMatches hub={hub} data={data} reportingStatus={reportingStatus} />
               <section id="what-next" aria-label="What next">
                 <PlayerNextSteps hub={hub} data={data} />
               </section>
@@ -219,16 +227,16 @@ function PlayerNextSteps({ hub, data }: { hub: PlayerEventHub; data: PublicEvent
   );
 }
 
-function EmptyEventMatches({ historical }: { historical: boolean }) {
+function EmptyEventMatches({ closed, historical }: { closed: boolean; historical: boolean }) {
   return (
     <>
       <section id="my-matches" className="card" aria-label="Event schedule">
         <h2>Matches & results</h2>
         <p>
-          No matches in this view yet.{' '}
+          {closed ? 'No matches are recorded for this event.' : 'No matches in this view yet.'}{' '}
           {historical
             ? 'Open Results below for the imported event standings.'
-            : 'The organisers will publish pairings here when they are ready.'}
+            : !closed && 'The organisers will publish pairings here when they are ready.'}
         </p>
       </section>
       <section id="what-next" aria-label="What next">
@@ -236,14 +244,22 @@ function EmptyEventMatches({ historical }: { historical: boolean }) {
         <p>
           {historical
             ? 'This event uses imported results. Match reporting is closed.'
-            : 'Check event announcements or ask an organiser about the next update.'}
+            : closed
+              ? 'Check the event announcements or ask an organiser for details.'
+              : 'Check event announcements or ask an organiser about the next update.'}
         </p>
       </section>
     </>
   );
 }
 
-function MatchReportingStatus({ hub }: { hub: PlayerEventHub }) {
+function MatchReportingStatus({
+  hub,
+  hasRecordedResults,
+}: {
+  hub: PlayerEventHub;
+  hasRecordedResults: boolean;
+}) {
   const {
     accessDenied,
     closed,
@@ -263,7 +279,11 @@ function MatchReportingStatus({ hub }: { hub: PlayerEventHub }) {
   } = hub;
   if (closed)
     return player ? null : (
-      <Notice>This event is closed. Results remain available. Ask a TO about corrections.</Notice>
+      <Notice>
+        {hasRecordedResults
+          ? 'This event is closed. Results remain available. Ask a TO about corrections.'
+          : 'This event is closed. Score reporting is unavailable.'}
+      </Notice>
     );
 
   return (
