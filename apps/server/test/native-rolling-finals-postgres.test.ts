@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PostgresStore } from '@rotorsoft/act-pg';
-import { sets } from '@smashclub/db';
-import { sql } from 'drizzle-orm';
+import { players, sets } from '@smashclub/db';
+import { eq, sql } from 'drizzle-orm';
 import { postgresCluster } from './helpers/postgres';
 import { nativeAdmin, seedNativeDraft } from './helpers/nativeLiveFixture';
 import { createNativeRuntime, nativeStream, type NativeRuntime } from '../src/tournament/runtime';
@@ -134,6 +134,144 @@ describe('rolling qualifier decisions on isolated PostgreSQL', () => {
     expect(history.entries.some((entry) => entry.eventName === 'DecisionRecordedV6')).toBe(true);
     const publicSnapshot = await restarted.snapshot(planId, false);
     expect(publicSnapshot.nativeBrackets.some((b) => 'strengthSeeding' in b)).toBe(false);
+  });
+
+  it('uses the pairing at each history cursor across a reused slot, reset and lost checkpoints', async () => {
+    const planId = await seedNativeDraft(cluster.db);
+    const live = await runtime();
+    const send = (command: TournamentCommand) =>
+      live.command(nativeAdmin, planId, crypto.randomUUID(), command);
+    await live.lock(nativeAdmin, planId);
+    let state = await live.state(planId);
+    await send({
+      kind: 'configureDispatch',
+      capacity: 2,
+      reservedStationIds: [],
+      expectedResourceRevision: state.settings.resourceRevision,
+    });
+    for (const pool of state.pools) await complete(live, planId, pool.id);
+    await send({ kind: 'drawFinals' });
+
+    state = await live.state(planId);
+    const pool = state.pools[0]!;
+    const [first, second] = pool.order!;
+    const source = state.matches.find(
+      (match) =>
+        match.poolId === pool.id &&
+        [match.player1Id, match.player2Id].includes(first!) &&
+        [match.player1Id, match.player2Id].includes(second!),
+    )!;
+    const slot = state.matches.find(
+      (match) =>
+        match.bracketId &&
+        match.status === 'ready' &&
+        [match.player1Id, match.player2Id].includes(first!),
+    )!;
+    const reorder = async () =>
+      send({
+        kind: 'queueMove',
+        matchId: slot.id,
+        beforeMatchId: null,
+        expectedQueueRevision: (await live.state(planId)).settings.queueRevision ?? 0,
+      });
+    const reportingUpdates = async (count: number) => {
+      const start = (await live.state(planId)).settings.reportingRevision;
+      for (let offset = 0; offset < count; offset++)
+        await send({
+          kind: 'reporting',
+          published: offset % 2 === 0,
+          playerReports: true,
+          mode: 'to_review',
+          expectedRevision: start + offset,
+        });
+    };
+    await reorder();
+    const latest = () => nativeEventHistory(live, cluster.db, planId, undefined, 1);
+    const [original] = (await latest()).entries;
+    expect(original).toMatchObject({ title: 'TO queue reordered', matchId: slot.id });
+    expect(original!.summary).toMatch(/Player \d+ vs Player \d+/);
+    expect(original!.summary).not.toContain('Entrant');
+
+    await reportingUpdates(20);
+    await send({
+      kind: 'score',
+      matchId: source.id,
+      expectedRevision: source.revision,
+      outcome: 'played',
+      score1: source.score2,
+      score2: source.score1,
+    });
+    const updated = (await live.state(planId)).matches.find((match) => match.id === slot.id)!;
+    expect([updated.player1Id, updated.player2Id]).not.toEqual([slot.player1Id, slot.player2Id]);
+    expect(updated.status).toBe('ready');
+    await reorder();
+    const [changed] = (await latest()).entries;
+    expect(changed).toMatchObject({ title: 'TO queue reordered', matchId: slot.id });
+    expect(changed!.summary).not.toBe(original!.summary);
+
+    await reportingUpdates(100);
+    await reorder();
+    const [recent] = (await latest()).entries;
+    expect(recent!.summary).toBe(changed!.summary);
+    await send({ kind: 'resetFinals', revisionToken: finalsToken(await live.state(planId)) });
+    const saved = await live.state(planId);
+    expect(saved.matches.some((match) => match.id === slot.id)).toBe(false);
+    expect((await nativeEventHistory(live, cluster.db, planId, undefined, 2)).entries[1]).toEqual(
+      recent,
+    );
+
+    const stream = nativeStream(planId);
+    const storeRows = () =>
+      cluster.pool.query<{ id: number; name: string }>(
+        'select id, name from native_act.events where stream=$1 order by id',
+        [stream],
+      );
+    const stored = (await storeRows()).rows;
+    const historyId = (id: string) => Number(id.replace('act:', ''));
+    const stale = stored.find(
+      (row) =>
+        row.name === '__snapshot__' &&
+        row.id > historyId(original!.id) &&
+        row.id < historyId(changed!.id),
+    );
+    expect(stale).toBeDefined();
+    await cluster.pool.query(
+      'delete from native_act.events where stream=$1 and name=$2 and id>$3',
+      [stream, '__snapshot__', stale!.id],
+    );
+    const capped = await nativeEventHistory(live, cluster.db, planId, undefined, 2);
+    expect(capped.entries[1]).toEqual({ ...recent, summary: 'Match' });
+    await cluster.pool.query('delete from native_act.events where stream=$1 and name=$2', [
+      stream,
+      '__snapshot__',
+    ]);
+    const cold = await runtime();
+    expect(await cold.replay(planId)).toEqual(saved);
+    const firstPage = await nativeEventHistory(cold, cluster.db, planId, undefined, 2);
+    expect(firstPage.entries[0]?.title).toBe('Unplayed finals reset');
+    expect(firstPage.entries[1]).toEqual({ ...recent, summary: 'Match' });
+    const recovered: typeof firstPage.entries = [];
+    let cursor = firstPage.nextCursor;
+    while (cursor) {
+      const page = await nativeEventHistory(cold, cluster.db, planId, cursor, 9);
+      recovered.push(...page.entries.filter((entry) => entry.title === 'TO queue reordered'));
+      cursor = page.nextCursor;
+    }
+    expect(recovered).toEqual([changed, original]);
+    await cluster.db
+      .update(players)
+      .set({ displayName: 'Current public alias' })
+      .where(eq(players.id, slot.player1Id!));
+    const renamed = await nativeEventHistory(
+      cold,
+      cluster.db,
+      planId,
+      { source: 'act', before: historyId(original!.id) + 1 },
+      1,
+    );
+    expect(renamed.entries[0]?.id).toBe(original!.id);
+    expect(renamed.entries[0]?.summary).toContain('Current public alias');
+    expect((await storeRows()).rows).toEqual(stored.filter((row) => row.name !== '__snapshot__'));
   });
 
   it('corrects played pool games without rewriting the automatic order or finals after play', async () => {

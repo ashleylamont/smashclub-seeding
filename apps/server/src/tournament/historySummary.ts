@@ -1,4 +1,5 @@
 import type { TournamentDecision, TournamentState } from './schemas';
+import { publicEntrantName } from './entrants';
 import { matchNames } from './matchNames';
 
 export type HistoryCategory =
@@ -9,46 +10,48 @@ export type HistoryDescription = {
   summary: string;
   matchId: string | null;
 };
+export type HistoryContext = Partial<
+  Pick<TournamentState, 'entrants' | 'matches' | 'brackets' | 'reports' | 'stations' | 'settings'>
+>;
 
 function decisionContext(
   decision: TournamentDecision,
-  state: TournamentState,
-  playerName?: (id: string | null) => string | undefined,
+  context: HistoryContext,
+  playerName: (id: string) => string | undefined,
 ) {
   const command = decision.command;
   const report =
     command.kind === 'review'
-      ? (decision.after.reports ?? state.reports).find((item) => item.id === command.reportId)
+      ? context.reports?.find((item) => item.id === command.reportId)
       : undefined;
   const matchId = 'matchId' in command ? command.matchId : (report?.matchId ?? null);
-  const match = (decision.after.matches ?? state.matches).find((item) => item.id === matchId);
-  const labels = matchNames({
-    matches: decision.after.matches ?? state.matches,
-    brackets: decision.after.brackets ?? state.brackets,
-  });
-  const player = (id: string | null) =>
-    state.entrants.find((item) => item.playerId === id)?.name ??
-    state.baseline?.entrants.find((item) => item.playerId === id)?.name ??
-    playerName?.(id) ??
-    'Player';
+  const matches = context.matches ?? [];
+  const match = matchId ? matches.find((item) => item.id === matchId) : undefined;
+  const player = (id: string | null) => {
+    if (!id) return 'Player';
+    const entrant = context.entrants?.find((item) => item.playerId === id);
+    return entrant?.memberPlayerIds
+      ? publicEntrantName(entrant, playerName)
+      : (playerName(id) ?? 'Player');
+  };
   const pairing = match
-    ? `${labels.get(match.id) ?? match.label}: ${player(match.player1Id)} vs ${player(match.player2Id)}`
+    ? `${matchNames({ matches, brackets: context.brackets ?? [] }).get(match.id) ?? match.label}: ${player(match.player1Id)} vs ${player(match.player2Id)}`
     : 'Match';
   const station = (id: string | null) =>
     id
-      ? (state.stations.find((item) => item.id === id)?.name ?? 'Recorded station')
+      ? (context.stations?.find((item) => item.id === id)?.name ?? 'Recorded station')
       : 'No station assigned';
   return { command, report, matchId, player, pairing, station };
 }
 
 export function describeDecision(
   decision: TournamentDecision,
-  state: TournamentState,
-  playerName?: (id: string | null) => string | undefined,
+  context: HistoryContext,
+  playerName: (id: string) => string | undefined,
 ): HistoryDescription {
   const { command, report, matchId, player, pairing, station } = decisionContext(
     decision,
-    state,
+    context,
     playerName,
   );
   const result = (
@@ -66,7 +69,7 @@ export function describeDecision(
     summary,
     matchId,
   });
-  const dispatch = describeDispatchCommand(command, state, pairing, station);
+  const dispatch = describeDispatchCommand(command, context, pairing, station);
   if (command.kind === 'broadcastSides')
     return description(
       'broadcast',
@@ -144,7 +147,7 @@ export function describeDecision(
         'settings',
         command.name ? 'Station saved' : 'Station removed',
         command.name ??
-          state.stations.find((station) => station.id === command.id)?.name ??
+          context.stations?.find((station) => station.id === command.id)?.name ??
           'Station',
       );
     case 'resources':
@@ -204,23 +207,24 @@ export function describeDecision(
 
 function describeDispatchCommand(
   command: TournamentDecision['command'],
-  state: TournamentState,
+  context: HistoryContext,
   pairing: string,
   station: (id: string | null) => string,
 ) {
   switch (command.kind) {
-    case 'dispatch':
+    case 'dispatch': {
+      const implicitCall = !command.stationId && command.callOnly === undefined;
       return {
         category: 'matches' as const,
         title:
-          command.callOnly ||
-          (state.settings.dispatchMode === 'shared' &&
-            !command.stationId &&
-            command.callOnly !== false)
-            ? 'Match called'
-            : 'Match started',
+          implicitCall && !context.settings
+            ? 'Match dispatch recorded'
+            : command.callOnly || (implicitCall && context.settings?.dispatchMode === 'shared')
+              ? 'Match called'
+              : 'Match started',
         summary: `${pairing} · ${station(command.stationId)}${command.callLocation ? ` · ${command.callLocation}` : ''}`,
       };
+    }
     case 'beginPlay':
       return { category: 'matches' as const, title: 'Called match started', summary: pairing };
     case 'configureDispatch':

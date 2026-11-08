@@ -1,4 +1,5 @@
 import { publicPlayerName } from '@smashclub/shared';
+import { SNAP_EVENT } from '@rotorsoft/act';
 import { eq } from 'drizzle-orm';
 import {
   nativeLiveHandoffs,
@@ -8,9 +9,9 @@ import {
   type eventMatchAudit,
   type eventAttendanceAudit,
 } from '@smashclub/db';
-import type { NativeRuntime } from './runtime';
-import { Baseline, Decision, LiveState } from './schemas';
-import { describeDecision, type HistoryCategory } from './historySummary';
+import { nativeStream, type NativeRuntime } from './runtime';
+import { Baseline, Decision, LiveState, type TournamentBaseline } from './schemas';
+import { describeDecision, type HistoryCategory, type HistoryContext } from './historySummary';
 
 export type HistoryCursor = { source: 'act' | 'imported'; before: number };
 export type HistoryEntry = {
@@ -30,6 +31,75 @@ type ImportedAudit = {
   legacyAudit?: (typeof eventMatchAudit.$inferSelect)[];
   legacyAttendance?: (typeof eventAttendanceAudit.$inferSelect)[];
 };
+
+const decisionNames = [
+  'DecisionRecordedV1',
+  'DecisionRecordedV2',
+  'DecisionRecordedV3',
+  'DecisionRecordedV4',
+  'DecisionRecordedV5',
+  'DecisionRecordedV6',
+  'ResultsSealedV1',
+  'PlanRetiredV1',
+];
+const historyNames = [
+  'BaselineCapturedV1',
+  'LegacyStateImportedV1',
+  ...decisionNames,
+  'PublicationRecordedV1',
+];
+const isOrigin = (name: string) =>
+  name === 'BaselineCapturedV1' || name === 'LegacyStateImportedV1';
+const maxContextEvents = 100;
+
+function updateContext(context: HistoryContext, after: HistoryContext): HistoryContext {
+  const {
+    entrants = context.entrants,
+    matches = context.matches,
+    brackets = context.brackets,
+    reports = context.reports,
+    stations = context.stations,
+    settings = context.settings,
+  } = after;
+  return { entrants, matches, brackets, reports, stations, settings };
+}
+
+function baselineContext(baseline: TournamentBaseline): HistoryContext {
+  return updateContext({}, { ...baseline, brackets: baseline.brackets ?? [], reports: [] });
+}
+
+async function contextBefore(runtime: NativeRuntime, stream: string, before: number) {
+  const query = { stream, stream_exact: true, before, backward: true, with_pii: false };
+  const [checkpoint] = await runtime.app.query_array({
+    ...query,
+    // An explicit after bound bypasses Act's newest-checkpoint floor for older pages.
+    after: -1,
+    with_snaps: true,
+    names: [SNAP_EVENT],
+    limit: 1,
+  });
+  const parsed = LiveState.safeParse(
+    (checkpoint?.data as { current?: unknown[] } | undefined)?.current?.[0],
+  );
+  const seed = checkpoint && parsed.success ? { id: checkpoint.id, state: parsed.data } : null;
+  const prefix = await runtime.app.query_array({
+    ...query,
+    after: seed?.id ?? -1,
+    names: historyNames,
+    limit: maxContextEvents,
+  });
+  // A full window may have omitted intervening facts. Only use fields actually
+  // recovered in that window, never stale checkpoint fields or the current draw.
+  let context = seed && prefix.length < maxContextEvents ? updateContext({}, seed.state) : {};
+  for (const event of prefix.reverse()) {
+    if (event.name === 'BaselineCapturedV1') context = baselineContext(Baseline.parse(event.data));
+    else if (event.name === 'LegacyStateImportedV1')
+      context = updateContext({}, LiveState.parse(event.data));
+    else if (decisionNames.includes(event.name))
+      context = updateContext(context, Decision.parse(event.data).after);
+  }
+  return context;
+}
 
 /** Exact stream, newest first, no snapshots or full-state payloads in the response. */
 export async function nativeEventHistory(
@@ -51,7 +121,15 @@ export async function nativeEventHistory(
     ]),
   );
   const playerNames = new Map(
-    (await db.select().from(players)).map((player) => [player.id, publicPlayerName(player)]),
+    (
+      await db
+        .select({
+          id: players.id,
+          displayName: players.displayName,
+          canonicalName: players.canonicalName,
+        })
+        .from(players)
+    ).map((player) => [player.id, publicPlayerName(player)]),
   );
   const imported = handoff.baseline as ImportedAudit;
   const legacy = [...(imported.legacyAudit ?? []), ...(imported.legacyAttendance ?? [])].sort(
@@ -89,29 +167,22 @@ export async function nativeEventHistory(
       nextCursor: start ? { source: 'imported' as const, before: start } : null,
     };
   }
-  const state = await runtime.state(planId);
+  const stream = nativeStream(planId);
   const events = await runtime.app.query_array({
-    stream: `native:${planId}`,
+    stream,
     stream_exact: true,
     after: -1,
     before: cursor?.before,
     backward: true,
     limit: limit + 1,
-    names: [
-      'BaselineCapturedV1',
-      'LegacyStateImportedV1',
-      'DecisionRecordedV1',
-      'DecisionRecordedV2',
-      'DecisionRecordedV3',
-      'DecisionRecordedV4',
-      'DecisionRecordedV5',
-      'DecisionRecordedV6',
-      'ResultsSealedV1',
-      'PlanRetiredV1',
-      'PublicationRecordedV1',
-    ],
+    names: historyNames,
   });
-  const entries = events.slice(0, limit).map((event): HistoryEntry => {
+  const page = events.slice(0, limit);
+  const oldest = page.at(-1);
+  let context =
+    oldest && !isOrigin(oldest.name) ? await contextBefore(runtime, stream, oldest.id) : {};
+  page.reverse();
+  const entries = page.map((event): HistoryEntry => {
     const actor = event.meta.causation.action?.actor;
     const common = {
       id: `act:${event.id}`,
@@ -119,20 +190,12 @@ export async function nativeEventHistory(
       version: event.version,
       at: event.created.toISOString(),
     };
-    if (
-      event.name === 'DecisionRecordedV1' ||
-      event.name === 'DecisionRecordedV2' ||
-      event.name === 'DecisionRecordedV3' ||
-      event.name === 'DecisionRecordedV4' ||
-      event.name === 'DecisionRecordedV5' ||
-      event.name === 'DecisionRecordedV6' ||
-      event.name === 'ResultsSealedV1' ||
-      event.name === 'PlanRetiredV1'
-    ) {
+    if (decisionNames.includes(event.name)) {
       const decision = Decision.parse(event.data);
+      context = updateContext(context, decision.after);
       return {
         ...common,
-        ...describeDecision(decision, state, (id) => (id ? playerNames.get(id) : undefined)),
+        ...describeDecision(decision, context, (id) => playerNames.get(id)),
         actor: actor?.name ?? names.get(decision.actorId) ?? 'Former participant',
         source: decision.source,
         details: {
@@ -158,7 +221,9 @@ export async function nativeEventHistory(
       };
     }
     const migrated = event.name === 'LegacyStateImportedV1';
-    const baseline = migrated ? LiveState.parse(event.data).baseline! : Baseline.parse(event.data);
+    const importedState = migrated ? LiveState.parse(event.data) : undefined;
+    const baseline = importedState?.baseline ?? Baseline.parse(event.data);
+    context = importedState ? updateContext({}, importedState) : baselineContext(baseline);
     return {
       ...common,
       actor: names.get(baseline.capturedBy) ?? 'Automatic migration',
@@ -174,6 +239,7 @@ export async function nativeEventHistory(
       },
     };
   });
+  entries.reverse();
   const nextCursor: HistoryCursor | null =
     events.length > limit
       ? { source: 'act', before: events[limit - 1]!.id }

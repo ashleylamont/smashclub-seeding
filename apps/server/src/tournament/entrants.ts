@@ -83,11 +83,16 @@ export function publicEntrantNames(
     if (e.memberPlayerIds)
       names.set(
         e.playerId,
-        `${e.teamName ? `${e.teamName} (` : ''}${memberIds(e)
-          .map((id) => names.get(id) ?? 'Player')
-          .join(' / ')}${e.teamName ? ')' : ''}`,
+        publicEntrantName(e, (id) => names.get(id)),
       );
   return names;
+}
+
+export function publicEntrantName(e: Entrant, playerName: (id: string) => string | undefined) {
+  const members = memberIds(e)
+    .map((id) => playerName(id) ?? 'Player')
+    .join(' / ');
+  return e.teamName ? `${e.teamName} (${members})` : members;
 }
 export type MemberView = {
   entrantId: string;
