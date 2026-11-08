@@ -1,4 +1,5 @@
 import {
+  isNativeRoundRobin,
   liveBracketFeeds,
   liveBracketLanes,
   liveBracketRound,
@@ -20,7 +21,7 @@ export function progressInterval(search: string) {
 }
 export type ProgressData = {
   publicCode?: number;
-  plan: { id: string; name: string; status: string; structure?: string };
+  plan: { id: string; name: string; status: string; bracketMode?: string; structure?: string };
   matches: LiveMatch[];
   nativeBrackets: NativeBracketView[];
   linkedBrackets?: LinkedBracket[];
@@ -36,6 +37,14 @@ type LinkedBracket = {
 };
 export type ProgressPage =
   | { kind: 'pool'; key: string; pool: Pool; players: Pool['players']; part: number; parts: number }
+  | {
+      kind: 'round-robin-results';
+      key: string;
+      standings: Bracket['standings'];
+      winnerId: Bracket['winnerId'];
+      part: number;
+      parts: number;
+    }
   | {
       kind: 'bracket';
       key: string;
@@ -105,6 +114,25 @@ function laneWindows(lane: ReturnType<typeof liveBracketLanes>[number]) {
 
 export function broadcastProgressPages(data: ProgressData): ProgressPage[] {
   const pages: ProgressPage[] = [];
+  const roundRobin = isNativeRoundRobin(data.plan);
+  if (roundRobin) {
+    const result = data.nativeBrackets.find(
+      (bracket) => bracket.division === 'upper' && bracket.stage === 'main' && bracket.complete,
+    );
+    if (result) {
+      const parts = chunks(result.standings, 6);
+      parts.forEach((standings, index) => {
+        pages.push({
+          kind: 'round-robin-results',
+          key: `round-robin-results:${result.id}:${index}`,
+          standings,
+          winnerId: result.winnerId,
+          part: index + 1,
+          parts: parts.length,
+        });
+      });
+    }
+  }
   for (const pool of poolStandings(data.matches).sort(
     (a, b) => a.division.localeCompare(b.division) || a.poolIndex - b.poolIndex,
   )) {
@@ -120,7 +148,7 @@ export function broadcastProgressPages(data: ProgressData): ProgressPage[] {
       }),
     );
   }
-  for (const bracket of data.nativeBrackets) {
+  for (const bracket of roundRobin ? [] : data.nativeBrackets) {
     const lanes = liveBracketLanes(data.matches.filter((m) => m.nativeBracketId === bracket.id));
     if (!lanes.length) lanes.push({ key: 'winners', title: '', matches: [] });
     for (const lane of lanes) {
