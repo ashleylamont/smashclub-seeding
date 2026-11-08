@@ -1,7 +1,17 @@
 import { knockoutMatchName } from '@smashclub/tournament-formats';
 import type { Match, TournamentState } from './schemas';
 
-type Draw = Pick<TournamentState, 'matches' | 'brackets'>;
+type DrawMatch = Pick<
+  Match,
+  'id' | 'bracketId' | 'stage' | 'round' | 'slot' | 'bracketRound' | 'bracketLane' | 'label'
+>;
+type Draw = {
+  matches: readonly DrawMatch[];
+  brackets: readonly Pick<
+    TournamentState['brackets'][number],
+    'id' | 'entrantIds' | 'division' | 'stage'
+  >[];
+};
 type ProjectedMatchLabel = { label: string; labelFromStructure?: true };
 
 /** Presentation only: never rename stored facts, source keys, links or receipts.
@@ -12,7 +22,7 @@ export function projectMatchLabels(draw: Draw): Map<string, ProjectedMatchLabel>
   const brackets = draw.brackets.filter((bracket) => bracket.entrantIds.length);
   const divisions = new Set(brackets.map((bracket) => bracket.division));
   const stages = new Set(brackets.map((bracket) => bracket.stage));
-  const byBracket = new Map<string, Match[]>();
+  const byBracket = new Map<string, DrawMatch[]>();
   for (const match of draw.matches) {
     if (!match.bracketId || match.stage === 'group') continue;
     const group = byBracket.get(match.bracketId) ?? [];

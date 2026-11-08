@@ -24,6 +24,7 @@ import { charactersByPlayer, charactersForPlayer } from '../../players/character
 import { loadRecap } from '../../recap/recap';
 import { loadEventOverview } from '../../events/overview';
 import { nativeHistory } from '../../events/nativeHistory';
+import { legacyNativeArchiveLabels } from '../../events/legacyNativeArchiveLabels';
 import { headToHeadInput, readHeadToHead } from '../../events/headToHead';
 import { publicProcedure, router } from '../trpc';
 
@@ -393,6 +394,7 @@ export const publicRouter = router({
         // did while `suggested_play_order` was never populated) is bracket
         // *creation* order: the whole winners side, then the whole losers side.
         .orderBy(asc(sets.suggestedPlayOrder), asc(sets.completedAt), asc(sets.challongeMatchId));
+      const archiveLabels = await legacyNativeArchiveLabels(ctx.db, tournament, setRows);
 
       return {
         id: tournament.id,
@@ -428,6 +430,7 @@ export const publicRouter = router({
               (a.challongeSeed ?? 1e9) - (b.challongeSeed ?? 1e9),
           ),
         sets: setRows.map((row) => {
+          const displayLabel = archiveLabels.get(row.id);
           const unplayedOutcome = unplayedResultOutcome(row.scoresCsv, row.raw);
           const excludedByResultsMode = !includesResultStage(
             tournament.resultsMode,
@@ -437,6 +440,7 @@ export const publicRouter = router({
             id: row.id,
             round: row.round,
             identifier: row.identifier,
+            ...(displayLabel && { displayLabel }),
             ...(hasSupersededAdvancement(row.raw)
               ? { advancementDisposition: 'superseded' as const }
               : {}),

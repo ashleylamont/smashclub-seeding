@@ -120,6 +120,10 @@
   --table-min: 720px;
 }
 
+.sets-table .set-structural-label {
+  white-space: nowrap;
+}
+
 .history-stage-filter {
   display: inline-flex;
   align-items: center;
