@@ -16,9 +16,27 @@ type Input = {
   playerId: string;
   division?: 'upper' | 'lower';
   reason?: string;
-  acknowledgeExternalChange?: boolean;
-  approveRedistribution?: boolean;
 };
+
+type AttendanceReview = {
+  result: Preview;
+  input: Input;
+  externalAcknowledged: boolean;
+  redistributionApproved: boolean;
+};
+
+function canApplyAttendance({
+  result,
+  input,
+  externalAcknowledged,
+  redistributionApproved,
+}: AttendanceReview) {
+  return (
+    result.allowed &&
+    (!result.requiresExternalAcknowledgement || externalAcknowledged) &&
+    (input.action !== 'redistribute' || redistributionApproved)
+  );
+}
 
 export function AttendanceControls({
   planId,
@@ -38,9 +56,7 @@ export function AttendanceControls({
   const [playerId, setPlayerId] = useState('');
   const [division, setDivision] = useState<'upper' | 'lower'>('upper');
   const [reason, setReason] = useState('');
-  const [ack, setAck] = useState(false);
-  const [approve, setApprove] = useState(false);
-  const [preview, setPreview] = useState<{ result: Preview; input: Input } | null>(null);
+  const [preview, setPreview] = useState<AttendanceReview | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -51,7 +67,6 @@ export function AttendanceControls({
   });
   const changed = () => {
     setPreview(null);
-    setApprove(false);
     setMessage('');
     setError('');
   };
@@ -62,14 +77,19 @@ export function AttendanceControls({
       action,
       playerId,
       reason,
-      acknowledgeExternalChange: ack,
       ...(action === 'add' ? { division } : {}),
     };
+    setPreview(null);
     setBusy(true);
     setError('');
     setMessage('');
     try {
-      setPreview({ input, result: await trpc.eventOps.previewAttendance.query(input) });
+      setPreview({
+        input,
+        result: await trpc.eventOps.previewAttendance.query(input),
+        externalAcknowledged: false,
+        redistributionApproved: false,
+      });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not preview change');
     } finally {
@@ -77,17 +97,19 @@ export function AttendanceControls({
     }
   };
   const apply = async () => {
-    if (!preview) return;
+    if (!preview || busy || disabled || !canApplyAttendance(preview)) return;
     setBusy(true);
     setError('');
     try {
       await trpc.eventOps.applyAttendance.mutate({
         ...preview.input,
-        approveRedistribution: approve,
+        ...(preview.result.requiresExternalAcknowledgement && {
+          acknowledgeExternalChange: preview.externalAcknowledged,
+        }),
+        approveRedistribution: preview.redistributionApproved,
         revisionToken: preview.result.revisionToken,
       });
       setPreview(null);
-      setApprove(false);
       setPlayerId('');
       setMessage(
         action === 'restore'
@@ -210,18 +232,6 @@ export function AttendanceControls({
             required={action === 'restore'}
           />
         </label>
-        {action !== 'restore' && (
-          <label className="ops-check">
-            <Checkbox
-              checked={ack}
-              onCheckedChange={(nextChecked) => {
-                setAck(nextChecked);
-                changed();
-              }}
-            />{' '}
-            I have reconciled the attendance change in any attached Challonge bracket.
-          </label>
-        )}
         <Button
           type="submit"
           disabled={!playerId || (action === 'restore' && !reason.trim())}
@@ -232,74 +242,14 @@ export function AttendanceControls({
       </fieldset>
       {search.isError && <p role="alert">{search.error.message}</p>}
       {preview && (
-        <div className="ops-attendance-preview">
-          <h4>Change preview</h4>
-          {preview.input.action === 'add' && preview.result.poolIndex !== null && (
-            <p>
-              Automatic placement: {preview.result.division} · Pool{' '}
-              {String.fromCharCode(65 + preview.result.poolIndex)}
-            </p>
-          )}
-          <p>
-            {preview.result.addedMatches} new match(es) · {preview.result.affectedMatches.length}{' '}
-            affected existing match(es)
-          </p>
-          {preview.result.issues.map((issue) => (
-            <p className="error-text" key={issue}>
-              {issue}
-            </p>
-          ))}
-          {preview.result.warnings.map((warning) => (
-            <p className="muted" key={warning}>
-              {warning}
-            </p>
-          ))}
-          {preview.result.restoration && (
-            <RestorationConsequences impact={preview.result.restoration} />
-          )}
-          {preview.input.action !== 'restore' && preview.result.affectedMatches.length > 0 && (
-            <ul>
-              {preview.result.affectedMatches.map((match) => (
-                <li key={match.id}>
-                  {match.label} · {match.status}
-                </li>
-              ))}
-            </ul>
-          )}
-          {preview.result.relocations.length > 0 && (
-            <ul>
-              {preview.result.relocations.map((move) => (
-                <li key={move.playerId}>
-                  {data.entrants.find((p) => p.id === move.playerId)?.name ?? 'Player'}: Pool{' '}
-                  {String.fromCharCode(65 + move.fromPoolIndex)} → Pool{' '}
-                  {String.fromCharCode(65 + move.toPoolIndex)}
-                </li>
-              ))}
-            </ul>
-          )}
-          {preview.result.requiresRedistributionApproval && (
-            <label className="ops-check">
-              <Checkbox checked={approve} onCheckedChange={setApprove} /> I approve moving these
-              players out of the two-player pool.
-              {preview.input.action === 'no_show'
-                ? ' Leave unchecked to remove the no-show and keep the two-player pool for now.'
-                : ''}
-            </label>
-          )}
-          <Button
-            variant="primary"
-            type="submit"
-            disabled={
-              busy ||
-              disabled ||
-              !preview.result.allowed ||
-              (preview.input.action === 'redistribute' && !approve)
-            }
-            onClick={() => void apply()}
-          >
-            Apply this change
-          </Button>
-        </div>
+        <AttendancePreviewPanel
+          preview={preview}
+          entrants={data.entrants}
+          disabled={busy || disabled}
+          onAcknowledge={(externalAcknowledged) => setPreview({ ...preview, externalAcknowledged })}
+          onApprove={(redistributionApproved) => setPreview({ ...preview, redistributionApproved })}
+          onApply={() => void apply()}
+        />
       )}
       {error && (
         <p className="error-text" role="alert">
@@ -313,6 +263,102 @@ export function AttendanceControls({
         </div>
       )}
     </section>
+  );
+}
+
+function AttendancePreviewPanel({
+  preview,
+  entrants,
+  disabled,
+  onAcknowledge,
+  onApprove,
+  onApply,
+}: {
+  preview: AttendanceReview;
+  entrants: Overview['entrants'];
+  disabled: boolean;
+  onAcknowledge: (checked: boolean) => void;
+  onApprove: (checked: boolean) => void;
+  onApply: () => void;
+}) {
+  return (
+    <div className="ops-attendance-preview">
+      <h4>Change preview</h4>
+      {preview.input.action === 'add' && preview.result.poolIndex !== null && (
+        <p>
+          Automatic placement: {preview.result.division} · Pool{' '}
+          {String.fromCharCode(65 + preview.result.poolIndex)}
+        </p>
+      )}
+      <p>
+        {preview.result.addedMatches} new match(es) · {preview.result.affectedMatches.length}{' '}
+        affected existing match(es)
+      </p>
+      {preview.result.issues.map((issue) => (
+        <p className="error-text" key={issue}>
+          {issue}
+        </p>
+      ))}
+      {preview.result.warnings.map((warning) => (
+        <p className="muted" key={warning}>
+          {warning}
+        </p>
+      ))}
+      {preview.result.restoration && (
+        <RestorationConsequences impact={preview.result.restoration} />
+      )}
+      {preview.input.action !== 'restore' && preview.result.affectedMatches.length > 0 && (
+        <ul>
+          {preview.result.affectedMatches.map((match) => (
+            <li key={match.id}>
+              {match.label} · {match.status}
+            </li>
+          ))}
+        </ul>
+      )}
+      {preview.result.relocations.length > 0 && (
+        <ul>
+          {preview.result.relocations.map((move) => (
+            <li key={move.playerId}>
+              {entrants.find((p) => p.id === move.playerId)?.name ?? 'Player'}: Pool{' '}
+              {String.fromCharCode(65 + move.fromPoolIndex)} → Pool{' '}
+              {String.fromCharCode(65 + move.toPoolIndex)}
+            </li>
+          ))}
+        </ul>
+      )}
+      {preview.result.requiresExternalAcknowledgement && (
+        <label className="ops-check">
+          <Checkbox
+            checked={preview.externalAcknowledged}
+            disabled={disabled || !preview.result.allowed}
+            onCheckedChange={onAcknowledge}
+          />{' '}
+          I reconciled this attendance change in the linked Challonge bracket.
+        </label>
+      )}
+      {preview.result.requiresRedistributionApproval && (
+        <label className="ops-check">
+          <Checkbox
+            checked={preview.redistributionApproved}
+            disabled={disabled || !preview.result.allowed}
+            onCheckedChange={onApprove}
+          />{' '}
+          I approve moving these players out of the two-player pool.
+          {preview.input.action === 'no_show'
+            ? ' Leave unchecked to remove the no-show and keep the two-player pool for now.'
+            : ''}
+        </label>
+      )}
+      <Button
+        variant="primary"
+        type="submit"
+        disabled={disabled || !canApplyAttendance(preview)}
+        onClick={onApply}
+      >
+        Apply this change
+      </Button>
+    </div>
   );
 }
 
