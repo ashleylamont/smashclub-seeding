@@ -2,6 +2,16 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.4.1
+
+### Patch Changes
+
+- 8 November 2026 · **Fix** · **Fixed** · Require a fresh organiser preview before removing a changed finals draw. [#254](https://github.com/ashleylamont/smashclub-seeding/pull/254) · [build 95b2b39](https://github.com/ashleylamont/smashclub-seeding/commit/95b2b3938ac35e3e6302a1f6931d1d588c2e9676)
+
+  Returning a call still refreshes the removal controls for the same draw. If another organiser removes or redraws any of those finals, preview the current draw before removing it.
+
+- 8 November 2026 · **Fix** · **Fix** — Closed events show recorded scores and match history without presenting unfinished sets as live or directing players to station calls. [#251](https://github.com/ashleylamont/smashclub-seeding/pull/251) · [build 915798c](https://github.com/ashleylamont/smashclub-seeding/commit/915798c13721a4a29551c5c1b72f593fc5608f36)
+
 ## 0.4.0
 
 ### Minor Changes
