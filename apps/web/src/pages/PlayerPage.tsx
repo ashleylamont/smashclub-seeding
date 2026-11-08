@@ -1,5 +1,4 @@
 import { Select, SelectItem } from '../components/ui/Select';
-import { Button } from '../components/ui/Button';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
@@ -17,7 +16,7 @@ import { trpc } from '../lib/trpc';
 import type { PlayerData, PlayerEventView } from '../lib/apiTypes';
 import { CharacterIcons } from '../components/CharacterIcons';
 import { PlayerRatingNight } from '../components/PlayerRatingNight';
-import { WhrResultImpact } from '../components/WhrResultImpact';
+import { PlayerMatchLog } from '../components/PlayerMatchLog';
 import { InfoTip } from '../components/InfoTip';
 import { formatDate, tierClass } from '../lib/format';
 import './PlayerPage.css';
@@ -50,7 +49,6 @@ export function PlayerPage() {
 
 function PlayerProfile({ data }: { data: PlayerData }) {
   const { player, rating, nights, recomputeId } = data;
-  const [impactSetId, setImpactSetId] = useState<string | null>(null);
   // The server types these rows loosely (Record<string, unknown>); see PlayerEventView.
   const events = data.events as unknown as PlayerEventView[];
   const chartData = useMemo(() => {
@@ -436,106 +434,21 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         {events.length > 0 && (
           <p className="muted chart-caption">
             {recomputeId
-              ? 'WHR fits whole nights. Open WHR impact to see how one set affected that night’s estimate.'
+              ? 'Each WHR impact compares that night’s skill estimate with and without one set. These estimates are approximate and don’t add up to the night’s change.'
               : 'WHR fits whole nights. Individual sets have no exact rating delta.'}
           </p>
         )}
         {events.length === 0 ? (
           <p className="muted">No match history available for this player.</p>
         ) : (
-          <div
-            className="match-history-scroll table-scroll"
-            role="region"
-            aria-label="Match results"
-            tabIndex={0}
-          >
-            <table className="match-table data-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Event</th>
-                  <th>Stage</th>
-                  <th>Opponent</th>
-                  <th>Result</th>
-                  <th
-                    className="num"
-                    title="Evidence strength in the WHR fit; not a points multiplier"
-                  >
-                    Evidence
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {tableEvents.map((event) => {
-                  return (
-                    <tr
-                      key={event.seq}
-                      className={event.isDecay ? 'decay' : event.won ? 'win' : 'loss'}
-                    >
-                      <td className="mono">{formatDate(event.tournamentDate)}</td>
-                      <td>
-                        {event.tournamentName}
-                        {event.isRookie && (
-                          <span className="chip chip-warning rookie-chip">rookie</span>
-                        )}
-                        {recomputeId && event.setId && !event.isDecay && event.won != null && (
-                          <div className="whr-impact-action">
-                            <Button
-                              size="small"
-                              aria-label={`WHR impact for ${event.tournamentName} against ${event.opponentName ?? 'this opponent'}`}
-                              onClick={(e) => {
-                                e.currentTarget.focus();
-                                setImpactSetId(event.setId);
-                              }}
-                            >
-                              WHR impact
-                            </Button>
-                          </div>
-                        )}
-                      </td>
-                      <td>
-                        {event.isDecay ? '—' : event.resultStage === 'group' ? 'Pool' : 'Bracket'}
-                      </td>
-                      <td>
-                        {event.isDecay ? (
-                          <em>Inactivity decay</em>
-                        ) : event.opponentPlayerId ? (
-                          <Link
-                            to="/players/$playerId"
-                            params={{ playerId: event.opponentPlayerId }}
-                          >
-                            {event.opponentName ?? 'Unknown'}
-                          </Link>
-                        ) : (
-                          (event.opponentName ?? 'Unknown')
-                        )}
-                      </td>
-                      <td
-                        className={
-                          event.isDecay ? 'result-decay' : event.won ? 'result-win' : 'result-loss'
-                        }
-                      >
-                        {event.isDecay ? '—' : event.won ? 'W' : 'L'}
-                      </td>
-                      <td className="num">
-                        {event.weight == null ? '—' : `×${event.weight.toFixed(1)}`}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <PlayerMatchLog
+            key={player.id}
+            playerId={player.id}
+            recomputeId={recomputeId}
+            events={tableEvents}
+          />
         )}
       </section>
-      {recomputeId && impactSetId && (
-        <WhrResultImpact
-          playerId={player.id}
-          setId={impactSetId}
-          recomputeId={recomputeId}
-          onClose={() => setImpactSetId(null)}
-        />
-      )}
     </div>
   );
 }

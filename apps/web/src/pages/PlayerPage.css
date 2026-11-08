@@ -176,13 +176,10 @@
   white-space: nowrap;
 }
 
-.whr-impact-action {
-  margin-block-start: var(--s2);
-}
-
-.whr-impact-details {
-  display: grid;
-  gap: var(--s2);
+.whr-impact-value {
+  display: block;
+  color: var(--text-soft);
+  font-size: var(--fs-xs);
 }
 
 /*
