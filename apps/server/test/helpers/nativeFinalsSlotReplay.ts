@@ -111,6 +111,13 @@ export function nativeFinalsSlotReplayFixture(
     doubles = false,
     consolationBye = false,
     substituteBeforePlay = false,
+    beforePoolPlay,
+  }: {
+    consolation?: boolean;
+    doubles?: boolean;
+    consolationBye?: boolean;
+    substituteBeforePlay?: boolean;
+    beforePoolPlay?: (planId: string) => Promise<void>;
   } = {}) {
     const planId = doubles ? await draftDoubles(consolation) : await seedNativeDraft(pg.db);
     if (!doubles)
@@ -130,6 +137,7 @@ export function nativeFinalsSlotReplayFixture(
     const substitution = substituteBeforePlay
       ? await substituteLowerPair(planId, await state())
       : null;
+    await beforePoolPlay?.(planId);
     const initial = await state();
     for (const match of initial.matches) {
       const pool = initial.pools.find(({ id }) => id === match.poolId)!;
