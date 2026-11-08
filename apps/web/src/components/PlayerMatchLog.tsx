@@ -26,6 +26,25 @@ function impactLabel(impact: WhrResultImpact | undefined, active: boolean) {
   return `≈${higher ? '+' : '−'}${rounded} pts`;
 }
 
+function forecastDetails(impact: Extract<WhrResultImpact, { status: 'available' }>, won: boolean) {
+  if (!impact.forecast) {
+    if (impact.forecastUnavailable === 'first_night') {
+      return { note: impact.firstNight ? 'First rated night' : 'Opponent’s first rated night' };
+    }
+    if (impact.forecastUnavailable === 'disconnected') return { note: 'Separate rated groups' };
+    return { note: 'Estimate unavailable' };
+  }
+  const chance = Math.round(impact.forecast.winProbability * 100);
+  const odds = chance === 0 ? '<1%' : chance === 100 ? '>99%' : `${chance}%`;
+  const moreLikely = won ? chance > 50 : chance < 50;
+  return {
+    chance: `${odds} to win`,
+    note: chance === 50 ? null : moreLikely ? 'More likely result' : 'Less likely result',
+  };
+}
+
+const evidenceUnits = new Intl.NumberFormat('en-AU', { maximumFractionDigits: 2 });
+
 export function PlayerMatchLog({
   events,
   playerId,
@@ -58,14 +77,17 @@ export function PlayerMatchLog({
             <th>Stage</th>
             <th>Opponent</th>
             <th>Result</th>
-            <th className="num" title="Evidence strength in the WHR fit; not a points multiplier">
-              Evidence
-            </th>
+            <th className="num">Evidence</th>
           </tr>
         </thead>
         <tbody ref={body}>
           {events.map((event) => {
             const setId = recomputeId && !event.isDecay && event.won != null ? event.setId : null;
+            const impact = setId ? (runImpact ?? results?.get(setId)) : undefined;
+            const forecast =
+              impact?.status === 'available' && event.won != null
+                ? forecastDetails(impact, event.won)
+                : null;
             return (
               <tr
                 key={event.seq}
@@ -78,7 +100,17 @@ export function PlayerMatchLog({
                   {event.isRookie && <span className="chip chip-warning rookie-chip">rookie</span>}
                   {setId && (
                     <span className="whr-impact-value">
-                      WHR {impactLabel(runImpact ?? results?.get(setId), activeSetId === setId)}
+                      WHR {impactLabel(impact, activeSetId === setId)}
+                    </span>
+                  )}
+                  {setId && (
+                    <span className="whr-impact-value whr-forecast">
+                      {forecast && (
+                        <>
+                          WHR pre-night{forecast.chance && ` · ${forecast.chance}`}
+                          {forecast.note && <span>{forecast.note}</span>}
+                        </>
+                      )}
                     </span>
                   )}
                 </td>
@@ -102,7 +134,12 @@ export function PlayerMatchLog({
                   {event.isDecay ? '—' : event.won ? 'W' : 'L'}
                 </td>
                 <td className="num">
-                  {event.weight == null ? '—' : `×${event.weight.toFixed(1)}`}
+                  {event.weight == null
+                    ? '—'
+                    : `${evidenceUnits.format(event.weight)} ${event.weight === 1 ? 'unit' : 'units'}`}
+                  {impact?.status === 'available' && (
+                    <span className="whr-impact-value">Margin weight {impact.gamesWeight}</span>
+                  )}
                 </td>
               </tr>
             );

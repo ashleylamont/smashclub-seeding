@@ -6,6 +6,7 @@ import {
   fitWhrPrefix,
   prepareWhrHistory,
   probabilityFromRatings,
+  type PreparedWhrHistory,
 } from '@smashclub/engine';
 import { ratingSettingsSchema } from '@smashclub/shared';
 import { loadSinglesHistory } from './inputs';
@@ -95,6 +96,39 @@ async function readSnapshot(db: Db, input: ImpactInput) {
   return { status: 'verified' as const, history, setIndex, row, participants, participant };
 }
 
+/** Only earlier rated sets can connect the players for a pre-night estimate. */
+function preNightOpponents(history: PreparedWhrHistory, day: number) {
+  const opponents = new Map<string, Set<string>>();
+  for (const { day: playedDay, set } of history.rateable) {
+    if (playedDay >= day) break;
+    const { p1PlayerId, p2PlayerId } = set;
+    for (const [playerId, opponentId] of [
+      [p1PlayerId, p2PlayerId],
+      [p2PlayerId, p1PlayerId],
+    ] as const) {
+      let played = opponents.get(playerId);
+      if (!played) opponents.set(playerId, (played = new Set()));
+      played.add(opponentId);
+    }
+  }
+  return opponents;
+}
+
+function connected(opponents: Map<string, Set<string>>, playerId: string, opponentId: string) {
+  const visited = new Set([playerId]);
+  const pending = [playerId];
+  while (pending.length) {
+    const next = pending.pop()!;
+    if (next === opponentId) return true;
+    for (const other of opponents.get(next) ?? []) {
+      if (visited.has(other)) continue;
+      visited.add(other);
+      pending.push(other);
+    }
+  }
+  return false;
+}
+
 export async function readWhrResultImpact(db: Db, input: ImpactInput) {
   if (activeReads >= MAX_ACTIVE_READS || !reserve('read')) return unavailable('busy');
   activeReads++;
@@ -138,19 +172,21 @@ export async function readWhrResultImpact(db: Db, input: ImpactInput) {
     }
     cache.set(cacheKey, deltas);
     if (cache.size > MAX_CACHE_ENTRIES) cache.delete(cache.keys().next().value!);
-    const hasHistory = (playerId: string) =>
-      history.rateable.some(
-        ({ day, set }) =>
-          day < row.day && (set.p1PlayerId === playerId || set.p2PlayerId === playerId),
-      );
-    const firstNight = !hasHistory(input.playerId);
+    const opponents = preNightOpponents(history, row.day);
+    const firstNight = !opponents.has(input.playerId);
     const opponent = participants.find(({ playerId }) => playerId !== input.playerId)!;
-    const forecast =
-      !firstNight &&
-      hasHistory(opponent.playerId) &&
-      participants.every(
+    let forecastUnavailable: 'first_night' | 'disconnected' | 'missing_estimate' | null = null;
+    if (firstNight || !opponents.has(opponent.playerId)) forecastUnavailable = 'first_night';
+    else if (!connected(opponents, input.playerId, opponent.playerId))
+      forecastUnavailable = 'disconnected';
+    else if (
+      !participants.every(
         ({ preRating, preRd }) => Number.isFinite(preRating) && Number.isFinite(preRd) && preRd > 0,
       )
+    )
+      forecastUnavailable = 'missing_estimate';
+    const forecast =
+      forecastUnavailable === null
         ? {
             winProbability: probabilityFromRatings(
               (participant.preRating - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY,
@@ -167,8 +203,10 @@ export async function readWhrResultImpact(db: Db, input: ImpactInput) {
       preNightSd:
         Number.isFinite(participant.preRd) && participant.preRd > 0 ? participant.preRd : null,
       evidenceWeight: participant.weight,
+      gamesWeight: history.gamesWeight,
       firstNight,
       forecast,
+      forecastUnavailable,
     };
   } finally {
     activeReads--;
