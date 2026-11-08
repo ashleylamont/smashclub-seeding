@@ -2,6 +2,12 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.12.0
+
+### Minor Changes
+
+- 9 November 2026 · **Feature** · Load a local character artwork pack and automatically use matching portraits for players’ mains in results PNGs. Individual portraits still take priority. [#355](https://github.com/ashleylamont/smashclub-seeding/pull/355) · [build 841ef6c](https://github.com/ashleylamont/smashclub-seeding/commit/841ef6c25e24f2c8d8e99bd024bc50712585a8fa)
+
 ## 0.11.0
 
 ### Minor Changes
