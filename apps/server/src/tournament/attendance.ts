@@ -4,6 +4,7 @@ import { buildRoundRobin } from '@smashclub/tournament-formats';
 import { hash, requireFact, resolved, unconfirmedCall } from './facts';
 import { advance } from './brackets';
 import { attendancePoolCandidates, poolMatch, lastPoolRound } from './poolAttendance';
+import { projectMatchLabels } from './matchNames';
 import { qualifierFieldFrozen } from './qualifiers';
 import {
   hasFixedLegacyPoolQualifiers,
@@ -94,6 +95,7 @@ function ordinaryAttendancePreview(
   }
   if (input.action === 'redistribute' && !relocations.length)
     issues.push('No safe redistribution is available.');
+  const labels = projectMatchLabels(state);
   return {
     allowed: !issues.length,
     issues,
@@ -112,7 +114,11 @@ function ordinaryAttendancePreview(
         ? (pool?.entrantIds.length ?? 0) *
           (state.baseline?.structureOptions?.roundRobinMeetings ?? 1)
         : 0,
-    affectedMatches: involved.map((m) => ({ id: m.id, label: m.label, status: m.status })),
+    affectedMatches: involved.map((m) => ({
+      id: m.id,
+      label: labels.get(m.id)?.label ?? m.label,
+      status: m.status,
+    })),
     revisionToken: hash({
       entrants: state.entrants,
       pools: state.pools,
