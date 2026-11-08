@@ -2,6 +2,12 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.13.0
+
+### Minor Changes
+
+- 9 November 2026 · **Feature** · Preview and download public native brackets as branded PNG or SVG images, with the actual draw, feeder paths and recorded scores. [#357](https://github.com/ashleylamont/smashclub-seeding/pull/357) · [build 9abc01e](https://github.com/ashleylamont/smashclub-seeding/commit/9abc01e64695c85adbb69ee25e1568d00714a2af)
+
 ## 0.12.0
 
 ### Minor Changes
