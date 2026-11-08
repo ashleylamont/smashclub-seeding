@@ -171,9 +171,9 @@ test('double elimination separates both brackets and finals and schedules indepe
   await expect(preview.locator('.projection-summary')).toContainText('1h 10m–1h 22m');
   await expect(preview).toContainText('The earlier finish is without a reset');
   const timeline = preview.getByRole('region', { name: 'Projected station timeline' });
-  await timeline.getByRole('button', { name: /^W2\.1:/ }).click();
+  await timeline.getByRole('button', { name: /^W2\.1 · Winners semi-final 1:/ }).click();
   await expect(preview.locator('.projection-inspector')).toContainText('18:42–18:52');
-  await timeline.getByRole('button', { name: /^L1\.1:/ }).click();
+  await timeline.getByRole('button', { name: /^L1\.1 · Losers round 1 · Match 1:/ }).click();
   await expect(preview.locator('.projection-inspector')).toContainText('18:42–18:52');
   await expect(timeline.getByRole('button', { name: /^Reset final \(if needed\):/ })).toHaveCSS(
     'border-top-style',
@@ -189,9 +189,13 @@ test('double elimination separates both brackets and finals and schedules indepe
   await expect(winners.getByRole('article')).toHaveCount(7);
   await expect(losers.getByRole('article')).toHaveCount(6);
   await expect(finals.getByRole('article')).toHaveCount(2);
-  await expect(losers.getByRole('article', { name: /^L1\.1:/ })).toContainText('Loser W1.1');
+  await expect(losers.getByRole('article', { name: /^Losers round 1 · Match 1:/ })).toContainText(
+    'Loser W1.1',
+  );
   await expect(finals.getByRole('article', { name: /^Grand final:/ })).toContainText('Winner L4.1');
-  await expect(finals.getByRole('article', { name: /^Reset final:/ })).toContainText('If needed');
+  await expect(finals.getByRole('article', { name: /^Reset final \(if needed\):/ })).toContainText(
+    'If needed',
+  );
   expect(
     (
       await new AxeBuilder({ page })

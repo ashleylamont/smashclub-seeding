@@ -1,29 +1,8 @@
+import { knockoutMatchName } from '@smashclub/tournament-formats';
 import type { Match, TournamentState } from './schemas';
 
 type Draw = Pick<TournamentState, 'matches' | 'brackets'>;
 type ProjectedMatchLabel = { label: string; labelFromStructure?: true };
-
-function roundName(remaining: number) {
-  if (remaining === 0) return 'Final';
-  if (remaining === 1) return 'Semi-final';
-  if (remaining === 2) return 'Quarter-final';
-  return `Round of ${2 ** (remaining + 1)}`;
-}
-
-function knockoutName(match: Match, rounds: number, entrants: number) {
-  if (match.bracketLane === 'final') return 'Grand final';
-  if (match.bracketLane === 'reset') return 'Reset final (if needed)';
-  if (match.bracketLane === 'losers')
-    return match.bracketRound
-      ? `Losers round ${match.bracketRound} · Match ${match.slot + 1}`
-      : undefined;
-  if (entrants === 1) return 'Uncontested bracket';
-  const round = match.bracketRound ?? match.round;
-  const remaining = rounds - round;
-  if (remaining < 0 || round < 1) return undefined;
-  const name = `${roundName(remaining)}${remaining ? ` ${match.slot + 1}` : ''}`;
-  return match.bracketLane === 'winners' ? `Winners ${name.toLowerCase()}` : name;
-}
 
 /** Presentation only: never rename stored facts, source keys, links or receipts.
  * Entrant count comes from the fixed draw, including reserved qualifier places;
@@ -70,7 +49,7 @@ export function projectMatchLabels(draw: Draw): Map<string, ProjectedMatchLabel>
       .filter(Boolean)
       .join(' · ');
     for (const match of matches) {
-      const name = knockoutName(match, rounds, entrants);
+      const name = knockoutMatchName(match, entrants);
       labels.set(match.id, {
         label: `${context ? `${context} · ` : ''}${name ?? match.label}`,
         ...(name === undefined ? {} : { labelFromStructure: true }),

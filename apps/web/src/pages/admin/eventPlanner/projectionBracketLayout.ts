@@ -4,7 +4,7 @@ import { duration, projectedTime, type ProjectedMatch } from './projectionView';
 export type ProjectionLane = 'winners' | 'losers' | 'finals';
 export const bracketCard = { width: 224, height: 76, column: 264, row: 96, top: 40 };
 
-export function projectionMatchName(match: ProjectedMatch): string {
+export function projectionMatchCode(match: ProjectedMatch): string {
   switch (match.bracketLane) {
     case 'winners':
       return `W${match.bracketRound}.${match.slot + 1}`;
@@ -19,16 +19,31 @@ export function projectionMatchName(match: ProjectedMatch): string {
   }
 }
 
-export function projectionPairing(match: ProjectedMatch, byId: Map<string, ProjectedMatch>) {
+export function projectionMatchName(match: ProjectedMatch) {
+  return (
+    match.displayName ??
+    (match.bracketLane === 'reset' ? 'Reset final (if needed)' : projectionMatchCode(match))
+  );
+}
+
+export function projectionPairing(
+  match: ProjectedMatch,
+  byId: ReadonlyMap<string, ProjectedMatch>,
+  style: 'name' | 'code' = 'name',
+) {
   return match.sides.map((label, side) => {
     if (label === 'Bye') return label;
     const feed = match.feeds.find((f) => f.side === side);
     const parent = feed && byId.get(feed.matchId);
-    return parent
-      ? `${feed.outcome === 'loser' ? 'Loser' : 'Winner'} ${projectionMatchName(parent)}`
-      : match.bracketLane && label.startsWith('O seed ')
-        ? `Seed ${label.slice('O seed '.length)}`
-        : label;
+    if (parent) {
+      const outcome = feed.outcome === 'loser' ? 'Loser' : 'Winner';
+      return style === 'code'
+        ? `${outcome} ${projectionMatchCode(parent)}`
+        : `${outcome} of ${projectionMatchName(parent)}`;
+    }
+    return match.bracketLane && label.startsWith('O seed ')
+      ? `Seed ${label.slice('O seed '.length)}`
+      : label;
   });
 }
 
