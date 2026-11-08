@@ -35,14 +35,9 @@ export function PlayerEvent({ planId }: { planId: string }) {
     session,
     signedCredential,
     setReportingPreference,
-    playOpen,
-    redeeming,
     valid,
     matches,
-    accessDenied,
     online,
-    signedIn,
-    guestCredential,
     selectedPool,
     player,
     error,
@@ -100,26 +95,7 @@ export function PlayerEvent({ planId }: { planId: string }) {
             </Button>
           </p>
         )}
-        {closed && !player && (
-          <Notice>
-            This event is closed. Results remain available; ask a TO about corrections.
-          </Notice>
-        )}
-        {data && reportingVisible && !playOpen && (
-          <Notice tone="warning">
-            Match reporting opens when the organiser locks or resumes the pool draw.
-          </Notice>
-        )}
-        {reportingVisible && (reporter !== 'signed-in' || redeeming) && (
-          <GuestPassStatus
-            redeeming={redeeming}
-            valid={valid}
-            session={session}
-            now={now}
-            error={matches.isError ? matches.error.message : null}
-            accessDenied={accessDenied}
-          />
-        )}
+        {(!data || (closed && empty)) && <MatchReportingStatus hub={hub} />}
         {data && (
           <p
             className="event-connection player-event-connection"
@@ -141,15 +117,13 @@ export function PlayerEvent({ planId }: { planId: string }) {
       </div>
       {data && (
         <>
-          {signedIn && !empty && !data.settings.playerReports && !guestCredential && (
-            <p className="banner banner-warning">
-              Signed-in reporting is off for this event. Scan the event QR for guest access or ask a
-              TO to record your score.
-            </p>
-          )}
           {!empty && (
             <>
-              <PlayerHubMatches hub={hub} data={data} />
+              <PlayerHubMatches
+                hub={hub}
+                data={data}
+                reportingStatus={<MatchReportingStatus hub={hub} />}
+              />
               <section id="what-next" aria-label="What next">
                 <PlayerNextSteps hub={hub} data={data} />
               </section>
@@ -269,6 +243,65 @@ function EmptyEventMatches({ historical }: { historical: boolean }) {
   );
 }
 
+function MatchReportingStatus({ hub }: { hub: PlayerEventHub }) {
+  const {
+    accessDenied,
+    closed,
+    data,
+    guestCredential,
+    matches,
+    now,
+    online,
+    player,
+    playOpen,
+    publicEvent,
+    redeeming,
+    reporter,
+    session,
+    signedIn,
+    valid,
+  } = hub;
+  if (closed)
+    return player ? null : (
+      <Notice>This event is closed. Results remain available. Ask a TO about corrections.</Notice>
+    );
+
+  return (
+    <>
+      {data && signedIn && !data.settings.playerReports && !guestCredential && (
+        <Notice tone="warning">
+          Signed-in reporting is off for this event. A TO can record your score.
+        </Notice>
+      )}
+      {data && !playOpen && (
+        <Notice tone="warning">
+          {data.plan.drawPaused
+            ? 'The draw is paused. Reporting reopens when play resumes.'
+            : 'Match reporting opens when the organiser locks the pool draw.'}
+        </Notice>
+      )}
+      {(reporter !== 'signed-in' || redeeming) && (
+        <GuestPassStatus
+          redeeming={redeeming}
+          valid={valid}
+          session={session}
+          now={now}
+          error={matches.isError ? matches.error.message : null}
+          accessDenied={accessDenied}
+        />
+      )}
+      {playOpen &&
+        reporter &&
+        (!online || publicEvent.isError) &&
+        !(reporter === 'guest' && matches.isError) && (
+          <Notice tone="warning">
+            Score reporting will resume when live updates recover. Your draft is kept.
+          </Notice>
+        )}
+    </>
+  );
+}
+
 function GuestPassStatus({
   redeeming,
   valid,
@@ -296,8 +329,8 @@ function GuestPassStatus({
               : 'Scan in to report a score'}
         </h2>
         <p>
-          Scan a guest reporting QR at the venue or ask a TO for an active invitation to start
-          matches and report scores. You can keep browsing without a pass.
+          Scan a guest reporting QR or ask a TO for a pass to start matches or report scores. You
+          can browse without a pass.
         </p>
         {error && (
           <p className="banner banner-warning" role="alert">
@@ -315,8 +348,8 @@ function GuestPassStatus({
       </p>
       {error && (
         <Notice tone="warning">
-          Reporting connection interrupted. Your pass is saved; reporting resumes when the
-          connection recovers.
+          Reporting connection interrupted. Your pass and score draft are kept. Reporting resumes
+          when the connection recovers.
         </Notice>
       )}
     </>

@@ -65,6 +65,13 @@ test('phone hub retains score drafts through section navigation, offline recover
   await page.evaluate(() => window.dispatchEvent(new Event('offline')));
   await expect(page.getByRole('alert')).toContainText('Live updates interrupted');
   await expect(card.getByRole('button', { name: /Submit score/ })).toHaveCount(0);
+  const matches = page.getByRole('region', { name: 'Find my matches and report scores' });
+  const recovery = matches.getByText('Score reporting will resume when live updates recover.', {
+    exact: false,
+  });
+  await expect(recovery).toHaveCount(1);
+  await expect(recovery).toContainText('Your draft is kept.');
+  await expect(card.getByText('Your score draft is kept', { exact: false })).toHaveCount(0);
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
   await expect(card.getByRole('spinbutton').nth(0)).toHaveValue('2');
   match.revision++;
@@ -73,6 +80,16 @@ test('phone hub retains score drafts through section navigation, offline recover
   await expect(card.getByRole('button', { name: /Submit score/ })).toBeDisabled();
   await card.getByRole('button', { name: 'Reload match' }).click();
   await expect(card.getByRole('spinbutton').nth(0)).toHaveValue('0');
+  await expect(recovery).toHaveCount(0);
+  await card.getByRole('spinbutton').nth(0).fill('2');
+  fixture.snapshot.plan.drawPaused = true;
+  const paused = matches.getByText('The draw is paused. Reporting reopens when play resumes.');
+  await expect(paused).toHaveCount(1);
+  await expect(card.getByRole('spinbutton')).toHaveCount(0);
+  await expect(recovery).toHaveCount(0);
+  fixture.snapshot.plan.drawPaused = false;
+  await expect(card.getByRole('spinbutton').nth(0)).toHaveValue('2');
+  await expect(paused).toHaveCount(0);
   await ready(page);
   expect(
     (
@@ -288,7 +305,11 @@ test('guest permission polling failure disables writes without switching to the 
   const card = page.locator('article.ops-match').first();
   await card.getByRole('spinbutton').nth(0).fill('2');
   interrupted = true;
-  await expect(page.getByText('Reporting connection interrupted.', { exact: false })).toBeVisible();
+  const reporting = page.getByRole('region', { name: 'Find my matches and report scores' });
+  const interruption = reporting.getByText('Reporting connection interrupted.', { exact: false });
+  await expect(interruption).toHaveCount(1);
+  await expect(interruption).toContainText('Your pass and score draft are kept.');
+  await expect(card.getByText('Your score draft is kept', { exact: false })).toHaveCount(0);
   await expect(card.getByRole('spinbutton')).toHaveCount(0);
   await expect(
     page.getByText('Reporting with your venue guest pass.', { exact: true }),
@@ -379,3 +400,103 @@ for (const role of [undefined, 'player'] as const)
     }
     expect(fixture.unexpected).toEqual([]);
   });
+
+test('signed-in visitors without reporting access get one account notice and one guest action', async ({
+  page,
+}) => {
+  const fixture = await mockEvent(page, { role: 'player' });
+  fixture.snapshot.settings.playerReports = false;
+  await page.goto(`/play/${PLAN_ID}#my-matches`);
+  const matches = page.getByRole('region', { name: 'Find my matches and report scores' });
+  await expect(
+    matches.getByText('Signed-in reporting is off for this event.', { exact: false }),
+  ).toHaveCount(1);
+  await expect(matches.getByRole('heading', { name: 'Scan in to report a score' })).toBeVisible();
+  await expect(
+    matches.getByText('Scan a guest reporting QR or ask a TO', { exact: false }),
+  ).toHaveCount(1);
+  await expect(matches.getByRole('spinbutton')).toHaveCount(0);
+  expect(fixture.unexpected).toEqual([]);
+});
+
+for (const theme of ['dark', 'light'] as const)
+  for (const width of [390, 1440])
+    test(`${theme} ${width}px read-only matches explain guest reporting once`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const fixture = await mockEvent(page);
+      fixture.snapshot.settings.scoreReportingMode = 'approve_unless_disputed';
+      const completed = fixture.snapshot.matches
+        .filter(
+          (match) =>
+            match.division === 'upper' && match.poolIndex === 0 && match.status === 'ready',
+        )
+        .slice(0, 2);
+      for (const match of completed)
+        Object.assign(match, {
+          status: 'complete',
+          outcome: 'played',
+          winnerId: match.player1Id,
+          score1: 2,
+          score2: 0,
+        });
+      Object.assign(completed[0]!, { pendingDisputeCount: 1 });
+      await page.goto(`/play/${PLAN_ID}?pool=upper%3A0#my-matches`);
+      const matches = page.getByRole('region', { name: 'Find my matches and report scores' });
+      await chooseOption(matches.getByRole('combobox', { name: 'Match view' }), 'matches');
+      const open = matches.locator('article.ops-match-ready, article.ops-match-playing');
+      const recorded = matches.locator('article.ops-match-complete');
+      await expect.poll(() => open.count()).toBeGreaterThan(1);
+      await expect.poll(() => recorded.count()).toBeGreaterThan(1);
+      await expect(
+        open.getByText('Alex with a long tournament alias', { exact: false }).first(),
+      ).toBeVisible();
+      await expect(recorded.first()).toContainText(/\d+ [–-] \d+/);
+      await expect(
+        recorded.getByText('A different score has been reported.', { exact: false }),
+      ).toHaveCount(1);
+      await page.getByRole('link', { name: 'Find my matches' }).press('Enter');
+      await ready(page);
+      await page.screenshot({ path: testInfo.outputPath('filtered-entry.png') });
+      await open.first().scrollIntoViewIfNeeded();
+      await page.screenshot({ path: testInfo.outputPath('open-matches.png') });
+      await recorded.first().scrollIntoViewIfNeeded();
+      await page.screenshot({ path: testInfo.outputPath('recorded-matches.png') });
+      await page.getByRole('link', { name: 'Find my matches' }).press('Enter');
+
+      const access = matches.getByRole('heading', { name: 'Scan in to report a score' });
+      await expect(access).toBeInViewport();
+      await expect(page.getByRole('heading', { name: 'Scan in to report a score' })).toHaveCount(1);
+      await expect(
+        matches.getByText('Scan a guest reporting QR or ask a TO', { exact: false }),
+      ).toBeVisible();
+      await expect(
+        open.getByText('Scan a guest reporting QR to start matches and report scores.'),
+      ).toHaveCount(0);
+      await expect(
+        recorded.getByText('Use your current event QR pass', { exact: false }),
+      ).toHaveCount(0);
+      await expect(recorded.getByText('You can confirm this score', { exact: false })).toHaveCount(
+        0,
+      );
+      await expect(
+        matches.getByRole('button', {
+          name: /Confirm recorded score|Report a different score|Submit score/,
+        }),
+      ).toHaveCount(0);
+      await expect(matches.getByRole('spinbutton')).toHaveCount(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      expect(
+        (
+          await new AxeBuilder({ page })
+            .include('.player-event-hub')
+            .withTags(['wcag2a', 'wcag2aa'])
+            .analyze()
+        ).violations,
+      ).toEqual([]);
+      expect(fixture.unexpected).toEqual([]);
+    });

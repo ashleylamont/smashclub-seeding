@@ -18,6 +18,7 @@ export function CompletedScoreReport({
   enabled,
   reportingIdentity = 'reporter',
   allowReports,
+  showUnavailableHint = true,
   onSubmit,
   pendingReport,
   label = 'Confirmed result',
@@ -26,6 +27,7 @@ export function CompletedScoreReport({
   enabled: boolean;
   reportingIdentity?: string;
   allowReports: boolean;
+  showUnavailableHint?: boolean;
   pendingReport?: { score1: number | null; score2: number | null; isDispute: boolean };
   onSubmit: (input: ResultSubmission) => Promise<{ isDispute: boolean }>;
   label?: string;
@@ -38,6 +40,10 @@ export function CompletedScoreReport({
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const { pending, message, error, begin, update } = useReportFeedback(reportingIdentity);
   const showEditor = editing && !message;
+  const showReporting =
+    allowReports &&
+    presentation.canReport &&
+    (enabled || Boolean(pendingReport) || showUnavailableHint);
   const submit = async (first: ScoreInputValue, second: ScoreInputValue) => {
     if (first === '' || second === '') return;
     if (!enabled) return;
@@ -70,7 +76,7 @@ export function CompletedScoreReport({
           A different score has been reported. TO review is pending; this result remains official.
         </p>
       )}
-      {allowReports && presentation.canReport && (
+      {showReporting && (
         <>
           <p className="muted">
             You can confirm this score or flag a different result. A disagreement goes to the TOs
