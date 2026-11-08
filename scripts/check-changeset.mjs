@@ -1,6 +1,6 @@
 import { pathToFileURL } from 'node:url';
 import { parse } from 'yaml';
-import { git, readPrMerge } from './pr-merge.mjs';
+import { git, readPrChanges, readPrMerge } from './pr-merge.mjs';
 
 const appPackage = 'apps/web/package.json';
 const changelog = 'apps/web/CHANGELOG.md';
@@ -61,7 +61,7 @@ export function assertAppChangeset(changes, read, { releaseOnly = false } = {}) 
           `Consumed Changesets require Nemesis ${expectedVersion}, got ${newVersion}.`,
         );
       const heading = /^## (.+)$/m.exec(read('HEAD', changelog))?.[1];
-      if (heading === newVersion) return;
+      if (heading === newVersion) return newVersion;
     }
   }
 
@@ -72,14 +72,8 @@ export function assertAppChangeset(changes, read, { releaseOnly = false } = {}) 
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const { merge, base } = readPrMerge(process.argv[2]);
-  const fields = git('diff', '--no-renames', '--name-status', '-z', base, merge).split('\0');
-  fields.pop();
-  const changes = [];
-  for (let index = 0; index < fields.length; index += 2) {
-    changes.push([fields[index], fields[index + 1]]);
-  }
   assertAppChangeset(
-    changes,
+    readPrChanges({ merge, base }),
     (revision, path) => git('show', `${revision === 'base' ? base : merge}:${path}`),
     { releaseOnly: process.env.GITHUB_HEAD_REF === 'changeset-release/main' },
   );

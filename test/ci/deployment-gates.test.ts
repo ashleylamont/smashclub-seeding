@@ -38,12 +38,15 @@ const successfulJobs = {
   'ui-quality': { result: 'success', outputs: { ui_case_set } },
 };
 
-it('keeps the full gate on publish and wires only the two scoped jobs to the PR plan', () => {
+it('keeps the full Publish gate and scopes PR job conditions to their plans', () => {
   expect(ci.jobs['all-checks'].needs.toSorted()).toEqual(requiredJobs.toSorted());
   expect(ci.jobs['all-checks'].if).toBe('always()');
   expect(() => assertRequiredJobs(successfulJobs, { event: 'push' })).not.toThrow();
+  const browserCondition =
+    "(github.event_name != 'pull_request' || needs.changeset.result != 'success' || needs.changeset.outputs.defer_browser != 'true')";
   const conditions = {
-    'e2e-report': 'always()',
+    e2e: `\${{ !cancelled() && ${browserCondition} }}`,
+    'e2e-report': `\${{ always() && ${browserCondition} }}`,
     ...Object.fromEntries(
       skippableJobs.map((job) => [
         job,
@@ -90,8 +93,55 @@ it('accepts only explicit PR skips from a successful plan', () => {
   }
 });
 
-it('runs browser shards independently of full typecheck and build', () => {
-  expect(ci.jobs.e2e.needs).toBeUndefined();
+it('accepts version browser deferral only as a validated PR pair', () => {
+  const options = { event: 'pull_request' };
+  const planned = {
+    ...successfulJobs,
+    changeset: { result: 'success', outputs: { skips: '[]', defer_browser: 'true' } },
+    e2e: { result: 'skipped' },
+    'e2e-report': { result: 'skipped' },
+  };
+  expect(() => assertRequiredJobs(planned, options)).not.toThrow();
+  for (const event of ['push', 'workflow_dispatch', 'workflow_call']) {
+    expect(() => assertRequiredJobs(successfulJobs, { event })).not.toThrow();
+    expect(() => assertRequiredJobs(planned, { event })).toThrow(/plan/);
+    expect(() =>
+      assertRequiredJobs({ ...successfulJobs, e2e: { result: 'skipped' } }, { event }),
+    ).toThrow('e2e');
+  }
+  expect(() => assertRequiredJobs(planned, { ...options, reportOnly: true })).toThrow(/plan/);
+  for (const job of ['e2e', 'e2e-report']) {
+    for (const result of ['success', 'failure', 'cancelled', undefined]) {
+      expect(() => assertRequiredJobs({ ...planned, [job]: { result } }, options)).toThrow(job);
+    }
+  }
+  for (const result of ['failure', 'cancelled', 'skipped', undefined]) {
+    expect(() =>
+      assertRequiredJobs({ ...planned, changeset: { ...planned.changeset, result } }, options),
+    ).toThrow('changeset');
+  }
+  for (const defer_browser of [undefined, 'false', true, []]) {
+    expect(() =>
+      assertRequiredJobs(
+        {
+          ...planned,
+          changeset: { ...planned.changeset, outputs: { skips: '[]', defer_browser } },
+        },
+        options,
+      ),
+    ).toThrow(/e2e|plan/);
+  }
+  for (const job of ['ui-portable', 'ui-portable-2', 'ui-quality', 'production-image']) {
+    expect(() => assertRequiredJobs({ ...planned, [job]: { result: 'skipped' } }, options)).toThrow(
+      job,
+    );
+  }
+});
+
+it('runs browser shards after only the PR plan, independently of full typecheck and build', () => {
+  expect(ci.jobs.e2e.needs).toBe('changeset');
+  expect(ci.jobs['e2e-report'].needs).toEqual(['changeset', 'e2e']);
+  expect(ci.jobs.changeset.outputs.defer_browser).toBe('${{ steps.plan.outputs.defer_browser }}');
   expect(ci.jobs.typecheck.steps).toContainEqual(
     expect.objectContaining({ run: 'pnpm typecheck' }),
   );

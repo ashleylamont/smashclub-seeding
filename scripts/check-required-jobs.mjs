@@ -19,18 +19,27 @@ export const requiredJobs = [
 ];
 export function assertRequiredJobs(results, { event, reportOnly } = {}) {
   const output = results.changeset?.outputs?.skips;
+  const browserPlan = results.changeset?.outputs?.defer_browser;
+  const deferBrowser = browserPlan === 'true';
   const skips = event === 'pull_request' ? JSON.parse(output ?? 'null') : [];
   if (
     !Array.isArray(skips) ||
     skips.some((name) => !skippableJobs.includes(name)) ||
     new Set(skips).size !== skips.length ||
     (reportOnly && skips.length) ||
-    (event !== 'pull_request' && output && output !== '[]')
+    (event !== 'pull_request' && output && output !== '[]') ||
+    (browserPlan != null &&
+      browserPlan !== '' &&
+      (!deferBrowser || event !== 'pull_request' || reportOnly))
   ) {
     throw new Error('Invalid affected check plan');
   }
   for (const name of requiredJobs) {
     const result = results[name]?.result;
+    if (deferBrowser && (name === 'e2e' || name === 'e2e-report')) {
+      if (result !== 'skipped') throw new Error(`${name} was not deferred with the browser plan`);
+      continue;
+    }
     if (result !== 'success' && !(result === 'skipped' && skips.includes(name)))
       throw new Error(`${name} did not pass (${result ?? 'missing'})`);
   }

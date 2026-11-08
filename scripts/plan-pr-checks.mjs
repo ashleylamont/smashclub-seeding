@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { git, readPrMerge } from './pr-merge.mjs';
+import { readPrChanges, readPrMerge } from './pr-merge.mjs';
 
 export const skippableJobs = ['legacy-python', 'postgres'];
 const appChecks = [
@@ -107,17 +107,18 @@ export function listWorkspaces(filter) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const { merge, base } = readPrMerge(process.argv[2]);
+  const { shouldDeferVersionBrowser } = await import('./version-pr-browser-plan.mjs');
+  const tested = readPrMerge(process.argv[2]);
   const reportOnly = process.env.CI_REPORT_ONLY === 'true';
-  // A move across scopes must include its old path, even when Git detects a rename.
-  const paths = git('diff', '--no-renames', '--name-only', '-z', base, merge)
-    .split('\0')
-    .slice(0, -1);
+  const changes = readPrChanges(tested);
+  const paths = changes.map(([, path]) => path);
   const { reason, skips, candidates } = planPrChecks(paths, reportOnly);
-  const workspaces = listWorkspaces(`...[${base}]`);
+  const deferBrowser = shouldDeferVersionBrowser(tested, changes);
+  const workspaces = listWorkspaces(`...[${tested.base}]`);
   const advisory = planAdvisoryCoverage(paths, workspaces);
   const list = (items) => (items.length ? items.map((item) => `\`${item}\``).join(', ') : 'None');
   appendFileSync(process.env.GITHUB_OUTPUT, `skips=${JSON.stringify(skips)}\n`);
+  if (deferBrowser) appendFileSync(process.env.GITHUB_OUTPUT, 'defer_browser=true\n');
   appendFileSync(
     process.env.GITHUB_STEP_SUMMARY,
     [
@@ -136,6 +137,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         : ['- Proposed workspace scope: Full verification']),
       '- Actual typecheck and unit test jobs: Full workspace scope',
       `- Skipped by policy: ${list(skips)}`,
+      ...(deferBrowser
+        ? ['- Browser event flows and report run on the final main SHA for this version PR.']
+        : []),
       `- Additional candidates (still run): ${list(candidates.filter((job) => !skips.includes(job)))}`,
       '',
     ].join('\n'),

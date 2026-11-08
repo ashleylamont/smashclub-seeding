@@ -52,6 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       skips: ${{ steps.plan.outputs.skips }}
+      defer_browser: ${{ steps.plan.outputs.defer_browser }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: github.event_name == 'pull_request'
@@ -88,6 +89,8 @@ jobs:
 
   e2e:
     name: Browser event flows (${{ matrix.shard }}/4)
+    needs: changeset
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changeset.result != 'success' || needs.changeset.outputs.defer_browser != 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -134,8 +137,8 @@ jobs:
 
   e2e-report:
     name: Browser report
-    if: always()
-    needs: e2e
+    if: ${{ always() && (github.event_name != 'pull_request' || needs.changeset.result != 'success' || needs.changeset.outputs.defer_browser != 'true') }}
+    needs: [changeset, e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
