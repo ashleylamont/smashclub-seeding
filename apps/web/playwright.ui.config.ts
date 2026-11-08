@@ -1,4 +1,5 @@
 import { defineConfig } from '@playwright/test';
+import { footerMetadataCapturePath } from './ui-tests/captureStyles';
 
 const port = Number(process.env.UI_PORT ?? 3411);
 const baseURL = `http://127.0.0.1:${port}`;
@@ -8,7 +9,14 @@ export default defineConfig({
   testDir: './ui-tests',
   outputDir: './ui-test-results',
   timeout: 30_000,
-  expect: { timeout: 5000, toHaveScreenshot: { animations: 'disabled', maxDiffPixelRatio: 0.003 } },
+  expect: {
+    timeout: 5000,
+    toHaveScreenshot: {
+      animations: 'disabled',
+      maxDiffPixelRatio: 0.003,
+      stylePath: footerMetadataCapturePath,
+    },
+  },
   fullyParallel: true,
   workers: 2,
   retries: 0,

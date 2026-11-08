@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { footerMetadataCapturePath } from './captureStyles';
 import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import type { EventPlanView } from '../src/lib/apiTypes';
@@ -168,7 +169,7 @@ for (const theme of ['dark', 'light'] as const)
         fullPage: true,
       });
       await expect(page).toHaveScreenshot(`pair-planner-${theme}-${width}.png`, {
-        ...bracketCaptureOptions,
+        stylePath: [footerMetadataCapturePath, bracketCaptureOptions.stylePath],
         fullPage: true,
       });
       expect(fixture.unexpected).toEqual([]);

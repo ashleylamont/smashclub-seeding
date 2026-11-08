@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { authClient, useCurrentUser } from '../lib/auth';
-import { BUILD_COMMIT_URL, BUILD_LABEL, BUILD_SHA } from '../lib/build';
+import { APP_VERSION, BUILD_COMMIT_URL, BUILD_LABEL, BUILD_SHA } from '../lib/build';
 import { useEventSource } from '../lib/useEventSource';
 import { NemesisMark } from './NemesisMark';
 import { ThemeToggle } from './ThemeToggle';
@@ -145,22 +145,26 @@ export function Layout() {
 
       <footer className="app-footer">
         <span>Smash Club</span>
+        <Link to="/changelog">Changelog</Link>
         {/* The build this page was served from, so "is prod actually on the
             new image?" is answerable without kubectl. */}
         <span className="build-tag">
+          <span className="app-version">v{APP_VERSION}</span> <span aria-hidden="true">·</span>{' '}
           build{' '}
-          {BUILD_COMMIT_URL ? (
-            <a
-              href={BUILD_COMMIT_URL}
-              target="_blank"
-              rel="noreferrer"
-              title={BUILD_SHA ?? undefined}
-            >
-              {BUILD_LABEL}
-            </a>
-          ) : (
-            BUILD_LABEL
-          )}
+          <span className="build-label">
+            {BUILD_COMMIT_URL ? (
+              <a
+                href={BUILD_COMMIT_URL}
+                target="_blank"
+                rel="noreferrer"
+                title={BUILD_SHA ?? undefined}
+              >
+                {BUILD_LABEL}
+              </a>
+            ) : (
+              BUILD_LABEL
+            )}
+          </span>
         </span>
       </footer>
     </div>

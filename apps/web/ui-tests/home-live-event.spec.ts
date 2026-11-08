@@ -3,9 +3,12 @@ import { expect, test, type Page } from '@playwright/test';
 import { AxeBuilder } from '@axe-core/playwright';
 import type { PublicEventNight } from '../src/lib/publicEvents';
 import { rpcProcedures } from '../test-support/rpcBatch';
-import { ready } from './fixtures';
+import { mockEvent, PLAN_ID, ready } from './fixtures';
+import { footerMetadataCaptureStyle } from './captureStyles';
 
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+const markdown = readFileSync(new URL('../CHANGELOG.md', import.meta.url), 'utf8');
+const buildSha = process.env.VITE_BUILD_SHA?.trim();
 const NOW = new Date('2026-10-31T09:00:00Z');
 function event(id: string, competitionFormat: 'singles' | 'doubles'): PublicEventNight {
   return {
@@ -141,9 +144,24 @@ for (const theme of ['light', 'dark'] as const) {
       await page.setViewportSize(viewport);
       await page.emulateMedia({ colorScheme: theme });
       await mockHome(page);
-      await page.goto('/');
-      const link = page.getByRole('link', { name: 'Changelog', exact: true });
+      const footer = page.getByRole('contentinfo');
+      const link = footer.getByRole('link', { name: 'Changelog', exact: true });
+      for (const route of ['/', '/tournaments']) {
+        await page.goto(route);
+        await expect(page.getByRole('main').getByRole('link', { name: 'Changelog' })).toHaveCount(
+          0,
+        );
+        await expect(link).toHaveAttribute('href', '/changelog');
+        await expect(footer).toContainText(`v${version} · build ${buildSha?.slice(0, 7) || 'dev'}`);
+        if (buildSha)
+          await expect(footer.getByRole('link', { name: buildSha.slice(0, 7) })).toHaveAttribute(
+            'href',
+            `https://github.com/ashleylamont/smashclub-seeding/commit/${buildSha}`,
+          );
+      }
       await link.focus();
+      await expect(link).toBeFocused();
+      await footer.screenshot({ path: testInfo.outputPath('footer.png') });
       await page.keyboard.press('Enter');
       await expect(page).toHaveURL('/changelog');
       const main = page.getByRole('main');
@@ -154,6 +172,33 @@ for (const theme of ['light', 'dark'] as const) {
         main.getByRole('heading', { level: 2, name: version, exact: true }),
       ).toBeVisible();
       await expect(main.getByRole('heading', { level: 3, name: '20 October 2025' })).toBeVisible();
+      await expect(
+        main.getByRole('heading', { level: 2, name: 'Before versioned releases' }),
+      ).toHaveClass('changelog-archive');
+      for (const tier of ['Major Changes', 'Minor Changes', 'Patch Changes']) {
+        for (const heading of await main
+          .getByRole('heading', { level: 3, name: tier, exact: true })
+          .all())
+          await expect(heading).toHaveClass('changelog-release-tier');
+      }
+      await expect(
+        main
+          .getByRole('listitem')
+          .filter({ hasText: 'OBS connection-interruption check' })
+          .locator('.changelog-category'),
+      ).toHaveText('Maintenance');
+      const categories = ['Milestone', 'Feature', 'Improvement', 'Fix', 'Maintenance'];
+      for (const category of categories) {
+        const annotations = [
+          ...markdown.matchAll(
+            new RegExp(`^- (?:\\d{1,2} [A-Za-z]+ \\d{4} · )?\\*\\*${category}\\*\\* · `, 'gm'),
+          ),
+        ].length;
+        expect(annotations).toBeGreaterThan(0);
+        await expect(
+          main.getByRole('listitem').locator(`.changelog-category-${category.toLowerCase()}`),
+        ).toHaveCount(annotations);
+      }
       await expect(main.getByRole('link', { name: '#151', exact: true })).toHaveAttribute(
         'href',
         'https://github.com/ashleylamont/smashclub-seeding/pull/151',
@@ -172,7 +217,7 @@ for (const theme of ['light', 'dark'] as const) {
         (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
       ).toEqual([]);
       await page.screenshot({ path: testInfo.outputPath('changelog.png') });
-      const image = main.getByRole('img', {
+      const image = page.getByRole('img', {
         name: /OBS intermission showing a double-elimination bracket/,
       });
       await image.scrollIntoViewIfNeeded();
@@ -180,7 +225,45 @@ for (const theme of ['light', 'dark'] as const) {
         .poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth))
         .toBeGreaterThan(0);
       expect((await image.boundingBox())!.width).toBeLessThanOrEqual(viewport.width);
-      await image.screenshot({ path: testInfo.outputPath('changelog-illustration.png') });
+      const illustratedEntry = main.getByRole('listitem').filter({ has: image });
+      await expect(illustratedEntry.locator('.changelog-category-feature')).toHaveText('Feature');
+      await illustratedEntry.screenshot({
+        path: testInfo.outputPath('changelog-illustration.png'),
+      });
     });
   }
 }
+
+test('the standalone OBS display stays outside the shared app footer', async ({ page }) => {
+  await mockEvent(page, { idle: true });
+  await page.goto(`/overlay/${PLAN_ID}?presentation=progress`);
+  await expect(page.getByRole('region', { name: 'Tournament progress' })).toBeVisible();
+  await expect(page.locator('.app-footer')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Changelog' })).toHaveCount(0);
+});
+
+test('footer screenshot metadata stays fixed while the normal DOM shows the actual values', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockHome(page);
+  await page.goto('/');
+  const footer = page.getByRole('contentinfo');
+  const versionLabel = footer.locator('.app-version');
+  const buildLabel = footer.locator('.build-label');
+  await expect(versionLabel).toHaveText(`v${version}`);
+  await expect(buildLabel).toHaveText(buildSha?.slice(0, 7) || 'dev');
+  await ready(page);
+  const capture = { style: footerMetadataCaptureStyle };
+  const original = await footer.screenshot(capture);
+
+  await versionLabel.evaluate((element) => {
+    element.textContent = 'v123.456.789';
+  });
+  await buildLabel.evaluate((element) => {
+    element.textContent = '123abcd';
+  });
+  await expect(versionLabel).toHaveText('v123.456.789');
+  await expect(buildLabel).toHaveText('123abcd');
+  expect(await footer.screenshot(capture)).toEqual(original);
+});
