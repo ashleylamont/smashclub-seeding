@@ -1,11 +1,12 @@
 import { isKnockout } from '@smashclub/shared';
 import { Select, SelectItem } from '../../../components/ui/Select';
 import { Button } from '../../../components/ui/Button';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { trpc } from '../../../lib/trpc';
 import type { EventPlanDivision, EventPlanPool, EventPlanView } from '../../../lib/apiTypes';
 import { DIVISION_LABEL } from './labels';
+import { LegacyPoolOrderRepair } from './LegacyPoolOrderRepair';
 
 /**
  * Step 5 and step 7: the pool cards, and the worksheet that records how each
@@ -123,7 +124,9 @@ function DivisionPools({
       {locked && (
         <p className="muted">
           {division.fixedLegacyFinals
-            ? 'This worksheet is read-only.'
+            ? division.pools.some((pool) => pool.legacyOrderRepairPoolId)
+              ? 'Placements are read-only. A missing order can be restored from verified journal evidence.'
+              : 'This worksheet is read-only.'
             : 'Placements are read-only while the event is closed or consolation is attached. Reconcile and detach consolation before changing qualifiers.'}
         </p>
       )}
@@ -216,9 +219,19 @@ type PoolCardProps = {
 };
 
 function PoolCard({ pool, fixedLegacyFinals, ...editor }: PoolCardProps) {
+  const heading = useRef<HTMLHeadingElement>(null);
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current && !pool.legacyOrderRepairPoolId) {
+      restored.current = false;
+      heading.current?.focus();
+    }
+  }, [pool.legacyOrderRepairPoolId]);
   return (
     <div className="pool-card">
-      <h5>Pool {pool.label}</h5>
+      <h5 tabIndex={-1} ref={heading}>
+        Pool {pool.label}
+      </h5>
       <ol className="pool-members">
         {pool.members.map((member) => (
           <li key={member.playerId}>
@@ -233,6 +246,17 @@ function PoolCard({ pool, fixedLegacyFinals, ...editor }: PoolCardProps) {
         <span className="form-label">Final order</span>
         {pool.orderStatus && <p className="muted">{pool.orderStatus.reason}</p>}
         {pool.orderLockedReason && <p className="muted">{pool.orderLockedReason}</p>}
+        {pool.legacyOrderRepairPoolId && (
+          <LegacyPoolOrderRepair
+            planId={editor.planId}
+            poolId={pool.legacyOrderRepairPoolId}
+            poolName={`${DIVISION_LABEL[editor.divisionKey]} Pool ${pool.label}`}
+            onRestored={() => {
+              restored.current = true;
+              editor.onChanged();
+            }}
+          />
+        )}
         {(!fixedLegacyFinals || !pool.orderLockedReason) && (
           <PoolOrderEditor pool={pool} fixedLegacyFinals={fixedLegacyFinals} {...editor} />
         )}

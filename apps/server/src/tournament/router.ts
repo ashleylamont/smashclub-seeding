@@ -3,7 +3,13 @@ import { publicEntrantNames } from './entrants';
 import { dispatchDesk } from './dispatch';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
-import { authedProcedure, publicProcedure, router, type TrpcContext } from '../trpc/trpc';
+import {
+  adminProcedure,
+  authedProcedure,
+  publicProcedure,
+  router,
+  type TrpcContext,
+} from '../trpc/trpc';
 import { requireOperator } from '../event-operations/access';
 import { Command, PoolGameCorrection } from './schemas';
 import { FinalsSlotReplayScore } from './commands';
@@ -11,6 +17,8 @@ import { previewFinalsSlotReplay } from './finalsSlotReplay';
 import { reviewPoolGameCorrection } from './poolGameCorrection';
 import { TournamentConflict } from './domain';
 import { nativeEventHistory } from './history';
+import { LegacyPoolOrderRepairReview } from './recoverySchema';
+import { hash } from './facts';
 
 const plan = z.object({ planId: z.uuid() });
 function runtime(ctx: TrpcContext) {
@@ -33,6 +41,34 @@ async function transport<T>(work: () => Promise<T>) {
 
 /** Direct command/cursor/recovery API for the standard native lifecycle. */
 export const nativeLiveRouter = router({
+  previewLegacyPoolOrderRepair: adminProcedure
+    .input(plan.extend({ poolId: z.uuid() }))
+    .query(({ ctx, input }) =>
+      transport(() => runtime(ctx).reviewLegacyPoolOrder(input.planId, input.poolId)),
+    ),
+  restoreLegacyPoolOrder: adminProcedure
+    .input(
+      plan
+        .extend({ requestId: z.string().min(1).max(128), ...LegacyPoolOrderRepairReview.shape })
+        .strict(),
+    )
+    .mutation(({ ctx, input: { planId, requestId, ...review } }) =>
+      transport(async () => {
+        const live = runtime(ctx);
+        const intent = { kind: 'restoreLegacyPoolOrder' as const, ...review };
+        const proof = await live.reviewLegacyPoolOrder(planId, review.poolId);
+        // Keep the receipt key bound to the same operator intent even when the
+        // successful append means there is no longer a missing order to review.
+        const { receipt } = await live.command(
+          ctx.user,
+          planId,
+          requestId,
+          { ...intent, evidence: proof.allowed ? proof.evidence : null },
+          hash(intent),
+        );
+        return { sequence: receipt.sequence };
+      }),
+    ),
   dispatchDesk: authedProcedure.input(plan).query(async ({ ctx, input }) => {
     await requireOperator(ctx.db, input.planId, ctx.user);
     return transport(async () => {
@@ -96,6 +132,11 @@ export const nativeLiveRouter = router({
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: 'Use the reviewed late doubles pair workflow.',
+          });
+        if (input.command.kind === 'restoreLegacyPoolOrder')
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Use the reviewed legacy pool order workflow.',
           });
         const live = runtime(ctx);
         const response = await live.command(ctx.user, input.planId, input.requestId, input.command);

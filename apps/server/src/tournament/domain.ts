@@ -1,6 +1,7 @@
 import { completeCommandProgression } from './progression';
 import { rollingFinals } from './qualifiers';
 import { confirmPoolPlacements } from './poolOrders';
+import { restoreLegacyPoolOrder } from './legacyPoolOrderRepair';
 import { updateResources, sharedDispatch } from './dispatch';
 import { validateKnockoutBaseline } from './structureValidation';
 import { isKnockout, isSinglePool } from '@smashclub/shared';
@@ -149,6 +150,7 @@ function decisionFactVersion(
   if (kind === 'replayFinalsSlotV1') return 7 as const;
   if (kind === 'substituteDoublesMember') return 8 as const;
   if (kind === 'addLateDoublesPair') return 10 as const;
+  if (kind === 'restoreLegacyPoolOrder') return 11 as const;
   if (
     !['retire', 'finalize', 'replaceResult'].includes(kind) &&
     [previous, state].some((value) => value.brackets.some((b) => b.strengthSeeding))
@@ -178,6 +180,41 @@ function correctedScoreCommand(state: TournamentState, command: TournamentComman
   return state.matches.find((match) => match.id === command.matchId)?.resultCommandId ?? null;
 }
 
+function requireCommandAccess(lifecycle: TournamentState['lifecycle'], envelope: CommandEnvelope) {
+  const { kind } = envelope.command;
+  requireFact(
+    kind === 'retire' ||
+      ((lifecycle !== 'finalized' || ['replaceResult', 'restoreLegacyPoolOrder'].includes(kind)) &&
+        lifecycle !== 'cancelled'),
+    'Results are sealed. Use an explicit replacement revision workflow.',
+  );
+  requireFact(
+    envelope.operator || kind === 'score' || kind === 'dispatch',
+    'Only an organiser can perform this action.',
+  );
+  requireFact(
+    lifecycle === 'locked' ||
+      [
+        'relock',
+        'resources',
+        'configureDispatch',
+        'reporting',
+        'poolResources',
+        'station',
+        'configurePools',
+        'cancel',
+        'replaceResult',
+        'restoreLegacyPoolOrder',
+        'retire',
+        'attendance',
+        'substituteDoublesMember',
+        'addLateDoublesPair',
+        'resetQueue',
+      ].includes(kind),
+    'Relock before making live decisions.',
+  );
+}
+
 export function decide(
   previous: TournamentState,
   envelope: CommandEnvelope,
@@ -192,37 +229,8 @@ export function decide(
     return undefined;
   }
   requireFact(previous.baseline, 'Baseline transfer has not completed.');
-  requireFact(
-    envelope.command.kind === 'retire' ||
-      ((previous.lifecycle !== 'finalized' || envelope.command.kind === 'replaceResult') &&
-        previous.lifecycle !== 'cancelled'),
-    'Results are sealed. Use an explicit replacement revision workflow.',
-  );
+  requireCommandAccess(previous.lifecycle, envelope);
   const command = envelope.command;
-  requireFact(
-    envelope.operator || command.kind === 'score' || command.kind === 'dispatch',
-    'Only an organiser can perform this action.',
-  );
-  requireFact(
-    previous.lifecycle === 'locked' ||
-      [
-        'relock',
-        'resources',
-        'configureDispatch',
-        'reporting',
-        'poolResources',
-        'station',
-        'configurePools',
-        'cancel',
-        'replaceResult',
-        'retire',
-        'attendance',
-        'substituteDoublesMember',
-        'addLateDoublesPair',
-        'resetQueue',
-      ].includes(command.kind),
-    'Relock before making live decisions.',
-  );
   const next = structuredClone(previous);
   const basis: Record<string, number> = {};
   let reportId: string | null = null;
@@ -330,6 +338,9 @@ export function decide(
     case 'placements':
       confirmPoolPlacements(next, command, basis);
       break;
+    case 'restoreLegacyPoolOrder':
+      restoreLegacyPoolOrder(next, command, basis);
+      break;
     case 'drawFinals':
       requireFact(
         !command.seedPolicy || (command.revisionToken && !command.replaceExisting),
@@ -360,7 +371,7 @@ export function decide(
     default:
       requireFact(additionalDecision(next, envelope, basis), 'Unsupported command.');
   }
-  if (command.kind !== 'broadcastSides')
+  if (command.kind !== 'broadcastSides' && command.kind !== 'restoreLegacyPoolOrder')
     completeCommandProgression(previous, next, envelope, basis);
   const after: TournamentDecision['after'] = {};
   for (const field of [

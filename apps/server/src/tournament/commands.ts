@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { RecoveryInput } from './recoverySchema';
+import {
+  LegacyPoolOrderRepairEvidence,
+  LegacyPoolOrderRepairReview,
+  RecoveryInput,
+} from './recoverySchema';
 const id = z.uuid();
 const revision = z.number().int().nonnegative();
 const poolOrder = z.object({
@@ -88,6 +92,10 @@ export const additionalCommands = [
     expectedResourceRevision: revision,
   }),
   RecoveryInput.extend({ kind: z.literal('retire'), expectedSequence: revision }),
+  LegacyPoolOrderRepairReview.extend({
+    kind: z.literal('restoreLegacyPoolOrder'),
+    evidence: LegacyPoolOrderRepairEvidence.nullable(),
+  }),
   z.object({
     kind: z.literal('progress'),
     matchId: id,

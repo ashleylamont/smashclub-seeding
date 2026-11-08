@@ -1,5 +1,6 @@
 import { poolFinalsConsumed, rollingFinals } from './qualifiers';
 import { hasFixedLegacyPoolQualifiers, legacyQualifierSlots } from './legacyFinalQualifiers';
+import { canReviewLegacyPoolOrder } from './legacyPoolOrderRepair';
 import { projectMatchLabels } from './matchNames';
 import {
   canConfirmPoolOrder,
@@ -409,7 +410,11 @@ function worksheetOrderLock(
     return 'Finals already use this pool order. Called or played opponents and report history stay fixed.';
 }
 
-export async function planView(db: Db, state: TournamentState): Promise<PlanView> {
+export async function planView(
+  db: Db,
+  state: TournamentState,
+  canReviewImportedOrder = false,
+): Promise<PlanView> {
   const draft = (await sqlPlan(db, state.baseline!.planId))!;
   const profiles = new Map((await db.select().from(players)).map((p) => [p.id, p]));
   const originalEntrantIds = new Set(state.baseline!.entrants.map(({ id }) => id));
@@ -478,7 +483,10 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
       state.brackets.some((bracket) => bracket.division === division);
     const divisionPools = state.pools.filter((p) => p.division === division);
     const pools = divisionPools.map((p) => {
-      const orderLockedReason = worksheetOrderLock(state, p, fixedLegacyFinals);
+      const repairable = canReviewImportedOrder && canReviewLegacyPoolOrder(state, p);
+      const orderLockedReason = repairable
+        ? 'The confirmed order is missing. Check the journal for the original places.'
+        : worksheetOrderLock(state, p, fixedLegacyFinals);
       return {
         poolIndex: p.index,
         label: poolLabel(p.index),
@@ -488,6 +496,7 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
           ? p.qualifierDecision?.groups.flatMap((group) => group.map(() => group))
           : undefined,
         orderLockedReason,
+        ...(repairable ? { legacyOrderRepairPoolId: p.id } : {}),
         orderStatus:
           fixedLegacyFinals && orderLockedReason && !p.order
             ? undefined

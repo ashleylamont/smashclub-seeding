@@ -71,6 +71,8 @@ export interface PoolView {
   placementRevision?: string;
   qualifierRoster?: string[];
   orderLockedReason?: string;
+  /** Private admin-only target for an explicit journal review. */
+  legacyOrderRepairPoolId?: string;
   /** Valid entrant IDs for each place in a tie ruling. Singleton places are fixed. */
   rulingOptions?: string[][];
   orderStatus?: {
