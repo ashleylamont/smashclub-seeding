@@ -8,6 +8,7 @@ export function recentResultCount(search: string) {
 }
 
 export function resultStageLabel(match: ResultMatch) {
+  if (match.labelFromStructure) return match.label;
   const division =
     match.division === 'upper' ? 'Upper' : match.division === 'lower' ? 'Lower' : match.division;
   return match.stage === 'group'

@@ -1,5 +1,5 @@
 import { publicPoolViews } from './poolOrders';
-import { matchNames } from './matchNames';
+import { projectMatchLabels } from './matchNames';
 import { isReserved, publicSettings, sharedDispatch } from './dispatch';
 import { publicEntrantNames } from './entrants';
 import { applyPlanRetirement } from '../event-planner/retirement';
@@ -261,7 +261,7 @@ export function createNativeRuntime(
       },
     );
     const names = publicEntrantNames(await db.select().from(players), state.entrants);
-    const labels = matchNames(state);
+    const labels = projectMatchLabels(state);
     const publicState = {
       ...(state.broadcastSides ? { broadcastSides: state.broadcastSides } : {}),
       plan: {
@@ -285,7 +285,7 @@ export function createNativeRuntime(
         .filter((m) => !m.skipped)
         .map((m) => ({
           ...m,
-          label: labels.get(m.id) ?? m.label,
+          ...labels.get(m.id),
           player1Name: m.player1Id ? (names.get(m.player1Id) ?? 'Player') : 'TBD',
           player2Name: m.player2Id ? (names.get(m.player2Id) ?? 'Player') : 'TBD',
           pendingDisputeCount: state.reports.filter(

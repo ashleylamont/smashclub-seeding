@@ -1,6 +1,6 @@
 import { poolFinalsConsumed, rollingFinals } from './qualifiers';
 import { hasFixedLegacyPoolQualifiers, legacyQualifierSlots } from './legacyFinalQualifiers';
-import { matchNames } from './matchNames';
+import { projectMatchLabels } from './matchNames';
 import { canConfirmPoolOrder, poolOrderStatus, poolPlacementSource } from './poolOrders';
 import {
   dispatchAvailability,
@@ -30,10 +30,13 @@ import { pendingStrengthFinals } from './strengthFinals';
 import type { Match, QualifierSlot, TournamentState } from './schemas';
 
 type SqlSnapshot = Awaited<ReturnType<typeof sqlSnapshot>>;
-type QualifierFields = Pick<Match, 'player1Qualifier' | 'player2Qualifier' | 'qualificationBlocks'>;
+type MatchViewFields = Pick<
+  Match,
+  'player1Qualifier' | 'player2Qualifier' | 'qualificationBlocks'
+> & { labelFromStructure?: true };
 export type EventSnapshot = Omit<SqlSnapshot, 'placements' | 'matches' | 'nativeBrackets'> & {
   broadcastSides?: TournamentState['broadcastSides'];
-  matches: (SqlSnapshot['matches'][number] & QualifierFields)[];
+  matches: (SqlSnapshot['matches'][number] & MatchViewFields)[];
   nativeBrackets: (SqlSnapshot['nativeBrackets'][number] & { qualifierSlots?: QualifierSlot[] })[];
   pendingFinals?: ReturnType<typeof pendingStrengthFinals>;
   placements: (Omit<SqlSnapshot['placements'][number], 'source'> & {
@@ -48,7 +51,7 @@ export type EventSnapshot = Omit<SqlSnapshot, 'placements' | 'matches' | 'native
   }[];
 };
 export function matchRows(state: TournamentState): (typeof eventMatches.$inferSelect &
-  QualifierFields & {
+  MatchViewFields & {
     parent1Outcome?: 'winner' | 'loser';
     parent2Outcome?: 'winner' | 'loser';
     bracketLane?: string;
@@ -58,7 +61,7 @@ export function matchRows(state: TournamentState): (typeof eventMatches.$inferSe
     player1MemberIds?: string[];
     player2MemberIds?: string[];
   })[] {
-  const labels = matchNames(state);
+  const labels = projectMatchLabels(state);
   return state.matches
     .filter((m) => !m.skipped)
     .map((m) => ({
@@ -69,7 +72,8 @@ export function matchRows(state: TournamentState): (typeof eventMatches.$inferSe
       division: m.division,
       stage: m.stage,
       poolIndex: state.pools.find((p) => p.id === m.poolId)?.index ?? null,
-      label: labels.get(m.id) ?? m.label,
+      label: m.label,
+      ...labels.get(m.id),
       player1Id: m.player1Id,
       ...(m.player1Qualifier ? { player1Qualifier: m.player1Qualifier } : {}),
       ...(m.player2Qualifier ? { player2Qualifier: m.player2Qualifier } : {}),

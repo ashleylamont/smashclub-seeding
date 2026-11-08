@@ -78,9 +78,7 @@ export function EventScoreCard({
   return (
     <article className={`card ops-match ops-match-${match.status}`}>
       <div className="ops-match-meta">
-        <span>
-          {match.division} · {match.label}
-        </span>
+        <span>{match.labelFromStructure ? match.label : `${match.division} · ${match.label}`}</span>
         <span className="chip">
           {presentation.status ?? status}
           {station ? ` · ${station}` : ''}

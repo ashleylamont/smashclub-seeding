@@ -144,6 +144,10 @@ export async function verifyMixedLegacyFinalsRecovery(
     const waiting = imported.matches.find(
       (m) => m.bracketId === mixed.id && m.qualificationBlocks?.length,
     )!;
+    const waitingView = publicBefore.matches.find((match) => match.id === waiting.id)!;
+    expect(waitingView.nativeBracketId).toBe(mixed.id);
+    expect(waitingView.label).toBe(waiting.label);
+    expect(waitingView.labelFromStructure).toBeUndefined();
     await expect(scoreActMatch(runtime, planId, waiting)).rejects.toThrow(
       /Resolve the relevant pool qualification/,
     );

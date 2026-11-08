@@ -106,6 +106,9 @@ describe('structural native display names', () => {
       if (malformed) data.matches[1]!.slot = data.matches[0]!.slot;
       else data.matches.pop();
       expect(matchNames(data)).toEqual(new Map(data.matches.map((m) => [m.id, m.label])));
+      const state = pureState();
+      Object.assign(state, data);
+      expect(matchRows(state).every((row) => row.labelFromStructure === undefined)).toBe(true);
     }
   });
 
@@ -116,9 +119,13 @@ describe('structural native display names', () => {
     state.matches.push(...data.matches);
     const before = hash(state);
     const rows = matchRows(state);
-    expect(rows.find((m) => m.id === data.matches[0]!.id)!.label).toBe('Semi-final 1');
+    expect(rows.find((m) => m.id === data.matches[0]!.id)).toMatchObject({
+      label: 'Semi-final 1',
+      labelFromStructure: true,
+    });
     expect(rows.find((m) => m.id === data.matches.at(-1)!.id)!.label).toBe('Final');
     expect(rows.find((m) => m.stage === 'group')!.label).toBe(state.matches[0]!.label);
+    expect(rows.find((m) => m.stage === 'group')!.labelFromStructure).toBeUndefined();
     expect(hash(state)).toBe(before);
   });
 });

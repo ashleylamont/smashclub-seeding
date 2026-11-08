@@ -17,6 +17,7 @@ export interface LiveMatch {
   stage: string;
   poolIndex: number | null;
   label: string;
+  labelFromStructure?: true;
   player1Name: string | null;
   player2Name: string | null;
   player1Id: string | null;
