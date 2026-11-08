@@ -1,0 +1,8 @@
+pool-stations.spec.ts
+score-without-start.spec.ts
+screenshots.spec.ts
+shared-dispatch.spec.ts
+to-attention.spec.ts
+to-player-finder.spec.ts
+tournament-formats.spec.ts
+tournament-projection.spec.ts

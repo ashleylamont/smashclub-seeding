@@ -95,7 +95,10 @@ jobs:
       - run: pnpm --filter @smashclub/web build
       # The root test:e2e command rebuilds. Use the already-built SPA here.
       # Each runner owns a fresh harness; files stay together and use one worker.
-      - run: pnpm --filter @smashclub/web test:e2e --shard=${{ matrix.shard }}/4 --reporter=list,blob
+      - name: Run browser shard
+        run: |
+          node scripts/check-browser-shards.mjs
+          pnpm --filter @smashclub/web test:e2e --test-list="e2e-shards/${{ matrix.shard }}.txt" --reporter=list,blob
       - uses: actions/upload-artifact@v4
         if: always()
         with:
