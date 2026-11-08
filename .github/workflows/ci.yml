@@ -160,17 +160,41 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+  ui-portable:
+    name: UI behavior and accessibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      ui_case_set: ${{ steps.browser.outputs.ui_case_set }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-node-pnpm
+      - run: pnpm --filter @smashclub/web exec playwright install --with-deps chromium
+      - id: browser
+        run: node scripts/run-ui-platform.mjs portable
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: ui-portable-review
+          path: |
+            apps/web/playwright-report/ui
+            apps/web/ui-test-results
+          retention-days: 7
+          if-no-files-found: ignore
+
   ui-quality:
     name: UI accessibility and visuals
-    # Chromium screenshots are platform-specific. Commit Darwin baselines from
-    # this job; the database-backed event flows continue on Linux above.
+    # Keep platform-specific Chromium comparisons on the committed baseline OS.
     runs-on: macos-15
     timeout-minutes: 15
+    outputs:
+      ui_case_set: ${{ steps.browser.outputs.ui_case_set }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-node-pnpm
       - run: pnpm --filter @smashclub/web exec playwright install chromium
-      - run: pnpm --filter @smashclub/web test:ui
+      - id: browser
+        run: node scripts/run-ui-platform.mjs darwin
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -338,6 +362,7 @@ jobs:
         test,
         e2e,
         e2e-report,
+        ui-portable,
         ui-quality,
         build,
         bundle-smoke,
