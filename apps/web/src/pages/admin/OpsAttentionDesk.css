@@ -66,6 +66,7 @@
   gap: 0.5rem;
 }
 .ops-report:focus,
+.ops-pool-order-heading:focus,
 #score-submissions:focus,
 #station-controls:focus,
 #match-desk:focus {

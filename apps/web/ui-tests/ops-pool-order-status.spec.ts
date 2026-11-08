@@ -9,12 +9,14 @@ test('assigned organisers are directed to the appropriate score review or admini
   Object.assign(fixture.overview, {
     poolOrders: [
       {
+        poolId: 'upper-0',
         division: 'upper',
         poolIndex: 0,
         status: 'review_pending',
         reason: 'Resolve current score reports before deciding this pool order.',
       },
       {
+        poolId: 'upper-1',
         division: 'upper',
         poolIndex: 1,
         status: 'partial',
@@ -22,6 +24,7 @@ test('assigned organisers are directed to the appropriate score review or admini
         plannerConfirmation: { available: true },
       },
       {
+        poolId: 'lower-0',
         division: 'lower',
         poolIndex: 0,
         status: 'manual_required',
@@ -33,6 +36,7 @@ test('assigned organisers are directed to the appropriate score review or admini
         },
       },
       {
+        poolId: 'lower-1',
         division: 'lower',
         poolIndex: 1,
         status: 'retained_after_correction',
@@ -84,6 +88,7 @@ for (const theme of ['dark', 'light'] as const) {
       Object.assign(fixture.overview, {
         poolOrders: [
           {
+            poolId: 'upper-0',
             division: 'upper',
             poolIndex: 0,
             status: 'manual_required',
@@ -93,6 +98,7 @@ for (const theme of ['dark', 'light'] as const) {
             },
           },
           {
+            poolId: 'lower-0',
             division: 'lower',
             poolIndex: 0,
             status: 'ruling_required',

@@ -192,7 +192,8 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
       </header>
       <OpsAttentionDesk
         data={data}
-        onJump={(id) => void workspace.openControl(id)}
+        pools={pools}
+        onJump={(id, section) => void workspace.openControl(id, section)}
         onMatch={(id) => {
           setFocusedMatchId(id);
           setDivision('all');
