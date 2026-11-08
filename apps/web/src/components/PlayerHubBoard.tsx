@@ -74,6 +74,7 @@ export function PlayerHubBoard({
           schedules={data.poolSchedules ?? []}
           stations={data.stations}
           recordedOnly={board.closed}
+          structure={data.plan.structure}
         />
         {!board.pools.length && (
           <>
@@ -176,6 +177,7 @@ export function PlayerHubBoard({
             <MatchCard
               key={match.id}
               match={match}
+              structure={data.plan.structure}
               nextMatch={board.closed ? undefined : nextMeaningfulMatch(data.matches, match)}
               station={matchStation(data, match, board.closed).name ?? undefined}
             />

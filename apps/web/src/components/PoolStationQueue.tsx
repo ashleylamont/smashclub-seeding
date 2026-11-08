@@ -21,7 +21,7 @@ export function PoolFilter({
   value,
   onChange,
 }: {
-  data: Pick<PoolFlowData, 'matches'>;
+  data: Pick<PoolFlowData, 'matches' | 'plan'>;
   value: string;
   onChange: (value: string) => void;
 }) {
@@ -35,11 +35,13 @@ export function PoolFilter({
       <Select value={value} onValueChange={onChange}>
         <SelectItem value="">All pools & finals</SelectItem>
         {value && !keys.includes(value) && (
-          <SelectItem value={value}>{poolTitle(value)} · unavailable</SelectItem>
+          <SelectItem value={value}>
+            {poolTitle(value, data.plan.structure)} · unavailable
+          </SelectItem>
         )}
         {keys.map((key) => (
           <SelectItem key={key} value={key}>
-            {poolTitle(key)}
+            {poolTitle(key, data.plan.structure)}
           </SelectItem>
         ))}
       </Select>
@@ -157,12 +159,14 @@ export function PoolStationQueue({
     >
       <div className="pool-flow-heading">
         <h2>{playerId ? 'Your stations' : 'Find your station'}</h2>
-        <span>{selectedPool ? poolTitle(selectedPool) : 'Playing now · play next'}</span>
+        <span>
+          {selectedPool ? poolTitle(selectedPool, data.plan.structure) : 'Playing now · play next'}
+        </span>
       </div>
       {selectedSchedule?.active === false && (
         <p className="pool-flow-selected-note">
-          {poolTitle(selectedPool)} is scheduled for a later wave. These stations may be serving
-          another pool now; wait for your pool to be called.
+          {poolTitle(selectedPool, data.plan.structure)} is scheduled for a later wave. These
+          stations may be serving another pool now; wait for your pool to be called.
         </p>
       )}
       <p className="pool-flow-note">
@@ -205,7 +209,7 @@ export function PoolStationQueue({
               </header>
               <p className="pool-flow-bank">
                 {queue?.poolKey
-                  ? `${poolTitle(queue.poolKey)} · station bank`
+                  ? `${poolTitle(queue.poolKey, data.plan.structure)} · station bank`
                   : 'Open station · no active pool reservation'}
               </p>
               {current ? (
@@ -394,7 +398,8 @@ export function PoolRoundSchedule({
         <Disclosure
           title={
             <>
-              {poolTitle(pool.poolKey)} <span>{pool.rounds.length} rounds</span>
+              {poolTitle(pool.poolKey, data.plan.structure)}{' '}
+              <span>{pool.rounds.length} rounds</span>
             </>
           }
           className="pool-flow-round-group"

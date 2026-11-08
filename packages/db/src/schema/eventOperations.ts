@@ -26,6 +26,19 @@ export const eventOperationSettings = pgTable('event_operation_settings', {
   published: boolean('published').notNull().default(false),
   playerReports: boolean('player_reports').notNull().default(false),
 });
+/** Presentation only. Native lifecycle and reporting remain in the Act journal. */
+export const eventTwitchPromotions = pgTable(
+  'event_twitch_promotions',
+  {
+    eventPlanId: planId().primaryKey(),
+    channel: text('channel'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    revision: integer('revision').notNull(),
+  },
+  (t) => [
+    check('event_twitch_promotion_pair', sql`(${t.channel} is null) = (${t.expiresAt} is null)`),
+  ],
+);
 export const eventOperators = pgTable(
   'event_operators',
   {

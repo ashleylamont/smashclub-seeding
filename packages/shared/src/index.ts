@@ -7,3 +7,5 @@ export * from './names';
 export * from './events';
 export * from './competition';
 export * from './broadcast';
+
+export * from './twitchChannel';

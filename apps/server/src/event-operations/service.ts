@@ -16,6 +16,7 @@ import {
   eventMatchAudit,
   eventMatches,
   eventOperationSettings,
+  eventTwitchPromotions,
   eventPlanBrackets,
   eventPlanEntries,
   eventPlanPoolPlacements,
@@ -37,6 +38,7 @@ import type { SessionUser } from '../auth';
 import { getPlan, type PlanView } from '../event-planner/plans';
 import { matchAvailability, stationAvailability } from './availability';
 import { isOperator, lockEvent, requireOperator } from './access';
+import { operatorTwitchPromotion, publicTwitchPromotion } from './twitchPromotion';
 export { isOperator, lockEvent, requireOperator } from './access';
 const fail = (
   code: 'BAD_REQUEST' | 'CONFLICT' | 'FORBIDDEN' | 'NOT_FOUND',
@@ -45,27 +47,31 @@ const fail = (
   throw new TRPCError({ code, message });
 };
 export async function readSqlSnapshotSource(db: Db, planId: string, privateView = false) {
-  const [plan] = await db.select().from(eventPlans).where(eq(eventPlans.id, planId));
-  if (!plan || plan.deletedAt) return fail('NOT_FOUND', 'Event not found.');
-  const [live] = await db
-    .select()
-    .from(nativeLiveHandoffs)
-    .where(eq(nativeLiveHandoffs.eventPlanId, planId));
+  const [source] = await db
+    .select({
+      plan: eventPlans,
+      settings: eventOperationSettings,
+      live: nativeLiveHandoffs.eventPlanId,
+      twitch: eventTwitchPromotions,
+    })
+    .from(eventPlans)
+    .leftJoin(eventOperationSettings, eq(eventOperationSettings.eventPlanId, eventPlans.id))
+    .leftJoin(nativeLiveHandoffs, eq(nativeLiveHandoffs.eventPlanId, eventPlans.id))
+    .leftJoin(eventTwitchPromotions, eq(eventTwitchPromotions.eventPlanId, eventPlans.id))
+    .where(eq(eventPlans.id, planId));
+  if (!source || source.plan.deletedAt) return fail('NOT_FOUND', 'Event not found.');
+  const { plan, settings, live, twitch } = source;
   if (live)
     return fail(
       'CONFLICT',
       'This event is owned by Act. Read its authoritative snapshot through eventOps.live.',
     );
-  const [settings] = await db
-    .select()
-    .from(eventOperationSettings)
-    .where(eq(eventOperationSettings.eventPlanId, planId));
   if (!privateView && !settings?.published) fail('NOT_FOUND', 'This event is not published.');
-  return { plan, settings };
+  return { plan, settings, twitch };
 }
 
 export async function snapshot(db: Db, planId: string, privateView = false) {
-  const { plan, settings } = await readSqlSnapshotSource(db, planId, privateView);
+  const { plan, settings, twitch } = await readSqlSnapshotSource(db, planId, privateView);
   const names = new Map((await db.select().from(players)).map((p) => [p.id, publicPlayerName(p)]));
   const rows = await db
     .select()
@@ -170,8 +176,14 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
   const prizes = (
     await db.select().from(eventPrizes).where(eq(eventPrizes.eventPlanId, planId))
   ).map((p) => ({ ...p, playerName: p.playerId ? (names.get(p.playerId) ?? 'Player') : null }));
+  const twitchView: ReturnType<typeof publicTwitchPromotion> & {
+    twitchBroadcast?: ReturnType<typeof operatorTwitchPromotion>;
+  } = privateView
+    ? { twitchBroadcast: operatorTwitchPromotion(twitch) }
+    : publicTwitchPromotion(twitch, plan.status === 'underway' && Boolean(settings?.published));
   return {
     publicCode: plan.publicCode,
+    ...twitchView,
     ...(await loadStationQueues(db, planId)),
     ...({} as { operatorDispatch?: ReturnType<typeof dispatchDesk> }),
     sharedDispatch: null as SharedDispatchSummary | null,

@@ -6,6 +6,7 @@ import { asc, eq } from 'drizzle-orm';
 import {
   companies,
   eventOperators,
+  eventTwitchPromotions,
   nativeLiveHandoffs,
   players,
   user,
@@ -13,8 +14,15 @@ import {
   type eventMatchAudit,
   type eventAttendanceAudit,
 } from '@smashclub/db';
-import { publicPlayerName, type CompetitionFormat } from '@smashclub/shared';
+import { publicPlayerName } from '@smashclub/shared';
 import { requireOperator } from '../event-operations/access';
+import type { publicEventNights } from '../event-operations/publicEvents';
+import {
+  nativeTwitchOpen,
+  operatorTwitchPromotion,
+  publicTwitchPromotion,
+  readTwitchPromotion,
+} from '../event-operations/twitchPromotion';
 import type { TrpcContext } from '../trpc/trpc';
 import { nativeEvent, reportViews, type NativeEventApi } from './api';
 
@@ -69,6 +77,7 @@ export async function nativeOverview(api: NativeEventApi) {
   const snapshot = await eventView(ctx.db, state, true);
   return {
     ...snapshot,
+    twitchBroadcast: operatorTwitchPromotion(await readTwitchPromotion(ctx.db, planId)),
     poolDrawPauseBlocker: poolDrawPauseBlocker(state),
     operatorDispatch: dispatchDesk(
       state,
@@ -140,24 +149,15 @@ export async function nativeRoster(api: NativeEventApi) {
 }
 export async function nativePublicEvents(
   ctx: TrpcContext,
-  legacy: () => Promise<
-    {
-      id: string;
-      name: string;
-      eventDate: string;
-      status: string;
-      bracketMode: 'native' | 'challonge';
-      competitionFormat: CompetitionFormat;
-      drawPaused: boolean;
-    }[]
-  >,
+  legacy: () => ReturnType<typeof publicEventNights>,
 ) {
   const original = await legacy();
   if (!ctx.nativeRuntime) return original;
   const native = [];
-  for (const plan of await ctx.db
-    .select()
+  for (const { plan, twitch } of await ctx.db
+    .select({ plan: eventPlans, twitch: eventTwitchPromotions })
     .from(eventPlans)
+    .leftJoin(eventTwitchPromotions, eq(eventTwitchPromotions.eventPlanId, eventPlans.id))
     .where(eq(eventPlans.bracketMode, 'native'))) {
     if (plan.deletedAt) continue;
     const api = await nativeEvent(ctx, plan.id);
@@ -177,6 +177,7 @@ export async function nativePublicEvents(
       bracketMode: 'native' as const,
       competitionFormat: state.baseline!.competitionFormat ?? 'singles',
       drawPaused: state.lifecycle === 'unlocked',
+      ...publicTwitchPromotion(twitch, nativeTwitchOpen(state)),
     });
   }
   const owned = new Set((await ctx.db.select().from(nativeLiveHandoffs)).map((h) => h.eventPlanId));
