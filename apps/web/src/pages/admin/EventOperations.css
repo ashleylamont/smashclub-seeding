@@ -247,6 +247,7 @@
   border: 1px solid var(--border);
 }
 .ops-attendance-fields {
+  min-inline-size: 0;
   border: 0;
   padding: 0;
   display: grid;
@@ -255,10 +256,8 @@
 }
 .ops-attendance-fields label {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 7px;
-}
-.ops-attendance-fields .ops-check {
-  grid-column: 1/-1;
 }
 .ops-attendance-preview {
   border: 1px solid var(--border);
@@ -302,7 +301,7 @@
 }
 @media (max-width: 650px) {
   .ops-attendance-fields {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .ops-attendee-copy {
     flex-direction: column;

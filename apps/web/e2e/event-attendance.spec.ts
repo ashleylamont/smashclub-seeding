@@ -41,46 +41,48 @@ async function mutate<T>(request: APIRequestContext, name: string, input: object
   return (await response.json()).result.data as T;
 }
 
+async function prepareAttendanceEvent(
+  request: APIRequestContext,
+  bracketMode: 'native' | 'challonge',
+) {
+  const login = await request.post('/api/auth/sign-in/email', {
+    data: { email: 'admin@smashclub.dev', password: 'devpassword123' },
+  });
+  expect(login.ok()).toBe(true);
+  const plans = await query<{ id: string; name: string }[]>(request, 'admin.eventPlanner.plans');
+  const source = plans.find((plan) => plan.name === 'Nemesis · Rehearsal Night')!;
+  const original = await query<Plan>(request, 'admin.eventPlanner.plan', {
+    planId: source.id,
+  });
+  const latePlayer = original.entries[16]!;
+  const { planId } = await mutate<{ planId: string }>(request, 'admin.eventPlanner.createPlan', {
+    name: `Attendance ${bracketMode} rehearsal ${Date.now()}`,
+    bracketMode,
+    eventDate: new Date().toISOString(),
+    upperTargetSize: 8,
+    rows: original.entries.slice(0, 16).map((entry, index) => ({
+      lineNumber: index + 1,
+      rawInput: entry.playerName,
+      cleanedName: entry.playerName,
+      playerId: entry.playerId,
+      companyId: entry.companyId ?? null,
+      resolutionMethod: 'manual',
+      divisionPreference: 'auto',
+    })),
+  });
+  for (const operation of ['admin.eventPlanner.freezeRoster', 'admin.eventPlanner.generatePools'])
+    await mutate(request, operation, { planId });
+  await mutate(request, 'eventOps.softLockPools', { planId, confirm: true });
+  await mutate(request, 'eventOps.saveStation', { planId, name: 'Attendance station' });
+  await mutate(request, 'eventOps.prepare', { planId });
+  return { planId, latePlayer };
+}
+
 test('attendance preview preserves completed play, rejects stale changes, and holds withdrawals', async ({
   page,
 }) => {
   test.setTimeout(120_000);
-  const login = await page.request.post('/api/auth/sign-in/email', {
-    data: { email: 'admin@smashclub.dev', password: 'devpassword123' },
-  });
-  expect(login.ok()).toBe(true);
-  const plans = await query<{ id: string; name: string }[]>(
-    page.request,
-    'admin.eventPlanner.plans',
-  );
-  const source = plans.find((plan) => plan.name === 'Nemesis · Rehearsal Night')!;
-  const original = await query<Plan>(page.request, 'admin.eventPlanner.plan', {
-    planId: source.id,
-  });
-  const latePlayer = original.entries[16]!;
-  const { planId } = await mutate<{ planId: string }>(
-    page.request,
-    'admin.eventPlanner.createPlan',
-    {
-      name: `Attendance browser rehearsal ${Date.now()}`,
-      eventDate: new Date().toISOString(),
-      upperTargetSize: 8,
-      rows: original.entries.slice(0, 16).map((entry, index) => ({
-        lineNumber: index + 1,
-        rawInput: entry.playerName,
-        cleanedName: entry.playerName,
-        playerId: entry.playerId,
-        companyId: entry.companyId ?? null,
-        resolutionMethod: 'manual',
-        divisionPreference: 'auto',
-      })),
-    },
-  );
-  for (const operation of ['admin.eventPlanner.freezeRoster', 'admin.eventPlanner.generatePools'])
-    await mutate(page.request, operation, { planId });
-  await mutate(page.request, 'eventOps.softLockPools', { planId, confirm: true });
-  await mutate(page.request, 'eventOps.saveStation', { planId, name: 'Attendance station' });
-  await mutate(page.request, 'eventOps.prepare', { planId });
+  const { planId, latePlayer } = await prepareAttendanceEvent(page.request, 'native');
   const before = await query<Snapshot>(page.request, 'eventOps.overview', { planId });
   const played = before.matches.find(
     (match) => match.division === 'upper' && match.poolIndex === 0,
@@ -118,6 +120,7 @@ test('attendance preview preserves completed play, rejects stale changes, and ho
   );
   await attendance.getByRole('button', { name: 'Preview attendance change' }).click();
   await expect(attendance.locator('.ops-attendance-preview')).toContainText('4 new match(es)');
+  await expect(attendance.getByRole('checkbox', { name: /Challonge bracket/ })).toHaveCount(0);
   await attendance.getByRole('button', { name: 'Apply this change' }).click();
   await expect(attendance.getByRole('status')).toContainText('Attendance updated');
 
@@ -184,4 +187,75 @@ test('attendance preview preserves completed play, rejects stale changes, and ho
   expect(remaining.length).toBeGreaterThan(0);
   for (const match of remaining)
     expect(match).toMatchObject({ status: 'blocked', score1: null, score2: null, winnerId: null });
+});
+
+test('linked attendance requires a fresh acknowledgement after previewing each change', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const { planId } = await prepareAttendanceEvent(page.request, 'challonge');
+  await mutate(page.request, 'admin.eventPlanner.attachBracket', {
+    planId,
+    division: 'upper',
+    stage: 'main',
+    challongeSlug: `linked-attendance-${planId}`,
+  });
+  const plan = await query<Plan>(page.request, 'admin.eventPlanner.plan', { planId });
+  const [first, second] = plan.divisions.find((division) => division.division === 'upper')!
+    .pools[0]!.members;
+  const previewInput = { planId, action: 'withdraw', playerId: first!.playerId };
+  expect(await query(page.request, 'eventOps.previewAttendance', previewInput)).toMatchObject({
+    allowed: true,
+    requiresExternalAcknowledgement: true,
+  });
+
+  await page.goto(`/admin/event-operations?plan=${planId}&view=players`);
+  const attendance = page.locator('section.card').filter({
+    has: page.getByRole('heading', { name: 'Attendance changes', exact: true }),
+  });
+  const action = attendance.getByRole('combobox', { name: 'Change', exact: true });
+  const player = attendance.getByRole('combobox', { name: 'Player', exact: true });
+  const preview = attendance.getByRole('button', { name: 'Preview attendance change' });
+  const apply = attendance.getByRole('button', { name: 'Apply this change' });
+  const acknowledgement = attendance.getByRole('checkbox', { name: /Challonge bracket/ });
+  await chooseOption(action, 'withdraw');
+  await chooseOption(player, first!.playerId);
+  await expect(acknowledgement).toHaveCount(0);
+  await preview.click();
+  await expect(acknowledgement).not.toBeChecked();
+  await expect(apply).toBeDisabled();
+  await acknowledgement.press('Space');
+  await expect(apply).toBeEnabled();
+
+  await preview.click();
+  await expect(acknowledgement).not.toBeChecked();
+  await expect(apply).toBeDisabled();
+  await acknowledgement.press('Space');
+  await chooseOption(action, 'no_show');
+  await expect(acknowledgement).toHaveCount(0);
+  await chooseOption(action, 'withdraw');
+  await chooseOption(player, first!.playerId);
+  await preview.click();
+  await acknowledgement.press('Space');
+  await chooseOption(player, second!.playerId);
+  await expect(acknowledgement).toHaveCount(0);
+
+  await preview.click();
+  await expect(acknowledgement).not.toBeChecked();
+  await expect(apply).toBeDisabled();
+  await acknowledgement.press('Space');
+  await apply.click();
+  await expect(attendance.getByRole('status')).toContainText('Attendance updated');
+  const after = await query<Snapshot & { attendanceAudit: { action: string; details: unknown }[] }>(
+    page.request,
+    'eventOps.overview',
+    { planId },
+  );
+  expect(after.withdrawals).toEqual([expect.objectContaining({ playerId: second!.playerId })]);
+  expect(after.attendanceAudit.filter(({ action }) => action === 'withdraw')).toEqual([
+    expect.objectContaining({
+      action: 'withdraw',
+      details: expect.objectContaining({ playerId: second!.playerId, externalAcknowledged: true }),
+    }),
+  ]);
 });
