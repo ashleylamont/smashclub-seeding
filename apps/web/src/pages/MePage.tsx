@@ -1,5 +1,6 @@
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+import { LoadingState } from '../components/ui/Feedback';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate } from '@tanstack/react-router';
@@ -42,17 +43,17 @@ export function MePage() {
             <div className="muted">{session.user.email}</div>
           </div>
         </div>
-        <LinkedProviders />
+        <LinkedProviders key={session.user.id} userId={session.user.id} />
       </div>
 
-      <ClaimSection />
+      <ClaimSection key={session.user.id} userId={session.user.id} />
     </div>
   );
 }
 
-function LinkedProviders() {
+function LinkedProviders({ userId }: { userId: string }) {
   const accounts = useQuery({
-    queryKey: ['me', 'accounts'],
+    queryKey: ['me', 'accounts', userId],
     queryFn: async () => {
       const res = await authClient.listAccounts();
       if (res.error) throw new Error(res.error.message ?? 'Failed to load linked accounts');
@@ -60,6 +61,8 @@ function LinkedProviders() {
     },
   });
   const [error, setError] = useState<string | null>(null);
+
+  if (accounts.isPending) return <LoadingState>Loading linked accounts…</LoadingState>;
 
   const linked = new Set(
     (accounts.data ?? []).map((account) => {
@@ -114,10 +117,10 @@ function LinkedProviders() {
   );
 }
 
-function ClaimSection() {
+function ClaimSection({ userId }: { userId: string }) {
   const queryClient = useQueryClient();
   const claims = useQuery({
-    queryKey: ['me', 'claims'],
+    queryKey: ['me', 'claims', userId],
     queryFn: () => trpc.me.claims.query(),
   });
 
@@ -139,7 +142,7 @@ function ClaimSection() {
     <div className="card">
       <h2>Player claim</h2>
       {liveClaim ? (
-        <LiveClaim claim={liveClaim} onChanged={invalidate} />
+        <LiveClaim key={liveClaim.id} claim={liveClaim} onChanged={invalidate} />
       ) : (
         <ClaimSearch onChanged={invalidate} />
       )}
