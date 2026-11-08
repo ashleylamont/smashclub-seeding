@@ -2,6 +2,12 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.10.4
+
+### Patch Changes
+
+- 9 November 2026 · **Improvement** · Load large native event plans faster by reading only planner metadata and sending compact match revision evidence to the browser. [#349](https://github.com/ashleylamont/smashclub-seeding/pull/349) · [build 941b5a1](https://github.com/ashleylamont/smashclub-seeding/commit/941b5a1fd58b30c2402e09da8e3bf92d48870daa)
+
 ## 0.10.3
 
 ### Patch Changes
