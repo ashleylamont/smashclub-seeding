@@ -1,7 +1,7 @@
-import { and, eq, inArray, isNotNull, lt } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, lt, sql } from 'drizzle-orm';
 import { sets, tournaments, type Db } from '@smashclub/db';
 import { parseScoresCsv, type EngineSet, type EngineTournament } from '@smashclub/engine';
-import { includesResultStage, isPlayedRatingResult } from '@smashclub/shared';
+import { includesResultStage, isPlayedRatingResult, type UnplayedOutcome } from '@smashclub/shared';
 import { loadNativeHistory } from '../events/nativeHistory';
 
 interface SinglesHistoryBudget {
@@ -59,7 +59,24 @@ export async function loadSinglesHistory(
   const modes = new Map(tournamentRows.map((t) => [t.id, t.resultsMode]));
 
   const setQuery = db
-    .select()
+    .select({
+      id: sets.id,
+      tournamentId: sets.tournamentId,
+      p1PlayerId: sets.p1PlayerId,
+      p2PlayerId: sets.p2PlayerId,
+      winner: sets.winner,
+      suggestedPlayOrder: sets.suggestedPlayOrder,
+      completedAt: sets.completedAt,
+      challongeMatchId: sets.challongeMatchId,
+      resultStage: sets.resultStage,
+      scoresCsv: sets.scoresCsv,
+      // Only the recognised top-level outcome reaches the shared classifier.
+      // Provider payloads and arbitrary values of `outcome` stay in the database.
+      storedOutcome: sql<UnplayedOutcome | null>`case ${sets.raw}->'outcome'
+        when '"bye"'::jsonb then 'bye'
+        when '"forfeit"'::jsonb then 'forfeit'
+      end`,
+    })
     .from(sets)
     .where(
       and(
@@ -88,7 +105,7 @@ export async function loadSinglesHistory(
      * is re-read here and the ratings come out right on the next recompute
      * rather than on the next re-sync.
      */
-    .filter((row) => isPlayedRatingResult(row.scoresCsv, row.raw))
+    .filter((row) => isPlayedRatingResult(row.scoresCsv, { outcome: row.storedOutcome }))
     .map((row) => {
       // Game counts feed WHR's evidence weighting (a 3-0 outrates a 3-2);
       // Unplayed scores were excluded above; unknown played scores count once.

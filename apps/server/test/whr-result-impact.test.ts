@@ -57,7 +57,8 @@ it('reads independent effects from the published night and rejects a cached effe
         },
       ])
       .returning();
-    const [prior, focusWin, focusLoss, bye, forfeit] = await db
+    const providerPayload = 'metadata'.repeat(16_384);
+    const [prior, focusWin, focusLoss, bye, forfeit, storedBye] = await db
       .insert(sets)
       .values([
         {
@@ -77,6 +78,7 @@ it('reads independent effects from the published night and rejects a cached effe
           p2PlayerId: returner!.id,
           winner: 1,
           scoresCsv: '3-0',
+          raw: { outcome: { providerPayload, status: 'bye' } },
         },
         {
           tournamentId: focus!.id,
@@ -104,7 +106,16 @@ it('reads independent effects from the published night and rejects a cached effe
           p2PlayerId: regular!.id,
           winner: 1,
           scoresCsv: '3-0',
-          raw: { outcome: 'forfeit' },
+          raw: { outcome: 'forfeit', providerPayload },
+        },
+        {
+          tournamentId: focus!.id,
+          challongeMatchId: 7,
+          state: 'complete',
+          p1PlayerId: newcomer!.id,
+          p2PlayerId: returner!.id,
+          winner: 1,
+          raw: { outcome: 'bye' },
         },
       ])
       .returning();
@@ -121,6 +132,9 @@ it('reads independent effects from the published night and rejects a cached effe
       expect.arrayContaining([prior!.id, focusWin!.id, focusLoss!.id]),
     );
     expect(bounded?.engineSets).toHaveLength(3);
+    const normal = await loadSinglesHistory(db);
+    expect(normal.engineSets).toHaveLength(3);
+    expect(normal.engineSets).toEqual(expect.arrayContaining(bounded!.engineSets));
 
     const settings = { ...defaultRatingSettings, whrRookieDebutPrior: 1400 };
     await updateRatingSettings(db, settings);
@@ -173,7 +187,7 @@ it('reads independent effects from the published night and rejects a cached effe
       ),
     ).toBeGreaterThan(1);
 
-    for (const setId of [bye!.id, forfeit!.id])
+    for (const setId of [bye!.id, forfeit!.id, storedBye!.id])
       expect(await api.whrResultImpact({ ...input, setId })).toEqual({
         status: 'unavailable',
         reason: 'not_rated',
