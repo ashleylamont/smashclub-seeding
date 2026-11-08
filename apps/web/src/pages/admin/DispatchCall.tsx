@@ -4,6 +4,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Select, SelectItem } from '../../components/ui/Select';
 import { useConfirmation } from '../../lib/confirmation';
+import { returnCallControlId } from '../../lib/opsWorkspace';
 import type { Overview, Desk, Run } from './dispatchTypes';
 
 export function ActiveCall({
@@ -49,6 +50,7 @@ export function ActiveCall({
           Score / details
         </Button>
         <Button
+          id={returnCallControlId(match.id)}
           disabled={disabled}
           onClick={async () => {
             if (

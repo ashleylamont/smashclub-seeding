@@ -11,6 +11,8 @@ export const OPS_SECTIONS = [
 ] as const;
 export type OpsSection = (typeof OPS_SECTIONS)[number]['value'];
 
+export const returnCallControlId = (matchId: string) => `return-call-${matchId}`;
+
 export function opsSection(value: unknown): OpsSection {
   return OPS_SECTIONS.find((section) => section.value === value)?.value ?? 'run';
 }

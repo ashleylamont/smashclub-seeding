@@ -238,15 +238,34 @@ export function additionalDecision(
   return true;
 }
 
-export function canPauseDraw(state: TournamentState) {
-  return (
-    (!state.brackets.length || isKnockout(state.baseline!.structure)) &&
-    !state.reports.length &&
-    state.matches.every(
-      (m) =>
-        m.status !== 'playing' &&
-        !m.started &&
-        (!resolved(m) || m.outcome === 'bye' || m.outcome === 'no_contest'),
+export function poolDrawPauseBlocker(state: TournamentState) {
+  if (
+    state.matches.some(
+      (match) =>
+        match.started ||
+        (resolved(match) && match.outcome !== 'bye' && match.outcome !== 'no_contest'),
     )
-  );
+  )
+    return {
+      kind: 'actual_play' as const,
+      message: 'Play has started. This draw cannot be paused.',
+    };
+  if (state.reports.length)
+    return {
+      kind: 'reports' as const,
+      message: 'This draw has score reports and cannot be paused.',
+    };
+  if (state.brackets.length && !isKnockout(state.baseline!.structure))
+    return {
+      kind: 'finals' as const,
+      message: 'Remove any unplayed finals before pausing the pool draw.',
+    };
+  const matchIds = state.matches.filter(unconfirmedCall).map(({ id }) => id);
+  return matchIds.length
+    ? {
+        kind: 'untaken_calls' as const,
+        matchIds,
+        message: 'Matches have been called. Return all untaken calls before pausing the draw.',
+      }
+    : null;
 }

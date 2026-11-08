@@ -9,7 +9,7 @@ import { retireEvent } from './retirementDecision';
 import { sealResults } from './results';
 import { memberIds, changeAvailability } from './entrants';
 import { dispatchMatch } from './scheduling';
-import { additionalDecision, finalsToken, resetFinals, canPauseDraw } from './operations';
+import { additionalDecision, finalsToken, resetFinals, poolDrawPauseBlocker } from './operations';
 import { drawFinals } from './brackets';
 import { hash, receiptKey, requireFact, resolved, sameScore } from './facts';
 import { applyScore, recordScore } from './scores';
@@ -309,13 +309,12 @@ export function decide(
       for (const pool of next.pools) basis[pool.id] = pool.revision;
       drawFinals(next, envelope);
       break;
-    case 'unlock':
-      requireFact(
-        canPauseDraw(next),
-        'Play has started or a match has been called; return an untaken call before reopening, otherwise use explicit repair.',
-      );
+    case 'unlock': {
+      const blocker = poolDrawPauseBlocker(next);
+      if (blocker) requireFact(false, blocker.message);
       next.lifecycle = 'unlocked';
       break;
+    }
     case 'relock':
       requireFact(next.lifecycle === 'unlocked', 'The event is already locked.');
       next.lifecycle = 'locked';
