@@ -2,7 +2,7 @@ import { previewRestoration, restoreEntrant } from './restoration';
 import { isKnockout } from '@smashclub/shared';
 import { buildRoundRobin } from '@smashclub/tournament-formats';
 import { hash, requireFact, resolved, unconfirmedCall } from './facts';
-import { advance } from './brackets';
+import { advance, matchInputStatus } from './brackets';
 import { attendancePoolCandidates, poolMatch, lastPoolRound } from './poolAttendance';
 import { projectMatchLabels } from './matchNames';
 import { qualifierFieldFrozen } from './qualifiers';
@@ -14,10 +14,10 @@ import {
 import type { CommandEnvelope, Match, TournamentState } from './schemas';
 
 type Input = Extract<CommandEnvelope['command'], { kind: 'attendance' }>;
-const withdrawalWarning = (state: TournamentState) =>
-  isKnockout(state.baseline?.structure)
-    ? 'Played results are retained; remaining knockout matches advance by forfeit.'
-    : 'Played results are retained; remaining pool pairings await explicit forfeit decisions.';
+type WithdrawalConsequence = {
+  state?: 'called' | 'playing' | 'held';
+  forfeit?: 'automatic' | 'organiser';
+};
 type AttendancePreview = ReturnType<typeof ordinaryAttendancePreview> & {
   restoration?: ReturnType<typeof previewRestoration>['restoration'];
 };
@@ -102,7 +102,7 @@ function ordinaryAttendancePreview(
     ...(input.action === 'no_show' && matchReview.untakenCallIds.length > 0 && issues.length === 1
       ? { returnCallMatchIds: matchReview.untakenCallIds }
       : {}),
-    warnings: input.action === 'withdraw' ? [withdrawalWarning(state)] : [],
+    ...reviewWithdrawal(state, involved, input, !issues.length),
     requiresExternalAcknowledgement: false,
     requiresRedistributionApproval: Boolean(relocations.length),
     relocations,
@@ -128,6 +128,48 @@ function ordinaryAttendancePreview(
       lifecycle: state.lifecycle,
     }),
   };
+}
+
+function reviewWithdrawal(
+  state: TournamentState,
+  involved: Match[],
+  { action, playerId }: Pick<Input, 'action' | 'playerId'>,
+  allowed: boolean,
+): { warnings: string[]; withdrawalMatches?: Record<string, WithdrawalConsequence> } {
+  if (action !== 'withdraw') return { warnings: [] };
+  const byId = new Map(state.matches.map((match) => [match.id, match]));
+  const withdrawn = new Set(
+    state.entrants
+      .filter((entrant) => entrant.availability === 'withdrawn')
+      .map((entrant) => entrant.playerId),
+  );
+  const matches: Record<string, WithdrawalConsequence> = {};
+  let called = false;
+  let poolForfeit = false;
+  for (const match of involved) {
+    if (resolved(match)) continue;
+    const consequence: WithdrawalConsequence = {};
+    if (match.status === 'playing') {
+      consequence.state = unconfirmedCall(match) ? 'called' : 'playing';
+      called ||= consequence.state === 'called';
+    } else if (match.started && match.status === 'blocked') consequence.state = 'held';
+    const opponent = match.player1Id === playerId ? match.player2Id : match.player1Id;
+    if (opponent && !withdrawn.has(opponent)) {
+      poolForfeit ||= match.stage === 'group';
+      if (allowed) {
+        if (match.started || match.stage === 'group') consequence.forfeit = 'organiser';
+        else if (matchInputStatus(match, byId) === 'ready') consequence.forfeit = 'automatic';
+      }
+    }
+    if (consequence.state || consequence.forfeit) matches[match.id] = consequence;
+  }
+  const warnings = ['Completed results stay recorded.'];
+  if (allowed && called)
+    warnings.push(
+      'Calls awaiting a confirmed start are released. Confirm the start first if play is underway.',
+    );
+  if (poolForfeit) warnings.push('Outstanding pool pairings need an explicit forfeit.');
+  return { withdrawalMatches: matches, warnings };
 }
 
 function reviewAffectedMatches(

@@ -13,6 +13,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 type Preview = Awaited<ReturnType<typeof trpc.eventOps.previewAttendance.query>>;
+const withdrawalStatusLabels = {
+  called: 'Called, awaiting start',
+  playing: 'In progress',
+  held: 'Started, on hold',
+};
 type Input = {
   planId: string;
   action: 'add' | 'withdraw' | 'no_show' | 'redistribute' | 'restore';
@@ -380,11 +385,21 @@ function AttendancePreviewPanel({
       )}
       {!restoring && preview.result.affectedMatches.length > 0 && (
         <ul>
-          {preview.result.affectedMatches.map((match) => (
-            <li key={match.id}>
-              {match.label} · {returnCallIds?.includes(match.id) ? 'called' : match.status}
-            </li>
-          ))}
+          {preview.result.affectedMatches.map((match) => {
+            const withdrawal = preview.result.withdrawalMatches?.[match.id];
+            const status = withdrawal?.state
+              ? withdrawalStatusLabels[withdrawal.state]
+              : returnCallIds?.includes(match.id)
+                ? 'called'
+                : match.status;
+            return (
+              <li key={match.id}>
+                {match.label} · {status}
+                {withdrawal?.forfeit === 'automatic' && ' · Forfeit on apply'}
+                {withdrawal?.forfeit === 'organiser' && ' · Record forfeit after withdrawal'}
+              </li>
+            );
+          })}
         </ul>
       )}
       {preview.result.relocations.length > 0 && (

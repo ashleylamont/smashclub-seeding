@@ -5,7 +5,25 @@ import { finalsRoles, isKnockout } from '@smashclub/shared';
 import { instantiateElimination } from './structureAdapter';
 import { buildFormatFinals, buildEliminationTree } from '@smashclub/tournament-formats';
 import { requireFact, resolved, stableId } from './facts';
-import type { CommandEnvelope, TournamentState } from './schemas';
+import type { CommandEnvelope, Match, TournamentState } from './schemas';
+
+/** Resolve qualifier, feeder and conditional prerequisites before using a bracket pairing. */
+export function matchInputStatus(match: Match, byId: ReadonlyMap<string, Match>) {
+  if (
+    match.qualificationBlocks?.length ||
+    [match.player1Qualifier, match.player2Qualifier].some(
+      (source) => source && source.status !== 'resolved',
+    )
+  )
+    return 'waiting';
+  const parents = [match.parent1Id, match.parent2Id].filter((id): id is string => Boolean(id));
+  if (!parents.every((id) => resolved(byId.get(id)!))) return 'waiting';
+  if (!match.activation) return 'ready';
+  const parent = byId.get(match.activation.matchId)!;
+  if (!resolved(parent)) return 'waiting';
+  const required = match.activation.winnerSide === 1 ? parent.player1Id : parent.player2Id;
+  return required && parent.winnerId === required ? 'ready' : 'inactive';
+}
 
 /** Execute advancement once on the decision path; persist resulting matches. */
 export function advance(state: TournamentState, at: number, commandId: string) {
@@ -16,31 +34,19 @@ export function advance(state: TournamentState, at: number, commandId: string) {
   for (const match of [...state.matches].sort(
     (a, b) => a.round - b.round || a.id.localeCompare(b.id),
   )) {
-    if (
-      match.qualificationBlocks?.length ||
-      [match.player1Qualifier, match.player2Qualifier].some(
-        (source) => source && source.status !== 'resolved',
-      )
-    )
+    const inputs = matchInputStatus(match, byId);
+    if (inputs === 'waiting') continue;
+    if (inputs === 'inactive') {
+      if (!resolved(match))
+        Object.assign(match, {
+          status: 'complete',
+          outcome: 'no_contest',
+          skipped: true,
+          completedAt: at,
+          revision: match.revision + 1,
+          resultCommandId: commandId,
+        });
       continue;
-    const parents = [match.parent1Id, match.parent2Id].filter((id): id is string => Boolean(id));
-    if (!parents.every((id) => resolved(byId.get(id)!))) continue;
-    if (match.activation) {
-      const parent = byId.get(match.activation.matchId)!;
-      if (!resolved(parent)) continue;
-      const required = match.activation.winnerSide === 1 ? parent.player1Id : parent.player2Id;
-      if (!required || parent.winnerId !== required) {
-        if (!resolved(match))
-          Object.assign(match, {
-            status: 'complete',
-            outcome: 'no_contest',
-            skipped: true,
-            completedAt: at,
-            revision: match.revision + 1,
-            resultCommandId: commandId,
-          });
-        continue;
-      }
     }
     const feed = (
       id: string | null,
