@@ -15,3 +15,7 @@ Read [UI foundations](docs/ui-foundations.md) and [visual review](docs/ui-visual
 - Run normal visual CI before baseline updates. Manually compare every intended expected/actual/difference image, update only approved platform-specific images, then rerun normal CI. Keep assertions, tolerances and required gates intact. Linux captures must not replace Darwin baselines.
 
 UI changes are complete only after inspecting the rendered page and recording the relevant validation.
+
+## Release notes
+
+For a user-visible change, add a Changeset for `@smashclub/web` following [the release guide](docs/development.md#versioned-releases). That package tracks the version of the entire Nemesis app.

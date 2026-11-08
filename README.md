@@ -52,6 +52,7 @@ Install the browser once with `pnpm --filter @smashclub/web exec playwright inst
 
 ## Documentation
 
+- [Nemesis changelog](apps/web/CHANGELOG.md) — release notes and project history
 - [Documentation index](docs/README.md) — current guides and historical design notes
 - [Development and deployment](docs/development.md) — local Postgres, configuration, bootstrap and Kubernetes
 - [Run an event](docs/event-guide.md) — planner, Nemesis, Challonge and results

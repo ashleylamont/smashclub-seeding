@@ -1,3 +1,4 @@
+import { version } from '../package.json';
 import { expect, test, type Page } from '@playwright/test';
 import { AxeBuilder } from '@axe-core/playwright';
 import type { PublicEventNight } from '../src/lib/publicEvents';
@@ -124,6 +125,44 @@ for (const theme of ['light', 'dark'] as const) {
       await page.clock.fastForward(24 * 60 * 60_000);
       await expect(entry).toContainText('No tournament is live right now.');
       await expect(choices).toHaveCount(0);
+    });
+  }
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 390, height: 844 },
+  ]) {
+    test(`Nemesis release history is readable at ${viewport.width}px in ${theme} mode`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize(viewport);
+      await page.emulateMedia({ colorScheme: theme });
+      await mockHome(page);
+      await page.goto('/');
+      const link = page.getByRole('link', { name: 'Changelog', exact: true });
+      await link.focus();
+      await page.keyboard.press('Enter');
+      await expect(page).toHaveURL('/changelog');
+      const main = page.getByRole('main');
+      await expect(
+        main.getByRole('heading', { level: 1, name: 'Nemesis changelog' }),
+      ).toBeVisible();
+      await expect(
+        main.getByRole('heading', { level: 2, name: version, exact: true }),
+      ).toBeVisible();
+      await expect(main.getByRole('heading', { level: 3, name: '20 October 2025' })).toBeVisible();
+      await expect(main.getByRole('link', { name: '#151', exact: true })).toHaveAttribute(
+        'href',
+        'https://github.com/ashleylamont/smashclub-seeding/pull/151',
+      );
+      await ready(page);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(viewport.width);
+      expect(
+        (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
+      ).toEqual([]);
+      await page.screenshot({ path: testInfo.outputPath('changelog.png') });
     });
   }
 }

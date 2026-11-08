@@ -237,7 +237,14 @@ const uiGalleryRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/UiGalleryPage'), 'UiGalleryPage'),
 });
 
+const changelogRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/changelog',
+  component: lazyRouteComponent(() => import('./pages/ChangelogPage'), 'ChangelogPage'),
+});
+
 const routeTree = rootRoute.addChildren([
+  changelogRoute,
   uiGalleryRoute,
   eventNightsRoute,
   eventLiveRoute,

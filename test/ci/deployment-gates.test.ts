@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { parse } from 'yaml';
 import { describe, expect, it } from 'vitest';
@@ -62,13 +63,16 @@ describe('publication ref policy', () => {
     expect(publicationPolicy({ ...input, event: 'workflow_dispatch' }).sha).toBe(sha);
   });
   it('publishes full version tags on main history without racing major/minor aliases', () => {
-    expect(publicationPolicy({ ...input, ref: 'refs/tags/v2.3.4' }).tags).toEqual(['2.3.4']);
+    expect(
+      publicationPolicy({ ...input, ref: 'refs/tags/v2.3.4', appVersion: '2.3.4' }).tags,
+    ).toEqual(['2.3.4']);
   });
   it.each([
     { event: 'pull_request', ref: 'refs/pull/5/merge' },
     { event: 'pull_request_target', ref: 'refs/heads/main' },
     { event: 'workflow_dispatch', ref: 'refs/heads/topic' },
     { event: 'workflow_dispatch', ref: 'refs/tags/v1.0.0' },
+    { ref: 'refs/tags/v2.3.4', appVersion: '2.3.5' },
     { ref: 'refs/tags/vwrong' },
     { ref: 'refs/tags/v01.0.0' },
     { onMain: false },
@@ -106,4 +110,13 @@ it('publication runs reusable CI with read permissions and publishes its tested 
     group: 'registry-publication',
     'cancel-in-progress': false,
   });
+});
+
+it('extracts the current app version notes for publication', () => {
+  const { version } = JSON.parse(readFileSync('apps/web/package.json', 'utf8'));
+  const notes = execFileSync(process.execPath, ['scripts/release-notes.mjs', version], {
+    encoding: 'utf8',
+  });
+  expect(notes).toMatch(/^### (Major|Minor|Patch) Changes$/m);
+  expect(notes).not.toContain('Before versioned releases');
 });
