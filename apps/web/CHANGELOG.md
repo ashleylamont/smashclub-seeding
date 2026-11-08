@@ -2,6 +2,14 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.4.0
+
+### Minor Changes
+
+- 8 November 2026 · **Feature** · Remove one division’s unplayed native finals without disturbing the other division. [#250](https://github.com/ashleylamont/smashclub-seeding/pull/250) · [build bb9ae54](https://github.com/ashleylamont/smashclub-seeding/commit/bb9ae545000c00bbbae2128ff4978a0c07b0ebb1)
+
+  From Standings / draw, preview finals and choose Upper or Lower under Finals to remove. Return any untaken calls before removing that draw. You can then correct pool results and preview a new draw for that division.
+
 ## 0.3.0
 
 ### Minor Changes
