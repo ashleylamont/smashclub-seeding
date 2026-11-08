@@ -1,0 +1,10 @@
+{
+  "name": "nemesis-react-bracket-spike",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@cm3tahkuh/react-tournament-brackets": "1.1.6",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  }
+}

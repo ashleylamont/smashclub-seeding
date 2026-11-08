@@ -1,4 +1,5 @@
 import { StrengthFinalsReview } from './StrengthFinalsReview';
+import { EventBracketLane } from '../../components/EventBracketLane';
 import { qualifierLabel } from '../../lib/qualification';
 import type { PoolQualifier } from '../../lib/eventDisplay';
 import { isKnockout } from '@smashclub/shared';
@@ -7,6 +8,7 @@ import { Button } from '../../components/ui/Button';
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
+import '../../styles/event-board.css';
 import './NativeBracketControls.css';
 
 type Preview = Awaited<ReturnType<typeof trpc.eventOps.native.preview.query>> & {
@@ -32,6 +34,7 @@ export function NativeBracketControls({
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const combined = preview && 'seedPolicy' in preview ? preview : null;
+  const entrantNames = new Map(entrants.map(({ id, name }) => [id, name]));
   const divisionLabel = (division: string) =>
     structure && structure !== 'dual_division' ? 'Open' : division;
   const stageLabel = (stage: string) => (stage === 'main' ? 'championship' : 'consolation');
@@ -39,7 +42,7 @@ export function NativeBracketControls({
     id?.startsWith('pending:')
       ? `Pool ${String.fromCharCode(65 + Number(id.split(':')[2]))} place ${id.split(':')[3]} TBD`
       : id
-        ? (entrants.find((p) => p.id === id)?.name ?? 'Player')
+        ? (entrantNames.get(id) ?? 'Player')
         : qualifier
           ? qualifierLabel(qualifier)
           : 'Bye';
@@ -147,7 +150,28 @@ export function NativeBracketControls({
                     entrants
                     {'alreadyDrawn' in bracket && bracket.alreadyDrawn ? ' · Created' : ''}
                   </h4>
-                  {bracket.roundOne.length ? (
+                  {'previewMatches' in bracket && bracket.previewMatches.length ? (
+                    <section className="app-event-board">
+                      <p className="event-live-note">
+                        Preview only.
+                        {bracket.previewMatches.some((match) => match.nativeRound !== 1) &&
+                          ' Scroll sideways to follow later rounds.'}
+                      </p>
+                      <EventBracketLane
+                        matches={bracket.previewMatches.map((match) => ({
+                          ...match,
+                          player1Name: match.player1Id ? name(match.player1Id) : null,
+                          player2Name: match.player2Id ? name(match.player2Id) : null,
+                        }))}
+                        lane="winners"
+                        title=""
+                        label={`${divisionLabel(bracket.division)} ${stageLabel(bracket.stage)} bracket preview`}
+                        labels={
+                          new Map(bracket.previewMatches.map((match) => [match.id, match.label]))
+                        }
+                      />
+                    </section>
+                  ) : bracket.roundOne.length ? (
                     <ol>
                       {bracket.roundOne.map((match, index) => (
                         <li key={index}>

@@ -24,6 +24,22 @@ for (const theme of ['dark', 'light'] as const)
         place: 2,
         status: 'pending',
       } as const;
+      const matchTemplate = {
+        ...fixture.snapshot.matches[0]!,
+        division: 'upper' as const,
+        stage: 'main' as const,
+        called: false,
+        callLocation: null,
+        poolIndex: null,
+        nativeBracketId: 'upper-finals',
+        syncState: 'local' as const,
+        sourceSetId: null,
+        eventPlanId: PLAN_ID,
+        resultUpdatedAt: null,
+        score1: null,
+        score2: null,
+        stationId: null,
+      };
       const preview: StrengthPreview = {
         seedPolicy: 'pool_place_whr_v1',
         existing: false,
@@ -46,6 +62,46 @@ for (const theme of ['dark', 'light'] as const)
             roundOne: [
               { player1Id: second!.id, player2Id: null },
               { player1Id: third!.id, player2Id: first!.id },
+            ],
+            previewMatches: [
+              {
+                ...matchTemplate,
+                id: 'bye',
+                label: 'Semi-final 1',
+                nativeRound: 1,
+                nativeSlot: 0,
+                player1Id: second!.id,
+                player2Id: null,
+                outcome: 'bye',
+                status: 'complete',
+                winnerId: second!.id,
+              },
+              {
+                ...matchTemplate,
+                id: 'played-semi',
+                label: 'Semi-final 2',
+                nativeRound: 1,
+                nativeSlot: 1,
+                player1Id: third!.id,
+                player2Id: first!.id,
+                outcome: null,
+                status: 'ready',
+                winnerId: null,
+              },
+              {
+                ...matchTemplate,
+                id: 'final',
+                label: 'Final',
+                nativeRound: 2,
+                nativeSlot: 0,
+                parent1MatchId: 'bye',
+                parent2MatchId: 'played-semi',
+                player1Id: null,
+                player2Id: null,
+                outcome: null,
+                status: 'blocked',
+                winnerId: null,
+              },
             ],
             strengthSeeding: {
               policy: 'pool_place_whr_v1',
@@ -99,6 +155,25 @@ for (const theme of ['dark', 'light'] as const)
       await expect(
         page.getByRole('heading', { name: 'upper championship · 3 entrants' }),
       ).toBeVisible();
+      const draw = page.getByRole('region', { name: 'upper championship bracket preview' });
+      await expect(draw.locator('.event-bracket-match')).toHaveCount(3);
+      await expect(draw.getByRole('article', { name: 'Semi-final 1: Bye' })).toContainText(
+        second!.name,
+      );
+      await expect(draw.getByRole('article', { name: 'Final: Waiting for feeders' })).toContainText(
+        'Winner of Semi-final 2',
+      );
+      await expect(draw.locator('path[data-feed-to="final"]')).toHaveCount(2);
+      await expect(
+        page.getByRole('region', { name: 'lower championship bracket preview' }),
+      ).toHaveCount(0);
+      if (width === 390) {
+        await draw.press('ArrowRight');
+        await expect.poll(() => draw.evaluate((node) => node.scrollLeft)).toBeGreaterThan(0);
+        await draw.evaluate((node) => {
+          node.scrollLeft = 0;
+        });
+      }
       const compare = page.getByRole('button', { name: 'Compare seeding and byes' });
       await compare.press('Enter');
       const region = page.getByRole('region', { name: 'Finals seeding comparison' });
@@ -129,6 +204,12 @@ for (const theme of ['dark', 'light'] as const)
         fullPage: true,
         style: readFileSync(bracketCaptureOptions.stylePath, 'utf8'),
       });
+      if (width === 1440 && theme === 'light') {
+        await page.locator('.native-finals-controls').screenshot({
+          path: testInfo.outputPath('to-precommit-bracket-preview.png'),
+          style: readFileSync(bracketCaptureOptions.stylePath, 'utf8'),
+        });
+      }
       if (width === 390) {
         await region.press('ArrowRight');
         await expect.poll(() => region.evaluate((node) => node.scrollLeft)).toBeGreaterThan(0);

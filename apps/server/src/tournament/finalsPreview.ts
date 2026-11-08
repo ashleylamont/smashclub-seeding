@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { appendQualifierBracket } from './rollingFinals';
 import { planStrengthFinals, strengthFinalsToken, strengthSeedPolicy } from './strengthFinals';
-import { drawFinals } from './brackets';
+import { advance, drawFinals } from './brackets';
 import { finalsToken, resetFinals } from './operations';
 import { poolOrderStatus } from './poolOrders';
 import { completeCommandProgression } from './progression';
+import { matchRows } from './views';
 import type { CommandEnvelope, TournamentState } from './schemas';
 
 export const rollingFieldWarning =
@@ -90,6 +91,11 @@ export function previewStrengthFinals(state: TournamentState) {
     if (!ready) continue;
     appendQualifierBracket(trial, envelope, division, stage, ready.slots, ready.seeding);
   }
+  // New brackets have no feeders from other stages. Apply the command's automatic
+  // advancement to these trial matches only so the preview shows the same byes.
+  const previewDraw = { ...trial, matches: trial.matches.slice(state.matches.length) };
+  advance(previewDraw, envelope.at, envelope.id);
+  const previewMatches = matchRows(previewDraw);
   const existing = Boolean(state.brackets.length);
   const resetIssues = finalsResetIssues(state);
   const issues: string[] = [];
@@ -118,6 +124,7 @@ export function previewStrengthFinals(state: TournamentState) {
     brackets: trial.brackets.map((b) => ({
       ...b,
       alreadyDrawn: state.brackets.some((bracket) => bracket.id === b.id),
+      previewMatches: previewMatches.filter((match) => match.nativeBracketId === b.id),
       roundOne: trial.matches
         .filter((m) => m.bracketId === b.id && m.round === 1)
         .map((m) => ({
