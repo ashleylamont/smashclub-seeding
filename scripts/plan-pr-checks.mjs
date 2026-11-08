@@ -9,6 +9,7 @@ const appChecks = [
   'e2e',
   'e2e-report',
   'ui-portable',
+  'ui-portable-2',
   'ui-quality',
   'build',
   'bundle-smoke',

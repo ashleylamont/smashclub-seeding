@@ -1,8 +1,14 @@
-import { defineConfig } from '@playwright/test';
+import { defineConfig, type PlaywrightTestConfig } from '@playwright/test';
 import { footerMetadataCapturePath } from './ui-tests/captureStyles';
 
 const port = Number(process.env.UI_PORT ?? 3411);
 const baseURL = `http://127.0.0.1:${port}`;
+const executionReport = process.env.UI_EXECUTION_REPORT;
+const reporter: PlaywrightTestConfig['reporter'] = [
+  ['list'],
+  ['html', { outputFolder: 'playwright-report/ui', open: 'never' }],
+];
+if (executionReport) reporter.push(['json', { outputFile: executionReport }]);
 
 /** Fixed API fixtures; no backend, database, OAuth or production requests. */
 export default defineConfig({
@@ -20,7 +26,7 @@ export default defineConfig({
   fullyParallel: true,
   workers: 2,
   retries: 0,
-  reporter: [['list'], ['html', { outputFolder: 'playwright-report/ui', open: 'never' }]],
+  reporter,
   use: {
     baseURL,
     viewport: { width: 1440, height: 900 },

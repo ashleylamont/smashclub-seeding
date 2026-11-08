@@ -162,26 +162,39 @@ jobs:
           if-no-files-found: error
 
   ui-portable:
-    name: UI behavior and accessibility
+    name: UI behavior and accessibility (1/2)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    outputs:
+    env:
+      UI_PORTABLE_SHARD: '1'
+    outputs: &portable-ui-outputs
       ui_case_set: ${{ steps.browser.outputs.ui_case_set }}
-    steps:
+      ui_portable_plan: ${{ steps.browser.outputs.ui_portable_plan }}
+      ui_portable_shard: ${{ steps.browser.outputs.ui_portable_shard }}
+    steps: &portable-ui-steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-node-pnpm
       - run: pnpm --filter @smashclub/web exec playwright install --with-deps chromium
       - id: browser
-        run: node scripts/run-ui-platform.mjs portable
+        run: node scripts/run-ui-platform.mjs portable "$UI_PORTABLE_SHARD/2"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: ui-portable-review
+          name: ui-portable-review-${{ env.UI_PORTABLE_SHARD }}
           path: |
             apps/web/playwright-report/ui
             apps/web/ui-test-results
           retention-days: 7
           if-no-files-found: ignore
+
+  ui-portable-2:
+    name: UI behavior and accessibility (2/2)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      UI_PORTABLE_SHARD: '2'
+    outputs: *portable-ui-outputs
+    steps: *portable-ui-steps
 
   ui-quality:
     name: UI accessibility and visuals
@@ -364,6 +377,7 @@ jobs:
         e2e,
         e2e-report,
         ui-portable,
+        ui-portable-2,
         ui-quality,
         build,
         bundle-smoke,

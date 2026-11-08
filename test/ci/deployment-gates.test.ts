@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +15,7 @@ import {
 } from '../../scripts/plan-pr-checks.mjs';
 import { assertReleaseTag, publicationPolicy } from '../../scripts/publication-policy.mjs';
 import { assertPostgresReport } from '../../scripts/postgres-report-policy.mjs';
+import { assertPassedUiShard, portableShardPlan } from '../../scripts/run-ui-platform.mjs';
 
 const ci = parse(readFileSync('.github/workflows/ci.yml', 'utf8'));
 const publish = parse(readFileSync('.github/workflows/publish.yml', 'utf8'));
@@ -22,17 +23,20 @@ const versionWorkflow = parse(readFileSync('.github/workflows/version.yml', 'utf
 const sha = 'a'.repeat(40);
 const input = { event: 'push', ref: 'refs/heads/main', sha, mainSha: sha, onMain: true };
 
-const successfulJobs = Object.fromEntries(
-  requiredJobs.map((name) => [
-    name,
-    {
-      result: 'success',
-      ...(['ui-portable', 'ui-quality'].includes(name)
-        ? { outputs: { ui_case_set: 'a'.repeat(64) } }
-        : {}),
-    },
-  ]),
-);
+const ui_case_set = 'a'.repeat(64);
+const ui_portable_plan = 'b'.repeat(64);
+const successfulJobs = {
+  ...Object.fromEntries(requiredJobs.map((name) => [name, { result: 'success' }])),
+  'ui-portable': {
+    result: 'success',
+    outputs: { ui_case_set, ui_portable_plan, ui_portable_shard: '1/2' },
+  },
+  'ui-portable-2': {
+    result: 'success',
+    outputs: { ui_case_set, ui_portable_plan, ui_portable_shard: '2/2' },
+  },
+  'ui-quality': { result: 'success', outputs: { ui_case_set } },
+};
 
 it('keeps the full gate on publish and wires only the two scoped jobs to the PR plan', () => {
   expect(ci.jobs['all-checks'].needs.toSorted()).toEqual(requiredJobs.toSorted());
@@ -105,6 +109,7 @@ it('scopes PR skips to web or prose and keeps broader candidates advisory', () =
       'e2e',
       'e2e-report',
       'ui-portable',
+      'ui-portable-2',
       'ui-quality',
       'production-image',
     ]),
@@ -179,29 +184,149 @@ describe('advisory workspace coverage', () => {
   });
 });
 
-it('keeps both UI partitions and their review artifacts independent', () => {
-  for (const [id, runner, mode, artifact] of [
-    ['ui-portable', 'ubuntu-latest', 'portable', 'ui-portable-review'],
-    ['ui-quality', 'macos-15', 'darwin', 'ui-review'],
+it('keeps both portable shards and Darwin independent with separate review artifacts', () => {
+  const sharedCaseOutput = '${{ steps.browser.outputs.ui_case_set }}';
+  const first = ci.jobs['ui-portable'];
+  const second = ci.jobs['ui-portable-2'];
+  for (const [job, ordinal] of [
+    [first, '1'],
+    [second, '2'],
   ]) {
-    expect(ci.jobs[id]).toMatchObject({
-      'runs-on': runner,
+    expect(job).toMatchObject({
+      'runs-on': 'ubuntu-latest',
       'timeout-minutes': 15,
-      outputs: { ui_case_set: '${{ steps.browser.outputs.ui_case_set }}' },
+      env: { UI_PORTABLE_SHARD: ordinal },
+      outputs: {
+        ui_case_set: sharedCaseOutput,
+        ui_portable_plan: '${{ steps.browser.outputs.ui_portable_plan }}',
+        ui_portable_shard: '${{ steps.browser.outputs.ui_portable_shard }}',
+      },
       steps: expect.arrayContaining([
-        { id: 'browser', run: `node scripts/run-ui-platform.mjs ${mode}` },
+        { id: 'browser', run: 'node scripts/run-ui-platform.mjs portable "$UI_PORTABLE_SHARD/2"' },
         expect.objectContaining({
           if: 'always()',
-          with: expect.objectContaining({ name: artifact }),
+          with: expect.objectContaining({
+            name: 'ui-portable-review-${{ env.UI_PORTABLE_SHARD }}',
+          }),
         }),
       ]),
     });
+    expect(job.needs).toBeUndefined();
   }
-  for (const outputs of [undefined, { ui_case_set: 'b'.repeat(64) }]) {
+  expect(second.steps).toEqual(first.steps);
+  expect(ci.jobs['ui-quality']).toMatchObject({
+    'runs-on': 'macos-15',
+    'timeout-minutes': 15,
+    outputs: { ui_case_set: sharedCaseOutput },
+    steps: expect.arrayContaining([
+      { id: 'browser', run: 'node scripts/run-ui-platform.mjs darwin' },
+      expect.objectContaining({
+        if: 'always()',
+        with: expect.objectContaining({ name: 'ui-review' }),
+      }),
+    ]),
+  });
+});
+
+it('requires both portable ordinals on the same plan and case set as Darwin', () => {
+  for (const id of ['ui-portable', 'ui-portable-2', 'ui-quality'] as const)
+    for (const outputs of [undefined, { ui_case_set: 'c'.repeat(64) }])
+      expect(() =>
+        assertRequiredJobs({ ...successfulJobs, [id]: { result: 'success', outputs } }),
+      ).toThrow(/same UI case set/);
+
+  for (const change of [
+    { ui_portable_plan: undefined },
+    { ui_portable_plan: 'c'.repeat(64) },
+    { ui_portable_shard: undefined },
+    { ui_portable_shard: '1/2' },
+  ])
     expect(() =>
-      assertRequiredJobs({ ...successfulJobs, 'ui-portable': { result: 'success', outputs } }),
-    ).toThrow(/same UI case set/);
+      assertRequiredJobs({
+        ...successfulJobs,
+        'ui-portable-2': {
+          result: 'success',
+          outputs: { ...successfulJobs['ui-portable-2'].outputs, ...change },
+        },
+      }),
+    ).toThrow(/both shards of the same plan/);
+});
+
+it('executes the UI runner through a symlinked worktree path', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'ui-runner-path-'));
+  try {
+    const alias = join(directory, 'worktree');
+    symlinkSync(process.cwd(), alias, 'dir');
+    const result = spawnSync(
+      process.execPath,
+      [join(alias, 'scripts/run-ui-platform.mjs'), 'invalid-mode'],
+      { encoding: 'utf8' },
+    );
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Choose darwin or portable');
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
+});
+
+it('requires a disjoint portable selection covering each case exactly once', () => {
+  const cases = (...ids: string[]) => new Map(ids.map((id) => [id, true]));
+  const portable = cases('a', 'b', 'c');
+  const plan = (first: Map<string, boolean>, second?: Map<string, boolean>) =>
+    portableShardPlan(
+      portable,
+      new Map(
+        second
+          ? [
+              ['1/2', first],
+              ['2/2', second],
+            ]
+          : [['1/2', first]],
+      ),
+    );
+  expect(plan(cases('a', 'b'), cases('c'))).toBe(plan(cases('b', 'a'), cases('c')));
+  expect(plan(cases('a', 'b'), cases('c'))).not.toBe(plan(cases('c'), cases('a', 'b')));
+  expect(() => plan(cases('a', 'b'))).toThrow(/2\/2 is missing/);
+  expect(() => plan(cases('a', 'b'), cases())).toThrow(/2\/2 is missing or empty/);
+  expect(() => plan(cases('a', 'b'), cases('b', 'c'))).toThrow(/repeated case/);
+  expect(() => plan(cases('a'), cases('c'))).toThrow(/cover every portable case/);
+  expect(() => plan(cases('a'), cases('b', 'c', 'darwin'))).toThrow(/unexpected/);
+});
+
+it('rejects missing, skipped, expected-to-fail and errored executions', () => {
+  const spec = { file: 'fixture.spec.ts', title: 'one case' };
+  const expected = new Map([['chromium:case', { spec }]]);
+  const pass = {
+    projectId: 'chromium',
+    status: 'expected',
+    expectedStatus: 'passed',
+    results: [{ status: 'passed' }],
+  };
+  const report = (test = pass, id = 'case') => ({
+    errors: [],
+    suites: [{ specs: [{ ...spec, id, tests: [test] }] }],
+  });
+  expect(() => assertPassedUiShard(expected, report())).not.toThrow();
+  expect(() => assertPassedUiShard(expected, { ...report(), suites: [] })).toThrow(
+    /assigned cases/,
+  );
+  expect(() => assertPassedUiShard(expected, report(pass, 'other'))).toThrow(/did not pass/);
+  expect(() => assertPassedUiShard(expected, { ...report(), errors: ['unexpected'] })).toThrow(
+    /suite errors/,
+  );
+  expect(() =>
+    assertPassedUiShard(expected, {
+      ...report(),
+      suites: [...report().suites, ...report().suites],
+    }),
+  ).toThrow(/Duplicate UI case/);
+  for (const failed of [
+    { ...pass, status: 'skipped', expectedStatus: 'skipped', results: [{ status: 'skipped' }] },
+    { ...pass, expectedStatus: 'failed', results: [{ status: 'failed' }] },
+    { ...pass, status: 'unexpected', results: [{ status: 'timedOut' }] },
+    { ...pass, status: 'flaky', results: [{ status: 'failed' }, ...pass.results] },
+  ])
+    expect(() => assertPassedUiShard(expected, report(failed))).toThrow(/did not pass/);
 });
 
 it('PostgreSQL gate rejects omitted suites and skipped tests even when the runner exits zero', () => {
