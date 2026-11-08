@@ -172,15 +172,23 @@ for (const theme of ['dark', 'light'] as const)
     });
 
 for (const theme of ['dark', 'light'] as const)
-  for (const width of [390, 1440])
-    test(`${theme} ${width}px finals removal locates a returnable call and refreshes its token`, async ({
-      page,
-    }, testInfo) => {
+  for (const [width, replaceDraw] of [
+    [390, false],
+    [1440, false],
+    [390, true],
+    [1440, true],
+  ] as const) {
+    const scenario = replaceDraw
+      ? 'requires a fresh preview when the whole finals draw was replaced'
+      : 'locates a returnable call and refreshes its token';
+    test(`${theme} ${width}px finals removal ${scenario}`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width, height: 900 });
       await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
       const { overview, responses, unexpected } = await mockEvent(page, { role: 'admin' });
       Object.assign(overview.plan, { bracketMode: 'native', drawPaused: false });
       const call = overview.matches.find((match) => match.status === 'ready')!;
+      const returnedMatchId = call.id;
+      const division = call.division === 'lower' ? 'lower' : 'upper';
       Object.assign(call, {
         player1Name: 'Alexandria with a long doubles alias / Captain Falcon from Western Sydney',
         status: 'playing',
@@ -189,6 +197,34 @@ for (const theme of ['dark', 'light'] as const)
         stationId: null,
         nativeBracketId: 'existing-finals',
       });
+      if (replaceDraw) {
+        Object.assign(call, {
+          label: 'Lower championship final',
+          stage: 'main',
+          poolIndex: null,
+          nativeRound: 1,
+          nativeSlot: 0,
+        });
+        Object.assign(
+          overview.entrants.find(({ id }) => id === call.player1Id)!,
+          {
+            name: call.player1Name,
+          },
+        );
+        overview.nativeBrackets = [
+          {
+            id: call.nativeBracketId!,
+            division,
+            stage: 'main',
+            entrantIds: [call.player1Id!, call.player2Id!],
+            complete: false,
+            winnerId: null,
+            standings: [],
+          },
+        ];
+      }
+      const originalPair = `${call.player1Name} vs ${call.player2Name}`;
+      const replacementPair = `${call.player2Name} vs ${call.player1Name}`;
       const desk: Desk = {
         mode: 'shared',
         capacity: 2,
@@ -224,11 +260,24 @@ for (const theme of ['dark', 'light'] as const)
         resetIssues: [callIssue, 'Finals have report history.'],
         resetCallMatchIds: [],
         resetRevisionToken: 'blocked-token',
+        resetBracketIds: [call.nativeBracketId!],
         divisionResets: [],
         revisionToken: 'reviewed-draw',
         poolOrders: [],
         waitingStages: [],
-        brackets: [],
+        brackets: replaceDraw
+          ? [
+              {
+                id: call.nativeBracketId!,
+                division,
+                stage: 'main',
+                entrantIds: [call.player1Id!, call.player2Id!],
+                alreadyDrawn: true,
+                roundOne: [{ player1Id: call.player1Id, player2Id: call.player2Id }],
+                previewMatches: [],
+              },
+            ]
+          : [],
       };
       responses['eventOps.native.preview'] = preview;
       const commands: { command: Command; requestId: string }[] = [];
@@ -248,6 +297,27 @@ for (const theme of ['dark', 'light'] as const)
           resetCallMatchIds: [],
           resetRevisionToken: 'refreshed-removal',
         });
+        if (replaceDraw) {
+          const replacementId = 'replacement-finals';
+          const bracket = preview.brackets[0]!;
+          preview.resetBracketIds = [replacementId];
+          preview.brackets = [
+            {
+              ...bracket,
+              id: replacementId,
+              roundOne: [{ player1Id: call.player2Id, player2Id: call.player1Id }],
+            },
+          ];
+          overview.nativeBrackets[0]!.id = replacementId;
+          Object.assign(call, {
+            id: 'replacement-final-match',
+            nativeBracketId: replacementId,
+            player1Id: call.player2Id,
+            player2Id: call.player1Id,
+            player1Name: call.player2Name,
+            player2Name: call.player1Name,
+          });
+        }
         const result = { result: { data: {} } };
         await route.fulfill({ json: batched ? [result] : result });
       });
@@ -305,7 +375,7 @@ for (const theme of ['dark', 'light'] as const)
         requestId: expect.any(String),
         command: {
           kind: 'matchControl',
-          matchId: call.id,
+          matchId: returnedMatchId,
           status: 'ready',
           stationId: null,
           expectedResourceRevision: 12,
@@ -313,6 +383,35 @@ for (const theme of ['dark', 'light'] as const)
       });
 
       await drawTab.click();
+      if (replaceDraw) {
+        await expect(removal).toContainText('The selected draw changed. Preview finals again.');
+        await expect(remove).toBeDisabled();
+        await expect(draw.getByText(originalPair, { exact: true })).toBeVisible();
+        expect(removals).toEqual([]);
+        await ready(page);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+        expect((await new AxeBuilder({ page }).include('.ops-page').analyze()).violations).toEqual(
+          [],
+        );
+        await page.evaluate(() => scrollTo(0, 0));
+        await page.screenshot({
+          path: testInfo.outputPath('whole-finals-stale-preview.png'),
+          fullPage: true,
+        });
+        await removal.screenshot({ path: testInfo.outputPath('whole-finals-stale-controls.png') });
+
+        preview.allowed = false;
+        const { resetBracketIds: _ids, ...unidentifiedPreview } = preview;
+        responses['eventOps.native.preview'] = unidentifiedPreview;
+        await previewButton.press('Enter');
+        await expect(removal).toContainText('Preview finals again before removing this draw.');
+        await expect(remove).toBeDisabled();
+        expect(removals).toEqual([]);
+
+        responses['eventOps.native.preview'] = preview;
+        await previewButton.press('Enter');
+        await expect(draw.getByText(replacementPair, { exact: true })).toBeVisible();
+      }
       await expect(remove).toBeEnabled();
       await expect(open).toHaveCount(0);
       await expect(draw.getByRole('button', { name: 'Create ready finals' })).toBeDisabled();
@@ -328,6 +427,7 @@ for (const theme of ['dark', 'light'] as const)
         .toEqual([{ planId: PLAN_ID, revisionToken: 'refreshed-removal' }]);
       expect(unexpected).toEqual([]);
     });
+  }
 
 for (const mode of ['live', 'legacy_locked', 'legacy_unlocked'] as const)
   test(`${mode} queue reset describes what happens to matches`, async ({ page }) => {
@@ -494,6 +594,7 @@ for (const { theme, width, mode, change } of scopedRemovalCases)
       resetIssues: [playedIssue, callIssue],
       resetCallMatchIds: [],
       resetRevisionToken: 'blocked-global-review',
+      resetBracketIds: [...upperScope.bracketIds, ...lowerScope.bracketIds].sort(),
       divisionResets: [upper, lower],
       revisionToken: 'draw-preview',
       poolOrders: [],

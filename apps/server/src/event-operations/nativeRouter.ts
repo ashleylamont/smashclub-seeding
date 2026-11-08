@@ -95,6 +95,7 @@ async function previewLegacyFinals(db: Db, planId: string) {
   return {
     ...preview,
     resetAllowed: false,
+    resetBracketIds: [],
     resetIssues: preview.replacing
       ? [
           ...preview.resetIssues,

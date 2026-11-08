@@ -86,9 +86,13 @@ it('removes and redraws only the reviewed unplayed division after the other divi
   const create = (revisionToken: string) =>
     eventOps.native.generate({ ...args, revisionToken, requestId: crypto.randomUUID() });
   await create((await review()).preview.revisionToken);
+  const originalPreview = (await review()).preview;
+  expect(originalPreview.resetBracketIds).toEqual(
+    (await state()).brackets.map(({ id }) => id).sort(),
+  );
   const originalInput = {
     planId,
-    revisionToken: (await review()).preview.resetRevisionToken,
+    revisionToken: originalPreview.resetRevisionToken,
     requestId: 'ignored on the existing unscoped API',
   };
   expect(await eventOps.native.reset(originalInput)).toEqual({ removed: 4 });
@@ -96,6 +100,15 @@ it('removes and redraws only the reviewed unplayed division after the other divi
   await create((await review()).preview.revisionToken);
 
   const drawn = await state();
+  const replacementPreview = (await review()).preview;
+  expect(replacementPreview.resetAllowed).toBe(true);
+  expect(replacementPreview.resetBracketIds).toEqual(drawn.brackets.map(({ id }) => id).sort());
+  expect(
+    replacementPreview.resetBracketIds.some((id) => originalPreview.resetBracketIds.includes(id)),
+  ).toBe(false);
+  await expect(eventOps.native.reset(originalInput)).rejects.toThrow(/changed since the preview/);
+  expect(await state()).toEqual(drawn);
+
   const readyFinals = (division: 'upper' | 'lower') =>
     drawn.matches.filter((m) => m.division === division && m.bracketId && m.status === 'ready');
   const [upperCall] = readyFinals('upper');

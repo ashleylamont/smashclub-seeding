@@ -109,6 +109,7 @@ describe('standard native lifecycle uses Act without adoption', () => {
         resetAllowed: false,
         resetIssues: ['There are no native finals to remove.'],
         resetCallMatchIds: [],
+        resetBracketIds: [],
       });
       await generateNativeBrackets(db, nativeAdmin, planId, before.revisionToken);
       const stored = () =>
@@ -124,6 +125,7 @@ describe('standard native lifecycle uses Act without adoption', () => {
           'This draw is stored in the older event system. Removal here requires a live draw.',
         ],
         resetCallMatchIds: [],
+        resetBracketIds: [],
       });
       await expect(
         operator.eventOps.native.reset({ planId, revisionToken: preview.revisionToken }),
