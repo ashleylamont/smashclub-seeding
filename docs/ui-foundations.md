@@ -92,6 +92,8 @@ Avoid slogan headers, repeating helper paragraphs above every control and upperc
 
 Put access or connection instructions that apply to every match beside the match list once. Keep each match’s outcome, report receipt and review status with that match.
 
+Distinguish a search with no matches from an empty queue. Name the next action for the current view and keep queue ordering details in optional help.
+
 ## Adoption and review
 
 Use the shared components for every control. Keep primitive imports and control appearance in the shared layer. The linter recognizes shared controls for label checks. It also rejects native control elements and direct Radix imports in pages and domain components; new primitives belong in `components/ui`. Existing semantic sections, links, badges and tables use shared CSS directly.

@@ -44,7 +44,15 @@
 .dispatch-row .ops-match-actions {
   margin-top: 10px;
 }
+.dispatch-pairings {
+  display: grid;
+  gap: var(--s2);
+}
+.dispatch-pairings > .btn {
+  justify-self: start;
+}
 .dispatch-list {
+  margin: 0;
   padding-left: 24px;
 }
 .dispatch-summary strong {
