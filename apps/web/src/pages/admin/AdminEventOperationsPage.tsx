@@ -17,6 +17,7 @@ import { LoadingState, Notice } from '../../components/ui/Feedback';
 import { OPS_SECTIONS, returnCallControlId, useOpsWorkspace } from '../../lib/opsWorkspace';
 import { MatchCard } from './OpsMatchCard';
 import { PlayerReports, AuditList } from './OpsPlayerReports';
+import type { ScoreCallDesk } from './ScoreCallRecovery';
 import { ScorePolicyControls } from './ScorePolicyControls';
 import { StationPoolControls } from './StationPoolControls';
 import { NativeBracketControls } from './NativeBracketControls';
@@ -94,6 +95,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
   const [search, setSearch] = useState('');
   const [poolFilter, setPoolFilter] = useState('all');
   const [focusedMatchId, setFocusedMatchId] = useState<string | null>(null);
+  const [revealedCall, setRevealedCall] = useState<{ id: string; resourceRevision: number }>();
   const act = async (work: () => Promise<unknown>, message = 'Saved') => {
     setPending(true);
     setError('');
@@ -137,6 +139,23 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
     poolFilter,
     search,
   });
+  const untakenCalls = data.matches.filter((match) => match.status === 'playing' && !match.started);
+  const callDesk: ScoreCallDesk = {
+    shared: Boolean(data.sharedDispatch),
+    calls: dispatchDisabled ? [] : untakenCalls,
+    open: (id) => {
+      const call = untakenCalls.find((match) => match.id === id);
+      if (!call) return;
+      if (!data.sharedDispatch) setRevealedCall({ id, resourceRevision: call.resourceRevision });
+      void workspace.openControl(returnCallControlId(id));
+    },
+  };
+  const revealed = untakenCalls.find(
+    (match) =>
+      match.id === revealedCall?.id && match.resourceRevision === revealedCall.resourceRevision,
+  );
+  // Keep the source match card mounted when a named-station call is outside its filters.
+  if (revealed && !matches.some((match) => match.id === revealed.id)) matches.push(revealed);
   return (
     <div className="ops-page">
       <header className="ops-heading">
@@ -344,6 +363,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
                 canStart={callable.has(match.id)}
                 native={data.plan.bracketMode === 'native'}
                 act={act}
+                callDesk={callDesk}
               />
             ))}
           </div>
@@ -356,7 +376,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
                   : 'No matches in this view.'}
             </p>
           )}
-          <PlayerReports data={data} disabled={liveDisabled} act={act} />
+          <PlayerReports data={data} disabled={liveDisabled} act={act} callDesk={callDesk} />
           {!data.sharedDispatch && (
             <StationPoolControls
               onMatch={(id) => {

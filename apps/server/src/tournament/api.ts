@@ -15,12 +15,18 @@ import {
   players,
 } from '@smashclub/db';
 import type { TrpcContext } from '../trpc/trpc';
-import { requireOperator } from '../event-operations/access';
+import { isOperator, requireOperator } from '../event-operations/access';
 import { attendancePreview } from './attendance';
 import { drawFinals } from './brackets';
 import { finalsToken } from './operations';
 import { eventView, planView, matchRows } from './views';
-import { TournamentConflict, hash, stableId, unconfirmedCall } from './facts';
+import {
+  TournamentConflict,
+  UntakenFeederCallsConflict,
+  hash,
+  stableId,
+  unconfirmedCall,
+} from './facts';
 import type { NativeRuntime } from './runtime';
 import type { TournamentCommand, TournamentState } from './schemas';
 
@@ -134,10 +140,19 @@ export async function nativeEntity(
     }
   return null;
 }
-export async function nativeTransport<T>(work: () => Promise<T>) {
+export async function nativeTransport<T>(
+  work: () => Promise<T>,
+  canRecoverFeederCalls?: () => Promise<boolean>,
+) {
   try {
     return await work();
   } catch (error) {
+    if (error instanceof UntakenFeederCallsConflict)
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: error.message,
+        cause: (await canRecoverFeederCalls?.()) ? error : undefined,
+      });
     if (error instanceof TournamentConflict)
       throw new TRPCError({ code: 'CONFLICT', message: error.message, cause: error });
     throw error;
@@ -174,15 +189,20 @@ export class NativeEventApi {
       : randomUUID();
   }
   execute(command: TournamentCommand, requestId: string = this.intent?.requestId ?? randomUUID()) {
-    if (!this.ctx.user) throw new TRPCError({ code: 'UNAUTHORIZED' });
-    return nativeTransport(() =>
-      this.runtime.command(
-        this.ctx.user!,
-        this.planId,
-        requestId,
-        command,
-        this.intent?.requestId ? hash(this.intent) : undefined,
-      ),
+    const { user } = this.ctx;
+    if (!user) throw new TRPCError({ code: 'UNAUTHORIZED' });
+    return nativeTransport(
+      () =>
+        this.runtime.command(
+          user,
+          this.planId,
+          requestId,
+          command,
+          this.intent?.requestId ? hash(this.intent) : undefined,
+        ),
+      command.kind === 'score' || command.kind === 'review'
+        ? () => isOperator(this.ctx.db, this.planId, user)
+        : undefined,
     );
   }
   async snapshot(privateView = false) {

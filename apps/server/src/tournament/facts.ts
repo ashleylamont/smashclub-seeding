@@ -2,6 +2,14 @@ import { createHash } from 'node:crypto';
 import type { Match } from './schemas';
 
 export class TournamentConflict extends Error {}
+
+export class UntakenFeederCallsConflict extends TournamentConflict {
+  constructor(readonly matchIds: string[]) {
+    super(
+      'A downstream match has been called. Return an untaken call before changing its opponents.',
+    );
+  }
+}
 export function requireFact(value: unknown, message: string): asserts value {
   if (!value) throw new TournamentConflict(message);
 }

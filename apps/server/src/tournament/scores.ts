@@ -1,7 +1,13 @@
 import { rollingFinals, requirePoolCorrectionAllowed } from './qualifiers';
 import { hasLegacyQualifier } from './legacyFinalQualifiers';
 import { advance } from './brackets';
-import { requireFact, resolved, sameScore } from './facts';
+import {
+  requireFact,
+  resolved,
+  sameScore,
+  unconfirmedCall,
+  UntakenFeederCallsConflict,
+} from './facts';
 import type { CommandEnvelope, Match, TournamentState } from './schemas';
 
 export function winner(
@@ -56,19 +62,18 @@ export function applyScore(
     }
     if (match.winnerId !== result.winnerId) {
       const descendants = new Set([match.id]);
+      const untakenCallIds: string[] = [];
       for (const item of [...state.matches].sort((a, b) => a.round - b.round)) {
         if (descendants.has(item.parent1Id ?? '') || descendants.has(item.parent2Id ?? '')) {
           requireFact(
             !item.started && !resolved(item),
             'Winner change needs a ruling for downstream actual play.',
           );
-          requireFact(
-            item.status !== 'playing',
-            'A downstream match has been called. Return an untaken call before changing its opponents.',
-          );
+          if (unconfirmedCall(item)) untakenCallIds.push(item.id);
           descendants.add(item.id);
         }
       }
+      if (untakenCallIds.length) throw new UntakenFeederCallsConflict(untakenCallIds);
     }
   }
   Object.assign(match, {

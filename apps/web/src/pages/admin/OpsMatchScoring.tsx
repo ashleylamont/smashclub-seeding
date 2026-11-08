@@ -4,6 +4,8 @@ import { Select, SelectItem } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
 import { ScoreFields, type ScoreInputValue } from '../../components/ScoreFields';
 import { trpc } from '../../lib/trpc';
+import { returnUntakenCallMatchIds } from '../../lib/eventErrors';
+import { ScoreCallRecovery, type ScoreCallDesk } from './ScoreCallRecovery';
 import type { Overview } from './dispatchTypes';
 
 type Match = Overview['matches'][number];
@@ -12,11 +14,13 @@ export function MatchScoring({
   match,
   disabled,
   act,
+  callDesk,
   children,
 }: {
   match: Match;
   disabled: boolean;
   act: Action;
+  callDesk?: ScoreCallDesk;
   children: ReactNode;
 }) {
   const confirmAction = useConfirmation();
@@ -28,6 +32,7 @@ export function MatchScoring({
   const [outcome, setOutcome] = useState<'played' | 'forfeit' | 'bye'>('played');
   const [winnerId, setWinnerId] = useState(match.winnerId ?? match.player1Id ?? '');
   const [requestId, setRequestId] = useState('');
+  const [callConflict, setCallConflict] = useState<{ requestId: string; matchIds: string[] }>();
   const stale =
     editing !== null &&
     (revision !== match.revision ||
@@ -91,18 +96,24 @@ export function MatchScoring({
                     score1: score1 === '' ? 0 : score1,
                     score2: score2 === '' ? 0 : score2,
                   });
-                else
-                  await trpc.eventOps.reportScore.mutate({
-                    matchId: match.id,
-                    expectedRevision: revision,
-                    requestId,
-                    // The shared legacy endpoint requires numeric wire values;
-                    // native forfeits are recorded with null game scores.
-                    score1: outcome === 'played' && score1 !== '' ? score1 : 0,
-                    score2: outcome === 'played' && score2 !== '' ? score2 : 0,
-                    outcome,
-                    ...(outcome !== 'played' ? { winnerId } : {}),
-                  });
+                else {
+                  try {
+                    await trpc.eventOps.reportScore.mutate({
+                      matchId: match.id,
+                      expectedRevision: revision,
+                      requestId,
+                      // The shared legacy endpoint requires numeric wire values;
+                      // native forfeits are recorded with null game scores.
+                      score1: outcome === 'played' && score1 !== '' ? score1 : 0,
+                      score2: outcome === 'played' && score2 !== '' ? score2 : 0,
+                      outcome,
+                      ...(outcome !== 'played' ? { winnerId } : {}),
+                    });
+                  } catch (cause) {
+                    setCallConflict({ requestId, matchIds: returnUntakenCallMatchIds(cause) });
+                    throw cause;
+                  }
+                }
                 setEditing(null);
               },
               editing === 'live'
@@ -118,7 +129,9 @@ export function MatchScoring({
               ? 'Update the score without finishing the match'
               : outcome === 'forfeit'
                 ? 'Record a forfeit without played games'
-                : 'Confirm the final result and finish this match'}
+                : match.status === 'complete'
+                  ? 'Confirm the corrected result'
+                  : 'Confirm the final result and finish this match'}
           </strong>
           {stale && (
             <p role="alert" className="error-text">
@@ -191,6 +204,9 @@ export function MatchScoring({
                 </label>
               )}
             </>
+          )}
+          {callDesk && !stale && callConflict?.requestId === requestId && (
+            <ScoreCallRecovery matchIds={callConflict.matchIds} desk={callDesk} />
           )}
           <div className="ops-match-actions">
             <Button

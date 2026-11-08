@@ -12,14 +12,14 @@
   min-width: 0;
   max-width: 100%;
 }
-.ops-pause-calls {
+.ops-call-links {
   display: grid;
   gap: var(--s2);
   max-width: 44rem;
   margin: var(--s3) 0 0;
   padding: 0;
 }
-.ops-pause-calls > li {
+.ops-call-links > li {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;

@@ -5,6 +5,7 @@ import type { SessionUser } from '../auth';
 import type { Env } from '../env';
 import type { RecomputeTrigger } from '../recompute/trigger';
 import type { NativeRuntime } from '../tournament/runtime';
+import { UntakenFeederCallsConflict } from '../tournament/facts';
 
 export interface TrpcContext {
   clientIp?: string;
@@ -16,7 +17,19 @@ export interface TrpcContext {
   nativeRuntime?: NativeRuntime;
 }
 
-const t = initTRPC.context<TrpcContext>().create();
+const t = initTRPC.context<TrpcContext>().create({
+  errorFormatter({ shape, error, path }) {
+    if (
+      (path === 'eventOps.reportScore' || path === 'eventOps.reviewReport') &&
+      error.cause instanceof UntakenFeederCallsConflict
+    )
+      return {
+        ...shape,
+        data: { ...shape.data, returnUntakenCallMatchIds: error.cause.matchIds },
+      };
+    return shape;
+  },
+});
 
 export const router = t.router;
 export const publicProcedure = t.procedure;

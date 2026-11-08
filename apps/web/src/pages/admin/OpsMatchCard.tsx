@@ -4,6 +4,8 @@ import { Select, SelectItem } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
 import { trpc } from '../../lib/trpc';
 import { MatchScoring } from './OpsMatchScoring';
+import { returnCallControlId } from '../../lib/opsWorkspace';
+import type { ScoreCallDesk } from './ScoreCallRecovery';
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 type Match = Overview['matches'][number];
 type Action = (work: () => Promise<unknown>, message?: string) => Promise<void>;
@@ -14,6 +16,7 @@ export function MatchCard({
   canStart,
   native,
   act,
+  callDesk,
 }: {
   match: Match;
   stations: Overview['stations'];
@@ -21,6 +24,7 @@ export function MatchCard({
   canStart: boolean;
   native: boolean;
   act: Action;
+  callDesk?: ScoreCallDesk;
 }) {
   const confirmAction = useConfirmation();
   const eligible = eligibleStations(match, stations);
@@ -89,9 +93,14 @@ export function MatchCard({
           ))}
         </Select>
       </label>
-      <MatchScoring match={match} disabled={disabled} act={act}>
+      <MatchScoring match={match} disabled={disabled} act={act} callDesk={callDesk}>
         {match.status !== 'complete' && (
           <Button
+            id={
+              native && callDesk && !callDesk.shared && match.status === 'playing' && !match.started
+                ? returnCallControlId(match.id)
+                : undefined
+            }
             size="small"
             disabled={disabled || (match.status !== 'playing' && !canStart)}
             title={
