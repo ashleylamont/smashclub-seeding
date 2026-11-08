@@ -1,3 +1,4 @@
+import type { Db } from '@smashclub/db';
 import { StrengthSeedPolicy } from '../tournament/schemas';
 import { rollingFinals } from '../tournament/qualifiers';
 import { nativeEvent } from '../tournament/api';
@@ -16,9 +17,7 @@ export const nativeBracketRouter = router({
     .query(async ({ ctx, input }) => {
       await requireOperator(ctx.db, input.planId, ctx.user);
       const api = await nativeEvent(ctx, input.planId, false, input);
-      return api
-        ? api.previewFinals(input.seedPolicy)
-        : previewNativeBrackets(ctx.db, input.planId);
+      return api ? api.previewFinals(input.seedPolicy) : previewLegacyFinals(ctx.db, input.planId);
     }),
   generate: authedProcedure
     .input(
@@ -74,3 +73,19 @@ export const nativeBracketRouter = router({
     });
   }),
 });
+
+async function previewLegacyFinals(db: Db, planId: string) {
+  const preview = await previewNativeBrackets(db, planId);
+  const resetCallMatchIds: string[] = [];
+  return {
+    ...preview,
+    resetAllowed: false,
+    resetIssues: preview.replacing
+      ? [
+          ...preview.resetIssues,
+          'This draw is stored in the older event system. Removal here requires a live draw.',
+        ]
+      : preview.resetIssues,
+    resetCallMatchIds,
+  };
+}

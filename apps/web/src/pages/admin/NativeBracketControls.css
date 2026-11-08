@@ -7,3 +7,11 @@
   min-width: 12rem;
   white-space: normal;
 }
+
+.finals-reset-actions {
+  margin-block-start: var(--s4);
+}
+
+.finals-reset-actions > ul {
+  margin-block: var(--s2);
+}

@@ -127,10 +127,36 @@ describe('rolling finals through the standard native API', () => {
     expect(existing.allowed).toBe(false);
     expect(existing.resetAllowed).toBe(false);
     expect(existing.resetIssues.join(' ')).toContain('untaken');
+    expect(existing.resetCallMatchIds).toEqual([ready.id]);
     await expect(
       caller().eventOps.native.generate({ planId, revisionToken: existing.revisionToken }),
     ).rejects.toThrow(/already exist/);
-    expect(await live.replay(planId)).toEqual(await live.state(planId));
+    await expect(
+      caller().eventOps.native.reset({ planId, revisionToken: existing.revisionToken }),
+    ).rejects.toThrow(/Return untaken finals calls/);
+    const called = await live.state(planId);
+    await command(planId, {
+      kind: 'matchControl',
+      matchId: ready.id,
+      expectedRevision: called.matches.find((match) => match.id === ready.id)!.revision,
+      expectedResourceRevision: called.settings.resourceRevision,
+      stationId: null,
+      reason: null,
+      status: 'ready',
+    });
+    const refreshed = await caller().eventOps.native.preview({ planId });
+    expect(refreshed.resetAllowed).toBe(true);
+    expect(refreshed.resetCallMatchIds).toEqual([]);
+    await expect(
+      caller().eventOps.native.reset({ planId, revisionToken: existing.revisionToken }),
+    ).rejects.toThrow(/changed since the preview/);
+    expect(
+      await caller().eventOps.native.reset({ planId, revisionToken: refreshed.revisionToken }),
+    ).toEqual({ removed: 4 });
+    const reset = await live.state(planId);
+    expect(reset.matches).toEqual(called.matches.filter((match) => !match.bracketId));
+    expect(reset.result).toBeNull();
+    expect(await live.replay(planId)).toEqual(reset);
   });
 
   it('lets the planner rule on an unrelated tied pool after actual finals play and rejects corrections to consumed pool evidence', async () => {

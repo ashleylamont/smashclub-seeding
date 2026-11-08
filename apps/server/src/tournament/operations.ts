@@ -3,7 +3,7 @@ import { rollingFinals } from './qualifiers';
 import { requirePoolOrderChangeAllowed } from './poolOrders';
 import { beginPlay, changeStation, configureDispatch, moveQueue, sharedDispatch } from './dispatch';
 import { isKnockout } from '@smashclub/shared';
-import { hash, requireFact, resolved, unconfirmedCall } from './facts';
+import { hash, requireFact, resolved, TournamentConflict, unconfirmedCall } from './facts';
 import { applyAttendance } from './attendance';
 import { replaceResult } from './replacement';
 import type { CommandEnvelope, TournamentState } from './schemas';
@@ -22,27 +22,31 @@ export const finalsToken = (
         lifecycle: state.lifecycle,
       });
 
+export function finalsResetBlockers(state: TournamentState) {
+  const issues: string[] = [];
+  const finals = state.matches.filter((match) => match.bracketId);
+  if (isKnockout(state.baseline?.structure))
+    issues.push('A locked knockout draw can only be changed by creating a new draft.');
+  if (
+    finals.some(
+      (match) =>
+        match.started ||
+        (resolved(match) && match.outcome !== 'bye' && match.outcome !== 'no_contest'),
+    )
+  )
+    issues.push('Finals have actual play and cannot be reset.');
+  const untakenCallIds = finals.filter(unconfirmedCall).map(({ id }) => id);
+  if (untakenCallIds.length)
+    issues.push('Return untaken finals calls before resetting their draw.');
+  const finalsIds = new Set(finals.map(({ id }) => id));
+  if (state.reports.some((report) => finalsIds.has(report.matchId)))
+    issues.push('Finals have report history.');
+  return { issues, untakenCallIds };
+}
+
 export function resetFinals(state: TournamentState) {
-  requireFact(
-    !isKnockout(state.baseline?.structure),
-    'A locked knockout draw can only be changed by creating a new draft.',
-  );
-  requireFact(
-    !state.matches.some(
-      (m) =>
-        m.bracketId &&
-        (m.started || (resolved(m) && m.outcome !== 'bye' && m.outcome !== 'no_contest')),
-    ),
-    'Finals have actual play and cannot be reset.',
-  );
-  requireFact(
-    !state.matches.some((m) => m.bracketId && unconfirmedCall(m)),
-    'Return untaken finals calls before resetting their draw.',
-  );
-  requireFact(
-    !state.reports.some((r) => state.matches.some((m) => m.id === r.matchId && m.bracketId)),
-    'Finals have report history.',
-  );
+  const [blocker] = finalsResetBlockers(state).issues;
+  if (blocker) throw new TournamentConflict(blocker);
   state.matches = state.matches.filter((m) => !m.bracketId);
   state.brackets = [];
   if (rollingFinals(state)) for (const pool of state.pools) delete pool.qualifierRoster;

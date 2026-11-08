@@ -4,7 +4,6 @@ import { DispatchDesk } from './DispatchDesk';
 import { DoublesAvailabilityControls } from './DoublesAvailabilityControls';
 import { PoolDrawControls } from './PoolDrawControls';
 import { NativeResultControls } from './NativeResultControls';
-import { useConfirmation } from '../../lib/confirmation';
 import { Button } from '../../components/ui/Button';
 import { Select, SelectItem } from '../../components/ui/Select';
 import { Input } from '../../components/ui/Input';
@@ -21,6 +20,7 @@ import { PlayerReports, AuditList } from './OpsPlayerReports';
 import { ScorePolicyControls } from './ScorePolicyControls';
 import { StationPoolControls } from './StationPoolControls';
 import { NativeBracketControls } from './NativeBracketControls';
+import { QueueResetControls } from './QueueResetControls';
 import { useState } from 'react';
 import { ToPlayerFinder } from './ToPlayerFinder';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -76,7 +76,6 @@ export function AssignedEventOperationsPage() {
 
 export function EventOperationsPanel({ planId }: { planId: string }) {
   const online = useOnlineStatus();
-  const confirmAction = useConfirmation();
   const workspace = useOpsWorkspace();
   const cache = useQueryClient();
   const { data: session } = authClient.useSession();
@@ -124,6 +123,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
   const data = event.data;
   const closed = ['complete', 'cancelled'].includes(data.plan.status);
   const liveDisabled = !online || pending || closed || Boolean(data.plan.drawPaused);
+  const dispatchDisabled = liveDisabled || event.isError;
   const disputes = data.reports.filter(
     (report) => report.status === 'pending' && report.isDispute,
   ).length;
@@ -225,7 +225,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
           {data.plan.bracketMode === 'native' && (
             <DispatchDesk
               data={data}
-              disabled={liveDisabled || event.isError}
+              disabled={dispatchDisabled}
               onReviewReports={() => void workspace.openControl('score-submissions')}
               onMatch={(id) => {
                 setFocusedMatchId(id);
@@ -472,10 +472,10 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
                 onChanged={() => cache.invalidateQueries({ queryKey: ['eventOps', planId] })}
               />
               <NativeBracketControls
-                structure={data.plan.structure}
-                planId={planId}
-                entrants={data.entrants}
+                data={data}
                 closed={closed || Boolean(data.plan.drawPaused)}
+                dispatchDisabled={dispatchDisabled}
+                onOpenCall={(matchId) => void workspace.openControl(returnCallControlId(matchId))}
               />
               <NativeDrawTools data={data} />
               <NativeResultControls
@@ -515,54 +515,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
             published={data.settings.published}
           />
           {admin && <OpsAccessControls data={data} pending={pending} closed={closed} act={act} />}
-          {admin && !closed && (
-            <Disclosure
-              title={
-                <>
-                  {data.plan.softLockedAt
-                    ? 'Before play: reset match queue'
-                    : 'Before play: rebuild the roster'}
-                </>
-              }
-              className="card"
-            >
-              <p className="muted">
-                {data.plan.softLockedAt
-                  ? 'Clear unplayed matches while keeping the soft-locked pool assignments. Prepare matches again to restore the queue.'
-                  : 'Clear an unplayed queue before reopening the planner. This is unavailable once a match starts, a score is reported, someone withdraws, or a bracket is attached.'}
-              </p>
-              <Button
-                type="submit"
-                disabled={
-                  pending ||
-                  data.matches.some(
-                    (match) =>
-                      match.started || match.status === 'playing' || match.status === 'complete',
-                  ) ||
-                  data.reports.length > 0 ||
-                  data.withdrawals.length > 0 ||
-                  data.brackets.some((bracket) => bracket.slug)
-                }
-                onClick={async () => {
-                  if (
-                    await confirmAction(
-                      data.plan.softLockedAt
-                        ? 'Clear this unplayed match queue? Soft-locked pools will stay in place.'
-                        : 'Clear this unplayed match queue? You can then reopen the roster in the planner.',
-                    )
-                  )
-                    void act(
-                      () => trpc.eventOps.resetOperations.mutate({ planId }),
-                      data.plan.softLockedAt
-                        ? 'Unplayed queue cleared. Pool assignments were kept.'
-                        : 'Unplayed queue cleared. Reopen the roster in the planner to reshuffle.',
-                    );
-                }}
-              >
-                Reset unplayed queue
-              </Button>
-            </Disclosure>
-          )}
+          {admin && !closed && <QueueResetControls data={data} pending={pending} act={act} />}
           {data.plan.bracketMode === 'native' ? (
             <Button type="button" onClick={() => void workspace.changeSection('history')}>
               Open event history
