@@ -302,8 +302,22 @@ it('queues exact-build verification and registry writes while superseding PR che
       "${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}-verification",
     'cancel-in-progress': "${{ github.event_name == 'pull_request' }}",
   });
+  expect(publish.jobs.classify).toMatchObject({
+    if: "github.event_name == 'push' && github.ref == 'refs/heads/main'",
+    permissions: { contents: 'read' },
+    'continue-on-error': true,
+    outputs: { lane: '${{ steps.classify.outputs.lane }}' },
+  });
+  expect(publish.jobs.classify.steps[0].with).toEqual({
+    ref: '${{ github.sha }}',
+    'fetch-depth': 2,
+    'persist-credentials': false,
+  });
+  expect(publish.jobs.verify.needs).toBe('classify');
+  expect(publish.jobs.verify.if).toBe('${{ !cancelled() }}');
   expect(publish.jobs.verify.concurrency).toEqual({
-    group: 'publish-verification-${{ github.ref }}',
+    group:
+      "${{ (github.event_name == 'workflow_dispatch' || needs.classify.outputs.lane == 'ordinary') && 'publish-verification-main-ordinary' || 'publish-verification-refs/heads/main' }}",
     queue: 'max',
   });
   expect(publish.jobs.publish.concurrency).toEqual({

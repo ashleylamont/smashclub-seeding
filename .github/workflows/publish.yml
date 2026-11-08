@@ -11,10 +11,33 @@ permissions:
   contents: read
 
 jobs:
+  classify:
+    name: Classify main build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    # Classification only chooses a queue. Failure falls back to the original lane.
+    continue-on-error: true
+    outputs:
+      lane: ${{ steps.classify.outputs.lane }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - id: classify
+        run: node scripts/publish-verification-lane.mjs
+
   # No workflow_run/pull_request_target: fork code never reaches a privileged job.
   verify:
+    needs: classify
+    if: ${{ !cancelled() }}
     concurrency:
-      group: publish-verification-${{ github.ref }}
+      # Preserve the original main queue for releases already waiting there.
+      group: ${{ (github.event_name == 'workflow_dispatch' || needs.classify.outputs.lane == 'ordinary') && 'publish-verification-main-ordinary' || 'publish-verification-refs/heads/main' }}
       queue: max
     uses: ./.github/workflows/ci.yml
     permissions:

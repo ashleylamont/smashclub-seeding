@@ -1,4 +1,4 @@
-const stableVersion = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+export const stableVersionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 /** A main push, a version tag on main's history, or a manual main rebuild. */
 export function publicationPolicy({
@@ -19,13 +19,13 @@ export function publicationPolicy({
   if (ref === 'refs/heads/main') {
     const tags = mainSha === sha ? ['main'] : [];
     if (event !== 'push' || !versionChanged) return { sha, tags };
-    if (!stableVersion.test(appVersion))
+    if (!stableVersionPattern.test(appVersion))
       throw new Error('Expected a MAJOR.MINOR.PATCH app version');
     return { sha, tags: [...tags, appVersion], releaseVersion: appVersion };
   }
 
   const version = ref.startsWith('refs/tags/v') ? ref.slice('refs/tags/v'.length) : '';
-  if (event !== 'push' || !stableVersion.test(version))
+  if (event !== 'push' || !stableVersionPattern.test(version))
     throw new Error('Expected a main push or a vMAJOR.MINOR.PATCH release tag');
   if (version !== appVersion)
     throw new Error(`Expected release tag v${appVersion} to match the app version`);
