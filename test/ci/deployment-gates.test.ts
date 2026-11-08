@@ -7,6 +7,7 @@ import { parse } from 'yaml';
 import { describe, expect, it } from 'vitest';
 import { assertAppChangeset } from '../../scripts/check-changeset.mjs';
 import { assertRequiredJobs, requiredJobs } from '../../scripts/check-required-jobs.mjs';
+import { planPrChecks, skippableJobs } from '../../scripts/plan-pr-checks.mjs';
 import { assertReleaseTag, publicationPolicy } from '../../scripts/publication-policy.mjs';
 import { assertPostgresReport } from '../../scripts/postgres-report-policy.mjs';
 
@@ -16,17 +17,88 @@ const versionWorkflow = parse(readFileSync('.github/workflows/version.yml', 'utf
 const sha = 'a'.repeat(40);
 const input = { event: 'push', ref: 'refs/heads/main', sha, mainSha: sha, onMain: true };
 
-it('all required jobs run and every skipped, missing, cancelled or failed dependency blocks the gate', () => {
+const successfulJobs = Object.fromEntries(
+  requiredJobs.map((name) => [name, { result: 'success' }]),
+);
+
+it('keeps the full gate on publish and wires only the two scoped jobs to the PR plan', () => {
   expect(ci.jobs['all-checks'].needs.toSorted()).toEqual(requiredJobs.toSorted());
   expect(ci.jobs['all-checks'].if).toBe('always()');
-  const results = Object.fromEntries(requiredJobs.map((name) => [name, { result: 'success' }]));
-  expect(() => assertRequiredJobs(results)).not.toThrow(
-    /PostgreSQL gate|Missing required|publication|commit|main|Expected/,
-  );
+  expect(() => assertRequiredJobs(successfulJobs, { event: 'push' })).not.toThrow();
+  const conditions = {
+    'e2e-report': 'always()',
+    ...Object.fromEntries(
+      skippableJobs.map((job) => [
+        job,
+        `\${{ !cancelled() && (github.event_name != 'pull_request' || !contains(fromJSON(needs.changeset.outputs.skips || '[]'), '${job}')) }}`,
+      ]),
+    ),
+  };
+  for (const job of skippableJobs) expect(ci.jobs[job].needs).toBe('changeset');
   for (const job of requiredJobs) {
-    expect(ci.jobs[job].if).toBe(job === 'e2e-report' ? 'always()' : undefined);
+    expect(ci.jobs[job].if).toBe(conditions[job]);
     for (const result of ['skipped', 'failure', 'cancelled', undefined])
-      expect(() => assertRequiredJobs({ ...results, [job]: { result } })).toThrow(job);
+      expect(() => assertRequiredJobs({ ...successfulJobs, [job]: { result } })).toThrow(job);
+  }
+});
+
+it('accepts only explicit PR skips from a successful plan', () => {
+  const options = { event: 'pull_request' };
+  const planned = {
+    ...successfulJobs,
+    changeset: { result: 'success', outputs: { skips: '["postgres"]' } },
+    postgres: { result: 'skipped' },
+  };
+  expect(() => assertRequiredJobs(planned, options)).not.toThrow();
+  expect(() => assertRequiredJobs(planned, { ...options, reportOnly: true })).toThrow(/plan/);
+  expect(() => assertRequiredJobs(planned, { event: 'push' })).toThrow(/plan/);
+  expect(() => assertRequiredJobs({ ...planned, e2e: { result: 'skipped' } }, options)).toThrow(
+    'e2e',
+  );
+  for (const result of ['failure', 'cancelled', undefined]) {
+    expect(() => assertRequiredJobs({ ...planned, postgres: { result } }, options)).toThrow(
+      'postgres',
+    );
+    expect(() =>
+      assertRequiredJobs({ ...planned, changeset: { ...planned.changeset, result } }, options),
+    ).toThrow('changeset');
+  }
+  for (const skips of [undefined, 'false', '["e2e"]', '["postgres","postgres"]']) {
+    expect(() =>
+      assertRequiredJobs(
+        { ...planned, changeset: { result: 'success', outputs: { skips } } },
+        options,
+      ),
+    ).toThrow(/plan/);
+  }
+});
+
+it('scopes PR skips to web or prose and keeps broader candidates advisory', () => {
+  const note = '.changeset/example.md';
+  const web = 'apps/web/src/pages/Example.tsx';
+  expect(planPrChecks([web, note], false).skips).toEqual(skippableJobs);
+  expect(planPrChecks([web, note], true)).toMatchObject({ skips: [], candidates: skippableJobs });
+  expect(planPrChecks(['docs/development.md', note], false)).toMatchObject({
+    skips: skippableJobs,
+    candidates: expect.arrayContaining(['e2e', 'e2e-report', 'ui-quality', 'production-image']),
+  });
+  expect(planPrChecks(['legacy/main.py', note], false)).toMatchObject({
+    skips: [],
+    candidates: expect.arrayContaining(['postgres']),
+  });
+  expect(planPrChecks([], false).skips).toEqual([]);
+  for (const path of [
+    'apps/server/src/app.ts',
+    'packages/db/migrations/0001.sql',
+    'packages/shared/src/events.ts',
+    'tools/rank-eval/src/index.ts',
+    'docs/bracket-renderer-reproduction/run.sh',
+    '.github/workflows/ci.yml',
+    '.changeset/config.json',
+    'pnpm-lock.yaml',
+    'unexpected.txt',
+  ]) {
+    expect(planPrChecks([web, note, path], false).skips, path).toEqual([]);
   }
 });
 
@@ -183,7 +255,7 @@ describe('Changeset merge gate', () => {
     return '## 0.1.1\n\n### Patch Changes\n\n- Keep the QR visible.';
   };
 
-  it('validates the tested merge when main has advanced through a release', () => {
+  it('checks and plans against the tested merge when main has advanced through a release', () => {
     const cwd = mkdtempSync(join(tmpdir(), 'nemesis-changeset-gate-'));
     const git = (...args: string[]) =>
       execFileSync(
@@ -202,26 +274,49 @@ describe('Changeset merge gate', () => {
       return git('rev-parse', 'HEAD');
     };
     const script = fileURLToPath(new URL('../../scripts/check-changeset.mjs', import.meta.url));
+    const planner = fileURLToPath(new URL('../../scripts/plan-pr-checks.mjs', import.meta.url));
+    const output = join(cwd, '.git', 'plan-output');
+    const summary = join(cwd, '.git', 'plan-summary');
     const check = (expectedHead: string) =>
       spawnSync(process.execPath, [script, expectedHead], {
         cwd,
         encoding: 'utf8',
         env: { ...process.env, GITHUB_HEAD_REF: 'feature' },
       });
+    const plan = (expectedHead: string, reportOnly: boolean) => {
+      writeFileSync(output, '');
+      writeFileSync(summary, '');
+      const result = spawnSync(process.execPath, [planner, expectedHead], {
+        cwd,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          CI_REPORT_ONLY: String(reportOnly),
+          GITHUB_OUTPUT: output,
+          GITHUB_STEP_SUMMARY: summary,
+        },
+      });
+      expect(result.status, result.stderr).toBe(0);
+      return readFileSync(output, 'utf8');
+    };
 
     try {
       git('init', '--quiet', '--initial-branch=main');
-      write(appPackage, JSON.stringify({ version: '0.1.4' }));
+      write('pnpm-workspace.yaml', 'packages:\n  - apps/*\n');
+      write('package.json', JSON.stringify({ name: 'nemesis', private: true }));
+      write(appPackage, JSON.stringify({ name: '@smashclub/web', version: '0.1.4' }));
+      write('apps/server/config.txt', 'test configuration\n');
       write(changelog, '## 0.1.4\n');
       write('.changeset/previous.md', valid);
       const eventBase = commit('Before release');
       git('switch', '--quiet', '--create', 'feature');
       write(note, valid);
+      write('apps/web/src/feature.ts', 'export const feature = true;\n');
       const feature = commit('Feature with Changeset');
       const nonMerge = check(feature);
 
       git('switch', '--quiet', 'main');
-      write(appPackage, JSON.stringify({ version: '0.1.5' }));
+      write(appPackage, JSON.stringify({ name: '@smashclub/web', version: '0.1.5' }));
       write(changelog, '## 0.1.5\n\n## 0.1.4\n');
       git('rm', '--quiet', '.changeset/previous.md');
       const testedBase = commit('Version Nemesis');
@@ -233,11 +328,28 @@ describe('Changeset merge gate', () => {
       expect(result.status, result.stderr).toBe(0);
       expect(nonMerge.stderr).toContain('two-parent pull request merge commit');
       expect(check(eventBase).stderr).toContain('does not match the expected pull request head');
+      expect(plan(feature, false)).toBe(`skips=${JSON.stringify(skippableJobs)}\n`);
+      expect(readFileSync(summary, 'utf8')).toContain('`@smashclub/web`');
+      expect(plan(feature, true)).toBe('skips=[]\n');
+      expect(readFileSync(summary, 'utf8')).toContain(
+        'Additional candidates (still run): `legacy-python`, `postgres`',
+      );
+
+      git('switch', '--quiet', '--create', 'rename');
+      git('mv', 'apps/server/config.txt', 'apps/web/config.txt');
+      const moved = commit('Move configuration across scopes');
+      git('switch', '--quiet', 'main');
+      git('merge', '--quiet', '--no-ff', '--no-edit', 'rename');
+      expect(plan(moved, false)).toBe('skips=[]\n');
       const checkStep = ci.jobs.changeset.steps.find(
         (step: { name?: string }) => step.name === 'Check release note',
       );
       expect(checkStep.env).toEqual({ PR_HEAD_SHA: '${{ github.event.pull_request.head.sha }}' });
       expect(checkStep.run).toBe('node scripts/check-changeset.mjs "$PR_HEAD_SHA"');
+      const planStep = ci.jobs.changeset.steps.find((step: { id?: string }) => step.id === 'plan');
+      expect(ci.jobs.changeset.outputs.skips).toBe('${{ steps.plan.outputs.skips }}');
+      expect(planStep.env.PR_HEAD_SHA).toBe(checkStep.env.PR_HEAD_SHA);
+      expect(planStep.run).toBe('node scripts/plan-pr-checks.mjs "$PR_HEAD_SHA"');
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

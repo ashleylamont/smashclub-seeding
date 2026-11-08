@@ -52,6 +52,8 @@ jobs:
   changeset:
     name: Changeset
     runs-on: ubuntu-latest
+    outputs:
+      skips: ${{ steps.plan.outputs.skips }}
     steps:
       - uses: actions/checkout@v4
         if: github.event_name == 'pull_request'
@@ -64,6 +66,13 @@ jobs:
         env:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: node scripts/check-changeset.mjs "$PR_HEAD_SHA"
+      - name: Plan affected checks
+        id: plan
+        if: github.event_name == 'pull_request'
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CI_REPORT_ONLY: ${{ vars.CI_REPORT_ONLY }}
+        run: node scripts/plan-pr-checks.mjs "$PR_HEAD_SHA"
       - name: Confirm release-note gate applies to pull requests
         if: github.event_name != 'pull_request'
         run: echo 'Changeset validation runs on pull requests.'
@@ -232,6 +241,8 @@ jobs:
 
   legacy-python:
     name: Legacy Python tests
+    needs: changeset
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || !contains(fromJSON(needs.changeset.outputs.skips || '[]'), 'legacy-python')) }}
     # Identity/import tests for the unsupported historical Python archive.
     # test_smart_parsing.py and test_seeding.py are excluded on purpose: both
     # construct SeedingCalculator('tests/test_data.csv'), a fixture of real
@@ -258,6 +269,8 @@ jobs:
 
   postgres:
     name: PostgreSQL integration
+    needs: changeset
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || !contains(fromJSON(needs.changeset.outputs.skips || '[]'), 'postgres')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -312,7 +325,7 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-  # Every listed dependency is mandatory. Skips/cancellations fail closed.
+  # Only skips explicitly permitted by the PR plan can pass the gate.
   all-checks:
     name: All checks
     if: always()
@@ -338,4 +351,5 @@ jobs:
       - name: Check job results
         env:
           RESULTS: ${{ toJSON(needs) }}
+          CI_REPORT_ONLY: ${{ vars.CI_REPORT_ONLY }}
         run: node scripts/check-required-jobs.mjs
