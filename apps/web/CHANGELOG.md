@@ -2,6 +2,13 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.2.9
+
+### Patch Changes
+
+- 8 November 2026 · **Fix** · Give the read-only Pool size field in the event planner an accessible label and announce the explanation for the selected format. [#233](https://github.com/ashleylamont/smashclub-seeding/pull/233) · [build b96dca8](https://github.com/ashleylamont/smashclub-seeding/commit/b96dca8196abdb7eccdea113466d6cb87c68026b)
+- 8 November 2026 · **Improvement** · The planner’s knockout diagrams and run sheet use names such as Quarter-final, Winners semi-final and Reset final (if needed). The run sheet scrolls inside the phone preview so match details stay readable. [#234](https://github.com/ashleylamont/smashclub-seeding/pull/234) · [build 3156296](https://github.com/ashleylamont/smashclub-seeding/commit/3156296265b64939a0b9a9833c3f25de85c54acc)
+
 ## 0.2.8
 
 ### Patch Changes
