@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { LiveMatch } from '../lib/eventDisplay';
 import { eliminationLaneLayout, type EliminationLane } from '../lib/eliminationLayout';
+import { matchPresentation } from '../lib/matchPresentation';
 import {
   liveBracketFeeds,
   liveBracketRound,
@@ -176,39 +177,43 @@ export function EventBracketLane({
               </h4>
             </section>
           ))}
-          {layout.nodes.map(({ match, x, y }) => (
-            <article
-              className={`event-bracket-match${match.status === 'playing' ? ' is-playing' : ''}`}
-              key={match.id}
-              data-match-id={match.id}
-              aria-label={`${match.label}: ${liveBracketStatus(match)}`}
-              style={{ left: x, top: y, width: geometry.width }}
-            >
-              <small>
-                {match.label} · {liveBracketStatus(match)}
-              </small>
-              {([0, 1] as const).map((side) => {
-                const id = side === 0 ? match.player1Id : match.player2Id;
-                const score = side === 0 ? match.score1 : match.score2;
-                const characters = side === 0 ? match.player1Characters : match.player2Characters;
-                return (
-                  <div
-                    className={liveBracketWinner(match, id) ? 'is-winner' : ''}
-                    key={side}
-                    data-entrant-id={id ?? undefined}
-                  >
-                    <span>
-                      {liveBracketSide(match, side, labels)}
-                      <CharacterIcons slugs={id ? (characters ?? []) : []} />
-                    </span>
-                    <b aria-label={score === null ? 'No score' : `Score ${score}`}>
-                      {score ?? '–'}
-                    </b>
-                  </div>
-                );
-              })}
-            </article>
-          ))}
+          {layout.nodes.map(({ match, x, y }) => {
+            const { showScores } = matchPresentation(match);
+            const scores = showScores ? [match.score1, match.score2] : [null, null];
+            return (
+              <article
+                className={`event-bracket-match${match.status === 'playing' ? ' is-playing' : ''}`}
+                key={match.id}
+                data-match-id={match.id}
+                aria-label={`${match.label}: ${liveBracketStatus(match)}`}
+                style={{ left: x, top: y, width: geometry.width }}
+              >
+                <small>
+                  {match.label} · {liveBracketStatus(match)}
+                </small>
+                {([0, 1] as const).map((side) => {
+                  const id = side === 0 ? match.player1Id : match.player2Id;
+                  const score = scores[side];
+                  const characters = side === 0 ? match.player1Characters : match.player2Characters;
+                  return (
+                    <div
+                      className={liveBracketWinner(match, id) ? 'is-winner' : ''}
+                      key={side}
+                      data-entrant-id={id ?? undefined}
+                    >
+                      <span>
+                        {liveBracketSide(match, side, labels)}
+                        <CharacterIcons slugs={id ? (characters ?? []) : []} />
+                      </span>
+                      <b aria-label={score === null ? 'No score' : `Score ${score}`}>
+                        {score ?? '–'}
+                      </b>
+                    </div>
+                  );
+                })}
+              </article>
+            );
+          })}
         </div>
       </div>
     </section>
