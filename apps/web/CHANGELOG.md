@@ -2,6 +2,15 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.2.5
+
+### Patch Changes
+
+- 8 November 2026 · **Fix** · Native finals use the published match name in player reporting and OBS without repeating the division or bracket stage. [#217](https://github.com/ashleylamont/smashclub-seeding/pull/217) · [build de0b7cc](https://github.com/ashleylamont/smashclub-seeding/commit/de0b7ccb2b3aaa9c586c138870621473ae6cb99a)
+- 8 November 2026 · **Fix** · Keep ordinary match calls available after unrelated station or score changes when the pairing and ordinary capacity still allow the call. [#214](https://github.com/ashleylamont/smashclub-seeding/pull/214) · [build b8b307e](https://github.com/ashleylamont/smashclub-seeding/commit/b8b307eaa65071f74fa7cb29b7b2fda3428820c0)
+- 8 November 2026 · **Maintenance** · Skip version workflow setup and release token creation on pushes with no pending Changesets. [#212](https://github.com/ashleylamont/smashclub-seeding/pull/212) · [build c0430f2](https://github.com/ashleylamont/smashclub-seeding/commit/c0430f29e5ad48f96b27babe9de6d7cdb6395492)
+- 8 November 2026 · **Maintenance** · Verify that a paused native draw rebuilds from its journal after losing derived checkpoints and can resume without duplicating commands. [#218](https://github.com/ashleylamont/smashclub-seeding/pull/218) · [build 8d49fc8](https://github.com/ashleylamont/smashclub-seeding/commit/8d49fc824de6798a405d6fe8a9096d612b6e2c66)
+
 ## 0.2.4
 
 ### Patch Changes
