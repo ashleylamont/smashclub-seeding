@@ -11,22 +11,27 @@ const sourcePath = (params: Record<string, string>) =>
 async function expectReadable(link: Locator) {
   await expect(link).toBeVisible();
   await expect(link).toBeInViewport({ ratio: 1 });
-  expect(
-    await link.evaluate((element) => {
-      const bounds = element.getBoundingClientRect();
-      const parent = element.parentElement!.getBoundingClientRect();
-      return (
-        bounds.left >= parent.left &&
-        bounds.right <= parent.right &&
-        bounds.top >= parent.top &&
-        bounds.bottom <= parent.bottom &&
-        element.scrollWidth <= element.clientWidth &&
-        element.contains(
-          document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2),
-        )
-      );
-    }),
-  ).toBe(true);
+  await expect
+    .poll(() =>
+      link.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        const parent = element.parentElement!.getBoundingClientRect();
+        return (
+          bounds.left >= parent.left &&
+          bounds.right <= parent.right &&
+          bounds.top >= parent.top &&
+          bounds.bottom <= parent.bottom &&
+          element.scrollWidth <= element.clientWidth &&
+          element.contains(
+            document.elementFromPoint(
+              bounds.left + bounds.width / 2,
+              bounds.top + bounds.height / 2,
+            ),
+          )
+        );
+      }),
+    )
+    .toBe(true);
 }
 
 function watchTwitchRequests(page: Page) {
@@ -204,6 +209,7 @@ for (const theme of ['dark', 'light'] as const)
       });
       if (width === 390 && theme === 'dark') {
         await page.setViewportSize({ width: 320, height: 568 });
+        await ready(page);
         await expectReadable(link);
         const status = page.locator('.broadcast-topline > span:first-child');
         await expect(status).toContainText('WAITING FOR A MATCH');
