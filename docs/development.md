@@ -47,6 +47,9 @@ E2E always starts its own harness and ignores `DEV_CACHE_DIR`, preventing an unr
 
 CI splits the browser suite across four runners. Each shard owns a fresh database
 and API harness, runs one browser worker, and retains whole test files together.
+The lists in `apps/web/e2e-shards` balance whole files using recent CI timings.
+Add or move a spec in exactly one list. CI checks the lists against Playwright's
+discovery before running each shard.
 All four shards and the combined **Browser report** are required by **All checks**.
 The `browser-report` artifact contains the merged HTML report; failed traces and
 page captures are also available in artifacts suffixed with the shard number.
@@ -56,7 +59,7 @@ To reproduce one shard locally, build once, then run:
 
 ```bash
 pnpm --filter @smashclub/web build
-E2E_PORT=3311 pnpm --filter @smashclub/web test:e2e --shard=1/4
+E2E_PORT=3311 pnpm --filter @smashclub/web test:e2e --test-list=e2e-shards/1.txt
 ```
 
 For concurrent local shards, give each a different `E2E_PORT` and `--output`
