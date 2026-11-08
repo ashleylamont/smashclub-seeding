@@ -119,8 +119,10 @@ for (const theme of ['dark', 'light'] as const)
       const row = finder.locator('.to-player-matches li').filter({
         has: page.getByText(match.label, { exact: true }),
       });
-      const openCurrent = () =>
-        current.getByRole('button', { name: 'Open current match' }).press('Enter');
+      const openCurrent = async () => {
+        await current.getByRole('button', { name: 'Open current match' }).press('Enter');
+        await expect(page.locator('#match-desk')).toBeFocused();
+      };
       await playersTab.press('Enter');
       await finder.getByLabel('Player name', { exact: true }).fill(alias);
       const result = finder.getByRole('button', { name: new RegExp(alias) });
