@@ -2,6 +2,14 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.1.4
+
+### Patch Changes
+
+- 8 November 2026 · **Improvement** · See which pool places feed each finals bracket during live pool play. Confirmed qualifiers appear as they become known, and pairings appear when the draw is created. [#162](https://github.com/ashleylamont/smashclub-seeding/pull/162) · [build 23cc78d](https://github.com/ashleylamont/smashclub-seeding/commit/23cc78d5c646180dfa17669e04c7135ace939d9e)
+
+  ![Public Brackets view showing which pool places feed each finals bracket](./public/changelog/finals-qualification.png)
+
 ## 0.1.3
 
 ### Patch Changes
