@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { darwinBaseline, darwinScreenshot } from './darwinScreenshot';
 import { AxeBuilder } from '@axe-core/playwright';
 import { mockEvent, ready } from './fixtures';
 import { chooseOption, clearInput } from '../test-support/controls';
@@ -152,15 +153,19 @@ test('registry modal restores focus for an existing conditional caller', async (
 });
 
 for (const theme of ['dark', 'light'] as const) {
-  test(`gallery ${theme}: labelled controls, visible states and contrast`, async ({ page }) => {
-    await page.emulateMedia({ colorScheme: theme });
-    await page.goto('/ui');
-    await ready(page);
-    const result = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
-      .analyze();
-    expect(result.violations).toEqual([]);
-    await expect(page.getByRole('button', { name: 'Saving…' })).toBeDisabled();
-    await expect(page).toHaveScreenshot(`gallery-${theme}.png`, { fullPage: true });
-  });
+  test(
+    `gallery ${theme}: labelled controls, visible states and contrast`,
+    darwinBaseline,
+    async ({ page }) => {
+      await page.emulateMedia({ colorScheme: theme });
+      await page.goto('/ui');
+      await ready(page);
+      const result = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+        .analyze();
+      expect(result.violations).toEqual([]);
+      await expect(page.getByRole('button', { name: 'Saving…' })).toBeDisabled();
+      await darwinScreenshot(page, `gallery-${theme}.png`, { fullPage: true });
+    },
+  );
 }

@@ -5,7 +5,15 @@ import { pathToFileURL } from 'node:url';
 import { git, readPrMerge } from './pr-merge.mjs';
 
 export const skippableJobs = ['legacy-python', 'postgres'];
-const appChecks = ['e2e', 'e2e-report', 'ui-quality', 'build', 'bundle-smoke', 'production-image'];
+const appChecks = [
+  'e2e',
+  'e2e-report',
+  'ui-portable',
+  'ui-quality',
+  'build',
+  'bundle-smoke',
+  'production-image',
+];
 const prose = /^(?:README\.md|AGENTS\.md|docs\/[^\n]+\.md|\.changeset\/[^/\n]+\.md)$/;
 const unitProjects = new Map([
   ['@smashclub/engine', 'engine'],

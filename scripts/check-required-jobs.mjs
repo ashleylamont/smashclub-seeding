@@ -8,6 +8,7 @@ export const requiredJobs = [
   'test',
   'e2e',
   'e2e-report',
+  'ui-portable',
   'ui-quality',
   'build',
   'bundle-smoke',
@@ -32,6 +33,10 @@ export function assertRequiredJobs(results, { event, reportOnly } = {}) {
     if (result !== 'success' && !(result === 'skipped' && skips.includes(name)))
       throw new Error(`${name} did not pass (${result ?? 'missing'})`);
   }
+  const portableCases = results['ui-portable'].outputs?.ui_case_set;
+  const darwinCases = results['ui-quality'].outputs?.ui_case_set;
+  if (!/^[a-f0-9]{64}$/.test(portableCases) || portableCases !== darwinCases)
+    throw new Error('Portable and Darwin jobs did not verify the same UI case set.');
 }
 if (process.env.RESULTS) {
   assertRequiredJobs(JSON.parse(process.env.RESULTS), {

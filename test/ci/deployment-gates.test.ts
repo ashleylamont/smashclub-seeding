@@ -23,7 +23,15 @@ const sha = 'a'.repeat(40);
 const input = { event: 'push', ref: 'refs/heads/main', sha, mainSha: sha, onMain: true };
 
 const successfulJobs = Object.fromEntries(
-  requiredJobs.map((name) => [name, { result: 'success' }]),
+  requiredJobs.map((name) => [
+    name,
+    {
+      result: 'success',
+      ...(['ui-portable', 'ui-quality'].includes(name)
+        ? { outputs: { ui_case_set: 'a'.repeat(64) } }
+        : {}),
+    },
+  ]),
 );
 
 it('keeps the full gate on publish and wires only the two scoped jobs to the PR plan', () => {
@@ -85,7 +93,13 @@ it('scopes PR skips to web or prose and keeps broader candidates advisory', () =
   expect(planPrChecks([web, note], true)).toMatchObject({ skips: [], candidates: skippableJobs });
   expect(planPrChecks(['docs/development.md', note], false)).toMatchObject({
     skips: skippableJobs,
-    candidates: expect.arrayContaining(['e2e', 'e2e-report', 'ui-quality', 'production-image']),
+    candidates: expect.arrayContaining([
+      'e2e',
+      'e2e-report',
+      'ui-portable',
+      'ui-quality',
+      'production-image',
+    ]),
   });
   expect(planPrChecks(['legacy/main.py', note], false)).toMatchObject({
     skips: [],
@@ -155,6 +169,31 @@ describe('advisory workspace coverage', () => {
       expect(planPrChecks([format, path], false).skips, path).toEqual([]);
     }
   });
+});
+
+it('keeps both UI partitions and their review artifacts independent', () => {
+  for (const [id, runner, mode, artifact] of [
+    ['ui-portable', 'ubuntu-latest', 'portable', 'ui-portable-review'],
+    ['ui-quality', 'macos-15', 'darwin', 'ui-review'],
+  ]) {
+    expect(ci.jobs[id]).toMatchObject({
+      'runs-on': runner,
+      'timeout-minutes': 15,
+      outputs: { ui_case_set: '${{ steps.browser.outputs.ui_case_set }}' },
+      steps: expect.arrayContaining([
+        { id: 'browser', run: `node scripts/run-ui-platform.mjs ${mode}` },
+        expect.objectContaining({
+          if: 'always()',
+          with: expect.objectContaining({ name: artifact }),
+        }),
+      ]),
+    });
+  }
+  for (const outputs of [undefined, { ui_case_set: 'b'.repeat(64) }]) {
+    expect(() =>
+      assertRequiredJobs({ ...successfulJobs, 'ui-portable': { result: 'success', outputs } }),
+    ).toThrow(/same UI case set/);
+  }
 });
 
 it('PostgreSQL gate rejects omitted suites and skipped tests even when the runner exits zero', () => {
