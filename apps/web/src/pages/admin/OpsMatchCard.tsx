@@ -1,4 +1,8 @@
-import { matchParticipantName, matchPresentation } from '../../lib/matchPresentation';
+import {
+  isUntakenCall,
+  matchParticipantName,
+  matchPresentation,
+} from '../../lib/matchPresentation';
 import { linkedFinalCaption } from '../../lib/linkedFinalCaption';
 import { useConfirmation } from '../../lib/confirmation';
 import { Select, SelectItem } from '../../components/ui/Select';
@@ -32,7 +36,7 @@ export function MatchCard({
   const confirmAction = useConfirmation();
   const eligible = eligibleStations(match, stations);
   const active = match.status === 'playing';
-  const untakenCall = active && (liveOwned ? match.started === false : match.called);
+  const untakenCall = isUntakenCall(match, liveOwned);
   const hasLiveScore = typeof match.liveScore1 === 'number' || typeof match.liveScore2 === 'number';
   const label = matchLabel(match, canStart, untakenCall);
   const caption = linkedFinalCaption(match)?.text ?? match.label;

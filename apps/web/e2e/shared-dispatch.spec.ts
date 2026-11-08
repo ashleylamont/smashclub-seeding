@@ -265,11 +265,38 @@ test('shared queue on a phone: snooze/return, focused scoring, and accessible co
   await desk
     .getByRole('button', { name: `Return ${target.player1Name}`, exact: true })
     .press('Enter');
+  await row.getByRole('textbox', { name: 'Call location (optional)' }).fill('Window setup');
   await row.getByRole('button', { name: 'Call ordinary match' }).click();
-  await desk
-    .locator(`[data-match-id="${target.id}"]`)
-    .getByRole('button', { name: 'Score / details' })
-    .click();
+  await expect(row.getByRole('button', { name: 'Mark playing', exact: true })).toBeVisible();
+  const called = (
+    await query<Overview>(page.request, 'eventOps.overview', { planId })
+  ).matches.find((match) => match.id === target.id);
+  expect(called).toMatchObject({
+    status: 'playing',
+    started: false,
+    called: true,
+    callLocation: 'Window setup',
+  });
+  const playersTab = page.getByRole('tab', { name: 'Players', exact: true });
+  const finder = page.getByRole('region', { name: 'Find a player', exact: true });
+  await playersTab.press('Enter');
+  await finder.getByLabel('Player name', { exact: true }).fill(target.player1Name);
+  const entrant = finder.locator('.to-player-result').filter({
+    has: page.getByText(target.player1Name, { exact: true }),
+  });
+  await expect(entrant).toContainText(' · Called');
+  await entrant.press('Enter');
+  const current = finder.locator('.to-player-call');
+  await expect(current).toContainText('Called · Window setup');
+  await expect(current).toContainText(`${target.player1Name} vs ${target.player2Name}`);
+  await finder
+    .getByRole('button', { name: /^Remaining matches and waiting reasons/ })
+    .press('Enter');
+  const disclosure = finder.locator('.to-player-matches li').filter({
+    has: page.getByText(target.label, { exact: true }),
+  });
+  await expect(disclosure).toContainText('Called · waiting to start');
+  await current.getByRole('button', { name: 'Open current match' }).press('Enter');
   const card = page.locator('article.ops-match:visible').filter({ hasText: target.label });
   await expect(card).toBeVisible();
   const tabBottom = await page
@@ -277,6 +304,24 @@ test('shared queue on a phone: snooze/return, focused scoring, and accessible co
     .evaluate((element) => element.getBoundingClientRect().bottom);
   await expect(card).toBeInViewport();
   await expect.poll(async () => (await card.boundingBox())!.y).toBeGreaterThanOrEqual(tabBottom);
+  await expect(card.getByRole('button', { name: 'Finish match', exact: true })).toBeEnabled();
+  await row.getByRole('button', { name: 'Mark playing', exact: true }).press('Enter');
+  await expect(card.getByText('Match in progress', { exact: true })).toBeVisible();
+  await playersTab.press('Enter');
+  await expect(current).toContainText('Playing · Window setup');
+  await expect(current).toContainText(`${target.player1Name} vs ${target.player2Name}`);
+  await expect(disclosure).toContainText('Playing now');
+  await finder.getByRole('button', { name: 'Change player' }).press('Enter');
+  await expect(entrant).toContainText(' · Playing');
+  await entrant.press('Enter');
+  await current.getByRole('button', { name: 'Open current match' }).press('Enter');
+  await card.getByRole('button', { name: 'Update live score' }).press('Enter');
+  await card.getByRole('spinbutton').first().fill('1');
+  await card.getByRole('button', { name: 'Save live score' }).press('Enter');
+  await expect(card.getByText('Live game score · match still in progress')).toBeVisible();
+  await playersTab.press('Enter');
+  await expect(current).toContainText(`${target.player1Name} 1 – 0 ${target.player2Name}`);
+  await current.getByRole('button', { name: 'Open current match' }).press('Enter');
   await card.getByRole('button', { name: 'Finish match', exact: true }).click();
   await card.getByRole('spinbutton').nth(0).fill('2');
   await card.getByRole('spinbutton').nth(1).fill('0');
