@@ -4,7 +4,7 @@ import type { PublicEventSnapshot } from '../src/lib/usePlayerEventHub';
 import { bracketCaptureOptions, mockEvent, PLAN_ID, ready } from './fixtures';
 
 type PendingField = NonNullable<PublicEventSnapshot['pendingFinals']>[number];
-const longPair = 'Alexandra with a long tournament alias / CaptainABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const longPair = 'Alexandra with a long tournament alias / CaptainFalconBreakfastClubForever';
 
 for (const theme of ['dark', 'light'] as const) {
   for (const width of [390, 1440]) {
