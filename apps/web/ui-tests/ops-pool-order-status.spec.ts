@@ -98,8 +98,7 @@ for (const theme of ['dark', 'light'] as const) {
             status: 'ruling_required',
             plannerConfirmation: {
               available: false,
-              reason:
-                'This pool has 17 entrants. The planner can confirm orders for pools of 2–16 entrants.',
+              reason: 'This pool order cannot be confirmed while the finals draw is in use.',
             },
           },
         ],
@@ -109,7 +108,7 @@ for (const theme of ['dark', 'light'] as const) {
       const standings = page.getByRole('region', { name: 'Pool standings', exact: true });
       await expect(standings).toContainText('Resume the pool draw to confirm this order.');
       await expect(standings).toContainText(
-        'The planner can confirm orders for pools of 2–16 entrants.',
+        'This pool order cannot be confirmed while the finals draw is in use.',
       );
       await expect(standings.getByRole('link', { name: /planner/ })).toHaveCount(0);
       await ready(page);

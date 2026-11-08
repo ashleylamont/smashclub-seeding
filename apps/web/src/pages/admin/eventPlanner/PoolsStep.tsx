@@ -257,6 +257,7 @@ function PoolOrderEditor({
       });
   const evidence = JSON.stringify([
     pool.placementRevision,
+    pool.matchRevisionToken,
     pool.members.map((member) => member.playerId),
     saved,
   ]);
@@ -276,7 +277,9 @@ function PoolOrderEditor({
           {
             poolIndex: pool.poolIndex,
             playerIdsInOrder: order,
-            expectedMatchRevisions: pool.matchRevisions ?? [],
+            ...(pool.matchRevisionToken
+              ? { expectedMatchRevisionToken: pool.matchRevisionToken }
+              : { expectedMatchRevisions: pool.matchRevisions ?? [] }),
             expectedPlacementRevision: pool.placementRevision,
           },
         ],

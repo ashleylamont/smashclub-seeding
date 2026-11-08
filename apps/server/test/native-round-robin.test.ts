@@ -134,7 +134,7 @@ describe('round-robin planner confirmation guidance', () => {
     }
   });
 
-  it('only offers confirmation through the planner up to its existing entrant limit', async () => {
+  it('offers planner confirmation on both sides of the former entrant limit', async () => {
     const { db, close } = await createTestDb();
     try {
       for (const count of [16, 17]) {
@@ -149,14 +149,7 @@ describe('round-robin planner confirmation guidance', () => {
         }
         expect((await eventView(db, state, true)).poolOrders?.[0]).toMatchObject({
           status: 'manual_required',
-          plannerConfirmation:
-            count === 16
-              ? { available: true }
-              : {
-                  available: false,
-                  reason:
-                    'This pool has 17 entrants. The planner can confirm orders for pools of 2–16 entrants.',
-                },
+          plannerConfirmation: { available: true },
         });
         expect((await eventView(db, state)).poolOrders?.[0]).not.toHaveProperty(
           'plannerConfirmation',
