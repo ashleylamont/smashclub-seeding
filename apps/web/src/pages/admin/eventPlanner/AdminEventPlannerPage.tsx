@@ -117,8 +117,8 @@ function PlanWizard({
   const confirmAction = useConfirmation();
   const queryClient = useQueryClient();
   const planQuery = useQuery({
-    queryKey: ['admin', 'eventPlanner', 'plan', planId],
-    queryFn: () => trpc.admin.eventPlanner.plan.query({ planId }),
+    queryKey: ['admin', 'eventPlanner', 'plan', planId, 'compact'],
+    queryFn: () => trpc.admin.eventPlanner.plan.query({ planId, revisionEvidence: 'compact' }),
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin', 'eventPlanner'] });

@@ -158,9 +158,9 @@ describe('native format lifecycle through shipped APIs', () => {
     const [pool] = original.pools;
     expect(original.pools).toHaveLength(1);
     expect(original.matches).toHaveLength(136);
-    const worksheet = async () =>
-      (await caller().admin.eventPlanner.plan({ planId }))!.divisions[0]!.pools[0]!;
-    const staleToken = (await worksheet()).matchRevisionToken;
+    const readPlan = (revisionEvidence?: 'compact') =>
+      caller().admin.eventPlanner.plan({ planId, revisionEvidence });
+    const staleToken = (await readPlan('compact'))!.divisions[0]!.pools[0]!.matchRevisionToken;
     const positions = new Map(pool!.entrantIds.map((id, index) => [id, index]));
     for (const match of original.matches) {
       const difference =
@@ -185,10 +185,25 @@ describe('native format lifecycle through shipped APIs', () => {
       status: 'ruling_required',
       plannerConfirmation: { available: true },
     });
-    const current = await worksheet();
+    const fullPlan = (await readPlan())!;
+    const compactPlan = (await readPlan('compact'))!;
+    const { matchRevisions, ...fullPoolWithToken } = fullPlan.divisions[0]!.pools[0]!;
+    const current = compactPlan.divisions[0]!.pools[0]!;
+    expect(compactPlan).toEqual({
+      ...fullPlan,
+      divisions: [{ ...fullPlan.divisions[0], pools: [fullPoolWithToken] }],
+    });
+    expect(current).not.toHaveProperty('matchRevisions');
     expect(current.matchRevisionToken).toMatch(/^[a-f0-9]{64}$/);
     expect(current.matchRevisionToken).not.toBe(staleToken);
-    expect(current.matchRevisions).toHaveLength(136);
+    expect(matchRevisions).toHaveLength(136);
+    const compactInput = { planId, revisionEvidence: 'compact' } as const;
+    await expect(caller(null).admin.eventPlanner.plan(compactInput)).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
+    await expect(
+      caller({ ...nativeAdmin, role: 'user' }).admin.eventPlanner.plan(compactInput),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     const order = [...pool!.entrantIds].reverse();
     const input = {
       poolIndex: current.poolIndex,
@@ -198,7 +213,7 @@ describe('native format lifecycle through shipped APIs', () => {
     };
     const save = (
       change: Partial<typeof input> & {
-        expectedMatchRevisions?: typeof current.matchRevisions;
+        expectedMatchRevisions?: typeof matchRevisions;
       } = {},
       actor: SessionUser | null = nativeAdmin,
     ) =>
@@ -209,11 +224,11 @@ describe('native format lifecycle through shipped APIs', () => {
       );
 
     expect((await save({}, null)).status).toBe(401);
-    expect((await save({ expectedMatchRevisions: current.matchRevisions })).status).toBe(400);
+    expect((await save({ expectedMatchRevisions: matchRevisions })).status).toBe(400);
     expect(
       (
         await save({
-          expectedMatchRevisions: current.matchRevisions,
+          expectedMatchRevisions: matchRevisions,
           expectedMatchRevisionToken: undefined,
         })
       ).status,
@@ -249,6 +264,7 @@ describe('native format lifecycle through shipped APIs', () => {
     await caller().eventOps.native.finalize({ planId });
     const result = await caller(null).eventOps.snapshot({ planId });
     expect(result.plan.status).toBe('complete');
+    expect(JSON.stringify(result)).not.toMatch(/matchRevisions|matchRevisionToken/);
     expect(result.matches).toHaveLength(136);
     expect(result.matches.every((m) => m.stage === 'group' && m.nativeBracketId === null)).toBe(
       true,
