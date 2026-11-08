@@ -698,24 +698,23 @@
   background: var(--warn-bg);
 }
 
-/* League tags carry the ladder ramp, so a league reads as a rung. */
+/* Keep the league ramp on the border and background for readable text in both themes. */
+.chip:is(.tier-1, .tier-2, .tier-3, .tier-4) {
+  color: var(--text-h);
+}
 .chip.tier-1 {
-  color: var(--tier-1);
   border-color: var(--tier-1);
   background: var(--tier-1-bg);
 }
 .chip.tier-2 {
-  color: var(--tier-2);
   border-color: var(--tier-2);
   background: var(--tier-2-bg);
 }
 .chip.tier-3 {
-  color: var(--tier-3);
   border-color: var(--tier-3);
   background: var(--tier-3-bg);
 }
 .chip.tier-4 {
-  color: var(--tier-4);
   border-color: var(--tier-4);
   background: var(--tier-4-bg);
 }
