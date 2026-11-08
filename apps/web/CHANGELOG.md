@@ -2,6 +2,12 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.14.0
+
+### Minor Changes
+
+- 9 November 2026 · **Feature** · Automatically show available fighter portraits for players’ mains in results graphics, with Nintendo artwork credit in the preview and PNG. Local artwork choices still take priority. [#360](https://github.com/ashleylamont/smashclub-seeding/pull/360) · [build ee774df](https://github.com/ashleylamont/smashclub-seeding/commit/ee774dfc072f2fc424c007fdaf3f0bc461264359)
+
 ## 0.13.0
 
 ### Minor Changes
