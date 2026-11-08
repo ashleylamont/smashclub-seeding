@@ -20,6 +20,11 @@ import { authClient } from '../lib/auth';
 import { trpc } from '../lib/trpc';
 import { downloadBlob } from '../lib/shareCard';
 import { readResultPortrait, RESULT_PORTRAIT_TYPES } from '../lib/resultGraphicPortrait';
+import {
+  characterPortraitPack,
+  resolveCharacterPortraits,
+  type CharacterPortraitPack,
+} from '../lib/resultGraphicPortraitPack';
 import './ResultGraphic.css';
 
 export function ResultGraphic({
@@ -70,6 +75,7 @@ export function ResultGraphic({
 const profileDefault = '__profile_default__';
 
 const noPortraits: GraphicPortraits = {};
+const noCharacterPack: CharacterPortraitPack = new Map();
 
 function ResultGraphicPreview(props: {
   context: GraphicContext;
@@ -94,6 +100,7 @@ function ResultGraphicSession({
   const rows = useMemo(() => rankedGraphicResults(results, context.kind), [results, context.kind]);
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [portraits, setPortraits] = useState<GraphicPortraits>({});
+  const [pack, setPack] = useState<CharacterPortraitPack>(noCharacterPack);
   const access = useQuery({
     queryKey: ['canCustomizeResultGraphic', userId, context.source],
     queryFn: () => trpc.eventOps.canCustomizeResultGraphic.query(context.source),
@@ -102,6 +109,7 @@ function ResultGraphicSession({
   });
   const canCustomize = Boolean(userId && access.data);
   const previewPortraits = canCustomize ? portraits : noPortraits;
+  const previewPack = canCustomize ? pack : noCharacterPack;
   const previewRows = useMemo(
     () =>
       canCustomize && Object.keys(overrides).length
@@ -122,33 +130,43 @@ function ResultGraphicSession({
     context: GraphicContext;
     rows: readonly GraphicResult[];
     portraits: GraphicPortraits;
+    pack: CharacterPortraitPack;
+    applied: number;
+    unreadable: number;
     image: { blob: Blob; url: string } | null;
   }>();
   useEffect(() => {
-    let active = true;
+    const controller = new AbortController();
     let url: string | undefined;
-    const receive = (blob: Blob | null) => {
-      if (!active) return;
+    const receive = (blob: Blob | null, applied = 0, unreadable = 0) => {
+      if (controller.signal.aborted) return;
       url = blob ? URL.createObjectURL(blob) : undefined;
       setOutput({
         context,
         rows: previewRows,
         portraits: previewPortraits,
+        pack: previewPack,
+        applied,
+        unreadable,
         image: blob && url ? { blob, url } : null,
       });
     };
-    void renderResultsPng(context, previewRows, previewPortraits).then(receive, () =>
-      receive(null),
-    );
+    void resolveCharacterPortraits(previewRows, previewPortraits, previewPack, controller.signal)
+      .then(async ({ portraits, applied, unreadable }) => {
+        if (controller.signal.aborted) return;
+        receive(await renderResultsPng(context, previewRows, portraits), applied, unreadable);
+      })
+      .catch(() => receive(null));
     return () => {
-      active = false;
+      controller.abort();
       if (url) URL.revokeObjectURL(url);
     };
-  }, [context, previewRows, previewPortraits]);
+  }, [context, previewRows, previewPortraits, previewPack]);
   const current =
     output?.rows === previewRows &&
     output.context === context &&
-    output.portraits === previewPortraits
+    output.portraits === previewPortraits &&
+    output.pack === previewPack
       ? output
       : undefined;
   const fileLabel = context.scopeLabel
@@ -172,8 +190,8 @@ function ResultGraphicSession({
         <LoadingState>Preparing results PNG…</LoadingState>
       )}
       <p className="muted">
-        Character labels use current profile choices when available. They may differ from the
-        characters played at this event.
+        Character labels and artwork follow current profile mains or organiser choices. They may
+        differ from the characters played at this event.
       </p>
       <Disclosure title="Placements in this graphic">
         <ul className="result-graphic-placements">
@@ -196,6 +214,9 @@ function ResultGraphicSession({
           rows={rows}
           overrides={overrides}
           portraits={portraits}
+          pack={previewPack}
+          packResult={current?.image ? current : undefined}
+          onPackChange={setPack}
           onChange={setOverrides}
           onPortraitChange={(member, portrait) =>
             setPortraits((current) => {
@@ -226,12 +247,18 @@ function ArtworkChoices({
   rows,
   overrides,
   portraits,
+  pack,
+  packResult,
+  onPackChange,
   onChange,
   onPortraitChange,
 }: {
   rows: readonly GraphicResult[];
   overrides: Record<string, string>;
   portraits: GraphicPortraits;
+  pack: CharacterPortraitPack;
+  packResult?: { applied: number; unreadable: number };
+  onPackChange: (pack: CharacterPortraitPack) => void;
   onChange: (next: Record<string, string>) => void;
   onPortraitChange: (member: string, portrait: HTMLCanvasElement | null) => void;
 }) {
@@ -251,7 +278,8 @@ function ArtworkChoices({
     : (members[0]?.value ?? '');
   return (
     <Disclosure title="Customize graphic">
-      <p className="muted">Character choices and portraits apply only to this export.</p>
+      <p className="muted">Character choices and artwork apply only to this export.</p>
+      <CharacterArtworkPicker pack={pack} result={packResult} onChange={onPackChange} />
       <div className="result-graphic-choices">
         <div className="ui-field">
           <label htmlFor={`${prefix}-member`}>Entrant or team member</label>
@@ -283,7 +311,7 @@ function ArtworkChoices({
               onChange(next);
             }}
           >
-            <SelectItem value={profileDefault}>Use profile choice</SelectItem>
+            <SelectItem value={profileDefault}>Use profile main</SelectItem>
             <SelectItem value="">No character label</SelectItem>
             {CHARACTERS.map(({ slug, name }) => (
               <SelectItem key={slug} value={slug}>
@@ -349,5 +377,85 @@ function ArtworkChoices({
         {fileError && <Notice tone="warning">{fileError}</Notice>}
       </div>
     </Disclosure>
+  );
+}
+
+function CharacterArtworkPicker({
+  pack,
+  result,
+  onChange,
+}: {
+  pack: CharacterPortraitPack;
+  result?: { applied: number; unreadable: number };
+  onChange: (pack: CharacterPortraitPack) => void;
+}) {
+  const hintId = useId();
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState('');
+  const unreadable = result?.unreadable ?? 0;
+  return (
+    <div className="result-graphic-portrait">
+      <p id={hintId} className="muted">
+        Load local artwork you have permission to use. Name each image after its character, such as{' '}
+        <code>mario.png</code>. An individual portrait takes priority. Files stay in this browser.
+      </p>
+      <div className="result-graphic-actions">
+        <Button
+          type="button"
+          size="small"
+          aria-describedby={hintId}
+          onClick={() => fileInput.current?.click()}
+        >
+          {pack.size ? 'Replace character artwork…' : 'Load character artwork…'}
+        </Button>
+        {pack.size > 0 && (
+          <Button
+            type="button"
+            size="small"
+            onClick={() => {
+              onChange(noCharacterPack);
+              setError('');
+            }}
+          >
+            Clear character artwork
+          </Button>
+        )}
+      </div>
+      <Input
+        ref={fileInput}
+        type="file"
+        multiple
+        tabIndex={-1}
+        aria-label="Character artwork files"
+        className="visually-hidden"
+        accept={RESULT_PORTRAIT_TYPES.join(',')}
+        onChange={(event) => {
+          const files = Array.from(event.currentTarget.files ?? []);
+          event.currentTarget.value = '';
+          if (!files.length) return;
+          try {
+            onChange(characterPortraitPack(files));
+            setError('');
+          } catch (error) {
+            setError((error as Error).message);
+          }
+        }}
+      />
+      {pack.size > 0 && (
+        <p className="muted" role="status">
+          {pack.size} {pack.size === 1 ? 'image' : 'images'} selected.
+          {result
+            ? ` Pack artwork used in ${result.applied} ${result.applied === 1 ? 'panel' : 'panels'}.`
+            : ''}
+        </p>
+      )}
+      {unreadable > 0 && (
+        <Notice tone="warning">
+          Could not open {unreadable} {unreadable === 1 ? 'image' : 'images'}. Those panels use the
+          original tag artwork.
+        </Notice>
+      )}
+      {error && <Notice tone="warning">{error}</Notice>}
+    </div>
   );
 }

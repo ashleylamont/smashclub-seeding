@@ -70,21 +70,28 @@ async function captureGraphicText(page: Page) {
 }
 
 async function previewBytes(image: Locator) {
-  return Buffer.from(
-    await image.evaluate(async (element: HTMLImageElement) =>
-      Array.from(new Uint8Array(await (await fetch(element.src)).arrayBuffer())),
-    ),
-  );
+  const base64 = await image.evaluate(async (element: HTMLImageElement) => {
+    const blob = await (await fetch(element.src)).blob();
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.addEventListener('load', () => resolve(String(reader.result).split(',')[1]!), {
+        once: true,
+      });
+      reader.addEventListener('error', () => reject(reader.error), { once: true });
+      reader.readAsDataURL(blob);
+    });
+  });
+  return Buffer.from(base64, 'base64');
 }
 
-async function makeSyntheticPortrait(page: Page) {
-  const data = await page.evaluate(() => {
+async function makeSyntheticPortrait(page: Page, base = '#0b8c86') {
+  const data = await page.evaluate((background) => {
     const canvas = document.createElement('canvas');
     canvas.width = 1536;
     canvas.height = 2048;
     const ctx = canvas.getContext('2d')!;
     ctx.scale(6.4, 6.4);
-    ctx.fillStyle = '#0b8c86';
+    ctx.fillStyle = background;
     ctx.fillRect(0, 0, 240, 320);
     ctx.fillStyle = '#69e3cf';
     ctx.beginPath();
@@ -101,7 +108,7 @@ async function makeSyntheticPortrait(page: Page) {
     ctx.fillStyle = '#ffbd70';
     ctx.fillRect(73, 142, 94, 31);
     return canvas.toDataURL('image/png').split(',')[1]!;
-  });
+  }, base);
   return Buffer.from(data, 'base64');
 }
 
@@ -115,6 +122,70 @@ async function pixels(image: Locator, points: [number, number][]) {
     ctx.drawImage(element, 0, 0);
     return coordinates.map(([x, y]) => Array.from(ctx.getImageData(x, y, 1, 1).data));
   }, points);
+}
+
+async function exerciseCharacterPack(page: Page, dialog: Locator, image: Locator, output: string) {
+  const positions: [number, number][] = [
+    [270, 300], // First member of the winning pair.
+    [460, 300], // Teammate without a profile main.
+    [805, 300], // Another player with the same main.
+    [1195, 300], // Matching filename whose file cannot decode.
+  ];
+  const fallback = await pixels(image, positions);
+  const mario = {
+    name: 'mario.png',
+    mimeType: 'image/png',
+    buffer: await makeSyntheticPortrait(page, '#8b324f'),
+  };
+  const luigi = {
+    name: 'luigi.png',
+    mimeType: 'image/png',
+    buffer: await makeSyntheticPortrait(page, '#5f4fce'),
+  };
+  const corrupt = { mimeType: 'image/png', buffer: Buffer.from('damaged portrait') };
+  const input = dialog.getByLabel('Character artwork files');
+  const openChooser = page.waitForEvent('filechooser');
+  await dialog.getByRole('button', { name: 'Load character artwork…' }).press('Enter');
+  const chooser = await openChooser;
+  expect(chooser.isMultiple()).toBe(true);
+  await chooser.setFiles([mario, { ...mario, name: 'MARIO.PNG' }]);
+  await expect(dialog.getByText('Choose only one artwork file for mario.')).toBeVisible();
+  expect(await pixels(image, positions)).toEqual(fallback);
+
+  await input.setInputFiles([
+    mario,
+    luigi,
+    { ...corrupt, name: 'link.png' },
+    { ...corrupt, name: 'kirby.png' }, // No Kirby main in these placements.
+  ]);
+  await expect(dialog.getByText('4 images selected. Pack artwork used in 2 panels.')).toBeVisible();
+  await expect(dialog.getByText('Could not open 1 image.', { exact: false })).toBeVisible();
+  const marioPixel = [139, 50, 79, 255];
+  expect(await pixels(image, positions)).toEqual([
+    marioPixel,
+    fallback[1],
+    marioPixel,
+    fallback[3],
+  ]);
+  await writeFile(output, await previewBytes(image));
+
+  const label = dialog.getByRole('combobox', { name: 'Character label' });
+  await chooseOption(label, { label: 'No character label' });
+  await expect(dialog.getByText('4 images selected. Pack artwork used in 1 panel.')).toBeVisible();
+  expect(await pixels(image, positions)).toEqual([
+    fallback[0],
+    fallback[1],
+    marioPixel,
+    fallback[3],
+  ]);
+  await chooseOption(label, { label: 'Luigi' });
+  await expect(dialog.getByText('4 images selected. Pack artwork used in 2 panels.')).toBeVisible();
+  expect(await pixels(image, positions)).toEqual([
+    [95, 79, 206, 255],
+    fallback[1],
+    marioPixel,
+    fallback[3],
+  ]);
 }
 
 for (const theme of ['dark', 'light'] as const)
@@ -151,7 +222,7 @@ for (const theme of ['dark', 'light'] as const)
           members: [
             {
               name: index === 0 ? '名前 / WIDE 🎮' : `Tag ${index}A`,
-              character: index === 0 ? 'mario' : null,
+              character: index < 2 ? 'mario' : index === 2 ? 'link' : null,
             },
             { name: index === 0 ? 'Wide second public tag' : `Tag ${index}B`, character: null },
           ],
@@ -245,7 +316,6 @@ for (const theme of ['dark', 'light'] as const)
       );
       await expect(dialog.getByText(/名前 \/ WIDE 🎮 \(Mario\)/)).toBeVisible();
       await placements.press('Enter');
-      const source = await image.getAttribute('src');
       const defaultArtwork = organizer ? await previewBytes(image) : null;
       if (organizer) {
         await expect
@@ -253,10 +323,17 @@ for (const theme of ['dark', 'light'] as const)
           .toEqual([{ tournamentIds: [brackets[0]!.tournamentId] }]);
         const customize = dialog.getByRole('button', { name: 'Customize graphic' });
         await customize.press('Enter');
-        await chooseOption(dialog.getByRole('combobox', { name: 'Character label' }), {
-          label: 'Luigi',
+        const apiWrites: string[] = [];
+        page.on('request', (request) => {
+          if (request.method() === 'POST' && new URL(request.url()).pathname.startsWith('/api/'))
+            apiWrites.push(request.url());
         });
-        await expect.poll(() => image.getAttribute('src')).not.toEqual(source);
+        await exerciseCharacterPack(
+          page,
+          dialog,
+          image,
+          testInfo.outputPath('automatic-artwork.png'),
+        );
         await expect.poll(() => drawn.includes('Luigi')).toBe(true);
         expect(entrants[0]!.graphic.members[0]!.character).toBe('mario');
 
@@ -272,11 +349,6 @@ for (const theme of ['dark', 'light'] as const)
         ];
         const beforeArt = await previewBytes(image);
         const fallbackPixels = await pixels(image, position);
-        const apiWrites: string[] = [];
-        page.on('request', (request) => {
-          if (request.method() === 'POST' && new URL(request.url()).pathname.startsWith('/api/'))
-            apiWrites.push(request.url());
-        });
         await fileInput.setInputFiles({
           name: 'not-an-image.txt',
           mimeType: 'text/plain',
@@ -287,8 +359,10 @@ for (const theme of ['dark', 'light'] as const)
         await fileInput.setInputFiles(portrait);
         await expect(dialog.getByRole('button', { name: 'Remove portrait' })).toBeEnabled();
         expect(await pixels(image, position)).toEqual([[11, 140, 134, 255], fallbackPixels[1]]);
+        const portraitSrc = await image.getAttribute('src');
         await dialog.getByRole('button', { name: 'Remove portrait' }).press('Enter');
-        await expect.poll(() => previewBytes(image)).toEqual(beforeArt);
+        await expect.poll(() => image.getAttribute('src')).not.toBe(portraitSrc);
+        expect(await previewBytes(image)).toEqual(beforeArt);
         await fileInput.setInputFiles(portrait);
         await expect(dialog.getByRole('button', { name: 'Remove portrait' })).toBeEnabled();
         expect(await pixels(image, position)).toEqual([[11, 140, 134, 255], fallbackPixels[1]]);
@@ -324,6 +398,7 @@ for (const theme of ['dark', 'light'] as const)
       ).toEqual([]);
       await page.screenshot({ path: testInfo.outputPath('event-preview.png'), fullPage: true });
       if (organizer) {
+        const portraitSrc = await image.getAttribute('src');
         sessionUserId = 'fixture-organiser-b';
         await page.evaluate(() => {
           window.dispatchEvent(
@@ -334,12 +409,17 @@ for (const theme of ['dark', 'light'] as const)
           );
         });
         await expect.poll(() => authorizationInputs.length).toBe(2);
-        await expect.poll(() => previewBytes(image)).toEqual(defaultArtwork);
+        await expect.poll(() => image.getAttribute('src')).not.toBe(portraitSrc);
+        expect(await previewBytes(image)).toEqual(defaultArtwork);
         await dialog.getByRole('button', { name: 'Customize graphic' }).press('Enter');
         await expect(dialog.getByRole('button', { name: 'Choose portrait…' })).toBeVisible();
         await expect(dialog.getByRole('button', { name: 'Remove portrait' })).toHaveCount(0);
+        await expect(dialog.getByRole('button', { name: 'Load character artwork…' })).toBeVisible();
+        await expect(dialog.getByRole('button', { name: 'Clear character artwork' })).toHaveCount(
+          0,
+        );
         await expect(dialog.getByRole('combobox', { name: 'Character label' })).toContainText(
-          'Use profile choice',
+          'Use profile main',
         );
       }
       await page.keyboard.press('Escape');
