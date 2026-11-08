@@ -442,6 +442,15 @@ function PlayerProfile({ data }: { data: PlayerData }) {
               : 'WHR fits whole nights. Individual sets have no exact rating delta.'}
           </p>
         )}
+        {matches.length > 0 && (
+          <p className="muted chart-caption">
+            Each set starts at one evidence unit. The saved margin weight adds units for each game
+            beyond a one-game winning margin, up to two units total. Evidence units weight the WHR
+            fit.
+            {recomputeId &&
+              ' Pre-night win estimates use earlier rated sets and both players’ uncertainty.'}
+          </p>
+        )}
         {events.length === 0 ? (
           <p className="muted">No match history available for this player.</p>
         ) : (

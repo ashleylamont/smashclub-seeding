@@ -16,7 +16,15 @@ const effect = {
   preNightSd: 110,
   firstNight: true,
   evidenceWeight: 1.5,
+  gamesWeight: 0.25,
   forecast: null,
+  forecastUnavailable: 'first_night' as const,
+};
+const forecastEffect = {
+  ...effect,
+  firstNight: false,
+  forecast: { winProbability: 0.32, opponentSkill: 1740 },
+  forecastUnavailable: null,
 };
 const nights = [
   {
@@ -100,7 +108,7 @@ async function mockProfile(
         postRd: night.postRd,
         revisedRating: night.revisedRating,
         revisedSd: night.postRd,
-        weight: 1,
+        weight: seq === 0 ? 1 : 1.5,
         tournamentId: `bracket-${seq}`,
         tournamentName: `Singles bracket ${seq + 1}`,
         tournamentDate: `${night.eventKey}T08:30:00Z`,
@@ -228,10 +236,16 @@ for (const theme of ['dark', 'light'] as const) {
     }, testInfo) => {
       await page.setViewportSize({ width, height: 900 });
       await page.emulateMedia({ colorScheme: theme });
-      const fixture = await mockProfile(page, ({ setId }) => ({
-        ...effect,
-        effectPoints: setId === setIds[1] ? 27.6 : setId === setIds[0] ? -0.8 : -22.1,
-      }));
+      const fixture = await mockProfile(page, ({ setId }) => {
+        if (setId === setIds[1]) return forecastEffect;
+        if (setId === setIds[0]) return { ...effect, effectPoints: -0.8 };
+        return {
+          ...effect,
+          firstNight: false,
+          forecastUnavailable: 'disconnected',
+          effectPoints: -22.1,
+        };
+      });
       addRatedEvents(fixture.profile, 3);
       await page.goto(`/players/${playerId}`);
       const log = page.getByRole('region', { name: 'Match results' });
@@ -245,7 +259,21 @@ for (const theme of ['dark', 'light'] as const) {
       await expect(log.getByRole('row', { name: /Singles bracket 3/ })).toContainText(
         'WHR ≈−20 pts',
       );
+      const recent = log.getByRole('row', { name: /Singles bracket 2/ });
+      await expect(recent).toContainText('WHR pre-night · 32% to win');
+      await expect(recent).toContainText('Less likely result');
+      await expect(recent).toContainText('1.5 units');
+      await expect(recent).toContainText('Margin weight 0.25');
+      await expect(log.getByRole('row', { name: /Singles bracket 1/ })).toContainText(
+        'First rated night',
+      );
+      await expect(log.getByRole('row', { name: /Singles bracket 3/ })).toContainText(
+        'Separate rated groups',
+      );
       await expect(log.getByRole('columnheader', { name: 'Evidence' })).toHaveCount(1);
+      await expect(
+        page.getByText(/up to two units total\. Evidence units weight the WHR fit/),
+      ).toBeVisible();
       await expect(page.getByText(/estimates are approximate and don’t add up/)).toBeVisible();
       await expect(page.getByRole('button', { name: /WHR impact/ })).toHaveCount(0);
       await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -385,7 +413,9 @@ test('a stale WHR run clears prior estimates and waits for the refreshed profile
     page,
     (request) => {
       if (request.recomputeId === newRun) return { ...effect, effectPoints: -19 };
-      return request.setId === setIds[0] ? { status: 'unavailable', reason: 'stale_run' } : effect;
+      return request.setId === setIds[0]
+        ? { status: 'unavailable', reason: 'stale_run' }
+        : forecastEffect;
     },
     live,
   );
@@ -395,8 +425,9 @@ test('a stale WHR run clears prior estimates and waits for the refreshed profile
     const log = page.getByRole('region', { name: 'Match results' });
     await log.scrollIntoViewIfNeeded();
     const recent = log.getByRole('row', { name: /Singles bracket 2/ });
-    await expect(recent).toContainText('WHR ≈+30 pts');
+    await expect(recent).toContainText('32% to win');
     await expect(recent).toContainText('WHR Refresh profile');
+    await expect(recent).not.toContainText('32% to win');
     expect(fixture.requests.map(({ recomputeId }) => recomputeId)).toEqual([
       recomputeId,
       recomputeId,
@@ -452,6 +483,8 @@ test('a live recompute aborts the previous estimate and preserves the focused de
       return element.scrollTop;
     });
     expect(scrollTop).toBeGreaterThan(0);
+    const visibleRow = log.getByRole('row', { name: /Singles bracket 25/ });
+    await expect(visibleRow).toBeInViewport({ ratio: 0.75 });
     const aborted = page.waitForEvent('requestfailed', {
       predicate: (request) =>
         request.url().includes('whrResultImpact') && request.url().includes(recomputeId),
@@ -460,7 +493,7 @@ test('a live recompute aborts the previous estimate and preserves the focused de
     notifyRecompute('event: recompute_completed\ndata: {}\n\n');
     await aborted;
     releaseOldRequest();
-    await expect(log.getByText('WHR ≈−20 pts').first()).toBeInViewport();
+    await expect(visibleRow.getByText('WHR ≈−20 pts')).toBeInViewport();
     await expect(log.getByText('WHR ≈+30 pts')).toHaveCount(0);
     await expect(log).toBeFocused();
     expect(await log.evaluate((element) => element.scrollTop)).toBe(scrollTop);
