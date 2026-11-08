@@ -16,6 +16,14 @@ export function useCurrentUser(session: Session) {
   });
 }
 
+export function useMyClaims(userId: string | undefined) {
+  return useQuery({
+    queryKey: ['me', 'claims', userId],
+    queryFn: () => trpc.me.claims.query(),
+    enabled: Boolean(userId),
+  });
+}
+
 export function useSignInOptions() {
   return useQuery({
     queryKey: ['auth-options'],

@@ -58,7 +58,7 @@ export function CharacterPicker({ value, onChange, max = MAX_CHARACTERS_PER_PLAY
         ) : (
           value.map((slug, index) => (
             <span key={slug} className={`selected-character${index === 0 ? ' is-main' : ''}`}>
-              <CharacterIcons slugs={[slug]} />
+              <CharacterIcons slugs={[slug]} decorative />
               <span className="selected-character-name">{characterName(slug)}</span>
               {index === 0 ? (
                 <span className="chip chip-accent selected-main-chip">main</span>
@@ -111,7 +111,7 @@ export function CharacterPicker({ value, onChange, max = MAX_CHARACTERS_PER_PLAY
               title={character.name}
               onClick={() => toggle(character.slug)}
             >
-              <CharacterIcons slugs={[character.slug]} loading="eager" />
+              <CharacterIcons slugs={[character.slug]} loading="eager" decorative />
               <span className="character-option-name">{character.name}</span>
             </Button>
           );

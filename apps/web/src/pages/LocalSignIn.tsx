@@ -5,7 +5,7 @@ import { Input } from '../components/ui/Input';
 import { authClient } from '../lib/auth';
 
 /** Only rendered when the API explicitly enables rehearsal credentials. */
-export function LocalSignIn() {
+export function LocalSignIn({ callbackURL }: { callbackURL: string }) {
   const [email, setEmail] = useState('admin@smashclub.dev');
   const [password, setPassword] = useState('devpassword123');
   const [pending, setPending] = useState(false);
@@ -18,7 +18,7 @@ export function LocalSignIn() {
     try {
       const result = await authClient.signIn.email({ email, password });
       if (result.error) setError(result.error.message ?? 'Sign-in failed');
-      else window.location.assign('/me');
+      else window.location.assign(callbackURL);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Sign-in failed');
     } finally {

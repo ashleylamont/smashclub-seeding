@@ -38,6 +38,7 @@ import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
 import { AdminAccountsPage } from './pages/admin/AdminAccountsPage';
 import { AdminBreakthroughPage } from './pages/admin/AdminBreakthroughPage';
 import { opsSection } from './lib/opsWorkspace';
+import { profileClaimSearch } from './lib/profileClaim';
 import { breakthroughSearch } from './lib/breakthrough';
 
 const rootRoute = createRootRoute({ component: Layout });
@@ -97,12 +98,14 @@ const recapRoute = createRoute({
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
+  validateSearch: profileClaimSearch,
   component: LoginPage,
 });
 
 const meRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/me',
+  validateSearch: profileClaimSearch,
   component: MePage,
 });
 

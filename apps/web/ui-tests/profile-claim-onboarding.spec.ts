@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
-import type { MyClaim } from '../src/lib/apiTypes';
-import { mockEvent } from './fixtures';
+import { AxeBuilder } from '@axe-core/playwright';
+import type { MyClaim, PlayerData } from '../src/lib/apiTypes';
+import { mockEvent, ready } from './fixtures';
 
 const PLAYER_ID = '3048c081-1afa-4eab-a0a0-622853293ae2';
 const OTHER_ID = 'afcc7fd0-e377-4832-9de0-18a3fa0c194a';
@@ -105,5 +106,231 @@ test('keeps a former account claim, provider state and editor draft private duri
   await fixture.switchTo(null);
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByText(next.playerName)).toHaveCount(0);
+  expect(fixture.unexpected).toEqual([]);
+});
+
+const PUBLIC_NAME = 'Returning player with an exceptionally long tournament alias';
+
+function publicPlayer(id = PLAYER_ID, verified = false): PlayerData {
+  return {
+    player: {
+      id,
+      name: id === PLAYER_ID ? PUBLIC_NAME : 'Other player',
+      companyCode: 'ATL',
+      companyName: 'Smash Club',
+      verified,
+      characters: verified ? ['fox'] : [],
+    },
+    rating: null,
+    nights: [],
+    events: [],
+    recomputeId: null,
+    model: 'whr',
+    ratingScope: 'night',
+    doublesResults: [],
+  };
+}
+
+for (const theme of ['dark', 'light'] as const)
+  for (const width of [390, 1440]) {
+    test(`${theme} ${width}px discovers a claim from the player page and reaches the approved editor`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ colorScheme: theme });
+      const fixture = await mockAccount(page, null);
+      let verified = false;
+      fixture.queryResponses.set('public.player', (input) => {
+        expect(input).toEqual({ playerId: PLAYER_ID });
+        return publicPlayer(PLAYER_ID, verified);
+      });
+      const requests: unknown[] = [];
+      await page.route('**/api/trpc/me.requestClaim*', async (route) => {
+        const batched = new URL(route.request().url()).searchParams.has('batch');
+        const body = route.request().postDataJSON();
+        requests.push(batched ? body[0] : body);
+        fixture.responses['me.claims'] = [playerClaim(PLAYER_ID, 'pending', PUBLIC_NAME)];
+        const result = { result: { data: { claimId: PLAYER_ID } } };
+        await route.fulfill({ json: batched ? [result] : result });
+      });
+      const inspect = async (name: string) => {
+        await ready(page);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+        expect(
+          (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze())
+            .violations,
+        ).toEqual([]);
+        await page.screenshot({ path: testInfo.outputPath(`${name}.png`), fullPage: true });
+      };
+
+      await page.goto(`/players/${PLAYER_ID}`);
+      const signIn = page.getByRole('link', { name: 'Sign in to claim this profile' });
+      await expect(signIn).toHaveAttribute('href', `/login?claim=${PLAYER_ID}`);
+      await inspect('01-public-profile');
+      await signIn.press('Enter');
+      await expect(page).toHaveURL(`/login?claim=${PLAYER_ID}`);
+      await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+      await inspect('02-continue-sign-in');
+      await fixture.switchTo('Claiming account');
+
+      await expect(page).toHaveURL(`/me?claim=${PLAYER_ID}`);
+      const request = page.getByRole('button', { name: 'Request claim' });
+      await expect(request).toBeVisible();
+      await expect(page.getByRole('link', { name: PUBLIC_NAME })).toBeVisible();
+      await expect(page.getByRole('textbox', { name: 'Search players' })).toHaveCount(0);
+      expect(requests).toEqual([]);
+      await inspect('03-selected-player');
+      await page
+        .getByRole('textbox', { name: 'Note for administrators (optional)' })
+        .fill('My bracket alias');
+      await request.press('Enter');
+
+      const check = page.getByRole('button', { name: 'Check approval' });
+      await expect(check).toBeVisible();
+      expect(requests).toEqual([{ playerId: PLAYER_ID, note: 'My bracket alias' }]);
+      await expect(page.getByRole('heading', { name: 'Main characters' })).toHaveCount(0);
+      await inspect('04-pending-approval');
+      await page.getByRole('link', { name: PUBLIC_NAME }).click();
+      await expect(page.getByRole('link', { name: 'View your claim status' })).toBeVisible();
+      await page.getByRole('link', { name: 'View your claim status' }).click();
+
+      verified = true;
+      fixture.responses['me.claims'] = [playerClaim(PLAYER_ID, 'approved', PUBLIC_NAME)];
+      await check.press('Enter');
+      const edit = page.getByRole('link', { name: 'Edit main characters' });
+      await expect(edit).toBeVisible();
+      await inspect('05-approved-profile');
+      await edit.press('Enter');
+      const heading = page.getByRole('heading', { name: 'Main characters' });
+      await expect(heading).toBeFocused();
+      await expect(heading).toBeInViewport();
+      await expect(page).toHaveURL(`/me?claim=${PLAYER_ID}#main-characters`);
+      await expect(page.getByRole('textbox', { name: 'Filter characters' })).toBeVisible();
+      await page.getByRole('link', { name: PUBLIC_NAME }).click();
+      await page.getByRole('link', { name: 'Edit your profile' }).press('Enter');
+      await expect(heading).toBeFocused();
+      expect(fixture.unexpected).toEqual([]);
+    });
+  }
+
+test('keeps exact verified ownership private and gives an unlinked signed-in player a direct claim path', async ({
+  page,
+}) => {
+  const fixture = await mockAccount(page, 'Unlinked account');
+  fixture.queryResponses.set('public.player', (input) => {
+    const { playerId } = input as { playerId: string };
+    return publicPlayer(playerId, playerId === PLAYER_ID);
+  });
+
+  await page.goto(`/players/${PLAYER_ID}`);
+  await expect(page.getByRole('heading', { name: new RegExp(PUBLIC_NAME) })).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: /edit your profile|claim this profile/i }),
+  ).toHaveCount(0);
+
+  await page.goto(`/me?claim=${PLAYER_ID}`);
+  await expect(page.getByText('This profile is already linked.', { exact: false })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Request claim' })).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Search players' })).toBeVisible();
+
+  await page.goto(`/players/${OTHER_ID}`);
+  const claim = page.getByRole('link', { name: 'Claim this profile', exact: true });
+  await expect(claim).toHaveAttribute('href', `/me?claim=${OTHER_ID}`);
+  await claim.click();
+  await expect(page.getByRole('link', { name: 'Other player' })).toBeVisible();
+
+  await page.goto(`/players/${PLAYER_ID}`);
+  fixture.responses['me.claims'] = [playerClaim(PLAYER_ID, 'approved', PUBLIC_NAME)];
+  await fixture.switchTo('First approved account');
+  await expect(page.getByRole('link', { name: 'Edit your profile' })).toBeVisible();
+  await fixture.switchTo('Second approved account');
+  await expect(
+    page.getByRole('link', { name: 'Second approved account', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Edit your profile' })).toBeVisible();
+
+  fixture.responses['me.claims'] = [playerClaim(OTHER_ID, 'approved', 'Other player')];
+  await fixture.switchTo('Different linked player account');
+  await expect(
+    page.getByRole('link', { name: 'Different linked player account', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Edit your profile' })).toHaveCount(0);
+  await page.goto(`/me?claim=${PLAYER_ID}#main-characters`);
+  await expect(
+    page.getByText('This account already has a claim for a different player.', { exact: false }),
+  ).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Other player' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Request claim' })).toHaveCount(0);
+  await expect(page.locator('#main-characters')).toHaveCount(0);
+  expect(fixture.unexpected).toEqual([]);
+});
+
+test('OAuth continuation accepts only the player UUID and builds a fixed internal destination', async ({
+  page,
+}) => {
+  const fixture = await mockAccount(page, null);
+  const callbacks: string[] = [];
+  await page.route('**/api/auth/sign-in/social', async (route) => {
+    callbacks.push(route.request().postDataJSON().callbackURL);
+    await route.fulfill({ json: { redirect: false } });
+  });
+  for (const [claim, expected] of [
+    [PLAYER_ID.toUpperCase(), `/me?claim=${PLAYER_ID}`],
+    [
+      `${PLAYER_ID}
+`,
+      '/me',
+    ],
+    ['//outside.example/players', '/me'],
+    [`["${PLAYER_ID}"]`, '/me'],
+    [String.raw`\outside.example`, '/me'],
+  ] as const) {
+    await page.goto(`/login?claim=${encodeURIComponent(claim)}&returnTo=https://outside.example`);
+    await page.getByRole('button', { name: 'Continue with Discord' }).click();
+    await expect.poll(() => callbacks.at(-1)).toBe(expected);
+  }
+  expect(callbacks).toHaveLength(5);
+  expect(fixture.unexpected).toEqual([]);
+});
+
+test('continues to a canonical public profile and handles unavailable or mismatched targets', async ({
+  page,
+}) => {
+  const fixture = await mockAccount(page, null);
+  const merged = '65dc61a8-c675-4eaf-86de-e7a3c1ab582e';
+  const missing = '440b33c6-bc48-48cf-9db4-ab0a1973900e';
+  fixture.queryResponses.set('public.player', (input) => {
+    const { playerId } = input as { playerId: string };
+    if (playerId === merged) return { redirectTo: PLAYER_ID };
+    return playerId === missing ? null : publicPlayer(playerId);
+  });
+  await page.goto(`/players/${merged}`);
+  await expect(page.getByRole('link', { name: 'Sign in to claim this profile' })).toHaveAttribute(
+    'href',
+    `/login?claim=${PLAYER_ID}`,
+  );
+  await expect(page).toHaveURL(`/players/${PLAYER_ID}`);
+
+  await page.goto(`/me?claim=${missing}`);
+  await expect(page).toHaveURL(`/login?claim=${missing}`);
+  await fixture.switchTo('New unlinked account');
+  await expect(
+    page.getByText('The selected profile is unavailable.', { exact: false }),
+  ).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Search players' })).toBeVisible();
+
+  await fixture.switchTo(null);
+  await expect(page).toHaveURL(`/login?claim=${missing}`);
+  await page.goto(`/login?claim=${PLAYER_ID}&returnTo=https://outside.example`);
+  fixture.responses['me.claims'] = [playerClaim(OTHER_ID, 'pending', 'Other player')];
+  await fixture.switchTo('Account with a different pending claim');
+  await expect(page).toHaveURL(`/me?claim=${PLAYER_ID}`);
+  await expect(
+    page.getByText('This account already has a claim for a different player.', { exact: false }),
+  ).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Other player' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Check approval' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Request claim' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Main characters' })).toHaveCount(0);
   expect(fixture.unexpected).toEqual([]);
 });

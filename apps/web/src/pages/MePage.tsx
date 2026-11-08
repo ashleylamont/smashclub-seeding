@@ -1,14 +1,10 @@
 import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
 import { LoadingState } from '../components/ui/Feedback';
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, Navigate } from '@tanstack/react-router';
+import { useQuery } from '@tanstack/react-query';
+import { Navigate, useSearch } from '@tanstack/react-router';
 import { authClient, useCurrentUser } from '../lib/auth';
-import { trpc } from '../lib/trpc';
-import type { MyClaim } from '../lib/apiTypes';
-import { CharacterPicker } from '../components/CharacterPicker';
-import { formatDate } from '../lib/format';
+import { ProfileClaimSection } from '../components/ProfileClaimSection';
 import './Auth.css';
 
 const PROVIDERS = ['discord', 'google'] as const;
@@ -16,9 +12,10 @@ const PROVIDERS = ['discord', 'google'] as const;
 export function MePage() {
   const { data: session, isPending } = authClient.useSession();
   const currentUser = useCurrentUser(session);
+  const { claim } = useSearch({ from: '/me' });
 
   if (isPending) return <p className="loading-text">Loading account…</p>;
-  if (!session) return <Navigate to="/login" />;
+  if (!session) return <Navigate to="/login" search={{ claim }} replace />;
 
   const role = currentUser.data?.role;
 
@@ -43,10 +40,14 @@ export function MePage() {
             <div className="muted">{session.user.email}</div>
           </div>
         </div>
+        <p className="account-photo-note muted">
+          Your account photo comes from your sign-in provider. Main characters are shown beside your
+          public player name.
+        </p>
         <LinkedProviders key={session.user.id} userId={session.user.id} />
       </div>
 
-      <ClaimSection key={session.user.id} userId={session.user.id} />
+      <ProfileClaimSection key={session.user.id} userId={session.user.id} targetId={claim} />
     </div>
   );
 }
@@ -88,7 +89,7 @@ function LinkedProviders({ userId }: { userId: string }) {
       <div className="provider-list">
         {PROVIDERS.map((provider) =>
           linked.has(provider) ? (
-            <span key={provider} className="chip chip-success">
+            <span key={provider} className="chip">
               ✓ {provider === 'discord' ? 'Discord' : 'Google'} linked
             </span>
           ) : (
@@ -114,237 +115,5 @@ function LinkedProviders({ userId }: { userId: string }) {
         </p>
       )}
     </>
-  );
-}
-
-function ClaimSection({ userId }: { userId: string }) {
-  const queryClient = useQueryClient();
-  const claims = useQuery({
-    queryKey: ['me', 'claims', userId],
-    queryFn: () => trpc.me.claims.query(),
-  });
-
-  const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['me', 'claims'] });
-    void queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
-    void queryClient.invalidateQueries({ queryKey: ['player'] });
-  };
-
-  if (claims.isPending) return <p className="loading-text">Loading claim…</p>;
-  if (claims.isError)
-    return <p className="error-text">Failed to load claims: {claims.error.message}</p>;
-
-  const liveClaim =
-    claims.data.find((c) => c.status === 'pending' || c.status === 'approved') ?? null;
-  const pastClaims = claims.data.filter((c) => c !== liveClaim);
-
-  return (
-    <div className="card">
-      <h2>Player claim</h2>
-      {liveClaim ? (
-        <LiveClaim key={liveClaim.id} claim={liveClaim} onChanged={invalidate} />
-      ) : (
-        <ClaimSearch onChanged={invalidate} />
-      )}
-      {pastClaims.length > 0 && (
-        <div style={{ marginTop: 16 }}>
-          <h3>History</h3>
-          <ul className="claim-search-results">
-            {pastClaims.map((c) => (
-              <li key={c.id}>
-                <span>
-                  {c.playerName} <span className="muted">({formatDate(c.createdAt)})</span>
-                </span>
-                <span className={`chip ${c.status === 'rejected' ? 'chip-danger' : ''}`}>
-                  {c.status}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function LiveClaim({ claim, onChanged }: { claim: MyClaim; onChanged: () => void }) {
-  const withdraw = useMutation({
-    mutationFn: () => trpc.me.withdrawClaim.mutate({ claimId: claim.id }),
-    onSuccess: onChanged,
-  });
-
-  return (
-    <div>
-      <div className="claim-status">
-        <span>
-          You claimed{' '}
-          <Link to="/players/$playerId" params={{ playerId: claim.playerId }}>
-            <strong>{claim.playerName}</strong>
-          </Link>
-          {claim.companyCode ? ` (${claim.companyCode})` : ''}
-        </span>
-        <span className={`chip ${claim.status === 'approved' ? 'chip-success' : 'chip-warning'}`}>
-          {claim.status === 'approved' ? '✓ approved' : 'pending review'}
-        </span>
-        <Button
-          variant="danger"
-          size="small"
-          type="button"
-          disabled={withdraw.isPending}
-          onClick={() => withdraw.mutate()}
-        >
-          Withdraw
-        </Button>
-      </div>
-      {claim.note && <p className="muted">Note: {claim.note}</p>}
-      {withdraw.isError && <p className="error-text">{withdraw.error.message}</p>}
-      {claim.status === 'approved' && <ProfileEditor claim={claim} onChanged={onChanged} />}
-    </div>
-  );
-}
-
-/**
- * Self-service profile editing for an approved claimant. Both fields are the
- * player's own to set — an admin should not be the bottleneck on someone
- * changing their tag or switching mains.
- */
-function ProfileEditor({ claim, onChanged }: { claim: MyClaim; onChanged: () => void }) {
-  const [displayName, setDisplayName] = useState(claim.displayName ?? '');
-  const [characters, setCharacters] = useState<string[]>(claim.characters);
-
-  const updateName = useMutation({
-    mutationFn: (name: string | null) =>
-      trpc.me.updateDisplayName.mutate({ playerId: claim.playerId, displayName: name }),
-    onSuccess: onChanged,
-  });
-
-  const updateCharacters = useMutation({
-    mutationFn: (slugs: string[]) =>
-      trpc.me.updateCharacters.mutate({ playerId: claim.playerId, characters: slugs }),
-    onSuccess: onChanged,
-  });
-
-  const dirtyCharacters = characters.join(',') !== claim.characters.join(',');
-
-  return (
-    <div className="profile-editor">
-      <div className="display-name-row">
-        <label htmlFor="display-name" className="muted">
-          Public alias
-        </label>
-        <Input
-          id="display-name"
-          value={displayName}
-          placeholder={claim.defaultAlias}
-          onChange={(e) => setDisplayName(e.target.value)}
-        />
-        <Button
-          size="small"
-          type="button"
-          disabled={updateName.isPending}
-          onClick={() => updateName.mutate(displayName.trim() === '' ? null : displayName.trim())}
-        >
-          Save
-        </Button>
-        {updateName.isSuccess && <span className="chip chip-success">saved</span>}
-        {updateName.isError && <span className="error-text">{updateName.error.message}</span>}
-      </div>
-      <p className="muted">
-        The name shown on the leaderboard. Leave it blank to go by “{claim.defaultAlias}”.
-      </p>
-
-      <div className="character-editor">
-        <div className="display-name-row">
-          <span className="muted">Characters</span>
-          <Button
-            size="small"
-            type="button"
-            disabled={!dirtyCharacters || updateCharacters.isPending}
-            onClick={() => updateCharacters.mutate(characters)}
-          >
-            Save
-          </Button>
-          {updateCharacters.isSuccess && !dirtyCharacters && (
-            <span className="chip chip-success">saved</span>
-          )}
-          {updateCharacters.isError && (
-            <span className="error-text">{updateCharacters.error.message}</span>
-          )}
-        </div>
-        <CharacterPicker value={characters} onChange={setCharacters} />
-      </div>
-    </div>
-  );
-}
-
-function ClaimSearch({ onChanged }: { onChanged: () => void }) {
-  const [query, setQuery] = useState('');
-  const [note, setNote] = useState('');
-  const trimmed = query.trim();
-
-  const search = useQuery({
-    queryKey: ['searchPlayers', trimmed],
-    queryFn: () => trpc.public.searchPlayers.query({ query: trimmed }),
-    enabled: trimmed.length >= 1,
-  });
-
-  const request = useMutation({
-    mutationFn: (playerId: string) =>
-      trpc.me.requestClaim.mutate({ playerId, note: note.trim() === '' ? undefined : note.trim() }),
-    onSuccess: onChanged,
-  });
-
-  return (
-    <div>
-      <p className="muted">
-        Find yourself on the leaderboard and claim your player. An admin will approve the claim.
-      </p>
-      <div className="claim-form-row" style={{ marginTop: 10 }}>
-        <Input
-          placeholder="Search players by their board name…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <Input
-          placeholder="Optional note for the admins"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-        />
-      </div>
-      {search.isFetching && <p className="loading-text">Searching…</p>}
-      {search.isError && <p className="error-text">{search.error.message}</p>}
-      {request.isError && <p className="error-text">{request.error.message}</p>}
-      {search.data && search.data.length === 0 && (
-        <p className="muted" style={{ marginTop: 10 }}>
-          No players found.
-        </p>
-      )}
-      {search.data && search.data.length > 0 && (
-        <ul className="claim-search-results">
-          {search.data.map((player) => (
-            <li key={player.id}>
-              <span>
-                {player.name}
-                {player.companyCode ? <span className="muted"> ({player.companyCode})</span> : null}
-                {player.verified && (
-                  <span className="verified-badge" title="Already claimed">
-                    {' '}
-                    ✓
-                  </span>
-                )}
-              </span>
-              <Button
-                size="small"
-                type="button"
-                disabled={player.verified || request.isPending}
-                onClick={() => request.mutate(player.id)}
-              >
-                This is me
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
   );
 }

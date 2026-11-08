@@ -146,9 +146,9 @@
   align-items: center;
 }
 
-.claim-form-row .input {
-  flex: 1;
-  min-width: 200px;
+.claim-form-row > .ui-field {
+  flex: 1 1 220px;
+  min-width: 0;
 }
 
 .display-name-row {
@@ -178,4 +178,34 @@
   margin-top: var(--s3);
   padding-top: var(--s3);
   border-top: 1px solid var(--border);
+}
+
+.account-photo-note {
+  margin-top: var(--s3);
+}
+
+.player-claim,
+.claim-flow {
+  display: grid;
+  gap: var(--s3);
+}
+
+.claim-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  margin-block: var(--s3);
+}
+
+.claim-history {
+  margin-top: var(--s3);
+}
+
+#main-characters {
+  scroll-margin-top: calc(var(--nav-h, 0px) + var(--s3));
+}
+
+.player-claim {
+  overflow-wrap: anywhere;
 }

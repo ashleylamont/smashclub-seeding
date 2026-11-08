@@ -1,4 +1,5 @@
 import { Select, SelectItem } from '../components/ui/Select';
+import { Button } from '../components/ui/Button';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
@@ -13,6 +14,8 @@ import {
   YAxis,
 } from 'recharts';
 import { trpc } from '../lib/trpc';
+import { authClient, useMyClaims } from '../lib/auth';
+import { mainCharactersAnchor } from '../lib/profileClaim';
 import type { PlayerData, PlayerEventView } from '../lib/apiTypes';
 import { CharacterIcons } from '../components/CharacterIcons';
 import { PlayerRatingNight } from '../components/PlayerRatingNight';
@@ -216,6 +219,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
               <CharacterIcons slugs={player.characters} size="lg" />
             </div>
           )}
+          <ProfileAccountAction player={player} />
         </div>
 
         {/* The headline figure is the ranked number — the club rating — because
@@ -450,5 +454,44 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         )}
       </section>
     </div>
+  );
+}
+
+function ProfileAccountAction({ player }: { player: PlayerData['player'] }) {
+  const { data: session, isPending } = authClient.useSession();
+  const claims = useMyClaims(session?.user.id);
+  if (isPending || (session && (claims.isPending || claims.isError))) return null;
+
+  const search = { claim: player.id };
+  if (!session)
+    return (
+      <Button asChild className="profile-account-action">
+        <Link to="/login" search={search}>
+          {player.verified ? 'Sign in to edit your profile' : 'Sign in to claim this profile'}
+        </Link>
+      </Button>
+    );
+
+  const current = claims.data?.find(({ status }) => status === 'approved' || status === 'pending');
+  if (current?.playerId === player.id)
+    return (
+      <Button asChild className="profile-account-action">
+        <Link
+          to="/me"
+          search={search}
+          hash={current.status === 'approved' ? mainCharactersAnchor : undefined}
+        >
+          {current.status === 'approved' ? 'Edit your profile' : 'View your claim status'}
+        </Link>
+      </Button>
+    );
+
+  if (current || player.verified) return null;
+  return (
+    <Button asChild className="profile-account-action">
+      <Link to="/me" search={search}>
+        Claim this profile
+      </Link>
+    </Button>
   );
 }
