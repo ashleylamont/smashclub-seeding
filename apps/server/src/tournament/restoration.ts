@@ -6,6 +6,7 @@ import { qualifierFieldFrozen } from './qualifiers';
 import { hasLegacyQualifier, legacyPendingRosterMessage } from './legacyFinalQualifiers';
 import { hash, requireFact, resolved, stableId } from './facts';
 import { hasCurrentPendingScoreReview } from './scoreReview';
+import { projectMatchLabels } from './matchNames';
 import type { CommandEnvelope, Match, TournamentState } from './schemas';
 
 const withdrawalHold = 'Player withdrawn: awaiting organiser forfeit decision';
@@ -58,12 +59,12 @@ export function restoreEntrant(
   state.settings.resourceRevision++;
 }
 
-function matchEffect(state: TournamentState, match: Match) {
+function matchEffect(state: TournamentState, match: Match, label: string) {
   const name = (id: string | null) =>
     state.entrants.find((e) => e.playerId === id)?.name ?? 'Awaiting opponent';
   const base = {
     id: match.id,
-    label: match.label,
+    label,
     player1Name: name(match.player1Id),
     player2Name: name(match.player2Id),
     status: match.status,
@@ -131,9 +132,10 @@ export function previewRestoration(state: TournamentState, playerId: string, rea
     restoreEntrant(next, command, playerId);
     completeCommandProgression(state, next, command, {});
   }
+  const labels = projectMatchLabels(next);
   const effects = next.matches
     .filter((m) => [m.player1Id, m.player2Id].includes(playerId))
-    .map((m) => matchEffect(next, m));
+    .map((m) => matchEffect(next, m, labels.get(m.id)?.label ?? m.label));
   const frozen = pool?.qualifierRoster;
   const awaitingDraw = pool && !qualifierFieldFrozen(state, pool.division);
   const qualification = frozen
