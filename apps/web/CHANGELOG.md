@@ -2,6 +2,12 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.4.3
+
+### Patch Changes
+
+- 8 November 2026 · **Fix** · Linked finals show the division and stage once on player and OBS screens, with the original bracket identifier. [#260](https://github.com/ashleylamont/smashclub-seeding/pull/260) · [build c4081f2](https://github.com/ashleylamont/smashclub-seeding/commit/c4081f2a701567c0c24129175beaafda79f5d522)
+
 ## 0.4.2
 
 ### Patch Changes
