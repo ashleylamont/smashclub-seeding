@@ -23,12 +23,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: env.RELEASE_APP_CONFIGURED == 'true'
         with:
-          ref: main
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Check the trigger still matches main
+        id: version-source
+        if: env.RELEASE_APP_CONFIGURED == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/check-version-source.sh
       - name: Detect a Changeset directory with only release tooling
         id: empty-changesets
-        if: env.RELEASE_APP_CONFIGURED == 'true' && github.event_name == 'push'
+        if: steps.version-source.outputs.ready == 'true' && github.event_name == 'push'
         shell: bash
         run: |
           # Let Changesets handle every unknown entry, including pre mode and legacy notes.
@@ -41,18 +47,24 @@ jobs:
             echo 'skip=true' >> "$GITHUB_OUTPUT"
           fi
       - uses: ./.github/actions/setup-node-pnpm
-        if: env.RELEASE_APP_CONFIGURED == 'true' && steps.empty-changesets.outputs.skip != 'true'
+        if: steps.version-source.outputs.ready == 'true' && steps.empty-changesets.outputs.skip != 'true'
       - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         id: release-token
-        if: env.RELEASE_APP_CONFIGURED == 'true' && steps.empty-changesets.outputs.skip != 'true'
+        if: steps.version-source.outputs.ready == 'true' && steps.empty-changesets.outputs.skip != 'true'
         with:
           client-id: ${{ vars.NEMESIS_RELEASE_APP_CLIENT_ID || secrets.NEMESIS_RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.NEMESIS_RELEASE_APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write
+      - name: Recheck main before Changesets updates the version PR
+        id: version-source-final
+        if: steps.version-source.outputs.ready == 'true' && steps.empty-changesets.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/check-version-source.sh
       - uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         id: changesets
-        if: env.RELEASE_APP_CONFIGURED == 'true' && steps.empty-changesets.outputs.skip != 'true'
+        if: steps.version-source-final.outputs.ready == 'true'
         with:
           github-token: ${{ steps.release-token.outputs.token }}
           version-script: pnpm changeset version
