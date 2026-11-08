@@ -2,6 +2,14 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.2.8
+
+### Patch Changes
+
+- 8 November 2026 · **Maintenance** · Verify queued release and ordinary main builds in separate lanes while continuing to build and verify every commit before publication. [#229](https://github.com/ashleylamont/smashclub-seeding/pull/229) · [build aea0dcc](https://github.com/ashleylamont/smashclub-seeding/commit/aea0dccceb56c183ce691db959b32caf11be7238)
+- 8 November 2026 · **Maintenance** · Avoid repeating the full TypeScript check in each browser shard while retaining required typecheck and build jobs. [#221](https://github.com/ashleylamont/smashclub-seeding/pull/221) · [build e05a3f1](https://github.com/ashleylamont/smashclub-seeding/commit/e05a3f15e276b33f58796a5f136091db206162e0)
+- 8 November 2026 · **Fix** · Let organisers review and correct the game score of a played pool set after finals have used its automatic finishing order. The winner, confirmed places and existing finals draw stay as recorded. [#230](https://github.com/ashleylamont/smashclub-seeding/pull/230) · [build 3fff654](https://github.com/ashleylamont/smashclub-seeding/commit/3fff654c14d3cfb7e39f00538e14643cc811a2d6)
+
 ## 0.2.7
 
 ### Patch Changes
