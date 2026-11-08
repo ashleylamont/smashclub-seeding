@@ -1,4 +1,5 @@
 import type { ResultMatch } from './broadcastResults';
+import { linkedFinalCaption } from './linkedFinalCaption';
 
 /** Bounded for the narrow OBS rail, including the venue guest QR at 720p. */
 export function recentResultCount(search: string) {
@@ -13,5 +14,6 @@ export function resultStageLabel(match: ResultMatch) {
     match.division === 'upper' ? 'Upper' : match.division === 'lower' ? 'Lower' : match.division;
   return match.stage === 'group'
     ? `${division} · Pool ${String.fromCharCode(65 + (match.poolIndex ?? 0))}`
-    : `${division} · ${match.stage === 'main' ? 'Championship' : 'Consolation'} · ${match.label}`;
+    : (linkedFinalCaption(match)?.text ??
+        `${division} · ${match.stage === 'main' ? 'Championship' : 'Consolation'} · ${match.label}`);
 }

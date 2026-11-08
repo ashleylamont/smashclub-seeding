@@ -1,4 +1,5 @@
 import { matchParticipantName, matchPresentation } from '../lib/matchPresentation';
+import { linkedFinalCaption } from '../lib/linkedFinalCaption';
 import { CharacterIcons } from './CharacterIcons';
 import type { LiveMatch } from '../lib/eventDisplay';
 export function MatchCard({
@@ -11,16 +12,21 @@ export function MatchCard({
   nextMatch?: LiveMatch;
 }) {
   const presentation = matchPresentation(match);
+  const linked = linkedFinalCaption(match);
   return (
     <article className={`event-match ${match.status === 'playing' ? 'is-playing' : ''}`}>
       <div className="event-match-meta">
         <span>
-          {match.division} ·{' '}
-          {match.stage === 'group'
-            ? `Pool ${match.poolIndex === null ? '—' : String.fromCharCode(65 + match.poolIndex)}`
-            : match.stage}
+          {linked?.context ?? (
+            <>
+              {match.division} ·{' '}
+              {match.stage === 'group'
+                ? `Pool ${match.poolIndex === null ? '—' : String.fromCharCode(65 + match.poolIndex)}`
+                : match.stage}
+            </>
+          )}
         </span>
-        <span>{station || match.label}</span>
+        <span>{station || linked?.identifier || match.label}</span>
       </div>
       {[
         {

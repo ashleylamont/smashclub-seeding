@@ -5,6 +5,7 @@ import {
   type ProgressPage,
 } from '../lib/broadcastProgress';
 import { liveBracketWinner } from '../lib/eventBracket';
+import { linkedFinalCaption } from '../lib/linkedFinalCaption';
 import { matchParticipantName, matchPresentation } from '../lib/matchPresentation';
 import {
   finalsFieldLabel,
@@ -311,7 +312,7 @@ function LinkedBracketPage({
                     : 'Upcoming');
             return (
               <tr key={match.id}>
-                <td>{match.label}</td>
+                <td>{linkedFinalCaption(match)?.identifier ?? match.label}</td>
                 {([0, 1] as const).map((side) => {
                   const id = side === 0 ? match.player1Id : match.player2Id;
                   const name = id ? matchParticipantName(match, side) : '—';

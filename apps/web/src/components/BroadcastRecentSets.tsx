@@ -20,14 +20,15 @@ export function BroadcastRecentSets({
       {results.length ? (
         results.map((match) => {
           const presentation = matchPresentation(match);
+          const caption = resultStageLabel(match);
           return (
             <article
               key={match.id}
               data-match-id={match.id}
               data-outcome={presentation.kind}
-              aria-label={`${resultStageLabel(match)} · ${resultHeadline(match)}`}
+              aria-label={`${caption} · ${resultHeadline(match)}`}
             >
-              <small>{resultStageLabel(match)}</small>
+              <small>{caption}</small>
               {([0, 1] as const)
                 .filter(
                   (side) =>

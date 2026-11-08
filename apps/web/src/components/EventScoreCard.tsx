@@ -1,4 +1,5 @@
 import { matchPresentation } from '../lib/matchPresentation';
+import { linkedFinalCaption } from '../lib/linkedFinalCaption';
 import { qualificationSummary } from '../lib/qualification';
 import type { LiveMatch } from '../lib/eventDisplay';
 import { useReportFeedback } from '../lib/useReportFeedback';
@@ -83,7 +84,7 @@ export function EventScoreCard({
       className={`card ops-match${!recordedOnly || match.status === 'complete' ? ` ops-match-${match.status}` : ''}`}
     >
       <div className="ops-match-meta">
-        <span>{match.labelFromStructure ? match.label : `${match.division} · ${match.label}`}</span>
+        <span>{scoreCardCaption(match)}</span>
         <span className="chip">
           {presentation.status ?? status}
           {station ? ` · ${station}` : ''}
@@ -204,6 +205,11 @@ export function EventScoreCard({
       )}
     </article>
   );
+}
+
+function scoreCardCaption(match: LiveMatch) {
+  if (match.labelFromStructure) return match.label;
+  return linkedFinalCaption(match)?.text ?? `${match.division} · ${match.label}`;
 }
 
 function ReportReceipt({
