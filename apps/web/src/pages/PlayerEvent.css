@@ -129,3 +129,30 @@
   margin: 0;
   overflow-wrap: anywhere;
 }
+
+.pending-finals {
+  display: grid;
+  gap: var(--s3);
+}
+.pending-finals > p {
+  margin: 0;
+}
+.pending-finals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: var(--s3);
+}
+.pending-finals-sources {
+  display: grid;
+  gap: var(--s2);
+  margin: var(--s3) 0 0;
+  padding: 0;
+  font-size: var(--fs-sm);
+}
+.pending-finals-sources li {
+  display: grid;
+  gap: var(--s1);
+  padding-top: var(--s2);
+  border-top: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}

@@ -21,6 +21,7 @@ import type { snapshot as sqlSnapshot } from '../event-operations/service';
 import { getPlan as sqlPlan, type PlanView } from '../event-planner/plans';
 import { resolved } from './facts';
 import { hasCurrentPendingScoreReview } from './scoreReview';
+import { pendingStrengthFinals } from './strengthFinals';
 import type { Match, QualifierSlot, TournamentState } from './schemas';
 
 type SqlSnapshot = Awaited<ReturnType<typeof sqlSnapshot>>;
@@ -29,6 +30,7 @@ export type EventSnapshot = Omit<SqlSnapshot, 'placements' | 'matches' | 'native
   broadcastSides?: TournamentState['broadcastSides'];
   matches: (SqlSnapshot['matches'][number] & QualifierFields)[];
   nativeBrackets: (SqlSnapshot['nativeBrackets'][number] & { qualifierSlots?: QualifierSlot[] })[];
+  pendingFinals?: ReturnType<typeof pendingStrengthFinals>;
   placements: (Omit<SqlSnapshot['placements'][number], 'source'> & {
     source: 'manual' | 'challonge' | 'automatic' | 'retained';
   })[];
@@ -210,6 +212,7 @@ export async function eventView(
           )
         : undefined,
     nativeBrackets: bracketViews(state),
+    pendingFinals: pendingStrengthFinals(state),
     plan: {
       id: planId,
       liveOwned: true,
