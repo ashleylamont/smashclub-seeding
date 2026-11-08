@@ -1,6 +1,6 @@
 import { expect } from 'vitest';
-import { and, eq } from 'drizzle-orm';
-import { eventMatches, eventNativeBrackets, type Db } from '@smashclub/db';
+import { and, eq, inArray } from 'drizzle-orm';
+import { eventMatches, eventNativeBrackets, sets, type Db } from '@smashclub/db';
 import {
   generateNativeBrackets,
   previewNativeBrackets,
@@ -9,7 +9,8 @@ import { nativeDraw, pendingSlot } from '../../src/event-operations/nativeBracke
 import { prepare, reportScore } from '../../src/event-operations/service';
 import { getPlan, savePoolPlacements } from '../../src/event-planner/plans';
 import { attendancePreview } from '../../src/tournament/attendance';
-import { eventView } from '../../src/tournament/views';
+import { hasFixedLegacyPoolQualifiers } from '../../src/tournament/legacyFinalQualifiers';
+import { eventView, planView } from '../../src/tournament/views';
 import { nativeStream, type NativeRuntime } from '../../src/tournament/runtime';
 import type { Match, TournamentState } from '../../src/tournament/schemas';
 import { appRouter } from '../../src/trpc/router';
@@ -120,6 +121,9 @@ export async function verifyMixedLegacyFinalsRecovery(
     expect(await runtime.replay(planId)).toEqual(imported);
 
     const pending = imported.pools.find((pool) => pool.division === 'upper' && pool.index === 1)!;
+    const fixed = imported.pools.find((pool) => pool.division === 'upper' && pool.index === 0)!;
+    expect(hasFixedLegacyPoolQualifiers(imported, pending)).toBe(false);
+    expect(hasFixedLegacyPoolQualifiers(imported, fixed)).toBe(true);
     const caller = appRouter.createCaller({
       db,
       nativeRuntime: runtime,
@@ -170,9 +174,21 @@ export async function verifyMixedLegacyFinalsRecovery(
     const beforeOrder = await runtime.state(planId);
     const order = pending.entrantIds.toReversed();
     const plan = (await caller.admin.eventPlanner.plan({ planId }))!;
-    const worksheet = plan.divisions
-      .find(({ division }) => division === pending.division)!
-      .pools.find(({ poolIndex }) => poolIndex === pending.index)!;
+    const upper = plan.divisions.find(({ division }) => division === pending.division)!;
+    expect(upper).toMatchObject({ fixedLegacyFinals: true, championship: [], consolation: null });
+    expect(
+      upper.pools.find(({ poolIndex }) => poolIndex === fixed.index)?.orderLockedReason,
+    ).toContain('Confirmed places stay recorded');
+    const worksheet = upper.pools.find(({ poolIndex }) => poolIndex === pending.index)!;
+    expect(worksheet.orderLockedReason).toBeUndefined();
+    const damaged = structuredClone(beforeOrder);
+    damaged.pools.find(({ id }) => id === fixed.id)!.order = null;
+    const damagedView = await planView(db, damaged);
+    const damagedPool = damagedView.divisions
+      .find(({ division }) => division === fixed.division)!
+      .pools.find(({ poolIndex }) => poolIndex === fixed.index)!;
+    expect(damagedPool.orderLockedReason).toContain('The confirmed order is missing');
+    expect(damagedPool.orderStatus).toBeUndefined();
     const submitted = {
       planId,
       division: pending.division,
@@ -259,14 +275,16 @@ export async function verifyMixedLegacyFinalsRecovery(
       expect(match.status).toBe('ready');
       await scoreActMatch(runtime, planId, match);
     }
-    const continued = await runtime.state(planId);
-    const final = continued.matches.find((m) => m.bracketId === mixed.id && m.round === 2)!;
+    const beforeWithdrawal = await runtime.state(planId);
+    const final = beforeWithdrawal.matches.find((m) => m.bracketId === mixed.id && m.round === 2)!;
     expect(final.status).toBe('ready');
     expect(final.player1Id).toBe(openingSets.find(({ id }) => id === final.parent1Id)!.player1Id);
     expect(final.player2Id).toBe(openingSets.find(({ id }) => id === final.parent2Id)!.player1Id);
-    expect(continued.matches.find((match) => match.id === played.id)).toEqual(
+    expect(beforeWithdrawal.matches.find((match) => match.id === played.id)).toEqual(
       imported.matches.find((match) => match.id === played.id),
     );
+
+    const continued = await verifyLegacyWithdrawal(db, runtime, planId, pending.id);
     await runtime.shutdown();
     runtime = await createRuntime();
     await runtime.recover();
@@ -274,15 +292,139 @@ export async function verifyMixedLegacyFinalsRecovery(
     await runtime.app.query({ stream: nativeStream(planId), after: -1 }, (event) => {
       eventNames.push(event.name);
     });
-    return {
+    const recovery = {
       continued,
       restarted: await runtime.state(planId),
       replayed: await runtime.replay(planId),
       eventNames,
     };
+    await verifyLegacyPublication(db, runtime, planId);
+    return recovery;
   } finally {
     await runtime.shutdown();
   }
+}
+
+async function verifyLegacyWithdrawal(
+  db: Db,
+  runtime: NativeRuntime,
+  planId: string,
+  poolId: string,
+) {
+  const drawn = await runtime.state(planId);
+  // A different confirmed pool entered the imported bracket as fixed IDs.
+  const lower = drawn.pools.find(({ division }) => division === 'lower')!;
+  const lowerPoolSet = drawn.matches.find(({ poolId }) => poolId === lower.id)!;
+  await scoreActMatch(runtime, planId, lowerPoolSet);
+  const beforeWithdrawal = await runtime.state(planId);
+  expect(beforeWithdrawal.pools).toEqual(drawn.pools);
+  const pending = beforeWithdrawal.pools.find(({ id }) => id === poolId)!;
+  const order = pending.order!;
+  const withdrawal = {
+    action: 'withdraw' as const,
+    playerId: pending.entrantIds[0]!,
+    reason: 'Player left after qualifying',
+  };
+  const preview = attendancePreview(beforeWithdrawal, withdrawal);
+  expect(preview.allowed).toBe(true);
+  const command = {
+    kind: 'attendance' as const,
+    ...withdrawal,
+    revisionToken: preview.revisionToken,
+    approveRedistribution: false,
+  };
+  const withdrawalRequestId = crypto.randomUUID();
+  const firstWithdrawal = await runtime.command(nativeAdmin, planId, withdrawalRequestId, command);
+  const withdrawalRetry = await runtime.command(nativeAdmin, planId, withdrawalRequestId, command);
+  expect(withdrawalRetry.receipt).toEqual(firstWithdrawal.receipt);
+
+  const lowerEntrant = beforeWithdrawal.entrants.find(
+    ({ playerId }) => playerId === lower.order![0],
+  )!;
+  await runtime.command(nativeAdmin, planId, crypto.randomUUID(), {
+    kind: 'availability',
+    playerId: lowerEntrant.playerId,
+    availability: 'withdrawn',
+    expectedRevision: lowerEntrant.revision,
+    reason: 'Player left during the finals',
+  });
+  const continued = await runtime.state(planId);
+  expect(continued.pools).toEqual(beforeWithdrawal.pools);
+  expect(continued.brackets).toEqual(beforeWithdrawal.brackets);
+  for (const match of beforeWithdrawal.matches.filter(({ outcome }) => outcome !== null))
+    expect(continued.matches.find(({ id }) => id === match.id)).toEqual(match);
+  const event = await eventView(db, continued);
+  expect(event.placements).toEqual((await eventView(db, beforeWithdrawal)).placements);
+  expect(event.withdrawals.map(({ playerId }) => playerId)).toEqual(
+    expect.arrayContaining([withdrawal.playerId, lowerEntrant.playerId]),
+  );
+  const retainedWorksheet = await planView(db, continued);
+  for (const division of retainedWorksheet.divisions)
+    expect(division).toMatchObject({
+      fixedLegacyFinals: true,
+      championship: [],
+      consolation: null,
+    });
+  expect(
+    retainedWorksheet.divisions
+      .find(({ division }) => division === pending.division)!
+      .pools.find(({ poolIndex }) => poolIndex === pending.index),
+  ).toMatchObject({
+    orderLockedReason: expect.stringContaining('Confirmed places stay recorded'),
+    members: expect.arrayContaining([
+      expect.objectContaining({
+        playerId: withdrawal.playerId,
+        withdrawn: true,
+        place: order.indexOf(withdrawal.playerId) + 1,
+      }),
+    ]),
+  });
+  await expect(
+    runtime.command(nativeAdmin, planId, crypto.randomUUID(), {
+      kind: 'poolOrders',
+      pools: [placementInput(continued, pending.id, order.toReversed())],
+    }),
+  ).rejects.toThrow(/Remove finals before changing qualifying orders/);
+  return continued;
+}
+
+async function verifyLegacyPublication(db: Db, runtime: NativeRuntime, planId: string) {
+  const initial = await runtime.state(planId);
+  let closing = initial;
+  for (let i = 0; i < closing.matches.length; i++) {
+    const match = closing.matches.find(({ status }) => status === 'ready');
+    if (!match) break;
+    await scoreActMatch(runtime, planId, match);
+    closing = await runtime.state(planId);
+  }
+  await runtime.command(nativeAdmin, planId, crypto.randomUUID(), { kind: 'finalize' });
+  await runtime.drainReactions();
+  const published = await runtime.state(planId);
+  expect(published.result).toMatchObject({ version: 1, brackets: initial.brackets });
+  expect(published.result).not.toHaveProperty('poolOrders');
+  expect((await eventView(db, published)).placements).toEqual(
+    (await eventView(db, initial)).placements,
+  );
+  const publishedSets = await db
+    .select()
+    .from(sets)
+    .where(inArray(sets.tournamentId, published.publication!.tournamentIds));
+  const byMatch = new Map(
+    publishedSets.map((row) => [(row.raw as { eventMatchId: string }).eventMatchId, row]),
+  );
+  for (const match of initial.matches.filter(({ outcome }) => outcome === 'played'))
+    expect(byMatch.get(match.id)).toMatchObject({
+      p1PlayerId: match.player1Id,
+      p2PlayerId: match.player2Id,
+      winner: match.winnerId === match.player1Id ? 1 : 2,
+      scoresCsv: `${match.score1}-${match.score2}`,
+      excludedFromRatings: false,
+    });
+  expect(
+    publishedSets.every(
+      (row) => (row.raw as { outcome: string }).outcome === 'played' || row.excludedFromRatings,
+    ),
+  ).toBe(true);
 }
 
 export function placementInput(state: TournamentState, poolId: string, order?: string[]) {

@@ -1,7 +1,7 @@
-import { poolFinalsConsumed } from './qualifiers';
-import { legacyQualifierSlots } from './legacyFinalQualifiers';
+import { poolFinalsConsumed, rollingFinals } from './qualifiers';
+import { hasFixedLegacyPoolQualifiers, legacyQualifierSlots } from './legacyFinalQualifiers';
 import { matchNames } from './matchNames';
-import { poolOrderStatus, poolPlacementSource } from './poolOrders';
+import { canConfirmPoolOrder, poolOrderStatus, poolPlacementSource } from './poolOrders';
 import {
   dispatchAvailability,
   dispatchContext,
@@ -359,6 +359,22 @@ export async function eventView(
   };
 }
 
+function worksheetOrderLock(
+  state: TournamentState,
+  pool: TournamentState['pools'][number],
+  fixedLegacyFinals: boolean,
+) {
+  if (fixedLegacyFinals && !canConfirmPoolOrder(state, pool)) {
+    if (pool.order)
+      return 'The finals draw is in use. Confirmed places stay recorded after withdrawals.';
+    if (hasFixedLegacyPoolQualifiers(state, pool))
+      return 'The confirmed order is missing. This worksheet cannot restore it after finals used it.';
+    return 'This pool order cannot be confirmed while the finals draw is in use.';
+  }
+  if (pool.qualifierRoster && !pool.qualifierDecision && poolFinalsConsumed(state, pool.id))
+    return 'Finals already use this pool order. Called or played opponents and report history stay fixed.';
+}
+
 export async function planView(db: Db, state: TournamentState): Promise<PlanView> {
   const draft = (await sqlPlan(db, state.baseline!.planId))!;
   const profiles = new Map((await db.select().from(players)).map((p) => [p.id, p]));
@@ -402,9 +418,15 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
       ? (['upper'] as const)
       : (['upper', 'lower'] as const)
   ).map((division) => {
-    const pools = state.pools
-      .filter((p) => p.division === division)
-      .map((p) => ({
+    const fixedLegacyFinals =
+      !state.settings.poolOrderPolicy &&
+      !rollingFinals(state) &&
+      state.baseline!.structure !== 'round_robin' &&
+      state.brackets.some((bracket) => bracket.division === division);
+    const divisionPools = state.pools.filter((p) => p.division === division);
+    const pools = divisionPools.map((p) => {
+      const orderLockedReason = worksheetOrderLock(state, p, fixedLegacyFinals);
+      return {
         poolIndex: p.index,
         label: poolLabel(p.index),
         placementRevision: String(p.revision),
@@ -412,11 +434,11 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
         rulingOptions: p.qualifierRoster
           ? p.qualifierDecision?.groups.flatMap((group) => group.map(() => group))
           : undefined,
-        orderLockedReason:
-          p.qualifierRoster && !p.qualifierDecision && poolFinalsConsumed(state, p.id)
-            ? 'Finals already use this pool order. Called or played opponents and report history stay fixed.'
-            : undefined,
-        orderStatus: poolOrderStatus(state, p),
+        orderLockedReason,
+        orderStatus:
+          fixedLegacyFinals && orderLockedReason && !p.order
+            ? undefined
+            : poolOrderStatus(state, p),
         matchRevisions: state.matches
           .filter((m) => m.poolId === p.id)
           .map((m) => ({ id: m.id, revision: m.revision })),
@@ -432,14 +454,22 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
             withdrawn: e.withdrawn,
           };
         }),
-      }));
-    const ordered = state.pools.filter((p) => p.division === division).every((p) => p.order);
-    const finishers = pools.flatMap((p) =>
-      p.members
-        .filter((m) => (p.qualifierRoster ? p.qualifierRoster.includes(m.playerId) : !m.withdrawn))
-        .sort((a, b) => a.place! - b.place!)
-        .map((m, i) => ({ playerId: m.playerId, poolIndex: p.poolIndex, place: i + 1 })),
-    );
+      };
+    });
+    const canPreview =
+      !fixedLegacyFinals &&
+      state.baseline!.structure !== 'round_robin' &&
+      divisionPools.every((p) => p.order);
+    const finishers = canPreview
+      ? pools.flatMap((p) =>
+          p.members
+            .filter((m) =>
+              p.qualifierRoster ? p.qualifierRoster.includes(m.playerId) : !m.withdrawn,
+            )
+            .sort((a, b) => a.place! - b.place!)
+            .map((m, i) => ({ playerId: m.playerId, poolIndex: p.poolIndex, place: i + 1 })),
+        )
+      : [];
     const consolation = buildFormatFinals(
       state.baseline!.structure,
       finishers,
@@ -451,23 +481,18 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
       size: entries.filter((e) => e.assignedDivision === division).length,
       poolCount: pools.length,
       pools,
-      consolation:
-        state.baseline!.structure !== 'round_robin' && ordered && consolation.length
-          ? seedPoolFinishers(consolation)
-          : null,
-      championship:
-        state.baseline!.structure !== 'round_robin' && ordered
-          ? buildFormatFinals(
-              state.baseline!.structure,
-              finishers,
-              'main',
-              state.baseline!.structureOptions,
-            ).map((q) => ({
-              playerId: q.playerId,
-              name: entries.find((e) => e.playerId === q.playerId)!.publicName,
-              label: q.label,
-            }))
-          : [],
+      ...(fixedLegacyFinals ? { fixedLegacyFinals } : {}),
+      consolation: consolation.length ? seedPoolFinishers(consolation) : null,
+      championship: buildFormatFinals(
+        state.baseline!.structure,
+        finishers,
+        'main',
+        state.baseline!.structureOptions,
+      ).map((q) => ({
+        playerId: q.playerId,
+        name: entries.find((e) => e.playerId === q.playerId)!.publicName,
+        label: q.label,
+      })),
     };
   });
   const event = await eventView(db, state);

@@ -4,7 +4,11 @@ import { buildRoundRobin } from '@smashclub/tournament-formats';
 import { hash, requireFact, resolved, stableId, unconfirmedCall } from './facts';
 import { advance } from './brackets';
 import { qualifierFieldFrozen } from './qualifiers';
-import { hasLegacyQualifier, legacyPendingRosterMessage } from './legacyFinalQualifiers';
+import {
+  hasFixedLegacyPoolQualifiers,
+  hasLegacyQualifier,
+  legacyPendingRosterMessage,
+} from './legacyFinalQualifiers';
 import type { CommandEnvelope, TournamentState, Match } from './schemas';
 
 type Input = Extract<CommandEnvelope['command'], { kind: 'attendance' }>;
@@ -164,7 +168,11 @@ export function applyAttendance(state: TournamentState, envelope: CommandEnvelop
       m.stationId = null;
       m.blockedReason = 'Player withdrawn: awaiting organiser forfeit decision';
     }
-    if (pool && (!state.settings.poolOrderPolicy || !qualifierFieldFrozen(state, pool.division))) {
+    if (
+      pool &&
+      !hasFixedLegacyPoolQualifiers(state, pool) &&
+      (!state.settings.poolOrderPolicy || !qualifierFieldFrozen(state, pool.division))
+    ) {
       pool.order = null;
       pool.revision++;
     }

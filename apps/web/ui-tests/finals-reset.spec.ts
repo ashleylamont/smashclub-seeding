@@ -2,6 +2,8 @@ import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import type { Command, Desk } from '../src/pages/admin/dispatchTypes';
 import type { trpc } from '../src/lib/trpc';
+import type { EventPlanView } from '../src/lib/apiTypes';
+import { chooseOption } from '../test-support/controls';
 import { mockEvent, PLAN_ID, ready } from './fixtures';
 
 type StrengthPreview = Extract<
@@ -9,6 +11,165 @@ type StrengthPreview = Extract<
   { seedPolicy: 'pool_place_whr_v1' }
 >;
 const callIssue = 'Return untaken finals calls before resetting their draw.';
+
+for (const theme of ['dark', 'light'] as const)
+  for (const width of [390, 1440])
+    test(`${theme} ${width}px legacy worksheet keeps confirmed places after a withdrawal`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const { responses, unexpected } = await mockEvent(page, { role: 'admin' });
+      const names = [
+        'Alexandria with a long tournament alias from Western Sydney',
+        'Beatrice',
+        'Charlie',
+        'Drew',
+      ];
+      const view: EventPlanView = {
+        plan: {
+          id: PLAN_ID,
+          name: 'Nemesis · Legacy finals',
+          eventDate: '2026-10-05T08:00:00Z',
+          slugPrefix: null,
+          status: 'underway',
+          softLockedAt: '2026-10-05T08:00:00Z',
+          softLockedBy: null,
+          bracketMode: 'native',
+          historicalAdoption: null,
+          upperTargetSize: null,
+          poolSize: 4,
+          rankingSnapshotAt: null,
+          createdAt: '2026-10-04T00:00:00Z',
+        },
+        entries: names.map((name, index) => ({
+          id: `entry-${index}`,
+          sourceLineNumber: index + 1,
+          rawInput: name,
+          cleanedName: name,
+          companyCode: null,
+          playerId: `player-${index}`,
+          playerName: name,
+          publicName: name,
+          withdrawn: index === 0,
+          playerStatus: 'active',
+          resolutionMethod: 'manual',
+          divisionPreference: 'auto',
+          assignedDivision: 'upper',
+          snapshotRank: null,
+          snapshotScore: null,
+          divisionSeed: index + 1,
+          currentRank: null,
+          currentScore: null,
+          lastPlayedDate: null,
+          candidates: [],
+        })),
+        divisions: [
+          {
+            division: 'upper',
+            size: names.length,
+            poolCount: 1,
+            fixedLegacyFinals: true,
+            championship: [],
+            consolation: null,
+            pools: [
+              {
+                poolIndex: 0,
+                label: 'A',
+                orderLockedReason:
+                  'The finals draw is in use. Confirmed places stay recorded after withdrawals.',
+                orderStatus: {
+                  status: 'manual',
+                  reason: 'Finishing order confirmed by an organiser.',
+                },
+                members: names.map((name, index) => ({
+                  entryId: `entry-${index}`,
+                  playerId: `player-${index}`,
+                  name,
+                  seed: index + 1,
+                  place: index + 1,
+                  snapshotRank: null,
+                  withdrawn: index === 0,
+                })),
+              },
+            ],
+          },
+        ],
+        brackets: [],
+        issues: { blocking: [], warnings: [] },
+      };
+      responses['admin.eventPlanner.plan'] = view;
+      await page.goto(`/admin/event-planner?plan=${PLAN_ID}&step=pools`);
+      const pool = page.locator('.pool-card').filter({ hasText: 'Pool A' });
+      const withdrawn = pool.getByRole('listitem').filter({ hasText: names[0]! });
+      await expect(withdrawn).toContainText('Withdrawn');
+      await expect(withdrawn).toContainText('1st');
+      await expect(pool.getByRole('combobox')).toHaveCount(0);
+      await expect(pool.getByRole('button', { name: 'Confirm pool' })).toHaveCount(0);
+      await expect(pool.getByText('Finishing order confirmed by an organiser.')).toBeVisible();
+      await expect(pool.getByText(/Confirmed places stay recorded/)).toBeVisible();
+      await expect(page.getByText(/Resolve ties using the event rules/)).toHaveCount(0);
+      await expect(page.getByText('Championship qualifiers', { exact: true })).toHaveCount(0);
+      await expect(page.getByText('Consolation draw', { exact: true })).toHaveCount(0);
+      await expect(page.getByText(/excluded from advancement/)).toHaveCount(0);
+      const deskLink = page.getByRole('link', { name: 'event desk', exact: true });
+      await expect(deskLink).toHaveAttribute('href', `/admin/event-operations?plan=${PLAN_ID}`);
+      await deskLink.focus();
+      await page.keyboard.press('Shift+Tab');
+      await page.keyboard.press('Tab');
+      await expect(deskLink).toBeFocused();
+      await ready(page);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+      await testInfo.attach('legacy-pool-worksheet', {
+        body: await page.screenshot({ fullPage: true }),
+        contentType: 'image/png',
+      });
+      if (theme === 'dark' && width === 390) {
+        const upper = view.divisions[0]!;
+        const fixed = upper.pools[0]!;
+        const extraPool = (label: string, poolIndex: number) => ({
+          label,
+          poolIndex,
+          members: fixed.members.map((member) => ({
+            ...member,
+            entryId: `${label}-${member.entryId}`,
+            playerId: `${label}-${member.playerId}`,
+            name: `${member.name} ${label}`,
+            withdrawn: false,
+            place: null,
+          })),
+        });
+        const pending = extraPool('B', 1);
+        const missing = extraPool('C', 2);
+        upper.pools.push(pending, {
+          ...missing,
+          orderLockedReason:
+            'The confirmed order is missing. This worksheet cannot restore it after finals used it.',
+        });
+        upper.poolCount = upper.pools.length;
+        upper.size = upper.pools.flatMap(({ members }) => members).length;
+        await page.reload();
+        await expect(page.getByText(/Resolve ties using the event rules/)).toBeVisible();
+        const pendingCard = page.locator('.pool-card').filter({ hasText: 'Pool B' });
+        const missingCard = page.locator('.pool-card').filter({ hasText: 'Pool C' });
+        await expect(pool.getByRole('combobox')).toHaveCount(0);
+        await expect(missingCard.getByText(/The confirmed order is missing/)).toBeVisible();
+        await expect(missingCard.getByRole('combobox')).toHaveCount(0);
+        await expect(missingCard.getByRole('button', { name: 'Confirm pool' })).toHaveCount(0);
+        const confirm = pendingCard.getByRole('button', { name: 'Confirm pool' });
+        await expect(confirm).toBeDisabled();
+        for (const [i, place] of ['1st', '2nd', '3rd', '4th'].entries())
+          await chooseOption(
+            pendingCard.getByRole('combobox', { name: `${place} place in pool B` }),
+            pending.members[i]!.playerId,
+          );
+        await expect(confirm).toBeEnabled();
+      }
+      expect(unexpected).toEqual([]);
+    });
 
 for (const theme of ['dark', 'light'] as const)
   for (const width of [390, 1440])
