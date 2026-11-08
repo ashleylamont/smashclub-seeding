@@ -79,7 +79,11 @@ describe('reviewed native finals slot replay on PostgreSQL', () => {
     await eventOps.guests.configure({ planId, enabled: true, showOnOverlay: false });
     const invitation = await eventOps.guests.invitation({ planId });
     const guest = await publicApi.eventOps.guests.redeem({ planId, token: invitation!.token });
-    const guestInput = { planId, sessionToken: guest.sessionToken, ...score(actual, alice) };
+    const guestInput = {
+      planId,
+      sessionToken: guest.sessionToken,
+      ...fixture.score(actual, alice),
+    };
     const guestReport = await publicApi.eventOps.guests.submit(guestInput);
     expect(guestReport.status).toBe('approved');
 
@@ -408,7 +412,9 @@ describe('reviewed native finals slot replay on PostgreSQL', () => {
     await expect(send(reviewedCommand('0'.repeat(64)))).rejects.toThrow(/more than one/);
     expect(await state()).toEqual(before);
   });
+});
 
+describe('reciprocal finals routes on PostgreSQL', () => {
   it('atomically swaps championship and untouched consolation entrants with no duplicate route', async () => {
     const context = await fixture.prepare({ consolation: true });
     const {
@@ -743,7 +749,9 @@ describe('reviewed native finals slot replay on PostgreSQL', () => {
     ).rejects.toThrow(/without a bye/);
     expect(await state()).toEqual(before);
   });
+});
 
+describe('single finals replay archives on PostgreSQL', () => {
   it('preserves archived actual play when all active matches in that division are unplayed, and rates both doubles sets', async () => {
     const context = await fixture.prepare({ doubles: true, substituteBeforePlay: true });
     const {

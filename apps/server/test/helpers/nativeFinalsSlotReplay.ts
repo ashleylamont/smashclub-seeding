@@ -106,7 +106,12 @@ export function nativeFinalsSlotReplayFixture(
     };
   }
 
-  async function prepare({ consolation = false, doubles = false, consolationBye = false } = {}) {
+  async function prepare({
+    consolation = false,
+    doubles = false,
+    consolationBye = false,
+    substituteBeforePlay = false,
+  } = {}) {
     const planId = doubles ? await draftDoubles(consolation) : await seedNativeDraft(pg.db);
     if (!doubles)
       await pg.db

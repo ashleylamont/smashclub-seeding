@@ -292,9 +292,9 @@ export function replayFinalsSlot(
     ...poolOrderEvidence(state, pool, envelope, poolMatches),
   };
   updateQualifierSlot(bracket, change);
-  const companionEvidence = companion
-    ? replaceConsolationPairing(state, envelope, companion, basis)
-    : undefined;
+  const replayEvidence = companion
+    ? { finalsReplayCompanion: replaceConsolationPairing(state, envelope, companion, basis) }
+    : {};
 
   const replacementMatchId = stableId(`${envelope.id}:slot-replay:${original.id}`);
   state.supersededPlayedSets = [
@@ -351,7 +351,7 @@ export function replayFinalsSlot(
     { ...command, outcome: 'played' },
     corrected.winnerId!,
   );
-  return { reportId, companionEvidence };
+  return { reportId, ...replayEvidence };
 }
 
 function updateQualifierSlot(

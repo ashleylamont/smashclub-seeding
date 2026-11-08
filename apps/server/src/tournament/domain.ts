@@ -225,7 +225,7 @@ export function decide(
   const basis: Record<string, number> = {};
   let reportId: string | null = null;
   let attendanceEffect: TournamentDecision['receipt']['attendanceEffect'];
-  let finalsReplayCompanion: TournamentDecision['finalsReplayCompanion'];
+  let replayEvidence: Pick<TournamentDecision, 'finalsReplayCompanion'> = {};
   switch (command.kind) {
     case 'broadcastSides':
       changeBroadcastSides(next, command, basis);
@@ -238,9 +238,14 @@ export function decide(
       break;
     case 'replayFinalsSlotV1':
     case 'replayFinalsRoutesV2': {
-      const result = replayFinalsSlot(next, envelope, command, basis);
-      reportId = result.reportId;
-      finalsReplayCompanion = result.companionEvidence;
+      const { reportId: replayReportId, ...evidence } = replayFinalsSlot(
+        next,
+        envelope,
+        command,
+        basis,
+      );
+      reportId = replayReportId;
+      replayEvidence = evidence;
       break;
     }
     case 'review': {
@@ -388,7 +393,7 @@ export function decide(
     after,
     receiptKey: key,
     command,
-    ...(finalsReplayCompanion && { finalsReplayCompanion }),
+    ...replayEvidence,
     source: envelope.operator ? 'operator' : envelope.guest ? 'guest' : 'attendee',
     correctionOf: correctedScoreCommand(previous, command),
     causation: [

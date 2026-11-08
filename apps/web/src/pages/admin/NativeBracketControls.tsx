@@ -212,13 +212,13 @@ export function NativeBracketControls({
                       <StrengthFinalsReview
                         seeding={bracket.strengthSeeding}
                         name={name}
-                        replayed={Boolean(
-                          'supersededPlayedSets' in data &&
-                          data.supersededPlayedSets?.some(
-                            (set) =>
-                              set.division === bracket.division && set.stage === bracket.stage,
-                          ),
-                        )}
+                        historical={
+                          'alreadyDrawn' in bracket &&
+                          bracket.alreadyDrawn &&
+                          bracket.strengthSeeding.seeds.some(
+                            ({ playerId }) => !bracket.entrantIds.includes(playerId),
+                          )
+                        }
                       />
                     )}
                 </div>
