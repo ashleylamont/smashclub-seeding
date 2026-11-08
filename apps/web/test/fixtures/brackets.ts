@@ -1,5 +1,4 @@
-import { buildDoubleEliminationTree } from '../../../../packages/engine/src/tournament/doubleElimination';
-import { buildEliminationTree } from '../../../../packages/engine/src/tournament/elimination';
+import { buildDoubleEliminationTree, buildEliminationTree } from '@smashclub/tournament-formats';
 import type { LiveMatch } from '../../src/lib/eventDisplay';
 
 export const TEAM_ALIAS =

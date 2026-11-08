@@ -4,8 +4,8 @@ import {
   seedFinalistsByStrength,
   seedPoolFinishers,
   standardBracketOrder,
-} from '../src/tournament/advancement';
-import { selectFormatFinalists } from '../src/tournament/structure';
+} from '../src/advancement';
+import { selectFormatFinalists } from '../src/structure';
 
 const strength = [
   [1600, 1900, 1500],

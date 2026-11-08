@@ -1,7 +1,7 @@
 import { isKnockout } from '@smashclub/shared';
 import { instantiateElimination } from './structureAdapter';
 import { advance } from './brackets';
-import { compileTournament } from '@smashclub/engine';
+import { compileTournament } from '@smashclub/tournament-formats';
 import { eq } from 'drizzle-orm';
 import {
   eventPlans,

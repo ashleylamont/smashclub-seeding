@@ -1,4 +1,4 @@
-import type { StructureMatch } from '@smashclub/engine';
+import type { StructureMatch } from '@smashclub/tournament-formats';
 import { stableId } from './facts';
 import { sourceDescriptor } from './qualifiers';
 import type { Match, QualifierSlot } from './schemas';

@@ -1,4 +1,4 @@
-import { standardBracketOrder } from '@smashclub/engine';
+import { standardBracketOrder } from '@smashclub/tournament-formats';
 
 /** The seed geometry used by native SQL brackets, including padded byes. */
 export function nativeBracketDraw(entrantIds: readonly string[]) {

@@ -11,7 +11,7 @@ import { captureBaseline } from '../src/tournament/domain';
 import { envelope, pureBaseline, nativeAdmin } from './helpers/nativeLiveFixture';
 import { eventPlannerRouter } from '../src/trpc/routers/eventPlanner';
 import type { TrpcContext } from '../src/trpc/trpc';
-import { compileTournament, type TournamentSlot } from '@smashclub/engine';
+import { compileTournament, type TournamentSlot } from '@smashclub/tournament-formats';
 
 const options: ProjectionInput = {
   entrantCount: 16,

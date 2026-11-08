@@ -1,4 +1,4 @@
-import { standardBracketOrder } from '@smashclub/engine';
+import { standardBracketOrder } from '@smashclub/tournament-formats';
 import { nativeBracketDraw } from '../event-operations/nativeBracketDraw';
 import { requireFact, resolved } from './facts';
 import { qualifierDependencies, qualifierKey, rollingFinals } from './qualifiers';

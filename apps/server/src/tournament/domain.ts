@@ -4,7 +4,7 @@ import { confirmPoolPlacements } from './poolOrders';
 import { updateResources, sharedDispatch } from './dispatch';
 import { validateKnockoutBaseline } from './structureValidation';
 import { isKnockout, isSinglePool } from '@smashclub/shared';
-import { buildRoundRobin } from '@smashclub/engine';
+import { buildRoundRobin } from '@smashclub/tournament-formats';
 import { retireEvent } from './retirementDecision';
 import { sealResults } from './results';
 import { memberIds, changeAvailability } from './entrants';

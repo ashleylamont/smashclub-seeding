@@ -1,13 +1,12 @@
+import { DISPLAY_CENTRE, NATURAL_TO_DISPLAY } from '@smashclub/engine';
 import {
-  DISPLAY_CENTRE,
   FINALS_POOL_PLACE_COST,
-  NATURAL_TO_DISPLAY,
   poolRematchRounds,
   seedFinalistsByStrength,
   seedPoolFinishers,
   selectFormatFinalists,
   type ConsolationBracket,
-} from '@smashclub/engine';
+} from '@smashclub/tournament-formats';
 import { defaultRatingSettings, finalsRoles } from '@smashclub/shared';
 import { hash, requireFact } from './facts';
 import { qualificationPlaces, rollingFinals, sourceDescriptor } from './qualifiers';

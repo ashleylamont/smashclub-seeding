@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { buildRoundRobin } from '@smashclub/engine';
+import { buildRoundRobin } from '@smashclub/tournament-formats';
 import { captureBaseline, decide, hash, reduceDecision, stableId } from '../src/tournament/domain';
 import { Baseline, Decision, LiveState } from '../src/tournament/schemas';
 import { bracketViews, matchRows } from '../src/tournament/views';

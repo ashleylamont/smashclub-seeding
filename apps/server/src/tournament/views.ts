@@ -1,4 +1,3 @@
-import { poolLabel } from '../event-planner/pools';
 import { poolFinalsConsumed } from './qualifiers';
 import { legacyQualifierSlots } from './legacyFinalQualifiers';
 import { matchNames } from './matchNames';
@@ -11,7 +10,12 @@ import {
   publicSettings,
   sharedDispatch,
 } from './dispatch';
-import { eliminationStandings, buildFormatFinals, seedPoolFinishers } from '@smashclub/engine';
+import {
+  eliminationStandings,
+  buildFormatFinals,
+  seedPoolFinishers,
+  poolLabel,
+} from '@smashclub/tournament-formats';
 import { available, memberIds, publicEntrantNames } from './entrants';
 import { asc, inArray } from 'drizzle-orm';
 import { players, playerCharacters, tournaments, type Db, type eventMatches } from '@smashclub/db';

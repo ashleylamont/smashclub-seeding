@@ -3,7 +3,7 @@ import { drawStrengthFinals } from './strengthFinals';
 import { rollingFinals } from './qualifiers';
 import { finalsRoles, isKnockout } from '@smashclub/shared';
 import { instantiateElimination } from './structureAdapter';
-import { buildFormatFinals, buildEliminationTree } from '@smashclub/engine';
+import { buildFormatFinals, buildEliminationTree } from '@smashclub/tournament-formats';
 import { requireFact, resolved, stableId } from './facts';
 import type { CommandEnvelope, TournamentState } from './schemas';
 

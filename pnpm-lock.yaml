@@ -55,6 +55,9 @@ importers:
       '@smashclub/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@smashclub/tournament-formats':
+        specifier: workspace:*
+        version: link:../../packages/tournament-formats
       '@trpc/server':
         specifier: ^11.0.0
         version: 11.18.0(typescript@5.9.3)
@@ -183,6 +186,9 @@ importers:
       '@smashclub/server':
         specifier: workspace:*
         version: link:../server
+      '@smashclub/tournament-formats':
+        specifier: workspace:*
+        version: link:../../packages/tournament-formats
       '@types/node':
         specifier: ^24.12.0
         version: 24.13.3
@@ -248,6 +254,16 @@ importers:
       zod:
         specifier: ^4.0.0
         version: 4.4.3
+    devDependencies:
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
+
+  packages/tournament-formats:
+    dependencies:
+      '@smashclub/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       typescript:
         specifier: ~5.9.3

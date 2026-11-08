@@ -23,6 +23,7 @@
     "@smashclub/db": "workspace:*",
     "@smashclub/engine": "workspace:*",
     "@smashclub/shared": "workspace:*",
+    "@smashclub/tournament-formats": "workspace:*",
     "@trpc/server": "^11.0.0",
     "better-auth": "^1.6.25",
     "croner": "^9.0.0",

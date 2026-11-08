@@ -1,4 +1,4 @@
-import { buildRoundRobin } from '@smashclub/engine';
+import { buildRoundRobin } from '@smashclub/tournament-formats';
 import { eq } from 'drizzle-orm';
 import {
   eventMatches,

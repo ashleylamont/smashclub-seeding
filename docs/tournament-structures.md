@@ -5,17 +5,18 @@ Nemesis treats a structure as a deterministic transformation:
 ```text
 ranked entrants + division assignments + structure + options
                          ↓
-                  pure engine compilation
+                  pure format compilation
                          ↓
        stages + participant sources + matches + dependencies + order
                          ↓
        planner / preview / live decisions / queues / displays / exports
 ```
 
-`packages/engine/src/tournament/` owns pool allocation, round-robin pairing,
-qualification, rematch-aware finals seeding, and elimination trees. It has no
-database, server, React, station, clock, or provider dependency. The existing
-planner imports re-export those rules for compatibility.
+The private `@smashclub/tournament-formats` workspace owns pool allocation,
+round-robin pairing, qualification, rematch-aware finals seeding, elimination
+standings, and elimination trees. It uses browser-safe schemas from
+`@smashclub/shared`. The server owns roster selection, frozen ratings, station
+assignment, persistence, and provider adapters.
 
 ## Contract
 
@@ -109,11 +110,10 @@ The existing implementation had a sound foundation: deterministic algorithms,
 explicit pool orders, and durable decisions retaining actual pairings. Its main
 architectural weakness was where those rules lived and how they were duplicated.
 
-- Pure allocation and advancement rules lived inside the server planner. They
-  now live in the engine, with no dependencies on their consumers.
-- The preview and live finals independently built elimination trees. Both now
-  use the engine tree builders and qualification/seeding functions. New extended
-  native draws consume the compiled graph directly at the lock boundary.
+- Pure allocation and advancement rules originally lived inside the server
+  planner. The format workspace now exposes them to the planner and live code.
+- The preview and live finals share tree builders, qualification, and seeding.
+  New extended native draws consume the compiled graph at the lock boundary.
 - Extended native pool draws used nested pairs while the preview used circle
   rounds. Both now use the same round-robin generator. New live draws retain
   chosen round metadata; queues use it instead of regenerating a different order
@@ -142,9 +142,24 @@ pairings in Act. A full predetermined bracket would falsely imply that future
 opponents are already known. Avoid building a general tournament scripting
 language until these concrete stage primitives need it.
 
+## Workspace dependencies
+
+| Before extraction | After extraction |
+| --- | --- |
+| `engine` exported tournament rules alongside WHR, identity, recap and provider code. | `tournament-formats` depends on `shared`. `engine` retains its own `shared` dependency. |
+| The planner used both `engine` imports and local compatibility re-exports. Live generation, dispatch, and publication also imported `engine`. | The server declares a runtime dependency on `tournament-formats`. Its preview and live adapters import the package directly. The server still supplies frozen rating values and persists the chosen draw. |
+| Web bracket test fixtures deep-imported two `engine` tree builders. | Web declares a development dependency on `tournament-formats` and uses its public workspace entry point in the fixture. |
+| `rank-eval` and `challonge-dump` consumed `engine`. | Both continue to consume `engine`. `import-registry` inherits the server dependency through its existing workspace link. |
+
+The `tournament-formats` Vitest project contains graph, elimination, pool,
+advancement, and frozen-strength seeding fixtures. The provider module bracket
+suite, rating and result ordering assertions, and server replay and publication
+checks stay in their original projects. CI reports proposed project coverage
+from the workspace graph and continues running the full unit and typecheck jobs.
+
 ## Verification
 
-Engine tests cover pairing uniqueness, repeated meetings, stage dependencies,
+Format tests cover pairing uniqueness, repeated meetings, stage dependencies,
 large fields, and every possible winner path for small single/double elimination
 draws. Wider seeded draws check topology, loss counts and conditional finals.
 Projection tests independently check capacity, recovery and participant overlap.

@@ -1,4 +1,4 @@
-import { eliminationStandings } from '@smashclub/engine';
+import { eliminationStandings } from '@smashclub/tournament-formats';
 import { matchNames } from './matchNames';
 import { memberIds } from './entrants';
 import { eq, inArray, isNull, sql } from 'drizzle-orm';
