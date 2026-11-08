@@ -22,6 +22,34 @@ import { recentResultCount } from '../lib/broadcastSidebar';
 import { useGuestClock } from '../lib/guestReporting';
 
 import { liveSections, overlayGeometry, type LiveMatch } from '../lib/eventDisplay';
+/** Keep the QR and results in frame when the full event name needs more room. */
+function fitBroadcastRail(rail: HTMLElement | null) {
+  if (!rail) return;
+
+  const fit = () => {
+    const last = rail.lastElementChild;
+    if (!last) return;
+    rail.classList.remove('is-compact');
+    const { bottom } = rail.getBoundingClientRect();
+    const padding = parseFloat(getComputedStyle(rail).paddingBottom);
+    rail.classList.toggle('is-compact', last.getBoundingClientRect().bottom > bottom - padding + 1);
+  };
+
+  fit();
+  // Observe the fixed frame and content updates. Watching the fitted children
+  // would also react to the size changes that compact mode itself produces.
+  const resize = new ResizeObserver(fit);
+  resize.observe(rail, { box: 'border-box' });
+  const content = new MutationObserver(fit);
+  content.observe(rail, { childList: true, characterData: true, subtree: true });
+  document.fonts.addEventListener('loadingdone', fit);
+  return () => {
+    resize.disconnect();
+    content.disconnect();
+    document.fonts.removeEventListener('loadingdone', fit);
+  };
+}
+
 export function EventLivePage() {
   return <PlayerEventAlias />;
 }
@@ -129,7 +157,8 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
       ? undefined
       : sections.playing[0];
   const displayPlayers = broadcastPlayers(data, onStream);
-  const showName = data.plan.name.split(' · ')[0]!;
+  const [showName, ...editionParts] = data.plan.name.split(' · ');
+  const edition = editionParts.join(' · ');
   const intermission = presentation === 'progress' || (presentation === 'auto' && !onStream);
   if (overlay)
     return (
@@ -137,7 +166,10 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
         className={`event-display event-overlay${intermission ? ' is-intermission' : ''}`}
         style={variables}
       >
-        <aside className={`broadcast-rail${guestQr ? ' has-guest-pass' : ''}`}>
+        <aside
+          ref={fitBroadcastRail}
+          className={`broadcast-rail${guestQr ? ' has-guest-pass' : ''}`}
+        >
           <div className="broadcast-club">
             <NemesisMark />
             <span>
@@ -148,11 +180,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
           </div>
           <div className="broadcast-identity">
             <h1 title={data.plan.name}>{showName}</h1>
-            {data.plan.name.includes(' · ') && (
-              <span className="broadcast-edition">
-                {data.plan.name.split(' · ').slice(1).join(' · ')}
-              </span>
-            )}
+            {edition && <span className="broadcast-edition">{edition}</span>}
           </div>
           <BroadcastRecentSets
             matches={visibleMatches}

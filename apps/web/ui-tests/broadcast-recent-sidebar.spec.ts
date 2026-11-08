@@ -139,6 +139,93 @@ for (const [width, height] of [
       expect(fixture.unexpected).toEqual([]);
     });
 
+for (const [width, height] of [
+  [1280, 720],
+  [1920, 1080],
+]) {
+  for (const theme of ['dark', 'light']) {
+    test(`${width}x${height} crowded OBS rail fits the full title, recent results and QR in ${theme}`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height });
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const fixture = await recentFixture(page, true);
+      const name =
+        'Smash Club South East Queensland Championships and Community Invitational Grand Finals';
+      const edition = 'November tournament night';
+      fixture.snapshot.plan.name = `${name} · ${edition}`;
+      fixture.forfeit.player1Name = 'Cody with an exceptionally long tournament alias';
+      fixture.forfeit.player2Name = 'Drew and their tournament doubles partner';
+      await page.goto(`/overlay/${PLAN_ID}?controls=0`);
+
+      const rail = page.locator('.broadcast-rail');
+      const heading = rail.getByRole('heading', { name, exact: true });
+      const results = rail.getByRole('region', { name: 'Recent resolved sets' });
+      const qr = rail.getByRole('img', { name: 'Scan to report a match score' });
+      await expect(heading).toBeVisible();
+      await expect(rail.getByText(edition, { exact: true })).toBeVisible();
+      await expect(results.locator('article')).toHaveCount(2);
+      await expect(results.getByText('Forfeit', { exact: true })).toBeVisible();
+      await expect(
+        results.locator('.is-winner').getByText('Advances', { exact: true }),
+      ).toBeVisible();
+      await expect(results.locator('article').first().locator('b')).toHaveText(['2', '1']);
+      await expect(qr).toBeVisible();
+      await expect(page.locator('.broadcast-topline')).toContainText('nemesis.ashl.dev');
+      await ready(page);
+      await expect
+        .poll(() => rail.evaluate((element) => element.scrollHeight - element.clientHeight))
+        .toBe(0);
+      const titleBox = (await heading.boundingBox())!;
+      const resultsBox = (await results.boundingBox())!;
+      const qrBox = (await qr.boundingBox())!;
+      const capture = (await page.getByLabel('Transparent game capture area').boundingBox())!;
+      expect(titleBox.y + titleBox.height).toBeLessThan(resultsBox.y);
+      expect(resultsBox.y + resultsBox.height).toBeLessThan(qrBox.y);
+      expect(qrBox.y + qrBox.height).toBeLessThan(height);
+      expect(qrBox.x + qrBox.width).toBeLessThan(capture.x);
+      expect(qrBox.width).toBeGreaterThan(120);
+      expect(
+        await heading.evaluate((element) => parseFloat(getComputedStyle(element).fontSize)),
+      ).toBeGreaterThanOrEqual(18);
+      expect(
+        (
+          await new AxeBuilder({ page })
+            .include('.event-overlay')
+            .withTags(['wcag2a', 'wcag2aa'])
+            .analyze()
+        ).violations,
+      ).toEqual([]);
+      await page.screenshot({
+        path: testInfo.outputPath(`long-event-title-${width}-${theme}.png`),
+        omitBackground: true,
+      });
+      expect(fixture.unexpected).toEqual([]);
+    });
+  }
+}
+
+test('a maximum-length unbroken title fits at 720p and after source resize', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  const fixture = await recentFixture(page, true);
+  fixture.snapshot.plan.name = '界'.repeat(120);
+  fixture.forfeit.player1Name = fixture.latest.player1Name;
+  fixture.forfeit.player2Name = fixture.latest.player2Name;
+  await page.goto(`/overlay/${PLAN_ID}?controls=0`);
+  const rail = page.locator('.broadcast-rail');
+  await expect(rail.getByRole('heading')).toHaveText(fixture.snapshot.plan.name);
+  await expect(rail.getByRole('img', { name: 'Scan to report a match score' })).toBeVisible();
+  await ready(page);
+  await expect
+    .poll(() => rail.evaluate((element) => element.scrollHeight - element.clientHeight))
+    .toBe(0);
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await expect
+    .poll(() => rail.evaluate((element) => element.scrollHeight - element.clientHeight))
+    .toBe(0);
+  expect(fixture.unexpected).toEqual([]);
+});
+
 test('corrections update one stable card and only the footer flashes; byes have no fabricated played score', async ({
   page,
 }) => {
