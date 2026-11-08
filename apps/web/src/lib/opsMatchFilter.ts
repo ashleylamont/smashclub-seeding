@@ -1,4 +1,5 @@
 import type { trpc } from './trpc';
+import { linkedFinalCaption } from './linkedFinalCaption';
 
 type DeskMatch = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>['matches'][number];
 export function filterDeskMatches(
@@ -19,6 +20,7 @@ export function filterDeskMatches(
     search: string;
   },
 ) {
+  const term = search.toLowerCase();
   return focusedMatchId
     ? all.filter((match) => match.id === focusedMatchId)
     : (filter === 'ready' ? available : all).filter(
@@ -33,8 +35,9 @@ export function filterDeskMatches(
                 : match.status === filter)) &&
           (poolFilter === 'all' ||
             (match.stage === 'group' && `${match.division}:${match.poolIndex}` === poolFilter)) &&
-          `${match.player1Name} ${match.player2Name} ${match.label}`
+          (`${match.player1Name} ${match.player2Name} ${match.label}`
             .toLowerCase()
-            .includes(search.toLowerCase()),
+            .includes(term) ||
+            linkedFinalCaption(match)?.text.toLowerCase().includes(term)),
       );
 }

@@ -117,6 +117,41 @@ describe('TO bracket backup sheets', () => {
     });
   });
 
+  it('prints linked identifiers under their field heading and preserves fallback and row order', () => {
+    const data = fixture();
+    data.plan.bracketMode = 'challonge';
+    data.brackets = [{ division: 'upper', stage: 'main', slug: 'linked-draw' }];
+    const confirmed = {
+      ...data.matches[0]!,
+      id: 'linked-confirmed',
+      stage: 'main',
+      poolIndex: null,
+      sourceSetId: 'imported-set',
+      sourceKey: 'set:imported-set',
+      label: 'upper main · 10 · Replay 2',
+      status: 'complete',
+      outcome: 'played',
+      score1: 2,
+      score2: 1,
+    };
+    data.matches.push(confirmed, {
+      ...confirmed,
+      id: 'unverified',
+      sourceKey: 'manual-key',
+      label: 'upper main · 2',
+    });
+    const [sheet] = bracketBackupSheets(data);
+    expect(sheet).toMatchObject({
+      title: 'Upper Championship',
+      source: 'Challonge: linked-draw',
+      matches: [
+        { key: 'unverified', label: 'upper main · 2', recorded: '2–1' },
+        { key: 'linked-confirmed', label: '10 · Replay 2', recorded: '2–1' },
+      ],
+    });
+    expect(data.matches[1]?.label).toBe('upper main · 10 · Replay 2');
+  });
+
   it('prints only the configured bracket roles and keeps round captions for unverified names', () => {
     const data = fixture();
     data.plan.structure = 'double_elimination';

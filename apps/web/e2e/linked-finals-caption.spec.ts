@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import type { trpc } from '../src/lib/trpc';
+import { chooseOption } from '../test-support/controls';
 
 type Source = NonNullable<Awaited<ReturnType<typeof trpc.public.tournament.query>>>;
 type Snapshot = Awaited<ReturnType<typeof trpc.eventOps.snapshot.query>>;
@@ -22,7 +23,7 @@ async function write<T = unknown>(
   return (await response.json()).result.data as T;
 }
 
-test('a synced linked final keeps its stored identifier and score in player and OBS captions', async ({
+test('a synced linked final keeps its identifier and score across player, TO, paper and OBS', async ({
   page,
   browser,
   baseURL,
@@ -81,10 +82,49 @@ test('a synced linked final keeps its stored identifier and score in player and 
       label: `upper main · ${imported.identifier}`,
       nativeBracketId: null,
     });
+    const caption = `Upper Championship · ${imported.identifier}`;
+    await page.goto(`/operate/${planId}?view=run`);
+    const run = page.getByRole('tabpanel', { name: 'Run matches' });
+    await chooseOption(run.getByRole('combobox', { name: 'View', exact: true }), 'complete');
+    const search = run.getByRole('textbox', { name: 'Find a player or match' });
+    const toCard = run.locator('article.ops-match').filter({
+      has: page.getByRole('combobox', { name: `Station for ${caption}`, exact: true }),
+    });
+    for (const term of [match.label, caption]) {
+      await search.fill(term);
+      await expect(toCard.getByText(caption, { exact: true })).toBeVisible();
+    }
+    await expect(toCard.locator('.ops-contestant b')).toHaveText([
+      String(match.score1),
+      String(match.score2),
+    ]);
+    await toCard.screenshot({ path: testInfo.outputPath('linked-import-to-card.png') });
+    await run.getByRole('button', { name: 'Pool queues and stations', exact: true }).press('Enter');
+    const trigger = run.getByRole('button', { name: 'Print bracket backup sheets', exact: true });
+    await trigger.press('Enter');
+    const print = page.getByRole('dialog', { name: 'Print bracket backup sheets' });
+    const sheet = print.locator('.bracket-backup-page').filter({
+      has: page.getByRole('heading', { name: 'Upper Championship', exact: true }),
+    });
+    const paperRow = sheet.getByRole('row').filter({
+      has: page.getByRole('cell', { name: imported.identifier!, exact: true }),
+    });
+    await expect(paperRow).toContainText(`Online: ${match.score1}–${match.score2}`);
+    await expect(paperRow).not.toContainText(match.label);
+    await page.emulateMedia({ media: 'print' });
+    await expect(paperRow).toBeVisible();
+    await page.pdf({
+      format: 'A4',
+      preferCSSPageSize: true,
+      path: testInfo.outputPath('linked-bracket-backup.pdf'),
+    });
+    await page.emulateMedia({ media: 'screen' });
+    await print.getByRole('button', { name: 'Close preview', exact: true }).click();
+    await expect(trigger).toBeFocused();
+
     const hub = await viewer.newPage();
     await hub.setViewportSize({ width: 390, height: 844 });
     await hub.goto(`/play/${planId}?match=${match.id}#my-matches`);
-    const caption = `Upper Championship · ${imported.identifier}`;
     const card = hub.locator('article.ops-match').filter({ hasText: caption });
     await expect(card.getByText(caption, { exact: true })).toBeVisible();
     await expect(card).toContainText(`Confirmed result: ${match.score1} – ${match.score2}`);
