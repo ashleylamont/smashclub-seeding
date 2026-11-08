@@ -6,7 +6,7 @@ import { Button } from '../../components/ui/Button';
 import { ScoreFields, type ScoreInputValue } from '../../components/ScoreFields';
 import { trpc } from '../../lib/trpc';
 import { returnUntakenCallMatchIds } from '../../lib/eventErrors';
-import { ScoreCallRecovery, type ScoreCallDesk } from './ScoreCallRecovery';
+import { UntakenCallRecovery, type UntakenCallDesk } from './UntakenCallRecovery';
 import type { Overview } from './dispatchTypes';
 
 type Match = Overview['matches'][number];
@@ -34,7 +34,7 @@ export function MatchScoring({
   match: Match;
   disabled: boolean;
   act: Action;
-  callDesk?: ScoreCallDesk;
+  callDesk?: UntakenCallDesk;
   children: ReactNode;
 }) {
   const confirmAction = useConfirmation();
@@ -292,7 +292,7 @@ export function MatchScoring({
             </>
           )}
           {callDesk && !stale && callConflict?.requestId === requestId && (
-            <ScoreCallRecovery matchIds={callConflict.matchIds} desk={callDesk} />
+            <UntakenCallRecovery matchIds={callConflict.matchIds} desk={callDesk} />
           )}
           <div className="ops-match-actions">
             <Button

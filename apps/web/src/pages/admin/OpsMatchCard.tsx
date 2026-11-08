@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { trpc } from '../../lib/trpc';
 import { MatchScoring } from './OpsMatchScoring';
 import { returnCallControlId } from '../../lib/opsWorkspace';
-import type { ScoreCallDesk } from './ScoreCallRecovery';
+import type { UntakenCallDesk } from './UntakenCallRecovery';
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 type Match = Overview['matches'][number];
 type Action = (work: () => Promise<unknown>, message?: string) => Promise<void>;
@@ -24,7 +24,7 @@ export function MatchCard({
   canStart: boolean;
   native: boolean;
   act: Action;
-  callDesk?: ScoreCallDesk;
+  callDesk?: UntakenCallDesk;
 }) {
   const confirmAction = useConfirmation();
   const eligible = eligibleStations(match, stations);
