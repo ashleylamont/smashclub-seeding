@@ -228,6 +228,14 @@ test('automatic source rotates, pauses, hands off to the selected station and re
   const station = fixture.snapshot.stations[0]!;
   await page.goto(`/overlay/${PLAN_ID}?station=${station.id}&presentation=auto&cycleSeconds=15`);
   const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
+  // An in-flight snapshot can still describe the previous station state after the clock advances.
+  const advanceUntilProgress = (visible: boolean) =>
+    expect
+      .poll(async () => {
+        await page.clock.runFor(2000);
+        return progress.isVisible();
+      })
+      .toBe(visible);
   await expect(progress).toContainText('Page 1 /');
   await page.clock.fastForward(15000);
   await expect(progress).toContainText('Page 2 /');
@@ -240,7 +248,7 @@ test('automatic source rotates, pauses, hands off to the selected station and re
   const match = fixture.snapshot.matches.find((item) => item.player1Id && item.player2Id)!;
   Object.assign(match, { status: 'playing', stationId: station.id });
   Object.assign(station, { currentMatchId: match.id, status: 'occupied' });
-  await page.clock.fastForward(5000);
+  await advanceUntilProgress(false);
   await expect(progress).not.toBeVisible();
   await expect(page.getByRole('region', { name: 'Transparent game capture area' })).toBeVisible();
   await expect(page.getByLabel('Current match')).toContainText(match.player1Name!);
@@ -252,7 +260,7 @@ test('automatic source rotates, pauses, hands off to the selected station and re
     score2: 0,
   });
   Object.assign(station, { currentMatchId: null, status: 'free' });
-  await page.clock.fastForward(5000);
+  await advanceUntilProgress(true);
   await expect(progress).toBeVisible();
   await page.keyboard.press('s');
   const setup = page.getByRole('dialog', { name: 'Display setup', exact: true });
