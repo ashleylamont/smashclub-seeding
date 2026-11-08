@@ -2,6 +2,13 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.9.2
+
+### Patch Changes
+
+- 9 November 2026 · **Fix** · Show the same finals caption in the OBS result flash and recent-results rail for native and linked brackets. [#317](https://github.com/ashleylamont/smashclub-seeding/pull/317) · [build 1d226b6](https://github.com/ashleylamont/smashclub-seeding/commit/1d226b6b6831c95623b0364593f68f074d556654)
+- 9 November 2026 · **Maintenance** · Stabilize the homepage browser test that checks live event discovery after a draw is paused. [#316](https://github.com/ashleylamont/smashclub-seeding/pull/316) · [build 15463b3](https://github.com/ashleylamont/smashclub-seeding/commit/15463b360d8973d11b51aef61c1205c6c4baec80)
+
 ## 0.9.1
 
 ### Patch Changes
