@@ -77,7 +77,7 @@ function matchEffect(state: TournamentState, match: Match, label: string) {
       reason:
         match.outcome === 'played'
           ? 'Played result stays recorded.'
-          : `Recorded ${match.outcome?.replaceAll('_', ' ') ?? 'result'} stays in place. Changing that recorded outcome needs a separate organiser ruling.`,
+          : `Recorded ${match.outcome?.replaceAll('_', ' ') ?? 'result'} stays in place. Changing it needs a separate organiser ruling.`,
     };
   if (match.started)
     return {
@@ -85,8 +85,8 @@ function matchEffect(state: TournamentState, match: Match, label: string) {
       effect: match.status === 'blocked' ? ('ruling' as const) : ('existing' as const),
       reason:
         match.status === 'blocked'
-          ? 'Actual play and the original pairing stay recorded. The held match must be resumed through its TO match controls.'
-          : 'The existing actual-play pairing is retained; attendance restoration does not create a new match or undo its progress.',
+          ? 'Actual play and the original pairing stay recorded. Resume it through the TO match controls.'
+          : 'The original pairing and its progress stay recorded.',
     };
   const reasons = dispatchAvailability(state, match).reasons.filter(
     (reason) => reason.code !== 'capacity_full',
@@ -96,8 +96,7 @@ function matchEffect(state: TournamentState, match: Match, label: string) {
   return {
     ...base,
     effect: 'resumable' as const,
-    reason:
-      'This unplayed pairing can resume, subject to the usual station, capacity and call checks.',
+    reason: 'Can resume after the usual station, capacity and call checks.',
   };
 }
 
@@ -144,28 +143,27 @@ export function previewRestoration(state: TournamentState, playerId: string, rea
           ? ('frozen_included' as const)
           : ('frozen_excluded' as const),
         reason: frozen.includes(playerId)
-          ? 'The frozen finals field is unchanged. Only existing reserved places can apply; recorded outcomes and used routes remain fixed.'
-          : 'This entrant was excluded when the finals field was frozen. Restoration does not add a finals place, reseed or change the recorded draw.',
+          ? 'The frozen finals field and used routes stay fixed. Only existing reserved places can apply.'
+          : 'This entrant was excluded when the finals field was frozen. The frozen field and existing draw stay fixed.',
       }
     : {
         status: awaitingDraw ? ('unfrozen' as const) : ('fixed_draw' as const),
         reason: awaitingDraw
-          ? 'This entrant is eligible for a future finals draw, subject to the confirmed pool order. Prior results and tie rulings stay recorded.'
-          : 'The existing draw, used qualifiers and recorded outcomes stay fixed. Restoration does not add a finals place or put an eliminated entrant back into the bracket.',
+          ? 'This entrant is eligible for a future finals draw, subject to the confirmed pool order. Prior tie rulings stay recorded.'
+          : 'The existing draw, used qualifiers, finals places and eliminations stay fixed.',
       };
   const waitingMembers = entrant && !available(next.entrants.find((e) => e.id === entrant.id)!);
   return {
     allowed: !issues.length,
     issues,
-    warnings: [
-      'Restoration keeps player/team identity, played results, forfeits, byes and no-contests. It does not reverse a result or repair a downstream draw.',
-      ...(waitingMembers ? ['An entrant or team-member availability hold still applies.'] : []),
-      ...(!effects.some((effect) => effect.effect === 'resumable')
-        ? [
-            'No new match becomes ready from this restoration. Review the waiting matches and retained results below.',
-          ]
-        : []),
-    ],
+    warnings: issues.length
+      ? []
+      : [
+          ...(waitingMembers ? ['An entrant or team-member availability hold still applies.'] : []),
+          ...(!effects.some((effect) => effect.effect === 'resumable')
+            ? ['No matches become ready to call.']
+            : []),
+        ],
     requiresExternalAcknowledgement: false,
     requiresRedistributionApproval: false,
     relocations: [],

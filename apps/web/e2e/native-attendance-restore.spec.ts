@@ -186,9 +186,10 @@ test('a phone TO reviews restoration, handles a stale preview, preserves played/
   const impact = controls.getByRole('region', { name: 'Restoration consequences', exact: true });
   await expect(impact).toContainText('This entrant was excluded when the finals field was frozen');
   await expect(impact).toContainText('Can resume');
-  await expect(impact).toContainText('Result retained');
+  await expect(impact).toContainText('Played result stays recorded.');
+  await expect(impact).toContainText('Recorded forfeit stays in place.');
   await expect(impact).toContainText('separate organiser ruling');
-  await expect(impact).toContainText('Reserved sources stay fixed');
+  await expect(impact).toContainText('Reserved places:');
   await page.screenshot({
     path: testInfo.outputPath('restore-reviewed-impact-phone.png'),
     fullPage: true,
@@ -332,7 +333,14 @@ test('knockout attendance previews use the live match name for withdrawal and re
     const preview = controls.locator('.ops-attendance-preview');
     await expect(preview).toContainText(match.label);
     await expect(preview).not.toContainText('R1 M1');
-    if (action === 'restore') await expect(preview).toContainText('Result retained');
+    if (action === 'restore') {
+      await expect(preview.getByRole('heading', { name: 'Restoration preview' })).toBeVisible();
+      await expect(preview.getByRole('heading', { name: 'Qualification' })).toBeVisible();
+      await expect(preview.getByRole('heading', { name: 'Matches' })).toBeVisible();
+      await expect(preview).toContainText('No matches become ready to call.');
+      await expect(preview).toContainText('Recorded forfeit stays in place.');
+      await expect(preview).not.toContainText('new match(es)');
+    }
     const affected = await query<{ affectedMatches: Pick<Match, 'id' | 'label' | 'status'>[] }>(
       page.request,
       'eventOps.previewAttendance',
