@@ -22,11 +22,17 @@ export type ProgressData = {
   plan: { id: string; name: string; status: string };
   matches: LiveMatch[];
   nativeBrackets: NativeBracketView[];
+  linkedBrackets?: LinkedBracket[];
   pendingFinals?: PublicFinalsField[];
   entrants: { id: string; name: string }[];
 };
 type Pool = ReturnType<typeof poolStandings>[number];
 type Bracket = ProgressData['nativeBrackets'][number];
+type LinkedBracket = {
+  division: 'upper' | 'lower';
+  stage: 'main' | 'consolation';
+  slug: string | null;
+};
 export type ProgressPage =
   | { kind: 'pool'; key: string; pool: Pool; players: Pool['players']; part: number; parts: number }
   | {
@@ -36,6 +42,14 @@ export type ProgressPage =
       lane: ReturnType<typeof liveBracketLanes>[number];
       matches: LiveMatch[];
       roundTitles: string[];
+      part: number;
+      parts: number;
+    }
+  | {
+      kind: 'linked';
+      key: string;
+      bracket: LinkedBracket;
+      matches: LiveMatch[];
       part: number;
       parts: number;
     }
@@ -131,6 +145,27 @@ export function broadcastProgressPages(data: ProgressData): ProgressPage[] {
         });
       });
     }
+  }
+  for (const bracket of data.linkedBrackets ?? []) {
+    if (!bracket.slug) continue;
+    const matches = data.matches.filter(
+      (match) =>
+        match.sourceSetId &&
+        !match.nativeBracketId &&
+        match.division === bracket.division &&
+        match.stage === bracket.stage,
+    );
+    const parts = chunks(matches, 3);
+    parts.forEach((matches, index) =>
+      pages.push({
+        kind: 'linked',
+        key: `linked:${bracket.division}:${bracket.stage}:${index}`,
+        bracket,
+        matches,
+        part: index + 1,
+        parts: parts.length,
+      }),
+    );
   }
   for (const { division, stage, slots } of data.pendingFinals ?? []) {
     const parts = chunks(slots, 4);

@@ -264,6 +264,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
               ...data,
               matches: visibleMatches,
               nativeBrackets: selectedPool ? [] : data.nativeBrackets,
+              linkedBrackets: selectedPool ? [] : data.brackets,
               pendingFinals: selectedPool ? [] : data.pendingFinals,
             }}
             seconds={cycleSeconds}

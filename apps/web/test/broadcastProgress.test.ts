@@ -83,6 +83,49 @@ describe('OBS intermission source choices and bounded pages', () => {
     );
   });
 
+  it('paginates only visible imported matches from each linked scope beside native brackets', () => {
+    const data = fixture(4, false);
+    data.matches[0]!.sourceSetId = 'published-native-set';
+    const linked = (id: string, division: string, stage: string) => ({
+      ...data.matches[0]!,
+      id,
+      division,
+      stage,
+      sourceSetId: `set-${id}`,
+      nativeBracketId: null,
+    });
+    const matches = Array.from({ length: 4 }, (_, index) =>
+      linked(`lower-${index}`, 'lower', 'main'),
+    );
+    const consolation = linked('consolation', 'lower', 'consolation');
+    data.matches.push(...matches, consolation, linked('unlinked', 'upper', 'consolation'), {
+      ...linked('local', 'lower', 'main'),
+      sourceSetId: null,
+    });
+    data.linkedBrackets = [
+      { division: 'upper', stage: 'main', slug: 'published-native-results' },
+      { division: 'lower', stage: 'main', slug: 'linked-main' },
+      { division: 'lower', stage: 'consolation', slug: 'linked-consolation' },
+      { division: 'upper', stage: 'consolation', slug: null },
+    ];
+
+    const pages = broadcastProgressPages(data);
+    expect(pages.some((page) => page.kind === 'bracket')).toBe(true);
+    expect(
+      pages
+        .filter((page) => page.kind === 'linked')
+        .map(({ matches, part, parts }) => ({
+          matches: matches.map(({ id }) => id),
+          part,
+          parts,
+        })),
+    ).toEqual([
+      { matches: ['lower-0', 'lower-1', 'lower-2'], part: 1, parts: 2 },
+      { matches: ['lower-3'], part: 2, parts: 2 },
+      { matches: ['consolation'], part: 1, parts: 1 },
+    ]);
+  });
+
   it('keeps mixed-stage pools, all entrants and actual completed summaries without inventing winners', () => {
     const data = fixture(4);
     const base = data.matches[0]!;

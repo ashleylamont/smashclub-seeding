@@ -4,6 +4,8 @@ import {
   type ProgressData,
   type ProgressPage,
 } from '../lib/broadcastProgress';
+import { liveBracketWinner } from '../lib/eventBracket';
+import { matchParticipantName, matchPresentation } from '../lib/matchPresentation';
 import {
   finalsFieldLabel,
   plannedFinalsSeeding,
@@ -121,6 +123,8 @@ export function BroadcastIntermission({
           <PoolPage page={page} />
         ) : page.kind === 'qualification' ? (
           <QualificationPage page={page} entrants={data.entrants} />
+        ) : page.kind === 'linked' ? (
+          <LinkedBracketPage page={page} />
         ) : page.kind === 'bracket' ? (
           <>
             <div className="intermission-section-heading">
@@ -246,6 +250,69 @@ function PoolPage({ page }: { page: Extract<ProgressPage, { kind: 'pool' }> }) {
               <td>{player.remaining}</td>
             </tr>
           ))}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
+function LinkedBracketPage({ page }: { page: Extract<ProgressPage, { kind: 'linked' }> }) {
+  const heading = `Linked ${finalsFieldLabel(page.bracket)} bracket`;
+  return (
+    <>
+      <div className="intermission-section-heading">
+        <h2>{heading}</h2>
+        <span>
+          Section {page.part} / {page.parts}
+        </span>
+      </div>
+      <table className="intermission-standings intermission-linked" aria-label={heading}>
+        <thead>
+          <tr>
+            <th>Match</th>
+            <th>First entrant</th>
+            <th>Second entrant</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          {page.matches.map((match) => {
+            const presentation = matchPresentation(match);
+            const status =
+              presentation.status ??
+              (match.called
+                ? 'Called'
+                : match.status === 'playing'
+                  ? 'Playing'
+                  : match.status === 'blocked'
+                    ? 'On hold'
+                    : 'Upcoming');
+            return (
+              <tr key={match.id}>
+                <td>{match.label}</td>
+                {([0, 1] as const).map((side) => {
+                  const id = side === 0 ? match.player1Id : match.player2Id;
+                  const name = id ? matchParticipantName(match, side) : '—';
+                  return (
+                    <td key={side}>
+                      {liveBracketWinner(match, id) ? <strong>{name} · Winner</strong> : name}
+                    </td>
+                  );
+                })}
+                <td>
+                  {presentation.kind === 'played' &&
+                  match.score1 !== null &&
+                  match.score2 !== null ? (
+                    <span className="intermission-linked-score">
+                      {match.score1}–{match.score2}
+                    </span>
+                  ) : (
+                    status
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </>
