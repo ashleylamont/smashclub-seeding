@@ -128,12 +128,19 @@ describe('shared dispatch through the application API', () => {
         expectedRevision: match.revision,
         stationId: null,
         expectedResourceRevision: before.settings.resourceRevision,
+        expectedOrdinaryCapacity: before.sharedDispatch!.capacity,
         callOnly: true,
         callLocation: 'Window',
       },
     };
-    await api.eventOps.live.command(request);
-    await api.eventOps.live.command(request);
+    const first = await api.eventOps.live.command(request);
+    expect((await api.eventOps.live.command(request)).receipt).toEqual(first.receipt);
+    await expect(
+      api.eventOps.live.command({
+        ...request,
+        command: { ...request.command, expectedOrdinaryCapacity: 1 },
+      }),
+    ).rejects.toThrow(/request identifier already used/i);
     const unrelated = before.matches.find((m) => m.division !== match.division)!;
     await api.eventOps.reportScore({
       matchId: unrelated.id,

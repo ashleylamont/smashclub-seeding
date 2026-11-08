@@ -52,7 +52,11 @@ Commands are discriminated by `kind`; schemas are in
   draw. Agreeing reports do not apply a second result; disputes require review.
 - Scheduling: `dispatch`, `matchControl`, `resources`, `poolResources`,
   `configurePools`, `station`. Match and resource preconditions protect dispatch;
-  scheduling and placement revisions are distinct.
+  scheduling and placement revisions are distinct. The shared TO desk sends
+  `expectedOrdinaryCapacity` alongside the resource revision for an ordinary call.
+  The decision checks the reviewed capacity setting and exact pairing, then
+  validates current availability and free ordinary capacity. Other dispatch
+  requests continue to check the resource revision.
 - Attendance and policy: `availability`, `attendance`, `reporting`. Attendance
   captures a new entrant's identity facts and applies a reviewed preview.
 - Draw and lifecycle: `placements`, `poolOrders`, `drawFinals`, `resetFinals`,

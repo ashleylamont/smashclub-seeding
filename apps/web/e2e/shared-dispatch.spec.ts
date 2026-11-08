@@ -279,6 +279,43 @@ test('shared queue on a phone: snooze/return, focused scoring, and accessible co
   });
 });
 
+test('ordinary call survives a station rename between the click and command', async ({ page }) => {
+  const { planId, desk } = await night(page, 'Ordinary call with concurrent rename');
+  const { stations } = await query<Overview>(page.request, 'eventOps.overview', { planId });
+  await page.route(
+    (url) => url.pathname === '/api/trpc/eventOps.live.command',
+    async (route) => {
+      const { command } = route.request().postDataJSON()[0];
+      expect(command).toMatchObject({
+        kind: 'dispatch',
+        stationId: null,
+        callOnly: true,
+        expectedOrdinaryCapacity: 1,
+        expectedResourceRevision: expect.any(Number),
+      });
+      await mutate(page.request, 'eventOps.saveStation', {
+        planId,
+        id: stations[0]!.id,
+        name: 'Broadcast station',
+        expectedResourceRevision: command.expectedResourceRevision,
+      });
+      await route.continue();
+    },
+    { times: 1 },
+  );
+  const row = desk.locator('.dispatch-list [data-match-id]').first();
+  const matchId = await row.getAttribute('data-match-id');
+  await row.getByRole('button', { name: 'Call ordinary match' }).press('Enter');
+  await expect(desk.getByText('1 / 1 in use', { exact: true })).toBeVisible();
+  const current = await query<Overview>(page.request, 'eventOps.overview', { planId });
+  expect(current.stations).toContainEqual(expect.objectContaining({ name: 'Broadcast station' }));
+  expect(current.matches.find((match) => match.id === matchId)).toMatchObject({
+    status: 'playing',
+    started: false,
+    stationId: null,
+  });
+});
+
 test('ordinary-only setup does not require named stations', async ({ page }) => {
   const { desk } = await night(page, 'Ordinary-only shared dispatch', false);
   // Other workspace tabs retain hidden no-station choices; the attention

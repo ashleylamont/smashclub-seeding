@@ -15,9 +15,20 @@ export function dispatchMatch(
     match && match.status === 'ready' && match.player1Id && match.player2Id,
     'Match is not ready.',
   );
+  const shared = sharedDispatch(next);
+  // The shared desk can review ordinary capacity separately from named resources.
+  // Other requests retain their existing resource revision check.
+  const reviewsOrdinaryCapacity =
+    shared &&
+    envelope.operator &&
+    command.stationId === null &&
+    command.callOnly === true &&
+    command.expectedOrdinaryCapacity !== undefined;
+  const resourcesMatch = reviewsOrdinaryCapacity
+    ? next.settings.capacity === command.expectedOrdinaryCapacity
+    : next.settings.resourceRevision === command.expectedResourceRevision;
   requireFact(
-    match.revision === command.expectedRevision &&
-      next.settings.resourceRevision === command.expectedResourceRevision,
+    match.revision === command.expectedRevision && resourcesMatch,
     'Pairing or resources changed.',
   );
   basis[match.id] = match.revision;
@@ -26,7 +37,7 @@ export function dispatchMatch(
     !hasCurrentPendingScoreReview(match, next.reports),
     'This match has a score awaiting TO review.',
   );
-  if (sharedDispatch(next)) {
+  if (shared) {
     requireFact(envelope.operator, 'An organiser calls matches from the shared queue.');
     const availability = dispatchAvailability(next, match);
     const allowed = command.stationId
