@@ -171,7 +171,9 @@ test('TO prints selected pool sheets with stable public QR and unclipped A4 pair
   await expect(
     brackets.locator('.bracket-backup-page').first().locator('tbody tr'),
   ).not.toHaveCount(0);
-  await expect(brackets.locator('.bracket-backup-page').first()).toContainText('Winner of R1 M1');
+  await expect(brackets.locator('.bracket-backup-page').first()).toContainText(
+    'Winner of Quarter-final 1',
+  );
   for (const label of ['Upper Consolation', 'Lower Championship', 'Lower Consolation'])
     await brackets.getByRole('checkbox', { name: label, exact: true }).uncheck();
   await page.emulateMedia({ media: 'print' });

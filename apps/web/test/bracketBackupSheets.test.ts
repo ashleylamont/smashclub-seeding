@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { buildRoundRobin } from '@smashclub/tournament-formats';
 import { bracketBackupSheets, type BracketBackupData } from '../src/lib/bracketBackupSheets';
 
 const fixture = (): BracketBackupData => ({
@@ -29,6 +30,26 @@ const fixture = (): BracketBackupData => ({
   ],
 });
 
+function roundRobinWorksheet(playoffSize?: number, consolation = false): BracketBackupData {
+  const data = fixture();
+  data.plan.structure = 'round_robin_finals';
+  data.plan.structureOptions = { roundRobinMeetings: 1, playoffSize, consolation };
+  data.entrants = Array.from({ length: 10 }, (_, index) => ({
+    id: `player-${index + 1}`,
+    name: `Player ${index + 1}`,
+  }));
+  const names = new Map(data.entrants.map(({ id, name }) => [id, name]));
+  data.matches = buildRoundRobin(data.entrants.map(({ id }) => id)).map((pair) => ({
+    ...data.matches[0]!,
+    id: `pool-${pair.round}-${pair.slot}`,
+    player1Id: pair.player1Id,
+    player1Name: names.get(pair.player1Id)!,
+    player2Id: pair.player2Id,
+    player2Name: names.get(pair.player2Id)!,
+  }));
+  return data;
+}
+
 describe('TO bracket backup sheets', () => {
   it('provides four blank worksheets before the draw exists, with the division roster', () => {
     const sheets = bracketBackupSheets(fixture());
@@ -40,13 +61,60 @@ describe('TO bracket backup sheets', () => {
     ]);
     expect(sheets.every((sheet) => sheet.blank && sheet.matches.length > 0)).toBe(true);
     expect(sheets[0].roster).toEqual(['Alice', 'Bob']);
-    expect(sheets[0].matches.map((match) => match.round)).toEqual([
-      'Round 1',
-      'Round 1',
-      'Round 2',
+    expect(sheets[0].matches.map(({ key, label }) => [key, label])).toEqual([
+      ['blank-1-0', 'Semi-final 1'],
+      ['blank-1-1', 'Semi-final 2'],
+      ['blank-2-0', 'Final'],
     ]);
-    expect(sheets[0].matches[2].player1).toBe('Winner of R1 M1');
+    expect(sheets[0].matches[2]).toMatchObject({
+      player1: 'Winner of Semi-final 1',
+      player2: 'Winner of Semi-final 2',
+    });
     expect(sheets[2].roster).toEqual([]);
+  });
+
+  it('fits a nine-place playoff and keeps all unassigned first-round slots writable', () => {
+    const [sheet] = bracketBackupSheets(roundRobinWorksheet(9));
+    expect(sheet.matches).toHaveLength(15);
+    expect(sheet.matches.filter((match) => !match.player1 && !match.player2)).toHaveLength(8);
+    expect(sheet.matches[0]).toMatchObject({ key: 'blank-1-0', label: 'Round of 16 1' });
+    expect(sheet.matches[8]).toMatchObject({
+      label: 'Quarter-final 1',
+      player1: 'Winner of Round of 16 1',
+      player2: 'Winner of Round of 16 2',
+    });
+    expect(sheet.matches.at(-1)).toMatchObject({ key: 'blank-4-0', label: 'Final' });
+  });
+
+  it('follows full-field, consolation, and active-entrant counts', () => {
+    const defaultCut = roundRobinWorksheet();
+    expect(bracketBackupSheets(defaultCut).map((sheet) => sheet.matches.length)).toEqual([15]);
+    defaultCut.withdrawals = [{ playerId: 'player-9' }, { playerId: 'player-10' }];
+    expect(bracketBackupSheets(defaultCut).map((sheet) => sheet.matches.length)).toEqual([7]);
+
+    const shortCut = bracketBackupSheets(roundRobinWorksheet(3, true));
+    expect(shortCut.map((sheet) => [sheet.title, sheet.matches.length])).toEqual([
+      ['Open Championship', 3],
+      ['Open Consolation', 7],
+    ]);
+    expect(
+      bracketBackupSheets(roundRobinWorksheet(9, true)).map((sheet) => sheet.matches.length),
+    ).toEqual([15, 3]);
+  });
+
+  it('keeps an unlinked provider worksheet generic', () => {
+    const data = fixture();
+    data.plan.bracketMode = 'challonge';
+    const [sheet] = bracketBackupSheets(data);
+    expect(sheet.matches).toHaveLength(16);
+    expect(sheet.matches[0]).toEqual({
+      key: 'blank-0',
+      label: 'Match 1',
+      round: 'Round ____',
+      player1: '',
+      player2: '',
+      recorded: '',
+    });
   });
 
   it('prints only the configured bracket roles and labels loser feeds honestly', () => {

@@ -1,9 +1,19 @@
-import { finalsRoles, isKnockout, type StructureOptions } from '@smashclub/shared';
+import {
+  finalsRoles,
+  isKnockout,
+  type StructureOptions,
+  type TournamentStructure,
+} from '@smashclub/shared';
+import { knockoutMatchName, selectFormatFinalists } from '@smashclub/tournament-formats';
 import type { LiveMatch } from './eventDisplay';
 import { liveBracketSide, liveBracketStatus } from './eventBracket';
 
 export type BracketBackupData = {
-  plan: { bracketMode: string; structure?: string; structureOptions?: StructureOptions };
+  plan: {
+    bracketMode: string;
+    structure?: TournamentStructure;
+    structureOptions?: StructureOptions;
+  };
   nativeBrackets: { id: string; division: string; stage: string; entrantIds: string[] }[];
   brackets: { division: string; stage: string; slug: string | null }[];
   matches: LiveMatch[];
@@ -11,7 +21,7 @@ export type BracketBackupData = {
   withdrawals?: { playerId: string }[];
 };
 
-function blankMatches(data: BracketBackupData, division: string, stage: string) {
+function blankMatches(data: BracketBackupData, division: string, stage: 'main' | 'consolation') {
   if (data.plan.bracketMode !== 'native')
     return Array.from({ length: 16 }, (_, index) => ({
       key: `blank-${index}`,
@@ -31,21 +41,29 @@ function blankMatches(data: BracketBackupData, division: string, stage: string) 
     for (const id of [match.player1Id, match.player2Id]) if (id && !withdrawn.has(id)) pool.add(id);
     pools.set(match.poolIndex ?? 0, pool);
   }
-  const expected = [...pools.values()].reduce((total, pool) => {
-    const qualifying = Math.min(pool.size, Math.max(2, Math.ceil(pool.size / 2)));
-    return total + (stage === 'main' ? qualifying : pool.size - qualifying);
-  }, 0);
+  // Only the count matters for paper. Use provisional places, with no seed or result assumptions.
+  const finishers = [...pools].flatMap(([poolIndex, ids]) =>
+    [...ids].map((playerId, index) => ({ playerId, poolIndex, place: index + 1 })),
+  );
+  const expected = selectFormatFinalists(
+    data.plan.structure,
+    finishers,
+    stage,
+    data.plan.structureOptions,
+  ).length;
   let capacity = 4;
   while (capacity < expected) capacity *= 2;
+  // Name the fixed paper positions, including the spare slots a TO can mark as byes.
+  const name = (round: number, slot: number) => knockoutMatchName({ round, slot }, capacity)!;
   const rows = [];
   for (let width = capacity / 2, round = 1; width >= 1; width /= 2, round++)
     for (let slot = 0; slot < width; slot++)
       rows.push({
         key: `blank-${round}-${slot}`,
-        label: `M${slot + 1}`,
-        round: `Round ${round}`,
-        player1: round === 1 ? '' : `Winner of R${round - 1} M${slot * 2 + 1}`,
-        player2: round === 1 ? '' : `Winner of R${round - 1} M${slot * 2 + 2}`,
+        label: name(round, slot),
+        round: '',
+        player1: round === 1 ? '' : `Winner of ${name(round - 1, slot * 2)}`,
+        player2: round === 1 ? '' : `Winner of ${name(round - 1, slot * 2 + 1)}`,
         recorded: '',
       });
   return rows;
