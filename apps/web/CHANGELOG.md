@@ -2,6 +2,15 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.7.3
+
+### Patch Changes
+
+- 9 November 2026 · **Fix** · Make the organiser's match queue explain when a search hides pairings, when no pairings are ready, and where to find actual blockers. [#290](https://github.com/ashleylamont/smashclub-seeding/pull/290) · [build b1ee6b5](https://github.com/ashleylamont/smashclub-seeding/commit/b1ee6b5b878789304c891bd22f650bc74acfe44b)
+- 9 November 2026 · **Improvement** · Open an untaken consolation call directly from the finals replay review when returning it is the only blocker. Keep your score correction and reason while returning the call, then refresh the review before confirming the replay. [#294](https://github.com/ashleylamont/smashclub-seeding/pull/294) · [build 6c21aee](https://github.com/ashleylamont/smashclub-seeding/commit/6c21aeee862b1e048149f5c5177c62f20fc1795e)
+- 9 November 2026 · **Maintenance** · Stabilise the automatic OBS handoff check by advancing the fixture clock while waiting for station updates to render. [#296](https://github.com/ashleylamont/smashclub-seeding/pull/296) · [build 482f886](https://github.com/ashleylamont/smashclub-seeding/commit/482f88673a097171b1c4685551d0a3b36bf5d5fc)
+- 9 November 2026 · **Maintenance** · Stabilise the late-pair keyboard check by waiting for the preview refresh to become available after returning a call. [#291](https://github.com/ashleylamont/smashclub-seeding/pull/291) · [build f8d6d67](https://github.com/ashleylamont/smashclub-seeding/commit/f8d6d67d3c23947bac1635d76a7e3866010e6b26)
+
 ## 0.7.2
 
 ### Patch Changes
