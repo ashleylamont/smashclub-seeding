@@ -13,5 +13,6 @@ function versionAt(commit) {
   return version;
 }
 
-const lane = versionAt(sha) === versionAt(`${sha}^1`) ? 'ordinary' : 'version';
+const ordinaryLane = Number.parseInt(sha.at(-1), 16) % 2 === 0 ? 'ordinary' : 'ordinary-2';
+const lane = versionAt(sha) === versionAt(`${sha}^1`) ? ordinaryLane : 'version';
 appendFileSync(process.env.GITHUB_OUTPUT, `lane=${lane}\n`);
