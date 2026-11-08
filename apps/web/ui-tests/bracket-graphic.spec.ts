@@ -19,7 +19,7 @@ async function setup(page: Page, double: boolean, closed: boolean) {
     outcome: 'played',
     player1Name: `艾麗 & <Alex> ${TEAM_ALIAS}`,
   });
-  snapshot.matches = snapshot.matches.filter((match) => !match.nativeBracketId);
+  snapshot.matches = [];
   snapshot.matches.push(
     ...matches.map((match) =>
       Object.assign({ ...template }, match, { nativeBracketId: bracket.id }),
@@ -50,6 +50,7 @@ for (const theme of ['dark', 'light'] as const)
         name: 'Preview bracket graphic for Open championship',
       });
       await expect(action).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Open · Championship' })).toBeVisible();
       await action.scrollIntoViewIfNeeded();
       await ready(page);
       await page.screenshot({ path: testInfo.outputPath('bracket-route.png') });

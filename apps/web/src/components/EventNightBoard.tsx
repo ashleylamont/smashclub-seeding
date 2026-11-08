@@ -220,18 +220,16 @@ export function EventBrackets({
       <h2>Brackets</h2>
       {brackets.map((bracket) => {
         const games = matches.filter((match) => match.nativeBracketId === bracket.id);
-        const division =
-          usesOpenPools(graphicContext?.structure) || isKnockout(graphicContext?.structure)
-            ? 'Open'
-            : bracket.division === 'upper'
-              ? 'Upper'
-              : 'Lower';
-        const scope = `${division} ${bracket.stage === 'main' ? 'championship' : 'consolation'}`;
+        const open =
+          usesOpenPools(graphicContext?.structure) || isKnockout(graphicContext?.structure);
+        const division = open ? 'Open' : bracket.division;
+        const stage = bracket.stage === 'main' ? 'Championship' : 'Consolation';
+        const scope = `${division === 'upper' ? 'Upper' : division === 'lower' ? 'Lower' : division} ${stage.toLowerCase()}`;
         return (
           <article className="event-bracket" key={bracket.id}>
             <header>
               <h3>
-                {bracket.division} · {bracket.stage === 'main' ? 'Championship' : 'Consolation'}
+                {division} · {stage}
               </h3>
               {graphicContext && hasExportableBracket(games) && (
                 <BracketGraphic context={{ ...graphicContext, scope }} matches={games} />
@@ -277,7 +275,7 @@ export function EventBrackets({
                 matches={lane.matches}
                 lane={lane.key}
                 title={lane.title}
-                label={`${bracket.division} ${bracket.stage} ${lane.title || 'bracket rounds'}`}
+                label={`${division} ${bracket.stage} ${lane.title || 'bracket rounds'}`}
                 labels={labels}
                 recordedOnly={recordedOnly}
               />
