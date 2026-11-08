@@ -14,6 +14,7 @@ import {
 } from '../lib/qualification';
 import { EventBracketLane } from './EventBracketLane';
 import { NemesisMark } from './NemesisMark';
+import { OverlayTwitchLink } from './OverlayTwitch';
 import { Button } from './ui/Button';
 import './BroadcastIntermission.css';
 
@@ -35,11 +36,13 @@ export function BroadcastIntermission({
   seconds,
   announcement,
   controls,
+  twitchChannel,
 }: {
   data: ProgressData;
   seconds: number;
   announcement: string;
   controls: boolean;
+  twitchChannel: string;
 }) {
   const pages = useMemo(() => broadcastProgressPages(data), [data]);
   const [current, setCurrent] = useState('');
@@ -194,6 +197,7 @@ export function BroadcastIntermission({
           Page {index + 1} / {pages.length}
           {reduced ? ' · manual pages' : paused ? ' · paused' : ''}
         </span>
+        {twitchChannel && <OverlayTwitchLink channel={twitchChannel} />}
         {controls && (
           <div className="intermission-controls">
             <Button onClick={() => next(-1)} disabled={pages.length < 2}>

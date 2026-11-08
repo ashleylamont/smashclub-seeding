@@ -13,6 +13,8 @@ import './EventLive.css';
 import { NemesisMark } from '../components/NemesisMark';
 import { CharacterIcons } from '../components/CharacterIcons';
 import { OverlaySetup } from '../components/OverlaySetup';
+import { OverlayTwitchLink, OverlayTwitchSetting } from '../components/OverlayTwitch';
+import { twitchChannel } from '../lib/twitchChannel';
 import { matchesPool, usePoolFilter } from '../lib/poolFlow';
 import { GuestOverlayQr } from '../components/GuestOverlayQr';
 import { BroadcastResults } from '../components/BroadcastResults';
@@ -45,6 +47,9 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
   );
   const [presentation, setPresentation] = useState(() => broadcastPresentation(location.search));
   const [cycleSeconds, setCycleSeconds] = useState(() => progressInterval(location.search));
+  const [twitch, setTwitch] = useState(() =>
+    twitchChannel(new URLSearchParams(location.search).get('twitch') ?? ''),
+  );
   const [compactRail, setCompactRail] = useState(false);
   const observeRail = useCallback(
     (rail: HTMLElement | null) => {
@@ -90,6 +95,13 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
     else url.searchParams.delete('station');
     window.history.replaceState(window.history.state, '', url);
     setFocus(stationId);
+  };
+  const changeTwitch = (channel: string) => {
+    const url = new URL(location.href);
+    if (channel) url.searchParams.set('twitch', channel);
+    else url.searchParams.delete('twitch');
+    history.replaceState(history.state, '', url);
+    setTwitch(channel);
   };
   const guestInvitation = useQuery({
     queryKey: ['overlayGuestInvitation', planId],
@@ -204,7 +216,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
           </div>
           {guestQr && <GuestOverlayQr planId={planId} invitation={guestQr} />}
         </aside>
-        <header className="broadcast-topline">
+        <header className={`broadcast-topline${twitch ? ' has-twitch-link' : ''}`}>
           <span>
             <i /> {closed ? 'EVENT FINISHED' : onStream ? 'PLAYING NOW' : 'WAITING FOR A MATCH'}
           </span>
@@ -217,7 +229,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
               ? 'ROUND ROBIN'
               : (onStream?.stage?.toUpperCase() ?? 'NEXT SET SOON')}
           </span>
-          <span>nemesis.ashl.dev</span>
+          {twitch ? <OverlayTwitchLink channel={twitch} /> : <span>nemesis.ashl.dev</span>}
         </header>
         <div className="broadcast-matchup" aria-label="Current match">
           <div className="broadcast-fighter broadcast-fighter-one">
@@ -243,12 +255,15 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
           focus={focusedStation?.id ?? focus}
           onFocus={changeFocus}
           presentationControls={
-            <BroadcastPresentationControls
-              mode={presentation}
-              seconds={cycleSeconds}
-              onMode={(mode) => changePresentation(mode, cycleSeconds)}
-              onSeconds={(seconds) => changePresentation(presentation, seconds)}
-            />
+            <>
+              <BroadcastPresentationControls
+                mode={presentation}
+                seconds={cycleSeconds}
+                onMode={(mode) => changePresentation(mode, cycleSeconds)}
+                onSeconds={(seconds) => changePresentation(presentation, seconds)}
+              />
+              <OverlayTwitchSetting channel={twitch} onChange={changeTwitch} />
+            </>
           }
         />
         <footer className="broadcast-footer">
@@ -270,6 +285,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
             seconds={cycleSeconds}
             announcement={announcement?.message ?? ''}
             controls={search.get('controls') !== '0'}
+            twitchChannel={twitch}
           />
         )}
         {(!online || query.isError) && (

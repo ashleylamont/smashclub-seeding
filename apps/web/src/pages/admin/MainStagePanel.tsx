@@ -79,7 +79,8 @@ export function MainStagePanel({
       <Disclosure title="Intermission browser sources">
         <p>
           Auto shows tournament progress between games and returns to gameplay when this station
-          starts a match. Copy the chosen URL into OBS.
+          starts a match. In Display setup (S), you can add a Twitch channel before copying the
+          updated URL into OBS.
         </p>
         <div className="ops-broadcast-source-links">
           {(['auto', 'progress'] as const).map((mode) => (
