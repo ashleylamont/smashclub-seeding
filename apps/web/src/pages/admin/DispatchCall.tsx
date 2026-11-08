@@ -6,6 +6,7 @@ import { Select, SelectItem } from '../../components/ui/Select';
 import { useConfirmation } from '../../lib/confirmation';
 import { returnCallControlId } from '../../lib/opsWorkspace';
 import type { Overview, Desk, Run } from './dispatchTypes';
+import { namedStationStart } from './dispatchCommand';
 
 export function ActiveCall({
   match,
@@ -167,14 +168,9 @@ export function ReadyCall({
             <Button
               disabled={disabled || !station || !row.eligibleStationIds.includes(station)}
               onClick={() =>
-                void run({
-                  kind: 'dispatch',
-                  matchId: match.id,
-                  stationId: station,
-                  expectedRevision: match.revision,
-                  expectedResourceRevision: desk.resourceRevision,
-                  callOnly: false,
-                })
+                void run(
+                  namedStationStart(match.id, station, match.revision, desk.resourceRevision),
+                )
               }
             >
               Start named station

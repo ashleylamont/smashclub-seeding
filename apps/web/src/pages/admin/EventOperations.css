@@ -449,10 +449,25 @@
   display: grid;
   gap: var(--s4);
 }
-.ops-main-stage > label {
+.ops-main-stage > label,
+.ops-stage-start > label {
   display: grid;
   gap: var(--s2);
   max-width: 28rem;
+}
+.ops-stage-start {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s3);
+  justify-items: start;
+}
+.ops-stage-start > label {
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+}
+.ops-stage-pairing {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 .ops-pool-settings > .ui-disclosure-trigger {
   font-family: var(--display);

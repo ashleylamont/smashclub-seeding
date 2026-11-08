@@ -1,6 +1,7 @@
 import { NativeDrawTools } from './NativeDrawTools';
 import { filterDeskMatches } from '../../lib/opsMatchFilter';
 import { DispatchDesk } from './DispatchDesk';
+import { useDispatchCommand } from './dispatchCommand';
 import { DoublesAvailabilityControls } from './DoublesAvailabilityControls';
 import { PoolDrawControls } from './PoolDrawControls';
 import { NativeResultControls } from './NativeResultControls';
@@ -113,6 +114,10 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
       setPending(false);
     }
   };
+  const closed = ['complete', 'cancelled'].includes(event.data?.plan.status ?? '');
+  const liveDisabled = !online || pending || closed || Boolean(event.data?.plan.drawPaused);
+  const dispatchDisabled = liveDisabled || event.isError;
+  const dispatch = useDispatchCommand(planId, dispatchDisabled);
   if (event.isPending) return <LoadingState>Opening event…</LoadingState>;
   if (!event.data)
     return (
@@ -126,9 +131,6 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
       </section>
     );
   const data = event.data;
-  const closed = ['complete', 'cancelled'].includes(data.plan.status);
-  const liveDisabled = !online || pending || closed || Boolean(data.plan.drawPaused);
-  const dispatchDisabled = liveDisabled || event.isError;
   const available = availableMatches(data.matches).filter((match) => match.availability.canStart);
   const callable = new Set(available.map((match) => match.id));
   const pools = poolStandings(data.matches);
@@ -229,7 +231,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
           {data.plan.bracketMode === 'native' && (
             <DispatchDesk
               data={data}
-              disabled={dispatchDisabled}
+              dispatch={dispatch}
               onReviewReports={openScoreSubmissions}
               onMatch={(id) => {
                 setFocusedMatchId(id);
@@ -513,6 +515,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
         <TabPanel value="broadcast">
           <MainStagePanel
             data={data}
+            dispatch={dispatch}
             disabled={liveDisabled}
             unavailable={event.isError}
             callable={callable}

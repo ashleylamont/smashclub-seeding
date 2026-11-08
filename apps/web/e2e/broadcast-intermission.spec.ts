@@ -128,6 +128,7 @@ test('independent OBS and player views follow native play, confirmed results and
       callOnly: true,
     });
     await expect(panel.getByRole('button', { name: 'Finish match', exact: true })).toBeVisible();
+    await expect(panel.getByRole('combobox', { name: 'Ready pairing' })).toHaveCount(0);
     await obs.reload();
     await expect(progress).toBeVisible();
     snapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
@@ -231,20 +232,33 @@ test('independent OBS and player views follow native play, confirmed results and
     await expect(progress).toBeVisible();
     snapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
     const next = snapshot.matches.find((match) => match.status === 'ready')!;
-    await command({
-      kind: 'dispatch',
-      matchId: next.id,
-      stationId,
-      expectedRevision: next.revision,
-      expectedResourceRevision: snapshot.settings.resourceRevision,
-      callOnly: true,
+    const picker = panel.getByRole('combobox', { name: 'Ready pairing' });
+    const start = panel.getByRole('button', { name: 'Start on Stage', exact: true });
+    await expect(start).toBeDisabled();
+    await chooseOption(picker, next.id);
+    const startRequest = page.waitForRequest(
+      (request) => request.method() === 'POST' && request.url().includes('eventOps.live.command'),
+    );
+    await start.press('Enter');
+    const request = await startRequest;
+    const body = request.postDataJSON();
+    expect(new URL(request.url()).searchParams.has('batch') ? body[0] : body).toMatchObject({
+      planId,
+      requestId: expect.any(String),
+      command: {
+        kind: 'dispatch',
+        matchId: next.id,
+        stationId,
+        expectedRevision: next.revision,
+        expectedResourceRevision: snapshot.settings.resourceRevision,
+        callOnly: false,
+      },
     });
+    await expect(panel.getByRole('button', { name: 'Finish match', exact: true })).toBeVisible();
     snapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
-    await command({
-      kind: 'beginPlay',
-      matchId: next.id,
-      expectedRevision: snapshot.matches.find((match) => match.id === next.id)!.revision,
-      expectedResourceRevision: snapshot.settings.resourceRevision,
+    expect(snapshot.matches.find((match) => match.id === next.id)).toMatchObject({
+      started: true,
+      stationId,
     });
     await expect(capture).toBeVisible();
     await expect(obs.getByLabel('Current match')).toContainText(next.player1Name!);
