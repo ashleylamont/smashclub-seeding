@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   matchesPool,
+  poolTitle,
   scoreApprovalPolicy,
   queueScoringIds,
   stationPreview,
@@ -25,6 +26,16 @@ const match = (id: string, status = 'ready'): PoolFlowMatch => ({
   winnerId: null,
 });
 describe('pool display queue semantics', () => {
+  it('keeps legacy and dual labels while naming open formats and multi-letter pools', () => {
+    expect(poolTitle('lower:0')).toBe('Lower Pool A');
+    expect(poolTitle('lower:0', 'unknown-legacy', 'caption')).toBe('lower Pool A');
+    expect(poolTitle(`upper:${'9'.repeat(310)}`)).toBe('Upper Pool —');
+    expect(poolTitle('lower:0', 'dual_division', 'heading')).toBe('lower · Pool A');
+    expect(poolTitle('upper:26', 'dual_division')).toBe('Upper Pool AA');
+    expect(poolTitle('upper:26', 'pools_finals')).toBe('Open Pool AA');
+    expect(poolTitle('upper:0', 'round_robin_finals')).toBe('Open Pool A');
+    expect(poolTitle('upper:0', 'round_robin')).toBe('Open round robin');
+  });
   it('keeps native immediate-result review independent of station and scheduling state', () => {
     const game = match('played');
     const data = {

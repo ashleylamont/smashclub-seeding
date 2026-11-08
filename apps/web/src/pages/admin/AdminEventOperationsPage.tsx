@@ -36,6 +36,7 @@ import { AttendanceControls } from './AttendanceControls';
 import { AttendeeList } from './AttendeeList';
 import { GuestReportingControls } from './GuestReportingControls';
 import { availableMatches, poolStandings } from '../../lib/eventQueue';
+import { poolTitle } from '../../lib/poolFlow';
 import { OpsAttentionDesk } from './OpsAttentionDesk';
 import { MainStagePanel } from './MainStagePanel';
 
@@ -322,7 +323,11 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
                       key={`${pool.division}:${pool.poolIndex}`}
                       value={`${pool.division}:${pool.poolIndex}`}
                     >
-                      {pool.division} Pool {String.fromCharCode(65 + pool.poolIndex)}
+                      {poolTitle(
+                        `${pool.division}:${pool.poolIndex}`,
+                        data.plan.structure,
+                        'caption',
+                      )}
                     </SelectItem>
                   ))}
                 </Select>
@@ -431,7 +436,11 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
                 {pools.map((pool) => (
                   <div key={`${pool.division}:${pool.poolIndex}`}>
                     <h4>
-                      {pool.division} · Pool {String.fromCharCode(65 + pool.poolIndex)}{' '}
+                      {poolTitle(
+                        `${pool.division}:${pool.poolIndex}`,
+                        data.plan.structure,
+                        'heading',
+                      )}{' '}
                       <span className="muted">
                         {pool.complete}/{pool.total} sets
                       </span>

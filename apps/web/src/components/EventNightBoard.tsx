@@ -4,6 +4,7 @@ import { Progress } from './ui/Progress';
 import { liveBracketLanes } from '../lib/eventBracket';
 import type { LiveMatch, PoolQualifierSlot } from '../lib/eventDisplay';
 import { poolStandings } from '../lib/eventQueue';
+import { poolTitle } from '../lib/poolFlow';
 import { CharacterIcons } from './CharacterIcons';
 
 export type DisplayStation = {
@@ -84,11 +85,13 @@ export function EventPools({
   schedules,
   stations,
   recordedOnly,
+  structure,
 }: {
   matches: LiveMatch[];
   schedules: PoolSchedule[];
   stations: DisplayStation[];
   recordedOnly: boolean;
+  structure?: string;
 }) {
   const pools = poolStandings(matches);
   if (!pools.length) return null;
@@ -102,6 +105,8 @@ export function EventPools({
       </p>
       <div className="event-results-grid">
         {pools.map((pool) => {
+          const key = `${pool.division}:${pool.poolIndex}`;
+          const title = poolTitle(key, structure, 'heading');
           const schedule = schedules.find(
             (item) => item.division === pool.division && item.poolIndex === pool.poolIndex,
           );
@@ -110,11 +115,9 @@ export function EventPools({
               .map((id) => stations.find((item) => item.id === id)?.name)
               .filter(Boolean) ?? [];
           return (
-            <article className="event-pool" key={`${pool.division}:${pool.poolIndex}`}>
+            <article className="event-pool" key={key}>
               <header>
-                <h3>
-                  {pool.division} · Pool {String.fromCharCode(65 + pool.poolIndex)}
-                </h3>
+                <h3>{title}</h3>
                 <span>
                   {recordedOnly
                     ? pool.complete === pool.total
@@ -135,7 +138,7 @@ export function EventPools({
               <Progress
                 value={pool.complete}
                 max={Math.max(1, pool.total)}
-                label={`${pool.division} Pool ${String.fromCharCode(65 + pool.poolIndex)} progress`}
+                label={`${poolTitle(key, structure, 'caption')} progress`}
               />
               <div className="event-pool-table">
                 <table>

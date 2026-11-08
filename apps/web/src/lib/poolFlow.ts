@@ -1,3 +1,5 @@
+import { isSinglePool } from '@smashclub/shared';
+import { poolLabel } from '@smashclub/tournament-formats';
 import { useEffect, useState } from 'react';
 import type { LiveMatch } from './eventDisplay';
 
@@ -27,7 +29,13 @@ export type PoolRounds = {
   rounds: { round: number; matchIds: string[]; restingPlayerIds: string[] }[];
 };
 export type PoolFlowData = {
-  plan: { id: string; status: string; bracketMode?: string; liveOwned?: boolean };
+  plan: {
+    id: string;
+    status: string;
+    bracketMode?: string;
+    liveOwned?: boolean;
+    structure?: string;
+  };
   sharedDispatch?: { capacity: number; active: number; overCapacity: number } | null;
   settings?: { scoreReportingMode?: 'to_review' | 'approve_unless_disputed' };
   matches: PoolFlowMatch[];
@@ -57,9 +65,27 @@ export const matchesPool = (
   match: Pick<LiveMatch, 'stage' | 'division' | 'poolIndex'>,
   selected: string,
 ) => !selected || poolKey(match) === selected;
-export function poolTitle(key: string) {
+export const usesOpenPools = (structure?: string) =>
+  isSinglePool(structure) || structure === 'pools_finals';
+
+export function poolTitle(
+  key: string,
+  structure?: string,
+  style: 'label' | 'heading' | 'caption' = 'label',
+) {
+  if (structure === 'round_robin') return 'Open round robin';
   const [division, index] = key.split(':');
-  return `${division === 'upper' ? 'Upper' : 'Lower'} Pool ${String.fromCharCode(65 + Number(index))}`;
+  const poolIndex = Number(index);
+  // Printed links carry pool keys supplied in the URL.
+  const letter = Number.isSafeInteger(poolIndex) && poolIndex >= 0 ? poolLabel(poolIndex) : '—';
+  const divisionLabel = usesOpenPools(structure)
+    ? 'Open'
+    : style !== 'label'
+      ? division
+      : division === 'upper'
+        ? 'Upper'
+        : 'Lower';
+  return `${divisionLabel}${style === 'heading' ? ' · ' : ' '}Pool ${letter}`;
 }
 export function poolPolicy(data: Pick<PoolFlowData, 'poolSchedules'>, match: LiveMatch) {
   return match.stage === 'group'
