@@ -2,6 +2,12 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.2.6
+
+### Patch Changes
+
+- 8 November 2026 · **Fix** · Linked event handoffs name the forfeit winner without game scores, and refreshing Challonge recognises the same forfeit as reconciled. [#220](https://github.com/ashleylamont/smashclub-seeding/pull/220) · [build 3871d1e](https://github.com/ashleylamont/smashclub-seeding/commit/3871d1e2d543897c57d8a0b41f24c7fd0f51f287)
+
 ## 0.2.5
 
 ### Patch Changes
