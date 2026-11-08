@@ -13,7 +13,7 @@ export function OverlayTwitchLink({ channel }: { channel: string }) {
       aria-label={`twitch.tv/${channel} (opens in a new tab)`}
     >
       <span className="broadcast-twitch-url">twitch.tv/{channel}</span>
-      <span className="broadcast-twitch-short">Twitch</span>
+      <span className="broadcast-twitch-short">@{channel}</span>
     </a>
   );
 }
