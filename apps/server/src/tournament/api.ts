@@ -1,6 +1,10 @@
 import { rollingFinals } from './qualifiers';
 import { canUseStrengthSeeding, type strengthSeedPolicy } from './strengthFinals';
-import { previewRollingFinals, previewStrengthFinals, reviewFinalsReset } from './finalsPreview';
+import {
+  previewRollingFinals,
+  previewStrengthFinals,
+  reviewWholeFinalsReset,
+} from './finalsPreview';
 import { poolOrderStatus } from './poolOrders';
 import { sharedDispatch } from './dispatch';
 import { isKnockout } from '@smashclub/shared';
@@ -351,7 +355,7 @@ export class NativeEventApi {
     return {
       allowed: !issues.length,
       issues,
-      ...reviewFinalsReset(state),
+      ...reviewWholeFinalsReset(state),
       replacing,
       poolOrders: state.pools.map((p) => ({
         poolId: p.id,

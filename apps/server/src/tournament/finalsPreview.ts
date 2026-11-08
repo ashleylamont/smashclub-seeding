@@ -28,6 +28,13 @@ export function reviewFinalsReset(state: TournamentState, scope?: FinalsDivision
   };
 }
 
+export function reviewWholeFinalsReset(state: TournamentState) {
+  return {
+    ...reviewFinalsReset(state),
+    resetBracketIds: state.brackets.map(({ id }) => id).sort(),
+  };
+}
+
 export function previewRollingFinals(state: TournamentState) {
   const trial = structuredClone(state);
   const existing = Boolean(state.brackets.length);
@@ -56,7 +63,7 @@ export function previewRollingFinals(state: TournamentState) {
     allowed: !existing && !issues.length,
     issues,
     replacing: false,
-    ...reviewFinalsReset(state),
+    ...reviewWholeFinalsReset(state),
     revisionToken: finalsToken(state),
     poolOrders: trial.pools.map((p) => ({
       poolId: p.id,
@@ -117,7 +124,7 @@ export function previewStrengthFinals(state: TournamentState) {
     allowed: Boolean(newBrackets) && !issues.length,
     issues,
     replacing: false,
-    ...reviewFinalsReset(state),
+    ...reviewWholeFinalsReset(state),
     resetRevisionToken: finalsToken(state),
     divisionResets: finalsDivisionResetScopes(state).map((scope) => ({
       scope,

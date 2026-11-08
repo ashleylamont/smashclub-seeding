@@ -147,6 +147,8 @@ describe('rolling finals through the standard native API', () => {
     const refreshed = await caller().eventOps.native.preview({ planId });
     expect(refreshed.resetAllowed).toBe(true);
     expect(refreshed.resetCallMatchIds).toEqual([]);
+    expect(refreshed.resetBracketIds).toHaveLength(4);
+    expect(refreshed.resetBracketIds).toEqual(existing.resetBracketIds);
     await expect(
       caller().eventOps.native.reset({ planId, revisionToken: existing.revisionToken }),
     ).rejects.toThrow(/changed since the preview/);

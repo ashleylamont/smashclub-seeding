@@ -346,23 +346,27 @@ function FinalsResetControl({
     (review) => review.scope.division === division,
   );
   const selected = reset.data.divisionResets.find((review) => review.scope.division === division);
-  // Returning a call may refresh the review for the same draw, but a newly drawn
-  // bracket needs a new full preview before it can be removed.
-  const drawChanged = Boolean(
-    division &&
-    (!original || original.scope.bracketIds.join() !== selected?.scope.bracketIds.join()),
-  );
+  // A refreshed token can reflect a returned call, but it must still describe
+  // the persisted brackets from the full preview the organiser saw.
+  const drawChanged = division
+    ? !original || original.scope.bracketIds.join() !== selected?.scope.bracketIds.join()
+    : initialReview.resetBracketIds.join() !== reset.data.resetBracketIds.join();
+  const drawUnidentified = !division && initialReview.resetBracketIds.length === 0;
   const review = division ? selected : reset.data;
   const reviewUnavailable = disabled || reset.isFetching || reset.isError;
+  const removalBlocked = reviewUnavailable || drawChanged || drawUnidentified;
   const currentCalls =
     data.operatorDispatch?.mode === 'shared'
       ? data.operatorDispatch.queue
           .filter((row) => row.state === 'called')
           .map((row) => row.matchId)
       : [];
-  const calls = data.matches.filter(
-    ({ id }) => !division && reset.data.resetCallMatchIds.includes(id) && currentCalls.includes(id),
-  );
+  const calls =
+    division || drawChanged || drawUnidentified
+      ? []
+      : data.matches.filter(
+          ({ id }) => reset.data.resetCallMatchIds.includes(id) && currentCalls.includes(id),
+        );
 
   return (
     <section className="finals-reset-actions" aria-label="Finals removal">
@@ -382,9 +386,11 @@ function FinalsResetControl({
           </Select>
         </label>
       )}
-      {drawChanged && (
+      {drawChanged ? (
         <Notice tone="warning">The selected draw changed. Preview finals again.</Notice>
-      )}
+      ) : drawUnidentified && review?.resetAllowed ? (
+        <Notice tone="warning">Preview finals again before removing this draw.</Notice>
+      ) : null}
       {!drawChanged && review && review.resetIssues.length > 0 && (
         <ul>
           {review.resetIssues.map((issue) => (
@@ -420,9 +426,9 @@ function FinalsResetControl({
         </ul>
       )}
       <Button
-        disabled={reviewUnavailable || drawChanged || !review?.resetAllowed}
+        disabled={removalBlocked || !review?.resetAllowed}
         onClick={async () => {
-          if (reviewUnavailable || drawChanged || !review?.resetAllowed) return;
+          if (removalBlocked || !review?.resetAllowed) return;
           const { revisionToken } = review;
           const planId = data.plan.id;
           if (!selected) {
@@ -460,6 +466,7 @@ function FinalsResetControl({
 function resetReview(preview: ServerPreview) {
   return {
     resetAllowed: preview.resetAllowed,
+    resetBracketIds: preview.resetBracketIds ?? [],
     resetIssues: preview.resetIssues,
     resetCallMatchIds: preview.resetCallMatchIds,
     divisionResets: 'divisionResets' in preview ? (preview.divisionResets ?? []) : [],

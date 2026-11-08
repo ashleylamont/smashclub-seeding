@@ -48,6 +48,7 @@ for (const theme of ['dark', 'light'] as const)
         replacing: false,
         resetAllowed: false,
         resetIssues: ['No finals exist.'],
+        resetBracketIds: [],
         resetCallMatchIds: [],
         divisionResets: [],
         resetRevisionToken: 'reset-token',
