@@ -73,7 +73,7 @@ export function AdminPlayersPage() {
 
       <div className="section">
         <div className="page-header">
-          <h2>Player registry</h2>
+          <h2 id="player-registry-heading">Player registry</h2>
           <span className="admin-form-row">
             <Input
               placeholder="Filter by name or alias…"
@@ -120,7 +120,12 @@ export function AdminPlayersPage() {
         {players.isPending && <p className="loading-text">Loading players…</p>}
         {players.isError && <p className="error-text">{players.error.message}</p>}
         {players.data && (
-          <div className="table-scroll">
+          <div
+            className="table-scroll"
+            role="region"
+            aria-labelledby="player-registry-heading"
+            tabIndex={0}
+          >
             <table className="data-table">
               <thead>
                 <tr>
@@ -386,12 +391,17 @@ function ClaimsPanel() {
 
   return (
     <div className="section">
-      <h2>Player claims</h2>
+      <h2 id="player-claims-heading">Player claims</h2>
       {claims.isPending && <p className="loading-text">Loading claims…</p>}
       {claims.isError && <p className="error-text">{claims.error.message}</p>}
       {claims.data && claims.data.length === 0 && <p className="muted">No claims yet.</p>}
       {claims.data && claims.data.length > 0 && (
-        <div className="table-scroll">
+        <div
+          className="table-scroll"
+          role="region"
+          aria-labelledby="player-claims-heading"
+          tabIndex={0}
+        >
           <table className="data-table">
             <thead>
               <tr>
