@@ -160,7 +160,7 @@ describe('Changeset merge gate', () => {
       ['M', changelog],
     ];
     expect(() => assertAppChangeset(release, read)).not.toThrow();
-    expect(() => assertAppChangeset([['D', note]], () => valid)).toThrow();
+    expect(() => assertAppChangeset([['D', note]], read)).toThrow(/Add a new/);
     expect(() => assertAppChangeset([...release, ['M', 'src/app.ts']], read)).toThrow(/Add a new/);
     expect(() =>
       assertAppChangeset(release, (revision, path) =>

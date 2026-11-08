@@ -32,9 +32,13 @@ export function assertAppChangeset(changes, read) {
       (status === 'D' && notePath.test(path)) ||
       (status === 'M' && (path === appPackage || path === changelog)),
   );
+  const versioned = [appPackage, changelog].every((file) =>
+    changes.some(([status, path]) => status === 'M' && path === file),
+  );
   if (
     consumed.length &&
     releaseFiles &&
+    versioned &&
     consumed.every(([, path]) => validNote(read('base', path)))
   ) {
     const oldVersion = JSON.parse(read('base', appPackage)).version;
