@@ -2,6 +2,16 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.8.0
+
+### Minor Changes
+
+- 9 November 2026 · **Feature** · Organisers can announce a Twitch stream from Broadcast for an open, published event. Viewers can follow the Twitch link from the homepage or load the player on the event page when there is room. Announcements expire after four hours or when stopped. Unpublishing hides the stream, and republishing resumes an unexpired announcement. [#303](https://github.com/ashleylamont/smashclub-seeding/pull/303) · [build 4417d63](https://github.com/ashleylamont/smashclub-seeding/commit/4417d631c5656ae7b0937ad3c3ee17f3072018a0)
+
+### Patch Changes
+
+- 9 November 2026 · **Fix** · Open events show their actual pool and round-robin names on player screens and the broadcast progress view. Pool names continue from Z to AA, while existing pool links and filters keep working. [#304](https://github.com/ashleylamont/smashclub-seeding/pull/304) · [build 5e9769f](https://github.com/ashleylamont/smashclub-seeding/commit/5e9769f97aae951b2ebcfcef0923fe57fb77d085)
+
 ## 0.7.4
 
 ### Patch Changes
