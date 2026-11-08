@@ -1,10 +1,11 @@
-import { version } from '../package.json';
+import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { AxeBuilder } from '@axe-core/playwright';
 import type { PublicEventNight } from '../src/lib/publicEvents';
 import { rpcProcedures } from '../test-support/rpcBatch';
 import { ready } from './fixtures';
 
+const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const NOW = new Date('2026-10-31T09:00:00Z');
 function event(id: string, competitionFormat: 'singles' | 'doubles'): PublicEventNight {
   return {
