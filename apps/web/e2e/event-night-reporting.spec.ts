@@ -90,20 +90,16 @@ test('an unlinked signed-in attendee reports different players and loses the for
     expect(claims.some((claim) => claim.status === 'approved')).toBe(false);
     const reporting = await attendee.newPage();
     await reporting.goto(`/play/${planId}`);
-    await expect(
-      reporting.getByText(
-        'Match reporting opens when the organiser locks or resumes the pool draw.',
-      ),
-    ).toBeVisible();
+    const preLockNotice = reporting.getByText(
+      'Match reporting opens when the organiser locks the pool draw.',
+      { exact: true },
+    );
+    await expect(preLockNotice).toBeVisible();
     await expect(
       reporting.getByRole('button', { name: 'Submit score for TO approval' }),
     ).toHaveCount(0);
     await mutate(page.request, 'eventOps.softLockPools', { planId, confirm: true });
-    await expect(
-      reporting.getByText(
-        'Match reporting opens when the organiser locks or resumes the pool draw.',
-      ),
-    ).toHaveCount(0);
+    await expect(preLockNotice).toHaveCount(0);
     await chooseOption(
       reporting.getByRole('combobox', { name: 'Match view', exact: true }),
       'matches',
