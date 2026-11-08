@@ -3,6 +3,10 @@ import type { BracketFeed, EliminationLane } from './eliminationLayout';
 import { matchPresentation } from './matchPresentation';
 import { qualifierLabel } from './qualification';
 
+/** Pure native round robin publishes its confirmed pool order through a result bracket record. */
+export const isNativeRoundRobin = (plan: { bracketMode?: string; structure?: string }) =>
+  plan.bracketMode === 'native' && plan.structure === 'round_robin';
+
 export function liveBracketFeeds(match: LiveMatch): BracketFeed[] {
   return ([0, 1] as const).flatMap((side) => {
     const id = side === 0 ? match.parent1MatchId : match.parent2MatchId;

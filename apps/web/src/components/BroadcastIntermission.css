@@ -87,6 +87,15 @@
 .intermission-standings td:not(:first-child) {
   font-family: var(--font-number);
 }
+.intermission-round-robin th:first-child {
+  width: 18%;
+}
+.intermission-round-robin td:first-child {
+  font-family: var(--font-number);
+}
+.intermission-round-robin td:nth-child(2) {
+  font-family: inherit;
+}
 .intermission-qualification th:first-child {
   width: 38%;
 }
