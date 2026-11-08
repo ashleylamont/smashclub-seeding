@@ -2,6 +2,18 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.4.2
+
+### Patch Changes
+
+- 8 November 2026 · **Fix** · Show when a match is called, and leave the station score blank until games are entered. [#257](https://github.com/ashleylamont/smashclub-seeding/pull/257) · [build da8c5c3](https://github.com/ashleylamont/smashclub-seeding/commit/da8c5c3454ad737f2bff76ec4e096661e2cf1170)
+
+  Pool rounds now say Called until play starts. Native station cards show the pairing before a live score is entered, and still show a saved 0–0.
+
+- 8 November 2026 · **Maintenance** · Run portable browser and accessibility checks in two Ubuntu shards. [#258](https://github.com/ashleylamont/smashclub-seeding/pull/258) · [build 667e38d](https://github.com/ashleylamont/smashclub-seeding/commit/667e38df6123641efd7285e6bfd39c79b0e718f9)
+
+  Both shards must cover the full portable suite between them, and the macOS screenshot checks retain their existing baselines.
+
 ## 0.4.1
 
 ### Patch Changes
