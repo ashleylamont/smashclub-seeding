@@ -417,8 +417,9 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
               void workspace.openControl('match-desk');
             }}
           />
-          <AttendeeList planId={planId} closed={closed} />
+          {/* Keep open attendance menus clear of shifts from the separately loaded roster. */}
           <AttendanceControls planId={planId} data={data} disabled={pending || closed} />
+          <AttendeeList planId={planId} closed={closed} />
         </TabPanel>
         <TabPanel value="draw">
           <PoolDrawControls
