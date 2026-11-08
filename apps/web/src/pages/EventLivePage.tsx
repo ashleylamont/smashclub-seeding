@@ -3,7 +3,7 @@ import { BroadcastPresentationControls } from '../components/BroadcastPresentati
 import { broadcastPresentation, progressInterval } from '../lib/broadcastProgress';
 import { PlayerEventAlias } from './GuestEventPage';
 import { Progress } from '../components/ui/Progress';
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { eventUnavailable } from '../lib/eventErrors';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
@@ -22,34 +22,6 @@ import { recentResultCount } from '../lib/broadcastSidebar';
 import { useGuestClock } from '../lib/guestReporting';
 
 import { liveSections, overlayGeometry, type LiveMatch } from '../lib/eventDisplay';
-/** Keep the QR and results in frame when the full event name needs more room. */
-function fitBroadcastRail(rail: HTMLElement | null) {
-  if (!rail) return;
-
-  const fit = () => {
-    const last = rail.lastElementChild;
-    if (!last) return;
-    rail.classList.remove('is-compact');
-    const { bottom } = rail.getBoundingClientRect();
-    const padding = parseFloat(getComputedStyle(rail).paddingBottom);
-    rail.classList.toggle('is-compact', last.getBoundingClientRect().bottom > bottom - padding + 1);
-  };
-
-  fit();
-  // Observe the fixed frame and content updates. Watching the fitted children
-  // would also react to the size changes that compact mode itself produces.
-  const resize = new ResizeObserver(fit);
-  resize.observe(rail, { box: 'border-box' });
-  const content = new MutationObserver(fit);
-  content.observe(rail, { childList: true, characterData: true, subtree: true });
-  document.fonts.addEventListener('loadingdone', fit);
-  return () => {
-    resize.disconnect();
-    content.disconnect();
-    document.fonts.removeEventListener('loadingdone', fit);
-  };
-}
-
 export function EventLivePage() {
   return <PlayerEventAlias />;
 }
@@ -73,6 +45,37 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
   );
   const [presentation, setPresentation] = useState(() => broadcastPresentation(location.search));
   const [cycleSeconds, setCycleSeconds] = useState(() => progressInterval(location.search));
+  const [compactRail, setCompactRail] = useState(false);
+  const observeRail = useCallback(
+    (rail: HTMLElement | null) => {
+      if (!rail || compactRail) return;
+
+      // Keep the composition stable once a crowded source needs the compact rail.
+      const fit = () => {
+        const last = rail.lastElementChild;
+        if (!last || !rail.clientHeight) return;
+        const { bottom } = rail.getBoundingClientRect();
+        const padding = parseFloat(getComputedStyle(rail).paddingBottom);
+        if (last.getBoundingClientRect().bottom > bottom - padding + 1) setCompactRail(true);
+      };
+      const sizes = new ResizeObserver(fit);
+      const observeChildren = () => {
+        sizes.disconnect();
+        sizes.observe(rail, { box: 'border-box' });
+        for (const child of rail.children) sizes.observe(child, { box: 'border-box' });
+        fit();
+      };
+      // The guest pass can appear or disappear after the event snapshot loads.
+      const children = new MutationObserver(observeChildren);
+      children.observe(rail, { childList: true });
+      observeChildren();
+      return () => {
+        children.disconnect();
+        sizes.disconnect();
+      };
+    },
+    [compactRail],
+  );
   const changePresentation = (mode: typeof presentation, seconds: number) => {
     const url = new URL(location.href);
     url.searchParams.set('presentation', mode);
@@ -167,8 +170,8 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
         style={variables}
       >
         <aside
-          ref={fitBroadcastRail}
-          className={`broadcast-rail${guestQr ? ' has-guest-pass' : ''}`}
+          ref={observeRail}
+          className={`broadcast-rail${guestQr ? ' has-guest-pass' : ''}${compactRail ? ' is-compact' : ''}`}
         >
           <div className="broadcast-club">
             <NemesisMark />
