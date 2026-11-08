@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { captureBaseline, decide, hash, reduceDecision, stableId } from '../src/tournament/domain';
+import { attendancePreview } from '../src/tournament/attendance';
 import {
   poolOrderStatus,
   poolResultBasis,
@@ -345,6 +346,37 @@ describe('opted-in automatic pool orders', () => {
     const future = initial();
     expect(decisions.reduce(reduceDecision, future).pools).toEqual(state.pools);
   });
+
+  it.each(['attendance', 'availability'] as const)(
+    'still invalidates a legacy pool order before finals on %s withdrawal',
+    (kind) => {
+      const state = rule(complete(initial(false)));
+      const pool = state.pools[0]!;
+      const entrant = state.entrants.find(({ playerId }) => playerId === pool.order![0])!;
+      const reason = 'Player left before qualifying';
+      const withdrawal = { action: 'withdraw' as const, playerId: entrant.playerId, reason };
+      const changed = apply(
+        state,
+        kind === 'attendance'
+          ? {
+              kind,
+              ...withdrawal,
+              revisionToken: attendancePreview(state, withdrawal).revisionToken,
+              approveRedistribution: false,
+            }
+          : {
+              kind,
+              playerId: entrant.playerId,
+              expectedRevision: entrant.revision,
+              availability: 'withdrawn',
+              reason,
+            },
+      );
+      expect(changed.pools[0]!.order).toBeNull();
+      expect(changed.brackets).toHaveLength(0);
+      expect(changed.matches).toEqual(state.matches);
+    },
+  );
 
   it('retains original pool/finals provenance after a reviewed published correction without claiming current automatic ordering', () => {
     let state = apply(complete(initial()), { kind: 'drawFinals' });

@@ -107,16 +107,22 @@ function DivisionPools({
         }
         /{division.poolCount} pools confirmed. Resolve ties using the event rules before confirming.
       </p>
-      {division.pools.some((pool) => pool.qualifierRoster) && (
+      {division.fixedLegacyFinals ? (
+        <p className="muted">
+          See the fixed finals draw in the{' '}
+          <a href={`/admin/event-operations?plan=${planId}`}>event desk</a>.
+        </p>
+      ) : division.pools.some((pool) => pool.qualifierRoster) ? (
         <p className="muted">
           The finals field is fixed. Later withdrawals use availability or forfeits. Returning
           entrants outside the field do not add finals places.
         </p>
-      )}
+      ) : null}
       {locked && (
         <p className="muted">
-          Placements are read-only while the event is closed or consolation is attached. Reconcile
-          and detach consolation before changing qualifiers.
+          {division.fixedLegacyFinals
+            ? 'This worksheet is read-only.'
+            : 'Placements are read-only while the event is closed or consolation is attached. Reconcile and detach consolation before changing qualifiers.'}
         </p>
       )}
       {division.championship.length > 0 && (
@@ -139,12 +145,14 @@ function DivisionPools({
             divisionKey={division.division}
             pool={pool}
             locked={locked}
+            fixedLegacyFinals={division.fixedLegacyFinals === true}
             onChanged={onChanged}
           />
         ))}
       </div>
 
       {!roundRobin &&
+        !division.fixedLegacyFinals &&
         (division.consolation ? (
           <div className="consolation-preview">
             <h5>Consolation draw</h5>
@@ -201,12 +209,14 @@ function PoolCard({
   divisionKey,
   pool,
   locked,
+  fixedLegacyFinals,
   onChanged,
 }: {
   planId: string;
   divisionKey: 'upper' | 'lower';
   pool: EventPlanPool;
   locked: boolean;
+  fixedLegacyFinals: boolean;
   onChanged: () => void;
 }) {
   const saved = pool.members.every((member) => member.place !== null)
@@ -269,7 +279,7 @@ function PoolCard({
         <span className="form-label">Final order</span>
         {pool.orderStatus && <p className="muted">{pool.orderStatus.reason}</p>}
         {pool.orderLockedReason && <p className="muted">{pool.orderLockedReason}</p>}
-        {pool.members.some((member) => member.withdrawn) && (
+        {!fixedLegacyFinals && pool.members.some((member) => member.withdrawn) && (
           <p className="muted">
             Include withdrawn entrants in the recorded finishing order. On confirmation, they are
             excluded from advancement: the upper half of active entrants, rounded up, advance to

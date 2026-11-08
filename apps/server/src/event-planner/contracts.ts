@@ -100,6 +100,8 @@ export interface DivisionView {
   size: number;
   poolCount: number;
   pools: PoolView[];
+  /** An existing native legacy draw owns qualification for this division. */
+  fixedLegacyFinals?: boolean;
   /** Null until every pool in the division has a confirmed 1-4. */
   consolation: ConsolationBracket | null;
   championship: { playerId: string; name: string; label: string }[];

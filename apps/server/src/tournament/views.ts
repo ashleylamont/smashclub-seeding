@@ -1,5 +1,5 @@
 import { poolFinalsConsumed } from './qualifiers';
-import { legacyQualifierSlots } from './legacyFinalQualifiers';
+import { hasFixedLegacyPoolQualifiers, legacyQualifierSlots } from './legacyFinalQualifiers';
 import { matchNames } from './matchNames';
 import { poolOrderStatus, poolPlacementSource } from './poolOrders';
 import {
@@ -402,6 +402,10 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
       ? (['upper'] as const)
       : (['upper', 'lower'] as const)
   ).map((division) => {
+    const fixedLegacyFinals =
+      !state.settings.poolOrderPolicy &&
+      state.baseline!.structure !== 'round_robin' &&
+      state.brackets.some((bracket) => bracket.division === division);
     const pools = state.pools
       .filter((p) => p.division === division)
       .map((p) => ({
@@ -413,9 +417,11 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
           ? p.qualifierDecision?.groups.flatMap((group) => group.map(() => group))
           : undefined,
         orderLockedReason:
-          p.qualifierRoster && !p.qualifierDecision && poolFinalsConsumed(state, p.id)
-            ? 'Finals already use this pool order. Called or played opponents and report history stay fixed.'
-            : undefined,
+          p.order && hasFixedLegacyPoolQualifiers(state, p)
+            ? 'Finals already use this pool order. Its confirmed places stay recorded after withdrawals.'
+            : p.qualifierRoster && !p.qualifierDecision && poolFinalsConsumed(state, p.id)
+              ? 'Finals already use this pool order. Called or played opponents and report history stay fixed.'
+              : undefined,
         orderStatus: poolOrderStatus(state, p),
         matchRevisions: state.matches
           .filter((m) => m.poolId === p.id)
@@ -433,13 +439,20 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
           };
         }),
       }));
-    const ordered = state.pools.filter((p) => p.division === division).every((p) => p.order);
-    const finishers = pools.flatMap((p) =>
-      p.members
-        .filter((m) => (p.qualifierRoster ? p.qualifierRoster.includes(m.playerId) : !m.withdrawn))
-        .sort((a, b) => a.place! - b.place!)
-        .map((m, i) => ({ playerId: m.playerId, poolIndex: p.poolIndex, place: i + 1 })),
-    );
+    const canPreview =
+      !fixedLegacyFinals &&
+      state.baseline!.structure !== 'round_robin' &&
+      pools.every((p) => p.members.every((member) => member.place !== null));
+    const finishers = canPreview
+      ? pools.flatMap((p) =>
+          p.members
+            .filter((m) =>
+              p.qualifierRoster ? p.qualifierRoster.includes(m.playerId) : !m.withdrawn,
+            )
+            .sort((a, b) => a.place! - b.place!)
+            .map((m, i) => ({ playerId: m.playerId, poolIndex: p.poolIndex, place: i + 1 })),
+        )
+      : [];
     const consolation = buildFormatFinals(
       state.baseline!.structure,
       finishers,
@@ -451,23 +464,18 @@ export async function planView(db: Db, state: TournamentState): Promise<PlanView
       size: entries.filter((e) => e.assignedDivision === division).length,
       poolCount: pools.length,
       pools,
-      consolation:
-        state.baseline!.structure !== 'round_robin' && ordered && consolation.length
-          ? seedPoolFinishers(consolation)
-          : null,
-      championship:
-        state.baseline!.structure !== 'round_robin' && ordered
-          ? buildFormatFinals(
-              state.baseline!.structure,
-              finishers,
-              'main',
-              state.baseline!.structureOptions,
-            ).map((q) => ({
-              playerId: q.playerId,
-              name: entries.find((e) => e.playerId === q.playerId)!.publicName,
-              label: q.label,
-            }))
-          : [],
+      ...(fixedLegacyFinals ? { fixedLegacyFinals } : {}),
+      consolation: consolation.length ? seedPoolFinishers(consolation) : null,
+      championship: buildFormatFinals(
+        state.baseline!.structure,
+        finishers,
+        'main',
+        state.baseline!.structureOptions,
+      ).map((q) => ({
+        playerId: q.playerId,
+        name: entries.find((e) => e.playerId === q.playerId)!.publicName,
+        label: q.label,
+      })),
     };
   });
   const event = await eventView(db, state);

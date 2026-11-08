@@ -1,5 +1,5 @@
 import { rollingFinals, requirePoolCorrectionAllowed } from './qualifiers';
-import { hasLegacyQualifier } from './legacyFinalQualifiers';
+import { hasFixedLegacyPoolQualifiers } from './legacyFinalQualifiers';
 import { advance } from './brackets';
 import { requireFact, resolved, sameScore } from './facts';
 import type { CommandEnvelope, Match, TournamentState } from './schemas';
@@ -86,12 +86,11 @@ export function applyScore(
     revision: match.revision + 1,
   });
   match.resultCommandId = commandId;
+  const pool = match.poolId && state.pools.find((p) => p.id === match.poolId);
   if (
-    match.poolId &&
-    (changed ||
-      (!state.settings.poolOrderPolicy && !hasLegacyQualifier(state, match.poolId, 'resolved')))
+    pool &&
+    (changed || (!state.settings.poolOrderPolicy && !hasFixedLegacyPoolQualifiers(state, pool)))
   ) {
-    const pool = state.pools.find((p) => p.id === match.poolId)!;
     pool.order = null;
     pool.revision++;
   }

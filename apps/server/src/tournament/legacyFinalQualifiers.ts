@@ -178,6 +178,19 @@ export function hasLegacyQualifier(
   );
 }
 
+/** SQL-era draws can store fixed entrant IDs without pool-place descriptors. */
+export function hasFixedLegacyPoolQualifiers(state: TournamentState, pool: Pool) {
+  return (
+    !state.settings.poolOrderPolicy &&
+    (hasLegacyQualifier(state, pool.id, 'resolved') ||
+      state.brackets.some(
+        (bracket) =>
+          bracket.division === pool.division &&
+          bracket.entrantIds.some((id) => pool.entrantIds.includes(id)),
+      ))
+  );
+}
+
 /** Confirm only the reserved places belonging to the submitted pool orders.
  * Reconstruct entrants from persisted first-round sides in legacy seed order. */
 export function resolveLegacyFinalQualifiers(

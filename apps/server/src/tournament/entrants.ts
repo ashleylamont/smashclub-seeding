@@ -1,7 +1,11 @@
 import { publicPlayerName } from '@smashclub/shared';
 import { requireFact } from './facts';
 import { advance } from './brackets';
-import { hasLegacyQualifier, legacyPendingRosterMessage } from './legacyFinalQualifiers';
+import {
+  hasFixedLegacyPoolQualifiers,
+  hasLegacyQualifier,
+  legacyPendingRosterMessage,
+} from './legacyFinalQualifiers';
 import type { CommandEnvelope, TournamentCommand, TournamentState } from './schemas';
 
 export type Entrant = TournamentState['entrants'][number];
@@ -62,6 +66,7 @@ export function changeAvailability(
     (!next.settings.poolOrderPolicy || !next.brackets.length)
   )
     for (const pool of next.pools.filter((p) => p.entrantIds.includes(entrant.playerId))) {
+      if (hasFixedLegacyPoolQualifiers(next, pool)) continue;
       pool.order = null;
       pool.revision++;
     }
