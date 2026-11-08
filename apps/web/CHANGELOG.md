@@ -2,6 +2,22 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.3.0
+
+### Minor Changes
+
+- 8 November 2026 · **Feature** · Add an optional Twitch channel link to OBS overlay sources from Display setup. [#247](https://github.com/ashleylamont/smashclub-seeding/pull/247) · [build aac6bca](https://github.com/ashleylamont/smashclub-seeding/commit/aac6bcac1f8de02117f0ddb2075107556de0562a)
+
+  Press S on the overlay, enter and save the Twitch channel, then copy the updated source URL into OBS.
+
+  ![OBS Progress scene with a Twitch channel link in the lower-right footer](./public/changelog/obs-twitch-link.png)
+
+### Patch Changes
+
+- 8 November 2026 · **Fix** · Automatic OBS sources show recorded progress when an event closes, and unfinished sets stop appearing as live matches. [#245](https://github.com/ashleylamont/smashclub-seeding/pull/245) · [build 006b14d](https://github.com/ashleylamont/smashclub-seeding/commit/006b14dca02347eeb2fb609f0ab840fa1a4048e8)
+- 8 November 2026 · **Fix** · Show when a native match is waiting for play to start, in progress, or carrying a live score in organiser match details. [#243](https://github.com/ashleylamont/smashclub-seeding/pull/243) · [build fa6a79b](https://github.com/ashleylamont/smashclub-seeding/commit/fa6a79ba725dd377db7e628d1f349c5de7f07eab)
+- 8 November 2026 · **Maintenance** · Keep stale release triggers from replacing the version PR by checking the trigger commit against current main before Changesets runs. [#244](https://github.com/ashleylamont/smashclub-seeding/pull/244) · [build 3409f5d](https://github.com/ashleylamont/smashclub-seeding/commit/3409f5d08e3fe435bdf4504b15620e5ec93dff0d)
+
 ## 0.2.11
 
 ### Patch Changes
