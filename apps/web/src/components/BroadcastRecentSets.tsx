@@ -53,7 +53,7 @@ export function BroadcastRecentSets({
               {!presentation.showScores && (
                 <>
                   <span className="broadcast-set-outcome">
-                    {presentation.kind === 'bye'
+                    {presentation.kind === 'bye' && presentation.byeWinner
                       ? 'Advanced automatically · Bye'
                       : presentation.result}
                   </span>

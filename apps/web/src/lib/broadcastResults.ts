@@ -1,4 +1,5 @@
 import type { LiveMatch } from './eventDisplay';
+import { recordedByeWinner } from './matchPresentation';
 
 export type ResultMatch = LiveMatch & {
   outcome?: 'played' | 'bye' | 'forfeit' | null;
@@ -34,6 +35,7 @@ export function newResultNotices(
   return recentResults(next, next.length)
     .reverse()
     .flatMap((match) => {
+      if (match.outcome === 'bye' && !recordedByeWinner(match)) return [];
       const old = before.get(match.id);
       const fingerprint = resultFingerprint(match);
       if (old && resultFingerprint(old) === fingerprint) return [];
@@ -47,10 +49,13 @@ export function newResultNotices(
     });
 }
 export function resultHeadline(match: ResultMatch): string {
+  if (match.outcome === 'bye') {
+    const winner = recordedByeWinner(match);
+    return winner ? `${winner} advances · bye` : 'Bye recorded';
+  }
   const first = match.winnerId === match.player1Id;
   const winner = (first ? match.player1Name : match.player2Name) || 'Player';
   const loser = (first ? match.player2Name : match.player1Name) || 'Opponent';
-  if (match.outcome === 'bye') return `${winner} advances · bye`;
   if (match.outcome === 'forfeit') return `${winner} advances · ${loser} forfeits`;
   return `${winner} ${first ? match.score1 : match.score2}–${first ? match.score2 : match.score1} ${loser}`;
 }

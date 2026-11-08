@@ -18,6 +18,14 @@ type PresentedMatch = Pick<
   | 'qualificationBlocks'
 >;
 
+export function recordedByeWinner(match: PresentedMatch) {
+  const { winnerId } = match;
+  if (match.status !== 'complete' || match.outcome !== 'bye' || !winnerId) return null;
+  if (winnerId === match.player1Id) return match.player1Name || 'Player';
+  if (winnerId === match.player2Id) return match.player2Name || 'Player';
+  return null;
+}
+
 /** A missing entrant is unresolved unless the recorded result explicitly says bye. */
 export function matchPresentation(match: PresentedMatch) {
   const complete = match.status === 'complete';
@@ -38,9 +46,14 @@ export function matchPresentation(match: PresentedMatch) {
             : complete
               ? 'played'
               : 'scheduled';
+  const byeWinner = recordedByeWinner(match);
+  const byeTitle = byeWinner ? `${byeWinner} · Bye` : 'Bye';
+  const byeResult = byeWinner
+    ? `${byeWinner} advanced automatically.`
+    : 'Bye recorded. No advancing entrant identified.';
   const title =
     kind === 'bye'
-      ? `${winner} · Bye`
+      ? byeTitle
       : kind === 'pending'
         ? `${(match.player1Id ? match.player1Name : match.player2Id ? match.player2Name : null) || 'Match'} · Awaiting opponent`
         : `${match.player1Name || 'Player'} vs ${match.player2Name || 'Opponent'}`;
@@ -58,7 +71,7 @@ export function matchPresentation(match: PresentedMatch) {
               : null;
   const result =
     kind === 'bye'
-      ? `${winner} advanced automatically.`
+      ? byeResult
       : kind === 'forfeit'
         ? `${winner} advances · ${loser} forfeits.`
         : kind === 'no-contest'
@@ -71,6 +84,7 @@ export function matchPresentation(match: PresentedMatch) {
     title,
     status,
     result,
+    byeWinner,
     showScores: kind === 'played' || kind === 'scheduled',
     canReport:
       Boolean(match.player1Id && match.player2Id) &&
@@ -92,7 +106,7 @@ export function matchParticipantName(match: PresentedMatch, side: 0 | 1) {
 
 /** Only expose a later pairing once the authoritative snapshot places the winner in it. */
 export function nextMeaningfulMatch(matches: readonly LiveMatch[], match: LiveMatch) {
-  if (matchPresentation(match).kind !== 'bye' || !match.winnerId) return undefined;
+  if (!recordedByeWinner(match)) return undefined;
   const direct = (candidate: LiveMatch) =>
     candidate.parent1MatchId === match.id || candidate.parent2MatchId === match.id;
   return matches
