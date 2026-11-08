@@ -1,6 +1,7 @@
 import { Button } from '../components/ui/Button';
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { trpc } from '../lib/trpc';
 import { timeAgo } from '../lib/format';
 import { filterInactive } from '../lib/activity';
@@ -250,6 +251,12 @@ export function LeaderboardPage() {
             ` · ${board.inactiveCount} inactive not counted`}
         </p>
       </header>
+
+      <div className="ui-actions">
+        <Button asChild size="small">
+          <Link to="/head-to-head">Compare players head to head</Link>
+        </Button>
+      </div>
 
       {leaderboard.data.rows.length === 0 ? (
         <div className="empty-state">
