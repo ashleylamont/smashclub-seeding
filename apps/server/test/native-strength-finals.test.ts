@@ -133,6 +133,51 @@ describe('native combined-strength finals', () => {
     expect(state.brackets.map((b) => b.stage)).toEqual(['main', 'consolation']);
   });
 
+  it('previews the full graph and automatic bye without writing the trial draw', () => {
+    const baseline = pureBaseline();
+    baseline.version = 2;
+    baseline.competitionFormat = 'singles';
+    baseline.structure = 'round_robin_finals';
+    baseline.structureOptions = { roundRobinMeetings: 1, playoffSize: 3, consolation: false };
+    baseline.settings.poolOrderPolicy = 'unique_set_wins_v1';
+    baseline.settings.finalsProgression = 'rolling_pool_places_v1';
+    baseline.pools = baseline.pools.filter((pool) => pool.division === 'upper');
+    baseline.entrants = baseline.entrants.filter((entrant) => entrant.division === 'upper');
+    baseline.matches = baseline.matches.filter((match) => match.division === 'upper');
+    const state = finish(captureBaseline(baseline), 'upper');
+    const original = structuredClone(state);
+
+    const preview = previewStrengthFinals(state);
+    const [bracket] = preview.brackets;
+    const matches = bracket!.previewMatches;
+    expect(matches).toHaveLength(3);
+    const opening = matches.filter((match) => match.nativeRound === 1);
+    const bye = opening.find((match) => match.outcome === 'bye');
+    expect(bye).toMatchObject({ status: 'complete', winnerId: expect.any(String) });
+    expect(matches[2]).toMatchObject({
+      nativeRound: 2,
+      parent1MatchId: opening[0]!.id,
+      parent2MatchId: opening[1]!.id,
+      status: 'blocked',
+      winnerId: null,
+    });
+    expect(state).toEqual(original);
+
+    const committed = run(state, draw(preview));
+    expect(committed.matches.filter((match) => match.bracketId)).toMatchObject(
+      matches.map((match) => ({
+        round: match.nativeRound,
+        slot: match.nativeSlot,
+        player1Id: match.player1Id,
+        player2Id: match.player2Id,
+        status: match.status,
+        outcome: match.outcome,
+        winnerId: match.winnerId,
+      })),
+    );
+    expect(previewStrengthFinals(committed).brackets[0]!.previewMatches).toEqual([]);
+  });
+
   it('leaves a division unfrozen when only its empty consolation is ready', () => {
     const baseline = pureBaseline();
     baseline.settings.poolOrderPolicy = 'unique_set_wins_v1';
