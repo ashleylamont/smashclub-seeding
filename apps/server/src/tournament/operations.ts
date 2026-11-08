@@ -4,7 +4,6 @@ import { canConfirmPoolOrder, requirePoolOrderChangeAllowed } from './poolOrders
 import { beginPlay, changeStation, configureDispatch, moveQueue, sharedDispatch } from './dispatch';
 import { isKnockout } from '@smashclub/shared';
 import { hash, requireFact, resolved, TournamentConflict, unconfirmedCall } from './facts';
-import { applyAttendance } from './attendance';
 import { substituteDoublesMember } from './doublesSubstitution';
 import { replaceResult } from './replacement';
 import type { FinalsDivisionResetScope } from './commands';
@@ -302,9 +301,6 @@ export function additionalDecision(
       break;
     case 'substituteDoublesMember':
       substituteDoublesMember(state, command, basis);
-      break;
-    case 'attendance':
-      applyAttendance(state, envelope, command);
       break;
     case 'cancel':
       state.lifecycle = 'cancelled';

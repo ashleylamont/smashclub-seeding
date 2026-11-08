@@ -10,6 +10,7 @@ import { sealResults } from './results';
 import { memberIds, changeAvailability } from './entrants';
 import { dispatchMatch } from './scheduling';
 import { replayFinalsSlot } from './finalsSlotReplay';
+import { applyAttendance } from './attendance';
 import { additionalDecision, finalsToken, resetFinals, poolDrawPauseBlocker } from './operations';
 import { drawFinals } from './brackets';
 import { hash, receiptKey, requireFact, resolved, sameScore } from './facts';
@@ -217,6 +218,7 @@ export function decide(
   const next = structuredClone(previous);
   const basis: Record<string, number> = {};
   let reportId: string | null = null;
+  let attendanceEffect: TournamentDecision['receipt']['attendanceEffect'];
   switch (command.kind) {
     case 'broadcastSides':
       changeBroadcastSides(next, command, basis);
@@ -251,6 +253,9 @@ export function decide(
       break;
     case 'availability':
       changeAvailability(next, envelope, command, basis);
+      break;
+    case 'attendance':
+      attendanceEffect = applyAttendance(next, envelope, command);
       break;
     case 'resources':
       updateResources(next, command, basis);
@@ -381,7 +386,13 @@ export function decide(
           .flatMap((m) => (m.resultCommandId ? [m.resultCommandId] : [])),
       ),
     ],
-    receipt: { hash: inputHash, sequence: previous.sequence + 1, reportId, commandId: envelope.id },
+    receipt: {
+      hash: inputHash,
+      sequence: previous.sequence + 1,
+      reportId,
+      commandId: envelope.id,
+      ...(attendanceEffect ? { attendanceEffect } : {}),
+    },
   };
 }
 

@@ -58,8 +58,11 @@ Commands are discriminated by `kind`; schemas are in
   The decision checks the reviewed capacity setting and exact pairing, then
   validates current availability and free ordinary capacity. Other dispatch
   requests continue to check the resource revision.
-- Attendance and policy: `availability`, `attendance`, `reporting`. Attendance
-  captures a new entrant's identity facts and applies a reviewed preview.
+- Attendance and policy: `availability`, `attendance`, `reporting`. For a native
+  singles late arrival, use `eventOps.previewAttendance` and `applyAttendance`
+  with `action: add`. Apply captures the current profile under the same lock
+  used by profile merges. Reusing the exact request ID and input recovers the
+  original match counts for new additions.
 - Draw and lifecycle: `placements`, `poolOrders`, `drawFinals`, `resetFinals`,
   `resetQueue`, `unlock`, `relock`, `cancel`. Unlock means pause for an unplayed
   Act-owned draw; SQL editing stays frozen. Chosen draws and dependencies are

@@ -28,6 +28,10 @@ export function attendancePreview(
     : ordinaryAttendancePreview(state, input);
 }
 
+export function attendanceEffect(preview: AttendancePreview) {
+  return { addedMatches: preview.addedMatches, affectedMatches: preview.affectedMatches.length };
+}
+
 function ordinaryAttendancePreview(
   state: TournamentState,
   input: Omit<Input, 'kind' | 'revisionToken' | 'entrant' | 'reason' | 'approveRedistribution'> & {
@@ -301,6 +305,7 @@ export function applyAttendance(state: TournamentState, envelope: CommandEnvelop
     state.pools = state.pools.filter((p) => p.entrantIds.length);
   }
   state.settings.resourceRevision++;
+  if (input.action === 'add') return attendanceEffect(preview);
 }
 
 function poolHasCallsOrHistory(state: TournamentState, id: string) {

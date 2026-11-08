@@ -264,6 +264,7 @@ export const Receipt = z.object({
   sequence: revision,
   reportId: id.nullable(),
   commandId: id.optional(),
+  attendanceEffect: z.object({ addedMatches: revision, affectedMatches: revision }).optional(),
 });
 export const LiveState = z.object({
   // Absent on old facts; display preferences never participate in competitive state.

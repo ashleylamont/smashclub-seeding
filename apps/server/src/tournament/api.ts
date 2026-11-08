@@ -11,16 +11,11 @@ import { isKnockout } from '@smashclub/shared';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
-import {
-  eventPlans,
-  eventMatches,
-  eventScoreReports,
-  nativeLiveHandoffs,
-  players,
-} from '@smashclub/db';
+import { eventPlans, eventMatches, eventScoreReports, nativeLiveHandoffs } from '@smashclub/db';
 import type { TrpcContext } from '../trpc/trpc';
 import { isOperator, requireOperator } from '../event-operations/access';
-import { attendancePreview } from './attendance';
+import { lockPlayerRows } from '../identity/playerIds';
+import { attendanceEffect, attendancePreview } from './attendance';
 import { drawFinals } from './brackets';
 import { finalsToken } from './operations';
 import { eventView, planView, matchRows } from './views';
@@ -28,6 +23,7 @@ import {
   TournamentConflict,
   UntakenFeederCallsConflict,
   hash,
+  receiptKey,
   stableId,
   unconfirmedCall,
 } from './facts';
@@ -187,6 +183,10 @@ export function reportViews(state: TournamentState) {
       createdAt: new Date(r.createdAt),
     }));
 }
+type AttendanceChange = Parameters<typeof attendancePreview>[1] & {
+  revisionToken: string;
+};
+
 export class NativeEventApi {
   constructor(
     readonly ctx: TrpcContext,
@@ -205,7 +205,11 @@ export class NativeEventApi {
       ? stableId(`${this.planId}:${this.ctx.user?.id}:${kind}:${this.intent.requestId}`)
       : randomUUID();
   }
-  execute(command: TournamentCommand, requestId: string = this.intent?.requestId ?? randomUUID()) {
+  execute(
+    command: TournamentCommand,
+    requestId: string = this.intent?.requestId ?? randomUUID(),
+    readDb = this.ctx.db,
+  ) {
     const { user } = this.ctx;
     if (!user) throw new TRPCError({ code: 'UNAUTHORIZED' });
     return nativeTransport(
@@ -216,6 +220,7 @@ export class NativeEventApi {
           requestId,
           command,
           this.intent?.requestId ? hash(this.intent) : undefined,
+          readDb,
         ),
       command.kind === 'score' || command.kind === 'review'
         ? () => isOperator(this.ctx.db, this.planId, user)
@@ -397,25 +402,8 @@ export class NativeEventApi {
   async previewAttendance(input: Parameters<typeof attendancePreview>[1]) {
     return attendancePreview(await this.state(), input);
   }
-  async attendance(
-    input: Parameters<typeof attendancePreview>[1] & {
-      revisionToken: string;
-      reason?: string;
-      approveRedistribution?: boolean;
-    },
-  ) {
-    let entrant: Extract<TournamentCommand, { kind: 'attendance' }>['entrant'];
-    if (input.action === 'add') {
-      const [p] = await this.ctx.db.select().from(players).where(eq(players.id, input.playerId));
-      if (!p || p.status !== 'active')
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Choose an active player.' });
-      entrant = {
-        id: randomUUID(),
-        name: p.canonicalName,
-        snapshotRank: null,
-        snapshotScore: null,
-      };
-    }
+  async attendance(input: AttendanceChange) {
+    if (input.action === 'add') return this.addAttendance(input);
     const preview = await this.previewAttendance(input);
     await this.execute({
       ...input,
@@ -423,12 +411,51 @@ export class NativeEventApi {
       reason:
         input.action === 'restore' ? (input.reason?.trim() ?? '') : (input.reason ?? input.action),
       approveRedistribution: input.approveRedistribution ?? false,
-      entrant,
     });
-    return {
-      applied: true,
-      addedMatches: preview.addedMatches,
-      affectedMatches: preview.affectedMatches.length,
-    };
+    return { applied: true, ...attendanceEffect(preview) };
+  }
+
+  private async addAttendance(input: AttendanceChange) {
+    const { db, user } = this.ctx;
+    if (!user) throw new TRPCError({ code: 'UNAUTHORIZED' });
+    const requestId = this.intent?.requestId;
+    return db.transaction(async (tx) => {
+      await requireOperator(tx, this.planId, user);
+      // A profile merge uses the same row lock before checking live attendance.
+      const [player] = await lockPlayerRows(tx, [input.playerId]);
+      const state = await this.state();
+      let receipt = requestId ? state.receipts[receiptKey(user.id, requestId)] : undefined;
+      if (receipt) {
+        if (receipt.hash !== hash(this.intent))
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Request identifier already used for a different command.',
+          });
+      } else {
+        if (!player || player.status !== 'active' || player.mergedIntoPlayerId)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Choose an active player.' });
+        ({ receipt } = await this.execute(
+          {
+            ...input,
+            kind: 'attendance',
+            reason: input.reason ?? 'add',
+            approveRedistribution: input.approveRedistribution ?? false,
+            entrant: {
+              id: randomUUID(),
+              name: player.canonicalName,
+              snapshotRank: null,
+              snapshotScore: null,
+            },
+          },
+          requestId,
+          tx,
+        ));
+      }
+      // Older receipts have no saved counts and retain the existing preview-based response.
+      return {
+        applied: true,
+        ...(receipt.attendanceEffect ?? attendanceEffect(attendancePreview(state, input))),
+      };
+    });
   }
 }
