@@ -366,19 +366,99 @@ describe('version preflight', () => {
   const steps = versionWorkflow.jobs.version.steps;
   const preflight = steps.find((step: { id?: string }) => step.id === 'empty-changesets');
 
-  it('checks current main on push before setup, token creation and versioning', () => {
+  it('checks the exact trigger before setup and rechecks immediately before versioning', () => {
     expect(versionWorkflow.on).toHaveProperty('workflow_dispatch');
-    expect(steps[0].with.ref).toBe('main');
-    expect(steps[1]).toBe(preflight);
-    expect(preflight.if).toContain("github.event_name == 'push'");
-    for (const step of steps.slice(2, 5)) {
-      expect(step.if).toContain("steps.empty-changesets.outputs.skip != 'true'");
-    }
-    expect(steps.slice(2, 5).map((step: { uses: string }) => step.uses.split('@')[0])).toEqual([
+    expect(steps[0].with).toEqual({
+      ref: '${{ github.sha }}',
+      'fetch-depth': 0,
+      'persist-credentials': false,
+    });
+    expect(
+      steps.slice(1, 7).map((step: { id?: string; uses?: string }) => step.id ?? step.uses),
+    ).toEqual([
+      'version-source',
+      'empty-changesets',
       './.github/actions/setup-node-pnpm',
-      'actions/create-github-app-token',
-      'changesets/action',
+      'release-token',
+      'version-source-final',
+      'changesets',
     ]);
+    for (const guard of [steps[1], steps[5]]) {
+      expect(guard).toMatchObject({
+        env: { GH_TOKEN: '${{ github.token }}' },
+        run: 'bash scripts/check-version-source.sh',
+      });
+    }
+    expect(steps[1].if).toBe("env.RELEASE_APP_CONFIGURED == 'true'");
+    expect(preflight.if).toBe(
+      "steps.version-source.outputs.ready == 'true' && github.event_name == 'push'",
+    );
+    for (const step of [steps[3], steps[4], steps[5]]) {
+      expect(step.if).toBe(
+        "steps.version-source.outputs.ready == 'true' && steps.empty-changesets.outputs.skip != 'true'",
+      );
+    }
+    expect(steps[6].if).toBe("steps.version-source-final.outputs.ready == 'true'");
+    expect(
+      steps.find((step: { name?: string }) => step.name?.startsWith('Queue the version PR')).run,
+    ).toContain('--match-head-commit "$head"');
+  });
+
+  it('accepts a fresh trigger and stops stale or unverifiable sources', () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'nemesis-version-source-'));
+    const output = join(cwd, 'output');
+    const script = fileURLToPath(new URL('../../scripts/check-version-source.sh', import.meta.url));
+    const newer = 'b'.repeat(40);
+    try {
+      writeFileSync(
+        join(cwd, 'git'),
+        '#!/bin/sh\n[ "$*" = "rev-parse HEAD" ] || exit 1\nprintf "%s\\n" "$CHECKOUT_SHA"\n',
+        { mode: 0o700 },
+      );
+      writeFileSync(
+        join(cwd, 'gh'),
+        [
+          '#!/bin/sh',
+          '[ "$*" = "api repos/test/nemesis/git/ref/heads/main --jq .object.sha" ] || exit 1',
+          '[ "$GH_TOKEN" = read-token ] || exit 1',
+          '[ "$LOOKUP_FAILS" = false ] || exit 1',
+          'printf "%s\\n" "$MAIN_SHA"',
+          '',
+        ].join('\n'),
+        { mode: 0o700 },
+      );
+      const guard = (main: string, event = 'push', checkout = sha, lookupFails = false) => {
+        writeFileSync(output, '');
+        const run = spawnSync('/bin/bash', [script], {
+          cwd,
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            PATH: `${cwd}:${process.env.PATH}`,
+            GITHUB_REPOSITORY: 'test/nemesis',
+            GITHUB_SHA: sha,
+            GITHUB_EVENT_NAME: event,
+            GITHUB_OUTPUT: output,
+            GH_TOKEN: 'read-token',
+            CHECKOUT_SHA: checkout,
+            MAIN_SHA: main,
+            LOOKUP_FAILS: String(lookupFails),
+          },
+        });
+        return { status: run.status, output: readFileSync(output, 'utf8'), stdout: run.stdout };
+      };
+      expect(guard(sha)).toMatchObject({ status: 0, output: 'ready=true\n' });
+      expect(guard(newer)).toMatchObject({ status: 0, output: 'ready=false\n' });
+      expect(guard(sha, 'workflow_dispatch')).toMatchObject({ status: 0, output: 'ready=true\n' });
+      const staleDispatch = guard(newer, 'workflow_dispatch');
+      expect(staleDispatch).toMatchObject({ status: 0, output: 'ready=false\n' });
+      expect(staleDispatch.stdout).toContain('Run Version Nemesis again on main');
+      for (const result of [guard(sha, 'push', newer), guard(sha, 'push', sha, true), guard('')]) {
+        expect(result).toMatchObject({ status: 1, output: '' });
+      }
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
   });
 
   it.each([
