@@ -2,6 +2,14 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.9.1
+
+### Patch Changes
+
+- 9 November 2026 · **Fix** · Keep pure round-robin results with the confirmed pool standings on the player hub and show the organiser’s confirmed order on OBS. [#311](https://github.com/ashleylamont/smashclub-seeding/pull/311) · [build cd0d8a3](https://github.com/ashleylamont/smashclub-seeding/commit/cd0d8a39af78347e198abcd4ab82b5248d0b2575)
+- 9 November 2026 · **Fix** · Print each structurally named bracket match with one caption on the organiser’s backup worksheet. The match order and feeder instructions are still shown. [#313](https://github.com/ashleylamont/smashclub-seeding/pull/313) · [build 6180f10](https://github.com/ashleylamont/smashclub-seeding/commit/6180f10e9909f75509d9426b7e3375416c78d425)
+- 9 November 2026 · **Fix** · Improve light-theme contrast for the main-character and administrator badges. [#312](https://github.com/ashleylamont/smashclub-seeding/pull/312) · [build 8cade51](https://github.com/ashleylamont/smashclub-seeding/commit/8cade5170f8d2f3219201595e57438226cfe36d7)
+
 ## 0.9.0
 
 ### Minor Changes
