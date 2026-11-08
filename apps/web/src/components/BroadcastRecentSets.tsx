@@ -41,6 +41,9 @@ export function BroadcastRecentSets({
                       <strong title={matchParticipantName(match, side)}>
                         {matchParticipantName(match, side)}
                       </strong>
+                      {presentation.kind === 'forfeit' && id === match.winnerId && (
+                        <span className="broadcast-set-status">Advances</span>
+                      )}
                       {presentation.showScores && (
                         <b>{(side === 0 ? match.score1 : match.score2) ?? '–'}</b>
                       )}
@@ -48,11 +51,14 @@ export function BroadcastRecentSets({
                   );
                 })}
               {!presentation.showScores && (
-                <span className="broadcast-set-outcome">
-                  {presentation.kind === 'bye'
-                    ? 'Advanced automatically · Bye'
-                    : presentation.result}
-                </span>
+                <>
+                  <span className="broadcast-set-outcome">
+                    {presentation.kind === 'bye'
+                      ? 'Advanced automatically · Bye'
+                      : presentation.result}
+                  </span>
+                  <span className="broadcast-set-status">{presentation.status}</span>
+                </>
               )}
             </article>
           );

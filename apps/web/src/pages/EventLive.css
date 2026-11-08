@@ -1307,8 +1307,67 @@
   letter-spacing: 0;
   margin-bottom: 0.4vh;
 }
-.broadcast-set-outcome {
+.broadcast-set-outcome,
+.broadcast-set-status {
   font-size: clamp(9px, 0.6vw, 12px);
   line-height: 1.4;
   overflow-wrap: anywhere;
+}
+
+.broadcast-set-status {
+  display: none;
+}
+
+/* Recover space on crowded sources while preserving both result cards and the QR size. */
+.broadcast-rail.is-compact {
+  padding: 1.6vh 1.2vw 1vh;
+}
+.broadcast-rail.is-compact .broadcast-club svg {
+  width: 2vw;
+  height: 2vw;
+}
+.broadcast-rail.is-compact .broadcast-identity {
+  margin-block: 0.8vh;
+}
+.broadcast-rail.is-compact .broadcast-identity h1 {
+  font-size: clamp(18px, 1.4vw, 34px);
+  line-height: 1.05;
+  margin: var(--s1) 0;
+}
+.broadcast-rail.is-compact .broadcast-rail-rule {
+  padding-block: var(--s1);
+}
+.broadcast-rail.is-compact .broadcast-recent-sets article {
+  padding-block: 0.5vh;
+}
+.broadcast-rail.is-compact .broadcast-recent-sets strong {
+  -webkit-line-clamp: 1;
+}
+/* The compact cards show the outcome beside the entrants, who are already listed. */
+.broadcast-rail.is-compact .broadcast-set-outcome {
+  display: none;
+}
+.broadcast-rail.is-compact .broadcast-set-status {
+  display: block;
+}
+.broadcast-rail.is-compact .broadcast-progress {
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: var(--s1) var(--s2);
+}
+.broadcast-rail.is-compact .broadcast-progress strong {
+  font-size: clamp(20px, 2.2vw, 42px);
+}
+.broadcast-rail.is-compact .broadcast-progress progress {
+  grid-column: 1 / -1;
+}
+.broadcast-rail.is-compact .broadcast-progress small {
+  display: none;
+}
+.broadcast-rail.is-compact .broadcast-progress,
+.broadcast-rail.is-compact .broadcast-guest-pass {
+  padding-top: 0.6vh;
+}
+.broadcast-rail.is-compact .broadcast-guest-pass {
+  margin-top: 0.9vh;
 }

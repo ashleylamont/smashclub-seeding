@@ -3,7 +3,7 @@ import { BroadcastPresentationControls } from '../components/BroadcastPresentati
 import { broadcastPresentation, progressInterval } from '../lib/broadcastProgress';
 import { PlayerEventAlias } from './GuestEventPage';
 import { Progress } from '../components/ui/Progress';
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { eventUnavailable } from '../lib/eventErrors';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from '@tanstack/react-router';
@@ -45,6 +45,37 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
   );
   const [presentation, setPresentation] = useState(() => broadcastPresentation(location.search));
   const [cycleSeconds, setCycleSeconds] = useState(() => progressInterval(location.search));
+  const [compactRail, setCompactRail] = useState(false);
+  const observeRail = useCallback(
+    (rail: HTMLElement | null) => {
+      if (!rail || compactRail) return;
+
+      // Keep the composition stable once a crowded source needs the compact rail.
+      const fit = () => {
+        const last = rail.lastElementChild;
+        if (!last || !rail.clientHeight) return;
+        const { bottom } = rail.getBoundingClientRect();
+        const padding = parseFloat(getComputedStyle(rail).paddingBottom);
+        if (last.getBoundingClientRect().bottom > bottom - padding + 1) setCompactRail(true);
+      };
+      const sizes = new ResizeObserver(fit);
+      const observeChildren = () => {
+        sizes.disconnect();
+        sizes.observe(rail, { box: 'border-box' });
+        for (const child of rail.children) sizes.observe(child, { box: 'border-box' });
+        fit();
+      };
+      // The guest pass can appear or disappear after the event snapshot loads.
+      const children = new MutationObserver(observeChildren);
+      children.observe(rail, { childList: true });
+      observeChildren();
+      return () => {
+        children.disconnect();
+        sizes.disconnect();
+      };
+    },
+    [compactRail],
+  );
   const changePresentation = (mode: typeof presentation, seconds: number) => {
     const url = new URL(location.href);
     url.searchParams.set('presentation', mode);
@@ -129,7 +160,8 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
       ? undefined
       : sections.playing[0];
   const displayPlayers = broadcastPlayers(data, onStream);
-  const showName = data.plan.name.split(' · ')[0]!;
+  const [showName, ...editionParts] = data.plan.name.split(' · ');
+  const edition = editionParts.join(' · ');
   const intermission = presentation === 'progress' || (presentation === 'auto' && !onStream);
   if (overlay)
     return (
@@ -137,7 +169,10 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
         className={`event-display event-overlay${intermission ? ' is-intermission' : ''}`}
         style={variables}
       >
-        <aside className={`broadcast-rail${guestQr ? ' has-guest-pass' : ''}`}>
+        <aside
+          ref={observeRail}
+          className={`broadcast-rail${guestQr ? ' has-guest-pass' : ''}${compactRail ? ' is-compact' : ''}`}
+        >
           <div className="broadcast-club">
             <NemesisMark />
             <span>
@@ -148,11 +183,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
           </div>
           <div className="broadcast-identity">
             <h1 title={data.plan.name}>{showName}</h1>
-            {data.plan.name.includes(' · ') && (
-              <span className="broadcast-edition">
-                {data.plan.name.split(' · ').slice(1).join(' · ')}
-              </span>
-            )}
+            {edition && <span className="broadcast-edition">{edition}</span>}
           </div>
           <BroadcastRecentSets
             matches={visibleMatches}
