@@ -1,5 +1,6 @@
 import { rollingFinals, requirePoolCorrectionAllowed } from './qualifiers';
 import { hasFixedLegacyPoolQualifiers } from './legacyFinalQualifiers';
+import { reviewPoolGameCorrection } from './poolGameCorrection';
 import { advance } from './brackets';
 import {
   requireFact,
@@ -112,6 +113,10 @@ export function recordScore(
   let reportId: string | null = null;
   const match = next.matches.find((m) => m.id === command.matchId);
   requireFact(match, 'Match not found.');
+  requireFact(
+    !command.poolGameCorrectionToken || envelope.operator,
+    'Only an organiser can correct played pool games.',
+  );
   basis[match.id] = match.revision;
   for (const parentId of [match.parent1Id, match.parent2Id]) {
     if (parentId) basis[parentId] = next.matches.find((m) => m.id === parentId)!.revision;
@@ -150,7 +155,32 @@ export function recordScore(
       match.revision === command.expectedRevision,
       'This match changed. Refresh and try again.',
     );
-    applyScore(next, match, result, envelope.at, false, envelope.id);
+    if (command.poolGameCorrectionToken) {
+      requireFact(
+        command.outcome === 'played' && command.score1 !== null && command.score2 !== null,
+        'Review a played pool score correction.',
+      );
+      const reviewed = reviewPoolGameCorrection(next, {
+        matchId: match.id,
+        expectedRevision: command.expectedRevision,
+        score1: command.score1,
+        score2: command.score2,
+      });
+      requireFact(
+        reviewed.revisionToken === command.poolGameCorrectionToken,
+        'Pool evidence changed. Review the score correction again.',
+      );
+      basis[reviewed.pool.id] = reviewed.pool.revision;
+      for (const poolMatch of next.matches.filter((row) => row.poolId === reviewed.pool.id))
+        basis[poolMatch.id] = poolMatch.revision;
+      Object.assign(match, {
+        score1: command.score1,
+        score2: command.score2,
+        revision: match.revision + 1,
+        automaticFromRevision: null,
+        resultCommandId: envelope.id,
+      });
+    } else applyScore(next, match, result, envelope.at, false, envelope.id);
     reportId = envelope.id;
     next.reports.push({
       id: reportId,

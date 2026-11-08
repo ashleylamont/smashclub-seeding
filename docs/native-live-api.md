@@ -39,6 +39,7 @@ apply a reviewed preview token.
 | Procedure | Behavior |
 | --- | --- |
 | `eventOps.live.command` | Authenticated actor plus `planId`, `requestId`, `command`; resolves organiser access and returns a receipt, sequence and publication status. |
+| `eventOps.live.previewPoolGameCorrection` | Organiser preview for changed games with the same winner after combined finals use an automatic pool order. Send its token with the reviewed `score` command. |
 | `eventOps.live.snapshot` | Published view with optional domain `cursor`; returns `unchanged` or full `resync` metadata. No reports, actor history or credentials. |
 | `eventOps.live.overview` | Operator view with reports, grouped commands and pending rating intents. |
 | `eventOps.live.history` | Admin or assigned TO only. Newest-first recorded events, bounded `limit` (default 50, maximum 100), and `nextCursor` for older pages. |
@@ -67,6 +68,11 @@ Commands are discriminated by `kind`; schemas are in
 - Publication: `finalize`, `replaceResult`. Replacement names the current result,
   its corrected match revisions and a ruling reason. It retains actual opponents
   and the draw and publishes a new revision through the same durable reaction.
+
+A reviewed pool game correction keeps the original winner, opponents, completion
+time, automatic finishing order and combined finals draw. The corrected games
+contribute to ratings through normal event publication. A current pool score
+review blocks this correction until the organiser resolves it.
 
 Publication status is `pending`, `blocked` or `published`; published includes
 historical tournament IDs. Rating-intent completion is independent of the

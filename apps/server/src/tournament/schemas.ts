@@ -307,6 +307,13 @@ export const LiveState = z.object({
     )
     .default([]),
 });
+export const PoolGameCorrection = z.object({
+  matchId: id,
+  expectedRevision: revision,
+  score1: revision.max(5),
+  score2: revision.max(5),
+});
+export type PoolGameCorrectionInput = z.infer<typeof PoolGameCorrection>;
 export const Command = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('score'),
@@ -316,6 +323,7 @@ export const Command = z.discriminatedUnion('kind', [
     score2: revision.max(5).nullable(),
     winnerId: id.optional(),
     outcome: z.enum(['played', 'forfeit']),
+    poolGameCorrectionToken: z.string().length(64).optional(),
   }),
   z.object({
     kind: z.literal('review'),

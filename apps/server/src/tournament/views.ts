@@ -1,7 +1,12 @@
 import { poolFinalsConsumed, rollingFinals } from './qualifiers';
 import { hasFixedLegacyPoolQualifiers, legacyQualifierSlots } from './legacyFinalQualifiers';
 import { projectMatchLabels } from './matchNames';
-import { canConfirmPoolOrder, poolOrderStatus, poolPlacementSource } from './poolOrders';
+import {
+  canConfirmPoolOrder,
+  canReviewFrozenPoolGames,
+  poolOrderStatus,
+  poolPlacementSource,
+} from './poolOrders';
 import {
   dispatchAvailability,
   dispatchContext,
@@ -36,7 +41,7 @@ type MatchViewFields = Pick<
 > & { labelFromStructure?: true };
 export type EventSnapshot = Omit<SqlSnapshot, 'placements' | 'matches' | 'nativeBrackets'> & {
   broadcastSides?: TournamentState['broadcastSides'];
-  matches: (SqlSnapshot['matches'][number] & MatchViewFields)[];
+  matches: (SqlSnapshot['matches'][number] & MatchViewFields & { reviewPoolGames?: true })[];
   nativeBrackets: (SqlSnapshot['nativeBrackets'][number] & { qualifierSlots?: QualifierSlot[] })[];
   pendingFinals?: ReturnType<typeof pendingStrengthFinals>;
   placements: (Omit<SqlSnapshot['placements'][number], 'source'> & {
@@ -175,6 +180,21 @@ export async function eventView(
         .orderBy(asc(playerCharacters.position))
     : [];
   const rows = matchRows(state);
+  const reviewableMatches = new Set<string>();
+  if (privateView) {
+    const reviewablePools = new Set(
+      state.pools.filter((pool) => canReviewFrozenPoolGames(state, pool)).map(({ id }) => id),
+    );
+    for (const match of state.matches)
+      if (
+        match.stage === 'group' &&
+        match.status === 'complete' &&
+        match.outcome === 'played' &&
+        match.poolId &&
+        reviewablePools.has(match.poolId)
+      )
+        reviewableMatches.add(match.id);
+  }
   const dispatch = sharedDispatch(state) ? dispatchContext(state) : undefined;
   const pendingReviewIds =
     dispatch?.pendingReports ??
@@ -258,6 +278,7 @@ export async function eventView(
     settings: publicSettings(state),
     matches: rows.map((m) => ({
       ...m,
+      ...(reviewableMatches.has(m.id) ? { reviewPoolGames: true as const } : {}),
       resourceRevision: state.settings.resourceRevision,
       progressRevision: state.matches.find((row) => row.id === m.id)!.progressRevision,
       started: state.matches.find((row) => row.id === m.id)!.started,

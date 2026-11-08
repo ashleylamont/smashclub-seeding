@@ -1,11 +1,21 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PostgresStore } from '@rotorsoft/act-pg';
+import { sets } from '@smashclub/db';
+import { sql } from 'drizzle-orm';
 import { postgresCluster } from './helpers/postgres';
 import { nativeAdmin, seedNativeDraft } from './helpers/nativeLiveFixture';
 import { createNativeRuntime, nativeStream, type NativeRuntime } from '../src/tournament/runtime';
 import { nativeEventHistory } from '../src/tournament/history';
 import { previewStrengthFinals } from '../src/tournament/finalsPreview';
 import { finalsToken } from '../src/tournament/operations';
+import { dispatchQueue } from '../src/tournament/dispatch';
+import { reviewPoolGameCorrection } from '../src/tournament/poolGameCorrection';
+import { eventView } from '../src/tournament/views';
+import { loadSinglesHistory } from '../src/recompute/inputs';
+import { appRouter } from '../src/trpc/router';
+import { loadEnv } from '../src/env';
+import { ChallongeClient } from '../src/challonge/client';
+import { RecomputeTrigger } from '../src/recompute/trigger';
 import { Decision, type TournamentCommand, type TournamentState } from '../src/tournament/schemas';
 
 describe('rolling qualifier decisions on isolated PostgreSQL', () => {
@@ -124,6 +134,213 @@ describe('rolling qualifier decisions on isolated PostgreSQL', () => {
     expect(history.entries.some((entry) => entry.eventName === 'DecisionRecordedV6')).toBe(true);
     const publicSnapshot = await restarted.snapshot(planId, false);
     expect(publicSnapshot.nativeBrackets.some((b) => 'strengthSeeding' in b)).toBe(false);
+  });
+
+  it('corrects played pool games without rewriting the automatic order or finals after play', async () => {
+    const planId = await seedNativeDraft(cluster.db);
+    const live = await runtime();
+    const send = (command: TournamentCommand, requestId: string = crypto.randomUUID()) =>
+      live.command(nativeAdmin, planId, requestId, command);
+    const caller = appRouter.createCaller({
+      db: cluster.db,
+      nativeRuntime: live,
+      user: nativeAdmin,
+      env: loadEnv({ DATABASE_URL: cluster.connectionString, NODE_ENV: 'test' }),
+      challonge: new ChallongeClient({}),
+      recomputeTrigger: new RecomputeTrigger(cluster.db),
+    });
+    await live.lock(nativeAdmin, planId);
+    const initial = await live.state(planId);
+    for (const pool of initial.pools) await complete(live, planId, pool.id);
+    const preview = previewStrengthFinals(await live.state(planId));
+    await send({
+      kind: 'drawFinals',
+      revisionToken: preview.revisionToken,
+      seedPolicy: preview.seedPolicy,
+    });
+    const drawn = await live.state(planId);
+    const final = drawn.matches.find(
+      (match) => match.division === 'upper' && match.bracketId && match.status === 'ready',
+    )!;
+    await send({
+      kind: 'score',
+      matchId: final.id,
+      expectedRevision: final.revision,
+      outcome: 'played',
+      score1: 2,
+      score2: 0,
+    });
+    const frozen = await live.state(planId);
+    const sourcePool = frozen.pools.find((pool) => pool.division === 'upper')!;
+    const source = frozen.matches.find((match) => match.poolId === sourcePool.id)!;
+    const publishedSets = () =>
+      cluster.db
+        .select()
+        .from(sets)
+        .where(sql`${sets.raw}->>'eventMatchId' = ${source.id}`);
+    const correction = (expectedRevision: number, won: number, lost: number) => ({
+      matchId: source.id,
+      expectedRevision,
+      score1: source.winnerId === source.player1Id ? won : lost,
+      score2: source.winnerId === source.player1Id ? lost : won,
+    });
+    const first = correction(source.revision, 3, 0);
+    expect(() =>
+      reviewPoolGameCorrection(frozen, { ...first, score1: first.score2, score2: first.score1 }),
+    ).toThrow(/same winner/);
+    const manuallyOrdered = structuredClone(frozen);
+    manuallyOrdered.pools.find(({ id }) => id === sourcePool.id)!.orderDecision!.source = 'manual';
+    expect(() => reviewPoolGameCorrection(manuallyOrdered, first)).toThrow(/automatic pool order/);
+    await expect(send({ kind: 'score', outcome: 'played', ...first })).rejects.toThrow(
+      /Finals already use/,
+    );
+    const firstReview = await caller.eventOps.live.previewPoolGameCorrection({ planId, ...first });
+    const firstToken = firstReview.revisionToken;
+    expect(firstReview.previousScore).toEqual([source.score1, source.score2]);
+    const announcement = {
+      kind: 'announce' as const,
+      message: 'Finals underway',
+      durationSeconds: null,
+    };
+    await send(announcement);
+    expect(reviewPoolGameCorrection(await live.state(planId), first).revisionToken).toBe(
+      firstToken,
+    );
+    const firstCommand = {
+      kind: 'score' as const,
+      outcome: 'played' as const,
+      ...first,
+      poolGameCorrectionToken: firstToken,
+    };
+    await expect(
+      live.command(
+        { ...nativeAdmin, id: 'non-operator', role: 'user' },
+        planId,
+        'unauthorised',
+        firstCommand,
+      ),
+    ).rejects.toThrow(/Only an organiser/);
+    const firstReceipt = await caller.eventOps.live.command({
+      planId,
+      requestId: 'games-only-one',
+      command: firstCommand,
+    });
+    expect((await send(firstCommand, 'games-only-one')).receipt).toEqual(firstReceipt.receipt);
+    const afterFirst = await live.state(planId);
+    const second = correction(source.revision + 1, 2, 1);
+    await expect(
+      send({ kind: 'score', outcome: 'played', ...second, poolGameCorrectionToken: firstToken }),
+    ).rejects.toThrow(/Pool evidence changed/);
+    const secondToken = reviewPoolGameCorrection(afterFirst, second).revisionToken;
+    await send({
+      kind: 'score',
+      outcome: 'played',
+      ...second,
+      poolGameCorrectionToken: secondToken,
+    });
+    await send({ ...announcement, message: 'Next calls coming soon' });
+    const corrected = await live.state(planId);
+    expect(corrected.pools).toEqual(frozen.pools);
+    expect(corrected.brackets).toEqual(frozen.brackets);
+    expect(corrected.matches.filter((match) => match.id !== source.id)).toEqual(
+      frozen.matches.filter((match) => match.id !== source.id),
+    );
+    expect(corrected.matches.find((match) => match.id === source.id)).toMatchObject({
+      score1: second.score1,
+      score2: second.score2,
+      winnerId: source.winnerId,
+      completedAt: source.completedAt,
+      revision: source.revision + 2,
+    });
+    expect(corrected.settings.resourceRevision).toBe(frozen.settings.resourceRevision);
+    expect(dispatchQueue(corrected)).toEqual(dispatchQueue(frozen));
+    const publicEvent = await eventView(cluster.db, corrected);
+    expect(publicEvent.matches.every((match) => !match.reviewPoolGames)).toBe(true);
+    expect(publicEvent.poolOrders).toContainEqual(
+      expect.objectContaining({ poolId: sourcePool.id, status: 'retained_after_correction' }),
+    );
+    const facts = await live.app.query_array({
+      stream: nativeStream(planId),
+      names: ['DecisionRecordedV6'],
+    });
+    const decision = facts
+      .map((fact) => Decision.parse(fact.data))
+      .find(({ requestId }) => requestId === 'games-only-one')!;
+    expect(decision).toMatchObject({
+      correctionOf: source.resultCommandId,
+      basis: { [source.id]: source.revision, [sourcePool.id]: sourcePool.revision },
+    });
+    expect(decision.after).not.toHaveProperty('pools');
+    expect(decision.after).not.toHaveProperty('brackets');
+    const disputed = correction(source.revision + 2, 3, 1);
+    const report = await live.command(
+      { ...nativeAdmin, id: 'non-operator', role: 'user' },
+      planId,
+      'dispute-after-correction',
+      { kind: 'score', outcome: 'played', ...disputed },
+    );
+    await expect(
+      caller.eventOps.live.previewPoolGameCorrection({ planId, ...disputed }),
+    ).rejects.toThrow(/scores awaiting review/);
+    const review = {
+      kind: 'review' as const,
+      reportId: report.receipt.reportId!,
+      expectedRevision: disputed.expectedRevision,
+    };
+    await expect(send({ ...review, approve: true })).rejects.toThrow(/Finals already use/);
+    await send({ ...review, approve: false });
+    const saved = await live.state(planId);
+    expect(saved.pools.find(({ id }) => id === sourcePool.id)?.orderDecision).toEqual(
+      sourcePool.orderDecision,
+    );
+    expect(saved.brackets).toEqual(frozen.brackets);
+    await live.shutdown();
+    runtimes.delete(live);
+    const restarted = await runtime();
+    expect(await restarted.state(planId)).toEqual(saved);
+    expect(await restarted.replay(planId)).toEqual(saved);
+    expect(await publishedSets()).toEqual([]);
+    const finish = (command: TournamentCommand) =>
+      restarted.command(nativeAdmin, planId, crypto.randomUUID(), command);
+    let closing = saved;
+    for (let i = 0; i < saved.matches.length; i++) {
+      const next = closing.matches.find((match) => match.status === 'ready');
+      if (!next) break;
+      await finish({
+        kind: 'score',
+        matchId: next.id,
+        expectedRevision: next.revision,
+        outcome: 'played',
+        score1: 2,
+        score2: 0,
+      });
+      closing = await restarted.state(planId);
+    }
+    await finish({ kind: 'finalize' });
+    await restarted.drainReactions();
+    const published = await restarted.state(planId);
+    expect(published.publication).toBeTruthy();
+    expect(published.brackets).toEqual(frozen.brackets);
+    await expect(
+      finish({
+        kind: 'score',
+        outcome: 'played',
+        ...disputed,
+        poolGameCorrectionToken: firstToken,
+      }),
+    ).rejects.toThrow(/Results are sealed/);
+    const [set] = await publishedSets();
+    expect(set).toBeDefined();
+    expect(
+      (await loadSinglesHistory(cluster.db)).engineSets.find((row) => row.id === set!.id),
+    ).toMatchObject({
+      p1PlayerId: source.player1Id,
+      p2PlayerId: source.player2Id,
+      winner: source.winnerId === source.player1Id ? 1 : 2,
+      p1Games: second.score1,
+      p2Games: second.score2,
+      completedAt: new Date(source.completedAt!).toISOString(),
+    });
   });
 
   it('restarts from V5 place evidence and returns the original receipt for a repeated result', async () => {

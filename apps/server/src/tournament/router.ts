@@ -5,7 +5,8 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { authedProcedure, publicProcedure, router, type TrpcContext } from '../trpc/trpc';
 import { requireOperator } from '../event-operations/access';
-import { Command } from './schemas';
+import { Command, PoolGameCorrection } from './schemas';
+import { reviewPoolGameCorrection } from './poolGameCorrection';
 import { TournamentConflict } from './domain';
 import { nativeEventHistory } from './history';
 
@@ -38,6 +39,18 @@ export const nativeLiveRouter = router({
       return dispatchDesk(state, names);
     });
   }),
+  previewPoolGameCorrection: authedProcedure
+    .input(plan.extend(PoolGameCorrection.shape))
+    .query(async ({ ctx, input: { planId, ...score } }) => {
+      await requireOperator(ctx.db, planId, ctx.user);
+      return transport(async () => {
+        const { match, revisionToken } = reviewPoolGameCorrection(
+          await runtime(ctx).state(planId),
+          score,
+        );
+        return { previousScore: [match.score1!, match.score2!] as const, revisionToken };
+      });
+    }),
   command: authedProcedure
     .input(plan.extend({ requestId: z.string().min(1).max(128), command: Command }))
     .mutation(({ ctx, input }) =>

@@ -1,4 +1,9 @@
-import { rollingFinals, requirePoolCorrectionAllowed, qualifierGroups } from './qualifiers';
+import {
+  rollingFinals,
+  requirePoolCorrectionAllowed,
+  qualifierGroups,
+  strengthFinalsUsePool,
+} from './qualifiers';
 import { hash, requireFact, resolved } from './facts';
 import { hasCurrentPendingScoreReview } from './scoreReview';
 import { hasLegacyQualifier } from './legacyFinalQualifiers';
@@ -119,6 +124,39 @@ function setWinGroups(
 
 type ResultEvidence = Omit<NonNullable<Pool['qualifierDecision']>, 'policy' | 'groups'>;
 
+function automaticOrder(pool: Pool, groups: string[][] | null) {
+  return groups?.length === pool.entrantIds.length ? groups.flat() : null;
+}
+
+function sameAutomaticOrder(pool: Pool, order: string[] | null) {
+  const original = pool.orderDecision;
+  return (
+    original?.source === 'automatic' &&
+    order !== null &&
+    original.order.length === order.length &&
+    original.order.every((id, index) => id === order[index])
+  );
+}
+
+export function canReviewFrozenPoolGames(state: TournamentState, pool: Pool) {
+  if (
+    state.lifecycle !== 'locked' ||
+    state.settings.poolOrderPolicy !== 'unique_set_wins_v1' ||
+    !rollingFinals(state) ||
+    !pool.order ||
+    !pool.qualifierRoster ||
+    pool.qualifierDecision ||
+    !strengthFinalsUsePool(state, pool.id)
+  )
+    return false;
+  const matches = matchesFor(state, pool);
+  return (
+    sameAutomaticOrder(pool, automaticOrder(pool, setWinGroups(state, pool, matches))) &&
+    hash(pool.order) === hash(pool.orderDecision!.order) &&
+    !matches.some((match) => hasCurrentPendingScoreReview(match, state.reports))
+  );
+}
+
 function decideQualifierBands(
   groups: string[][] | null,
   old: Pool['qualifierDecision'],
@@ -160,16 +198,19 @@ export function decidePoolOrders(
       'Resolve current score reports before confirming pool placements.',
     );
     const groups = setWinGroups(next, pool, matches);
-    const automatic = groups?.length === pool.entrantIds.length ? groups.flat() : null;
+    const automatic = automaticOrder(pool, groups);
     const evidence = {
       resultBasis,
       matchRevisions: Object.fromEntries(matches.map((m) => [m.id, m.revision])),
       commandId: envelope.id,
       decidedAt: envelope.at,
     };
+    const retainsFrozenOrder =
+      old && strengthFinalsUsePool(next, pool.id) && sameAutomaticOrder(old, automatic);
     const retained =
-      old?.orderDecision?.resultBasis === resultBasis &&
-      (old.orderDecision.source === 'manual' || automatic)
+      (old?.orderDecision?.resultBasis === resultBasis &&
+        (old.orderDecision.source === 'manual' || automatic)) ||
+      retainsFrozenOrder
         ? old.orderDecision
         : old?.order && !old.orderDecision && poolResultBasis(previous, old) === resultBasis
           ? {
