@@ -2,6 +2,17 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.10.0
+
+### Minor Changes
+
+- 9 November 2026 · **Feature** · Compare two players’ recorded singles sets, games, and current WHR odds on a shareable head-to-head page. Find it from Rankings or start with one player already selected from their profile. [#322](https://github.com/ashleylamont/smashclub-seeding/pull/322) · [build 397374a](https://github.com/ashleylamont/smashclub-seeding/commit/397374a5f503bd174fc41bfd22b9fa422493a17b)
+
+### Patch Changes
+
+- 9 November 2026 · **Fix** · Show the same native bracket match names in attendance previews and the organiser’s match queue. [#320](https://github.com/ashleylamont/smashclub-seeding/pull/320) · [build ef266ef](https://github.com/ashleylamont/smashclub-seeding/commit/ef266ef402cf454fa15c461a85004d25476f4805)
+- 9 November 2026 · **Fix** · Explain singles match evidence in player history and show the pre-night WHR win estimate when both players have connected earlier rated results. [#319](https://github.com/ashleylamont/smashclub-seeding/pull/319) · [build 0c6ea36](https://github.com/ashleylamont/smashclub-seeding/commit/0c6ea36f01171f21d44ae9ca99aa8772cd6ef77a)
+
 ## 0.9.2
 
 ### Patch Changes
