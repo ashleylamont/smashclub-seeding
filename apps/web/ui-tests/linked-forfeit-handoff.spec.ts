@@ -2,6 +2,7 @@ import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { mockEvent, PLAN_ID, PLAYER_NAME, ready } from './fixtures';
+import { chooseOption } from '../test-support/controls';
 
 for (const theme of ['dark', 'light'] as const) {
   for (const [width, height] of [
@@ -22,12 +23,14 @@ for (const theme of ['dark', 'light'] as const) {
       const forfeit = completed[0]!;
       const played = completed[1]!;
       Object.assign(forfeit, {
+        division: 'upper',
         stage: 'main',
         poolIndex: null,
-        label: 'Upper championship · Match 8',
+        label: 'upper main · M8',
         player1Name: PLAYER_NAME,
         player2Name: 'Jordan with a long tournament alias',
         sourceSetId: 'linked-forfeit-set',
+        sourceKey: 'set:linked-forfeit-set',
         syncState: 'pending',
         outcome: 'forfeit',
         winnerId: forfeit.player2Id,
@@ -35,10 +38,12 @@ for (const theme of ['dark', 'light'] as const) {
         score2: 0,
       });
       Object.assign(played, {
+        division: 'upper',
         stage: 'main',
         poolIndex: null,
-        label: 'Upper championship · Match 9',
+        label: 'upper main · M9',
         sourceSetId: 'linked-played-set',
+        sourceKey: 'set:linked-played-set',
         syncState: 'pending',
         outcome: 'played',
         winnerId: played.player1Id,
@@ -93,6 +98,15 @@ for (const theme of ['dark', 'light'] as const) {
             .analyze()
         ).violations,
       ).toEqual([]);
+      await page.getByRole('tab', { name: 'Run matches', exact: true }).press('Enter');
+      const run = page.getByRole('tabpanel', { name: 'Run matches', exact: true });
+      await chooseOption(run.getByRole('combobox', { name: 'View', exact: true }), 'complete');
+      const storedMatch = run.locator('article.ops-match').filter({ hasText: played.label });
+      await expect(storedMatch.getByText(played.label, { exact: true })).toBeVisible();
+      await expect(storedMatch).toContainText(played.player1Name!);
+      await page.evaluate(() => scrollTo(0, 0));
+      await ready(page);
+      await page.screenshot({ path: testInfo.outputPath('linked-run.png'), fullPage: true });
       expect(fixture.unexpected).toEqual([]);
     });
   }

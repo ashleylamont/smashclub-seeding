@@ -39,6 +39,7 @@ export interface LiveMatch {
     eligibleStationIds: string[];
   };
   nativeBracketId?: string | null;
+  sourceKey?: string;
   sourceSetId?: string | null;
   nativeRound?: number | null;
   nativeSlot?: number | null;

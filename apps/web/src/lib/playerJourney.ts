@@ -1,4 +1,5 @@
 import type { NativeBracketView } from '../components/EventNightBoard';
+import { linkedFinalCaption } from './linkedFinalCaption';
 import { includesPlayer, matchStation, matchStatus, sortPlayerMatches } from './playerMatchView';
 import { playerBracketPath, playerHubView } from './playerHubView';
 import type { PoolFlowData, PoolFlowMatch } from './poolFlow';
@@ -80,25 +81,26 @@ export function playerJourney(data: JourneyData, player: string): PlayerJourney 
     open.find((match) => match.status === 'ready' && match.player1Id && match.player2Id) ??
     open[0];
   if (current) {
+    const caption = linkedFinalCaption(current)?.text ?? current.label;
     const consequences = playerConsequences(data.matches, current);
     if (!current.player1Id || !current.player2Id)
       return result(
         'awaiting_opponent',
         qualificationSummary(current) ??
-          `Waiting for a confirmed pairing · ${current.label}. Follow the published draw below.`,
+          `Waiting for a confirmed pairing · ${caption}. Follow the published draw below.`,
         consequences,
       );
     if (current.status === 'blocked')
       return result(
         'held',
         qualificationSummary(current) ??
-          `${current.label} is waiting for an earlier result or a TO decision.`,
+          `${caption} is waiting for an earlier result or a TO decision.`,
         consequences,
       );
     const location = matchStation(data, current).name;
     return result(
       'active',
-      `${matchStatus(data, current)} · ${current.label}${location ? ` · ${location}` : ''}`,
+      `${matchStatus(data, current)} · ${caption}${location ? ` · ${location}` : ''}`,
       consequences,
     );
   }

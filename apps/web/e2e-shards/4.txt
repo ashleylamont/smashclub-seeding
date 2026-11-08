@@ -1,3 +1,4 @@
+linked-finals-caption.spec.ts
 pool-stations.spec.ts
 score-without-start.spec.ts
 screenshots.spec.ts
