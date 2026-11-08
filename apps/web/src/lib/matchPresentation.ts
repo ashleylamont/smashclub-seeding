@@ -27,7 +27,7 @@ export function recordedByeWinner(match: PresentedMatch) {
 }
 
 /** A missing entrant is unresolved unless the recorded result explicitly says bye. */
-export function matchPresentation(match: PresentedMatch) {
+export function matchPresentation(match: PresentedMatch, recordedOnly = false) {
   const complete = match.status === 'complete';
   const first = match.winnerId && match.winnerId === match.player1Id;
   const winner = (first ? match.player1Name : match.player2Name) || 'Player';
@@ -46,6 +46,7 @@ export function matchPresentation(match: PresentedMatch) {
             : complete
               ? 'played'
               : 'scheduled';
+  const unrecorded = recordedOnly && !complete && kind !== 'no-contest';
   const byeWinner = recordedByeWinner(match);
   const byeTitle = byeWinner ? `${byeWinner} · Bye` : 'Bye';
   const byeResult = byeWinner
@@ -55,7 +56,7 @@ export function matchPresentation(match: PresentedMatch) {
     kind === 'bye'
       ? byeTitle
       : kind === 'pending'
-        ? `${(match.player1Id ? match.player1Name : match.player2Id ? match.player2Name : null) || 'Match'} · Awaiting opponent`
+        ? `${(match.player1Id ? match.player1Name : match.player2Id ? match.player2Name : null) || 'Match'} · ${recordedOnly ? 'Unresolved pairing' : 'Awaiting opponent'}`
         : `${match.player1Name || 'Player'} vs ${match.player2Name || 'Opponent'}`;
   const status =
     kind === 'bye'
@@ -76,17 +77,18 @@ export function matchPresentation(match: PresentedMatch) {
         ? `${winner} advances · ${loser} forfeits.`
         : kind === 'no-contest'
           ? 'No contest. No winner or score recorded.'
-          : kind === 'pending'
+          : kind === 'pending' && !recordedOnly
             ? qualificationSummary(match)
             : null;
   return {
     kind,
     title,
-    status,
+    status: unrecorded ? 'No result recorded' : status,
     result,
     byeWinner,
-    showScores: kind === 'played' || kind === 'scheduled',
+    showScores: kind === 'played' || (kind === 'scheduled' && !recordedOnly),
     canReport:
+      !recordedOnly &&
       Boolean(match.player1Id && match.player2Id) &&
       (kind === 'scheduled'
         ? match.status === 'ready' || match.status === 'playing'

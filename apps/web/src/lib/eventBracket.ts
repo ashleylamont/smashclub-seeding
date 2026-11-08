@@ -1,5 +1,6 @@
 import type { LiveMatch } from './eventDisplay';
 import type { BracketFeed, EliminationLane } from './eliminationLayout';
+import { matchPresentation } from './matchPresentation';
 import { qualifierLabel } from './qualification';
 
 export function liveBracketFeeds(match: LiveMatch): BracketFeed[] {
@@ -30,12 +31,13 @@ export function liveBracketRound(match: LiveMatch) {
       ? 1
       : (match.bracketRound ?? match.nativeRound ?? 1);
 }
-export function liveBracketStatus(match: LiveMatch) {
+export function liveBracketStatus(match: LiveMatch, recordedOnly = false) {
   if (match.status === 'complete') {
     if (match.outcome === 'bye') return 'Bye';
     if (!match.winnerId) return 'No contest';
     return match.outcome === 'forfeit' ? 'Forfeit' : 'Final result';
   }
+  if (recordedOnly) return matchPresentation(match, true).status ?? 'No result recorded';
   if (match.status === 'playing') return match.called ? 'Called' : 'Playing now';
   if (match.qualificationBlocks?.some((source) => source.status === 'review_pending'))
     return 'Qualification under review';

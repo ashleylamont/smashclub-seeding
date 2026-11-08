@@ -13,6 +13,7 @@ import {
 } from '../lib/poolFlow';
 import { CharacterIcons } from './CharacterIcons';
 import { includesPlayer } from '../lib/playerMatchView';
+import { matchPresentation } from '../lib/matchPresentation';
 import './PoolStationQueue.css';
 
 export function PoolFilter({
@@ -335,10 +336,12 @@ export function PoolRoundSchedule({
   data,
   selectedPool = '',
   playerId = '',
+  recordedOnly = false,
 }: {
   data: PoolFlowData;
   selectedPool?: string;
   playerId?: string;
+  recordedOnly?: boolean;
 }) {
   const groups = (data.poolRounds ?? [])
     .filter((pool) => !selectedPool || pool.poolKey === selectedPool)
@@ -366,17 +369,20 @@ export function PoolRoundSchedule({
         ] as const,
     ),
   );
-  if (!groups.length) return null;
+  if (!groups.length)
+    return recordedOnly ? <p>No pool schedule is recorded for this view.</p> : null;
   return (
     <section className="pool-flow-rounds">
       <div className="pool-flow-heading">
         <h2>{playerId ? 'Your pool rounds' : 'Pool rounds'}</h2>
         <span>Everyone meets once</span>
       </div>
-      <p className="pool-flow-note">
-        Follow the station queue above. These rounds show the pairings and who rests; they are not
-        start times.
-      </p>
+      {!recordedOnly && (
+        <p className="pool-flow-note">
+          Follow the station queue above. These rounds show the pairings and who rests; they are not
+          start times.
+        </p>
+      )}
       {groups.map((pool) => (
         <Disclosure
           title={
@@ -400,20 +406,24 @@ export function PoolRoundSchedule({
                 <ul>
                   {round.matchIds.map((id) => {
                     const match = data.matches.find((item) => item.id === id);
-                    return match ? (
+                    if (!match) return null;
+                    const recorded = recordedOnly ? matchPresentation(match, true) : null;
+                    return (
                       <li key={id}>
                         <span>
                           {match.player1Name} vs {match.player2Name}
                         </span>
                         <small>
-                          {match.status === 'complete'
-                            ? `${match.score1 ?? '–'}–${match.score2 ?? '–'} · complete`
-                            : match.status === 'playing'
-                              ? 'Playing now'
-                              : 'Upcoming'}
+                          {recorded && !recorded.showScores
+                            ? recorded.status
+                            : match.status === 'complete'
+                              ? `${match.score1 ?? '–'}–${match.score2 ?? '–'} · complete`
+                              : match.status === 'playing'
+                                ? 'Playing now'
+                                : 'Upcoming'}
                         </small>
                       </li>
-                    ) : null;
+                    );
                   })}
                 </ul>
                 {round.restingPlayerIds.length > 0 && (

@@ -49,6 +49,9 @@ export function PlayerEvent({ planId }: { planId: string }) {
     data?.matches.some((match) => match.status === 'complete') ||
     Boolean(data?.placements.length || data?.plan.resultsSlug || data?.plan.historicalResultsSlug);
   const updatesInterrupted = !online || publicEvent.isError;
+  const labels = closed
+    ? { account: 'View signed-in reports', guest: 'View guest reports', next: 'Pool schedule' }
+    : { account: 'Use signed-in reporting', guest: 'Use venue guest pass', next: 'What next' };
   const reportingStatus = (
     <MatchReportingStatus hub={hub} hasRecordedResults={hasRecordedResults} />
   );
@@ -68,7 +71,7 @@ export function PlayerEvent({ planId }: { planId: string }) {
           }
         />
         {data && !empty && <EventProgress data={data} selectedPool={selectedPool} />}
-        <PlayerEventNavigation board={board} />
+        <PlayerEventNavigation board={board} empty={empty} nextLabel={labels.next} />
         {empty && (
           <EmptyEventMatches
             closed={closed}
@@ -103,7 +106,7 @@ export function PlayerEvent({ planId }: { planId: string }) {
               size="small"
               onClick={() => setReportingPreference(reporter === 'guest' ? 'signed-in' : 'guest')}
             >
-              {reporter === 'guest' ? 'Use signed-in reporting' : 'Use venue guest pass'}
+              {labels[reporter === 'guest' ? 'account' : 'guest']}
             </Button>
           </p>
         )}
@@ -132,7 +135,7 @@ export function PlayerEvent({ planId }: { planId: string }) {
           {!empty && (
             <>
               <PlayerHubMatches hub={hub} data={data} reportingStatus={reportingStatus} />
-              <section id="what-next" aria-label="What next">
+              <section id="what-next" aria-label={labels.next}>
                 <PlayerNextSteps hub={hub} data={data} />
               </section>
             </>
@@ -169,14 +172,22 @@ function EventProgress({
   );
 }
 
-function PlayerEventNavigation({ board }: { board: PlayerEventHub['board'] }) {
+function PlayerEventNavigation({
+  board,
+  empty,
+  nextLabel,
+}: {
+  board: PlayerEventHub['board'];
+  empty: boolean;
+  nextLabel: string;
+}) {
   return (
     <nav className="player-event-nav" aria-label="Event sections">
       <Button asChild>
         <a href="#my-matches">Find my matches</a>
       </Button>
       <Button asChild>
-        <a href="#what-next">What next</a>
+        <a href="#what-next">{empty ? 'What next' : nextLabel}</a>
       </Button>
       {(board?.sections ?? ['pools', 'brackets', 'results']).map((section) => (
         <Button key={section} asChild>
@@ -190,6 +201,15 @@ function PlayerEventNavigation({ board }: { board: PlayerEventHub['board'] }) {
 }
 
 function PlayerNextSteps({ hub, data }: { hub: PlayerEventHub; data: PublicEventSnapshot }) {
+  const rounds = (
+    <PoolRoundSchedule
+      data={data}
+      selectedPool={hub.selectedPool}
+      playerId={hub.player}
+      recordedOnly={hub.closed}
+    />
+  );
+  if (hub.closed) return <Disclosure title="Pool schedule history">{rounds}</Disclosure>;
   const queues = (
     <PoolStationQueue
       data={data}
@@ -202,16 +222,6 @@ function PlayerNextSteps({ hub, data }: { hub: PlayerEventHub; data: PublicEvent
       disabled={!hub.canWrite}
     />
   );
-  const rounds = (
-    <PoolRoundSchedule data={data} selectedPool={hub.selectedPool} playerId={hub.player} />
-  );
-  if (hub.closed)
-    return (
-      <Disclosure title="Schedule & station history">
-        {queues}
-        {rounds}
-      </Disclosure>
-    );
   const poolMatches = hub.playerMatches.filter((match) => match.stage === 'group');
   const finishedPoolMatches =
     poolMatches.length > 0 && poolMatches.every((match) => match.status === 'complete');

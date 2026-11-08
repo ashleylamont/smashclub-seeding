@@ -83,10 +83,12 @@ export function EventPools({
   matches,
   schedules,
   stations,
+  recordedOnly,
 }: {
   matches: LiveMatch[];
   schedules: PoolSchedule[];
   stations: DisplayStation[];
+  recordedOnly: boolean;
 }) {
   const pools = poolStandings(matches);
   if (!pools.length) return null;
@@ -94,8 +96,9 @@ export function EventPools({
     <section className="event-pool-progress">
       <h2>Pool progress & standings</h2>
       <p className="event-live-note">
-        These are live set records, ordered by wins then game difference. Ties and final places are
-        confirmed by the organisers below.
+        {recordedOnly
+          ? 'Standings from recorded pool results, ordered by wins then game difference.'
+          : 'These are live set records, ordered by wins then game difference. Ties and final places are confirmed by the organisers below.'}
       </p>
       <div className="event-results-grid">
         {pools.map((pool) => {
@@ -113,16 +116,21 @@ export function EventPools({
                   {pool.division} · Pool {String.fromCharCode(65 + pool.poolIndex)}
                 </h3>
                 <span>
-                  {schedule?.active === false
-                    ? 'On hold'
-                    : pool.complete === pool.total
+                  {recordedOnly
+                    ? pool.complete === pool.total
                       ? 'All sets recorded'
-                      : 'Active'}
+                      : 'Pool closed'
+                    : schedule?.active === false
+                      ? 'On hold'
+                      : pool.complete === pool.total
+                        ? 'All sets recorded'
+                        : 'Active'}
                 </span>
               </header>
               <p>
                 {pool.complete} / {pool.total} sets recorded
-                {names.length ? ` · ${names.join(', ')}` : ' · Any available station'}
+                {!recordedOnly &&
+                  (names.length ? ` · ${names.join(', ')}` : ' · Any available station')}
               </p>
               <Progress
                 value={pool.complete}
@@ -144,7 +152,7 @@ export function EventPools({
                         <abbr title="Game difference">+/−</abbr>
                       </th>
                       <th>
-                        <abbr title="Matches remaining">Left</abbr>
+                        {recordedOnly ? 'No result' : <abbr title="Matches remaining">Left</abbr>}
                       </th>
                     </tr>
                   </thead>
@@ -188,11 +196,13 @@ export function EventBrackets({
   matches,
   entrants,
   linked,
+  recordedOnly = false,
 }: {
   brackets: NativeBracketView[];
   matches: LiveMatch[];
   entrants: { id: string; name: string }[];
   linked: { division: string; stage: string; slug: string | null }[];
+  recordedOnly?: boolean;
 }) {
   if (!brackets.length && !linked.some((item) => item.slug)) return null;
   const names = new Map(entrants.map((player) => [player.id, player.name]));
@@ -210,8 +220,9 @@ export function EventBrackets({
               </h3>
               {bracket.qualifierSlots?.some((slot) => slot.status !== 'resolved') && (
                 <p className="event-live-note">
-                  Qualification is pending. Pool-place labels reserve draw positions; they do not
-                  assign a player or award a bye.
+                  {recordedOnly
+                    ? 'Pool-place labels show unfilled positions from the recorded draw.'
+                    : 'Qualification is pending. Pool-place labels reserve draw positions; they do not assign a player or award a bye.'}
                 </p>
               )}
               {bracket.complete && (
@@ -234,7 +245,7 @@ export function EventBrackets({
             {!games.length &&
               !(bracket.complete && bracket.entrantIds.length === 1 && bracket.winnerId) && (
                 <p className="event-live-note">
-                  {bracket.complete
+                  {bracket.complete || recordedOnly
                     ? 'No sets in this bracket.'
                     : 'The draw will appear when the organisers publish the bracket.'}
                 </p>
@@ -250,6 +261,7 @@ export function EventBrackets({
                 title={lane.title}
                 label={`${bracket.division} ${bracket.stage} ${lane.title || 'bracket rounds'}`}
                 labels={labels}
+                recordedOnly={recordedOnly}
               />
             ))}
             {bracket.complete && bracket.standings.length > 0 && (
