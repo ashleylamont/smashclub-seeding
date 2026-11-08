@@ -1,0 +1,19 @@
+.bracket-graphic-preview {
+  display: grid;
+  min-width: 0;
+  gap: var(--s3);
+}
+.bracket-graphic-image {
+  overflow: auto;
+  max-height: 52svh;
+  border: 1px solid var(--border);
+}
+.bracket-graphic-image img {
+  display: block;
+  max-width: none;
+}
+.bracket-graphic-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}

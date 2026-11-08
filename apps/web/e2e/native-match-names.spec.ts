@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 import { AxeBuilder } from '@axe-core/playwright';
 import type { PoolFlowMatch } from '../src/lib/poolFlow';
 import { bracketBackupSheets } from '../src/lib/bracketBackupSheets';
@@ -19,6 +20,8 @@ async function rpc<T>(
 
 test('an uneven native draw keeps meaningful names across player, TO, feeders, paper, history and publication', async ({
   page,
+  browser,
+  baseURL,
 }, testInfo) => {
   const login = await page.request.post('/api/auth/sign-in/email', {
     data: { email: 'admin@smashclub.dev', password: 'devpassword123' },
@@ -187,4 +190,27 @@ test('an uneven native draw keeps meaningful names across player, TO, feeders, p
     { slug: event.slug },
   );
   expect(published.sets.map((m) => m.identifier).sort()).toEqual(before.map((m) => m.label).sort());
+
+  const publicBrowser = await browser.newContext({ baseURL });
+  try {
+    const publicPage = await publicBrowser.newPage();
+    await publicPage.goto(`/play/${planId}#event-brackets`);
+    await publicPage
+      .getByRole('button', { name: 'Preview bracket graphic for Open championship' })
+      .click();
+    const dialog = publicPage.getByRole('dialog', { name: 'Bracket graphic' });
+    await expect(dialog.getByRole('img')).toBeVisible();
+    const downloaded = publicPage.waitForEvent('download');
+    await dialog.getByRole('button', { name: 'Download bracket SVG' }).click();
+    const path = testInfo.outputPath('recorded-native-bracket.svg');
+    await (await downloaded).saveAs(path);
+    const svg = await readFile(path, 'utf8');
+    expect(svg).toContain('Recorded draw');
+    expect(svg).toContain('Quarter-final 1');
+    expect(svg).toContain('Final · Final result');
+    expect(svg).toContain('>2</text>');
+    expect(svg).toContain('>0</text>');
+  } finally {
+    await publicBrowser.close();
+  }
 });

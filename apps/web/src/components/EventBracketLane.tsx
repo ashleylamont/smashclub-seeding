@@ -6,6 +6,7 @@ import {
   liveBracketFeeds,
   liveBracketRound,
   liveBracketSide,
+  liveBracketSourceSide,
   liveBracketStatus,
   liveBracketWinner,
 } from '../lib/eventBracket';
@@ -104,21 +105,7 @@ export function EventBracketLane({
       targetPort: (match, side) => measurements[match.id]?.rows[side] ?? height / 2,
       sourcePort: (match, outcome) => {
         const measured = measurements[match.id];
-        const winner = liveBracketWinner(match, match.player1Id)
-          ? 0
-          : liveBracketWinner(match, match.player2Id)
-            ? 1
-            : null;
-        // Pending feeds leave the card center: there is no known participant to
-        // attach to. A confirmed result follows its actual winner/loser row.
-        const side =
-          winner === null
-            ? null
-            : outcome === 'winner'
-              ? winner
-              : match.player1Id && match.player2Id
-                ? 1 - winner
-                : null;
+        const side = liveBracketSourceSide(match, outcome);
         return side === null
           ? (measured?.height ?? height) / 2
           : (measured?.rows[side] ?? height / 2);

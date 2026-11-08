@@ -2,9 +2,12 @@ import '../pages/EventLive.css';
 import { EventBracketLane } from './EventBracketLane';
 import { Progress } from './ui/Progress';
 import { liveBracketLanes } from '../lib/eventBracket';
+import { isKnockout } from '@smashclub/shared';
+import { hasExportableBracket, type BracketGraphicContext } from '../lib/bracketGraphic';
+import { BracketGraphic } from './BracketGraphic';
 import type { LiveMatch, PoolQualifierSlot } from '../lib/eventDisplay';
 import { poolStandings } from '../lib/eventQueue';
-import { poolTitle } from '../lib/poolFlow';
+import { poolTitle, usesOpenPools } from '../lib/poolFlow';
 import { CharacterIcons } from './CharacterIcons';
 
 export type DisplayStation = {
@@ -200,12 +203,14 @@ export function EventBrackets({
   entrants,
   linked,
   recordedOnly = false,
+  graphicContext,
 }: {
   brackets: NativeBracketView[];
   matches: LiveMatch[];
   entrants: { id: string; name: string }[];
   linked: { division: string; stage: string; slug: string | null }[];
   recordedOnly?: boolean;
+  graphicContext?: Omit<BracketGraphicContext, 'scope'> & { structure?: string };
 }) {
   if (!brackets.length && !linked.some((item) => item.slug)) return null;
   const names = new Map(entrants.map((player) => [player.id, player.name]));
@@ -215,12 +220,22 @@ export function EventBrackets({
       <h2>Brackets</h2>
       {brackets.map((bracket) => {
         const games = matches.filter((match) => match.nativeBracketId === bracket.id);
+        const division =
+          usesOpenPools(graphicContext?.structure) || isKnockout(graphicContext?.structure)
+            ? 'Open'
+            : bracket.division === 'upper'
+              ? 'Upper'
+              : 'Lower';
+        const scope = `${division} ${bracket.stage === 'main' ? 'championship' : 'consolation'}`;
         return (
           <article className="event-bracket" key={bracket.id}>
             <header>
               <h3>
                 {bracket.division} · {bracket.stage === 'main' ? 'Championship' : 'Consolation'}
               </h3>
+              {graphicContext && hasExportableBracket(games) && (
+                <BracketGraphic context={{ ...graphicContext, scope }} matches={games} />
+              )}
               {bracket.qualifierSlots?.some((slot) => slot.status !== 'resolved') && (
                 <p className="event-live-note">
                   {recordedOnly
