@@ -214,10 +214,17 @@ test('reduced motion retains manual pages, and interruptions keep the last known
   await page.keyboard.press('ArrowRight');
   await expect(progress).toContainText('Page 2 /');
   options.failure = true;
-  await page.clock.fastForward(10000);
-  await expect(
-    page.getByText('Connection interrupted · last received scores', { exact: true }),
-  ).toBeVisible();
+  const interruption = page.getByText('Connection interrupted · last received scores', {
+    exact: true,
+  });
+  // A failed poll schedules a retry only after its response has been handled.
+  // Keep advancing the clock while the browser processes those network responses.
+  await expect
+    .poll(async () => {
+      await page.clock.runFor(2000);
+      return interruption.isVisible();
+    })
+    .toBe(true);
   await expect(progress).toBeVisible();
   await expect(progress).toContainText('Page 2 /');
 });
