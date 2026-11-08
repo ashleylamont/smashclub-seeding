@@ -81,13 +81,16 @@ export function qualifierDependencies(
   return [...sources.values()];
 }
 
+export function strengthFinalsUsePool(state: TournamentState, poolId: string) {
+  return state.brackets.some(
+    (bracket) =>
+      bracket.strengthSeeding && bracket.qualifierSlots?.some((source) => source.poolId === poolId),
+  );
+}
+
 export function poolFinalsConsumed(state: TournamentState, poolId: string) {
   return (
-    state.brackets.some(
-      (bracket) =>
-        bracket.strengthSeeding &&
-        bracket.qualifierSlots?.some((source) => source.poolId === poolId),
-    ) ||
+    strengthFinalsUsePool(state, poolId) ||
     state.matches.some(
       (m) =>
         m.bracketId &&

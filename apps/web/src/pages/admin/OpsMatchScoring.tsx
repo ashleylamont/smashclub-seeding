@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { TRPCClientError } from '@trpc/client';
 import { useConfirmation } from '../../lib/confirmation';
 import { Select, SelectItem } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
@@ -10,6 +11,19 @@ import type { Overview } from './dispatchTypes';
 
 type Match = Overview['matches'][number];
 type Action = (work: () => Promise<unknown>, message?: string) => Promise<void>;
+
+function isPoolGameCorrection(match: Match, score1: ScoreInputValue, score2: ScoreInputValue) {
+  return (
+    'reviewPoolGames' in match &&
+    match.reviewPoolGames &&
+    score1 !== '' &&
+    score2 !== '' &&
+    score1 !== score2 &&
+    (score1 > score2 ? match.player1Id : match.player2Id) === match.winnerId &&
+    (score1 !== match.score1 || score2 !== match.score2)
+  );
+}
+
 export function MatchScoring({
   match,
   disabled,
@@ -33,12 +47,18 @@ export function MatchScoring({
   const [winnerId, setWinnerId] = useState(match.winnerId ?? match.player1Id ?? '');
   const [requestId, setRequestId] = useState('');
   const [callConflict, setCallConflict] = useState<{ requestId: string; matchIds: string[] }>();
+  const [reviewing, setReviewing] = useState(false);
+  const [reviewError, setReviewError] = useState('');
+  const [reviewed, setReviewed] = useState<{ requestId: string; token: string }>();
+  const approvedToken = reviewed?.requestId === requestId ? reviewed.token : undefined;
   const stale =
+    !approvedToken &&
     editing !== null &&
     (revision !== match.revision ||
       (editing === 'live' && progressRevision !== match.progressRevision));
   const requireDecisive = editing === 'final' && outcome === 'played';
   const needsScores = editing === 'live' || outcome === 'played';
+  const reviewPoolGames = requireDecisive && isPoolGameCorrection(match, score1, score2);
   const participatingWinner = [match.player1Id, match.player2Id].some(
     (id) => Boolean(id) && id === winnerId,
   );
@@ -51,6 +71,53 @@ export function MatchScoring({
     setOutcome(resultType ?? match.outcome ?? 'played');
     setWinnerId(resultType ? '' : (match.winnerId ?? ''));
     setRequestId(crypto.randomUUID());
+    setReviewError('');
+  };
+  const reviewScore = async (score1: number, score2: number) => {
+    setReviewing(true);
+    setReviewError('');
+    try {
+      const { revisionToken, previousScore } =
+        await trpc.eventOps.live.previewPoolGameCorrection.query({
+          planId: match.eventPlanId,
+          matchId: match.id,
+          expectedRevision: revision,
+          score1,
+          score2,
+        });
+      const approved = await confirmAction(
+        `Correct ${previousScore.join('–')} to ${score1}–${score2}? The winner, confirmed pool places and finals draw stay as recorded. Ratings use the corrected games after publication.`,
+      );
+      if (!approved) return;
+      setReviewed({ requestId, token: revisionToken });
+      return revisionToken;
+    } catch (cause) {
+      setReviewError(cause instanceof Error ? cause.message : 'Could not review the correction.');
+    } finally {
+      setReviewing(false);
+    }
+  };
+  const saveReviewedScore = async (score1: number, score2: number, token: string) => {
+    try {
+      await trpc.eventOps.live.command.mutate({
+        planId: match.eventPlanId,
+        requestId,
+        command: {
+          kind: 'score',
+          matchId: match.id,
+          expectedRevision: revision,
+          outcome: 'played',
+          score1,
+          score2,
+          poolGameCorrectionToken: token,
+        },
+      });
+    } catch (cause) {
+      // Only an explicit rejection invalidates the approved request.
+      if (cause instanceof TRPCClientError && cause.data?.code === 'CONFLICT')
+        setRequestId(crypto.randomUUID());
+      throw cause;
+    }
   };
   return (
     <>
@@ -75,7 +142,8 @@ export function MatchScoring({
           className="ops-score-form"
           onSubmit={async (event) => {
             event.preventDefault();
-            if (disabled || stale || (needsScores && (score1 === '' || score2 === ''))) return;
+            if (disabled || reviewing || stale || (needsScores && (score1 === '' || score2 === '')))
+              return;
             if (requireDecisive && score1 === score2) return;
             if (!needsScores && !participatingWinner) return;
             if (
@@ -86,6 +154,11 @@ export function MatchScoring({
               ))
             )
               return;
+            let correctionToken = approvedToken;
+            if (reviewPoolGames && !correctionToken && score1 !== '' && score2 !== '') {
+              correctionToken = await reviewScore(score1, score2);
+              if (!correctionToken) return;
+            }
             void act(
               async () => {
                 if (editing === 'live')
@@ -96,6 +169,8 @@ export function MatchScoring({
                     score1: score1 === '' ? 0 : score1,
                     score2: score2 === '' ? 0 : score2,
                   });
+                else if (correctionToken && score1 !== '' && score2 !== '')
+                  await saveReviewedScore(score1, score2, correctionToken);
                 else {
                   try {
                     await trpc.eventOps.reportScore.mutate({
@@ -120,7 +195,9 @@ export function MatchScoring({
                 ? 'Live score updated · match still playing'
                 : outcome === 'forfeit'
                   ? 'Forfeit recorded locally · no played games'
-                  : 'Score recorded locally',
+                  : correctionToken
+                    ? 'Pool score corrected · confirmed places and finals kept'
+                    : 'Score recorded locally',
             );
           }}
         >
@@ -138,20 +215,28 @@ export function MatchScoring({
               Another TO updated this match. Cancel and reopen to use the latest score.
             </p>
           )}
+          {reviewError && (
+            <p role="alert" className="error-text">
+              {reviewError}
+            </p>
+          )}
           {needsScores ? (
             <ScoreFields
               player1Name={match.player1Name}
               player2Name={match.player2Name}
               score1={score1}
               score2={score2}
+              disabled={reviewing}
               requireDecisive={requireDecisive}
               onScore1={(value) => {
                 setScore1(value);
                 setRequestId(crypto.randomUUID());
+                setReviewError('');
               }}
               onScore2={(value) => {
                 setScore2(value);
                 setRequestId(crypto.randomUUID());
+                setReviewError('');
               }}
             />
           ) : (
@@ -165,6 +250,7 @@ export function MatchScoring({
               <label>
                 Result type
                 <Select
+                  disabled={reviewing}
                   value={outcome}
                   onValueChange={(selectedValue) => {
                     setOutcome(selectedValue as typeof outcome);
@@ -212,6 +298,7 @@ export function MatchScoring({
             <Button
               type="submit"
               variant="primary"
+              aria-disabled={reviewing || undefined}
               disabled={
                 disabled ||
                 stale ||
@@ -224,9 +311,13 @@ export function MatchScoring({
                 ? 'Save live score'
                 : outcome === 'forfeit'
                   ? 'Confirm forfeit'
-                  : 'Confirm result'}
+                  : approvedToken
+                    ? 'Retry correction'
+                    : reviewPoolGames
+                      ? 'Review correction'
+                      : 'Confirm result'}
             </Button>
-            <Button type="button" onClick={() => setEditing(null)}>
+            <Button type="button" disabled={reviewing} onClick={() => setEditing(null)}>
               Cancel
             </Button>
           </div>

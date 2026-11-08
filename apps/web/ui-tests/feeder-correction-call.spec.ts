@@ -3,6 +3,168 @@ import { expect, test } from '@playwright/test';
 import { mockEvent, PLAN_ID, ready, type FixtureOptions } from './fixtures';
 import type { Desk } from '../src/pages/admin/dispatchTypes';
 
+for (const theme of ['dark', 'light'] as const)
+  for (const width of [390, 1440])
+    test(`reviews a frozen pool score at ${width}px in ${theme}`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const options: FixtureOptions = {
+        role: 'admin',
+        history: [
+          {
+            entries: [
+              {
+                id: 'act:52',
+                eventName: 'DecisionRecordedV6',
+                version: 52,
+                at: '2026-10-03T23:59:00.000Z',
+                actor: 'Organiser',
+                source: 'operator',
+                category: 'scores',
+                title: 'Score recorded',
+                summary: 'Pool score',
+                matchId: '',
+                details: {},
+              },
+            ],
+            nextCursor: null,
+          },
+        ],
+      };
+      const { overview, unexpected } = await mockEvent(page, options);
+      const match = overview.matches.find(
+        (row) => row.status === 'complete' && row.stage === 'group',
+      )!;
+      options.history![0]!.entries[0]!.matchId = match.id;
+      const revision = match.revision;
+      Object.assign(overview.plan, { bracketMode: 'native', drawPaused: false, liveOwned: true });
+      Object.assign(match, {
+        label: 'Recorded pool set',
+        player1Name: 'Alexandria with a long tournament alias from Western Sydney',
+        reviewPoolGames: true,
+        score1: 2,
+        score2: 0,
+        winnerId: match.player1Id,
+        outcome: 'played',
+      });
+      const previews: object[] = [];
+      const submissions: { requestId: string; command: { poolGameCorrectionToken: string } }[] = [];
+      let revisionToken = 'a'.repeat(64);
+      await page.route('**/api/trpc/eventOps.live.previewPoolGameCorrection*', async (route) => {
+        const params = new URL(route.request().url()).searchParams;
+        const input = JSON.parse(params.get('input')!);
+        previews.push(params.has('batch') ? input[0] : input);
+        const result = {
+          result: { data: { previousScore: [match.score1, match.score2], revisionToken } },
+        };
+        await route.fulfill({ json: params.has('batch') ? [result] : result });
+      });
+      await page.route('**/api/trpc/eventOps.live.command*', async (route) => {
+        const batched = new URL(route.request().url()).searchParams.has('batch');
+        const body = route.request().postDataJSON();
+        submissions.push(batched ? body[0] : body);
+        let conflict: string | undefined;
+        switch (submissions.length) {
+          case 1:
+            revisionToken = 'b'.repeat(64);
+            conflict = 'Pool evidence changed. Review the score correction again.';
+            break;
+          case 2:
+            Object.assign(match, { score2: 1, revision: revision + 1 });
+            await route.abort();
+            return;
+          case 4:
+            Object.assign(match, { score1: 3, revision: revision + 2 });
+            conflict = 'This match changed. Refresh and try again.';
+            break;
+        }
+        const result = conflict
+          ? {
+              error: {
+                message: conflict,
+                code: -32009,
+                data: { code: 'CONFLICT', httpStatus: 409 },
+              },
+            }
+          : { result: { data: {} } };
+        await route.fulfill({ json: batched ? [result] : result });
+      });
+      await page.goto(`/operate/${PLAN_ID}?view=history`);
+      await page.getByRole('button', { name: 'Open match', exact: true }).click();
+      const card = page.locator('article.ops-match:visible').filter({ hasText: match.label });
+      await card.getByRole('button', { name: 'Correct score' }).click();
+      await card.getByRole('spinbutton').last().fill('1');
+      const reviewButton = card.getByRole('button', { name: 'Review correction' });
+      await reviewButton.press('Enter');
+      const dialog = page.getByRole('alertdialog');
+      await expect(dialog).toContainText('Correct 2–0 to 2–1?');
+      await expect(dialog).toContainText(
+        'The winner, confirmed pool places and finals draw stay as recorded.',
+      );
+      await expect(dialog).toContainText('Ratings use the corrected games after publication.');
+      await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+      expect(submissions).toHaveLength(0);
+      await ready(page);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      expect(
+        (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze())
+          .violations,
+      ).toEqual([]);
+      await page.screenshot({ path: testInfo.outputPath('frozen-pool-correction.png') });
+      await dialog.getByRole('button', { name: 'Cancel' }).press('Enter');
+      await expect(reviewButton).toBeFocused();
+      expect(submissions).toHaveLength(0);
+      await reviewButton.press('Enter');
+      await dialog.getByRole('button', { name: 'Confirm', exact: true }).press('Enter');
+      await expect(
+        page.getByText('Pool evidence changed. Review the score correction again.'),
+      ).toBeVisible();
+      await expect(reviewButton).toBeEnabled();
+      await expect(card.getByRole('button', { name: 'Retry correction' })).toHaveCount(0);
+      await reviewButton.press('Enter');
+      await expect(dialog).toContainText('Correct 2–0 to 2–1?');
+      await dialog.getByRole('button', { name: 'Confirm', exact: true }).press('Enter');
+      await expect(
+        card.locator('.ops-contestant').last().getByText('1', { exact: true }),
+      ).toBeVisible();
+      await expect(card.getByRole('button', { name: 'Retry correction' })).toBeEnabled();
+      await card.getByRole('button', { name: 'Retry correction' }).click();
+      await expect(
+        page.getByRole('status').filter({ hasText: /Pool score corrected/ }),
+      ).toBeVisible();
+      const input = {
+        planId: PLAN_ID,
+        matchId: match.id,
+        expectedRevision: revision,
+        score1: 2,
+        score2: 1,
+      };
+      expect(previews).toEqual([input, input, input]);
+      expect(submissions).toHaveLength(3);
+      expect(submissions[0]!.command.poolGameCorrectionToken).toBe('a'.repeat(64));
+      expect(submissions[1]!.command.poolGameCorrectionToken).toBe('b'.repeat(64));
+      expect(submissions[1]!.requestId).not.toBe(submissions[0]!.requestId);
+      expect(submissions[2]).toEqual(submissions[1]);
+
+      await card.getByRole('button', { name: 'Correct score' }).click();
+      await card.getByRole('spinbutton').last().fill('0');
+      await reviewButton.press('Enter');
+      await expect(dialog).toContainText('Correct 2–1 to 2–0?');
+      await dialog.getByRole('button', { name: 'Confirm', exact: true }).press('Enter');
+      await expect(
+        card.getByText('Another TO updated this match. Cancel and reopen to use the latest score.'),
+      ).toBeVisible();
+      await expect(reviewButton).toBeDisabled();
+      await card.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await card.getByRole('button', { name: 'Correct score' }).click();
+      await expect(card.getByRole('spinbutton').first()).toHaveValue('3');
+      await expect(card.getByRole('spinbutton').last()).toHaveValue('1');
+      expect(previews[3]).toEqual({ ...input, expectedRevision: revision + 1, score2: 0 });
+      expect(unexpected).toEqual([]);
+    });
+
 const cases = [
   { mode: 'shared', entry: 'score', theme: 'dark', width: 390 },
   { mode: 'station', entry: 'score', theme: 'light', width: 390 },
