@@ -2,6 +2,7 @@ export const requiredJobs = [
   'typecheck',
   'lint',
   'format',
+  'changeset',
   'test',
   'e2e',
   'e2e-report',

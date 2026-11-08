@@ -18,4 +18,4 @@ UI changes are complete only after inspecting the rendered page and recording th
 
 ## Release notes
 
-For a user-visible change, add a Changeset for `@smashclub/web` following [the release guide](docs/development.md#versioned-releases). That package tracks the version of the entire Nemesis app.
+For each pull request, add a Changeset for `@smashclub/web` following [the release guide](docs/development.md#versioned-releases). That package tracks the version of the entire Nemesis app. A release-only PR consumes the existing Changesets.

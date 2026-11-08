@@ -158,12 +158,29 @@ for (const theme of ['light', 'dark'] as const) {
         'href',
         'https://github.com/ashleylamont/smashclub-seeding/pull/151',
       );
+      await expect(main.getByRole('link', { name: version, exact: true })).toHaveAttribute(
+        'href',
+        `https://github.com/ashleylamont/smashclub-seeding/releases/tag/v${version}`,
+      );
+      await expect(main.getByRole('link', { name: 'build 6f20a0a', exact: true })).toHaveAttribute(
+        'href',
+        'https://github.com/ashleylamont/smashclub-seeding/commit/6f20a0adcd84e04b9a09f677c67ec406496d73c9',
+      );
       await ready(page);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(viewport.width);
       expect(
         (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
       ).toEqual([]);
       await page.screenshot({ path: testInfo.outputPath('changelog.png') });
+      const image = main.getByRole('img', {
+        name: /OBS intermission showing a double-elimination bracket/,
+      });
+      await image.scrollIntoViewIfNeeded();
+      await expect
+        .poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth))
+        .toBeGreaterThan(0);
+      expect((await image.boundingBox())!.width).toBeLessThanOrEqual(viewport.width);
+      await image.screenshot({ path: testInfo.outputPath('changelog-illustration.png') });
     });
   }
 }

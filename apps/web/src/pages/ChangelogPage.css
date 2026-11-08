@@ -27,3 +27,11 @@
   text-decoration: underline;
   text-underline-offset: 0.15em;
 }
+
+.changelog-page img {
+  display: block;
+  max-inline-size: 100%;
+  block-size: auto;
+  margin-block: var(--s3);
+  border: 1px solid var(--border-strong);
+}
