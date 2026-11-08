@@ -141,8 +141,29 @@
             "patterns": [
               "@smashclub/engine",
               "@smashclub/db",
+              "@smashclub/tournament-formats",
+              "**/tournament-formats/**",
               "@smashclub/server",
               "@smashclub/web"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/tournament-formats/**/*.{ts,tsx}"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              "node:*",
+              "@smashclub/*",
+              "!@smashclub/shared",
+              "**/db/**",
+              "**/engine/**",
+              "**/apps/**",
+              "**/tools/**"
             ]
           }
         ]

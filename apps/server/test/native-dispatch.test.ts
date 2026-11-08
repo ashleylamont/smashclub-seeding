@@ -1,7 +1,7 @@
 import { finalsToken } from '../src/tournament/operations';
 import { reviewFinalsReset } from '../src/tournament/finalsPreview';
 import { attendancePreview } from '../src/tournament/attendance';
-import { buildEliminationTree } from '@smashclub/engine';
+import { buildEliminationTree } from '@smashclub/tournament-formats';
 import { instantiateElimination } from '../src/tournament/structureAdapter';
 import { describe, expect, it } from 'vitest';
 import { captureBaseline, decide, reduceDecision, stableId } from '../src/tournament/domain';

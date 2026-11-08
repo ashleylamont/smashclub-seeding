@@ -51,12 +51,13 @@ import {
   type DivisionPreference,
   EventPlanValidationError,
 } from './divisions';
-import { poolLabel, stripeIntoPools } from './pools';
 import {
   buildConsolationBracket,
   championshipQualifiers,
   consolationQualifiers,
-} from './advancement';
+  poolLabel,
+  stripeIntoPools,
+} from '@smashclub/tournament-formats';
 import { parseRosterText, resolveRoster, type RosterResolution } from './roster';
 
 export { EventPlanStateError, BRACKET_SLOTS } from './contracts';

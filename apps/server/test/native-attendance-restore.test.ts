@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { buildEliminationTree } from '@smashclub/engine';
+import { buildEliminationTree } from '@smashclub/tournament-formats';
 import { captureBaseline, decide, hash, reduceDecision, stableId } from '../src/tournament/domain';
 import { attendancePreview } from '../src/tournament/attendance';
 import { instantiateElimination } from '../src/tournament/structureAdapter';

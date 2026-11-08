@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildRoundRobin,
-  buildEliminationTree,
-  compileTournament,
-} from '../src/tournament/structure';
+import { buildRoundRobin, buildEliminationTree, compileTournament } from '../src/structure';
 
 const ids = (count: number) => Array.from({ length: count }, (_, i) => `entrant-${i}`);
 describe('surface-independent tournament generation', () => {

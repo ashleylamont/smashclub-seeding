@@ -1,4 +1,4 @@
-import { buildPoolFinals } from '@smashclub/engine';
+import { buildPoolFinals } from '@smashclub/tournament-formats';
 import { randomUUID } from 'node:crypto';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import {

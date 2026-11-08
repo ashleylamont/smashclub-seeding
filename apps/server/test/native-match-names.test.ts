@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildEliminationTree, buildDoubleEliminationTree } from '@smashclub/engine';
+import { buildEliminationTree, buildDoubleEliminationTree } from '@smashclub/tournament-formats';
 import { matchNames } from '../src/tournament/matchNames';
 import { matchRows } from '../src/tournament/views';
 import { hash, stableId } from '../src/tournament/domain';

@@ -1,4 +1,4 @@
-import { buildEliminationTree, buildFormatFinals } from '@smashclub/engine';
+import { buildEliminationTree, buildFormatFinals } from '@smashclub/tournament-formats';
 import { finalsRoles } from '@smashclub/shared';
 import { instantiateElimination } from './structureAdapter';
 import { qualificationPlaces, reconcileRollingFinals } from './qualifiers';

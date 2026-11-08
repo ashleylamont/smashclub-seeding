@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildRoundRobin } from '@smashclub/engine';
+import { buildRoundRobin } from '@smashclub/tournament-formats';
 import { pureBaseline, envelope } from './helpers/nativeLiveFixture';
 import { captureBaseline, stableId } from '../src/tournament/domain';
 import { applyAttendance, attendancePreview } from '../src/tournament/attendance';

@@ -15,6 +15,12 @@ export default defineConfig({
       },
       {
         test: {
+          name: 'tournament-formats',
+          include: ['packages/tournament-formats/test/**/*.test.ts'],
+        },
+      },
+      {
+        test: {
           name: 'ci',
           include: ['test/ci/**/*.test.ts'],
         },

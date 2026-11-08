@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { poolCountFor, poolLabel, stripeIntoPools } from '../src/event-planner/pools';
+import { poolCountFor, poolLabel, stripeIntoPools } from '../src';
 
 const seeds = (n: number) => Array.from({ length: n }, (_, index) => index + 1);
 

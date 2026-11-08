@@ -15,7 +15,7 @@ import { latestRecomputeId } from '../recompute/recompute';
 import { getRatingSettings } from '../settings';
 import { loadDoublesRatings } from '../recompute/doubles';
 import { EventPlanStateError, BRACKET_SLOTS, type PlanView } from './contracts';
-import { stripeIntoPools, poolLabel } from './pools';
+import { stripeIntoPools, poolLabel } from '@smashclub/tournament-formats';
 import { describePairRating, frozenPairRating } from './pairRatings';
 
 export const extendedNativePlan = (plan: typeof eventPlans.$inferSelect) =>

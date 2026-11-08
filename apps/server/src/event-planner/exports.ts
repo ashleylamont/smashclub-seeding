@@ -1,6 +1,6 @@
 import { divisionLabel, EventPlanStateError, type PlanView } from './plans';
 import type { Division } from './divisions';
-import { winnersCount } from './advancement';
+import { winnersCount } from '@smashclub/tournament-formats';
 
 /**
  * The copy-and-paste handoff to Challonge.

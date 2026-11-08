@@ -1,4 +1,4 @@
-import { buildRoundRobin } from '@smashclub/engine';
+import { buildRoundRobin } from '@smashclub/tournament-formats';
 import { describe, expect, it } from 'vitest';
 import { attendancePreview } from '../src/tournament/attendance';
 import { captureBaseline, decide, reduceDecision, stableId } from '../src/tournament/domain';

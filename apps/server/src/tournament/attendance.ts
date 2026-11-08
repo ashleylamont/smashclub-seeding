@@ -1,6 +1,6 @@
 import { previewRestoration, restoreEntrant } from './restoration';
 import { isSinglePool, isKnockout } from '@smashclub/shared';
-import { buildRoundRobin } from '@smashclub/engine';
+import { buildRoundRobin } from '@smashclub/tournament-formats';
 import { hash, requireFact, resolved, stableId, unconfirmedCall } from './facts';
 import { advance } from './brackets';
 import { qualifierFieldFrozen } from './qualifiers';

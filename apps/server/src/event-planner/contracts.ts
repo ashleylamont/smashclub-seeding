@@ -1,7 +1,7 @@
 import type { eventPlans } from '@smashclub/db';
 import type { CompetitionFormat, TournamentStructure, StructureOptions } from '@smashclub/shared';
 import type { Division, DivisionPreference, PlanIssue } from './divisions';
-import type { ConsolationBracket } from './advancement';
+import type { ConsolationBracket } from '@smashclub/tournament-formats';
 import type { ReviewCandidateSnapshot } from '../identity/candidates';
 import type { PairRatingBreakdown } from './pairRatings';
 

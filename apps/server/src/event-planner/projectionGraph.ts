@@ -8,7 +8,7 @@ import {
   poolLabel,
   type StructureMatch,
   type TournamentSlot,
-} from '@smashclub/engine';
+} from '@smashclub/tournament-formats';
 
 export interface ProjectionMatch {
   id: string;

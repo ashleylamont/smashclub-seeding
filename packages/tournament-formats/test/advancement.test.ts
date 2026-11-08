@@ -4,7 +4,7 @@ import {
   championshipQualifiers,
   standardBracketOrder,
   type PoolFinisher,
-} from '../src/event-planner/advancement';
+} from '../src';
 
 /** Every pool's 1-4, for a division of `poolCount` pools. */
 function finishers(poolCount: number): PoolFinisher[] {

@@ -7,7 +7,12 @@ import { parse } from 'yaml';
 import { describe, expect, it } from 'vitest';
 import { assertAppChangeset } from '../../scripts/check-changeset.mjs';
 import { assertRequiredJobs, requiredJobs } from '../../scripts/check-required-jobs.mjs';
-import { planPrChecks, skippableJobs } from '../../scripts/plan-pr-checks.mjs';
+import {
+  listWorkspaces,
+  planAdvisoryCoverage,
+  planPrChecks,
+  skippableJobs,
+} from '../../scripts/plan-pr-checks.mjs';
 import { assertReleaseTag, publicationPolicy } from '../../scripts/publication-policy.mjs';
 import { assertPostgresReport } from '../../scripts/postgres-report-policy.mjs';
 
@@ -100,6 +105,56 @@ it('scopes PR skips to web or prose and keeps broader candidates advisory', () =
   ]) {
     expect(planPrChecks([web, note, path], false).skips, path).toEqual([]);
   }
+});
+
+describe('advisory workspace coverage', () => {
+  const graph = (pkg: string) => listWorkspaces(`...@smashclub/${pkg}`);
+
+  it.each([
+    [
+      'tournament-formats',
+      'packages/tournament-formats/src/elimination.ts',
+      ['server', 'tournament-formats', 'web'],
+    ],
+    ['engine', 'packages/engine/src/whr.ts', ['engine', 'server', 'web']],
+    [
+      'shared',
+      'packages/shared/src/competition.ts',
+      ['engine', 'server', 'shared', 'tournament-formats', 'web'],
+    ],
+  ])('uses the %s dependency graph while preserving all actual gates', (pkg, path, projects) => {
+    const paths = [path, '.changeset/example.md'];
+    const coverage = planAdvisoryCoverage(paths, graph(pkg));
+    expect(coverage?.projects).toEqual(projects);
+    expect(coverage?.typecheck).toContain('@smashclub/server');
+    expect(coverage?.typecheck.includes('@smashclub/rank-eval')).toBe(pkg !== 'tournament-formats');
+    expect(coverage?.downstream).toEqual(
+      expect.arrayContaining(['e2e', 'ui-quality', 'postgres', 'production-image']),
+    );
+    expect(planPrChecks(paths, false).skips).toEqual([]);
+  });
+
+  it('combines known rename endpoints and falls back for uncertain or global changes', () => {
+    const format = 'packages/tournament-formats/src/advancement.ts';
+    const rating = 'packages/engine/src/whr.ts';
+    const workspaces = graph('shared');
+    expect(planAdvisoryCoverage([format, rating], workspaces)?.projects).toEqual(
+      expect.arrayContaining(['engine', 'tournament-formats']),
+    );
+    expect(planAdvisoryCoverage([format], [])).toBeNull();
+    for (const path of [
+      'packages/db/migrations/0001.sql',
+      'packages/engine/src/challonge/extract.ts',
+      'packages/tournament-formats/package.json',
+      'pnpm-lock.yaml',
+      'vitest.config.ts',
+      'scripts/plan-pr-checks.mjs',
+      'unexpected.txt',
+    ]) {
+      expect(planAdvisoryCoverage([format, path], workspaces), path).toBeNull();
+      expect(planPrChecks([format, path], false).skips, path).toEqual([]);
+    }
+  });
 });
 
 it('PostgreSQL gate rejects omitted suites and skipped tests even when the runner exits zero', () => {
@@ -342,7 +397,10 @@ describe('Changeset merge gate', () => {
       expect(nonMerge.stderr).toContain('two-parent pull request merge commit');
       expect(check(eventBase).stderr).toContain('does not match the expected pull request head');
       expect(plan(feature, false)).toBe(`skips=${JSON.stringify(skippableJobs)}\n`);
-      expect(readFileSync(summary, 'utf8')).toContain('`@smashclub/web`');
+      expect(readFileSync(summary, 'utf8')).toContain('Proposed Vitest projects: `web`');
+      expect(readFileSync(summary, 'utf8')).toContain(
+        'Actual typecheck and unit test jobs: Full workspace scope',
+      );
       expect(plan(feature, true)).toBe('skips=[]\n');
       expect(readFileSync(summary, 'utf8')).toContain(
         'Additional candidates (still run): `legacy-python`, `postgres`',
@@ -354,6 +412,9 @@ describe('Changeset merge gate', () => {
       git('switch', '--quiet', 'main');
       git('merge', '--quiet', '--no-ff', '--no-edit', 'rename');
       expect(plan(moved, false)).toBe('skips=[]\n');
+      expect(readFileSync(summary, 'utf8')).toContain(
+        'Proposed workspace scope: Full verification',
+      );
       const checkStep = ci.jobs.changeset.steps.find(
         (step: { name?: string }) => step.name === 'Check release note',
       );

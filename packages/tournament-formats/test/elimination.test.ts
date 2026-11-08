@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  compileTournament,
-  type StructureMatch,
-  type TournamentSlot,
-} from '../src/tournament/structure';
+import { compileTournament, type StructureMatch, type TournamentSlot } from '../src/structure';
 
 function play(tree: StructureMatch[], decisions: number) {
   const results = new Map<string, { a: string | null; b: string | null; winner: string | null }>();
