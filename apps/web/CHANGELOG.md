@@ -2,6 +2,15 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.2.3
+
+### Patch Changes
+
+- 8 November 2026 · **Fix** · The event directory distinguishes an empty event list from an archive with no open events. Cancelled events link to their event page, and closed event pages direct players to recorded results, describe missing draws, and list prizes without implying play is ongoing. [#204](https://github.com/ashleylamont/smashclub-seeding/pull/204) · [build e00df4b](https://github.com/ashleylamont/smashclub-seeding/commit/e00df4b50c684a07e501a6a831f97947db0a6ee4)
+- 8 November 2026 · **Fix** · Public result cards keep imported byes visible when no advancing entrant is identified. The app and OBS only name an advancing entrant when the recorded winner matches a participant. [#207](https://github.com/ashleylamont/smashclub-seeding/pull/207) · [build ebb05ab](https://github.com/ashleylamont/smashclub-seeding/commit/ebb05abf504144df871d656b8120603862dd23e5)
+- 8 November 2026 · **Fix** · Open the exact untaken call blocking a live score correction or approval. Return it from the desk and retry the correction with the score draft intact. [#206](https://github.com/ashleylamont/smashclub-seeding/pull/206) · [build a7ef00c](https://github.com/ashleylamont/smashclub-seeding/commit/a7ef00cdbe4ea619ebb217b288d8025f5ba9826f)
+- 8 November 2026 · **Fix** · Attendance menus stay reachable while the event roster loads. [#209](https://github.com/ashleylamont/smashclub-seeding/pull/209) · [build 1942166](https://github.com/ashleylamont/smashclub-seeding/commit/19421664bfcbe06febc50ff721b2997e27e34f7d)
+
 ## 0.2.2
 
 ### Patch Changes
