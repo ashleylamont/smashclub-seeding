@@ -20,10 +20,35 @@ export function projectionMatchCode(match: ProjectedMatch): string {
 }
 
 export function projectionMatchName(match: ProjectedMatch) {
+  if (match.stage === 'group') return `Round ${match.round}, set ${match.slot + 1}`;
   return (
     match.displayName ??
     (match.bracketLane === 'reset' ? 'Reset final (if needed)' : projectionMatchCode(match))
   );
+}
+
+/** Narrow timeline bars use compact versions of the same structural names. */
+export function projectionTimelineName(match: ProjectedMatch) {
+  return projectionMatchName(match)
+    .replace(/^Winners /, 'W ')
+    .replace(/^Losers round (\d+) · Match (\d+)$/, 'L$1 set $2')
+    .replace(/^Round (\d+), set (\d+)$/, 'R$1 S$2')
+    .replace(/Quarter-final/i, 'QF')
+    .replace(/Semi-final/i, 'SF')
+    .replace(' (if needed)', '');
+}
+
+export function projectionFeederName(
+  feeder: ProjectedMatch,
+  targetSection: string,
+  sections: ReadonlyMap<string, string>,
+) {
+  const name = `${projectionMatchName(feeder)}${feeder.bye ? ' (bye)' : ''}`;
+  const section =
+    feeder.stage === 'group' || feeder.section !== targetSection
+      ? sections.get(feeder.section)
+      : undefined;
+  return section ? `${section} · ${name}` : name;
 }
 
 export function projectionPairing(
@@ -41,6 +66,8 @@ export function projectionPairing(
         ? `${outcome} ${projectionMatchCode(parent)}`
         : `${outcome} of ${projectionMatchName(parent)}`;
     }
+    const placeName = style === 'name' ? match.poolPlaceNames?.[side] : undefined;
+    if (placeName) return placeName;
     return match.bracketLane && label.startsWith('O seed ')
       ? `Seed ${label.slice('O seed '.length)}`
       : label;

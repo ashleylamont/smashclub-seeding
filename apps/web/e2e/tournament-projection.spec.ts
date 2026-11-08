@@ -171,14 +171,13 @@ test('double elimination separates both brackets and finals and schedules indepe
   await expect(preview.locator('.projection-summary')).toContainText('1h 10m–1h 22m');
   await expect(preview).toContainText('The earlier finish is without a reset');
   const timeline = preview.getByRole('region', { name: 'Projected station timeline' });
-  await timeline.getByRole('button', { name: /^W2\.1 · Winners semi-final 1:/ }).click();
+  await timeline.getByRole('button', { name: /^Winners semi-final 1 \(W SF 1\):/ }).click();
   await expect(preview.locator('.projection-inspector')).toContainText('18:42–18:52');
-  await timeline.getByRole('button', { name: /^L1\.1 · Losers round 1 · Match 1:/ }).click();
+  await timeline.getByRole('button', { name: /^Losers round 1 · Match 1 \(L1 set 1\):/ }).click();
   await expect(preview.locator('.projection-inspector')).toContainText('18:42–18:52');
-  await expect(timeline.getByRole('button', { name: /^Reset final \(if needed\):/ })).toHaveCSS(
-    'border-top-style',
-    'dashed',
-  );
+  await expect(
+    timeline.getByRole('button', { name: /^Reset final \(if needed\) \(Reset final\):/ }),
+  ).toHaveCSS('border-top-style', 'dashed');
   await preview.getByRole('tab', { name: 'Pools and bracket layout' }).click();
   await expect(
     preview.getByRole('heading', { name: 'Double elimination · 8 entrants', exact: true }),

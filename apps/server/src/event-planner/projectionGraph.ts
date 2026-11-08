@@ -23,6 +23,8 @@ export interface ProjectionMatch {
   bracketLane?: StructureMatch['bracketLane'];
   bracketRound?: number;
   sides: [string, string];
+  /** Human names for pool places. The existing sides retain the export references. */
+  poolPlaceNames?: [string | null, string | null];
   feeds: { matchId: string; outcome: 'winner' | 'loser'; side: 0 | 1 }[];
   /** Actual repeated pool entrants; elimination participation follows its feeds. */
   resources: string[];
@@ -123,6 +125,11 @@ export function projectionGraph(
     const view = stageViews.get(match.stageId)!;
     const displayName =
       view.stage === 'group' ? undefined : knockoutMatchName(match, view.entrants);
+    const poolPlaceNames = match.sides.map((source) =>
+      source.kind === 'pool_place'
+        ? `${stageViews.get(source.poolId)!.label} · place ${source.place}`
+        : null,
+    ) as [string | null, string | null];
     const sideResources = match.sides.map((s) =>
       s.kind === 'bye'
         ? []
@@ -155,6 +162,7 @@ export function projectionGraph(
       sides: match.sides.map((source, i) =>
         sideResources[i]!.length ? labelSlot(source) : 'Bye',
       ) as [string, string],
+      ...(poolPlaceNames.some(Boolean) ? { poolPlaceNames } : {}),
       feeds: match.sides.flatMap((source, side) =>
         source.kind === 'winner' || source.kind === 'loser'
           ? [{ matchId: matchIds.get(source.matchId)!, outcome: source.kind, side: side as 0 | 1 }]

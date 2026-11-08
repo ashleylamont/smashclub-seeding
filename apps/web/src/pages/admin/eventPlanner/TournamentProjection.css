@@ -120,12 +120,25 @@
   min-height: 0;
   min-width: 0;
   padding: 2px;
+  flex-direction: column;
+  gap: var(--s1);
   overflow: hidden;
-  white-space: nowrap;
   font: var(--fs-xs)/1 var(--mono);
+  letter-spacing: normal;
+  text-transform: none;
   border-color: var(--projection-color);
   background: var(--projection-bg);
   color: var(--text-h);
+}
+.projection-bar > span {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.projection-bar > span:nth-child(2) {
+  font-family: var(--sans);
 }
 .projection-bar[aria-pressed='true'] {
   outline: 2px solid var(--text-h);
