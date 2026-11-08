@@ -226,6 +226,51 @@ test('an independent OBS source cycles native progress, waits through a call, re
     await obs.reload();
     await expect(capture).toBeVisible();
     await expect(obs).toHaveURL(/presentation=gameplay/);
+
+    await obs.goto(href);
+    await expect(progress).toBeVisible();
+    snapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
+    const next = snapshot.matches.find((match) => match.status === 'ready')!;
+    await command({
+      kind: 'dispatch',
+      matchId: next.id,
+      stationId,
+      expectedRevision: next.revision,
+      expectedResourceRevision: snapshot.settings.resourceRevision,
+      callOnly: true,
+    });
+    snapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
+    await command({
+      kind: 'beginPlay',
+      matchId: next.id,
+      expectedRevision: snapshot.matches.find((match) => match.id === next.id)!.revision,
+      expectedResourceRevision: snapshot.settings.resourceRevision,
+    });
+    await expect(capture).toBeVisible();
+    await expect(obs.getByLabel('Current match')).toContainText(next.player1Name!);
+
+    const active = await query<Snapshot>(publicContext.request, 'eventOps.snapshot', { planId });
+    await mutate(page.request, 'admin.eventPlanner.closePlan', { planId, status: 'cancelled' });
+    const closed = await query<Snapshot>(publicContext.request, 'eventOps.snapshot', { planId });
+    expect(closed.plan.status).toBe('cancelled');
+    const retained = active.matches.find((match) => match.id === next.id)!;
+    expect(retained).toMatchObject({ status: 'playing', stationId });
+    expect(closed.matches.find((match) => match.id === next.id)).toMatchObject({
+      status: retained.status,
+      stationId: retained.stationId,
+      revision: retained.revision,
+      winnerId: retained.winnerId,
+    });
+    await expect(progress).toContainText('Event cancelled');
+    await expect(capture).not.toBeVisible();
+    const abandoned = progress.locator(`[data-match-id="${next.id}"]`);
+    await expect(abandoned).toContainText('No result recorded');
+    await expect(abandoned).not.toHaveClass(/is-playing/);
+    await expect(result).toContainText('Final result');
+    await obs.reload();
+    await expect(abandoned).toContainText('No result recorded');
+    await expect(obs).toHaveURL(/presentation=auto/);
+    await obs.screenshot({ path: testInfo.outputPath('real-intermission-cancelled.png') });
   } finally {
     await publicContext.close();
   }

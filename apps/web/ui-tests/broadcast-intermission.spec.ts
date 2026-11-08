@@ -240,6 +240,140 @@ for (const [width, theme] of [
   [1280, 'dark'],
   [1920, 'light'],
 ] as const) {
+  test(`${width}px cancelled Auto source keeps recorded results and stops showing an active set`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height: (width * 9) / 16 });
+    await page.emulateMedia({ colorScheme: theme });
+    await page.clock.install({ time: new Date('2026-10-04T00:00:00Z') });
+    const options = { idle: true, failure: false };
+    const { snapshot, responses, unexpected } = await mockEvent(page, options);
+    const [playing, played, pending] = bracketFixture(4, false);
+    const station = snapshot.stations[0]!;
+    Object.assign(playing!, { status: 'playing', stationId: station.id, score1: 7, score2: 5 });
+    Object.assign(played!, {
+      status: 'complete',
+      outcome: 'played',
+      score1: 2,
+      score2: 1,
+      winnerId: played!.player1Id,
+    });
+    const event = {
+      ...snapshot,
+      matches: [playing!, played!, pending!],
+      nativeBrackets: [
+        {
+          id: 'rehearsal',
+          division: 'upper',
+          stage: 'main',
+          entrantIds: Array.from({ length: 4 }, (_, index) => `entrant-${index}`),
+          complete: false,
+          winnerId: null,
+          standings: [],
+        },
+      ],
+    };
+    responses['eventOps.snapshot'] = event;
+    const overlay = (mode: string) =>
+      `/overlay/${PLAN_ID}?station=${station.id}&presentation=${mode}&controls=0`;
+    const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
+    const capture = page.getByRole('region', { name: 'Transparent game capture area' });
+    const current = page.getByLabel('Current match');
+
+    await page.goto(overlay('auto'));
+    await expect(capture).toBeVisible();
+    await expect(current).toContainText(TEAM_ALIAS);
+    await expect(progress).not.toBeVisible();
+    event.plan.status = 'cancelled';
+    await expect
+      .poll(async () => {
+        await page.clock.runFor(2000);
+        return progress.isVisible();
+      })
+      .toBe(true);
+    await expect(page).toHaveURL(/presentation=auto/);
+    await expect(progress).toContainText('Event cancelled');
+    await expect(capture).not.toBeVisible();
+    const unfinished = progress.locator(`[data-match-id="${playing!.id}"]`);
+    await expect(unfinished).toHaveAccessibleName(/No result recorded/);
+    await expect(unfinished).not.toHaveClass(/is-playing/);
+    await expect(unfinished.getByLabel(/Score [75]/)).toHaveCount(0);
+    const recorded = progress.locator(`[data-match-id="${played!.id}"]`);
+    await expect(recorded).toHaveAccessibleName(/Final result/);
+    await expect(recorded.getByLabel('Score 2', { exact: true })).toBeVisible();
+    await expect(recorded.locator('.is-winner')).toHaveCount(1);
+    await expect(progress.locator(`[data-match-id="${pending!.id}"]`)).toHaveAccessibleName(
+      /No result recorded/,
+    );
+    await fits(page);
+    expect(
+      (
+        await new AxeBuilder({ page })
+          .include('.broadcast-intermission')
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+          .analyze()
+      ).violations,
+    ).toEqual([]);
+    await page.screenshot({
+      path: testInfo.outputPath(`intermission-cancelled-native-${width}.png`),
+    });
+
+    options.failure = true;
+    const interrupted = page.getByText('Connection interrupted · last received scores', {
+      exact: true,
+    });
+    await expect
+      .poll(async () => {
+        await page.clock.runFor(2000);
+        return interrupted.isVisible();
+      })
+      .toBe(true);
+    await expect(unfinished).toBeVisible();
+    await expect(recorded).toBeVisible();
+    await expect(capture).not.toBeVisible();
+
+    options.failure = false;
+    await page.goto(overlay('gameplay'));
+    await expect(capture).toBeVisible();
+    await expect(progress).not.toBeVisible();
+    await expect(page.locator('.broadcast-topline')).toContainText('EVENT CANCELLED');
+    await expect(page.locator('.broadcast-topline')).toContainText('NO ACTIVE SET');
+    await expect(current).toHaveCount(0);
+    await expect(capture).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await expect(page.locator('.broadcast-matchup')).not.toHaveCSS(
+      'background-color',
+      'rgba(0, 0, 0, 0)',
+    );
+    await page.screenshot({
+      path: testInfo.outputPath(`intermission-cancelled-gameplay-${width}.png`),
+    });
+    await page.goto(overlay('progress'));
+    await expect(unfinished).toHaveAccessibleName(/No result recorded/);
+
+    // Older SQL-era events can store a no contest as a blocked match.
+    Object.assign(playing!, {
+      status: 'blocked',
+      blockedReason: 'Both players withdrawn: no contest; no winner or score recorded',
+      stationId: null,
+      score1: null,
+      score2: null,
+    });
+    await page.reload();
+    await expect(unfinished).toHaveAccessibleName(/No contest/);
+    await expect(unfinished).not.toHaveClass(/is-playing/);
+    await expect(recorded.getByLabel('Score 2', { exact: true })).toBeVisible();
+    await fits(page);
+    await page.screenshot({
+      path: testInfo.outputPath(`intermission-closed-native-no-contest-${width}.png`),
+    });
+    expect(unexpected).toEqual([]);
+  });
+}
+
+for (const [width, theme] of [
+  [1280, 'dark'],
+  [1920, 'light'],
+] as const) {
   test(`${width}px linked finals show published matches without guessing the draw`, async ({
     page,
   }, testInfo) => {
@@ -298,15 +432,20 @@ for (const [width, theme] of [
       player1Name: 'TBD',
       player2Name: 'TBD',
     });
+    const noContest = linked('Withdrawal no contest', {
+      status: 'blocked',
+      blockedReason: 'Both players withdrawn: no contest; no winner or score recorded',
+    });
     const lower = linked('Imported consolation set', {
       division: 'lower',
       stage: 'consolation',
     });
+    const plan = { ...fixture.snapshot.plan, bracketMode: 'challonge' };
     fixture.responses['eventOps.snapshot'] = {
       ...fixture.snapshot,
-      plan: { ...fixture.snapshot.plan, bracketMode: 'challonge' },
+      plan,
       nativeBrackets: [],
-      matches: [pool, played, forfeit, bye, pending, lower],
+      matches: [pool, played, forfeit, bye, pending, noContest, lower],
       brackets: [
         { division: 'upper', stage: 'main', slug: 'linked-upper' },
         { division: 'lower', stage: 'consolation', slug: 'linked-lower' },
@@ -364,6 +503,30 @@ for (const [width, theme] of [
     await expect(progress).toBeVisible();
     await page.keyboard.press('ArrowLeft');
     await expect(lowerTable).toContainText('1–2');
+
+    plan.status = 'complete';
+    await page.clock.runFor(5000);
+    await expect(progress).toContainText('Event complete');
+    await expect(lowerTable).toContainText('1–2');
+    await page.keyboard.press('ArrowLeft');
+    await expect(upper.getByRole('row', { name: /Imported pending set/ })).toContainText(
+      'No result recorded',
+    );
+    await expect(upper.getByRole('row', { name: /Withdrawal no contest/ })).toContainText(
+      'No contest',
+    );
+    await expect(upper).not.toContainText('Awaiting opponent');
+    await fits(page);
+    await page.screenshot({ path: testInfo.outputPath(`intermission-closed-linked-${width}.png`) });
+    await page.keyboard.press('ArrowLeft');
+    await expect(upper.getByRole('row', { name: /Imported played set/ })).toContainText('2–0');
+    await fits(page);
+    await page.screenshot({
+      path: testInfo.outputPath(`intermission-closed-linked-results-${width}.png`),
+    });
+    await page.keyboard.press('ArrowLeft');
+    await expect(progress).toContainText('Standings from recorded pool results.');
+    await expect(progress.getByRole('columnheader', { name: 'No result' })).toBeVisible();
     expect(fixture.unexpected).toEqual([]);
   });
 }
