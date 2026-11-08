@@ -20,6 +20,7 @@ export const NativeTournament = state({
     DecisionRecordedV6: Decision.extend({ version: z.literal(6) }),
     DecisionRecordedV7: Decision.extend({ version: z.literal(7) }),
     DecisionRecordedV8: Decision.extend({ version: z.literal(8) }),
+    DecisionRecordedV9: Decision.extend({ version: z.literal(9) }),
     DecisionRecordedV10: Decision.extend({ version: z.literal(10) }),
     ResultsSealedV1: Decision,
     PlanRetiredV1: Decision,
@@ -52,6 +53,9 @@ export const NativeTournament = state({
     DecisionRecordedV8: ({ data }, state) => ({
       current: [reduceDecision(state.current[0], data)],
     }),
+    DecisionRecordedV9: ({ data }, state) => ({
+      current: [reduceDecision(state.current[0], data)],
+    }),
     DecisionRecordedV10: ({ data }, state) => ({
       current: [reduceDecision(state.current[0], data)],
     }),
@@ -82,6 +86,7 @@ export const NativeTournament = state({
       return ['ResultsSealedV1', decision];
     if (decision.version === 10)
       return ['DecisionRecordedV10', { ...decision, version: 10 as const }];
+    if (decision.version === 9) return ['DecisionRecordedV9', { ...decision, version: 9 as const }];
     if (decision.version === 8) return ['DecisionRecordedV8', { ...decision, version: 8 as const }];
     if (decision.version === 7) return ['DecisionRecordedV7', { ...decision, version: 7 as const }];
     if (decision.version === 6) return ['DecisionRecordedV6', { ...decision, version: 6 as const }];

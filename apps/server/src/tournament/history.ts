@@ -41,6 +41,7 @@ const decisionNames = [
   'DecisionRecordedV6',
   'DecisionRecordedV7',
   'DecisionRecordedV8',
+  'DecisionRecordedV9',
   'DecisionRecordedV10',
   'ResultsSealedV1',
   'PlanRetiredV1',
@@ -207,6 +208,9 @@ export async function nativeEventHistory(
           sequence: decision.receipt.sequence,
           correctionOf: decision.correctionOf,
           causedBy: decision.causation,
+          ...(decision.finalsReplayCompanion && {
+            finalsReplayCompanion: decision.finalsReplayCompanion,
+          }),
         },
       };
     }

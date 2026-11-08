@@ -410,6 +410,14 @@ export const Envelope = z.object({
 });
 /** Persist decided state changes; reducers do not rerun scheduling/draw policy. */
 export const Decision = z.object({
+  finalsReplayCompanion: z
+    .object({
+      matchId: id,
+      label: z.string(),
+      beforeEntrantId: id,
+      afterEntrantId: id,
+    })
+    .optional(),
   version: z.union([
     z.literal(1),
     z.literal(2),
@@ -419,6 +427,7 @@ export const Decision = z.object({
     z.literal(6),
     z.literal(7),
     z.literal(8),
+    z.literal(9),
     z.literal(10),
   ]),
   commandId: id,

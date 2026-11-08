@@ -165,6 +165,7 @@ export function describeDecision(
         `${command.title}${command.playerId ? ` · ${player(command.playerId)}` : ''}`,
       );
     case 'replayFinalsSlotV1':
+    case 'replayFinalsRoutesV2':
       return describeFinalsReplay(decision, command.reason, matchId, player);
     case 'drawFinals':
       return description('draw', 'Finals drawn', 'The chosen finals pairings were recorded.');
@@ -235,10 +236,14 @@ function describeFinalsReplay(
   if (!archived || !replacement) return { ...base, matchId: sourceMatchId, summary: reason };
   const oldPairing = `${player(archived.match.player1Id)} vs ${player(archived.match.player2Id)}`;
   const newPairing = `${player(replacement.player1Id)} vs ${player(replacement.player2Id)}`;
+  const companion = decision.finalsReplayCompanion;
+  const consolation = companion
+    ? ` ${companion.label} changes from ${player(companion.beforeEntrantId)} to ${player(companion.afterEntrantId)}.`
+    : '';
   return {
     ...base,
     matchId: replacement.id,
-    summary: `${oldPairing} ${archived.match.score1}–${archived.match.score2} stays recorded with superseded advancement. Replay ${newPairing}. ${reason}`,
+    summary: `${oldPairing} ${archived.match.score1}–${archived.match.score2} stays recorded with superseded advancement. Replay ${newPairing}.${consolation} ${reason}`,
   };
 }
 

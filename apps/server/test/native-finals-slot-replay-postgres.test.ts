@@ -1,8 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eq, inArray } from 'drizzle-orm';
 import {
-  eventOperationSettings,
-  eventPlans,
   nativeResultPublications,
   players,
   sets,
@@ -10,255 +8,34 @@ import {
   tournaments,
 } from '@smashclub/db';
 import { postgresCluster } from './helpers/postgres';
-import { nativeAdmin, seedNativeDraft } from './helpers/nativeLiveFixture';
+import { nativeAdmin } from './helpers/nativeLiveFixture';
+import { nativeFinalsSlotReplayFixture } from './helpers/nativeFinalsSlotReplay';
 import {
   createPostgresNativeRuntime,
   nativeStream,
   type NativeRuntime,
 } from '../src/tournament/runtime';
-import { appRouter } from '../src/trpc/router';
-import { loadEnv } from '../src/env';
-import { ChallongeClient } from '../src/challonge/client';
-import { RecomputeTrigger } from '../src/recompute/trigger';
 import { loadSinglesHistory } from '../src/recompute/inputs';
 import { loadDoublesRatings } from '../src/recompute/doubles';
 import { processNativeRatingIntents, publishNativeResult } from '../src/tournament/publication';
-import type { Match, TournamentCommand, TournamentState } from '../src/tournament/schemas';
-import type { SessionUser } from '../src/auth';
+
+let pg: Awaited<ReturnType<typeof postgresCluster>>;
+let runtime: NativeRuntime;
+let fixture: ReturnType<typeof nativeFinalsSlotReplayFixture>;
+
+beforeAll(async () => {
+  pg = await postgresCluster();
+  runtime = await createPostgresNativeRuntime(pg.db, pg.connectionString);
+  fixture = nativeFinalsSlotReplayFixture(pg, runtime);
+});
+afterAll(async () => {
+  await runtime?.shutdown();
+  await pg?.close();
+});
 
 describe('reviewed native finals slot replay on PostgreSQL', () => {
-  let pg: Awaited<ReturnType<typeof postgresCluster>>;
-  let runtime: NativeRuntime;
-
-  beforeAll(async () => {
-    pg = await postgresCluster();
-    runtime = await createPostgresNativeRuntime(pg.db, pg.connectionString);
-  });
-  afterAll(async () => {
-    await runtime?.shutdown();
-    await pg?.close();
-  });
-
-  function caller(user: SessionUser | null = nativeAdmin) {
-    return appRouter.createCaller({
-      db: pg.db,
-      nativeRuntime: runtime,
-      user,
-      env: loadEnv({ DATABASE_URL: pg.connectionString, NODE_ENV: 'test' }),
-      challonge: new ChallongeClient({}),
-      recomputeTrigger: new RecomputeTrigger(pg.db),
-    });
-  }
-
-  function score(match: Match, winningEntrant: string, requestId = crypto.randomUUID()) {
-    return {
-      matchId: match.id,
-      expectedRevision: match.revision,
-      requestId,
-      outcome: 'played' as const,
-      score1: winningEntrant === match.player1Id ? 2 : 1,
-      score2: winningEntrant === match.player1Id ? 1 : 2,
-    };
-  }
-
-  async function draftDoubles() {
-    const members = await pg.db
-      .insert(players)
-      .values(
-        Array.from({ length: 32 }, (_, i) => ({
-          canonicalName: `Replay pair member ${i} ${crypto.randomUUID()}`,
-          displayName: `Member ${i}`,
-        })),
-      )
-      .returning();
-    const { admin } = caller();
-    const { planId } = await admin.eventPlanner.createPlan({
-      competitionFormat: 'doubles',
-      bracketMode: 'native',
-      structure: 'dual_division',
-      structureOptions: { roundRobinMeetings: 1, consolation: false },
-      name: 'Pair finals replay',
-      eventDate: '2026-10-03T00:00:00Z',
-      upperTargetSize: 8,
-      rows: [],
-    });
-    for (let i = 0; i < 16; i++)
-      await admin.eventPlanner.addDoublesPair({
-        planId,
-        playerId: members[i * 2]!.id,
-        partnerPlayerId: members[i * 2 + 1]!.id,
-        teamName: `Pair ${i}`,
-      });
-    await admin.eventPlanner.freezeRoster({ planId });
-    await admin.eventPlanner.generatePools({ planId });
-    await pg.db.insert(eventOperationSettings).values({
-      eventPlanId: planId,
-      published: true,
-      playerReports: true,
-      scoreReportingMode: 'to_review',
-    });
-    return planId;
-  }
-
-  async function substituteLowerPair(planId: string, state: TournamentState) {
-    const entrant = state.entrants.find((e) => e.division === 'lower')!;
-    const [incoming] = await pg.db
-      .insert(players)
-      .values({
-        canonicalName: 'Mixed journal substitute',
-        displayName: 'Mixed substitute',
-      })
-      .returning();
-    const request = {
-      planId,
-      entrantId: entrant.id,
-      outgoingPlayerId: entrant.memberPlayerIds![1]!,
-      incomingPlayerId: incoming!.id,
-      reason: 'Original lower pair member unavailable before play',
-    };
-    const { eventOps } = caller();
-    const preview = await eventOps.previewDoublesSubstitution(request);
-    expect(preview.allowed).toBe(true);
-    await eventOps.applyDoublesSubstitution({
-      ...request,
-      requestId: 'substitution-before-finals-replay',
-      revisionToken: preview.revisionToken,
-    });
-    return {
-      entrantId: entrant.id,
-      memberPlayerIds: [entrant.memberPlayerIds![0]!, incoming!.id],
-    };
-  }
-
-  async function prepare({
-    consolation = false,
-    doubles = false,
-    substituteBeforePlay = false,
-  } = {}) {
-    const planId = doubles ? await draftDoubles() : await seedNativeDraft(pg.db);
-    if (!doubles)
-      await pg.db
-        .update(eventPlans)
-        .set({
-          structure: 'dual_division',
-          structureOptions: { roundRobinMeetings: 1, consolation },
-        })
-        .where(eq(eventPlans.id, planId));
-    const { eventOps } = caller();
-    const state = () => runtime.state(planId);
-    const send = (command: TournamentCommand, requestId = crypto.randomUUID()) =>
-      eventOps.live.command({ planId, requestId, command });
-    const report = (match: Match, winner: string) => eventOps.reportScore(score(match, winner));
-    await eventOps.softLockPools({ planId, confirm: true });
-    const substitution = substituteBeforePlay
-      ? await substituteLowerPair(planId, await state())
-      : null;
-    const initial = await state();
-    for (const match of initial.matches) {
-      const pool = initial.pools.find(({ id }) => id === match.poolId)!;
-      await report(
-        match,
-        pool.entrantIds.find((id) => [match.player1Id, match.player2Id].includes(id))!,
-      );
-    }
-    const drawArgs = { planId, seedPolicy: 'pool_place_whr_v1' as const };
-    const preview = await eventOps.native.preview(drawArgs);
-    await eventOps.native.generate({
-      ...drawArgs,
-      revisionToken: preview.revisionToken,
-      requestId: crypto.randomUUID(),
-    });
-    const drawn = await state();
-    const bracket = drawn.brackets.find((b) => b.division === 'upper' && b.stage === 'main')!;
-    const place = bracket.qualifierSlots!.find(({ place }) => place === 2)!;
-    const pool = drawn.pools.find(({ id }) => id === place.poolId)!;
-    expect(pool.order).toHaveLength(4);
-    const [first, alice, bea, fourth] = pool.order!;
-    const original = drawn.matches.find(
-      (m) =>
-        m.bracketId === bracket.id && m.round === 1 && [m.player1Id, m.player2Id].includes(alice!),
-    )!;
-    const chris = original.player1Id === alice ? original.player2Id! : original.player1Id!;
-    const sibling = drawn.matches.find(
-      (m) => m.bracketId === bracket.id && m.round === 1 && m.id !== original.id,
-    )!;
-    const downstream = drawn.matches.find(
-      (m) => m.parent1Id === original.id || m.parent2Id === original.id,
-    )!;
-    const source = drawn.matches.find(
-      (m) =>
-        m.poolId === pool.id &&
-        [m.player1Id, m.player2Id].includes(alice!) &&
-        [m.player1Id, m.player2Id].includes(bea!),
-    )!;
-    const { requestId: _, outcome: __, ...reviewInput } = score(source, bea!);
-    const review = () => eventOps.live.previewFinalsSlotReplay({ planId, ...reviewInput });
-    const reviewedCommand = (revisionToken: string) => ({
-      kind: 'replayFinalsSlotV1' as const,
-      ...reviewInput,
-      revisionToken,
-      reason: 'Checked score sheet with both entrants',
-    });
-    return {
-      planId,
-      eventOps,
-      state,
-      send,
-      report,
-      review,
-      reviewedCommand,
-      original,
-      sibling,
-      downstream,
-      source,
-      pool,
-      bracket,
-      alice: alice!,
-      bea: bea!,
-      chris,
-      first,
-      fourth,
-      reviewInput,
-      substitution,
-    };
-  }
-
-  const lowerFacts = (state: TournamentState) => {
-    const matches = state.matches.filter((m) => m.division === 'lower');
-    return {
-      matches,
-      pools: state.pools.filter((p) => p.division === 'lower'),
-      brackets: state.brackets.filter((b) => b.division === 'lower'),
-      reports: state.reports.filter((r) => matches.some((m) => m.id === r.matchId)),
-      stations: state.stations,
-    };
-  };
-
-  async function finish(
-    context: Awaited<ReturnType<typeof prepare>>,
-    preferredWinner: string,
-    replacementMatchId: string,
-  ) {
-    const replacement = (await context.state()).matches.find(
-      ({ id }) => id === replacementMatchId,
-    )!;
-    await context.report(replacement, preferredWinner);
-    const downstream = (await context.state()).matches.find(
-      ({ id }) => id === context.downstream.id,
-    )!;
-    expect([downstream.player1Id, downstream.player2Id]).toContain(preferredWinner);
-    expect([downstream.player1Id, downstream.player2Id]).not.toContain(context.alice);
-    for (;;) {
-      const ready = (await context.state()).matches.find((m) => m.status === 'ready');
-      if (!ready) break;
-      await context.report(ready, ready.player1Id!);
-    }
-    await context.eventOps.native.finalize({ planId: context.planId });
-    return context.state();
-  }
-
   it('records Alice beating Chris and rates both real sets while only the new slot advances', async () => {
-    const context = await prepare();
+    const context = await fixture.prepare();
     const {
       planId,
       eventOps,
@@ -289,7 +66,7 @@ describe('reviewed native finals slot replay on PostgreSQL', () => {
       (m) => m.division === 'lower' && m.bracketId && m.status === 'ready',
     )!;
     await report(lower, lower.player1Id!);
-    const oldInput = score(original, alice);
+    const oldInput = fixture.score(original, alice);
     const oldReport = await eventOps.reportScore(oldInput);
     await report(sibling, sibling.player1Id!);
     const before = await state();
@@ -298,15 +75,22 @@ describe('reviewed native finals slot replay on PostgreSQL', () => {
     const side = oldRoute.parent1Id === actual.id ? 'player1Id' : 'player2Id';
     const parent = oldRoute.parent1Id === actual.id ? 'parent1Id' : 'parent2Id';
     expect(oldRoute).toMatchObject({ [side]: alice, status: 'ready', started: false });
-    const publicApi = caller(null);
+    const publicApi = fixture.caller(null);
     await eventOps.guests.configure({ planId, enabled: true, showOnOverlay: false });
     const invitation = await eventOps.guests.invitation({ planId });
     const guest = await publicApi.eventOps.guests.redeem({ planId, token: invitation!.token });
-    const guestInput = { planId, sessionToken: guest.sessionToken, ...score(actual, alice) };
+    const guestInput = {
+      planId,
+      sessionToken: guest.sessionToken,
+      ...fixture.score(actual, alice),
+    };
     const guestReport = await publicApi.eventOps.guests.submit(guestInput);
     expect(guestReport.status).toBe('approved');
 
     const approved = await review();
+    expect(
+      await eventOps.live.previewFinalsSlotReplay({ planId, ...reviewInput, reviewVersion: 2 }),
+    ).toEqual(approved);
     expect(approved).toMatchObject({
       allowed: true,
       qualifierChanges: [
@@ -319,8 +103,8 @@ describe('reviewed native finals slot replay on PostgreSQL', () => {
       downstream: [{ id: oldRoute.id }],
     });
     if (!approved.allowed) throw new Error(approved.issues.join(' '));
-    const otherUser = caller({ ...nativeAdmin, id: crypto.randomUUID(), role: 'user' });
-    const signedInput = score(actual, alice);
+    const otherUser = fixture.caller({ ...nativeAdmin, id: crypto.randomUUID(), role: 'user' });
+    const signedInput = fixture.score(actual, alice);
     const signedReport = await otherUser.eventOps.reportScore(signedInput);
     expect(signedReport.status).toBe('approved');
     await expect(
@@ -449,7 +233,7 @@ describe('reviewed native finals slot replay on PostgreSQL', () => {
     expect(changed.matches.find(({ id }) => id === context.source.id)?.completedAt).toBe(
       context.source.completedAt,
     );
-    expect(lowerFacts(changed)).toEqual(lowerFacts(beforeReplay));
+    expect(fixture.lowerFacts(changed)).toEqual(fixture.lowerFacts(beforeReplay));
     expect(changed.reports.slice(0, beforeReplay.reports.length)).toEqual(beforeReplay.reports);
     expect((await send(input, requestId)).receipt).toEqual(firstReceipt.receipt);
     await expect(send({ ...input, reason: 'Different reason' }, requestId)).rejects.toThrow(
@@ -502,9 +286,9 @@ describe('reviewed native finals slot replay on PostgreSQL', () => {
     ]);
     expect(publicArchive).not.toHaveProperty('sourcePoolMatchId');
     expect(publicArchive).not.toHaveProperty('reason');
-    expect((await caller(null).eventOps.live.snapshot({ planId })).supersededPlayedSets).toEqual(
-      publicBoard.supersededPlayedSets,
-    );
+    expect(
+      (await fixture.caller(null).eventOps.live.snapshot({ planId })).supersededPlayedSets,
+    ).toEqual(publicBoard.supersededPlayedSets);
     const history = await eventOps.live.history({ planId });
     expect(history.entries[0]).toMatchObject({
       eventName: 'DecisionRecordedV7',
@@ -522,7 +306,7 @@ describe('reviewed native finals slot replay on PostgreSQL', () => {
         }),
       ]),
     );
-    const finalized = await finish(context, bea, archived.replacementMatchId);
+    const finalized = await fixture.finish(context, bea, archived.replacementMatchId);
     expect(finalized.result!.supersededPlayedSets).toEqual([archived]);
     const rows = await pg.db
       .select()
@@ -610,9 +394,11 @@ describe('reviewed native finals slot replay on PostgreSQL', () => {
   });
 
   it('refuses both changed slots with default consolation, leaving actual results intact', async () => {
-    const { state, report, review, send, reviewedCommand, original, alice } = await prepare({
-      consolation: true,
-    });
+    const { state, report, review, send, reviewedCommand, original, alice } = await fixture.prepare(
+      {
+        consolation: true,
+      },
+    );
     await report(original, alice);
     const before = await state();
     expect(await review()).toMatchObject({
@@ -626,9 +412,348 @@ describe('reviewed native finals slot replay on PostgreSQL', () => {
     await expect(send(reviewedCommand('0'.repeat(64)))).rejects.toThrow(/more than one/);
     expect(await state()).toEqual(before);
   });
+});
 
+describe('reciprocal finals routes on PostgreSQL', () => {
+  it('atomically swaps championship and untouched consolation entrants with no duplicate route', async () => {
+    const context = await fixture.prepare({ consolation: true });
+    const {
+      planId,
+      eventOps,
+      state,
+      report,
+      send,
+      review,
+      reviewInput,
+      reviewedCommand,
+      bracket,
+      pool,
+      original,
+      sibling,
+      downstream,
+      alice,
+      bea,
+      chris,
+    } = context;
+    const before = await state();
+    const consolation = before.brackets.find(
+      (b) => b.division === 'upper' && b.stage === 'consolation',
+    )!;
+    const consolationRoot = before.matches.find(
+      (match) =>
+        match.bracketId === consolation.id &&
+        [match.player1Qualifier, match.player2Qualifier].some(
+          (slot) => slot?.poolId === pool.id && slot.place === 3,
+        ),
+    )!;
+    const consolationSibling = before.matches.find(
+      (match) =>
+        match.bracketId === consolation.id && match.round === 1 && match.id !== consolationRoot.id,
+    )!;
+    const consolationFinal = before.matches.find(
+      (match) => match.parent1Id === consolationRoot.id || match.parent2Id === consolationRoot.id,
+    )!;
+    await report(original, alice);
+    await report(sibling, sibling.player1Id!);
+    await report(consolationSibling, consolationSibling.player1Id!);
+    const recorded = await state();
+    const v2 = () =>
+      eventOps.live.previewFinalsSlotReplay({ planId, ...reviewInput, reviewVersion: 2 });
+    const approved = await v2();
+    expect(await review()).toMatchObject({
+      allowed: false,
+      issues: [expect.stringContaining('more than one')],
+    });
+    expect(approved).toMatchObject({
+      allowed: true,
+      qualifierChanges: [
+        { bracketId: bracket.id, place: 2, beforeEntrantId: alice, afterEntrantId: bea },
+        { bracketId: consolation.id, place: 3, beforeEntrantId: bea, afterEntrantId: alice },
+      ],
+      companion: {
+        matchId: consolationRoot.id,
+        beforeEntrantId: bea,
+        afterEntrantId: alice,
+        downstream: [{ id: consolationFinal.id }],
+      },
+    });
+    if (!approved.allowed) throw new Error(approved.issues.join(' '));
+    const oldMain = recorded.matches.find(({ id }) => id === original.id)!;
+    expect(oldMain).toMatchObject({ winnerId: alice, outcome: 'played' });
+    const lower = recorded.matches.find(
+      (m) => m.division === 'lower' && m.bracketId && m.status === 'ready',
+    )!;
+    await report(lower, lower.player1Id!);
+    const preApply = await state();
+    expect(await v2()).toEqual(approved);
+    await expect(send(reviewedCommand(approved.revisionToken))).rejects.toThrow(/more than one/);
+    const command = {
+      ...reviewedCommand(approved.revisionToken),
+      kind: 'replayFinalsRoutesV2' as const,
+    };
+    const requestId = crypto.randomUUID();
+    const result = await send(command, requestId);
+    const after = await state();
+    expect(after.supersededPlayedSets).toHaveLength(1);
+    const archive = after.supersededPlayedSets![0]!;
+    expect(archive.match).toEqual(oldMain);
+    expect(after.matches.some(({ id }) => id === oldMain.id)).toBe(false);
+    const replay = after.matches.find(({ id }) => id === archive.replacementMatchId)!;
+    expect([replay.player1Id, replay.player2Id]).toEqual(expect.arrayContaining([bea, chris]));
+    const consolationMatch = after.matches.find(({ id }) => id === consolationRoot.id)!;
+    const changedSide = consolationRoot.player1Id === bea ? 'player1Id' : 'player2Id';
+    expect(consolationMatch).toEqual({
+      ...consolationRoot,
+      [changedSide]: alice,
+      revision: consolationRoot.revision + 1,
+      readySince: expect.any(Number),
+    });
+    expect(after.matches.find(({ id }) => id === consolationFinal.id)).toEqual(
+      preApply.matches.find(({ id }) => id === consolationFinal.id),
+    );
+    for (const [id, expectedBracket] of [
+      [alice, consolation.id],
+      [bea, bracket.id],
+    ]) {
+      expect(after.brackets.filter((b) => b.entrantIds.includes(id!)).map((b) => b.id)).toEqual([
+        expectedBracket,
+      ]);
+    }
+    expect(fixture.lowerFacts(after)).toEqual(fixture.lowerFacts(preApply));
+    expect(after.brackets.find(({ id }) => id === bracket.id)?.strengthSeeding).toEqual(
+      bracket.strengthSeeding,
+    );
+    expect(after.brackets.find(({ id }) => id === consolation.id)?.strengthSeeding).toEqual(
+      consolation.strengthSeeding,
+    );
+    expect((await send(command, requestId)).receipt).toEqual(result.receipt);
+    await expect(send({ ...command, reason: 'Different reason' }, requestId)).rejects.toThrow(
+      /already used/,
+    );
+    await expect(report(consolationRoot, bea)).rejects.toThrow(/match changed/i);
+    const history = await eventOps.live.history({ planId });
+    expect(history.entries[0]).toMatchObject({
+      eventName: 'DecisionRecordedV9',
+      matchId: replay.id,
+      details: {
+        finalsReplayCompanion: {
+          matchId: consolationRoot.id,
+          beforeEntrantId: bea,
+          afterEntrantId: alice,
+        },
+      },
+    });
+
+    await report(replay, bea);
+    await report(consolationMatch, alice);
+    const advanced = await state();
+    const championshipFinal = advanced.matches.find(({ id }) => id === downstream.id)!;
+    const playedConsolationFinal = advanced.matches.find(({ id }) => id === consolationFinal.id)!;
+    expect([championshipFinal.player1Id, championshipFinal.player2Id]).toContain(bea);
+    expect([championshipFinal.player1Id, championshipFinal.player2Id]).not.toContain(alice);
+    expect([playedConsolationFinal.player1Id, playedConsolationFinal.player2Id]).toContain(alice);
+    expect([playedConsolationFinal.player1Id, playedConsolationFinal.player2Id]).not.toContain(bea);
+    for (;;) {
+      const ready = (await state()).matches.find((match) => match.status === 'ready');
+      if (!ready) break;
+      await report(ready, ready.player1Id!);
+    }
+    await eventOps.native.finalize({ planId });
+    const published = await state();
+    expect(published.result?.supersededPlayedSets).toEqual([archive]);
+    const exported = await pg.db
+      .select()
+      .from(sets)
+      .where(inArray(sets.tournamentId, published.publication!.tournamentIds));
+    const { engineSets } = await loadSinglesHistory(pg.db);
+    for (const match of [oldMain, replay, consolationMatch]) {
+      const matching = exported.filter(
+        (set) => (set.raw as { eventMatchId?: string }).eventMatchId === match.id,
+      );
+      expect(matching).toHaveLength(1);
+      expect(engineSets.filter((set) => set.id === matching[0]!.id)).toHaveLength(1);
+    }
+    await pg.pool.query('delete from native_act.events where stream=$1 and name=$2', [
+      nativeStream(planId),
+      '__snapshot__',
+    ]);
+    expect(await runtime.replay(planId)).toEqual(published);
+  });
+
+  it('reconstructs a V9 doubles replay after a V8 substitution in the same journal', async () => {
+    const context = await fixture.prepare({
+      doubles: true,
+      consolation: true,
+      substituteBeforePlay: true,
+    });
+    const { planId, eventOps, state, report, send, reviewInput, reviewedCommand, original, alice } =
+      context;
+    await report(original, alice);
+    const preview = await eventOps.live.previewFinalsSlotReplay({
+      planId,
+      ...reviewInput,
+      reviewVersion: 2,
+    });
+    if (!preview.allowed) throw new Error(preview.issues.join(' '));
+    await send({ ...reviewedCommand(preview.revisionToken), kind: 'replayFinalsRoutesV2' });
+    const saved = await state();
+    const { entrantId, memberPlayerIds } = context.substitution!;
+    expect(saved.entrants.find(({ id }) => id === entrantId)).toMatchObject({
+      memberPlayerIds,
+      memberSubstituted: true,
+    });
+    const history = await eventOps.live.history({ planId, limit: 100 });
+    expect(
+      history.entries
+        .filter(({ eventName }) => ['DecisionRecordedV8', 'DecisionRecordedV9'].includes(eventName))
+        .map(({ eventName }) => eventName),
+    ).toEqual(['DecisionRecordedV9', 'DecisionRecordedV8']);
+    await pg.pool.query('delete from native_act.events where stream=$1 and name=$2', [
+      nativeStream(planId),
+      '__snapshot__',
+    ]);
+    const restarted = await createPostgresNativeRuntime(pg.db, pg.connectionString);
+    try {
+      expect(await restarted.state(planId)).toEqual(saved);
+      expect(await restarted.replay(planId)).toEqual(saved);
+    } finally {
+      await restarted.shutdown();
+    }
+  });
+
+  it('blocks both updates after a consolation call, hold or report races the reviewed swap', async () => {
+    const context = await fixture.prepare({ consolation: true });
+    const {
+      planId,
+      eventOps,
+      state,
+      report,
+      send,
+      reviewInput,
+      reviewedCommand,
+      original,
+      pool,
+      alice,
+    } = context;
+    await report(original, alice);
+    const mainPlayed = await state();
+    const consolationRoot = mainPlayed.matches.find(
+      (match) =>
+        match.stage === 'consolation' &&
+        [match.player1Qualifier, match.player2Qualifier].some(
+          (source) => source?.poolId === pool.id && source.place === 3,
+        ),
+    )!;
+    await send({
+      kind: 'configureDispatch',
+      capacity: 2,
+      reservedStationIds: [],
+      expectedResourceRevision: mainPlayed.settings.resourceRevision,
+    });
+    const v2 = () =>
+      eventOps.live.previewFinalsSlotReplay({ planId, ...reviewInput, reviewVersion: 2 });
+    const reviewCommand = async () => {
+      const preview = await v2();
+      if (!preview.allowed) throw new Error(preview.issues.join(' '));
+      return { ...reviewedCommand(preview.revisionToken), kind: 'replayFinalsRoutesV2' as const };
+    };
+    const attempt = await reviewCommand();
+    await send({
+      kind: 'dispatch',
+      matchId: consolationRoot.id,
+      stationId: null,
+      callOnly: true,
+      expectedRevision: consolationRoot.revision,
+      expectedResourceRevision: (await state()).settings.resourceRevision,
+    });
+    const called = await state();
+    await expect(send(attempt)).rejects.toThrow(/return any untaken call/i);
+    expect(await state()).toEqual(called);
+    const move = async (status: 'blocked' | 'ready') => {
+      const current = await state();
+      return send({
+        kind: 'matchControl',
+        matchId: consolationRoot.id,
+        expectedRevision: current.matches.find(({ id }) => id === consolationRoot.id)!.revision,
+        expectedResourceRevision: current.settings.resourceRevision,
+        status,
+        stationId: null,
+        reason: status === 'blocked' ? 'Organiser hold' : null,
+      });
+    };
+    await move('ready');
+    const afterReturn = await reviewCommand();
+    await move('blocked');
+    const held = await state();
+    await expect(send(afterReturn)).rejects.toThrow(/organiser hold/i);
+    expect(await state()).toEqual(held);
+    await move('ready');
+    await eventOps.settings({
+      planId,
+      published: true,
+      playerReports: true,
+      scoreReportingMode: 'to_review',
+    });
+    const afterHold = await reviewCommand();
+    const attendee = fixture.caller({ ...nativeAdmin, id: crypto.randomUUID(), role: 'user' });
+    const ready = (await state()).matches.find(({ id }) => id === consolationRoot.id)!;
+    const pending = await attendee.eventOps.reportScore(fixture.score(ready, ready.player1Id!));
+    expect(pending.status).toBe('pending');
+    const submitted = await state();
+    await expect(send(afterHold)).rejects.toThrow(/consolation route has score report history/i);
+    expect(await state()).toEqual(submitted);
+    await eventOps.reviewReport({ reportId: pending.id, approve: false });
+    const rejected = await state();
+    await expect(send(afterHold)).rejects.toThrow(/consolation route has score report history/i);
+    expect(await state()).toEqual(rejected);
+  });
+
+  it('leaves an already recorded consolation bye and its route for a separate ruling', async () => {
+    const {
+      planId,
+      eventOps,
+      state,
+      report,
+      send,
+      reviewInput,
+      reviewedCommand,
+      original,
+      pool,
+      alice,
+      bea,
+    } = await fixture.prepare({ consolation: true, consolationBye: true });
+    await report(original, alice);
+    const before = await state();
+    const bye = before.matches.find(
+      (match) =>
+        match.stage === 'consolation' &&
+        [match.player1Qualifier, match.player2Qualifier].some(
+          (slot) => slot?.poolId === pool.id && slot.place === 3,
+        ),
+    );
+    expect(bye).toMatchObject({ status: 'complete', outcome: 'bye', winnerId: bea });
+    const blocked = await eventOps.live.previewFinalsSlotReplay({
+      planId,
+      ...reviewInput,
+      reviewVersion: 2,
+    });
+    expect(blocked).toMatchObject({
+      allowed: false,
+      issues: [expect.stringContaining('without a bye')],
+    });
+    await expect(
+      send({
+        ...reviewedCommand('0'.repeat(64)),
+        kind: 'replayFinalsRoutesV2',
+      }),
+    ).rejects.toThrow(/without a bye/);
+    expect(await state()).toEqual(before);
+  });
+});
+
+describe('single finals replay archives on PostgreSQL', () => {
   it('preserves archived actual play when all active matches in that division are unplayed, and rates both doubles sets', async () => {
-    const context = await prepare({ doubles: true, substituteBeforePlay: true });
+    const context = await fixture.prepare({ doubles: true, substituteBeforePlay: true });
     const {
       planId,
       eventOps,
@@ -666,7 +791,7 @@ describe('reviewed native finals slot replay on PostgreSQL', () => {
     expect(await state()).toEqual(live);
 
     await report(sibling, sibling.player1Id!);
-    const finalized = await finish(context, bea, archived.replacementMatchId);
+    const finalized = await fixture.finish(context, bea, archived.replacementMatchId);
     const chrisTeam = finalized.entrants.find(({ playerId }) => playerId === chris)!
       .memberPlayerIds! as [string, string];
     const evidenceCount = finalized.matches.filter(
@@ -708,7 +833,7 @@ describe('reviewed native finals slot replay on PostgreSQL', () => {
       reviewedCommand,
       send,
       eventOps,
-    } = await prepare();
+    } = await fixture.prepare();
     await report(original, original.player1Id!);
     await report(sibling, sibling.player1Id!);
     const match = (await state()).matches.find(({ id }) => id === downstream.id)!;
@@ -721,8 +846,8 @@ describe('reviewed native finals slot replay on PostgreSQL', () => {
     });
     const preview = await review();
     if (!preview.allowed) throw new Error(preview.issues.join(' '));
-    const attendee = caller({ ...nativeAdmin, id: crypto.randomUUID(), role: 'user' });
-    const pending = await attendee.eventOps.reportScore(score(match, match.player1Id!));
+    const attendee = fixture.caller({ ...nativeAdmin, id: crypto.randomUUID(), role: 'user' });
+    const pending = await attendee.eventOps.reportScore(fixture.score(match, match.player1Id!));
     expect(pending.status).toBe('pending');
     const command = reviewedCommand(preview.revisionToken);
     await expect(send(command)).rejects.toThrow(/downstream pairing with report history/);

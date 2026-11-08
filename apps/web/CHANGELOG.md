@@ -2,6 +2,19 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.6.0
+
+### Minor Changes
+
+- 8 November 2026 · **Feature** · Let organisers review and confirm a last-minute doubles substitute before that pair plays. The pair keeps its pool, seed, opponents and scheduled rounds, while the original roster and any recorded results stay in the event history. [#267](https://github.com/ashleylamont/smashclub-seeding/pull/267) · [build 23de82a](https://github.com/ashleylamont/smashclub-seeding/commit/23de82ac43894a3d21132ad9d0b17a883738a91c)
+- 8 November 2026 · **Fix** · Keep late singles additions consistent when an organiser merges player profiles at the same time. Retrying a confirmed addition returns its original match counts. [#273](https://github.com/ashleylamont/smashclub-seeding/pull/273) · [build 831c8e7](https://github.com/ashleylamont/smashclub-seeding/commit/831c8e72a42e108b900590ae0b8cfe4b33d122c9)
+
+  API clients adding a late entrant should preview and apply the addition through `eventOps.previewAttendance` and `eventOps.applyAttendance`. The generic `eventOps.live.command` endpoint no longer accepts an attendance Add.
+
+### Patch Changes
+
+- 8 November 2026 · **Maintenance** · Stabilise the finals replay keyboard check by waiting for the match desk to receive focus. [#271](https://github.com/ashleylamont/smashclub-seeding/pull/271) · [build 4a9f47c](https://github.com/ashleylamont/smashclub-seeding/commit/4a9f47c4ecee8677d5045fbe34fb4caefed50231)
+
 ## 0.5.0
 
 ### Minor Changes

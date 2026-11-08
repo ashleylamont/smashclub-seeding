@@ -145,6 +145,7 @@ function decisionFactVersion(
   command: TournamentCommand,
 ) {
   const kind = command.kind;
+  if (kind === 'replayFinalsRoutesV2') return 9 as const;
   if (kind === 'replayFinalsSlotV1') return 7 as const;
   if (kind === 'substituteDoublesMember') return 8 as const;
   if (kind === 'addLateDoublesPair') return 10 as const;
@@ -168,7 +169,12 @@ function decisionFactVersion(
 }
 
 function correctedScoreCommand(state: TournamentState, command: TournamentCommand) {
-  if (command.kind !== 'score' && command.kind !== 'replayFinalsSlotV1') return null;
+  if (
+    command.kind !== 'score' &&
+    command.kind !== 'replayFinalsSlotV1' &&
+    command.kind !== 'replayFinalsRoutesV2'
+  )
+    return null;
   return state.matches.find((match) => match.id === command.matchId)?.resultCommandId ?? null;
 }
 
@@ -221,6 +227,7 @@ export function decide(
   const basis: Record<string, number> = {};
   let reportId: string | null = null;
   let attendanceEffect: TournamentDecision['receipt']['attendanceEffect'];
+  let replayEvidence: Pick<TournamentDecision, 'finalsReplayCompanion'> = {};
   switch (command.kind) {
     case 'broadcastSides':
       changeBroadcastSides(next, command, basis);
@@ -232,8 +239,17 @@ export function decide(
       reportId = recordScore(next, envelope, command, basis);
       break;
     case 'replayFinalsSlotV1':
-      reportId = replayFinalsSlot(next, envelope, command, basis);
+    case 'replayFinalsRoutesV2': {
+      const { reportId: replayReportId, ...evidence } = replayFinalsSlot(
+        next,
+        envelope,
+        command,
+        basis,
+      );
+      reportId = replayReportId;
+      replayEvidence = evidence;
       break;
+    }
     case 'review': {
       const report = next.reports.find((r) => r.id === command.reportId);
       requireFact(report && report.status === 'pending', 'This report is no longer pending.');
@@ -379,6 +395,7 @@ export function decide(
     after,
     receiptKey: key,
     command,
+    ...replayEvidence,
     source: envelope.operator ? 'operator' : envelope.guest ? 'guest' : 'attendee',
     correctionOf: correctedScoreCommand(previous, command),
     causation: [

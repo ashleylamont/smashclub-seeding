@@ -14,18 +14,18 @@ function meetingCounts(rounds: number[]) {
 export function StrengthFinalsReview({
   seeding,
   name,
-  replayed,
+  historical,
 }: {
   seeding: Seeding;
   name: (id: string) => string;
-  replayed: boolean;
+  historical: boolean;
 }) {
   const byeNames = (ids: string[]) => ids.map(name).join(', ') || 'None';
   return (
-    <Disclosure title={replayed ? 'Original seeding and byes' : 'Compare seeding and byes'}>
-      {replayed && (
+    <Disclosure title={historical ? 'Original seeding and byes' : 'Compare seeding and byes'}>
+      {historical && (
         <p>
-          These seeds are the original draw record. See the current bracket for replay pairings.
+          These seeds are the original draw record. See the current bracket for updated pairings.
         </p>
       )}
       <p>

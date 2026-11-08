@@ -36,6 +36,10 @@ export const LateDoublesPairInput = z.object({
   memberPlayerIds: z.tuple([id, id]),
   reason: z.string().trim().min(1).max(200),
 });
+const ConfirmFinalsReplay = FinalsSlotReplayScore.extend({
+  revisionToken: z.string().length(64),
+  reason: z.string().trim().min(1).max(500),
+});
 export const additionalCommands = [
   LateDoublesPairInput.extend({
     kind: z.literal('addLateDoublesPair'),
@@ -48,11 +52,8 @@ export const additionalCommands = [
       })
       .nullable(),
   }),
-  FinalsSlotReplayScore.extend({
-    kind: z.literal('replayFinalsSlotV1'),
-    revisionToken: z.string().length(64),
-    reason: z.string().trim().min(1).max(500),
-  }),
+  ConfirmFinalsReplay.extend({ kind: z.literal('replayFinalsSlotV1') }),
+  ConfirmFinalsReplay.extend({ kind: z.literal('replayFinalsRoutesV2') }),
   DoublesSubstitutionInput.extend({
     kind: z.literal('substituteDoublesMember'),
     revisionToken: z.string().length(64),
