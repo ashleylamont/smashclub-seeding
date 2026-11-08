@@ -8,7 +8,7 @@ import { playerBracketPath, playerHubView } from '../lib/playerHubView';
 import { liveBracketSide, liveBracketStatus } from '../lib/eventBracket';
 import { Disclosure } from './ui/Disclosure';
 import { matchStation } from '../lib/playerMatchView';
-import { nextMeaningfulMatch } from '../lib/matchPresentation';
+import { matchPresentation, nextMeaningfulMatch } from '../lib/matchPresentation';
 import type { PublicEventSnapshot } from '../lib/usePlayerEventHub';
 
 export function PlayerHubBoard({
@@ -36,9 +36,10 @@ export function PlayerHubBoard({
       matches={data.matches}
       entrants={data.entrants}
       linked={board.linked}
+      recordedOnly={board.closed}
     />
   );
-  const pendingFinals = (data.pendingFinals ?? []).flatMap((field) => {
+  const pendingFinals = (board.closed ? [] : (data.pendingFinals ?? [])).flatMap((field) => {
     if (!player) return [field];
     if (board.assignedBrackets.length) return [];
     const slots = field.slots.filter((slot) =>
@@ -67,6 +68,7 @@ export function PlayerHubBoard({
           matches={board.pools}
           schedules={data.poolSchedules ?? []}
           stations={data.stations}
+          recordedOnly={board.closed}
         />
         {!board.pools.length && (
           <>
@@ -88,8 +90,12 @@ export function PlayerHubBoard({
       >
         {player && board.nativeBrackets.length > 0 ? (
           <>
-            <h2>{board.pendingBrackets.length ? 'Finals qualification' : 'Your bracket path'}</h2>
-            {board.pendingBrackets.length ? (
+            <h2>
+              {!board.closed && board.pendingBrackets.length
+                ? 'Finals qualification'
+                : 'Your bracket path'}
+            </h2>
+            {!board.closed && board.pendingBrackets.length ? (
               <p className="event-live-note">
                 Your pool order will determine your bracket. These draws show reserved pool places;
                 your finals opponents are not confirmed yet.
@@ -105,9 +111,11 @@ export function PlayerHubBoard({
               <ol className="player-bracket-path">
                 {path.map((match) => (
                   <li key={match.id}>
-                    <strong>{match.label}</strong> · {liveBracketStatus(match)}
+                    <strong>{match.label}</strong> · {liveBracketStatus(match, board.closed)}
                     <p>
-                      {liveBracketSide(match, 0, labels)} vs {liveBracketSide(match, 1, labels)}
+                      {board.closed && match.status === 'complete' && match.outcome === 'bye'
+                        ? matchPresentation(match, true).result
+                        : `${liveBracketSide(match, 0, labels)} vs ${liveBracketSide(match, 1, labels)}`}
                     </p>
                   </li>
                 ))}
@@ -122,7 +130,7 @@ export function PlayerHubBoard({
                 </p>
               ) : null;
             })}
-            {!path.length && !board.pendingBrackets.length && (
+            {!board.closed && !path.length && !board.pendingBrackets.length && (
               <p>Your bracket is published. Open the full draw for its current standings.</p>
             )}
             <Disclosure title="Full draw & bracket standings">{bracketView}</Disclosure>
@@ -163,8 +171,8 @@ export function PlayerHubBoard({
             <MatchCard
               key={match.id}
               match={match}
-              nextMatch={nextMeaningfulMatch(data.matches, match)}
-              station={matchStation(data, match).name ?? undefined}
+              nextMatch={board.closed ? undefined : nextMeaningfulMatch(data.matches, match)}
+              station={matchStation(data, match, board.closed).name ?? undefined}
             />
           ))}
         </div>

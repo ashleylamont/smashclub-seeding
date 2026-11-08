@@ -2,6 +2,7 @@ import { matchPresentation } from './matchPresentation';
 import {
   scoreApprovalPolicy,
   matchesPool,
+  queueScoringIds,
   type PoolFlowData,
   type PoolFlowMatch,
 } from './poolFlow';
@@ -16,7 +17,12 @@ export function includesPlayer(match: PoolFlowMatch, playerId: string) {
   );
 }
 
-export function matchStation(data: PoolFlowData, match: PoolFlowMatch) {
+export function matchStation(data: PoolFlowData, match: PoolFlowMatch, recordedOnly = false) {
+  if (recordedOnly)
+    return {
+      name: data.stations.find((station) => station.id === match.stationId)?.name ?? null,
+      call: null,
+    };
   if (data.sharedDispatch) {
     const active = match.status === 'playing';
     return {
@@ -80,8 +86,16 @@ type GuestMatchFilters = {
   search: string;
   disputeMode: boolean;
   reportedIds: ReadonlySet<string>;
-  queuedIds: ReadonlySet<string>;
 };
+
+export function stationQueueMatchIds(data: PoolFlowData | undefined, stationId: string) {
+  const queue = data?.stationQueues?.find((item) => item.stationId === stationId);
+  return new Set([
+    queue?.currentMatchId,
+    queue?.nextMatchId,
+    ...(queue?.upcoming.map((item) => item.matchId) ?? []),
+  ]);
+}
 
 export function guestVisibleMatches(data: PoolFlowData | undefined, filters: GuestMatchFilters) {
   if (!data) return [];
@@ -95,8 +109,9 @@ export function guestVisibleMatches(data: PoolFlowData | undefined, filters: Gue
     search,
     disputeMode,
     reportedIds,
-    queuedIds,
   } = filters;
+  const closed = ['complete', 'cancelled'].includes(data.plan.status);
+  const queuedIds = closed ? undefined : queueScoringIds(data);
   const matching = data.matches.filter(
     (match) =>
       (!stationId ||
@@ -119,12 +134,12 @@ export function guestVisibleMatches(data: PoolFlowData | undefined, filters: Gue
                   reportedIds.has(match.id)) &&
                 match.player1Id &&
                 match.player2Id
-              : queuedIds.has(match.id) ||
+              : (closed ? Boolean(match.stationId) : queuedIds?.has(match.id)) ||
                 reportedIds.has(match.id) ||
                 selectedMatch === match.id) &&
       `${match.player1Name} ${match.player2Name} ${match.label} ${match.division} ${match.poolIndex === null ? '' : `Pool ${String.fromCharCode(65 + match.poolIndex)}`}`
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
-  return playerId ? sortPlayerMatches(data, matching) : matching;
+  return playerId && !closed ? sortPlayerMatches(data, matching) : matching;
 }

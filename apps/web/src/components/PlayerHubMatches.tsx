@@ -129,8 +129,9 @@ export function PlayerHubMatches({
           <div className="player-match-controls">
             {player && view === 'mine' && (
               <p className="muted">
-                Next & recent matches include every stage. The pool filter refines standings and
-                station history.
+                {closed
+                  ? 'The pool filter refines standings and schedule history.'
+                  : 'Next & recent matches include every stage. The pool filter refines standings and station history.'}
               </p>
             )}
             <div className="player-match-secondary-filters">
@@ -158,13 +159,21 @@ export function PlayerHubMatches({
               <label>
                 View
                 <Select aria-label="Match view" value={view} onValueChange={setView}>
-                  <SelectItem value="queue">Station matches & my reports</SelectItem>
+                  <SelectItem value="queue">
+                    {closed ? 'Station pairings & my reports' : 'Station matches & my reports'}
+                  </SelectItem>
                   <SelectItem value="matches">
-                    {hasAutomaticReports ? 'All matches & results' : 'All open matches'}
+                    {hasAutomaticReports
+                      ? 'All matches & results'
+                      : closed
+                        ? 'Unfinished matches & my reports'
+                        : 'All open matches'}
                   </SelectItem>
                   <SelectItem value="results">Recorded results</SelectItem>
                   <SelectItem value="mine" disabled={!player}>
-                    Selected player’s next & recent matches
+                    {closed
+                      ? 'Selected player’s match history'
+                      : 'Selected player’s next & recent matches'}
                   </SelectItem>
                   <SelectItem value="reports">My reports</SelectItem>
                 </Select>
@@ -197,10 +206,11 @@ export function PlayerHubMatches({
               onSubmit={(input) => submitScore(match.id, input)}
               approvalPolicy={!closed && playOpen ? scoreApprovalPolicy(data, match) : 'review'}
               match={match}
-              nextMatch={nextMeaningfulMatch(data.matches, match)}
+              nextMatch={closed ? undefined : nextMeaningfulMatch(data.matches, match)}
               report={ownReports?.find((report) => report.matchId === match.id)}
+              recordedOnly={closed}
               status={matchStatus(data, match)}
-              station={matchStation(data, match).name ?? undefined}
+              station={matchStation(data, match, closed).name ?? undefined}
             />
           ))}
         </div>

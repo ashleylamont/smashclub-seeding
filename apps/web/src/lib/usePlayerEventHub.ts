@@ -9,12 +9,16 @@ import { trpc } from './trpc';
 import {
   eventPlayOpen,
   scoreApprovalPolicy,
-  queueScoringIds,
   usePoolFilter,
   matchesPool,
   type StartPoolMatch,
 } from './poolFlow';
-import { guestVisibleMatches, includesPlayer, sortPlayerMatches } from './playerMatchView';
+import {
+  guestVisibleMatches,
+  includesPlayer,
+  sortPlayerMatches,
+  stationQueueMatchIds,
+} from './playerMatchView';
 import {
   playerHubView,
   effectivePlayerView,
@@ -107,19 +111,13 @@ export function usePlayerEventHub(planId: string) {
   const view = effectivePlayerView(preferredView, player);
   const playerName = players.find((item) => item.id === player)?.name;
   const reportedIds = new Set(ownReports?.map((report) => report.matchId));
-  const queuedIds = data ? queueScoringIds(data) : new Set<string>();
   const stationId =
     data?.stations.find(
       (station) =>
         station.id === selectedStation ||
         station.name.toLowerCase() === selectedStation.toLowerCase(),
     )?.id ?? '';
-  const stationQueue = data?.stationQueues?.find((queue) => queue.stationId === stationId);
-  const stationMatchIds = new Set([
-    stationQueue?.currentMatchId,
-    stationQueue?.nextMatchId,
-    ...(stationQueue?.upcoming.map((item) => item.matchId) ?? []),
-  ]);
+  const stationMatchIds = stationQueueMatchIds(closed ? undefined : data, stationId);
   const matching = guestVisibleMatches(data, {
     stationId,
     stationMatchIds,
@@ -130,7 +128,6 @@ export function usePlayerEventHub(planId: string) {
     search,
     disputeMode,
     reportedIds,
-    queuedIds,
   });
   const visible =
     player && view === 'mine' ? recentPlayerMatches(matching, 3, reportedIds) : matching;

@@ -22,6 +22,7 @@ export function CompletedScoreReport({
   onSubmit,
   pendingReport,
   label = 'Confirmed result',
+  recordedOnly = false,
 }: {
   match: RecordedMatch;
   enabled: boolean;
@@ -31,6 +32,7 @@ export function CompletedScoreReport({
   pendingReport?: { score1: number | null; score2: number | null; isDispute: boolean };
   onSubmit: (input: ResultSubmission) => Promise<{ isDispute: boolean }>;
   label?: string;
+  recordedOnly?: boolean;
 }) {
   const presentation = matchPresentation(match);
   const [editing, setEditing] = useState(false);
@@ -41,6 +43,7 @@ export function CompletedScoreReport({
   const { pending, message, error, begin, update } = useReportFeedback(reportingIdentity);
   const showEditor = editing && !message;
   const showReporting =
+    !recordedOnly &&
     allowReports &&
     presentation.canReport &&
     (enabled || Boolean(pendingReport) || showUnavailableHint);
@@ -73,7 +76,9 @@ export function CompletedScoreReport({
       <p>{presentation.result ?? `${label}: ${match.score1} – ${match.score2}`}</p>
       {Boolean(match.pendingDisputeCount) && (
         <p className="banner banner-warning">
-          A different score has been reported. TO review is pending; this result remains official.
+          {recordedOnly
+            ? 'An unresolved report differs from this official result.'
+            : 'A different score has been reported. TO review is pending; this result remains official.'}
         </p>
       )}
       {showReporting && (

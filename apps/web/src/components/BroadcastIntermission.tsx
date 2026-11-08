@@ -299,18 +299,16 @@ function LinkedBracketPage({
         </thead>
         <tbody>
           {page.matches.map((match) => {
-            const presentation = matchPresentation(match);
+            const presentation = matchPresentation(match, closed);
             const status =
-              closed && match.status !== 'complete' && presentation.kind !== 'no-contest'
-                ? 'No result recorded'
-                : (presentation.status ??
-                  (match.called
-                    ? 'Called'
-                    : match.status === 'playing'
-                      ? 'Playing'
-                      : match.status === 'blocked'
-                        ? 'On hold'
-                        : 'Upcoming'));
+              presentation.status ??
+              (match.called
+                ? 'Called'
+                : match.status === 'playing'
+                  ? 'Playing'
+                  : match.status === 'blocked'
+                    ? 'On hold'
+                    : 'Upcoming');
             return (
               <tr key={match.id}>
                 <td>{match.label}</td>

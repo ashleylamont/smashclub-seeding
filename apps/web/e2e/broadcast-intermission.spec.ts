@@ -21,7 +21,7 @@ async function mutate<T = unknown>(
   return (await response.json()).result.data as T;
 }
 
-test('an independent OBS source cycles native progress, waits through a call, returns on play and restores actual results', async ({
+test('independent OBS and player views follow native play, confirmed results and cancellation', async ({
   page,
   browser,
   baseURL,
@@ -249,6 +249,12 @@ test('an independent OBS source cycles native progress, waits through a call, re
     await expect(capture).toBeVisible();
     await expect(obs.getByLabel('Current match')).toContainText(next.player1Name!);
 
+    const hub = await publicContext.newPage();
+    await hub.setViewportSize({ width: 390, height: 844 });
+    await hub.goto(`/play/${planId}?player=${next.player1Id}`);
+    const hubCard = hub.locator('article.ops-match').filter({ hasText: next.label });
+    await expect(hubCard).toContainText('Playing now · Stage');
+
     const active = await query<Snapshot>(publicContext.request, 'eventOps.snapshot', { planId });
     await mutate(page.request, 'admin.eventPlanner.closePlan', { planId, status: 'cancelled' });
     const closed = await query<Snapshot>(publicContext.request, 'eventOps.snapshot', { planId });
@@ -267,6 +273,22 @@ test('an independent OBS source cycles native progress, waits through a call, re
     await expect(abandoned).toContainText('No result recorded');
     await expect(abandoned).not.toHaveClass(/is-playing/);
     await expect(result).toContainText('Final result');
+    await expect(hubCard).toContainText('No result recorded · Stage');
+    await expect(hubCard).not.toHaveClass(/ops-match-playing/);
+    await expect(hubCard.getByRole('spinbutton')).toHaveCount(0);
+    await expect(hub.getByRole('region', { name: 'Match calls' })).toHaveCount(0);
+    const results = hub.getByRole('region', { name: 'Results', exact: true });
+    await hub.getByRole('button', { name: 'Full draw & bracket standings' }).press('Enter');
+    await expect(hub.locator(`[data-match-id="${next.id}"]`)).toHaveAccessibleName(
+      /No result recorded/,
+    );
+    await expect(hub.locator(`[data-match-id="${first.id}"]`).getByLabel('Score 2')).toBeVisible();
+    await expect(results.getByRole('heading', { name: 'Recorded results' })).toBeVisible();
+    await hub.evaluate(() => scrollTo(0, 0));
+    await hub.screenshot({
+      path: testInfo.outputPath('real-player-event-cancelled.png'),
+      fullPage: true,
+    });
     await obs.reload();
     await expect(abandoned).toContainText('No result recorded');
     await expect(obs).toHaveURL(/presentation=auto/);

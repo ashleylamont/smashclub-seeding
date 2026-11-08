@@ -13,7 +13,7 @@ type GuestData = Awaited<ReturnType<typeof trpc.eventOps.guests.matches.mutate>>
 export type GuestMatch = GuestData['matches'][number];
 
 export function EventScoreCard({
-  enabled,
+  enabled: reportingEnabled,
   reportingIdentity = 'reporter',
   unavailableMessage = 'Scan a guest reporting QR to start matches and report scores.',
   onSubmit,
@@ -24,6 +24,7 @@ export function EventScoreCard({
   station,
   approvalPolicy,
   nextMatch,
+  recordedOnly = false,
 }: {
   enabled: boolean;
   reportingIdentity?: string;
@@ -37,9 +38,11 @@ export function EventScoreCard({
   station?: string;
   approvalPolicy: ScoreApprovalPolicy;
   nextMatch?: LiveMatch;
+  recordedOnly?: boolean;
 }) {
-  const presentation = matchPresentation(match);
-  const qualification = qualificationSummary(match);
+  const enabled = reportingEnabled && !recordedOnly;
+  const presentation = matchPresentation(match, recordedOnly);
+  const qualification = recordedOnly ? null : qualificationSummary(match);
   const [score1, setScore1] = useState<ScoreInputValue>(0);
   const [score2, setScore2] = useState<ScoreInputValue>(0);
   const [revision, setRevision] = useState(match.revision);
@@ -76,7 +79,9 @@ export function EventScoreCard({
     }
   };
   return (
-    <article className={`card ops-match ops-match-${match.status}`}>
+    <article
+      className={`card ops-match${!recordedOnly || match.status === 'complete' ? ` ops-match-${match.status}` : ''}`}
+    >
       <div className="ops-match-meta">
         <span>{match.labelFromStructure ? match.label : `${match.division} · ${match.label}`}</span>
         <span className="chip">
@@ -88,22 +93,13 @@ export function EventScoreCard({
       {qualification && presentation.kind === 'scheduled' && match.status !== 'blocked' && (
         <p role="status">{qualification} Your recorded pairing is unchanged.</p>
       )}
-      {nextMatch && (
+      {!recordedOnly && nextMatch && (
         <p>
           Next: {nextMatch.label} · {matchPresentation(nextMatch).title}
         </p>
       )}
-      {report && ['played', 'scheduled'].includes(presentation.kind) && (
-        <p className="guest-report-status" role="status">
-          Your report: {report.score1} – {report.score2} ·{' '}
-          {report.status === 'approved'
-            ? 'Confirmed result'
-            : report.status === 'rejected'
-              ? 'Rejected by a TO'
-              : report.isDispute
-                ? 'Different score awaiting TO review'
-                : 'Awaiting TO approval'}
-        </p>
+      {['played', 'scheduled'].includes(presentation.kind) && (
+        <ReportReceipt report={report} recordedOnly={recordedOnly} />
       )}
       {match.status === 'complete' ? (
         <CompletedScoreReport
@@ -114,10 +110,11 @@ export function EventScoreCard({
           showUnavailableHint={unavailableMessage !== null}
           onSubmit={onSubmit}
           pendingReport={report?.status === 'pending' ? report : undefined}
+          recordedOnly={recordedOnly}
         />
       ) : presentation.kind === 'no-contest' ? (
         <p>{presentation.result}</p>
-      ) : presentation.kind === 'pending' ? (
+      ) : recordedOnly ? null : presentation.kind === 'pending' ? (
         <p>
           {presentation.result ?? 'Awaiting opponent. The next entrant has not been confirmed yet.'}
         </p>
@@ -180,15 +177,12 @@ export function EventScoreCard({
             pending={pending}
             variant="primary"
             disabled={
-              !enabled ||
               pending ||
               stale ||
               score1 === '' ||
               score2 === '' ||
               score1 === score2 ||
-              !match.player1Id ||
-              !match.player2Id ||
-              !['ready', 'playing'].includes(match.status)
+              !presentation.canReport
             }
           >
             {approvalPolicy !== 'review' ? 'Confirm result' : 'Submit score for TO approval'}
@@ -203,11 +197,38 @@ export function EventScoreCard({
           </p>
         </form>
       )}
-      {error && (
+      {!recordedOnly && error && (
         <p className="error-text" role="alert">
           {error}
         </p>
       )}
     </article>
+  );
+}
+
+function ReportReceipt({
+  report,
+  recordedOnly,
+}: {
+  report?: GuestData['reports'][number];
+  recordedOnly: boolean;
+}) {
+  if (!report) return null;
+  const status =
+    report.status === 'approved'
+      ? 'Confirmed result'
+      : report.status === 'rejected'
+        ? 'Rejected by a TO'
+        : recordedOnly
+          ? report.isDispute
+            ? 'Dispute unresolved'
+            : 'No review decision recorded'
+          : report.isDispute
+            ? 'Different score awaiting TO review'
+            : 'Awaiting TO approval';
+  return (
+    <p className="guest-report-status" role="status">
+      Your report: {report.score1} – {report.score2} · {status}
+    </p>
   );
 }

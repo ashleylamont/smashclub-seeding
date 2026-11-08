@@ -180,18 +180,12 @@ export function EventBracketLane({
             </section>
           ))}
           {layout.nodes.map(({ match, x, y }) => {
-            const unresolved = recordedOnly && match.status !== 'complete';
-            const presentation = matchPresentation(match);
-            const status = unresolved
-              ? presentation.kind === 'no-contest'
-                ? 'No contest'
-                : 'No result recorded'
-              : liveBracketStatus(match);
-            const showScores = !unresolved && presentation.showScores;
+            const status = liveBracketStatus(match, recordedOnly);
+            const { showScores } = matchPresentation(match, recordedOnly);
             const scores = showScores ? [match.score1, match.score2] : [null, null];
             return (
               <article
-                className={`event-bracket-match${!unresolved && match.status === 'playing' ? ' is-playing' : ''}`}
+                className={`event-bracket-match${!recordedOnly && match.status === 'playing' ? ' is-playing' : ''}`}
                 key={match.id}
                 data-match-id={match.id}
                 aria-label={`${match.label}: ${status}`}
