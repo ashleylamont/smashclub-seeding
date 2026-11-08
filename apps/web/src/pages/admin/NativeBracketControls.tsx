@@ -1,32 +1,38 @@
 import { StrengthFinalsReview } from './StrengthFinalsReview';
 import { EventBracketLane } from '../../components/EventBracketLane';
 import { qualifierLabel } from '../../lib/qualification';
+import { matchPresentation } from '../../lib/matchPresentation';
+import { Notice } from '../../components/ui/Feedback';
+import type { Overview } from './dispatchTypes';
 import type { PoolQualifier } from '../../lib/eventDisplay';
 import { isKnockout } from '@smashclub/shared';
 import { useConfirmation } from '../../lib/confirmation';
 import { Button } from '../../components/ui/Button';
 import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
 import '../../styles/event-board.css';
 import './NativeBracketControls.css';
 
-type Preview = Awaited<ReturnType<typeof trpc.eventOps.native.preview.query>> & {
-  requestId: string;
-};
+type ServerPreview = Awaited<ReturnType<typeof trpc.eventOps.native.preview.query>>;
+type Preview = ServerPreview & { requestId: string };
 
 /** Only render for native events; remote handoff remains a separate workflow. */
 export function NativeBracketControls({
-  planId,
-  entrants,
-  closed = false,
-  structure,
+  data,
+  closed,
+  dispatchDisabled,
+  onOpenCall,
 }: {
-  planId: string;
-  entrants: { id: string; name: string }[];
-  closed?: boolean;
-  structure?: string;
+  data: Overview;
+  closed: boolean;
+  dispatchDisabled: boolean;
+  onOpenCall: (matchId: string) => void;
 }) {
+  const {
+    plan: { id: planId, structure },
+    entrants,
+  } = data;
   const confirmAction = useConfirmation();
   const cache = useQueryClient();
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -246,26 +252,24 @@ export function NativeBracketControls({
                       : 'Create these finals'}
               </Button>
               {(preview.replacing || ('existing' in preview && preview.existing)) && (
-                <Button
-                  type="submit"
-                  disabled={closed || busy || !preview.resetAllowed}
-                  onClick={async () => {
+                <FinalsResetControl
+                  data={data}
+                  preview={preview}
+                  disabled={closed || busy}
+                  dispatchDisabled={dispatchDisabled}
+                  onOpenCall={onOpenCall}
+                  onRemove={async (revisionToken) => {
                     if (
                       await confirmAction(
                         'Remove the unplayed finals? Pool results will stay recorded.',
                       )
                     )
                       void act(async () => {
-                        await trpc.eventOps.native.reset.mutate({
-                          planId,
-                          revisionToken: combined?.resetRevisionToken ?? preview.revisionToken,
-                        });
+                        await trpc.eventOps.native.reset.mutate({ planId, revisionToken });
                         setPreview(null);
                       }, 'Unplayed finals removed. Pool orders and attendance can now be corrected.');
                   }}
-                >
-                  Remove unplayed finals
-                </Button>
+                />
               )}
             </div>
           )}
@@ -300,4 +304,96 @@ export function NativeBracketControls({
       {message && <p role="status">{message}</p>}
     </section>
   );
+}
+
+function FinalsResetControl({
+  data,
+  preview,
+  disabled,
+  dispatchDisabled,
+  onOpenCall,
+  onRemove,
+}: {
+  data: Overview;
+  preview: Preview;
+  disabled: boolean;
+  dispatchDisabled: boolean;
+  onOpenCall: (matchId: string) => void;
+  onRemove: (revisionToken: string) => void;
+}) {
+  // Returning a call invalidates the event queries. Refresh only removal metadata;
+  // the creation preview and its request ID still refer to the draw the TO reviewed.
+  const reset = useQuery({
+    queryKey: ['eventOps', data.plan.id, 'finalsReset', preview.requestId],
+    queryFn: async () =>
+      resetReview(
+        await trpc.eventOps.native.preview.query({
+          planId: data.plan.id,
+          seedPolicy: 'pool_place_whr_v1',
+        }),
+      ),
+    initialData: () => resetReview(preview),
+    staleTime: Infinity,
+    retry: false,
+  });
+  const currentCalls =
+    data.operatorDispatch?.mode === 'shared'
+      ? data.operatorDispatch.queue
+          .filter((row) => row.state === 'called')
+          .map((row) => row.matchId)
+      : [];
+  const calls = data.matches.filter(
+    ({ id }) => reset.data.resetCallMatchIds.includes(id) && currentCalls.includes(id),
+  );
+
+  return (
+    <section className="finals-reset-actions" aria-label="Finals removal">
+      {reset.isError && (
+        <Notice tone="danger">Could not refresh the removal preview. Preview finals again.</Notice>
+      )}
+      {reset.data.resetIssues.length > 0 && (
+        <ul>
+          {reset.data.resetIssues.map((issue) => (
+            <li key={issue}>{issue}</li>
+          ))}
+        </ul>
+      )}
+      {calls.length > 0 && (
+        <ul className="ops-pause-calls">
+          {calls.map((match) => {
+            const pairing = matchPresentation(match).title;
+            return (
+              <li key={match.id}>
+                <span>{pairing}</span>
+                <Button
+                  size="small"
+                  disabled={disabled || dispatchDisabled || reset.isFetching || reset.isError}
+                  aria-label={`Open call for ${pairing}`}
+                  onClick={() => onOpenCall(match.id)}
+                >
+                  Open call
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <Button
+        disabled={disabled || reset.isFetching || reset.isError || !reset.data.resetAllowed}
+        onClick={() => onRemove(reset.data.revisionToken)}
+      >
+        Remove unplayed finals
+      </Button>
+    </section>
+  );
+}
+
+function resetReview(preview: ServerPreview) {
+  return {
+    resetAllowed: preview.resetAllowed,
+    resetIssues: preview.resetIssues,
+    resetCallMatchIds: preview.resetCallMatchIds,
+    revisionToken:
+      'resetRevisionToken' in preview ? preview.resetRevisionToken : preview.revisionToken,
+  };
 }

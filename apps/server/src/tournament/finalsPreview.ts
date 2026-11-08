@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { appendQualifierBracket } from './rollingFinals';
 import { planStrengthFinals, strengthFinalsToken, strengthSeedPolicy } from './strengthFinals';
 import { advance, drawFinals } from './brackets';
-import { finalsToken, resetFinals } from './operations';
+import { finalsResetBlockers, finalsToken } from './operations';
 import { poolOrderStatus } from './poolOrders';
 import { completeCommandProgression } from './progression';
 import { matchRows } from './views';
@@ -11,14 +11,15 @@ import type { CommandEnvelope, TournamentState } from './schemas';
 export const rollingFieldWarning =
   'Creating finals fixes the current eligible field, pool-place sources and seeds. Later withdrawals resolve by availability/forfeit; restoring an excluded entrant does not add a finals place. The draw will not shrink or reseed while other pools finish.';
 
-function finalsResetIssues(state: TournamentState) {
-  if (!state.brackets.length) return ['No finals exist.'];
-  try {
-    resetFinals(structuredClone(state));
-    return [];
-  } catch (error) {
-    return [error instanceof Error ? error.message : 'Cannot remove these finals.'];
-  }
+export function reviewFinalsReset(state: TournamentState) {
+  const { issues, untakenCallIds } = finalsResetBlockers(state);
+  if (state.lifecycle !== 'locked') issues.unshift('The event is not open.');
+  if (!state.brackets.length) issues.push('No finals exist.');
+  return {
+    resetAllowed: issues.length === 0,
+    resetIssues: issues,
+    resetCallMatchIds: issues.length === 1 ? untakenCallIds : [],
+  };
 }
 
 export function previewRollingFinals(state: TournamentState) {
@@ -42,7 +43,6 @@ export function previewRollingFinals(state: TournamentState) {
       issues.push(error instanceof Error ? error.message : 'Cannot reserve finals.');
     }
   }
-  const resetIssues = finalsResetIssues(state);
   return {
     rolling: true as const,
     existing,
@@ -50,8 +50,7 @@ export function previewRollingFinals(state: TournamentState) {
     allowed: !existing && !issues.length,
     issues,
     replacing: false,
-    resetAllowed: !resetIssues.length,
-    resetIssues,
+    ...reviewFinalsReset(state),
     revisionToken: finalsToken(state),
     poolOrders: trial.pools.map((p) => ({
       poolId: p.id,
@@ -97,7 +96,6 @@ export function previewStrengthFinals(state: TournamentState) {
   advance(previewDraw, envelope.at, envelope.id);
   const previewMatches = matchRows(previewDraw);
   const existing = Boolean(state.brackets.length);
-  const resetIssues = finalsResetIssues(state);
   const issues: string[] = [];
   if (state.lifecycle !== 'locked') issues.push('The event is not open.');
   const newBrackets = trial.brackets.length - state.brackets.length;
@@ -113,8 +111,7 @@ export function previewStrengthFinals(state: TournamentState) {
     allowed: Boolean(newBrackets) && !issues.length,
     issues,
     replacing: false,
-    resetAllowed: !resetIssues.length,
-    resetIssues,
+    ...reviewFinalsReset(state),
     resetRevisionToken: finalsToken(state),
     revisionToken: strengthFinalsToken(state, plan),
     poolOrders,

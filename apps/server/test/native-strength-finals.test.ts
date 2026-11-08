@@ -265,6 +265,7 @@ describe('native combined-strength finals', () => {
     state = run(state, draw(previewStrengthFinals(state)));
     const reset = previewStrengthFinals(state);
     expect(reset.resetAllowed).toBe(true);
+    expect(reset.resetCallMatchIds).toEqual([]);
     state = run(state, { kind: 'resetFinals', revisionToken: reset.resetRevisionToken });
     expect(state.brackets).toHaveLength(0);
     expect(state.pools.every((p) => !p.qualifierRoster)).toBe(true);

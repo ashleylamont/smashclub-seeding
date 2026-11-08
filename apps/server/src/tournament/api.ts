@@ -1,6 +1,6 @@
 import { rollingFinals } from './qualifiers';
 import { canUseStrengthSeeding, type strengthSeedPolicy } from './strengthFinals';
-import { previewRollingFinals, previewStrengthFinals } from './finalsPreview';
+import { previewRollingFinals, previewStrengthFinals, reviewFinalsReset } from './finalsPreview';
 import { poolOrderStatus } from './poolOrders';
 import { sharedDispatch } from './dispatch';
 import { isKnockout } from '@smashclub/shared';
@@ -316,8 +316,6 @@ export class NativeEventApi {
       issues.push('Finals have actual play and cannot be reset.');
     if (state.matches.some((m) => m.bracketId && unconfirmedCall(m)))
       issues.push('Return untaken finals calls before changing their draw.');
-    const resetIssues = [...issues];
-    if (!replacing) resetIssues.push('No finals exist.');
     try {
       drawFinals(trial, {
         id: randomUUID(),
@@ -333,8 +331,7 @@ export class NativeEventApi {
     return {
       allowed: !issues.length,
       issues,
-      resetAllowed: !resetIssues.length,
-      resetIssues,
+      ...reviewFinalsReset(state),
       replacing,
       poolOrders: state.pools.map((p) => ({
         poolId: p.id,

@@ -1,4 +1,5 @@
 import { finalsToken } from '../src/tournament/operations';
+import { reviewFinalsReset } from '../src/tournament/finalsPreview';
 import { attendancePreview } from '../src/tournament/attendance';
 import { buildEliminationTree } from '@smashclub/engine';
 import { instantiateElimination } from '../src/tournament/structureAdapter';
@@ -380,14 +381,16 @@ describe('shared native dispatch', () => {
     expect(() => apply(state, { kind: 'unlock' })).toThrow(/called/);
     state = release(state);
     expect(attendancePreview(state, { action: 'no_show', playerId: entrant }).allowed).toBe(true);
-    expect(apply(state, { kind: 'resetQueue' }).matches.every((match) => !match.started)).toBe(
-      true,
-    );
+    const reset = apply(state, { kind: 'resetQueue' });
+    expect(reset.matches.every((match) => !match.started && match.stationId === null)).toBe(true);
+    const pairings = (snapshot: TournamentState) =>
+      snapshot.matches.map(({ id, player1Id, player2Id }) => [id, player1Id, player2Id]);
+    expect(pairings(reset)).toEqual(pairings(state));
     expect(apply(state, { kind: 'unlock' }).lifecycle).toBe('unlocked');
   });
 
   it('preserves a called finals draw until the TO explicitly returns its untaken call', () => {
-    let state = setup();
+    let state = setup(pureState(), 2);
     for (const match of state.matches)
       state = apply(state, {
         kind: 'score',
@@ -412,10 +415,72 @@ describe('shared native dispatch', () => {
     state = apply(state, { kind: 'drawFinals' });
     const final = state.matches.find((match) => match.bracketId && match.status === 'ready')!;
     state = call(state, final.id);
+    expect(reviewFinalsReset(state)).toEqual({
+      resetAllowed: false,
+      resetIssues: ['Return untaken finals calls before resetting their draw.'],
+      resetCallMatchIds: [final.id],
+    });
+
+    state.settings.published = true;
+    state.settings.playerReports = true;
+    state.settings.scoreReportingMode = 'to_review';
+    const score = {
+      kind: 'score',
+      matchId: final.id,
+      expectedRevision: state.matches.find((match) => match.id === final.id)!.revision,
+      score1: 2,
+      score2: 0,
+      outcome: 'played',
+    } as const;
+    const decision = decide(
+      state,
+      envelope(score, { actorId: final.player1Id!, operator: false }),
+    )!;
+    const reported = reduceDecision(state, decision);
+    expect(reviewFinalsReset(reported)).toEqual({
+      resetAllowed: false,
+      resetIssues: [
+        'Return untaken finals calls before resetting their draw.',
+        'Finals have report history.',
+      ],
+      resetCallMatchIds: [],
+    });
+    const resetFinals = (snapshot: TournamentState) =>
+      apply(snapshot, { kind: 'resetFinals', revisionToken: finalsToken(snapshot) });
+    expect(() => resetFinals(reported)).toThrow(/Return untaken finals calls/);
+    expect(() => resetFinals(release(reported, final.id))).toThrow(/report history/);
+
+    const other = state.matches.find((match) => match.bracketId && match.status === 'ready')!;
+    const called = call(state, other.id);
+    const started = apply(called, {
+      kind: 'beginPlay',
+      matchId: other.id,
+      expectedRevision: called.matches.find((match) => match.id === other.id)!.revision,
+      expectedResourceRevision: called.settings.resourceRevision,
+    });
+    expect(reviewFinalsReset(started)).toEqual({
+      resetAllowed: false,
+      resetIssues: [
+        'Finals have actual play and cannot be reset.',
+        'Return untaken finals calls before resetting their draw.',
+      ],
+      resetCallMatchIds: [],
+    });
+    expect(() => resetFinals(started)).toThrow(/actual play/);
+
     expect(() => apply(state, { kind: 'resetFinals', revisionToken: finalsToken(state) })).toThrow(
       /Return untaken finals calls/,
     );
+    const blockedToken = finalsToken(state);
     state = release(state, final.id);
+    expect(reviewFinalsReset(state)).toEqual({
+      resetAllowed: true,
+      resetIssues: [],
+      resetCallMatchIds: [],
+    });
+    expect(() => apply(state, { kind: 'resetFinals', revisionToken: blockedToken })).toThrow(
+      /changed since the preview/,
+    );
     expect(
       apply(state, { kind: 'resetFinals', revisionToken: finalsToken(state) }).brackets,
     ).toEqual([]);
