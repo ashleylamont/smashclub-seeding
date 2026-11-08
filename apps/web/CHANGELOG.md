@@ -2,6 +2,13 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.2.11
+
+### Patch Changes
+
+- 8 November 2026 · **Fix** · Blank native bracket worksheets use round names and show enough slots for the configured playoff cut. [#238](https://github.com/ashleylamont/smashclub-seeding/pull/238) · [build c242146](https://github.com/ashleylamont/smashclub-seeding/commit/c2421461801ed51af901f1b021e2c19faabcb332)
+- 8 November 2026 · **Fix** · Open the exact untaken call from a blocked native no-show preview, then refresh the same attendance draft after returning it. [#240](https://github.com/ashleylamont/smashclub-seeding/pull/240) · [build ca86cfe](https://github.com/ashleylamont/smashclub-seeding/commit/ca86cfe934e80827f76068767b2cacdf1a2a48a6)
+
 ## 0.2.10
 
 ### Patch Changes
