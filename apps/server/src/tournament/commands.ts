@@ -31,12 +31,13 @@ const DoublesSubstitutionIdentity = z.object({
   newMemberNames: z.tuple([z.string(), z.string()]),
   incomingAliases: z.array(id),
 });
+const ConfirmFinalsReplay = FinalsSlotReplayScore.extend({
+  revisionToken: z.string().length(64),
+  reason: z.string().trim().min(1).max(500),
+});
 export const additionalCommands = [
-  FinalsSlotReplayScore.extend({
-    kind: z.literal('replayFinalsSlotV1'),
-    revisionToken: z.string().length(64),
-    reason: z.string().trim().min(1).max(500),
-  }),
+  ConfirmFinalsReplay.extend({ kind: z.literal('replayFinalsSlotV1') }),
+  ConfirmFinalsReplay.extend({ kind: z.literal('replayFinalsRoutesV2') }),
   DoublesSubstitutionInput.extend({
     kind: z.literal('substituteDoublesMember'),
     revisionToken: z.string().length(64),

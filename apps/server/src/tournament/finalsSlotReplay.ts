@@ -5,37 +5,28 @@ import { automaticPoolOrder, canReviewFrozenPoolResult, poolOrderEvidence } from
 import { qualificationPlaces, qualifierKey } from './qualifiers';
 import { appendOperatorScoreReport, winner } from './scores';
 import { canUseStrengthSeeding } from './strengthFinals';
-import type { CommandEnvelope, Match, TournamentState } from './schemas';
+import {
+  openingRoute,
+  dependants,
+  championshipRouteBlocker,
+  outsideWinnerRoute,
+  reciprocalRoutes,
+  type QualifierChange,
+  type ConsolationRoute,
+} from './finalsReplayRoutes';
+import type { CommandEnvelope, TournamentState } from './schemas';
 
-type ReplayCommand = Extract<CommandEnvelope['command'], { kind: 'replayFinalsSlotV1' }>;
+type ReplayCommand = Extract<
+  CommandEnvelope['command'],
+  { kind: 'replayFinalsSlotV1' | 'replayFinalsRoutesV2' }
+>;
 type ReplayScore = Pick<ReplayCommand, 'matchId' | 'expectedRevision' | 'score1' | 'score2'>;
-type QualifierChange = {
-  bracketId: string;
-  division: 'upper' | 'lower';
-  stage: 'main' | 'consolation';
-  poolId: string;
-  poolIndex: number;
-  place: number;
-  beforeEntrantId: string | null;
-  afterEntrantId: string | null;
-};
 
 function blocked(issue: string, qualifierChanges: QualifierChange[] = []) {
   return { preview: { allowed: false as const, issues: [issue], qualifierChanges }, plan: null };
 }
 
-function dependants(state: TournamentState, original: Match) {
-  const affected = new Map([[original.id, original]]);
-  // A match is only visited once even if both of its parent sides are affected.
-  for (const id of affected.keys())
-    for (const match of state.matches)
-      if (match.parent1Id === id || match.parent2Id === id || match.activation?.matchId === id)
-        affected.set(match.id, match);
-  affected.delete(original.id);
-  return [...affected.values()];
-}
-
-function reviewFinalsSlotReplay(state: TournamentState, input: ReplayScore) {
+function reviewFinalsSlotReplay(state: TournamentState, input: ReplayScore, reviewVersion: 1 | 2) {
   const { matchId, expectedRevision, score1, score2 } = input;
   const source = state.matches.find(({ id }) => id === matchId);
   if (source?.revision !== expectedRevision)
@@ -86,7 +77,12 @@ function reviewFinalsSlotReplay(state: TournamentState, input: ReplayScore) {
           ];
     }),
   );
-  if (qualifierChanges.length !== 1)
+  const routes =
+    reviewVersion === 2 && qualifierChanges.length > 1
+      ? reciprocalRoutes(state, qualifierChanges)
+      : undefined;
+  if (routes && !routes.allowed) return blocked(routes.issue, qualifierChanges);
+  if (!routes && qualifierChanges.length !== 1)
     return blocked(
       qualifierChanges.length
         ? 'This correction changes more than one existing finals slot. Review each affected draw before proceeding.'
@@ -94,29 +90,16 @@ function reviewFinalsSlotReplay(state: TournamentState, input: ReplayScore) {
       qualifierChanges,
     );
 
-  const change = qualifierChanges[0]!;
+  const change = routes?.value.main ?? qualifierChanges[0]!;
+  const companion = routes?.value.companion;
   const bracket = state.brackets.find(({ id }) => id === change.bracketId)!;
-  const originalSides = state.matches.flatMap((match) =>
-    match.bracketId === bracket.id
-      ? (['player1', 'player2'] as const).flatMap((side) => {
-          const qualifier = match[`${side}Qualifier`];
-          return qualifier && qualifierKey(qualifier) === qualifierKey(change)
-            ? [{ match, side }]
-            : [];
-        })
-      : [],
-  );
-  const original = originalSides.length === 1 ? originalSides[0] : undefined;
+  const original = openingRoute(state, change);
   if (
     !original ||
-    original.match.round !== 1 ||
-    original.match.parent1Id ||
-    original.match.parent2Id ||
     !resolved(original.match) ||
     original.match.outcome !== 'played' ||
     original.match.completedAt === null ||
     !change.beforeEntrantId ||
-    original.match[`${original.side}Id`] !== change.beforeEntrantId ||
     state.supersededPlayedSets?.some((entry) => entry.replacementMatchId === original.match.id)
   )
     return blocked(
@@ -138,6 +121,8 @@ function reviewFinalsSlotReplay(state: TournamentState, input: ReplayScore) {
     return blocked('Both players in the replay must be available.', qualifierChanges);
 
   const downstream = dependants(state, original.match);
+  const companionBlocker = companion && championshipRouteBlocker(original.match, downstream);
+  if (companionBlocker) return blocked(companionBlocker, qualifierChanges);
   const downstreamIds = new Set(downstream.map(({ id }) => id));
   if (
     original.match.qualificationBlocks?.length ||
@@ -167,15 +152,7 @@ function reviewFinalsSlotReplay(state: TournamentState, input: ReplayScore) {
       'Resolve outstanding reports. A downstream pairing with report history cannot be replayed here.',
       qualifierChanges,
     );
-  if (
-    downstream.some(
-      (m) =>
-        m.bracketId !== bracket.id ||
-        m.activation ||
-        m.parent1Outcome === 'loser' ||
-        m.parent2Outcome === 'loser',
-    )
-  )
+  if (downstream.some((m) => outsideWinnerRoute(m, bracket.id)))
     return blocked(
       'This replay requires an independent single-elimination route.',
       qualifierChanges,
@@ -195,6 +172,7 @@ function reviewFinalsSlotReplay(state: TournamentState, input: ReplayScore) {
     downstream,
     reports: state.reports.filter((r) => reviewedMatchIds.has(r.matchId)),
     entrants,
+    ...(companion && { reviewVersion: 2, companion }),
   });
   const labels = matchNames(state);
   const {
@@ -221,6 +199,7 @@ function reviewFinalsSlotReplay(state: TournamentState, input: ReplayScore) {
       },
       replay: { player1Id, player2Id },
       downstream: downstream.map(({ id, label }) => ({ id, label: labels.get(id) ?? label })),
+      ...(companion && { companion: previewConsolation(companion, labels) }),
     },
     plan: {
       source,
@@ -235,12 +214,33 @@ function reviewFinalsSlotReplay(state: TournamentState, input: ReplayScore) {
       player1Id,
       player2Id,
       label,
+      companion,
     },
   };
 }
 
-export function previewFinalsSlotReplay(state: TournamentState, input: ReplayScore) {
-  return reviewFinalsSlotReplay(state, input).preview;
+function previewConsolation(
+  { root: { match, side }, change, downstream }: ConsolationRoute,
+  labels: ReadonlyMap<string, string>,
+) {
+  return {
+    matchId: match.id,
+    label: labels.get(match.id) ?? match.label,
+    player1Id: match.player1Id,
+    player2Id: match.player2Id,
+    changedSide: side,
+    beforeEntrantId: change.beforeEntrantId!,
+    afterEntrantId: change.afterEntrantId!,
+    downstream: downstream.map(({ id, label }) => ({ id, label: labels.get(id) ?? label })),
+  };
+}
+
+export function previewFinalsSlotReplay(
+  state: TournamentState,
+  input: ReplayScore,
+  reviewVersion: 1 | 2 = 1,
+) {
+  return reviewFinalsSlotReplay(state, input, reviewVersion).preview;
 }
 
 export function replayFinalsSlot(
@@ -249,9 +249,13 @@ export function replayFinalsSlot(
   command: ReplayCommand,
   basis: Record<string, number>,
 ) {
-  const { plan, preview } = reviewFinalsSlotReplay(state, command);
+  const multipleRoutes = command.kind === 'replayFinalsRoutesV2';
+  const { plan, preview } = reviewFinalsSlotReplay(state, command, multipleRoutes ? 2 : 1);
   requireFact(
-    preview.allowed && plan && preview.revisionToken === command.revisionToken,
+    preview.allowed &&
+      plan &&
+      Boolean(plan.companion) === multipleRoutes &&
+      preview.revisionToken === command.revisionToken,
     preview.issues[0] ?? 'Finals replay evidence changed. Review the replay again.',
   );
   const {
@@ -267,6 +271,7 @@ export function replayFinalsSlot(
     player1Id,
     player2Id,
     label,
+    companion,
   } = plan;
   for (const match of [...poolMatches, original, ...downstream]) basis[match.id] = match.revision;
   basis[pool.id] = pool.revision;
@@ -286,11 +291,10 @@ export function replayFinalsSlot(
     order,
     ...poolOrderEvidence(state, pool, envelope, poolMatches),
   };
-  const slot = bracket.qualifierSlots!.find((slot) => qualifierKey(slot) === qualifierKey(change))!;
-  slot.entrantId = change.afterEntrantId;
-  bracket.entrantIds = bracket.qualifierSlots!.flatMap((slot) =>
-    slot.entrantId ? [slot.entrantId] : [],
-  );
+  updateQualifierSlot(bracket, change);
+  const companionEvidence = companion
+    ? replaceConsolationPairing(state, envelope, companion, basis)
+    : undefined;
 
   const replacementMatchId = stableId(`${envelope.id}:slot-replay:${original.id}`);
   state.supersededPlayedSets = [
@@ -335,15 +339,54 @@ export function replayFinalsSlot(
     delete match.readySince;
     match.revision++;
   }
+  if (companion) affected.add(companion.root.match.id);
   const queue = state.settings.queueOrder;
   if (queue?.some((id) => affected.has(id))) {
     state.settings.queueOrder = queue.filter((id) => !affected.has(id));
     state.settings.queueRevision = (state.settings.queueRevision ?? 0) + 1;
   }
-  return appendOperatorScoreReport(
+  const reportId = appendOperatorScoreReport(
     state,
     envelope,
     { ...command, outcome: 'played' },
     corrected.winnerId!,
   );
+  return { reportId, companionEvidence };
+}
+
+function updateQualifierSlot(
+  bracket: TournamentState['brackets'][number],
+  change: QualifierChange,
+) {
+  const slot = bracket.qualifierSlots!.find((slot) => qualifierKey(slot) === qualifierKey(change))!;
+  slot.entrantId = change.afterEntrantId;
+  bracket.entrantIds = bracket.qualifierSlots!.flatMap((slot) =>
+    slot.entrantId ? [slot.entrantId] : [],
+  );
+}
+
+function replaceConsolationPairing(
+  state: TournamentState,
+  envelope: CommandEnvelope,
+  companion: ConsolationRoute,
+  basis: Record<string, number>,
+) {
+  const {
+    root: { match, side },
+    change,
+    downstream,
+  } = companion;
+  const bracket = state.brackets.find(({ id }) => id === change.bracketId)!;
+  const label = matchNames(state).get(match.id) ?? match.label;
+  for (const row of [match, ...downstream]) basis[row.id] = row.revision;
+  updateQualifierSlot(bracket, change);
+  match[`${side}Id`] = change.afterEntrantId;
+  match.revision++;
+  match.readySince = envelope.at;
+  return {
+    matchId: match.id,
+    label,
+    beforeEntrantId: change.beforeEntrantId!,
+    afterEntrantId: change.afterEntrantId!,
+  };
 }
