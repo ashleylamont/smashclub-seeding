@@ -204,3 +204,8 @@
     max-width: 100%;
   }
 }
+
+.hero-sub a {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
