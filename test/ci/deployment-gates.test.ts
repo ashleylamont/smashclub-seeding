@@ -200,9 +200,22 @@ it('publication runs reusable CI with read permissions and publishes its tested 
       (step: { uses: string }) => step.uses === 'docker/build-push-action@v7',
     ),
   ).toBe(false);
+});
+
+it('queues exact-build verification and registry writes while superseding PR checks', () => {
+  expect(ci.concurrency).toEqual({
+    group:
+      "${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}-verification",
+    'cancel-in-progress': "${{ github.event_name == 'pull_request' }}",
+  });
+  expect(publish.jobs.verify.concurrency).toEqual({
+    group: 'publish-verification-${{ github.ref }}',
+    queue: 'max',
+  });
   expect(publish.jobs.publish.concurrency).toEqual({
     group: 'registry-publication',
     'cancel-in-progress': false,
+    queue: 'max',
   });
 });
 
