@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, readFileSync } from 'node:fs';
 import { publicationPolicy } from './publication-policy.mjs';
 const git = (args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
 const sha = git(['rev-parse', 'HEAD']);
@@ -18,6 +18,8 @@ const policy = publicationPolicy({
   sha,
   mainSha: git(['rev-parse', 'origin/main']),
   onMain,
+  appVersion: JSON.parse(readFileSync(new URL('../apps/web/package.json', import.meta.url), 'utf8'))
+    .version,
 });
 const image = 'ghcr.io/ashleylamont/smashclub-seeding';
 const tags = [`${image}:sha-${sha}`, ...policy.tags.map((tag) => `${image}:${tag}`)];

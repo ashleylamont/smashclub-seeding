@@ -30,6 +30,7 @@
     "dev:doctor": "node scripts/doctor.mjs"
   },
   "devDependencies": {
+    "@changesets/cli": "^3.0.3",
     "oxlint": "^1.85.0",
     "prettier": "^3.9.9",
     "typescript": "~5.9.3",

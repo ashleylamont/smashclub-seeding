@@ -137,3 +137,16 @@ kubectl apply -f deploy/k8s/ingress.yaml
 Keep `secret.yaml` out of version control. Schedule regular database backups; PostgreSQL holds the club's player, event and result records.
 
 The public `/api/live` streams have global and per-IP connection caps, a maximum lifetime and a buffered-byte limit. Set `TRUST_PROXY=true` only when requests pass through the trusted ingress; leave it off for direct exposure.
+
+## Versioned releases
+
+Nemesis has one application version, tracked in `apps/web/package.json`, covering the web app, API and the rest of the deployed image. After a user-facing change, run `pnpm changeset`, select `@smashclub/web`, choose the SemVer bump and describe the change from a player or organiser's perspective. Commit the generated note with the change. Fixes generally use patch releases and new capabilities use minor releases.
+
+To cut a release, branch from current `main`, run `pnpm changeset version` and review the version and entries written to [the changelog](../apps/web/CHANGELOG.md). Open a release PR and merge it after CI passes. Tag the merged commit on `main` with an annotated `vMAJOR.MINOR.PATCH` tag matching the app version and push the tag to GitHub. For example, for version 0.1.0:
+
+```bash
+git tag -a v0.1.0 <merged-release-commit> -m "Nemesis 0.1.0"
+git push origin refs/tags/v0.1.0
+```
+
+The tag runs full CI, publishes the verified application image under the numeric version and creates the GitHub Release with that version's changelog entry. The in-app `/changelog` uses the same Markdown file. Entries under “Before versioned releases” use historical Git dates in Sydney time.
