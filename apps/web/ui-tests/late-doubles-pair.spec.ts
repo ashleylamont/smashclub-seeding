@@ -121,7 +121,9 @@ for (const theme of ['dark', 'light'] as const) {
         expect.objectContaining({ matchId: called.id, status: 'ready', stationId: null }),
       ]);
       await page.getByRole('tab', { name: 'Players' }).press('Enter');
-      await panel.getByRole('button', { name: 'Refresh late pair preview' }).press('Enter');
+      const refresh = panel.getByRole('button', { name: 'Refresh late pair preview' });
+      await expect(refresh).toBeEnabled();
+      await refresh.press('Enter');
       await expect(heading).toBeFocused();
       await expect(confirm).toBeEnabled();
       await expect(panel.getByText(`${first} / ${second}`, { exact: true })).toBeVisible();
