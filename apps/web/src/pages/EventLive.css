@@ -792,6 +792,9 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .broadcast-topline.has-twitch-link > span:nth-child(2) {
+    flex: 1;
+  }
   .broadcast-topline .broadcast-twitch-link {
     padding-block: 1px;
   }

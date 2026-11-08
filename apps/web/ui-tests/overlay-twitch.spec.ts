@@ -75,6 +75,13 @@ for (const [width, height, fontSize] of [
     await expect(link).toHaveAttribute('target', '_blank');
     await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
     await expect(page.getByRole('region', { name: 'Transparent game capture area' })).toBeVisible();
+    if (width === 640) {
+      const status = page.locator('.broadcast-topline > span:first-child');
+      await expect(status).toHaveText('PLAYING NOW');
+      await expect
+        .poll(() => status.evaluate((element) => element.scrollWidth <= element.clientWidth))
+        .toBe(true);
+    }
     const setup = page.getByRole('button', { name: 'Display setup' });
     await page.keyboard.press('Tab');
     await expect(link).toBeFocused();
