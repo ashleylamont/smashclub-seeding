@@ -116,6 +116,16 @@ export function qualificationReason(sources: readonly QualifierSource[]) {
     .join('; ')}`;
 }
 
+export function isGeneratedQualificationWait(state: TournamentState, match: Match) {
+  const sources = match.qualificationBlocks;
+  return (
+    rollingFinals(state) &&
+    match.status === 'blocked' &&
+    !match.held &&
+    Boolean(sources?.length && match.blockedReason === qualificationReason(sources))
+  );
+}
+
 /** Persist slot identity changes only on the command path. A report hold never
  * retracts an actual call, played opponent, result or report history. */
 export function reconcileRollingFinals(state: TournamentState, basis: Record<string, number>) {

@@ -178,6 +178,10 @@ test('TO desk automatically decides a unique pool, records an explicit tied-pool
         await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
         await page.evaluate(async () => {
           await document.fonts.ready;
+          // Let the responsive navigation finish reflowing after the viewport change.
+          await new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          );
           scrollTo(0, 0);
         });
         await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
@@ -199,7 +203,19 @@ test('TO desk automatically decides a unique pool, records an explicit tied-pool
       }
     }
   };
-  await page.getByRole('tab', { name: 'Standings / draw', exact: true }).press('Enter');
+  const attention = page.getByRole('region', { name: /Needs attention/ });
+  const attentionHeading = attention.getByRole('heading', { name: /Needs attention/ });
+  const poolOrders = attention.getByRole('button', { name: 'Pool orders · 1', exact: true });
+  await expect(attentionHeading).toHaveText('Needs attention 1');
+  await poolOrders.press('Enter');
+  await attention
+    .getByRole('button', { name: 'Review pool order for Open · Pool B' })
+    .press('Enter');
+  await expect(page.getByRole('tab', { name: 'Standings / draw', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(tied.getByRole('heading', { name: /Open · Pool B/ })).toBeFocused();
   await expect(standings).toContainText('Confirmed finishing orders are recorded separately.');
   await expect(automatic).toContainText('Decided automatically by distinct set-win totals');
   await expect(tied).toContainText('Set wins do not decide a unique full order');
@@ -221,6 +237,8 @@ test('TO desk automatically decides a unique pool, records an explicit tied-pool
   await expect(automatic).toContainText('Decided automatically by distinct set-win totals');
   await expect(tied).toContainText('Finishing order confirmed by an organiser');
   await expect(plannerLink).toHaveCount(0);
+  await expect(attentionHeading).toHaveText('Needs attention 0');
+  await expect(poolOrders).toHaveCount(0);
   await captureStandings('confirmed');
   const finals = page.locator('section.card').filter({
     has: page.getByRole('heading', { name: 'Championship and consolation', exact: true }),

@@ -12,6 +12,7 @@ export const OPS_SECTIONS = [
 export type OpsSection = (typeof OPS_SECTIONS)[number]['value'];
 
 export const returnCallControlId = (matchId: string) => `return-call-${matchId}`;
+export const poolOrderControlId = (poolId: string) => `pool-order-${poolId}`;
 
 export function opsSection(value: unknown): OpsSection {
   return OPS_SECTIONS.find((section) => section.value === value)?.value ?? 'run';

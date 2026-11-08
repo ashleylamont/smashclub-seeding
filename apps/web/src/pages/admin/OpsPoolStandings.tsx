@@ -1,5 +1,6 @@
 import { Button } from '../../components/ui/Button';
 import type { poolStandings } from '../../lib/eventQueue';
+import { poolOrderControlId } from '../../lib/opsWorkspace';
 import { poolTitle } from '../../lib/poolFlow';
 import type { trpc } from '../../lib/trpc';
 
@@ -66,16 +67,25 @@ export function OpsPoolStandings({
       <div className="ops-bottom-grid">
         {rows.map(({ pool, key, order }) => {
           const title = poolTitle(key, data.plan.structure, 'heading');
+          const controlId = order ? poolOrderControlId(order.poolId) : undefined;
+          const summaryId = controlId ? `${controlId}-status` : undefined;
           return (
             <section key={key} aria-label={title}>
-              <h4>
+              <h4
+                id={controlId}
+                tabIndex={controlId ? -1 : undefined}
+                aria-describedby={summaryId}
+                className="ops-pool-order-heading"
+              >
                 {title}{' '}
                 <span className="muted">
                   {pool.complete}/{pool.total} sets
                 </span>
               </h4>
               {order ? (
-                <p className="muted">{orderSummary(order, closed)}</p>
+                <p className="muted" id={summaryId}>
+                  {orderSummary(order, closed)}
+                </p>
               ) : (
                 hasStatuses && <p className="muted">Finishing order status unavailable.</p>
               )}

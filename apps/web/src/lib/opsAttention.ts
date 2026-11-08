@@ -8,10 +8,17 @@ export interface AttentionMatch {
   player1Name: string;
   player2Name: string;
   blockedReason: string | null;
+  qualificationWait?: true;
+  qualificationBlocks?: { poolId: string; status: 'pending' | 'resolved' | 'review_pending' }[];
   availability: { canStart: boolean; reasons: { code: string; message: string }[] };
 }
+interface PoolScope {
+  division: string;
+  poolIndex: number;
+}
 interface AttentionData {
-  plan: { status: string };
+  plan: { status: string; drawPaused?: boolean };
+  poolOrders?: (PoolScope & { poolId: string; plannerConfirmation?: { available: boolean } })[];
   sharedDispatch?: { capacity: number } | null;
   matches: AttentionMatch[];
   reports: {
@@ -32,10 +39,31 @@ const normalWaits = new Set([
   'Both players withdrawn: no contest; no winner or score recorded',
 ]);
 
+const poolKey = ({ division, poolIndex }: PoolScope) => `${division}:${poolIndex}`;
+
+function waitsOnlyForPoolRulings(match: AttentionMatch, rulingIds: ReadonlySet<string>) {
+  const sources = match.qualificationBlocks;
+  return (
+    match.qualificationWait === true &&
+    sources !== undefined &&
+    sources.length > 0 &&
+    sources.every((source) => source.status === 'pending' && rulingIds.has(source.poolId))
+  );
+}
+
 /** A work list of decisions and dispatch opportunities, not every unavailable match. */
-export function opsAttention(data: AttentionData) {
+export function opsAttention(data: AttentionData, renderedPools: readonly PoolScope[] = []) {
   const closed = ['complete', 'cancelled'].includes(data.plan.status);
   const byId = new Map(data.matches.map((match) => [match.id, match]));
+  const renderedPoolKeys = new Set(renderedPools.map(poolKey));
+  const poolRulings =
+    closed || data.plan.drawPaused
+      ? []
+      : (data.poolOrders ?? []).filter(
+          (order) =>
+            order.plannerConfirmation?.available === true && renderedPoolKeys.has(poolKey(order)),
+        );
+  const rulingIds = new Set(poolRulings.map((pool) => pool.poolId));
   const reports = closed
     ? []
     : data.reports
@@ -47,7 +75,12 @@ export function opsAttention(data: AttentionData) {
   const decisions = closed
     ? []
     : data.matches.filter((match) => {
-        if (match.status !== 'blocked' || normalWaits.has(match.blockedReason ?? '')) return false;
+        if (
+          match.status !== 'blocked' ||
+          normalWaits.has(match.blockedReason ?? '') ||
+          waitsOnlyForPoolRulings(match, rulingIds)
+        )
+          return false;
         // Unknown qualifiers alone are normal bracket progress, not a TO decision.
         if ((!match.player1Id || !match.player2Id) && !match.blockedReason) return false;
         return true;
@@ -70,6 +103,7 @@ export function opsAttention(data: AttentionData) {
   return {
     reports,
     decisions,
+    poolRulings,
     dispatch,
     needsStations:
       !closed &&

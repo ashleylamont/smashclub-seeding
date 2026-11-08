@@ -115,6 +115,87 @@ describe('TO attention work list', () => {
       ['missing', true],
     ]);
   });
+  it('lists only actionable pool orders with rendered targets and keeps score reviews separate', () => {
+    const rendered = [0, 1, 2, 3].map((poolIndex) => ({ division: 'upper', poolIndex }));
+    const poolOrders = [
+      { ...rendered[0]!, poolId: 'tie', plannerConfirmation: { available: true } },
+      { ...rendered[1]!, poolId: 'frozen', plannerConfirmation: { available: false } },
+      { ...rendered[2]!, poolId: 'review-pending' },
+      { ...rendered[3]!, poolId: 'confirmed' },
+      {
+        division: 'upper',
+        poolIndex: 4,
+        poolId: 'missing',
+        plannerConfirmation: { available: true },
+      },
+    ];
+    const overview = {
+      ...data([match('score')]),
+      poolOrders,
+      reports: [
+        {
+          id: 'pending',
+          matchId: 'score',
+          status: 'pending',
+          expectedRevision: 1,
+          score1: 2,
+          score2: 0,
+        },
+      ],
+    };
+    const result = opsAttention(overview, rendered);
+    expect(result.poolRulings.map(({ poolId }) => poolId)).toEqual(['tie']);
+    expect(result.reports.map(({ id }) => id)).toEqual(['pending']);
+    expect(
+      opsAttention({ ...overview, plan: { ...overview.plan, drawPaused: true } }, rendered)
+        .poolRulings,
+    ).toEqual([]);
+  });
+  it('collapses generated qualification waits only when every blocker is already listed as a pool ruling', () => {
+    const source = { poolId: 'tie', status: 'pending' } as const;
+    const waiting = (id: string, overrides: Partial<AttentionMatch> = {}) =>
+      match(id, {
+        status: 'blocked',
+        blockedReason: 'Waiting for qualification: upper pool A place 1 (finishing order)',
+        qualificationWait: true,
+        qualificationBlocks: [source],
+        ...overrides,
+      });
+    const order = {
+      division: 'upper',
+      poolIndex: 0,
+      poolId: source.poolId,
+      plannerConfirmation: { available: true },
+    };
+    const result = opsAttention(
+      {
+        ...data([
+          waiting('first-affected'),
+          waiting('second-affected'),
+          waiting('held', { qualificationWait: undefined }),
+          waiting('legacy', {
+            blockedReason: 'Waiting for pool finishing order',
+            qualificationWait: undefined,
+          }),
+          waiting('mixed', {
+            qualificationBlocks: [source, { poolId: 'another', status: 'pending' }],
+          }),
+          waiting('review', { qualificationBlocks: [{ ...source, status: 'review_pending' }] }),
+          waiting('unverified', { qualificationBlocks: undefined }),
+        ]),
+        poolOrders: [order],
+      },
+      [order],
+    );
+    expect(result.poolRulings.map(({ poolId }) => poolId)).toEqual(['tie']);
+    expect(result.decisions.map(({ id }) => id)).toEqual([
+      'held',
+      'legacy',
+      'mixed',
+      'review',
+      'unverified',
+    ]);
+  });
   it('only offers known next pairings at genuinely free stations; does not invent work from future projections', () => {
     const result = opsAttention({
       ...data([match('next'), match('busy', { availability: { canStart: false, reasons: [] } })]),
@@ -146,6 +227,7 @@ describe('TO attention work list', () => {
       expect(opsAttention({ ...data([match('ready')]), plan: { status } })).toEqual({
         reports: [],
         decisions: [],
+        poolRulings: [],
         dispatch: [],
         needsStations: false,
       });

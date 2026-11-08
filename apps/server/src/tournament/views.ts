@@ -1,4 +1,4 @@
-import { poolFinalsConsumed, rollingFinals } from './qualifiers';
+import { isGeneratedQualificationWait, poolFinalsConsumed, rollingFinals } from './qualifiers';
 import { hasFixedLegacyPoolQualifiers, legacyQualifierSlots } from './legacyFinalQualifiers';
 import { projectMatchLabels } from './matchNames';
 import {
@@ -49,7 +49,8 @@ export type EventSnapshot = Omit<
   publicCode?: number;
   broadcastSides?: TournamentState['broadcastSides'];
   supersededPlayedSets?: ReturnType<typeof supersededPlayedSetViews>;
-  matches: (SqlSnapshot['matches'][number] & MatchViewFields & { reviewPoolGames?: true })[];
+  matches: (SqlSnapshot['matches'][number] &
+    MatchViewFields & { reviewPoolGames?: true; qualificationWait?: true })[];
   nativeBrackets: (SqlSnapshot['nativeBrackets'][number] & { qualifierSlots?: QualifierSlot[] })[];
   pendingFinals?: ReturnType<typeof pendingStrengthFinals>;
   placements: (Omit<SqlSnapshot['placements'][number], 'source'> & {
@@ -190,11 +191,12 @@ export async function eventView(
     : [];
   const rows = matchRows(state);
   const reviewableMatches = new Set<string>();
+  const qualificationWaits = new Set<string>();
   if (privateView) {
     const reviewablePools = new Set(
       state.pools.filter((pool) => canReviewFrozenPoolResult(state, pool)).map(({ id }) => id),
     );
-    for (const match of state.matches)
+    for (const match of state.matches) {
       if (
         match.stage === 'group' &&
         match.status === 'complete' &&
@@ -203,6 +205,8 @@ export async function eventView(
         reviewablePools.has(match.poolId)
       )
         reviewableMatches.add(match.id);
+      if (isGeneratedQualificationWait(state, match)) qualificationWaits.add(match.id);
+    }
   }
   const dispatch = sharedDispatch(state) ? dispatchContext(state) : undefined;
   const pendingReviewIds =
@@ -291,6 +295,7 @@ export async function eventView(
     matches: rows.map((m) => ({
       ...m,
       ...(reviewableMatches.has(m.id) ? { reviewPoolGames: true as const } : {}),
+      ...(qualificationWaits.has(m.id) ? { qualificationWait: true as const } : {}),
       resourceRevision: state.settings.resourceRevision,
       progressRevision: state.matches.find((row) => row.id === m.id)!.progressRevision,
       started: state.matches.find((row) => row.id === m.id)!.started,
