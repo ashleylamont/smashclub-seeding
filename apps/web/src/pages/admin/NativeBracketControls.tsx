@@ -1,3 +1,4 @@
+import { UntakenCallRecovery, type UntakenCallDesk } from './UntakenCallRecovery';
 import { StrengthFinalsReview } from './StrengthFinalsReview';
 import { EventBracketLane } from '../../components/EventBracketLane';
 import { qualifierLabel } from '../../lib/qualification';
@@ -8,7 +9,8 @@ import type { PoolQualifier } from '../../lib/eventDisplay';
 import { isKnockout } from '@smashclub/shared';
 import { useConfirmation } from '../../lib/confirmation';
 import { Button } from '../../components/ui/Button';
-import { useState } from 'react';
+import { Select, SelectItem } from '../../components/ui/Select';
+import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
 import '../../styles/event-board.css';
@@ -16,18 +18,22 @@ import './NativeBracketControls.css';
 
 type ServerPreview = Awaited<ReturnType<typeof trpc.eventOps.native.preview.query>>;
 type Preview = ServerPreview & { requestId: string };
+type DivisionRemoval = Extract<ServerPreview, { seedPolicy: string }>['divisionResets'][number];
+type ResetInput = Parameters<typeof trpc.eventOps.native.reset.mutate>[0];
+const divisionName = (division: DivisionRemoval['scope']['division']) =>
+  division === 'upper' ? 'Upper' : 'Lower';
 
 /** Only render for native events; remote handoff remains a separate workflow. */
 export function NativeBracketControls({
   data,
   closed,
   dispatchDisabled,
-  onOpenCall,
+  callDesk,
 }: {
   data: Overview;
   closed: boolean;
   dispatchDisabled: boolean;
-  onOpenCall: (matchId: string) => void;
+  callDesk: UntakenCallDesk;
 }) {
   const {
     plan: { id: planId, structure },
@@ -253,22 +259,18 @@ export function NativeBracketControls({
               </Button>
               {(preview.replacing || ('existing' in preview && preview.existing)) && (
                 <FinalsResetControl
+                  key={preview.requestId}
                   data={data}
                   preview={preview}
                   disabled={closed || busy}
                   dispatchDisabled={dispatchDisabled}
-                  onOpenCall={onOpenCall}
-                  onRemove={async (revisionToken) => {
-                    if (
-                      await confirmAction(
-                        'Remove the unplayed finals? Pool results will stay recorded.',
-                      )
-                    )
-                      void act(async () => {
-                        await trpc.eventOps.native.reset.mutate({ planId, revisionToken });
-                        setPreview(null);
-                      }, 'Unplayed finals removed. Pool orders and attendance can now be corrected.');
-                  }}
+                  callDesk={callDesk}
+                  onRemove={(input, success) =>
+                    void act(async () => {
+                      await trpc.eventOps.native.reset.mutate(input);
+                      setPreview(null);
+                    }, success)
+                  }
                 />
               )}
             </div>
@@ -311,16 +313,20 @@ function FinalsResetControl({
   preview,
   disabled,
   dispatchDisabled,
-  onOpenCall,
+  callDesk,
   onRemove,
 }: {
   data: Overview;
   preview: Preview;
   disabled: boolean;
   dispatchDisabled: boolean;
-  onOpenCall: (matchId: string) => void;
-  onRemove: (revisionToken: string) => void;
+  callDesk: UntakenCallDesk;
+  onRemove: (input: ResetInput, success: string) => void;
 }) {
+  const [division, setDivision] = useState('');
+  const confirmAction = useConfirmation();
+  const removalRequest = useRef<{ revisionToken: string; requestId: string } | null>(null);
+  const initialReview = resetReview(preview);
   // Returning a call invalidates the event queries. Refresh only removal metadata;
   // the creation preview and its request ID still refer to the draw the TO reviewed.
   const reset = useQuery({
@@ -332,10 +338,22 @@ function FinalsResetControl({
           seedPolicy: 'pool_place_whr_v1',
         }),
       ),
-    initialData: () => resetReview(preview),
+    initialData: () => initialReview,
     staleTime: Infinity,
     retry: false,
   });
+  const original = initialReview.divisionResets.find(
+    (review) => review.scope.division === division,
+  );
+  const selected = reset.data.divisionResets.find((review) => review.scope.division === division);
+  // Returning a call may refresh the review for the same draw, but a newly drawn
+  // bracket needs a new full preview before it can be removed.
+  const drawChanged = Boolean(
+    division &&
+    (!original || original.scope.bracketIds.join() !== selected?.scope.bracketIds.join()),
+  );
+  const review = division ? selected : reset.data;
+  const reviewUnavailable = disabled || reset.isFetching || reset.isError;
   const currentCalls =
     data.operatorDispatch?.mode === 'shared'
       ? data.operatorDispatch.queue
@@ -343,7 +361,7 @@ function FinalsResetControl({
           .map((row) => row.matchId)
       : [];
   const calls = data.matches.filter(
-    ({ id }) => reset.data.resetCallMatchIds.includes(id) && currentCalls.includes(id),
+    ({ id }) => !division && reset.data.resetCallMatchIds.includes(id) && currentCalls.includes(id),
   );
 
   return (
@@ -351,12 +369,35 @@ function FinalsResetControl({
       {reset.isError && (
         <Notice tone="danger">Could not refresh the removal preview. Preview finals again.</Notice>
       )}
-      {reset.data.resetIssues.length > 0 && (
+      {initialReview.divisionResets.length > 0 && (
+        <label className="finals-reset-scope">
+          Finals to remove
+          <Select value={division} onValueChange={setDivision} disabled={reviewUnavailable}>
+            <SelectItem value="">All finals</SelectItem>
+            {initialReview.divisionResets.map(({ scope }) => (
+              <SelectItem key={scope.division} value={scope.division}>
+                {divisionName(scope.division)} finals only
+              </SelectItem>
+            ))}
+          </Select>
+        </label>
+      )}
+      {drawChanged && (
+        <Notice tone="warning">The selected draw changed. Preview finals again.</Notice>
+      )}
+      {!drawChanged && review && review.resetIssues.length > 0 && (
         <ul>
-          {reset.data.resetIssues.map((issue) => (
+          {review.resetIssues.map((issue) => (
             <li key={issue}>{issue}</li>
           ))}
         </ul>
+      )}
+      {selected && !drawChanged && !reviewUnavailable && (
+        <UntakenCallRecovery
+          matchIds={selected.resetCallMatchIds}
+          desk={callDesk}
+          showInstructions={false}
+        />
       )}
       {calls.length > 0 && (
         <ul className="ops-pause-calls">
@@ -369,7 +410,7 @@ function FinalsResetControl({
                   size="small"
                   disabled={disabled || dispatchDisabled || reset.isFetching || reset.isError}
                   aria-label={`Open call for ${pairing}`}
-                  onClick={() => onOpenCall(match.id)}
+                  onClick={() => callDesk.open(match.id)}
                 >
                   Open call
                 </Button>
@@ -379,10 +420,38 @@ function FinalsResetControl({
         </ul>
       )}
       <Button
-        disabled={disabled || reset.isFetching || reset.isError || !reset.data.resetAllowed}
-        onClick={() => onRemove(reset.data.revisionToken)}
+        disabled={reviewUnavailable || drawChanged || !review?.resetAllowed}
+        onClick={async () => {
+          if (reviewUnavailable || drawChanged || !review?.resetAllowed) return;
+          const { revisionToken } = review;
+          const planId = data.plan.id;
+          if (!selected) {
+            if (await confirmAction('Remove the unplayed finals? Pool results will stay recorded.'))
+              onRemove(
+                { planId, revisionToken },
+                'Unplayed finals removed. Pool orders and attendance can now be corrected.',
+              );
+            return;
+          }
+          const { scope } = selected;
+          const name = divisionName(scope.division);
+          if (
+            !(await confirmAction(
+              `Remove the unplayed ${name} finals? Pool results and the other division will stay recorded.`,
+            ))
+          )
+            return;
+          if (removalRequest.current?.revisionToken !== revisionToken)
+            removalRequest.current = { revisionToken, requestId: crypto.randomUUID() };
+          onRemove(
+            { planId, revisionToken, scope, requestId: removalRequest.current.requestId },
+            `Unplayed ${name} finals removed. Make any pool corrections before previewing a new draw.`,
+          );
+        }}
       >
-        Remove unplayed finals
+        {original
+          ? `Remove unplayed ${divisionName(original.scope.division)} finals`
+          : 'Remove unplayed finals'}
       </Button>
     </section>
   );
@@ -393,6 +462,7 @@ function resetReview(preview: ServerPreview) {
     resetAllowed: preview.resetAllowed,
     resetIssues: preview.resetIssues,
     resetCallMatchIds: preview.resetCallMatchIds,
+    divisionResets: 'divisionResets' in preview ? (preview.divisionResets ?? []) : [],
     revisionToken:
       'resetRevisionToken' in preview ? preview.resetRevisionToken : preview.revisionToken,
   };

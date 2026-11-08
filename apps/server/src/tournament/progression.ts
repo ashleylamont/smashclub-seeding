@@ -13,6 +13,9 @@ export function completeCommandProgression(
   envelope: CommandEnvelope,
   basis: Record<string, number>,
 ) {
+  // Scoped removal only deletes an independent draw and releases its frozen field.
+  // Keep every surviving pairing and its progression facts exactly as recorded.
+  if (envelope.command.kind === 'resetFinals' && envelope.command.scope) return;
   decidePoolOrders(previous, next, envelope, basis);
   if (rollingFinals(next) && next.lifecycle === 'locked') {
     reconcileRollingFinals(next, basis);

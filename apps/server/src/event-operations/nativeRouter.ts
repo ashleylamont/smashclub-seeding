@@ -1,4 +1,5 @@
 import type { Db } from '@smashclub/db';
+import { FinalsDivisionResetScope } from '../tournament/commands';
 import { StrengthSeedPolicy } from '../tournament/schemas';
 import { rollingFinals } from '../tournament/qualifiers';
 import { nativeEvent } from '../tournament/api';
@@ -50,13 +51,27 @@ export const nativeBracketRouter = router({
       });
       return { created: (await api.state()).brackets.length };
     }),
-  reset: authedProcedure.input(reviewed).mutation(async ({ ctx, input }) => {
-    const api = await nativeEvent(ctx, input.planId, false, input);
-    if (!api) throw new TRPCError({ code: 'CONFLICT', message: 'No live finals exist.' });
-    const removed = (await api.state()).brackets.length;
-    await api.execute({ kind: 'resetFinals', revisionToken: input.revisionToken });
-    return { removed };
-  }),
+  reset: authedProcedure
+    .input(
+      z.union([
+        reviewed.extend({ scope: FinalsDivisionResetScope, requestId: z.uuid() }),
+        reviewed.extend({ scope: z.undefined().optional() }),
+      ]),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { scope, revisionToken } = input;
+      const api = await nativeEvent(ctx, input.planId, false, scope ? input : undefined);
+      if (!api) throw new TRPCError({ code: 'CONFLICT', message: 'No live finals exist.' });
+      if (scope) {
+        await api.execute({ kind: 'resetFinals', revisionToken, scope });
+        // The decision checks every reviewed bracket ID. Returning that count also
+        // works for a retried request after the brackets have already been removed.
+        return { removed: scope.bracketIds.length };
+      }
+      const removed = (await api.state()).brackets.length;
+      await api.execute({ kind: 'resetFinals', revisionToken });
+      return { removed };
+    }),
   finalize: authedProcedure.input(plan).mutation(async ({ ctx, input }) => {
     await requireOperator(ctx.db, input.planId, ctx.user);
     const api = await nativeEvent(ctx, input.planId, false, input);

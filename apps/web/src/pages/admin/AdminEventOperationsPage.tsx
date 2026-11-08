@@ -502,7 +502,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
                 data={data}
                 closed={closed || Boolean(data.plan.drawPaused)}
                 dispatchDisabled={dispatchDisabled}
-                onOpenCall={(matchId) => void workspace.openControl(returnCallControlId(matchId))}
+                callDesk={callDesk}
               />
               <NativeDrawTools data={data} />
               <NativeResultControls
