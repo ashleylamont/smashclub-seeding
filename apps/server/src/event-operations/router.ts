@@ -261,9 +261,9 @@ export const eventOpsRouter = router({
   resetOperations: authedProcedure.input(planInput).mutation(async ({ ctx, input }) => {
     const api = await nativeEvent(ctx, input.planId, false, input);
     if (!api) return resetOperations(ctx.db, ctx.user, input.planId);
-    const removedMatches = (await api.state()).matches.length;
     await api.execute({ kind: 'resetQueue' });
-    return { removedMatches };
+    // Keep removedMatches as a compatibility alias of the actual deletion count.
+    return { effect: 'setup_only', deletedMatches: 0, removedMatches: 0 } as const;
   }),
   myReports: authedProcedure.input(planInput).query(async ({ ctx, input }) => {
     const api = await nativeEvent(ctx, input.planId, false, input);

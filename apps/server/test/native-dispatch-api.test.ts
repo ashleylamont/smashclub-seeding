@@ -173,6 +173,59 @@ describe('shared dispatch through the application API', () => {
     expect(await runtime.replay(planId)).toEqual(state);
   });
 
+  it('reports a setup-only reset and retains match IDs and pairings', async () => {
+    const { planId, api } = await night();
+    const original = await runtime.state(planId);
+    const match = original.matches[0]!;
+    const pool = original.pools.find(({ id }) => id === match.poolId)!;
+    await api.eventOps.live.command({
+      planId,
+      requestId: 'hold-pool-before-reset',
+      command: {
+        kind: 'poolResources',
+        poolId: pool.id,
+        active: false,
+        stationIds: [],
+        selfRun: false,
+        autoAcceptScores: false,
+        expectedResourceRevision: original.settings.resourceRevision,
+      },
+    });
+    expect((await runtime.state(planId)).pools.find(({ id }) => id === pool.id)?.active).toBe(
+      false,
+    );
+
+    const request = { planId, requestId: 'reset-queue' };
+    await expect(
+      caller({ ...nativeAdmin, id: 'unassigned-player', role: 'user' }).eventOps.resetOperations(
+        request,
+      ),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    const result = await api.eventOps.resetOperations(request);
+    expect(result).toEqual({ effect: 'setup_only', deletedMatches: 0, removedMatches: 0 });
+    const reset = await runtime.state(planId);
+    const pairings = (state: typeof reset) =>
+      state.matches.map(({ id, player1Id, player2Id }) => [id, player1Id, player2Id]);
+    expect(pairings(reset)).toEqual(pairings(original));
+    expect(reset.pools.find(({ id }) => id === pool.id)?.active).toBe(true);
+    expect(await api.eventOps.resetOperations(request)).toEqual(result);
+    expect(await runtime.state(planId)).toEqual(reset);
+
+    await api.eventOps.reportScore({
+      matchId: match.id,
+      expectedRevision: reset.matches.find(({ id }) => id === match.id)!.revision,
+      requestId: 'result-after-reset',
+      score1: 2,
+      score2: 0,
+      outcome: 'played',
+    });
+    const played = await runtime.state(planId);
+    await expect(
+      api.eventOps.resetOperations({ planId, requestId: 'reset-after-play' }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(await runtime.state(planId)).toEqual(played);
+  });
+
   it('keeps operator holds through unrelated scores and resumes pools independently', async () => {
     const { planId, api } = await night();
     const before = await api.eventOps.overview({ planId });

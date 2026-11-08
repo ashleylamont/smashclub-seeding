@@ -616,7 +616,11 @@ describe('late attendance and protected pools', () => {
         view.entries.filter((e) => e.assignedDivision === 'upper').map((e) => e.id),
       ),
     ).rejects.toThrow('Operational matches');
-    expect(await resetOperations(db, admin, planId)).toEqual({ removedMatches: 12 });
+    expect(await resetOperations(db, admin, planId)).toEqual({
+      effect: 'queue_deleted',
+      deletedMatches: 12,
+      removedMatches: 12,
+    });
     await unfreezeRoster(db, planId);
     expect((await getPlan(db, planId))!.plan.status).toBe('draft');
   });
