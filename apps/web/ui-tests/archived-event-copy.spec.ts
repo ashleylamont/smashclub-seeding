@@ -19,6 +19,15 @@ const completed = {
   status: 'complete',
 } satisfies PublicEventNight;
 
+async function archiveFixture(page: Page, theme: 'dark' | 'light', width: number) {
+  await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+  await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+  const fixture = await mockEvent(page);
+  fixture.snapshot.announcements = [];
+  Object.assign(fixture.snapshot.plan, cancelled);
+  return fixture;
+}
+
 async function reviewRoute(page: Page, info: TestInfo, file: string) {
   await page.evaluate(() => scrollTo(0, 0));
   await page.mouse.move(0, 0);
@@ -36,19 +45,13 @@ for (const theme of ['dark', 'light'] as const) {
     test(`event archives and prizes use factual copy at ${width}px in ${theme}`, async ({
       page,
     }, testInfo) => {
-      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
-      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
-      const fixture = await mockEvent(page);
+      const fixture = await archiveFixture(page, theme, width);
       const played = fixture.snapshot.matches.find(
         (match) => match.status === 'complete' && match.outcome === 'played',
       )!;
-      const unplayed = fixture.snapshot.matches.find((match) => match.status === 'ready')!;
       fixture.snapshot.matches = [played];
-      const placements = fixture.snapshot.placements;
       fixture.snapshot.placements = [];
-      fixture.snapshot.announcements = [];
       fixture.snapshot.prizes[1]!.playerName = PLAYER_NAME;
-      Object.assign(fixture.snapshot.plan, cancelled);
 
       fixture.responses['eventOps.publicEvents'] = [];
       await page.goto('/play');
@@ -122,11 +125,25 @@ for (const theme of ['dark', 'light'] as const) {
       await expect(brackets).toContainText(
         'This event uses pool standings to decide the result; there is no finals bracket.',
       );
+      expect(fixture.unexpected).toEqual([]);
+      expect(fixture.submissions).toEqual([]);
+    });
+
+    test(`cancelled events show recorded results only when present at ${width}px in ${theme}`, async ({
+      page,
+    }, testInfo) => {
+      const fixture = await archiveFixture(page, theme, width);
+      const unplayed = fixture.snapshot.matches.find((match) => match.status === 'ready')!;
+      const placements = fixture.snapshot.placements;
       fixture.snapshot.matches = [unplayed];
+      fixture.snapshot.placements = [];
       fixture.snapshot.prizes = [];
-      Object.assign(fixture.snapshot.plan, cancelled, { structure: 'dual_division' });
+      Object.assign(fixture.snapshot.plan, { structure: 'dual_division' });
       await page.goto(`/play/${cancelled.id}`);
       await expect(page.getByRole('heading', { name: cancelled.name, level: 1 })).toBeVisible();
+      const emptyMatches = page.getByText('No matches in this view. Change the filters or go to');
+      const emptyResultsLink = emptyMatches.getByRole('link', { name: 'Recorded results' });
+      const results = page.getByRole('region', { name: 'Results', exact: true });
       await emptyResultsLink.focus();
       await page.keyboard.press('Enter');
       await expect(page).toHaveURL(`/play/${cancelled.id}#event-results`);
