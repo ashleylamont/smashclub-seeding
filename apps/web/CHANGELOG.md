@@ -2,6 +2,13 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.10.2
+
+### Patch Changes
+
+- 9 November 2026 · **Fix** · Separate the live pool standings from confirmed finishing orders and show the organiser which pools need a ruling or score review. [#337](https://github.com/ashleylamont/smashclub-seeding/pull/337) · [build 5e8c5f4](https://github.com/ashleylamont/smashclub-seeding/commit/5e8c5f4f885dda7f870d6f9bd3e5ced12a11d39c)
+- 9 November 2026 · **Maintenance** · Let the secure Twitch browser fixture recover from one local asset socket reset during startup. [#341](https://github.com/ashleylamont/smashclub-seeding/pull/341) · [build 3586883](https://github.com/ashleylamont/smashclub-seeding/commit/3586883c2d034dbb87ad9b9378a17cfbfa23f699)
+
 ## 0.10.1
 
 ### Patch Changes
