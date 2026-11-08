@@ -18,6 +18,8 @@ export function completeCommandProgression(
   if (envelope.command.kind === 'resetFinals' && envelope.command.scope) return;
   // A reviewed replay applies its exact pool and route changes as one decision.
   if (envelope.command.kind === 'replayFinalsSlotV1') return;
+  // The original draw and every unaffected pairing already have their recorded state.
+  if (envelope.command.kind === 'substituteDoublesMember') return;
   decidePoolOrders(previous, next, envelope, basis);
   if (rollingFinals(next) && next.lifecycle === 'locked') {
     reconcileRollingFinals(next, basis);

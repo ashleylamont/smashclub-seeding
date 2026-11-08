@@ -86,6 +86,7 @@ export const Entrant = z.object({
   /** V1 transport name: an entrant key, equal to entry ID for doubles. */
   playerId: id,
   memberPlayerIds: z.array(id).min(1).max(2).optional(),
+  memberSubstituted: z.literal(true).optional(),
   memberAvailability: z.record(id, z.enum(['available', 'snoozed'])).optional(),
   teamName: z.string().nullable().optional(),
   snapshotMean: z.number().nullable().optional(),
@@ -416,6 +417,7 @@ export const Decision = z.object({
     z.literal(5),
     z.literal(6),
     z.literal(7),
+    z.literal(8),
   ]),
   commandId: id,
   actorId: z.string(),

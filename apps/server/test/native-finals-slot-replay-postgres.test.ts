@@ -100,7 +100,41 @@ describe('reviewed native finals slot replay on PostgreSQL', () => {
     return planId;
   }
 
-  async function prepare({ consolation = false, doubles = false } = {}) {
+  async function substituteLowerPair(planId: string, state: TournamentState) {
+    const entrant = state.entrants.find((e) => e.division === 'lower')!;
+    const [incoming] = await pg.db
+      .insert(players)
+      .values({
+        canonicalName: 'Mixed journal substitute',
+        displayName: 'Mixed substitute',
+      })
+      .returning();
+    const request = {
+      planId,
+      entrantId: entrant.id,
+      outgoingPlayerId: entrant.memberPlayerIds![1]!,
+      incomingPlayerId: incoming!.id,
+      reason: 'Original lower pair member unavailable before play',
+    };
+    const { eventOps } = caller();
+    const preview = await eventOps.previewDoublesSubstitution(request);
+    expect(preview.allowed).toBe(true);
+    await eventOps.applyDoublesSubstitution({
+      ...request,
+      requestId: 'substitution-before-finals-replay',
+      revisionToken: preview.revisionToken,
+    });
+    return {
+      entrantId: entrant.id,
+      memberPlayerIds: [entrant.memberPlayerIds![0]!, incoming!.id],
+    };
+  }
+
+  async function prepare({
+    consolation = false,
+    doubles = false,
+    substituteBeforePlay = false,
+  } = {}) {
     const planId = doubles ? await draftDoubles() : await seedNativeDraft(pg.db);
     if (!doubles)
       await pg.db
@@ -116,6 +150,9 @@ describe('reviewed native finals slot replay on PostgreSQL', () => {
       eventOps.live.command({ planId, requestId, command });
     const report = (match: Match, winner: string) => eventOps.reportScore(score(match, winner));
     await eventOps.softLockPools({ planId, confirm: true });
+    const substitution = substituteBeforePlay
+      ? await substituteLowerPair(planId, await state())
+      : null;
     const initial = await state();
     for (const match of initial.matches) {
       const pool = initial.pools.find(({ id }) => id === match.poolId)!;
@@ -182,6 +219,7 @@ describe('reviewed native finals slot replay on PostgreSQL', () => {
       first,
       fourth,
       reviewInput,
+      substitution,
     };
   }
 
@@ -590,7 +628,7 @@ describe('reviewed native finals slot replay on PostgreSQL', () => {
   });
 
   it('preserves archived actual play when all active matches in that division are unplayed, and rates both doubles sets', async () => {
-    const context = await prepare({ doubles: true });
+    const context = await prepare({ doubles: true, substituteBeforePlay: true });
     const {
       planId,
       eventOps,
@@ -638,6 +676,24 @@ describe('reviewed native finals slot replay on PostgreSQL', () => {
     expect(rating.evidence(chrisTeam)).toEqual({ playedSets: evidenceCount + 1, eventDays: 1 });
     expect(rating.provenance.sourceResultIds).toContain(finalized.result!.id);
     expect(await runtime.replay(planId)).toEqual(finalized);
+    const { entrantId, memberPlayerIds } = context.substitution!;
+    expect(finalized.result!.entrants.find((e) => e.id === entrantId)).toMatchObject({
+      memberPlayerIds,
+      memberSubstituted: true,
+    });
+    const journal = await eventOps.live.history({ planId, limit: 100 });
+    expect(
+      journal.entries
+        .filter(({ eventName }) => ['DecisionRecordedV7', 'DecisionRecordedV8'].includes(eventName))
+        .map(({ eventName }) => eventName),
+    ).toEqual(['DecisionRecordedV7', 'DecisionRecordedV8']);
+    const restarted = await createPostgresNativeRuntime(pg.db, pg.connectionString);
+    try {
+      expect(await restarted.state(planId)).toEqual(finalized);
+      expect(await restarted.replay(planId)).toEqual(finalized);
+    } finally {
+      await restarted.shutdown();
+    }
   });
 
   it('keeps a downstream report as a blocker after the report is rejected', async () => {

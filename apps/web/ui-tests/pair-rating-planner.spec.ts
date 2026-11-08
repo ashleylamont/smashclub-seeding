@@ -214,6 +214,57 @@ test('frozen roster sorts the displayed snapshots and marks old missing breakdow
   expect(fixture.unexpected).toEqual([]);
 });
 
+for (const theme of ['dark', 'light'] as const)
+  for (const width of [390, 1440])
+    test(`the substitute pair has no inherited rating at ${width}px in ${theme}`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const fixture = await planner(page);
+      fixture.view.plan.status = 'underway';
+      Object.assign(fixture.view.plan, { softLockedAt: '2026-10-04T00:00:00Z' });
+      const pair = fixture.view.entries[0]!;
+      Object.assign(pair, {
+        playerName: 'Alex with a long tournament alias / Morgan with a long replacement alias',
+        memberSubstituted: true,
+        snapshotMean: null,
+        snapshotSd: null,
+        snapshotScore: null,
+        currentMean: undefined,
+        currentSd: undefined,
+        currentScore: null,
+        pairRating: undefined,
+        assignedDivision: 'upper',
+        divisionSeed: 1,
+      });
+      await page.goto(`/admin/event-planner?plan=${PLAN_ID}&step=roster`);
+      const ratings = page.getByRole('region', { name: 'Pair ratings', exact: true });
+      const rows = ratings.getByRole('row').filter({ has: page.getByRole('cell') });
+      const substituted = rows.filter({ hasText: 'Substitute pair' });
+      await expect(substituted).toContainText('Morgan with a long replacement alias');
+      await expect(substituted).toContainText('original pool seed retained');
+      await expect(substituted.getByRole('cell', { name: '—', exact: true })).toHaveCount(2);
+      await chooseOption(page.getByRole('combobox', { name: 'Sort pairs' }), 'skill_desc');
+      await expect(rows.last()).toContainText('Substitute pair');
+      await ready(page);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      expect(
+        (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze())
+          .violations,
+      ).toEqual([]);
+      await page.evaluate(() => scrollTo(0, 0));
+      await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
+      await page.screenshot({
+        style: captureStyle,
+        path: testInfo.outputPath('substitute-pair-planner.png'),
+        fullPage: true,
+      });
+      expect(fixture.unexpected).toEqual([]);
+    });
+
 for (const [theme, width] of [
   ['dark', 390],
   ['dark', 1440],

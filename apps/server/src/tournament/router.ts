@@ -79,6 +79,11 @@ export const nativeLiveRouter = router({
     .input(plan.extend({ requestId: z.string().min(1).max(128), command: Command }))
     .mutation(({ ctx, input }) =>
       transport(async () => {
+        if (input.command.kind === 'substituteDoublesMember')
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Use the reviewed doubles substitution workflow.',
+          });
         const live = runtime(ctx);
         const response = await live.command(ctx.user, input.planId, input.requestId, input.command);
         if (['finalize', 'replaceResult'].includes(input.command.kind)) {

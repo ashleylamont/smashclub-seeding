@@ -145,6 +145,7 @@ function decisionFactVersion(
 ) {
   const kind = command.kind;
   if (kind === 'replayFinalsSlotV1') return 7 as const;
+  if (kind === 'substituteDoublesMember') return 8 as const;
   if (
     !['retire', 'finalize', 'replaceResult'].includes(kind) &&
     [previous, state].some((value) => value.brackets.some((b) => b.strengthSeeding))
@@ -208,6 +209,7 @@ export function decide(
         'replaceResult',
         'retire',
         'attendance',
+        'substituteDoublesMember',
         'resetQueue',
       ].includes(command.kind),
     'Relock before making live decisions.',

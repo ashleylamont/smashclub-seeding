@@ -35,6 +35,7 @@ export interface PlanEntryView {
   partnerPlayerId?: string | null;
   teamName?: string | null;
   memberPlayerIds?: string[];
+  memberSubstituted?: true;
   memberNames?: string[];
   snapshotMean?: number | null;
   snapshotSd?: number | null;

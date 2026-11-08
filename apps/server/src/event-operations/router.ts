@@ -1,3 +1,4 @@
+import { previewDoublesSubstitution, applyDoublesSubstitution } from './doublesSubstitutionRouter';
 import type { previewRestoration } from '../tournament/restoration';
 import type { EventSnapshot } from '../tournament/views';
 import { memberIds } from '../tournament/entrants';
@@ -212,6 +213,8 @@ export const eventOpsRouter = router({
   guests: guestRouter,
   delivery: eventDeliveryRouter,
   sources: sourceRefreshRouter,
+  previewDoublesSubstitution,
+  applyDoublesSubstitution,
   previewAttendance: authedProcedure
     .input(attendanceInput)
     .query(async ({ ctx, input }): Promise<AttendancePreview> => {
