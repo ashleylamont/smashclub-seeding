@@ -2,6 +2,13 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.2.1
+
+### Patch Changes
+
+- 8 November 2026 · **Fix** · See why unplayed finals cannot be removed and open the exact untaken call when returning it can unblock removal. The queue reset now explains whether it keeps matches or clears them. [#191](https://github.com/ashleylamont/smashclub-seeding/pull/191) · [build 695a091](https://github.com/ashleylamont/smashclub-seeding/commit/695a091f98a1f0f106dca68662b06f188edc04e0)
+- 8 November 2026 · **Maintenance** · Keep pending build verification and registry publication queued when several changes land on main close together. [#188](https://github.com/ashleylamont/smashclub-seeding/pull/188) · [build 3604c04](https://github.com/ashleylamont/smashclub-seeding/commit/3604c04eaec0b6097806301ad87808c18e94658a)
+
 ## 0.2.0
 
 ### Minor Changes
