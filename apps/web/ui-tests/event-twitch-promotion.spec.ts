@@ -9,11 +9,24 @@ const promotion = { channel: 'club_stream', expiresAt: '2026-10-04T00:10:00.000Z
 type Request = Parameters<typeof trpc.eventOps.setTwitchPromotion.mutate>[0];
 
 async function secureFixture(page: Page, baseURL: string) {
+  const loopback = new URL(baseURL);
+  if (loopback.protocol !== 'http:' || loopback.hostname !== '127.0.0.1')
+    throw new Error('The secure fixture must use the local Vite server.');
+
   // Exercise the real HTTPS branch without TLS setup or external network traffic.
   await page.route(`${origin}/**`, async (route) => {
-    const url = new URL(route.request().url());
+    const request = route.request();
+    const url = new URL(request.url());
     if (url.pathname.startsWith('/api/')) return route.fallback();
-    const response = await route.fetch({ url: new URL(url.pathname + url.search, baseURL).href });
+    const target = new URL(loopback);
+    target.pathname = url.pathname;
+    target.search = url.search;
+    // Playwright retries ECONNRESET only. Keep the retry on the read-only loopback hop.
+    const response = await route.fetch({
+      url: target.href,
+      maxRedirects: 0,
+      maxRetries: request.method() === 'GET' ? 1 : 0,
+    });
     await route.fulfill({ response });
   });
 }
