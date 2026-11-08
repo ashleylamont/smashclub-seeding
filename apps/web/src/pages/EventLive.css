@@ -522,13 +522,24 @@
   text-transform: none;
 }
 .broadcast-twitch-link {
-  color: var(--event-bone);
-  font-size: clamp(12px, 1.1vw, 20px);
+  flex-shrink: 0;
+  max-width: 100%;
+  padding: 2px clamp(var(--s2), 0.8vw, var(--s4));
+  background: var(--event-orange);
+  color: var(--event-ink);
+  font-family: var(--font-number);
+  font-size: clamp(13px, min(1.9vw, 3.4vh), 36px);
+  font-weight: 700;
+  line-height: 1.05;
   letter-spacing: 0;
   text-transform: none;
   text-decoration: underline;
-  text-underline-offset: 0.16em;
-  flex-shrink: 0;
+  text-underline-offset: 0.12em;
+  overflow-wrap: anywhere;
+}
+.broadcast-twitch-link:focus-visible {
+  outline: 2px solid var(--event-ink);
+  outline-offset: -2px;
 }
 .broadcast-twitch-short {
   display: none;
@@ -776,11 +787,43 @@
   .broadcast-topline.has-twitch-link {
     gap: var(--s2);
   }
+  .broadcast-topline.has-twitch-link > span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .broadcast-topline.has-twitch-link > span:nth-child(2) {
+    flex: 1;
+  }
+  .broadcast-topline .broadcast-twitch-link {
+    padding-block: 1px;
+  }
+}
+@media (max-width: 540px) {
+  .event-overlay:has(> .overlay-setup-toggle) .broadcast-topline.has-twitch-link {
+    padding-right: calc(1vw + 5.25rem);
+  }
+  .broadcast-topline .broadcast-twitch-link {
+    padding-inline: clamp(var(--s1), 1.65vw, var(--s2));
+    font-size: clamp(10px, min(3.1vw, 3.4vh), 12px);
+  }
   .broadcast-topline .broadcast-twitch-url {
     display: none;
   }
   .broadcast-topline .broadcast-twitch-short {
     display: inline;
+  }
+}
+@media (max-width: 540px) and (min-height: 540px) {
+  .broadcast-topline.has-twitch-link {
+    display: grid;
+    grid-template: minmax(0, 1fr) auto / auto minmax(0, 1fr);
+    column-gap: var(--s2);
+    row-gap: 0;
+  }
+  .broadcast-topline .broadcast-twitch-link {
+    grid-column: 1 / -1;
+    justify-self: start;
   }
 }
 .broadcast-rail.has-guest-pass .broadcast-identity {
