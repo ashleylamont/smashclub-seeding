@@ -190,10 +190,12 @@ export const eventPlannerRouter = router({
       return { planId };
     }),
 
-  plan: adminProcedure.input(z.object({ planId: z.uuid() })).query(async ({ ctx, input }) => {
-    const api = await nativeEvent(ctx, input.planId, false, input);
-    return api ? api.plan() : getPlan(ctx.db, input.planId);
-  }),
+  plan: adminProcedure
+    .input(z.object({ planId: z.uuid(), revisionEvidence: z.literal('compact').optional() }))
+    .query(async ({ ctx, input }) => {
+      const api = await nativeEvent(ctx, input.planId, false, input);
+      return api ? api.plan(input.revisionEvidence) : getPlan(ctx.db, input.planId);
+    }),
 
   updatePlan: adminProcedure
     .input(

@@ -248,8 +248,8 @@ export class NativeEventApi {
       ...publicTwitchPromotion(twitch, nativeTwitchOpen(state)),
     };
   }
-  async plan() {
-    return planView(this.ctx.db, await this.state());
+  async plan(revisionEvidence?: 'compact') {
+    return planView(this.ctx.db, await this.state(), revisionEvidence);
   }
   async report(input: {
     matchId: string;
