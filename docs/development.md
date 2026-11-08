@@ -146,6 +146,6 @@ On `main`, **Version Nemesis** opens or updates the Changesets version PR and qu
 
 ### Enable the release bot
 
-Install a GitHub App on this repository with repository **Contents** and **Pull requests** set to **Read and write**. Add its client ID as the Actions variable `NEMESIS_RELEASE_APP_CLIENT_ID` and its private key as the Actions secret `NEMESIS_RELEASE_APP_PRIVATE_KEY`. Enable **Allow auto-merge** in the repository's pull request settings, then run **Version Nemesis** once to process any pending notes. The job uses a short-lived installation token scoped to this repository so its PRs start normal CI.
+Install a GitHub App on this repository with repository **Contents** and **Pull requests** set to **Read and write**. Add its client ID as the Actions variable `NEMESIS_RELEASE_APP_CLIENT_ID` and its private key as the Actions secret `NEMESIS_RELEASE_APP_PRIVATE_KEY`. The workflow also accepts the Client ID as a repository secret with the same name. Enable **Allow auto-merge** in the repository's pull request settings, then run **Version Nemesis** once to process any pending notes. The job uses a short-lived installation token scoped to this repository so its PRs start normal CI.
 
 A maintainer can also fetch `origin/main`, run `pnpm changeset version` on a branch from it and open a release-only PR. The merged version publishes through the same workflow. For a tagged rebuild, an existing or manually pushed version tag must match its main commit and app version.
