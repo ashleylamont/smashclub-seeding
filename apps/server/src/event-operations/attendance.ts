@@ -800,7 +800,11 @@ export async function resetOperations(db: Db, actor: SessionUser, planId: string
         message:
           'Only an unplayed queue with no reports, withdrawals, or linked brackets can be reset.',
       });
-    await tx.delete(eventMatches).where(eq(eventMatches.eventPlanId, planId));
+    const deleted = await tx
+      .delete(eventMatches)
+      .where(eq(eventMatches.eventPlanId, planId))
+      .returning({ id: eventMatches.id });
+    const deletedMatches = deleted.length;
     const [plan] = await tx.select().from(eventPlans).where(eq(eventPlans.id, planId));
     if (!plan?.softLockedAt)
       await tx.delete(eventPoolAssignments).where(eq(eventPoolAssignments.eventPlanId, planId));
@@ -810,8 +814,8 @@ export async function resetOperations(db: Db, actor: SessionUser, planId: string
       eventPlanId: planId,
       userId: actor.id,
       action: 'reset_queue',
-      details: { removedMatches: matches.length },
+      details: { removedMatches: deletedMatches },
     });
-    return { removedMatches: matches.length };
+    return { effect: 'queue_deleted' as const, deletedMatches, removedMatches: deletedMatches };
   });
 }

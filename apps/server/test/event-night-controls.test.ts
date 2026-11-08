@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import {
   eventAnnouncements,
+  eventAttendanceAudit,
   eventMatchAudit,
   eventMatches,
   eventOperators,
@@ -19,7 +20,10 @@ import {
   type Db,
 } from '@smashclub/db';
 import type { SessionUser } from '../src/auth';
-import { resetOperations } from '../src/event-operations/attendance';
+import { appRouter } from '../src/trpc/router';
+import { loadEnv } from '../src/env';
+import { ChallongeClient } from '../src/challonge/client';
+import { RecomputeTrigger } from '../src/recompute/trigger';
 import {
   configurePool,
   publishAnnouncement,
@@ -387,7 +391,16 @@ describe('public display additions', () => {
   });
 });
 
-it('clears pool schedules on an unplayed reset but retains paused live-score history', async () => {
+it('reports the actual legacy queue deletion and refuses to clear paused live scores', async () => {
+  const caller = (actor: SessionUser) =>
+    appRouter.createCaller({
+      db,
+      user: actor,
+      env: loadEnv({ DATABASE_URL: 'pglite://memory', NODE_ENV: 'test' }),
+      challonge: new ChallongeClient({}),
+      recomputeTrigger: new RecomputeTrigger(db),
+    }).eventOps;
+  const api = caller(admin);
   await configurePool(db, admin, {
     planId,
     division: 'upper',
@@ -395,8 +408,25 @@ it('clears pool schedules on an unplayed reset but retains paused live-score his
     active: false,
     stationIds: [],
   });
-  await resetOperations(db, admin, planId);
+  const before = await allMatches();
+  const count = before.length;
+  expect(count).toBeGreaterThan(0);
+  await expect(caller(helper).resetOperations({ planId })).rejects.toMatchObject({
+    code: 'FORBIDDEN',
+  });
+  expect(await allMatches()).toEqual(before);
+  expect(await api.resetOperations({ planId })).toEqual({
+    effect: 'queue_deleted',
+    deletedMatches: count,
+    removedMatches: count,
+  });
+  expect(await allMatches()).toHaveLength(0);
   expect(await db.select().from(eventPoolSchedules)).toHaveLength(0);
+  expect(await api.resetOperations({ planId })).toEqual({
+    effect: 'queue_deleted',
+    deletedMatches: 0,
+    removedMatches: 0,
+  });
   await prepare(db, planId);
   const [match] = await allMatches();
   const started = await updateMatch(db, admin, {
@@ -415,7 +445,21 @@ it('clears pool schedules on an unplayed reset but retains paused live-score his
     expectedRevision: live.revision,
     status: 'ready',
   });
-  await expect(resetOperations(db, admin, planId)).rejects.toMatchObject({ code: 'CONFLICT' });
+  await expect(api.resetOperations({ planId })).rejects.toMatchObject({ code: 'CONFLICT' });
+  expect((await allMatches()).find(({ id }) => id === match!.id)).toMatchObject({
+    status: 'ready',
+    liveScore1: 1,
+    liveScore2: 0,
+  });
+  const audit = await db
+    .select()
+    .from(eventAttendanceAudit)
+    .where(eq(eventAttendanceAudit.eventPlanId, planId));
+  const resets = audit.filter(({ action }) => action === 'reset_queue');
+  expect(resets).toHaveLength(2);
+  expect(resets.map(({ details }) => details)).toEqual(
+    expect.arrayContaining([{ removedMatches: count }, { removedMatches: 0 }]),
+  );
 });
 
 it('accepts an official final after local live progress without treating live counts as a completed correction', async () => {
