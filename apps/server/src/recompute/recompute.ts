@@ -14,7 +14,11 @@ import {
   runWhrModel,
   type LeaderboardRow,
 } from '@smashclub/engine';
-import { whrPrefixFingerprints } from './whrProvenance';
+import {
+  currentWhrPrefixFingerprints,
+  whrPrefixFingerprints,
+  WHR_PREFIX_FINGERPRINT_VERSION,
+} from './whrProvenance';
 import { getRatingSettings, updateRatingSettings } from '../settings';
 
 export const ENGINE_VERSION = '2.0.0';
@@ -107,6 +111,7 @@ async function computeRatings(
       sets: engineSets.length,
       events: ratingEventRows.length,
       ratingNights: run.nightRatings.length,
+      whrPrefixFingerprintVersion: WHR_PREFIX_FINGERPRINT_VERSION,
       whrPrefixFingerprints: Object.fromEntries(
         whrPrefixFingerprints(
           prepareWhrHistory({
@@ -246,5 +251,10 @@ export async function latestRecomputeId(db: Db): Promise<string | null> {
 
 export async function needsRatingRecompute(db: Db): Promise<boolean> {
   const stats = (await latestCompletedRecompute(db))?.stats;
-  return !stats || typeof stats !== 'object' || !('ratingNights' in stats);
+  return (
+    !stats ||
+    typeof stats !== 'object' ||
+    !('ratingNights' in stats) ||
+    !currentWhrPrefixFingerprints(stats)
+  );
 }

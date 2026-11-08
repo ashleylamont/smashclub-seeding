@@ -10,7 +10,7 @@ import {
 import { ratingSettingsSchema } from '@smashclub/shared';
 import { loadSinglesHistory } from './inputs';
 import { latestRecomputeId } from './recompute';
-import { whrPrefixFingerprints } from './whrProvenance';
+import { currentWhrPrefixFingerprints, whrPrefixFingerprints } from './whrProvenance';
 
 interface ImpactInput {
   playerId: string;
@@ -51,8 +51,7 @@ function reserve(kind: keyof typeof WORK_PER_SECOND) {
 async function readSnapshot(db: Db, input: ImpactInput) {
   if ((await latestRecomputeId(db)) !== input.recomputeId) return unavailable('stale_run');
   const [run] = await db.select().from(recomputes).where(eq(recomputes.id, input.recomputeId));
-  const stats = run?.stats as { whrPrefixFingerprints?: Record<string, string> } | null;
-  const fingerprints = stats?.whrPrefixFingerprints;
+  const fingerprints = currentWhrPrefixFingerprints(run?.stats);
   const snapshot = run?.settingsSnapshot as { rating?: unknown } | null;
   if (!fingerprints || !snapshot?.rating) return unavailable('older_run');
   const settings = ratingSettingsSchema.safeParse(snapshot.rating);

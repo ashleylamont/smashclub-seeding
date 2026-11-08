@@ -27,7 +27,7 @@ async function main(): Promise<void> {
     username: env.CHALLONGE_USERNAME,
   });
   const recomputeTrigger = new RecomputeTrigger(db);
-  // Backfill the nightly history while the last completed board stays available.
+  // Backfill rating history and impact provenance while the last completed board stays available.
   if (await needsRatingRecompute(db)) recomputeTrigger.request();
 
   const nativeRuntime = await createPostgresNativeRuntime(db, env.DATABASE_URL);

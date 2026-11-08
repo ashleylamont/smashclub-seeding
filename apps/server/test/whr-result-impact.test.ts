@@ -4,7 +4,7 @@ import { players, recomputes, sets, tournaments, type Db } from '@smashclub/db';
 import { DISPLAY_CENTRE, NATURAL_TO_DISPLAY, fitWhr } from '@smashclub/engine';
 import { defaultRatingSettings } from '@smashclub/shared';
 import { loadEnv } from '../src/env';
-import { runRecompute } from '../src/recompute/recompute';
+import { latestRecomputeId, needsRatingRecompute, runRecompute } from '../src/recompute/recompute';
 import { loadSinglesHistory } from '../src/recompute/inputs';
 import { RecomputeTrigger } from '../src/recompute/trigger';
 import { updateRatingSettings } from '../src/settings';
@@ -215,10 +215,13 @@ it('reads independent effects from the published night and rejects a cached effe
       status: 'unavailable',
       reason: 'history_changed',
     });
+    expect(await needsRatingRecompute(db)).toBe(false);
     await db
       .update(recomputes)
       .set({ stats: { ratingNights: 3 } })
       .where(eq(recomputes.id, extended.recomputeId));
+    expect(await needsRatingRecompute(db)).toBe(true);
+    expect(await latestRecomputeId(db)).toBe(extended.recomputeId);
     expect(await api.whrResultImpact(updated)).toEqual({
       status: 'unavailable',
       reason: 'older_run',
@@ -278,6 +281,29 @@ it('uses the assigned debut prior when the omitted result is the player’s only
     );
   } finally {
     vi.useRealTimers();
+    await close();
+  }
+});
+
+it('does not keep scheduling startup backfill for a current empty rating history', async () => {
+  const { db, close } = await createTestDb();
+  try {
+    expect(await needsRatingRecompute(db)).toBe(true);
+    const run = await runRecompute(db);
+    expect(await needsRatingRecompute(db)).toBe(false);
+    await db
+      .update(recomputes)
+      .set({
+        stats: {
+          ratingNights: 0,
+          whrPrefixFingerprintVersion: 0,
+          whrPrefixFingerprints: {},
+        },
+      })
+      .where(eq(recomputes.id, run.recomputeId));
+    expect(await needsRatingRecompute(db)).toBe(true);
+    expect(await latestRecomputeId(db)).toBe(run.recomputeId);
+  } finally {
     await close();
   }
 });
