@@ -7,7 +7,7 @@ const changelog = 'apps/web/CHANGELOG.md';
 const notePath = /^\.changeset\/(?!README\.md$)[^/]+\.md$/;
 const versionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
-export function assertAppChangeset(changes, read) {
+export function assertAppChangeset(changes, read, { releaseOnly = false } = {}) {
   const validNote = (source) => {
     const match = /^---\r?\n([\s\S]+?)\r?\n---\r?\n([\s\S]*)$/.exec(source);
     if (!match?.[2].trim()) return false;
@@ -18,8 +18,14 @@ export function assertAppChangeset(changes, read) {
       ['patch', 'minor', 'major'].includes(bumps['@smashclub/web'])
     );
   };
+  const editsPackage = changes.some(([status, path]) => status === 'M' && path === appPackage);
+  const before = editsPackage ? JSON.parse(read('base', appPackage)) : {};
+  const after = editsPackage ? JSON.parse(read('HEAD', appPackage)) : {};
+  const { version: oldVersion, ...oldPackage } = before;
+  const { version: newVersion, ...newPackage } = after;
+
   const additions = changes.filter(([status, path]) => status === 'A' && notePath.test(path));
-  if (additions.length) {
+  if (additions.length && !releaseOnly && oldVersion === newVersion) {
     for (const [, path] of additions) {
       if (!validNote(read('HEAD', path))) throw new Error(`Invalid Nemesis Changeset in ${path}`);
     }
@@ -39,10 +45,9 @@ export function assertAppChangeset(changes, read) {
     consumed.length &&
     releaseFiles &&
     versioned &&
+    JSON.stringify(oldPackage) === JSON.stringify(newPackage) &&
     consumed.every(([, path]) => validNote(read('base', path)))
   ) {
-    const oldVersion = JSON.parse(read('base', appPackage)).version;
-    const newVersion = JSON.parse(read('HEAD', appPackage)).version;
     if (versionPattern.test(oldVersion) && versionPattern.test(newVersion)) {
       const previous = oldVersion.split('.').map(Number);
       const next = newVersion.split('.').map(Number);
@@ -68,7 +73,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   for (let index = 0; index < fields.length; index += 2) {
     changes.push([fields[index], fields[index + 1]]);
   }
-  assertAppChangeset(changes, (revision, path) =>
-    git('show', `${revision === 'base' ? base : revision}:${path}`),
+  assertAppChangeset(
+    changes,
+    (revision, path) => git('show', `${revision === 'base' ? base : revision}:${path}`),
+    { releaseOnly: process.env.GITHUB_HEAD_REF === 'changeset-release/main' },
   );
 }

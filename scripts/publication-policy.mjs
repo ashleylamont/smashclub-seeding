@@ -1,18 +1,39 @@
+const stableVersion = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+
 /** A main push, a version tag on main's history, or a manual main rebuild. */
-export function publicationPolicy({ event, ref, sha, mainSha, onMain, appVersion }) {
+export function publicationPolicy({
+  event,
+  ref,
+  sha,
+  mainSha,
+  onMain,
+  appVersion,
+  versionChanged,
+}) {
   if (!['push', 'workflow_dispatch'].includes(event))
     throw new Error('Unsupported publication event');
   if (!/^[a-f0-9]{40}$/.test(sha)) throw new Error('Publication requires a full commit SHA');
   if (!onMain) throw new Error('Only commits on main may be published');
   if (event === 'workflow_dispatch' && ref !== 'refs/heads/main')
     throw new Error('Manual publication must select main');
-  if (ref === 'refs/heads/main') return { sha, tags: mainSha === sha ? ['main'] : [] };
-  const version = /^refs\/tags\/v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(ref);
-  if (event !== 'push' || !version)
+  if (ref === 'refs/heads/main') {
+    const tags = mainSha === sha ? ['main'] : [];
+    if (event !== 'push' || !versionChanged) return { sha, tags };
+    if (!stableVersion.test(appVersion))
+      throw new Error('Expected a MAJOR.MINOR.PATCH app version');
+    return { sha, tags: [...tags, appVersion], releaseVersion: appVersion };
+  }
+
+  const version = ref.startsWith('refs/tags/v') ? ref.slice('refs/tags/v'.length) : '';
+  if (event !== 'push' || !stableVersion.test(version))
     throw new Error('Expected a main push or a vMAJOR.MINOR.PATCH release tag');
-  const releaseVersion = version.slice(1).join('.');
-  if (releaseVersion !== appVersion)
+  if (version !== appVersion)
     throw new Error(`Expected release tag v${appVersion} to match the app version`);
-  // Immutable full versions only: older release workflows cannot overwrite major/minor aliases.
-  return { sha, tags: [releaseVersion] };
+  return { sha, tags: [version], releaseVersion: version };
+}
+
+export function assertReleaseTag(tag, expectedSha, existingSha) {
+  if (existingSha && existingSha !== expectedSha) {
+    throw new Error(`Release tag ${tag} already points to ${existingSha}`);
+  }
 }

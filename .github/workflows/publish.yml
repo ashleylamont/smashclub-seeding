@@ -20,6 +20,8 @@ jobs:
   publish:
     needs: verify
     if: needs.verify.result == 'success' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    outputs:
+      version: ${{ steps.release.outputs.version }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -42,13 +44,14 @@ jobs:
         run: |
           gunzip -c verified-image/production-image.tar.gz | docker load
           test "$(docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' smashclub:smoke)" = "$GITHUB_SHA"
-      # Read current main AFTER verification. Superseded runs publish only their SHA.
+      # Read current main after verification to protect the mutable image tag.
       - id: release
-        run: |
-          node scripts/publication-tags.mjs
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            node scripts/release-notes.mjs "${GITHUB_REF_NAME#v}" > /dev/null
-          fi
+        run: node scripts/publication-tags.mjs
+      - name: Check notes for a versioned image
+        if: steps.release.outputs.version != ''
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: node scripts/release-notes.mjs "$VERSION" > /dev/null
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -67,23 +70,36 @@ jobs:
 
   release:
     needs: publish
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: needs.publish.outputs.version != ''
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: write
+    concurrency:
+      group: release-${{ needs.publish.outputs.version }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
-          persist-credentials: false
-      - name: Publish release notes
+          fetch-depth: 0
+      - name: Publish release notes and exact build tag
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.publish.outputs.version }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" --json tagName --jq .tagName; then
+          tag="v$VERSION"
+          node scripts/release-notes.mjs "$VERSION" > "$RUNNER_TEMP/release-notes.md"
+          if git show-ref --verify --quiet "refs/tags/$tag"; then
+            test "$(git rev-parse "refs/tags/$tag^{commit}")" = "$GITHUB_SHA"
+          else
+            test "$GITHUB_REF" = refs/heads/main
+            git -c user.name=github-actions[bot] -c user.email=41898282+github-actions[bot]@users.noreply.github.com \
+              tag -a "$tag" "$GITHUB_SHA" -m "Nemesis $VERSION"
+            git push origin "refs/tags/$tag"
+          fi
+          if gh release view "$tag" --json tagName --jq .tagName; then
             exit 0
           fi
-          node scripts/release-notes.mjs "${GITHUB_REF_NAME#v}" > "$RUNNER_TEMP/release-notes.md"
-          gh release create "$GITHUB_REF_NAME" --verify-tag \
-            --title "Nemesis ${GITHUB_REF_NAME#v}" --notes-file "$RUNNER_TEMP/release-notes.md"
+          gh release create "$tag" --verify-tag \
+            --title "Nemesis $VERSION" --notes-file "$RUNNER_TEMP/release-notes.md"
