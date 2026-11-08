@@ -2,6 +2,17 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.11.0
+
+### Minor Changes
+
+- 9 November 2026 · **Feature** · Preview and download a branded Nemesis results PNG for confirmed brackets, divisions and pools. Graphics keep tied places, public player tags and doubles members visible. Organisers can choose character labels and add local portraits for a single export. [#300](https://github.com/ashleylamont/smashclub-seeding/pull/300) · [build 4f6ca0a](https://github.com/ashleylamont/smashclub-seeding/commit/4f6ca0ab156bb91f739ac7b587795b5a78c4b349)
+
+### Patch Changes
+
+- 9 November 2026 · **Fix** · **Fix:** Show whether a player's current match is called or underway in the organiser finder, with the recorded location and any actual live score. [#352](https://github.com/ashleylamont/smashclub-seeding/pull/352) · [build 33b8477](https://github.com/ashleylamont/smashclub-seeding/commit/33b8477ad8d123047cd94412449a2fe6c72ffde4)
+- 9 November 2026 · **Improvement** · Make the Twitch channel easier to read on Gameplay and Intermission overlays, with a short channel handle in compact Gameplay. [#351](https://github.com/ashleylamont/smashclub-seeding/pull/351) · [build 188ec6f](https://github.com/ashleylamont/smashclub-seeding/commit/188ec6fb2ae718f512b3c0cf7fc8e9c6b7201e9f)
+
 ## 0.10.4
 
 ### Patch Changes
