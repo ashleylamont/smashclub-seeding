@@ -51,7 +51,8 @@ export function ActiveCall({
           Score / details
         </Button>
         <Button
-          id={returnCallControlId(match.id)}
+          key={match.started ? 'release-capacity' : 'return-call'}
+          id={!match.started ? returnCallControlId(match.id) : undefined}
           disabled={disabled}
           onClick={async () => {
             if (

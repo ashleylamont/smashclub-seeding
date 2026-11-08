@@ -232,6 +232,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
             <DispatchDesk
               data={data}
               dispatch={dispatch}
+              callDesk={callDesk}
               onReviewReports={openScoreSubmissions}
               onMatch={(id) => {
                 setFocusedMatchId(id);
