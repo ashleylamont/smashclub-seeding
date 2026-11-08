@@ -2,6 +2,15 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.1.8
+
+### Patch Changes
+
+- 8 November 2026 · **Maintenance** · Document the TIP12 bracket replay and verify how two alternative renderers handle pending matches, long names and draw progression. [#168](https://github.com/ashleylamont/smashclub-seeding/pull/168) · [build 8721d14](https://github.com/ashleylamont/smashclub-seeding/commit/8721d14818db11c39d35521401133cd8e948bb6b)
+- 8 November 2026 · **Improvement** · Organisers can preview every round of a ready finals bracket before creating it, including automatic byes and where winners advance. [#168](https://github.com/ashleylamont/smashclub-seeding/pull/168) · [build 8721d14](https://github.com/ashleylamont/smashclub-seeding/commit/8721d14818db11c39d35521401133cd8e948bb6b)
+
+  ![Organiser finals preview with semi-finals, a bye and the final](./public/changelog/to-precommit-bracket-preview.png)
+
 ## 0.1.7
 
 ### Patch Changes
