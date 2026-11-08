@@ -1,5 +1,4 @@
-import type { ResultMatch } from './broadcastResults';
-import { linkedFinalCaption } from './linkedFinalCaption';
+import { verifiedResultCaption, type ResultMatch } from './broadcastResults';
 
 /** Bounded for the narrow OBS rail, including the venue guest QR at 720p. */
 export function recentResultCount(search: string) {
@@ -9,11 +8,11 @@ export function recentResultCount(search: string) {
 }
 
 export function resultStageLabel(match: ResultMatch) {
-  if (match.labelFromStructure) return match.label;
+  const verified = verifiedResultCaption(match);
+  if (verified !== undefined) return verified;
   const division =
     match.division === 'upper' ? 'Upper' : match.division === 'lower' ? 'Lower' : match.division;
   return match.stage === 'group'
     ? `${division} · Pool ${String.fromCharCode(65 + (match.poolIndex ?? 0))}`
-    : (linkedFinalCaption(match)?.text ??
-        `${division} · ${match.stage === 'main' ? 'Championship' : 'Consolation'} · ${match.label}`);
+    : `${division} · ${match.stage === 'main' ? 'Championship' : 'Consolation'} · ${match.label}`;
 }

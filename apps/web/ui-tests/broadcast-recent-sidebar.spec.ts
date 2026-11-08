@@ -247,6 +247,9 @@ test('corrections update one stable card and only the footer flashes; byes have 
   await expect(card.locator('b')).toHaveText(['1', '2']);
   await expect(rail.locator('[data-match-id="rail-latest"]')).toHaveCount(1);
   await expect(page.getByTestId('broadcast-result-notice')).toContainText('CORRECTED');
+  await expect(page.locator('.broadcast-result-copy small')).toHaveText(
+    `${fixture.latest.division} / Pool A · ${fixture.latest.label}`,
+  );
   await expect(rail.getByTestId('broadcast-result-notice')).toHaveCount(0);
   await page.clock.runFor(5100);
   await expect(page.getByTestId('broadcast-result-notice')).toHaveCount(1);
@@ -265,12 +268,101 @@ test('corrections update one stable card and only the footer flashes; byes have 
   await expect(bye.locator('b')).toHaveCount(0);
   await expect(bye).not.toContainText(/99|TBD|vs/);
   await expect(page.getByTestId('broadcast-result-notice')).toContainText('CORRECTED');
+  await expect(page.locator('.broadcast-result-copy small')).toHaveText(
+    `${fixture.forfeit.division} / main · Winners semi-final A`,
+  );
   Object.assign(fixture.latest, { status: 'ready' });
   Object.assign(fixture.forfeit, { status: 'ready' });
   await page.clock.runFor(5100);
   await expect(rail.locator('article')).toHaveCount(0);
   await expect(rail).toContainText('No confirmed results yet.');
 });
+
+for (const [width, height, theme] of [
+  [1280, 720, 'dark'],
+  [1920, 1080, 'light'],
+] as const) {
+  for (const kind of ['native', 'linked'] as const) {
+    test(`${kind} final notice matches the recent rail at ${width}x${height} in ${theme}`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height });
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const fixture = await recentFixture(page);
+      const native = kind === 'native';
+      const providerIdentifier = 'M700351 · Replay 2';
+      const caption = native ? 'Final' : `Upper Championship · ${providerIdentifier}`;
+      Object.assign(fixture.latest, {
+        division: 'upper',
+        stage: 'main',
+        poolIndex: null,
+        label: native ? 'Final' : `upper main · ${providerIdentifier}`,
+        labelFromStructure: native ? true : undefined,
+        nativeBracketId: native ? 'final-draw' : null,
+        sourceSetId: native ? null : 'source-final',
+        sourceKey: native ? 'native:final' : 'set:source-final',
+        ...(native && {
+          status: 'ready',
+          score1: null,
+          score2: null,
+          winnerId: null,
+          outcome: null,
+        }),
+      });
+      Object.assign(fixture.snapshot.plan, { bracketMode: native ? 'native' : 'challonge' });
+      await page.clock.install({ time: new Date('2026-10-04T00:00:00Z') });
+      await page.goto(`/overlay/${PLAN_ID}?presentation=gameplay&controls=0`);
+      const rail = page.getByRole('region', { name: 'Recent resolved sets' });
+      const card = rail.locator('[data-match-id="rail-latest"]');
+      await expect(card).toHaveCount(native ? 0 : 1);
+      const notice = page.getByTestId('broadcast-result-notice');
+      await expect(notice).toHaveCount(0);
+
+      Object.assign(fixture.latest, {
+        status: 'complete',
+        score1: 1,
+        score2: 2,
+        winnerId: fixture.latest.player2Id,
+        outcome: 'played',
+        resultUpdatedAt: '2026-10-04T00:00:03Z',
+      });
+      await page.clock.runFor(5100);
+      await expect(card.locator('small')).toHaveText(caption);
+      await expect(card.locator('b')).toHaveText(['1', '2']);
+      await expect(notice.locator('.broadcast-result-label strong')).toHaveText(
+        native ? 'FINISHED' : 'CORRECTED',
+      );
+      const copy = notice.locator('.broadcast-result-copy');
+      await expect(copy.locator('strong')).toHaveText(
+        `${fixture.latest.player2Name} 2–1 ${fixture.latest.player1Name}`,
+      );
+      const noticeCaption = copy.locator('small');
+      await expect(noticeCaption).toHaveText(caption);
+      expect(
+        await noticeCaption.evaluate((element) => element.scrollWidth <= element.clientWidth),
+      ).toBe(true);
+      const aperture = (await page.getByLabel('Transparent game capture area').boundingBox())!;
+      const footer = (await page.locator('.broadcast-footer').boundingBox())!;
+      expect(footer.y).toBeGreaterThanOrEqual(aperture.y + aperture.height - 1);
+      expect(
+        (
+          await new AxeBuilder({ page })
+            .include('.event-overlay')
+            .withTags(['wcag2a', 'wcag2aa'])
+            .analyze()
+        ).violations,
+      ).toEqual([]);
+      await page.screenshot({
+        path: testInfo.outputPath('result-flash.png'),
+        omitBackground: true,
+      });
+      await page.clock.runFor(8100);
+      await expect(notice).toHaveCount(0);
+      await expect(card).toHaveCount(1);
+      expect(fixture.unexpected).toEqual([]);
+    });
+  }
+}
 
 test('the bounded recent count survives an OBS reload', async ({ page }) => {
   await recentFixture(page);
