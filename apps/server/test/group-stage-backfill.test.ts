@@ -116,7 +116,15 @@ it('recovers pools from a completed legacy import and requests a rating recomput
     }),
   });
   const profile = await caller.public.player({ playerId: group.p1PlayerId! });
-  const profileEvents = profile && 'events' in profile ? (profile.events ?? []) : [];
+  if (!profile?.events || !profile.nights) throw new Error('Expected a rated profile');
+  const profileEvents = profile.events;
+  expect(profile.nights).toHaveLength(1);
+  expect(profile.nights[0]).toMatchObject({
+    played: true,
+    postRating: profileEvents[0]?.postRating,
+    prePenalty: 0,
+    postPenalty: 0,
+  });
   expect(profileEvents.filter((e) => !e.isDecay)).toHaveLength(2);
   expect(
     profileEvents

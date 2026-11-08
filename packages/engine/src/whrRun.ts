@@ -15,6 +15,7 @@ import type { EngineSet, EngineTournament, RatingEvent } from './types';
  */
 export interface WhrRunResult {
   events: RatingEvent[];
+  nightRatings: WhrNightRating[];
   leaderboard: LeaderboardRow[];
   converged: boolean;
   iterations: number;
@@ -26,6 +27,19 @@ export interface WhrRunResult {
    * `previousRank` without running a second withheld fit.
    */
   previousRanks: Map<string, number>;
+}
+
+/** One prefix-to-prefix comparison for a player on a rated club night. */
+export interface WhrNightRating {
+  playerId: string;
+  eventKey: string;
+  played: boolean;
+  preRating: number;
+  postRating: number;
+  postRd: number;
+  revisedRating: number;
+  prePenalty: number;
+  postPenalty: number;
 }
 
 const MS_PER_DAY = 86_400_000;
@@ -109,6 +123,7 @@ export function runWhrModel(input: {
   if (rateable.length === 0) {
     return {
       events: [],
+      nightRatings: [],
       leaderboard: [],
       converged: true,
       iterations: 0,
@@ -172,7 +187,10 @@ export function runWhrModel(input: {
   const fits = orderedEventKeys.map((_, index) => fitPrefix(index));
   const fullFit = fits[fits.length - 1]!;
 
-  // Estimates at the night boundary, repeated on each played set.
+  // Evaluate every player from their debut onward, including nights they miss.
+  // The played-set ledger reuses these estimates for its existing readers.
+  const nightRatings: WhrNightRating[] = [];
+  const lastPlayedIndex = new Map<string, number | null>();
   const plans = new Map<string, Map<string, NightPlan>>();
   for (const [eventIndex, eventKey] of orderedEventKeys.entries()) {
     const nightSets = rateable.filter((r) => r.eventKey === eventKey);
@@ -182,6 +200,10 @@ export function runWhrModel(input: {
     const playerIds = new Set(nightSets.flatMap(({ set }) => [set.p1PlayerId, set.p2PlayerId]));
     const nightPlans = new Map<string, NightPlan>();
     for (const playerId of playerIds) {
+      if (!lastPlayedIndex.has(playerId)) lastPlayedIndex.set(playerId, null);
+    }
+    for (const [playerId, lastPlayed] of lastPlayedIndex) {
+      const played = playerIds.has(playerId);
       const current = nightFit.display(playerId, time);
       const previous = preFit?.track(playerId)
         ? preFit.display(playerId, time)
@@ -190,6 +212,21 @@ export function runWhrModel(input: {
             sd: settings.whrPriorSd * NATURAL_TO_DISPLAY,
           };
       const revised = fullFit.display(playerId, time);
+      nightRatings.push({
+        playerId,
+        eventKey,
+        played,
+        preRating: previous.rating,
+        postRating: current.rating,
+        postRd: current.sd,
+        revisedRating: revised.rating,
+        prePenalty:
+          lastPlayed === null ? 0 : activityPenaltyFor(eventIndex - 1 - lastPlayed, settings),
+        postPenalty:
+          played || lastPlayed === null ? 0 : activityPenaltyFor(eventIndex - lastPlayed, settings),
+      });
+      if (!played) continue;
+      lastPlayedIndex.set(playerId, eventIndex);
       nightPlans.set(playerId, {
         preRating: previous.rating,
         endRating: current.rating,
@@ -261,6 +298,7 @@ export function runWhrModel(input: {
 
   return {
     events,
+    nightRatings,
     leaderboard,
     converged: fullFit.converged,
     iterations: fullFit.iterations,

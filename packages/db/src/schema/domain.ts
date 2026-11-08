@@ -2,11 +2,13 @@ import type { HistoricalAdoption } from './eventPlanningTypes';
 import {
   bigint,
   boolean,
+  date,
   doublePrecision,
   integer,
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -370,6 +372,27 @@ export const ratingEvents = pgTable('rating_events', {
   revisedRating: doublePrecision('revised_rating'),
   revisedSd: doublePrecision('revised_sd'),
 });
+
+export const ratingNights = pgTable(
+  'rating_nights',
+  {
+    recomputeId: uuid('recompute_id')
+      .notNull()
+      .references(() => recomputes.id, { onDelete: 'cascade' }),
+    playerId: uuid('player_id')
+      .notNull()
+      .references(() => players.id, { onDelete: 'cascade' }),
+    eventKey: date('event_key').notNull(),
+    played: boolean('played').notNull(),
+    preRating: doublePrecision('pre_rating').notNull(),
+    postRating: doublePrecision('post_rating').notNull(),
+    postRd: doublePrecision('post_rd').notNull(),
+    revisedRating: doublePrecision('revised_rating').notNull(),
+    prePenalty: doublePrecision('pre_penalty').notNull(),
+    postPenalty: doublePrecision('post_penalty').notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.recomputeId, table.playerId, table.eventKey] })],
+);
 
 export const playerRatings = pgTable(
   'player_ratings',
