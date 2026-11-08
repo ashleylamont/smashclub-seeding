@@ -2,6 +2,16 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.1.9
+
+### Patch Changes
+
+- 8 November 2026 · **Maintenance** · Validate release notes against the merge commit tested by CI when a release advances the base branch. [#181](https://github.com/ashleylamont/smashclub-seeding/pull/181) · [build 9e0b162](https://github.com/ashleylamont/smashclub-seeding/commit/9e0b1625dd1be606fcf587f944941230c35ba330)
+
+  Verify that each release increments the exact highest patch, minor or major bump declared by its consumed Changesets.
+
+- 8 November 2026 · **Fix** · The organiser desk explains why a pool draw cannot be paused and takes organisers directly to any untaken calls they need to return. A paused draw can resume from the same panel in one step. [#169](https://github.com/ashleylamont/smashclub-seeding/pull/169) · [build f2f4ed8](https://github.com/ashleylamont/smashclub-seeding/commit/f2f4ed8dc7976c08113467e7cd30a574298f9d7d)
+
 ## 0.1.8
 
 ### Patch Changes
