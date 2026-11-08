@@ -66,7 +66,7 @@ export function ToPlayerFinder({
               >
                 <strong>{item.name}</strong>
                 <span>
-                  {info.pools.map((pool) => poolTitle(pool.key)).join(' · ') ||
+                  {info.pools.map((pool) => poolTitle(pool.key, data.plan.structure)).join(' · ') ||
                     'No pool matches yet'}
                   {info.withdrawn
                     ? ' · Withdrawn'
@@ -141,7 +141,7 @@ export function ToPlayerFinder({
                   className="to-player-pool-link"
                   onClick={() => onPool(pool.key)}
                 >
-                  {poolTitle(pool.key)}
+                  {poolTitle(pool.key, data.plan.structure)}
                 </Button>
                 <span>
                   {pool.remaining === 0

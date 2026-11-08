@@ -6,6 +6,7 @@ import {
 } from '../lib/broadcastProgress';
 import { liveBracketWinner } from '../lib/eventBracket';
 import { linkedFinalCaption } from '../lib/linkedFinalCaption';
+import { poolTitle } from '../lib/poolFlow';
 import { matchParticipantName, matchPresentation } from '../lib/matchPresentation';
 import {
   finalsFieldLabel,
@@ -125,7 +126,7 @@ export function BroadcastIntermission({
       </header>
       <div className="intermission-content" key={page.key}>
         {page.kind === 'pool' ? (
-          <PoolPage page={page} closed={closed} />
+          <PoolPage page={page} closed={closed} structure={data.plan.structure} />
         ) : page.kind === 'qualification' ? (
           <QualificationPage page={page} entrants={data.entrants} />
         ) : page.kind === 'linked' ? (
@@ -226,16 +227,16 @@ export function BroadcastIntermission({
 function PoolPage({
   page,
   closed,
+  structure,
 }: {
   page: Extract<ProgressPage, { kind: 'pool' }>;
   closed: boolean;
+  structure?: string;
 }) {
   return (
     <>
       <div className="intermission-section-heading">
-        <h2>
-          {page.pool.division} · Pool {String.fromCharCode(65 + page.pool.poolIndex)}
-        </h2>
+        <h2>{poolTitle(`${page.pool.division}:${page.pool.poolIndex}`, structure, 'heading')}</h2>
         <span>
           {page.pool.complete} / {page.pool.total} sets complete · Section {page.part} /{' '}
           {page.parts}
