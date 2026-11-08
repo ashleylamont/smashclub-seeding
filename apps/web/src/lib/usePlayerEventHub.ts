@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { authClient, type Session } from './auth';
+import { authClient, useMyClaims, type Session } from './auth';
 import { eventUnavailable } from './eventErrors';
 import { eventPlayers, useDevicePlayer } from './playerSelection';
 import { useOnlineStatus } from './useOnlineStatus';
@@ -70,11 +70,7 @@ export function usePlayerEventHub(planId: string) {
     refetchInterval: 2500,
     retry: false,
   });
-  const claims = useQuery({
-    queryKey: ['me', 'claims', signedIn?.user.id],
-    queryFn: () => trpc.me.claims.query(),
-    enabled: Boolean(signedIn),
-  });
+  const claims = useMyClaims(signedIn?.user.id);
   const unpublished = eventUnavailable(publicEvent.error);
   const eventPlan = (publicEvent.data ?? matches.data)?.plan;
   const playOpen = eventPlayOpen(eventPlan);

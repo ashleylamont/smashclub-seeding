@@ -323,3 +323,11 @@
   margin: var(--s1) 0 0;
   color: var(--text-h);
 }
+
+.profile-account-action {
+  margin-top: var(--s3);
+}
+
+.profile-identity {
+  overflow-wrap: anywhere;
+}

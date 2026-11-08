@@ -1,21 +1,24 @@
 import { Button } from '../components/ui/Button';
 import { useState } from 'react';
-import { Navigate } from '@tanstack/react-router';
+import { Navigate, useSearch } from '@tanstack/react-router';
 import { authClient, useSignInOptions } from '../lib/auth';
 import { LocalSignIn } from './LocalSignIn';
+import { profileAccountPath } from '../lib/profileClaim';
 import './Auth.css';
 
 export function LoginPage() {
   const { data: session, isPending } = authClient.useSession();
+  const { claim } = useSearch({ from: '/login' });
+  const callbackURL = profileAccountPath(claim);
   const options = useSignInOptions();
   const [error, setError] = useState<string | null>(null);
 
-  if (!isPending && session) return <Navigate to="/me" />;
+  if (!isPending && session) return <Navigate to="/me" search={{ claim }} replace />;
 
   const signIn = async (provider: 'discord' | 'google') => {
     setError(null);
     try {
-      const res = await authClient.signIn.social({ provider, callbackURL: '/me' });
+      const res = await authClient.signIn.social({ provider, callbackURL });
       if (res.error) setError(res.error.message ?? 'Sign-in failed');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign-in failed');
@@ -27,7 +30,9 @@ export function LoginPage() {
       <div className="login-card card">
         <h1>Sign in</h1>
         <p className="muted">
-          Claim your player profile and edit your public alias and characters.
+          {claim
+            ? 'Continue to your account to request a claim or edit your linked player profile.'
+            : 'Claim your player profile and edit your public alias and main characters.'}
         </p>
         {options.isPending && <p role="status">Loading sign-in options…</p>}
         {options.error && (
@@ -40,7 +45,7 @@ export function LoginPage() {
             </Button>
           </div>
         )}
-        {options.data?.credentials && <LocalSignIn />}
+        {options.data?.credentials && <LocalSignIn callbackURL={callbackURL} />}
         <div className="login-buttons">
           {options.data?.providers.includes('discord') && (
             <Button

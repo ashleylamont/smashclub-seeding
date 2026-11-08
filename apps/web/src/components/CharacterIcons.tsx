@@ -16,6 +16,7 @@ interface Props {
   slugs: string[];
   /** `sm` sits inside a leaderboard row; `lg` heads a profile. */
   size?: 'sm' | 'lg';
+  decorative?: boolean;
   /**
    * Lazy by default, which is right for a long board. The picker overrides it:
    * its ninety icons are the content of the dialog, all on screen at once, and
@@ -24,10 +25,18 @@ interface Props {
   loading?: 'lazy' | 'eager';
 }
 
-export function CharacterIcons({ slugs, size = 'sm', loading = 'lazy' }: Props) {
+export function CharacterIcons({
+  slugs,
+  size = 'sm',
+  loading = 'lazy',
+  decorative = false,
+}: Props) {
   if (slugs.length === 0) return null;
   return (
-    <span className={`character-icons character-icons-${size}`}>
+    <span
+      className={`character-icons character-icons-${size}`}
+      aria-hidden={decorative || undefined}
+    >
       {slugs.map((slug, index) => (
         <CharacterIcon
           key={slug}
