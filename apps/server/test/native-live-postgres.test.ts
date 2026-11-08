@@ -26,6 +26,7 @@ import {
 } from '../src/tournament/runtime';
 import { processNativeRatingIntents, publishNativeResult } from '../src/tournament/publication';
 import { nativeEventHistory } from '../src/tournament/history';
+import { attendancePreview } from '../src/tournament/attendance';
 import type {
   TournamentCommand,
   TournamentResult,
@@ -135,6 +136,96 @@ describe('native Act-PG integration on isolated PostgreSQL', () => {
     expect(eventNames.slice(1)).toEqual(
       Array.from({ length: continued.sequence - 1 }, () => 'DecisionRecordedV1'),
     );
+  });
+
+  it('rebuilds a paused draw after losing its checkpoints and resumes on the existing journal', async () => {
+    const planId = await seedNativeDraft(cluster.db);
+    const stream = nativeStream(planId);
+    const writer = await runtime();
+    await writer.lock(nativeAdmin, planId);
+    await command(writer, planId, { kind: 'unlock' });
+    const paused = await writer.state(planId);
+    const withdrawal = {
+      action: 'withdraw' as const,
+      playerId: paused.entrants[0]!.playerId,
+      reason: 'Left while the draw was paused',
+    };
+    const preview = attendancePreview(paused, withdrawal);
+    expect(preview.allowed).toBe(true);
+    const attendance = {
+      kind: 'attendance' as const,
+      ...withdrawal,
+      revisionToken: preview.revisionToken,
+      approveRedistribution: false,
+    };
+    const firstAttendance = await command(writer, planId, attendance, 'paused-withdrawal');
+    // Baseline, pause and withdrawal are three patches. Reach two checkpoints
+    // at the 20-patch interval and stop at the second one.
+    for (let i = 0; i < 37; i++)
+      await command(writer, planId, {
+        kind: 'resources',
+        capacity: 2,
+        stations: [],
+        expectedResourceRevision: (await writer.state(planId)).settings.resourceRevision,
+      });
+    const live = await writer.state(planId);
+    const livePublic = await writer.snapshot(planId);
+    expect(live.lifecycle).toBe('unlocked');
+    expect(live.entrants[0]!.availability).toBe('withdrawn');
+    expect(livePublic.plan.drawPaused).toBe(true);
+
+    const storedRows = async () =>
+      (
+        await cluster.pool.query<{ id: number; version: number; name: string }>(
+          'select * from native_act.events where stream=$1 order by id',
+          [stream],
+        )
+      ).rows;
+    await writer.shutdown();
+    runtimes.delete(writer);
+    const stored = await storedRows();
+    const authoritative = stored.filter(({ name }) => name !== '__snapshot__');
+    const checkpoints = stored.filter(({ name }) => name === '__snapshot__');
+    expect(checkpoints).toHaveLength(2);
+    expect(checkpoints[0]!.version).toBeLessThan(authoritative.at(-1)!.version);
+    expect(stored.at(-1)?.name).toBe('__snapshot__');
+    expect(
+      authoritative.every(
+        (row, index) => index === 0 || row.version > authoritative[index - 1]!.version,
+      ),
+    ).toBe(true);
+    // Only this test stream's derived rows are lost. Domain rows retain their
+    // original event IDs, versions and payloads, including the resulting gaps.
+    await cluster.pool.query('delete from native_act.events where stream=$1 and name=$2', [
+      stream,
+      '__snapshot__',
+    ]);
+    expect(await storedRows()).toEqual(authoritative);
+
+    const cold = await runtime();
+    expect(await cold.state(planId)).toEqual(live);
+    expect(await cold.snapshot(planId)).toEqual(livePublic);
+    expect(await cold.replay(planId)).toEqual(live);
+    expect((await command(cold, planId, attendance, 'paused-withdrawal')).receipt).toEqual(
+      firstAttendance.receipt,
+    );
+    expect(await storedRows()).toEqual(authoritative);
+    expect(await countPublications(planId)).toEqual([]);
+    expect(await cold.ratingStatus(planId)).toEqual([]);
+
+    const firstRelock = await command(cold, planId, { kind: 'relock' }, 'resume-paused-draw');
+    expect((await command(cold, planId, { kind: 'relock' }, 'resume-paused-draw')).receipt).toEqual(
+      firstRelock.receipt,
+    );
+    const resumed = await cold.state(planId);
+    expect(resumed.lifecycle).toBe('locked');
+    expect(resumed.sequence).toBe(live.sequence + 1);
+    expect(resumed.matches).toEqual(live.matches);
+    expect((await cold.snapshot(planId)).plan.drawPaused).toBe(false);
+    expect(await cold.replay(planId)).toEqual(resumed);
+    const after = (await storedRows()).filter(({ name }) => name !== '__snapshot__');
+    expect(after.slice(0, -1)).toEqual(authoritative);
+    expect(after.at(-1)!.version).toBe(authoritative.at(-1)!.version + 1);
   });
 
   it('serializes shared calls across independent stores without double-booking ordinary capacity or named stations', async () => {
