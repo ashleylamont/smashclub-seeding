@@ -142,11 +142,10 @@ The public `/api/live` streams have global and per-IP connection caps, a maximum
 
 Nemesis has one application version, tracked in `apps/web/package.json`, covering the web app, API and the rest of the deployed image. Each pull request adds a `@smashclub/web` Changeset with `pnpm changeset`. Choose the SemVer bump and describe the change in terms a player or organiser can understand. Use the [note format](../.changeset/README.md) for a change category and optional screenshots. The required **All checks** gate verifies that the PR adds a valid note. A release-only PR passes by consuming existing notes and updating the version and changelog.
 
-To cut a release, fetch `origin/main`, branch from it, run `pnpm changeset version` and review the version and entries written to [the changelog](../apps/web/CHANGELOG.md). Open a release PR and merge it after CI passes. Tag the merged commit on `main` with an annotated `vMAJOR.MINOR.PATCH` tag matching the app version and push the tag to GitHub. For example, for version 0.1.0:
+On `main`, **Version Nemesis** opens or updates the Changesets version PR and queues it for GitHub auto-merge. Required CI checks still gate that merge. A version bump on `main` makes **Publish** run full CI, publish the verified image under the numeric version and create the matching annotated tag and GitHub Release. The in-app `/changelog` uses the same Markdown. Each note includes its Sydney merge date and source build, and version headings link to the tagged release.
 
-```bash
-git tag -a v0.1.0 <merged-release-commit> -m "Nemesis 0.1.0"
-git push origin refs/tags/v0.1.0
-```
+### Enable the release bot
 
-The tag runs full CI, publishes the verified application image under the numeric version and creates the GitHub Release with that version's changelog entry. The in-app `/changelog` uses the same Markdown file. Changesets includes each note’s Sydney merge date and source build. The in-app version heading links to the tagged release, and entries from before versioning retain their original dates and Git builds.
+Install a GitHub App on this repository with repository **Contents** and **Pull requests** set to **Read and write**. Add its client ID as the Actions variable `NEMESIS_RELEASE_APP_CLIENT_ID` and its private key as the Actions secret `NEMESIS_RELEASE_APP_PRIVATE_KEY`. Enable **Allow auto-merge** in the repository's pull request settings, then run **Version Nemesis** once to process any pending notes. The job uses a short-lived installation token scoped to this repository so its PRs start normal CI.
+
+A maintainer can also fetch `origin/main`, run `pnpm changeset version` on a branch from it and open a release-only PR. The merged version publishes through the same workflow. For a tagged rebuild, an existing or manually pushed version tag must match its main commit and app version.

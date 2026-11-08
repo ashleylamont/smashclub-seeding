@@ -1,0 +1,56 @@
+name: Version Nemesis
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nemesis-version-pr
+  cancel-in-progress: false
+
+jobs:
+  version:
+    if: github.ref == 'refs/heads/main' && vars.NEMESIS_RELEASE_APP_CLIENT_ID != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup-node-pnpm
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        id: release-token
+        with:
+          client-id: ${{ vars.NEMESIS_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.NEMESIS_RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      - uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        id: changesets
+        with:
+          github-token: ${{ steps.release-token.outputs.token }}
+          version-script: pnpm changeset version
+          commit-message: Version Nemesis
+          pr-title: Version Nemesis
+          pr-base-branch: main
+          push-git-tags: false
+          create-github-releases: false
+      - name: Queue the version PR for merge after required checks
+        if: steps.changesets.outputs.pr-number != ''
+        env:
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
+          PR: ${{ steps.changesets.outputs.pr-number }}
+        run: |
+          pr="$(gh pr view "$PR" --json state,headRefName,headRefOid,autoMergeRequest)"
+          test "$(jq -r .headRefName <<< "$pr")" = changeset-release/main
+          if jq -e '.state == "MERGED" or .autoMergeRequest != null' <<< "$pr" > /dev/null; then
+            exit 0
+          fi
+          head="$(jq -r .headRefOid <<< "$pr")"
+          gh pr merge "$PR" --auto --merge --match-head-commit "$head"

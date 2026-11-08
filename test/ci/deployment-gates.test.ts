@@ -4,11 +4,12 @@ import { parse } from 'yaml';
 import { describe, expect, it } from 'vitest';
 import { assertAppChangeset } from '../../scripts/check-changeset.mjs';
 import { assertRequiredJobs, requiredJobs } from '../../scripts/check-required-jobs.mjs';
-import { publicationPolicy } from '../../scripts/publication-policy.mjs';
+import { assertReleaseTag, publicationPolicy } from '../../scripts/publication-policy.mjs';
 import { assertPostgresReport } from '../../scripts/postgres-report-policy.mjs';
 
 const ci = parse(readFileSync('.github/workflows/ci.yml', 'utf8'));
 const publish = parse(readFileSync('.github/workflows/publish.yml', 'utf8'));
+const versionWorkflow = parse(readFileSync('.github/workflows/version.yml', 'utf8'));
 const sha = 'a'.repeat(40);
 const input = { event: 'push', ref: 'refs/heads/main', sha, mainSha: sha, onMain: true };
 
@@ -68,6 +69,23 @@ describe('publication ref policy', () => {
       publicationPolicy({ ...input, ref: 'refs/tags/v2.3.4', appVersion: '2.3.4' }).tags,
     ).toEqual(['2.3.4']);
   });
+  it('publishes a new version on a verified main push, even if another merge is newer', () => {
+    const change = { ...input, versionChanged: true, appVersion: '2.3.4' };
+    expect(publicationPolicy(change)).toEqual({
+      sha,
+      tags: ['main', '2.3.4'],
+      releaseVersion: '2.3.4',
+    });
+    expect(publicationPolicy({ ...change, mainSha: 'b'.repeat(40) }).tags).toEqual(['2.3.4']);
+    expect(
+      publicationPolicy({ ...change, event: 'workflow_dispatch' }).releaseVersion,
+    ).toBeUndefined();
+    expect(() => publicationPolicy({ ...change, appVersion: '2.3.4-beta.1' })).toThrow(/Expected/);
+  });
+  it('rejects an existing version tag pointing at a different build', () => {
+    expect(() => assertReleaseTag('v2.3.4', sha, sha)).not.toThrow();
+    expect(() => assertReleaseTag('v2.3.4', sha, 'b'.repeat(40))).toThrow(/already points to/);
+  });
   it.each([
     { event: 'pull_request', ref: 'refs/pull/5/merge' },
     { event: 'pull_request_target', ref: 'refs/heads/main' },
@@ -113,6 +131,29 @@ it('publication runs reusable CI with read permissions and publishes its tested 
   });
 });
 
+it('uses repository-scoped credentials for version PRs and publishes releases after image publication', () => {
+  expect(versionWorkflow.on.push.branches).toEqual(['main']);
+  expect(versionWorkflow.on).not.toHaveProperty('pull_request');
+  expect(versionWorkflow.permissions).toEqual({ contents: 'read' });
+  const steps = versionWorkflow.jobs.version.steps;
+  const token = steps.find((step: { id?: string }) => step.id === 'release-token');
+  expect(token.with).toMatchObject({
+    'permission-contents': 'write',
+    'permission-pull-requests': 'write',
+  });
+  const changesets = steps.find((step: { id?: string }) => step.id === 'changesets');
+  expect(changesets.with).toMatchObject({
+    'github-token': '${{ steps.release-token.outputs.token }}',
+    'version-script': 'pnpm changeset version',
+    'push-git-tags': false,
+    'create-github-releases': false,
+  });
+  expect(steps.at(-1).run).toContain('--auto --merge');
+  expect(publish.jobs.release.needs).toBe('publish');
+  expect(publish.jobs.release.if).toContain('needs.publish.outputs.version');
+  expect(publish.jobs.release.permissions).toEqual({ contents: 'write' });
+});
+
 it('extracts the current app version notes for publication', () => {
   const { version } = JSON.parse(readFileSync('apps/web/package.json', 'utf8'));
   const notes = execFileSync(process.execPath, ['scripts/release-notes.mjs', version], {
@@ -146,6 +187,18 @@ describe('Changeset merge gate', () => {
       ),
     ).not.toThrow();
     expect(() => assertAppChangeset([['M', note]], read)).toThrow(/Add a new/);
+    expect(() => assertAppChangeset([['A', note]], read, { releaseOnly: true })).toThrow(
+      /Add a new/,
+    );
+    expect(() =>
+      assertAppChangeset(
+        [
+          ['A', note],
+          ['M', appPackage],
+        ],
+        read,
+      ),
+    ).toThrow(/Add a new/);
     expect(() => assertAppChangeset([['A', '.changeset/README.md']], read)).toThrow(/Add a new/);
     expect(() => assertAppChangeset([['A', note]], () => '---\n---\n')).toThrow(/Invalid/);
     expect(() =>
@@ -160,6 +213,14 @@ describe('Changeset merge gate', () => {
       ['M', changelog],
     ];
     expect(() => assertAppChangeset(release, read)).not.toThrow();
+    expect(() => assertAppChangeset(release, read, { releaseOnly: true })).not.toThrow();
+    expect(() =>
+      assertAppChangeset(release, (revision, path) =>
+        path === appPackage && revision === 'HEAD'
+          ? JSON.stringify({ version: '0.1.1', scripts: { build: 'other' } })
+          : read(revision, path),
+      ),
+    ).toThrow(/Add a new/);
     expect(() => assertAppChangeset([['D', note]], read)).toThrow(/Add a new/);
     expect(() => assertAppChangeset([...release, ['M', 'src/app.ts']], read)).toThrow(/Add a new/);
     expect(() =>
