@@ -117,7 +117,7 @@ describe('TO bracket backup sheets', () => {
     });
   });
 
-  it('prints only the configured bracket roles and labels loser feeds honestly', () => {
+  it('prints only the configured bracket roles and keeps round captions for unverified names', () => {
     const data = fixture();
     data.plan.structure = 'double_elimination';
     data.nativeBrackets = [
@@ -138,6 +138,7 @@ describe('TO bracket backup sheets', () => {
         stage: 'main',
         nativeBracketId: 'draw',
         label: 'Grand final',
+        labelFromStructure: true,
         nativeRound: 2,
         player1Id: null,
         player2Id: null,
@@ -148,6 +149,10 @@ describe('TO bracket backup sheets', () => {
     ];
     const sheets = bracketBackupSheets(data);
     expect(sheets).toHaveLength(1);
+    expect(sheets[0]!.matches.map(({ key, label, round }) => [key, label, round])).toEqual([
+      ['winners', 'Winners R1', 'Round 1'],
+      ['final', 'Grand final', ''],
+    ]);
     expect(sheets[0]!.matches[1]!.player1).toBe('Winner of Winners R1');
     expect(sheets[0]!.matches[1]!.player2).toBe('Loser of Winners R1');
     data.plan.structure = 'round_robin';

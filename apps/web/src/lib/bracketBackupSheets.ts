@@ -139,7 +139,10 @@ export function bracketBackupSheets(data: BracketBackupData) {
             ? matches.map((match) => ({
                 key: match.id,
                 label: match.label,
-                round: match.nativeRound ? `Round ${match.nativeRound}` : '',
+                round:
+                  match.nativeRound && !match.labelFromStructure
+                    ? `Round ${match.nativeRound}`
+                    : '',
                 player1: liveBracketSide(
                   {
                     ...match,

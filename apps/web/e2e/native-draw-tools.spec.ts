@@ -89,6 +89,8 @@ test('a phone TO reads and prints a real native draw before and after finalizati
   const preview = page.getByRole('dialog', { name: 'Print bracket backup sheets' });
   await expect(preview.locator('.bracket-backup-page')).toHaveCount(1);
   await expect(preview).toContainText('Bye');
+  const firstMatch = preview.locator('.bracket-backup-page tbody tr').first();
+  await expect(firstMatch.getByRole('cell').first()).toHaveText('Quarter-final 1');
   await page.emulateMedia({ media: 'print' });
   const pdf = await page.pdf({ format: 'A4', preferCSSPageSize: true });
   await writeFile(testInfo.outputPath('native-draw-backup.pdf'), pdf);
