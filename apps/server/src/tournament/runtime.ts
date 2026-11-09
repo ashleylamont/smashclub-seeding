@@ -91,7 +91,12 @@ async function replayNative(
   return rebuilt;
 }
 
-function requireRecoveryAdmin(kind: string, role: string) {
+function requireCommandAdmin(kind: string, role: string) {
+  if (kind === 'renameDoublesPair' && role !== 'admin')
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Only an administrator can rename a doubles pair.',
+    });
   if (kind === 'retire' && role !== 'admin')
     throw new TRPCError({
       code: 'FORBIDDEN',
@@ -219,7 +224,7 @@ export function createNativeRuntime(
     readDb = db,
   ) {
     const parsed = Command.parse(input);
-    requireRecoveryAdmin(parsed.kind, actor.role);
+    requireCommandAdmin(parsed.kind, actor.role);
     const operator = await isOperator(readDb, planId, actor);
     if (!['score', 'dispatch'].includes(parsed.kind)) await requireOperator(readDb, planId, actor);
     await transfer(planId, readDb);

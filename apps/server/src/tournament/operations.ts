@@ -6,6 +6,7 @@ import { isKnockout } from '@smashclub/shared';
 import { hash, requireFact, resolved, TournamentConflict, unconfirmedCall } from './facts';
 import { substituteDoublesMember } from './doublesSubstitution';
 import { addLateDoublesPair } from './lateDoublesPair';
+import { renameDoublesPair } from './entrants';
 import { replaceResult } from './replacement';
 import type { FinalsDivisionResetScope } from './commands';
 import type { CommandEnvelope, TournamentState } from './schemas';
@@ -299,6 +300,9 @@ export function additionalDecision(
         m.blockedReason = null;
       }
       state.settings.resourceRevision++;
+      break;
+    case 'renameDoublesPair':
+      renameDoublesPair(state, command, basis);
       break;
     case 'addLateDoublesPair':
       addLateDoublesPair(state, envelope, command, basis);

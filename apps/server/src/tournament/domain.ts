@@ -219,6 +219,7 @@ export function decide(
         'attendance',
         'substituteDoublesMember',
         'addLateDoublesPair',
+        'renameDoublesPair',
         'resetQueue',
       ].includes(command.kind),
     'Relock before making live decisions.',

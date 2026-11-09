@@ -77,7 +77,7 @@ export function describeDecision(
       `${station(command.stationId)} · ${pairing} · ${command.swapped ? 'Swapped left / right' : 'Recorded player order'}`,
     );
   if (dispatch) return { ...dispatch, matchId };
-  const attendance = describeAttendance(command, player);
+  const attendance = describeAttendance(command, player, context, playerName);
   if (attendance) return { ...attendance, matchId };
   switch (command.kind) {
     case 'score': {
@@ -285,8 +285,21 @@ function describeDispatchCommand(
 function describeAttendance(
   command: TournamentDecision['command'],
   player: (id: string | null) => string,
+  context: HistoryContext,
+  playerName: (id: string) => string | undefined,
 ) {
   switch (command.kind) {
+    case 'renameDoublesPair': {
+      const entrant = context.entrants?.find((entry) => entry.id === command.entrantId);
+      const pair = entrant ? publicEntrantName({ ...entrant, teamName: null }, playerName) : 'Pair';
+      return {
+        category: 'players' as const,
+        title: 'Doubles pair name changed',
+        summary: command.teamName
+          ? `${pair} · Name set to ${command.teamName}`
+          : `${pair} · Team name cleared`,
+      };
+    }
     case 'availability':
       return {
         category: 'players' as const,

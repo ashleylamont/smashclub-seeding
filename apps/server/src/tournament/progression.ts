@@ -25,7 +25,8 @@ export function completeCommandProgression(
   // The original draw and every unaffected pairing already have their recorded state.
   if (
     envelope.command.kind === 'substituteDoublesMember' ||
-    envelope.command.kind === 'addLateDoublesPair'
+    envelope.command.kind === 'addLateDoublesPair' ||
+    envelope.command.kind === 'renameDoublesPair'
   )
     return;
   decidePoolOrders(previous, next, envelope, basis);
