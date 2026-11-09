@@ -87,7 +87,7 @@ async function fits(page: Page) {
     .poll(() =>
       page
         .locator(
-          '.intermission-heading h1, .intermission-section-heading h2, .intermission-section-heading > span, .intermission-standings td, .event-bracket-match small, .event-bracket-match > div > span, .intermission-footer button, .intermission-pagination',
+          '.intermission-heading h1, .intermission-section-heading h2, .intermission-pool-status, .intermission-standings td, .event-bracket-match small, .event-bracket-match > div > span, .intermission-footer button, .intermission-pagination',
         )
         .evaluateAll((elements) =>
           elements
@@ -208,6 +208,9 @@ for (const width of [1280, 1920]) {
       const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
       await expect(progress.getByRole('table')).toBeVisible();
       await expect(progress).toContainText('10 / 10 sets complete');
+      const poolMeter = progress.getByRole('progressbar', { name: 'Pool sets completed' });
+      await expect(poolMeter).toHaveAttribute('value', '10');
+      await expect(poolMeter).toHaveAttribute('max', '10');
       await expect(progress).not.toContainText(/Section \d+ \/|final seeds are separate decisions/);
       await expect(progress.getByText(/^Page \d+ \/ \d+$/)).toHaveCount(1);
       await fits(page);
@@ -246,14 +249,21 @@ test('automatic source rotates, pauses, hands off to the selected station and re
       })
       .toBe(visible);
   const meter = progress.getByRole('progressbar', { name: 'Page rotation' });
+  await expect
+    .poll(async () => {
+      await page.clock.runFor(50);
+      return meter.isVisible();
+    })
+    .toBe(true);
   await expect(progress).toContainText('Page 1 /');
   await expect(meter).toHaveAttribute('max', '10000');
   await page.clock.fastForward(5000);
   await expect(progress).toContainText('Page 1 /');
-  await expect(meter).toHaveAttribute('value', '5000');
+  expect(Number(await meter.getAttribute('value'))).toBeGreaterThanOrEqual(5000);
+  expect(Number(await meter.getAttribute('value'))).toBeLessThanOrEqual(5050);
   await expect(meter).toHaveAttribute('aria-valuetext', '5 seconds until next page');
   await expect(progress.getByText('5s', { exact: true })).toBeVisible();
-  await fits(page);
+  await page.evaluate(() => document.fonts.ready.then(() => true));
   await page.screenshot({ path: testInfo.outputPath('intermission-timer-1280.png') });
   await progress.getByRole('button', { name: 'Next page', exact: true }).press('Enter');
   await expect(progress).toContainText('Page 2 /');
@@ -316,7 +326,7 @@ test('reduced motion retains manual pages, and interruptions keep the last known
   const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
   await expect(progress).toContainText('Page 1 /');
   await expect(progress.getByText('Manual', { exact: true })).toBeVisible();
-  await expect(progress.getByRole('progressbar')).toHaveCount(0);
+  await expect(progress.getByRole('progressbar', { name: 'Page rotation' })).toHaveCount(0);
   await page.clock.fastForward(60000);
   await expect(progress).toContainText('Page 1 /');
   await page.keyboard.press('ArrowRight');

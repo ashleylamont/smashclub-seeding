@@ -158,7 +158,7 @@ export function broadcastProgressPages(data: ProgressData): ProgressPage[] {
               ? round === 1
                 ? 'Grand final'
                 : 'Reset · if needed'
-              : `${lane.title || 'Bracket'} · Round ${round}`,
+              : `Round ${round}`,
           ),
         });
       });

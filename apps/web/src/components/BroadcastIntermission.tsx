@@ -135,6 +135,7 @@ export function BroadcastIntermission({
               <h2>
                 {page.bracket.division} ·{' '}
                 {page.bracket.stage === 'main' ? 'Championship' : 'Consolation'}
+                {page.lane.title ? ` · ${page.lane.title}` : ''}
               </h2>
             </div>
             {page.bracket.complete && page.bracket.winnerId && (
@@ -330,9 +331,17 @@ function PoolPage({
             ? 'Round-robin set records'
             : poolTitle(`${page.pool.division}:${page.pool.poolIndex}`, structure, 'heading')}
         </h2>
-        <span className="intermission-set-count">
-          {page.pool.complete} / {page.pool.total} sets complete
-        </span>
+        <div className="intermission-pool-status">
+          <span className="intermission-set-count">
+            {page.pool.complete} / {page.pool.total} sets complete
+          </span>
+          <Progress
+            className="intermission-pool-meter"
+            label="Pool sets completed"
+            value={page.pool.complete}
+            max={page.pool.total}
+          />
+        </div>
       </div>
       {confirmedRoundRobin && <p>Confirmed places shown separately.</p>}
       <table className="intermission-standings">

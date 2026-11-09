@@ -67,8 +67,10 @@
   font-size: clamp(22px, min(2.8vw, 5vh), 52px);
   line-height: 1.12;
 }
-.intermission-section-heading > span {
-  flex-shrink: 0;
+.intermission-pool-status {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
 }
 .intermission-set-count {
   color: var(--event-muted);
@@ -216,11 +218,16 @@
   min-width: 3ch;
   text-align: right;
 }
-.broadcast-intermission .intermission-timer {
+.broadcast-intermission :is(.intermission-timer, .intermission-pool-meter) {
   --surface-2: var(--event-rule);
   --accent: var(--event-orange);
-  width: clamp(84px, 13vw, 220px);
   height: clamp(5px, 0.6vh, 8px);
+}
+.broadcast-intermission .intermission-timer {
+  width: clamp(84px, 13vw, 220px);
+}
+.broadcast-intermission .intermission-pool-meter {
+  width: clamp(54px, 8vw, 140px);
 }
 .event-overlay.is-intermission .broadcast-offline {
   left: 0;
