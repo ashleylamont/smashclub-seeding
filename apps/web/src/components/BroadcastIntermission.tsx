@@ -252,8 +252,18 @@ function PageTimer({ seconds, onNext }: { seconds: number; onNext: () => void })
       window.clearTimeout(turn);
     };
   }, [duration, onNext]);
+  const remaining = Math.ceil((duration - elapsed) / 1000);
   return (
-    <Progress className="intermission-timer" label="Page rotation" value={elapsed} max={duration} />
+    <span className="intermission-countdown">
+      <Progress
+        className="intermission-timer"
+        label="Page rotation"
+        value={elapsed}
+        max={duration}
+        aria-valuetext={`${remaining} seconds until next page`}
+      />
+      <span aria-hidden="true">{remaining}s</span>
+    </span>
   );
 }
 

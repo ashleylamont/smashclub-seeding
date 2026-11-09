@@ -206,6 +206,16 @@
   font-family: var(--font-body);
   font-size: 0.85em;
 }
+.intermission-countdown {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--event-orange);
+}
+.intermission-countdown > span {
+  min-width: 3ch;
+  text-align: right;
+}
 .broadcast-intermission .intermission-timer {
   --surface-2: var(--event-rule);
   --accent: var(--event-orange);

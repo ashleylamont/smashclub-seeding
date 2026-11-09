@@ -251,6 +251,8 @@ test('automatic source rotates, pauses, hands off to the selected station and re
   await page.clock.fastForward(5000);
   await expect(progress).toContainText('Page 1 /');
   await expect(meter).toHaveAttribute('value', '5000');
+  await expect(meter).toHaveAttribute('aria-valuetext', '5 seconds until next page');
+  await expect(progress.getByText('5s', { exact: true })).toBeVisible();
   await fits(page);
   await page.screenshot({ path: testInfo.outputPath('intermission-timer-1280.png') });
   await progress.getByRole('button', { name: 'Next page', exact: true }).press('Enter');
