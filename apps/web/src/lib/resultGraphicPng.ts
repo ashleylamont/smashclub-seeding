@@ -394,7 +394,7 @@ export async function renderResultsPng(
   tiles.forEach((tile, index) => drawTile(ctx, tile, index, portraits, bundled));
 
   const footer =
-    context.kind === 'pool' ? 'CONFIRMED POOL PLACES' : 'CONFIRMED FINISHES THROUGH 8TH';
+    context.kind === 'pool' ? 'POOL PLACES' : 'TOP 8 PLACES';
   const caption = `${footer}  /  ${context.format.toUpperCase()}`;
   label(ctx, caption, PADDING, height - 20, WIDTH - 2 * PADDING, `700 12px ${mono}`, muted);
   if (bundled.size) {
