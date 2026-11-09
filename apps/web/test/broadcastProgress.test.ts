@@ -123,6 +123,40 @@ describe('OBS intermission source choices and bounded pages', () => {
     ]);
   });
 
+  it('uses one stable recent scene and gives Auto first sight of competitive outcomes', () => {
+    const data = fixture(4, false);
+    const base = data.matches.find((match) => match.player1Id && match.player2Id)!;
+    const dated = (id: string, minute: number) => ({
+      ...base,
+      id,
+      status: 'complete',
+      outcome: 'played',
+      winnerId: base.player1Id,
+      score1: 2,
+      score2: 1,
+      resultUpdatedAt: `2026-10-04T00:${minute}:00.000Z`,
+    });
+    expect(broadcastProgressPages(data).some((page) => page.kind === 'recent-results')).toBe(false);
+    data.matches.push(
+      dated('older', 10),
+      dated('recent', 11),
+      { ...dated('latest', 12), outcome: 'forfeit', score1: -1, score2: 0 },
+      { ...dated('bye', 13), outcome: 'bye', player2Id: null },
+      { ...dated('draft', 14), status: 'playing' },
+      { ...dated('wrong-winner', 15), winnerId: 'unrelated' },
+      { ...dated('unknown-time', 16), resultUpdatedAt: 'unknown' },
+      { ...dated('missing-time', 17), resultUpdatedAt: null },
+    );
+    const recent = broadcastProgressPages(data).at(-1);
+    expect(recent?.kind === 'recent-results' && recent.matches.map(({ id }) => id)).toEqual([
+      'latest',
+      'recent',
+    ]);
+    expect(broadcastProgressPages(data, true)[0]).toEqual(recent);
+    data.plan.status = 'complete';
+    expect(broadcastProgressPages(data, true).at(-2)).toEqual(recent);
+  });
+
   it('keeps mixed-stage pools, all entrants and actual completed summaries without inventing winners', () => {
     const data = fixture(4);
     const base = data.matches[0]!;

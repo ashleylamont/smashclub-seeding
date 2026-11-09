@@ -30,7 +30,7 @@ These synthetic accounts exist only in the local harness. Its database resets wh
 
 ## OBS
 
-Add the overlay URL as a 1920×1080 browser source above the capture card. Auto shows tournament progress between sets and rotates pages every 10 seconds. Use `?presentation=gameplay` to keep gameplay visible between sets, or `?presentation=progress` to keep the progress scene. The gameplay aperture is approximately x=384, y=140, width=1498, height=842 (16:9). Position/scale the capture source underneath it. The overlay itself is transparent in that region.
+Add the overlay URL as a 1920×1080 browser source above the capture card. Auto shows tournament progress between sets and rotates pages every 10 seconds. If a confirmed result is available, Auto opens on Recent results after gameplay. Available fighter portraits show current profile mains. Use `?presentation=gameplay` to keep gameplay visible between sets, or `?presentation=progress` to keep the progress scene. The gameplay aperture is approximately x=384, y=140, width=1498, height=842 (16:9). Position/scale the capture source underneath it. The overlay itself is transparent in that region.
 
 `?station=Stage` focuses the scoreboard on that station; station IDs also work. The sidebar selects distinct available players. Screens refresh every five seconds. The treatment is bone, ink and vermilion, with condensed typography and a club-poster layout.
 

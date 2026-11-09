@@ -256,6 +256,7 @@ test('automatic source rotates, pauses, hands off to the selected station and re
     })
     .toBe(true);
   await expect(progress).toContainText('Page 1 /');
+  await expect(progress.getByRole('heading', { name: 'Recent results' })).toBeVisible();
   await expect(meter).toHaveAttribute('max', '10000');
   await page.clock.fastForward(5000);
   await expect(progress).toContainText('Page 1 /');
@@ -315,6 +316,103 @@ test('automatic source rotates, pauses, hands off to the selected station and re
   await expect(page.getByRole('region', { name: 'Transparent game capture area' })).toBeVisible();
   expect(fixture.unexpected).toEqual([]);
 });
+
+for (const [width, height] of [
+  [1280, 720],
+  [1920, 1080],
+] as const)
+  test(`${width}px recent results select the newest confirmed outcomes inside the source scope`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height });
+    await page.emulateMedia({ colorScheme: width === 1280 ? 'dark' : 'light' });
+    const { snapshot, responses, unexpected } = await mockEvent(page, { idle: true });
+    const base = snapshot.matches.find(
+      (match) => match.stage === 'group' && match.division === 'upper' && match.player2Id,
+    )!;
+    const result = (id: string, minute: number, facts: Partial<LiveMatch> = {}) => ({
+      ...base,
+      id,
+      poolIndex: 0,
+      status: 'complete',
+      outcome: 'played',
+      winnerId: base.player1Id,
+      score1: 2,
+      score2: 1,
+      resultUpdatedAt: `2026-10-04T00:${String(minute).padStart(2, '0')}:00.000Z`,
+      ...facts,
+    });
+    const played = result('new-played', 12, {
+      player1Name: TEAM_ALIAS,
+      player2Name: `Opponent · ${TEAM_ALIAS}`,
+      player1Characters: ['mario'],
+      player2Characters: width === 1280 ? ['steve'] : ['link'],
+    });
+    const forfeit = result('forfeit', 11, {
+      outcome: 'forfeit',
+      winnerId: base.player2Id!,
+      score1: -1,
+      score2: 0,
+    });
+    responses['eventOps.snapshot'] = {
+      ...snapshot,
+      nativeBrackets: [],
+      matches: [
+        result('outside-scope', 16, { poolIndex: 1 }),
+        result('unconfirmed-draft', 15, {
+          status: 'playing',
+          stationId: snapshot.stations[1]!.id,
+          score1: 7,
+          score2: 5,
+        }),
+        result('invalid-winner', 14, { winnerId: 'not-an-entrant' }),
+        result('newer-bye', 13, { outcome: 'bye', player2Id: null }),
+        played,
+        forfeit,
+        result('older-played', 10),
+      ],
+    };
+    await page.goto(
+      `/overlay/${PLAN_ID}?station=${snapshot.stations[0]!.id}&pool=upper%3A0&controls=0`,
+    );
+    const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
+    await expect(progress.getByRole('heading', { name: 'Recent results' })).toBeVisible();
+    await expect(progress.getByText('Page 1 / 2', { exact: true })).toBeVisible();
+    await expect(progress.locator('[data-match-id]')).toHaveCount(2);
+    await expect(progress.locator('[data-match-id]').first()).toHaveAttribute(
+      'data-match-id',
+      played.id,
+    );
+    await expect(progress.locator('[data-match-id]').last()).toHaveAttribute(
+      'data-match-id',
+      forfeit.id,
+    );
+    const playedCard = progress.locator(`[data-match-id="${played.id}"]`);
+    const forfeitCard = progress.locator(`[data-match-id="${forfeit.id}"]`);
+    await expect(playedCard.getByLabel('Score 2', { exact: true })).toBeVisible();
+    await expect(playedCard.getByLabel('Score 1', { exact: true })).toBeVisible();
+    await expect(playedCard.locator('[data-winner]')).toContainText(TEAM_ALIAS);
+    await expect(playedCard.locator('img')).toHaveCount(width === 1280 ? 1 : 2);
+    await expect(
+      progress.getByText('Profile mains · Fighter artwork', { exact: false }),
+    ).toBeVisible();
+    await expect(forfeitCard.getByText('Forfeit', { exact: true })).toBeVisible();
+    await expect(forfeitCard.getByLabel(/^Score /)).toHaveCount(0);
+    await fits(page);
+    const firstScore = (await playedCard.getByLabel('Score 2', { exact: true }).boundingBox())!;
+    const secondScore = (await playedCard.getByLabel('Score 1', { exact: true }).boundingBox())!;
+    expect(Math.abs(firstScore.y - secondScore.y)).toBeLessThanOrEqual(1);
+    expect(
+      (await new AxeBuilder({ page }).include('.broadcast-intermission').analyze()).violations,
+    ).toEqual([]);
+    await page.screenshot({
+      path: testInfo.outputPath(`intermission-recent-results-${width}.png`),
+    });
+    await page.keyboard.press('ArrowRight');
+    await expect(progress.getByRole('heading', { name: /Pool A/ })).toBeVisible();
+    await expect(progress.getByText('Page 2 / 2', { exact: true })).toBeVisible();
+    expect(unexpected).toEqual([]);
+  });
 
 test('reduced motion retains manual pages, and interruptions keep the last known data', async ({
   page,
@@ -564,10 +662,12 @@ for (const [width, theme] of [
     };
     await page.goto(`/overlay/${PLAN_ID}?station=${station!.id}&presentation=auto&controls=0`);
     const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
+    await expect(progress.getByRole('heading', { name: 'Recent results' })).toBeVisible();
+    await page.keyboard.press('ArrowRight');
     await expect(progress.getByRole('heading', { name: /pool/i })).toBeVisible();
     await page.keyboard.press('ArrowRight');
     const upper = progress.getByRole('table', { name: 'Linked Upper Championship bracket' });
-    await expect(progress).toContainText('Page 2 / 4');
+    await expect(progress).toContainText('Page 3 / 5');
     await expect(progress).not.toContainText(/Section \d+ \/ /);
     await expect(upper.getByRole('row', { name: /Imported played set/ })).toContainText('2–0');
     await expect(upper.getByRole('row', { name: /Imported played set/ })).toContainText(
@@ -589,7 +689,7 @@ for (const [width, theme] of [
     ).toEqual([]);
 
     await page.keyboard.press('ArrowRight');
-    await expect(progress).toContainText('Page 3 / 4');
+    await expect(progress).toContainText('Page 4 / 5');
     await expect(upper).toContainText('Awaiting opponent');
     await expect(upper).not.toContainText('TBD');
     await fits(page);
@@ -612,7 +712,7 @@ for (const [width, theme] of [
       winnerId: lower.player2Id,
     });
     await page.clock.runFor(5000);
-    await expect(progress).toBeVisible();
+    await expect(progress.getByRole('heading', { name: 'Recent results' })).toBeVisible();
     await page.keyboard.press('ArrowLeft');
     await expect(lowerTable).toContainText('1–2');
 
@@ -689,6 +789,7 @@ for (const [width, height, theme] of [
     await expect(progress.getByRole('table')).toBeVisible();
     const pages = broadcastProgressPages(pools);
     const firstQualifier = pages.findIndex((item) => item.kind === 'qualification');
+    const lastQualifier = pages.findLastIndex((item) => item.kind === 'qualification');
     const upperHeading = progress.getByRole('heading', {
       name: 'Upper Championship qualification',
     });
@@ -696,7 +797,7 @@ for (const [width, height, theme] of [
       name: 'Lower Championship qualification',
     });
     const seen = new Set<string>();
-    for (let index = 0; index < pages.length; index++) {
+    for (let index = 0; index <= lastQualifier; index++) {
       await expect(progress).toContainText(`Page ${index + 1} / ${pages.length}`);
       if (index >= firstQualifier) {
         await fits(page);
@@ -722,7 +823,7 @@ for (const [width, height, theme] of [
           ).toEqual([]);
         }
       }
-      if (index < pages.length - 1) await page.keyboard.press('ArrowRight');
+      if (index < lastQualifier) await page.keyboard.press('ArrowRight');
     }
     expect(seen.size).toBe(12);
     await expect(lowerHeading).toBeVisible();
@@ -732,7 +833,8 @@ for (const [width, height, theme] of [
     const mixed = { ...snapshot, pendingFinals: fields.slice(1) };
     fixture.responses['eventOps.snapshot'] = mixed;
     const mixedPages = broadcastProgressPages(mixed);
-    const lastPage = `Page ${mixedPages.length} / ${mixedPages.length}`;
+    const lastMixedQualifier = mixedPages.findLastIndex((item) => item.kind === 'qualification');
+    const lastPage = `Page ${lastMixedQualifier + 1} / ${mixedPages.length}`;
     await expect
       .poll(async () => {
         await page.clock.runFor(2000);
@@ -742,7 +844,7 @@ for (const [width, height, theme] of [
     await expect(lowerHeading).toBeVisible();
     await expect(progress).not.toContainText(/Section \d+ \/ /);
     const firstDraw = mixedPages.findIndex((item) => item.kind === 'bracket');
-    for (let i = mixedPages.length - 1; i > firstDraw; i--) await page.keyboard.press('ArrowLeft');
+    for (let i = lastMixedQualifier; i > firstDraw; i--) await page.keyboard.press('ArrowLeft');
     await expect(progress.locator('.event-bracket-match').first()).toBeVisible();
     await expect(upperHeading).toHaveCount(0);
     expect(fixture.unexpected).toEqual([]);

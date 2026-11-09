@@ -6,6 +6,7 @@ import {
   liveBracketSide,
 } from './eventBracket';
 import { poolStandings } from './eventQueue';
+import { intermissionRecentResults } from './broadcastResults';
 import type { LiveMatch } from './eventDisplay';
 import type { PublicFinalsField } from './qualification';
 import type { NativeBracketView } from '../components/EventNightBoard';
@@ -61,6 +62,7 @@ export type ProgressPage =
       matches: LiveMatch[];
     }
   | (PublicFinalsField & { kind: 'qualification'; key: string })
+  | { kind: 'recent-results'; key: 'recent-results'; matches: LiveMatch[] }
   | { kind: 'summary'; key: 'summary' };
 
 const chunks = <T>(items: T[], count: number): T[][] =>
@@ -109,7 +111,7 @@ function laneWindows(lane: ReturnType<typeof liveBracketLanes>[number]) {
   });
 }
 
-export function broadcastProgressPages(data: ProgressData): ProgressPage[] {
+export function broadcastProgressPages(data: ProgressData, preferRecent = false): ProgressPage[] {
   const pages: ProgressPage[] = [];
   const roundRobin = isNativeRoundRobin(data.plan);
   if (roundRobin) {
@@ -193,7 +195,20 @@ export function broadcastProgressPages(data: ProgressData): ProgressPage[] {
       }),
     );
   }
-  if (!pages.length || ['complete', 'cancelled'].includes(data.plan.status))
-    pages.push({ kind: 'summary', key: 'summary' });
+  const closed = ['complete', 'cancelled'].includes(data.plan.status);
+  const needsSummary = !pages.length || closed;
+  const recent = intermissionRecentResults(data.matches);
+  if (recent.length) {
+    const page = { kind: 'recent-results', key: 'recent-results', matches: recent } as const;
+    if (
+      preferRecent &&
+      !closed &&
+      pages[0]?.kind !== 'round-robin-results' &&
+      recent.some((match) => match.outcome !== 'bye')
+    )
+      pages.unshift(page);
+    else pages.push(page);
+  }
+  if (needsSummary) pages.push({ kind: 'summary', key: 'summary' });
   return pages;
 }

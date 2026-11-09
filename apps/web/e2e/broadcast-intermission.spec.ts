@@ -174,10 +174,12 @@ test('independent OBS and player views follow native play, confirmed results and
       score2: 0,
       outcome: 'played',
     });
-    await expect(progress).toBeVisible();
+    await expect(progress.getByRole('heading', { name: 'Recent results' })).toBeVisible();
+    await expect(progress.getByText(/^Page 1 \/ /)).toBeVisible();
     const result = progress.locator(`[data-match-id="${first.id}"]`);
-    await expect(result).toContainText('Final result');
-    await expect(result.locator('.is-winner')).toContainText(first.player1Name!);
+    await expect(result.getByLabel('Score 2', { exact: true })).toBeVisible();
+    await expect(result.getByLabel('Score 0', { exact: true })).toBeVisible();
+    await expect(result.locator('[data-winner]')).toContainText(first.player1Name!);
     const before = (
       await query<Snapshot>(page.request, 'eventOps.snapshot', { planId })
     ).matches.map((match) => [

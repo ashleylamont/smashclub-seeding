@@ -10,6 +10,7 @@ import { poolTitle } from '../lib/poolFlow';
 import { matchParticipantName, matchPresentation } from '../lib/matchPresentation';
 import { finalsFieldLabel, qualifierDetail, qualifierLabel } from '../lib/qualification';
 import { EventBracketLane } from './EventBracketLane';
+import { IntermissionRecentResults } from './IntermissionRecentResults';
 import { NemesisMark } from './NemesisMark';
 import { OverlayTwitchLink } from './OverlayTwitch';
 import { Button } from './ui/Button';
@@ -35,14 +36,16 @@ export function BroadcastIntermission({
   announcement,
   controls,
   twitchChannel,
+  preferRecent,
 }: {
   data: ProgressData;
   seconds: number;
   announcement: string;
   controls: boolean;
   twitchChannel: string;
+  preferRecent: boolean;
 }) {
-  const pages = useMemo(() => broadcastProgressPages(data), [data]);
+  const pages = useMemo(() => broadcastProgressPages(data, preferRecent), [data, preferRecent]);
   const [current, setCurrent] = useState('');
   const [viewportWidth, setViewportWidth] = useState(() => innerWidth);
   useEffect(() => {
@@ -129,6 +132,8 @@ export function BroadcastIntermission({
           <QualificationPage page={page} entrants={data.entrants} />
         ) : page.kind === 'linked' ? (
           <LinkedBracketPage page={page} closed={closed} />
+        ) : page.kind === 'recent-results' ? (
+          <IntermissionRecentResults matches={page.matches} />
         ) : page.kind === 'bracket' ? (
           <>
             <div className="intermission-section-heading">

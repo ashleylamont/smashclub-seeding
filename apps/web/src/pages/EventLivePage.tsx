@@ -290,6 +290,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
             announcement={announcement?.message ?? ''}
             controls={search.get('controls') !== '0'}
             twitchChannel={twitch}
+            preferRecent={presentation === 'auto'}
           />
         )}
         {(!online || query.isError) && (
