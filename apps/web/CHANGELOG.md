@@ -2,6 +2,12 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.14.1
+
+### Patch Changes
+
+- 9 November 2026 · **Fix** · Tweak wording of result graphics to sound less vibe coded. [#362](https://github.com/ashleylamont/smashclub-seeding/pull/362) · [build a05128d](https://github.com/ashleylamont/smashclub-seeding/commit/a05128d5abf32633cff7e6220acb0e33f590e6b3)
+
 ## 0.14.0
 
 ### Minor Changes
