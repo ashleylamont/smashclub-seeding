@@ -3,7 +3,8 @@
   min-width: 0;
   gap: var(--s3);
 }
-.intermission-recent > h2 {
+.event-display .intermission-recent > h2 {
+  margin-bottom: 0;
   font-size: clamp(24px, 2.9vw, 55px);
 }
 .intermission-recent-cards,

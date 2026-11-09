@@ -181,7 +181,6 @@
   border-top: 1px solid var(--event-rule);
   padding-top: var(--s3);
 }
-.intermission-footer-info,
 .intermission-navigation,
 .intermission-pagination,
 .intermission-controls {
@@ -190,12 +189,10 @@
   align-items: center;
   gap: var(--s3);
 }
-.intermission-footer-info,
 .intermission-navigation {
   justify-content: space-between;
 }
-.intermission-footer-info p {
-  flex: 1 1 50%;
+.intermission-announcement {
   margin: 0;
   overflow-wrap: anywhere;
 }

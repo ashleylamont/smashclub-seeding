@@ -194,12 +194,7 @@ export function BroadcastIntermission({
         )}
       </div>
       <footer className="intermission-footer">
-        {(announcement || twitchChannel) && (
-          <div className="intermission-footer-info">
-            {announcement && <p>{announcement}</p>}
-            {twitchChannel && <OverlayTwitchLink channel={twitchChannel} />}
-          </div>
-        )}
+        {announcement && <p className="intermission-announcement">{announcement}</p>}
         <div className="intermission-navigation">
           <div className="intermission-pagination">
             <span>
@@ -218,6 +213,7 @@ export function BroadcastIntermission({
                 />
               ))}
           </div>
+          {twitchChannel && <OverlayTwitchLink channel={twitchChannel} />}
           {controls && multiplePages && (
             <div className="intermission-controls">
               <Button onClick={() => move(-1)}>Previous page</Button>

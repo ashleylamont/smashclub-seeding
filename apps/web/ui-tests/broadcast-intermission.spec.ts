@@ -325,7 +325,10 @@ for (const [width, height] of [
     page,
   }, testInfo) => {
     await page.setViewportSize({ width, height });
-    await page.emulateMedia({ colorScheme: width === 1280 ? 'dark' : 'light' });
+    await page.emulateMedia({
+      colorScheme: width === 1280 ? 'dark' : 'light',
+      reducedMotion: width === 1280 ? 'no-preference' : 'reduce',
+    });
     const { snapshot, responses, unexpected } = await mockEvent(page, { idle: true });
     const base = snapshot.matches.find(
       (match) => match.stage === 'group' && match.division === 'upper' && match.player2Id,
@@ -372,12 +375,18 @@ for (const [width, height] of [
         result('older-played', 10),
       ],
     };
+    const sourceOptions = width === 1280 ? '&cycleSeconds=60&twitch=smashclub' : '';
     await page.goto(
-      `/overlay/${PLAN_ID}?station=${snapshot.stations[0]!.id}&pool=upper%3A0&controls=0`,
+      `/overlay/${PLAN_ID}?station=${snapshot.stations[0]!.id}&pool=upper%3A0${sourceOptions}`,
     );
     const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
     await expect(progress.getByRole('heading', { name: 'Recent results' })).toBeVisible();
     await expect(progress.getByText('Page 1 / 2', { exact: true })).toBeVisible();
+    await expect(progress.getByRole('button', { name: 'Next page', exact: true })).toBeVisible();
+    if (width === 1280) {
+      await expect(progress.getByRole('link', { name: /twitch\.tv\/smashclub/ })).toBeVisible();
+      await expect(progress.getByRole('progressbar', { name: 'Page rotation' })).toBeVisible();
+    }
     await expect(progress.locator('[data-match-id]')).toHaveCount(2);
     await expect(progress.locator('[data-match-id]').first()).toHaveAttribute(
       'data-match-id',
