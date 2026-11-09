@@ -35,10 +35,14 @@ for (const theme of ['dark', 'light'] as const)
       const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
       await expect(progress).toBeVisible();
       if (width !== 390) await page.keyboard.press('ArrowLeft');
+      else {
+        await expect(progress.getByRole('heading', { name: 'Waiting for the draw' })).toBeVisible();
+        await expect(progress).toContainText('Page 1 / 1');
+        await expect(progress.getByRole('progressbar')).toHaveCount(0);
+        await expect(progress).not.toContainText('0 / 0');
+      }
       const shortUrl = `${new URL(page.url()).origin}/e/${publicCode}`;
-      await expect(progress).toContainText(
-        `Full event information and recorded results at ${shortUrl}`,
-      );
+      await expect(progress).toContainText(`Event info & results ${shortUrl}`);
       await fits(page);
       expect(
         (await new AxeBuilder({ page }).include('.broadcast-intermission').analyze()).violations,
@@ -83,7 +87,7 @@ async function fits(page: Page) {
     .poll(() =>
       page
         .locator(
-          '.intermission-heading h1, .intermission-section-heading h2, .intermission-section-heading > span, .intermission-standings td, .event-bracket-match small, .event-bracket-match > div > span',
+          '.intermission-heading h1, .intermission-section-heading h2, .intermission-section-heading > span, .intermission-standings td, .event-bracket-match small, .event-bracket-match > div > span, .intermission-footer button, .intermission-pagination',
         )
         .evaluateAll((elements) =>
           elements
@@ -92,6 +96,7 @@ async function fits(page: Page) {
               return (
                 element.scrollWidth > element.clientWidth + 1 ||
                 box.right > innerWidth + 1 ||
+                box.bottom > innerHeight + 1 ||
                 box.left < -1
               );
             })
@@ -202,7 +207,9 @@ for (const width of [1280, 1920]) {
       await page.goto(`/overlay/${PLAN_ID}?presentation=progress&controls=0`);
       const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
       await expect(progress.getByRole('table')).toBeVisible();
-      await expect(progress).toContainText('Pool order and final seeds are separate decisions');
+      await expect(progress).toContainText('10 / 10 sets complete');
+      await expect(progress).not.toContainText(/Section \d+ \/|final seeds are separate decisions/);
+      await expect(progress.getByText(/^Page \d+ \/ \d+$/)).toHaveCount(1);
       await fits(page);
       expect(
         (
@@ -221,12 +228,14 @@ for (const width of [1280, 1920]) {
 
 test('automatic source rotates, pauses, hands off to the selected station and returns after its result', async ({
   page,
-}) => {
+}, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
   await page.clock.install({ time: new Date('2026-10-04T00:00:00Z') });
+  await page.clock.pauseAt(new Date('2026-10-04T00:01:00Z'));
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   const fixture = await mockEvent(page, { idle: true, bracket: true });
   const station = fixture.snapshot.stations[0]!;
-  await page.goto(`/overlay/${PLAN_ID}?station=${station.id}&presentation=auto&cycleSeconds=15`);
+  await page.goto(`/overlay/${PLAN_ID}?station=${station.id}`);
   const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
   // An in-flight snapshot can still describe the previous station state after the clock advances.
   const advanceUntilProgress = (visible: boolean) =>
@@ -236,15 +245,35 @@ test('automatic source rotates, pauses, hands off to the selected station and re
         return progress.isVisible();
       })
       .toBe(visible);
+  const meter = progress.getByRole('progressbar', { name: 'Page rotation' });
   await expect(progress).toContainText('Page 1 /');
-  await page.clock.fastForward(15000);
+  await expect(meter).toHaveAttribute('max', '10000');
+  await page.clock.fastForward(5000);
+  await expect(progress).toContainText('Page 1 /');
+  await expect(meter).toHaveAttribute('value', '5000');
+  await fits(page);
+  await page.screenshot({ path: testInfo.outputPath('intermission-timer-1280.png') });
+  await progress.getByRole('button', { name: 'Next page', exact: true }).press('Enter');
   await expect(progress).toContainText('Page 2 /');
-  await page.getByRole('button', { name: 'Pause rotation', exact: true }).click();
+  await expect(meter).toHaveAttribute('value', '0');
+  await page.clock.fastForward(5000);
+  await expect(progress).toContainText('Page 2 /');
+  await expect(meter).toHaveAttribute('value', '5000');
+  await page.clock.fastForward(5000);
+  await expect(progress).toContainText('Page 3 /');
+  await expect(meter).toHaveAttribute('value', '0');
+  await progress.getByRole('button', { name: 'Pause rotation', exact: true }).press('Enter');
+  await expect(progress.getByText('Paused', { exact: true })).toBeVisible();
+  await expect(meter).toHaveCount(0);
   await page.clock.fastForward(60000);
-  await expect(progress).toContainText('Page 2 /');
-  await page.getByRole('button', { name: 'Resume rotation', exact: true }).click();
-  await page.clock.fastForward(15000);
-  await expect(progress).not.toContainText('Page 2 /');
+  await expect(progress).toContainText('Page 3 /');
+  await progress.getByRole('button', { name: 'Resume rotation', exact: true }).press('Enter');
+  await expect(meter).toHaveAttribute('value', '0');
+  await page.clock.fastForward(9000);
+  await expect(progress).toContainText('Page 3 /');
+  await expect(meter).toHaveAttribute('value', '9000');
+  await page.clock.fastForward(1000);
+  await expect(progress).toContainText('Page 4 /');
   const match = fixture.snapshot.matches.find((item) => item.player1Id && item.player2Id)!;
   Object.assign(match, { status: 'playing', stationId: station.id });
   Object.assign(station, { currentMatchId: match.id, status: 'occupied' });
@@ -284,7 +313,8 @@ test('reduced motion retains manual pages, and interruptions keep the last known
   await page.goto(`/overlay/${PLAN_ID}?presentation=progress&controls=0`);
   const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
   await expect(progress).toContainText('Page 1 /');
-  await expect(progress).toContainText('manual pages');
+  await expect(progress.getByText('Manual', { exact: true })).toBeVisible();
+  await expect(progress.getByRole('progressbar')).toHaveCount(0);
   await page.clock.fastForward(60000);
   await expect(progress).toContainText('Page 1 /');
   await page.keyboard.press('ArrowRight');
@@ -525,7 +555,8 @@ for (const [width, theme] of [
     await expect(progress.getByRole('heading', { name: /pool/i })).toBeVisible();
     await page.keyboard.press('ArrowRight');
     const upper = progress.getByRole('table', { name: 'Linked Upper Championship bracket' });
-    await expect(progress).toContainText('Section 1 / 2');
+    await expect(progress).toContainText('Page 2 / 4');
+    await expect(progress).not.toContainText(/Section \d+ \/ /);
     await expect(upper.getByRole('row', { name: /Imported played set/ })).toContainText('2–0');
     await expect(upper.getByRole('row', { name: /Imported played set/ })).toContainText(
       `${TEAM_ALIAS} · Winner`,
@@ -546,7 +577,7 @@ for (const [width, theme] of [
     ).toEqual([]);
 
     await page.keyboard.press('ArrowRight');
-    await expect(progress).toContainText('Section 2 / 2');
+    await expect(progress).toContainText('Page 3 / 4');
     await expect(upper).toContainText('Awaiting opponent');
     await expect(upper).not.toContainText('TBD');
     await fits(page);
@@ -594,7 +625,7 @@ for (const [width, theme] of [
       path: testInfo.outputPath(`intermission-closed-linked-results-${width}.png`),
     });
     await page.keyboard.press('ArrowLeft');
-    await expect(progress).toContainText('Standings from recorded pool results.');
+    await expect(progress.getByRole('heading', { name: /Pool/ })).toBeVisible();
     await expect(progress.getByRole('columnheader', { name: 'No result' })).toBeVisible();
     expect(fixture.unexpected).toEqual([]);
   });
@@ -665,7 +696,7 @@ for (const [width, height, theme] of [
           await expect(upperHeading).toBeVisible();
           await expect(table).toContainText(TEAM_ALIAS);
           await expect(table).toContainText('Awaiting qualification');
-          await expect(progress).toContainText('Section 1 / 2');
+          await expect(progress).not.toContainText(/Section \d+ \/ /);
           await page.screenshot({
             path: testInfo.outputPath(`intermission-qualification-${width}.png`),
           });
@@ -697,7 +728,7 @@ for (const [width, height, theme] of [
       })
       .toBe(true);
     await expect(lowerHeading).toBeVisible();
-    await expect(progress).toContainText('Section 2 / 2');
+    await expect(progress).not.toContainText(/Section \d+ \/ /);
     const firstDraw = mixedPages.findIndex((item) => item.kind === 'bracket');
     for (let i = mixedPages.length - 1; i > firstDraw; i--) await page.keyboard.press('ArrowLeft');
     await expect(progress.locator('.event-bracket-match').first()).toBeVisible();

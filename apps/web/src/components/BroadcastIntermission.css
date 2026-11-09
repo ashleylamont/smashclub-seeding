@@ -9,12 +9,13 @@
   z-index: 1;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: var(--s5);
-  padding: 3vh 4vw;
+  gap: clamp(var(--s3), 2.3vh, var(--s5));
+  padding: 4vh 4vw 3vh;
   background: var(--event-ink);
   color: var(--event-bone);
   font-family: var(--font-body);
-  font-size: clamp(14px, 1.1vw, 22px);
+  font-size: clamp(var(--fs-md), min(1.7vw, 3.15vh), 32px);
+  line-height: 1.22;
 }
 .intermission-heading {
   display: flex;
@@ -24,8 +25,8 @@
   padding-bottom: var(--s4);
 }
 .broadcast-intermission .intermission-heading > svg {
-  width: clamp(32px, 3vw, 58px);
-  height: clamp(32px, 3vw, 58px);
+  width: clamp(32px, 4vw, 72px);
+  height: clamp(32px, 4vw, 72px);
   flex-shrink: 0;
   color: var(--event-red);
 }
@@ -34,17 +35,19 @@
   min-width: 0;
 }
 .intermission-heading h1 {
-  font-size: clamp(24px, 2.3vw, 44px);
+  font-size: clamp(24px, min(3.2vw, 5.8vh), 60px);
   line-height: 1.1;
   margin: 0;
   overflow-wrap: anywhere;
 }
 .intermission-heading p {
-  margin: 0 0 var(--s2);
+  margin: 0 0 var(--s1);
   color: var(--event-muted);
   font-size: 0.8em;
+  font-weight: 600;
 }
 .intermission-heading > span {
+  font-weight: 700;
   color: var(--event-orange);
 }
 .intermission-content {
@@ -56,15 +59,41 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: var(--s5);
+  gap: var(--s4);
+  margin-bottom: var(--s3);
 }
 .intermission-section-heading h2 {
   margin: 0;
-  font-size: clamp(22px, 2vw, 38px);
+  font-size: clamp(22px, min(2.8vw, 5vh), 52px);
+  line-height: 1.12;
 }
 .intermission-section-heading > span {
   flex-shrink: 0;
+}
+.intermission-set-count {
   color: var(--event-muted);
+  font-family: var(--font-number);
+  font-size: 0.85em;
+}
+.intermission-winner {
+  color: var(--event-orange);
+  font-weight: 700;
+}
+.intermission-summary {
+  display: grid;
+  align-content: center;
+  min-height: 100%;
+}
+.intermission-summary h2 {
+  margin-bottom: var(--s3);
+  font-size: clamp(26px, min(4.3vw, 7vh), 76px);
+}
+.intermission-public-link strong {
+  display: block;
+  margin-top: var(--s2);
+  color: var(--event-orange);
+  font-family: var(--font-number);
+  overflow-wrap: anywhere;
 }
 .intermission-standings {
   width: 100%;
@@ -80,12 +109,21 @@
   width: 54%;
 }
 .intermission-standings :is(th, td) {
-  padding: 1.2vh var(--s3);
+  padding: 1.35vh var(--s3);
   border-bottom: 1px solid var(--event-rule);
   overflow-wrap: anywhere;
 }
 .intermission-standings td:not(:first-child) {
   font-family: var(--font-number);
+}
+.intermission-standings tbody tr:nth-child(odd) {
+  background: color-mix(in srgb, var(--event-bone) 4%, var(--event-ink));
+}
+.intermission-standings tbody td:first-child {
+  font-weight: 700;
+}
+.intermission-standings .intermission-official-winner {
+  color: var(--event-orange);
 }
 .intermission-round-robin th:first-child {
   width: 18%;
@@ -111,12 +149,17 @@
 }
 .intermission-linked-score {
   font-family: var(--font-number);
+  font-weight: 700;
+}
+.intermission-content .event-bracket-lane {
+  margin-top: 0;
 }
 .intermission-content .event-bracket-lane > h4 {
   display: none;
 }
 .intermission-content .event-bracket-rounds {
   max-height: none;
+  padding-bottom: var(--s1);
 }
 .intermission-content .event-bracket-match {
   font-family: var(--font-body);
@@ -124,31 +167,50 @@
 }
 .intermission-content .event-bracket-match small {
   font-size: 0.8em;
+  margin-bottom: var(--s2);
 }
 .intermission-content .event-bracket-match > div {
   font-size: 1em;
+  padding-block: var(--s2);
 }
 .intermission-footer {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
+  display: grid;
   gap: var(--s3);
   border-top: 1px solid var(--event-rule);
   padding-top: var(--s3);
 }
-.intermission-footer p {
-  margin: 0;
-  max-width: 70%;
-  overflow-wrap: anywhere;
-}
-.intermission-footer > span {
-  font-family: var(--font-number);
-  color: var(--event-muted);
-}
+.intermission-footer-info,
+.intermission-navigation,
+.intermission-pagination,
 .intermission-controls {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: var(--s3);
+}
+.intermission-footer-info,
+.intermission-navigation {
+  justify-content: space-between;
+}
+.intermission-footer-info p {
+  flex: 1 1 50%;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.intermission-pagination {
+  font-family: var(--font-number);
+  font-weight: 700;
+}
+.intermission-rotation-state {
+  color: var(--event-muted);
+  font-family: var(--font-body);
+  font-size: 0.85em;
+}
+.broadcast-intermission .intermission-timer {
+  --surface-2: var(--event-rule);
+  --accent: var(--event-orange);
+  width: clamp(84px, 13vw, 220px);
+  height: clamp(5px, 0.6vh, 8px);
 }
 .event-overlay.is-intermission .broadcast-offline {
   left: 0;
@@ -163,8 +225,9 @@
   .intermission-heading > span {
     display: none;
   }
-  .intermission-heading > svg {
+  .broadcast-intermission .intermission-heading > svg {
     width: 32px;
+    height: 32px;
   }
   .intermission-section-heading {
     display: block;
