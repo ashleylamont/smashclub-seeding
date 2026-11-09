@@ -58,13 +58,14 @@
   border-color: var(--event-orange);
 }
 .intermission-recent-art {
+  --recent-portrait-height: clamp(60px, 14vh, 155px);
   grid-row: 1;
-  min-height: calc(clamp(60px, 14vh, 155px) + 1.65em);
+  min-height: calc(var(--recent-portrait-height) + 1.65em);
 }
 .intermission-recent-art img {
   display: block;
   width: 100%;
-  height: clamp(60px, 14vh, 155px);
+  height: var(--recent-portrait-height);
   object-fit: contain;
   object-position: center bottom;
 }
@@ -95,6 +96,19 @@
 }
 .intermission-recent-credit {
   margin: 0;
+}
+/* Give the score and credit room when aliases wrap more on a short stage. */
+@media (max-height: 800px) {
+  .intermission-recent-art {
+    --recent-portrait-height: clamp(48px, 10.5vh, 84px);
+  }
+  .intermission-recent,
+  .intermission-recent-card {
+    gap: var(--s2);
+  }
+  .intermission-recent-fighter {
+    padding: var(--s2);
+  }
 }
 @media (max-width: 700px) {
   .intermission-recent-cards {
