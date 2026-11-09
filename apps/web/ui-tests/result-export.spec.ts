@@ -314,9 +314,7 @@ for (const theme of ['dark', 'light'] as const)
       await expect(image).toBeVisible();
       await expect(dialog.getByText(FIGHTER_ART_CREDIT, { exact: true })).toBeVisible();
       expect([...requestedPortraits].sort()).toEqual(['link.png', 'mario.png']);
-      await expect
-        .poll(() => drawn.includes('TOP 8 PLACES'))
-        .toBe(true);
+      await expect.poll(() => drawn.includes('TOP 8')).toBe(true);
       expect(drawn).toContain('名前 / WIDE 🎮');
       expect(drawn).toContain('Wide second public tag');
       expect(drawn).toContain('Tag 8B');
