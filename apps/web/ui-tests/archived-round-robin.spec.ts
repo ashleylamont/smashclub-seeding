@@ -135,9 +135,7 @@ for (const theme of ['dark', 'light'] as const)
       await expect(
         progress.getByRole('heading', { name: 'Round-robin set records', exact: true }),
       ).toBeVisible();
-      await expect(
-        progress.getByText('Set and game records. Confirmed places are shown separately.'),
-      ).toBeVisible();
+      await expect(progress.getByText('Confirmed places shown separately.')).toBeVisible();
       await expect(progress.getByRole('row').nth(1)).toContainText(first!.name);
       await ready(page);
       await page.screenshot({

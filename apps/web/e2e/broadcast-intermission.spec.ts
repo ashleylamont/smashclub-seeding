@@ -102,6 +102,14 @@ test('independent OBS and player views follow native play, confirmed results and
   await page.goto(`/operate/${planId}?view=broadcast&station=${stationId}`);
   const panel = page.getByRole('tabpanel', { name: 'Broadcast', exact: true });
   await panel.getByRole('button', { name: 'Intermission browser sources', exact: true }).click();
+  await expect(panel.getByRole('link', { name: 'Gameplay-only overlay ↗' })).toHaveAttribute(
+    'href',
+    /presentation=gameplay/,
+  );
+  await expect(panel.getByRole('link', { name: 'Progress-only overlay ↗' })).toHaveAttribute(
+    'href',
+    /presentation=progress/,
+  );
   const link = panel.getByRole('link', { name: 'Automatic intermission overlay ↗', exact: true });
   const href = (await link.getAttribute('href'))!;
   expect(href).toContain('presentation=auto');
@@ -166,10 +174,12 @@ test('independent OBS and player views follow native play, confirmed results and
       score2: 0,
       outcome: 'played',
     });
-    await expect(progress).toBeVisible();
+    await expect(progress.getByRole('heading', { name: 'Recent results' })).toBeVisible();
+    await expect(progress.getByText(/^Page 1 \/ /)).toBeVisible();
     const result = progress.locator(`[data-match-id="${first.id}"]`);
-    await expect(result).toContainText('Final result');
-    await expect(result.locator('.is-winner')).toContainText(first.player1Name!);
+    await expect(result.getByLabel('Score 2', { exact: true })).toBeVisible();
+    await expect(result.getByLabel('Score 0', { exact: true })).toBeVisible();
+    await expect(result.locator('[data-winner]')).toContainText(first.player1Name!);
     const before = (
       await query<Snapshot>(page.request, 'eventOps.snapshot', { planId })
     ).matches.map((match) => [
@@ -318,9 +328,7 @@ test('independent OBS and player views follow native play, confirmed results and
       progress.getByRole('heading', { name: 'Recorded tournament results' }),
     ).toBeVisible();
     const shortUrl = `${new URL(obs.url()).origin}/e/${publicCode}`;
-    await expect(progress).toContainText(
-      `Full event information and recorded results at ${shortUrl}`,
-    );
+    await expect(progress).toContainText(`Event info & results ${shortUrl}`);
     await obs.screenshot({ path: testInfo.outputPath('real-intermission-short-link-1920.png') });
     await hub.goto(`${shortUrl}#results`);
     await expect(hub).toHaveURL(

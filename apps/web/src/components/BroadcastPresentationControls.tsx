@@ -1,5 +1,5 @@
 import { Select, SelectItem } from './ui/Select';
-import type { BroadcastPresentation } from '../lib/broadcastProgress';
+import { progressIntervals, type BroadcastPresentation } from '../lib/broadcastProgress';
 
 export function BroadcastPresentationControls({
   mode,
@@ -25,7 +25,7 @@ export function BroadcastPresentationControls({
       <label>
         Change progress page every
         <Select value={String(seconds)} onValueChange={(value) => onSeconds(Number(value))}>
-          {[15, 30, 60].map((value) => (
+          {progressIntervals.map((value) => (
             <SelectItem key={value} value={String(value)}>
               {value} seconds
             </SelectItem>

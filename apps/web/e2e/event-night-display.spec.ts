@@ -59,7 +59,7 @@ test('public night board and user-initiated overlay capture controls', async ({
     });
   });
   await page.setViewportSize({ width: 1920, height: 1080 });
-  await page.goto(`/overlay/${plan.id}?station=Stage&controls=0`);
+  await page.goto(`/overlay/${plan.id}?presentation=gameplay&station=Stage&controls=0`);
   await expect(page.getByLabel('Transparent game capture area')).toBeVisible();
   expect(
     await page.evaluate(

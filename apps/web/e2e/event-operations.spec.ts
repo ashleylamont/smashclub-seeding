@@ -172,7 +172,7 @@ test('rehearsal: two TOs, score approval, station safety, public board and OBS',
     await download.saveAs(testInfo.outputPath('pool-results.svg'));
     await page.screenshot({ path: testInfo.outputPath('live-board.png'), fullPage: true });
 
-    await page.goto(`/overlay/${planId}`);
+    await page.goto(`/overlay/${planId}?presentation=gameplay`);
     await expect(page.locator('.event-capture')).toBeVisible();
     const geometry = await page.locator('.event-capture').evaluate((element) => {
       const box = element.getBoundingClientRect();

@@ -386,7 +386,7 @@ test('live board and OBS recover a result missed while disconnected without a re
     const board = await screens.newPage();
     const overlay = await screens.newPage();
     await board.goto(`/live/${night.planId}`);
-    await overlay.goto(`/overlay/${night.planId}`);
+    await overlay.goto(`/overlay/${night.planId}?presentation=gameplay`);
     for (const page of [board, overlay])
       await expect(page.getByRole('progressbar', { name: 'Sets completed' })).toHaveAttribute(
         'value',

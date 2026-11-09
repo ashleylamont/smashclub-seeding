@@ -258,7 +258,7 @@ for (const theme of ['dark', 'light'] as const) {
       );
       await page.clock.install({ time: new Date('2026-10-04T00:00:00Z') });
       Object.assign(fixture.snapshot, { matches: [missing, named] });
-      await page.goto(`/overlay/${PLAN_ID}?controls=0`);
+      await page.goto(`/overlay/${PLAN_ID}?presentation=gameplay&controls=0`);
       const rail = page.getByRole('region', { name: 'Recent resolved sets' });
       const namedCard = rail.locator(`[data-match-id="${named.id}"]`);
       await expect(namedCard).toContainText('Advanced automatically · Bye');

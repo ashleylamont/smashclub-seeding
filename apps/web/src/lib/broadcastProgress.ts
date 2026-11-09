@@ -6,18 +6,22 @@ import {
   liveBracketSide,
 } from './eventBracket';
 import { poolStandings } from './eventQueue';
+import { intermissionRecentResults } from './broadcastResults';
 import type { LiveMatch } from './eventDisplay';
 import type { PublicFinalsField } from './qualification';
 import type { NativeBracketView } from '../components/EventNightBoard';
 
 export type BroadcastPresentation = 'gameplay' | 'auto' | 'progress';
+export const DEFAULT_PROGRESS_SECONDS = 10;
+export const progressIntervals = [DEFAULT_PROGRESS_SECONDS, 15, 30, 60] as const;
+
 export function broadcastPresentation(search: string): BroadcastPresentation {
   const mode = new URLSearchParams(search).get('presentation');
-  return mode === 'auto' || mode === 'progress' ? mode : 'gameplay';
+  return mode === 'gameplay' || mode === 'progress' ? mode : 'auto';
 }
-export function progressInterval(search: string) {
+export function progressInterval(search: string): number {
   const seconds = Number(new URLSearchParams(search).get('cycleSeconds'));
-  return seconds === 15 || seconds === 60 ? seconds : 30;
+  return progressIntervals.find((option) => option === seconds) ?? DEFAULT_PROGRESS_SECONDS;
 }
 export type ProgressData = {
   publicCode?: number;
@@ -36,14 +40,12 @@ type LinkedBracket = {
   slug: string | null;
 };
 export type ProgressPage =
-  | { kind: 'pool'; key: string; pool: Pool; players: Pool['players']; part: number; parts: number }
+  | { kind: 'pool'; key: string; pool: Pool; players: Pool['players'] }
   | {
       kind: 'round-robin-results';
       key: string;
       standings: Bracket['standings'];
       winnerId: Bracket['winnerId'];
-      part: number;
-      parts: number;
     }
   | {
       kind: 'bracket';
@@ -52,18 +54,15 @@ export type ProgressPage =
       lane: ReturnType<typeof liveBracketLanes>[number];
       matches: LiveMatch[];
       roundTitles: string[];
-      part: number;
-      parts: number;
     }
   | {
       kind: 'linked';
       key: string;
       bracket: LinkedBracket;
       matches: LiveMatch[];
-      part: number;
-      parts: number;
     }
-  | (PublicFinalsField & { kind: 'qualification'; key: string; part: number; parts: number })
+  | (PublicFinalsField & { kind: 'qualification'; key: string })
+  | { kind: 'recent-results'; key: 'recent-results'; matches: LiveMatch[] }
   | { kind: 'summary'; key: 'summary' };
 
 const chunks = <T>(items: T[], count: number): T[][] =>
@@ -112,7 +111,7 @@ function laneWindows(lane: ReturnType<typeof liveBracketLanes>[number]) {
   });
 }
 
-export function broadcastProgressPages(data: ProgressData): ProgressPage[] {
+export function broadcastProgressPages(data: ProgressData, preferRecent = false): ProgressPage[] {
   const pages: ProgressPage[] = [];
   const roundRobin = isNativeRoundRobin(data.plan);
   if (roundRobin) {
@@ -120,15 +119,12 @@ export function broadcastProgressPages(data: ProgressData): ProgressPage[] {
       (bracket) => bracket.division === 'upper' && bracket.stage === 'main' && bracket.complete,
     );
     if (result) {
-      const parts = chunks(result.standings, 6);
-      parts.forEach((standings, index) => {
+      chunks(result.standings, 6).forEach((standings, index) => {
         pages.push({
           kind: 'round-robin-results',
           key: `round-robin-results:${result.id}:${index}`,
           standings,
           winnerId: result.winnerId,
-          part: index + 1,
-          parts: parts.length,
         });
       });
     }
@@ -136,15 +132,12 @@ export function broadcastProgressPages(data: ProgressData): ProgressPage[] {
   for (const pool of poolStandings(data.matches).sort(
     (a, b) => a.division.localeCompare(b.division) || a.poolIndex - b.poolIndex,
   )) {
-    const parts = chunks(pool.players, 6);
-    parts.forEach((players, index) =>
+    chunks(pool.players, 6).forEach((players, index) =>
       pages.push({
         kind: 'pool',
         key: `pool:${pool.division}:${pool.poolIndex}:${index}`,
         pool,
         players,
-        part: index + 1,
-        parts: parts.length,
       }),
     );
   }
@@ -167,10 +160,8 @@ export function broadcastProgressPages(data: ProgressData): ProgressPage[] {
               ? round === 1
                 ? 'Grand final'
                 : 'Reset · if needed'
-              : `${lane.title || 'Bracket'} · Round ${round}`,
+              : `Round ${round}`,
           ),
-          part: index + 1,
-          parts: windows.length,
         });
       });
     }
@@ -184,33 +175,40 @@ export function broadcastProgressPages(data: ProgressData): ProgressPage[] {
         match.division === bracket.division &&
         match.stage === bracket.stage,
     );
-    const parts = chunks(matches, 3);
-    parts.forEach((matches, index) =>
+    chunks(matches, 3).forEach((matches, index) =>
       pages.push({
         kind: 'linked',
         key: `linked:${bracket.division}:${bracket.stage}:${index}`,
         bracket,
         matches,
-        part: index + 1,
-        parts: parts.length,
       }),
     );
   }
   for (const { division, stage, slots } of data.pendingFinals ?? []) {
-    const parts = chunks(slots, 4);
-    parts.forEach((slots, index) =>
+    chunks(slots, 4).forEach((slots, index) =>
       pages.push({
         kind: 'qualification',
         key: `qualification:${division}:${stage}:${index}`,
         division,
         stage,
         slots,
-        part: index + 1,
-        parts: parts.length,
       }),
     );
   }
-  if (!pages.length || ['complete', 'cancelled'].includes(data.plan.status))
-    pages.push({ kind: 'summary', key: 'summary' });
+  const closed = ['complete', 'cancelled'].includes(data.plan.status);
+  const needsSummary = !pages.length || closed;
+  const recent = intermissionRecentResults(data.matches);
+  if (recent.length) {
+    const page = { kind: 'recent-results', key: 'recent-results', matches: recent } as const;
+    if (
+      preferRecent &&
+      !closed &&
+      pages[0]?.kind !== 'round-robin-results' &&
+      recent.some((match) => match.outcome !== 'bye')
+    )
+      pages.unshift(page);
+    else pages.push(page);
+  }
+  if (needsSummary) pages.push({ kind: 'summary', key: 'summary' });
   return pages;
 }

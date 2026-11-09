@@ -26,15 +26,16 @@ const fixture = (size = 16, double = true): ProgressData => ({
 });
 
 describe('OBS intermission source choices and bounded pages', () => {
-  it('keeps existing sources on gameplay and bounds supported timing choices', () => {
-    expect(broadcastPresentation('')).toBe('gameplay');
-    expect(broadcastPresentation('?presentation=auto')).toBe('auto');
-    expect(broadcastPresentation('?presentation=progress')).toBe('progress');
-    expect(broadcastPresentation('?presentation=unknown')).toBe('gameplay');
-    for (const value of ['', 'NaN', 'Infinity', '-1', '0', '1', '999', '30'])
-      expect(progressInterval(`?cycleSeconds=${value}`)).toBe(30);
-    expect(progressInterval('?cycleSeconds=15')).toBe(15);
-    expect(progressInterval('?cycleSeconds=60')).toBe(60);
+  it('defaults to Auto and ten seconds while keeping explicit source settings', () => {
+    for (const search of ['', '?presentation=', '?presentation=unknown'])
+      expect(broadcastPresentation(search)).toBe('auto');
+    for (const mode of ['auto', 'gameplay', 'progress'])
+      expect(broadcastPresentation(`?presentation=${mode}`)).toBe(mode);
+    expect(progressInterval('')).toBe(10);
+    for (const value of ['', 'NaN', 'Infinity', '-1', '0', '1', '999'])
+      expect(progressInterval(`?cycleSeconds=${value}`)).toBe(10);
+    for (const seconds of [10, 15, 30, 60])
+      expect(progressInterval(`?cycleSeconds=${seconds}`)).toBe(seconds);
   });
 
   it.each([
@@ -114,16 +115,46 @@ describe('OBS intermission source choices and bounded pages', () => {
     expect(
       pages
         .filter((page) => page.kind === 'linked')
-        .map(({ matches, part, parts }) => ({
-          matches: matches.map(({ id }) => id),
-          part,
-          parts,
-        })),
+        .map(({ key, matches }) => ({ key, matches: matches.map(({ id }) => id) })),
     ).toEqual([
-      { matches: ['lower-0', 'lower-1', 'lower-2'], part: 1, parts: 2 },
-      { matches: ['lower-3'], part: 2, parts: 2 },
-      { matches: ['consolation'], part: 1, parts: 1 },
+      { key: 'linked:lower:main:0', matches: ['lower-0', 'lower-1', 'lower-2'] },
+      { key: 'linked:lower:main:1', matches: ['lower-3'] },
+      { key: 'linked:lower:consolation:0', matches: ['consolation'] },
     ]);
+  });
+
+  it('uses one stable recent scene and gives Auto first sight of competitive outcomes', () => {
+    const data = fixture(4, false);
+    const base = data.matches.find((match) => match.player1Id && match.player2Id)!;
+    const dated = (id: string, minute: number) => ({
+      ...base,
+      id,
+      status: 'complete',
+      outcome: 'played',
+      winnerId: base.player1Id,
+      score1: 2,
+      score2: 1,
+      resultUpdatedAt: `2026-10-04T00:${minute}:00.000Z`,
+    });
+    expect(broadcastProgressPages(data).some((page) => page.kind === 'recent-results')).toBe(false);
+    data.matches.push(
+      dated('older', 10),
+      dated('recent', 11),
+      { ...dated('latest', 12), outcome: 'forfeit', score1: -1, score2: 0 },
+      { ...dated('bye', 13), outcome: 'bye', player2Id: null },
+      { ...dated('draft', 14), status: 'playing' },
+      { ...dated('wrong-winner', 15), winnerId: 'unrelated' },
+      { ...dated('unknown-time', 16), resultUpdatedAt: 'unknown' },
+      { ...dated('missing-time', 17), resultUpdatedAt: null },
+    );
+    const recent = broadcastProgressPages(data).at(-1);
+    expect(recent?.kind === 'recent-results' && recent.matches.map(({ id }) => id)).toEqual([
+      'latest',
+      'recent',
+    ]);
+    expect(broadcastProgressPages(data, true)[0]).toEqual(recent);
+    data.plan.status = 'complete';
+    expect(broadcastProgressPages(data, true).at(-2)).toEqual(recent);
   });
 
   it('keeps mixed-stage pools, all entrants and actual completed summaries without inventing winners', () => {

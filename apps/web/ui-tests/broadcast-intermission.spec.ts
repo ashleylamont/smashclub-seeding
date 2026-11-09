@@ -35,10 +35,14 @@ for (const theme of ['dark', 'light'] as const)
       const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
       await expect(progress).toBeVisible();
       if (width !== 390) await page.keyboard.press('ArrowLeft');
+      else {
+        await expect(progress.getByRole('heading', { name: 'Waiting for the draw' })).toBeVisible();
+        await expect(progress).toContainText('Page 1 / 1');
+        await expect(progress.getByRole('progressbar')).toHaveCount(0);
+        await expect(progress).not.toContainText('0 / 0');
+      }
       const shortUrl = `${new URL(page.url()).origin}/e/${publicCode}`;
-      await expect(progress).toContainText(
-        `Full event information and recorded results at ${shortUrl}`,
-      );
+      await expect(progress).toContainText(`Event info & results ${shortUrl}`);
       await fits(page);
       expect(
         (await new AxeBuilder({ page }).include('.broadcast-intermission').analyze()).violations,
@@ -83,7 +87,7 @@ async function fits(page: Page) {
     .poll(() =>
       page
         .locator(
-          '.intermission-heading h1, .intermission-section-heading h2, .intermission-section-heading > span, .intermission-standings td, .event-bracket-match small, .event-bracket-match > div > span',
+          '.intermission-heading h1, .intermission-section-heading h2, .intermission-pool-status, .intermission-standings td, .event-bracket-match small, .event-bracket-match > div > span, .intermission-footer button, .intermission-pagination',
         )
         .evaluateAll((elements) =>
           elements
@@ -92,6 +96,7 @@ async function fits(page: Page) {
               return (
                 element.scrollWidth > element.clientWidth + 1 ||
                 box.right > innerWidth + 1 ||
+                box.bottom > innerHeight + 1 ||
                 box.left < -1
               );
             })
@@ -202,7 +207,12 @@ for (const width of [1280, 1920]) {
       await page.goto(`/overlay/${PLAN_ID}?presentation=progress&controls=0`);
       const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
       await expect(progress.getByRole('table')).toBeVisible();
-      await expect(progress).toContainText('Pool order and final seeds are separate decisions');
+      await expect(progress).toContainText('10 / 10 sets complete');
+      const poolMeter = progress.getByRole('progressbar', { name: 'Pool sets completed' });
+      await expect(poolMeter).toHaveAttribute('value', '10');
+      await expect(poolMeter).toHaveAttribute('max', '10');
+      await expect(progress).not.toContainText(/Section \d+ \/|final seeds are separate decisions/);
+      await expect(progress.getByText(/^Page \d+ \/ \d+$/)).toHaveCount(1);
       await fits(page);
       expect(
         (
@@ -221,12 +231,14 @@ for (const width of [1280, 1920]) {
 
 test('automatic source rotates, pauses, hands off to the selected station and returns after its result', async ({
   page,
-}) => {
+}, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
   await page.clock.install({ time: new Date('2026-10-04T00:00:00Z') });
+  await page.clock.pauseAt(new Date('2026-10-04T00:01:00Z'));
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   const fixture = await mockEvent(page, { idle: true, bracket: true });
   const station = fixture.snapshot.stations[0]!;
-  await page.goto(`/overlay/${PLAN_ID}?station=${station.id}&presentation=auto&cycleSeconds=15`);
+  await page.goto(`/overlay/${PLAN_ID}?station=${station.id}`);
   const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
   // An in-flight snapshot can still describe the previous station state after the clock advances.
   const advanceUntilProgress = (visible: boolean) =>
@@ -236,15 +248,45 @@ test('automatic source rotates, pauses, hands off to the selected station and re
         return progress.isVisible();
       })
       .toBe(visible);
+  const meter = progress.getByRole('progressbar', { name: 'Page rotation' });
+  await expect
+    .poll(async () => {
+      await page.clock.runFor(50);
+      return meter.isVisible();
+    })
+    .toBe(true);
   await expect(progress).toContainText('Page 1 /');
-  await page.clock.fastForward(15000);
+  await expect(progress.getByRole('heading', { name: 'Recent results' })).toBeVisible();
+  await expect(meter).toHaveAttribute('max', '10000');
+  await page.clock.fastForward(5000);
+  await expect(progress).toContainText('Page 1 /');
+  expect(Number(await meter.getAttribute('value'))).toBeGreaterThanOrEqual(5000);
+  expect(Number(await meter.getAttribute('value'))).toBeLessThanOrEqual(5050);
+  await expect(meter).toHaveAttribute('aria-valuetext', '5 seconds until next page');
+  await expect(progress.getByText('5s', { exact: true })).toBeVisible();
+  await page.evaluate(() => document.fonts.ready.then(() => true));
+  await page.screenshot({ path: testInfo.outputPath('intermission-timer-1280.png') });
+  await progress.getByRole('button', { name: 'Next page', exact: true }).press('Enter');
   await expect(progress).toContainText('Page 2 /');
-  await page.getByRole('button', { name: 'Pause rotation', exact: true }).click();
+  await expect(meter).toHaveAttribute('value', '0');
+  await page.clock.fastForward(5000);
+  await expect(progress).toContainText('Page 2 /');
+  await expect(meter).toHaveAttribute('value', '5000');
+  await page.clock.fastForward(5000);
+  await expect(progress).toContainText('Page 3 /');
+  await expect(meter).toHaveAttribute('value', '0');
+  await progress.getByRole('button', { name: 'Pause rotation', exact: true }).press('Enter');
+  await expect(progress.getByText('Paused', { exact: true })).toBeVisible();
+  await expect(meter).toHaveCount(0);
   await page.clock.fastForward(60000);
-  await expect(progress).toContainText('Page 2 /');
-  await page.getByRole('button', { name: 'Resume rotation', exact: true }).click();
-  await page.clock.fastForward(15000);
-  await expect(progress).not.toContainText('Page 2 /');
+  await expect(progress).toContainText('Page 3 /');
+  await progress.getByRole('button', { name: 'Resume rotation', exact: true }).press('Enter');
+  await expect(meter).toHaveAttribute('value', '0');
+  await page.clock.fastForward(9000);
+  await expect(progress).toContainText('Page 3 /');
+  await expect(meter).toHaveAttribute('value', '9000');
+  await page.clock.fastForward(1000);
+  await expect(progress).toContainText('Page 4 /');
   const match = fixture.snapshot.matches.find((item) => item.player1Id && item.player2Id)!;
   Object.assign(match, { status: 'playing', stationId: station.id });
   Object.assign(station, { currentMatchId: match.id, status: 'occupied' });
@@ -275,6 +317,112 @@ test('automatic source rotates, pauses, hands off to the selected station and re
   expect(fixture.unexpected).toEqual([]);
 });
 
+for (const [width, height] of [
+  [1280, 720],
+  [1920, 1080],
+] as const)
+  test(`${width}px recent results select the newest confirmed outcomes inside the source scope`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height });
+    await page.emulateMedia({
+      colorScheme: width === 1280 ? 'dark' : 'light',
+      reducedMotion: width === 1280 ? 'no-preference' : 'reduce',
+    });
+    const { snapshot, responses, unexpected } = await mockEvent(page, { idle: true });
+    const base = snapshot.matches.find(
+      (match) => match.stage === 'group' && match.division === 'upper' && match.player2Id,
+    )!;
+    const result = (id: string, minute: number, facts: Partial<LiveMatch> = {}) => ({
+      ...base,
+      id,
+      poolIndex: 0,
+      status: 'complete',
+      outcome: 'played',
+      winnerId: base.player1Id,
+      score1: 2,
+      score2: 1,
+      resultUpdatedAt: `2026-10-04T00:${String(minute).padStart(2, '0')}:00.000Z`,
+      ...facts,
+    });
+    const played = result('new-played', 12, {
+      player1Name: TEAM_ALIAS,
+      player2Name: `Opponent · ${TEAM_ALIAS}`,
+      player1Characters: ['mario'],
+      player2Characters: width === 1280 ? ['steve'] : ['link'],
+    });
+    const forfeit = result('forfeit', 11, {
+      outcome: 'forfeit',
+      winnerId: base.player2Id!,
+      score1: -1,
+      score2: 0,
+    });
+    responses['eventOps.snapshot'] = {
+      ...snapshot,
+      nativeBrackets: [],
+      matches: [
+        result('outside-scope', 16, { poolIndex: 1 }),
+        result('unconfirmed-draft', 15, {
+          status: 'playing',
+          stationId: snapshot.stations[1]!.id,
+          score1: 7,
+          score2: 5,
+        }),
+        result('invalid-winner', 14, { winnerId: 'not-an-entrant' }),
+        result('newer-bye', 13, { outcome: 'bye', player2Id: null }),
+        played,
+        forfeit,
+        result('older-played', 10),
+      ],
+    };
+    const sourceOptions = width === 1280 ? '&cycleSeconds=60&twitch=smashclub' : '';
+    await page.goto(
+      `/overlay/${PLAN_ID}?station=${snapshot.stations[0]!.id}&pool=upper%3A0${sourceOptions}`,
+    );
+    const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
+    await expect(progress.getByRole('heading', { name: 'Recent results' })).toBeVisible();
+    await expect(progress.getByText('Page 1 / 2', { exact: true })).toBeVisible();
+    await expect(progress.getByRole('button', { name: 'Next page', exact: true })).toBeVisible();
+    if (width === 1280) {
+      await expect(progress.getByRole('link', { name: /twitch\.tv\/smashclub/ })).toBeVisible();
+      await expect(progress.getByRole('progressbar', { name: 'Page rotation' })).toBeVisible();
+    }
+    await expect(progress.locator('[data-match-id]')).toHaveCount(2);
+    await expect(progress.locator('[data-match-id]').first()).toHaveAttribute(
+      'data-match-id',
+      played.id,
+    );
+    await expect(progress.locator('[data-match-id]').last()).toHaveAttribute(
+      'data-match-id',
+      forfeit.id,
+    );
+    const playedCard = progress.locator(`[data-match-id="${played.id}"]`);
+    const forfeitCard = progress.locator(`[data-match-id="${forfeit.id}"]`);
+    await expect(playedCard.getByLabel('Score 2', { exact: true })).toBeVisible();
+    await expect(playedCard.getByLabel('Score 1', { exact: true })).toBeVisible();
+    await expect(playedCard.locator('[data-winner]')).toContainText(TEAM_ALIAS);
+    await expect(playedCard.locator('img')).toHaveCount(width === 1280 ? 1 : 2);
+    await expect(
+      progress.getByText('Profile mains · Fighter artwork', { exact: false }),
+    ).toBeVisible();
+    await expect(forfeitCard.getByText('Forfeit', { exact: true })).toBeVisible();
+    await expect(forfeitCard.getByLabel(/^Score /)).toHaveCount(0);
+    await fits(page);
+    const firstScore = (await playedCard.getByLabel('Score 2', { exact: true }).boundingBox())!;
+    const secondScore = (await playedCard.getByLabel('Score 1', { exact: true }).boundingBox())!;
+    expect(Math.abs(firstScore.y - secondScore.y)).toBeLessThanOrEqual(1);
+    expect(
+      (await new AxeBuilder({ page }).include('.broadcast-intermission').analyze()).violations,
+    ).toEqual([]);
+    await page.screenshot({
+      path: testInfo.outputPath(`intermission-recent-results-${width}.png`),
+    });
+    await page.keyboard.press('ArrowRight');
+    await expect(progress.getByRole('heading', { name: /Pool A/ })).toBeVisible();
+    await expect(progress.getByText('Page 2 / 2', { exact: true })).toBeVisible();
+    expect(unexpected).toEqual([]);
+  });
+
 test('reduced motion retains manual pages, and interruptions keep the last known data', async ({
   page,
 }) => {
@@ -284,7 +432,8 @@ test('reduced motion retains manual pages, and interruptions keep the last known
   await page.goto(`/overlay/${PLAN_ID}?presentation=progress&controls=0`);
   const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
   await expect(progress).toContainText('Page 1 /');
-  await expect(progress).toContainText('manual pages');
+  await expect(progress.getByText('Manual', { exact: true })).toBeVisible();
+  await expect(progress.getByRole('progressbar', { name: 'Page rotation' })).toHaveCount(0);
   await page.clock.fastForward(60000);
   await expect(progress).toContainText('Page 1 /');
   await page.keyboard.press('ArrowRight');
@@ -522,10 +671,13 @@ for (const [width, theme] of [
     };
     await page.goto(`/overlay/${PLAN_ID}?station=${station!.id}&presentation=auto&controls=0`);
     const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
+    await expect(progress.getByRole('heading', { name: 'Recent results' })).toBeVisible();
+    await page.keyboard.press('ArrowRight');
     await expect(progress.getByRole('heading', { name: /pool/i })).toBeVisible();
     await page.keyboard.press('ArrowRight');
     const upper = progress.getByRole('table', { name: 'Linked Upper Championship bracket' });
-    await expect(progress).toContainText('Section 1 / 2');
+    await expect(progress).toContainText('Page 3 / 5');
+    await expect(progress).not.toContainText(/Section \d+ \/ /);
     await expect(upper.getByRole('row', { name: /Imported played set/ })).toContainText('2–0');
     await expect(upper.getByRole('row', { name: /Imported played set/ })).toContainText(
       `${TEAM_ALIAS} · Winner`,
@@ -546,7 +698,7 @@ for (const [width, theme] of [
     ).toEqual([]);
 
     await page.keyboard.press('ArrowRight');
-    await expect(progress).toContainText('Section 2 / 2');
+    await expect(progress).toContainText('Page 4 / 5');
     await expect(upper).toContainText('Awaiting opponent');
     await expect(upper).not.toContainText('TBD');
     await fits(page);
@@ -569,7 +721,7 @@ for (const [width, theme] of [
       winnerId: lower.player2Id,
     });
     await page.clock.runFor(5000);
-    await expect(progress).toBeVisible();
+    await expect(progress.getByRole('heading', { name: 'Recent results' })).toBeVisible();
     await page.keyboard.press('ArrowLeft');
     await expect(lowerTable).toContainText('1–2');
 
@@ -594,7 +746,7 @@ for (const [width, theme] of [
       path: testInfo.outputPath(`intermission-closed-linked-results-${width}.png`),
     });
     await page.keyboard.press('ArrowLeft');
-    await expect(progress).toContainText('Standings from recorded pool results.');
+    await expect(progress.getByRole('heading', { name: /Pool/ })).toBeVisible();
     await expect(progress.getByRole('columnheader', { name: 'No result' })).toBeVisible();
     expect(fixture.unexpected).toEqual([]);
   });
@@ -646,6 +798,7 @@ for (const [width, height, theme] of [
     await expect(progress.getByRole('table')).toBeVisible();
     const pages = broadcastProgressPages(pools);
     const firstQualifier = pages.findIndex((item) => item.kind === 'qualification');
+    const lastQualifier = pages.findLastIndex((item) => item.kind === 'qualification');
     const upperHeading = progress.getByRole('heading', {
       name: 'Upper Championship qualification',
     });
@@ -653,7 +806,7 @@ for (const [width, height, theme] of [
       name: 'Lower Championship qualification',
     });
     const seen = new Set<string>();
-    for (let index = 0; index < pages.length; index++) {
+    for (let index = 0; index <= lastQualifier; index++) {
       await expect(progress).toContainText(`Page ${index + 1} / ${pages.length}`);
       if (index >= firstQualifier) {
         await fits(page);
@@ -665,7 +818,7 @@ for (const [width, height, theme] of [
           await expect(upperHeading).toBeVisible();
           await expect(table).toContainText(TEAM_ALIAS);
           await expect(table).toContainText('Awaiting qualification');
-          await expect(progress).toContainText('Section 1 / 2');
+          await expect(progress).not.toContainText(/Section \d+ \/ /);
           await page.screenshot({
             path: testInfo.outputPath(`intermission-qualification-${width}.png`),
           });
@@ -679,7 +832,7 @@ for (const [width, height, theme] of [
           ).toEqual([]);
         }
       }
-      if (index < pages.length - 1) await page.keyboard.press('ArrowRight');
+      if (index < lastQualifier) await page.keyboard.press('ArrowRight');
     }
     expect(seen.size).toBe(12);
     await expect(lowerHeading).toBeVisible();
@@ -689,7 +842,8 @@ for (const [width, height, theme] of [
     const mixed = { ...snapshot, pendingFinals: fields.slice(1) };
     fixture.responses['eventOps.snapshot'] = mixed;
     const mixedPages = broadcastProgressPages(mixed);
-    const lastPage = `Page ${mixedPages.length} / ${mixedPages.length}`;
+    const lastMixedQualifier = mixedPages.findLastIndex((item) => item.kind === 'qualification');
+    const lastPage = `Page ${lastMixedQualifier + 1} / ${mixedPages.length}`;
     await expect
       .poll(async () => {
         await page.clock.runFor(2000);
@@ -697,9 +851,9 @@ for (const [width, height, theme] of [
       })
       .toBe(true);
     await expect(lowerHeading).toBeVisible();
-    await expect(progress).toContainText('Section 2 / 2');
+    await expect(progress).not.toContainText(/Section \d+ \/ /);
     const firstDraw = mixedPages.findIndex((item) => item.kind === 'bracket');
-    for (let i = mixedPages.length - 1; i > firstDraw; i--) await page.keyboard.press('ArrowLeft');
+    for (let i = lastMixedQualifier; i > firstDraw; i--) await page.keyboard.press('ArrowLeft');
     await expect(progress.locator('.event-bracket-match').first()).toBeVisible();
     await expect(upperHeading).toHaveCount(0);
     expect(fixture.unexpected).toEqual([]);

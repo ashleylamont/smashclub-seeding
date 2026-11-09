@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   broadcastProgressPages,
   type ProgressData,
@@ -8,16 +8,13 @@ import { liveBracketWinner } from '../lib/eventBracket';
 import { linkedFinalCaption } from '../lib/linkedFinalCaption';
 import { poolTitle } from '../lib/poolFlow';
 import { matchParticipantName, matchPresentation } from '../lib/matchPresentation';
-import {
-  finalsFieldLabel,
-  plannedFinalsSeeding,
-  qualifierDetail,
-  qualifierLabel,
-} from '../lib/qualification';
+import { finalsFieldLabel, qualifierDetail, qualifierLabel } from '../lib/qualification';
 import { EventBracketLane } from './EventBracketLane';
+import { IntermissionRecentResults } from './IntermissionRecentResults';
 import { NemesisMark } from './NemesisMark';
 import { OverlayTwitchLink } from './OverlayTwitch';
 import { Button } from './ui/Button';
+import { Progress } from './ui/Progress';
 import './BroadcastIntermission.css';
 
 function useReducedMotion() {
@@ -39,14 +36,16 @@ export function BroadcastIntermission({
   announcement,
   controls,
   twitchChannel,
+  preferRecent,
 }: {
   data: ProgressData;
   seconds: number;
   announcement: string;
   controls: boolean;
   twitchChannel: string;
+  preferRecent: boolean;
 }) {
-  const pages = useMemo(() => broadcastProgressPages(data), [data]);
+  const pages = useMemo(() => broadcastProgressPages(data, preferRecent), [data, preferRecent]);
   const [current, setCurrent] = useState('');
   const [viewportWidth, setViewportWidth] = useState(() => innerWidth);
   useEffect(() => {
@@ -61,20 +60,23 @@ export function BroadcastIntermission({
     0,
     pages.findIndex((page) => page.key === current),
   );
+  const multiplePages = pages.length > 1;
+  const page = pages[index]!;
+  const move = useCallback(
+    (direction: number, fromPage?: string) => {
+      if (!multiplePages) return;
+      const pageKeys = keys.split('|');
+      setCurrent((previous) => {
+        const previousIndex = Math.max(0, pageKeys.indexOf(previous));
+        if (fromPage && pageKeys[previousIndex] !== fromPage) return previous;
+        return pageKeys[(previousIndex + direction + pageKeys.length) % pageKeys.length]!;
+      });
+    },
+    [keys, multiplePages],
+  );
+  const advance = useCallback(() => move(1, page.key), [move, page.key]);
   useEffect(() => {
-    if (paused || reduced || pages.length < 2) return;
-    const pageKeys = keys.split('|');
-    const timer = window.setInterval(
-      () =>
-        setCurrent(
-          (previous) => pageKeys[(Math.max(0, pageKeys.indexOf(previous)) + 1) % pageKeys.length]!,
-        ),
-      seconds * 1000,
-    );
-    return () => clearInterval(timer);
-  }, [keys, seconds, paused, reduced, pages.length]);
-  useEffect(() => {
-    const pageKeys = keys.split('|');
+    if (!multiplePages) return;
     const key = (event: KeyboardEvent) => {
       if (
         event.ctrlKey ||
@@ -91,23 +93,15 @@ export function BroadcastIntermission({
             ? -1
             : 0;
       if (!direction) return;
-      setCurrent(
-        (previous) =>
-          pageKeys[
-            (Math.max(0, pageKeys.indexOf(previous)) + direction + pageKeys.length) %
-              pageKeys.length
-          ]!,
-      );
+      move(direction);
       event.preventDefault();
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
-  }, [keys]);
-  const page = pages[index]!;
+  }, [move, multiplePages]);
   const closed = ['complete', 'cancelled'].includes(data.plan.status);
   const labels = new Map(data.matches.map((match) => [match.id, match.label]));
-  const next = (direction: number) =>
-    setCurrent(pages[(index + direction + pages.length) % pages.length]!.key);
+
   return (
     <section className="broadcast-intermission" aria-label="Tournament progress">
       <header className="intermission-heading">
@@ -121,7 +115,7 @@ export function BroadcastIntermission({
             ? 'Event cancelled'
             : data.plan.status === 'complete'
               ? 'Event complete'
-              : 'Tournament progress'}
+              : 'Intermission'}
         </span>
       </header>
       <div className="intermission-content" key={page.key}>
@@ -138,6 +132,8 @@ export function BroadcastIntermission({
           <QualificationPage page={page} entrants={data.entrants} />
         ) : page.kind === 'linked' ? (
           <LinkedBracketPage page={page} closed={closed} />
+        ) : page.kind === 'recent-results' ? (
+          <IntermissionRecentResults matches={page.matches} />
         ) : page.kind === 'bracket' ? (
           <>
             <div className="intermission-section-heading">
@@ -146,12 +142,9 @@ export function BroadcastIntermission({
                 {page.bracket.stage === 'main' ? 'Championship' : 'Consolation'}
                 {page.lane.title ? ` · ${page.lane.title}` : ''}
               </h2>
-              <span>
-                Section {page.part} / {page.parts}
-              </span>
             </div>
             {page.bracket.complete && page.bracket.winnerId && (
-              <p>
+              <p className="intermission-winner">
                 Confirmed winner ·{' '}
                 {data.entrants.find((entrant) => entrant.id === page.bracket.winnerId)?.name ??
                   'Player'}
@@ -166,13 +159,13 @@ export function BroadcastIntermission({
                 labels={labels}
                 roundWindow
                 recordedOnly={closed}
-                cardWidth={Math.max(250, Math.round(viewportWidth / 4))}
+                cardWidth={Math.max(250, Math.round(viewportWidth * 0.36))}
                 roundTitles={page.roundTitles}
               />
             ) : (
               <p>
                 {page.bracket.complete
-                  ? 'No played sets in this bracket.'
+                  ? 'No played sets.'
                   : 'The draw has no published matches yet.'}
               </p>
             )}
@@ -186,48 +179,93 @@ export function BroadcastIntermission({
                   ? 'Tournament progress'
                   : 'Waiting for the draw'}
             </h2>
-            <p>
-              {data.matches.filter((match) => match.status === 'complete').length} /{' '}
-              {data.matches.length} sets complete
-            </p>
-            <p>
-              Full event information and recorded results at {location.origin}
-              {data.publicCode === undefined
-                ? `/play/${encodeURIComponent(data.plan.id)}`
-                : `/e/${data.publicCode}`}
+            {data.matches.length > 0 ? (
+              <p className="intermission-set-count">
+                {data.matches.filter((match) => match.status === 'complete').length} /{' '}
+                {data.matches.length} sets complete
+              </p>
+            ) : closed ? (
+              <p>No results recorded.</p>
+            ) : null}
+            <p className="intermission-public-link">
+              Event info &amp; results <strong>{eventUrl(data)}</strong>
             </p>
           </div>
         )}
       </div>
       <footer className="intermission-footer">
-        <p>
-          {announcement ||
-            (closed
-              ? 'Recorded tournament results'
-              : 'Live records · final places depend on confirmed results')}
-        </p>
-        <span>
-          Page {index + 1} / {pages.length}
-          {reduced ? ' · manual pages' : paused ? ' · paused' : ''}
-        </span>
-        {twitchChannel && <OverlayTwitchLink channel={twitchChannel} />}
-        {controls && (
-          <div className="intermission-controls">
-            <Button onClick={() => next(-1)} disabled={pages.length < 2}>
-              Previous page
-            </Button>
-            <Button onClick={() => next(1)} disabled={pages.length < 2}>
-              Next page
-            </Button>
-            {!reduced && (
-              <Button onClick={() => setPaused((value) => !value)}>
-                {paused ? 'Resume rotation' : 'Pause rotation'}
-              </Button>
-            )}
+        {announcement && <p className="intermission-announcement">{announcement}</p>}
+        <div className="intermission-navigation">
+          <div className="intermission-pagination">
+            <span>
+              Page {index + 1} / {pages.length}
+            </span>
+            {multiplePages &&
+              (reduced ? (
+                <span className="intermission-rotation-state">Manual</span>
+              ) : paused ? (
+                <span className="intermission-rotation-state">Paused</span>
+              ) : (
+                <PageTimer
+                  key={`${keys}:${page.key}:${seconds}`}
+                  seconds={seconds}
+                  onNext={advance}
+                />
+              ))}
           </div>
-        )}
+          {twitchChannel && <OverlayTwitchLink channel={twitchChannel} />}
+          {controls && multiplePages && (
+            <div className="intermission-controls">
+              <Button onClick={() => move(-1)}>Previous page</Button>
+              <Button onClick={() => move(1)}>Next page</Button>
+              {!reduced && (
+                <Button onClick={() => setPaused((value) => !value)}>
+                  {paused ? 'Resume rotation' : 'Pause rotation'}
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
       </footer>
     </section>
+  );
+}
+
+function eventUrl(data: ProgressData) {
+  const path =
+    data.publicCode === undefined
+      ? `/play/${encodeURIComponent(data.plan.id)}`
+      : `/e/${data.publicCode}`;
+  return `${location.origin}${path}`;
+}
+
+function PageTimer({ seconds, onNext }: { seconds: number; onNext: () => void }) {
+  const [elapsed, setElapsed] = useState(0);
+  const duration = seconds * 1000;
+  useEffect(() => {
+    const started = performance.now();
+    const tick = window.setInterval(
+      () => setElapsed(Math.min(duration, performance.now() - started)),
+      125,
+    );
+    const turn = window.setTimeout(onNext, duration);
+    return () => {
+      window.clearInterval(tick);
+      window.clearTimeout(turn);
+    };
+  }, [duration, onNext]);
+  const remaining = Math.ceil((duration - elapsed) / 1000);
+  return (
+    <span className="intermission-countdown">
+      <Progress
+        className="intermission-timer"
+        label="Page rotation"
+        value={elapsed}
+        max={duration}
+        aria-valuetext={`${remaining} seconds until next page`}
+      />
+      <span aria-hidden="true">{remaining}s</span>
+    </span>
   );
 }
 
@@ -243,11 +281,12 @@ function RoundRobinResultsPage({
     <>
       <div className="intermission-section-heading">
         <h2>Round-robin results</h2>
-        <span>
-          Section {page.part} / {page.parts}
-        </span>
       </div>
-      {page.winnerId && <p>Confirmed winner · {names.get(page.winnerId) ?? 'Player'}</p>}
+      {page.winnerId && (
+        <p className="intermission-winner">
+          Confirmed winner · {names.get(page.winnerId) ?? 'Player'}
+        </p>
+      )}
       <table
         className="intermission-standings intermission-round-robin"
         aria-label="Confirmed round-robin standings"
@@ -260,7 +299,10 @@ function RoundRobinResultsPage({
         </thead>
         <tbody>
           {page.standings.map(({ place, playerId }) => (
-            <tr key={playerId}>
+            <tr
+              key={playerId}
+              className={playerId === page.winnerId ? 'intermission-official-winner' : undefined}
+            >
               <td>{place}</td>
               <td>{names.get(playerId) ?? 'Player'}</td>
             </tr>
@@ -290,18 +332,19 @@ function PoolPage({
             ? 'Round-robin set records'
             : poolTitle(`${page.pool.division}:${page.pool.poolIndex}`, structure, 'heading')}
         </h2>
-        <span>
-          {page.pool.complete} / {page.pool.total} sets complete · Section {page.part} /{' '}
-          {page.parts}
-        </span>
+        <div className="intermission-pool-status">
+          <span className="intermission-set-count">
+            {page.pool.complete} / {page.pool.total} sets complete
+          </span>
+          <Progress
+            className="intermission-pool-meter"
+            label="Pool sets completed"
+            value={page.pool.complete}
+            max={page.pool.total}
+          />
+        </div>
       </div>
-      <p>
-        {confirmedRoundRobin
-          ? 'Set and game records. Confirmed places are shown separately.'
-          : closed
-            ? 'Standings from recorded pool results.'
-            : 'Live standings for review. Pool order and final seeds are separate decisions.'}
-      </p>
+      {confirmedRoundRobin && <p>Confirmed places shown separately.</p>}
       <table className="intermission-standings">
         <thead>
           <tr>
@@ -343,9 +386,6 @@ function LinkedBracketPage({
     <>
       <div className="intermission-section-heading">
         <h2>{heading}</h2>
-        <span>
-          Section {page.part} / {page.parts}
-        </span>
       </div>
       <table className="intermission-standings intermission-linked" aria-label={heading}>
         <thead>
@@ -412,11 +452,7 @@ function QualificationPage({
     <>
       <div className="intermission-section-heading">
         <h2>{finalsFieldLabel(page)} qualification</h2>
-        <span>
-          Section {page.part} / {page.parts}
-        </span>
       </div>
-      <p>Pairings appear after the draw is published. {plannedFinalsSeeding}</p>
       <table className="intermission-standings intermission-qualification">
         <thead>
           <tr>
