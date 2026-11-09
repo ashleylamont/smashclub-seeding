@@ -2,6 +2,12 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.14.3
+
+### Patch Changes
+
+- 9 November 2026 · **Improvement** · Organisers can rename or clear a doubles team name in the planner before or after locking the draw. Pair membership, frozen seeds and recorded results stay intact. [#366](https://github.com/ashleylamont/smashclub-seeding/pull/366) · [build a08dd56](https://github.com/ashleylamont/smashclub-seeding/commit/a08dd561f9ce4dbacda267ea47a0bc18e1c08ffe)
+
 ## 0.14.2
 
 ### Patch Changes
