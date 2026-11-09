@@ -39,14 +39,12 @@ type LinkedBracket = {
   slug: string | null;
 };
 export type ProgressPage =
-  | { kind: 'pool'; key: string; pool: Pool; players: Pool['players']; part: number; parts: number }
+  | { kind: 'pool'; key: string; pool: Pool; players: Pool['players'] }
   | {
       kind: 'round-robin-results';
       key: string;
       standings: Bracket['standings'];
       winnerId: Bracket['winnerId'];
-      part: number;
-      parts: number;
     }
   | {
       kind: 'bracket';
@@ -55,18 +53,14 @@ export type ProgressPage =
       lane: ReturnType<typeof liveBracketLanes>[number];
       matches: LiveMatch[];
       roundTitles: string[];
-      part: number;
-      parts: number;
     }
   | {
       kind: 'linked';
       key: string;
       bracket: LinkedBracket;
       matches: LiveMatch[];
-      part: number;
-      parts: number;
     }
-  | (PublicFinalsField & { kind: 'qualification'; key: string; part: number; parts: number })
+  | (PublicFinalsField & { kind: 'qualification'; key: string })
   | { kind: 'summary'; key: 'summary' };
 
 const chunks = <T>(items: T[], count: number): T[][] =>
@@ -123,15 +117,12 @@ export function broadcastProgressPages(data: ProgressData): ProgressPage[] {
       (bracket) => bracket.division === 'upper' && bracket.stage === 'main' && bracket.complete,
     );
     if (result) {
-      const parts = chunks(result.standings, 6);
-      parts.forEach((standings, index) => {
+      chunks(result.standings, 6).forEach((standings, index) => {
         pages.push({
           kind: 'round-robin-results',
           key: `round-robin-results:${result.id}:${index}`,
           standings,
           winnerId: result.winnerId,
-          part: index + 1,
-          parts: parts.length,
         });
       });
     }
@@ -139,15 +130,12 @@ export function broadcastProgressPages(data: ProgressData): ProgressPage[] {
   for (const pool of poolStandings(data.matches).sort(
     (a, b) => a.division.localeCompare(b.division) || a.poolIndex - b.poolIndex,
   )) {
-    const parts = chunks(pool.players, 6);
-    parts.forEach((players, index) =>
+    chunks(pool.players, 6).forEach((players, index) =>
       pages.push({
         kind: 'pool',
         key: `pool:${pool.division}:${pool.poolIndex}:${index}`,
         pool,
         players,
-        part: index + 1,
-        parts: parts.length,
       }),
     );
   }
@@ -172,8 +160,6 @@ export function broadcastProgressPages(data: ProgressData): ProgressPage[] {
                 : 'Reset · if needed'
               : `${lane.title || 'Bracket'} · Round ${round}`,
           ),
-          part: index + 1,
-          parts: windows.length,
         });
       });
     }
@@ -187,29 +173,23 @@ export function broadcastProgressPages(data: ProgressData): ProgressPage[] {
         match.division === bracket.division &&
         match.stage === bracket.stage,
     );
-    const parts = chunks(matches, 3);
-    parts.forEach((matches, index) =>
+    chunks(matches, 3).forEach((matches, index) =>
       pages.push({
         kind: 'linked',
         key: `linked:${bracket.division}:${bracket.stage}:${index}`,
         bracket,
         matches,
-        part: index + 1,
-        parts: parts.length,
       }),
     );
   }
   for (const { division, stage, slots } of data.pendingFinals ?? []) {
-    const parts = chunks(slots, 4);
-    parts.forEach((slots, index) =>
+    chunks(slots, 4).forEach((slots, index) =>
       pages.push({
         kind: 'qualification',
         key: `qualification:${division}:${stage}:${index}`,
         division,
         stage,
         slots,
-        part: index + 1,
-        parts: parts.length,
       }),
     );
   }

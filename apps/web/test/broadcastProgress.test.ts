@@ -115,15 +115,11 @@ describe('OBS intermission source choices and bounded pages', () => {
     expect(
       pages
         .filter((page) => page.kind === 'linked')
-        .map(({ matches, part, parts }) => ({
-          matches: matches.map(({ id }) => id),
-          part,
-          parts,
-        })),
+        .map(({ key, matches }) => ({ key, matches: matches.map(({ id }) => id) })),
     ).toEqual([
-      { matches: ['lower-0', 'lower-1', 'lower-2'], part: 1, parts: 2 },
-      { matches: ['lower-3'], part: 2, parts: 2 },
-      { matches: ['consolation'], part: 1, parts: 1 },
+      { key: 'linked:lower:main:0', matches: ['lower-0', 'lower-1', 'lower-2'] },
+      { key: 'linked:lower:main:1', matches: ['lower-3'] },
+      { key: 'linked:lower:consolation:0', matches: ['consolation'] },
     ]);
   });
 
