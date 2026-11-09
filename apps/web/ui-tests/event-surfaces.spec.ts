@@ -113,7 +113,7 @@ for (const idle of [false, true]) {
     async ({ page }) => {
       await mockEvent(page, { idle });
       await page.setViewportSize({ width: 1920, height: 1080 });
-      await page.goto(`/overlay/${PLAN_ID}`);
+      await page.goto(`/overlay/${PLAN_ID}?presentation=gameplay`);
       await expect(page.locator('.broadcast-identity h1')).toHaveText('Tech In Place');
       await expect(page.locator('.app-nav')).toBeHidden();
       await expect(page.getByText('Find your rival.')).toHaveCount(0);

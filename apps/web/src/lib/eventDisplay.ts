@@ -1,4 +1,5 @@
 import { availableMatches } from './eventQueue';
+import { isUntakenCall } from './matchPresentation';
 export interface PoolQualifier {
   poolId: string;
   poolIndex: number;
@@ -28,6 +29,7 @@ export interface LiveMatch {
   status: string;
   stationId: string | null;
   called?: boolean;
+  started?: boolean;
   callLocation?: string | null;
   outcome?: string | null;
   blockedReason?: string | null;
@@ -53,9 +55,9 @@ export interface LiveMatch {
   player2Qualifier?: PoolQualifier;
   qualificationBlocks?: PoolQualifier[];
 }
-export function liveSections(matches: readonly LiveMatch[]) {
+export function liveSections(matches: readonly LiveMatch[], liveOwned?: boolean) {
   return {
-    playing: matches.filter((m) => m.status === 'playing' && !m.called),
+    playing: matches.filter((m) => m.status === 'playing' && !isUntakenCall(m, liveOwned)),
     ready: availableMatches(matches).filter((match) => match.availability?.canStart !== false),
     complete: matches.filter((m) => m.status === 'complete'),
     total: matches.length,

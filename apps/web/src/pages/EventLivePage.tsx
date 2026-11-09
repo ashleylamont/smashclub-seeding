@@ -148,7 +148,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
   const closed = ['complete', 'cancelled'].includes(data.plan.status);
   const closedLabel = data.plan.status === 'cancelled' ? 'EVENT CANCELLED' : 'EVENT FINISHED';
   const visibleMatches = data.matches.filter((match) => matchesPool(match, selectedPool));
-  const sections = liveSections(visibleMatches);
+  const sections = liveSections(visibleMatches, data.plan.liveOwned);
   const geometry = overlayGeometry(window.location.search);
   const search = new URLSearchParams(window.location.search);
   const customGeometry = search.has('captureWidth') || search.has('captureHeight');

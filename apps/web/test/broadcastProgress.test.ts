@@ -26,15 +26,16 @@ const fixture = (size = 16, double = true): ProgressData => ({
 });
 
 describe('OBS intermission source choices and bounded pages', () => {
-  it('keeps existing sources on gameplay and bounds supported timing choices', () => {
-    expect(broadcastPresentation('')).toBe('gameplay');
-    expect(broadcastPresentation('?presentation=auto')).toBe('auto');
-    expect(broadcastPresentation('?presentation=progress')).toBe('progress');
-    expect(broadcastPresentation('?presentation=unknown')).toBe('gameplay');
-    for (const value of ['', 'NaN', 'Infinity', '-1', '0', '1', '999', '30'])
-      expect(progressInterval(`?cycleSeconds=${value}`)).toBe(30);
-    expect(progressInterval('?cycleSeconds=15')).toBe(15);
-    expect(progressInterval('?cycleSeconds=60')).toBe(60);
+  it('defaults to Auto and ten seconds while keeping explicit source settings', () => {
+    for (const search of ['', '?presentation=', '?presentation=unknown'])
+      expect(broadcastPresentation(search)).toBe('auto');
+    for (const mode of ['auto', 'gameplay', 'progress'])
+      expect(broadcastPresentation(`?presentation=${mode}`)).toBe(mode);
+    expect(progressInterval('')).toBe(10);
+    for (const value of ['', 'NaN', 'Infinity', '-1', '0', '1', '999'])
+      expect(progressInterval(`?cycleSeconds=${value}`)).toBe(10);
+    for (const seconds of [10, 15, 30, 60])
+      expect(progressInterval(`?cycleSeconds=${seconds}`)).toBe(seconds);
   });
 
   it.each([

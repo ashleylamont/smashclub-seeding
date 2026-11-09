@@ -180,7 +180,9 @@ test('guests and signed-in attendees run a pool station and immediately advance 
     });
     await attendeeCard.locator('input[type="number"]').nth(0).fill('2');
     await attendeeCard.locator('input[type="number"]').nth(1).fill('0');
-    await page.goto(`/overlay/${planId}?station=${station.id}&pool=upper%3A0&controls=0`);
+    await page.goto(
+      `/overlay/${planId}?presentation=gameplay&station=${station.id}&pool=upper%3A0&controls=0`,
+    );
     const recent = page.getByRole('region', { name: 'Recent resolved sets' });
     await expect(recent.locator('article')).toHaveCount(1);
     await expect(recent.locator('article')).toHaveAttribute('data-match-id', first.id);
@@ -330,7 +332,7 @@ test('idle overlay retains Stage focus and shows resolved sets without queue pre
     }
     await route.fulfill({ response: remote, json: payload });
   });
-  await page.goto(`/overlay/${planId}?controls=0`);
+  await page.goto(`/overlay/${planId}?presentation=gameplay&controls=0`);
   await expect(page.locator('.broadcast-topline')).toContainText('Stage');
   const recent = page.getByRole('region', { name: 'Recent resolved sets' });
   const results = recent.locator('article');
@@ -348,7 +350,7 @@ test('idle overlay retains Stage focus and shows resolved sets without queue pre
     /Queued Alpha|Queued Beta|Later Gamma|Later Delta|PLAY NEXT|COMING UP|provisional/,
   );
   await expect(page.getByLabel('Current match')).toContainText('AWAITING MATCH');
-  await page.goto(`/overlay/${planId}?station=missing-station&controls=0`);
+  await page.goto(`/overlay/${planId}?presentation=gameplay&station=missing-station&controls=0`);
   await expect(page.getByLabel('Current match')).toContainText('AWAITING MATCH');
   await expect(results).toHaveCount(2);
   expect(

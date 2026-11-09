@@ -11,13 +11,16 @@ import type { PublicFinalsField } from './qualification';
 import type { NativeBracketView } from '../components/EventNightBoard';
 
 export type BroadcastPresentation = 'gameplay' | 'auto' | 'progress';
+export const DEFAULT_PROGRESS_SECONDS = 10;
+export const progressIntervals = [DEFAULT_PROGRESS_SECONDS, 15, 30, 60] as const;
+
 export function broadcastPresentation(search: string): BroadcastPresentation {
   const mode = new URLSearchParams(search).get('presentation');
-  return mode === 'auto' || mode === 'progress' ? mode : 'gameplay';
+  return mode === 'gameplay' || mode === 'progress' ? mode : 'auto';
 }
-export function progressInterval(search: string) {
+export function progressInterval(search: string): number {
   const seconds = Number(new URLSearchParams(search).get('cycleSeconds'));
-  return seconds === 15 || seconds === 60 ? seconds : 30;
+  return progressIntervals.find((option) => option === seconds) ?? DEFAULT_PROGRESS_SECONDS;
 }
 export type ProgressData = {
   publicCode?: number;

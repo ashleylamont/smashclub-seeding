@@ -61,7 +61,7 @@ for (const [width, height] of [
       await page.setViewportSize({ width, height });
       const fixture = await recentFixture(page, qr);
       const current = fixture.snapshot.matches.find((match) => match.status === 'playing')!;
-      await page.goto(`/overlay/${PLAN_ID}?controls=0`);
+      await page.goto(`/overlay/${PLAN_ID}?presentation=gameplay&controls=0`);
       const rail = page.getByRole('region', { name: 'Recent resolved sets' });
       await expect(rail.locator('article')).toHaveCount(2);
       expect(
@@ -156,7 +156,7 @@ for (const [width, height] of [
       fixture.snapshot.plan.name = `${name} · ${edition}`;
       fixture.forfeit.player1Name = 'Cody with an exceptionally long tournament alias';
       fixture.forfeit.player2Name = 'Drew and their tournament doubles partner';
-      await page.goto(`/overlay/${PLAN_ID}?controls=0`);
+      await page.goto(`/overlay/${PLAN_ID}?presentation=gameplay&controls=0`);
 
       const rail = page.locator('.broadcast-rail');
       const heading = rail.getByRole('heading', { name, exact: true });
@@ -211,7 +211,7 @@ test('a maximum-length unbroken title fits at 720p and after source resize', asy
   fixture.snapshot.plan.name = '界'.repeat(120);
   fixture.forfeit.player1Name = fixture.latest.player1Name;
   fixture.forfeit.player2Name = fixture.latest.player2Name;
-  await page.goto(`/overlay/${PLAN_ID}?controls=0`);
+  await page.goto(`/overlay/${PLAN_ID}?presentation=gameplay&controls=0`);
   const rail = page.locator('.broadcast-rail');
   await expect(rail.getByRole('heading')).toHaveText(fixture.snapshot.plan.name);
   await expect(rail.getByRole('img', { name: 'Scan to report a match score' })).toBeVisible();
@@ -231,7 +231,7 @@ test('corrections update one stable card and only the footer flashes; byes have 
 }) => {
   const fixture = await recentFixture(page);
   await page.clock.install({ time: new Date('2026-10-04T00:00:00Z') });
-  await page.goto(`/overlay/${PLAN_ID}?controls=0`);
+  await page.goto(`/overlay/${PLAN_ID}?presentation=gameplay&controls=0`);
   const rail = page.getByRole('region', { name: 'Recent resolved sets' });
   const card = rail.locator('[data-match-id="rail-latest"]');
   await expect(card).toBeVisible();
@@ -366,7 +366,7 @@ for (const [width, height, theme] of [
 
 test('the bounded recent count survives an OBS reload', async ({ page }) => {
   await recentFixture(page);
-  await page.goto(`/overlay/${PLAN_ID}?recent=1&controls=0`);
+  await page.goto(`/overlay/${PLAN_ID}?presentation=gameplay&recent=1&controls=0`);
   await expect(
     page.getByRole('region', { name: 'Recent resolved sets' }).locator('article'),
   ).toHaveCount(1);

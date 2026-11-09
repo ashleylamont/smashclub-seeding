@@ -6,6 +6,7 @@ import { Select, SelectItem } from '../../components/ui/Select';
 import { BroadcastSideControls } from './BroadcastSideControls';
 import { MatchCard } from './OpsMatchCard';
 import { matchPresentation } from '../../lib/matchPresentation';
+import { DEFAULT_PROGRESS_SECONDS } from '../../lib/broadcastProgress';
 import { namedStationStart, type DispatchCommandController } from './dispatchCommand';
 import type { Desk, Overview } from './dispatchTypes';
 
@@ -106,19 +107,26 @@ export function MainStagePanel({
       </a>
       <Disclosure title="Intermission browser sources">
         <p>
-          Auto shows tournament progress between games and returns to gameplay when this station
-          starts a match. In Display setup (S), you can add a Twitch channel before copying the
-          updated URL into OBS.
+          Auto shows tournament progress between sets and returns to gameplay when this station
+          starts a match. Progress pages rotate every {DEFAULT_PROGRESS_SECONDS} seconds by default.
+          In Display setup (S), you can add a Twitch channel before copying the updated URL into
+          OBS.
         </p>
         <div className="ops-broadcast-source-links">
-          {(['auto', 'progress'] as const).map((mode) => (
+          {(
+            [
+              ['auto', 'Automatic intermission overlay ↗'],
+              ['gameplay', 'Gameplay-only overlay ↗'],
+              ['progress', 'Progress-only overlay ↗'],
+            ] as const
+          ).map(([mode, label]) => (
             <Button asChild key={mode}>
               <a
                 href={`/overlay/${encodeURIComponent(data.plan.id)}?${new URLSearchParams({ ...(station ? { station: station.id } : {}), presentation: mode, controls: '0' })}`}
                 target="_blank"
                 rel="noreferrer"
               >
-                {mode === 'auto' ? 'Automatic intermission overlay ↗' : 'Progress-only overlay ↗'}
+                {label}
               </a>
             </Button>
           ))}

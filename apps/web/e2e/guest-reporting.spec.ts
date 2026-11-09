@@ -200,7 +200,7 @@ test('scannable guest QR accepts anonymous and unlinked reports, keeps approval 
     ).reports.find((report) => report.matchId === second.id && report.status === 'pending')!;
     expect(retry.id).not.toBe(rejected.id);
     const overlay = await broadcast.newPage();
-    await overlay.goto(`/overlay/${planId}`);
+    await overlay.goto(`/overlay/${planId}?presentation=gameplay`);
     const overlayQr = overlay.locator('.broadcast-guest-pass canvas');
     await expect(overlayQr).toBeVisible();
     await expect(overlay.getByTestId('broadcast-result-notice')).toHaveCount(0);

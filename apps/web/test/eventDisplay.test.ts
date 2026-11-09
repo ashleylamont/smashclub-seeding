@@ -110,6 +110,11 @@ it('reserves called players without showing an untaken call as an active broadca
   const waiting = { ...pairing, id: 'same-player', status: 'ready', called: false, player2Id: 'e' };
   const sections = liveSections([pairing, active, waiting]);
   expect(sections.playing.map((m) => m.id)).toEqual(['actual-play']);
+  const namedCall = { ...pairing, called: false, started: false, stationId: 'stage' };
+  expect(liveSections([namedCall, { ...active, started: true }], true).playing).toEqual([
+    { ...active, started: true },
+  ]);
+  expect(liveSections([namedCall], false).playing).toEqual([namedCall]);
   expect(sections.ready).toEqual([]);
   expect(sections.total).toBe(3);
 });

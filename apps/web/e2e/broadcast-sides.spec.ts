@@ -122,7 +122,7 @@ test('a TO swaps a called broadcast pairing for an independent OBS viewer, retai
   });
   try {
     const obs = await publicContext.newPage();
-    const obsUrl = `/overlay/${planId}?station=${stationId}&recent=1&captureWidth=74&captureHeight=75&controls=0`;
+    const obsUrl = `/overlay/${planId}?presentation=gameplay&station=${stationId}&recent=1&captureWidth=74&captureHeight=75&controls=0`;
     await obs.goto(obsUrl);
     await expect(obs.locator('.broadcast-topline')).toContainText('WAITING FOR A MATCH');
     await preview.getByRole('button', { name: 'Swap players / sides' }).click();

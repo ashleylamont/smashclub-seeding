@@ -210,7 +210,7 @@ for (const idle of [false, true])
     async ({ page }) => {
       const fixture = await mockEvent(page, { idle });
       await page.setViewportSize({ width: 1280, height: 720 });
-      await page.goto(`/overlay/${PLAN_ID}`);
+      await page.goto(`/overlay/${PLAN_ID}?presentation=gameplay`);
       const aperture = page.getByLabel('Transparent game capture area');
       await expect(aperture).toBeVisible();
       await expect(page.getByRole('img', { name: 'Scan to report a match score' })).toHaveCount(0);
