@@ -1,0 +1,96 @@
+.intermission-recent {
+  display: grid;
+  min-width: 0;
+  gap: var(--s3);
+}
+.intermission-recent > h2 {
+  font-size: clamp(24px, 2.9vw, 55px);
+}
+.intermission-recent-cards,
+.intermission-recent-players {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s3);
+}
+.intermission-recent-cards[data-count='1'],
+.intermission-recent-players[data-count='1'] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.intermission-recent-card {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: var(--s3);
+  min-width: 0;
+  padding: var(--s3);
+  background: #201f1a;
+  border-top: 3px solid var(--event-red);
+}
+.intermission-recent-card > header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s2);
+}
+.intermission-recent-card h3 {
+  font-size: clamp(16px, 1.65vw, 31px);
+  overflow-wrap: anywhere;
+}
+.intermission-recent-card > header strong,
+.intermission-recent-winner {
+  color: var(--event-orange);
+}
+.intermission-recent-fighter {
+  display: grid;
+  grid-row: span 4;
+  grid-template-rows: subgrid;
+  gap: var(--s2);
+  min-width: 0;
+  padding: var(--s3);
+  border: 1px solid var(--event-rule);
+  overflow-wrap: anywhere;
+}
+.intermission-recent-fighter[data-winner] {
+  border-color: var(--event-orange);
+}
+.intermission-recent-art {
+  grid-row: 1;
+  min-height: calc(clamp(74px, 18vh, 200px) + 1.65em);
+}
+.intermission-recent-art img {
+  display: block;
+  width: 100%;
+  height: clamp(74px, 18vh, 200px);
+  object-fit: contain;
+  object-position: center bottom;
+}
+.intermission-recent-fighter p {
+  grid-row: 2;
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(20px, 2.15vw, 41px);
+  font-weight: 700;
+  line-height: 1.1;
+}
+.intermission-recent-score {
+  grid-row: 3;
+  font-family: var(--font-number);
+  font-size: clamp(26px, 3.5vw, 67px);
+  line-height: 1;
+}
+.intermission-recent-fighter .intermission-recent-winner {
+  grid-row: 4;
+}
+.intermission-recent-main,
+.intermission-recent-credit {
+  color: var(--event-muted);
+  font-size: clamp(12px, 1.15vw, 20px);
+}
+.intermission-recent-credit {
+  margin: 0;
+}
+@media (max-width: 700px) {
+  .intermission-recent-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
