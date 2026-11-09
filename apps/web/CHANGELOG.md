@@ -2,6 +2,12 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.14.2
+
+### Patch Changes
+
+- 9 November 2026 · **Improvement** · Make the OBS intermission easier to read on a TV with larger standings and draw cards, shorter captions, one page count and a timer that shows when the next page will appear. Show the latest recorded sets with available profile-main artwork when Auto returns from gameplay. [#365](https://github.com/ashleylamont/smashclub-seeding/pull/365) · [build 59b4ee2](https://github.com/ashleylamont/smashclub-seeding/commit/59b4ee2bb463be949aa11e38d0782d552c81d207)
+
 ## 0.14.1
 
 ### Patch Changes
