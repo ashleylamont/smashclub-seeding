@@ -91,7 +91,12 @@ export function IntermissionRecentResults({ matches }: { matches: readonly LiveM
       {cards.length ? (
         <div className="intermission-recent-cards" data-count={cards.length}>
           {cards.map(({ match, result, players, winnerKnown, status }) => (
-            <article className="intermission-recent-card" key={match.id} data-match-id={match.id}>
+            <article
+              className="intermission-recent-card"
+              key={match.id}
+              data-match-id={match.id}
+              data-long-names={players.some(({ name }) => name.length > 90) || undefined}
+            >
               <header>
                 <h3>{linkedFinalCaption(match)?.text ?? match.label}</h3>
                 {status && <strong>{status}</strong>}

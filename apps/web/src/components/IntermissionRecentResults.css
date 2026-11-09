@@ -12,6 +12,9 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--s3);
 }
+.intermission-recent-players {
+  align-content: start;
+}
 .intermission-recent-cards[data-count='1'],
 .intermission-recent-players[data-count='1'] {
   grid-template-columns: minmax(0, 1fr);
@@ -55,12 +58,12 @@
 }
 .intermission-recent-art {
   grid-row: 1;
-  min-height: calc(clamp(74px, 18vh, 200px) + 1.65em);
+  min-height: calc(clamp(60px, 14vh, 155px) + 1.65em);
 }
 .intermission-recent-art img {
   display: block;
   width: 100%;
-  height: clamp(74px, 18vh, 200px);
+  height: clamp(60px, 14vh, 155px);
   object-fit: contain;
   object-position: center bottom;
 }
@@ -68,14 +71,17 @@
   grid-row: 2;
   margin: 0;
   font-family: var(--font-heading);
-  font-size: clamp(20px, 2.15vw, 41px);
+  font-size: clamp(18px, 1.9vw, 36px);
   font-weight: 700;
   line-height: 1.1;
+}
+.intermission-recent-card[data-long-names] .intermission-recent-fighter p {
+  font-size: clamp(16px, 1.45vw, 28px);
 }
 .intermission-recent-score {
   grid-row: 3;
   font-family: var(--font-number);
-  font-size: clamp(26px, 3.5vw, 67px);
+  font-size: clamp(26px, 3.1vw, 59px);
   line-height: 1;
 }
 .intermission-recent-fighter .intermission-recent-winner {
