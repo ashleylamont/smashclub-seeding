@@ -19,6 +19,12 @@ export const FinalsSlotReplayScore = z.object({
   score1: revision.max(5),
   score2: revision.max(5),
 });
+export const PairName = z.string().trim().max(60).nullable();
+export const RenameDoublesPairInput = z.object({
+  entrantId: id,
+  teamName: PairName.transform((value) => value || null),
+  expectedRevision: z.string().min(1).max(64),
+});
 export const DoublesSubstitutionInput = z.object({
   entrantId: id,
   outgoingPlayerId: id,
@@ -41,6 +47,7 @@ const ConfirmFinalsReplay = FinalsSlotReplayScore.extend({
   reason: z.string().trim().min(1).max(500),
 });
 export const additionalCommands = [
+  RenameDoublesPairInput.extend({ kind: z.literal('renameDoublesPair') }),
   LateDoublesPairInput.extend({
     kind: z.literal('addLateDoublesPair'),
     revisionToken: z.string().length(64),

@@ -17,6 +17,28 @@ import { loadDoublesRatings } from '../recompute/doubles';
 import { EventPlanStateError, BRACKET_SLOTS, type PlanView } from './contracts';
 import { stripeIntoPools, poolLabel } from '@smashclub/tournament-formats';
 import { describePairRating, frozenPairRating } from './pairRatings';
+import { hash } from '../tournament/facts';
+
+function canRenamePlannedPair(plan: typeof eventPlans.$inferSelect) {
+  return (
+    plan.bracketMode === 'native' &&
+    plan.competitionFormat === 'doubles' &&
+    !plan.historicalAdoption &&
+    !plan.deletedAt &&
+    !plan.softLockedAt &&
+    ['draft', 'roster_frozen', 'pools_ready'].includes(plan.status)
+  );
+}
+
+function plannedPairNameRevision(entry: typeof eventPlanEntries.$inferSelect) {
+  return hash([
+    entry.id,
+    entry.updatedAt.getTime(),
+    entry.playerId,
+    entry.partnerPlayerId,
+    entry.teamName,
+  ]);
+}
 
 export const extendedNativePlan = (plan: typeof eventPlans.$inferSelect) =>
   plan.competitionFormat === 'doubles' ||
@@ -82,6 +104,7 @@ export async function getExtendedNativePlan(
       primaryPlayerId: row.playerId,
       partnerPlayerId: row.partnerPlayerId,
       teamName: row.teamName,
+      ...(pair && canRenamePlannedPair(plan) && { pairNameRevision: plannedPairNameRevision(row) }),
       memberPlayerIds: members,
       memberNames: names.map((p) => p.canonicalName),
       playerName: names.map((p) => p.canonicalName).join(' / ') || null,
@@ -344,6 +367,43 @@ export async function updateNativeFormat(
         ...(usePairRatings !== undefined ? { usePairRatings } : {}),
       })
       .where(and(eq(eventPlans.id, planId), eq(eventPlans.status, 'draft')));
+  });
+}
+
+export async function renamePlannedPair(
+  db: Db,
+  input: { planId: string; entrantId: string; teamName: string | null; expectedRevision: string },
+) {
+  await db.transaction(async (tx) => {
+    // Serialize with roster edits and the authoritative SQL-to-Act baseline capture.
+    const [plan] = await tx
+      .select()
+      .from(eventPlans)
+      .where(eq(eventPlans.id, input.planId))
+      .for('update');
+    if (!plan || !canRenamePlannedPair(plan))
+      throw new EventPlanStateError(
+        'The event changed. Refresh the roster before renaming a pair.',
+      );
+    const pair = and(
+      eq(eventPlanEntries.eventPlanId, input.planId),
+      eq(eventPlanEntries.id, input.entrantId),
+    );
+    const [entry] = await tx.select().from(eventPlanEntries).where(pair).for('update');
+    if (
+      !entry?.playerId ||
+      !entry.partnerPlayerId ||
+      plannedPairNameRevision(entry) !== input.expectedRevision
+    )
+      throw new EventPlanStateError('The pair changed. Review its current details before saving.');
+    if (entry.teamName === input.teamName) return;
+    await tx
+      .update(eventPlanEntries)
+      .set({
+        teamName: input.teamName,
+        updatedAt: new Date(Math.max(Date.now(), entry.updatedAt.getTime() + 1)),
+      })
+      .where(pair);
   });
 }
 

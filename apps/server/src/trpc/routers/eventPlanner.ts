@@ -1,5 +1,10 @@
 import { structureOptionsSchema, tournamentStructureSchema } from '@smashclub/shared';
-import { addDoublesPair, updateNativeFormat } from '../../event-planner/nativePlanner';
+import {
+  addDoublesPair,
+  renamePlannedPair,
+  updateNativeFormat,
+} from '../../event-planner/nativePlanner';
+import { PairName, RenameDoublesPairInput } from '../../tournament/commands';
 import { projectTournament, projectionInput } from '../../event-planner/projection';
 import { previewPlanRecovery, recoverPlan } from '../../event-planner/recovery';
 import { nativePlanList } from '../../tournament/queries';
@@ -97,11 +102,23 @@ export const eventPlannerRouter = router({
         planId: z.uuid(),
         playerId: z.uuid(),
         partnerPlayerId: z.uuid(),
-        teamName: z.string().trim().max(60).nullable().default(null),
+        teamName: PairName.default(null),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       await guard(() => addDoublesPair(ctx.db, input));
+      return { ok: true };
+    }),
+  renameDoublesPair: adminProcedure
+    .input(
+      RenameDoublesPairInput.extend({ planId: z.uuid(), requestId: z.string().min(1).max(128) }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const api = await nativeEvent(ctx, input.planId, false, input);
+      if (api) {
+        const { entrantId, teamName, expectedRevision } = input;
+        await api.execute({ kind: 'renameDoublesPair', entrantId, teamName, expectedRevision });
+      } else await guard(() => renamePlannedPair(ctx.db, input));
       return { ok: true };
     }),
   updateNativeFormat: adminProcedure
@@ -162,7 +179,7 @@ export const eventPlannerRouter = router({
           .array(
             z.object({
               partnerPlayerId: z.uuid().nullable().optional(),
-              teamName: z.string().trim().max(60).nullable().optional(),
+              teamName: PairName.optional(),
               lineNumber: z.number().int().nonnegative(),
               rawInput: z.string().max(500),
               cleanedName: z.string().max(200),
@@ -232,7 +249,7 @@ export const eventPlannerRouter = router({
         entryId: z.uuid(),
         playerId: z.uuid().nullable().optional(),
         partnerPlayerId: z.uuid().nullable().optional(),
-        teamName: z.string().trim().max(60).nullable().optional(),
+        teamName: PairName.optional(),
         divisionPreference: preferenceSchema.optional(),
         /** `new` records that the player was minted for this row. */
         resolutionMethod: z.enum(['manual', 'new']).optional(),

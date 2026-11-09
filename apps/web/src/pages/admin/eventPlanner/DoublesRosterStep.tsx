@@ -10,6 +10,7 @@ import { Select, SelectItem } from '../../../components/ui/Select';
 import { PlayerLookupModal } from '../../../components/PlayerLookupModal';
 import { IssueList } from './shared';
 import { PairRatingEvidence } from './PairRatingEvidence';
+import { PairNameEditor } from './PairNameEditor';
 
 type PairSort = 'roster' | 'skill_desc' | 'skill_asc' | 'seed_desc';
 
@@ -18,7 +19,7 @@ export function DoublesRosterStep({
   onChanged,
 }: {
   view: EventPlanView;
-  onChanged: () => void;
+  onChanged: () => void | Promise<unknown>;
 }) {
   const [first, setFirst] = useState(''),
     [second, setSecond] = useState(''),
@@ -240,15 +241,18 @@ export function DoublesRosterStep({
                     : Math.round(e.snapshotScore ?? e.currentScore ?? 0)}
                 </td>
                 <td>
-                  {editable && (
-                    <Button
-                      size="small"
-                      disabled={remove.isPending}
-                      onClick={() => remove.mutate(e.id)}
-                    >
-                      Remove pair
-                    </Button>
-                  )}
+                  <div className="row-actions">
+                    <PairNameEditor planId={planId} pair={e} onChanged={onChanged} />
+                    {editable && (
+                      <Button
+                        size="small"
+                        disabled={remove.isPending}
+                        onClick={() => remove.mutate(e.id)}
+                      >
+                        Remove pair
+                      </Button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

@@ -117,6 +117,18 @@ test('creates fixed doubles pairs in the planner and runs a configured double ro
   expect(
     (await query<PairPlan>(page.request, 'admin.eventPlanner.plan', { planId })).entries,
   ).toEqual(withPairModel.entries);
+  const rename = async (previous: string, next: string) => {
+    const pair = ratings.getByRole('row').filter({ hasText: previous });
+    await pair.getByRole('button', { name: /^Rename pair / }).press('Enter');
+    const dialog = page.getByRole('dialog', { name: 'Rename pair', exact: true });
+    const name = dialog.getByRole('textbox', { name: 'Team name', exact: true });
+    await expect(name).toHaveValue(previous);
+    await name.fill(next);
+    await name.press('Enter');
+    await expect(dialog).toBeHidden();
+    await expect(ratings.getByRole('row').filter({ hasText: next })).toBeVisible();
+  };
+  await rename('Team 2', 'Draft rename');
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({
@@ -134,6 +146,8 @@ test('creates fixed doubles pairs in the planner and runs a configured double ro
   await expect(
     page.getByRole('heading', { level: 2, name: /Browser doubles rehearsal.*Pools ready/ }),
   ).toBeVisible();
+  await page.getByRole('button', { name: 'Roster', exact: true }).click();
+  await rename('Team 3', 'Frozen rename');
   await mutate(page.request, 'eventOps.softLockPools', { planId, confirm: true });
   await mutate(page.request, 'eventOps.settings', { planId, published: true, playerReports: true });
   type State = {
@@ -158,6 +172,17 @@ test('creates fixed doubles pairs in the planner and runs a configured double ro
       score2: 0,
       outcome: 'played',
     });
+  const scored = await query<State>(page.request, 'eventOps.snapshot', { planId });
+  await page.goto(`/admin/event-planner?plan=${planId}&step=roster`);
+  await rename('Team 1', 'Live rename');
+  const renamed = await query<State>(page.request, 'eventOps.snapshot', { planId });
+  expect(renamed.matches).toEqual(
+    scored.matches.map((match) => ({
+      ...match,
+      player1Name: match.player1Name.replace(/^Team 1 \(/, 'Live rename ('),
+      player2Name: match.player2Name.replace(/^Team 1 \(/, 'Live rename ('),
+    })),
+  );
   const view = await query<{
     divisions: {
       division: string;
@@ -188,6 +213,9 @@ test('creates fixed doubles pairs in the planner and runs a configured double ro
   await page.getByRole('button', { name: 'Finalize native results', exact: true }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm', exact: true }).click();
   await expect(page.getByText('Result revision 1 published.', { exact: false })).toBeVisible();
+  await page.goto(`/admin/event-planner?plan=${planId}&step=roster`);
+  await expect(ratings.getByText('Live rename', { exact: false })).toBeVisible();
+  await expect(ratings.getByRole('button', { name: /^Rename pair / })).toHaveCount(0);
   const results = await query<{ id: string; slug: string; name: string }[]>(
     page.request,
     'public.tournaments',
@@ -202,7 +230,7 @@ test('creates fixed doubles pairs in the planner and runs a configured double ro
       .getByRole('columnheader', { name: 'Team', exact: true }),
   ).toBeVisible();
   await expect(page.getByText(/No consolation bracket is linked/)).toHaveCount(0);
-  await expect(page.locator('.section > .table-scroll').getByText(/^Team 1 \(/)).toBeVisible();
+  await expect(page.locator('.section > .table-scroll').getByText(/^Live rename \(/)).toBeVisible();
   await expect(page.locator('a[href*="challonge.com"]')).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

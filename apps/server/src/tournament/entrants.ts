@@ -9,6 +9,7 @@ import {
 import type { CommandEnvelope, TournamentCommand, TournamentState } from './schemas';
 
 export type Entrant = TournamentState['entrants'][number];
+export const livePairNameRevision = (entrant: Entrant) => `live:${entrant.revision}`;
 export const memberIds = (e: Entrant): string[] => e.memberPlayerIds ?? [e.playerId];
 export const available = (e: Entrant) =>
   e.availability === 'available' &&
@@ -20,6 +21,26 @@ export function matchMemberIds(
   return state.entrants
     .filter((e) => [match.player1Id, match.player2Id].includes(e.playerId))
     .flatMap(memberIds);
+}
+
+export function renameDoublesPair(
+  next: TournamentState,
+  command: Extract<TournamentCommand, { kind: 'renameDoublesPair' }>,
+  basis: Record<string, number>,
+) {
+  const entrant = next.entrants.find((entry) => entry.id === command.entrantId);
+  requireFact(
+    next.baseline?.competitionFormat === 'doubles' && entrant?.memberPlayerIds?.length === 2,
+    'Choose an existing doubles pair.',
+  );
+  requireFact(
+    livePairNameRevision(entrant) === command.expectedRevision,
+    'The pair changed. Review its current details before saving.',
+  );
+  basis[entrant.id] = entrant.revision;
+  if ((entrant.teamName ?? null) === command.teamName) return;
+  entrant.teamName = command.teamName;
+  entrant.revision++;
 }
 
 export function changeAvailability(

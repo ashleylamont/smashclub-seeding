@@ -360,3 +360,92 @@ for (const [theme, width] of [
     }
     expect(unexpected).toEqual([]);
   });
+
+for (const theme of ['dark', 'light'] as const)
+  for (const width of [390, 1440])
+    test(`pair rename keeps a conflict draft and accepts clearing at ${width}px in ${theme}`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const fixture = await planner(page);
+      fixture.view.plan.status = 'underway';
+      fixture.view.plan.softLockedAt = '2026-10-04T00:00:00Z';
+      const pair = fixture.view.entries[0]!;
+      pair.teamName = 'Original team label';
+      pair.pairNameRevision = 'live:0';
+      const intents: {
+        entrantId: string;
+        teamName: string | null;
+        expectedRevision: string;
+        requestId: string;
+      }[] = [];
+      await page.route('**/api/trpc/admin.eventPlanner.renameDoublesPair*', async (route) => {
+        const intent = route.request().postDataJSON()['0'];
+        intents.push(intent);
+        if (intents.length === 1) {
+          pair.teamName = 'Name changed elsewhere';
+          pair.pairNameRevision = 'live:1';
+          await route.fulfill({
+            status: 409,
+            json: [
+              {
+                error: {
+                  message: 'The pair changed. Review its current details before saving.',
+                  code: -32009,
+                  data: { code: 'CONFLICT', httpStatus: 409 },
+                },
+              },
+            ],
+          });
+          return;
+        }
+        pair.teamName = intent.teamName;
+        pair.pairNameRevision = 'live:2';
+        await route.fulfill({ json: [{ result: { data: { ok: true } } }] });
+      });
+      await page.goto(`/admin/event-planner?plan=${PLAN_ID}&step=roster`);
+      const rename = page.getByRole('button', { name: /^Rename pair Alex/ });
+      await expect(page.getByRole('button', { name: 'Remove pair' })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Reopen roster' })).toHaveCount(0);
+      await rename.press('Enter');
+      const dialog = page.getByRole('dialog', { name: 'Rename pair', exact: true });
+      const name = dialog.getByRole('textbox', { name: 'Team name', exact: true });
+      await expect(name).toHaveValue('Original team label');
+      await expect(dialog.getByRole('button', { name: 'Save team name' })).toBeDisabled();
+      await name.fill('Draft after conflict');
+      await name.press('Enter');
+      await expect(dialog.getByRole('alert')).toContainText('The pair changed.');
+      await expect(dialog.getByRole('alert')).toContainText('Name changed elsewhere');
+      await expect(name).toHaveValue('Draft after conflict');
+      await expect(dialog.getByRole('button', { name: 'Save team name' })).toHaveCount(0);
+      await ready(page);
+      expect(
+        (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze())
+          .violations,
+      ).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      await page.screenshot({ path: testInfo.outputPath('rename-conflict.png') });
+      await dialog.getByRole('button', { name: 'Use current pair details' }).press('Enter');
+      await expect(name).toBeFocused();
+      await expect(name).toHaveValue('Draft after conflict');
+      expect(intents).toHaveLength(1);
+      await page.screenshot({ path: testInfo.outputPath('rename-ready.png') });
+      await name.fill('');
+      await name.press('Enter');
+      await expect(dialog).toBeHidden();
+      await expect(rename).toBeFocused();
+      await expect(page.getByText('Name changed elsewhere')).toHaveCount(0);
+      expect(intents).toEqual([
+        expect.objectContaining({
+          entrantId: pair.id,
+          teamName: 'Draft after conflict',
+          expectedRevision: 'live:0',
+        }),
+        expect.objectContaining({ entrantId: pair.id, teamName: null, expectedRevision: 'live:1' }),
+      ]);
+      expect(intents[1]!.requestId).not.toBe(intents[0]!.requestId);
+      expect(fixture.unexpected).toEqual([]);
+    });

@@ -27,7 +27,7 @@ import {
   seedPoolFinishers,
   poolLabel,
 } from '@smashclub/tournament-formats';
-import { available, memberIds, publicEntrantNames } from './entrants';
+import { available, livePairNameRevision, memberIds, publicEntrantNames } from './entrants';
 import { asc, inArray } from 'drizzle-orm';
 import { players, playerCharacters, tournaments, type Db, type eventMatches } from '@smashclub/db';
 import { publicPlayerName } from '@smashclub/shared';
@@ -455,6 +455,11 @@ export async function planView(
         memberPlayerIds: e.memberPlayerIds,
         memberNames: pairProfiles?.map((profile) => profile.canonicalName),
         teamName: e.teamName,
+        pairNameRevision:
+          e.memberPlayerIds.length === 2 &&
+          (state.lifecycle === 'locked' || state.lifecycle === 'unlocked')
+            ? livePairNameRevision(e)
+            : undefined,
         snapshotMean: e.snapshotMean,
         snapshotSd: e.snapshotSd,
       }),
