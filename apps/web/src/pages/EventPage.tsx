@@ -42,11 +42,9 @@ function EventOverview({ data }: { data: EventOverviewData }) {
           </p>
         </div>
         <div className="event-header-links">
-          {!doubles && (
-            <Link to="/recaps/$slug" params={{ slug: data.canonicalSlug }}>
-              Recap →
-            </Link>
-          )}
+          <Link to="/recaps/$slug" params={{ slug: data.canonicalSlug }}>
+            Recap →
+          </Link>
         </div>
       </div>
       {data.warnings?.map((warning) => (

@@ -259,6 +259,7 @@ export const publicRouter = router({
       .from(playerClaims)
       .where(and(eq(playerClaims.playerId, input.playerId), eq(playerClaims.status, 'approved')));
 
+    const doubles = await playerDoublesHistory(ctx.db, input.playerId);
     return {
       player: {
         id: player.id,
@@ -274,7 +275,8 @@ export const publicRouter = router({
       nights,
       model: 'whr' as const,
       ratingScope: 'night' as const,
-      doublesResults: await playerDoublesHistory(ctx.db, input.playerId),
+      doublesResults: doubles.results,
+      doublesMatches: doubles.matches,
     };
   }),
 

@@ -128,6 +128,7 @@ function publicPlayer(id = PLAYER_ID, verified = false): PlayerData {
     model: 'whr',
     ratingScope: 'night',
     doublesResults: [],
+    doublesMatches: [],
   };
 }
 

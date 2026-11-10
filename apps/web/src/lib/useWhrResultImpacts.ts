@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import type { PlayerEventView } from './apiTypes';
+import type { PlayerMatchLogEntry } from './apiTypes';
 import { trpc } from './trpc';
 
 export type WhrResultImpact =
@@ -24,12 +24,12 @@ export function useWhrResultImpacts({
   recomputeId,
 }: {
   body: RefObject<HTMLTableSectionElement | null>;
-  events: readonly PlayerEventView[];
+  events: readonly PlayerMatchLogEntry[];
   playerId: string;
   recomputeId?: string | null;
 }) {
   const [visibility, setVisibility] = useState<{
-    events: readonly PlayerEventView[];
+    events: readonly PlayerMatchLogEntry[];
     recomputeId: string;
     setIds: string[];
   }>();

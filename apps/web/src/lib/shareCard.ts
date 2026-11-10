@@ -20,6 +20,7 @@ export interface ShareCardInput {
   /** A couple of headlines from the night, already formatted. */
   facts: string[];
   entrants: number;
+  competitionFormat?: 'singles' | 'doubles';
   setsPlayed: number;
   /** Champions labelled by bracket for multi-bracket evenings. */
   champions?: { name: string; bracket: string }[];
@@ -168,7 +169,11 @@ export async function renderShareCard(input: ShareCardInput): Promise<Blob | nul
   ctx.fillRect(0, HEIGHT - 76, WIDTH, 1);
   ctx.font = '400 22px "JetBrains Mono", monospace';
   ctx.fillStyle = soft;
-  ctx.fillText(`${input.entrants} entrants · ${input.setsPlayed} sets`, PAD, HEIGHT - 30);
+  ctx.fillText(
+    `${input.entrants} ${input.competitionFormat === 'doubles' ? 'teams' : 'entrants'} · ${input.setsPlayed} sets`,
+    PAD,
+    HEIGHT - 30,
+  );
   const host = window.location.host;
   const hostWidth = ctx.measureText(host).width;
   ctx.fillText(host, WIDTH - PAD - hostWidth, HEIGHT - 30);
