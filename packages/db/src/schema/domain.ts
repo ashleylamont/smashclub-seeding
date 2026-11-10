@@ -156,41 +156,6 @@ export const identityDecisions = pgTable(
   ],
 );
 
-export const claimStatusEnum = pgEnum('claim_status', [
-  'pending',
-  'approved',
-  'rejected',
-  'revoked',
-]);
-
-/**
- * User <-> player links. Many users may hold approved claims on one player
- * (e.g. unlinked work/personal accounts); a user holds at most one live
- * (pending or approved) claim overall.
- */
-export const playerClaims = pgTable(
-  'player_claims',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    userId: text('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    playerId: uuid('player_id')
-      .notNull()
-      .references(() => players.id, { onDelete: 'cascade' }),
-    status: claimStatusEnum('status').notNull().default('pending'),
-    note: text('note'),
-    resolvedBy: text('resolved_by').references(() => user.id, { onDelete: 'set null' }),
-    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
-    ...timestamps,
-  },
-  (table) => [
-    uniqueIndex('player_claims_live_per_user_idx')
-      .on(table.userId)
-      .where(sql`${table.status} in ('pending', 'approved')`),
-  ],
-);
-
 // ---------------------------------------------------------------------------
 // Tournaments and sets (the source of truth)
 // ---------------------------------------------------------------------------

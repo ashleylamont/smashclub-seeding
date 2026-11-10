@@ -752,6 +752,7 @@ export const adminRouter = router({
         id: playerClaims.id,
         status: playerClaims.status,
         note: playerClaims.note,
+        jevReview: playerClaims.jevReview,
         createdAt: playerClaims.createdAt,
         userName: user.name,
         userEmail: user.email,

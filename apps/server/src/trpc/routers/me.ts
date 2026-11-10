@@ -9,6 +9,7 @@ import {
   characterSlugsSchema,
   setPlayerCharacters,
 } from '../../players/characters';
+import { claimReviewKey, reviewPendingClaim } from '../../players/claimReview';
 import { authedProcedure, router } from '../trpc';
 
 /**
@@ -43,6 +44,7 @@ export const meRouter = router({
     email: ctx.user.email,
     name: ctx.user.name,
     role: ctx.user.role,
+    claimReviewAvailable: Boolean(claimReviewKey(ctx.env)),
   })),
 
   /** The caller's claim state (live claim + history). */
@@ -85,7 +87,13 @@ export const meRouter = router({
   }),
 
   requestClaim: authedProcedure
-    .input(z.object({ playerId: z.uuid(), note: z.string().max(500).optional() }))
+    .input(
+      z.object({
+        playerId: z.uuid(),
+        note: z.string().max(500).optional(),
+        reviewWithJev: z.boolean().optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const [player] = await ctx.db
         .select()
@@ -113,7 +121,19 @@ export const meRouter = router({
         .insert(playerClaims)
         .values({ userId: ctx.user.id, playerId: input.playerId, note: input.note ?? null })
         .returning({ id: playerClaims.id });
-      return { claimId: claim!.id };
+      const claimId = claim!.id;
+      const apiKey = input.reviewWithJev ? claimReviewKey(ctx.env) : undefined;
+      if (apiKey) {
+        await reviewPendingClaim(ctx.db, apiKey, {
+          id: claimId,
+          userId: ctx.user.id,
+          playerId: player.id,
+          companyId: player.companyId,
+          playerName: publicPlayerName(player),
+          note: input.note?.trim(),
+        });
+      }
+      return { claimId };
     }),
 
   withdrawClaim: authedProcedure

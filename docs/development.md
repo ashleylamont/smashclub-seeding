@@ -114,6 +114,12 @@ The source of truth is [`apps/server/src/env.ts`](../apps/server/src/env.ts). Va
 
 Users can link Discord and Google from `/me` after signing in with their original provider. Signing in separately with a new provider creates a separate account. Admin access follows the account across linked providers.
 
+### Optional Jev claim review
+
+Set `JEV_CLAIM_REVIEW_ENABLED=true` and provide `TYPESAFE_API_KEY` through the server's secret store. Review is off by default. Enable [TypeSafe's zero data retention setting](https://help.typesafe.ai/articles/5974925716) for the API organisation before using it with real claims.
+
+When someone with a verified email opts in on the claim form, Nemesis sends their account name and email, the public player alias and company, and any claim note to [TypeSafe System One](https://docs.typesafe.ai/api/system-one). Only the score summary, model, rubric version, and assessment time are stored with the claim. A likely match appears first among pending claims. The label is advisory and only an administrator can grant access. Inconclusive, unavailable, and skipped assessments all remain in the ordinary manual queue.
+
 ## Initial data
 
 After deploying and configuring the server, import the player registry and historical tournament slugs. Put your registry at `legacy/players.yaml` (a gitignored path; see the [format example](../legacy/players.yaml.example)). Run this from the repository root so `$PWD` resolves the input paths before pnpm starts the tool in its package directory:

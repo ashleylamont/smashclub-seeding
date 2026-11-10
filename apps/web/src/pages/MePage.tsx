@@ -47,7 +47,12 @@ export function MePage() {
         <LinkedProviders key={session.user.id} userId={session.user.id} />
       </div>
 
-      <ProfileClaimSection key={session.user.id} userId={session.user.id} targetId={claim} />
+      <ProfileClaimSection
+        key={session.user.id}
+        userId={session.user.id}
+        targetId={claim}
+        claimReviewAvailable={session.user.emailVerified && currentUser.data?.claimReviewAvailable}
+      />
     </div>
   );
 }

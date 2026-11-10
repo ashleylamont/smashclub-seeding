@@ -13,6 +13,15 @@ const claim: AdminClaim = {
   userName: 'Claiming account with a long display name',
   userEmail: 'claimant@example.test',
   note,
+  jevReview: {
+    result: 'likely_match',
+    reviewedAt: '2026-10-03T00:00:00Z',
+    rubricVersion: 1,
+    model: 'jev-1.14.0',
+    score: 3.96,
+    confidence: 0.95,
+    topLevelProbability: 0.96,
+  },
   status: 'pending',
   createdAt: '2026-10-03T00:00:00Z',
 };
@@ -68,6 +77,7 @@ for (const theme of ['dark', 'light'] as const)
         'Actions',
       ]);
       await expect(table.getByRole('cell', { name: note })).toBeVisible();
+      await expect(table.getByText('Jev · Likely match')).toBeVisible();
       await page.getByRole('link', { name: 'Admins', exact: true }).focus();
       await page.keyboard.press('Tab');
       await expect(region).toBeFocused();
@@ -97,6 +107,7 @@ for (const theme of ['dark', 'light'] as const)
       await page.keyboard.press('Enter');
       await expect(table.getByRole('button', { name: 'Revoke', exact: true })).toBeVisible();
       expect(resolutions).toEqual([{ claimId: claim.id, action: 'approved' }]);
+      await expect(table.getByText('Jev · Likely match')).toHaveCount(0);
 
       const registry = page.getByRole('region', { name: 'Player registry', exact: true });
       const filter = page.getByPlaceholder('Filter by name or alias…');

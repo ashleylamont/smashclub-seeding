@@ -140,6 +140,14 @@ for (const theme of ['dark', 'light'] as const)
       await page.setViewportSize({ width, height: 900 });
       await page.emulateMedia({ colorScheme: theme });
       const fixture = await mockAccount(page, null);
+      const optIn = (theme === 'dark' && width === 390) || (theme === 'light' && width === 1440);
+      fixture.responses['me.whoami'] = {
+        id: 'Claiming account',
+        name: 'Claiming account',
+        email: 'claimant@example.test',
+        role: 'player',
+        claimReviewAvailable: optIn,
+      };
       let verified = false;
       fixture.queryResponses.set('public.player', (input) => {
         expect(input).toEqual({ playerId: PLAYER_ID });
@@ -180,15 +188,34 @@ for (const theme of ['dark', 'light'] as const)
       await expect(page.getByRole('link', { name: PUBLIC_NAME })).toBeVisible();
       await expect(page.getByRole('textbox', { name: 'Search players' })).toHaveCount(0);
       expect(requests).toEqual([]);
+      const review = page.getByRole('checkbox', { name: 'Allow automated review' });
+      if (optIn) {
+        await expect(review).not.toBeChecked();
+        await expect(review).toHaveAccessibleDescription(
+          /TypeSafe receives your account name and email/,
+        );
+      } else {
+        await expect(review).toHaveCount(0);
+      }
       await inspect('03-selected-player');
       await page
         .getByRole('textbox', { name: 'Note for administrators (optional)' })
         .fill('My bracket alias');
+      if (optIn) {
+        await review.press('Space');
+        await expect(review).toBeChecked();
+      }
       await request.press('Enter');
 
       const check = page.getByRole('button', { name: 'Check approval' });
       await expect(check).toBeVisible();
-      expect(requests).toEqual([{ playerId: PLAYER_ID, note: 'My bracket alias' }]);
+      expect(requests).toEqual([
+        {
+          playerId: PLAYER_ID,
+          note: 'My bracket alias',
+          ...(optIn ? { reviewWithJev: true } : {}),
+        },
+      ]);
       await expect(page.getByRole('heading', { name: 'Main characters' })).toHaveCount(0);
       await inspect('04-pending-approval');
       await page.getByRole('link', { name: PUBLIC_NAME }).click();

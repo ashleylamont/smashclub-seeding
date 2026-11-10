@@ -25,6 +25,11 @@ const envSchema = z.object({
    * the UI and changes here do not alter existing accounts.
    */
   ADMIN_EMAILS: z.string().default(''),
+  JEV_CLAIM_REVIEW_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
+  TYPESAFE_API_KEY: z.string().trim().min(1).optional(),
   /**
    * Trust `X-Forwarded-*` from the proxy in front of us. Off by default (a
    * directly-exposed server must not let clients pick their own address);
