@@ -33,7 +33,7 @@ The original member list and frozen rating evidence stay in the draw history. Th
 
 Either teammate can find the pair under their public names. Reports retain the individual reporter identity and use the existing approval/dispute policy. Confirm pool finishing orders in the planner. For a round robin, finalize directly afterward; for formats with pools and playoffs, create and finish the final brackets first. Standalone knockout starts at draw lock and finalizes after its last required match. A reviewed round-robin score correction must also include a reviewed complete finishing order.
 
-Results retain both members and one team-versus-team result per set. Player profiles show doubles results separately. Doubles does not alter singles ratings, singles activity periods, or singles breakthrough analysis. Singles recaps remain a singles feature; doubles publishes team standings, records, and bracket results. Public views use both players' public aliases.
+Results retain both members and one team-versus-team result per set. Player profiles show team placements and mark doubles sets in the match log. Doubles recaps show the night's team podiums and recorded set highlights. Doubles results do not alter singles ratings, singles activity periods, or singles breakthrough analysis. Public views use both players' public aliases.
 
 Run separate singles and doubles plans in sequential time blocks. Station and player reservations are local to one event plan. Concurrent competitions sharing players or physical stations require shared scheduling support and are not coordinated automatically.
 

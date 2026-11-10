@@ -56,6 +56,8 @@ export interface RecapParticipant {
   tournamentId: string;
   /** Null while identity is unresolved; seed-based facts still work. */
   playerId: string | null;
+  /** Stable team identity for counting entries across brackets. */
+  entryKey?: string;
   /** Already public-formatted by the caller. */
   name: string;
   companyCode: string | null;
@@ -809,14 +811,15 @@ export function buildRecap(input: RecapInput): RecapResult {
       if (outcome) outcomes.set(tournament.id, outcome);
     }
     const entries = participants.filter((p) => p.tournamentId === tournament.id);
-    const finalParticipantIds = groupedTournamentIds.has(tournament.id)
-      ? new Set(
-          sets
-            .filter((set) => set.tournamentId === tournament.id && !isGroupSet(set))
-            .flatMap((set) => [set.p1ParticipantId, set.p2ParticipantId])
-            .filter((id): id is string => id !== null),
-        )
-      : null;
+    const finalParticipantIds =
+      tournament.tournamentType !== 'round robin' && groupedTournamentIds.has(tournament.id)
+        ? new Set(
+            sets
+              .filter((set) => set.tournamentId === tournament.id && !isGroupSet(set))
+              .flatMap((set) => [set.p1ParticipantId, set.p2ParticipantId])
+              .filter((id): id is string => id !== null),
+          )
+        : null;
     const reported = entries.filter(
       (p) => p.finalRank != null && (finalParticipantIds === null || finalParticipantIds.has(p.id)),
     );
@@ -895,7 +898,10 @@ export function buildRecap(input: RecapInput): RecapResult {
   facts.sort((a, b) => b.notability - a.notability || a.id.localeCompare(b.id));
 
   const entrantIds = new Set(
-    participants.map((participant) => participant.playerId ?? `participant:${participant.id}`),
+    participants.map(
+      (participant) =>
+        participant.entryKey ?? participant.playerId ?? `participant:${participant.id}`,
+    ),
   );
   return {
     eventKey: eventKey ? eventKeyOf(eventKey) : null,

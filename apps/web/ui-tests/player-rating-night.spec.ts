@@ -3,6 +3,7 @@ import { AxeBuilder } from '@axe-core/playwright';
 import { rpcProcedures } from '../test-support/rpcBatch';
 import { chooseOption } from '../test-support/controls';
 import { ready } from './fixtures';
+import type { PlayerDoublesMatch } from '../src/lib/apiTypes';
 import type { trpc } from '../src/lib/trpc';
 
 const playerId = 'ac184b5a-fba4-4bc9-9ee9-c1610d3c8373';
@@ -63,6 +64,7 @@ async function mockProfile(
   page: Page,
   impact?: (request: ImpactRequest) => Impact | undefined | Promise<Impact | undefined>,
   live?: Promise<string>,
+  doublesMatches: PlayerDoublesMatch[] = [],
 ) {
   const profile = {
     recomputeId: impact ? recomputeId : undefined,
@@ -119,6 +121,7 @@ async function mockProfile(
         opponentName: 'Practice opponent',
       })),
     doublesResults: [],
+    doublesMatches,
   };
   const requests: (ImpactRequest & { at: number })[] = [];
   let active = 0;
@@ -502,3 +505,55 @@ test('a live recompute aborts the previous estimate and preserves the focused de
     notifyRecompute(': fixture\n\n');
   }
 });
+
+for (const [width, theme] of [
+  [390, 'dark'],
+  [1440, 'light'],
+] as const) {
+  test(`${width}px ${theme} player history interleaves marked doubles results`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+    const mock = await mockProfile(page, () => effect, undefined, [
+      {
+        format: 'doubles',
+        setId: 'doubles-played-set',
+        resultStage: 'group',
+        tournamentName: 'Tech In Place 13 Open Main',
+        tournamentSlug: 'tip13-doubles',
+        tournamentDate: '2026-11-10T07:00:00Z',
+        teammateName: 'A teammate with a particularly long public alias',
+        opponentName: 'Opponent One / Opponent Two with a long alias',
+        won: true,
+        score: '2–1',
+        forfeit: false,
+      },
+    ]);
+    await page.goto(`/players/${playerId}`);
+    const log = page.getByRole('region', { name: 'Match results' });
+    await expect(log.getByRole('row').nth(1)).toContainText('Doubles');
+    const row = log.getByRole('row', { name: /Tech In Place 13/ });
+    await expect(row).toContainText('With A teammate');
+    await expect(row).toContainText('Opponent One / Opponent Two');
+    await expect(row).toContainText('W · 2–1');
+    await expect(row).not.toHaveAttribute('data-whr-set-id', /./);
+    await expect(row.getByRole('link')).toHaveAttribute('href', '/events/tip13-doubles');
+    const stage = page.getByRole('combobox', { name: 'Filter match history by stage' });
+    await chooseOption(stage, 'final');
+    await expect(row).toHaveCount(0);
+    await chooseOption(stage, 'all');
+    await expect(row).toBeVisible();
+    await ready(page);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    expect((await new AxeBuilder({ page }).include('.match-history').analyze()).violations).toEqual(
+      [],
+    );
+    await page
+      .locator('.match-history')
+      .screenshot({ path: testInfo.outputPath('doubles-match-log.png') });
+    expect(mock.requests.every(({ setId }) => setId !== 'doubles-played-set')).toBe(true);
+  });
+}

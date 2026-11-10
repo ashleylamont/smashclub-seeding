@@ -32,7 +32,9 @@ import {
   isPlayedRatingResult,
 } from '@smashclub/shared';
 import { latestRecomputeId } from '../recompute/recompute';
+import { publicParticipantPresentation } from '../events/participantNames';
 import { charactersByPlayer } from '../players/characters';
+import { historicalPlayerIds } from '../identity/playerIds';
 
 /**
  * Assembles a night's recap: resolves a slug to every bracket that ran that
@@ -63,6 +65,7 @@ export interface LoadedRecap extends Omit<RecapResult, 'tournaments' | 'facts' |
   /** The night's brackets, main first, each addressable by its own slug. */
   tournaments: (RecapTournament & { slug: string })[];
   name: string;
+  competitionFormat: 'singles' | 'doubles';
   facts: LoadedRecapFact[];
   highlights: LoadedRecapFact[];
   coverage: {
@@ -77,7 +80,8 @@ export interface LoadedRecap extends Omit<RecapResult, 'tournaments' | 'facts' |
 
 export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | null> {
   const [anchor] = await db.select().from(tournaments).where(eq(tournaments.challongeSlug, slug));
-  if (!anchor || anchor.competitionFormat === 'doubles') return null;
+  if (!anchor) return null;
+  const doubles = anchor.competitionFormat === 'doubles';
 
   /*
    * Explicit plan membership owns the event identity. Historical unlinked
@@ -97,7 +101,12 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
       raw: tournaments.raw,
     })
     .from(tournaments)
-    .where(and(isNotNull(tournaments.eventDate), eq(tournaments.competitionFormat, 'singles')))
+    .where(
+      and(
+        isNotNull(tournaments.eventDate),
+        eq(tournaments.competitionFormat, anchor.competitionFormat),
+      ),
+    )
     .orderBy(asc(tournaments.eventDate));
 
   const anchorKey = anchor.eventDate ? eventKeyOf(anchor.eventDate.toISOString()) : null;
@@ -132,7 +141,12 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
       await db
         .select()
         .from(tournaments)
-        .where(inArray(tournaments.id, ids))
+        .where(
+          and(
+            inArray(tournaments.id, ids),
+            eq(tournaments.competitionFormat, anchor.competitionFormat),
+          ),
+        )
         .orderBy(asc(tournaments.eventDate))
     ).map((t) => ({ ...t, slug: t.challongeSlug }));
   } else if (anchorPlans.size > 1) {
@@ -173,6 +187,8 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
       id: tournamentParticipants.id,
       tournamentId: tournamentParticipants.tournamentId,
       playerId: tournamentParticipants.playerId,
+      memberPlayerIds: tournamentParticipants.memberPlayerIds,
+      teamName: tournamentParticipants.teamName,
       cleanedName: tournamentParticipants.cleanedName,
       seed: tournamentParticipants.challongeSeed,
       finalRank: tournamentParticipants.finalRank,
@@ -185,23 +201,40 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
     .leftJoin(companies, eq(players.companyId, companies.id))
     .where(inArray(tournamentParticipants.tournamentId, nightIds));
 
-  const characters = await charactersByPlayer(
-    db,
-    participantRows.flatMap((p) => (p.playerId ? [p.playerId] : [])),
+  const presentation = doubles
+    ? await publicParticipantPresentation(db, participantRows, true)
+    : null;
+  const singlesCharacters = doubles
+    ? null
+    : await charactersByPlayer(
+        db,
+        participantRows.flatMap(({ playerId }) => (playerId ? [playerId] : [])),
+      );
+  const canonical = doubles ? await historicalPlayerIds(db) : null;
+  const participants: RecapParticipant[] = participantRows.map((p) => {
+    const display = presentation?.get(p.id);
+    const members = p.memberPlayerIds?.map((id) => canonical?.(id) ?? id);
+    return {
+      id: p.id,
+      tournamentId: p.tournamentId,
+      playerId: p.playerId,
+      entryKey:
+        doubles && members?.length === 2 && members[0] !== members[1]
+          ? JSON.stringify(members.toSorted())
+          : undefined,
+      name: display?.name ?? publicParticipantName(p),
+      companyCode: p.companyCode,
+      characters: p.playerId
+        ? (singlesCharacters?.get(p.playerId) ?? [])
+        : (display?.graphic?.members.flatMap(({ character }) => (character ? [character] : [])) ??
+          []),
+      seed: p.seed,
+      finalRank: p.finalRank,
+    };
+  });
+  const linkedParticipants = new Set(
+    participants.filter((p) => p.playerId || p.entryKey).map((p) => p.id),
   );
-
-  const participants: RecapParticipant[] = participantRows.map((p) => ({
-    id: p.id,
-    tournamentId: p.tournamentId,
-    playerId: p.playerId,
-    // Public surface — and a shareable one — so a player with no chosen alias
-    // shows the short form, as does an entry the review queue has not linked yet.
-    name: publicParticipantName(p),
-    companyCode: p.companyCode,
-    characters: p.playerId ? (characters.get(p.playerId) ?? []) : [],
-    seed: p.seed,
-    finalRank: p.finalRank,
-  }));
 
   // --- sets ---------------------------------------------------------------
 
@@ -233,14 +266,14 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
 
   // --- ratings (optional) -------------------------------------------------
 
-  const recomputeId = await latestRecomputeId(db);
+  const recomputeId = doubles ? null : await latestRecomputeId(db);
   const { nightEvents, history, rankMovement } = recomputeId
     ? await loadRatingContext(db, recomputeId, nightIds)
     : { nightEvents: [], history: undefined, rankMovement: [] };
 
   // --- turnout comparison -------------------------------------------------
 
-  const priorTurnouts = await loadPriorTurnouts(db, allDated, anchorKey);
+  const priorTurnouts = doubles ? [] : await loadPriorTurnouts(db, allDated, anchorKey);
 
   const result = buildRecap({
     tournaments: nightTournaments,
@@ -264,6 +297,7 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
   return {
     ...result,
     name: eventNameOf(withSlugs.map((t) => t.name)),
+    competitionFormat: anchor.competitionFormat,
     tournaments: withSlugs,
     facts: result.facts.map((entry) => ({ ...entry, ...formatFact(entry.fact) })),
     highlights: result.highlights.map((entry) => ({ ...entry, ...formatFact(entry.fact) })),
@@ -271,7 +305,7 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
       unsyncedBrackets: (nightRows.length ? nightRows : [anchor]).filter(
         (t) => t.syncState !== 'synced',
       ).length,
-      unresolvedEntrants: participants.filter((p) => p.playerId === null).length,
+      unresolvedEntrants: participants.length - linkedParticipants.size,
       unlinkedPlayedSets: setRows.filter(
         (s) =>
           s.state === 'complete' &&
@@ -279,7 +313,12 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
           !s.excludedFromRatings &&
           isPlayedRatingResult(s.scoresCsv, s.raw) &&
           includesResultStage(modes.get(s.tournamentId) ?? 'auto', s.resultStage) &&
-          (!s.p1PlayerId || !s.p2PlayerId),
+          (doubles
+            ? !s.p1ParticipantId ||
+              !s.p2ParticipantId ||
+              !linkedParticipants.has(s.p1ParticipantId) ||
+              !linkedParticipants.has(s.p2ParticipantId)
+            : !s.p1PlayerId || !s.p2PlayerId),
       ).length,
       ignoredGroupSets: setRows.filter(
         (s) => !includesResultStage(modes.get(s.tournamentId) ?? 'auto', s.resultStage),

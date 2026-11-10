@@ -16,7 +16,7 @@ import {
 import { trpc } from '../lib/trpc';
 import { authClient, useMyClaims } from '../lib/auth';
 import { mainCharactersAnchor } from '../lib/profileClaim';
-import type { PlayerData, PlayerEventView } from '../lib/apiTypes';
+import type { PlayerData, PlayerEventView, PlayerMatchLogEntry } from '../lib/apiTypes';
 import { CharacterIcons } from '../components/CharacterIcons';
 import { PlayerRatingNight } from '../components/PlayerRatingNight';
 import { PlayerMatchLog } from '../components/PlayerMatchLog';
@@ -98,20 +98,30 @@ function PlayerProfile({ data }: { data: PlayerData }) {
     [chartData],
   );
 
-  const matches = useMemo(() => events.filter((e) => !e.isDecay), [events]);
+  const singlesMatches = useMemo(() => events.filter((e) => !e.isDecay), [events]);
+  const logEvents = useMemo((): PlayerMatchLogEntry[] => {
+    const doubles = data.doublesMatches ?? [];
+    const newestSingles = [...events].reverse();
+    if (!doubles.length) return newestSingles;
+    return [...newestSingles, ...doubles].sort((a, b) =>
+      (b.tournamentDate ?? '').localeCompare(a.tournamentDate ?? ''),
+    );
+  }, [data.doublesMatches, events]);
+  const matchCount = singlesMatches.length + (data.doublesMatches?.length ?? 0);
   const [stageFilter, setStageFilter] = useState<'all' | 'group' | 'final'>('all');
   const hasBothStages = useMemo(
     () =>
       new Set(
-        matches
+        logEvents
           .map((event) => event.resultStage)
           .filter((stage): stage is 'group' | 'final' => stage !== null),
       ).size > 1,
-    [matches],
+    [logEvents],
   );
   const effectiveStage = hasBothStages ? stageFilter : 'all';
-  const wins = matches.filter((e) => e.won).length;
-  const winRate = matches.length > 0 ? ((wins / matches.length) * 100).toFixed(0) : null;
+  const wins = singlesMatches.filter((e) => e.won).length;
+  const winRate =
+    singlesMatches.length > 0 ? ((wins / singlesMatches.length) * 100).toFixed(0) : null;
 
   const confidenceExplainer = useMemo(() => {
     if (!rating) return 'No rated match history yet.';
@@ -131,10 +141,8 @@ function PlayerProfile({ data }: { data: PlayerData }) {
   // Most recent first for the table.
   const tableEvents = useMemo(
     () =>
-      [...events]
-        .reverse()
-        .filter((event) => effectiveStage === 'all' || event.resultStage === effectiveStage),
-    [events, effectiveStage],
+      logEvents.filter((event) => effectiveStage === 'all' || event.resultStage === effectiveStage),
+    [logEvents, effectiveStage],
   );
 
   /**
@@ -269,7 +277,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         <div className="stat">
           <dt>Record</dt>
           <dd className="num">
-            {rating ? `${rating.wins}–${rating.losses}` : `${wins}–${matches.length - wins}`}
+            {rating ? `${rating.wins}–${rating.losses}` : `${wins}–${singlesMatches.length - wins}`}
           </dd>
           <dd className="stat-detail">
             {winRate != null ? `${winRate}% of sets won` : 'No sets played'}
@@ -424,8 +432,8 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         <h3>
           Match log (
           {effectiveStage === 'all'
-            ? matches.length
-            : `${tableEvents.filter((event) => !event.isDecay).length} of ${matches.length}`}{' '}
+            ? matchCount
+            : `${tableEvents.filter((event) => !('isDecay' in event) || !event.isDecay).length} of ${matchCount}`}{' '}
           sets)
         </h3>
         {hasBothStages && (
@@ -449,7 +457,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
               : 'WHR fits whole nights. Individual sets have no exact rating delta.'}
           </p>
         )}
-        {matches.length > 0 && (
+        {singlesMatches.length > 0 && (
           <p className="muted chart-caption">
             Each set starts at one evidence unit. The saved margin weight adds units for each game
             beyond a one-game winning margin, up to two units total. Evidence units weight the WHR
@@ -458,7 +466,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
               ' Pre-night win estimates use earlier rated sets and both players’ uncertainty.'}
           </p>
         )}
-        {events.length === 0 ? (
+        {logEvents.length === 0 ? (
           <p className="muted">No match history available for this player.</p>
         ) : (
           <PlayerMatchLog

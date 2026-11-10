@@ -43,6 +43,9 @@ export interface PlayerEventView {
   opponentName: string | null;
 }
 
+export type PlayerDoublesMatch = PlayerData['doublesMatches'][number];
+export type PlayerMatchLogEntry = PlayerEventView | PlayerDoublesMatch;
+
 export type RatingHistoryData = Awaited<ReturnType<typeof trpc.public.ratingHistory.query>>;
 
 export type TournamentListItem = Awaited<ReturnType<typeof trpc.public.tournaments.query>>[number];

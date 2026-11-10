@@ -39,6 +39,7 @@ async function comparisonFixture(page: Page) {
     model: 'whr',
     ratingScope: 'night',
     doublesResults: [],
+    doublesMatches: [],
   };
   const pairs: { first?: string; second?: string }[] = [];
   fixture.queryResponses.set('public.headToHead', (input): Data => {

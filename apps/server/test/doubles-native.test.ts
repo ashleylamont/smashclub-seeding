@@ -15,6 +15,7 @@ import {
   user,
   type Db,
 } from '@smashclub/db';
+import { expectDoublesRecapAndHistory } from './helpers/doublesRecapAssertions';
 import { createTestDb } from './helpers/testDb';
 import { nativeAdmin, pureBaseline, envelope } from './helpers/nativeLiveFixture';
 import { createNativeRuntime, type NativeRuntime } from '../src/tournament/runtime';
@@ -624,8 +625,12 @@ describe('native doubles through shipped APIs', () => {
     expect(overview!.divisions[0]!.players.find((p) => p.place === 1)?.entryKey).toBe(
       `pair:${JSON.stringify([members[6]!.id, members[7]!.id].sort())}`,
     );
-    const profile = await caller().public.player({ playerId: members[7]!.id });
-    expect(profile && 'doublesResults' in profile ? profile.doublesResults : []).toHaveLength(1);
+    await expectDoublesRecapAndHistory(
+      caller(null).public,
+      t!.challongeSlug,
+      members[7]!.id,
+      members[6]!.displayName,
+    );
   });
   it('retains pair evidence across a historical identity redirect without giving it to a new partner', async () => {
     const { planId, members } = await draft(2, 'round_robin', '2026-10-02T00:00:00Z');

@@ -69,7 +69,8 @@ function Recap({ data }: { data: RecapData }) {
       </div>
 
       <p className="muted recap-subtitle">
-        {formatDate(eventDate)} · {data.entrants} entrants · {data.setsPlayed} sets
+        {formatDate(eventDate)} · {data.entrants}{' '}
+        {data.competitionFormat === 'doubles' ? 'teams' : 'entrants'} · {data.setsPlayed} sets
         {data.tournaments.length > 1 && ` · ${data.tournaments.length} brackets`}
         {data.slug && (
           <Link to="/events/$slug" params={{ slug: data.slug }}>
@@ -468,6 +469,7 @@ function ShareBar({
               }))
             : undefined,
         entrants: data.entrants,
+        competitionFormat: data.competitionFormat,
         setsPlayed: data.setsPlayed,
       });
       if (!blob) {

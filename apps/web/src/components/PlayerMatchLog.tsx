@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { Link } from '@tanstack/react-router';
-import type { PlayerEventView } from '../lib/apiTypes';
+import type { PlayerMatchLogEntry } from '../lib/apiTypes';
 import { formatDate } from '../lib/format';
 import { useWhrResultImpacts, type WhrResultImpact } from '../lib/useWhrResultImpacts';
 
@@ -50,7 +50,7 @@ export function PlayerMatchLog({
   playerId,
   recomputeId,
 }: {
-  events: readonly PlayerEventView[];
+  events: readonly PlayerMatchLogEntry[];
   playerId: string;
   recomputeId?: string | null;
 }) {
@@ -82,6 +82,29 @@ export function PlayerMatchLog({
         </thead>
         <tbody ref={body}>
           {events.map((event) => {
+            if ('format' in event) {
+              return (
+                <tr key={event.setId} className={event.won ? 'win' : 'loss'}>
+                  <td className="mono">{formatDate(event.tournamentDate)}</td>
+                  <td>
+                    <Link to="/events/$slug" params={{ slug: event.tournamentSlug }}>
+                      {event.tournamentName}
+                    </Link>
+                    <span className="chip rookie-chip">Doubles</span>
+                    {event.teammateName && (
+                      <span className="whr-impact-value">With {event.teammateName}</span>
+                    )}
+                  </td>
+                  <td>{event.resultStage === 'group' ? 'Pool' : 'Bracket'}</td>
+                  <td>{event.opponentName}</td>
+                  <td className={event.won ? 'result-win' : 'result-loss'}>
+                    {event.won ? 'W' : 'L'}
+                    {event.forfeit ? ' · Forfeit' : event.score ? ` · ${event.score}` : ''}
+                  </td>
+                  <td className="num">—</td>
+                </tr>
+              );
+            }
             const setId = recomputeId && !event.isDecay && event.won != null ? event.setId : null;
             const impact = setId ? (runImpact ?? results?.get(setId)) : undefined;
             const forecast =
