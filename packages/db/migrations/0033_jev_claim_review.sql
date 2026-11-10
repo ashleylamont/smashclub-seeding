@@ -1,0 +1,1 @@
+ALTER TABLE "player_claims" ADD COLUMN "jev_review" jsonb;

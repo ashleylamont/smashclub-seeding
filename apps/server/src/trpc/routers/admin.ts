@@ -752,6 +752,8 @@ export const adminRouter = router({
         id: playerClaims.id,
         status: playerClaims.status,
         note: playerClaims.note,
+        jevReview: playerClaims.jevReview,
+        resolvedBy: playerClaims.resolvedBy,
         createdAt: playerClaims.createdAt,
         userName: user.name,
         userEmail: user.email,
@@ -764,8 +766,13 @@ export const adminRouter = router({
       .innerJoin(players, eq(playerClaims.playerId, players.id))
       .orderBy(desc(playerClaims.createdAt))
       .limit(100);
-    return rows.map((row) => ({
+    return rows.map(({ resolvedBy, ...row }) => ({
       ...row,
+      autoApproved:
+        row.status === 'approved' &&
+        resolvedBy === null &&
+        row.jevReview?.result === 'likely_match' &&
+        Boolean(row.jevReview.autoApprovedAt),
       playerName: row.displayName ?? row.canonicalName,
       createdAt: row.createdAt.toISOString(),
     }));

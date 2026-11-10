@@ -115,7 +115,7 @@ async function redirectPlayer(db: Db, from: typeof players.$inferSelect, intoPla
     } else {
       await db
         .update(playerClaims)
-        .set({ playerId: intoPlayerId, updatedAt: new Date() })
+        .set({ playerId: intoPlayerId, jevReview: null, updatedAt: new Date() })
         .where(eq(playerClaims.id, claim.id));
     }
   }

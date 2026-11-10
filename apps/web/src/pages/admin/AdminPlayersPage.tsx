@@ -386,7 +386,13 @@ function ClaimsPanel() {
     void queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
   };
 
-  const pending = (claims.data ?? []).filter((c) => c.status === 'pending');
+  const pending = (claims.data ?? [])
+    .filter((c) => c.status === 'pending')
+    .sort(
+      (a, b) =>
+        Number(b.jevReview?.result === 'likely_match') -
+        Number(a.jevReview?.result === 'likely_match'),
+    );
   const resolved = (claims.data ?? []).filter((c) => c.status !== 'pending');
 
   return (
@@ -456,6 +462,22 @@ function ClaimRow({ claim, onChanged }: { claim: AdminClaim; onChanged: () => vo
         >
           {claim.status}
         </span>
+        {claim.autoApproved && (
+          <div>
+            <span className="chip">Jev · Auto-approved</span>
+          </div>
+        )}
+        {claim.status === 'pending' && claim.jevReview && (
+          <div>
+            {claim.jevReview.result === 'likely_match' ? (
+              <span className="chip chip-accent">Jev · Likely match</span>
+            ) : (
+              <span className="muted">
+                {claim.jevReview.result === 'unavailable' ? 'Jev unavailable' : 'Jev inconclusive'}
+              </span>
+            )}
+          </div>
+        )}
       </td>
       <td>
         <span className="row-actions">

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from '@tanstack/react-router';
 import { CharacterPicker } from './CharacterPicker';
 import { Button } from './ui/Button';
+import { Checkbox } from './ui/Checkbox';
 import { LoadingState, Notice } from './ui/Feedback';
 import { Field } from './ui/Field';
 import { Input } from './ui/Input';
@@ -12,7 +13,15 @@ import { formatDate } from '../lib/format';
 import { mainCharactersAnchor } from '../lib/profileClaim';
 import { trpc } from '../lib/trpc';
 
-export function ProfileClaimSection({ userId, targetId }: { userId: string; targetId?: string }) {
+export function ProfileClaimSection({
+  userId,
+  targetId,
+  claimReviewMode,
+}: {
+  userId: string;
+  targetId?: string;
+  claimReviewMode?: 'off' | 'triage' | 'auto';
+}) {
   const queryClient = useQueryClient();
   const claims = useMyClaims(userId);
   const hash = useLocation({ select: (location) => location.hash });
@@ -58,7 +67,12 @@ export function ProfileClaimSection({ userId, targetId }: { userId: string; targ
           checking={claims.isFetching}
         />
       ) : (
-        <ClaimSearch key={targetId ?? 'search'} targetId={targetId} onChanged={invalidate} />
+        <ClaimSearch
+          key={targetId ?? 'search'}
+          targetId={targetId}
+          claimReviewMode={claimReviewMode}
+          onChanged={invalidate}
+        />
       )}
       {pastClaims.length > 0 && (
         <div className="claim-history">
@@ -245,9 +259,19 @@ function ProfileEditor({
   );
 }
 
-function ClaimSearch({ targetId, onChanged }: { targetId?: string; onChanged: () => void }) {
+function ClaimSearch({
+  targetId,
+  claimReviewMode,
+  onChanged,
+}: {
+  targetId?: string;
+  claimReviewMode?: 'off' | 'triage' | 'auto';
+  onChanged: () => void;
+}) {
   const [query, setQuery] = useState('');
   const [note, setNote] = useState('');
+  const [reviewWithJev, setReviewWithJev] = useState(false);
+  const reviewAvailable = claimReviewMode === 'triage' || claimReviewMode === 'auto';
   const trimmed = query.trim();
   const target = useQuery({
     queryKey: ['player', targetId],
@@ -264,7 +288,13 @@ function ClaimSearch({ targetId, onChanged }: { targetId?: string; onChanged: ()
 
   const request = useMutation({
     mutationFn: (playerId: string) =>
-      trpc.me.requestClaim.mutate({ playerId, note: note.trim() === '' ? undefined : note.trim() }),
+      trpc.me.requestClaim.mutate({
+        playerId,
+        note: note.trim() || undefined,
+        ...(reviewAvailable && reviewWithJev
+          ? { reviewWithJev: claimReviewMode === 'auto' ? 'auto' : 'triage' }
+          : {}),
+      }),
     onSuccess: onChanged,
   });
 
@@ -275,6 +305,25 @@ function ClaimSearch({ targetId, onChanged }: { targetId?: string; onChanged: ()
       maxLength={500}
       onChange={(event) => setNote(event.target.value)}
     />
+  );
+  const reviewField = reviewAvailable && (
+    <div>
+      <label className="ui-actions">
+        <Checkbox
+          checked={reviewWithJev}
+          onCheckedChange={setReviewWithJev}
+          aria-describedby="claim-review-data"
+        />
+        Allow automated review
+      </label>
+      <p className="muted" id="claim-review-data">
+        Optional. TypeSafe receives your account name and email, the player’s public alias and
+        company{claimReviewMode === 'auto' ? '.' : ', and any note above.'}{' '}
+        {claimReviewMode === 'auto'
+          ? 'A strong match may be approved automatically.'
+          : 'An administrator still decides your claim.'}
+      </p>
+    </div>
   );
   const requestError = request.isError && <Notice tone="danger">{request.error.message}</Notice>;
 
@@ -288,10 +337,11 @@ function ClaimSearch({ targetId, onChanged }: { targetId?: string; onChanged: ()
           <Link to="/players/$playerId" params={{ playerId: selected.id }}>
             <strong>{selected.name}</strong>
           </Link>
-          {selected.companyCode ? ` (${selected.companyCode})` : ''}. An administrator reviews your
-          request before you can edit this profile.
+          {selected.companyCode ? ` (${selected.companyCode})` : ''}. You can edit this profile
+          after your request is approved.
         </p>
         {noteField}
+        {reviewField}
         {requestError}
         <div className="claim-actions">
           <Button
@@ -317,9 +367,7 @@ function ClaimSearch({ targetId, onChanged }: { targetId?: string; onChanged: ()
             : 'The selected profile is unavailable. You can search for your current player profile below.'}
         </Notice>
       )}
-      <p>
-        Find your player by the name shown on the leaderboard. An administrator reviews your claim.
-      </p>
+      <p>Find your player by the name shown on the leaderboard.</p>
       <div className="claim-form-row">
         <Field
           label="Search players"
@@ -330,6 +378,7 @@ function ClaimSearch({ targetId, onChanged }: { targetId?: string; onChanged: ()
         />
         {noteField}
       </div>
+      {reviewField}
       {search.isFetching && <LoadingState>Searching…</LoadingState>}
       {search.isError && <Notice tone="danger">{search.error.message}</Notice>}
       {requestError}

@@ -114,6 +114,20 @@ The source of truth is [`apps/server/src/env.ts`](../apps/server/src/env.ts). Va
 
 Users can link Discord and Google from `/me` after signing in with their original provider. Signing in separately with a new provider creates a separate account. Admin access follows the account across linked providers.
 
+### Optional Jev claim review
+
+Set `JEV_CLAIM_REVIEW_ENABLED=true` and provide `TYPESAFE_API_KEY` through the server's secret store. Review is off by default. Enable [TypeSafe's zero data retention setting](https://help.typesafe.ai/articles/5974925716) for the API organisation before using it with real claims.
+
+When someone with a verified email opts in on the claim form, Nemesis sends their account name and email and the public player alias and company to [TypeSafe System One](https://docs.typesafe.ai/api/system-one). In advisory-only mode it can also send the optional note with consent. Nemesis stores the score summary, model, rubric version and assessment time alongside the original claim. A likely match appears first among pending claims. Inconclusive, unavailable and skipped assessments remain in the ordinary manual queue.
+
+Auto-approval is separately opt-in with `JEV_CLAIM_AUTO_APPROVE_ENABLED=true`. Any provider-verified account email is eligible. Jev must clear both `JEV_CLAIM_AUTO_APPROVE_MIN_SCORE` (default 3.5 out of 4, allowed range 3.5–4) and `JEV_CLAIM_AUTO_APPROVE_MIN_CONFIDENCE` (default 0.80, allowed range 0.65–1). Confidence measures how concentrated the model's answer is across the rubric levels. Automatic review omits the claim note. Numbered aliases, claims with another pending or approved claimant, and claims with a prior admin decision for that account and profile stay manual. The admin queue records automatic approvals and administrators can revoke them.
+
+Run the same synthetic cases against the live model with a locally configured TypeSafe key. The command prints case names and decisions and exits nonzero if an unambiguous case is misclassified or if a provider request fails. Borderline cases allow either decision and show the resulting scores.
+
+```sh
+pnpm --filter @smashclub/server exec node --import tsx test/calibrateJevClaims.ts
+```
+
 ## Initial data
 
 After deploying and configuring the server, import the player registry and historical tournament slugs. Put your registry at `legacy/players.yaml` (a gitignored path; see the [format example](../legacy/players.yaml.example)). Run this from the repository root so `$PWD` resolves the input paths before pnpm starts the tool in its package directory:
