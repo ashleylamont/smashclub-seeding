@@ -585,6 +585,7 @@ describe('native doubles through shipped APIs', () => {
       match = state.matches[0]!,
       resultId = state.result!.id;
     const before = await loadDoublesRatings(db, Date.parse('2026-10-10'));
+    const beforeIndividual = await caller(null).public.doublesRating({ playerId: members[0]!.id });
     const at = Date.parse('2026-10-10') / 86400000,
       pair = [members[0]!.id, members[1]!.id] as const;
     const correction = {
@@ -615,6 +616,9 @@ describe('native doubles through shipped APIs', () => {
     const after = await loadDoublesRatings(db, Date.parse('2026-10-10'));
     expect(after.evidence(pair)).toEqual(before.evidence(pair));
     expect(after.rating(pair, at).rating).toBeLessThan(before.rating(pair, at).rating);
+    const afterIndividual = await caller(null).public.doublesRating({ playerId: members[0]!.id });
+    expect(afterIndividual?.playedSets).toBe(beforeIndividual?.playedSets);
+    expect(afterIndividual!.rating).toBeLessThan(beforeIndividual!.rating);
     expect(after.provenance.sourceResultIds).not.toContain(resultId);
     expect(after.provenance.sourceResultIds).toContain(corrected.result!.id);
     const [t] = await db

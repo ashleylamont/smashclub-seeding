@@ -17,6 +17,10 @@ export async function expectDoublesRecapAndHistory(
     teammateName,
     score: expect.stringMatching(/^(?:2–0|0–2)$/),
   });
+  const rating = await api.doublesRating({ playerId });
+  expect(rating).toMatchObject({ model: 'doubles-whr', playedSets: 3 });
+  expect(rating?.rating).toBeGreaterThan(0);
+  expect(rating?.sd).toBeGreaterThan(0);
   const recap = await api.recap({ slug });
   expect(recap).toMatchObject({
     competitionFormat: 'doubles',
