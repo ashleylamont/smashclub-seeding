@@ -70,7 +70,8 @@ export async function expectDoublesFinalsMembership(
   const consolation = result.brackets.find(
     (bracket) => bracket.stage === 'consolation' && bracket.division === main?.division,
   );
-  const poolOnlyId = consolation?.entrantIds.find((id) => !main?.entrantIds.includes(id));
+  if (!consolation) return;
+  const poolOnlyId = consolation.entrantIds.find((id) => !main?.entrantIds.includes(id));
   const pair = result.entrants.find((entrant) => entrant.playerId === poolOnlyId);
   if (!pair?.memberPlayerIds?.[0]) throw new Error('Expected a consolation-only pair.');
   const event = await api.eventOverview({ slug });
