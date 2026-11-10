@@ -419,17 +419,30 @@ function PlayerProfile({ data }: { data: PlayerData }) {
       {data.doublesResults?.length > 0 && (
         <section className="section">
           <h2>Doubles results</h2>
-          <p className="muted">Played doubles sets count toward each team member’s WHR.</p>
-          <ul>
-            {data.doublesResults.map((r) => (
-              <li key={r.tournamentId}>
-                <Link to="/events/$slug" params={{ slug: r.slug }}>
-                  {r.name}
-                </Link>{' '}
-                · {r.pairName} · {r.place ? `Place ${r.place}` : 'Unplaced'}
-              </li>
-            ))}
-          </ul>
+          <div className="table-scroll" role="region" aria-label="Doubles results" tabIndex={0}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Place</th>
+                  <th>Bracket</th>
+                  <th>Pair</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.doublesResults.map((r) => (
+                  <tr key={r.tournamentId}>
+                    <td className="num">{r.place ?? '—'}</td>
+                    <td>
+                      <Link to="/events/$slug" params={{ slug: r.slug }}>
+                        {r.name}
+                      </Link>
+                    </td>
+                    <td>{r.pairName}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
       <section className="section match-history">

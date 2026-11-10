@@ -1,3 +1,4 @@
+import type { TournamentResult } from '../../src/tournament/schemas';
 import { expect } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { playerRatings, type Db } from '@smashclub/db';
@@ -58,4 +59,30 @@ export async function publishedPlayerRating(db: Db, playerId: string) {
     .from(playerRatings)
     .where(and(eq(playerRatings.recomputeId, recomputeId), eq(playerRatings.playerId, playerId)));
   return rating;
+}
+
+export async function expectDoublesFinalsMembership(
+  api: ReturnType<typeof appRouter.createCaller>['public'],
+  slug: string,
+  result: TournamentResult,
+) {
+  const main = result.brackets.find((bracket) => bracket.stage === 'main');
+  const consolation = result.brackets.find(
+    (bracket) => bracket.stage === 'consolation' && bracket.division === main?.division,
+  );
+  const poolOnlyId = consolation?.entrantIds.find((id) => !main?.entrantIds.includes(id));
+  const pair = result.entrants.find((entrant) => entrant.playerId === poolOnlyId);
+  if (!pair?.memberPlayerIds?.[0]) throw new Error('Expected a consolation-only pair.');
+  const event = await api.eventOverview({ slug });
+  const mainStanding = event?.brackets.find(
+    (bracket) => bracket.stage === 'main' && bracket.division === main?.division,
+  );
+  expect(mainStanding?.players.map((row) => row.graphic?.teamName)).not.toContain(pair.teamName);
+  expect(
+    event?.divisions.flatMap((division) => division.players).map((row) => row.graphic?.teamName),
+  ).toContain(pair.teamName);
+  const profile = await api.player({ playerId: pair.memberPlayerIds[0] });
+  if (!profile?.doublesMatches) throw new Error('Missing doubles profile.');
+  expect(profile.doublesResults.map((row) => row.slug)).not.toContain(mainStanding?.slug);
+  expect(profile.doublesMatches.some((row) => row.resultStage === 'group')).toBe(true);
 }

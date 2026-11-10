@@ -353,3 +353,32 @@ a.fact-name:hover {
     font-size: var(--fs-2xl);
   }
 }
+
+.podium-place:has(.recap-podium-portraits) {
+  grid-template-columns: 1.4em minmax(0, 1fr) minmax(3rem, 25%);
+  align-items: center;
+}
+
+.recap-podium-portraits {
+  display: flex;
+  flex: 0 1 auto;
+  justify-content: flex-end;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.recap-podium-portraits img {
+  width: auto;
+  max-width: 60%;
+  height: clamp(2.5rem, 7vw, 4.5rem);
+  object-fit: contain;
+}
+
+.recap-podium-portraits img + img {
+  margin-inline-start: calc(-1 * var(--s2));
+}
+
+.recap-portrait-credit {
+  margin-block: var(--s2) var(--s3);
+  font-size: var(--fs-xs);
+}

@@ -27,13 +27,32 @@ const data = {
           {
             place: 1,
             seed: null,
-            player: { playerId: null, name: team, companyCode: null, characters: [] },
+            player: { playerId: null, name: team, companyCode: null, characters: ['fox', 'marth'] },
           },
         ],
       },
     },
   ],
-  highlights: [],
+  highlights: [
+    {
+      id: 'pool-tie:one',
+      headline: '3 pairs tied on 1 pool win',
+      detail: 'Each pair went 1–1 against the other two.',
+      fact: {
+        kind: 'pool_tie',
+        tournamentId: null,
+        setWins: 1,
+        circular: true,
+        splitFinals: false,
+        teams: ['Pair A', 'Pair B', 'Pair C'].map((name) => ({
+          name,
+          playerId: null,
+          companyCode: null,
+          characters: [],
+        })),
+      },
+    },
+  ],
   coverage: {
     unsyncedBrackets: 0,
     unresolvedEntrants: 0,
@@ -67,6 +86,12 @@ for (const [width, theme] of [
     await expect(page.getByRole('heading', { name: 'Open Main', level: 2 })).toBeVisible();
     await expect(page.getByText('19 teams · 44 sets', { exact: false })).toBeVisible();
     await expect(page.getByText(team)).toBeVisible();
+    await expect(page.getByText('3 pairs tied on 1 pool win')).toBeVisible();
+    await expect(page.getByText('Each pair went 1–1 against the other two.')).toBeVisible();
+    await expect(page.locator('.recap-podium-portraits img')).toHaveCount(2);
+    await expect(
+      page.getByText('Super Smash Bros. Ultimate character artwork © Nintendo.'),
+    ).toBeVisible();
     await expect(page.getByRole('link', { name: 'Event results →' })).toHaveAttribute(
       'href',
       `/events/${slug}`,

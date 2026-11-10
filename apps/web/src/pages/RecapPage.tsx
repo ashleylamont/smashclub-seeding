@@ -7,6 +7,7 @@ import type { RecapData, RecapFact, RecapFactEntry, RecapPlayer } from '../lib/a
 import { CharacterIcons } from '../components/CharacterIcons';
 import { formatDate } from '../lib/format';
 import { downloadBlob, renderShareCard } from '../lib/shareCard';
+import { bundledResultPortraitUrl } from '../lib/resultGraphicBundledArt';
 import './Recap.css';
 
 /**
@@ -124,6 +125,13 @@ function Recap({ data }: { data: RecapData }) {
           ))}
         </section>
       )}
+      {podiums.some((podium) =>
+        podium.places.some(({ player }) => portraitUrls(player).length > 0),
+      ) && (
+        <p className="muted recap-portrait-credit">
+          Super Smash Bros. Ultimate character artwork © Nintendo.
+        </p>
+      )}
 
       <section className="section">
         <h2>Highlights</h2>
@@ -177,6 +185,12 @@ function Recap({ data }: { data: RecapData }) {
   );
 }
 
+function portraitUrls(player: RecapPlayer): string[] {
+  return [...new Set(player.characters.slice(0, player.playerId ? 1 : 2))].flatMap(
+    (slug) => bundledResultPortraitUrl(slug) ?? [],
+  );
+}
+
 function Podium({
   podium,
   name,
@@ -188,18 +202,28 @@ function Podium({
     <div className="podium card">
       <h2 className="podium-title">{name}</h2>
       <ol className="podium-list">
-        {podium.places.map((place) => (
-          <li
-            key={`${place.place}-${place.player.name}`}
-            className={`podium-place place-${place.place}`}
-          >
-            <span className="podium-rank num">{place.place}</span>
-            <span className="podium-player">
-              <PlayerName player={place.player} />
-              {place.seed != null && <span className="podium-seed">seed {place.seed}</span>}
-            </span>
-          </li>
-        ))}
+        {podium.places.map((place) => {
+          const portraits = portraitUrls(place.player);
+          return (
+            <li
+              key={`${place.place}-${place.player.name}`}
+              className={`podium-place place-${place.place}`}
+            >
+              <span className="podium-rank num">{place.place}</span>
+              <span className="podium-player">
+                <PlayerName player={place.player} />
+                {place.seed != null && <span className="podium-seed">seed {place.seed}</span>}
+              </span>
+              {portraits.length > 0 && (
+                <span className="recap-podium-portraits" aria-hidden="true">
+                  {portraits.map((url) => (
+                    <img key={url} src={url} alt="" loading="lazy" />
+                  ))}
+                </span>
+              )}
+            </li>
+          );
+        })}
       </ol>
       {podium.derived && (
         <p className="podium-note muted">
@@ -217,6 +241,12 @@ function Podium({
  */
 function statOf(fact: RecapFact): { value: string; label: string } | null {
   switch (fact.kind) {
+    case 'pool_tie':
+      return { value: String(fact.teams.length), label: 'pairs tied' };
+    case 'pool_sweep':
+      return { value: `${fact.wins}–0`, label: 'pool sets' };
+    case 'pool_deciders':
+      return { value: `${fact.closeSets}/${fact.totalSets}`, label: 'one-game margins' };
     case 'seed_upset':
       return { value: `#${fact.winnerSeed}`, label: `beat seed #${fact.loserSeed}` };
     case 'rating_upset':
@@ -375,6 +405,12 @@ function PlayerName({ player }: { player: RecapPlayer }) {
 /** Every player a fact refers to, for the faces strip. */
 function playersOf(fact: RecapFact): RecapPlayer[] {
   switch (fact.kind) {
+    case 'pool_tie':
+      return fact.teams;
+    case 'pool_sweep':
+      return [fact.player];
+    case 'pool_deciders':
+      return [];
     case 'podium':
       return fact.places.map((place) => place.player);
     case 'seed_upset':
@@ -404,6 +440,9 @@ function playersOf(fact: RecapFact): RecapPlayer[] {
 
 const KIND_LABELS: Record<RecapFact['kind'], string> = {
   podium: 'Podium',
+  pool_tie: 'Pool tie',
+  pool_sweep: 'Unbeaten pool',
+  pool_deciders: 'Close pool',
   seed_upset: 'Upset',
   rating_upset: 'Upset',
   losers_run: 'The comeback',

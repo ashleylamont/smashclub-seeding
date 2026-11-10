@@ -3,7 +3,7 @@ import { AxeBuilder } from '@axe-core/playwright';
 import { rpcProcedures } from '../test-support/rpcBatch';
 import { chooseOption } from '../test-support/controls';
 import { ready } from './fixtures';
-import type { PlayerDoublesMatch } from '../src/lib/apiTypes';
+import type { PlayerData, PlayerDoublesMatch } from '../src/lib/apiTypes';
 import type { trpc } from '../src/lib/trpc';
 
 const playerId = 'ac184b5a-fba4-4bc9-9ee9-c1610d3c8373';
@@ -121,7 +121,7 @@ async function mockProfile(
         opponentPlayerId: null,
         opponentName: 'Practice opponent',
       })),
-    doublesResults: [],
+    doublesResults: [] as PlayerData['doublesResults'],
     doublesMatches,
   };
   for (const [index, doubles] of doublesMatches.entries())
@@ -533,7 +533,7 @@ for (const [width, theme] of [
         format: 'doubles',
         setId: 'doubles-played-set',
         resultStage: 'group',
-        tournamentName: 'Tech In Place 13 Open Main',
+        tournamentName: 'Tech In Place 13',
         tournamentSlug: 'tip13-doubles',
         tournamentDate: '2026-11-10T07:00:00Z',
         teammateName: 'A teammate with a particularly long public alias',
@@ -544,9 +544,24 @@ for (const [width, theme] of [
         ratingWeight: 1.5,
       },
     ]);
+    Object.assign(mock.profile.events[0]!, { score: '1–3' });
+    mock.profile.doublesResults = [
+      {
+        tournamentId: 'tip13-consolation',
+        slug: 'tip13-consolation',
+        name: 'Tech In Place 13 Open Consolation',
+        pairName: 'A team with two long public aliases',
+        place: 5,
+        eventDate: '2026-11-10T07:00:00Z',
+      },
+    ];
     await page.goto(`/players/${playerId}`);
     const log = page.getByRole('region', { name: 'Match results' });
     await expect(log.getByRole('row').nth(1)).toContainText('Doubles');
+    await expect(log.getByText('L · 1–3', { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('region', { name: 'Doubles results' }).getByRole('link'),
+    ).toHaveAttribute('href', '/events/tip13-consolation');
     const row = log.getByRole('row', { name: /Tech In Place 13/ });
     await expect(row).toContainText('With A teammate');
     await expect(row).toContainText('Opponent One / Opponent Two');
