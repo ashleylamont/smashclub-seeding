@@ -136,11 +136,35 @@
 .intermission-round-robin td:nth-child(2) {
   font-family: inherit;
 }
-.intermission-qualification th:first-child {
-  width: 38%;
+.intermission-pool-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(var(--s4), 3vw, var(--s7));
 }
-.intermission-qualification td:nth-child(2) {
-  font-family: inherit;
+.intermission-pool-grid .intermission-section-heading {
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+.intermission-pool-grid .intermission-standings {
+  font-size: 0.88em;
+}
+.intermission-pool-grid .intermission-standings :is(th, td) {
+  padding: 0.9vh var(--s2);
+}
+.intermission-qualifier {
+  display: block;
+  color: var(--event-orange);
+  font-size: 0.78em;
+}
+.intermission-qualification {
+  display: grid;
+  gap: var(--s1);
+  list-style: none;
+  margin: var(--s3) 0 0;
+  padding: 0;
+  font-size: 0.82em;
+  color: var(--event-muted);
+  overflow-wrap: anywhere;
 }
 .intermission-linked th:first-child,
 .intermission-linked th:last-child {
@@ -165,15 +189,18 @@
 }
 .intermission-content .event-bracket-match {
   font-family: var(--font-body);
+  font-size: 0.9em;
+  padding: var(--s2) var(--s3);
   background: #201f1a;
 }
 .intermission-content .event-bracket-match small {
   font-size: 0.8em;
-  margin-bottom: var(--s2);
+  margin-bottom: var(--s1);
+  line-height: 1.2;
 }
 .intermission-content .event-bracket-match > div {
   font-size: 1em;
-  padding-block: var(--s2);
+  padding-block: var(--s1);
 }
 .intermission-footer {
   display: grid;

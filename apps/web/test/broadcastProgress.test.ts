@@ -44,7 +44,7 @@ describe('OBS intermission source choices and bounded pages', () => {
     [7, true],
     [32, true],
   ] as const)(
-    'covers every %i-entrant graph match with at most two cards per column (DE=%s)',
+    'covers every %i-entrant graph match once with at most three cards per column (DE=%s)',
     (size, double) => {
       const data = fixture(size, double);
       const original = structuredClone(data);
@@ -53,21 +53,23 @@ describe('OBS intermission source choices and bounded pages', () => {
       expect(new Set(draws.flatMap((page) => page.matches.map((match) => match.id)))).toEqual(
         new Set(data.matches.map((match) => match.id)),
       );
+      expect(draws.flatMap((page) => page.matches)).toHaveLength(data.matches.length);
+      expect(draws.some((page) => page.roundTitles.length === 3)).toBe(true);
       expect(new Set(pages.map((page) => page.key)).size).toBe(pages.length);
       for (const page of draws) {
         const rounds = [...new Set(page.matches.map(liveBracketRound))];
-        expect(rounds.length).toBeLessThanOrEqual(2);
+        expect(rounds.length).toBeLessThanOrEqual(3);
         for (const round of rounds)
           expect(
             page.matches.filter((match) => liveBracketRound(match) === round).length,
-          ).toBeLessThanOrEqual(2);
+          ).toBeLessThanOrEqual(3);
       }
       expect(draws.some((page) => page.roundTitles.includes('Reset · if needed'))).toBe(double);
       expect(data).toEqual(original);
     },
   );
 
-  it('uses one card per column for long doubles names without losing any matches', () => {
+  it('uses at most two cards per column for long doubles names without losing any matches', () => {
     const data = fixture(8);
     data.matches.forEach((match) => {
       if (match.player1Id) match.player1Name = TEAM_ALIAS;
@@ -78,7 +80,7 @@ describe('OBS intermission source choices and bounded pages', () => {
       for (const round of new Set(page.matches.map(liveBracketRound)))
         expect(
           page.matches.filter((match) => liveBracketRound(match) === round).length,
-        ).toBeLessThanOrEqual(1);
+        ).toBeLessThanOrEqual(2);
     expect(new Set(draws.flatMap((page) => page.matches.map((match) => match.id))).size).toBe(
       data.matches.length,
     );
@@ -117,8 +119,7 @@ describe('OBS intermission source choices and bounded pages', () => {
         .filter((page) => page.kind === 'linked')
         .map(({ key, matches }) => ({ key, matches: matches.map(({ id }) => id) })),
     ).toEqual([
-      { key: 'linked:lower:main:0', matches: ['lower-0', 'lower-1', 'lower-2'] },
-      { key: 'linked:lower:main:1', matches: ['lower-3'] },
+      { key: 'linked:lower:main:0', matches: ['lower-0', 'lower-1', 'lower-2', 'lower-3'] },
       { key: 'linked:lower:consolation:0', matches: ['consolation'] },
     ]);
   });
@@ -177,9 +178,15 @@ describe('OBS intermission source choices and bounded pages', () => {
     data.plan.status = 'complete';
     const pages = broadcastProgressPages(data);
     const pools = pages.filter((page) => page.kind === 'pool');
-    expect(pools).toHaveLength(2);
-    expect(new Set(pools.flatMap((page) => page.players.map((player) => player.id))).size).toBe(8);
-    expect(pools.every((page) => page.players.length <= 6 && page.pool.complete === 0)).toBe(true);
+    expect(pools).toHaveLength(1);
+    const panels = pools[0]!.panels;
+    expect(panels).toHaveLength(2);
+    expect(new Set(panels.flatMap((panel) => panel.players.map((player) => player.id))).size).toBe(
+      8,
+    );
+    expect(panels.every((panel) => panel.players.length <= 6 && panel.pool.complete === 0)).toBe(
+      true,
+    );
     expect(pages.some((page) => page.kind === 'bracket')).toBe(true);
     expect(pages.at(-1)).toEqual({ kind: 'summary', key: 'summary' });
     expect(data.nativeBrackets[0]!.winnerId).toBeNull();
@@ -225,6 +232,8 @@ describe('OBS intermission source choices and bounded pages', () => {
       { ...data.plan, structure: 'round_robin_finals' },
       { ...data.plan, bracketMode: 'challonge' },
     ])
-      expect(broadcastProgressPages({ ...data, plan })[0]?.kind).toBe('bracket');
+      expect(
+        broadcastProgressPages({ ...data, plan, matches: bracketFixture(8, false) })[0]?.kind,
+      ).toBe('bracket');
   });
 });

@@ -5,7 +5,7 @@ import { mockEvent, PLAN_ID, ready } from './fixtures';
 import { bracketFixture, TEAM_ALIAS } from '../test/fixtures/brackets';
 import { chooseOption } from '../test-support/controls';
 import { rpcProcedures } from '../test-support/rpcBatch';
-import { broadcastProgressPages } from '../src/lib/broadcastProgress';
+import { broadcastPageDensity, broadcastProgressPages } from '../src/lib/broadcastProgress';
 import type { LiveMatch } from '../src/lib/eventDisplay';
 import type { PublicFinalsField } from '../src/lib/qualification';
 
@@ -676,7 +676,7 @@ for (const [width, theme] of [
     await expect(progress.getByRole('heading', { name: /pool/i })).toBeVisible();
     await page.keyboard.press('ArrowRight');
     const upper = progress.getByRole('table', { name: 'Linked Upper Championship bracket' });
-    await expect(progress).toContainText('Page 3 / 5');
+    await expect(progress).toContainText('Page 3 / 4');
     await expect(progress).not.toContainText(/Section \d+ \/ /);
     await expect(upper.getByRole('row', { name: /Imported played set/ })).toContainText('2–0');
     await expect(upper.getByRole('row', { name: /Imported played set/ })).toContainText(
@@ -697,12 +697,10 @@ for (const [width, theme] of [
       ).violations,
     ).toEqual([]);
 
-    await page.keyboard.press('ArrowRight');
-    await expect(progress).toContainText('Page 4 / 5');
     await expect(upper).toContainText('Awaiting opponent');
     await expect(upper).not.toContainText('TBD');
-    await fits(page);
     await page.keyboard.press('ArrowRight');
+    await expect(progress).toContainText('Page 4 / 4');
     const lowerTable = progress.getByRole('table', { name: 'Linked Lower Consolation bracket' });
     await expect(lowerTable).toContainText(lower.label);
 
@@ -739,12 +737,7 @@ for (const [width, theme] of [
     await expect(upper).not.toContainText('Awaiting opponent');
     await fits(page);
     await page.screenshot({ path: testInfo.outputPath(`intermission-closed-linked-${width}.png`) });
-    await page.keyboard.press('ArrowLeft');
     await expect(upper.getByRole('row', { name: /Imported played set/ })).toContainText('2–0');
-    await fits(page);
-    await page.screenshot({
-      path: testInfo.outputPath(`intermission-closed-linked-results-${width}.png`),
-    });
     await page.keyboard.press('ArrowLeft');
     await expect(progress.getByRole('heading', { name: /Pool/ })).toBeVisible();
     await expect(progress.getByRole('columnheader', { name: 'No result' })).toBeVisible();
@@ -757,105 +750,104 @@ for (const [width, height, theme] of [
   [1280, 720, 'dark'],
   [1920, 1080, 'light'],
 ] as const) {
-  test(`${width}px intermission pages show qualifiers before pairings are published`, async ({
+  test(`${width}px intermission combines qualification and standings on the pool pages`, async ({
     page,
   }, testInfo) => {
     await page.setViewportSize({ width, height });
-    await page.emulateMedia({ colorScheme: theme });
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
     await page.clock.install({ time: new Date('2026-10-04T00:00:00Z') });
     const fixture = await mockEvent(page, { idle: true, bracket: true });
     const { snapshot } = fixture;
-    const id = snapshot.nativeBrackets[0]!.entrantIds[0]!;
+    const poolMatches = snapshot.matches.filter(
+      (match) => match.stage === 'group' && match.poolIndex === 0,
+    );
+    const source = poolMatches[0]!;
+    const id = source.player1Id!;
+    for (const match of poolMatches) {
+      if (match.player1Id === id) match.player1Name = TEAM_ALIAS;
+      if (match.player2Id === id) match.player2Name = TEAM_ALIAS;
+    }
     snapshot.entrants.find((entrant) => entrant.id === id)!.name = TEAM_ALIAS;
     const fields: PublicFinalsField[] = (['upper', 'lower'] as const).map((division) => ({
       division,
       stage: 'main',
-      slots: [0, 1].flatMap((poolIndex) =>
-        [1, 2, 3].map((place) => ({
-          poolId: `${division}-${poolIndex}`,
-          poolIndex,
-          place,
-          division,
-          status:
-            division === 'lower' && poolIndex === 1
-              ? 'review_pending'
-              : division === 'upper' && poolIndex === 0 && place === 1
-                ? 'resolved'
-                : 'pending',
-          entrantId: division === 'upper' && poolIndex === 0 && place === 1 ? id : null,
-        })),
-      ),
+      slots: [1, 2, 3].map((place) => ({
+        poolId: division,
+        poolIndex: 0,
+        place,
+        division,
+        status: division === 'lower' ? 'review_pending' : place === 1 ? 'resolved' : 'pending',
+        entrantId: division === 'upper' && place === 1 ? id : null,
+      })),
+    }));
+    const lowerMatches = poolMatches.map((match) => ({
+      ...match,
+      id: `lower-${match.id}`,
+      division: 'lower',
     }));
     const pools = {
       ...snapshot,
-      matches: snapshot.matches.filter((match) => !match.nativeBracketId),
+      matches: [...poolMatches, ...lowerMatches],
       nativeBrackets: [],
       pendingFinals: fields,
     };
     fixture.responses['eventOps.snapshot'] = pools;
     await page.goto(`/overlay/${PLAN_ID}?presentation=progress&controls=0`);
     const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
-    await expect(progress.getByRole('table')).toBeVisible();
-    const pages = broadcastProgressPages(pools);
-    const firstQualifier = pages.findIndex((item) => item.kind === 'qualification');
-    const lastQualifier = pages.findLastIndex((item) => item.kind === 'qualification');
-    const upperHeading = progress.getByRole('heading', {
-      name: 'Upper Championship qualification',
-    });
-    const lowerHeading = progress.getByRole('heading', {
-      name: 'Lower Championship qualification',
-    });
-    const seen = new Set<string>();
-    for (let index = 0; index <= lastQualifier; index++) {
-      await expect(progress).toContainText(`Page ${index + 1} / ${pages.length}`);
-      if (index >= firstQualifier) {
-        await fits(page);
-        const table = progress.getByRole('table');
-        const labels = await table.getByRole('row').getByRole('cell').allTextContents();
-        labels.filter((label) => label.includes('Pool')).forEach((label) => seen.add(label));
-        await expect(progress.locator('.event-bracket-match')).toHaveCount(0);
-        if (index === firstQualifier) {
-          await expect(upperHeading).toBeVisible();
-          await expect(table).toContainText(TEAM_ALIAS);
-          await expect(table).toContainText('Awaiting qualification');
-          await expect(progress).not.toContainText(/Section \d+ \/ /);
-          await page.screenshot({
-            path: testInfo.outputPath(`intermission-qualification-${width}.png`),
-          });
-          expect(
-            (
-              await new AxeBuilder({ page })
-                .include('.broadcast-intermission')
-                .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
-                .analyze()
-            ).violations,
-          ).toEqual([]);
-        }
-      }
-      if (index < lastQualifier) await page.keyboard.press('ArrowRight');
-    }
-    expect(seen.size).toBe(12);
-    await expect(lowerHeading).toBeVisible();
-    await expect(progress).toContainText('Under score review');
+    const upper = progress.getByRole('region', { name: /upper.*Pool A/i });
+    const lower = progress.getByRole('region', { name: /lower.*Pool A/i });
+    const density = broadcastPageDensity(width);
+    const wide = density.poolsPerPage === 2;
+    // Lower sorts first; wide sources fit both standings tables on one page.
+    await expect(lower.getByRole('table')).toBeVisible();
+    await expect(progress).toContainText(wide ? 'Page 1 / 1' : 'Page 1 / 2');
+    await expect(lower).toContainText('Under score review');
+    await fits(page);
+    if (!wide) await page.keyboard.press('ArrowRight');
+    await expect(upper.getByRole('row', { name: /The very long doubles team/ })).toContainText(
+      'Qualified · Championship · #1',
+    );
+    await expect(upper).toContainText('#2, #3 · Championship · Awaiting qualification');
+    await expect(upper.getByText('Qualified', { exact: false })).toHaveCount(1);
+    await expect(progress.locator('.event-bracket-match')).toHaveCount(0);
+    await fits(page);
+    await page.screenshot({ path: testInfo.outputPath(`intermission-qualification-${width}.png`) });
+    expect(
+      (
+        await new AxeBuilder({ page })
+          .include('.broadcast-intermission')
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+          .analyze()
+      ).violations,
+    ).toEqual([]);
 
-    // The next poll publishes one bracket while keeping the other field and its active page.
-    const mixed = { ...snapshot, pendingFinals: fields.slice(1) };
+    // A published bracket keeps its confirmed markers on the pool page.
+    const brackets = snapshot.nativeBrackets.map((bracket) => ({
+      ...bracket,
+      qualifierSlots: fields[0]!.slots
+        .slice(0, 1)
+        .map((slot) => ({ ...slot, eligibleEntrantIds: [] })),
+    }));
+    const mixed = {
+      ...pools,
+      nativeBrackets: brackets,
+      pendingFinals: fields.slice(1),
+      matches: [...pools.matches, ...snapshot.matches.filter((match) => match.nativeBracketId)],
+    };
     fixture.responses['eventOps.snapshot'] = mixed;
-    const mixedPages = broadcastProgressPages(mixed);
-    const lastMixedQualifier = mixedPages.findLastIndex((item) => item.kind === 'qualification');
-    const lastPage = `Page ${lastMixedQualifier + 1} / ${mixedPages.length}`;
+    const mixedPages = broadcastProgressPages(mixed, false, density);
     await expect
       .poll(async () => {
         await page.clock.runFor(2000);
-        return progress.getByText(lastPage, { exact: false }).isVisible();
+        return progress
+          .getByText(`Page ${wide ? 1 : 2} / ${mixedPages.length}`, { exact: true })
+          .isVisible();
       })
       .toBe(true);
-    await expect(lowerHeading).toBeVisible();
-    await expect(progress).not.toContainText(/Section \d+ \/ /);
-    const firstDraw = mixedPages.findIndex((item) => item.kind === 'bracket');
-    for (let i = lastMixedQualifier; i > firstDraw; i--) await page.keyboard.press('ArrowLeft');
+    await expect(upper).toContainText('Qualified · Championship · #1');
+    await expect(upper).not.toContainText('Awaiting qualification');
+    await page.keyboard.press('ArrowRight');
     await expect(progress.locator('.event-bracket-match').first()).toBeVisible();
-    await expect(upperHeading).toHaveCount(0);
     expect(fixture.unexpected).toEqual([]);
   });
 }

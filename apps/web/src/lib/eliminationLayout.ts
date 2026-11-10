@@ -25,6 +25,7 @@ export function eliminationLaneLayout<T>(
     round: (match: T) => number;
     slot: (match: T) => number;
     feeds: (match: T) => BracketFeed[];
+    row?: (match: T) => number;
     sourcePort?: (match: T, outcome: BracketFeed['outcome']) => number;
     targetPort?: (match: T, side: 0 | 1) => number;
   },
@@ -39,7 +40,7 @@ export function eliminationLaneLayout<T>(
     )
     .map((match) => {
       const column = Math.max(0, read.round(match) - 1);
-      const row = eliminationLaneRow(lane, column, read.slot(match));
+      const row = read.row?.(match) ?? eliminationLaneRow(lane, column, read.slot(match));
       return { match, column, x: column * card.column + 12, y: card.top + row * card.row };
     });
   const byId = new Map(nodes.map((node) => [read.id(node.match), node]));

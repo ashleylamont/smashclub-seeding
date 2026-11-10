@@ -39,7 +39,7 @@ export function EventBracketLane({
     Record<string, { height: number; rows: [number, number] }>
   >({});
   const height = Math.max(
-    150,
+    roundWindow ? 80 : 150,
     ...Object.values(measurements).map((item) => Math.ceil(item.height)),
   );
   // Names, team labels and translated feeder text can wrap to any length. Measure
@@ -72,7 +72,7 @@ export function EventBracketLane({
     width: cardWidth,
     height,
     column: cardWidth + 36,
-    row: height + 24,
+    row: height + (roundWindow ? 12 : 24),
     top: 40,
     side1: height / 2,
     side2: height * 0.8,
@@ -100,7 +100,8 @@ export function EventBracketLane({
               ? 2
               : 1
             : (match.bracketRound ?? rounds.indexOf(match.nativeRound ?? 1) + 1),
-      slot: (match) => (roundWindow ? (windowSlots.get(match.id) ?? 0) : (match.nativeSlot ?? 0)),
+      slot: (match) => match.nativeSlot ?? 0,
+      row: roundWindow ? (match) => windowSlots.get(match.id) ?? 0 : undefined,
       feeds: liveBracketFeeds,
       targetPort: (match, side) => measurements[match.id]?.rows[side] ?? height / 2,
       sourcePort: (match, outcome) => {
