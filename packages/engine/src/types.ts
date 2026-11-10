@@ -22,6 +22,8 @@ export interface EngineSet {
   tournamentId: string;
   p1PlayerId: string;
   p2PlayerId: string;
+  /** Partners on sides one and two, in a doubles set. */
+  partnerIds?: readonly [string, string];
   winner: 1 | 2;
   /** Challonge's bracket ordering hint; primary in-tournament order key. */
   suggestedPlayOrder?: number | null;

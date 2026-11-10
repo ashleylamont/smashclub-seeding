@@ -5,7 +5,7 @@ import { DISPLAY_CENTRE, NATURAL_TO_DISPLAY, fitWhr } from '@smashclub/engine';
 import { defaultRatingSettings } from '@smashclub/shared';
 import { loadEnv } from '../src/env';
 import { latestRecomputeId, needsRatingRecompute, runRecompute } from '../src/recompute/recompute';
-import { loadSinglesHistory } from '../src/recompute/inputs';
+import { loadWhrHistory } from '../src/recompute/inputs';
 import { RecomputeTrigger } from '../src/recompute/trigger';
 import { updateRatingSettings } from '../src/settings';
 import { appRouter } from '../src/trpc/router';
@@ -125,14 +125,14 @@ it('reads independent effects from the published night and rejects a cached effe
       maxSets: 10,
       maxNativeRows: 10,
     };
-    expect(await loadSinglesHistory(db, { ...bounds, maxSets: 2 })).toBeNull();
-    expect(await loadSinglesHistory(db, { ...bounds, maxTournaments: 1 })).toBeNull();
-    const bounded = await loadSinglesHistory(db, bounds);
+    expect(await loadWhrHistory(db, { ...bounds, maxSets: 2 })).toBeNull();
+    expect(await loadWhrHistory(db, { ...bounds, maxTournaments: 1 })).toBeNull();
+    const bounded = await loadWhrHistory(db, bounds);
     expect(bounded?.engineSets.map((set) => set.id)).toEqual(
       expect.arrayContaining([prior!.id, focusWin!.id, focusLoss!.id]),
     );
     expect(bounded?.engineSets).toHaveLength(3);
-    const normal = await loadSinglesHistory(db);
+    const normal = await loadWhrHistory(db);
     expect(normal.engineSets).toHaveLength(3);
     expect(normal.engineSets).toEqual(expect.arrayContaining(bounded!.engineSets));
 

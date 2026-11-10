@@ -26,10 +26,20 @@ function impactLabel(impact: WhrResultImpact | undefined, active: boolean) {
   return `≈${higher ? '+' : '−'}${rounded} pts`;
 }
 
-function forecastDetails(impact: Extract<WhrResultImpact, { status: 'available' }>, won: boolean) {
+function forecastDetails(
+  impact: Extract<WhrResultImpact, { status: 'available' }>,
+  won: boolean,
+  doubles: boolean,
+) {
   if (!impact.forecast) {
     if (impact.forecastUnavailable === 'first_night') {
-      return { note: impact.firstNight ? 'First rated night' : 'Opponent’s first rated night' };
+      return {
+        note: impact.firstNight
+          ? 'First rated night'
+          : doubles
+            ? 'A player’s first rated night'
+            : 'Opponent’s first rated night',
+      };
     }
     if (impact.forecastUnavailable === 'disconnected') return { note: 'Separate rated groups' };
     return { note: 'Estimate unavailable' };
@@ -44,6 +54,51 @@ function forecastDetails(impact: Extract<WhrResultImpact, { status: 'available' 
 }
 
 const evidenceUnits = new Intl.NumberFormat('en-AU', { maximumFractionDigits: 2 });
+
+function ImpactNotes({
+  impact,
+  active,
+  won,
+  doubles = false,
+}: {
+  impact: WhrResultImpact | undefined;
+  active: boolean;
+  won: boolean | null;
+  doubles?: boolean;
+}) {
+  const forecast =
+    impact?.status === 'available' && won != null ? forecastDetails(impact, won, doubles) : null;
+  return (
+    <>
+      <span className="whr-impact-value">WHR {impactLabel(impact, active)}</span>
+      <span className="whr-impact-value whr-forecast">
+        {forecast && (
+          <>
+            WHR pre-night{forecast.chance && ` · ${forecast.chance}`}
+            {forecast.note && <span>{forecast.note}</span>}
+          </>
+        )}
+      </span>
+    </>
+  );
+}
+
+function Evidence({
+  weight,
+  impact,
+}: {
+  weight: number | null;
+  impact: WhrResultImpact | undefined;
+}) {
+  return (
+    <td className="num">
+      {weight == null ? '—' : `${evidenceUnits.format(weight)} ${weight === 1 ? 'unit' : 'units'}`}
+      {impact?.status === 'available' && (
+        <span className="whr-impact-value">Margin weight {impact.gamesWeight}</span>
+      )}
+    </td>
+  );
+}
 
 export function PlayerMatchLog({
   events,
@@ -82,9 +137,19 @@ export function PlayerMatchLog({
         </thead>
         <tbody ref={body}>
           {events.map((event) => {
-            if ('format' in event) {
+            const doubles = 'format' in event;
+            const rated = doubles
+              ? event.ratingWeight != null
+              : !event.isDecay && event.won != null;
+            const setId = recomputeId && rated ? event.setId : null;
+            const impact = setId ? (runImpact ?? results?.get(setId)) : undefined;
+            if (doubles) {
               return (
-                <tr key={event.setId} className={event.won ? 'win' : 'loss'}>
+                <tr
+                  key={event.setId}
+                  data-whr-set-id={setId ?? undefined}
+                  className={event.won ? 'win' : 'loss'}
+                >
                   <td className="mono">{formatDate(event.tournamentDate)}</td>
                   <td>
                     <Link to="/events/$slug" params={{ slug: event.tournamentSlug }}>
@@ -94,6 +159,14 @@ export function PlayerMatchLog({
                     {event.teammateName && (
                       <span className="whr-impact-value">With {event.teammateName}</span>
                     )}
+                    {setId && (
+                      <ImpactNotes
+                        impact={impact}
+                        active={activeSetId === setId}
+                        won={event.won}
+                        doubles
+                      />
+                    )}
                   </td>
                   <td>{event.resultStage === 'group' ? 'Pool' : 'Bracket'}</td>
                   <td>{event.opponentName}</td>
@@ -101,16 +174,10 @@ export function PlayerMatchLog({
                     {event.won ? 'W' : 'L'}
                     {event.forfeit ? ' · Forfeit' : event.score ? ` · ${event.score}` : ''}
                   </td>
-                  <td className="num">—</td>
+                  <Evidence weight={event.ratingWeight} impact={impact} />
                 </tr>
               );
             }
-            const setId = recomputeId && !event.isDecay && event.won != null ? event.setId : null;
-            const impact = setId ? (runImpact ?? results?.get(setId)) : undefined;
-            const forecast =
-              impact?.status === 'available' && event.won != null
-                ? forecastDetails(impact, event.won)
-                : null;
             return (
               <tr
                 key={event.seq}
@@ -122,19 +189,7 @@ export function PlayerMatchLog({
                   {event.tournamentName}
                   {event.isRookie && <span className="chip chip-warning rookie-chip">rookie</span>}
                   {setId && (
-                    <span className="whr-impact-value">
-                      WHR {impactLabel(impact, activeSetId === setId)}
-                    </span>
-                  )}
-                  {setId && (
-                    <span className="whr-impact-value whr-forecast">
-                      {forecast && (
-                        <>
-                          WHR pre-night{forecast.chance && ` · ${forecast.chance}`}
-                          {forecast.note && <span>{forecast.note}</span>}
-                        </>
-                      )}
-                    </span>
+                    <ImpactNotes impact={impact} active={activeSetId === setId} won={event.won} />
                   )}
                 </td>
                 <td>{event.isDecay ? '—' : event.resultStage === 'group' ? 'Pool' : 'Bracket'}</td>
@@ -156,14 +211,7 @@ export function PlayerMatchLog({
                 >
                   {event.isDecay ? '—' : event.won ? 'W' : 'L'}
                 </td>
-                <td className="num">
-                  {event.weight == null
-                    ? '—'
-                    : `${evidenceUnits.format(event.weight)} ${event.weight === 1 ? 'unit' : 'units'}`}
-                  {impact?.status === 'available' && (
-                    <span className="whr-impact-value">Margin weight {impact.gamesWeight}</span>
-                  )}
-                </td>
+                <Evidence weight={event.weight} impact={impact} />
               </tr>
             );
           })}

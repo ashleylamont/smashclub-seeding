@@ -506,3 +506,35 @@ it('separates changes during an absence, results on return and the attendance pe
     '2026-08-01',
   );
 });
+
+it('adds one doubles result to the same ledger, board and seeding skill as singles', () => {
+  const tournaments = [tournament('singles', '2026-10-01'), tournament('doubles', '2026-11-10')];
+  const singles = makeSet('singles', 'alice', 'bob', 1);
+  const doubles = {
+    ...makeSet('doubles', 'alice', 'bob', 2),
+    partnerIds: ['carol', 'dan'] as const,
+  };
+  const first = runWhrModel({ tournaments, sets: [singles], settings });
+  const combined = runWhrModel({ tournaments, sets: [singles, doubles], settings });
+  expect(combined.converged).toBe(true);
+  expect(combined.periods).toBe(2);
+  expect(combined.events.filter((event) => event.setId === doubles.id)).toHaveLength(4);
+  const alice = combined.leaderboard.find((row) => row.playerId === 'alice')!;
+  expect(alice).toMatchObject({
+    matchCount: 2,
+    wins: 1,
+    losses: 1,
+    eventCount: 2,
+    missedEvents: 0,
+  });
+  expect(alice.skillRating).toBeLessThan(first.leaderboard[0]!.skillRating);
+  expect(alice.conservativeRating).toBeLessThan(first.leaderboard[0]!.conservativeRating);
+  expect(combined.leaderboard.find((row) => row.playerId === 'dan')).toMatchObject({
+    matchCount: 1,
+    wins: 1,
+    losses: 0,
+  });
+  expect(combined.nightRatings.find((row) => row.playerId === 'alice')).toEqual(
+    expect.objectContaining({ eventKey: '2026-10-01', preRating: 1500, played: true }),
+  );
+});

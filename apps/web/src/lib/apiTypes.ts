@@ -36,6 +36,7 @@ export interface PlayerEventView {
    * evening — `tournamentId` still points at only the first of them.
    */
   tournamentName: string;
+  competitionFormat?: 'singles' | 'doubles';
   tournamentDate: string | null;
   /** On a decay row: true only when the night had nothing but a rookie bracket. */
   isRookie: boolean;

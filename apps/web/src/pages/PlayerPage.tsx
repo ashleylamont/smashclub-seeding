@@ -52,22 +52,6 @@ export function PlayerPage() {
 
 function PlayerProfile({ data }: { data: PlayerData }) {
   const { player, rating, nights, recomputeId } = data;
-  const hasDoublesEvidence = data.doublesMatches?.some(({ forfeit }) => !forfeit);
-  const labels = hasDoublesEvidence
-    ? {
-        skill: 'Singles skill estimate',
-        record: 'Singles record',
-        events: 'Singles events',
-        confidence: 'Singles confidence',
-        noSets: 'No singles sets played',
-      }
-    : {
-        skill: 'Skill estimate',
-        record: 'Record',
-        events: 'Events',
-        confidence: 'Confidence',
-        noSets: 'No sets played',
-      };
   // The server types these rows loosely (Record<string, unknown>); see PlayerEventView.
   const events = data.events as unknown as PlayerEventView[];
   const chartData = useMemo(() => {
@@ -114,10 +98,14 @@ function PlayerProfile({ data }: { data: PlayerData }) {
     [chartData],
   );
 
-  const singlesMatches = useMemo(() => events.filter((e) => !e.isDecay), [events]);
+  const ratedMatches = useMemo(() => events.filter((e) => !e.isDecay), [events]);
+  const singlesMatches = useMemo(
+    () => ratedMatches.filter((event) => event.competitionFormat !== 'doubles'),
+    [ratedMatches],
+  );
   const logEvents = useMemo((): PlayerMatchLogEntry[] => {
     const doubles = data.doublesMatches ?? [];
-    const newestSingles = [...events].reverse();
+    const newestSingles = events.filter((event) => event.competitionFormat !== 'doubles').reverse();
     if (!doubles.length) return newestSingles;
     return [...newestSingles, ...doubles].sort((a, b) =>
       (b.tournamentDate ?? '').localeCompare(a.tournamentDate ?? ''),
@@ -135,9 +123,8 @@ function PlayerProfile({ data }: { data: PlayerData }) {
     [logEvents],
   );
   const effectiveStage = hasBothStages ? stageFilter : 'all';
-  const wins = singlesMatches.filter((e) => e.won).length;
-  const winRate =
-    singlesMatches.length > 0 ? ((wins / singlesMatches.length) * 100).toFixed(0) : null;
+  const wins = ratedMatches.filter((e) => e.won).length;
+  const winRate = ratedMatches.length > 0 ? ((wins / ratedMatches.length) * 100).toFixed(0) : null;
 
   const confidenceExplainer = useMemo(() => {
     if (!rating) return 'No rated match history yet.';
@@ -217,7 +204,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
       <header className="profile-header">
         <div className="profile-identity">
           <p className="eyebrow">
-            {rating ? `Rank #${rating.rank}` : hasDoublesEvidence ? 'Doubles player' : 'Unrated'}
+            {rating ? `Rank #${rating.rank}` : 'Unrated'}
             {player.companyCode ? ` · ${player.companyCode}` : ''}
           </p>
           <h1 className="profile-name">
@@ -260,11 +247,12 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         {rating && (
           <div className="profile-headline">
             <span className="headline-label">
-              {hasDoublesEvidence ? 'Singles rating' : 'Rating'}
+              Rating
               <InfoTip label="Rating" align="end">
                 The board ranks on this: the skill estimate below, less a penalty for missed club
-                nights. Results move the estimate; turning up — or not — moves the penalty. Bracket
-                seeding uses a different, more cautious number, so a seed and a rank need not agree.
+                nights. Played singles and doubles sets move the estimate. Attendance affects the
+                penalty. Bracket seeding uses a different, more cautious number, so a seed and a
+                rank need not agree.
               </InfoTip>
             </span>
             <span className="headline-value num">{rating.clubRating.toFixed(0)}</span>
@@ -283,7 +271,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
 
       <dl className="profile-stats">
         <div className="stat">
-          <dt>{labels.skill}</dt>
+          <dt>Skill estimate</dt>
           <dd className="num">{rating ? rating.skillRating.toFixed(0) : '—'}</dd>
           <dd className="stat-detail">
             Best guess at how good you are, from results alone. The rating above is this number less
@@ -291,16 +279,16 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           </dd>
         </div>
         <div className="stat">
-          <dt>{labels.record}</dt>
+          <dt>Record</dt>
           <dd className="num">
-            {rating ? `${rating.wins}–${rating.losses}` : `${wins}–${singlesMatches.length - wins}`}
+            {rating ? `${rating.wins}–${rating.losses}` : `${wins}–${ratedMatches.length - wins}`}
           </dd>
           <dd className="stat-detail">
-            {winRate != null ? `${winRate}% of sets won` : labels.noSets}
+            {winRate != null ? `${winRate}% of rated sets won` : 'No rated sets played'}
           </dd>
         </div>
         <div className="stat">
-          <dt>{labels.events}</dt>
+          <dt>Events</dt>
           <dd className="num">{rating ? rating.eventCount : '—'}</dd>
           <dd className="stat-detail">
             {rating
@@ -318,7 +306,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           </dd>
         </div>
         <div className="stat">
-          <dt>{labels.confidence}</dt>
+          <dt>Confidence</dt>
           <dd className="num">{rating ? `${(rating.sampleConfidence * 100).toFixed(0)}%` : '—'}</dd>
           <dd className="stat-detail">{confidenceExplainer}</dd>
         </div>
@@ -331,7 +319,6 @@ function PlayerProfile({ data }: { data: PlayerData }) {
             </dd>
           </div>
         )}
-        {hasDoublesEvidence && <DoublesRatingStat playerId={player.id} />}
       </dl>
 
       {rating?.isProvisional && (
@@ -432,7 +419,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
       {data.doublesResults?.length > 0 && (
         <section className="section">
           <h2>Doubles results</h2>
-          <p className="muted">Played team sets count toward each member’s doubles WHR.</p>
+          <p className="muted">Played doubles sets count toward each team member’s WHR.</p>
           <ul>
             {data.doublesResults.map((r) => (
               <li key={r.tournamentId}>
@@ -474,13 +461,13 @@ function PlayerProfile({ data }: { data: PlayerData }) {
               : 'WHR fits whole nights. Individual sets have no exact rating delta.'}
           </p>
         )}
-        {singlesMatches.length > 0 && (
+        {ratedMatches.length > 0 && (
           <p className="muted chart-caption">
-            Each {data.doublesMatches?.length ? 'singles set' : 'set'} starts at one evidence unit.
-            The saved margin weight adds units for each game beyond a one-game winning margin, up to
-            two units total. Evidence units weight the WHR fit.
+            Each rated set starts at one evidence unit. The saved margin weight adds units for each
+            game beyond a one-game winning margin, up to two units total. Evidence units weight the
+            WHR fit.
             {recomputeId &&
-              ' Pre-night win estimates use earlier rated sets and both players’ uncertainty.'}
+              ' Pre-night win estimates use earlier rated sets and player uncertainty.'}
           </p>
         )}
         {logEvents.length === 0 ? (
@@ -494,29 +481,6 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           />
         )}
       </section>
-    </div>
-  );
-}
-
-function DoublesRatingStat({ playerId }: { playerId: string }) {
-  const query = useQuery({
-    queryKey: ['doubles-rating', playerId],
-    queryFn: () => trpc.public.doublesRating.query({ playerId }),
-  });
-  const rating = query.data;
-  return (
-    <div className="stat">
-      <dt>Doubles WHR</dt>
-      <dd className="num">{rating?.rating.toFixed(0) ?? '—'}</dd>
-      <dd className="stat-detail">
-        {rating
-          ? `± ${rating.sd.toFixed(0)} · ${rating.playedSets} played ${rating.playedSets === 1 ? 'set' : 'sets'}`
-          : query.isError
-            ? 'Rating unavailable'
-            : query.isPending
-              ? 'Loading doubles rating…'
-              : 'No rated doubles sets'}
-      </dd>
     </div>
   );
 }

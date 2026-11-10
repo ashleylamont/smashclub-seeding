@@ -1,4 +1,7 @@
 import { expect } from 'vitest';
+import { and, eq } from 'drizzle-orm';
+import { playerRatings, type Db } from '@smashclub/db';
+import { runRecompute } from '../../src/recompute/recompute';
 import type { appRouter } from '../../src/trpc/router';
 
 export async function expectDoublesRecapAndHistory(
@@ -17,10 +20,14 @@ export async function expectDoublesRecapAndHistory(
     teammateName,
     score: expect.stringMatching(/^(?:2–0|0–2)$/),
   });
-  const rating = await api.doublesRating({ playerId });
-  expect(rating).toMatchObject({ model: 'doubles-whr', playedSets: 3 });
-  expect(rating?.rating).toBeGreaterThan(0);
-  expect(rating?.sd).toBeGreaterThan(0);
+  expect(profile.rating).toMatchObject({ matchCount: 3 });
+  expect(profile.doublesMatches.every((match) => match.ratingWeight !== null)).toBe(true);
+  const impact = await api.whrResultImpact({
+    playerId,
+    setId: profile.doublesMatches[0]!.setId,
+    recomputeId: profile.recomputeId!,
+  });
+  expect(impact).toMatchObject({ status: 'available', forecast: null });
   const recap = await api.recap({ slug });
   expect(recap).toMatchObject({
     competitionFormat: 'doubles',
@@ -42,4 +49,13 @@ export async function expectDoublesRecapAndHistory(
     ]),
   });
   expect(JSON.stringify([recap, profile.doublesMatches])).not.toContain('Private Surname');
+}
+
+export async function publishedPlayerRating(db: Db, playerId: string) {
+  const { recomputeId } = await runRecompute(db);
+  const [rating] = await db
+    .select()
+    .from(playerRatings)
+    .where(and(eq(playerRatings.recomputeId, recomputeId), eq(playerRatings.playerId, playerId)));
+  return rating;
 }

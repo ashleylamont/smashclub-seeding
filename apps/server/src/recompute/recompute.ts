@@ -1,4 +1,4 @@
-import { loadSinglesHistory } from './inputs';
+import { loadWhrHistory } from './inputs';
 import { and, eq, sql } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
 import {
@@ -21,7 +21,7 @@ import {
 } from './whrProvenance';
 import { getRatingSettings, updateRatingSettings } from '../settings';
 
-export const ENGINE_VERSION = '2.0.0';
+export const ENGINE_VERSION = '2.1.0';
 const RATING_INSERT_CHUNK = 500;
 
 /**
@@ -51,7 +51,7 @@ async function computeRatings(
   db: Db,
 ): Promise<{ recomputeId: string; model: 'whr'; players: number; sets: number; events: number }> {
   const { rating, version } = await getRatingSettings(db);
-  const { engineSets, engineTournaments } = await loadSinglesHistory(db);
+  const { engineSets, engineTournaments } = await loadWhrHistory(db);
 
   const model = 'whr' as const;
   const [recompute] = await db
