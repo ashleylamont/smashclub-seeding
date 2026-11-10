@@ -2,6 +2,16 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.15.0
+
+### Minor Changes
+
+- 10 November 2026 · **Feature** · Count played doubles sets in the same WHR used for rankings and singles seeding. Each team set contributes evidence for all four players, and doubles remain marked in the match log. [#376](https://github.com/ashleylamont/smashclub-seeding/pull/376) · [build 3d0dfa4](https://github.com/ashleylamont/smashclub-seeding/commit/3d0dfa4344811d2461b51fe518993b36ad309f33)
+
+### Patch Changes
+
+- 10 November 2026 · **Fix** · Open recaps for published doubles events and show individual doubles sets, teammates, opponents and scores in each player's match log. [#373](https://github.com/ashleylamont/smashclub-seeding/pull/373) · [build 1c9cb06](https://github.com/ashleylamont/smashclub-seeding/commit/1c9cb06b50bb0167337fef0abb6bd65ed40d1160)
+
 ## 0.14.4
 
 ### Patch Changes
