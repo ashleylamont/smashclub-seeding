@@ -2,6 +2,12 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.14.4
+
+### Patch Changes
+
+- 10 November 2026 · **Improvement** · Shorten the OBS intermission loop with side-by-side pool standings, qualification markers on the pool screens, and wider bracket pages that show more rounds and sets. [#370](https://github.com/ashleylamont/smashclub-seeding/pull/370) · [build ffd64d2](https://github.com/ashleylamont/smashclub-seeding/commit/ffd64d2dc0aba5931549542e9d1690e1256e948d)
+
 ## 0.14.3
 
 ### Patch Changes
