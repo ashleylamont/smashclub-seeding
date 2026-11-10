@@ -132,6 +132,12 @@
 .intermission-round-robin th:first-child {
   width: 18%;
 }
+.intermission-round-robin:has(th:nth-child(3)) th:first-child {
+  width: 12%;
+}
+.intermission-round-robin:has(th:nth-child(3)) th:nth-child(2) {
+  width: 52%;
+}
 .intermission-round-robin td:first-child {
   font-family: var(--font-number);
 }

@@ -54,6 +54,7 @@ export type ProgressPage =
       kind: 'round-robin-results';
       key: string;
       standings: Bracket['standings'];
+      records: ReadonlyMap<string, Pool['players'][number]>;
       winnerId: Bracket['winnerId'];
     }
   | {
@@ -195,12 +196,18 @@ export function broadcastProgressPages(
         )
       : undefined;
   if (roundRobinResult) {
+    const records = new Map(
+      poolStandings(data.matches).flatMap(({ players }) =>
+        players.map((player) => [player.id, player] as const),
+      ),
+    );
     chunks(roundRobinResult.standings, 6).forEach((standings, index) => {
       pages.push({
         kind: 'round-robin-results',
         key: `round-robin-results:${roundRobinResult.id}:${index}`,
         standings,
         winnerId: roundRobinResult.winnerId,
+        records,
       });
     });
   } else {

@@ -285,6 +285,8 @@ function RoundRobinResultsPage({
   entrants: ProgressData['entrants'];
 }) {
   const names = new Map(entrants.map(({ id, name }) => [id, name]));
+  const showRecords = page.records.size > 0;
+  const showUnplayed = [...page.records.values()].some(({ remaining }) => remaining > 0);
   return (
     <>
       <div className="intermission-section-heading">
@@ -303,18 +305,39 @@ function RoundRobinResultsPage({
           <tr>
             <th scope="col">Place</th>
             <th scope="col">Entrant</th>
+            {showRecords && (
+              <>
+                <th scope="col" aria-label="Sets won–lost">
+                  W–L
+                </th>
+                <th scope="col">Games ±</th>
+              </>
+            )}
+            {showUnplayed && <th scope="col">No result</th>}
           </tr>
         </thead>
         <tbody>
-          {page.standings.map(({ place, playerId }) => (
-            <tr
-              key={playerId}
-              className={playerId === page.winnerId ? 'intermission-official-winner' : undefined}
-            >
-              <td>{place}</td>
-              <td>{names.get(playerId) ?? 'Player'}</td>
-            </tr>
-          ))}
+          {page.standings.map(({ place, playerId }) => {
+            const record = page.records.get(playerId);
+            return (
+              <tr
+                key={playerId}
+                className={playerId === page.winnerId ? 'intermission-official-winner' : undefined}
+              >
+                <td>{place}</td>
+                <td>{names.get(playerId) ?? record?.name ?? 'Player'}</td>
+                {showRecords && (
+                  <>
+                    <td>{record ? `${record.wins}–${record.losses}` : '—'}</td>
+                    <td>
+                      {record ? `${record.differential > 0 ? '+' : ''}${record.differential}` : '—'}
+                    </td>
+                  </>
+                )}
+                {showUnplayed && <td>{record?.remaining ?? '—'}</td>}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </>
