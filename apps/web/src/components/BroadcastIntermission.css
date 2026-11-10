@@ -62,8 +62,10 @@
   gap: var(--s4);
   margin-bottom: var(--s3);
 }
-.intermission-section-heading h2 {
+.broadcast-intermission .intermission-section-heading h2 {
   margin: 0;
+  padding: 0;
+  border: 0;
   font-size: clamp(22px, min(2.8vw, 5vh), 52px);
   line-height: 1.12;
 }
@@ -170,6 +172,9 @@
 .intermission-linked th:last-child {
   width: 20%;
 }
+.intermission-linked :is(th, td) {
+  padding-block: 0.85vh;
+}
 .intermission-linked td:not(:first-child) {
   font-family: inherit;
 }
@@ -189,8 +194,8 @@
 }
 .intermission-content .event-bracket-match {
   font-family: var(--font-body);
-  font-size: 0.9em;
-  padding: var(--s2) var(--s3);
+  font-size: 0.8em;
+  padding: var(--s2);
   background: #201f1a;
 }
 .intermission-content .event-bracket-match small {

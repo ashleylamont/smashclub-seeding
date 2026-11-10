@@ -79,14 +79,18 @@ export function EventBracketLane({
   };
   const rounds = [...new Set(matches.map((match) => match.nativeRound ?? 1))].sort((a, b) => a - b);
   const windowRounds = [...new Set(matches.map(liveBracketRound))].sort((a, b) => a - b);
-  const windowSlots = new Map(
-    windowRounds.flatMap((round) =>
-      matches
-        .filter((match) => liveBracketRound(match) === round)
-        .sort((a, b) => (a.nativeSlot ?? 0) - (b.nativeSlot ?? 0) || a.id.localeCompare(b.id))
-        .map((match, index) => [match.id, index] as const),
-    ),
-  );
+  const windowRows = new Map<string, number>();
+  if (roundWindow) {
+    for (const round of windowRounds) {
+      let offset = 0;
+      for (const match of matches
+        .filter((item) => liveBracketRound(item) === round)
+        .sort((a, b) => (a.nativeSlot ?? 0) - (b.nativeSlot ?? 0) || a.id.localeCompare(b.id))) {
+        windowRows.set(match.id, offset / geometry.row);
+        offset += Math.ceil(measurements[match.id]?.height ?? 80) + 12;
+      }
+    }
+  }
   const layout = eliminationLaneLayout(
     matches,
     lane,
@@ -101,7 +105,7 @@ export function EventBracketLane({
               : 1
             : (match.bracketRound ?? rounds.indexOf(match.nativeRound ?? 1) + 1),
       slot: (match) => match.nativeSlot ?? 0,
-      row: roundWindow ? (match) => windowSlots.get(match.id) ?? 0 : undefined,
+      row: roundWindow ? (match) => windowRows.get(match.id) ?? 0 : undefined,
       feeds: liveBracketFeeds,
       targetPort: (match, side) => measurements[match.id]?.rows[side] ?? height / 2,
       sourcePort: (match, outcome) => {

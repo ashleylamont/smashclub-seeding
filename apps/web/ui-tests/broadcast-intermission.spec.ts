@@ -206,9 +206,10 @@ for (const width of [1280, 1920]) {
       const fixture = await mockEvent(page, { idle: true });
       await page.goto(`/overlay/${PLAN_ID}?presentation=progress&controls=0`);
       const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
-      await expect(progress.getByRole('table')).toBeVisible();
-      await expect(progress).toContainText('10 / 10 sets complete');
-      const poolMeter = progress.getByRole('progressbar', { name: 'Pool sets completed' });
+      await expect(progress.getByRole('table')).toHaveCount(2);
+      const firstPool = progress.getByRole('region', { name: /lower.*Pool A/i });
+      await expect(firstPool).toContainText('10 / 10 sets complete');
+      const poolMeter = firstPool.getByRole('progressbar', { name: 'Pool sets completed' });
       await expect(poolMeter).toHaveAttribute('value', '10');
       await expect(poolMeter).toHaveAttribute('max', '10');
       await expect(progress).not.toContainText(/Section \d+ \/|final seeds are separate decisions/);
@@ -758,9 +759,11 @@ for (const [width, height, theme] of [
     await page.clock.install({ time: new Date('2026-10-04T00:00:00Z') });
     const fixture = await mockEvent(page, { idle: true, bracket: true });
     const { snapshot } = fixture;
-    const poolMatches = snapshot.matches.filter(
-      (match) => match.stage === 'group' && match.poolIndex === 0,
-    );
+    const poolMatches = snapshot.matches
+      .filter(
+        (match) => match.stage === 'group' && match.division === 'lower' && match.poolIndex === 0,
+      )
+      .map((match) => ({ ...match, division: 'upper' }));
     const source = poolMatches[0]!;
     const id = source.player1Id!;
     for (const match of poolMatches) {

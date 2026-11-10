@@ -19,7 +19,7 @@ export function finalsFieldLabel({
 }
 
 export function qualifierDetail(
-  { status, entrantId }: PublicFinalsField['slots'][number],
+  { status, entrantId }: Pick<PublicFinalsField['slots'][number], 'status' | 'entrantId'>,
   names: ReadonlyMap<string, string>,
 ) {
   if (status === 'review_pending') return 'Under score review';
