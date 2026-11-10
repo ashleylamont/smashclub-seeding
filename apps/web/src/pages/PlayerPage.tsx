@@ -459,9 +459,9 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         )}
         {singlesMatches.length > 0 && (
           <p className="muted chart-caption">
-            Each set starts at one evidence unit. The saved margin weight adds units for each game
-            beyond a one-game winning margin, up to two units total. Evidence units weight the WHR
-            fit.
+            Each {data.doublesMatches?.length ? 'singles set' : 'set'} starts at one evidence unit.
+            The saved margin weight adds units for each game beyond a one-game winning margin, up to
+            two units total. Evidence units weight the WHR fit.
             {recomputeId &&
               ' Pre-night win estimates use earlier rated sets and both players’ uncertainty.'}
           </p>

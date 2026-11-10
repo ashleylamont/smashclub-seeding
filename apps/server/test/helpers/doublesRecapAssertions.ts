@@ -8,7 +8,7 @@ export async function expectDoublesRecapAndHistory(
   teammateName: string | null,
 ) {
   const profile = await api.player({ playerId });
-  if (!profile || !('doublesResults' in profile)) throw new Error('Missing player profile');
+  if (!profile?.doublesMatches) throw new Error('Missing player profile');
   expect(profile.doublesResults).toHaveLength(1);
   expect(profile.doublesMatches).toHaveLength(3);
   expect(profile.doublesMatches[0]).toMatchObject({
