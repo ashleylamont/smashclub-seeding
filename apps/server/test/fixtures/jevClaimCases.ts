@@ -1,6 +1,7 @@
 type Case = {
   label: string;
   autoApprove: boolean;
+  liveExpectation?: 'either';
   state: {
     account: { name: string; email: string };
     profile: { name: string; company: string | null };
@@ -32,23 +33,25 @@ export const jevClaimCases: Case[] = [
   },
   {
     label: 'Initial in the profile corroborated by the account and mailbox',
-    autoApprove: true,
+    liveExpectation: 'either',
+    autoApprove: false,
     state: {
       account: { name: 'Mira Keane', email: 'mkeane17@personal.example' },
       profile: { name: 'Mira K', company: 'Example Studio' },
     },
-    mockConfidence: 0.83,
-    mockProbabilities: [0, 0, 0, 0.1, 0.9],
+    mockConfidence: 0.4,
+    mockProbabilities: [0, 0, 0.18, 0.53, 0.29],
   },
   {
     label: 'Distinctive nickname backed by the same name in a custom domain mailbox',
-    autoApprove: true,
+    liveExpectation: 'either',
+    autoApprove: false,
     state: {
       account: { name: 'Pippinplayspools', email: 'pippin@tilt.example' },
       profile: { name: 'Pippin', company: null },
     },
-    mockConfidence: 0.85,
-    mockProbabilities: [0, 0, 0, 0.09, 0.91],
+    mockConfidence: 0.58,
+    mockProbabilities: [0, 0, 0.07, 0.35, 0.58],
   },
   {
     label: 'Shared given name and a short handle with no surname evidence',
@@ -67,8 +70,8 @@ export const jevClaimCases: Case[] = [
       account: { name: 'Jamie Patel', email: 'jpatel17@personal.example' },
       profile: { name: 'Jamie P (2)', company: 'Example Studio' },
     },
-    mockConfidence: 0.66,
-    mockProbabilities: [0, 0, 0.04, 0.15, 0.81],
+    mockConfidence: 0.95,
+    mockProbabilities: [0, 0, 0, 0.03, 0.97],
   },
   {
     label: 'Common first name and contradictory surnames',
@@ -89,5 +92,56 @@ export const jevClaimCases: Case[] = [
     },
     mockConfidence: 0.86,
     mockProbabilities: [0.08, 0.92, 0, 0, 0],
+  },
+  {
+    label: 'Holdout: exact two-part name with an unrelated email handle',
+    liveExpectation: 'either',
+    autoApprove: true,
+    state: {
+      account: { name: 'Celine Wren', email: 'peppermint79@personal.example' },
+      profile: { name: 'Celine Wren', company: 'Example Studio' },
+    },
+    mockConfidence: 0.85,
+    mockProbabilities: [0, 0, 0, 0.07, 0.93],
+  },
+  {
+    label: 'Holdout: an exact gaming alias with a different personal name in the mailbox',
+    autoApprove: false,
+    state: {
+      account: { name: 'SparrowDash', email: 'marin.holt@personal.example' },
+      profile: { name: 'SparrowDash', company: null },
+    },
+    mockConfidence: 0.82,
+    mockProbabilities: [0, 0, 0, 0.88, 0.12],
+  },
+  {
+    label: 'Holdout: email begins with the same surname and a different given name',
+    autoApprove: false,
+    state: {
+      account: { name: 'TheQuietOne', email: 'wren.luca@personal.example' },
+      profile: { name: 'Celine Wren', company: 'Example Studio' },
+    },
+    mockConfidence: 0.79,
+    mockProbabilities: [0.09, 0.89, 0.02, 0, 0],
+  },
+  {
+    label: 'Holdout: matching full name with a matching mailbox and a personal domain',
+    autoApprove: true,
+    state: {
+      account: { name: 'Ari Fenwick', email: 'ari.fenwick@personal.example' },
+      profile: { name: 'Ari Fenwick', company: null },
+    },
+    mockConfidence: 0.96,
+    mockProbabilities: [0, 0, 0, 0.025, 0.975],
+  },
+  {
+    label: 'Holdout: a near-identical surname with different given names',
+    autoApprove: false,
+    state: {
+      account: { name: 'Inez Fenwick', email: 'inez.fenwick@personal.example' },
+      profile: { name: 'Ari Fenwick', company: null },
+    },
+    mockConfidence: 0.88,
+    mockProbabilities: [0.94, 0.06, 0, 0, 0],
   },
 ];

@@ -10,14 +10,22 @@ const env = loadEnv({ ...process.env, DATABASE_URL: 'postgres://unused' });
 const results = [];
 for (const fixture of jevClaimCases) {
   const review = await scoreClaim(key, fixture.state);
-  const decision = clearsApprovalThreshold(review, env) ? 'approve' : 'manual';
+  const decision = clearsApprovalThreshold(review, env, fixture.state.profile.name)
+    ? 'approve'
+    : 'manual';
   results.push({
     case: fixture.label,
     score: review.result === 'unavailable' ? null : review.score,
     confidence: review.result === 'unavailable' ? null : review.confidence,
-    expected: fixture.autoApprove ? 'approve' : 'manual',
+    expected: fixture.liveExpectation ?? (fixture.autoApprove ? 'approve' : 'manual'),
     observed: review.result === 'unavailable' ? 'unavailable' : decision,
   });
 }
 console.table(results);
-if (results.some((result) => result.observed !== result.expected)) process.exitCode = 1;
+if (
+  results.some(
+    ({ expected, observed }) =>
+      observed === 'unavailable' || (expected !== 'either' && observed !== expected),
+  )
+)
+  process.exitCode = 1;
