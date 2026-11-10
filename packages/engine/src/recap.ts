@@ -165,6 +165,7 @@ export type RecapFact =
   | {
       kind: 'pool_tie';
       tournamentId: null;
+      poolName?: string;
       teams: RecapPlayerRef[];
       setWins: number;
       circular: boolean;

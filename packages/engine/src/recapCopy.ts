@@ -51,16 +51,7 @@ export function formatFact(fact: RecapFact): { headline: string; detail: string 
         detail: `Sent to the losers bracket, then won ${fact.wins} straight elimination sets${fact.finalRank != null ? ` to finish ${ordinal(fact.finalRank)}` : ''}.`,
       };
     case 'pool_tie':
-      return {
-        headline: `${fact.teams.length} pairs tied on ${fact.setWins} pool ${fact.setWins === 1 ? 'win' : 'wins'}`,
-        detail: [
-          `Recorded order: ${fact.teams.map((team) => team.name).join(' → ')}.`,
-          fact.circular ? 'Each pair went 1–1 against the other two.' : '',
-          fact.splitFinals ? 'The tie spanned championship and consolation qualifiers.' : '',
-        ]
-          .filter(Boolean)
-          .join(' '),
-      };
+      return poolTieCopy(fact);
     case 'pool_sweep':
       return {
         headline: `${fact.player.name} swept their pool`,
@@ -170,4 +161,17 @@ export function formatFact(fact: RecapFact): { headline: string; detail: string 
       };
     }
   }
+}
+
+function poolTieCopy(fact: Extract<RecapFact, { kind: 'pool_tie' }>) {
+  return {
+    headline: `${fact.teams.length} pairs tied on ${fact.setWins} pool ${fact.setWins === 1 ? 'win' : 'wins'}`,
+    detail: [
+      `${fact.poolName ?? 'Pool'} finishing order: ${fact.teams.map((team) => team.name).join(' → ')}.`,
+      fact.circular ? 'Each pair went 1–1 against the other two.' : '',
+      fact.splitFinals ? 'The tie spanned championship and consolation qualifiers.' : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  };
 }

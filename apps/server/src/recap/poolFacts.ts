@@ -4,6 +4,7 @@ import type { Match, TournamentResult } from '../tournament/schemas';
 type PoolMatch = Pick<
   Match,
   | 'stage'
+  | 'label'
   | 'poolId'
   | 'skipped'
   | 'status'
@@ -72,6 +73,8 @@ export function nativeDoublesPoolFacts(
     );
     if (orders.length !== 1) continue;
     const order = orders[0]!.order;
+    const label = matches[0]?.label;
+    const poolName = label && matches.every((match) => match.label === label) ? label : undefined;
     const wins = new Map(
       order.map((id) => [id, played.filter((match) => match.winnerId === id).length]),
     );
@@ -93,6 +96,7 @@ export function nativeDoublesPoolFacts(
         fact: {
           kind: 'pool_tie',
           tournamentId: null,
+          poolName,
           teams: tied.map((id) => names.get(id)!),
           setWins,
           circular,

@@ -21,6 +21,7 @@ const evidence: Parameters<typeof nativeDoublesPoolFacts>[0] = {
     ['c', 'a'],
   ].map(([player1Id, player2Id]) => ({
     stage: 'group',
+    label: 'Open pool 3',
     poolId: 'pool',
     status: 'complete',
     outcome: 'played',
@@ -37,6 +38,7 @@ it('uses the recorded order for a circular three-way tie and verifies the qualif
   expect(facts.map(({ fact }) => fact)).toMatchObject([
     {
       kind: 'pool_tie',
+      poolName: 'Open pool 3',
       teams: [{ name: 'Pair C' }, { name: 'Pair A' }, { name: 'Pair B' }],
       setWins: 1,
       circular: true,
