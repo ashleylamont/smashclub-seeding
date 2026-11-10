@@ -1,8 +1,6 @@
-import { nativeResultPublications, settings as ratingSettings, type Db } from '@smashclub/db';
+import { nativeResultPublications, type Db } from '@smashclub/db';
 import {
   fitDoubles,
-  fitWhr,
-  whrSetTrials,
   runWhrModel,
   NATURAL_TO_DISPLAY,
   type DoublesSet,
@@ -14,8 +12,6 @@ import { historicalPlayerIds } from '../identity/playerIds';
 import { loadSinglesHistory } from './inputs';
 import { getRatingSettings } from '../settings';
 import { nativeHistory } from '../events/nativeHistory';
-import { defaultRatingSettings, ratingSettingsSchema } from '@smashclub/shared';
-import { eq } from 'drizzle-orm';
 
 async function loadDoublesEvidence(db: Db, before: number) {
   const canonical = await historicalPlayerIds(db);
@@ -125,43 +121,4 @@ export async function loadDoublesRatings(db: Db, before: number) {
       beforeDay: Math.floor(before / 86400000),
     },
   };
-}
-
-const playerFits = new WeakMap<Db, { key: string; fit: ReturnType<typeof fitWhr> }>();
-
-/** Per-person doubles WHR from played sets, independent of the pair seeding adjustment. */
-export async function loadPlayerDoublesRating(db: Db, playerId: string) {
-  const { doubles, canonical } = await loadDoublesEvidence(db, Number.POSITIVE_INFINITY);
-  const id = canonical(playerId);
-  const played = doubles.filter((set) => set.p1.includes(id) || set.p2.includes(id));
-  if (!played.length) return null;
-
-  const [saved] = await db
-    .select({ rating: ratingSettings.rating })
-    .from(ratingSettings)
-    .where(eq(ratingSettings.id, 1));
-  const settings = saved ? ratingSettingsSchema.parse(saved.rating) : defaultRatingSettings;
-  const config = {
-    priorSd: settings.whrPriorSd,
-    driftVariancePerDay: settings.whrDriftVariancePerDay,
-  };
-  const key = JSON.stringify([config, settings.whrGamesWeight, doubles]);
-  let cached = playerFits.get(db);
-  if (cached?.key !== key) {
-    const fit = fitWhr({
-      config,
-      sets: doubles.map((set) => ({
-        p1PlayerId: set.p1[0],
-        p2PlayerId: set.p2[0],
-        partnerIds: [set.p1[1], set.p2[1]],
-        time: set.time,
-        winner: set.winner,
-        trials: whrSetTrials(set, settings.whrGamesWeight),
-      })),
-    });
-    if (!fit.converged) throw new Error('Individual doubles WHR did not converge.');
-    cached = { key, fit };
-    playerFits.set(db, cached);
-  }
-  return { ...cached.fit.display(id), playedSets: played.length, model: 'doubles-whr' as const };
 }

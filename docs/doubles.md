@@ -33,13 +33,13 @@ The original member list and frozen rating evidence stay in the draw history. Th
 
 Either teammate can find the pair under their public names. Reports retain the individual reporter identity and use the existing approval/dispute policy. Confirm pool finishing orders in the planner. For a round robin, finalize directly afterward; for formats with pools and playoffs, create and finish the final brackets first. Standalone knockout starts at draw lock and finalizes after its last required match. A reviewed round-robin score correction must also include a reviewed complete finishing order.
 
-Results retain both members and one team-versus-team result per set. Player profiles show team placements and mark doubles sets in the match log. Doubles recaps show the night's team podiums and recorded set highlights. Doubles results do not alter singles ratings, singles activity periods, or singles breakthrough analysis. Public views use both players' public aliases.
+Results retain both members and one team-versus-team result per set. Player profiles show team placements and mark doubles sets in the match log. Doubles recaps show the night's team podiums and recorded set highlights. Played doubles sets contribute to the same club WHR as singles sets and count as participation on the event date. Public views use both players' public aliases.
 
 Run separate singles and doubles plans in sequential time blocks. Station and player reservations are local to one event plan. Concurrent competitions sharing players or physical stations require shared scheduling support and are not coordinated automatically.
 
 ## Ratings and uncertainty
 
-The player profile shows a separate individual **Doubles WHR** when a player has a played set. Each set contributes one result likelihood based on the difference between the two teams' average skills. Both partners receive evidence, including when they change partners. The estimate uses effective published revisions and excludes forfeits and byes. The current uncertainty uses the same conditional approximation as singles WHR. The singles leaderboard, attendance and existing pair-seeding model continue to use their own inputs.
+The leaderboard, player profiles, and singles seeding use one combined WHR. Each doubles set contributes one result likelihood based on the difference between the two teams' average skills. Both partners receive evidence, including when they change partners. The estimate uses effective published revisions and excludes forfeits and byes. The optional pair-seeding model keeps its separate historical singles baseline, so the same doubles evidence does not also enter that baseline.
 
 By default a pair's strength is the average of its members' underlying singles WHR skill, without attendance deductions. Unknown players use the singles prior. Baselines for a doubles event use singles history strictly before that calendar event day, projected forward with WHR drift. No same-night or future singles result enters a pre-night doubles baseline.
 

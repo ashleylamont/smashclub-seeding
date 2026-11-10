@@ -1,30 +1,41 @@
-import { and, eq, inArray, isNotNull, lt, sql } from 'drizzle-orm';
-import { sets, tournaments, type Db } from '@smashclub/db';
+import { and, eq, inArray, isNotNull, lt, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
+import { sets, tournamentParticipants, tournaments, type Db } from '@smashclub/db';
 import { parseScoresCsv, type EngineSet, type EngineTournament } from '@smashclub/engine';
 import { includesResultStage, isPlayedRatingResult, type UnplayedOutcome } from '@smashclub/shared';
+import { historicalPlayerIds } from '../identity/playerIds';
 import { loadNativeHistory } from '../events/nativeHistory';
 
-interface SinglesHistoryBudget {
+interface WhrHistoryBudget {
   before: Date;
   maxTournaments: number;
   maxSets: number;
   maxNativeRows: number;
 }
 
-interface SinglesHistory {
+interface WhrHistory {
   engineSets: EngineSet[];
   engineTournaments: EngineTournament[];
 }
 
-export function loadSinglesHistory(db: Db): Promise<SinglesHistory>;
-export function loadSinglesHistory(
+export async function loadSinglesHistory(db: Db): Promise<WhrHistory> {
+  return (await loadHistory(db, false))!;
+}
+
+export function loadWhrHistory(db: Db): Promise<WhrHistory>;
+export function loadWhrHistory(db: Db, budget: WhrHistoryBudget): Promise<WhrHistory | null>;
+export function loadWhrHistory(db: Db, budget?: WhrHistoryBudget) {
+  return loadHistory(db, true, budget);
+}
+
+const first = alias(tournamentParticipants, 'first_entrant');
+const second = alias(tournamentParticipants, 'second_entrant');
+
+async function loadHistory(
   db: Db,
-  budget: SinglesHistoryBudget,
-): Promise<SinglesHistory | null>;
-export async function loadSinglesHistory(
-  db: Db,
-  budget?: SinglesHistoryBudget,
-): Promise<SinglesHistory | null> {
+  includeDoubles: boolean,
+  budget?: WhrHistoryBudget,
+): Promise<WhrHistory | null> {
   const native = await loadNativeHistory(db, budget?.maxNativeRows);
   if (!native) return null;
 
@@ -35,12 +46,13 @@ export async function loadSinglesHistory(
       isRookie: tournaments.isRookie,
       challongeId: tournaments.challongeId,
       resultsMode: tournaments.resultsMode,
+      competitionFormat: tournaments.competitionFormat,
     })
     .from(tournaments)
     .where(
       and(
         isNotNull(tournaments.eventDate),
-        eq(tournaments.competitionFormat, 'singles'),
+        includeDoubles ? undefined : eq(tournaments.competitionFormat, 'singles'),
         budget ? lt(tournaments.eventDate, budget.before) : undefined,
       ),
     );
@@ -56,7 +68,11 @@ export async function loadSinglesHistory(
     challongeId: row.challongeId,
   }));
   const tournamentIds = engineTournaments.map((t) => t.id);
-  const modes = new Map(tournamentRows.map((t) => [t.id, t.resultsMode]));
+  const sources = new Map(tournamentRows.map((t) => [t.id, t]));
+  const doublesIds = tournamentRows
+    .filter((t) => t.competitionFormat === 'doubles')
+    .map((t) => t.id);
+  const canonical = doublesIds.length ? await historicalPlayerIds(db) : (id: string) => id;
 
   const setQuery = db
     .select({
@@ -64,6 +80,8 @@ export async function loadSinglesHistory(
       tournamentId: sets.tournamentId,
       p1PlayerId: sets.p1PlayerId,
       p2PlayerId: sets.p2PlayerId,
+      firstMembers: first.memberPlayerIds,
+      secondMembers: second.memberPlayerIds,
       winner: sets.winner,
       suggestedPlayOrder: sets.suggestedPlayOrder,
       completedAt: sets.completedAt,
@@ -78,13 +96,29 @@ export async function loadSinglesHistory(
       end`,
     })
     .from(sets)
+    .leftJoin(
+      first,
+      and(eq(sets.p1ParticipantId, first.id), eq(sets.tournamentId, first.tournamentId)),
+    )
+    .leftJoin(
+      second,
+      and(eq(sets.p2ParticipantId, second.id), eq(sets.tournamentId, second.tournamentId)),
+    )
     .where(
       and(
         inArray(sets.tournamentId, tournamentIds),
         eq(sets.state, 'complete'),
         eq(sets.excludedFromRatings, false),
-        isNotNull(sets.p1PlayerId),
-        isNotNull(sets.p2PlayerId),
+        or(
+          and(isNotNull(sets.p1PlayerId), isNotNull(sets.p2PlayerId)),
+          doublesIds.length
+            ? and(
+                inArray(sets.tournamentId, doublesIds),
+                isNotNull(first.memberPlayerIds),
+                isNotNull(second.memberPlayerIds),
+              )
+            : undefined,
+        ),
         isNotNull(sets.winner),
       ),
     );
@@ -95,8 +129,9 @@ export async function loadSinglesHistory(
 
   const engineSets: EngineSet[] = setRows
     .filter((row) => !native.superseded.has(row.tournamentId))
-    .filter((row) => includesResultStage(modes.get(row.tournamentId) ?? 'auto', row.resultStage))
-    .filter((row) => row.p1PlayerId !== row.p2PlayerId)
+    .filter((row) =>
+      includesResultStage(sources.get(row.tournamentId)!.resultsMode, row.resultStage),
+    )
     /*
      * A `99-0` is a bye — nobody played it, so it cannot move a rating, and it
      * must not reach the game-count weighting below as the most decisive set in
@@ -106,22 +141,38 @@ export async function loadSinglesHistory(
      * rather than on the next re-sync.
      */
     .filter((row) => isPlayedRatingResult(row.scoresCsv, { outcome: row.storedOutcome }))
-    .map((row) => {
+    .flatMap((row): EngineSet[] => {
+      if (row.winner !== 1 && row.winner !== 2) return [];
+      let { p1PlayerId, p2PlayerId } = row;
+      let partnerIds: EngineSet['partnerIds'];
+      if (sources.get(row.tournamentId)!.competitionFormat === 'doubles') {
+        const a = row.firstMembers?.map(canonical);
+        const b = row.secondMembers?.map(canonical);
+        if (!a || !b || a.length !== 2 || b.length !== 2 || new Set([...a, ...b]).size !== 4)
+          return [];
+        p1PlayerId = a[0]!;
+        p2PlayerId = b[0]!;
+        partnerIds = [a[1]!, b[1]!];
+      }
+      if (!p1PlayerId || !p2PlayerId || p1PlayerId === p2PlayerId) return [];
       // Game counts feed WHR's evidence weighting (a 3-0 outrates a 3-2);
       // Unplayed scores were excluded above; unknown played scores count once.
       const score = parseScoresCsv(row.scoresCsv);
-      return {
-        id: row.id,
-        tournamentId: row.tournamentId,
-        p1PlayerId: row.p1PlayerId!,
-        p2PlayerId: row.p2PlayerId!,
-        winner: row.winner as 1 | 2,
-        suggestedPlayOrder: row.suggestedPlayOrder,
-        completedAt: row.completedAt?.toISOString() ?? null,
-        challongeMatchId: row.challongeMatchId,
-        p1Games: score.unknown ? null : score.p1,
-        p2Games: score.unknown ? null : score.p2,
-      };
+      return [
+        {
+          id: row.id,
+          tournamentId: row.tournamentId,
+          p1PlayerId,
+          p2PlayerId,
+          ...(partnerIds ? { partnerIds } : {}),
+          winner: row.winner,
+          suggestedPlayOrder: row.suggestedPlayOrder,
+          completedAt: row.completedAt?.toISOString() ?? null,
+          challongeMatchId: row.challongeMatchId,
+          p1Games: score.unknown ? null : score.p1,
+          p2Games: score.unknown ? null : score.p2,
+        },
+      ];
     });
 
   return { engineSets, engineTournaments };

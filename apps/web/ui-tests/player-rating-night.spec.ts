@@ -114,6 +114,7 @@ async function mockProfile(
         tournamentId: `bracket-${seq}`,
         tournamentName: `Singles bracket ${seq + 1}`,
         tournamentDate: `${night.eventKey}T08:30:00Z`,
+        competitionFormat: 'singles' as 'singles' | 'doubles',
         setId: setIds[seq],
         resultStage: seq === 0 ? 'group' : 'final',
         isRookie: false,
@@ -123,6 +124,18 @@ async function mockProfile(
     doublesResults: [],
     doublesMatches,
   };
+  for (const [index, doubles] of doublesMatches.entries())
+    profile.events.push({
+      ...profile.events[0]!,
+      seq: profile.events.length + index,
+      competitionFormat: 'doubles',
+      won: doubles.won,
+      weight: doubles.ratingWeight!,
+      tournamentName: doubles.tournamentName,
+      tournamentDate: doubles.tournamentDate!,
+      setId: doubles.setId,
+      resultStage: doubles.resultStage,
+    });
   const requests: (ImpactRequest & { at: number })[] = [];
   let active = 0;
   let maxActive = 0;
@@ -157,11 +170,6 @@ async function mockProfile(
           } finally {
             active--;
           }
-        }
-        if (procedure === 'public.doublesRating') {
-          return {
-            result: { data: { rating: 1566, sd: 178, playedSets: 1, model: 'doubles-whr' } },
-          };
         }
         expect(procedure).toBe('public.player');
         return { result: { data: profile } };
@@ -533,24 +541,19 @@ for (const [width, theme] of [
         won: true,
         score: '2–1',
         forfeit: false,
+        ratingWeight: 1.5,
       },
     ]);
     await page.goto(`/players/${playerId}`);
     const log = page.getByRole('region', { name: 'Match results' });
-    await expect(page.getByText('Doubles WHR', { exact: true })).toBeVisible();
-    await expect(page.getByText('1566', { exact: true })).toBeVisible();
-    await expect(page.getByText('± 178 · 1 played set', { exact: true })).toBeVisible();
-    await expect(page.getByText('Singles record', { exact: true })).toBeVisible();
-    await ready(page);
-    await page
-      .locator('.profile-stats')
-      .screenshot({ path: testInfo.outputPath('doubles-whr.png') });
     await expect(log.getByRole('row').nth(1)).toContainText('Doubles');
     const row = log.getByRole('row', { name: /Tech In Place 13/ });
     await expect(row).toContainText('With A teammate');
     await expect(row).toContainText('Opponent One / Opponent Two');
     await expect(row).toContainText('W · 2–1');
-    await expect(row).not.toHaveAttribute('data-whr-set-id', /./);
+    await expect(row).toHaveCount(1);
+    await expect(row).toHaveAttribute('data-whr-set-id', 'doubles-played-set');
+    await expect(row).toContainText('1.5 units');
     await expect(row.getByRole('link')).toHaveAttribute('href', '/events/tip13-doubles');
     const stage = page.getByRole('combobox', { name: 'Filter match history by stage' });
     await chooseOption(stage, 'final');
@@ -567,6 +570,8 @@ for (const [width, theme] of [
     await page
       .locator('.match-history')
       .screenshot({ path: testInfo.outputPath('doubles-match-log.png') });
-    expect(mock.requests.every(({ setId }) => setId !== 'doubles-played-set')).toBe(true);
+    await expect
+      .poll(() => mock.requests.some(({ setId }) => setId === 'doubles-played-set'))
+      .toBe(true);
   });
 }

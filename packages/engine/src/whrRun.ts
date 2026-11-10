@@ -93,6 +93,15 @@ interface WhrModelInput {
   settings: RatingSettings;
 }
 
+export function whrSetSides(set: Pick<EngineSet, 'p1PlayerId' | 'p2PlayerId' | 'partnerIds'>) {
+  return set.partnerIds
+    ? ([
+        [set.p1PlayerId, set.partnerIds[0]],
+        [set.p2PlayerId, set.partnerIds[1]],
+      ] as const)
+    : ([[set.p1PlayerId], [set.p2PlayerId]] as const);
+}
+
 /** Canonical played-set order, evidence weights and debut priors for WHR. */
 export function prepareWhrHistory(input: WhrModelInput) {
   const { settings } = input;
@@ -147,7 +156,7 @@ export function prepareWhrHistory(input: WhrModelInput) {
   if (rookieDebutPriorNatural !== 0) {
     const seen = new Set<string>();
     for (const { set, tournament } of rateable) {
-      for (const playerId of [set.p1PlayerId, set.p2PlayerId]) {
+      for (const playerId of whrSetSides(set).flat()) {
         if (seen.has(playerId)) continue;
         seen.add(playerId);
         if (tournament.isRookie) priorMeans.set(playerId, rookieDebutPriorNatural);
@@ -158,6 +167,7 @@ export function prepareWhrHistory(input: WhrModelInput) {
   const fitSets: WhrSet[] = rateable.map(({ set, day, trials }) => ({
     p1PlayerId: set.p1PlayerId,
     p2PlayerId: set.p2PlayerId,
+    partnerIds: set.partnerIds,
     winner: set.winner,
     time: day - originDay,
     trials,
@@ -230,7 +240,7 @@ export function runWhrModel(input: WhrModelInput): WhrRunResult {
     const time = nightSets[0]!.day - originDay;
     const nightFit = fits[eventIndex]!;
     const preFit = eventIndex > 0 ? fits[eventIndex - 1]! : null;
-    const playerIds = new Set(nightSets.flatMap(({ set }) => [set.p1PlayerId, set.p2PlayerId]));
+    const playerIds = new Set(nightSets.flatMap(({ set }) => whrSetSides(set).flat()));
     const nightPlans = new Map<string, NightPlan>();
     for (const playerId of playerIds) {
       if (!lastPlayedIndex.has(playerId)) lastPlayedIndex.set(playerId, null);
@@ -278,10 +288,17 @@ export function runWhrModel(input: WhrModelInput): WhrRunResult {
   let seq = 0;
 
   for (const { set, tournament, eventKey, trials } of rateable) {
-    for (const [playerId, opponentId, won] of [
-      [set.p1PlayerId, set.p2PlayerId, set.winner === 1],
-      [set.p2PlayerId, set.p1PlayerId, set.winner === 2],
-    ] as const) {
+    const [first, second] = whrSetSides(set);
+    const participants = set.partnerIds
+      ? [
+          ...first.map((id) => [id, null, set.winner === 1] as const),
+          ...second.map((id) => [id, null, set.winner === 2] as const),
+        ]
+      : ([
+          [set.p1PlayerId, set.p2PlayerId, set.winner === 1],
+          [set.p2PlayerId, set.p1PlayerId, set.winner === 2],
+        ] as const);
+    for (const [playerId, opponentId, won] of participants) {
       const plan = plans.get(eventKey)!.get(playerId)!;
 
       events.push({
@@ -384,25 +401,20 @@ function buildLeaderboard(
   };
 
   for (const { set, tournament, eventKey } of rateable) {
-    const p1 = ensure(set.p1PlayerId, tournament.eventDate);
-    const p2 = ensure(set.p2PlayerId, tournament.eventDate);
-    for (const [self, other] of [
-      [p1, p2],
-      [p2, p1],
-    ] as const) {
-      self.matchCount += 1;
-      self.tournamentIds.add(tournament.id);
-      self.eventKeys.add(eventKey);
-      self.opponentIds.add(other.playerId);
-      if (tournament.isRookie) self.rookieMatchCount += 1;
-      else self.mainMatchCount += 1;
-    }
-    if (set.winner === 1) {
-      p1.wins += 1;
-      p2.losses += 1;
-    } else {
-      p2.wins += 1;
-      p1.losses += 1;
+    const sides = whrSetSides(set);
+    for (const side of [0, 1] as const) {
+      const opponents = sides[side === 0 ? 1 : 0];
+      for (const playerId of sides[side]) {
+        const row = ensure(playerId, tournament.eventDate);
+        row.matchCount += 1;
+        row.tournamentIds.add(tournament.id);
+        row.eventKeys.add(eventKey);
+        opponents.forEach((opponent) => row.opponentIds.add(opponent));
+        if (tournament.isRookie) row.rookieMatchCount += 1;
+        else row.mainMatchCount += 1;
+        if (set.winner === side + 1) row.wins += 1;
+        else row.losses += 1;
+      }
     }
   }
 
@@ -416,13 +428,11 @@ function buildLeaderboard(
    */
   const bridgeMatchCounts = new Map<string, number>();
   for (const { set } of rateable) {
-    for (const [selfId, otherId] of [
-      [set.p1PlayerId, set.p2PlayerId],
-      [set.p2PlayerId, set.p1PlayerId],
-    ] as const) {
-      if ((participation.get(otherId)?.mainMatchCount ?? 0) > 0) {
-        bridgeMatchCounts.set(selfId, (bridgeMatchCounts.get(selfId) ?? 0) + 1);
-      }
+    const sides = whrSetSides(set);
+    for (const side of [0, 1] as const) {
+      const opponents = sides[side === 0 ? 1 : 0];
+      if (!opponents.some((id) => (participation.get(id)?.mainMatchCount ?? 0) > 0)) continue;
+      for (const id of sides[side]) bridgeMatchCounts.set(id, (bridgeMatchCounts.get(id) ?? 0) + 1);
     }
   }
 

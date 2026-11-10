@@ -6,10 +6,11 @@ import {
   fitWhrPrefix,
   prepareWhrHistory,
   probabilityFromRatings,
+  whrSetSides,
   type PreparedWhrHistory,
 } from '@smashclub/engine';
 import { ratingSettingsSchema } from '@smashclub/shared';
-import { loadSinglesHistory } from './inputs';
+import { loadWhrHistory } from './inputs';
 import { latestRecomputeId } from './recompute';
 import { currentWhrPrefixFingerprints, whrPrefixFingerprints } from './whrProvenance';
 
@@ -76,11 +77,12 @@ async function readSnapshot(db: Db, input: ImpactInput) {
       ),
     );
   const participant = participants.find(({ playerId }) => playerId === input.playerId);
-  if (!participant || participants.length !== 2) return unavailable('not_rated');
+  if (!participant || (participants.length !== 2 && participants.length !== 4))
+    return unavailable('not_rated');
   if (!participant.eventDate) return unavailable('history_changed');
   const before = new Date(participant.eventDate);
   before.setUTCHours(24, 0, 0, 0);
-  const inputs = await loadSinglesHistory(db, { before, ...HISTORY_LIMITS });
+  const inputs = await loadWhrHistory(db, { before, ...HISTORY_LIMITS });
   if (!inputs) return unavailable('history_too_large');
   const { engineSets, engineTournaments } = inputs;
   const history = prepareWhrHistory({
@@ -91,6 +93,12 @@ async function readSnapshot(db: Db, input: ImpactInput) {
   const setIndex = history.rateable.findIndex(({ set }) => set.id === input.setId);
   const row = history.rateable[setIndex];
   if (!row) return unavailable('history_changed');
+  const members = whrSetSides(row.set).flat();
+  if (
+    members.length !== participants.length ||
+    !members.every((id) => participants.some(({ playerId }) => playerId === id))
+  )
+    return unavailable('history_changed');
   if (whrPrefixFingerprints(history).get(row.eventKey) !== fingerprints[row.eventKey])
     return unavailable('history_changed');
   return { status: 'verified' as const, history, setIndex, row, participants, participant };
@@ -101,14 +109,13 @@ function preNightOpponents(history: PreparedWhrHistory, day: number) {
   const opponents = new Map<string, Set<string>>();
   for (const { day: playedDay, set } of history.rateable) {
     if (playedDay >= day) break;
-    const { p1PlayerId, p2PlayerId } = set;
-    for (const [playerId, opponentId] of [
-      [p1PlayerId, p2PlayerId],
-      [p2PlayerId, p1PlayerId],
-    ] as const) {
-      let played = opponents.get(playerId);
-      if (!played) opponents.set(playerId, (played = new Set()));
-      played.add(opponentId);
+    const sides = whrSetSides(set);
+    for (const side of [0, 1] as const) {
+      for (const id of sides[side]) {
+        const played = opponents.get(id) ?? new Set<string>();
+        sides[side === 0 ? 1 : 0].forEach((opponent) => played.add(opponent));
+        opponents.set(id, played);
+      }
     }
   }
   return opponents;
@@ -127,6 +134,17 @@ function connected(opponents: Map<string, Set<string>>, playerId: string, oppone
     }
   }
   return false;
+}
+
+function meanPreRating(team: readonly { preRating: number }[]) {
+  return team.reduce((sum, member) => sum + member.preRating, 0) / team.length;
+}
+
+function varianceOfMean(team: readonly { preRd: number }[]) {
+  return (
+    team.reduce((sum, member) => sum + (member.preRd / NATURAL_TO_DISPLAY) ** 2, 0) /
+    team.length ** 2
+  );
 }
 
 export async function readWhrResultImpact(db: Db, input: ImpactInput) {
@@ -174,10 +192,14 @@ export async function readWhrResultImpact(db: Db, input: ImpactInput) {
     if (cache.size > MAX_CACHE_ENTRIES) cache.delete(cache.keys().next().value!);
     const opponents = preNightOpponents(history, row.day);
     const firstNight = !opponents.has(input.playerId);
-    const opponent = participants.find(({ playerId }) => playerId !== input.playerId)!;
+    const sides = whrSetSides(row.set);
+    const side = sides[0].includes(input.playerId) ? 0 : 1;
+    const own = participants.filter(({ playerId }) => sides[side].includes(playerId));
+    const other = participants.filter(({ playerId }) => !sides[side].includes(playerId));
     let forecastUnavailable: 'first_night' | 'disconnected' | 'missing_estimate' | null = null;
-    if (firstNight || !opponents.has(opponent.playerId)) forecastUnavailable = 'first_night';
-    else if (!connected(opponents, input.playerId, opponent.playerId))
+    if (participants.some(({ playerId }) => !opponents.has(playerId)))
+      forecastUnavailable = 'first_night';
+    else if (participants.some(({ playerId }) => !connected(opponents, input.playerId, playerId)))
       forecastUnavailable = 'disconnected';
     else if (
       !participants.every(
@@ -189,12 +211,11 @@ export async function readWhrResultImpact(db: Db, input: ImpactInput) {
       forecastUnavailable === null
         ? {
             winProbability: probabilityFromRatings(
-              (participant.preRating - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY,
-              (opponent.preRating - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY,
-              (participant.preRd / NATURAL_TO_DISPLAY) ** 2 +
-                (opponent.preRd / NATURAL_TO_DISPLAY) ** 2,
+              (meanPreRating(own) - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY,
+              (meanPreRating(other) - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY,
+              varianceOfMean(own) + varianceOfMean(other),
             ),
-            opponentSkill: opponent.preRating,
+            opponentSkill: meanPreRating(other),
           }
         : null;
     return {

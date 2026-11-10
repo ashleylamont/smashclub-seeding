@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { defaultWhrConfig, type PreparedWhrHistory } from '@smashclub/engine';
 
 // Bump when the preparation, fitter or omission method changes.
-export const WHR_PREFIX_FINGERPRINT_VERSION = 1;
+export const WHR_PREFIX_FINGERPRINT_VERSION = 2;
 
 export function currentWhrPrefixFingerprints(stats: unknown): Record<string, string> | null {
   if (
@@ -39,12 +39,14 @@ export function whrPrefixFingerprints(history: PreparedWhrHistory) {
         set.id,
         fitted.p1PlayerId,
         fitted.p2PlayerId,
+        fitted.partnerIds ?? null,
         fitted.winner,
         fitted.time,
         fitted.trials ?? 1,
         fitted.logOddsOffset ?? 0,
         history.priorMeans.get(fitted.p1PlayerId) ?? 0,
         history.priorMeans.get(fitted.p2PlayerId) ?? 0,
+        fitted.partnerIds?.map((id) => history.priorMeans.get(id) ?? 0) ?? null,
       ]),
     );
     if (index + 1 === history.prefixEnds.get(eventKey))

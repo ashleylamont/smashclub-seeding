@@ -1,5 +1,4 @@
 import { hasSupersededAdvancement } from '../../tournament/resultEvidence';
-import { loadPlayerDoublesRating } from '../../recompute/doubles';
 import { playerDoublesHistory } from '../../events/playerDoublesHistory';
 import { publicParticipantNames } from '../../events/participantNames';
 import { z } from 'zod';
@@ -110,7 +109,7 @@ export const publicRouter = router({
     const eventDates = await ctx.db
       .select({ eventDate: tournaments.eventDate })
       .from(tournaments)
-      .where(and(isNotNull(tournaments.eventDate), eq(tournaments.competitionFormat, 'singles')));
+      .where(isNotNull(tournaments.eventDate));
     const eventCount = new Set(eventDates.map((row) => eventKeyOf(row.eventDate!.toISOString())))
       .size;
 
@@ -179,6 +178,7 @@ export const publicRouter = router({
     const recomputeId = await latestRecomputeId(ctx.db);
     let ratingRow = null;
     let events: Record<string, unknown>[] = [];
+    const doublesWeights = new Map<string, number>();
     let nights: Omit<WhrNightRating, 'playerId'>[] = [];
     if (recomputeId) {
       const [rating] = await ctx.db
@@ -227,6 +227,7 @@ export const publicRouter = router({
           resultStage: sets.resultStage,
           tournamentId: ratingEvents.tournamentId,
           tournamentName: tournaments.name,
+          competitionFormat: tournaments.competitionFormat,
           tournamentDate: tournaments.eventDate,
           isRookie: tournaments.isRookie,
           opponentPlayerId: ratingEvents.opponentPlayerId,
@@ -242,6 +243,8 @@ export const publicRouter = router({
         )
         .orderBy(asc(ratingEvents.seq));
       events = eventRows.map(({ opponentCanonicalName, opponentDisplayName, ...row }) => {
+        if (row.competitionFormat === 'doubles' && row.setId)
+          doublesWeights.set(row.setId, row.weight);
         return {
           ...row,
           tournamentDate: row.tournamentDate?.toISOString() ?? null,
@@ -277,13 +280,12 @@ export const publicRouter = router({
       model: 'whr' as const,
       ratingScope: 'night' as const,
       doublesResults: doubles.results,
-      doublesMatches: doubles.matches,
+      doublesMatches: doubles.matches.map((match) => ({
+        ...match,
+        ratingWeight: doublesWeights.get(match.setId) ?? null,
+      })),
     };
   }),
-
-  doublesRating: publicProcedure
-    .input(z.object({ playerId: z.uuid() }))
-    .query(({ ctx, input }) => loadPlayerDoublesRating(ctx.db, input.playerId)),
 
   headToHead: publicProcedure
     .input(headToHeadInput)

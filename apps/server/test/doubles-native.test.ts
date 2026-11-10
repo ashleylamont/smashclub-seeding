@@ -7,7 +7,7 @@ import {
   playerCharacters,
   eventPlans,
   eventOperationSettings,
-  playerRatings,
+  ratingEvents,
   players,
   sets,
   tournamentParticipants,
@@ -15,7 +15,10 @@ import {
   user,
   type Db,
 } from '@smashclub/db';
-import { expectDoublesRecapAndHistory } from './helpers/doublesRecapAssertions';
+import {
+  expectDoublesRecapAndHistory,
+  publishedPlayerRating,
+} from './helpers/doublesRecapAssertions';
 import { createTestDb } from './helpers/testDb';
 import { nativeAdmin, pureBaseline, envelope } from './helpers/nativeLiveFixture';
 import { createNativeRuntime, type NativeRuntime } from '../src/tournament/runtime';
@@ -128,7 +131,7 @@ describe('native doubles through shipped APIs', () => {
     ['pools_finals', 8, 2],
     ['dual_division', 12, 4],
   ] as const)
-    it(`runs ${count} pairs in ${structure}, publishes one fact per set, and preserves singles ratings`, async () => {
+    it(`runs ${count} pairs in ${structure}, publishes one fact per set and rates each team member`, async () => {
       const { planId, members } = await draft(count, structure);
       await prepare(planId);
       const state = await runtime.state(planId);
@@ -222,8 +225,19 @@ describe('native doubles through shipped APIs', () => {
       expect(JSON.stringify(detail)).not.toContain('Private Surname');
       await processNativeRatingIntents(db);
       const recompute = await runRecompute(db);
-      expect(recompute.sets).toBe(0);
-      expect(await db.select().from(playerRatings)).toHaveLength(0);
+      const ratedRows = (
+        await db
+          .select()
+          .from(ratingEvents)
+          .where(eq(ratingEvents.recomputeId, recompute.recomputeId))
+      ).filter((row) => publishedIds.has(row.tournamentId));
+      expect(ratedRows).toHaveLength(
+        historical.filter((row) => !row.excludedFromRatings).length * 4,
+      );
+      expect(new Set(ratedRows.map((row) => row.playerId))).toEqual(
+        new Set(members.map(({ id }) => id)),
+      );
+      expect(ratedRows.every((row) => row.opponentPlayerId === null)).toBe(true);
       const fit = await loadDoublesRatings(db, Date.parse('2026-10-10T00:00:00Z'));
       expect(fit.converged).toBe(true);
       expect(
@@ -585,7 +599,7 @@ describe('native doubles through shipped APIs', () => {
       match = state.matches[0]!,
       resultId = state.result!.id;
     const before = await loadDoublesRatings(db, Date.parse('2026-10-10'));
-    const beforeIndividual = await caller(null).public.doublesRating({ playerId: members[0]!.id });
+    const beforeIndividual = await publishedPlayerRating(db, members[0]!.id);
     const at = Date.parse('2026-10-10') / 86400000,
       pair = [members[0]!.id, members[1]!.id] as const;
     const correction = {
@@ -616,8 +630,8 @@ describe('native doubles through shipped APIs', () => {
     const after = await loadDoublesRatings(db, Date.parse('2026-10-10'));
     expect(after.evidence(pair)).toEqual(before.evidence(pair));
     expect(after.rating(pair, at).rating).toBeLessThan(before.rating(pair, at).rating);
-    const afterIndividual = await caller(null).public.doublesRating({ playerId: members[0]!.id });
-    expect(afterIndividual?.playedSets).toBe(beforeIndividual?.playedSets);
+    const afterIndividual = await publishedPlayerRating(db, members[0]!.id);
+    expect(afterIndividual?.matchCount).toBe(beforeIndividual?.matchCount);
     expect(afterIndividual!.rating).toBeLessThan(beforeIndividual!.rating);
     expect(after.provenance.sourceResultIds).not.toContain(resultId);
     expect(after.provenance.sourceResultIds).toContain(corrected.result!.id);
