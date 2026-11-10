@@ -23,6 +23,7 @@ const claim: AdminClaim = {
     topLevelProbability: 0.96,
   },
   status: 'pending',
+  autoApproved: false,
   createdAt: '2026-10-03T00:00:00Z',
 };
 const player: AdminPlayer = {
@@ -133,3 +134,21 @@ for (const theme of ['dark', 'light'] as const)
       await page.screenshot({ path: testInfo.outputPath('registry-filtered.png'), fullPage: true });
       expect(fixture.unexpected).toEqual([]);
     });
+
+test('shows that Jev approved a claim and leaves revoke available', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  const fixture = await mockEvent(page, { role: 'admin' });
+  fixture.responses['admin.claims'] = [{ ...claim, status: 'approved', autoApproved: true }];
+  fixture.responses['admin.players'] = [player];
+  await page.goto('/admin/players');
+  const table = page.getByRole('region', { name: 'Player claims', exact: true }).getByRole('table');
+  const revoke = table.getByRole('button', { name: 'Revoke', exact: true });
+  await expect(table.getByText('Jev · Auto-approved')).toBeVisible();
+  await expect(revoke).toBeEnabled();
+  await expect(table.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
+  await ready(page);
+  await revoke.focus();
+  await expect(revoke).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  await page.screenshot({ path: testInfo.outputPath('auto-approved.png'), fullPage: true });
+});

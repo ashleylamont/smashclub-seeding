@@ -462,6 +462,11 @@ function ClaimRow({ claim, onChanged }: { claim: AdminClaim; onChanged: () => vo
         >
           {claim.status}
         </span>
+        {claim.autoApproved && (
+          <div>
+            <span className="chip">Jev · Auto-approved</span>
+          </div>
+        )}
         {claim.status === 'pending' && claim.jevReview && (
           <div>
             {claim.jevReview.result === 'likely_match' ? (

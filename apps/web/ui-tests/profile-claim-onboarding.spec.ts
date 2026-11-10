@@ -146,7 +146,7 @@ for (const theme of ['dark', 'light'] as const)
         name: 'Claiming account',
         email: 'claimant@example.test',
         role: 'player',
-        claimReviewAvailable: optIn,
+        claimReviewMode: optIn ? (theme === 'dark' ? 'auto' : 'triage') : 'off',
       };
       let verified = false;
       fixture.queryResponses.set('public.player', (input) => {
@@ -213,7 +213,7 @@ for (const theme of ['dark', 'light'] as const)
         {
           playerId: PLAYER_ID,
           note: 'My bracket alias',
-          ...(optIn ? { reviewWithJev: true } : {}),
+          ...(optIn ? { reviewWithJev: theme === 'dark' ? 'auto' : 'triage' } : {}),
         },
       ]);
       await expect(page.getByRole('heading', { name: 'Main characters' })).toHaveCount(0);

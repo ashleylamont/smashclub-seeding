@@ -20,6 +20,7 @@ export type JevClaimReview =
       score: number;
       confidence: number;
       topLevelProbability: number;
+      autoApprovedAt?: string;
     };
 
 /**

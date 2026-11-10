@@ -16,11 +16,11 @@ import { trpc } from '../lib/trpc';
 export function ProfileClaimSection({
   userId,
   targetId,
-  claimReviewAvailable,
+  claimReviewMode,
 }: {
   userId: string;
   targetId?: string;
-  claimReviewAvailable?: boolean;
+  claimReviewMode?: 'off' | 'triage' | 'auto';
 }) {
   const queryClient = useQueryClient();
   const claims = useMyClaims(userId);
@@ -70,7 +70,7 @@ export function ProfileClaimSection({
         <ClaimSearch
           key={targetId ?? 'search'}
           targetId={targetId}
-          claimReviewAvailable={claimReviewAvailable}
+          claimReviewMode={claimReviewMode}
           onChanged={invalidate}
         />
       )}
@@ -261,16 +261,17 @@ function ProfileEditor({
 
 function ClaimSearch({
   targetId,
-  claimReviewAvailable,
+  claimReviewMode,
   onChanged,
 }: {
   targetId?: string;
-  claimReviewAvailable?: boolean;
+  claimReviewMode?: 'off' | 'triage' | 'auto';
   onChanged: () => void;
 }) {
   const [query, setQuery] = useState('');
   const [note, setNote] = useState('');
   const [reviewWithJev, setReviewWithJev] = useState(false);
+  const reviewAvailable = claimReviewMode === 'triage' || claimReviewMode === 'auto';
   const trimmed = query.trim();
   const target = useQuery({
     queryKey: ['player', targetId],
@@ -290,7 +291,9 @@ function ClaimSearch({
       trpc.me.requestClaim.mutate({
         playerId,
         note: note.trim() || undefined,
-        ...(claimReviewAvailable && reviewWithJev ? { reviewWithJev: true } : {}),
+        ...(reviewAvailable && reviewWithJev
+          ? { reviewWithJev: claimReviewMode === 'auto' ? 'auto' : 'triage' }
+          : {}),
       }),
     onSuccess: onChanged,
   });
@@ -303,7 +306,7 @@ function ClaimSearch({
       onChange={(event) => setNote(event.target.value)}
     />
   );
-  const reviewField = claimReviewAvailable && (
+  const reviewField = reviewAvailable && (
     <div>
       <label className="ui-actions">
         <Checkbox
@@ -315,7 +318,10 @@ function ClaimSearch({
       </label>
       <p className="muted" id="claim-review-data">
         Optional. TypeSafe receives your account name and email, the player’s public alias and
-        company, and any note above. An administrator still decides your claim.
+        company{claimReviewMode === 'auto' ? '.' : ', and any note above.'}{' '}
+        {claimReviewMode === 'auto'
+          ? 'A strong match may be approved automatically.'
+          : 'An administrator still decides your claim.'}
       </p>
     </div>
   );
@@ -331,8 +337,8 @@ function ClaimSearch({
           <Link to="/players/$playerId" params={{ playerId: selected.id }}>
             <strong>{selected.name}</strong>
           </Link>
-          {selected.companyCode ? ` (${selected.companyCode})` : ''}. An administrator reviews your
-          request before you can edit this profile.
+          {selected.companyCode ? ` (${selected.companyCode})` : ''}. You can edit this profile
+          after your request is approved.
         </p>
         {noteField}
         {reviewField}
@@ -361,9 +367,7 @@ function ClaimSearch({
             : 'The selected profile is unavailable. You can search for your current player profile below.'}
         </Notice>
       )}
-      <p>
-        Find your player by the name shown on the leaderboard. An administrator reviews your claim.
-      </p>
+      <p>Find your player by the name shown on the leaderboard.</p>
       <div className="claim-form-row">
         <Field
           label="Search players"

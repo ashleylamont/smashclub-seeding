@@ -30,6 +30,12 @@ const envSchema = z.object({
     .default('false')
     .transform((value) => value === 'true'),
   TYPESAFE_API_KEY: z.string().trim().min(1).optional(),
+  JEV_CLAIM_AUTO_APPROVE_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
+  JEV_CLAIM_AUTO_APPROVE_MIN_SCORE: z.coerce.number().min(3.5).max(4).default(3.5),
+  JEV_CLAIM_AUTO_APPROVE_MIN_CONFIDENCE: z.coerce.number().min(0.65).max(1).default(0.8),
   /**
    * Trust `X-Forwarded-*` from the proxy in front of us. Off by default (a
    * directly-exposed server must not let clients pick their own address);

@@ -51,7 +51,7 @@ export function MePage() {
         key={session.user.id}
         userId={session.user.id}
         targetId={claim}
-        claimReviewAvailable={session.user.emailVerified && currentUser.data?.claimReviewAvailable}
+        claimReviewMode={session.user.emailVerified ? currentUser.data?.claimReviewMode : 'off'}
       />
     </div>
   );
