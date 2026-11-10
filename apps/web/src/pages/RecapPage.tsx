@@ -186,7 +186,7 @@ function Podium({
 }) {
   return (
     <div className="podium card">
-      <h3 className="podium-title">{name}</h3>
+      <h2 className="podium-title">{name}</h2>
       <ol className="podium-list">
         {podium.places.map((place) => (
           <li

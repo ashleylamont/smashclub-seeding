@@ -158,6 +158,11 @@ async function mockProfile(
             active--;
           }
         }
+        if (procedure === 'public.doublesRating') {
+          return {
+            result: { data: { rating: 1566, sd: 178, playedSets: 1, model: 'doubles-whr' } },
+          };
+        }
         expect(procedure).toBe('public.player');
         return { result: { data: profile } };
       }),
@@ -532,6 +537,14 @@ for (const [width, theme] of [
     ]);
     await page.goto(`/players/${playerId}`);
     const log = page.getByRole('region', { name: 'Match results' });
+    await expect(page.getByText('Doubles WHR', { exact: true })).toBeVisible();
+    await expect(page.getByText('1566', { exact: true })).toBeVisible();
+    await expect(page.getByText('± 178 · 1 played set', { exact: true })).toBeVisible();
+    await expect(page.getByText('Singles record', { exact: true })).toBeVisible();
+    await ready(page);
+    await page
+      .locator('.profile-stats')
+      .screenshot({ path: testInfo.outputPath('doubles-whr.png') });
     await expect(log.getByRole('row').nth(1)).toContainText('Doubles');
     const row = log.getByRole('row', { name: /Tech In Place 13/ });
     await expect(row).toContainText('With A teammate');

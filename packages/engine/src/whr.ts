@@ -70,6 +70,8 @@ export const defaultWhrConfig: WhrConfig = {
 export interface WhrSet {
   p1PlayerId: string;
   p2PlayerId: string;
+  /** One partner per side. Doubles compare the two teams' mean skills. */
+  partnerIds?: readonly [string, string];
   winner: 1 | 2;
   /** Time in days (any consistent origin). */
   time: number;
@@ -92,15 +94,23 @@ interface PlayerTrack {
   /** Posterior variance at each time, natural units squared. */
   variance: number[];
   /** Games indexed by time position. */
-  games: {
-    opponentId: string;
-    opponentTimeIndex: number;
-    won: boolean;
-    trials: number;
-    offset: number;
-  }[][];
+  games: TrackGame[][];
   /** Centre of this player's prior, natural units (0 unless overridden). */
   priorMean: number;
+}
+
+interface TrackGame {
+  coefficient: number;
+  others: { track: PlayerTrack; index: number; coefficient: number }[];
+  won: boolean;
+  trials: number;
+  offset: number;
+}
+
+function expectedWin(rating: number, game: TrackGame) {
+  let logOdds = game.coefficient * rating;
+  for (const other of game.others) logOdds += other.coefficient * other.track.r[other.index]!;
+  return 1 / (1 + Math.exp(-(logOdds + game.offset)));
 }
 
 export interface PlayerRatingAt {
@@ -151,13 +161,23 @@ export function fitWhr(input: {
   priorMeans?: ReadonlyMap<string, number>;
 }): WhrFit {
   const config: WhrConfig = { ...defaultWhrConfig, ...input.config };
-  const sets = input.sets;
+  const sets = input.sets.map((set) => {
+    const first = [set.p1PlayerId];
+    const second = [set.p2PlayerId];
+    if (set.partnerIds) {
+      first.push(set.partnerIds[0]);
+      second.push(set.partnerIds[1]);
+      if (new Set([...first, ...second]).size !== 4)
+        throw new Error('A doubles WHR set requires four distinct players.');
+    }
+    return { set, sides: [first, second] as const };
+  });
   const priorMeans = input.priorMeans;
 
   // ---- build per-player tracks ----
   const timesByPlayer = new Map<string, Set<number>>();
-  for (const set of sets) {
-    for (const id of [set.p1PlayerId, set.p2PlayerId]) {
+  for (const { set, sides } of sets) {
+    for (const id of sides.flat()) {
       const times = timesByPlayer.get(id) ?? new Set<number>();
       times.add(set.time);
       timesByPlayer.set(id, times);
@@ -184,28 +204,42 @@ export function fitWhr(input: {
     throw new Error(`time ${time} missing for ${track.playerId}`);
   };
 
-  for (const set of sets) {
+  for (const { set, sides } of sets) {
     const trials = set.trials ?? 1;
     const offset = set.logOddsOffset ?? 0;
     if (!Number.isFinite(offset)) throw new Error('WHR offset must be finite.');
-    const t1 = tracks.get(set.p1PlayerId)!;
-    const t2 = tracks.get(set.p2PlayerId)!;
-    const i1 = timeIndex(t1, set.time);
-    const i2 = timeIndex(t2, set.time);
-    t1.games[i1]!.push({
-      opponentId: set.p2PlayerId,
-      opponentTimeIndex: i2,
-      won: set.winner === 1,
-      trials,
-      offset,
-    });
-    t2.games[i2]!.push({
-      opponentId: set.p1PlayerId,
-      opponentTimeIndex: i1,
-      won: set.winner === 2,
-      trials,
-      offset: -offset,
-    });
+    const tracked = sides.map((team) =>
+      team.map((id) => {
+        const track = tracks.get(id)!;
+        return { track, index: timeIndex(track, set.time) };
+      }),
+    );
+    for (const side of [0, 1] as const) {
+      const own = tracked[side]!;
+      const opposing = tracked[1 - side]!;
+      const coefficient = 1 / own.length;
+      const opponents = opposing.map((member) => ({
+        ...member,
+        coefficient: -1 / opposing.length,
+      }));
+      for (const member of own) {
+        member.track.games[member.index]!.push({
+          coefficient,
+          others: [
+            ...own
+              .filter((teammate) => teammate !== member)
+              .map((teammate) => ({
+                ...teammate,
+                coefficient,
+              })),
+            ...opponents,
+          ],
+          won: set.winner === side + 1,
+          trials,
+          offset: side === 0 ? offset : -offset,
+        });
+      }
+    }
   }
 
   // ---- iterative conditional modes: Newton step per player until settled ----
@@ -215,7 +249,7 @@ export function fitWhr(input: {
   for (; iterations < config.maxIterations; iterations++) {
     let maxStep = 0;
     for (const playerId of order) {
-      maxStep = Math.max(maxStep, newtonUpdatePlayer(tracks.get(playerId)!, tracks, config));
+      maxStep = Math.max(maxStep, newtonUpdatePlayer(tracks.get(playerId)!, config));
     }
     if (maxStep < config.tolerance) {
       converged = true;
@@ -225,7 +259,7 @@ export function fitWhr(input: {
   }
 
   // Variances only need computing once the ratings have settled.
-  for (const track of tracks.values()) computeVariances(track, tracks, config);
+  for (const track of tracks.values()) computeVariances(track, config);
 
   const latest = (playerId: string): PlayerRatingAt | null => {
     const track = tracks.get(playerId);
@@ -286,15 +320,11 @@ export function fitWhr(input: {
 
 /**
  * One Newton step over a single player's whole rating trajectory, holding all
- * opponents fixed. The system is tridiagonal — the likelihood contributes only
+ * other players fixed. The system is tridiagonal — the likelihood contributes only
  * to the diagonal, and the Brownian prior couples consecutive times — so it
  * solves in linear time.
  */
-function newtonUpdatePlayer(
-  track: PlayerTrack,
-  tracks: Map<string, PlayerTrack>,
-  config: WhrConfig,
-): number {
+function newtonUpdatePlayer(track: PlayerTrack, config: WhrConfig): number {
   const n = track.times.length;
   if (n === 0) return 0;
 
@@ -302,14 +332,13 @@ function newtonUpdatePlayer(
   const diagonal = new Float64Array(n);
   const offDiagonal = new Float64Array(Math.max(0, n - 1));
 
-  // Likelihood: d/dr Σ (outcome − E), d²/dr² = −Σ E(1−E).
+  // One likelihood per set. A doubles member contributes half of the team
+  // mean, so its derivatives carry coefficients of 1/2 and 1/4.
   for (let i = 0; i < n; i++) {
     for (const game of track.games[i]!) {
-      const opponent = tracks.get(game.opponentId)!;
-      const rOpp = opponent.r[game.opponentTimeIndex]!;
-      const expected = 1 / (1 + Math.exp(-(track.r[i]! - rOpp + game.offset)));
-      gradient[i]! += game.trials * ((game.won ? 1 : 0) - expected);
-      diagonal[i]! -= game.trials * expected * (1 - expected);
+      const expected = expectedWin(track.r[i]!, game);
+      gradient[i]! += game.trials * game.coefficient * ((game.won ? 1 : 0) - expected);
+      diagonal[i]! -= game.trials * game.coefficient ** 2 * expected * (1 - expected);
     }
   }
 
@@ -373,11 +402,7 @@ function solveTridiagonal(
  * negative Hessian, via the standard forward/backward recursions for a
  * tridiagonal matrix.
  */
-function computeVariances(
-  track: PlayerTrack,
-  tracks: Map<string, PlayerTrack>,
-  config: WhrConfig,
-): void {
+function computeVariances(track: PlayerTrack, config: WhrConfig): void {
   const n = track.times.length;
   if (n === 0) return;
 
@@ -386,10 +411,8 @@ function computeVariances(
 
   for (let i = 0; i < n; i++) {
     for (const game of track.games[i]!) {
-      const opponent = tracks.get(game.opponentId)!;
-      const expected =
-        1 / (1 + Math.exp(-(track.r[i]! - opponent.r[game.opponentTimeIndex]! + game.offset)));
-      diagonal[i]! += game.trials * expected * (1 - expected);
+      const expected = expectedWin(track.r[i]!, game);
+      diagonal[i]! += game.trials * game.coefficient ** 2 * expected * (1 - expected);
     }
   }
   const priorPrecision = 1 / (config.priorSd * config.priorSd);

@@ -1,4 +1,5 @@
 import { hasSupersededAdvancement } from '../../tournament/resultEvidence';
+import { loadPlayerDoublesRating } from '../../recompute/doubles';
 import { playerDoublesHistory } from '../../events/playerDoublesHistory';
 import { publicParticipantNames } from '../../events/participantNames';
 import { z } from 'zod';
@@ -279,6 +280,10 @@ export const publicRouter = router({
       doublesMatches: doubles.matches,
     };
   }),
+
+  doublesRating: publicProcedure
+    .input(z.object({ playerId: z.uuid() }))
+    .query(({ ctx, input }) => loadPlayerDoublesRating(ctx.db, input.playerId)),
 
   headToHead: publicProcedure
     .input(headToHeadInput)

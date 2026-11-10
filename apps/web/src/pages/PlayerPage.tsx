@@ -52,6 +52,22 @@ export function PlayerPage() {
 
 function PlayerProfile({ data }: { data: PlayerData }) {
   const { player, rating, nights, recomputeId } = data;
+  const hasDoublesEvidence = data.doublesMatches?.some(({ forfeit }) => !forfeit);
+  const labels = hasDoublesEvidence
+    ? {
+        skill: 'Singles skill estimate',
+        record: 'Singles record',
+        events: 'Singles events',
+        confidence: 'Singles confidence',
+        noSets: 'No singles sets played',
+      }
+    : {
+        skill: 'Skill estimate',
+        record: 'Record',
+        events: 'Events',
+        confidence: 'Confidence',
+        noSets: 'No sets played',
+      };
   // The server types these rows loosely (Record<string, unknown>); see PlayerEventView.
   const events = data.events as unknown as PlayerEventView[];
   const chartData = useMemo(() => {
@@ -201,7 +217,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
       <header className="profile-header">
         <div className="profile-identity">
           <p className="eyebrow">
-            {rating ? `Rank #${rating.rank}` : 'Unrated'}
+            {rating ? `Rank #${rating.rank}` : hasDoublesEvidence ? 'Doubles player' : 'Unrated'}
             {player.companyCode ? ` · ${player.companyCode}` : ''}
           </p>
           <h1 className="profile-name">
@@ -244,7 +260,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         {rating && (
           <div className="profile-headline">
             <span className="headline-label">
-              Rating
+              {hasDoublesEvidence ? 'Singles rating' : 'Rating'}
               <InfoTip label="Rating" align="end">
                 The board ranks on this: the skill estimate below, less a penalty for missed club
                 nights. Results move the estimate; turning up — or not — moves the penalty. Bracket
@@ -267,7 +283,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
 
       <dl className="profile-stats">
         <div className="stat">
-          <dt>Skill estimate</dt>
+          <dt>{labels.skill}</dt>
           <dd className="num">{rating ? rating.skillRating.toFixed(0) : '—'}</dd>
           <dd className="stat-detail">
             Best guess at how good you are, from results alone. The rating above is this number less
@@ -275,16 +291,16 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           </dd>
         </div>
         <div className="stat">
-          <dt>Record</dt>
+          <dt>{labels.record}</dt>
           <dd className="num">
             {rating ? `${rating.wins}–${rating.losses}` : `${wins}–${singlesMatches.length - wins}`}
           </dd>
           <dd className="stat-detail">
-            {winRate != null ? `${winRate}% of sets won` : 'No sets played'}
+            {winRate != null ? `${winRate}% of sets won` : labels.noSets}
           </dd>
         </div>
         <div className="stat">
-          <dt>Events</dt>
+          <dt>{labels.events}</dt>
           <dd className="num">{rating ? rating.eventCount : '—'}</dd>
           <dd className="stat-detail">
             {rating
@@ -302,7 +318,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           </dd>
         </div>
         <div className="stat">
-          <dt>Confidence</dt>
+          <dt>{labels.confidence}</dt>
           <dd className="num">{rating ? `${(rating.sampleConfidence * 100).toFixed(0)}%` : '—'}</dd>
           <dd className="stat-detail">{confidenceExplainer}</dd>
         </div>
@@ -315,6 +331,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
             </dd>
           </div>
         )}
+        {hasDoublesEvidence && <DoublesRatingStat playerId={player.id} />}
       </dl>
 
       {rating?.isProvisional && (
@@ -415,7 +432,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
       {data.doublesResults?.length > 0 && (
         <section className="section">
           <h2>Doubles results</h2>
-          <p className="muted">Team results are recorded separately from singles ratings.</p>
+          <p className="muted">Played team sets count toward each member’s doubles WHR.</p>
           <ul>
             {data.doublesResults.map((r) => (
               <li key={r.tournamentId}>
@@ -477,6 +494,29 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           />
         )}
       </section>
+    </div>
+  );
+}
+
+function DoublesRatingStat({ playerId }: { playerId: string }) {
+  const query = useQuery({
+    queryKey: ['doubles-rating', playerId],
+    queryFn: () => trpc.public.doublesRating.query({ playerId }),
+  });
+  const rating = query.data;
+  return (
+    <div className="stat">
+      <dt>Doubles WHR</dt>
+      <dd className="num">{rating?.rating.toFixed(0) ?? '—'}</dd>
+      <dd className="stat-detail">
+        {rating
+          ? `± ${rating.sd.toFixed(0)} · ${rating.playedSets} played ${rating.playedSets === 1 ? 'set' : 'sets'}`
+          : query.isError
+            ? 'Rating unavailable'
+            : query.isPending
+              ? 'Loading doubles rating…'
+              : 'No rated doubles sets'}
+      </dd>
     </div>
   );
 }

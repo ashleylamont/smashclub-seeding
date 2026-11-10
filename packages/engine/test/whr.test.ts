@@ -203,3 +203,49 @@ describe('probabilityFromRatings', () => {
     expect(unsure).toBeGreaterThan(0.5);
   });
 });
+
+describe('four-player WHR likelihood', () => {
+  const set = {
+    p1PlayerId: 'a',
+    p2PlayerId: 'c',
+    partnerIds: ['b', 'd'],
+    winner: 1,
+    time: 1,
+  } as const;
+
+  it('updates all four players once with weaker individual evidence than singles', () => {
+    const doubles = fitWhr({ sets: [set] });
+    const singles = fitWhr({ sets: [{ ...set, partnerIds: undefined }] });
+    expect(doubles.converged).toBe(true);
+    expect(doubles.playerIds().sort()).toEqual(['a', 'b', 'c', 'd']);
+    const winner = doubles.latest('a')!;
+    expect(winner.r).toBeGreaterThan(0);
+    expect(winner.r).toBeLessThan(singles.latest('a')!.r);
+    expect(winner.variance).toBeGreaterThan(singles.latest('a')!.variance);
+    expect(doubles.latest('b')!.r).toBeCloseTo(winner.r, 6);
+    expect(doubles.latest('c')!.r).toBeCloseTo(-winner.r, 6);
+    expect(doubles.latest('d')!.r).toBeCloseTo(-winner.r, 6);
+  });
+
+  it('attributes evidence to the player across changing teams and ignores within-team order', () => {
+    const next = {
+      p1PlayerId: 'a',
+      p2PlayerId: 'b',
+      partnerIds: ['d', 'c'],
+      winner: 1,
+      time: 3,
+    } as const;
+    const fit = fitWhr({ sets: [set, next] });
+    const reordered = fitWhr({
+      sets: [
+        { ...set, p1PlayerId: 'b', p2PlayerId: 'd', partnerIds: ['a', 'c'] },
+        { ...next, p1PlayerId: 'd', p2PlayerId: 'c', partnerIds: ['a', 'b'] },
+      ],
+    });
+    expect(fit.converged && reordered.converged).toBe(true);
+    expect(fit.latest('a')!.r).toBeGreaterThan(fit.latest('b')!.r);
+    expect(fit.latest('d')!.r).toBeGreaterThan(fit.latest('c')!.r);
+    for (const id of ['a', 'b', 'c', 'd'])
+      expect(fit.latest(id)!.r).toBeCloseTo(reordered.latest(id)!.r, 8);
+  });
+});
