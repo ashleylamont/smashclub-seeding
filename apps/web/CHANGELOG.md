@@ -2,6 +2,12 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.16.0
+
+### Minor Changes
+
+- 11 November 2026 · **Feature** · **Feature:** Let players opt in to automated claim triage when a server enables Jev. Administrators can spot likely matches sooner and optionally auto-approve high-confidence claims backed by an account with a provider-verified email. [#377](https://github.com/ashleylamont/smashclub-seeding/pull/377) · [build 4814cb9](https://github.com/ashleylamont/smashclub-seeding/commit/4814cb9ad0d80ff50c44bbe953836c73ea2ba28e)
+
 ## 0.15.0
 
 ### Minor Changes
