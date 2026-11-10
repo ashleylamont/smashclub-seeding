@@ -110,9 +110,11 @@ for (const theme of ['dark', 'light'] as const)
       ).toBeVisible();
       await expect(progress.getByText(`Confirmed winner · ${winner!.name}`)).toBeVisible();
       const standings = progress.getByRole('table', { name: 'Confirmed round-robin standings' });
-      await expect(standings.getByRole('row').locator('td').filter({ hasText: /\D/ })).toHaveText(
-        order.map(({ name }) => name),
-      );
+      const rows = standings.getByRole('row');
+      await expect(rows.locator('td:nth-child(2)')).toHaveText(order.map(({ name }) => name));
+      // The tied set records appear beside the official places in the TO’s order.
+      await expect(rows.locator('td:nth-child(3)')).toHaveText(['2–1', '2–1', '1–2', '1–2']);
+      await expect(rows.locator('td:nth-child(4)')).toHaveText(['+2', '+2', '-2', '-2']);
       await expect(progress.getByText('No played sets in this bracket.')).toHaveCount(0);
       await ready(page);
       expect(
@@ -130,17 +132,11 @@ for (const theme of ['dark', 'light'] as const)
         path: testInfo.outputPath('round-robin-obs.png'),
         omitBackground: true,
       });
-      // Equal records sort by tag here. The confirmed table follows the TO’s decision.
       await page.getByRole('button', { name: 'Next page', exact: true }).press('Enter');
-      await expect(
-        progress.getByRole('heading', { name: 'Round-robin set records', exact: true }),
-      ).toBeVisible();
-      await expect(progress.getByText('Confirmed places shown separately.')).toBeVisible();
-      await expect(progress.getByRole('row').nth(1)).toContainText(first!.name);
-      await ready(page);
-      await page.screenshot({
-        path: testInfo.outputPath('round-robin-set-records-obs.png'),
-        omitBackground: true,
-      });
+      await expect(progress).toContainText('Page 2 /');
+      await expect(standings).toHaveCount(0);
+      await expect(progress.getByRole('heading', { name: 'Round-robin set records' })).toHaveCount(
+        0,
+      );
       expect(unexpected).toEqual([]);
     });

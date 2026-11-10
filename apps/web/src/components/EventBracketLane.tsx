@@ -39,7 +39,7 @@ export function EventBracketLane({
     Record<string, { height: number; rows: [number, number] }>
   >({});
   const height = Math.max(
-    150,
+    roundWindow ? 80 : 150,
     ...Object.values(measurements).map((item) => Math.ceil(item.height)),
   );
   // Names, team labels and translated feeder text can wrap to any length. Measure
@@ -72,21 +72,25 @@ export function EventBracketLane({
     width: cardWidth,
     height,
     column: cardWidth + 36,
-    row: height + 24,
+    row: height + (roundWindow ? 12 : 24),
     top: 40,
     side1: height / 2,
     side2: height * 0.8,
   };
   const rounds = [...new Set(matches.map((match) => match.nativeRound ?? 1))].sort((a, b) => a - b);
   const windowRounds = [...new Set(matches.map(liveBracketRound))].sort((a, b) => a - b);
-  const windowSlots = new Map(
-    windowRounds.flatMap((round) =>
-      matches
-        .filter((match) => liveBracketRound(match) === round)
-        .sort((a, b) => (a.nativeSlot ?? 0) - (b.nativeSlot ?? 0) || a.id.localeCompare(b.id))
-        .map((match, index) => [match.id, index] as const),
-    ),
-  );
+  const windowRows = new Map<string, number>();
+  if (roundWindow) {
+    for (const round of windowRounds) {
+      let offset = 0;
+      for (const match of matches
+        .filter((item) => liveBracketRound(item) === round)
+        .sort((a, b) => (a.nativeSlot ?? 0) - (b.nativeSlot ?? 0) || a.id.localeCompare(b.id))) {
+        windowRows.set(match.id, offset / geometry.row);
+        offset += Math.ceil(measurements[match.id]?.height ?? 80) + 12;
+      }
+    }
+  }
   const layout = eliminationLaneLayout(
     matches,
     lane,
@@ -100,7 +104,8 @@ export function EventBracketLane({
               ? 2
               : 1
             : (match.bracketRound ?? rounds.indexOf(match.nativeRound ?? 1) + 1),
-      slot: (match) => (roundWindow ? (windowSlots.get(match.id) ?? 0) : (match.nativeSlot ?? 0)),
+      slot: (match) => match.nativeSlot ?? 0,
+      row: roundWindow ? (match) => windowRows.get(match.id) ?? 0 : undefined,
       feeds: liveBracketFeeds,
       targetPort: (match, side) => measurements[match.id]?.rows[side] ?? height / 2,
       sourcePort: (match, outcome) => {

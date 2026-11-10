@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  broadcastPageDensity,
   broadcastProgressPages,
+  type PoolPanel,
   type ProgressData,
   type ProgressPage,
 } from '../lib/broadcastProgress';
@@ -8,7 +10,7 @@ import { liveBracketWinner } from '../lib/eventBracket';
 import { linkedFinalCaption } from '../lib/linkedFinalCaption';
 import { poolTitle } from '../lib/poolFlow';
 import { matchParticipantName, matchPresentation } from '../lib/matchPresentation';
-import { finalsFieldLabel, qualifierDetail, qualifierLabel } from '../lib/qualification';
+import { finalsFieldLabel, qualifierDetail } from '../lib/qualification';
 import { EventBracketLane } from './EventBracketLane';
 import { IntermissionRecentResults } from './IntermissionRecentResults';
 import { NemesisMark } from './NemesisMark';
@@ -45,7 +47,6 @@ export function BroadcastIntermission({
   twitchChannel: string;
   preferRecent: boolean;
 }) {
-  const pages = useMemo(() => broadcastProgressPages(data, preferRecent), [data, preferRecent]);
   const [current, setCurrent] = useState('');
   const [viewportWidth, setViewportWidth] = useState(() => innerWidth);
   useEffect(() => {
@@ -53,6 +54,11 @@ export function BroadcastIntermission({
     window.addEventListener('resize', resize);
     return () => window.removeEventListener('resize', resize);
   }, []);
+  const density = broadcastPageDensity(viewportWidth);
+  const pages = useMemo(
+    () => broadcastProgressPages(data, preferRecent, broadcastPageDensity(viewportWidth)),
+    [data, preferRecent, viewportWidth],
+  );
   const [paused, setPaused] = useState(false);
   const reduced = useReducedMotion();
   const keys = pages.map((page) => page.key).join('|');
@@ -101,6 +107,7 @@ export function BroadcastIntermission({
   }, [move, multiplePages]);
   const closed = ['complete', 'cancelled'].includes(data.plan.status);
   const labels = new Map(data.matches.map((match) => [match.id, match.label]));
+  const entrantNames = new Map(data.entrants.map(({ id, name }) => [id, name]));
 
   return (
     <section className="broadcast-intermission" aria-label="Tournament progress">
@@ -120,16 +127,19 @@ export function BroadcastIntermission({
       </header>
       <div className="intermission-content" key={page.key}>
         {page.kind === 'pool' ? (
-          <PoolPage
-            page={page}
-            closed={closed}
-            structure={data.plan.structure}
-            confirmedRoundRobin={pages.some((item) => item.kind === 'round-robin-results')}
-          />
+          <div className={page.panels.length > 1 ? 'intermission-pool-grid' : undefined}>
+            {page.panels.map((panel) => (
+              <PoolStandingsPanel
+                key={panel.key}
+                panel={panel}
+                closed={closed}
+                structure={data.plan.structure}
+                entrantNames={entrantNames}
+              />
+            ))}
+          </div>
         ) : page.kind === 'round-robin-results' ? (
           <RoundRobinResultsPage page={page} entrants={data.entrants} />
-        ) : page.kind === 'qualification' ? (
-          <QualificationPage page={page} entrants={data.entrants} />
         ) : page.kind === 'linked' ? (
           <LinkedBracketPage page={page} closed={closed} />
         ) : page.kind === 'recent-results' ? (
@@ -150,25 +160,23 @@ export function BroadcastIntermission({
                   'Player'}
               </p>
             )}
-            {page.matches.length ? (
-              <EventBracketLane
-                matches={page.matches}
-                lane={page.lane.key}
-                title={page.lane.title || 'Bracket'}
-                label="Bracket progress section"
-                labels={labels}
-                roundWindow
-                recordedOnly={closed}
-                cardWidth={Math.max(250, Math.round(viewportWidth * 0.36))}
-                roundTitles={page.roundTitles}
-              />
-            ) : (
-              <p>
-                {page.bracket.complete
-                  ? 'No played sets.'
-                  : 'The draw has no published matches yet.'}
-              </p>
-            )}
+            <EventBracketLane
+              matches={page.matches}
+              lane={page.lane.key}
+              title={page.lane.title || 'Bracket'}
+              label="Bracket progress section"
+              labels={labels}
+              roundWindow
+              recordedOnly={closed}
+              cardWidth={Math.min(
+                Math.round(viewportWidth * (density.bracketColumns === 1 ? 0.92 : 0.4)),
+                Math.floor(
+                  (viewportWidth * 0.92) /
+                    Math.min(density.bracketColumns, page.roundTitles.length),
+                ) - 36,
+              )}
+              roundTitles={page.roundTitles}
+            />
           </>
         ) : (
           <div className="intermission-summary">
@@ -277,6 +285,8 @@ function RoundRobinResultsPage({
   entrants: ProgressData['entrants'];
 }) {
   const names = new Map(entrants.map(({ id, name }) => [id, name]));
+  const showRecords = page.records.size > 0;
+  const showUnplayed = [...page.records.values()].some(({ remaining }) => remaining > 0);
   return (
     <>
       <div className="intermission-section-heading">
@@ -295,82 +305,140 @@ function RoundRobinResultsPage({
           <tr>
             <th scope="col">Place</th>
             <th scope="col">Entrant</th>
+            {showRecords && (
+              <>
+                <th scope="col" aria-label="Sets won–lost">
+                  W–L
+                </th>
+                <th scope="col">Games ±</th>
+              </>
+            )}
+            {showUnplayed && <th scope="col">No result</th>}
           </tr>
         </thead>
         <tbody>
-          {page.standings.map(({ place, playerId }) => (
-            <tr
-              key={playerId}
-              className={playerId === page.winnerId ? 'intermission-official-winner' : undefined}
-            >
-              <td>{place}</td>
-              <td>{names.get(playerId) ?? 'Player'}</td>
-            </tr>
-          ))}
+          {page.standings.map(({ place, playerId }) => {
+            const record = page.records.get(playerId);
+            return (
+              <tr
+                key={playerId}
+                className={playerId === page.winnerId ? 'intermission-official-winner' : undefined}
+              >
+                <td>{place}</td>
+                <td>{names.get(playerId) ?? record?.name ?? 'Player'}</td>
+                {showRecords && (
+                  <>
+                    <td>{record ? `${record.wins}–${record.losses}` : '—'}</td>
+                    <td>
+                      {record ? `${record.differential > 0 ? '+' : ''}${record.differential}` : '—'}
+                    </td>
+                  </>
+                )}
+                {showUnplayed && <td>{record?.remaining ?? '—'}</td>}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </>
   );
 }
 
-function PoolPage({
-  page,
+function PoolStandingsPanel({
+  panel: { pool, players, qualifications },
   closed,
   structure,
-  confirmedRoundRobin,
+  entrantNames,
 }: {
-  page: Extract<ProgressPage, { kind: 'pool' }>;
+  panel: PoolPanel;
   closed: boolean;
   structure?: string;
-  confirmedRoundRobin: boolean;
+  entrantNames: ReadonlyMap<string, string>;
 }) {
+  const heading = poolTitle(`${pool.division}:${pool.poolIndex}`, structure, 'heading');
+  const shortStage = (stage: PoolPanel['qualifications'][number]['stage']) =>
+    stage === 'main' ? 'Championship' : 'Consolation';
+  const displayed = new Set(players.map(({ id }) => id));
+  const remaining = qualifications.filter(
+    ({ status, entrantId }) => status !== 'resolved' || !entrantId || !displayed.has(entrantId),
+  );
+  const slotGroups = new Map<string, number[]>();
+  for (const slot of remaining) {
+    const detail = qualifierDetail(slot, entrantNames) ?? 'Awaiting qualification';
+    const key = `${shortStage(slot.stage)} · ${detail}`;
+    const places = slotGroups.get(key) ?? [];
+    places.push(slot.place);
+    slotGroups.set(key, places);
+  }
   return (
-    <>
+    <section className="intermission-pool-panel" aria-label={heading}>
       <div className="intermission-section-heading">
-        <h2>
-          {confirmedRoundRobin
-            ? 'Round-robin set records'
-            : poolTitle(`${page.pool.division}:${page.pool.poolIndex}`, structure, 'heading')}
-        </h2>
-        <div className="intermission-pool-status">
-          <span className="intermission-set-count">
-            {page.pool.complete} / {page.pool.total} sets complete
-          </span>
-          <Progress
-            className="intermission-pool-meter"
-            label="Pool sets completed"
-            value={page.pool.complete}
-            max={page.pool.total}
-          />
-        </div>
+        <h2>{heading}</h2>
+        {pool.total > 0 && (
+          <div className="intermission-pool-status">
+            <span className="intermission-set-count">
+              {pool.complete} / {pool.total} sets complete
+            </span>
+            <Progress
+              className="intermission-pool-meter"
+              label="Pool sets completed"
+              value={pool.complete}
+              max={pool.total}
+            />
+          </div>
+        )}
       </div>
-      {confirmedRoundRobin && <p>Confirmed places shown separately.</p>}
-      <table className="intermission-standings">
-        <thead>
-          <tr>
-            <th>Player</th>
-            <th>Sets W–L</th>
-            <th>Games ±</th>
-            <th>{closed ? 'No result' : 'To play'}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {page.players.map((player) => (
-            <tr key={player.id}>
-              <td>{player.name}</td>
-              <td>
-                {player.wins}–{player.losses}
-              </td>
-              <td>
-                {player.differential > 0 ? '+' : ''}
-                {player.differential}
-              </td>
-              <td>{player.remaining}</td>
+      {players.length > 0 && (
+        <table className="intermission-standings" aria-label={heading}>
+          <thead>
+            <tr>
+              <th scope="col">Player</th>
+              <th scope="col" aria-label="Sets won–lost">
+                W–L
+              </th>
+              <th scope="col">Games ±</th>
+              <th scope="col">{closed ? 'No result' : 'To play'}</th>
             </tr>
+          </thead>
+          <tbody>
+            {players.map((player) => {
+              const confirmed = qualifications.filter(
+                ({ entrantId, status }) => entrantId === player.id && status === 'resolved',
+              );
+              return (
+                <tr key={player.id}>
+                  <td>
+                    {player.name}
+                    {confirmed.map(({ stage, place }) => (
+                      <strong className="intermission-qualifier" key={`${stage}:${place}`}>
+                        Qualified · {shortStage(stage)} · #{place}
+                      </strong>
+                    ))}
+                  </td>
+                  <td>
+                    {player.wins}–{player.losses}
+                  </td>
+                  <td>
+                    {player.differential > 0 ? '+' : ''}
+                    {player.differential}
+                  </td>
+                  <td>{player.remaining}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+      {slotGroups.size > 0 && (
+        <ul className="intermission-qualification" aria-label="Finals qualification">
+          {[...slotGroups].map(([label, places]) => (
+            <li key={label}>
+              {places.map((place) => `#${place}`).join(', ')} · {label}
+            </li>
           ))}
-        </tbody>
-      </table>
-    </>
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -434,39 +502,6 @@ function LinkedBracketPage({
               </tr>
             );
           })}
-        </tbody>
-      </table>
-    </>
-  );
-}
-
-function QualificationPage({
-  page,
-  entrants,
-}: {
-  page: Extract<ProgressPage, { kind: 'qualification' }>;
-  entrants: ProgressData['entrants'];
-}) {
-  const names = new Map(entrants.map(({ id, name }) => [id, name]));
-  return (
-    <>
-      <div className="intermission-section-heading">
-        <h2>{finalsFieldLabel(page)} qualification</h2>
-      </div>
-      <table className="intermission-standings intermission-qualification">
-        <thead>
-          <tr>
-            <th>Qualifying place</th>
-            <th>Entrant or status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {page.slots.map((slot) => (
-            <tr key={`${slot.poolId}:${slot.place}`}>
-              <td>{qualifierLabel(slot)}</td>
-              <td>{qualifierDetail(slot, names) ?? 'Awaiting qualification'}</td>
-            </tr>
-          ))}
         </tbody>
       </table>
     </>
