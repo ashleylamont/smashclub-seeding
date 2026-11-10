@@ -11,7 +11,7 @@ import {
 import { publicPlayerName } from '@smashclub/shared';
 import type { Env } from '../env';
 
-const model = 'jev-1.14.0';
+import { jevModel as model, requestJev } from '../typesafe/jev';
 const probability = z.number().min(0).max(1);
 const responseSchema = z.object({
   model: z.literal(model),
@@ -214,15 +214,9 @@ export async function scoreClaim(
 ): Promise<JevClaimReview> {
   const metadata = { rubricVersion: 1 as const, reviewedAt: new Date().toISOString() };
   try {
-    const response = await fetch('https://api.typesafe.ai/v1/systemone', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, state, questions }),
-      signal: AbortSignal.timeout(2500),
-      redirect: 'error',
-    });
-    if (response.ok) {
-      const parsed = responseSchema.safeParse(await response.json());
+    const response = await requestJev(apiKey, state, questions);
+    if (response !== null) {
+      const parsed = responseSchema.safeParse(response);
       if (parsed.success) {
         const { score, confidence, probabilities } = parsed.data.answers.player_profile_match;
         const total = Object.values(probabilities).reduce((sum, value) => sum + value, 0);
@@ -237,8 +231,6 @@ export async function scoreClaim(
           };
         }
       }
-    } else {
-      await response.body?.cancel();
     }
   } catch {
     // A timed out or malformed response provides no evidence for or against a claim.

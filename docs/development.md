@@ -128,6 +128,12 @@ Run the same synthetic cases against the live model with a locally configured Ty
 pnpm --filter @smashclub/server exec node --import tsx test/calibrateJevClaims.ts
 ```
 
+### Optional Jev recap ranking
+
+Set `JEV_RECAP_RANKING_ENABLED=true` with the same `TYPESAFE_API_KEY`. On the first view of a completed recap, Nemesis can send up to twelve already-published highlight headings and details for ordering. The recap still shows at most six, and statistics, scores and placements come from the existing facts engine.
+
+The database saves one attempt per event and exact shortlist. Later views reuse the saved order, including after a restart. If a request fails or the process stops before recording the result, the original deterministic order is used for that input. A changed shortlist can be ranked once as new input.
+
 ## Initial data
 
 After deploying and configuring the server, import the player registry and historical tournament slugs. Put your registry at `legacy/players.yaml` (a gitignored path; see the [format example](../legacy/players.yaml.example)). Run this from the repository root so `$PWD` resolves the input paths before pnpm starts the tool in its package directory:

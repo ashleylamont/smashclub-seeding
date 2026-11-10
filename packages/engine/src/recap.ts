@@ -673,8 +673,8 @@ const FACT_LIMITS: Record<RecapFactKind, number> = {
 };
 
 /** Keep the most notable few of each kind; assumes `facts` is already sorted. */
-function limitByKind(facts: readonly RankedRecapFact[]): RankedRecapFact[] {
-  const kept: RankedRecapFact[] = [];
+function limitByKind<T extends RankedRecapFact>(facts: readonly T[]): T[] {
+  const kept: T[] = [];
   const seen = new Map<RecapFactKind, number>();
   for (const entry of facts) {
     const count = seen.get(entry.fact.kind) ?? 0;
@@ -699,17 +699,20 @@ function factPeople(fact: RecapFact): string[] {
 }
 
 /** Keep a short, diverse highlight reel while retaining every podium fact. */
-function selectFacts(facts: readonly RankedRecapFact[]): RankedRecapFact[] {
+export function selectRecapHighlights<T extends RankedRecapFact>(
+  facts: readonly T[],
+  limit = 6,
+): T[] {
   const candidates = limitByKind(facts.filter((entry) => entry.fact.kind !== 'podium')).sort(
     (a, b) => b.notability - a.notability || a.id.localeCompare(b.id),
   );
-  const kept: RankedRecapFact[] = [];
+  const kept: T[] = [];
   const people = new Map<string, number>();
   const stories = new Set<string>();
   const categories = new Map<RecapFactKind, number>();
   let upsetCount = 0;
   for (const entry of candidates) {
-    if (kept.length >= 6 || entry.notability < 0.45) continue;
+    if (kept.length >= limit || entry.notability < 0.45) continue;
     const fact = entry.fact as Record<string, unknown>;
     const winner = (fact.winner as { playerId?: string } | undefined)?.playerId;
     const loser = (fact.loser as { playerId?: string } | undefined)?.playerId;
@@ -912,7 +915,7 @@ export function buildRecap(input: RecapInput): RecapResult {
       orderedTournaments.length > 0 && orderedTournaments.every((t) => isBracketOver(t, now)),
     isAbandoned: orderedTournaments.some((t) => isBracketAbandoned(t, now)),
     facts: limitByKind(facts),
-    highlights: selectFacts(facts),
+    highlights: selectRecapHighlights(facts),
   };
 }
 

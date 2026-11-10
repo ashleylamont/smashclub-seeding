@@ -21,6 +21,7 @@ import { latestRecomputeId } from '../../recompute/recompute';
 import { readWhrResultImpact } from '../../recompute/whrResultImpact';
 import { getRatingSettings } from '../../settings';
 import { charactersByPlayer, charactersForPlayer } from '../../players/characters';
+import { rankRecapHighlights } from '../../recap/highlightRanking';
 import { loadRecap } from '../../recap/recap';
 import { loadEventOverview } from '../../events/overview';
 import { nativeHistory } from '../../events/nativeHistory';
@@ -488,7 +489,9 @@ export const publicRouter = router({
    * shared out of the club.
    */
   recap: publicProcedure.input(z.object({ slug: z.string() })).query(async ({ ctx, input }) => {
-    return loadRecap(ctx.db, input.slug);
+    const recap = await loadRecap(ctx.db, input.slug);
+    const key = ctx.env.JEV_RECAP_RANKING_ENABLED ? ctx.env.TYPESAFE_API_KEY : undefined;
+    return recap && key ? rankRecapHighlights(ctx.db, recap, key) : recap;
   }),
 
   /**

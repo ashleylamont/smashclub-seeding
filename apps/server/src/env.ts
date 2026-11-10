@@ -29,6 +29,10 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((value) => value === 'true'),
+  JEV_RECAP_RANKING_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
   TYPESAFE_API_KEY: z.string().trim().min(1).optional(),
   JEV_CLAIM_AUTO_APPROVE_ENABLED: z
     .enum(['true', 'false'])
