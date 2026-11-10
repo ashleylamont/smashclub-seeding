@@ -763,7 +763,7 @@ for (const [width, height, theme] of [
       .filter(
         (match) => match.stage === 'group' && match.division === 'lower' && match.poolIndex === 0,
       )
-      .map((match) => ({ ...match, division: 'upper' }));
+      .map((match) => ({ ...match, division: 'upper', resultUpdatedAt: null }));
     const source = poolMatches[0]!;
     const id = source.player1Id!;
     for (const match of poolMatches) {

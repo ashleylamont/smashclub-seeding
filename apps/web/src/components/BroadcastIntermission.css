@@ -144,8 +144,14 @@
   gap: clamp(var(--s4), 3vw, var(--s7));
 }
 .intermission-pool-grid .intermission-section-heading {
-  flex-wrap: wrap;
-  gap: var(--s2);
+  display: grid;
+  gap: var(--s1);
+}
+.intermission-pool-panel th {
+  overflow-wrap: normal;
+}
+.intermission-pool-panel th:first-child {
+  width: 49%;
 }
 .intermission-pool-grid .intermission-standings {
   font-size: 0.88em;

@@ -370,7 +370,9 @@ function PoolStandingsPanel({
           <thead>
             <tr>
               <th scope="col">Player</th>
-              <th scope="col">Sets W–L</th>
+              <th scope="col" aria-label="Sets won–lost">
+                W–L
+              </th>
               <th scope="col">Games ±</th>
               <th scope="col">{closed ? 'No result' : 'To play'}</th>
             </tr>
