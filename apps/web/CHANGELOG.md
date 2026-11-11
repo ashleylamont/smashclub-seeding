@@ -2,6 +2,16 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.18.0
+
+### Minor Changes
+
+- 12 November 2026 · **Feature** · Organisers can fill an empty character profile from a playing native match after the player confirms their main. [#383](https://github.com/ashleylamont/smashclub-seeding/pull/383) · [build 385c492](https://github.com/ashleylamont/smashclub-seeding/commit/385c492396c6e43b887a8fbdf70f115fbdcfc565)
+
+### Patch Changes
+
+- 12 November 2026 · **Maintenance** · Stabilise the keyboard test for confirming a player’s main during a match. [#385](https://github.com/ashleylamont/smashclub-seeding/pull/385) · [build 150701c](https://github.com/ashleylamont/smashclub-seeding/commit/150701c4d61fcdda4a33a838850bfc5388e07f8c)
+
 ## 0.17.1
 
 ### Patch Changes
