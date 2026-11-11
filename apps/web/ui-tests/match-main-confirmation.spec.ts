@@ -53,8 +53,9 @@ for (const width of [390, 1440]) {
       await expect(submit).toBeDisabled();
       const character = dialog.getByRole('combobox', { name: 'Main character' });
       await character.press('Enter');
-      await expect(page.getByRole('listbox')).toBeVisible();
+      await expect(page.getByRole('option', { name: 'Choose a character' })).toBeFocused();
       await page.keyboard.press('End');
+      await expect(page.getByRole('option', { name: 'Zero Suit Samus' })).toBeFocused();
       await page.keyboard.press('Enter');
       await expect(character).toHaveAttribute('data-value', 'zero-suit-samus');
       await ready(page);
