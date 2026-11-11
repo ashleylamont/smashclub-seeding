@@ -1,5 +1,5 @@
 ---
-"@smashclub/web": patch
+'@smashclub/web': patch
 ---
 
 **Fix:** Show recorded singles scores from the player’s side and keep pool-only teams out of archived finals standings and profile placements.
