@@ -11,6 +11,8 @@ import { previewFinalsSlotReplay } from './finalsReplayPreview';
 import { reviewPoolGameCorrection } from './poolGameCorrection';
 import { TournamentConflict } from './domain';
 import { nativeEventHistory } from './history';
+import { isCharacterSlug } from '@smashclub/shared';
+import { confirmMatchMain } from './matchMains';
 
 const plan = z.object({ planId: z.uuid() });
 function runtime(ctx: TrpcContext) {
@@ -33,6 +35,20 @@ async function transport<T>(work: () => Promise<T>) {
 
 /** Direct command/cursor/recovery API for the standard native lifecycle. */
 export const nativeLiveRouter = router({
+  confirmMatchMain: authedProcedure
+    .input(
+      plan.extend({
+        matchId: z.uuid(),
+        playerId: z.uuid(),
+        character: z.string().refine(isCharacterSlug, { message: 'Unknown character.' }),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await requireOperator(ctx.db, input.planId, ctx.user);
+      return transport(() =>
+        confirmMatchMain(ctx.db, () => runtime(ctx).state(input.planId), input),
+      );
+    }),
   dispatchDesk: authedProcedure.input(plan).query(async ({ ctx, input }) => {
     await requireOperator(ctx.db, input.planId, ctx.user);
     return transport(async () => {

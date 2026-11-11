@@ -352,6 +352,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
               <MatchCard
                 key={match.id}
                 match={match}
+                missingMains={'missingMains' in data ? data.missingMains[match.id] : undefined}
                 stations={data.stations}
                 disabled={liveDisabled}
                 canStart={callable.has(match.id)}

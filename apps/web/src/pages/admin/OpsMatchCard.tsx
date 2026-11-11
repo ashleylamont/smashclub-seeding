@@ -11,11 +11,13 @@ import { trpc } from '../../lib/trpc';
 import { MatchScoring } from './OpsMatchScoring';
 import { returnCallControlId } from '../../lib/opsWorkspace';
 import type { UntakenCallDesk } from './UntakenCallRecovery';
+import { MatchMainDialog } from './MatchMainDialog';
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 type Match = Overview['matches'][number];
 type Action = (work: () => Promise<unknown>, message?: string) => Promise<void>;
 export function MatchCard({
   match,
+  missingMains,
   stations,
   disabled,
   canStart,
@@ -25,6 +27,7 @@ export function MatchCard({
   callDesk,
 }: {
   match: Match;
+  missingMains?: { playerId: string; name: string }[];
   stations: Overview['stations'];
   disabled: boolean;
   canStart: boolean;
@@ -169,6 +172,7 @@ export function MatchCard({
             </Button>
           )}
       </MatchScoring>
+      <MatchMainDialog match={match} candidates={missingMains ?? []} disabled={disabled} />
     </article>
   );
 }

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { InMemoryStore } from '@rotorsoft/act';
-import type { Db } from '@smashclub/db';
+import { eventOperators, user, type Db } from '@smashclub/db';
 import type { SessionUser } from '../src/auth';
 import { createTestDb } from './helpers/testDb';
 import { nativeAdmin, seedNativeDraft } from './helpers/nativeLiveFixture';
@@ -9,6 +9,7 @@ import { appRouter } from '../src/trpc/router';
 import { loadEnv } from '../src/env';
 import { ChallongeClient } from '../src/challonge/client';
 import { RecomputeTrigger } from '../src/recompute/trigger';
+import { charactersForPlayer } from '../src/players/characters';
 
 describe('shared dispatch through the application API', () => {
   let db: Db, close: () => Promise<void>, runtime: NativeRuntime;
@@ -178,6 +179,85 @@ describe('shared dispatch through the application API', () => {
       callLocation: null,
     });
     expect(await runtime.replay(planId)).toEqual(state);
+  });
+
+  it('lets the assigned TO fill a missing main only after play starts', async () => {
+    const { planId, api } = await night();
+    const organiser = {
+      ...nativeAdmin,
+      id: 'main-confirming-to',
+      role: 'user' as const,
+      email: 'main-to@example.test',
+    };
+    await db.insert(user).values(organiser);
+    await db.insert(eventOperators).values({ eventPlanId: planId, userId: organiser.id });
+    const to = caller(organiser).eventOps;
+    const desk = await api.eventOps.live.dispatchDesk({ planId });
+    const before = await runtime.state(planId);
+    const match = before.matches.find(({ id }) => id === desk.queue[0]!.matchId)!;
+    const input = { planId, matchId: match.id, playerId: match.player1Id!, character: 'fox' };
+    await expect(caller(null).eventOps.live.confirmMatchMain(input)).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
+    await expect(
+      caller({ ...organiser, id: 'unassigned' }).eventOps.live.confirmMatchMain(input),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await api.eventOps.live.command({
+      planId,
+      requestId: 'call-for-main-confirmation',
+      command: {
+        kind: 'dispatch',
+        matchId: match.id,
+        expectedRevision: match.revision,
+        stationId: null,
+        expectedResourceRevision: desk.resourceRevision,
+        expectedOrdinaryCapacity: desk.capacity,
+        callOnly: true,
+      },
+    });
+    const called = await runtime.state(planId);
+    await expect(to.live.confirmMatchMain(input)).rejects.toMatchObject({ code: 'CONFLICT' });
+    await api.eventOps.live.command({
+      planId,
+      requestId: 'start-for-main-confirmation',
+      command: {
+        kind: 'beginPlay',
+        matchId: match.id,
+        expectedRevision: called.matches.find(({ id }) => id === match.id)!.revision,
+        expectedResourceRevision: called.settings.resourceRevision,
+      },
+    });
+    const playing = await runtime.state(planId);
+    const overview = await to.overview({ planId });
+    const playingMatch = overview.matches.find(({ id }) => id === match.id)!;
+    expect('missingMains' in overview && overview.missingMains[match.id]).toContainEqual({
+      playerId: input.playerId,
+      name: playingMatch.player1Name,
+    });
+    const otherPlayer = before.entrants.find(
+      ({ playerId }) => playerId !== match.player1Id && playerId !== match.player2Id,
+    )!;
+    await expect(
+      to.live.confirmMatchMain({ ...input, playerId: otherPlayer.playerId }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    await expect(
+      to.live.confirmMatchMain({ ...input, character: 'unknown-fighter' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(to.live.confirmMatchMain(input)).resolves.toEqual({ ok: true });
+    await expect(to.live.confirmMatchMain(input)).resolves.toEqual({ ok: true });
+    await expect(to.live.confirmMatchMain({ ...input, character: 'falco' })).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+    expect(await charactersForPlayer(db, input.playerId)).toEqual(['fox']);
+    const after = await to.overview({ planId });
+    expect('missingMains' in after && after.missingMains[match.id]).toEqual([
+      { playerId: match.player2Id, name: playingMatch.player2Name },
+    ]);
+    const publicBoard = await caller(null).eventOps.snapshot({ planId });
+    const publicMatch = publicBoard.matches.find(({ id }) => id === match.id)!;
+    expect(publicMatch.player1Characters).toEqual(['fox']);
+    expect(publicBoard).not.toHaveProperty('missingMains');
+    expect(await runtime.state(planId)).toEqual(playing);
   });
 
   it('reports a setup-only reset and retains match IDs and pairings', async () => {
