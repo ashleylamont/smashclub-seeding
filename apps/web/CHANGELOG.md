@@ -2,6 +2,14 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.17.1
+
+### Patch Changes
+
+- 11 November 2026 · **Fix** · **Fix:** Show recorded singles scores from the player’s side and keep pool-only teams out of archived finals standings and profile placements. [#380](https://github.com/ashleylamont/smashclub-seeding/pull/380) · [build 9ded714](https://github.com/ashleylamont/smashclub-seeding/commit/9ded714eb1e864733e6e8d820cb9d69f41da86d2)
+
+  **Improve:** Surface verified pool ties, unbeaten pools, close sets and pair rematches in doubles recaps. Show character portraits on the podium where mains are available.
+
 ## 0.17.0
 
 ### Minor Changes
