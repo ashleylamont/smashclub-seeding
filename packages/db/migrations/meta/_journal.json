@@ -239,6 +239,13 @@
       "when": 1794314333277,
       "tag": "0033_jev_claim_review",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1794347313918,
+      "tag": "0034_recap_highlight_rankings",
+      "breakpoints": true
     }
   ]
 }
