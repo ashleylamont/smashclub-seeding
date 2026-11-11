@@ -313,7 +313,15 @@ export async function loadEventOverview(db: Db, slug: string): Promise<EventOver
     structure: (anchor.raw as { structure?: string } | null)?.structure,
     date: anchor.eventDate?.toISOString() ?? null,
     canonicalSlug: eventCanonicalSlug(brackets, slug),
-    brackets,
+    brackets: brackets.map((bracket) => {
+      const tournament = eventRows.find((row) => row.id === bracket.tournamentId)!;
+      const structure = (tournament.raw as { structure?: string } | null)?.structure;
+      return tournament.provider === 'native' &&
+        tournament.competitionFormat === 'doubles' &&
+        structure !== 'round_robin'
+        ? { ...bracket, players: bracket.players.filter((p) => p.inFinalStage || p.place !== null) }
+        : bracket;
+    }),
     divisions,
     warnings,
   };

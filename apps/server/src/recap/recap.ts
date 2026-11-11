@@ -4,6 +4,7 @@ import { nativeHistory } from '../events/nativeHistory';
 import {
   companies,
   eventPlanBrackets,
+  nativeResultPublications,
   playerRatings,
   players,
   ratingEvents,
@@ -20,6 +21,7 @@ import {
   type RecapHistory,
   type RecapParticipant,
   type RecapResult,
+  type RecapPlayerRef,
   type RecapSet,
   type RecapTournament,
 } from '@smashclub/engine';
@@ -34,6 +36,8 @@ import {
 import { latestRecomputeId } from '../recompute/recompute';
 import { publicParticipantPresentation } from '../events/participantNames';
 import { charactersByPlayer } from '../players/characters';
+import { nativeDoublesPoolFacts } from './poolFacts';
+import { Result } from '../tournament/schemas';
 import { historicalPlayerIds } from '../identity/playerIds';
 
 /**
@@ -275,10 +279,43 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
 
   const priorTurnouts = doubles ? [] : await loadPriorTurnouts(db, allDated, anchorKey);
 
+  const poolFacts = [];
+  const resultId = (nightRows[0]?.raw as { resultId?: string } | null)?.resultId;
+  if (doubles && nativeIds && resultId) {
+    const [receipt] = await db
+      .select({ result: nativeResultPublications.result })
+      .from(nativeResultPublications)
+      .where(eq(nativeResultPublications.resultId, resultId));
+    const sealed = Result.safeParse(receipt?.result);
+    if (sealed.success) {
+      const names = new Map<string, RecapPlayerRef>();
+      const participantById = new Map(participants.map((p) => [p.id, p]));
+      const matchById = new Map(sealed.data.matches.map((m) => [m.id, m]));
+      for (const row of setRows) {
+        if (row.resultStage !== 'group') continue;
+        const raw = row.raw as { eventMatchId?: string } | null;
+        const match = raw?.eventMatchId ? matchById.get(raw.eventMatchId) : null;
+        if (!match) continue;
+        for (const [nativeId, archiveId] of [
+          [match.player1Id, row.p1ParticipantId],
+          [match.player2Id, row.p2ParticipantId],
+        ]) {
+          const player = archiveId ? participantById.get(archiveId) : null;
+          if (nativeId && player?.entryKey) {
+            const { playerId, name, companyCode, characters } = player;
+            names.set(nativeId, { playerId, name, companyCode, characters });
+          }
+        }
+      }
+      poolFacts.push(...nativeDoublesPoolFacts(sealed.data, names));
+    }
+  }
+
   const result = buildRecap({
     tournaments: nightTournaments,
     participants,
     sets: recapSets,
+    poolFacts,
     ratingEvents: nightEvents,
     history,
     rankMovement,

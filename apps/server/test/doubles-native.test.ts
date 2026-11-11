@@ -17,6 +17,7 @@ import {
 } from '@smashclub/db';
 import {
   expectDoublesRecapAndHistory,
+  expectDoublesFinalsMembership,
   publishedPlayerRating,
 } from './helpers/doublesRecapAssertions';
 import { createTestDb } from './helpers/testDb';
@@ -219,7 +220,9 @@ describe('native doubles through shipped APIs', () => {
       expect(event!.divisions.flatMap((d) => d.players)).toHaveLength(count);
       expect(event!.divisions.flatMap((d) => d.players).every((p) => p.place !== null)).toBe(true);
       expect(JSON.stringify(event)).not.toContain('Private Surname');
-      const detail = await caller().public.tournament({ slug: tournament!.challongeSlug });
+      const api = caller().public;
+      await expectDoublesFinalsMembership(api, tournament!.challongeSlug, complete.result!);
+      const detail = await api.tournament({ slug: tournament!.challongeSlug });
       expect(detail!.participants[0]!.name).toContain(' / ');
       expect(detail!.participants[0]!.name).toMatch(/^Pair \d+ \(/);
       expect(JSON.stringify(detail)).not.toContain('Private Surname');

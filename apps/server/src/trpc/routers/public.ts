@@ -1,4 +1,5 @@
 import { hasSupersededAdvancement } from '../../tournament/resultEvidence';
+import { playerSetScore } from '../../events/playerSetScore';
 import { playerDoublesHistory } from '../../events/playerDoublesHistory';
 import { publicParticipantNames } from '../../events/participantNames';
 import { z } from 'zod';
@@ -226,6 +227,11 @@ export const publicRouter = router({
           setId: ratingEvents.setId,
           /** Pool or bracket stage for the played set; null for decay. */
           resultStage: sets.resultStage,
+          scoreCsv: sets.scoresCsv,
+          resultRaw: sets.raw,
+          resultWinner: sets.winner,
+          p1PlayerId: sets.p1PlayerId,
+          p2PlayerId: sets.p2PlayerId,
           tournamentId: ratingEvents.tournamentId,
           tournamentName: tournaments.name,
           competitionFormat: tournaments.competitionFormat,
@@ -243,20 +249,41 @@ export const publicRouter = router({
           and(eq(ratingEvents.recomputeId, recomputeId), eq(ratingEvents.playerId, input.playerId)),
         )
         .orderBy(asc(ratingEvents.seq));
-      events = eventRows.map(({ opponentCanonicalName, opponentDisplayName, ...row }) => {
-        if (row.competitionFormat === 'doubles' && row.setId)
-          doublesWeights.set(row.setId, row.weight);
-        return {
-          ...row,
-          tournamentDate: row.tournamentDate?.toISOString() ?? null,
-          opponentName: opponentCanonicalName
-            ? publicPlayerName({
-                displayName: opponentDisplayName,
-                canonicalName: opponentCanonicalName,
-              })
-            : null,
-        };
-      });
+      events = eventRows.map(
+        ({
+          opponentCanonicalName,
+          opponentDisplayName,
+          scoreCsv,
+          resultRaw,
+          resultWinner,
+          p1PlayerId,
+          p2PlayerId,
+          ...row
+        }) => {
+          if (row.competitionFormat === 'doubles' && row.setId)
+            doublesWeights.set(row.setId, row.weight);
+          return {
+            ...row,
+            score: (() => {
+              const side =
+                p1PlayerId === input.playerId ? 1 : p2PlayerId === input.playerId ? 2 : null;
+              return row.competitionFormat === 'singles' &&
+                side !== null &&
+                (resultWinner === 1 || resultWinner === 2) &&
+                row.won === (resultWinner === side)
+                ? playerSetScore(scoreCsv, resultRaw, side)
+                : null;
+            })(),
+            tournamentDate: row.tournamentDate?.toISOString() ?? null,
+            opponentName: opponentCanonicalName
+              ? publicPlayerName({
+                  displayName: opponentDisplayName,
+                  canonicalName: opponentCanonicalName,
+                })
+              : null,
+          };
+        },
+      );
     }
 
     const verified = await ctx.db

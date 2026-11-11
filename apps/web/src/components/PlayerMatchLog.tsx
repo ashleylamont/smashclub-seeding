@@ -210,6 +210,7 @@ export function PlayerMatchLog({
                   }
                 >
                   {event.isDecay ? '—' : event.won ? 'W' : 'L'}
+                  {!event.isDecay && event.score && ` · ${event.score}`}
                 </td>
                 <Evidence weight={event.weight} impact={impact} />
               </tr>

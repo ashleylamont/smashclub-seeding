@@ -27,6 +27,7 @@ export interface PlayerEventView {
   revisedSd: number | null;
   /** The played set behind this event; null for inactivity decay. */
   setId: string | null;
+  score?: string | null;
   /** Pool or bracket stage; null for inactivity decay. */
   resultStage: 'group' | 'final' | null;
   tournamentId: string;
