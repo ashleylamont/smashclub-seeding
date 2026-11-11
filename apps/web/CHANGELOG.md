@@ -2,6 +2,12 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.17.0
+
+### Minor Changes
+
+- 11 November 2026 · **Feature** · **Feature:** Optionally rank the recap’s verified highlights with Jev and save the ordering for repeat views. [#379](https://github.com/ashleylamont/smashclub-seeding/pull/379) · [build b5f1d39](https://github.com/ashleylamont/smashclub-seeding/commit/b5f1d39a49d5700258f1a00643681ba428bde7db)
+
 ## 0.16.0
 
 ### Minor Changes
