@@ -1,6 +1,7 @@
 import { eq, inArray } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
 import { companies, companyAliases, playerAliases, playerCharacters, players } from '@smashclub/db';
+import { lockPlayerRows } from '../identity/playerIds';
 import {
   DEFAULT_COMPANY_TAXONOMY,
   cleanPlayerEntry,
@@ -484,6 +485,7 @@ export async function applyRegistryEntries(
       }
 
       if (entry.charactersToAdd.length > 0) {
+        await lockPlayerRows(tx, [playerId!]);
         // Appended after whatever the player already has: the registry names a
         // main, but it does not get to reorder a picker the player set.
         const existing = await tx

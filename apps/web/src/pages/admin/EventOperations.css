@@ -552,3 +552,16 @@
 .ops-twitch-promotion .ui-field {
   max-width: 36rem;
 }
+
+.match-main-form,
+.match-main-form label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s3);
+  min-width: 0;
+}
+
+.match-main-form .modal-actions {
+  margin-top: 0;
+  flex-wrap: wrap;
+}

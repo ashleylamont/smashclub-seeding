@@ -3,6 +3,7 @@ import { inArray, eq } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
 import { playerCharacters } from '@smashclub/db';
 import { MAX_CHARACTERS_PER_PLAYER, isCharacterSlug } from '@smashclub/shared';
+import { lockPlayerRows } from '../identity/playerIds';
 
 /**
  * A player's mains. Stored as ordered rows so the first slug is *the* main and
@@ -30,11 +31,14 @@ export async function setPlayerCharacters(
   playerId: string,
   slugs: string[],
 ): Promise<void> {
-  await db.delete(playerCharacters).where(eq(playerCharacters.playerId, playerId));
-  if (slugs.length === 0) return;
-  await db
-    .insert(playerCharacters)
-    .values(slugs.map((slug, index) => ({ playerId, characterSlug: slug, position: index })));
+  await db.transaction(async (tx) => {
+    await lockPlayerRows(tx, [playerId]);
+    await tx.delete(playerCharacters).where(eq(playerCharacters.playerId, playerId));
+    if (slugs.length === 0) return;
+    await tx
+      .insert(playerCharacters)
+      .values(slugs.map((slug, index) => ({ playerId, characterSlug: slug, position: index })));
+  });
 }
 
 /**

@@ -25,6 +25,7 @@ import {
 } from '../event-operations/twitchPromotion';
 import type { TrpcContext } from '../trpc/trpc';
 import { nativeEvent, reportViews, type NativeEventApi } from './api';
+import { missingMainsByMatch } from './matchMains';
 
 export async function nativeOverview(api: NativeEventApi) {
   const { ctx, planId } = api;
@@ -77,6 +78,7 @@ export async function nativeOverview(api: NativeEventApi) {
   const snapshot = await eventView(ctx.db, state, true);
   return {
     ...snapshot,
+    missingMains: await missingMainsByMatch(ctx.db, state),
     twitchBroadcast: operatorTwitchPromotion(await readTwitchPromotion(ctx.db, planId)),
     poolDrawPauseBlocker: poolDrawPauseBlocker(state),
     operatorDispatch: dispatchDesk(
