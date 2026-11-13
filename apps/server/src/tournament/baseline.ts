@@ -272,6 +272,7 @@ export async function stageNativeBaseline(
         brackets: legacyFinals.brackets,
         reports: legacyReports.map((r) => ({
           ...r,
+          characterPicks: r.characterPicks ?? undefined,
           actorId: r.userId ?? `guest:${r.guestSessionId}`,
           submittedRevision: r.submittedRevision ?? r.expectedRevision,
           createdAt: r.createdAt.getTime(),

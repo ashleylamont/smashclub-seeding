@@ -11,6 +11,7 @@ import {
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import type { SetCharacterPick } from '@smashclub/shared';
 import { eventPlans, players, sets } from './domain';
 import { user } from './auth';
 const planId = () =>
@@ -125,6 +126,7 @@ export const eventScoreReports = pgTable(
     expectedRevision: integer('expected_revision').notNull(),
     score1: integer('score1').notNull(),
     score2: integer('score2').notNull(),
+    characterPicks: jsonb('character_picks').$type<SetCharacterPick[]>(),
     winnerId: uuid('winner_id')
       .notNull()
       .references(() => players.id),

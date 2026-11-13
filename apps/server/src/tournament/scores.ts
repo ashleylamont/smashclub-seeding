@@ -10,6 +10,8 @@ import {
   UntakenFeederCallsConflict,
 } from './facts';
 import type { CommandEnvelope, Match, TournamentState } from './schemas';
+import { matchMemberIds } from './entrants';
+import { validSetCharacterParticipants } from '../players/setCharacterPicks';
 
 export function winner(
   command: Extract<CommandEnvelope['command'], { kind: 'score' }>,
@@ -109,7 +111,7 @@ export function appendOperatorScoreReport(
   envelope: CommandEnvelope,
   score: Pick<
     Extract<CommandEnvelope['command'], { kind: 'score' }>,
-    'matchId' | 'expectedRevision' | 'score1' | 'score2' | 'outcome'
+    'matchId' | 'expectedRevision' | 'score1' | 'score2' | 'outcome' | 'characterPicks'
   >,
   winnerId: string,
 ) {
@@ -122,6 +124,7 @@ export function appendOperatorScoreReport(
     expectedRevision: score.expectedRevision,
     score1: score.score1,
     score2: score.score2,
+    ...(score.characterPicks && { characterPicks: score.characterPicks }),
     winnerId,
     outcome: score.outcome,
     status: 'approved',
@@ -141,6 +144,15 @@ export function recordScore(
   let reportId: string | null = null;
   const match = next.matches.find((m) => m.id === command.matchId);
   requireFact(match, 'Match not found.');
+  if (command.characterPicks)
+    requireFact(
+      validSetCharacterParticipants(
+        command.characterPicks,
+        matchMemberIds(next, match),
+        command.outcome,
+      ),
+      'Choose fighters for players in the played set.',
+    );
   requireFact(
     !command.poolGameCorrectionToken || envelope.operator,
     'Only an organiser can correct played pool games.',
@@ -278,6 +290,7 @@ export function recordScore(
       expectedRevision: match.revision,
       score1: command.score1,
       score2: command.score2,
+      ...(command.characterPicks && { characterPicks: command.characterPicks }),
       winnerId,
       outcome: command.outcome,
       status: accepted ? 'approved' : 'pending',

@@ -9,6 +9,10 @@ import { useState } from 'react';
 import { CompletedScoreReport, type ResultSubmission } from './CompletedScoreReport';
 import type { PoolFlowMatch, ScoreApprovalPolicy } from '../lib/poolFlow';
 import type { trpc } from '../lib/trpc';
+import type { SetCharacterPick } from '@smashclub/shared';
+import { scoreReportPlayers, type ScoreReportPlayer } from '../lib/scoreReportPlayers';
+import { SetCharacterFields } from './SetCharacterFields';
+import { ReportedCharacters } from './ReportedCharacters';
 
 type GuestData = Awaited<ReturnType<typeof trpc.eventOps.guests.matches.mutate>>;
 export type GuestMatch = GuestData['matches'][number];
@@ -25,6 +29,7 @@ export function EventScoreCard({
   station,
   approvalPolicy,
   nextMatch,
+  memberNames,
   recordedOnly = false,
 }: {
   enabled: boolean;
@@ -39,6 +44,7 @@ export function EventScoreCard({
   station?: string;
   approvalPolicy: ScoreApprovalPolicy;
   nextMatch?: LiveMatch;
+  memberNames?: Readonly<Record<string, string>>;
   recordedOnly?: boolean;
 }) {
   const enabled = reportingEnabled && !recordedOnly;
@@ -48,26 +54,39 @@ export function EventScoreCard({
   const [score2, setScore2] = useState<ScoreInputValue>(0);
   const [revision, setRevision] = useState(match.revision);
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const players = scoreReportPlayers(match, memberNames);
+  const characterDraftKey = JSON.stringify([reportingIdentity, players.map(({ id }) => id)]);
+  const [characterDraft, setCharacterDraft] = useState<{
+    key: string;
+    picks: SetCharacterPick[];
+  }>();
+  const picks = characterDraft?.key === characterDraftKey ? characterDraft.picks : [];
+  const editPicks = (next: SetCharacterPick[]) => {
+    setCharacterDraft({ key: characterDraftKey, picks: next });
+    setRequestId(crypto.randomUUID());
+  };
   const { pending, sent, error, begin, update } = useReportFeedback(reportingIdentity);
   const [retryRejectedFor, setRetryRejectedFor] = useState<string | null>(null);
   const retryRejected = retryRejectedFor === reportingIdentity;
   const stale = revision !== match.revision;
+  const score = decisiveDraft(score1, score2);
+  const blockedSubmission = pending || stale || !score || !presentation.canReport;
   const reset = () => {
     setRevision(match.revision);
     setScore1(0);
     setScore2(0);
-    setRequestId(crypto.randomUUID());
+    editPicks([]);
     update({ error: '', sent: null });
   };
   const submit = async () => {
-    if (!enabled || score1 === '' || score2 === '') return;
+    if (!enabled || blockedSubmission || !score) return;
     begin();
     try {
       const result = await onSubmit({
         expectedRevision: revision,
         requestId,
-        score1,
-        score2,
+        ...score,
+        ...(picks.length && { characterPicks: picks }),
       });
       update({ sent: result.status === 'approved' ? 'approved' : 'pending' });
       setRetryRejectedFor((previous) => (previous === reportingIdentity ? null : previous));
@@ -100,7 +119,7 @@ export function EventScoreCard({
         </p>
       )}
       {['played', 'scheduled'].includes(presentation.kind) && (
-        <ReportReceipt report={report} recordedOnly={recordedOnly} />
+        <ReportReceipt report={report} recordedOnly={recordedOnly} players={players} />
       )}
       {match.status === 'complete' ? (
         <CompletedScoreReport
@@ -110,6 +129,7 @@ export function EventScoreCard({
           allowReports={approvalPolicy !== 'review'}
           showUnavailableHint={unavailableMessage !== null}
           onSubmit={onSubmit}
+          characterDraft={{ players, picks, onChange: editPicks }}
           pendingReport={report?.status === 'pending' ? report : undefined}
           recordedOnly={recordedOnly}
         />
@@ -173,19 +193,13 @@ export function EventScoreCard({
               setRequestId(crypto.randomUUID());
             }}
           />
-          <Button
-            type="submit"
-            pending={pending}
-            variant="primary"
-            disabled={
-              pending ||
-              stale ||
-              score1 === '' ||
-              score2 === '' ||
-              score1 === score2 ||
-              !presentation.canReport
-            }
-          >
+          <SetCharacterFields
+            players={players}
+            picks={picks}
+            onChange={editPicks}
+            disabled={pending || stale}
+          />
+          <Button type="submit" pending={pending} variant="primary" disabled={blockedSubmission}>
             {approvalPolicy !== 'review' ? 'Confirm result' : 'Submit score for TO approval'}
           </Button>
           <p className="muted">
@@ -207,6 +221,10 @@ export function EventScoreCard({
   );
 }
 
+function decisiveDraft(score1: ScoreInputValue, score2: ScoreInputValue) {
+  return score1 !== '' && score2 !== '' && score1 !== score2 ? { score1, score2 } : undefined;
+}
+
 function scoreCardCaption(match: LiveMatch) {
   if (match.labelFromStructure) return match.label;
   return linkedFinalCaption(match)?.text ?? `${match.division} · ${match.label}`;
@@ -215,9 +233,11 @@ function scoreCardCaption(match: LiveMatch) {
 function ReportReceipt({
   report,
   recordedOnly,
+  players,
 }: {
   report?: GuestData['reports'][number];
   recordedOnly: boolean;
+  players: ScoreReportPlayer[];
 }) {
   if (!report) return null;
   const status =
@@ -233,8 +253,11 @@ function ReportReceipt({
             ? 'Different score awaiting TO review'
             : 'Awaiting TO approval';
   return (
-    <p className="guest-report-status" role="status">
-      Your report: {report.score1} – {report.score2} · {status}
-    </p>
+    <>
+      <p className="guest-report-status" role="status">
+        Your report: {report.score1} – {report.score2} · {status}
+      </p>
+      <ReportedCharacters picks={report.characterPicks} players={players} />
+    </>
   );
 }

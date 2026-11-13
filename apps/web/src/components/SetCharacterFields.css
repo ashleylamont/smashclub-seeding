@@ -1,0 +1,17 @@
+.set-character-fields,
+.set-character-player {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s2);
+  overflow-wrap: anywhere;
+}
+
+.set-character-fields {
+  gap: var(--s4);
+}
+
+.set-character-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}

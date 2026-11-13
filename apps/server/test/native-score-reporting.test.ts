@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { captureBaseline, decide, reduceDecision, stableId } from '../src/tournament/domain';
 import { envelope, pureBaseline, pureState } from './helpers/nativeLiveFixture';
 import { hasCurrentPendingScoreReview } from '../src/tournament/scoreReview';
+import { setCharacterPicksSchema } from '../src/players/setCharacterPicks';
 import type {
   CommandEnvelope,
   TournamentCommand,
@@ -50,6 +51,27 @@ function dispatch(state: TournamentState, match = state.matches[0]!): Tournament
 }
 
 describe('reporting native played results independently of dispatch', () => {
+  it('validates roster choices and attaches doubles picks to members of the played set', () => {
+    const state = pureState();
+    const match = state.matches[0]!;
+    const memberId = stableId('first-pair-member');
+    const team = state.entrants.find(({ playerId }) => playerId === match.player1Id)!;
+    team.memberPlayerIds = [memberId, stableId('second-pair-member')];
+    const pick = { playerId: memberId, characters: ['fox', 'falco'] };
+    expect(setCharacterPicksSchema.parse([pick])).toEqual([pick]);
+    expect(setCharacterPicksSchema.safeParse([{ ...pick, characters: ['missing'] }]).success).toBe(
+      false,
+    );
+    expect(
+      setCharacterPicksSchema.safeParse([{ ...pick, characters: ['fox', 'fox'] }]).success,
+    ).toBe(false);
+    expect(setCharacterPicksSchema.safeParse([pick, pick]).success).toBe(false);
+    const input = { ...score(match), characterPicks: [pick] };
+    expect(apply(state, input, attendee).reports[0]).toMatchObject({ characterPicks: [pick] });
+    expect(() =>
+      apply(state, { ...input, characterPicks: [{ ...pick, playerId: team.playerId }] }, attendee),
+    ).toThrow(/players in the played set/);
+  });
   it.each([false, true])(
     'accepts an unstarted self-running pairing despite a held pool and full capacity (guest=%s)',
     (guest) => {

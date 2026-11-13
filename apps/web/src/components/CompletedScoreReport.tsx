@@ -4,6 +4,8 @@ import { useReportFeedback } from '../lib/useReportFeedback';
 import { Button } from './ui/Button';
 import { ScoreFields, type ScoreInputValue } from './ScoreFields';
 import { useState } from 'react';
+import type { SetCharacterPick } from '@smashclub/shared';
+import { SetCharacterFields, type SetCharacterDraft } from './SetCharacterFields';
 
 type RecordedMatch = LiveMatch & { revision: number; pendingDisputeCount?: number };
 export type ResultSubmission = {
@@ -11,6 +13,7 @@ export type ResultSubmission = {
   requestId: string;
   score1: number;
   score2: number;
+  characterPicks?: SetCharacterPick[];
 };
 /** Later reports are evidence for organisers; they never replace the displayed official result. */
 export function CompletedScoreReport({
@@ -20,6 +23,7 @@ export function CompletedScoreReport({
   allowReports,
   showUnavailableHint = true,
   onSubmit,
+  characterDraft,
   pendingReport,
   label = 'Confirmed result',
   recordedOnly = false,
@@ -31,6 +35,7 @@ export function CompletedScoreReport({
   showUnavailableHint?: boolean;
   pendingReport?: { score1: number | null; score2: number | null; isDispute: boolean };
   onSubmit: (input: ResultSubmission) => Promise<{ isDispute: boolean }>;
+  characterDraft: SetCharacterDraft;
   label?: string;
   recordedOnly?: boolean;
 }) {
@@ -40,6 +45,7 @@ export function CompletedScoreReport({
   const [score2, setScore2] = useState<ScoreInputValue>(match.score2 ?? 0);
   const [revision, setRevision] = useState(match.revision);
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const [confirmationId, setConfirmationId] = useState(() => crypto.randomUUID());
   const { pending, message, error, begin, update } = useReportFeedback(reportingIdentity);
   const showEditor = editing && !message;
   const showReporting =
@@ -47,16 +53,29 @@ export function CompletedScoreReport({
     allowReports &&
     presentation.canReport &&
     (enabled || Boolean(pendingReport) || showUnavailableHint);
-  const submit = async (first: ScoreInputValue, second: ScoreInputValue) => {
-    if (first === '' || second === '') return;
-    if (!enabled) return;
+  const editPicks = (picks: SetCharacterPick[]) => {
+    characterDraft.onChange(picks);
+    setRequestId(crypto.randomUUID());
+    setConfirmationId(crypto.randomUUID());
+  };
+  const submit = async (first: ScoreInputValue, second: ScoreInputValue, id: string) => {
+    if (
+      first === '' ||
+      second === '' ||
+      first === second ||
+      !enabled ||
+      pending ||
+      revision !== match.revision
+    )
+      return;
     begin();
     try {
       const result = await onSubmit({
         expectedRevision: revision,
-        requestId,
+        requestId: id,
         score1: first,
         score2: second,
+        ...(characterDraft.picks.length && { characterPicks: characterDraft.picks }),
       });
       update({
         message: result.isDispute
@@ -105,7 +124,7 @@ export function CompletedScoreReport({
                       setRevision(match.revision);
                       setScore1(match.score1 ?? 0);
                       setScore2(match.score2 ?? 0);
-                      setRequestId(crypto.randomUUID());
+                      editPicks([]);
                       update({ error: '', message: '' });
                     }}
                   >
@@ -114,9 +133,14 @@ export function CompletedScoreReport({
                 </div>
               )}
               <div className="ops-toolbar">
+                <SetCharacterFields
+                  {...characterDraft}
+                  onChange={editPicks}
+                  disabled={pending || revision !== match.revision}
+                />
                 <Button
                   disabled={pending || revision !== match.revision}
-                  onClick={() => void submit(match.score1 ?? 0, match.score2 ?? 0)}
+                  onClick={() => void submit(match.score1 ?? 0, match.score2 ?? 0, confirmationId)}
                 >
                   Confirm recorded score
                 </Button>
@@ -136,7 +160,7 @@ export function CompletedScoreReport({
                   className="ops-score-form"
                   onSubmit={(event) => {
                     event.preventDefault();
-                    void submit(score1, score2);
+                    void submit(score1, score2, requestId);
                   }}
                 >
                   <ScoreFields

@@ -248,8 +248,20 @@ test('account expiry and replacement hide private reports and feedback while ret
   await submittedCard.getByRole('button', { name: 'Confirm result', exact: true }).click();
   await expect(submittedCard).toContainText('Score submitted for TO approval');
   await draftCard.getByRole('spinbutton').nth(0).fill('3');
+  await draftCard.getByRole('button', { name: 'Add characters (optional)' }).click();
+  await chooseOption(page.getByRole('dialog').getByRole('combobox').first(), 'fox');
+  await page.getByRole('dialog').getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(draftCard.getByRole('button', { name: 'Edit characters (1)' })).toBeVisible();
+  await completedCard.getByRole('button', { name: 'Add characters (optional)' }).click();
+  await chooseOption(page.getByRole('dialog').getByRole('combobox').first(), 'kirby');
+  await page.getByRole('dialog').getByRole('button', { name: 'Done', exact: true }).click();
   await completedCard.getByRole('button', { name: 'Confirm recorded score', exact: true }).click();
   await expect(completedCard).toContainText('your score agrees');
+  expect(
+    fixture.submissions.find((submission) => submission.matchId === completed.id),
+  ).toMatchObject({
+    characterPicks: [{ playerId: completed.player1Id, characters: ['kirby'] }],
+  });
   account = null;
   await page.clock.setFixedTime(new Date('2026-10-04T00:00:10Z'));
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
@@ -265,6 +277,7 @@ test('account expiry and replacement hide private reports and feedback while ret
   await expect(page.getByRole('link', { name: 'account-B', exact: true })).toBeVisible();
   await expect(submittedCard.getByRole('spinbutton').nth(0)).toHaveValue('2');
   await expect(draftCard.getByRole('spinbutton').nth(0)).toHaveValue('3');
+  await expect(draftCard.getByRole('button', { name: 'Add characters (optional)' })).toBeVisible();
   await expect(
     submittedCard.getByText('Score submitted for TO approval', { exact: false }),
   ).toHaveCount(0);

@@ -4,6 +4,8 @@ import { trpc } from '../../lib/trpc';
 import { returnUntakenCallMatchIds } from '../../lib/eventErrors';
 import { matchPresentation } from '../../lib/matchPresentation';
 import { UntakenCallRecovery, type UntakenCallDesk } from './UntakenCallRecovery';
+import { Disclosure } from '../../components/ui/Disclosure';
+import { ReportedCharacters } from '../../components/ReportedCharacters';
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 type Action = (work: () => Promise<unknown>, message?: string) => Promise<void>;
 export function PlayerReports({
@@ -26,11 +28,13 @@ export function PlayerReports({
     >
       <h3 id="score-submissions-title">Score submissions</h3>
       <ReportRows data={data} disabled={disabled} act={act} callDesk={callDesk} />
+      <ApprovedCharacterReports data={data} />
     </section>
   );
 }
 function ReportRows({ data, disabled, act, callDesk }: Parameters<typeof PlayerReports>[0]) {
   const [callConflict, setCallConflict] = useState<{ reportId: string; matchIds: string[] }>();
+  const players = reportPlayers(data);
   const reports = data.reports
     .filter((report) => report.status === 'pending')
     .sort((a, b) => Number(b.isDispute) - Number(a.isDispute));
@@ -77,6 +81,7 @@ function ReportRows({ data, disabled, act, callDesk }: Parameters<typeof PlayerR
                   ? ' · stale: match has changed'
                   : ''}
               </p>
+              <ReportedCharacters picks={report.characterPicks} players={players} />
               {callConflict?.reportId === report.id &&
                 match?.revision === report.expectedRevision && (
                   <UntakenCallRecovery matchIds={callConflict.matchIds} desk={callDesk} />
@@ -121,6 +126,40 @@ function ReportRows({ data, disabled, act, callDesk }: Parameters<typeof PlayerR
     </div>
   ) : (
     <p className="muted">No scores awaiting review.</p>
+  );
+}
+
+function reportPlayers(data: Overview) {
+  return [
+    ...data.entrants,
+    ...Object.entries(('memberNames' in data && data.memberNames) || {}).map(([id, name]) => ({
+      id,
+      name,
+    })),
+  ];
+}
+
+function ApprovedCharacterReports({ data }: { data: Overview }) {
+  const reports = data.reports.filter(
+    (report) => report.status === 'approved' && report.characterPicks?.length,
+  );
+  if (!reports.length) return null;
+  const players = reportPlayers(data);
+  return (
+    <Disclosure title="Reported characters from approved scores">
+      <ul className="ops-audit-list">
+        {reports.map((report) => (
+          <li key={report.id}>
+            <strong>
+              {data.matches.find((match) => match.id === report.matchId)?.label ?? 'Match'}
+            </strong>
+            {' · '}
+            {report.reporterLabel} report · {report.score1}–{report.score2}
+            <ReportedCharacters picks={report.characterPicks} players={players} />
+          </li>
+        ))}
+      </ul>
+    </Disclosure>
   );
 }
 export function AuditList({ data }: { data: Overview }) {

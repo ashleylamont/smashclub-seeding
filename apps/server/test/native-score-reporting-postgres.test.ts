@@ -59,6 +59,7 @@ describe('unstarted native result reporting on isolated PostgreSQL', () => {
       score1: 2,
       score2: 0,
       outcome: 'played',
+      characterPicks: [{ playerId: match.player1Id!, characters: ['fox', 'falco'] }],
     };
     const opposing: TournamentCommand = { ...score, score1: 0, score2: 2 };
     const player = { ...nativeAdmin, id: 'reporting-attendee', role: 'user' as const };
@@ -79,6 +80,7 @@ describe('unstarted native result reporting on isolated PostgreSQL', () => {
       ['approved', false],
       ['pending', true],
     ]);
+    expect(current.reports[0]!.characterPicks).toEqual(score.characterPicks);
     expect(current.matches.filter((item) => item.status === 'playing')).toHaveLength(0);
     expect(current.settings.capacity).toBe(0);
     expect((await a.command(player, planId, 'first-report', score)).receipt).toEqual(first.receipt);

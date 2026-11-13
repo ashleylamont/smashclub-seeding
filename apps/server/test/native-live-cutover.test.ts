@@ -377,15 +377,24 @@ describe('standard native lifecycle uses Act without adoption', () => {
     });
     const before = await runtime.state(planId);
     const match = before.matches[0]!;
-    const report = await attendee.eventOps.reportScore({
+    const input = {
       matchId: match.id,
       expectedRevision: match.revision,
       requestId: 'attendee-report',
       score1: 2,
       score2: 1,
-      outcome: 'played',
-    });
-    expect(report.status).toBe('pending');
+      outcome: 'played' as const,
+      characterPicks: [{ playerId: match.player1Id!, characters: ['fox', 'falco'] }],
+    };
+    const report = await attendee.eventOps.reportScore(input);
+    expect(report).toMatchObject({ status: 'pending', characterPicks: input.characterPicks });
+    expect(await attendee.eventOps.reportScore(input)).toEqual(report);
+    await expect(
+      attendee.eventOps.reportScore({
+        ...input,
+        characterPicks: [{ playerId: match.player1Id!, characters: ['wolf'] }],
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
     expect(report.id).not.toBe(match.id);
     await operator.eventOps.reviewReport({ reportId: report.id, approve: true });
     const after = await runtime.state(planId);
@@ -399,6 +408,7 @@ describe('standard native lifecycle uses Act without adoption', () => {
       id: report.id,
       matchId: match.id,
       status: 'approved',
+      characterPicks: input.characterPicks,
     });
     const next = before.matches[1]!;
     const retryInput = {
@@ -418,6 +428,10 @@ describe('standard native lifecycle uses Act without adoption', () => {
     expect(
       (await attendee.eventOps.myReports({ planId })).find((r) => r.matchId === next.id),
     ).toMatchObject({ id: replacement.id, status: 'pending' });
+    expect(replacement.characterPicks).toBeUndefined();
+    expect(JSON.stringify(await caller(null).eventOps.snapshot({ planId }))).not.toContain(
+      'characterPicks',
+    );
     expect(await runtime.replay(planId)).toEqual(await runtime.state(planId));
   });
   it('journals late attendance and guest self-service without guest credentials in the stream', async () => {
@@ -506,6 +520,7 @@ describe('standard native lifecycle uses Act without adoption', () => {
       requestId: 'guest-complete',
       score1: 2,
       score2: 1,
+      characterPicks: [{ playerId: match.player2Id!, characters: ['kirby'] }],
     };
     const first = await publicApi.eventOps.guests.submit(submission);
     expect(first.status).toBe('approved');
@@ -525,10 +540,23 @@ describe('standard native lifecycle uses Act without adoption', () => {
       sessionToken: confirming.sessionToken,
       requestId: 'official-score',
       expectedRevision: match.revision + 1,
+      characterPicks: [{ playerId: match.player2Id!, characters: ['yoshi'] }],
     });
     expect(agreement).toMatchObject({ isDispute: false, status: 'approved' });
     view = await operator.eventOps.overview({ planId });
-    expect(view.reports.find((r) => r.id === first.reportId)!.reporterLabel).toBe('Guest');
+    expect(view.reports.find((r) => r.id === first.reportId)).toMatchObject({
+      reporterLabel: 'Guest',
+      characterPicks: submission.characterPicks,
+    });
+    expect(
+      (await publicApi.eventOps.guests.matches({ planId, sessionToken: confirming.sessionToken }))
+        .reports,
+    ).toMatchObject([
+      {
+        id: agreement.reportId,
+        characterPicks: [{ playerId: match.player2Id, characters: ['yoshi'] }],
+      },
+    ]);
     const events: unknown[] = [];
     await runtime.app.query({ stream: `native:${planId}` }, (e) => {
       events.push(e);
@@ -711,10 +739,14 @@ describe('standard native lifecycle uses Act without adoption', () => {
       score1: 2,
       score2: 1,
       outcome: 'played',
+      characterPicks: [{ playerId: match!.player1Id!, characters: ['ness'] }],
     });
     await runtime.recover();
     const view = await caller().eventOps.overview({ planId });
     expect(view.matches.find((m) => m.id === match!.id)!.score1).toBe(2);
+    expect(view.reports.find((report) => report.matchId === match!.id)?.characterPicks).toEqual([
+      { playerId: match!.player1Id, characters: ['ness'] },
+    ]);
     expect(view.audit.some((a) => a.matchId === match!.id)).toBe(true);
     expect(
       (await runtime.app.query({ stream: `native:${planId}`, names: ['LegacyStateImportedV1'] }))

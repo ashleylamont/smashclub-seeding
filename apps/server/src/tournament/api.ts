@@ -12,7 +12,8 @@ import {
 } from './finalsPreview';
 import { poolOrderStatus } from './poolOrders';
 import { sharedDispatch } from './dispatch';
-import { isKnockout } from '@smashclub/shared';
+import { isKnockout, type SetCharacterPick } from '@smashclub/shared';
+import { sameSetCharacterPicks } from '../players/setCharacterPicks';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -259,6 +260,7 @@ export class NativeEventApi {
     score2: number;
     outcome: 'played' | 'forfeit' | 'bye';
     winnerId?: string;
+    characterPicks?: SetCharacterPick[];
   }) {
     const state = await this.state();
     const previous = reportViews(state).find(
@@ -271,6 +273,7 @@ export class NativeEventApi {
         previous.outcome !== input.outcome ||
         previous.score1 !== (input.outcome === 'forfeit' ? null : input.score1) ||
         previous.score2 !== (input.outcome === 'forfeit' ? null : input.score2) ||
+        !sameSetCharacterPicks(previous.characterPicks, input.characterPicks) ||
         (input.winnerId && previous.winnerId !== input.winnerId)
       )
         throw new TRPCError({

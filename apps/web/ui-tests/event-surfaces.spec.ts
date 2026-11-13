@@ -39,6 +39,7 @@ test(
     await card.getByRole('button', { name: /Submit score/ }).click();
     await expect(card.getByRole('status')).toContainText('Score submitted for TO approval');
     expect(fixture.submissions).toHaveLength(1);
+    expect(fixture.submissions[0]).not.toHaveProperty('characterPicks');
     const match = fixture.snapshot.matches.find(
       (item) => item.player1Name === PLAYER_NAME && item.status === 'playing',
     )!;

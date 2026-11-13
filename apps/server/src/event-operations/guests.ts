@@ -1,5 +1,5 @@
 import type { NativeRuntime } from '../tournament/runtime';
-import { attendeeScoreDecision } from './scorePolicy';
+import { attendeeScoreDecision, validateScore } from './scorePolicy';
 import { loadStationQueues } from './queue';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { and, desc, eq, lt, sql } from 'drizzle-orm';
@@ -16,7 +16,9 @@ import {
   type Db,
 } from '@smashclub/db';
 import type { SessionUser } from '../auth';
-import { lockEvent, requireOperator, snapshot, validateScore, applyScore } from './service';
+import type { SetCharacterPick } from '@smashclub/shared';
+import { sameSetCharacterPicks } from '../players/setCharacterPicks';
+import { lockEvent, requireOperator, snapshot, applyScore } from './service';
 
 // In rotating mode, change the displayed code every 15 minutes while keeping
 // each issued code valid for at least an hour.
@@ -326,6 +328,7 @@ export async function guestMatches(
         isDispute: eventScoreReports.isDispute,
         score1: eventScoreReports.score1,
         score2: eventScoreReports.score2,
+        characterPicks: eventScoreReports.characterPicks,
       })
       .from(eventScoreReports)
       .where(eq(eventScoreReports.guestSessionId, guest.id))
@@ -352,6 +355,7 @@ export async function submitGuest(
     requestId: string;
     score1: number;
     score2: number;
+    characterPicks?: SetCharacterPick[];
   },
   now = Date.now(),
 ) {
@@ -367,7 +371,8 @@ export async function submitGuest(
         prior.matchId !== input.matchId ||
         (prior.submittedRevision ?? prior.expectedRevision) !== input.expectedRevision ||
         prior.score1 !== input.score1 ||
-        prior.score2 !== input.score2
+        prior.score2 !== input.score2 ||
+        !sameSetCharacterPicks(prior.characterPicks, input.characterPicks)
       )
         throw new TRPCError({
           code: 'CONFLICT',
@@ -440,6 +445,7 @@ export async function submitGuest(
         requestId: input.requestId,
         score1: input.score1,
         score2: input.score2,
+        characterPicks: input.characterPicks,
         outcome: 'played',
         winnerId,
       })
