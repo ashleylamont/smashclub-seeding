@@ -2,6 +2,12 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.19.0
+
+### Minor Changes
+
+- 13 November 2026 · **Feature** · Players and guests can optionally add the fighters used in a set when reporting a score, including character switches. Organisers can see the picks alongside the submitted score. [#386](https://github.com/ashleylamont/smashclub-seeding/pull/386) · [build 48ca009](https://github.com/ashleylamont/smashclub-seeding/commit/48ca009a54b8889fbb595f390304c08b49f266c6)
+
 ## 0.18.0
 
 ### Minor Changes
