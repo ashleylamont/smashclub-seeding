@@ -436,7 +436,7 @@ for (const theme of ['dark', 'light'] as const)
           0,
         );
         await expect(dialog.getByRole('combobox', { name: 'Character label' })).toContainText(
-          'Use profile main',
+          'Use suggested character',
         );
       }
       await page.keyboard.press('Escape');

@@ -11,7 +11,11 @@ for (const width of [390, 1440]) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
       const fixture = await mockEvent(page, { role: 'admin' });
       const match = fixture.overview.matches.find((row) => row.status === 'playing')!;
-      const player = { playerId: match.player1Id!, name: PLAYER_NAME };
+      const player = {
+        playerId: match.player1Id!,
+        name: PLAYER_NAME,
+        suggestion: { character: 'fox', sets: 3 },
+      };
       const candidates = [player];
       Object.assign(match, { player1Name: player.name });
       Object.assign(fixture.overview, { missingMains: { [match.id]: candidates } });
@@ -52,8 +56,11 @@ for (const width of [390, 1440]) {
       const submit = dialog.getByRole('button', { name: 'Save confirmed main' });
       await expect(submit).toBeDisabled();
       const character = dialog.getByRole('combobox', { name: 'Main character' });
+      await expect(dialog.getByText('Fox reported in 3 sets this event.')).toBeVisible();
+      await dialog.getByRole('button', { name: 'Use suggested fighter' }).press('Enter');
+      await expect(character).toHaveAttribute('data-value', 'fox');
       await character.press('Enter');
-      await expect(page.getByRole('option', { name: 'Choose a character' })).toBeFocused();
+      await expect(page.getByRole('option', { name: 'Fox', exact: true })).toBeFocused();
       await page.keyboard.press('End');
       await expect(page.getByRole('option', { name: 'Zero Suit Samus' })).toBeFocused();
       await page.keyboard.press('Enter');

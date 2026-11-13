@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   CHARACTERS,
   MAX_CHARACTERS_PER_SET_PLAYER,
@@ -24,8 +24,16 @@ export function SetCharacterFields({
   picks,
   onChange,
   disabled,
+  triggerLabel,
+  action,
+  feedback,
+  description = 'Add the fighters each player used in this set. Leave any player blank if you’re unsure.',
 }: SetCharacterDraft & {
   disabled: boolean;
+  triggerLabel?: string;
+  action?: ReactNode;
+  feedback?: ReactNode;
+  description?: string;
 }) {
   const [open, setOpen] = useState(false);
   if (!players.length) return null;
@@ -43,12 +51,12 @@ export function SetCharacterFields({
   return (
     <Dialog
       title="Characters played"
-      description="Add the fighters each player used in this set. Leave any player blank if you’re unsure."
+      description={description}
       open={open}
       onOpenChange={setOpen}
       trigger={
         <Button disabled={disabled}>
-          {count ? `Edit characters (${count})` : 'Add characters (optional)'}
+          {triggerLabel ?? (count ? `Edit characters (${count})` : 'Add characters (optional)')}
         </Button>
       }
     >
@@ -97,8 +105,10 @@ export function SetCharacterFields({
           );
         })}
       </div>
+      {feedback}
       <div className="modal-actions">
-        <Button onClick={() => setOpen(false)}>Done</Button>
+        <Button onClick={() => setOpen(false)}>{action ? 'Close' : 'Done'}</Button>
+        {action}
       </div>
     </Dialog>
   );

@@ -10,6 +10,9 @@ import { challongeStateLabel, setStateLabel, syncStateLabel } from '../lib/label
 import { useEventSource } from '../lib/useEventSource';
 import { useNow } from '../lib/useNow';
 import { InfoTip } from '../components/InfoTip';
+import { ReportedCharacters } from '../components/ReportedCharacters';
+import { PlayedCharacterReport } from '../components/PlayedCharacterReport';
+import { useCharacterReporter } from '../lib/useCharacterReporter';
 import './Tournaments.css';
 
 export function TournamentPage() {
@@ -48,6 +51,7 @@ function isLiveNow(data: TournamentData | null, now: number): boolean {
 }
 
 function TournamentDetail({ data, now }: { data: TournamentData; now: number }) {
+  const reporter = useCharacterReporter();
   const isLive = isLiveNow(data, now);
   // Over, not necessarily finished: a bracket abandoned mid-run is also done.
   const abandoned = isBracketAbandoned(data, now);
@@ -282,6 +286,23 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
                       </td>
                       <td>
                         <SetLine set={set} />
+                        {set.charactersPlayed && (
+                          <>
+                            <ReportedCharacters
+                              picks={set.charactersPlayed.picks}
+                              players={set.charactersPlayed.players}
+                            />
+                            {set.charactersPlayed.players.some(({ id }) =>
+                              reporter.playerIds.has(id),
+                            ) && (
+                              <PlayedCharacterReport
+                                key={reporter.identity}
+                                target={{ kind: 'archive', setId: set.id }}
+                                players={set.charactersPlayed.players}
+                              />
+                            )}
+                          </>
+                        )}
                         {set.excludedFromRatings && (
                           <span
                             className="chip excluded-chip"

@@ -16,7 +16,11 @@ export function MatchMainDialog({
   disabled,
 }: {
   match: Overview['matches'][number];
-  candidates: { playerId: string; name: string }[];
+  candidates: {
+    playerId: string;
+    name: string;
+    suggestion?: { character: string; sets: number };
+  }[];
   disabled: boolean;
 }) {
   const cache = useQueryClient();
@@ -109,6 +113,20 @@ export function MatchMainDialog({
                 ))}
               </Select>
             </label>
+            {player?.suggestion && (
+              <div>
+                <p>
+                  {characterName(player.suggestion.character)} reported in {player.suggestion.sets}{' '}
+                  sets this event.
+                </p>
+                <Button
+                  disabled={disabled || save.isPending}
+                  onClick={() => setCharacter(player.suggestion!.character)}
+                >
+                  Use suggested fighter
+                </Button>
+              </div>
+            )}
             <label>
               Main character
               <Select
