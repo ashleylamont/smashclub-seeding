@@ -27,6 +27,7 @@ export async function publicParticipantPresentation(
   db: Db,
   rows: readonly Participant[],
   includeGraphics = false,
+  eventCharacters?: ReadonlyMap<string, { character: string }>,
 ) {
   const profiles = await db.select().from(players);
   const names = new Map(profiles.map((p) => [p.id, publicPlayerName(p)]));
@@ -55,12 +56,16 @@ export async function publicParticipantPresentation(
         members: team
           ? team.map((id) => ({
               name: names.get(id) ?? 'Player',
-              character: characters.get(id)?.[0] ?? null,
+              character: eventCharacters?.get(id)?.character ?? characters.get(id)?.[0] ?? null,
             }))
           : [
               {
                 name,
-                character: (p.playerId && characters.get(canonical(p.playerId))?.[0]) || null,
+                character: p.playerId
+                  ? (eventCharacters?.get(canonical(p.playerId))?.character ??
+                    characters.get(canonical(p.playerId))?.[0] ??
+                    null)
+                  : null,
               },
             ],
       };

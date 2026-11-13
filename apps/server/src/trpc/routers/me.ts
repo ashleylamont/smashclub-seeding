@@ -11,6 +11,10 @@ import {
 } from '../../players/characters';
 import { claimReviewKey, claimReviewMode, reviewPendingClaim } from '../../players/claimReview';
 import { authedProcedure, router } from '../trpc';
+import {
+  reportPlayedCharacters,
+  reportPlayedCharactersInput,
+} from '../../players/reportPlayedCharacters';
 
 /**
  * Every self-service edit below is gated on the caller holding an *approved*
@@ -34,6 +38,11 @@ async function assertApprovedClaim(db: Db, userId: string, playerId: string): Pr
 }
 
 export const meRouter = router({
+  reportPlayedCharacters: authedProcedure
+    .input(reportPlayedCharactersInput)
+    .mutation(({ ctx, input }) =>
+      reportPlayedCharacters(ctx.db, ctx.user, ctx.nativeRuntime, input),
+    ),
   /**
    * Authoritative identity and role for the signed-in caller. The client gates
    * admin navigation on this rather than on the auth session, because role

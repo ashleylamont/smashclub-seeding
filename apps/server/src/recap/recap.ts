@@ -1,5 +1,7 @@
 import { and, asc, eq, inArray, isNotNull, lt } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
+import type { NativeRuntime } from '../tournament/runtime';
+import { archiveCharacterEvidence, archiveCharacterLeaders } from '../events/archivedCharacters';
 import { nativeHistory } from '../events/nativeHistory';
 import {
   companies,
@@ -82,7 +84,11 @@ export interface LoadedRecap extends Omit<RecapResult, 'tournaments' | 'facts' |
   slug: string;
 }
 
-export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | null> {
+export async function loadRecap(
+  db: Db,
+  slug: string,
+  runtime?: NativeRuntime,
+): Promise<LoadedRecap | null> {
   const [anchor] = await db.select().from(tournaments).where(eq(tournaments.challongeSlug, slug));
   if (!anchor) return null;
   const doubles = anchor.competitionFormat === 'doubles';
@@ -205,8 +211,19 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
     .leftJoin(companies, eq(players.companyId, companies.id))
     .where(inArray(tournamentParticipants.tournamentId, nightIds));
 
+  const setRows = await db
+    .select()
+    .from(sets)
+    .where(inArray(sets.tournamentId, nightIds))
+    // Play order, matching the engine's `compareSetsInBracket`. The recap's own
+    // tie-break is this array's index, so this ordering is load-bearing.
+    .orderBy(asc(sets.suggestedPlayOrder), asc(sets.completedAt), asc(sets.challongeMatchId));
+
+  const eventCharacters = archiveCharacterLeaders(
+    (await archiveCharacterEvidence(db, setRows, runtime)).values(),
+  );
   const presentation = doubles
-    ? await publicParticipantPresentation(db, participantRows, true)
+    ? await publicParticipantPresentation(db, participantRows, true, eventCharacters)
     : null;
   const singlesCharacters = doubles
     ? null
@@ -229,7 +246,9 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
       name: display?.name ?? publicParticipantName(p),
       companyCode: p.companyCode,
       characters: p.playerId
-        ? (singlesCharacters?.get(p.playerId) ?? [])
+        ? eventCharacters.has(p.playerId)
+          ? [eventCharacters.get(p.playerId)!.character]
+          : (singlesCharacters?.get(p.playerId) ?? [])
         : (display?.graphic?.members.flatMap(({ character }) => (character ? [character] : [])) ??
           []),
       seed: p.seed,
@@ -241,14 +260,6 @@ export async function loadRecap(db: Db, slug: string): Promise<LoadedRecap | nul
   );
 
   // --- sets ---------------------------------------------------------------
-
-  const setRows = await db
-    .select()
-    .from(sets)
-    .where(inArray(sets.tournamentId, nightIds))
-    // Play order, matching the engine's `compareSetsInBracket`. The recap's own
-    // tie-break is this array's index, so this ordering is load-bearing.
-    .orderBy(asc(sets.suggestedPlayOrder), asc(sets.completedAt), asc(sets.challongeMatchId));
 
   const recapSets: RecapSet[] = setRows
     .filter((row) => includesResultStage(modes.get(row.tournamentId) ?? 'auto', row.resultStage))

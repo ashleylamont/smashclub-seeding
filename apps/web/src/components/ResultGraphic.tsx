@@ -212,8 +212,8 @@ function ResultGraphicSession({
         <LoadingState>Preparing results PNG…</LoadingState>
       )}
       <p className="muted">
-        Character labels and artwork follow current profile mains or organiser choices. They may
-        differ from the characters played at this event.
+        Character labels and artwork use the most-reported fighter at this event when there’s a
+        clear leader. Profile mains fill gaps, and organisers can change the selection.
       </p>
       {current?.image && current.hasBundledArtwork && <p className="muted">{FIGHTER_ART_CREDIT}</p>}
       <Disclosure title="Placements in this graphic">
@@ -334,7 +334,7 @@ function ArtworkChoices({
               onChange(next);
             }}
           >
-            <SelectItem value={profileDefault}>Use profile main</SelectItem>
+            <SelectItem value={profileDefault}>Use suggested character</SelectItem>
             <SelectItem value="">No character label</SelectItem>
             {CHARACTERS.map(({ slug, name }) => (
               <SelectItem key={slug} value={slug}>

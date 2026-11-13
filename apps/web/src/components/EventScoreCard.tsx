@@ -30,6 +30,8 @@ export function EventScoreCard({
   approvalPolicy,
   nextMatch,
   memberNames,
+  playedCharacters,
+  lateReport,
   recordedOnly = false,
 }: {
   enabled: boolean;
@@ -45,6 +47,8 @@ export function EventScoreCard({
   approvalPolicy: ScoreApprovalPolicy;
   nextMatch?: LiveMatch;
   memberNames?: Readonly<Record<string, string>>;
+  playedCharacters?: SetCharacterPick[];
+  lateReport?: React.ReactNode;
   recordedOnly?: boolean;
 }) {
   const enabled = reportingEnabled && !recordedOnly;
@@ -212,6 +216,8 @@ export function EventScoreCard({
           </p>
         </form>
       )}
+      <ReportedCharacters picks={playedCharacters} players={players} />
+      {lateReport}
       {!recordedOnly && error && (
         <p className="error-text" role="alert">
           {error}

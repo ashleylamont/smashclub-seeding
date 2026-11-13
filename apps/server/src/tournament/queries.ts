@@ -78,7 +78,11 @@ export async function nativeOverview(api: NativeEventApi) {
   const snapshot = await eventView(ctx.db, state, true);
   return {
     ...snapshot,
-    missingMains: await missingMainsByMatch(ctx.db, state),
+    missingMains: await missingMainsByMatch(
+      ctx.db,
+      state,
+      Object.values(snapshot.charactersPlayed ?? {}),
+    ),
     twitchBroadcast: operatorTwitchPromotion(await readTwitchPromotion(ctx.db, planId)),
     poolDrawPauseBlocker: poolDrawPauseBlocker(state),
     operatorDispatch: dispatchDesk(

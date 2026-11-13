@@ -5,6 +5,8 @@ import { Select, SelectItem } from './ui/Select';
 import { Input } from './ui/Input';
 import { Button } from './ui/Button';
 import { EventScoreCard } from './EventScoreCard';
+import { PlayedCharacterReport } from './PlayedCharacterReport';
+import { scoreReportPlayers } from '../lib/scoreReportPlayers';
 import { PlayerMatchFilter } from './PlayerMatchFilter';
 import { PoolFilter } from './PoolStationQueue';
 import { scoreApprovalPolicy } from '../lib/poolFlow';
@@ -51,6 +53,8 @@ export function PlayerHubMatches({
     submitScore,
     playOpen,
     ownReports,
+    claim,
+    signedIn,
   } = hub;
   const journey = player ? playerJourney(data, player) : undefined;
   return (
@@ -207,6 +211,23 @@ export function PlayerHubMatches({
               approvalPolicy={!closed && playOpen ? scoreApprovalPolicy(data, match) : 'review'}
               match={match}
               memberNames={data.memberNames}
+              playedCharacters={data.charactersPlayed?.[match.id]}
+              lateReport={
+                data.plan.liveOwned &&
+                data.plan.status !== 'cancelled' &&
+                match.status === 'complete' &&
+                match.outcome === 'played' &&
+                claim &&
+                scoreReportPlayers(match, data.memberNames).some(
+                  ({ id }) => id === claim.playerId,
+                ) && (
+                  <PlayedCharacterReport
+                    key={signedIn?.user.id}
+                    target={{ kind: 'native', planId: data.plan.id, matchId: match.id }}
+                    players={scoreReportPlayers(match, data.memberNames)}
+                  />
+                )
+              }
               nextMatch={closed ? undefined : nextMeaningfulMatch(data.matches, match)}
               report={ownReports?.find((report) => report.matchId === match.id)}
               recordedOnly={closed}

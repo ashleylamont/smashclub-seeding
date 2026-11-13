@@ -176,6 +176,23 @@
   white-space: nowrap;
 }
 
+.match-log-characters:empty {
+  display: none;
+}
+
+.match-log-characters {
+  inline-size: max-content;
+  max-inline-size: 20ch;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-xs);
+  font-weight: 400;
+}
+
+.match-log-characters ul {
+  margin-block: var(--s1);
+  padding-inline-start: var(--s3);
+}
+
 .whr-impact-value {
   display: block;
   color: var(--text-soft);

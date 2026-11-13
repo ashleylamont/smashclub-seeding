@@ -36,7 +36,7 @@ import {
 } from './entrants';
 import { asc, inArray } from 'drizzle-orm';
 import { players, playerCharacters, tournaments, type Db, type eventMatches } from '@smashclub/db';
-import { publicPlayerName } from '@smashclub/shared';
+import { publicPlayerName, type SetCharacterPick } from '@smashclub/shared';
 import type { ResultGraphicIdentity } from '../events/participantNames';
 import { buildStationQueues } from '../event-operations/queue';
 import { matchAvailability, stationAvailability } from '../event-operations/availability';
@@ -47,6 +47,8 @@ import { supersededPlayedSetViews } from './resultEvidence';
 import { hasCurrentPendingScoreReview } from './scoreReview';
 import { pendingStrengthFinals } from './strengthFinals';
 import type { Match, QualifierSlot, TournamentState } from './schemas';
+import { nativeCharacterEvidence } from '../players/nativeCharacterEvidence';
+import { leadingCharacters } from '../players/characterEvidence';
 
 type SqlSnapshot = Awaited<ReturnType<typeof sqlSnapshot>>;
 type MatchViewFields = Pick<
@@ -59,6 +61,7 @@ export type EventSnapshot = Omit<
 > & {
   publicCode?: number;
   memberNames?: Record<string, string>;
+  charactersPlayed?: Record<string, SetCharacterPick[]>;
   broadcastSides?: TournamentState['broadcastSides'];
   supersededPlayedSets?: ReturnType<typeof supersededPlayedSetViews>;
   matches: (SqlSnapshot['matches'][number] &
@@ -177,25 +180,21 @@ export function bracketViews(state: TournamentState) {
     };
   });
 }
-function livePlanFields(
-  state: TournamentState,
-): Pick<EventSnapshot['plan'], 'status' | 'softLockedAt'> {
-  return {
-    status:
-      state.lifecycle === 'finalized'
-        ? 'complete'
-        : state.lifecycle === 'cancelled'
-          ? 'cancelled'
-          : 'underway',
-    softLockedAt: new Date(state.baseline!.capturedAt).toISOString(),
-  };
-}
-
 function publishedBracketScope(slug: string) {
   return {
     division: slug.includes('_upper_') ? ('upper' as const) : ('lower' as const),
     stage: slug.includes('_main') ? ('main' as const) : ('consolation' as const),
   };
+}
+
+function livePlanFields(state: TournamentState) {
+  const status =
+    state.lifecycle === 'finalized'
+      ? 'complete'
+      : state.lifecycle === 'cancelled'
+        ? 'cancelled'
+        : 'underway';
+  return { status, softLockedAt: new Date(state.baseline!.capturedAt).toISOString() } as const;
 }
 
 export async function eventView(
@@ -205,7 +204,6 @@ export async function eventView(
 ): Promise<EventSnapshot> {
   const baseline = state.baseline!;
   const planId = baseline.planId;
-  const { status, softLockedAt } = livePlanFields(state);
   const allPlayers = await db.select().from(players);
   const names = publicEntrantNames(allPlayers, state.entrants);
   const ids = state.entrants.flatMap(memberIds);
@@ -217,10 +215,9 @@ export async function eventView(
         .orderBy(asc(playerCharacters.position))
     : [];
   const placedIds = new Set(state.pools.flatMap(({ order }) => order ?? []));
-  const mains = new Map<string, string>();
-  for (const row of characters)
-    if (!mains.has(row.playerId)) mains.set(row.playerId, row.characterSlug);
   const rows = matchRows(state);
+  const picks = await nativeCharacterEvidence(db, state);
+  const eventCharacters = leadingCharacters(picks.values());
   const reviewableMatches = new Set<string>();
   const qualificationWaits = new Set<string>();
   if (privateView) {
@@ -293,12 +290,11 @@ export async function eventView(
       drawPaused: state.lifecycle === 'unlocked',
       name: baseline.name,
       eventDate: new Date(baseline.eventDate).toISOString(),
-      status,
+      ...livePlanFields(state),
       bracketMode: 'native',
       competitionFormat: baseline.competitionFormat ?? 'singles',
       structure: baseline.structure ?? 'dual_division',
       structureOptions: baseline.structureOptions,
-      softLockedAt,
       historicalResultsSlug: null,
       resultsSlug:
         historical.find(
@@ -312,6 +308,7 @@ export async function eventView(
       slug: t.challongeSlug,
     })),
     settings: publicSettings(state),
+    ...(picks.size && { charactersPlayed: Object.fromEntries(picks) }),
     matches: rows.map((m) => ({
       ...m,
       ...(reviewableMatches.has(m.id) ? { reviewPoolGames: true as const } : {}),
@@ -383,7 +380,10 @@ export async function eventView(
           teamName: e.teamName ?? null,
           members: memberIds(e).map((id) => ({
             name: names.get(id) ?? 'Player',
-            character: mains.get(id) ?? null,
+            character:
+              eventCharacters.get(id)?.character ??
+              characters.find((row) => row.playerId === id)?.characterSlug ??
+              null,
           })),
         } satisfies ResultGraphicIdentity,
       }),

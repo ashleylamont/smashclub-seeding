@@ -11,3 +11,4 @@ export type {
 export * from './eventOperations';
 export * from './nativeLive';
 export * from './recapRankings';
+export * from './characterReports';

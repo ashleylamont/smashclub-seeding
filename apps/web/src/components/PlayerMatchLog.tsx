@@ -1,8 +1,11 @@
 import { useRef } from 'react';
 import { Link } from '@tanstack/react-router';
-import type { PlayerMatchLogEntry } from '../lib/apiTypes';
+import type { PlayerData, PlayerMatchLogEntry } from '../lib/apiTypes';
 import { formatDate } from '../lib/format';
 import { useWhrResultImpacts, type WhrResultImpact } from '../lib/useWhrResultImpacts';
+import { useCharacterReporter } from '../lib/useCharacterReporter';
+import { PlayedCharacterReport } from './PlayedCharacterReport';
+import { ReportedCharacters } from './ReportedCharacters';
 
 const unavailableLabel = {
   stale_run: 'Refresh profile',
@@ -104,11 +107,14 @@ export function PlayerMatchLog({
   events,
   playerId,
   recomputeId,
+  characterSets,
 }: {
   events: readonly PlayerMatchLogEntry[];
   playerId: string;
   recomputeId?: string | null;
+  characterSets?: PlayerData['characterSets'];
 }) {
+  const reporter = useCharacterReporter();
   const body = useRef<HTMLTableSectionElement>(null);
   const { results, activeSetId, runFailure } = useWhrResultImpacts({
     body,
@@ -143,6 +149,20 @@ export function PlayerMatchLog({
               : !event.isDecay && event.won != null;
             const setId = recomputeId && rated ? event.setId : null;
             const impact = setId ? (runImpact ?? results?.get(setId)) : undefined;
+            const characterSet = event.setId ? characterSets?.[event.setId] : undefined;
+            const characters = characterSet && (
+              <div className="match-log-characters">
+                <ReportedCharacters picks={characterSet.picks} players={characterSet.players} />
+                {event.setId &&
+                  characterSet.players.some(({ id }) => reporter.playerIds.has(id)) && (
+                    <PlayedCharacterReport
+                      key={reporter.identity}
+                      target={{ kind: 'archive', setId: event.setId }}
+                      players={characterSet.players}
+                    />
+                  )}
+              </div>
+            );
             if (doubles) {
               return (
                 <tr
@@ -171,8 +191,11 @@ export function PlayerMatchLog({
                   <td>{event.resultStage === 'group' ? 'Pool' : 'Bracket'}</td>
                   <td>{event.opponentName}</td>
                   <td className={event.won ? 'result-win' : 'result-loss'}>
-                    {event.won ? 'W' : 'L'}
-                    {event.forfeit ? ' · Forfeit' : event.score ? ` · ${event.score}` : ''}
+                    <span>
+                      {event.won ? 'W' : 'L'}
+                      {event.forfeit ? ' · Forfeit' : event.score ? ` · ${event.score}` : ''}
+                    </span>
+                    {characters}
                   </td>
                   <Evidence weight={event.ratingWeight} impact={impact} />
                 </tr>
@@ -209,8 +232,11 @@ export function PlayerMatchLog({
                     event.isDecay ? 'result-decay' : event.won ? 'result-win' : 'result-loss'
                   }
                 >
-                  {event.isDecay ? '—' : event.won ? 'W' : 'L'}
-                  {!event.isDecay && event.score && ` · ${event.score}`}
+                  <span>
+                    {event.isDecay ? '—' : event.won ? 'W' : 'L'}
+                    {!event.isDecay && event.score && ` · ${event.score}`}
+                  </span>
+                  {characters}
                 </td>
                 <Evidence weight={event.weight} impact={impact} />
               </tr>

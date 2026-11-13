@@ -253,6 +253,13 @@
       "when": 1794477860444,
       "tag": "0035_score_report_character_picks",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1794604552446,
+      "tag": "0036_set_character_reports",
+      "breakpoints": true
     }
   ]
 }

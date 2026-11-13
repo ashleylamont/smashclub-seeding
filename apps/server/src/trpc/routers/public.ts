@@ -26,6 +26,7 @@ import { rankRecapHighlights } from '../../recap/highlightRanking';
 import { loadRecap } from '../../recap/recap';
 import { loadEventOverview } from '../../events/overview';
 import { nativeHistory } from '../../events/nativeHistory';
+import { archiveCharacterEvidence } from '../../events/archivedCharacters';
 import { legacyNativeArchiveLabels } from '../../events/legacyNativeArchiveLabels';
 import { headToHeadInput, readHeadToHead } from '../../events/headToHead';
 import { publicProcedure, router } from '../trpc';
@@ -292,6 +293,17 @@ export const publicRouter = router({
       .where(and(eq(playerClaims.playerId, input.playerId), eq(playerClaims.status, 'approved')));
 
     const doubles = await playerDoublesHistory(ctx.db, input.playerId);
+    const setIds = [
+      ...new Set([
+        ...events.flatMap(({ setId }) => (typeof setId === 'string' ? [setId] : [])),
+        ...doubles.matches.map(({ setId }) => setId),
+      ]),
+    ];
+    const characterSets = await archiveCharacterEvidence(
+      ctx.db,
+      setIds.length ? await ctx.db.select().from(sets).where(inArray(sets.id, setIds)) : [],
+      ctx.nativeRuntime,
+    );
     return {
       player: {
         id: player.id,
@@ -305,6 +317,7 @@ export const publicRouter = router({
       recomputeId,
       events,
       nights,
+      characterSets: characterSets.size ? Object.fromEntries(characterSets) : undefined,
       model: 'whr' as const,
       ratingScope: 'night' as const,
       doublesResults: doubles.results,
@@ -432,6 +445,7 @@ export const publicRouter = router({
         // *creation* order: the whole winners side, then the whole losers side.
         .orderBy(asc(sets.suggestedPlayOrder), asc(sets.completedAt), asc(sets.challongeMatchId));
       const archiveLabels = await legacyNativeArchiveLabels(ctx.db, tournament, setRows);
+      const characterSets = await archiveCharacterEvidence(ctx.db, setRows, ctx.nativeRuntime);
 
       return {
         id: tournament.id,
@@ -499,6 +513,7 @@ export const publicRouter = router({
             p2Name: row.p2ParticipantId ? (participantName.get(row.p2ParticipantId) ?? null) : null,
             p1PlayerId: row.p1PlayerId,
             p2PlayerId: row.p2PlayerId,
+            charactersPlayed: characterSets.get(row.id),
           };
         }),
       };
@@ -507,7 +522,7 @@ export const publicRouter = router({
   eventOverview: publicProcedure
     .input(z.object({ slug: z.string() }))
     .query(async ({ ctx, input }) => {
-      return loadEventOverview(ctx.db, input.slug);
+      return loadEventOverview(ctx.db, input.slug, ctx.nativeRuntime);
     }),
 
   /**
@@ -516,7 +531,7 @@ export const publicRouter = router({
    * shared out of the club.
    */
   recap: publicProcedure.input(z.object({ slug: z.string() })).query(async ({ ctx, input }) => {
-    const recap = await loadRecap(ctx.db, input.slug);
+    const recap = await loadRecap(ctx.db, input.slug, ctx.nativeRuntime);
     const key = ctx.env.JEV_RECAP_RANKING_ENABLED ? ctx.env.TYPESAFE_API_KEY : undefined;
     return recap && key ? rankRecapHighlights(ctx.db, recap, key) : recap;
   }),

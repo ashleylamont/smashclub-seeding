@@ -9,6 +9,7 @@ import {
   nativeResultPublications,
   nativeRatingIntents,
   tournaments,
+  sets,
   players,
   user,
 } from '@smashclub/db';
@@ -26,6 +27,8 @@ import {
 } from '../src/tournament/runtime';
 import { processNativeRatingIntents, publishNativeResult } from '../src/tournament/publication';
 import { nativeEventHistory } from '../src/tournament/history';
+import { reportPlayedCharacters } from '../src/players/reportPlayedCharacters';
+import { archiveCharacterEvidence } from '../src/events/archivedCharacters';
 import { attendancePreview } from '../src/tournament/attendance';
 import type {
   TournamentCommand,
@@ -601,6 +604,19 @@ describe('native Act-PG integration on isolated PostgreSQL', () => {
       'Results sealed',
     ]);
     expect(history.entries[0]!.details).toEqual(live.publication);
+    const archive = await cluster.db
+      .select()
+      .from(sets)
+      .where(eq(sets.tournamentId, live.publication!.tournamentIds[0]!));
+    const played = archive.find((row) => row.p1PlayerId && row.p2PlayerId && row.scoresCsv)!;
+    const picks = [{ playerId: played.p1PlayerId!, characters: ['fox'] }];
+    await reportPlayedCharacters(cluster.db, nativeAdmin, b, {
+      target: { kind: 'archive', setId: played.id },
+      picks,
+    });
+    const archivePicks = await archiveCharacterEvidence(cluster.db, [played], b);
+    expect(archivePicks.get(played.id)?.picks).toEqual(picks);
+    expect(await state(b, planId)).toEqual(live);
     const raw = await cluster.pool.query(
       'select name, count(*)::int as n from native_act.events where stream=$1 group by name',
       [nativeStream(planId)],

@@ -491,6 +491,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
             playerId={player.id}
             recomputeId={recomputeId}
             events={tableEvents}
+            characterSets={data.characterSets}
           />
         )}
       </section>

@@ -129,6 +129,7 @@ function publicPlayer(id = PLAYER_ID, verified = false): PlayerData {
     ratingScope: 'night',
     doublesResults: [],
     doublesMatches: [],
+    characterSets: undefined,
   };
 }
 

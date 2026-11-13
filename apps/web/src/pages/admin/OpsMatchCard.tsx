@@ -27,7 +27,11 @@ export function MatchCard({
   callDesk,
 }: {
   match: Match;
-  missingMains?: { playerId: string; name: string }[];
+  missingMains?: {
+    playerId: string;
+    name: string;
+    suggestion?: { character: string; sets: number };
+  }[];
   stations: Overview['stations'];
   disabled: boolean;
   canStart: boolean;

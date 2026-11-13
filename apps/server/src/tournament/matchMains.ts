@@ -7,6 +7,8 @@ import { charactersForPlayer } from '../players/characters';
 import { matchMemberIds } from './entrants';
 import { sharedDispatch } from './dispatch';
 import type { Match, TournamentState } from './schemas';
+import { leadingCharacters } from '../players/characterEvidence';
+import type { SetCharacterPick } from '@smashclub/shared';
 
 function canConfirmMatchMain(state: TournamentState, match: Match) {
   return (
@@ -18,7 +20,11 @@ function canConfirmMatchMain(state: TournamentState, match: Match) {
   );
 }
 
-export async function missingMainsByMatch(db: Db, state: TournamentState) {
+export async function missingMainsByMatch(
+  db: Db,
+  state: TournamentState,
+  evidence: Iterable<SetCharacterPick[]>,
+) {
   const playing = state.matches
     .filter((match) => canConfirmMatchMain(state, match))
     .map((match) => ({ id: match.id, memberIds: matchMemberIds(state, match) }));
@@ -43,12 +49,14 @@ export async function missingMainsByMatch(db: Db, state: TournamentState) {
         ),
       ),
     );
+  const suggestions = leadingCharacters(evidence, 2);
   const candidates = new Map(
     profiles.map((profile) => [
       profile.id,
       {
         playerId: profile.id,
         name: publicPlayerName(profile),
+        suggestion: suggestions.get(profile.id),
       },
     ]),
   );

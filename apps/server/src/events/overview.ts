@@ -12,6 +12,8 @@ import {
 import { eventKeyOf } from '@smashclub/engine';
 import { nativeHistory } from './nativeHistory';
 import { hasSupersededAdvancement } from '../tournament/resultEvidence';
+import type { NativeRuntime } from '../tournament/runtime';
+import { archiveCharacterEvidence, archiveCharacterLeaders } from './archivedCharacters';
 import {
   compareEventBrackets,
   eventCanonicalSlug,
@@ -76,7 +78,11 @@ const validResult = (s: StoredSet) =>
   s.p1ParticipantId !== s.p2ParticipantId;
 
 /** Explicit plan membership first; historical unlinked brackets fall back to event date. */
-export async function loadEventOverview(db: Db, slug: string): Promise<EventOverview | null> {
+export async function loadEventOverview(
+  db: Db,
+  slug: string,
+  runtime?: NativeRuntime,
+): Promise<EventOverview | null> {
   const [anchor] = await db.select().from(tournaments).where(eq(tournaments.challongeSlug, slug));
   if (!anchor) return null;
   const memberships = await db
@@ -148,8 +154,15 @@ export async function loadEventOverview(db: Db, slug: string): Promise<EventOver
     .leftJoin(players, eq(tournamentParticipants.playerId, players.id))
     .leftJoin(companies, eq(players.companyId, companies.id))
     .where(inArray(tournamentParticipants.tournamentId, ids));
-  const participantPresentation = await publicParticipantPresentation(db, participants, true);
   const setRows = await db.select().from(sets).where(inArray(sets.tournamentId, ids));
+  const evidence = await archiveCharacterEvidence(db, setRows, runtime);
+  const eventCharacters = archiveCharacterLeaders(evidence.values());
+  const participantPresentation = await publicParticipantPresentation(
+    db,
+    participants,
+    true,
+    eventCharacters,
+  );
   const warnings: string[] =
     anchorPlanIds.size > 1
       ? ['This bracket belongs to conflicting event plans; only its own results are shown.']

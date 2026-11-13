@@ -123,6 +123,15 @@ async function mockProfile(
       })),
     doublesResults: [] as PlayerData['doublesResults'],
     doublesMatches,
+    characterSets: {
+      [setIds[0]!]: {
+        key: setIds[0]!,
+        players: [
+          { id: playerId, name: 'Returning Player With An Exceptionally Long Tournament Alias' },
+        ],
+        picks: [{ playerId, characters: ['fox', 'falco'] }],
+      },
+    },
   };
   for (const [index, doubles] of doublesMatches.entries())
     profile.events.push({
@@ -195,6 +204,9 @@ for (const theme of ['dark', 'light'] as const) {
       await expect(breakdown).toContainText('+57.4');
       await expect(breakdown).toContainText('120 → 0');
       await expect(page.getByRole('heading', { name: 'Match log (2 sets)' })).toBeVisible();
+      const reported = page.getByRole('list', { name: 'Reported characters' });
+      await expect(reported).toContainText('Fox, Falco');
+      await expect(page.getByRole('button', { name: 'Report characters played' })).toHaveCount(0);
       await ready(page);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
       expect(overflow).toBe(0);
@@ -202,6 +214,10 @@ for (const theme of ['dark', 'light'] as const) {
         (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
       ).toEqual([]);
       await page.screenshot({ path: testInfo.outputPath('night-return.png'), fullPage: true });
+      await reported.evaluate((element) => element.scrollIntoView({ inline: 'nearest' }));
+      await page.getByRole('region', { name: 'Match results' }).screenshot({
+        path: testInfo.outputPath('match-log-characters.png'),
+      });
 
       const picker = breakdown.getByRole('combobox', { name: 'Rating night' });
       await picker.focus();
