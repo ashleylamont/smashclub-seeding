@@ -151,7 +151,7 @@ export function PlayerMatchLog({
             const impact = setId ? (runImpact ?? results?.get(setId)) : undefined;
             const characterSet = event.setId ? characterSets?.[event.setId] : undefined;
             const characters = characterSet && (
-              <>
+              <div className="match-log-characters">
                 <ReportedCharacters picks={characterSet.picks} players={characterSet.players} />
                 {event.setId &&
                   characterSet.players.some(({ id }) => reporter.playerIds.has(id)) && (
@@ -161,7 +161,7 @@ export function PlayerMatchLog({
                       players={characterSet.players}
                     />
                   )}
-              </>
+              </div>
             );
             if (doubles) {
               return (
