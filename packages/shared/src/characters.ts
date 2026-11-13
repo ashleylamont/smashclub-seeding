@@ -23,6 +23,13 @@ export interface Character {
   aka?: string[];
 }
 
+export const MAX_CHARACTERS_PER_SET_PLAYER = 5;
+
+export interface SetCharacterPick {
+  playerId: string;
+  characters: string[];
+}
+
 /**
  * Roster order follows the in-game fighter numbering, so the picker reads the
  * way the character select screen does rather than alphabetically — players

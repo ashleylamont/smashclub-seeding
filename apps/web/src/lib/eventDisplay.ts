@@ -23,6 +23,8 @@ export interface LiveMatch {
   player2Name: string | null;
   player1Id: string | null;
   player2Id: string | null;
+  player1MemberIds?: string[];
+  player2MemberIds?: string[];
   score1: number | null;
   score2: number | null;
   winnerId: string | null;

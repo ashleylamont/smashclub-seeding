@@ -199,9 +199,21 @@ describe('guest reporting', () => {
     expect(JSON.stringify(await db.select().from(eventGuestSessions))).not.toContain(
       guest.sessionToken,
     );
-    const report = await submitGuest(db, input(guest.sessionToken), now);
+    const score = {
+      ...input(guest.sessionToken),
+      characterPicks: [{ playerId: match.player1Id!, characters: ['mario', 'dr-mario'] }],
+    };
+    const report = await submitGuest(db, score, now);
+    expect(await submitGuest(db, score, now)).toEqual(report);
+    await expect(
+      submitGuest(db, { ...score, characterPicks: undefined }, now),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
     const [saved] = await db.select().from(eventScoreReports);
-    expect(saved).toMatchObject({ userId: null, status: 'pending' });
+    expect(saved).toMatchObject({
+      userId: null,
+      status: 'pending',
+      characterPicks: score.characterPicks,
+    });
     expect(saved!.guestSessionId).toBeTruthy();
     expect(await db.select().from(eventMatchAudit)).toHaveLength(0);
     expect(
@@ -210,7 +222,7 @@ describe('guest reporting', () => {
     ).toBeNull();
     expect(
       (await guestMatches(db, { planId, sessionToken: guest.sessionToken }, now)).reports,
-    ).toHaveLength(1);
+    ).toMatchObject([{ id: report.reportId, characterPicks: score.characterPicks }]);
     await reviewReport(db, admin, report.reportId, true);
     expect(
       (await db.select().from(eventMatches).where(eq(eventMatches.id, match.id)))[0],
@@ -219,7 +231,7 @@ describe('guest reporting', () => {
       (await db.select().from(eventMatches).where(eq(eventMatches.id, match.id)))[0]!
         .resultUpdatedAt,
     ).toBeInstanceOf(Date);
-    expect((await submitGuest(db, input(guest.sessionToken), now)).status).toBe('approved');
+    expect((await submitGuest(db, score, now)).status).toBe('approved');
   });
   it('keeps guest reports private to their session, prevents duplicate pending and request reuse', async () => {
     await enable();

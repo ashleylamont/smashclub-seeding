@@ -206,6 +206,7 @@ export function PlayerHubMatches({
               onSubmit={(input) => submitScore(match.id, input)}
               approvalPolicy={!closed && playOpen ? scoreApprovalPolicy(data, match) : 'review'}
               match={match}
+              memberNames={data.memberNames}
               nextMatch={closed ? undefined : nextMeaningfulMatch(data.matches, match)}
               report={ownReports?.find((report) => report.matchId === match.id)}
               recordedOnly={closed}

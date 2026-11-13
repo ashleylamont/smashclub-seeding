@@ -2,6 +2,7 @@ import { structureOptionsSchema, tournamentStructureSchema } from '@smashclub/sh
 import { z } from 'zod';
 import { Retirement } from './recoverySchema';
 import { additionalCommands } from './commands';
+import { setCharacterPicksSchema } from '../players/setCharacterPicks';
 
 const id = z.uuid();
 const revision = z.number().int().nonnegative();
@@ -234,6 +235,7 @@ export const Report = z.object({
   score1: revision.nullable(),
   score2: revision.nullable(),
   winnerId: id,
+  characterPicks: setCharacterPicksSchema,
   outcome: z.enum(['played', 'forfeit', 'bye']),
   status: z.enum(['pending', 'approved', 'rejected']),
   autoApproved: z.boolean(),
@@ -331,6 +333,7 @@ export const Command = z.discriminatedUnion('kind', [
     expectedRevision: revision,
     score1: revision.max(5).nullable(),
     score2: revision.max(5).nullable(),
+    characterPicks: setCharacterPicksSchema,
     winnerId: id.optional(),
     outcome: z.enum(['played', 'forfeit']),
     poolGameCorrectionToken: z.string().length(64).optional(),

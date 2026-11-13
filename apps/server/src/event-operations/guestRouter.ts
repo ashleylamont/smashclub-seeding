@@ -1,6 +1,7 @@
 import { nativeEvent, nativeTransport, reportViews } from '../tournament/api';
 import { hash } from '../tournament/facts';
 import { startPoolMatch } from './selfService';
+import { setCharacterPicksSchema } from '../players/setCharacterPicks';
 import { z } from 'zod';
 import { authedProcedure, publicProcedure, router } from '../trpc/trpc';
 import {
@@ -114,6 +115,7 @@ export const guestRouter = router({
         requestId: z.string().min(1).max(100),
         score1: z.number().int().min(0).max(5),
         score2: z.number().int().min(0).max(5),
+        characterPicks: setCharacterPicksSchema,
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -138,6 +140,7 @@ export const guestRouter = router({
               expectedRevision: input.expectedRevision,
               score1: input.score1,
               score2: input.score2,
+              ...(input.characterPicks && { characterPicks: input.characterPicks }),
               outcome: 'played',
             },
             undefined,

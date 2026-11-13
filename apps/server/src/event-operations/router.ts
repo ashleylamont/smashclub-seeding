@@ -13,6 +13,7 @@ import { nativeLiveRouter } from '../tournament/router';
 import { startPoolMatch } from './selfService';
 import { nativeBracketRouter } from './nativeRouter';
 import { guestRouter } from './guestRouter';
+import { setCharacterPicksSchema } from '../players/setCharacterPicks';
 import { eventDeliveryRouter } from './deliveryRouter';
 import { sourceRefreshRouter } from './sourceRefreshRouter';
 import { z } from 'zod';
@@ -363,6 +364,7 @@ export const eventOpsRouter = router({
         requestId: z.string().min(1).max(100),
         score1: z.number().int().min(0).max(99),
         score2: z.number().int().min(0).max(99),
+        characterPicks: setCharacterPicksSchema,
         outcome: z.enum(['played', 'bye', 'forfeit']),
         winnerId: z.string().uuid().optional(),
       }),

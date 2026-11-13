@@ -122,3 +122,18 @@ export type MemberView = {
   availability: 'available' | 'snoozed';
   revision: number;
 };
+
+export function eventMemberViews(
+  entrants: readonly Entrant[],
+  names: ReadonlyMap<string, string>,
+): MemberView[] {
+  return entrants.flatMap((entrant) =>
+    memberIds(entrant).map((id) => ({
+      entrantId: entrant.playerId,
+      playerId: id,
+      name: names.get(id) ?? 'Player',
+      availability: entrant.memberAvailability?.[id] ?? 'available',
+      revision: entrant.revision,
+    })),
+  );
+}

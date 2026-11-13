@@ -8,7 +8,63 @@ import {
   type Db,
 } from '@smashclub/db';
 import { canAutoAcceptPoolScore } from './poolScorePolicy';
-import type { ScoreInput } from './service';
+import type { SetCharacterPick } from '@smashclub/shared';
+import { validSetCharacterParticipants } from '../players/setCharacterPicks';
+
+const badScore = (message: string): never => {
+  throw new TRPCError({ code: 'BAD_REQUEST', message });
+};
+
+export interface ScoreInput {
+  matchId: string;
+  expectedRevision: number;
+  requestId: string;
+  score1: number;
+  score2: number;
+  outcome: 'played' | 'bye' | 'forfeit';
+  winnerId?: string;
+  characterPicks?: SetCharacterPick[];
+}
+export function validateScore(
+  match: {
+    player1Id: string | null;
+    player2Id: string | null;
+  },
+  input: ScoreInput,
+) {
+  if (
+    !validSetCharacterParticipants(
+      input.characterPicks,
+      [match.player1Id, match.player2Id],
+      input.outcome,
+    )
+  )
+    badScore('Choose fighters for players in the played set.');
+  if (input.outcome === 'played' && (input.score1 > 5 || input.score2 > 5))
+    badScore('A played score cannot use a bye sentinel. Select a forfeit or bye outcome.');
+  if (
+    input.outcome === 'played' &&
+    (!match.player1Id || !match.player2Id || input.score1 === input.score2)
+  )
+    badScore('Played matches need two players and a decisive score.');
+  if (input.outcome === 'bye' && Boolean(match.player1Id) === Boolean(match.player2Id))
+    badScore('A bye must have exactly one player.');
+  const winner =
+    input.winnerId ??
+    (input.score1 > input.score2
+      ? match.player1Id
+      : input.score2 > input.score1
+        ? match.player2Id
+        : null);
+  if (!winner || ![match.player1Id, match.player2Id].includes(winner))
+    return badScore('Select a participating winner.');
+  if (
+    input.outcome === 'played' &&
+    winner !== (input.score1 > input.score2 ? match.player1Id : match.player2Id)
+  )
+    badScore('Winner disagrees with score.');
+  return winner;
+}
 
 type Match = typeof eventMatches.$inferSelect;
 const changed = (): never => {

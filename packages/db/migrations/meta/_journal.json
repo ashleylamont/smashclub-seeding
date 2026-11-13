@@ -246,6 +246,13 @@
       "when": 1794347313918,
       "tag": "0034_recap_highlight_rankings",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1794477860444,
+      "tag": "0035_score_report_character_picks",
+      "breakpoints": true
     }
   ]
 }

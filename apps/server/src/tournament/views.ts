@@ -27,7 +27,13 @@ import {
   seedPoolFinishers,
   poolLabel,
 } from '@smashclub/tournament-formats';
-import { available, livePairNameRevision, memberIds, publicEntrantNames } from './entrants';
+import {
+  available,
+  eventMemberViews,
+  livePairNameRevision,
+  memberIds,
+  publicEntrantNames,
+} from './entrants';
 import { asc, inArray } from 'drizzle-orm';
 import { players, playerCharacters, tournaments, type Db, type eventMatches } from '@smashclub/db';
 import { publicPlayerName } from '@smashclub/shared';
@@ -52,6 +58,7 @@ export type EventSnapshot = Omit<
   'placements' | 'matches' | 'nativeBrackets' | 'publicCode' | 'twitchBroadcast'
 > & {
   publicCode?: number;
+  memberNames?: Record<string, string>;
   broadcastSides?: TournamentState['broadcastSides'];
   supersededPlayedSets?: ReturnType<typeof supersededPlayedSetViews>;
   matches: (SqlSnapshot['matches'][number] &
@@ -271,17 +278,12 @@ export async function eventView(
           overCapacity: Math.max(0, ordinaryUsage(state) - state.settings.capacity),
         }
       : null,
+    ...(baseline.competitionFormat === 'doubles' && {
+      memberNames: Object.fromEntries(ids.map((id) => [id, names.get(id) ?? 'Player'])),
+    }),
     members:
       (!sharedDispatch(state) || privateView) && state.baseline?.competitionFormat === 'doubles'
-        ? state.entrants.flatMap((e) =>
-            memberIds(e).map((id) => ({
-              entrantId: e.playerId,
-              playerId: id,
-              name: names.get(id) ?? 'Player',
-              availability: e.memberAvailability?.[id] ?? 'available',
-              revision: e.revision,
-            })),
-          )
+        ? eventMemberViews(state.entrants, names)
         : undefined,
     nativeBrackets: bracketViews(state),
     pendingFinals: pendingStrengthFinals(state),

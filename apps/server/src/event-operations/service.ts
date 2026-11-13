@@ -2,7 +2,12 @@ import type { Match as NativeMatch } from '../tournament/schemas';
 import { compareImportedResult, importedOutcome, remoteValues } from './sourceResult';
 import type { dispatchDesk, SharedDispatchSummary } from '../tournament/dispatch';
 import type { MemberView } from '../tournament/entrants';
-import { attendeeScoreDecision, samePlayedScore } from './scorePolicy';
+import {
+  attendeeScoreDecision,
+  samePlayedScore,
+  validateScore,
+  type ScoreInput,
+} from './scorePolicy';
 import { loadStationQueues } from './queue';
 import {
   advanceNativeBrackets,
@@ -33,6 +38,7 @@ import {
   type Db,
 } from '@smashclub/db';
 import { publicPlayerName } from '@smashclub/shared';
+import { sameSetCharacterPicks } from '../players/setCharacterPicks';
 import type { ResultGraphicIdentity } from '../events/participantNames';
 import type { SessionUser } from '../auth';
 import { getPlan, type PlanView } from '../event-planner/plans';
@@ -542,50 +548,6 @@ export async function prepare(db: Db, planId: string) {
     };
   });
 }
-export interface ScoreInput {
-  matchId: string;
-  expectedRevision: number;
-  requestId: string;
-  score1: number;
-  score2: number;
-  outcome: 'played' | 'bye' | 'forfeit';
-  winnerId?: string;
-}
-export function validateScore(
-  match: {
-    player1Id: string | null;
-    player2Id: string | null;
-  },
-  input: ScoreInput,
-) {
-  if (input.outcome === 'played' && (input.score1 > 5 || input.score2 > 5))
-    fail(
-      'BAD_REQUEST',
-      'A played score cannot use a bye sentinel. Select a forfeit or bye outcome.',
-    );
-  if (
-    input.outcome === 'played' &&
-    (!match.player1Id || !match.player2Id || input.score1 === input.score2)
-  )
-    fail('BAD_REQUEST', 'Played matches need two players and a decisive score.');
-  if (input.outcome === 'bye' && Boolean(match.player1Id) === Boolean(match.player2Id))
-    fail('BAD_REQUEST', 'A bye must have exactly one player.');
-  const winner =
-    input.winnerId ??
-    (input.score1 > input.score2
-      ? match.player1Id
-      : input.score2 > input.score1
-        ? match.player2Id
-        : null);
-  if (!winner || ![match.player1Id, match.player2Id].includes(winner))
-    return fail('BAD_REQUEST', 'Select a participating winner.');
-  if (
-    input.outcome === 'played' &&
-    winner !== (input.score1 > input.score2 ? match.player1Id : match.player2Id)
-  )
-    fail('BAD_REQUEST', 'Winner disagrees with score.');
-  return winner;
-}
 async function matchForUpdate(db: Db, id: string) {
   const [match] = await db.select().from(eventMatches).where(eq(eventMatches.id, id));
   if (!match) return fail('NOT_FOUND', 'Match not found.');
@@ -596,7 +558,7 @@ async function matchForUpdate(db: Db, id: string) {
 export async function applyScore(
   db: Db,
   match: typeof eventMatches.$inferSelect,
-  input: ScoreInput,
+  input: Pick<ScoreInput, 'expectedRevision' | 'score1' | 'score2' | 'outcome'>,
   winnerId: string,
   actor: string | null,
   guestSessionId: string | null = null,
@@ -686,6 +648,7 @@ export async function reportScore(db: Db, user: SessionUser, input: ScoreInput) 
         (prior.submittedRevision ?? prior.expectedRevision) !== input.expectedRevision ||
         prior.score1 !== input.score1 ||
         prior.score2 !== input.score2 ||
+        !sameSetCharacterPicks(prior.characterPicks, input.characterPicks) ||
         prior.outcome !== input.outcome ||
         (input.winnerId && input.winnerId !== prior.winnerId)
       )
