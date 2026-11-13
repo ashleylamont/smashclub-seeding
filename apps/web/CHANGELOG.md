@@ -2,6 +2,12 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.20.0
+
+### Minor Changes
+
+- 14 November 2026 · **Feature** · Report characters after a set from event or player match history. Character reports appear in histories, suggest missing mains for organisers to confirm, and supply defaults for event results graphics. [#388](https://github.com/ashleylamont/smashclub-seeding/pull/388) · [build a056d64](https://github.com/ashleylamont/smashclub-seeding/commit/a056d645379eb57927410626694aa37387ccd54e)
+
 ## 0.19.0
 
 ### Minor Changes
