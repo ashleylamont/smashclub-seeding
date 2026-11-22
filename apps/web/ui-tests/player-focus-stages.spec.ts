@@ -204,7 +204,7 @@ test('a removed player falls back to Everyone, reappears on polling, and respect
     'data-value',
     'mine',
   );
-  // The printed selection remains a preference until the attendee deliberately clears it.
+  // The printed selection stays active until the attendee deliberately chooses Everyone.
   fixture.snapshot.matches = withoutPlayer;
   await expect(page.getByLabel('Show matches for')).toHaveAttribute('data-value', '');
   await chooseOption(page.getByLabel('Show matches for'), '');
@@ -214,7 +214,7 @@ test('a removed player falls back to Everyone, reappears on polling, and respect
       (planId) => localStorage.getItem(`nemesis:player-filter:${planId}`),
       PLAN_ID,
     ),
-  ).toBeNull();
+  ).toBe('');
   fixture.snapshot.matches = originalMatches;
   await expect(page.locator('#event-pools .event-pool')).toHaveCount(
     new Set(
