@@ -72,6 +72,7 @@ export const LiveMatch = z.object({
   liveScore2: revision.nullable().default(null),
   progressRevision: revision.default(0),
   calledAt: z.number().nullable().optional(),
+  callSequence: revision.optional(),
   callLocation: z.string().max(100).nullable().optional(),
   readySince: z.number().optional(),
   held: z.boolean().optional(),

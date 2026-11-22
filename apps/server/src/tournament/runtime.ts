@@ -290,7 +290,7 @@ export function createNativeRuntime(
         : {}),
       matches: state.matches
         .filter((m) => !m.skipped)
-        .map((m) => ({
+        .map(({ callSequence: _callSequence, ...m }) => ({
           ...m,
           ...labels.get(m.id),
           player1Name: m.player1Id ? (names.get(m.player1Id) ?? 'Player') : 'TBD',

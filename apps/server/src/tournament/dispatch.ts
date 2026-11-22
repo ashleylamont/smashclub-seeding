@@ -8,6 +8,19 @@ export const sharedDispatch = (state: TournamentState) => state.settings.dispatc
 export const isReserved = (state: TournamentState, stationId: string | null) =>
   Boolean(stationId && state.settings.reservedStationIds?.includes(stationId));
 
+export function publicCallFact(state: TournamentState, match: Match) {
+  // Older journals and reservations may have no committed call stamp.
+  if (
+    sharedDispatch(state) &&
+    state.lifecycle === 'locked' &&
+    match.status === 'playing' &&
+    !match.started &&
+    match.calledAt != null &&
+    match.callSequence !== undefined
+  )
+    return { callSequence: match.callSequence };
+}
+
 export function ordinaryUsage(state: TournamentState) {
   return state.matches.filter((m) => m.status === 'playing' && !isReserved(state, m.stationId))
     .length;

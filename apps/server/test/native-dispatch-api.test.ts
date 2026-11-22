@@ -120,6 +120,7 @@ describe('shared dispatch through the application API', () => {
     const { planId, api } = await night();
     const before = await api.eventOps.overview({ planId });
     const match = before.matches.find((m) => m.status === 'ready')!;
+    expect(before.matches.find((m) => m.id === match.id)).not.toHaveProperty('callSequence');
     const request = {
       planId,
       requestId: 'call-at-window',
@@ -152,14 +153,18 @@ describe('shared dispatch through the application API', () => {
       outcome: 'played',
     });
     const board = await caller(null).eventOps.snapshot({ planId });
+    expect(board.callSnapshotVersion).toBeGreaterThan(first.receipt.sequence);
     expect(board.matches.find((m) => m.id === match.id)).toMatchObject({
       status: 'playing',
       started: false,
       called: true,
+      callSequence: first.receipt.sequence,
       callLocation: 'Window',
       stationId: null,
     });
     expect(board.sharedDispatch).toMatchObject({ active: 1, capacity: 2 });
+    const direct = await caller(null).eventOps.live.snapshot({ planId });
+    expect(direct.matches.find((m) => m.id === match.id)).not.toHaveProperty('callSequence');
     expect(
       (await api.eventOps.live.overview({ planId })).audit.filter((a) => a.kind === 'dispatch'),
     ).toHaveLength(1);
@@ -171,13 +176,47 @@ describe('shared dispatch through the application API', () => {
       status: 'ready',
       stationId: null,
     });
-    expect((await caller(null).eventOps.snapshot({ planId })).sharedDispatch!.active).toBe(0);
-    const state = await runtime.state(planId);
-    expect(state.matches.find((m) => m.id === match.id)).toMatchObject({
+    const returned = await caller(null).eventOps.snapshot({ planId });
+    expect(returned.sharedDispatch!.active).toBe(0);
+    expect(returned.matches.find((m) => m.id === match.id)).not.toHaveProperty('callSequence');
+    expect((await runtime.state(planId)).matches.find((m) => m.id === match.id)).toMatchObject({
       started: false,
       calledAt: null,
       callLocation: null,
     });
+    await api.eventOps.live.command(request);
+    expect(await caller(null).eventOps.snapshot({ planId })).toEqual(returned);
+
+    const nextCall = await api.eventOps.live.command({
+      ...request,
+      requestId: 'call-again-at-window',
+      command: {
+        ...request.command,
+        expectedRevision: returned.matches.find((m) => m.id === match.id)!.revision,
+      },
+    });
+    const recalled = await caller(null).eventOps.snapshot({ planId });
+    expect(recalled.matches.find((m) => m.id === match.id)?.callSequence).toBe(
+      nextCall.receipt.sequence,
+    );
+    expect(nextCall.receipt.sequence).toBeGreaterThan(first.receipt.sequence);
+    await api.eventOps.live.command({
+      planId,
+      requestId: 'start-recalled-match',
+      command: {
+        kind: 'beginPlay',
+        matchId: match.id,
+        expectedRevision: recalled.matches.find((m) => m.id === match.id)!.revision,
+        expectedResourceRevision: recalled.settings.resourceRevision,
+      },
+    });
+    const started = await caller(null).eventOps.snapshot({ planId });
+    expect(started.matches.find((m) => m.id === match.id)).toMatchObject({
+      started: true,
+      called: false,
+    });
+    expect(started.matches.find((m) => m.id === match.id)).not.toHaveProperty('callSequence');
+    const state = await runtime.state(planId);
     expect(await runtime.replay(planId)).toEqual(state);
   });
 
