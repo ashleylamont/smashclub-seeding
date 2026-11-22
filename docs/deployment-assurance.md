@@ -59,6 +59,61 @@ Publication supports main pushes, `vMAJOR.MINOR.PATCH` tags whose commits are on
 
 One publication job at a time writes tags. It reads current main after verification/loading, so an older run that finishes late cannot roll the main tag back over a newer commit. A newly pushed main commit is published after its own gates pass. Tag names should never be moved to a different commit. Main/version/dispatch decisions and failed/skipped/missing gate behavior have fast structural/policy tests in `test/ci/deployment-gates.test.ts`.
 
+## Native journal compatibility and rollback
+
+An image rollback is supported only when the target image can read **every persisted
+native event, embedded command and state field** in the database, and its SQL schema
+is compatible with the applied migrations. A lower application version or an unchanged
+`DecisionRecordedV1` event name does not establish that compatibility. For example,
+#366 added `renameDoublesPair` to the command union inside existing decision schemas;
+a pre-rename reader rejects that decision even though its top-level event version
+is unchanged (V2 in the regression fixture). New decision versions, legacy imports
+and sealed results can introduce other boundaries. Treat a new durable command as a rollback boundary unless the
+candidate older reader has been verified against it.
+
+Before deploying a release that adds durable facts:
+
+1. Record the running image's immutable full SHA tag or digest, the candidate image,
+   applied migration ledger and a restorable database backup. Keep the original
+   journal, handoffs, publication receipts and rating intents together. Test any
+   restore on an isolated database; CI does not prove your backup is restorable.
+2. Rehearse the candidate on an isolated copy using its normal migration and native
+   recovery startup path. Exercise the new command on synthetic events with recorded
+   play. Compare replayed scores, actual opponents, frozen seeds and audit history;
+   include sealed results/publication when that release affects them.
+3. If rollback must remain available after the new command, test the **specific older
+   image** against that updated copy, including full original-journal replay and
+   history reads. A healthy process or a successfully loaded checkpoint alone is
+   insufficient: checkpoints can bypass the unsupported historical decision. Do not
+   infer rollback support from the PR's green checks or the currently tested image.
+4. Use the single-replica `Recreate` deployment strategy. Do not run old and new
+   writers together. Once new facts have been written, retain a capable image as the
+   recovery candidate rather than automatically selecting the preceding version.
+
+If the older image rejects a stream, stop the failed rollout and retain the database.
+Redeploy the last image that understands all recorded facts, or ship a forward fix
+that retains those readers. Startup awaits `nativeRuntime.recover()` before opening
+the HTTP listener; verify recovery finishes, compare full replay/history with the
+retained evidence, and retry interrupted requests with their original IDs and payloads.
+This preserves the new decision and the earlier scores, seeds and audit record.
+
+Do not delete, rewrite, truncate, rename or silently skip unsupported journal rows,
+reset an event, or remove checkpoints as a normal rollback procedure. Those operations
+do not make an incompatible reader safe. Restoring an earlier backup loses later
+recorded play unless a separate, explicitly reviewed reconciliation plan preserves
+it; it is disaster recovery, not an ordinary image rollback. SQL down-migrations
+are likewise not implied by switching the image.
+
+The mandatory `doubles-postgres.test.ts` contract writes a real scored doubles
+stream, proves the command reader without `renameDoublesPair` accepts it before the
+rename and rejects the new embedded discriminator afterward, and checks that rejection
+changes no journal rows. A cold current runtime then runs production's recovery path,
+replays the original history and retries the rename without changing recorded scores,
+frozen baseline or journal rows. This isolates the pre-#366 schema boundary using
+Zod's real discriminated-union validation; it is not execution of a historical image,
+a Kubernetes rollback, or a database-backup rehearsal. Repeat the release-specific
+image/copy checks above before claiming an older image is supported.
+
 ## Scope and remaining integration
 
 Production's PostgreSQL major is not declared in this repository; 17 matches the available development runtime and is the tested deployment contract. Confirm the database operator's major before adopting the gate; test it explicitly if different. These checks do not test database backup restoration, real OAuth credentials, real external-provider outages, Kubernetes rollout or a second active replica.

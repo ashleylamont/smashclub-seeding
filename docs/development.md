@@ -91,6 +91,10 @@ Open <http://localhost:5173/login>, matching the example auth origin. The server
 
 Native event nights use Act-PG in the `native_act` schema by default. Startup imports existing native live/completed nights and recovers pending handoffs before accepting traffic. The normal pool lock establishes ownership for a new night; there is no adoption toggle. Once locked, use the event desk for attendance, resources, scores and pause/resume. Draft SQL editing stays frozen. Publication and rating recovery run durably in the background; the desk exposes publication status, recovery and reviewed result corrections. See [the native API notes](native-live-api.md) and read the [WHR-only migration guide](whr-only-migration.md) before upgrading an existing database.
 
+For image rollback and releases that add durable native commands, follow the
+[journal compatibility and recovery procedure](deployment-assurance.md#native-journal-compatibility-and-rollback).
+Switching to an older image does not by itself establish journal or SQL compatibility.
+
 ## Configuration
 
 The source of truth is [`apps/server/src/env.ts`](../apps/server/src/env.ts). Values relevant to setup are:
