@@ -35,6 +35,7 @@
   font-size: 22px;
 }
 .station-sign-page h1 {
+  color: inherit;
   margin: 0;
   font-size: 64px;
   line-height: 1.1;
@@ -52,6 +53,7 @@
   margin: 14px auto;
 }
 .station-sign-page h2 {
+  color: inherit;
   margin: 14px 0;
   font-size: 24px;
 }

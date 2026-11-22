@@ -13,6 +13,7 @@ Coverage includes:
 - TO desktop and phone destinations, preserved score drafts, refresh, station-to-match focus, cleared drafts when changing broadcast matches and axe accessibility checks. Shared-dispatch shortcut coverage checks focus and drafts in both themes, and keeps the score title and first field visible below sticky navigation in a 390 × 500 window.
 - Active and idle 1920×1080 OBS composition, transparent gameplay aperture and unclipped `Tech In Place` identity.
 - Phone bracket with a bye, unresolved dependency, uneven rounds and a long alias.
+- A4 print layout for a published pool floor sheet and a station sign, including readable paper headings and decoded QR destinations. Browser event flows separately check real PDF pagination and guest invitation redemption.
 
 CI runs screenshot comparisons on `macos-15` in **UI accessibility and visuals**, matching the committed Darwin snapshot suffix. Its `ui-review` artifact contains the HTML report, traces and expected, actual and difference images. **UI behavior and accessibility** runs the rest of the fixture suite in three Ubuntu shards. Each uploads its own HTML report, traces and diagnostic captures in `ui-portable-review-1`, `ui-portable-review-2`, or `ui-portable-review-3`. **All checks** requires all three shards and the Darwin job.
 
