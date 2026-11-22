@@ -18,6 +18,7 @@ import {
 import type { SessionUser } from '../auth';
 import { isOperator, requireOperator } from '../event-operations/access';
 import { NativeTournament } from './aggregate';
+import { isDecisionEvent } from './decisionEvents';
 import {
   Baseline,
   Command,
@@ -34,21 +35,6 @@ import { supersededPlayedSetViews } from './resultEvidence';
 import { captureBaseline, receiptKey, reduceDecision, TournamentConflict } from './domain';
 
 export const nativeStream = (planId: string) => `native:${planId}`;
-const isDecisionEvent = (name: string) =>
-  [
-    'DecisionRecordedV1',
-    'DecisionRecordedV2',
-    'DecisionRecordedV3',
-    'DecisionRecordedV4',
-    'DecisionRecordedV5',
-    'DecisionRecordedV6',
-    'DecisionRecordedV7',
-    'DecisionRecordedV8',
-    'DecisionRecordedV9',
-    'DecisionRecordedV10',
-    'ResultsSealedV1',
-    'PlanRetiredV1',
-  ].includes(name);
 const systemActor = { id: 'native-publication', name: 'Native publication worker' };
 
 async function replayNative(
@@ -56,26 +42,16 @@ async function replayNative(
 ) {
   let rebuilt = initialState();
   await query((event) => {
+    if (isDecisionEvent(event.name)) {
+      rebuilt = reduceDecision(rebuilt, Decision.parse(event.data));
+      return;
+    }
     switch (event.name) {
       case 'LegacyStateImportedV1':
         rebuilt = LiveState.parse(event.data);
         break;
       case 'BaselineCapturedV1':
         rebuilt = captureBaseline(Baseline.parse(event.data));
-        break;
-      case 'DecisionRecordedV1':
-      case 'DecisionRecordedV2':
-      case 'DecisionRecordedV3':
-      case 'DecisionRecordedV4':
-      case 'DecisionRecordedV5':
-      case 'DecisionRecordedV6':
-      case 'DecisionRecordedV7':
-      case 'DecisionRecordedV8':
-      case 'DecisionRecordedV9':
-      case 'DecisionRecordedV10':
-      case 'ResultsSealedV1':
-      case 'PlanRetiredV1':
-        rebuilt = reduceDecision(rebuilt, Decision.parse(event.data));
         break;
       case 'PublicationRecordedV1':
         rebuilt = {

@@ -9,6 +9,7 @@ import {
   type eventMatchAudit,
   type eventAttendanceAudit,
 } from '@smashclub/db';
+import { decisionEventNames, isDecisionEvent } from './decisionEvents';
 import { nativeStream, type NativeRuntime } from './runtime';
 import { Baseline, Decision, LiveState, type TournamentBaseline } from './schemas';
 import { describeDecision, type HistoryCategory, type HistoryContext } from './historySummary';
@@ -32,24 +33,10 @@ type ImportedAudit = {
   legacyAttendance?: (typeof eventAttendanceAudit.$inferSelect)[];
 };
 
-const decisionNames = [
-  'DecisionRecordedV1',
-  'DecisionRecordedV2',
-  'DecisionRecordedV3',
-  'DecisionRecordedV4',
-  'DecisionRecordedV5',
-  'DecisionRecordedV6',
-  'DecisionRecordedV7',
-  'DecisionRecordedV8',
-  'DecisionRecordedV9',
-  'DecisionRecordedV10',
-  'ResultsSealedV1',
-  'PlanRetiredV1',
-];
 const historyNames = [
   'BaselineCapturedV1',
   'LegacyStateImportedV1',
-  ...decisionNames,
+  ...decisionEventNames,
   'PublicationRecordedV1',
 ];
 const isOrigin = (name: string) =>
@@ -99,7 +86,7 @@ async function contextBefore(runtime: NativeRuntime, stream: string, before: num
     if (event.name === 'BaselineCapturedV1') context = baselineContext(Baseline.parse(event.data));
     else if (event.name === 'LegacyStateImportedV1')
       context = updateContext({}, LiveState.parse(event.data));
-    else if (decisionNames.includes(event.name))
+    else if (isDecisionEvent(event.name))
       context = updateContext(context, Decision.parse(event.data).after);
   }
   return context;
@@ -194,7 +181,7 @@ export async function nativeEventHistory(
       version: event.version,
       at: event.created.toISOString(),
     };
-    if (decisionNames.includes(event.name)) {
+    if (isDecisionEvent(event.name)) {
       const decision = Decision.parse(event.data);
       context = updateContext(context, decision.after);
       return {
