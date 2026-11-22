@@ -2,6 +2,16 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.21.1
+
+### Patch Changes
+
+- 22 November 2026 · **Fix** · Take players straight to their current or next match card from the progress panel. [#425](https://github.com/ashleylamont/smashclub-seeding/pull/425) · [build b4197a8](https://github.com/ashleylamont/smashclub-seeding/commit/b4197a86b11222f346fd04c0a257a3e84d595c7e)
+- 22 November 2026 · **Fix** · Show the assigned station or call location on shared match cards in Broadcast and Score / details. Use the shared queue to start a pairing at a station and the match card to return an untaken call or release capacity. [#434](https://github.com/ashleylamont/smashclub-seeding/pull/434) · [build 4cc7f78](https://github.com/ashleylamont/smashclub-seeding/commit/4cc7f788bb39d57ab8571016cd7d53cfb7812249)
+- 22 November 2026 · **Fix** · Keep your score draft when changing match filters and returning to the same pairing. [#413](https://github.com/ashleylamont/smashclub-seeding/pull/413) · [build 6fb0300](https://github.com/ashleylamont/smashclub-seeding/commit/6fb03002f087218c895454f1dbf01b526d51f7e2)
+- 22 November 2026 · **Maintenance** · Make browser checks for recovering a no-show call reliable when attendance requests share a batch. [#432](https://github.com/ashleylamont/smashclub-seeding/pull/432) · [build 8f0018d](https://github.com/ashleylamont/smashclub-seeding/commit/8f0018d2c59894d0c26144fe785ae6901343423d)
+- 22 November 2026 · **Improvement** · Copy the selected station’s OBS browser source directly from Broadcast, with confirmation beside the source and a manual fallback if clipboard access is unavailable. [#429](https://github.com/ashleylamont/smashclub-seeding/pull/429) · [build c4800d8](https://github.com/ashleylamont/smashclub-seeding/commit/c4800d821a00716e7828616e57e3e3f3ec01292e)
+
 ## 0.21.0
 
 ### Minor Changes
