@@ -745,10 +745,19 @@ describe('rating-derived facts', () => {
   const favourite = participant({ name: 'Bo' });
   const set = completedSet(underdog, favourite, 1, { round: 3 });
 
-  const result = buildRecap({
+  const input = {
     tournaments: [MAIN],
     participants: [underdog, favourite],
     sets: [set],
+    priorWhrEvidence: new Map([
+      [
+        MAIN.id,
+        new Map([
+          [underdog.playerId!, 'club'],
+          [favourite.playerId!, 'club'],
+        ]),
+      ],
+    ]),
     ratingEvents: [
       {
         playerId: underdog.playerId!,
@@ -773,7 +782,8 @@ describe('rating-derived facts', () => {
         postRd: 58,
       },
     ],
-  });
+  } satisfies RecapInput;
+  const result = buildRecap(input);
 
   it('score the upset by how unlikely it was', () => {
     const [upset] = factsOfKind(result, 'rating_upset');
@@ -781,6 +791,23 @@ describe('rating-derived facts', () => {
     expect(upset?.probability).toBeLessThan(0.2);
     expect(Math.round(upset!.ratingGap)).toBe(500);
   });
+
+  it('withholds odds when prior evidence is absent', () => {
+    expect(
+      factsOfKind(buildRecap({ ...input, priorWhrEvidence: undefined }), 'rating_upset'),
+    ).toEqual([]);
+  });
+
+  it.each([{ preRating: NaN }, { preRd: 0 }, { preRd: -1 }, { preRd: Infinity }])(
+    'withholds odds for an unusable estimate (%j)',
+    (estimate) => {
+      const result = buildRecap({
+        ...input,
+        ratingEvents: [{ ...input.ratingEvents[0]!, ...estimate }, input.ratingEvents[1]!],
+      });
+      expect(factsOfKind(result, 'rating_upset')).toEqual([]);
+    },
+  );
 
   it('report the biggest climb of the night', () => {
     const [climb] = factsOfKind(result, 'biggest_climb');
@@ -796,6 +823,15 @@ describe('rating-derived facts', () => {
       tournaments: [MAIN],
       participants: [a, b],
       sets: [even],
+      priorWhrEvidence: new Map([
+        [
+          MAIN.id,
+          new Map([
+            [a.playerId!, 'club'],
+            [b.playerId!, 'club'],
+          ]),
+        ],
+      ]),
       ratingEvents: [a, b].map((p, i) => ({
         playerId: p.playerId!,
         setId: even.id,

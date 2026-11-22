@@ -31,6 +31,7 @@ import {
 } from '@smashclub/shared';
 import { eventKeyOf } from './events';
 import { DISPLAY_CENTRE, NATURAL_TO_DISPLAY, probabilityFromRatings } from './whr';
+import { whrForecastUnavailable, type WhrPriorEvidence } from './whrForecast';
 
 // ---------------------------------------------------------------------------
 // Input
@@ -130,6 +131,8 @@ export interface RecapInput {
   /** May be empty — see the module note on optional ratings. */
   ratingEvents?: readonly RecapRatingEvent[];
   history?: RecapHistory;
+  /** Rated connections strictly before the WHR period for each bracket. */
+  priorWhrEvidence?: ReadonlyMap<string, WhrPriorEvidence>;
   /** Rank movement recorded by the recompute (already night-aware). */
   rankMovement?: readonly RecapRankMovement[];
   /** Entrant counts for earlier nights, for the turnout comparison. */
@@ -906,7 +909,8 @@ export function buildRecap(input: RecapInput): RecapResult {
     weightOf,
     push,
   );
-  collectRatingUpsets(played, ratingEvents, stageOf, weightOf, push);
+  if (input.priorWhrEvidence)
+    collectRatingUpsets(played, ratingEvents, input.priorWhrEvidence, stageOf, weightOf, push);
   collectNailbiters(played, deciderSetIds, stageOf, weightOf, push);
   collectLosersRuns(played, placement, push);
   collectOverperformers(
@@ -1066,6 +1070,7 @@ function collectSeedUpsets(
 function collectRatingUpsets(
   played: readonly PlayedSet[],
   ratingEvents: readonly RecapRatingEvent[],
+  priorWhrEvidence: ReadonlyMap<string, WhrPriorEvidence>,
   stageOf: (p: PlayedSet) => string | null,
   weightOf: (p: PlayedSet) => number,
   push: Push,
@@ -1081,10 +1086,12 @@ function collectRatingUpsets(
 
   for (const p of played) {
     const events = bySet.get(p.set.id);
-    if (!events || events.length < 2) continue;
+    const evidence = priorWhrEvidence.get(p.set.tournamentId);
+    if (!evidence || !events || events.length !== 2) continue;
     const winnerEvent = events.find((e) => e.playerId === p.winner.playerId);
     const loserEvent = events.find((e) => e.playerId === p.loser.playerId);
     if (!winnerEvent || !loserEvent) continue;
+    if (whrForecastUnavailable(evidence, [winnerEvent, loserEvent])) continue;
 
     const probability = probabilityFromRatings(
       (winnerEvent.preRating - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY,

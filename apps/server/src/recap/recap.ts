@@ -16,6 +16,7 @@ import {
 } from '@smashclub/db';
 import {
   buildRecap,
+  buildWhrPriorEvidence,
   eventKeyOf,
   formatFact,
   pairKey,
@@ -26,6 +27,7 @@ import {
   type RecapPlayerRef,
   type RecapSet,
   type RecapTournament,
+  type WhrPriorEvidence,
 } from '@smashclub/engine';
 import {
   compareEventBrackets,
@@ -36,6 +38,11 @@ import {
   isPlayedRatingResult,
 } from '@smashclub/shared';
 import { latestRecomputeId } from '../recompute/recompute';
+import {
+  loadWhrHistoryThroughDay,
+  readWhrRunProvenance,
+  whrPrefixFingerprints,
+} from '../recompute/whrProvenance';
 import { publicParticipantPresentation } from '../events/participantNames';
 import { charactersByPlayer } from '../players/characters';
 import { nativeDoublesPoolFacts } from './poolFacts';
@@ -46,11 +53,8 @@ import { historicalPlayerIds } from '../identity/playerIds';
  * Assembles a night's recap: resolves a slug to every bracket that ran that
  * evening, loads what the facts engine needs, and hands off.
  *
- * All the *decisions* live in the engine; this module is the I/O around it. The
- * one judgement it makes is what counts as "before tonight", and it makes it
- * with `seq` rather than dates — `rating_events.seq` is the replay's own
- * processing order, so it is the only ordering guaranteed to agree with the
- * ratings themselves when two brackets share a date.
+ * Career facts use the replay's sequence at the start of the recap. Forecasts
+ * use the verified rated sets strictly before each bracket's WHR period (a UTC day).
  */
 
 /**
@@ -285,6 +289,15 @@ export async function loadRecap(
   const { nightEvents, history, rankMovement } = recomputeId
     ? await loadRatingContext(db, recomputeId, nightIds)
     : { nightEvents: [], history: undefined, rankMovement: [] };
+  const ratedBrackets = new Set(nightEvents.map(({ tournamentId }) => tournamentId));
+  const priorWhrEvidence =
+    recomputeId && ratedBrackets.size
+      ? await loadRecapWhrEvidence(
+          db,
+          recomputeId,
+          nightTournaments.filter(({ id }) => ratedBrackets.has(id)),
+        )
+      : undefined;
 
   // --- turnout comparison -------------------------------------------------
 
@@ -329,6 +342,7 @@ export async function loadRecap(
     poolFacts,
     ratingEvents: nightEvents,
     history,
+    priorWhrEvidence,
     rankMovement,
     priorTurnouts,
     model: 'whr',
@@ -374,6 +388,36 @@ export async function loadRecap(
     },
     slug: eventCanonicalSlug(withSlugs, slug),
   };
+}
+
+async function loadRecapWhrEvidence(
+  db: Db,
+  recomputeId: string,
+  brackets: readonly RecapTournament[],
+) {
+  const eventKeys = brackets.flatMap(({ eventDate }) => (eventDate ? [eventKeyOf(eventDate)] : []));
+  const lastDay = eventKeys.toSorted().at(-1);
+  if (!lastDay) return;
+  const provenance = await readWhrRunProvenance(db, recomputeId);
+  if (!provenance) return;
+  const history = await loadWhrHistoryThroughDay(db, new Date(lastDay), provenance.settings);
+  if (!history) return;
+
+  // The estimates come from the ledger. Only use the current rated inputs as
+  // evidence if their prefix matches the inputs of that published run.
+  const fingerprints = whrPrefixFingerprints(history);
+  const evidenceByDay = new Map<string, WhrPriorEvidence>();
+  for (const day of new Set(eventKeys)) {
+    const fingerprint = fingerprints.get(day);
+    if (fingerprint && fingerprint === provenance.fingerprints[day])
+      evidenceByDay.set(day, buildWhrPriorEvidence(history, day));
+  }
+  const evidenceByBracket = new Map<string, WhrPriorEvidence>();
+  for (const { id, eventDate } of brackets) {
+    const evidence = eventDate && evidenceByDay.get(eventKeyOf(eventDate));
+    if (evidence) evidenceByBracket.set(id, evidence);
+  }
+  return evidenceByBracket;
 }
 
 interface RatingContext {
