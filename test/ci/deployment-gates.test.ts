@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { assertAppChangeset } from '../../scripts/check-changeset.mjs';
 import { assertRequiredJobs, requiredJobs } from '../../scripts/check-required-jobs.mjs';
 import {
@@ -706,8 +706,12 @@ describe('Changeset merge gate', () => {
     return '## 0.1.1\n\n### Patch Changes\n\n- Keep the QR visible.';
   };
 
-  it('checks and plans against the tested merge when main has advanced through a release', () => {
-    const cwd = mkdtempSync(join(tmpdir(), 'nemesis-changeset-gate-'));
+  // Git, Node and pnpm process startup can exceed five seconds during parallel runs.
+  describe.sequential('tested merge checkout', { timeout: 15_000 }, () => {
+    let cwd: string;
+    let eventBase: string;
+    let testedBase: string;
+    let feature: string;
     const git = (...args: string[]) =>
       execFileSync(
         'git',
@@ -719,15 +723,8 @@ describe('Changeset merge gate', () => {
       mkdirSync(dirname(destination), { recursive: true });
       writeFileSync(destination, contents);
     };
-    const commit = (message: string) => {
-      git('add', '--all');
-      git('commit', '--quiet', '-m', message);
-      return git('rev-parse', 'HEAD');
-    };
     const script = fileURLToPath(new URL('../../scripts/check-changeset.mjs', import.meta.url));
     const planner = fileURLToPath(new URL('../../scripts/plan-pr-checks.mjs', import.meta.url));
-    const output = join(cwd, '.git', 'plan-output');
-    const summary = join(cwd, '.git', 'plan-summary');
     const check = (expectedHead: string) =>
       spawnSync(process.execPath, [script, expectedHead], {
         cwd,
@@ -735,6 +732,8 @@ describe('Changeset merge gate', () => {
         env: { ...process.env, GITHUB_HEAD_REF: 'feature' },
       });
     const plan = (expectedHead: string, reportOnly: boolean) => {
+      const output = join(cwd, '.git', 'plan-output');
+      const summary = join(cwd, '.git', 'plan-summary');
       writeFileSync(output, '');
       writeFileSync(summary, '');
       const result = spawnSync(process.execPath, [planner, expectedHead], {
@@ -748,10 +747,11 @@ describe('Changeset merge gate', () => {
         },
       });
       expect(result.status, result.stderr).toBe(0);
-      return readFileSync(output, 'utf8');
+      return { output: readFileSync(output, 'utf8'), summary: readFileSync(summary, 'utf8') };
     };
 
-    try {
+    beforeAll(() => {
+      cwd = mkdtempSync(join(tmpdir(), 'nemesis-changeset-gate-'));
       git('init', '--quiet', '--initial-branch=main');
       write('pnpm-workspace.yaml', 'packages:\n  - apps/*\n');
       write('package.json', JSON.stringify({ name: 'nemesis', private: true }));
@@ -759,57 +759,101 @@ describe('Changeset merge gate', () => {
       write('apps/server/config.txt', 'test configuration\n');
       write(changelog, '## 0.1.4\n');
       write('.changeset/previous.md', valid);
-      const eventBase = commit('Before release');
+      git('add', '--all');
+      git('commit', '--quiet', '-m', 'Before release');
+
       git('switch', '--quiet', '--create', 'feature');
       write(note, valid);
       write('apps/web/src/feature.ts', 'export const feature = true;\n');
-      const feature = commit('Feature with Changeset');
-      const nonMerge = check(feature);
+      git('add', '--all');
+      git('commit', '--quiet', '-m', 'Feature with Changeset');
 
       git('switch', '--quiet', 'main');
       write(appPackage, JSON.stringify({ name: '@smashclub/web', version: '0.1.5' }));
       write(changelog, '## 0.1.5\n\n## 0.1.4\n');
-      git('rm', '--quiet', '.changeset/previous.md');
-      const testedBase = commit('Version Nemesis');
+      rmSync(join(cwd, '.changeset/previous.md'));
+      git('commit', '--quiet', '--all', '-m', 'Version Nemesis');
+      [eventBase, testedBase, feature] = git('rev-parse', 'feature^', 'main', 'feature').split(
+        '\n',
+      );
       git('merge', '--quiet', '--no-ff', '--no-edit', 'feature');
+    });
 
+    afterAll(() => {
+      if (cwd) rmSync(cwd, { recursive: true, force: true });
+    });
+
+    it('accepts a feature Changeset after main has advanced through a release', () => {
       expect(git('rev-parse', 'HEAD^1')).toBe(testedBase);
       expect(git('diff', '--name-only', eventBase, 'HEAD')).toContain(appPackage);
       const result = check(feature);
       expect(result.status, result.stderr).toBe(0);
-      expect(nonMerge.stderr).toContain('two-parent pull request merge commit');
-      expect(check(eventBase).stderr).toContain('does not match the expected pull request head');
-      expect(plan(feature, false)).toBe(`skips=${JSON.stringify(skippableJobs)}\n`);
-      expect(readFileSync(summary, 'utf8')).toContain('Proposed Vitest projects: `web`');
-      expect(readFileSync(summary, 'utf8')).toContain(
-        'Actual typecheck and unit test jobs: Full workspace scope',
-      );
-      expect(plan(feature, true)).toBe('skips=[]\n');
-      expect(readFileSync(summary, 'utf8')).toContain(
-        'Additional candidates (still run): `legacy-python`, `postgres`',
-      );
+    });
 
-      git('switch', '--quiet', '--create', 'rename');
-      git('mv', 'apps/server/config.txt', 'apps/web/config.txt');
-      const moved = commit('Move configuration across scopes');
-      git('switch', '--quiet', 'main');
-      git('merge', '--quiet', '--no-ff', '--no-edit', 'rename');
-      expect(plan(moved, false)).toBe('skips=[]\n');
-      expect(readFileSync(summary, 'utf8')).toContain(
-        'Proposed workspace scope: Full verification',
-      );
-      const checkStep = ci.jobs.changeset.steps.find(
-        (step: { name?: string }) => step.name === 'Check release note',
-      );
-      expect(checkStep.env).toEqual({ PR_HEAD_SHA: '${{ github.event.pull_request.head.sha }}' });
-      expect(checkStep.run).toBe('node scripts/check-changeset.mjs "$PR_HEAD_SHA"');
-      const planStep = ci.jobs.changeset.steps.find((step: { id?: string }) => step.id === 'plan');
-      expect(ci.jobs.changeset.outputs.skips).toBe('${{ steps.plan.outputs.skips }}');
-      expect(planStep.env.PR_HEAD_SHA).toBe(checkStep.env.PR_HEAD_SHA);
-      expect(planStep.run).toBe('node scripts/plan-pr-checks.mjs "$PR_HEAD_SHA"');
-    } finally {
-      rmSync(cwd, { recursive: true, force: true });
-    }
+    it('rejects a stale PR head on a tested merge', () => {
+      const stale = check(eventBase);
+      expect(stale.status).toBe(1);
+      expect(stale.stderr).toContain('does not match the expected pull request head');
+    });
+
+    it('rejects a checkout that is not a two-parent merge', () => {
+      git('switch', '--quiet', 'feature');
+      try {
+        const nonMerge = check(feature);
+        expect(nonMerge.status).toBe(1);
+        expect(nonMerge.stderr).toContain('two-parent pull request merge commit');
+      } finally {
+        git('switch', '--quiet', 'main');
+      }
+    });
+
+    it('plans conservative skips from the tested merge after main advances', () => {
+      const { output, summary } = plan(feature, false);
+      expect(output).toBe(`skips=${JSON.stringify(skippableJobs)}\n`);
+      expect(summary).toContain('Proposed Vitest projects: `web`');
+      expect(summary).toContain('Actual typecheck and unit test jobs: Full workspace scope');
+    });
+
+    it('reports skip candidates while keeping all checks enabled', () => {
+      const { output, summary } = plan(feature, true);
+      expect(output).toBe('skips=[]\n');
+      expect(summary).toContain('Additional candidates (still run): `legacy-python`, `postgres`');
+    });
+
+    describe('cross-workspace rename', () => {
+      let moved: string;
+
+      beforeAll(() => {
+        git('switch', '--quiet', '--create', 'rename');
+        git('mv', 'apps/server/config.txt', 'apps/web/config.txt');
+        git('commit', '--quiet', '-m', 'Move configuration across scopes');
+        moved = git('rev-parse', 'HEAD');
+        git('switch', '--quiet', '--detach', 'main');
+        git('merge', '--quiet', '--no-ff', '--no-edit', 'rename');
+      });
+
+      afterAll(() => {
+        git('switch', '--quiet', 'main');
+      });
+
+      it('keeps full verification', () => {
+        const { output, summary } = plan(moved, false);
+        expect(output).toBe('skips=[]\n');
+        expect(summary).toContain('Proposed workspace scope: Full verification');
+      });
+    });
+  });
+
+  it('passes the expected PR head to both workflow CLI steps', () => {
+    const checkStep = ci.jobs.changeset.steps.find(
+      (step: { name?: string }) => step.name === 'Check release note',
+    );
+    expect(checkStep.env).toEqual({ PR_HEAD_SHA: '${{ github.event.pull_request.head.sha }}' });
+    expect(checkStep.run).toBe('node scripts/check-changeset.mjs "$PR_HEAD_SHA"');
+    const planStep = ci.jobs.changeset.steps.find((step: { id?: string }) => step.id === 'plan');
+    expect(ci.jobs.changeset.outputs.skips).toBe('${{ steps.plan.outputs.skips }}');
+    expect(planStep.env.PR_HEAD_SHA).toBe(checkStep.env.PR_HEAD_SHA);
+    expect(planStep.run).toBe('node scripts/plan-pr-checks.mjs "$PR_HEAD_SHA"');
   });
 
   it('requires a new valid note for regular changes', () => {
