@@ -1,0 +1,35 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "defaultBase": "origin/main",
+  "neverConnectToCloud": true,
+  "analytics": false,
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*"],
+    "workspaceToolchain": [
+      "{workspaceRoot}/nx.json",
+      "{workspaceRoot}/.node-version",
+      "{workspaceRoot}/.npmrc",
+      "{workspaceRoot}/package.json",
+      "{workspaceRoot}/pnpm-lock.yaml",
+      "{workspaceRoot}/pnpm-workspace.yaml",
+      "{workspaceRoot}/patches/**/*",
+      "{workspaceRoot}/tsconfig.base.json"
+    ]
+  },
+  "targetDefaults": {
+    "typecheck": {
+      "cache": true,
+      "inputs": [
+        "default",
+        "^default",
+        "workspaceToolchain",
+        { "runtime": "node -p '[process.version, process.platform, process.arch].join(\"-\")'" }
+      ],
+      "outputs": []
+    },
+    "test": {
+      "cache": false,
+      "inputs": ["default", "^default", "workspaceToolchain", "{workspaceRoot}/vitest.config.ts"]
+    }
+  }
+}

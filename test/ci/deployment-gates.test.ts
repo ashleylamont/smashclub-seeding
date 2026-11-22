@@ -148,6 +148,22 @@ it('runs browser shards after only the PR plan, independently of full typecheck 
   expect(ci.jobs.build.steps).toContainEqual(expect.objectContaining({ run: 'pnpm build' }));
 });
 
+it('keeps the Nx preview advisory and both verification commands at full scope', () => {
+  expect(ci.jobs.test.steps).toContainEqual(
+    expect.objectContaining({
+      name: 'Preview Nx affected tasks',
+      if: "github.event_name == 'pull_request'",
+      'continue-on-error': true,
+      env: { PR_HEAD_SHA: '${{ github.event.pull_request.head.sha }}' },
+      run: 'node scripts/report-nx-affected.mjs "$PR_HEAD_SHA"',
+    }),
+  );
+  expect(ci.jobs.typecheck.steps).toContainEqual(
+    expect.objectContaining({ run: 'pnpm typecheck' }),
+  );
+  expect(ci.jobs.test.steps).toContainEqual(expect.objectContaining({ run: 'pnpm test' }));
+});
+
 it('scopes PR skips to web or prose and keeps broader candidates advisory', () => {
   const note = '.changeset/example.md';
   const web = 'apps/web/src/pages/Example.tsx';

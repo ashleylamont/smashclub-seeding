@@ -14,5 +14,12 @@
   },
   "devDependencies": {
     "typescript": "~5.9.3"
+  },
+  "nx": {
+    "targets": {
+      "test": {
+        "command": "pnpm exec vitest run --project engine"
+      }
+    }
   }
 }

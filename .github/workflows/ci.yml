@@ -81,11 +81,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Include the tested merge commit and both parents for the PR task preview.
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 1 }}
       - uses: ./.github/actions/setup-node-pnpm
       # Vitest turns on its `github-actions` reporter by itself when it sees
       # GITHUB_ACTIONS, so a failing assertion is annotated on the diff line
       # rather than only in the log.
       - run: pnpm test
+      - name: Preview Nx affected tasks
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        timeout-minutes: 1
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/report-nx-affected.mjs "$PR_HEAD_SHA"
 
   e2e:
     name: Browser event flows (${{ matrix.shard }}/4)
