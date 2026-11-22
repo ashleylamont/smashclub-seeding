@@ -13,6 +13,8 @@ import type { Ref } from 'react';
 import { returnCallControlId } from '../../lib/opsWorkspace';
 import type { UntakenCallDesk } from './UntakenCallRecovery';
 import { MatchMainDialog } from './MatchMainDialog';
+import { ActiveCallControls } from './DispatchCall';
+import type { DispatchCommandController } from './dispatchCommand';
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 type Match = Overview['matches'][number];
 type Action = (work: () => Promise<unknown>, message?: string) => Promise<void>;
@@ -26,6 +28,7 @@ export function MatchCard({
   liveOwned,
   act,
   callDesk,
+  sharedDispatch,
   scoreEditorRef,
 }: {
   match: Match;
@@ -41,11 +44,13 @@ export function MatchCard({
   liveOwned: boolean;
   act: Action;
   callDesk?: UntakenCallDesk;
+  sharedDispatch?: { resourceRevision: number; dispatch: DispatchCommandController };
   scoreEditorRef?: Ref<ScoreEditor>;
 }) {
   const confirmAction = useConfirmation();
   const eligible = eligibleStations(match, stations);
   const active = match.status === 'playing';
+  const sharedCall = active && sharedDispatch;
   const untakenCall = isUntakenCall(match, liveOwned);
   const hasLiveScore = typeof match.liveScore1 === 'number' || typeof match.liveScore2 === 'number';
   const label = matchLabel(match, canStart, untakenCall);
@@ -127,7 +132,16 @@ export function MatchCard({
         callDesk={callDesk}
         scoreEditorRef={scoreEditorRef}
       >
-        {match.status !== 'complete' && (
+        {sharedCall && (
+          <ActiveCallControls
+            match={match}
+            resourceRevision={sharedCall.resourceRevision}
+            run={sharedCall.dispatch.run}
+            disabled={disabled || sharedCall.dispatch.busy}
+            size="small"
+          />
+        )}
+        {!sharedCall && match.status !== 'complete' && (
           <Button
             id={
               native && callDesk && !callDesk.shared && match.status === 'playing' && !match.started

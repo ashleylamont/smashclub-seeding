@@ -139,13 +139,13 @@ test('independent OBS and player views follow native play, confirmed results and
     await expect(panel.getByRole('combobox', { name: 'Ready pairing' })).toHaveCount(0);
     await obs.reload();
     await expect(progress).toBeVisible();
-    snapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
-    await command({
-      kind: 'beginPlay',
-      matchId: first.id,
-      expectedRevision: snapshot.matches.find((match) => match.id === first.id)!.revision,
-      expectedResourceRevision: snapshot.settings.resourceRevision,
-    });
+    await expect(
+      panel.getByRole('button', { name: 'Return untaken call', exact: true }),
+    ).toBeVisible();
+    await panel.getByRole('button', { name: 'Mark playing', exact: true }).press('Enter');
+    await expect(
+      panel.getByRole('button', { name: 'Release capacity', exact: true }),
+    ).toBeVisible();
     await expect(progress).not.toBeVisible();
     const capture = obs.getByRole('region', { name: 'Transparent game capture area', exact: true });
     await expect(capture).toBeVisible();

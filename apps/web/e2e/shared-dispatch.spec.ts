@@ -680,3 +680,102 @@ test('organisers can return a blocking call from the draw panel and resume in on
   expect(resumed.plan.drawPaused).toBe(false);
   expect(resumed.matches).toEqual(before.matches);
 });
+
+test('web-started Main stage matches require confirmation before either match card releases them', async ({
+  page,
+}) => {
+  const { planId, desk } = await night(page, 'Shared stage release rehearsal');
+  const load = () =>
+    query<Awaited<ReturnType<typeof trpc.eventOps.overview.query>>>(
+      page.request,
+      'eventOps.overview',
+      { planId },
+    );
+  const station = (await load()).stations.find((item) => item.name === 'Main stage')!;
+  const runTab = page.getByRole('tab', { name: 'Run matches', exact: true });
+  const broadcastTab = page.getByRole('tab', { name: 'Broadcast', exact: true });
+  const broadcast = page.getByRole('tabpanel', { name: 'Broadcast', exact: true });
+  const dialog = page.getByRole('alertdialog', { name: 'Confirm action' });
+  const confirm = dialog.getByRole('button', { name: 'Confirm', exact: true });
+  // Keep one real station in use until each surface confirms its release.
+  for (const surface of ['Broadcast', 'Score / details'] as const) {
+    const before = await load();
+    const match = before.matches.find(
+      (item) =>
+        item.status === 'ready' &&
+        !item.started &&
+        item.availability.eligibleStationIds.includes(station.id),
+    )!;
+    await broadcastTab.press('Enter');
+    await chooseOption(broadcast.getByRole('combobox', { name: 'Ready pairing' }), match.id);
+    await broadcast
+      .getByRole('button', { name: `Start on ${station.name}`, exact: true })
+      .press('Enter');
+    const card = page.locator('article.ops-match:visible').filter({ hasText: match.label });
+    await expect(card.getByText('Match in progress', { exact: true })).toBeVisible();
+    await card.getByRole('button', { name: 'Update live score', exact: true }).press('Enter');
+    await card.getByRole('spinbutton').first().fill('1');
+    await card.getByRole('button', { name: 'Save live score', exact: true }).press('Enter');
+    await expect(card.getByText('Live game score · match still in progress')).toBeVisible();
+    await expect
+      .poll(async () => (await load()).matches.find((item) => item.id === match.id)?.liveScore1)
+      .toBe(1);
+    if (surface === 'Score / details') {
+      await runTab.press('Enter');
+      await desk
+        .locator(`[data-match-id="${match.id}"]`)
+        .getByRole('button', { name: surface, exact: true })
+        .press('Enter');
+    }
+    const release = card.getByRole('button', { name: 'Release capacity', exact: true });
+    await release.press('Enter');
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).press('Enter');
+    await expect(release).toBeFocused();
+    const cancelled = await load();
+    expect(cancelled.stations.find((item) => item.id === station.id)?.currentMatchId).toBe(
+      match.id,
+    );
+    expect(cancelled.matches.find((item) => item.id === match.id)).toMatchObject({
+      status: 'playing',
+      started: true,
+      stationId: station.id,
+      liveScore1: 1,
+      liveScore2: 0,
+    });
+    if (surface === 'Broadcast') {
+      await release.press('Enter');
+      await expect(dialog).toBeVisible();
+      // Another operator changes shared resources while the confirmation is open.
+      await mutate(page.request, 'eventOps.live.command', {
+        planId,
+        requestId: crypto.randomUUID(),
+        command: {
+          kind: 'configureDispatch',
+          capacity: 2,
+          reservedStationIds: [station.id],
+          expectedResourceRevision: cancelled.settings.resourceRevision,
+        },
+      });
+      await confirm.press('Enter');
+      await expect(broadcast.getByRole('alert')).toHaveText('Match or resources changed.');
+      expect((await load()).stations.find((item) => item.id === station.id)?.currentMatchId).toBe(
+        match.id,
+      );
+      await runTab.press('Enter');
+      await expect(desk.getByText('0 / 2 in use', { exact: true })).toBeVisible();
+      await broadcastTab.press('Enter');
+    }
+    await release.press('Enter');
+    await confirm.press('Enter');
+    await expect(release).toHaveCount(0);
+    const released = await load();
+    expect(released.stations.find((item) => item.id === station.id)?.currentMatchId).toBeNull();
+    expect(released.matches.find((item) => item.id === match.id)).toMatchObject({
+      status: 'ready',
+      started: true,
+      stationId: null,
+      liveScore1: 1,
+      liveScore2: 0,
+    });
+  }
+});

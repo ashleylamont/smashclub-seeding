@@ -111,6 +111,7 @@ export const additionalCommands = [
     status: z.enum(['ready', 'blocked']),
     stationId: id.nullable(),
     reason: z.string().max(200).nullable(),
+    onlyIfUntaken: z.literal(true).optional(),
   }),
   z.object({ kind: z.literal('poolOrders'), pools: z.array(poolOrder).min(1).max(128) }),
   z.object({

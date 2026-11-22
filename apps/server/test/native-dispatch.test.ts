@@ -15,6 +15,7 @@ import {
   publicSettings,
 } from '../src/tournament/dispatch';
 import {
+  Command,
   Decision,
   LiveState,
   type TournamentCommand,
@@ -310,6 +311,60 @@ describe('shared native dispatch', () => {
     for (const event of events) replay = reduceDecision(replay, Decision.parse(event));
     expect(replay).toEqual(state);
     expect(() => apply(state, { kind: 'unlock' })).toThrow(/Play has started/);
+  });
+
+  it('rejects an untaken return after a live score records actual play', () => {
+    const baseline = pureState();
+    const stationId = stableId('Main stage');
+    baseline.stations = [{ id: stationId, name: 'Main stage', enabled: true, revision: 0 }];
+    const called = call(setup(baseline, 1, [stationId]), baseline.matches[0]!.id, stationId, true);
+    const match = called.matches[0]!;
+    const returnRequest = envelope(
+      Command.parse({
+        kind: 'matchControl',
+        matchId: match.id,
+        status: 'ready',
+        stationId: null,
+        reason: null,
+        expectedRevision: match.revision,
+        expectedResourceRevision: called.settings.resourceRevision,
+        onlyIfUntaken: true,
+      }),
+    );
+    const returned = Decision.parse(decide(called, returnRequest));
+    const returnedState = reduceDecision(called, returned);
+    expect(returnedState.matches[0]).toMatchObject({
+      status: 'ready',
+      started: false,
+      stationId: null,
+    });
+    expect(decide(returnedState, returnRequest)).toBeUndefined();
+
+    const playing = apply(called, {
+      kind: 'progress',
+      matchId: match.id,
+      expectedRevision: match.revision,
+      expectedProgressRevision: match.progressRevision,
+      score1: 1,
+      score2: 0,
+    });
+    expect(playing.matches[0]).toMatchObject({
+      status: 'playing',
+      started: true,
+      stationId,
+      liveScore1: 1,
+      liveScore2: 0,
+      revision: match.revision,
+    });
+    expect(playing.settings.resourceRevision).toBe(called.settings.resourceRevision);
+    expect(() => decide(playing, returnRequest)).toThrow(/The call changed/);
+    expect(release(playing).matches[0]).toMatchObject({
+      status: 'ready',
+      started: true,
+      stationId: null,
+      liveScore1: 1,
+      liveScore2: 0,
+    });
   });
 
   it('converts station banks with active play without changing actual station IDs, scores or holds', () => {

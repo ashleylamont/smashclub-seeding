@@ -202,8 +202,8 @@ export function EventOperationsPanel({
         }}
       />
     );
-  const sharedQueue =
-    data.plan.bracketMode === 'native' && data.operatorDispatch?.mode === 'shared';
+  const desk = data.operatorDispatch;
+  const sharedQueue = data.plan.bracketMode === 'native' && desk?.mode === 'shared';
   const available = availableMatches(data.matches).filter((match) => match.availability.canStart);
   const callable = new Set(available.map((match) => match.id));
   const pools = poolStandings(data.matches);
@@ -440,12 +440,17 @@ export function EventOperationsPanel({
                 match={match}
                 missingMains={'missingMains' in data ? data.missingMains[match.id] : undefined}
                 stations={data.stations}
-                disabled={liveDisabled}
+                disabled={liveDisabled || (desk?.mode === 'shared' && dispatch.busy)}
                 canStart={callable.has(match.id)}
                 native={data.plan.bracketMode === 'native'}
                 liveOwned={data.plan.liveOwned}
                 act={act}
                 callDesk={callDesk}
+                sharedDispatch={
+                  desk?.mode === 'shared'
+                    ? { resourceRevision: desk.resourceRevision, dispatch }
+                    : undefined
+                }
                 scoreEditorRef={
                   sharedQueue && match.id === focusedMatchId ? scoreEditor : undefined
                 }

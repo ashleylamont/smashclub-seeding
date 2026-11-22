@@ -351,6 +351,7 @@ for (const theme of ['dark', 'light'] as const)
               status: 'ready',
               stationId: null,
               reason: null,
+              onlyIfUntaken: true,
             },
           ]);
           await expect(details).toContainText('Refresh the finals review before continuing.');

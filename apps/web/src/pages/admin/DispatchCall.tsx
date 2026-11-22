@@ -1,12 +1,16 @@
 import { matchPresentation } from '../../lib/matchPresentation';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import { useLocation } from '@tanstack/react-router';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Select, SelectItem } from '../../components/ui/Select';
-import { useConfirmation } from '../../lib/confirmation';
+import { ConfirmCancel, ConfirmDialog } from '../../components/ui/ConfirmDialog';
+import { authClient } from '../../lib/auth';
 import { returnCallControlId } from '../../lib/opsWorkspace';
-import type { Overview, Desk, Run } from './dispatchTypes';
+import type { Command, Overview, Desk, Run } from './dispatchTypes';
 import { namedStationStart } from './dispatchCommand';
+
+type MatchControl = Extract<Command, { kind: 'matchControl' }>;
 
 export function ActiveCall({
   match,
@@ -21,7 +25,6 @@ export function ActiveCall({
   disabled: boolean;
   onMatch: (id: string) => void;
 }) {
-  const confirm = useConfirmation();
   return (
     <article className="dispatch-row" data-match-id={match.id}>
       <strong>{matchPresentation(match).title}</strong>
@@ -32,51 +35,139 @@ export function ActiveCall({
           'Any available ordinary setup'}
       </p>
       <div className="ops-match-actions">
-        {!match.started && (
-          <Button
-            disabled={disabled}
-            onClick={() =>
-              void run({
-                kind: 'beginPlay',
-                matchId: match.id,
-                expectedRevision: match.revision,
-                expectedResourceRevision: desk.resourceRevision,
-              })
-            }
-          >
-            Mark playing
-          </Button>
-        )}
-        <Button disabled={disabled} onClick={() => onMatch(match.id)}>
-          Score / details
-        </Button>
-        <Button
-          key={match.started ? 'release-capacity' : 'return-call'}
-          id={!match.started ? returnCallControlId(match.id) : undefined}
+        <ActiveCallControls
+          match={match}
+          resourceRevision={desk.resourceRevision}
+          run={run}
           disabled={disabled}
-          onClick={async () => {
-            if (
-              match.started &&
-              !(await confirm(
-                'Release this match’s capacity? Actual play and live scores remain recorded. Resolve any result before changing its opponents.',
-              ))
-            )
-              return;
-            await run({
-              kind: 'matchControl',
-              matchId: match.id,
-              expectedRevision: match.revision,
-              expectedResourceRevision: desk.resourceRevision,
-              status: 'ready',
-              stationId: null,
-              reason: null,
-            });
-          }}
+          returnControlId={returnCallControlId(match.id)}
         >
-          {match.started ? 'Release capacity' : 'Return untaken call'}
-        </Button>
+          <Button disabled={disabled} onClick={() => onMatch(match.id)}>
+            Score / details
+          </Button>
+        </ActiveCallControls>
       </div>
     </article>
+  );
+}
+
+export function ActiveCallControls({
+  match,
+  resourceRevision,
+  run,
+  disabled,
+  size,
+  returnControlId,
+  children,
+}: {
+  match: Overview['matches'][number];
+  resourceRevision: number;
+  run: Run;
+  disabled: boolean;
+  size?: 'small';
+  returnControlId?: string;
+  children?: ReactNode;
+}) {
+  const visit = useLocation({ select: ({ href, state }) => `${state.__TSR_key ?? ''}:${href}` });
+  const { data: session } = authClient.useSession();
+  // The workspace keeps inactive tabs mounted. Scope the dialog to this visit and pairing.
+  const releaseScope = JSON.stringify([
+    visit,
+    session?.session.id,
+    match.eventPlanId,
+    match.id,
+    match.stationId,
+    match.player1Id,
+    match.player2Id,
+  ]);
+  const basis = {
+    matchId: match.id,
+    expectedRevision: match.revision,
+    expectedResourceRevision: resourceRevision,
+  };
+  const release: MatchControl = {
+    kind: 'matchControl',
+    ...basis,
+    status: 'ready',
+    stationId: null,
+    reason: null,
+  };
+  return (
+    <>
+      {!match.started && (
+        <Button
+          size={size}
+          disabled={disabled}
+          onClick={() => void run({ kind: 'beginPlay', ...basis })}
+        >
+          Mark playing
+        </Button>
+      )}
+      {children}
+      {match.started ? (
+        <ReleaseCapacityButton
+          key={releaseScope}
+          command={release}
+          run={run}
+          disabled={disabled}
+          size={size}
+        />
+      ) : (
+        <Button
+          id={returnControlId}
+          size={size}
+          disabled={disabled}
+          onClick={() => void run({ ...release, onlyIfUntaken: true })}
+        >
+          Return untaken call
+        </Button>
+      )}
+    </>
+  );
+}
+
+function ReleaseCapacityButton({
+  command,
+  run,
+  disabled,
+  size,
+}: {
+  command: MatchControl;
+  run: Run;
+  disabled: boolean;
+  size?: 'small';
+}) {
+  // Keep the revisions from the click so a subsequent resource change is checked by the server.
+  const [reviewed, setReviewed] = useState<MatchControl | null>(null);
+  return (
+    <>
+      <Button size={size} disabled={disabled} onClick={() => setReviewed(command)}>
+        Release capacity
+      </Button>
+      {reviewed && (
+        <ConfirmDialog
+          title="Confirm action"
+          description="Release this match’s capacity? Actual play and live scores remain recorded. Resolve any result before changing its opponents."
+          open
+          onOpenChange={(open) => {
+            if (!open) setReviewed(null);
+          }}
+        >
+          <div className="modal-actions">
+            <ConfirmCancel />
+            <Button
+              variant="primary"
+              onClick={() => {
+                setReviewed(null);
+                void run(reviewed);
+              }}
+            >
+              Confirm
+            </Button>
+          </div>
+        </ConfirmDialog>
+      )}
+    </>
   );
 }
 
