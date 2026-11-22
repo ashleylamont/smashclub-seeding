@@ -41,9 +41,7 @@ export function OpsAttentionDesk({
         </h3>
       )}
       {count === 0 && !interrupted && (
-        <p className="muted ops-attention-status" role="status">
-          No decisions pending.
-        </p>
+        <p className="muted ops-attention-status">No decisions pending.</p>
       )}
       {firstDispute && (
         <div className="ui-actions ops-attention-disagreements">

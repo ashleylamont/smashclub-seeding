@@ -237,7 +237,7 @@ test('TO desk automatically decides a unique pool, records an explicit tied-pool
   await expect(automatic).toContainText('Decided automatically by distinct set-win totals');
   await expect(tied).toContainText('Finishing order confirmed by an organiser');
   await expect(plannerLink).toHaveCount(0);
-  await expect(attention.getByRole('status')).toHaveText('No decisions pending.');
+  await expect(attention.getByText('No decisions pending.', { exact: true })).toBeVisible();
   await expect(poolOrders).toHaveCount(0);
   await captureStandings('confirmed');
   const finals = page.locator('section.card').filter({

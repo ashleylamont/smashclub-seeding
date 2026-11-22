@@ -71,13 +71,14 @@ for (const theme of ['dark', 'light'] as const)
       const alreadyReviewed = overview.reports;
       const route = `/operate/${PLAN_ID}`;
       const attention = page.getByRole('region', { name: 'Needs attention' });
-      const empty = attention.getByRole('status');
+      const empty = attention.getByText('No decisions pending.', { exact: true });
       const interruption = page.getByRole('alert').filter({ hasText: 'Live updates interrupted.' });
 
       await page.goto(route);
       await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
       await expect(attention).toHaveText('No decisions pending.');
-      await expect(empty).toHaveText('No decisions pending.');
+      await expect(empty).toBeVisible();
+      await expect(attention.getByRole('status')).toHaveCount(0);
       await expect(page.getByText('TO desk', { exact: true })).toBeVisible();
       await inspect(page, testInfo, 'empty-attention', width);
 
