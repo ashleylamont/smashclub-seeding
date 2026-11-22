@@ -18,7 +18,7 @@ function pairUrl(first: string, second: string) {
   return `/head-to-head?first=${first}&second=${second}`;
 }
 
-async function comparisonFixture(page: Page) {
+async function comparisonFixture(page: Page, { noSharedNight = false } = {}) {
   const fixture = await mockEvent(page);
   fixture.responses['public.leaderboard'] = {
     computedAt: null,
@@ -57,8 +57,11 @@ async function comparisonFixture(page: Page) {
         players: [first, second],
         history: { wins: [0, 0], gamesWon: [0, 0], scoredMeetings: 0, recent: [] },
         forecast: null,
+        ratingNight: null,
       };
     const aliceFirst = first.id === ALICE.id;
+    const aliceEstimate = { preRating: 1455, postRating: 1510.5, prePenalty: 40, postPenalty: 0 };
+    const beaEstimate = { preRating: 1560, postRating: 1540.5, prePenalty: 0, postPenalty: 0 };
     return {
       status: 'ready',
       players: [first, second],
@@ -90,6 +93,12 @@ async function comparisonFixture(page: Page) {
         ratedAt: '2026-10-04T00:00:00Z',
         provisional: true,
       },
+      ratingNight: noSharedNight
+        ? null
+        : {
+            eventKey: '2026-10-03',
+            estimates: aliceFirst ? [aliceEstimate, beaEstimate] : [beaEstimate, aliceEstimate],
+          },
     };
   });
   fixture.queryResponses.set('public.searchPlayers', (input) => {
@@ -147,6 +156,12 @@ for (const theme of ['dark', 'light'] as const)
       await expect(forecast).toContainText('33%');
       await expect(forecast).toContainText('provisional');
       await expect(forecast.locator('time')).toHaveAttribute('datetime', '2026-10-04T00:00:00Z');
+      const ratingNight = page.getByRole('region', { name: 'Skill gap by night' });
+      await expect(ratingNight.getByText('105.0 points')).toBeVisible();
+      await expect(ratingNight.getByText('30.0 points')).toBeVisible();
+      await expect(ratingNight.getByText(`${BEA.name} ahead`)).toHaveCount(2);
+      await expect(ratingNight.getByText('40 → 0 points')).toBeVisible();
+      await expect(ratingNight.locator('time')).toHaveAttribute('datetime', '2026-10-03');
       const recent = page.getByRole('region', { name: 'Recent meetings' });
       await expect(recent.getByRole('link', { name: 'October Championship' })).toHaveAttribute(
         'href',
@@ -161,6 +176,8 @@ for (const theme of ['dark', 'light'] as const)
       await expect(page).toHaveURL(new RegExp(`first=${BEA.id}&second=${ALICE.id}$`));
       await expect(actual.locator('dt').first()).toHaveText(BEA.name);
       await expect(forecast.locator('dd').first()).toHaveText('33%');
+      await expect(ratingNight.getByText(`${BEA.name} ahead`)).toHaveCount(2);
+      await expect(ratingNight.getByText('40 → 0 points')).toBeVisible();
       await expect(recent.getByRole('listitem').first()).toContainText('2–1');
       await page.reload();
       await expect(actual.locator('dt').first()).toHaveText(BEA.name);
@@ -172,11 +189,14 @@ for (const theme of ['dark', 'light'] as const)
 test('the public route handles canonical redirects, duplicate selection, no meetings and discovery', async ({
   page,
 }, testInfo) => {
-  const fixture = await comparisonFixture(page);
+  const fixture = await comparisonFixture(page, { noSharedNight: true });
   await page.goto(pairUrl(OLD_ALICE, BEA.id));
   await expect(page).toHaveURL(new RegExp(`first=${ALICE.id}&second=${BEA.id}$`));
   await expect(page.getByRole('heading', { name: 'Played singles' })).toBeVisible();
+  const ratingNight = page.getByRole('region', { name: 'Skill gap by night' });
+  await expect(ratingNight).toContainText('A comparison needs a night with rated sets for both');
   expect(fixture.pairs).toContainEqual({ first: OLD_ALICE, second: BEA.id });
+  await review(page, testInfo, 'rated-without-a-shared-night');
 
   await page.goto(pairUrl(ALICE.id, OLD_ALICE));
   await expect(page.getByText('Choose two different players')).toBeVisible();
@@ -184,6 +204,7 @@ test('the public route handles canonical redirects, duplicate selection, no meet
 
   await page.goto(pairUrl(ALICE.id, CHRIS.id));
   await expect(page.getByText('No recorded singles meetings for this pair.')).toBeVisible();
+  await expect(ratingNight).toHaveCount(0);
   await expect(
     page.getByText('An estimate needs a current published WHR rating', { exact: false }),
   ).toBeVisible();

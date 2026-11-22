@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { expect, it } from 'vitest';
 import {
   eventPlans,
@@ -7,6 +7,7 @@ import {
   nativeResultPublications,
   playerRatings,
   players,
+  ratingNights,
   recomputes,
   sets,
   tournaments,
@@ -342,6 +343,111 @@ it('keeps exact totals beyond the recent list and withholds totals if the pair e
     expect(first.status === 'ready' && first.history?.recent).toHaveLength(10);
     await addMeetings(16, 2049 - 15);
     expect(await api.headToHead(input)).toMatchObject({ status: 'ready', history: null });
+  } finally {
+    await close();
+  }
+});
+
+it('compares the latest night both players played after debut from the same published WHR run', async () => {
+  const { db, close } = await createTestDb();
+  try {
+    const [alice, bea, chris, debut] = await db
+      .insert(players)
+      .values([
+        { canonicalName: 'Alice' },
+        { canonicalName: 'Bea' },
+        { canonicalName: 'Chris' },
+        { canonicalName: 'New player' },
+      ])
+      .returning({ id: players.id });
+
+    const record = async (date: string, first: string, second: string) => {
+      const tournamentId = await addTournament(db, `club-${date}`, {
+        eventDate: new Date(`${date}T08:00:00Z`),
+      });
+      await db.insert(sets).values({
+        tournamentId,
+        challongeMatchId: 1,
+        state: 'complete',
+        p1PlayerId: first,
+        p2PlayerId: second,
+        winner: 1,
+        scoresCsv: '2-1',
+      });
+    };
+
+    await record('2026-04-03', bea!.id, alice!.id);
+    await record('2026-04-10', bea!.id, chris!.id);
+    await record('2026-04-17', bea!.id, chris!.id);
+    const commonDate = '2026-04-24';
+    await record(commonDate, alice!.id, bea!.id);
+    await record('2026-05-01', bea!.id, debut!.id);
+    const { recomputeId } = await runRecompute(db);
+
+    const [unfinishedRun] = await db
+      .insert(recomputes)
+      .values({
+        engineVersion: ENGINE_VERSION,
+        startedAt: new Date('2099-01-01'),
+        settingsSnapshot: {},
+      })
+      .returning({ id: recomputes.id });
+    await db.insert(ratingNights).values(
+      [alice!.id, bea!.id].map((playerId) => ({
+        recomputeId: unfinishedRun!.id,
+        playerId,
+        eventKey: '2026-05-01',
+        played: true,
+        preRating: 2000,
+        postRating: 2000,
+        postRd: 50,
+        revisedRating: 2000,
+        prePenalty: 0,
+        postPenalty: 0,
+      })),
+    );
+
+    const estimates = await db
+      .select({
+        playerId: ratingNights.playerId,
+        preRating: ratingNights.preRating,
+        postRating: ratingNights.postRating,
+        prePenalty: ratingNights.prePenalty,
+        postPenalty: ratingNights.postPenalty,
+      })
+      .from(ratingNights)
+      .where(and(eq(ratingNights.recomputeId, recomputeId), eq(ratingNights.eventKey, commonDate)));
+    const estimateFor = (id: string) => {
+      const { preRating, postRating, prePenalty, postPenalty } = estimates.find(
+        (estimate) => estimate.playerId === id,
+      )!;
+      return { preRating, postRating, prePenalty, postPenalty };
+    };
+    const aliceEstimate = estimateFor(alice!.id);
+    const beaEstimate = estimateFor(bea!.id);
+    expect(aliceEstimate).toMatchObject({ prePenalty: 40, postPenalty: 0 });
+    expect(beaEstimate).toMatchObject({ prePenalty: 0, postPenalty: 0 });
+    expect(aliceEstimate.preRating).toBeLessThan(beaEstimate.preRating);
+    expect(beaEstimate.postRating - aliceEstimate.postRating).toBeLessThan(
+      beaEstimate.preRating - aliceEstimate.preRating,
+    );
+
+    const api = publicApi(db);
+    expect(await api.headToHead({ first: alice!.id, second: bea!.id })).toMatchObject({
+      status: 'ready',
+      history: { wins: [1, 1], recent: [{ winner: 0, games: [2, 1] }, { winner: 1 }] },
+      ratingNight: { eventKey: commonDate, estimates: [aliceEstimate, beaEstimate] },
+    });
+    expect(await api.headToHead({ first: bea!.id, second: alice!.id })).toMatchObject({
+      status: 'ready',
+      ratingNight: { eventKey: commonDate, estimates: [beaEstimate, aliceEstimate] },
+    });
+    expect(await api.headToHead({ first: bea!.id, second: debut!.id })).toMatchObject({
+      status: 'ready',
+      history: { wins: [1, 0] },
+      forecast: { firstWinChance: expect.any(Number) },
+      ratingNight: null,
+    });
   } finally {
     await close();
   }

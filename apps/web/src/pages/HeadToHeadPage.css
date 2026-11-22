@@ -52,6 +52,7 @@
 }
 
 .h2h-figures dt,
+.h2h-figures dd,
 .h2h-recent li {
   overflow-wrap: anywhere;
 }
@@ -64,6 +65,22 @@
   font-size: var(--fs-lg);
   font-weight: 700;
   color: var(--text-h);
+}
+
+.h2h-night-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--s3) var(--s4);
+  margin: var(--s3) 0;
+}
+
+.h2h-night-details .h2h-figures {
+  margin: 0;
+}
+
+.h2h-night-attendance h3 {
+  margin-bottom: var(--s1);
 }
 
 .h2h-recent ul,
@@ -100,6 +117,7 @@
 @media (max-width: 650px) {
   .h2h-pickers,
   .h2h-summary,
+  .h2h-night-details,
   .h2h-recent li {
     grid-template-columns: minmax(0, 1fr);
   }
