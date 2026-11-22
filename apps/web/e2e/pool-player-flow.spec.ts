@@ -349,9 +349,11 @@ test('idle overlay retains Stage focus and shows resolved sets without queue pre
   await expect(recent).not.toContainText(
     /Queued Alpha|Queued Beta|Later Gamma|Later Delta|PLAY NEXT|COMING UP|provisional/,
   );
-  await expect(page.getByLabel('Current match')).toContainText('AWAITING MATCH');
+  await expect(page.getByText('WAITING FOR A MATCH', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Current match')).toHaveCount(0);
   await page.goto(`/overlay/${planId}?presentation=gameplay&station=missing-station&controls=0`);
-  await expect(page.getByLabel('Current match')).toContainText('AWAITING MATCH');
+  await expect(page.getByText('WAITING FOR A MATCH', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Current match')).toHaveCount(0);
   await expect(results).toHaveCount(2);
   expect(
     await results.evaluateAll((cards) => cards.map((card) => card.getAttribute('data-match-id'))),
