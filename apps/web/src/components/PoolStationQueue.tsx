@@ -9,6 +9,7 @@ import {
   poolTitle,
   stationPreview,
   type PoolFlowData,
+  type PoolFlowMatch,
   type StartPoolMatch,
 } from '../lib/poolFlow';
 import { CharacterIcons } from './CharacterIcons';
@@ -334,6 +335,27 @@ export function PoolStationQueue({
     </section>
   );
 }
+function poolRoundMatchStatus(data: PoolFlowData, match: PoolFlowMatch, recordedOnly: boolean) {
+  const presentation = matchPresentation(match, recordedOnly);
+  if (!recordedOnly && presentation.kind === 'forfeit' && match.winnerId) {
+    const winner =
+      match.winnerId === match.player1Id
+        ? match.player1Name
+        : match.winnerId === match.player2Id
+          ? match.player2Name
+          : null;
+    if (winner) return `${presentation.status} · ${winner} wins`;
+  }
+  if (
+    !presentation.showScores &&
+    (recordedOnly || match.status === 'complete' || presentation.kind === 'no-contest')
+  )
+    return presentation.status;
+  if (match.status === 'complete')
+    return `${match.score1 ?? '–'}–${match.score2 ?? '–'} · complete`;
+  return match.status === 'playing' ? matchStatus(data, match) : 'Upcoming';
+}
+
 export function PoolRoundSchedule({
   data,
   selectedPool = '',
@@ -419,21 +441,12 @@ export function PoolRoundSchedule({
                   {round.matchIds.map((id) => {
                     const match = data.matches.find((item) => item.id === id);
                     if (!match) return null;
-                    const recorded = recordedOnly ? matchPresentation(match, true) : null;
                     return (
                       <li key={id}>
                         <span>
                           {match.player1Name} vs {match.player2Name}
                         </span>
-                        <small>
-                          {recorded && !recorded.showScores
-                            ? recorded.status
-                            : match.status === 'complete'
-                              ? `${match.score1 ?? '–'}–${match.score2 ?? '–'} · complete`
-                              : match.status === 'playing'
-                                ? matchStatus(data, match)
-                                : 'Upcoming'}
-                        </small>
+                        <small>{poolRoundMatchStatus(data, match, recordedOnly)}</small>
                       </li>
                     );
                   })}
