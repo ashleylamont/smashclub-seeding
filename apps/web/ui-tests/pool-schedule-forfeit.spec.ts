@@ -52,6 +52,11 @@ async function openFixture(page: Page, theme: 'dark' | 'light', width: number) {
     score1: null,
     score2: null,
   });
+  const recordedIds = new Set([native.id, imported.id, played.id]);
+  for (const queue of snapshot.stationQueues) {
+    if (queue.nextMatchId && recordedIds.has(queue.nextMatchId)) queue.nextMatchId = null;
+    queue.upcoming = queue.upcoming.filter(({ matchId }) => !recordedIds.has(matchId));
+  }
 
   await page.goto(url);
   const schedule = page.locator('.pool-flow-rounds');
