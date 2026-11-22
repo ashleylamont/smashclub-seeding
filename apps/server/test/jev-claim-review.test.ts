@@ -1,15 +1,16 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import assert from 'node:assert/strict';
+import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { companies, playerClaims, players, user, type Db } from '@smashclub/db';
+import { companies, playerClaims, players, user } from '@smashclub/db';
 import { loadEnv } from '../src/env';
 import { RecomputeTrigger } from '../src/recompute/trigger';
 import { appRouter } from '../src/trpc/router';
-import { createTestDb } from './helpers/testDb';
+import { createTestDb, createTestDbSnapshot } from './helpers/testDb';
 import { jevClaimCases } from './fixtures/jevClaimCases';
 import { fixtureClient } from './helpers/challongeFixtures';
 
-let db: Db;
-let close: () => Promise<void>;
+let snapshot: Blob | undefined;
+let testDb: Awaited<ReturnType<typeof createTestDb>> | undefined;
 let playerId: string;
 
 const account = {
@@ -33,7 +34,13 @@ const score = {
 
 const fakeFetch = vi.fn<typeof fetch>();
 
+function caseDb() {
+  assert(testDb);
+  return testDb.db;
+}
+
 function caller({ enabled = true, admin = false, auto = false, minimum = '0.80' } = {}) {
+  const db = caseDb();
   return appRouter.createCaller({
     db,
     env: loadEnv({
@@ -49,8 +56,21 @@ function caller({ enabled = true, admin = false, auto = false, minimum = '0.80' 
   });
 }
 
+beforeAll(async () => {
+  // File hooks run again on watch reruns, rebuilding from the current migrations.
+  snapshot = await createTestDbSnapshot();
+});
+
+afterAll(() => {
+  snapshot = undefined;
+});
+
 beforeEach(async () => {
-  ({ db, close } = await createTestDb());
+  assert(snapshot);
+  testDb = await createTestDb(snapshot);
+  const { db } = testDb;
+  const existingClaims = await db.select({ id: playerClaims.id }).from(playerClaims).limit(1);
+  assert.equal(existingClaims.length, 0, 'The case must start with no player claims');
   await db.insert(user).values({ ...account, emailVerified: true });
   const [company] = await db
     .insert(companies)
@@ -67,7 +87,9 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.unstubAllGlobals();
-  await close();
+  const fixture = testDb;
+  testDb = undefined;
+  await fixture?.close();
 });
 
 it('sends only the opted-in evidence and leaves ownership with the admin', async () => {
@@ -108,7 +130,7 @@ it.each(['disabled', 'no consent', 'unverified'] as const)(
   'saves claims for manual review without sending data when %s',
   async (scenario) => {
     if (scenario === 'unverified') {
-      await db.update(user).set({ emailVerified: false }).where(eq(user.id, account.id));
+      await caseDb().update(user).set({ emailVerified: false }).where(eq(user.id, account.id));
     }
     const player = caller({ enabled: scenario !== 'disabled' });
     await player.me.requestClaim({
@@ -209,6 +231,7 @@ it.each([
   } else {
     usePerfectScore();
   }
+  const db = caseDb();
   if (scenario === 'unverified email') {
     await db.update(user).set({ emailVerified: false }).where(eq(user.id, account.id));
   }
@@ -251,6 +274,7 @@ it.each([
 });
 
 it.each(jevClaimCases)('applies the configured policy to $label', async (fixture) => {
+  const db = caseDb();
   await db.update(user).set(fixture.state.account).where(eq(user.id, account.id));
   await db
     .update(players)
