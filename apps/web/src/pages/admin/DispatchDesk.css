@@ -51,8 +51,12 @@
 .dispatch-pairings > .btn {
   justify-self: start;
 }
-.dispatch-pairings > .banner {
+.dispatch-pairings > .banner,
+.dispatch-confirmation > .banner {
   margin-bottom: 0;
+}
+.dispatch-confirmation {
+  overflow-wrap: anywhere;
 }
 .dispatch-list {
   margin: 0;

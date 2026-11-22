@@ -1,7 +1,8 @@
 import { matchPresentation } from '../../lib/matchPresentation';
-import { useState, type ReactNode } from 'react';
+import { useState, type ReactNode, type Ref } from 'react';
 import { useLocation } from '@tanstack/react-router';
 import { Button } from '../../components/ui/Button';
+import { Notice } from '../../components/ui/Feedback';
 import { Input } from '../../components/ui/Input';
 import { Select, SelectItem } from '../../components/ui/Select';
 import { ConfirmCancel, ConfirmDialog } from '../../components/ui/ConfirmDialog';
@@ -9,8 +10,24 @@ import { authClient } from '../../lib/auth';
 import { returnCallControlId } from '../../lib/opsWorkspace';
 import type { Command, Overview, Desk, Run } from './dispatchTypes';
 import { namedStationStart } from './dispatchCommand';
+import type { StartPairing } from './pairingDispatch';
 
 type MatchControl = Extract<Command, { kind: 'matchControl' }>;
+export function DispatchConfirmation({ text }: { text?: string }) {
+  return (
+    <div
+      aria-live="polite"
+      aria-atomic="true"
+      className={text ? 'dispatch-confirmation' : 'visually-hidden'}
+    >
+      {text && (
+        <Notice tone="success" live={false}>
+          {text}
+        </Notice>
+      )}
+    </div>
+  );
+}
 
 export function ActiveCall({
   match,
@@ -177,6 +194,9 @@ export function ReadyCall({
   desk,
   run,
   disabled,
+  starting,
+  dispatchButtonRef,
+  onDispatch,
   onMatch,
   onReviewReports,
   previous,
@@ -188,6 +208,9 @@ export function ReadyCall({
   desk: Desk;
   run: Run;
   disabled: boolean;
+  starting?: 'ordinary' | 'named';
+  dispatchButtonRef: Ref<HTMLButtonElement>;
+  onDispatch: (command: StartPairing, title: string, source: HTMLButtonElement) => void;
   onMatch: (id: string) => void;
   onReviewReports: () => void;
   previous?: string;
@@ -196,9 +219,14 @@ export function ReadyCall({
 }) {
   const [station, setStation] = useState(''),
     [location, setLocation] = useState('');
+  const title = matchPresentation(match).title;
+  const callingOrdinary = starting === 'ordinary';
+  const startingNamed = starting === 'named';
+  const ordinaryDisabled = disabled || !row.canDispatchOrdinary;
+  const namedDisabled = disabled || !station || !row.eligibleStationIds.includes(station);
   return (
     <article className="dispatch-row" data-match-id={match.id}>
-      <h4>{matchPresentation(match).title}</h4>
+      <h4>{title}</h4>
       <span className="chip">{row.state === 'ready' ? 'Ready to call' : 'Waiting'}</span>
       <small>
         {match.label}
@@ -221,21 +249,28 @@ export function ReadyCall({
           />
         </label>
         <Button
-          disabled={disabled || !row.canDispatchOrdinary}
-          onClick={() =>
-            void run({
-              kind: 'dispatch',
-              matchId: match.id,
-              stationId: null,
-              expectedRevision: match.revision,
-              expectedResourceRevision: desk.resourceRevision,
-              expectedOrdinaryCapacity: desk.capacity,
-              callLocation: location.trim() || null,
-              callOnly: true,
-            })
-          }
+          ref={dispatchButtonRef}
+          aria-disabled={callingOrdinary || undefined}
+          disabled={ordinaryDisabled && !callingOrdinary}
+          onClick={(event) => {
+            if (ordinaryDisabled) return;
+            onDispatch(
+              {
+                kind: 'dispatch',
+                matchId: match.id,
+                stationId: null,
+                expectedRevision: match.revision,
+                expectedResourceRevision: desk.resourceRevision,
+                expectedOrdinaryCapacity: desk.capacity,
+                callLocation: location.trim() || null,
+                callOnly: true,
+              },
+              title,
+              event.currentTarget,
+            );
+          }}
         >
-          Call ordinary match
+          {callingOrdinary ? 'Calling ordinary match…' : 'Call ordinary match'}
         </Button>
         {desk.stations.some((s) => s.reserved) && (
           <>
@@ -258,14 +293,19 @@ export function ReadyCall({
               </Select>
             </label>
             <Button
-              disabled={disabled || !station || !row.eligibleStationIds.includes(station)}
-              onClick={() =>
-                void run(
+              ref={dispatchButtonRef}
+              aria-disabled={startingNamed || undefined}
+              disabled={namedDisabled && !startingNamed}
+              onClick={(event) => {
+                if (namedDisabled) return;
+                onDispatch(
                   namedStationStart(match.id, station, match.revision, desk.resourceRevision),
-                )
-              }
+                  title,
+                  event.currentTarget,
+                );
+              }}
             >
-              Start named station
+              {startingNamed ? 'Starting named station…' : 'Start named station'}
             </Button>
           </>
         )}

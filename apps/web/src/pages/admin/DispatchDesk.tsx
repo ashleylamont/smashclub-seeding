@@ -1,7 +1,7 @@
-import { ActiveCall, ReadyCall } from './DispatchCall';
+import { ActiveCall, DispatchConfirmation, ReadyCall } from './DispatchCall';
 import { DispatchSetup } from './DispatchSetup';
 import { UntakenCallRecovery, type UntakenCallDesk } from './UntakenCallRecovery';
-import type { Overview } from './dispatchTypes';
+import type { Desk, Overview } from './dispatchTypes';
 import type { DispatchCommandController } from './dispatchCommand';
 import { useImperativeHandle, useRef, useState, type Ref } from 'react';
 import { Button } from '../../components/ui/Button';
@@ -11,6 +11,7 @@ import { Input } from '../../components/ui/Input';
 import { Select, SelectItem } from '../../components/ui/Select';
 import { DispatchShortcuts } from './DispatchShortcuts';
 import { dispatchShortcut, focusDispatchTarget } from './dispatchKeyboard';
+import { usePairingDispatch } from './pairingDispatch';
 import './DispatchDesk.css';
 
 export type DispatchDeskNavigation = { goToReadyQueue: () => boolean };
@@ -43,6 +44,13 @@ export function DispatchDesk({
   const [limit, setLimit] = useState(12);
   const pairingsHeading = useRef<HTMLHeadingElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
+  const { starting, confirmationText, dispatchButtonRef, startPairing } = usePairingDispatch({
+    planId: data.plan.id,
+    desk: data.operatorDispatch,
+    dispatch,
+    active: shortcutsActive,
+    heading: pairingsHeading,
+  });
   const changeView = (value: string) => {
     setView(value);
     setLimit(12);
@@ -101,21 +109,7 @@ export function DispatchDesk({
       )}
       {shared && (
         <>
-          <section className="card dispatch-summary" aria-label="Shared capacity">
-            <h3>Ordinary setups</h3>
-            <strong>
-              {desk.active} / {desk.capacity} in use
-            </strong>
-            <p>
-              Calls reserve capacity. A score can be reported even if the match was never called.
-            </p>
-            {desk.overCapacity > 0 && (
-              <p role="status" className="banner banner-warning">
-                {desk.overCapacity} above the new cap. Existing matches stay in place; new ordinary
-                calls wait until space is free.
-              </p>
-            )}
-          </section>
+          <OrdinaryCapacitySummary desk={desk} />
           <section className="card">
             <h3>Called and playing</h3>
             {desk.queue
@@ -156,6 +150,7 @@ export function DispatchDesk({
                 }}
               />
             </div>
+            <DispatchConfirmation text={confirmationText} />
             <PairingFilters
               search={search}
               searchInput={searchInput}
@@ -183,6 +178,11 @@ export function DispatchDesk({
                       desk={desk}
                       run={run}
                       disabled={busy}
+                      starting={starting?.matchId === match.id ? starting.action : undefined}
+                      dispatchButtonRef={dispatchButtonRef}
+                      onDispatch={(command, title, source) =>
+                        void startPairing(command, title, source)
+                      }
                       onMatch={onMatch}
                       onReviewReports={onReviewReports}
                       previous={queuePairings[index - 1]?.match.id}
@@ -320,6 +320,24 @@ export function DispatchDesk({
             ))}
           </Disclosure>
         </>
+      )}
+    </section>
+  );
+}
+
+function OrdinaryCapacitySummary({ desk }: { desk: Desk }) {
+  return (
+    <section className="card dispatch-summary" aria-label="Shared capacity">
+      <h3>Ordinary setups</h3>
+      <strong>
+        {desk.active} / {desk.capacity} in use
+      </strong>
+      <p>Calls reserve capacity. A score can be reported even if the match was never called.</p>
+      {desk.overCapacity > 0 && (
+        <p role="status" className="banner banner-warning">
+          {desk.overCapacity} above the new cap. Existing matches stay in place; new ordinary calls
+          wait until space is free.
+        </p>
       )}
     </section>
   );
