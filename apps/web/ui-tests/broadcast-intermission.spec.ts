@@ -28,6 +28,7 @@ for (const theme of ['dark', 'light'] as const)
             ? []
             : snapshot.matches.filter(({ status }) => status === 'complete').slice(0, 1),
         nativeBrackets: [],
+        placements: [],
         plan: { ...snapshot.plan, status: width === 390 ? 'underway' : 'complete' },
       };
       responses['eventOps.snapshot'] = event;
@@ -139,6 +140,7 @@ for (const width of [1280, 1920]) {
       }
       Object.assign(fixture.snapshot, {
         matches,
+        placements: [],
         stationQueues: [],
         poolRounds: [],
         nativeBrackets: [
@@ -486,6 +488,7 @@ for (const [width, theme] of [
     const event = {
       ...snapshot,
       matches: [playing!, played!, pending!],
+      placements: [],
       nativeBrackets: [
         {
           id: 'rehearsal',
@@ -671,6 +674,7 @@ for (const [width, theme] of [
       plan,
       nativeBrackets: [],
       matches: [pool, played, forfeit, bye, pending, noContest, lower],
+      placements: [],
       brackets: [
         { division: 'upper', stage: 'main', slug: 'linked-upper' },
         { division: 'lower', stage: 'consolation', slug: 'linked-lower' },

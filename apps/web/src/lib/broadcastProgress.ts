@@ -159,12 +159,21 @@ function poolPanels(data: ProgressData) {
   const keyFor = ({ division, poolIndex }: { division: string; poolIndex: number }) =>
     `${division}:${poolIndex}`;
   const pools = new Map(poolStandings(data.matches).map((pool) => [keyFor(pool), pool]));
+  const includePool = (
+    key: string,
+    { division, poolIndex }: Pick<Pool, 'division' | 'poolIndex'>,
+  ) => {
+    if (!pools.has(key))
+      pools.set(key, { division, poolIndex, complete: 0, total: 0, players: [] });
+  };
   const orderStatuses = new Map(
     (data.poolOrders ?? []).map((order) => [keyFor(order), order.status]),
   );
   const placements = new Map<string, Placement[]>();
   for (const placement of data.placements ?? []) {
     const key = keyFor(placement);
+    if (data.poolScope && data.poolScope !== key) continue;
+    includePool(key, placement);
     const existing = placements.get(key) ?? [];
     existing.push(placement);
     placements.set(key, existing);
@@ -190,14 +199,7 @@ function poolPanels(data: ProgressData) {
       const { poolId, poolIndex, division, status, entrantId, place } = slot;
       existing.push({ poolId, poolIndex, division, status, entrantId, place, stage });
       qualifications.set(key, existing);
-      if (!pools.has(key))
-        pools.set(key, {
-          division: slot.division,
-          poolIndex: slot.poolIndex,
-          complete: 0,
-          total: 0,
-          players: [],
-        });
+      includePool(key, slot);
     }
   }
   return [...pools.entries()]
