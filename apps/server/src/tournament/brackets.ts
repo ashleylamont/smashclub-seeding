@@ -25,6 +25,70 @@ export function matchInputStatus(match: Match, byId: ReadonlyMap<string, Match>)
   return required && parent.winnerId === required ? 'ready' : 'inactive';
 }
 
+/** Reopen only the untouched reset that the grand final itself skipped. Advancement fills its feeds. */
+export function reopenAutomaticallySkippedReset(
+  state: TournamentState,
+  final: Match,
+  correctedWinnerId: string | null,
+) {
+  if (
+    final.bracketLane !== 'final' ||
+    !final.bracketId ||
+    !final.resultCommandId ||
+    !final.player1Id ||
+    final.winnerId !== final.player1Id ||
+    !correctedWinnerId ||
+    correctedWinnerId !== final.player2Id
+  )
+    return;
+  const reset = state.matches.find(
+    (match) =>
+      match.bracketLane === 'reset' &&
+      match.bracketId === final.bracketId &&
+      match.activation?.matchId === final.id &&
+      match.activation.winnerSide === 2 &&
+      match.parent1Id === final.id &&
+      match.parent2Id === final.id &&
+      match.parent1Outcome !== 'loser' &&
+      match.parent2Outcome === 'loser',
+  );
+  if (
+    !reset ||
+    !resolved(reset) ||
+    !reset.skipped ||
+    reset.outcome !== 'no_contest' ||
+    reset.resultCommandId !== final.resultCommandId ||
+    reset.completedAt === null ||
+    reset.completedAt !== final.completedAt ||
+    reset.player1Id !== null ||
+    reset.player2Id !== null ||
+    reset.started ||
+    reset.calledAt != null ||
+    reset.callSequence != null ||
+    reset.callLocation != null ||
+    reset.stationId !== null ||
+    reset.score1 !== null ||
+    reset.score2 !== null ||
+    reset.liveScore1 !== null ||
+    reset.liveScore2 !== null ||
+    reset.progressRevision !== 0 ||
+    reset.winnerId !== null ||
+    reset.automaticFromRevision !== null ||
+    state.reports.some((report) => report.matchId === reset.id) ||
+    state.supersededPlayedSets?.some(
+      ({ match, replacementMatchId }) => match.id === reset.id || replacementMatchId === reset.id,
+    )
+  )
+    return;
+  delete reset.skipped;
+  Object.assign(reset, {
+    status: 'blocked',
+    outcome: null,
+    completedAt: null,
+    resultCommandId: null,
+  });
+}
+
 /** Execute advancement once on the decision path; persist resulting matches. */
 export function advance(state: TournamentState, at: number, commandId: string) {
   const withdrawn = new Set(
