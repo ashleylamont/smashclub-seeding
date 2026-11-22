@@ -30,8 +30,7 @@ export function PlayerEvent({ planId }: { planId: string }) {
     return <Notice tone="danger">This event is unavailable or has not been published.</Notice>;
   const { data } = hub;
   if (
-    hub.closed &&
-    data &&
+    data?.plan.status === 'complete' &&
     !data.matches.length &&
     (data.plan.bracketMode === 'challonge' || data.plan.historicalResultsSlug)
   )
@@ -163,7 +162,7 @@ function ImportedArchive({ data, hub }: { data: PublicEventSnapshot; hub: Player
     <div className="ops-page player-event-hub player-event-archive">
       <PageHeader
         title={data.plan.name}
-        description={`${data.plan.status === 'cancelled' ? 'Cancelled' : 'Finished'} · ${formatDate(data.plan.eventDate)}`}
+        description={`Finished · ${formatDate(data.plan.eventDate)}`}
       />
       {(!hub.online || hub.publicEvent.isError) && (
         <Notice tone="warning">

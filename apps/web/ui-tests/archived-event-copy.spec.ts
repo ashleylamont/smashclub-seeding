@@ -178,6 +178,7 @@ for (const theme of ['dark', 'light'] as const) {
         results.getByRole('link', { name: 'View historical results →' }),
       ).toHaveAttribute('href', '/events/archived-night');
       await expect(page.getByText('Results remain available.', { exact: false })).toBeVisible();
+      await reviewRoute(page, testInfo, 'hub-cancelled-retained-results');
       expect(fixture.unexpected).toEqual([]);
       expect(fixture.submissions).toEqual([]);
     });
