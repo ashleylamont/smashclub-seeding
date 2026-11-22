@@ -47,7 +47,7 @@ export function OpsAttentionDesk({
       )}
       {firstDispute && (
         <div className="ui-actions ops-attention-disagreements">
-          <p className="muted ops-attention-status" role="status">
+          <p className="muted" role="status">
             {disputes.length} conflicting score {disputes.length === 1 ? 'report' : 'reports'}
           </p>
           <Button size="small" onClick={() => onJump(`score-report-${firstDispute.id}`)}>
