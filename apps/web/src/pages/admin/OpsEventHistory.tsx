@@ -6,6 +6,7 @@ import { EmptyState, LoadingState, Notice } from '../../components/ui/Feedback';
 import { Input } from '../../components/ui/Input';
 import { Select, SelectItem } from '../../components/ui/Select';
 import { trpc } from '../../lib/trpc';
+import { useOnlineStatus } from '../../lib/useOnlineStatus';
 import './OpsEventHistory.css';
 
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
@@ -34,8 +35,12 @@ export function OpsEventHistory({
   attendanceOnly?: boolean;
 }) {
   const [search, setSearch] = useState('');
-  const [category, setCategory] = useState(attendanceOnly ? 'players' : 'all');
+  const [category, setCategory] = useState('all');
   const titleId = useId();
+  const online = useOnlineStatus();
+  const closed = data.plan.status === 'complete' || data.plan.status === 'cancelled';
+  const title = attendanceOnly ? 'Attendance history' : 'Event history';
+  const kind = attendanceOnly ? 'attendance changes' : 'changes';
   const history = useInfiniteQuery({
     queryKey: ['eventOps', data.plan.id, 'history'],
     initialPageParam: undefined as History['nextCursor'] | undefined,
@@ -46,25 +51,22 @@ export function OpsEventHistory({
     refetchInterval: active ? 5000 : false,
     retry: false,
   });
-  const entries = history.data?.pages.flatMap((page) => page.entries) ?? [];
-  const selected = entries.filter(
+  const loaded = history.data?.pages.flatMap((page) => page.entries) ?? [];
+  const entries = attendanceOnly ? loaded.filter((entry) => entry.category === 'players') : loaded;
+  const filtered = entries.filter(
     (entry) =>
       (category === 'all' || entry.category === category) &&
       `${entry.title} ${entry.summary} ${entry.actor} ${entry.eventName}`
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
-  const filtered = attendanceOnly ? [...selected].reverse() : selected;
+  if (attendanceOnly) filtered.reverse();
+  const scope = history.hasNextPage || history.isError || !online ? 'loaded' : 'recorded';
   return (
     <section className="card ops-history" aria-labelledby={titleId}>
       <div className="ops-history-heading">
-        <div>
-          <h3 id={titleId}>{attendanceOnly ? 'Attendance history' : 'Event history'}</h3>
-          <p className="muted">
-            Who changed what, and when. Recorded events remain available after the event closes.
-          </p>
-        </div>
-        {data.plan.liveOwned && (
+        <h3 id={titleId}>{title}</h3>
+        {data.plan.liveOwned && history.data && (
           <Button
             type="button"
             size="small"
@@ -75,58 +77,75 @@ export function OpsEventHistory({
           </Button>
         )}
       </div>
-      {!data.plan.liveOwned ? (
-        <EmptyState title="Live history has not started">
-          Native events begin recording their live history when pools are locked or a TO starts play
-          or records the first result.
-        </EmptyState>
-      ) : (
+      {!data.plan.liveOwned &&
+        (closed ? (
+          <EmptyState title="No live history was recorded" />
+        ) : (
+          <EmptyState title="Live history has not started">
+            Native events begin recording their live history when pools are locked or a TO starts
+            play or records the first result.
+          </EmptyState>
+        ))}
+      {data.plan.liveOwned &&
+        history.isPending &&
+        (online ? (
+          <LoadingState>Loading {title.toLowerCase()}…</LoadingState>
+        ) : (
+          <p role="status">Waiting for a connection to load {title.toLowerCase()}…</p>
+        ))}
+      {data.plan.liveOwned && history.isError && (
+        <Notice tone="danger">
+          {history.isFetchNextPageError
+            ? 'Could not load older changes.'
+            : history.data
+              ? 'Could not refresh history.'
+              : `Could not load ${title.toLowerCase()}.`}{' '}
+          {history.error.message}{' '}
+          <Button
+            type="button"
+            size="small"
+            onClick={() =>
+              void (history.isFetchNextPageError ? history.fetchNextPage() : history.refetch())
+            }
+          >
+            Retry history
+          </Button>
+        </Notice>
+      )}
+      {data.plan.liveOwned && history.data && (
         <>
-          <div className="ops-history-filters">
-            {!attendanceOnly && (
+          {(entries.length > 0 || history.hasNextPage) && (
+            <div className="ops-history-filters">
+              {!attendanceOnly && (
+                <label>
+                  Change type
+                  <Select value={category} onValueChange={setCategory}>
+                    {categories.map(([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </Select>
+                </label>
+              )}
               <label>
-                Change type
-                <Select value={category} onValueChange={setCategory}>
-                  {categories.map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </Select>
+                Search loaded history
+                <Input
+                  type="search"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder={attendanceOnly ? 'Player or organiser' : 'Player, match or change'}
+                />
               </label>
-            )}
-            <label>
-              Search loaded history
-              <Input
-                type="search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Player, match, organiser or change"
-              />
-            </label>
-          </div>
-          {history.isPending && <LoadingState>Loading event history…</LoadingState>}
-          {history.isError && (
-            <Notice tone="danger">
-              Could not load event history. {history.error.message}{' '}
-              <Button
-                type="button"
-                size="small"
-                onClick={() =>
-                  void (history.isFetchNextPageError ? history.fetchNextPage() : history.refetch())
-                }
-              >
-                Retry history
-              </Button>
-            </Notice>
+            </div>
           )}
-          <p className="muted">
-            {filtered.length} of {entries.length} loaded changes shown.{' '}
-            {attendanceOnly
-              ? 'Chronological order, earliest loaded change first.'
-              : 'Newest first.'}{' '}
-            Filters apply to loaded entries; load older changes to search further back.
-          </p>
+          {entries.length > 0 && (
+            <p className="muted">
+              {filtered.length} of {entries.length} {scope} {kind} shown.{' '}
+              {attendanceOnly ? 'Earliest first.' : 'Newest first.'}{' '}
+              {history.hasNextPage && 'Load older changes to search further back.'}
+            </p>
+          )}
           <ol
             className="ops-history-list"
             aria-label={attendanceOnly ? 'Recorded attendance changes' : 'Recorded event changes'}
@@ -142,8 +161,14 @@ export function OpsEventHistory({
               />
             ))}
           </ol>
-          {!history.isPending && !history.isError && !filtered.length && (
-            <p>No changes match this view.</p>
+          {!filtered.length && (
+            <p>
+              {entries.length > 0
+                ? 'No changes match this view.'
+                : scope === 'loaded'
+                  ? `No ${kind} in the loaded history.`
+                  : `No ${attendanceOnly ? kind : 'event changes'} have been recorded.`}
+            </p>
           )}
           {history.hasNextPage && (
             <Button
