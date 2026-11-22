@@ -2,13 +2,19 @@ import type { ReactNode } from 'react';
 
 export function Notice({
   tone = 'info',
+  live = true,
   children,
 }: {
   tone?: 'info' | 'success' | 'warning' | 'danger';
+  /** Use false when a persistent parent live region already announces updates. */
+  live?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className={`banner banner-${tone}`} role={tone === 'danger' ? 'alert' : 'status'}>
+    <div
+      className={`banner banner-${tone}`}
+      role={live ? (tone === 'danger' ? 'alert' : 'status') : undefined}
+    >
       {children}
     </div>
   );

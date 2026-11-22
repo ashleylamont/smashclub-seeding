@@ -4,9 +4,9 @@ PRs run **CI**. Main pushes, version tags and manual publication run the full re
 
 ## Affected checks on pull requests
 
-The **Changeset** job summary reports affected pnpm workspaces and their dependents, the checks it authorized skipping, and any further candidates that still run. It compares the tested merge tree against its first parent and verifies the second parent matches the PR head. Moves across scopes count both paths.
+The **Changeset** job summary reports affected pnpm workspaces and their dependents, the checks it authorized skipping, and any further candidates that still run. It compares the tested merge tree against its first parent and verifies the second parent matches the PR head. Moves across scopes count both paths. On PRs, the **Typecheck** job runs the full typecheck and then adds a bounded, advisory **Preview Nx affected tasks** step. It reports which package typechecks and unit suites Nx would select for the same comparison. **Unit tests** runs the full suite, and Publish runs both full checks.
 
-Web-only and prose-only PRs skip **PostgreSQL integration** and **Legacy Python tests**. Prose covers repository Markdown guidance, Markdown under `docs/` and Changeset notes. Browser, visual, bundle and production-image checks still run. A change outside those isolated scopes, including workspace configuration, migrations or workflow scripts, runs the full suite. Set the repository Actions variable `CI_REPORT_ONLY` to `true` to keep the summary and run every check on PRs.
+Web-only and prose-only PRs skip **PostgreSQL integration** and **Legacy Python tests**. Prose covers repository Markdown guidance, Markdown under `docs/` and Changeset notes. Visual, bundle, and production-image checks still run. Browser event flows and their report also run, with a deferral for validated version-only PRs until Publish verifies the exact main commit. A change outside the isolated scopes, including workspace configuration, migrations, or workflow scripts, runs the full suite. Set the repository Actions variable `CI_REPORT_ONLY` to `true` to keep the summaries and run every check on PRs.
 
 ## Required contracts
 
@@ -15,7 +15,7 @@ Web-only and prose-only PRs skip **PostgreSQL integration** and **Legacy Python 
 - **Migration upgrades:** real historical journals through migrations 0010, 0018 and 0020, followed by the current complete journal. Synthetic identities, historical results, result-stage policy, untouched/played/explicitly locked draws, uniqueness and foreign keys must survive as appropriate. New connections reapply the normal migrator without duplicating ledger entries.
 - **Lifecycle:** soft-lock retries preserve assignments; reopening connections preserves committed state; unsafe feeder corrections fail after downstream play starts. Injected database failures roll back both report and event finalization. Concurrent finalizers and retry after reconnection create one durable history, while byes/forfeits advance but never invent rated games. WHR recomputations produce identical player ratings from durable results.
 - **Production image runtime:** builds `deploy/Dockerfile`, uses its production-only dependencies as the unprivileged `node` user, boots against PostgreSQL 17, upgrades a synthetic pre-stage-aware database, exercises health, public identity API/privacy, anonymous auth/admin boundaries, frontend assets and deep links, then restarts and repeats probes. The internal Docker network prevents external provider calls. Logs are retained on both success and failure.
-- **Browser event flows** rehearse the real API on Ubuntu. **UI behavior and accessibility** runs portable fixture cases in two Ubuntu shards, and **UI accessibility and visuals** runs the fixture cases with Darwin baselines on macOS. Each job retains its diagnostic artifacts. [UI review](ui-visual-review.md)
+- **Browser event flows** rehearse the real API on Ubuntu. **UI behavior and accessibility** runs portable fixture cases in three Ubuntu shards, and **UI accessibility and visuals** runs the fixture cases with Darwin baselines on macOS. Each job retains its diagnostic artifacts. [UI review](ui-visual-review.md)
 
 - **Server bundle boots:** preserves the original missing-`DATABASE_URL` environment-validation check, which catches module-load failures independently of the image check.
 
@@ -24,8 +24,8 @@ browser installation, discovery, execution and artifact upload. The named
 **Install portable UI browser** and **Run portable UI shard** steps print elapsed
 wall time with Bash `time`; the same steps run on PRs and exact-main Publish
 verification. Compare both steps rather than attributing the whole job to tests.
-The case-set digest, disjoint shard plan, single-attempt pass checks and required
-publication gates remain mandatory.
+All three portable jobs must report a common disjoint and exhaustive shard plan,
+match the Darwin case-set digest and pass every assigned case on the first attempt.
 
 This budget follows the [#370 first-attempt timeout](https://github.com/ashleylamont/smashclub-seeding/actions/runs/42761702568/job/129648662811):
 browser installation took 2m 49s and shard execution used 12m 09s before the job
@@ -39,7 +39,7 @@ observed slow setup and execution together without changing test selection,
 workers, per-test timeouts, retries or image baselines. Verify future changes on
 both a PR and its exact-main Publish run using the named step timings.
 
-**All checks** rejects failed, cancelled, missing and unexpected skipped jobs. Only the two PR jobs listed above can be skipped, and only with an explicit plan from a successful **Changeset** job. `pnpm test:postgres` additionally validates its JUnit report: all named required suites must appear and no tests may be skipped. Missing binaries, wrong PostgreSQL major, missing Docker, migrations or an empty/skipped suite fail the command.
+**All checks** rejects failed, cancelled, missing and unexpected skipped jobs. The two optional PR jobs and the version-only browser deferral require an explicit plan from a successful **Changeset** job. The browser deferral must apply to both the event flows and their report. Publish requires every job to pass. `pnpm test:postgres` additionally validates its JUnit report: all named required suites must appear and no tests may be skipped. Missing binaries, wrong PostgreSQL major, missing Docker, migrations or an empty/skipped suite fail the command.
 
 ## Run locally
 

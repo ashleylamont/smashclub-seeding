@@ -72,7 +72,7 @@ The assigned-TO and admin routes share the same six destinations. `?view=` selec
 
 Attention links switch destination, open ancestor disclosures, scroll and focus the relevant control. Switching tabs preserves edits; a full refresh still discards local drafts as before. The attention summary stays visible across destinations. Broadcast uses the same match controls and API; the OBS display remains a separate transparent composition. Its event title wraps instead of clipping, and idle/result rails use literal states without fallback announcements.
 
-Richer desk shortcuts and a unified public event hub need their own design and API review.
+In the shared dispatch queue, **Keyboard shortcuts** beside Pairings lists Ctrl+Shift+F7 for pairing search, Ctrl+Shift+F8 for the selected match’s score editor, and Ctrl+Shift+F9 for Ready to call. Hold Fn or Globe too if these keys control media. The shortcuts pause in fields, menus and dialogs. They keep search and score drafts and leave calls and results to the existing controls.
 
 ## Copy audit
 

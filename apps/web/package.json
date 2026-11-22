@@ -1,7 +1,7 @@
 {
   "name": "@smashclub/web",
   "private": true,
-  "version": "0.20.1",
+  "version": "0.20.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -52,5 +52,12 @@
     "smash-ultimate-assets": "0.1.1",
     "typescript": "~5.9.3",
     "vite": "^8.0.0"
+  },
+  "nx": {
+    "targets": {
+      "test": {
+        "command": "pnpm exec vitest run --project web"
+      }
+    }
   }
 }

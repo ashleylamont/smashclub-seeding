@@ -1,4 +1,5 @@
 import { skippableJobs } from './plan-pr-checks.mjs';
+import { portableUiShards } from './portable-ui-shards.mjs';
 
 export const requiredJobs = [
   'typecheck',
@@ -8,8 +9,7 @@ export const requiredJobs = [
   'test',
   'e2e',
   'e2e-report',
-  'ui-portable',
-  'ui-portable-2',
+  ...Object.keys(portableUiShards),
   'ui-quality',
   'build',
   'bundle-smoke',
@@ -43,22 +43,26 @@ export function assertRequiredJobs(results, { event, reportOnly } = {}) {
     if (result !== 'success' && !(result === 'skipped' && skips.includes(name)))
       throw new Error(`${name} did not pass (${result ?? 'missing'})`);
   }
-  const first = results['ui-portable'].outputs;
-  const second = results['ui-portable-2'].outputs;
+  const shards = Object.entries(portableUiShards).map(([job, ordinal]) => ({
+    ordinal,
+    outputs: results[job].outputs,
+  }));
   const darwinCases = results['ui-quality'].outputs?.ui_case_set;
   if (
     !/^[a-f0-9]{64}$/.test(darwinCases) ||
-    first?.ui_case_set !== darwinCases ||
-    second?.ui_case_set !== darwinCases
+    shards.some(({ outputs }) => outputs?.ui_case_set !== darwinCases)
   )
     throw new Error('Portable and Darwin jobs did not verify the same UI case set.');
+
+  const plan = shards[0].outputs.ui_portable_plan;
   if (
-    first.ui_portable_shard !== '1/2' ||
-    second.ui_portable_shard !== '2/2' ||
-    !/^[a-f0-9]{64}$/.test(first.ui_portable_plan) ||
-    first.ui_portable_plan !== second.ui_portable_plan
+    !/^[a-f0-9]{64}$/.test(plan) ||
+    shards.some(
+      ({ ordinal, outputs }) =>
+        outputs.ui_portable_shard !== ordinal || outputs.ui_portable_plan !== plan,
+    )
   )
-    throw new Error('Portable UI jobs did not pass both shards of the same plan.');
+    throw new Error('Portable UI jobs did not pass all three shards of the same plan.');
 }
 if (process.env.RESULTS) {
   assertRequiredJobs(JSON.parse(process.env.RESULTS), {

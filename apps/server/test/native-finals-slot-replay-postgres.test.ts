@@ -619,7 +619,10 @@ describe('reciprocal finals routes on PostgreSQL', () => {
       reviewVersion: 2,
     });
     if (!preview.allowed) throw new Error(preview.issues.join(' '));
-    await send({ ...reviewedCommand(preview.revisionToken), kind: 'replayFinalsRoutesV2' });
+    const { receipt } = await send({
+      ...reviewedCommand(preview.revisionToken),
+      kind: 'replayFinalsRoutesV2',
+    });
     const saved = await state();
     const { entrantId, memberPlayerIds } = context.substitution!;
     expect(saved.entrants.find(({ id }) => id === entrantId)).toMatchObject({
@@ -647,6 +650,35 @@ describe('reciprocal finals routes on PostgreSQL', () => {
     try {
       expect(await restarted.state(planId)).toEqual(saved);
       expect(await restarted.replay(planId)).toEqual(saved);
+      // With the checkpoints removed, the desk audit can see the whole mixed stream.
+      const { audit } = await restarted.snapshot(planId, true);
+      const mixedKinds = ['substituteDoublesMember', 'addLateDoublesPair', 'replayFinalsRoutesV2'];
+      expect(audit.filter(({ kind }) => mixedKinds.includes(kind))).toMatchObject([
+        {
+          kind: 'substituteDoublesMember',
+          actorId: nativeAdmin.id,
+          command: {
+            kind: 'substituteDoublesMember',
+            entrantId,
+            incomingPlayerId: memberPlayerIds[1],
+          },
+        },
+        {
+          kind: 'addLateDoublesPair',
+          actorId: nativeAdmin.id,
+          command: {
+            kind: 'addLateDoublesPair',
+            division: 'lower',
+            memberPlayerIds: lateMemberIds,
+          },
+        },
+        {
+          kind: 'replayFinalsRoutesV2',
+          actorId: nativeAdmin.id,
+          sequence: receipt.sequence,
+          command: { kind: 'replayFinalsRoutesV2', matchId: reviewInput.matchId },
+        },
+      ]);
     } finally {
       await restarted.shutdown();
     }

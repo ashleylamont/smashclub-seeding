@@ -188,8 +188,8 @@
 
 .app-footer {
   border-top: 1px solid var(--border);
-  padding: var(--s3) var(--s5);
-  padding-bottom: calc(var(--s3) + env(safe-area-inset-bottom));
+  padding: var(--s1) var(--s5);
+  padding-bottom: calc(var(--s1) + env(safe-area-inset-bottom));
   font-family: var(--mono);
   font-size: var(--fs-xs);
   color: var(--text-soft);
@@ -201,21 +201,32 @@
   gap: var(--s1) var(--s3);
 }
 
-.app-footer a {
+.app-footer :is(a, .link-button) {
   color: inherit;
   text-decoration-color: var(--border);
   text-underline-offset: 2px;
 }
 
-.app-footer > a {
-  /* Enlarge the text link's target within the existing footer padding. */
-  padding-block: var(--s1);
-  margin-block: calc(-1 * var(--s1));
-  text-decoration: underline;
+.app-footer-links {
+  display: flex;
+  gap: var(--s3);
 }
 
-.app-footer a:hover,
-.app-footer a:focus-visible {
+.app-footer-links > :is(a, .link-button) {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-height-small);
+  text-decoration-line: underline;
+}
+
+@media (max-width: 600px), (pointer: coarse) {
+  .app-footer-links > :is(a, .link-button) {
+    min-height: 44px;
+  }
+}
+
+.app-footer :is(a, .link-button):hover,
+.app-footer :is(a, .link-button):focus-visible {
   color: var(--accent);
   text-decoration-color: currentColor;
 }

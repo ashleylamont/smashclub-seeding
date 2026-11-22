@@ -3,12 +3,16 @@ import { DispatchSetup } from './DispatchSetup';
 import { UntakenCallRecovery, type UntakenCallDesk } from './UntakenCallRecovery';
 import type { Overview } from './dispatchTypes';
 import type { DispatchCommandController } from './dispatchCommand';
-import { useState } from 'react';
+import { useImperativeHandle, useRef, useState, type Ref } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Disclosure } from '../../components/ui/Disclosure';
 import { Input } from '../../components/ui/Input';
 import { Select, SelectItem } from '../../components/ui/Select';
+import { DispatchShortcuts } from './DispatchShortcuts';
+import { dispatchShortcut, focusDispatchTarget } from './dispatchKeyboard';
 import './DispatchDesk.css';
+
+export type DispatchDeskNavigation = { goToReadyQueue: () => boolean };
 
 export function DispatchDesk({
   data,
@@ -16,16 +20,34 @@ export function DispatchDesk({
   callDesk,
   onMatch,
   onReviewReports,
+  shortcutsActive,
+  focusScore,
+  navigationRef,
 }: {
   data: Overview;
   dispatch: DispatchCommandController;
   callDesk: UntakenCallDesk;
   onMatch: (id: string) => void;
   onReviewReports: () => void;
+  shortcutsActive: boolean;
+  focusScore: () => boolean;
+  navigationRef: Ref<DispatchDeskNavigation>;
 }) {
   const [search, setSearch] = useState('');
   const [view, setView] = useState('ready');
   const [limit, setLimit] = useState(12);
+  const pairingsHeading = useRef<HTMLHeadingElement>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const changeView = (value: string) => {
+    setView(value);
+    setLimit(12);
+  };
+  const goToReadyQueue = () => {
+    if (!pairingsHeading.current) return false;
+    if (view !== 'ready') changeView('ready');
+    return focusDispatchTarget(pairingsHeading.current);
+  };
+  useImperativeHandle(navigationRef, () => ({ goToReadyQueue }));
   if (!data.operatorDispatch) return null;
   const desk = data.operatorDispatch;
   const { busy, error, run } = dispatch;
@@ -112,33 +134,33 @@ export function DispatchDesk({
             )}
           </section>
           <section className="card dispatch-pairings">
-            <h3>Pairings</h3>
-            <div className="dispatch-call-controls">
-              <label>
-                Find a pairing
-                <Input
-                  value={search}
-                  onChange={(event) => {
-                    setSearch(event.target.value);
-                    setLimit(12);
-                  }}
-                />
-              </label>
-              <label>
-                Queue view
-                <Select
-                  value={view}
-                  onValueChange={(value) => {
-                    setView(value);
-                    setLimit(12);
-                  }}
-                >
-                  <SelectItem value="ready">Ready to call</SelectItem>
-                  <SelectItem value="waiting">Waiting</SelectItem>
-                  <SelectItem value="all">All queue pairings</SelectItem>
-                </Select>
-              </label>
+            <div className="dispatch-pairings-heading">
+              <h3
+                ref={pairingsHeading}
+                tabIndex={-1}
+                aria-keyshortcuts={dispatchShortcut('readyQueue')}
+              >
+                Pairings
+              </h3>
+              <DispatchShortcuts
+                active={shortcutsActive}
+                actions={{
+                  findPairing: () => focusDispatchTarget(searchInput.current),
+                  focusScore,
+                  readyQueue: goToReadyQueue,
+                }}
+              />
             </div>
+            <PairingFilters
+              search={search}
+              searchInput={searchInput}
+              view={view}
+              onSearchChange={(value) => {
+                setSearch(value);
+                setLimit(12);
+              }}
+              onViewChange={changeView}
+            />
             <ol className="dispatch-list" hidden={!visiblePairings.length}>
               {visiblePairings.slice(0, limit).map((pairing) => {
                 const { match, row } = pairing;
@@ -290,6 +312,42 @@ export function DispatchDesk({
         </>
       )}
     </section>
+  );
+}
+
+function PairingFilters({
+  search,
+  searchInput,
+  view,
+  onSearchChange,
+  onViewChange,
+}: {
+  search: string;
+  searchInput: Ref<HTMLInputElement>;
+  view: string;
+  onSearchChange: (value: string) => void;
+  onViewChange: (value: string) => void;
+}) {
+  return (
+    <div className="dispatch-call-controls">
+      <label>
+        Find a pairing
+        <Input
+          ref={searchInput}
+          aria-keyshortcuts={dispatchShortcut('findPairing')}
+          value={search}
+          onChange={(event) => onSearchChange(event.target.value)}
+        />
+      </label>
+      <label>
+        Queue view
+        <Select value={view} onValueChange={onViewChange}>
+          <SelectItem value="ready">Ready to call</SelectItem>
+          <SelectItem value="waiting">Waiting</SelectItem>
+          <SelectItem value="all">All queue pairings</SelectItem>
+        </Select>
+      </label>
+    </div>
   );
 }
 

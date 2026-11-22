@@ -20,6 +20,13 @@
   display: grid;
   gap: var(--s4);
 }
+.player-call-alerts > p {
+  margin: 0;
+}
+.player-call-alerts .banner {
+  margin: var(--s3) 0 0;
+  overflow-wrap: anywhere;
+}
 .player-event-progress {
   display: grid;
   gap: var(--s2);
@@ -42,6 +49,10 @@
 .player-event-hub .ops-match-meta {
   align-items: start;
   font-size: var(--fs-xs);
+}
+.player-event-hub .ops-match-meta > .chip {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .player-event-hub .guest-report-status {
   font-size: var(--fs-sm);

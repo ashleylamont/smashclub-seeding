@@ -29,7 +29,7 @@ WEB_DIST_DIR="$PWD/apps/web/dist" pnpm dev:harness
 | --- | --- |
 | `pnpm check` | Typecheck, lint, format, unit/server tests and build; no external services. |
 | `pnpm typecheck` | App and package source, UI fixtures and E2E tests; does not build frontend assets. |
-| `pnpm test:watch` | Vitest watch loop. Server files run serially because each applies migrations to PGlite. |
+| `pnpm test:watch` | Vitest watch loop. Server tests apply migrations to PGlite. |
 | `pnpm test:ui` | Isolated visual/accessibility fixtures in Chromium, no API; macOS baselines. |
 | `pnpm test:e2e` | Rebuilds the frontend and starts a fresh synthetic API harness. |
 | `pnpm test:postgres` | Disposable PostgreSQL 17 clusters, requiring `initdb` and `pg_ctl` on PATH. |
@@ -50,7 +50,7 @@ and API harness, runs one browser worker, and retains whole test files together.
 The lists in `apps/web/e2e-shards` balance whole files using recent CI timings.
 Add or move a spec in exactly one list. CI checks the lists against Playwright's
 discovery before running each shard.
-All four shards and the combined **Browser report** are required by **All checks**.
+**All checks** requires all four shards and the combined **Browser report**. For validated version-only PRs, Publish runs those checks on the exact main commit.
 The `browser-report` artifact contains the merged HTML report; failed traces and
 page captures are also available in artifacts suffixed with the shard number.
 Shard failures do not cancel the other shards. Retries remain disabled.
@@ -70,6 +70,21 @@ run first. Do not solve missing controls or slow requests by increasing timeouts
 without inspecting the retained trace.
 
 `pnpm lint:fix` applies safe Oxlint fixes; `pnpm format` writes Prettier formatting. Oxlint checks workspace import direction and cycles, correctness, React hooks, accessibility, and bounded complexity. Existing large modules have named overrides. Prettier excludes generated migration snapshots, engine fixtures, legacy Python, and prose docs. `pnpm rank-eval` evaluates WHR variants against independent baselines.
+
+### Focus checks on changed workspaces
+
+From the repository root, run the affected checks for your branch and working tree. Fetch `origin/main` first if your local remote-tracking branch is stale.
+
+```bash
+pnpm exec nx affected -t typecheck test
+pnpm exec nx affected -t typecheck test --explain
+```
+
+Nx uses package dependencies and each task's inputs to select changed packages and consumers. The preview prints the selected tasks and the paths that selected them. For a comparison between committed trees, pass `--base=origin/main --head=HEAD`. Giving `--head` excludes uncommitted edits.
+
+The `typecheck` targets run the existing package scripts and reuse successful results locally. Pass `--skipNxCache` when you need a fresh typecheck. The `test` targets run the five package Vitest projects in the root configuration. The server suite uses the same Vitest configuration and reads the database package's migrations. Unit tests run fresh each time. If Nx cannot build the graph or a change spans workflows, infrastructure, or another root-level input outside Nx, run `pnpm check`. It includes the root `ci` Vitest project, lint, format, and build. Run the browser, PostgreSQL, and production-image commands separately when they apply.
+
+If a restricted shell denies Nx's local sockets, retry with `NX_DAEMON=false NX_ISOLATE_PLUGINS=false` or use `pnpm check`.
 
 ### Troubleshooting
 

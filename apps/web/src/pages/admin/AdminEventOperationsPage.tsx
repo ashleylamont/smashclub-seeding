@@ -1,6 +1,7 @@
 import { NativeDrawTools } from './NativeDrawTools';
 import { filterDeskMatches } from '../../lib/opsMatchFilter';
-import { DispatchDesk } from './DispatchDesk';
+import { DispatchDesk, type DispatchDeskNavigation } from './DispatchDesk';
+import { dispatchShortcut } from './dispatchKeyboard';
 import { useDispatchCommand } from './dispatchCommand';
 import { DoublesAvailabilityControls } from './DoublesAvailabilityControls';
 import { PoolDrawControls } from './PoolDrawControls';
@@ -26,7 +27,8 @@ import { ScorePolicyControls } from './ScorePolicyControls';
 import { StationPoolControls } from './StationPoolControls';
 import { NativeBracketControls } from './NativeBracketControls';
 import { QueueResetControls } from './QueueResetControls';
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
+import type { ScoreEditor } from './OpsMatchScoring';
 import { ToPlayerFinder } from './ToPlayerFinder';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearch, useParams } from '@tanstack/react-router';
@@ -69,6 +71,40 @@ function useEventOverview(planId: string, userId: string | undefined, recheckAcc
     refetchInterval: 2500,
     ...(recheckAccess && { gcTime: 0 }),
   });
+}
+
+function EventOverviewUnavailable({
+  accessError,
+  isPending,
+  isFetching,
+  onRetry,
+}: {
+  accessError?: string;
+  isPending: boolean;
+  isFetching: boolean;
+  onRetry: () => void;
+}) {
+  if (isPending) return <LoadingState>Opening event…</LoadingState>;
+  if (accessError === 'FORBIDDEN')
+    return (
+      <PageHeader
+        title="Event access denied"
+        description="This account does not have organiser access. Ask an administrator to grant access or sign in with the assigned account."
+      />
+    );
+  if (accessError === 'NOT_FOUND' || accessError === 'BAD_REQUEST')
+    return <PageHeader title="Event unavailable" description="Check the event control link." />;
+  return (
+    <PageHeader
+      title={accessError === 'UNAUTHORIZED' ? 'Could not check sign-in' : 'Could not open event'}
+      description="Check your connection and try again."
+      actions={
+        <Button pending={isFetching} onClick={onRetry}>
+          Try again
+        </Button>
+      }
+    />
+  );
 }
 
 export function AdminEventOperationsPage() {
@@ -131,6 +167,8 @@ export function EventOperationsPanel({
   const [search, setSearch] = useState('');
   const [poolFilter, setPoolFilter] = useState('all');
   const [focusedMatchId, setFocusedMatchId] = useState<string | null>(null);
+  const dispatchNavigation = useRef<DispatchDeskNavigation>(null);
+  const scoreEditor = useRef<ScoreEditor>(null);
   const [revealedCall, setRevealedCall] = useState<{ id: string; resourceRevision: number }>();
   const act = async (work: () => Promise<unknown>, message = 'Saved') => {
     setPending(true);
@@ -149,37 +187,23 @@ export function EventOperationsPanel({
   const data = event.data?.overview;
   const closed = ['complete', 'cancelled'].includes(data?.plan.status ?? '');
   const liveDisabled = !online || pending || closed || Boolean(data?.plan.drawPaused);
-  const dispatchDisabled = liveDisabled || event.isError;
+  const dispatchDisabled = !data || liveDisabled || event.isError;
   const dispatch = useDispatchCommand(planId, dispatchDisabled);
-  if (event.isPending) return <LoadingState>Opening event…</LoadingState>;
   const accessError = event.data?.accessError ?? overviewErrorCode(event.error);
-  if (accessError === 'FORBIDDEN')
+  if (!data || terminalOverviewErrors.includes(accessError ?? ''))
     return (
-      <PageHeader
-        title="Event access denied"
-        description="This account does not have organiser access. Ask an administrator to grant access or sign in with the assigned account."
+      <EventOverviewUnavailable
+        accessError={accessError}
+        isPending={event.isPending}
+        isFetching={event.isFetching}
+        onRetry={() => {
+          if (accessError === 'UNAUTHORIZED') void refetchSession();
+          void event.refetch();
+        }}
       />
     );
-  if (accessError === 'NOT_FOUND' || accessError === 'BAD_REQUEST')
-    return <PageHeader title="Event unavailable" description="Check the event control link." />;
-  if (!data || accessError === 'UNAUTHORIZED')
-    return (
-      <PageHeader
-        title={accessError === 'UNAUTHORIZED' ? 'Could not check sign-in' : 'Could not open event'}
-        description="Check your connection and try again."
-        actions={
-          <Button
-            pending={event.isFetching}
-            onClick={() => {
-              if (accessError === 'UNAUTHORIZED') void refetchSession();
-              void event.refetch();
-            }}
-          >
-            Try again
-          </Button>
-        }
-      />
-    );
+  const sharedQueue =
+    data.plan.bracketMode === 'native' && data.operatorDispatch?.mode === 'shared';
   const available = availableMatches(data.matches).filter((match) => match.availability.canStart);
   const callable = new Set(available.map((match) => match.id));
   const pools = poolStandings(data.matches);
@@ -284,6 +308,9 @@ export function EventOperationsPanel({
               dispatch={dispatch}
               callDesk={callDesk}
               onReviewReports={openScoreSubmissions}
+              shortcutsActive={workspace.section === 'run'}
+              navigationRef={dispatchNavigation}
+              focusScore={() => scoreEditor.current?.focus() ?? false}
               onMatch={(id) => {
                 setFocusedMatchId(id);
                 setFilter('all');
@@ -341,9 +368,20 @@ export function EventOperationsPanel({
               tabIndex={-1}
             >
               Showing the selected match.
-              <Button size="small" type="submit" onClick={() => setFocusedMatchId(null)}>
-                Show all matches
-              </Button>
+              <span className="ops-match-actions">
+                {sharedQueue && (
+                  <Button
+                    size="small"
+                    aria-keyshortcuts={dispatchShortcut('readyQueue')}
+                    onClick={() => dispatchNavigation.current?.goToReadyQueue()}
+                  >
+                    Go to ready queue
+                  </Button>
+                )}
+                <Button size="small" type="submit" onClick={() => setFocusedMatchId(null)}>
+                  Show all matches
+                </Button>
+              </span>
             </p>
           )}
           {!data.sharedDispatch && (
@@ -408,6 +446,9 @@ export function EventOperationsPanel({
                 liveOwned={data.plan.liveOwned}
                 act={act}
                 callDesk={callDesk}
+                scoreEditorRef={
+                  sharedQueue && match.id === focusedMatchId ? scoreEditor : undefined
+                }
               />
             ))}
           </div>
