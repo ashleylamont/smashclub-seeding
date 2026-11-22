@@ -180,7 +180,8 @@ describe('reviewed native finals slot replay on PostgreSQL', () => {
     });
     const returnedDesk = await eventOps.live.dispatchDesk({ planId });
     const fresh = await review();
-    if (!fresh.allowed) throw new Error(fresh.issues.join(' '));
+    if (!fresh.allowed || !('replay' in fresh))
+      throw new Error(fresh.issues.join(' ') || 'Expected a finals replay.');
 
     const beforeReplay = await state();
     const requestId = crypto.randomUUID();
