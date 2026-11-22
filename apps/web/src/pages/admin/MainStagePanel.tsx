@@ -120,11 +120,7 @@ export function MainStagePanel({
           In Display setup (S), you can add a Twitch channel before copying the updated URL into
           OBS.
         </p>
-        <BroadcastSources
-          key={`${data.plan.id}:${station?.id ?? ''}`}
-          planId={data.plan.id}
-          stationId={station?.id}
-        />
+        <BroadcastSources planId={data.plan.id} stationId={station?.id} />
       </Disclosure>
     </section>
   );
@@ -143,8 +139,49 @@ type CopyFeedback = {
 };
 
 function BroadcastSources({ planId, stationId }: { planId: string; stationId?: string }) {
+  const inFlight = useRef(false);
+  const [busy, setBusy] = useState(false);
+
+  async function copyUrl(url: string, onState: (state: CopyFeedback['state']) => void) {
+    // The clipboard is shared by every row, even when the station changes mid-write.
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    onState('copying');
+    try {
+      await navigator.clipboard.writeText(url);
+      onState('copied');
+    } catch {
+      onState('failed');
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  }
+
+  return (
+    <BroadcastSourceRows
+      key={`${planId}:${stationId ?? ''}`}
+      planId={planId}
+      stationId={stationId}
+      busy={busy}
+      copyUrl={copyUrl}
+    />
+  );
+}
+
+function BroadcastSourceRows({
+  planId,
+  stationId,
+  busy,
+  copyUrl,
+}: {
+  planId: string;
+  stationId?: string;
+  busy: boolean;
+  copyUrl: (url: string, onState: (state: CopyFeedback['state']) => void) => Promise<void>;
+}) {
   const [feedback, setFeedback] = useState<CopyFeedback>();
-  const latestAttempt = useRef(0);
 
   useEffect(() => {
     if (feedback?.state !== 'copied') return;
@@ -155,23 +192,11 @@ function BroadcastSources({ planId, stationId }: { planId: string; stationId?: s
     return () => window.clearTimeout(timeout);
   }, [feedback]);
 
-  async function copy(mode: CopyFeedback['mode'], href: string) {
-    if (feedback?.mode === mode && feedback.state === 'copying') return;
-    const attempt = ++latestAttempt.current;
-    const url = new URL(href, window.location.origin).href;
-    setFeedback({ mode, state: 'copying', url });
-    let state: CopyFeedback['state'];
-    try {
-      await navigator.clipboard.writeText(url);
-      state = 'copied';
-    } catch {
-      state = 'failed';
-    }
-    if (latestAttempt.current === attempt) setFeedback({ mode, state, url });
-  }
-
   return (
     <div className="ops-broadcast-sources">
+      {busy && feedback?.state !== 'copying' && (
+        <Notice>Waiting for the previous copy to finish.</Notice>
+      )}
       {broadcastSources.map(([mode, label]) => {
         const params = new URLSearchParams({
           ...(stationId ? { station: stationId } : {}),
@@ -192,8 +217,11 @@ function BroadcastSources({ planId, stationId }: { planId: string; stationId?: s
             </Button>
             <Button
               aria-label={`${action} ${label.toLowerCase()} URL`}
-              aria-disabled={state === 'copying' || undefined}
-              onClick={() => void copy(mode, href)}
+              aria-disabled={busy || undefined}
+              onClick={() => {
+                const url = new URL(href, window.location.origin).href;
+                void copyUrl(url, (state) => setFeedback({ mode, state, url }));
+              }}
             >
               {action === 'Copying' ? 'Copying…' : action}
             </Button>

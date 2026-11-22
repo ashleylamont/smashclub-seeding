@@ -29,11 +29,16 @@ for (const theme of ['dark', 'light'] as const)
 
       let rejectClipboard = false;
       let holdClipboard = false;
+      let clipboardContents = '';
       let releaseClipboard: (() => void) | undefined;
       await page.exposeFunction('writeObsSourceClipboard', async (value: string) => {
         writes.push(value);
-        if (holdClipboard) await new Promise<void>((resolve) => (releaseClipboard = resolve));
+        if (holdClipboard) {
+          holdClipboard = false;
+          await new Promise<void>((resolve) => (releaseClipboard = resolve));
+        }
         if (rejectClipboard) throw new Error('Clipboard access denied');
+        clipboardContents = value;
       });
       await page.addInitScript(() => {
         Object.defineProperty(navigator, 'clipboard', {
@@ -105,24 +110,42 @@ for (const theme of ['dark', 'light'] as const)
       await page.clock.resume();
 
       const picker = panel.getByRole('combobox', { name: 'Station', exact: true });
+      const gameplayUrl = base + urlFor('gameplay', stage!.id);
+      const progressUrl = base + urlFor('progress', setup!.id);
       holdClipboard = true;
       await copy(gameplay).press('Enter');
       await expect.poll(() => releaseClipboard !== undefined).toBe(true);
       await expect(copy(gameplay, 'Copying')).toBeFocused();
-      expect(writes.at(-1)).toBe(base + urlFor('gameplay', stage!.id));
-      await chooseOption(picker, setup!.id);
+      try {
+        await copy(progress).press('Enter');
+        await chooseOption(picker, setup!.id);
+        await copy(progress).press('Space');
+        await chooseOption(picker, stage!.id);
+        await chooseOption(picker, setup!.id);
+        expect(writes).toEqual([autoUrl, autoUrl, gameplayUrl]);
+        expect(clipboardContents).toBe(autoUrl);
+        await expect(copy(progress)).toBeDisabled();
+        await expect(panel.getByText('Waiting for the previous copy to finish.')).toBeVisible();
+        await page.screenshot({
+          path: testInfo.outputPath('waiting-for-clipboard.png'),
+          fullPage: true,
+          animations: 'disabled',
+          style: captureStyle,
+        });
+      } finally {
+        releaseClipboard?.();
+      }
       await expect(preview(gameplay)).toHaveAttribute('href', urlFor('gameplay', setup!.id));
-      await expect(copy(gameplay)).toBeVisible();
-      holdClipboard = false;
-      releaseClipboard?.();
-      await chooseOption(picker, stage!.id);
-      await expect(copy(gameplay)).toBeVisible();
-      await chooseOption(picker, setup!.id);
+      await expect(copy(gameplay)).toBeEnabled();
+      await expect(panel.getByText('Waiting for the previous copy to finish.')).toBeHidden();
+      expect(clipboardContents).toBe(gameplayUrl);
+      await copy(progress).press('Enter');
+      await expect(copy(progress, 'Copied')).toBeFocused();
+      expect(clipboardContents).toBe(progressUrl);
 
       rejectClipboard = true;
-      await copy(progress).press('Enter');
+      await copy(progress, 'Copied').press('Enter');
       const fallback = panel.getByRole('textbox', { name: 'Progress-only overlay URL' });
-      const progressUrl = base + urlFor('progress', setup!.id);
       await expect(fallback).toHaveValue(progressUrl);
       await expect(fallback).toHaveAttribute('readonly', '');
       expect(
