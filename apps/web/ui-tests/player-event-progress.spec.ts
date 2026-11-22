@@ -141,39 +141,56 @@ test(
   },
 );
 
-test('only an open native pool-and-finals event implies an unpublished finals draw', async ({
-  page,
-}) => {
-  const { fixture, beforeDraw, afterDraw } = await finishedPools(page);
-  const { plan } = beforeDraw;
-  const partialDraw = { ...afterDraw, pendingFinals: [pendingField] };
-  const linkedFinals = [{ slug: 'linked-finals', stage: 'main', division: 'upper' }];
-  for (const variation of [
-    { ...beforeDraw, plan: { ...plan, structure: 'round_robin' } },
-    { ...beforeDraw, plan: { ...plan, structure: 'single_elimination' } },
-    { ...beforeDraw, plan: { ...plan, structure: undefined } },
-    { ...beforeDraw, plan: { ...plan, status: 'complete' } },
-    { ...beforeDraw, plan: { ...plan, status: 'cancelled' } },
-    { ...beforeDraw, plan: { ...plan, status: 'draft' } },
-    { ...beforeDraw, plan: { ...plan, bracketMode: 'challonge' } },
-    { ...beforeDraw, brackets: linkedFinals },
-    { ...partialDraw, plan: { ...plan, status: 'complete' } },
-    { ...partialDraw, plan: { ...plan, status: 'cancelled' } },
-    { ...partialDraw, brackets: linkedFinals },
-  ]) {
-    fixture.responses['eventOps.snapshot'] = variation;
+type FixturePlan = Awaited<ReturnType<typeof finishedPools>>['beforeDraw']['plan'];
+const guardedEvents: {
+  name: string;
+  plan?: Partial<FixturePlan>;
+  linked?: boolean;
+  published?: boolean;
+}[] = [
+  { name: 'round robin', plan: { structure: 'round_robin' } },
+  { name: 'knockout', plan: { structure: 'single_elimination' } },
+  { name: 'unknown structure', plan: { structure: undefined } },
+  { name: 'completed pools', plan: { status: 'complete' } },
+  { name: 'cancelled pools', plan: { status: 'cancelled' } },
+  { name: 'draft', plan: { status: 'draft' } },
+  { name: 'Challonge mode', plan: { bracketMode: 'challonge' } },
+  { name: 'linked finals', linked: true },
+  { name: 'completed partial draw', plan: { status: 'complete' }, published: true },
+  { name: 'cancelled partial draw', plan: { status: 'cancelled' }, published: true },
+  { name: 'linked partial draw', linked: true, published: true },
+];
+
+for (const { name, plan, linked, published } of guardedEvents)
+  test(`${name} retains set counts without advertising pending finals`, async ({ page }) => {
+    const { fixture, beforeDraw, afterDraw } = await finishedPools(page);
+    const snapshot = published ? afterDraw : beforeDraw;
+    fixture.responses['eventOps.snapshot'] = {
+      ...snapshot,
+      plan: { ...snapshot.plan, ...plan },
+      brackets: linked
+        ? [{ slug: 'linked-finals', stage: 'main', division: 'upper' }]
+        : snapshot.brackets,
+      pendingFinals: [pendingField],
+    };
     await page.goto(`/play/${PLAN_ID}`);
-    const complete = variation.matches.filter((match) => match.status === 'complete').length;
+    const complete = snapshot.matches.filter((match) => match.status === 'complete').length;
     await expect(progress(page)).toHaveText(
-      `Event progress · ${complete} / ${variation.matches.length} sets complete`,
+      `Event progress · ${complete} / ${snapshot.matches.length} sets complete`,
     );
     await expect(
       progress(page).getByRole('progressbar', { name: 'Sets completed', exact: true }),
     ).toBeVisible();
-  }
+    expect(fixture.unexpected).toEqual([]);
+  });
+
+test('round robin playoffs signal the pending draw before qualifiers are available', async ({
+  page,
+}) => {
+  const { fixture, beforeDraw } = await finishedPools(page);
   fixture.responses['eventOps.snapshot'] = {
     ...beforeDraw,
-    plan: { ...plan, structure: 'round_robin_finals' },
+    plan: { ...beforeDraw.plan, structure: 'round_robin_finals' },
     pendingFinals: [],
   };
   await page.goto(`/play/${PLAN_ID}`);
