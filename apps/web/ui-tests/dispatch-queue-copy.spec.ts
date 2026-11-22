@@ -1,6 +1,6 @@
 import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import type { Desk } from '../src/pages/admin/dispatchTypes';
+import type { Command, Desk } from '../src/pages/admin/dispatchTypes';
 import { chooseOption, clearInput } from '../test-support/controls';
 import { mockEvent, PLAN_ID, ready } from './fixtures';
 
@@ -49,8 +49,331 @@ async function fixture(page: Page) {
     sharedDispatch: { active: 0, capacity: 2, overCapacity: 0 },
   });
   responses['eventOps.delivery.status'] = { configured: false };
-  return { desk, unexpected, submissions, starts };
+  return { desk, overview, readyMatch: readyMatch!, unexpected, submissions, starts };
 }
+
+async function callFixture(page: Page, { applyOnSuccess = true } = {}) {
+  const { desk, overview, readyMatch, unexpected } = await fixture(page);
+  const pairing = desk.queue[0]!;
+  const station = overview.stations.find(({ currentMatchId }) => !currentMatchId)!;
+  desk.stations = [{ ...station, enabled: true, reserved: true, revision: 0 }];
+  pairing.eligibleStationIds = [station.id];
+  const commands: { planId: string; requestId: string; command: Command }[] = [];
+  let release!: () => void;
+  const delay = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let failure: string | undefined;
+  const applyDispatch = (command: Extract<Command, { kind: 'dispatch' }>) => {
+    Object.assign(readyMatch, {
+      status: 'playing',
+      started: !command.callOnly,
+      called: Boolean(command.callOnly),
+      stationId: command.stationId,
+      callLocation: command.callLocation ?? null,
+    });
+    pairing.state = command.callOnly ? 'called' : 'playing';
+    if (!command.stationId) {
+      desk.active = 1;
+      Object.assign(overview, { sharedDispatch: { active: 1, capacity: 2, overCapacity: 0 } });
+    }
+    desk.resourceRevision++;
+  };
+  await page.route('**/api/trpc/eventOps.live.command*', async (route) => {
+    const batched = new URL(route.request().url()).searchParams.has('batch');
+    const body = route.request().postDataJSON();
+    const input = batched ? body[0] : body;
+    commands.push(input);
+    await delay;
+    const error = failure;
+    failure = undefined;
+    if (!error && applyOnSuccess) applyDispatch(input.command);
+    const response = error
+      ? { error: { message: error, code: -32603, data: { httpStatus: 500 } } }
+      : { result: { data: { status: 'approved' } } };
+    await route.fulfill({ json: batched ? [response] : response });
+  });
+  const queue = page.getByRole('region', { name: 'TO match queue' });
+  const source = queue.locator('.dispatch-list article').filter({ hasText: longAlias });
+  return {
+    commands,
+    release,
+    failNext: (message: string) => {
+      failure = message;
+    },
+    applyDispatch,
+    desk,
+    overview,
+    readyMatch,
+    station,
+    queue,
+    source,
+    call: source.getByRole('button', { name: 'Call ordinary match' }),
+    pending: source.getByRole('button', { name: 'Calling ordinary match…' }),
+    search: queue.getByRole('textbox', { name: 'Find a pairing' }),
+    receipt: queue.locator('[aria-live="polite"]').filter({ hasText: /^(Called|Started) / }),
+    unexpected,
+  };
+}
+
+for (const theme of ['dark', 'light'] as const)
+  for (const width of [390, 1440])
+    test(`ordinary call confirms the pairing and restores queue focus at ${width}px in ${theme}`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const {
+        commands,
+        release,
+        readyMatch,
+        queue,
+        source,
+        call,
+        pending,
+        search,
+        receipt,
+        unexpected,
+      } = await callFixture(page);
+      await page.goto(`/operate/${PLAN_ID}?view=run`);
+      const location = source.getByRole('textbox', { name: 'Call location (optional)' });
+      const heading = queue.getByRole('heading', { name: 'Pairings', exact: true });
+      const run = page.getByRole('tab', { name: 'Run matches' });
+      const locationLabel =
+        width === 390 ? 'Opposite the windows beside the tournament registration desk' : '';
+      await search.fill('Alexandria');
+      await location.fill(locationLabel);
+      await page.keyboard.press('Tab');
+      await expect(call).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect.poll(() => commands.length).toBe(1);
+      await expect(pending).toBeFocused();
+      await expect(pending).toBeDisabled();
+      await expect(receipt).toHaveCount(0);
+      await page.keyboard.press('Enter');
+      await page.keyboard.press('Space');
+      await ready(page);
+      await pending.evaluate((button) => button.scrollIntoView({ block: 'center' }));
+      await page.screenshot({ path: testInfo.outputPath('ordinary-call-pending.png') });
+
+      release();
+      await expect(source).toHaveCount(0);
+      await expect(receipt).toHaveCount(1);
+      await expect(receipt).toContainText(`Called ${longAlias} vs ${readyMatch.player2Name}`);
+      const calledLocation = locationLabel || 'Any available ordinary setup';
+      await expect(receipt).toContainText(calledLocation);
+      await expect(receipt).toBeInViewport();
+      await expect(heading).toBeFocused();
+      await expect(run).toHaveAttribute('aria-selected', 'true');
+      const active = queue.getByRole('article').filter({ hasText: longAlias });
+      await expect(active.getByRole('button', { name: 'Mark playing' })).toBeEnabled();
+      await expect(active).toContainText('Called');
+      await expect(queue.getByText('1 / 2 in use')).toBeVisible();
+      await expect(commands).toEqual([
+        {
+          planId: PLAN_ID,
+          requestId: expect.any(String),
+          command: {
+            kind: 'dispatch',
+            matchId: readyMatch.id,
+            stationId: null,
+            expectedRevision: readyMatch.revision,
+            expectedResourceRevision: 12,
+            expectedOrdinaryCapacity: 2,
+            callLocation: locationLabel || null,
+            callOnly: true,
+          },
+        },
+      ]);
+      await ready(page);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+      expect(
+        (
+          await new AxeBuilder({ page })
+            .include('.ops-page')
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+            .analyze()
+        ).violations,
+      ).toEqual([]);
+      await page.screenshot({ path: testInfo.outputPath('ordinary-call-confirmed.png') });
+      await page.keyboard.press('Tab');
+      await expect(queue.getByRole('button', { name: 'Keyboard shortcuts' })).toBeFocused();
+      await expect(search).toHaveValue('Alexandria');
+      const capacity = queue.getByRole('button', { name: 'Capacity and named stations' });
+      await capacity.press('Enter');
+      await expect(capacity).toHaveAttribute('aria-expanded', 'true');
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+      await page.evaluate(() => scrollTo(0, 0));
+      await page.screenshot({
+        path: testInfo.outputPath('ordinary-call-full-page.png'),
+        fullPage: true,
+      });
+      expect(unexpected).toEqual([]);
+    });
+
+test('successful ordinary call leaves focus in a queue filter that replaced its source', async ({
+  page,
+}) => {
+  const { call, commands, release, receipt, search, source, unexpected } = await callFixture(page);
+  await page.goto(`/operate/${PLAN_ID}`);
+  await call.press('Enter');
+  await expect.poll(() => commands.length).toBe(1);
+  await search.fill('changed while the call was pending');
+  await expect(source).toHaveCount(0);
+  await expect(search).toBeFocused();
+  release();
+  await expect(receipt).toHaveCount(1);
+  await expect(search).toBeFocused();
+  await expect(page.getByRole('tab', { name: 'Run matches' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  expect(unexpected).toEqual([]);
+});
+
+test('a failed ordinary call retains keyboard focus and can retry the same request', async ({
+  page,
+}) => {
+  const { call, commands, release, failNext, queue, receipt, source, unexpected } =
+    await callFixture(page);
+  await page.goto(`/operate/${PLAN_ID}`);
+  const location = source.getByRole('textbox', { name: 'Call location (optional)' });
+  await location.fill('Near the front desk');
+  failNext('The queue connection was interrupted.');
+  await call.press('Enter');
+  release();
+  await expect(queue.getByRole('alert')).toContainText('The queue connection was interrupted.');
+  await expect(receipt).toHaveCount(0);
+  await expect(call).toBeFocused();
+  await expect(location).toHaveValue('Near the front desk');
+  await page.keyboard.press('Enter');
+  await expect(receipt).toHaveCount(1);
+  expect(commands).toHaveLength(2);
+  expect(commands[1]).toEqual(commands[0]);
+  expect(unexpected).toEqual([]);
+});
+
+test('a named station start confirms the station and leaves ordinary capacity free', async ({
+  page,
+}) => {
+  const { commands, release, queue, receipt, source, station, unexpected } =
+    await callFixture(page);
+  await page.goto(`/operate/${PLAN_ID}`);
+  const picker = source.getByRole('combobox', { name: 'Named station' });
+  const start = source.getByRole('button', { name: 'Start named station' });
+  await picker.press('Enter');
+  const option = page.getByRole('option', { name: station.name, exact: true });
+  await expect(option).toBeVisible();
+  await page.keyboard.press('End');
+  await expect(option).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(picker).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(start).toBeFocused();
+  await page.keyboard.press('Enter');
+  const pending = source.getByRole('button', { name: 'Starting named station…' });
+  await expect(pending).toBeFocused();
+  await expect(pending).toBeDisabled();
+  await expect(receipt).toHaveCount(0);
+  release();
+  await expect(queue.getByRole('article').filter({ hasText: longAlias })).toContainText(
+    `Playing · ${station.name}`,
+  );
+  await expect(queue.getByText('0 / 2 in use')).toBeVisible();
+  await expect(receipt).toContainText(`Started ${longAlias}`);
+  await expect(receipt).toContainText(station.name);
+  await expect(queue.getByRole('heading', { name: 'Pairings', exact: true })).toBeFocused();
+  expect(commands).toHaveLength(1);
+  expect(commands[0]!.command).toMatchObject({
+    kind: 'dispatch',
+    stationId: station.id,
+    callOnly: false,
+  });
+  expect(unexpected).toEqual([]);
+});
+
+test('a call made by another organiser updates the queue without a local receipt or focus move', async ({
+  page,
+}) => {
+  const { applyDispatch, commands, readyMatch, receipt, search, source, unexpected } =
+    await callFixture(page);
+  await page.goto(`/operate/${PLAN_ID}`);
+  await search.fill('Alexandria');
+  await expect(source).toBeVisible();
+  await expect(search).toBeFocused();
+  await ready(page);
+  const scrollBefore = await page.evaluate(() => scrollY);
+  applyDispatch({
+    kind: 'dispatch',
+    matchId: readyMatch.id,
+    stationId: null,
+    expectedRevision: readyMatch.revision,
+    expectedResourceRevision: 12,
+    callOnly: true,
+  });
+  await expect(source).toHaveCount(0);
+  await expect(receipt).toHaveCount(0);
+  await expect(search).toBeFocused();
+  expect(await page.evaluate(() => scrollY)).toBe(scrollBefore);
+  expect(commands).toEqual([]);
+  expect(unexpected).toEqual([]);
+});
+
+test('a later poll does not restore focus when a successful call left its button in place', async ({
+  page,
+}) => {
+  const { applyDispatch, call, commands, queue, receipt, release, source, unexpected } =
+    await callFixture(page, { applyOnSuccess: false });
+  await page.goto(`/operate/${PLAN_ID}`);
+  await call.press('Enter');
+  release();
+  await expect(receipt).toHaveCount(1);
+  await expect(call).toBeFocused();
+  const command = commands[0]?.command;
+  if (command?.kind !== 'dispatch') throw new Error('Expected an ordinary call command');
+  applyDispatch(command);
+  await expect(source).toHaveCount(0);
+  await expect(queue.getByRole('heading', { name: 'Pairings', exact: true })).not.toBeFocused();
+  expect(unexpected).toEqual([]);
+});
+
+test('a queue reorder while the command is pending does not trigger focus after it succeeds', async ({
+  page,
+}) => {
+  const {
+    call,
+    commands,
+    desk,
+    overview,
+    queue,
+    readyMatch,
+    receipt,
+    release,
+    source,
+    unexpected,
+  } = await callFixture(page);
+  const pairing = desk.queue[0]!;
+  const otherPairings = Array.from({ length: 12 }, (_, index) => {
+    const id = `ready-pairing-${index}`;
+    overview.matches.push({ ...readyMatch, id, player1Name: `Other player ${index}` });
+    return { ...pairing, matchId: id };
+  });
+  desk.queue = [...otherPairings.slice(0, 11), pairing, otherPairings[11]!, ...desk.queue.slice(1)];
+
+  await page.goto(`/operate/${PLAN_ID}`);
+  await call.press('Enter');
+  await expect.poll(() => commands.length).toBe(1);
+  desk.queue.splice(11, 2, otherPairings[11]!, pairing);
+  desk.queueRevision++;
+  await expect(source).toHaveCount(0);
+  await expect(receipt).toHaveCount(0);
+
+  release();
+  await expect(receipt).toHaveCount(1);
+  await expect(queue.getByRole('heading', { name: 'Pairings', exact: true })).not.toBeFocused();
+  expect(commands).toHaveLength(1);
+  expect(unexpected).toEqual([]);
+});
 
 for (const theme of ['dark', 'light'] as const)
   for (const width of [390, 1440]) {
