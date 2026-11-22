@@ -2,6 +2,12 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.20.2
+
+### Patch Changes
+
+- 22 November 2026 · **Fix** · Make warning, approved and rejected status chips easier to read in the light theme. [#392](https://github.com/ashleylamont/smashclub-seeding/pull/392) · [build 9891e33](https://github.com/ashleylamont/smashclub-seeding/commit/9891e33d31c52b719d2b2e3d5e71282ed72d14f1)
+
 ## 0.20.1
 
 ### Patch Changes
