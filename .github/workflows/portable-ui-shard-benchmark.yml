@@ -1,0 +1,126 @@
+name: Portable UI shard benchmark 173
+
+on:
+  push:
+    branches: [codex/portable-ui-shard-benchmark-173]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portable-ui-shard-benchmark-173
+  cancel-in-progress: false
+
+env:
+  SOURCE_SHA: 9e486c4efca9e3e05a4b9f67eeb8787d497e748a
+
+jobs:
+  benchmark:
+    name: ${{ matrix.arm }} portable UI (${{ matrix.shard }}/3)
+    if: github.event.created && github.repository == 'ashleylamont/smashclub-seeding'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [native, weighted]
+        shard: [1, 2, 3]
+    env:
+      ARM: ${{ matrix.arm }}
+      SHARD: ${{ matrix.shard }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Pin the app, fixtures and lockfile to the release source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$SOURCE_SHA"
+          git diff --exit-code "$SOURCE_SHA" HEAD -- . \
+            ':!.github/workflows/portable-ui-shard-benchmark.yml' \
+            ':!.github/benchmarks/portable-ui/**'
+          cp -R .github/benchmarks/portable-ui "$RUNNER_TEMP/portable-ui-benchmark"
+          git checkout --detach "$SOURCE_SHA"
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -z "$(git status --porcelain)"
+          if [[ "$ARM" == weighted ]]; then
+            cp scripts/run-ui-platform.mjs scripts/run-ui-platform.weighted-experiment.mjs
+            cp "$RUNNER_TEMP/portable-ui-benchmark/weighted-selection.mjs" scripts/
+            cp "$RUNNER_TEMP/portable-ui-benchmark/timings.json" scripts/weighted-timings.json
+            git apply --check "$RUNNER_TEMP/portable-ui-benchmark/weighted-runner.patch"
+            git apply "$RUNNER_TEMP/portable-ui-benchmark/weighted-runner.patch"
+          fi
+      - uses: ./.github/actions/setup-node-pnpm
+      - name: Install portable UI browser
+        run: time pnpm --filter @smashclub/web exec playwright install --with-deps chromium
+      - name: Run portable UI shard
+        id: browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          runner=scripts/run-ui-platform.mjs
+          if [[ "$ARM" == weighted ]]; then
+            runner=scripts/run-ui-platform.weighted-experiment.mjs
+          fi
+          time node "$runner" portable "$SHARD/3"
+      - name: Record exact-pass proof
+        shell: bash
+        env:
+          CASE_SET: ${{ steps.browser.outputs.ui_case_set }}
+          PLAN: ${{ steps.browser.outputs.ui_portable_plan }}
+          ORDINAL: ${{ steps.browser.outputs.ui_portable_shard }}
+        run: |
+          set -euo pipefail
+          test -n "$CASE_SET"
+          test -n "$PLAN"
+          test "$ORDINAL" = "$SHARD/3"
+          mkdir -p "$RUNNER_TEMP/benchmark-proof"
+          printf '%s\n' "$SOURCE_SHA" "$CASE_SET" "$PLAN" "$ORDINAL" > "$RUNNER_TEMP/benchmark-proof/$ARM-$SHARD.txt"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: portable-ui-benchmark-proof-${{ env.ARM }}-${{ env.SHARD }}
+          path: ${{ runner.temp }}/benchmark-proof
+          retention-days: 7
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: portable-ui-benchmark-review-${{ env.ARM }}-${{ env.SHARD }}
+          path: |
+            apps/web/playwright-report/ui
+            apps/web/ui-test-results
+          retention-days: 7
+          if-no-files-found: ignore
+
+  verify:
+    name: Verify benchmark case coverage
+    if: always() && github.event.created && github.repository == 'ashleylamont/smashclub-seeding'
+    needs: benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require all six browser jobs to pass
+        env:
+          BENCHMARK_RESULT: ${{ needs.benchmark.result }}
+        run: test "$BENCHMARK_RESULT" = success
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: portable-ui-benchmark-proof-*
+          path: artifacts
+          merge-multiple: true
+      - name: Check exact source, case set, arm plans and shard ordinals
+        shell: bash
+        run: |
+          set -euo pipefail
+          cases=21e3605987576ad29f396e36b7dbdb4c755ae80ac749f9b11a83e330018415ed
+          native=47bb325ebfc6763ab2d5dbf6f5f400717fa848052f7c30f38831905431b673e2
+          weighted=d98be4cadcf8c6b250e4c16067506159a1bf578e6c120f9c3db5f73455506948
+          test "$(find artifacts -type f | wc -l)" -eq 6
+          for arm in native weighted; do
+            for shard in 1 2 3; do
+              printf '%s\n' "$SOURCE_SHA" "$cases" "${!arm}" "$shard/3" \
+                | diff - "artifacts/$arm-$shard.txt"
+            done
+          done

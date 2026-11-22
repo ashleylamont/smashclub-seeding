@@ -1,0 +1,59 @@
+--- a/scripts/run-ui-platform.weighted-experiment.mjs
++++ b/scripts/run-ui-platform.weighted-experiment.mjs
+@@ -6,6 +6,7 @@
+ import { join } from 'node:path';
+ import { fileURLToPath } from 'node:url';
+ import { portableUiShards } from './portable-ui-shards.mjs';
++import { weightedUiSelections } from './weighted-selection.mjs';
+
+ const web = fileURLToPath(new URL('../apps/web', import.meta.url));
+ const testDir = join(web, 'ui-tests');
+@@ -80,13 +81,13 @@
+   }
+ }
+
+-function runShard(ordinal, expected) {
++function runShard(args, expected) {
+   const directory = mkdtempSync(join(tmpdir(), 'portable-ui-report-'));
+   const report = join(directory, 'execution.json');
+   try {
+     execFileSync(
+       'pnpm',
+-      ['test:ui', '--update-snapshots=none', ...partitions.portable, `--shard=${ordinal}`],
++      ['test:ui', '--update-snapshots=none', ...partitions.portable, ...args],
+       { cwd: web, stdio: 'inherit', env: { ...process.env, UI_EXECUTION_REPORT: report } },
+     );
+     assertPassedUiShard(expected, JSON.parse(readFileSync(report, 'utf8')));
+@@ -136,14 +137,24 @@
+
+   const outputs = [`ui_case_set=${caseSet}`];
+   if (ordinal) {
+-    const shards = new Map(
+-      ordinals.map((id) => [id, discoveredCases([...partitions.portable, `--shard=${id}`])]),
+-    );
+-    const plan = portableShardPlan(portable, shards);
+-    const assigned = shards.get(ordinal);
+-    console.log(`Portable UI shard ${ordinal}: ${assigned.size} cases, plan ${plan}`);
+-    runShard(ordinal, assigned);
+-    outputs.push(`ui_portable_plan=${plan}`, `ui_portable_shard=${ordinal}`);
++    const directory = mkdtempSync(join(tmpdir(), 'weighted-portable-ui-'));
++    try {
++      const selections = weightedUiSelections(portable, ordinals, directory);
++      const shards = new Map();
++      for (const [id, { ids, args }] of selections) {
++        const discovered = discoveredCases([...partitions.portable, ...args]);
++        if (discovered.size !== ids.size || [...discovered.keys()].some((caseId) => !ids.has(caseId)))
++          throw new Error(`Playwright selected different cases for weighted portable shard ${id}.`);
++        shards.set(id, discovered);
++      }
++      const plan = portableShardPlan(portable, shards);
++      const assigned = shards.get(ordinal);
++      console.log(`Portable UI shard ${ordinal}: ${assigned.size} cases, plan ${plan}`);
++      runShard(selections.get(ordinal).args, assigned);
++      outputs.push(`ui_portable_plan=${plan}`, `ui_portable_shard=${ordinal}`);
++    } finally {
++      rmSync(directory, { recursive: true, force: true });
++    }
+   } else {
+     execFileSync('pnpm', ['test:ui', '--update-snapshots=none', ...partitions[mode]], {
+       cwd: web,
