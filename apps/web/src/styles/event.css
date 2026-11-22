@@ -127,6 +127,22 @@
   font-weight: 700;
   white-space: nowrap;
 }
+.player-filter-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  max-width: 100%;
+}
+.player-filter-option-label {
+  min-width: 0;
+}
+.player-filter-option .chip {
+  flex: none;
+}
+.player-match-filter .player-filter-option-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .player-match-filter .muted {
   margin: 0;
   font-size: var(--fs-sm);
