@@ -1,4 +1,4 @@
-import { isKnockout } from '@smashclub/shared';
+import { finalsRoles, isKnockout } from '@smashclub/shared';
 import { Input } from '../../../components/ui/Input';
 import { Button } from '../../../components/ui/Button';
 import { useState } from 'react';
@@ -14,7 +14,7 @@ import { CopyBlock } from './shared';
 import { DIVISION_LABEL } from './labels';
 
 /**
- * Step 6: the handoff to Challonge.
+ * Instructions for running a native event or handing off to Challonge.
  *
  * Entirely manual, and that is the design. The first live event has to be
  * finishable with no API credentials and no quota, so what this screen offers
@@ -30,22 +30,18 @@ export function HandoffStep({ view, onChanged }: { view: EventPlanView; onChange
     queryFn: () => trpc.admin.eventPlanner.exports.query({ planId: view.plan.id }),
   });
 
-  if (view.plan.bracketMode === 'native')
+  if (view.plan.bracketMode === 'native') {
+    const closed = view.plan.status === 'complete' || view.plan.status === 'cancelled';
     return (
       <div className="card section">
-        <h3>Run this event in Nemesis</h3>
-        <p>
-          {isKnockout(view.plan.structure)
-            ? 'Lock the seeded knockout draw and complete its matches, then finalize results. A double-elimination final resets when the losers-bracket finalist wins the first final.'
-            : view.plan.structure === 'round_robin'
-              ? 'Complete the round robin, confirm its finishing order, and finalize the event. Teams remain fixed after draw lock.'
-              : 'Complete pools and confirm their finishing orders, then create championship and consolation finals. Winners advance and byes are shown explicitly.'}
-        </p>
+        <h3>{closed ? 'Review this event in Nemesis' : 'Run this event in Nemesis'}</h3>
+        <p>{nativeInstructions(view.plan)}</p>
         <Button asChild variant="primary">
           <a href={`/admin/event-operations?plan=${view.plan.id}`}>Open event desk</a>
         </Button>
       </div>
     );
+  }
 
   if (exportsQuery.isPending) return <p className="loading-text">Building exports…</p>;
   if (exportsQuery.isError) return <p className="error-text">{exportsQuery.error.message}</p>;
@@ -108,6 +104,33 @@ export function HandoffStep({ view, onChanged }: { view: EventPlanView; onChange
       </div>
     </div>
   );
+}
+
+function nativeInstructions({ status, structure, structureOptions }: EventPlanView['plan']) {
+  if (status === 'complete')
+    return 'Results are finalized. Review the recorded results in the event desk.';
+  if (status === 'cancelled')
+    return 'This event was cancelled. Review its record in the event desk.';
+  if (status === 'roster_frozen')
+    return isKnockout(structure)
+      ? 'Generate the seeded knockout draw in Divisions before locking it in the event desk.'
+      : 'Generate pools in Divisions before soft-locking the pool draw in the event desk.';
+
+  if (isKnockout(structure)) {
+    const instruction =
+      'Lock the seeded knockout draw and complete all matches. Resolve pending reports before finalizing results.';
+    return structure === 'double_elimination'
+      ? `${instruction} A reset final runs if the losers-bracket finalist wins the first final.`
+      : instruction;
+  }
+  if (structure === 'round_robin')
+    return 'Soft-lock the pool draw, complete the round robin, and confirm its finishing order. Resolve any pending reports before finalizing results.';
+
+  const main = structure === 'round_robin_finals' ? 'playoffs' : 'championship';
+  const finals = finalsRoles(structure, structureOptions).includes('consolation')
+    ? `${main} and consolation`
+    : main;
+  return `Soft-lock the pool draw and confirm any required tiebreak rulings as pool matches finish. Preview and create the ${finals} in the event desk. Complete all matches and resolve pending reports before finalizing results.`;
 }
 
 function BracketCard({
