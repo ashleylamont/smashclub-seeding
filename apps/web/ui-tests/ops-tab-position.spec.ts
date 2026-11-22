@@ -152,3 +152,53 @@ test('workspace deep links keep their station, anchor and history entries', asyn
   await expect(copy).toBeInViewport();
   expect(unexpected).toEqual([]);
 });
+
+test('activating a tab supersedes a smooth jump to an organiser control', async ({
+  page,
+}, testInfo) => {
+  const { unexpected } = await mockEvent(page, { role: 'admin' });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto(`/admin/event-operations?plan=${PLAN_ID}&view=run`);
+  const tabs = page.getByRole('tablist', { name: 'Event workspace' });
+  const settings = tabs.getByRole('tab', { name: 'Settings' });
+  const heading = page
+    .getByRole('tabpanel', { name: 'Settings' })
+    .getByRole('heading', { name: 'Score approval' });
+  await expect(page.getByRole('tabpanel', { name: 'Run matches' })).toBeVisible();
+  await ready(page);
+
+  // Activate Settings on the next frame after the real Stations jump starts.
+  await settings.evaluate((tab) => {
+    document.getElementById('station-controls')!.addEventListener(
+      'focus',
+      () => {
+        requestAnimationFrame(() => {
+          tab.focus({ preventScroll: true });
+          tab.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        });
+      },
+      { once: true },
+    );
+  });
+  await page.getByRole('button', { name: 'Stations', exact: true }).click();
+  await expect(settings).toHaveAttribute('aria-selected', 'true');
+  await expect(settings).toBeFocused();
+
+  const lowestHeadingGap = await heading.evaluate(async (element) => {
+    const strip = document.querySelector('[role="tablist"][aria-label="Event workspace"]')!;
+    const start = performance.now();
+    let lowestGap = Infinity;
+    // The old smooth scroll can continue for several frames after Settings has focus.
+    do {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      const gap = element.getBoundingClientRect().top - strip.getBoundingClientRect().bottom;
+      lowestGap = Math.min(lowestGap, gap);
+    } while (performance.now() - start < 750);
+    return Math.round(lowestGap);
+  });
+  expect(lowestHeadingGap).toBeGreaterThanOrEqual(0);
+  await expectBelowTabs(heading, tabs);
+  await expect(settings).toBeFocused();
+  await page.screenshot({ path: testInfo.outputPath('settings-after-interrupted-jump.png') });
+  expect(unexpected).toEqual([]);
+});

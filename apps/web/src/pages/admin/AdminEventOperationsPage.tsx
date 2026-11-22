@@ -170,8 +170,11 @@ export function EventOperationsPanel({
     const tabsBounds = tabs.getBoundingClientRect();
     const panelTop = panel.getBoundingClientRect().top;
     const headingBottom = panel.querySelector('h3')?.getBoundingClientRect().bottom ?? panelTop;
-    if (panelTop >= tabsBounds.bottom && headingBottom <= document.documentElement.clientHeight)
+    if (panelTop >= tabsBounds.bottom && headingBottom <= document.documentElement.clientHeight) {
+      // Stop any smooth control jump already carrying the viewport into the old panel.
+      window.scrollTo({ top: window.scrollY, behavior: 'instant' });
       return;
+    }
 
     // The computed sticky offset includes the measured app header above the tab strip.
     const stickyBottom = Number.parseFloat(getComputedStyle(tabs).top) + tabsBounds.height;
