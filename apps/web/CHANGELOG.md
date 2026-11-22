@@ -2,6 +2,19 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.22.0
+
+### Minor Changes
+
+- 23 November 2026 · **Feature** · Send private feedback from Nemesis without a GitHub account and get a report reference. Nemesis admins can review reports in the private Feedback inbox. [#469](https://github.com/ashleylamont/smashclub-seeding/pull/469) · [build 1efacfb](https://github.com/ashleylamont/smashclub-seeding/commit/1efacfbd88add44018bd65cd1f89f4df856679f5)
+
+### Patch Changes
+
+- 23 November 2026 · **Fix** · Show win odds in event recaps only when earlier rated matches connect the players. [#471](https://github.com/ashleylamont/smashclub-seeding/pull/471) · [build 226a106](https://github.com/ashleylamont/smashclub-seeding/commit/226a1069f36a08f3d3cd3cded47231f6d21514fc)
+- 23 November 2026 · **Fix** · Show the private score receipt when a report reaches the server and the submit response is lost. If the report did not reach the server, you can still retry the same submission. [#459](https://github.com/ashleylamont/smashclub-seeding/pull/459) · [build 6dd03a5](https://github.com/ashleylamont/smashclub-seeding/commit/6dd03a53baddcf13423c7f8b9800863d9c569cfd)
+- 23 November 2026 · **Fix** · Ask organisers to review a pending played score before a withdrawal would replace the result or change its pairing. [#472](https://github.com/ashleylamont/smashclub-seeding/pull/472) · [build 016ad9e](https://github.com/ashleylamont/smashclub-seeding/commit/016ad9e3966a569d3deead675d92e6b8aed65919)
+- 23 November 2026 · **Fix** · See what still needs attention before finalizing native results, with shortcuts to the draw, unfinished matches, pool orders or score reviews. [#468](https://github.com/ashleylamont/smashclub-seeding/pull/468) · [build 994d987](https://github.com/ashleylamont/smashclub-seeding/commit/994d987b3f23d0a5db09864d19de5b55ad9f16a0)
+
 ## 0.21.4
 
 ### Patch Changes
