@@ -97,7 +97,8 @@ test(
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
       .analyze();
     expect(result.violations).toEqual([]);
-    await darwinScreenshot(page, 'to-desk-desktop.png');
+    // Report both viewport differences in the same run.
+    await darwinScreenshot(page, 'to-desk-desktop.png', { soft: true });
     await page.setViewportSize({ width: 390, height: 844 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,

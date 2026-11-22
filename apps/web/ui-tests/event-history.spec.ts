@@ -104,7 +104,8 @@ test(
           .analyze()
       ).violations,
     ).toEqual([]);
-    await darwinScreenshot(page, 'event-history-desktop.png');
+    // Report both viewport differences in the same run.
+    await darwinScreenshot(page, 'event-history-desktop.png', { soft: true });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => scrollTo(0, 0));
     await expect(page.getByRole('tab', { name: 'History', exact: true })).toBeInViewport();

@@ -11,11 +11,13 @@ type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
 export function OpsAttentionDesk({
   data,
   pools,
+  interrupted,
   onMatch,
   onJump,
 }: {
   data: Overview;
   pools: ReturnType<typeof poolStandings>;
+  interrupted: boolean;
   onMatch: (matchId: string) => void;
   onJump: (id: string, section?: OpsSection) => void;
 }) {
@@ -24,30 +26,33 @@ export function OpsAttentionDesk({
   const disputes = reports.filter((report) => report.isDispute);
   const firstDispute = disputes.find((report) => !report.stale) ?? disputes[0];
   const count = reports.length + decisions.length + poolRulings.length + (needsStations ? 1 : 0);
-  if (['complete', 'cancelled'].includes(data.plan.status)) return null;
+  const hasActions = count > 0 || dispatch.length > 0;
+  if (['complete', 'cancelled'].includes(data.plan.status) || (interrupted && !hasActions))
+    return null;
   return (
-    <section className="card ops-attention" aria-labelledby="ops-attention-title">
-      <div className="ops-attention-heading">
-        <div>
-          <h3 id="ops-attention-title">
-            Needs attention <span className="chip">{count}</span>
-          </h3>
-          {firstDispute ? (
-            <div className="ui-actions">
-              <p className="muted" role="status">
-                {disputes.length} conflicting score {disputes.length === 1 ? 'report' : 'reports'}
-              </p>
-              <Button size="small" onClick={() => onJump(`score-report-${firstDispute.id}`)}>
-                Review disagreements
-              </Button>
-            </div>
-          ) : (
-            <p className="muted">
-              {count ? 'Review pending decisions below.' : 'No decisions pending.'}
-            </p>
-          )}
+    <section
+      className={hasActions ? 'card ops-attention' : 'ops-attention'}
+      aria-label={count === 0 ? 'Needs attention' : undefined}
+      aria-labelledby={count > 0 ? 'ops-attention-title' : undefined}
+    >
+      {count > 0 && (
+        <h3 id="ops-attention-title">
+          Needs attention <span className="chip">{count}</span>
+        </h3>
+      )}
+      {count === 0 && !interrupted && (
+        <p className="muted ops-attention-status">No decisions pending.</p>
+      )}
+      {firstDispute && (
+        <div className="ui-actions ops-attention-disagreements">
+          <p className="muted" role="status">
+            {disputes.length} conflicting score {disputes.length === 1 ? 'report' : 'reports'}
+          </p>
+          <Button size="small" onClick={() => onJump(`score-report-${firstDispute.id}`)}>
+            Review disagreements
+          </Button>
         </div>
-      </div>
+      )}
       <div className="ops-attention-groups">
         {reports.length > 0 && (
           <Disclosure

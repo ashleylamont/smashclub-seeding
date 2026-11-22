@@ -4,8 +4,11 @@
   align-items: center;
   gap: 0.6rem;
 }
-.ops-attention-heading p {
+.ops-attention-disagreements p {
   margin: 0.6rem 0;
+}
+.ops-attention-status {
+  margin: 0;
 }
 .ops-attention-groups {
   display: grid;

@@ -266,6 +266,7 @@ export function EventOperationsPanel({
       <OpsAttentionDesk
         data={data}
         pools={pools}
+        interrupted={interrupted}
         onJump={(id, section) => void workspace.openControl(id, section)}
         onMatch={(id) => {
           setFocusedMatchId(id);
