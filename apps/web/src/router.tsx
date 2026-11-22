@@ -37,8 +37,9 @@ import { AdminEventPlannerPage } from './pages/admin/eventPlanner/AdminEventPlan
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
 import { AdminAccountsPage } from './pages/admin/AdminAccountsPage';
 import { AdminBreakthroughPage } from './pages/admin/AdminBreakthroughPage';
-import { opsSection } from './lib/opsWorkspace';
+import { opsSection, opsSectionFromSearch } from './lib/opsWorkspace';
 import { playerIdFromSearch, profileClaimSearch } from './lib/profileClaim';
+import { loginSearch } from './lib/operatorDestination';
 import { breakthroughSearch } from './lib/breakthrough';
 
 const rootRoute = createRootRoute({ component: Layout });
@@ -108,7 +109,7 @@ const recapRoute = createRoute({
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
-  validateSearch: profileClaimSearch,
+  validateSearch: loginSearch,
   component: LoginPage,
 });
 
@@ -262,7 +263,7 @@ const eventOperateRoute = createRoute({
   path: '/operate/$planId',
   component: EventOperatorPage,
   validateSearch: (search: Record<string, unknown>) => ({
-    view: opsSection(search.view),
+    view: opsSectionFromSearch(search.view),
     ...(typeof search.station === 'string' ? { station: search.station } : {}),
   }),
 });

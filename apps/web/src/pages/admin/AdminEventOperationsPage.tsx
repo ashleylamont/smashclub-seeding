@@ -16,7 +16,8 @@ import { OpsTwitchPromotion } from './OpsTwitchPromotion';
 import { OpsAccessControls } from './OpsAccessControls';
 import { OpsEventHistory } from './OpsEventHistory';
 import { Tabs, TabList, Tab, TabPanel } from '../../components/ui/Tabs';
-import { LoadingState, Notice } from '../../components/ui/Feedback';
+import { LoadingState } from '../../components/ui/Feedback';
+import { PageHeader } from '../../components/ui/PageHeader';
 import { OPS_SECTIONS, returnCallControlId, useOpsWorkspace } from '../../lib/opsWorkspace';
 import { MatchCard } from './OpsMatchCard';
 import { PlayerReports, AuditList } from './OpsPlayerReports';
@@ -30,6 +31,7 @@ import { ToPlayerFinder } from './ToPlayerFinder';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearch, useParams } from '@tanstack/react-router';
 import { trpc } from '../../lib/trpc';
+import { TRPCClientError } from '@trpc/client';
 import { useOnlineStatus } from '../../lib/useOnlineStatus';
 import { authClient, useCurrentUser } from '../../lib/auth';
 import './EventOperations.css';
@@ -84,11 +86,11 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
   const workspace = useOpsWorkspace();
   const openScoreSubmissions = () => void workspace.openControl('score-submissions');
   const cache = useQueryClient();
-  const { data: session } = authClient.useSession();
+  const { data: session, refetch: refetchSession } = authClient.useSession();
   const currentUser = useCurrentUser(session);
   const admin = currentUser.data?.role === 'admin';
   const event = useQuery({
-    queryKey: ['eventOps', planId],
+    queryKey: ['eventOps', planId, 'overview', session?.user.id],
     queryFn: () => trpc.eventOps.overview.query({ planId }),
     refetchInterval: 2500,
   });
@@ -120,16 +122,33 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
   const dispatchDisabled = liveDisabled || event.isError;
   const dispatch = useDispatchCommand(planId, dispatchDisabled);
   if (event.isPending) return <LoadingState>Opening event…</LoadingState>;
-  if (!event.data)
+  const accessError = event.error instanceof TRPCClientError ? event.error.data?.code : undefined;
+  if (accessError === 'FORBIDDEN')
     return (
-      <section className="card">
-        <h2>Event control</h2>
-        <Notice tone="danger">{event.error?.message ?? 'Event unavailable'}</Notice>
-        <Button type="submit" onClick={() => void event.refetch()}>
-          Try again
-        </Button>
-        <a href="/login">Sign in</a>
-      </section>
+      <PageHeader
+        title="Event access denied"
+        description="This account does not have organiser access. Ask an administrator to grant access or sign in with the assigned account."
+      />
+    );
+  if (accessError === 'NOT_FOUND' || accessError === 'BAD_REQUEST')
+    return <PageHeader title="Event unavailable" description="Check the event control link." />;
+  if (!event.data || accessError === 'UNAUTHORIZED')
+    return (
+      <PageHeader
+        title={accessError === 'UNAUTHORIZED' ? 'Could not check sign-in' : 'Could not open event'}
+        description="Check your connection and try again."
+        actions={
+          <Button
+            pending={event.isFetching}
+            onClick={() => {
+              if (accessError === 'UNAUTHORIZED') void refetchSession();
+              void event.refetch();
+            }}
+          >
+            Try again
+          </Button>
+        }
+      />
     );
   const data = event.data;
   const available = availableMatches(data.matches).filter((match) => match.availability.canStart);

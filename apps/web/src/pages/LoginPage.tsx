@@ -4,16 +4,29 @@ import { Navigate, useSearch } from '@tanstack/react-router';
 import { authClient, useSignInOptions } from '../lib/auth';
 import { LocalSignIn } from './LocalSignIn';
 import { profileAccountPath } from '../lib/profileClaim';
+import { operatorDestination, operatorPath } from '../lib/operatorDestination';
 import './Auth.css';
 
 export function LoginPage() {
   const { data: session, isPending } = authClient.useSession();
-  const { claim } = useSearch({ from: '/login' });
-  const callbackURL = profileAccountPath(claim);
+  const search = useSearch({ from: '/login' });
+  const { claim } = search;
+  const operator = operatorDestination(search);
+  const callbackURL = operator ? operatorPath(operator) : profileAccountPath(claim);
   const options = useSignInOptions();
   const [error, setError] = useState<string | null>(null);
 
-  if (!isPending && session) return <Navigate to="/me" search={{ claim }} replace />;
+  if (!isPending && session)
+    return operator ? (
+      <Navigate
+        to="/operate/$planId"
+        params={{ planId: operator.operate }}
+        search={{ view: operator.view, station: operator.station }}
+        replace
+      />
+    ) : (
+      <Navigate to="/me" search={{ claim }} replace />
+    );
 
   const signIn = async (provider: 'discord' | 'google') => {
     setError(null);
@@ -30,9 +43,11 @@ export function LoginPage() {
       <div className="login-card card">
         <h1>Sign in</h1>
         <p className="muted">
-          {claim
-            ? 'Continue to your account to request a claim or edit your linked player profile.'
-            : 'Claim your player profile and edit your public alias and main characters.'}
+          {operator
+            ? 'Use the account assigned to this event.'
+            : claim
+              ? 'Continue to your account to request a claim or edit your linked player profile.'
+              : 'Claim your player profile and edit your public alias and main characters.'}
         </p>
         {options.isPending && <p role="status">Loading sign-in options…</p>}
         {options.error && (
