@@ -79,9 +79,8 @@ test('phone hub retains score drafts through section navigation, offline recover
   await expect(card.getByRole('spinbutton').nth(0)).toHaveValue('2');
   await expect(card.getByRole('button', { name: /Submit score/ })).toBeDisabled();
   await card.getByRole('button', { name: 'Reload match' }).click();
-  await expect(card.getByRole('spinbutton').nth(0)).toHaveValue('0');
+  await expect(card.getByRole('spinbutton').nth(0)).toHaveValue('2');
   await expect(recovery).toHaveCount(0);
-  await card.getByRole('spinbutton').nth(0).fill('2');
   fixture.snapshot.plan.drawPaused = true;
   const paused = matches.getByText('The draw is paused. Reporting reopens when play resumes.');
   await expect(paused).toHaveCount(1);
@@ -259,17 +258,22 @@ test('a draft restored by a filter still requires reloading after a revision cha
   )!;
   await page.goto(`/play/${PLAN_ID}`);
   const card = page.locator('article.ops-match').filter({ hasText: match.label });
-  await card.getByRole('spinbutton').first().fill('2');
+  const scores = card.getByRole('spinbutton');
+  await scores.nth(0).fill('2');
+  await scores.nth(1).fill('1');
   const filter = page.getByLabel('Show matches for');
   await chooseOption(filter, other.player1Id!);
   await expect(card).toHaveCount(0);
   match.revision++;
   await page.waitForResponse((response) => response.url().includes('eventOps.snapshot'));
   await chooseOption(filter, '');
-  await expect(card.getByRole('spinbutton').first()).toHaveValue('2');
+  await expect(scores.nth(0)).toHaveValue('2');
+  await expect(scores.nth(1)).toHaveValue('1');
   await expect(card.getByRole('button', { name: /Submit score/ })).toBeDisabled();
   await card.getByRole('button', { name: 'Reload match' }).click();
-  await expect(card.getByRole('spinbutton').first()).toHaveValue('0');
+  await expect(scores.nth(0)).toHaveValue('2');
+  await expect(scores.nth(1)).toHaveValue('1');
+  await expect(card.getByRole('button', { name: /Submit score/ })).toBeEnabled();
   expect(fixture.submissions).toEqual([]);
 });
 
@@ -385,12 +389,11 @@ test('reloading a stale match keeps a reopened rejected report editable', async 
   await expect(reload).toBeVisible();
   await reload.click();
   await expect(restart).toHaveCount(0);
-  await expect(card.getByRole('spinbutton').first()).toHaveValue('0');
-  await card.getByRole('spinbutton').first().fill('2');
+  await expect(card.getByRole('spinbutton').first()).toHaveValue('3');
   await card.getByRole('button', { name: /Submit score/ }).click();
   await expect
     .poll(() => fixture.submissions)
-    .toMatchObject([{ matchId: match.id, expectedRevision: match.revision, score1: 2, score2: 0 }]);
+    .toMatchObject([{ matchId: match.id, expectedRevision: match.revision, score1: 3, score2: 0 }]);
   expect(fixture.unexpected).toEqual([]);
 });
 

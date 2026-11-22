@@ -1,6 +1,7 @@
 import { matchPresentation } from '../lib/matchPresentation';
 import type { LiveMatch } from '../lib/eventDisplay';
 import { Button } from './ui/Button';
+import { Notice } from './ui/Feedback';
 import { ScoreFields, type ScoreInputValue } from './ScoreFields';
 import type { SetCharacterPick } from '@smashclub/shared';
 import { SetCharacterFields } from './SetCharacterFields';
@@ -28,6 +29,7 @@ export function CompletedScoreReport({
   showUnavailableHint = true,
   onSubmit,
   editor,
+  onReload,
   players,
   report,
   label = 'Confirmed result',
@@ -46,6 +48,7 @@ export function CompletedScoreReport({
   };
   onSubmit: (input: ResultSubmission) => Promise<ResultSubmissionReceipt>;
   editor: ReportEditor;
+  onReload: () => void;
   players: ScoreReportPlayer[];
   label?: string;
   recordedOnly?: boolean;
@@ -141,12 +144,12 @@ export function CompletedScoreReport({
           ) : (
             <>
               {revision !== match.revision && (
-                <div role="alert">
-                  <p>The recorded result changed. Reload it before reporting.</p>
-                  <Button type="button" onClick={editor.reset}>
+                <Notice tone="warning" live={false}>
+                  <p role="alert">Match details changed. Reload and check the recorded result.</p>
+                  <Button disabled={pending} onClick={onReload}>
                     Reload match
                   </Button>
-                </div>
+                </Notice>
               )}
               <div className="ops-toolbar">
                 <SetCharacterFields

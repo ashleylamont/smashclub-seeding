@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { SetCharacterPick } from '@smashclub/shared';
 import type { LiveMatch } from './eventDisplay';
+import { matchPresentation } from './matchPresentation';
 import type { ScoreInputValue } from '../components/ScoreFields';
 
 type DraftMatch = LiveMatch & { revision: number };
@@ -34,6 +35,8 @@ export function scoreReportDraftKey(match: DraftMatch) {
     match.player1MemberIds ?? [],
     match.player2Id,
     match.player2MemberIds ?? [],
+    // Keep ready and playing drafts together, but retire them if reporting becomes ineligible.
+    matchPresentation(match).canReport,
     // A new official result starts a separate editor. Other revision changes still require Reload.
     match.status === 'complete'
       ? [match.outcome, match.winnerId, match.score1, match.score2]
@@ -117,13 +120,16 @@ export function useScoreReportDraft(match: DraftMatch, store?: ScoreReportDrafts
       update({ [side]: value, requestId: crypto.randomUUID() }),
     editPicks: (picks: SetCharacterPick[]) =>
       update({ picks, requestId: crypto.randomUUID(), confirmationId: crypto.randomUUID() }),
-    reset: () =>
+    reload: () => {
+      if (draft.pendingRequestId !== null || draft.revision === match.revision) return;
+      // The revised submission has a different payload; it cannot retry either earlier request.
       update({
-        ...initialDraft(match),
-        editing: draft.editing,
-        pendingRequestId: draft.pendingRequestId,
-        retryRejected: draft.retryRejected,
-      }),
+        revision: match.revision,
+        requestId: crypto.randomUUID(),
+        confirmationId: crypto.randomUUID(),
+        error: '',
+      });
+    },
     begin: (id: string) =>
       update({ pendingRequestId: id, completedFeedback: null, error: '', sent: null }),
     succeed: (
