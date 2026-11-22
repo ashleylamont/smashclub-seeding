@@ -38,6 +38,12 @@ body::before {
   display: none;
 }
 
+@media print {
+  body::before {
+    display: none;
+  }
+}
+
 #root {
   min-height: 100svh;
   display: flex;

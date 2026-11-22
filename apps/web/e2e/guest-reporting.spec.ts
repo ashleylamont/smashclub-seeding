@@ -301,6 +301,7 @@ test('organisers print a permanent station QR before publication', async ({
   baseURL,
 }, testInfo) => {
   test.setTimeout(120_000);
+  await page.emulateMedia({ colorScheme: 'dark' });
   const planId = await event(page.request);
   await mutate(page.request, 'eventOps.settings', {
     planId,
@@ -347,6 +348,10 @@ test('organisers print a permanent station QR before publication', async ({
   await preview.getByRole('checkbox', { name: 'Station 2' }).uncheck();
   await expect(preview.locator('.station-sign-page')).toHaveCount(1);
   await page.emulateMedia({ media: 'print' });
+  expect(await page.evaluate(() => getComputedStyle(document.body, '::before').display)).toBe(
+    'none',
+  );
+  await expect(preview.locator('.station-sign-page h1')).toHaveCSS('color', 'rgb(17, 17, 17)');
   const pdf = await page.pdf({ format: 'A4', preferCSSPageSize: true });
   await writeFile(testInfo.outputPath('station-sign.pdf'), pdf);
   expect(pdf.toString('latin1').match(/\/Type \/Page\b/g)).toHaveLength(1);

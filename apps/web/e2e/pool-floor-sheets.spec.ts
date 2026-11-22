@@ -20,6 +20,7 @@ async function mutate<T = unknown>(
 test('TO prints selected pool sheets with stable public QR and unclipped A4 pairings', async ({
   page,
 }, testInfo) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
   await page.request.post('/api/auth/sign-in/email', {
     data: { email: 'admin@smashclub.dev', password: 'devpassword123' },
   });
@@ -131,6 +132,11 @@ test('TO prints selected pool sheets with stable public QR and unclipped A4 pair
   expect(await preview.locator('.floor-sheet-pages').innerText()).toBe(before);
   await page.emulateMedia({ media: 'print' });
   await expect(preview.locator('.floor-sheet-toolbar')).toBeHidden();
+  // The dark app's fixed scanline can cover the entire PDF with backgrounds off.
+  expect(await page.evaluate(() => getComputedStyle(document.body, '::before').display)).toBe(
+    'none',
+  );
+  await expect(preview.locator('.floor-sheet-page h1')).toHaveCSS('color', 'rgb(17, 17, 17)');
   expect(await page.locator('#root').evaluate((node) => getComputedStyle(node).display)).toBe(
     'none',
   );
@@ -177,6 +183,7 @@ test('TO prints selected pool sheets with stable public QR and unclipped A4 pair
   for (const label of ['Upper Consolation', 'Lower Championship', 'Lower Consolation'])
     await brackets.getByRole('checkbox', { name: label, exact: true }).uncheck();
   await page.emulateMedia({ media: 'print' });
+  await expect(brackets.locator('.bracket-backup-page h1')).toHaveCSS('color', 'rgb(17, 17, 17)');
   const bracketPdf = await page.pdf({ format: 'A4', preferCSSPageSize: true });
   await writeFile(testInfo.outputPath('blank-bracket-backup.pdf'), bracketPdf);
   expect(bracketPdf.toString('latin1').match(/\/Type \/Page\b/g)).toHaveLength(1);
