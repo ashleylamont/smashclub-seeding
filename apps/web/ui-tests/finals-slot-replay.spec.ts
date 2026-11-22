@@ -503,7 +503,7 @@ for (const theme of ['dark', 'light'] as const)
         label: 'Recorded pool set',
         player1Name: entrantNames[alice],
         player2Name: entrantNames[bea],
-        reviewPoolGames: true,
+        reviewPlayoffPoolWinner: true,
         score1: 2,
         score2: 0,
         winnerId: alice,
@@ -539,6 +539,8 @@ for (const theme of ['dark', 'light'] as const)
       await expect(page.locator('#match-desk')).toBeFocused();
       const card = page.locator('article.ops-match:visible').filter({ hasText: match.label });
       await card.getByRole('button', { name: 'Correct score' }).press('Enter');
+      await card.getByRole('spinbutton').last().fill('1');
+      await expect(card.getByRole('button', { name: 'Confirm result' })).toBeVisible();
       await card.getByRole('spinbutton').last().fill('3');
       await card.getByRole('button', { name: 'Review finals replay' }).press('Enter');
       const details = card.getByRole('region', { name: 'Pool placement correction review' });

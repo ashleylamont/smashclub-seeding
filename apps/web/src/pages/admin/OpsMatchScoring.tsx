@@ -98,13 +98,12 @@ export function MatchScoring({
   const participatingWinner = [match.player1Id, match.player2Id].some(
     (id) => Boolean(id) && id === winnerId,
   );
+  const canReviewWinner =
+    ('reviewPoolGames' in match && match.reviewPoolGames) ||
+    ('reviewPlayoffPoolWinner' in match && match.reviewPlayoffPoolWinner);
   const begin = (mode: 'live' | 'final', resultType?: 'forfeit') => {
     setEditing(mode);
-    setReplaySource(
-      'reviewPoolGames' in match && match.reviewPoolGames
-        ? (match.winnerId ?? undefined)
-        : undefined,
-    );
+    setReplaySource(canReviewWinner ? (match.winnerId ?? undefined) : undefined);
     setRevision(match.revision);
     setProgressRevision(match.progressRevision);
     setScore1(match.score1 ?? 0);

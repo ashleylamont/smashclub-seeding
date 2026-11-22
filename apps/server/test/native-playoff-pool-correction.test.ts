@@ -61,7 +61,10 @@ describe('playoff-neutral native pool corrections', () => {
     return planId;
   }
 
-  async function playedRoundRobinPlayoff() {
+  async function playedRoundRobinPlayoff(
+    combined = true,
+    beforeFinal?: (planId: string) => Promise<void>,
+  ) {
     const planId = await draft();
     const initial = await runtime.state(planId);
     const order = initial.pools[0]!.entrantIds;
@@ -79,7 +82,7 @@ describe('playoff-neutral native pool corrections', () => {
         requestId: crypto.randomUUID(),
       });
     }
-    const seedPolicy = 'pool_place_whr_v1';
+    const seedPolicy = combined ? 'pool_place_whr_v1' : undefined;
     const preview = await caller().eventOps.native.preview({ planId, seedPolicy });
     await caller().eventOps.native.generate({
       planId,
@@ -87,6 +90,7 @@ describe('playoff-neutral native pool corrections', () => {
       revisionToken: preview.revisionToken,
     });
     const final = (await runtime.state(planId)).matches.find((match) => match.bracketId)!;
+    await beforeFinal?.(planId);
     await caller().eventOps.reportScore({
       ...score(final, order[0]!),
       requestId: crypto.randomUUID(),
@@ -192,6 +196,57 @@ describe('playoff-neutral native pool corrections', () => {
     expect(await runtime.replay(planId)).toEqual(corrected);
     await caller().eventOps.native.finalize({ planId });
     await expectPublishedRoundRobinPlaces(planId, newOrder, score.matchId);
+  });
+
+  it('offers the winner review in the organiser overview for an original rolling playoff draw', async () => {
+    const { planId, played, order, final, correction } = await playedRoundRobinPlayoff(
+      false,
+      async (planId) => {
+        const overview = await caller().eventOps.overview({ planId });
+        expect(overview.matches.some((match) => 'reviewPlayoffPoolWinner' in match)).toBe(false);
+      },
+    );
+    const score = correction(2, 3);
+    const overview = await caller().eventOps.overview({ planId });
+    const source = overview.matches.find(({ id }) => id === score.matchId);
+    expect(played.brackets[0]!.strengthSeeding).toBeUndefined();
+    expect(source).toHaveProperty('reviewPlayoffPoolWinner', true);
+    expect(source).not.toHaveProperty('reviewPoolGames');
+    await caller().eventOps.settings({ planId, published: true, playerReports: true });
+    const published = await caller().eventOps.snapshot({ planId });
+    const publicSource = published.matches.find(({ id }) => id === score.matchId);
+    expect(publicSource).toBeDefined();
+    expect(publicSource).not.toHaveProperty('reviewPlayoffPoolWinner');
+    expect(overview.matches.find(({ id }) => id === final.id)).not.toHaveProperty(
+      'reviewPlayoffPoolWinner',
+    );
+    await expect(
+      caller().eventOps.live.previewPoolGameCorrection({
+        planId,
+        matchId: score.matchId,
+        expectedRevision: score.expectedRevision,
+        score1: score.score2 === 2 ? 2 : 1,
+        score2: score.score1 === 2 ? 2 : 1,
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    const preview = await caller().eventOps.live.previewFinalsSlotReplay({
+      planId,
+      ...score,
+      reviewVersion: 3,
+    });
+    expect(preview).toMatchObject({ allowed: true, poolPlacementCorrection: true });
+    if (!preview.allowed) throw new Error('Expected the reviewed correction');
+    await caller().eventOps.live.command({
+      planId,
+      requestId: crypto.randomUUID(),
+      command: { ...score, kind: 'score', poolGameCorrectionToken: preview.revisionToken },
+    });
+    const changed = await runtime.state(planId);
+    expect(changed.matches.find(({ id }) => id === final.id)).toEqual(
+      played.matches.find(({ id }) => id === final.id),
+    );
+    expect(changed.pools[0]!.order).toEqual([order[0], order[1], order[3], order[2]]);
+    expect(await runtime.replay(planId)).toEqual(changed);
   });
 
   it('updates the automatic order in a sealed playoff result replacement', async () => {

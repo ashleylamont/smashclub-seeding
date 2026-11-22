@@ -1,17 +1,13 @@
-import { isGeneratedQualificationWait } from './qualifiers';
 import { legacyQualifierSlots } from './legacyFinalQualifiers';
 import { projectMatchLabels } from './matchNames';
-import {
-  canReviewFrozenPoolResult,
-  poolOrderRevisionToken,
-  poolOrderStatus,
-  poolPlacementSource,
-} from './poolOrders';
+import { poolOrderRevisionToken, poolOrderStatus, poolPlacementSource } from './poolOrders';
 import {
   eventPoolOrderViews,
   hasFixedLegacyFinals,
+  operatorPoolMatchViews,
   worksheetOrderLock,
   type PoolOrderView,
+  type OperatorPoolMatchView,
 } from './poolOrderViews';
 import {
   dispatchAvailability,
@@ -65,8 +61,7 @@ export type EventSnapshot = Omit<
   charactersPlayed?: Record<string, SetCharacterPick[]>;
   broadcastSides?: TournamentState['broadcastSides'];
   supersededPlayedSets?: ReturnType<typeof supersededPlayedSetViews>;
-  matches: (SqlSnapshot['matches'][number] &
-    MatchViewFields & { reviewPoolGames?: true; qualificationWait?: true })[];
+  matches: (SqlSnapshot['matches'][number] & MatchViewFields & OperatorPoolMatchView)[];
   nativeBrackets: (SqlSnapshot['nativeBrackets'][number] & { qualifierSlots?: QualifierSlot[] })[];
   pendingFinals?: ReturnType<typeof pendingStrengthFinals>;
   placements: (Omit<SqlSnapshot['placements'][number], 'source'> & {
@@ -219,24 +214,7 @@ export async function eventView(
   const rows = matchRows(state);
   const picks = await nativeCharacterEvidence(db, state);
   const eventCharacters = leadingCharacters(picks.values());
-  const reviewableMatches = new Set<string>();
-  const qualificationWaits = new Set<string>();
-  if (privateView) {
-    const reviewablePools = new Set(
-      state.pools.filter((pool) => canReviewFrozenPoolResult(state, pool)).map(({ id }) => id),
-    );
-    for (const match of state.matches) {
-      if (
-        match.stage === 'group' &&
-        match.status === 'complete' &&
-        match.outcome === 'played' &&
-        match.poolId &&
-        reviewablePools.has(match.poolId)
-      )
-        reviewableMatches.add(match.id);
-      if (isGeneratedQualificationWait(state, match)) qualificationWaits.add(match.id);
-    }
-  }
+  const poolMatchViews = privateView ? operatorPoolMatchViews(state) : undefined;
   const dispatch = sharedDispatch(state) ? dispatchContext(state) : undefined;
   const pendingReviewIds =
     dispatch?.pendingReports ??
@@ -312,8 +290,7 @@ export async function eventView(
     ...(picks.size && { charactersPlayed: Object.fromEntries(picks) }),
     matches: rows.map((m) => ({
       ...m,
-      ...(reviewableMatches.has(m.id) ? { reviewPoolGames: true as const } : {}),
-      ...(qualificationWaits.has(m.id) ? { qualificationWait: true as const } : {}),
+      ...poolMatchViews?.get(m.id),
       resourceRevision: state.settings.resourceRevision,
       progressRevision: state.matches.find((row) => row.id === m.id)!.progressRevision,
       started: state.matches.find((row) => row.id === m.id)!.started,

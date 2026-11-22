@@ -1,8 +1,8 @@
 import { finalsRoles } from '@smashclub/shared';
 import { selectFormatFinalists } from '@smashclub/tournament-formats';
-import { hash, requireFact } from './facts';
+import { hash, requireFact, TournamentConflict } from './facts';
 import { automaticPoolOrder, poolOrderEvidence } from './poolOrders';
-import { sourceDescriptor } from './qualifiers';
+import { poolFinalsConsumed, sourceDescriptor } from './qualifiers';
 import { hasCurrentPendingScoreReview } from './scoreReview';
 import type { CommandEnvelope, TournamentState } from './schemas';
 
@@ -34,7 +34,7 @@ function exactBracketSources(state: TournamentState, bracket: Bracket) {
   );
 }
 
-export function reviewPlayoffPoolOrder(before: TournamentState, corrected: TournamentState) {
+function recordedPlayoffPool(before: TournamentState) {
   const baseline = before.baseline;
   const [pool] = before.pools;
   requireFact(
@@ -53,9 +53,6 @@ export function reviewPlayoffPoolOrder(before: TournamentState, corrected: Tourn
     matches.every((match) => !hasCurrentPendingScoreReview(match, before.reports)),
     'Resolve current pool score reports before correcting the finishing order.',
   );
-  const order = automaticPoolOrder(corrected, pool);
-  requireFact(order, 'The corrected results need a separate ruling for the pool order.');
-
   const exactEvidence = 'This correction requires exact recorded finals qualification sources.';
   requireFact(pool.qualifierRoster, exactEvidence);
   const roster = new Set(pool.qualifierRoster);
@@ -64,7 +61,6 @@ export function reviewPlayoffPoolOrder(before: TournamentState, corrected: Tourn
     roster.size === pool.qualifierRoster.length && oldField.length === roster.size,
     exactEvidence,
   );
-  const newField = order.filter((id) => roster.has(id));
   const finishers = oldField.map((playerId, index) => ({
     playerId,
     poolIndex: pool.index,
@@ -80,7 +76,7 @@ export function reviewPlayoffPoolOrder(before: TournamentState, corrected: Tourn
           hash([{ division: pool.division, order: pool.order }]),
       exactEvidence,
     );
-  for (const stage of roles) {
+  const frozenSlots = roles.flatMap((stage) => {
     const bracket = before.brackets.find(
       (item) => item.stage === stage && item.division === pool.division,
     );
@@ -107,11 +103,37 @@ export function reviewPlayoffPoolOrder(before: TournamentState, corrected: Tourn
         exactBracketSources(before, bracket),
       exactEvidence,
     );
-    requireFact(
-      slots.every((slot) => newField[slot.place - 1] === slot.entrantId),
-      'The correction would change a recorded finals qualification assignment.',
-    );
+    return slots;
+  });
+  return { pool, matches, roster, frozenSlots };
+}
+
+/** Only offer the dedicated review once the ordinary score path protects the draw. */
+export function reviewablePlayoffPoolId(state: TournamentState) {
+  const [pool] = state.pools;
+  if (
+    state.lifecycle !== 'locked' ||
+    state.baseline?.structure !== 'round_robin_finals' ||
+    !pool ||
+    !poolFinalsConsumed(state, pool.id)
+  )
+    return;
+  try {
+    return recordedPlayoffPool(state).pool.id;
+  } catch (error) {
+    if (!(error instanceof TournamentConflict)) throw error;
   }
+}
+
+export function reviewPlayoffPoolOrder(before: TournamentState, corrected: TournamentState) {
+  const { pool, matches, roster, frozenSlots } = recordedPlayoffPool(before);
+  const order = automaticPoolOrder(corrected, pool);
+  requireFact(order, 'The corrected results need a separate ruling for the pool order.');
+  const newField = order.filter((id) => roster.has(id));
+  requireFact(
+    frozenSlots.every((slot) => newField[slot.place - 1] === slot.entrantId),
+    'The correction would change a recorded finals qualification assignment.',
+  );
   return { pool, matches, order };
 }
 
