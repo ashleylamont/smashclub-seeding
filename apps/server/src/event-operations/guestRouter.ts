@@ -104,6 +104,7 @@ export const guestRouter = router({
     return {
       ...data,
       reports: reportViews(await api.state()).filter((r) => r.guestSessionId === guest.id),
+      reportingDraftOwnerId: guest.id,
       expiresAt: guest.expiresAt?.toISOString() ?? null,
     };
   }),

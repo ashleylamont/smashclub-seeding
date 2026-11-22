@@ -1,16 +1,25 @@
-import { useEffect, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { authClient, useMyClaims, type Session } from './auth';
 import { eventUnavailable } from './eventErrors';
 import { eventPlayers, useDevicePlayer } from './playerSelection';
 import { useOnlineStatus } from './useOnlineStatus';
 import { useGuestEventAccess } from './useGuestEventAccess';
 import { trpc } from './trpc';
+import { matchPresentation } from './matchPresentation';
+import {
+  accountDraftSource,
+  clearScoreDrafts,
+  storedScoreDraftOwner,
+  useScoreDraftOwner,
+} from './scoreDraftSession';
+import { useScoreReportDrafts } from './useScoreReportDrafts';
 import {
   eventPlayOpen,
   scoreApprovalPolicy,
   usePoolFilter,
   matchesPool,
+  type PoolFlowMatch,
   type StartPoolMatch,
 } from './poolFlow';
 import {
@@ -29,10 +38,11 @@ import {
 import type { ResultSubmission } from '../components/CompletedScoreReport';
 
 export function usePlayerEventHub(planId: string) {
-  const { data: signedIn } = authClient.useSession();
+  const auth = authClient.useSession();
+  const signedIn = auth.data;
   const online = useOnlineStatus();
   const guest = useGuestEventAccess(planId);
-  const { session, redeeming, matches, setError, setReportingPreference } = guest;
+  const { session, redeeming, matches, setError } = guest;
   const [search, setSearch] = useState('');
   const [selectedPlayer, persistSelectedPlayer] = useDevicePlayer(
     planId,
@@ -72,37 +82,9 @@ export function usePlayerEventHub(planId: string) {
     refetchInterval: 2500,
     retry: false,
   });
-  const signedReports = useQuery({
-    queryKey: ['eventOpsReports', planId, signedIn?.user.id],
-    queryFn: () => trpc.eventOps.myReports.query({ planId }),
-    enabled: Boolean(signedIn),
-    refetchInterval: 2500,
-    retry: false,
-  });
+  const reporting = usePlayerReporting(planId, auth, guest, publicEvent, online);
+  const { data, reporter, canWrite, closed, ownReports } = reporting;
   const claims = useMyClaims(signedIn?.user.id);
-  const unpublished = eventUnavailable(publicEvent.error);
-  const eventPlan = (publicEvent.data ?? matches.data)?.plan;
-  const playOpen = eventPlayOpen(eventPlan);
-  // Only the public snapshot drives browsing; private reporting responses never widen visibility.
-  const data = unpublished ? undefined : publicEvent.data;
-  const { guestCredential, signedCredential, reporter, reportingIdentity } = reportingAccess(
-    guest,
-    signedIn,
-    data,
-  );
-  const canWrite =
-    online &&
-    playOpen &&
-    !publicEvent.isError &&
-    (reporter === 'guest' ? guestCredential : signedCredential) &&
-    !redeeming &&
-    !['complete', 'cancelled'].includes(data?.plan.status ?? '');
-  const ownReports =
-    reporter === 'guest'
-      ? matches.data?.reports
-      : reporter === 'signed-in'
-        ? signedReports.data
-        : undefined;
   const claim = signedIn ? claims.data?.find((item) => item.status === 'approved') : undefined;
   const disputeMode =
     (publicEvent.data ?? matches.data)?.settings.scoreReportingMode === 'approve_unless_disputed' &&
@@ -110,7 +92,6 @@ export function usePlayerEventHub(planId: string) {
   const hasAutomaticReports = data?.matches.some(
     (match) => scoreApprovalPolicy(data, match) !== 'review',
   );
-  const closed = data !== undefined && ['complete', 'cancelled'].includes(data.plan.status);
   const players = eventPlayers(data?.matches ?? []);
   // A linked profile supplies browsing context only, without persisting the account's player ID.
   const linkedPlayerId =
@@ -254,17 +235,8 @@ export function usePlayerEventHub(planId: string) {
     signedIn,
     online,
     publicEvent,
-    unpublished,
-    data,
-    signedCredential,
-    guestCredential,
-    reporter,
-    reportingIdentity,
-    canWrite,
-    ownReports,
+    ...reporting,
     claim,
-    playOpen,
-    closed,
     players,
     player,
     playerName,
@@ -295,28 +267,165 @@ export function usePlayerEventHub(planId: string) {
     chooseMatch,
     submitScore,
     hasAutomaticReports,
-    setReportingPreference,
   };
 }
 export type PlayerEventHub = ReturnType<typeof usePlayerEventHub>;
-export type PublicEventSnapshot = NonNullable<PlayerEventHub['data']>;
+export type PublicEventSnapshot = Awaited<ReturnType<typeof trpc.eventOps.snapshot.query>>;
+
+function usePlayerReporting(
+  planId: string,
+  auth: ReturnType<typeof authClient.useSession>,
+  guest: ReturnType<typeof useGuestEventAccess>,
+  publicEvent: UseQueryResult<PublicEventSnapshot>,
+  online: boolean,
+) {
+  const { data: signedIn, isPending: authPending, error: authError } = auth;
+  const authUnresolved = authPending || Boolean(authError);
+  const accountOwner = useScoreDraftOwner('account', accountDraftSource(signedIn, authUnresolved));
+  const [savedDraftOwner] = useState(() => storedScoreDraftOwner(planId));
+  const { redeeming, matches } = guest;
+  const guestOwner = useScoreDraftOwner(
+    'guest',
+    matches.isSuccess && matches.isFetchedAfterMount
+      ? matches.data.reportingDraftOwnerId
+      : undefined,
+  );
+  const preferRecoveredAccount =
+    savedDraftOwner?.startsWith('account:') && guest.reportingPreference === undefined;
+  const recoveredAccountPending = preferRecoveredAccount && accountOwner === undefined;
+  const reportingPreference =
+    guest.reportingPreference ??
+    (recoveredAccountPending
+      ? undefined
+      : preferRecoveredAccount && accountOwner === savedDraftOwner
+        ? 'signed-in'
+        : 'guest');
+  const setReportingPreference = (preference: 'guest' | 'signed-in') => {
+    clearScoreDrafts(planId);
+    guest.setReportingPreference(preference);
+  };
+  const signedReports = useQuery({
+    queryKey: ['eventOpsReports', planId, signedIn?.user.id, signedIn?.session.id],
+    queryFn: () => trpc.eventOps.myReports.query({ planId }),
+    enabled: Boolean(signedIn),
+    refetchInterval: 2500,
+    retry: false,
+  });
+  const unpublished = eventUnavailable(publicEvent.error);
+  const eventPlan = (publicEvent.data ?? matches.data)?.plan;
+  const playOpen = eventPlayOpen(eventPlan);
+  // Only the public snapshot drives browsing; private reporting responses never widen visibility.
+  const data = unpublished ? undefined : publicEvent.data;
+  const { guestCredential, signedCredential, reporter, reportingIdentity } = reportingAccess(
+    guest,
+    signedIn,
+    data,
+    reportingPreference,
+  );
+  const signedReportingDenied = eventUnavailable(signedReports.error);
+  const canWrite =
+    online &&
+    playOpen &&
+    !publicEvent.isError &&
+    Boolean(reporter) &&
+    (reporter === 'guest' ? guestCredential : signedCredential && !signedReportingDenied) &&
+    !redeeming &&
+    !['complete', 'cancelled'].includes(data?.plan.status ?? '');
+  const ownReports =
+    reporter === 'guest'
+      ? matches.data?.reports
+      : reporter === 'signed-in' && !signedReportingDenied
+        ? signedReports.data
+        : undefined;
+  const closed = data !== undefined && ['complete', 'cancelled'].includes(data.plan.status);
+  const verifiedDraftOwner = (() => {
+    if (closed || unpublished) return null;
+    if (
+      redeeming ||
+      !data ||
+      !publicEvent.isSuccess ||
+      !publicEvent.isFetchedAfterMount ||
+      recoveredAccountPending
+    )
+      return undefined;
+    if (reporter === 'guest') {
+      if (!guest.valid || guest.accessDenied) return null;
+      return guestCredential ? guestOwner : undefined;
+    }
+    if (reporter === 'signed-in') {
+      if (signedReportingDenied) return null;
+      return signedReports.isSuccess && signedReports.isFetchedAfterMount
+        ? accountOwner
+        : undefined;
+    }
+    return authUnresolved ? undefined : null;
+  })();
+  const canRecoverDraft = useCallback(
+    (match: PoolFlowMatch, attemptedRequestId: string | null) => {
+      const report = ownReports?.find((item) => item.matchId === match.id);
+      const attemptRecorded =
+        attemptedRequestId !== null &&
+        ownReports?.some(
+          (item) => item.matchId === match.id && item.requestId === attemptedRequestId,
+        );
+      return (
+        !attemptRecorded &&
+        matchPresentation(match).canReport &&
+        report?.status !== 'pending' &&
+        (match.status === 'complete'
+          ? scoreApprovalPolicy(data, match) !== 'review'
+          : report?.status !== 'approved')
+      );
+    },
+    [data, ownReports],
+  );
+  const scoreDrafts = useScoreReportDrafts(
+    JSON.stringify([planId, reportingIdentity, closed]),
+    data?.matches,
+    {
+      planId,
+      owner: verifiedDraftOwner && (!playOpen || !online) ? undefined : verifiedDraftOwner,
+      canRecover: canRecoverDraft,
+    },
+  );
+  return {
+    data,
+    unpublished,
+    playOpen,
+    closed,
+    guestCredential,
+    signedCredential,
+    reporter,
+    reportingIdentity,
+    canWrite,
+    ownReports,
+    scoreDrafts,
+    setReportingPreference,
+  };
+}
 
 function reportingAccess(
   guest: ReturnType<typeof useGuestEventAccess>,
   signedIn: Session,
   data: Awaited<ReturnType<typeof trpc.eventOps.snapshot.query>> | undefined,
+  reportingPreference: 'guest' | 'signed-in' | undefined,
 ) {
-  const { valid, redeeming, matches, session, reportingPreference, cacheId, passVersion } = guest;
+  const { valid, redeeming, matches, session, cacheId, passVersion } = guest;
   const guestCredential = valid && !redeeming && Boolean(matches.data) && !matches.isError;
   const signedCredential = Boolean(signedIn) && Boolean(data?.settings.playerReports);
   // A polling outage or revocation disables the chosen pass without silently changing attribution.
-  const reporter =
-    session && reportingPreference === 'guest' ? 'guest' : signedCredential ? 'signed-in' : null;
+  const reporter = !reportingPreference
+    ? null
+    : session && reportingPreference === 'guest'
+      ? 'guest'
+      : signedCredential
+        ? 'signed-in'
+        : null;
   const reportingIdentity =
     reporter === 'guest'
       ? `guest:${cacheId}:${passVersion}`
       : reporter === 'signed-in'
-        ? `account:${signedIn!.user.id}`
+        ? `account:${signedIn!.user.id}:${signedIn!.session.id}`
         : 'anonymous';
   return { guestCredential, signedCredential, reporter, reportingIdentity };
 }
