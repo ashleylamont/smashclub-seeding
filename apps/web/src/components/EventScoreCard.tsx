@@ -155,7 +155,7 @@ function ScoreCard({
         <p>{qualification ?? 'Waiting for earlier matches or a TO before this match can start.'}</p>
       ) : !enabled ? (
         unavailableMessage && <p>{unavailableMessage}</p>
-      ) : report?.status === 'pending' || (sent && !report) ? (
+      ) : report?.status === 'pending' ? null : sent && !report ? (
         <p role="status">{sent === 'approved' ? 'Result confirmed.' : pendingMessage}</p>
       ) : report?.status === 'approved' ? (
         <p>Your report has been approved. Ask a TO if this match needs a correction.</p>

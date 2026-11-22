@@ -165,13 +165,11 @@ for (const actor of ['guest', 'signed-in'] as const)
         await expect(submit).toBeEnabled();
         await expect(card.getByRole('spinbutton').nth(0)).toHaveValue('2');
         await submit.click();
-        await expect(card).toContainText(
-          automatic
-            ? /Confirmed(?: result)?: 2 – 0/
-            : actor === 'guest'
-              ? 'Thanks! A TO will review your score.'
-              : 'Score submitted for TO approval.',
-        );
+        if (automatic) await expect(card).toContainText(/Confirmed(?: result)?: 2 – 0/);
+        else
+          await expect(card.getByRole('status')).toHaveText(
+            'Your report: 2 – 0 · Awaiting TO approval',
+          );
         let after = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
         expect(after.matches.find((match) => match.id === target.id)).toMatchObject(
           automatic

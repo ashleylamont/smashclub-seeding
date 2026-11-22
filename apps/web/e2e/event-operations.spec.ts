@@ -134,7 +134,9 @@ test('rehearsal: two TOs, score approval, station safety, public board and OBS',
     await playerCard.locator('input[type="number"]').nth(0).fill('2');
     await playerCard.locator('input[type="number"]').nth(1).fill('0');
     await playerCard.getByRole('button', { name: 'Submit score for TO approval' }).click();
-    await expect(playerCard).toContainText(/submitted|pending/i);
+    await expect(playerCard.getByRole('status')).toHaveText(
+      'Your report: 2 – 0 · Awaiting TO approval',
+    );
     const pendingSnapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
     expect(pendingSnapshot.matches.find((match) => match.id === playing.id)!.status).toBe(
       'playing',
@@ -297,7 +299,7 @@ test('player score draft survives a station dispatch without changing its score 
     await expect(card.locator('input[type="number"]').nth(0)).toHaveValue('2');
     await expect(card.locator('input[type="number"]').nth(1)).toHaveValue('1');
     await submit.click();
-    await expect(card).toContainText('Score submitted for TO approval');
+    await expect(card.getByRole('status')).toHaveText('Your report: 2 – 1 · Awaiting TO approval');
     const reports = await query<Report[]>(playerContext.request, 'eventOps.myReports', { planId });
     expect(reports).toHaveLength(1);
     expect(reports[0]).toMatchObject({
@@ -335,7 +337,7 @@ test('a rejected player score starts a new request even when its scores are unch
     await card.locator('input[type="number"]').nth(0).fill('2');
     await card.locator('input[type="number"]').nth(1).fill('1');
     await card.getByRole('button', { name: 'Submit score for TO approval' }).click();
-    await expect(card).toContainText('Score submitted for TO approval');
+    await expect(card.getByRole('status')).toHaveText('Your report: 2 – 1 · Awaiting TO approval');
     const [first] = await query<Report[]>(playerContext.request, 'eventOps.myReports', { planId });
     expect(first!.status).toBe('pending');
     await mutateData(page.request, 'eventOps.reviewReport', {
@@ -347,7 +349,7 @@ test('a rejected player score starts a new request even when its scores are unch
     await expect(card.locator('input[type="number"]').nth(0)).toHaveValue('2');
     await expect(card.locator('input[type="number"]').nth(1)).toHaveValue('1');
     await card.getByRole('button', { name: 'Submit score for TO approval' }).click();
-    await expect(card).toContainText('Score submitted for TO approval');
+    await expect(card.getByRole('status')).toHaveText('Your report: 2 – 1 · Awaiting TO approval');
     const reports = await query<Report[]>(playerContext.request, 'eventOps.myReports', { planId });
     expect(reports).toHaveLength(2);
     expect(reports.find((report) => report.id === first!.id)!.status).toBe('rejected');

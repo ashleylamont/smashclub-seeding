@@ -174,8 +174,8 @@ function batchInput<T>(route: Route, procedure: string): T {
 }
 
 /** Delay background read delivery so polling cannot conceal a transport retry bug. */
-async function delaySnapshots(page: Page) {
-  const procedures = ['eventOps.snapshot', 'eventOps.guests.matches'];
+async function delaySnapshots(page: Page, privateProcedure = 'eventOps.guests.matches') {
+  const procedures = ['eventOps.snapshot', privateProcedure];
   const delivery = rpcReadDelivery(procedures);
   const fulfill = async (route: Route, response: APIResponse) => {
     await route.fulfill({
@@ -279,8 +279,80 @@ for (const automatic of [false, true]) {
     expect(
       (await overview(request, night)).reports.filter((report) => report.matchId === match.id),
     ).toHaveLength(1);
+    await page.unrouteAll({ behavior: 'wait' });
   });
 }
+
+test('a signed-in score retry recovers its private receipt when the server response is lost', async ({
+  page,
+  browser,
+  request,
+  night,
+}) => {
+  const match = night.overview.matches[0]!;
+  const reads = await delaySnapshots(page, 'eventOps.myReports');
+  await signIn(page.request, 'player@smashclub.dev');
+  const path = `/play/${night.planId}?match=${match.id}`;
+  await page.goto(path);
+  await reads.delay();
+
+  const attempts: ScoreInput[] = [];
+  const procedure = 'eventOps.reportScore';
+  await page.route(
+    (url) => hasProcedure(url.href, procedure),
+    async (route) => {
+      attempts.push(batchInput<ScoreInput>(route, procedure));
+      if (attempts.length === 2) {
+        const response = await route.fetch();
+        expect(response.ok(), await response.text()).toBe(true);
+      }
+      await route.abort('connectionreset');
+    },
+  );
+  const card = guestCard(page, match);
+  const submit = card.getByRole('button', { name: 'Submit score for TO approval' });
+  await card.getByRole('spinbutton').nth(0).fill('2');
+  await card.getByRole('spinbutton').nth(1).fill('1');
+  await submit.click();
+  await expect(card.getByRole('alert')).toContainText(/fetch|network|connection/i);
+  await expect(submit).toBeEnabled();
+  expect((await overview(request, night)).reports).toHaveLength(0);
+
+  await submit.click();
+  await expect(card.getByRole('alert')).toContainText(/fetch|network|connection/i);
+  const committed = (await overview(request, night)).reports;
+  expect(committed).toHaveLength(1);
+  expect(attempts).toHaveLength(2);
+  expect(attempts[1]).toEqual(attempts[0]);
+  expect(committed[0]).toMatchObject({
+    matchId: match.id,
+    requestId: attempts[0]!.requestId,
+    status: 'pending',
+  });
+
+  reads.resume();
+  await expect(card.getByRole('status')).toHaveText('Your report: 2 – 1 · Awaiting TO approval');
+  await expect(card.getByRole('alert')).toHaveCount(0);
+  await expect(submit).toHaveCount(0);
+  expect(attempts).toHaveLength(2);
+
+  const publicPage = await browser.newPage();
+  try {
+    await publicPage.goto(new URL(path, page.url()).href);
+    const publicCard = guestCard(publicPage, match);
+    await expect(publicCard).toBeVisible();
+    await expect(publicPage.getByText('Your report:', { exact: false })).toHaveCount(0);
+    await mutate(request, 'eventOps.reviewReport', { reportId: committed[0]!.id, approve: true });
+    await chooseOption(publicPage.getByLabel('Match view', { exact: true }), 'results');
+    await expect(publicCard).toContainText('Confirmed result: 2 – 1');
+    await expect(publicPage.getByText('Your report:', { exact: false })).toHaveCount(0);
+  } finally {
+    await publicPage.close();
+  }
+  await expect(card.getByText('Your report: 2 – 1 · Confirmed result')).toBeVisible();
+  expect((await overview(request, night)).reports).toHaveLength(1);
+  await page.unrouteAll({ behavior: 'wait' });
+});
 
 for (const actor of ['guest', 'player']) {
   test(`${actor} preserves an unsent score across offline polling and a station dispatch`, async ({
@@ -324,9 +396,7 @@ for (const actor of ['guest', 'player']) {
     await expect(card.getByRole('spinbutton').nth(1)).toHaveValue('1');
     expect((await overview(request, night)).reports).toHaveLength(0);
     await card.getByRole('button', { name: submitName }).click();
-    await expect(card).toContainText(
-      actor === 'guest' ? 'Awaiting TO approval' : 'Score submitted for TO approval',
-    );
+    await expect(card.getByRole('status')).toHaveText('Your report: 2 – 1 · Awaiting TO approval');
     const after = await overview(request, night);
     expect(after.reports).toHaveLength(1);
     expect(after.matches.find((item) => item.id === match.id)).toMatchObject({

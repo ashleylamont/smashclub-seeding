@@ -214,6 +214,8 @@ test('a verified confirmation receipt retires its draft after an interrupted res
       isDispute: false,
     },
   ];
+  await expect(card.getByText(/Your report:.*Confirmed result/)).toBeVisible();
+  await expect(card.getByRole('alert')).toHaveCount(0);
   await page.reload();
   await expect(card.getByText(/Your report:.*Confirmed result/)).toBeVisible();
   await expect(card.getByRole('button', { name: 'Add characters (optional)' })).toBeVisible();
