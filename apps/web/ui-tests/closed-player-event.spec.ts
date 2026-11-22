@@ -115,7 +115,9 @@ for (const theme of ['dark', 'light'] as const) {
       await page.goto(path);
       const finalCard = page.locator('article.ops-match').filter({ hasText: final.label });
       const recordedCard = page.locator('article.ops-match').filter({ hasText: recorded!.label });
+      const shortcut = page.getByRole('button', { name: /^View (current|next) match$/ });
       await expect(finalCard).toContainText(`Playing now · ${station.name}`);
+      await expect(shortcut).toHaveText('View current match');
       if (guest) await expect(recordedCard).toContainText('Different score awaiting TO review');
       const interrupted = page.getByText(
         'Live updates interrupted. Scores shown may be out of date.',
@@ -141,7 +143,7 @@ for (const theme of ['dark', 'light'] as const) {
       await expect(finalCard).toContainText(`No result recorded · ${station.name}`);
       await expect(finalCard).not.toHaveClass(/ops-match-playing/);
       await expect(page.locator('article.ops-match').getByRole('spinbutton')).toHaveCount(0);
-      await expect(page.getByRole('button', { name: 'Find next match' })).toHaveCount(0);
+      await expect(shortcut).toHaveCount(0);
       if (guest) {
         await expect
           .poll(async () => {

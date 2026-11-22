@@ -301,7 +301,7 @@ export function PlayerHubMatches({
 }
 
 function focusMatchCard(grid: HTMLDivElement | null, matchId: string) {
-  const card = grid?.querySelector<HTMLElement>(`[data-match-id="${CSS.escape(matchId)}"]`);
+  const card = grid?.querySelector<HTMLElement>(`[data-player-match-id="${CSS.escape(matchId)}"]`);
   if (!card) return false;
   card.focus({ preventScroll: true });
   card.scrollIntoView({

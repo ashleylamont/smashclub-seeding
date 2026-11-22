@@ -105,7 +105,7 @@ export function EventScoreCard({
   return (
     <article
       className={`card ops-match${!recordedOnly || match.status === 'complete' ? ` ops-match-${match.status}` : ''}`}
-      data-match-id={match.id}
+      data-player-match-id={match.id}
       tabIndex={-1}
       aria-label={presentation.title}
     >
