@@ -237,6 +237,12 @@ test('a paused poll keeps the baseline for a call committed immediately after re
   snapshot.callSnapshotVersion = 16;
   await poll();
   await expect(announcement).toBeEmpty();
+
+  // Returning the newer call still counts after the obsolete paused response.
+  removeCall(17, 'ready');
+  await poll();
+  await expect(announcement).toContainText('Call returned to the queue.');
+  await page.screenshot({ path: testInfo.outputPath('returned-after-relock.png') });
 });
 
 for (const theme of ['dark', 'light']) {

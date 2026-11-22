@@ -106,14 +106,14 @@ function updateObservation(
   previous: Observation | null,
 ): Observation | null {
   if (mode === 'off') return null;
-  if (mode === 'paused') {
-    const version = source?.callSnapshotVersion ?? previous?.version;
-    // A paused snapshot is a baseline for new calls after relock.
-    return version === undefined
-      ? null
-      : { version: Math.max(version, previous?.version ?? version) };
-  }
-  if (source) return observe(source, player, previous);
+  if (source && mode === 'live') return observe(source, player, previous);
+
+  // A fresh paused snapshot is a baseline for new calls after relock.
+  const version = source?.callSnapshotVersion;
+  if (version !== undefined && (!previous || version >= previous.version)) return { version };
+
+  // An interruption or older pause can hide the banner while the newer call
+  // remains eligible for a later return or cancellation.
   return previous && { version: previous.version, call: previous.call };
 }
 
