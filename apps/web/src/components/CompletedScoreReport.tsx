@@ -15,6 +15,11 @@ export type ResultSubmission = {
   score2: number;
   characterPicks?: SetCharacterPick[];
 };
+export type ResultSubmissionReceipt = {
+  reportId: string;
+  status: 'pending' | 'approved' | 'rejected';
+  isDispute: boolean;
+};
 /** Later reports are evidence for organisers; they never replace the displayed official result. */
 export function CompletedScoreReport({
   match,
@@ -24,7 +29,7 @@ export function CompletedScoreReport({
   onSubmit,
   editor,
   players,
-  pendingReport,
+  report,
   label = 'Confirmed result',
   recordedOnly = false,
 }: {
@@ -32,18 +37,41 @@ export function CompletedScoreReport({
   enabled: boolean;
   allowReports: boolean;
   showUnavailableHint?: boolean;
-  pendingReport?: { score1: number | null; score2: number | null; isDispute: boolean };
-  onSubmit: (input: ResultSubmission) => Promise<{ isDispute: boolean }>;
+  report?: {
+    id: string;
+    status: ResultSubmissionReceipt['status'];
+    score1: number | null;
+    score2: number | null;
+    isDispute: boolean;
+  };
+  onSubmit: (input: ResultSubmission) => Promise<ResultSubmissionReceipt>;
   editor: ReportEditor;
   players: ScoreReportPlayer[];
   label?: string;
   recordedOnly?: boolean;
 }) {
   const presentation = matchPresentation(match);
-  const { editing, score1, score2, revision, requestId, confirmationId, picks, message, error } =
-    editor.draft;
+  const {
+    editing,
+    score1,
+    score2,
+    revision,
+    requestId,
+    confirmationId,
+    picks,
+    completedFeedback,
+    error,
+  } = editor.draft;
   const pending = editor.draft.pendingRequestId !== null;
-  const showEditor = editing && !message;
+  const pendingReport = report?.status === 'pending' ? report : undefined;
+  // Keep the response visible while the private report query catches up with this submission.
+  const message =
+    completedFeedback &&
+    (!report ||
+      (report.id === completedFeedback.previousReportId &&
+        report.id !== completedFeedback.reportId))
+      ? completedFeedback.message
+      : '';
   const showReporting =
     !recordedOnly &&
     allowReports &&
@@ -69,9 +97,16 @@ export function CompletedScoreReport({
         ...(picks.length && { characterPicks: picks }),
       });
       editor.succeed(id, {
-        message: result.isDispute
-          ? 'Different score sent to the TOs for review. The recorded result stays official until they resolve it.'
-          : 'Thanks — your score agrees with the recorded result.',
+        completedFeedback: {
+          reportId: result.reportId,
+          previousReportId: report?.id,
+          message:
+            result.status === 'rejected'
+              ? 'Your report was rejected by a TO.'
+              : result.isDispute
+                ? 'Different score sent to the TOs for review. The recorded result stays official until they resolve it.'
+                : 'Thanks — your score agrees with the recorded result.',
+        },
       });
     } catch (cause) {
       editor.fail(
@@ -130,16 +165,16 @@ export function CompletedScoreReport({
                   disabled={pending}
                   onClick={() => {
                     editor.update({
-                      editing: !showEditor,
+                      editing: !editing,
                       requestId: crypto.randomUUID(),
-                      message: '',
+                      completedFeedback: null,
                     });
                   }}
                 >
                   Report a different score
                 </Button>
               </div>
-              {showEditor && (
+              {editing && (
                 <form
                   className="ops-score-form"
                   onSubmit={(event) => {

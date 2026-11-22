@@ -5,6 +5,12 @@ import type { ScoreInputValue } from '../components/ScoreFields';
 
 type DraftMatch = LiveMatch & { revision: number };
 
+type CompletedReportFeedback = {
+  reportId: string;
+  previousReportId?: string;
+  message: string;
+};
+
 type ScoreReportDraft = {
   score1: ScoreInputValue;
   score2: ScoreInputValue;
@@ -16,7 +22,7 @@ type ScoreReportDraft = {
   retryRejected: boolean;
   pendingRequestId: string | null;
   sent: 'approved' | 'pending' | null;
-  message: string;
+  completedFeedback: CompletedReportFeedback | null;
   error: string;
 };
 
@@ -80,7 +86,7 @@ function initialDraft(match: DraftMatch): ScoreReportDraft {
     retryRejected: false,
     pendingRequestId: null,
     sent: null,
-    message: '',
+    completedFeedback: null,
     error: '',
   };
 }
@@ -116,10 +122,14 @@ export function useScoreReportDraft(match: DraftMatch, store?: ScoreReportDrafts
         ...initialDraft(match),
         editing: draft.editing,
         pendingRequestId: draft.pendingRequestId,
+        retryRejected: draft.retryRejected,
       }),
-    begin: (id: string) => update({ pendingRequestId: id, message: '', error: '', sent: null }),
-    succeed: (id: string, feedback: Pick<Partial<ScoreReportDraft>, 'message' | 'sent'>) =>
-      update({ pendingRequestId: null, retryRejected: false, ...feedback }, id),
+    begin: (id: string) =>
+      update({ pendingRequestId: id, completedFeedback: null, error: '', sent: null }),
+    succeed: (
+      id: string,
+      feedback: Pick<Partial<ScoreReportDraft>, 'completedFeedback' | 'sent'>,
+    ) => update({ pendingRequestId: null, editing: false, retryRejected: false, ...feedback }, id),
     fail: (id: string, error: string) => update({ pendingRequestId: null, error }, id),
   };
 }

@@ -309,6 +309,91 @@ test('an official result recorded while filtered out clears the open score draft
   expect(fixture.submissions).toEqual([]);
 });
 
+test('an authoritative report receipt replaces feedback from a completed score submission', async ({
+  page,
+}, testInfo) => {
+  const fixture = await mockEvent(page, { role: 'player' });
+  fixture.snapshot.settings.scoreReportingMode = 'approve_unless_disputed';
+  const match = fixture.snapshot.matches.find((item) => item.status === 'complete')!;
+  const other = fixture.snapshot.matches.find((item) => item.status === 'playing')!;
+  const report = {
+    id: 'completed-score-dispute',
+    matchId: match.id,
+    score1: 3,
+    score2: 2,
+    status: 'pending',
+    isDispute: true,
+  };
+  await page.route('**/api/trpc/eventOps.reportScore*', async (route) => {
+    const result = { result: { data: { ...report } } };
+    await route.fulfill({
+      json: new URL(route.request().url()).searchParams.has('batch') ? [result] : result,
+    });
+  });
+  await page.goto(`/play/${PLAN_ID}`);
+  await chooseOption(page.getByLabel('Match view', { exact: true }), 'matches');
+  const card = page.locator('article.ops-match').filter({ hasText: match.label });
+  await card.getByRole('button', { name: 'Report a different score' }).click();
+  const scores = card.getByRole('spinbutton');
+  await scores.nth(0).fill('3');
+  await scores.nth(1).fill('2');
+  await card.getByRole('button', { name: 'Send different score to TOs' }).click();
+  const transient = card.getByText('Different score sent to the TOs for review.', { exact: false });
+  await expect(transient).toBeVisible();
+  fixture.responses['eventOps.myReports'] = [report];
+  await expect(card).toContainText('Your report: 3 – 2 · Different score awaiting TO review');
+  await expect(transient).toHaveCount(0);
+
+  const filter = page.getByLabel('Show matches for');
+  await chooseOption(filter, other.player1Id!);
+  await expect(card).toHaveCount(0);
+  report.status = 'rejected';
+  report.isDispute = false;
+  await page.waitForResponse((response) => response.url().includes('eventOps.myReports'));
+  await chooseOption(filter, '');
+  await expect(card).toContainText('Your report: 3 – 2 · Rejected by a TO');
+  await expect(card.getByText('awaiting TO review', { exact: false })).toHaveCount(0);
+  await expect(transient).toHaveCount(0);
+  await expect(scores).toHaveCount(0);
+  await expect(card.getByRole('button', { name: 'Report a different score' })).toBeEnabled();
+  expect(fixture.unexpected).toEqual([]);
+  await ready(page);
+  await card.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath('reviewed-late-report.png') });
+});
+
+test('reloading a stale match keeps a reopened rejected report editable', async ({ page }) => {
+  const fixture = await mockEvent(page, { role: 'player' });
+  const match = fixture.snapshot.matches.find((item) => item.status === 'playing')!;
+  fixture.responses['eventOps.myReports'] = [
+    {
+      id: 'rejected-open-score',
+      matchId: match.id,
+      score1: 2,
+      score2: 1,
+      status: 'rejected',
+      isDispute: false,
+    },
+  ];
+  await page.goto(`/play/${PLAN_ID}`);
+  const card = page.locator('article.ops-match').filter({ hasText: match.label });
+  const restart = card.getByRole('button', { name: 'Start a new report' });
+  await restart.click();
+  await card.getByRole('spinbutton').first().fill('3');
+  match.revision++;
+  const reload = card.getByRole('button', { name: 'Reload match' });
+  await expect(reload).toBeVisible();
+  await reload.click();
+  await expect(restart).toHaveCount(0);
+  await expect(card.getByRole('spinbutton').first()).toHaveValue('0');
+  await card.getByRole('spinbutton').first().fill('2');
+  await card.getByRole('button', { name: /Submit score/ }).click();
+  await expect
+    .poll(() => fixture.submissions)
+    .toMatchObject([{ matchId: match.id, expectedRevision: match.revision, score1: 2, score2: 0 }]);
+  expect(fixture.unexpected).toEqual([]);
+});
+
 test('cold results links scroll after the public snapshot mounts', async ({ page }) => {
   let release!: () => void;
   const fixture = await mockEvent(page, {

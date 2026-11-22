@@ -4,7 +4,11 @@ import { qualificationSummary } from '../lib/qualification';
 import type { LiveMatch } from '../lib/eventDisplay';
 import { Button } from './ui/Button';
 import { ScoreFields, type ScoreInputValue } from './ScoreFields';
-import { CompletedScoreReport, type ResultSubmission } from './CompletedScoreReport';
+import {
+  CompletedScoreReport,
+  type ResultSubmission,
+  type ResultSubmissionReceipt,
+} from './CompletedScoreReport';
 import type { PoolFlowMatch, ScoreApprovalPolicy } from '../lib/poolFlow';
 import type { trpc } from '../lib/trpc';
 import type { SetCharacterPick } from '@smashclub/shared';
@@ -27,7 +31,7 @@ type EventScoreCardProps = {
   /** Pass null when the match list already explains why reporting is unavailable. */
   unavailableMessage?: string | null;
   pendingMessage?: string;
-  onSubmit: (input: ResultSubmission) => Promise<{ status: string; isDispute: boolean }>;
+  onSubmit: (input: ResultSubmission) => Promise<ResultSubmissionReceipt>;
   match: PoolFlowMatch & { pendingDisputeCount?: number };
   report?: GuestData['reports'][number];
   status: string;
@@ -126,7 +130,7 @@ function ScoreCard({
           onSubmit={onSubmit}
           editor={editor}
           players={players}
-          pendingReport={report?.status === 'pending' ? report : undefined}
+          report={report}
           recordedOnly={recordedOnly}
         />
       ) : presentation.kind === 'no-contest' ? (
