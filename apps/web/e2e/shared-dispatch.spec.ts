@@ -297,6 +297,7 @@ test('shared queue on a phone: snooze/return, focused scoring, and accessible co
   });
   await expect(disclosure).toContainText('Called · waiting to start');
   await current.getByRole('button', { name: 'Open current match' }).press('Enter');
+  await expect(page.locator('#match-desk')).toBeFocused();
   const card = page.locator('article.ops-match:visible').filter({ hasText: target.label });
   await expect(card).toBeVisible();
   const tabBottom = await page
@@ -315,6 +316,7 @@ test('shared queue on a phone: snooze/return, focused scoring, and accessible co
   await expect(entrant).toContainText(' · Playing');
   await entrant.press('Enter');
   await current.getByRole('button', { name: 'Open current match' }).press('Enter');
+  await expect(page.locator('#match-desk')).toBeFocused();
   await card.getByRole('button', { name: 'Update live score' }).press('Enter');
   await card.getByRole('spinbutton').first().fill('1');
   await card.getByRole('button', { name: 'Save live score' }).press('Enter');
@@ -322,6 +324,7 @@ test('shared queue on a phone: snooze/return, focused scoring, and accessible co
   await playersTab.press('Enter');
   await expect(current).toContainText(`${target.player1Name} 1 – 0 ${target.player2Name}`);
   await current.getByRole('button', { name: 'Open current match' }).press('Enter');
+  await expect(page.locator('#match-desk')).toBeFocused();
   const beforeShortcut = await query<Overview>(page.request, 'eventOps.overview', { planId });
   const release = row.getByRole('button', { name: 'Release capacity' });
   await release.press('Enter');
