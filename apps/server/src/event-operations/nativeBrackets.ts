@@ -20,6 +20,7 @@ import {
 import { scoresIndicateUnplayed } from '@smashclub/shared';
 import type { SessionUser } from '../auth';
 import { getPlan } from '../event-planner/plans';
+import { legacyWithdrawalNoContestReason as noContest } from '../tournament/resultEvidence';
 import { lockEvent, requireOperator } from './access';
 import { nativeBracketViews } from './nativeBracketViews';
 import {
@@ -32,7 +33,6 @@ import {
 } from './nativeBracketSlots';
 export { nativeBracketViews } from './nativeBracketViews';
 export { nativeDraw } from './nativeBracketSlots';
-const noContest = 'Both players withdrawn: no contest; no winner or score recorded';
 const resolved = (match: typeof eventMatches.$inferSelect) =>
   match.status === 'complete' || match.blockedReason === noContest;
 export async function previewNativeBrackets(db: Db, planId: string) {
@@ -446,13 +446,7 @@ export async function finalizeNativeEvent(db: Db, user: SessionUser, planId: str
       .from(eventMatches)
       .where(eq(eventMatches.eventPlanId, planId))
       .orderBy(asc(eventMatches.sourceKey));
-    if (
-      all.some(
-        (m) =>
-          m.status !== 'complete' &&
-          m.blockedReason !== 'Both players withdrawn: no contest; no winner or score recorded',
-      )
-    )
+    if (all.some((match) => !resolved(match)))
       reject('Resolve all remaining matches before finalizing.');
     const reports = await tx
       .select()

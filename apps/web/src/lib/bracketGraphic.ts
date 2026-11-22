@@ -19,6 +19,7 @@ export type BracketGraphicContext = {
   scope: string;
   state: 'published' | 'paused' | 'closed';
   format: 'singles' | 'doubles';
+  revision?: number;
 };
 type Measure = (value: string, size: number, bold: boolean) => number;
 export type BracketGraphicImage = { svg: string; width: number; height: number };
@@ -26,7 +27,7 @@ export type BracketGraphicImage = { svg: string; width: number; height: number }
 const cardWidth = 364;
 const lineHeight = 21;
 const padding = 24;
-const font = 'Arial, sans-serif';
+export const bracketGraphicFont = 'Arial, sans-serif';
 const graphemes = typeof Intl.Segmenter === 'function' ? new Intl.Segmenter() : undefined;
 const laneOrder = { winners: 0, losers: 1, finals: 2 };
 const colors = {
@@ -155,7 +156,9 @@ export function bracketGraphicSvg(
           const name = wrap(liveBracketSide(match, side, labels), 17, winner, cardWidth - 74);
           const feed = liveBracketFeeds(match).find((edge) => edge.side === side);
           const origin =
-            feed && id && laneByMatch.get(feed.matchId) !== lane.key
+            feed &&
+            (id || match.status === 'complete') &&
+            laneByMatch.get(feed.matchId) !== lane.key
               ? wrap(
                   `${feed.outcome === 'winner' ? 'Winner' : 'Loser'} of ${labels.get(feed.matchId)}`,
                   13,
@@ -210,7 +213,7 @@ export function bracketGraphicSvg(
     closed: 'Recorded draw',
   }[context.state];
   const scope = wrap(
-    `${context.scope} · ${context.format === 'doubles' ? 'Doubles' : 'Singles'} · ${state}${context.eventDate ? ` · ${context.eventDate}` : ''}`,
+    `${context.scope} · ${context.format === 'doubles' ? 'Doubles' : 'Singles'} · ${state}${context.revision ? ` · Revision ${context.revision}` : ''}${context.eventDate ? ` · ${context.eventDate}` : ''}`,
     17,
     false,
     width - padding * 2,
@@ -296,38 +299,10 @@ export function bracketGraphicSvg(
     })
     .join('');
   const height = Math.ceil(y + 26);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img"><title>${xmlText(`${context.eventName} · ${context.scope}`)}</title><desc>Smash Club bracket. Gold marks the recorded winner. Dashed lines are loser feeds. Scores shown are recorded results.</desc><rect width="${width}" height="${height}" fill="${colors.background}"/><rect width="8" height="${height}" fill="${colors.red}"/><g font-family="${font}"><g fill="${colors.red}" transform="translate(${padding} 21) scale(.28)"><path d="${NEMESIS_MARK_PATHS[0]}"/><path d="${NEMESIS_MARK_PATHS[1]}" opacity=".45"/></g>${text('NEMESIS / SMASH CLUB', padding + 40, 42, 17, colors.red, true)}${header}${subtitle}${sections}${text('Gold marks the recorded winner · Dashed lines are loser feeds', padding + 12, height - 24, 15, colors.muted)}</g></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img"><title>${xmlText(`${context.eventName} · ${context.scope}`)}</title><desc>Smash Club bracket. Gold marks the recorded winner. Dashed lines are loser feeds. Scores shown are recorded results.</desc><rect width="${width}" height="${height}" fill="${colors.background}"/><rect width="8" height="${height}" fill="${colors.red}"/><g font-family="${bracketGraphicFont}"><g fill="${colors.red}" transform="translate(${padding} 21) scale(.28)"><path d="${NEMESIS_MARK_PATHS[0]}"/><path d="${NEMESIS_MARK_PATHS[1]}" opacity=".45"/></g>${text('NEMESIS / SMASH CLUB', padding + 40, 42, 17, colors.red, true)}${header}${subtitle}${sections}${text('Gold marks the recorded winner · Dashed lines are loser feeds', padding + 12, height - 24, 15, colors.muted)}</g></svg>`;
   return { svg, width, height };
-}
-
-export function browserBracketGraphic(context: BracketGraphicContext, matches: LiveMatch[]) {
-  const canvas = document.createElement('canvas').getContext('2d');
-  return bracketGraphicSvg(context, matches, (value, size, bold) => {
-    if (!canvas) return Array.from(value).length * size;
-    canvas.font = `${bold ? 700 : 400} ${size}px ${font}`;
-    return canvas.measureText(value).width;
-  });
 }
 
 export function bracketPngScale({ width, height }: BracketGraphicImage) {
   return Math.min(2, 4096 / Math.max(width, height), Math.sqrt(12_000_000 / (width * height)));
-}
-
-export async function bracketGraphicPng(graphic: BracketGraphicImage, blob: Blob) {
-  const scale = bracketPngScale(graphic);
-  const url = URL.createObjectURL(blob);
-  try {
-    const image = new Image();
-    image.src = url;
-    await image.decode();
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.floor(graphic.width * scale);
-    canvas.height = Math.floor(graphic.height * scale);
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
-    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-    return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-  } finally {
-    URL.revokeObjectURL(url);
-  }
 }

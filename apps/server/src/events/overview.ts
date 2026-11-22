@@ -14,6 +14,7 @@ import { nativeHistory } from './nativeHistory';
 import { hasSupersededAdvancement } from '../tournament/resultEvidence';
 import type { NativeRuntime } from '../tournament/runtime';
 import { archiveCharacterEvidence, archiveCharacterLeaders } from './archivedCharacters';
+import { archivedBracketGraphic, type ArchivedBracketGraphic } from './archiveBracketGraphic';
 import {
   compareEventBrackets,
   eventCanonicalSlug,
@@ -52,6 +53,7 @@ export interface EventOverviewBracket {
   isComplete: boolean;
   placeSource: PlaceSource;
   players: EventOverviewPlayer[];
+  bracketGraphic?: ArchivedBracketGraphic;
 }
 export interface EventOverview {
   name: string;
@@ -308,6 +310,19 @@ export async function loadEventOverview(
         .sort(sortPlayers),
     };
   });
+  const names = new Map([...participantPresentation].map(([id, { name }]) => [id, name]));
+  await Promise.all(
+    brackets.map(async (bracket, index) => {
+      const tournament = eventRows[index]!;
+      const { graphic } = await archivedBracketGraphic(
+        db,
+        tournament,
+        setRows.filter((set) => set.tournamentId === bracket.tournamentId),
+        names,
+      );
+      if (graphic) bracket.bracketGraphic = graphic;
+    }),
+  );
   brackets.sort(compareEventBrackets);
   const divisions = (['upper', 'lower'] as const)
     .filter((division) => brackets.some((b) => b.division === division))
