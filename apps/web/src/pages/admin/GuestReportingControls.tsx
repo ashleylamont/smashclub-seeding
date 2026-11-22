@@ -1,6 +1,7 @@
 import { useConfirmation } from '../../lib/confirmation';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { Button } from '../../components/ui/Button';
+import { Dialog } from '../../components/ui/Dialog';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
@@ -56,6 +57,8 @@ export function GuestReportingControls({
     settings.data?.enabled &&
     !closed;
   const link = valid ? guestInvitationUrl(planId, invitation.token) : '';
+  const canPrint = !closed && settings.data?.enabled && !settings.data.rotateInvitations;
+  const closePrintPreview = () => setPrintInvitation(null);
   const configure = (
     changes: Partial<
       Pick<NonNullable<typeof settings.data>, 'enabled' | 'showOnOverlay' | 'rotateInvitations'>
@@ -130,24 +133,38 @@ export function GuestReportingControls({
             >
               Generate guest QR
             </Button>
-            <Button
-              type="submit"
-              disabled={
-                pending ||
-                closed ||
-                !settings.data.enabled ||
-                settings.data.rotateInvitations ||
-                !stations.length
-              }
-              onClick={() =>
-                void act(async () => {
-                  const issued = await trpc.eventOps.guests.invitation.mutate({ planId });
-                  if (issued && !issued.expiresAt) setPrintInvitation(issued.token);
-                })
+            <Dialog
+              title="Print station signs"
+              className="station-sign-dialog"
+              print
+              open={Boolean(printInvitation && canPrint)}
+              onOpenChange={(open) => {
+                if (!open) closePrintPreview();
+                else if (!pending)
+                  void act(async () => {
+                    const issued = await trpc.eventOps.guests.invitation.mutate({ planId });
+                    if (issued && !issued.expiresAt) setPrintInvitation(issued.token);
+                  });
+              }}
+              trigger={
+                <Button
+                  disabled={!canPrint || !stations.length}
+                  aria-disabled={pending || undefined}
+                >
+                  Print station signs
+                </Button>
               }
             >
-              Print station signs
-            </Button>
+              {printInvitation && (
+                <StationSignPreview
+                  planId={planId}
+                  eventName={eventName}
+                  stations={stations}
+                  token={printInvitation}
+                  onClose={closePrintPreview}
+                />
+              )}
+            </Dialog>
             <Button
               type="submit"
               disabled={pending || closed || !settings.data.enabled}
@@ -206,15 +223,6 @@ export function GuestReportingControls({
       )}
       {notice && <p role="status">{notice}</p>}
       {(error || settings.error) && <p role="alert">{error || settings.error?.message}</p>}
-      {printInvitation && settings.data?.enabled && !settings.data.rotateInvitations && !closed && (
-        <StationSignPreview
-          planId={planId}
-          eventName={eventName}
-          stations={stations}
-          token={printInvitation}
-          onClose={() => setPrintInvitation(null)}
-        />
-      )}
     </section>
   );
 }
