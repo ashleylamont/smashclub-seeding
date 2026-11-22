@@ -60,8 +60,9 @@ const themes = [
   { label: 'explicit dark', system: 'light', selected: 'dark' },
 ] as const;
 
-async function inspect(page: Page, testInfo: TestInfo, name: string) {
+async function inspect(page: Page, testInfo: TestInfo, name: string, theme: 'light' | 'dark') {
   await ready(page);
+  await expect(page.locator('html')).toHaveCSS('color-scheme', theme);
   expect(
     (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze())
       .violations,
@@ -122,7 +123,7 @@ for (const { label, system, selected } of themes)
             await page.goto(`/recaps/${tournament.slug}`);
             await expect(page.locator('.recap-progress-chip')).toHaveText('still in progress');
           }
-          await inspect(page, testInfo, surface);
+          await inspect(page, testInfo, surface, selected ?? system);
           expect(fixture.unexpected).toEqual([]);
           expect(fixture.submissions).toEqual([]);
         });
