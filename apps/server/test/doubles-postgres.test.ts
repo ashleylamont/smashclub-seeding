@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { eventPlanEntries, players, user } from '@smashclub/db';
 import { eq } from 'drizzle-orm';
 import { appRouter } from '../src/trpc/router';
@@ -9,8 +10,27 @@ import { postgresCluster } from './helpers/postgres';
 import { nativeAdmin } from './helpers/nativeLiveFixture';
 import { createPlan, freezeRoster, generatePools } from '../src/event-planner/plans';
 import { addDoublesPair } from '../src/event-planner/nativePlanner';
-import { createPostgresNativeRuntime, type NativeRuntime } from '../src/tournament/runtime';
+import {
+  createPostgresNativeRuntime,
+  nativeStream,
+  type NativeRuntime,
+} from '../src/tournament/runtime';
+import { Command, Decision } from '../src/tournament/schemas';
 import type { TournamentCommand } from '../src/tournament/schemas';
+
+// Model only the pre-#366 command-discriminator boundary (055811c), not an
+// entire historical image. Keep all other current validations: this isolates
+// rejection of a new embedded command even when its event version is unchanged.
+const preRenameCommand = z.discriminatedUnion('kind', [
+  Command.options[0],
+  ...Command.options.slice(1).filter((option) => option.shape.kind.value !== 'renameDoublesPair'),
+]);
+const preRenameDecision = Decision.extend({ command: preRenameCommand });
+async function readWithPreRenameContract(runtime: NativeRuntime, planId: string) {
+  return runtime.app.query({ stream: nativeStream(planId), after: -1 }, (event) => {
+    if (event.name.startsWith('DecisionRecorded')) preRenameDecision.parse(event.data);
+  });
+}
 
 describe('doubles with durable Act-PG storage', () => {
   it('serializes substitutions and calls, replays exact retries, and retains concurrent score and result history', async () => {
@@ -318,6 +338,7 @@ describe('doubles with durable Act-PG storage', () => {
         outcome: 'played',
       });
       const before = await runtime.state(planId);
+      await expect(readWithPreRenameContract(runtime, planId)).resolves.toBeDefined();
       const locked = await readPair();
       expect(locked).toMatchObject({
         teamName: 'Frozen label',
@@ -360,11 +381,31 @@ describe('doubles with durable Act-PG storage', () => {
       expect(await readPair()).toMatchObject({
         publicName: 'Live label (Public member 0 / Public member 1)',
       });
+      const journal = async () =>
+        (
+          await cluster.pool.query('select * from native_act.events where stream=$1 order by id', [
+            nativeStream(planId),
+          ])
+        ).rows;
+      const recorded = await journal();
+      const recordedHistory = await caller().eventOps.live.history({ planId });
+      const rename = recorded.find((row) => row.data?.command?.kind === 'renameDoublesPair');
+      // Adding a command can break old readers without a new event name/version.
+      expect(rename).toMatchObject({ name: 'DecisionRecordedV2', data: { version: 2 } });
+      await expect(readWithPreRenameContract(runtime, planId)).rejects.toThrow(/kind/);
+      expect(await journal()).toEqual(recorded);
       await runtime.shutdown();
       runtime = await createPostgresNativeRuntime(cluster.db, cluster.connectionString);
+      // Forward recovery follows production's awaited recover-before-listen path.
+      await runtime.recover();
       expect(await runtime.replay(planId)).toEqual(renamed);
+      expect(await runtime.state(planId)).toEqual(renamed);
+      expect((await runtime.state(planId)).matches).toEqual(before.matches);
+      expect((await runtime.state(planId)).baseline).toEqual(before.baseline);
+      expect(await caller().eventOps.live.history({ planId })).toEqual(recordedHistory);
       await caller().admin.eventPlanner.renameDoublesPair(liveIntent);
       expect(await runtime.state(planId)).toEqual(renamed);
+      expect(await journal()).toEqual(recorded);
       await expect(
         caller().admin.eventPlanner.renameDoublesPair({
           ...liveIntent,
