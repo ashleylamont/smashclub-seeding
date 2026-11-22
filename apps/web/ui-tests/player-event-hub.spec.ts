@@ -394,9 +394,9 @@ test('reloading a stale match keeps a reopened rejected report editable', async 
   expect(fixture.unexpected).toEqual([]);
 });
 
-test('confirming the recorded score after a rejected dispute starts a fresh request', async ({
+test('a reviewed dispute supersedes an earlier confirmation with a lost acknowledgement', async ({
   page,
-}) => {
+}, testInfo) => {
   const fixture = await mockEvent(page, { role: 'player' });
   fixture.snapshot.settings.scoreReportingMode = 'approve_unless_disputed';
   const match = fixture.snapshot.matches.find((item) => item.status === 'complete')!;
@@ -410,24 +410,12 @@ test('confirming the recorded score after a rejected dispute starts a fresh requ
   };
   const inputs: ReportInput[] = [];
   const reports = new Map<string, Receipt>();
-  let failNext = false;
+  let loseNextAcknowledgement = false;
   await page.route('**/api/trpc/eventOps.reportScore*', async (route) => {
     const body = JSON.parse(route.request().postData()!);
     const batch = new URL(route.request().url()).searchParams.has('batch');
     const input: ReportInput = batch ? body[0] : body;
     inputs.push(input);
-    if (failNext) {
-      failNext = false;
-      const error = {
-        error: {
-          message: 'Temporary reporting failure. Try again.',
-          code: -32603,
-          data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
-        },
-      };
-      await route.fulfill({ status: 500, json: batch ? [error] : error });
-      return;
-    }
     let report = reports.get(input.requestId);
     if (!report) {
       const isDispute = input.score1 !== match.score1 || input.score2 !== match.score2;
@@ -441,6 +429,18 @@ test('confirming the recorded score after a rejected dispute starts a fresh requ
       reports.set(input.requestId, report);
       fixture.responses['eventOps.myReports'] = [report];
     }
+    if (loseNextAcknowledgement) {
+      loseNextAcknowledgement = false;
+      const error = {
+        error: {
+          message: 'Temporary reporting failure. Try again.',
+          code: -32603,
+          data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
+        },
+      };
+      await route.fulfill({ status: 500, json: batch ? [error] : error });
+      return;
+    }
     const result = { result: { data: report } };
     await route.fulfill({ json: batch ? [result] : result });
   });
@@ -449,13 +449,25 @@ test('confirming the recorded score after a rejected dispute starts a fresh requ
   await chooseOption(page.getByLabel('Match view', { exact: true }), 'matches');
   const card = page.locator('article.ops-match').filter({ hasText: match.label });
   const confirm = card.getByRole('button', { name: 'Confirm recorded score' });
+  const error = card.getByRole('alert');
+  loseNextAcknowledgement = true;
   await confirm.click();
+  await expect(error).toContainText('Temporary reporting failure');
+  await confirm.click();
+  await expect.poll(() => inputs.length).toBe(2);
+  expect(inputs[1]).toEqual(inputs[0]);
+  await expect(confirm).toBeEnabled();
   await expect(card).toContainText('Your report: 2 – 0 · Confirmed result');
+
+  loseNextAcknowledgement = true;
+  await confirm.click();
+  await expect(error).toContainText('Temporary reporting failure');
+  expect(inputs[2]!.requestId).not.toBe(inputs[1]!.requestId);
   await card.getByRole('button', { name: 'Report a different score' }).click();
   await card.getByRole('spinbutton').nth(1).fill('1');
   await card.getByRole('button', { name: 'Send different score to TOs' }).click();
   await expect(card).toContainText('Your report: 2 – 1 · Different score awaiting TO review');
-  const dispute = reports.get(inputs[1]!.requestId)!;
+  const dispute = reports.get(inputs[3]!.requestId)!;
   const filter = page.getByLabel('Show matches for');
   await chooseOption(filter, other.player1Id!);
   await expect(card).toHaveCount(0);
@@ -465,16 +477,18 @@ test('confirming the recorded score after a rejected dispute starts a fresh requ
   await chooseOption(filter, '');
   await expect(card).toContainText('Your report: 2 – 1 · Rejected by a TO');
 
-  failNext = true;
   await confirm.click();
-  await expect(card.getByRole('alert')).toContainText('Temporary reporting failure');
-  await confirm.click();
-  await expect.poll(() => inputs.length).toBe(4);
-  expect(inputs[2]!.requestId).not.toBe(inputs[0]!.requestId);
-  expect(inputs[3]).toEqual(inputs[2]);
+  await expect.poll(() => inputs.length).toBe(5);
+  expect(inputs[4]!.requestId).not.toBe(inputs[2]!.requestId);
   await expect(card).toContainText('Your report: 2 – 0 · Confirmed result');
   await expect(card.getByText('Rejected by a TO', { exact: false })).toHaveCount(0);
+  await expect(error).toHaveCount(0);
   expect(fixture.unexpected).toEqual([]);
+  await ready(page);
+  await card.scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: testInfo.outputPath('reconfirmed-after-lost-acknowledgement.png'),
+  });
 });
 
 test('cold results links scroll after the public snapshot mounts', async ({ page }) => {

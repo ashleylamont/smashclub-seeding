@@ -135,8 +135,8 @@ export function useScoreReportDraft(match: DraftMatch, store?: ScoreReportDrafts
           pendingRequestId: null,
           editing: false,
           retryRejected: false,
-          // The next deliberate confirmation is a new report once this request has resolved.
-          ...(id === draft.confirmationId && { confirmationId: crypto.randomUUID() }),
+          // A definitive report for a completed result supersedes earlier confirmation attempts.
+          ...(feedback.completedFeedback && { confirmationId: crypto.randomUUID() }),
           ...feedback,
         },
         id,
