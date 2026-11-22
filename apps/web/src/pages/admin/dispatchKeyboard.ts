@@ -25,7 +25,14 @@ export function focusDispatchTarget(target: HTMLElement | null) {
   const gap = Number.parseFloat(tabStyle.getPropertyValue('--s2'));
   const rect = target.getBoundingClientRect();
   const centered = (document.documentElement.clientHeight - rect.height) / 2;
-  const visibleTop = Math.max(centered, stickyBottom + gap);
+  const minimumTop = stickyBottom + gap;
+  const visibleTop = Math.max(centered, minimumTop);
   window.scrollBy({ top: rect.top - visibleTop, behavior: 'instant' });
+  // A queued frame from an interrupted smooth jump can move the page again.
+  requestAnimationFrame(() => {
+    if (document.activeElement !== target) return;
+    const top = target.getBoundingClientRect().top;
+    if (top < minimumTop) window.scrollBy({ top: top - minimumTop, behavior: 'instant' });
+  });
   return true;
 }
