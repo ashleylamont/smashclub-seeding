@@ -457,6 +457,9 @@
   z-index: var(--z-navigation);
   background: var(--bg);
 }
+.ops-settings {
+  grid-template-columns: minmax(0, 1fr);
+}
 .ops-main-stage {
   display: grid;
   gap: var(--s4);
