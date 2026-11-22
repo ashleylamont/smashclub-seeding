@@ -147,6 +147,125 @@ function factsOfKind<K extends RecapFactKind>(
     .filter((f): f is Extract<RecapFact, { kind: K }> => f.kind === kind);
 }
 
+async function publishForecastFixture(history: 'debut' | 'disconnected' | 'connected') {
+  const [underdog, favourite, ...opponents] = await db
+    .insert(players)
+    .values(
+      ['Underdog', 'Favourite', ...Array.from({ length: 12 }, (_, i) => `Opponent ${i}`)].map(
+        (canonicalName) => ({ canonicalName }),
+      ),
+    )
+    .returning();
+  const [earlier, bridge, featured, later] = await db
+    .insert(tournaments)
+    .values(
+      ['2025-03-01T08', '2025-03-08T06', '2025-03-08T08', '2025-03-15T08'].map((date, i) => ({
+        challongeSlug: `forecast-${i}`,
+        name: `Round ${i}`,
+        challongeState: 'complete',
+        eventDate: new Date(`${date}:00:00Z`),
+      })),
+    )
+    .returning();
+  // Link the early same-day result to a doubles bracket. The singles recap
+  // does not display it, though it is part of the combined WHR replay.
+  await db
+    .update(tournaments)
+    .set({ competitionFormat: 'doubles' })
+    .where(eq(tournaments.id, bridge!.id));
+  const earlierMembers = opponents.slice(0, 6);
+  const otherMembers = history === 'connected' ? earlierMembers : opponents.slice(6);
+  const [a, b] = await db
+    .insert(tournamentParticipants)
+    .values([
+      {
+        tournamentId: featured!.id,
+        challongeParticipantId: 31,
+        rawName: 'Underdog',
+        cleanedName: 'Underdog',
+        playerId: underdog!.id,
+        challongeSeed: 8,
+        finalRank: 1,
+      },
+      {
+        tournamentId: featured!.id,
+        challongeParticipantId: 32,
+        rawName: 'Favourite',
+        cleanedName: 'Favourite',
+        playerId: favourite!.id,
+        challongeSeed: 1,
+        finalRank: 2,
+      },
+    ])
+    .returning();
+  const [teamOne, teamTwo] = await db
+    .insert(tournamentParticipants)
+    .values([
+      {
+        tournamentId: bridge!.id,
+        challongeParticipantId: 33,
+        rawName: 'Pair One',
+        cleanedName: 'Pair One',
+        memberPlayerIds: [favourite!.id, opponents[0]!.id],
+      },
+      {
+        tournamentId: bridge!.id,
+        challongeParticipantId: 34,
+        rawName: 'Pair Two',
+        cleanedName: 'Pair Two',
+        memberPlayerIds: [underdog!.id, opponents[6]!.id],
+      },
+    ])
+    .returning();
+  let nextMatch = 1;
+  const played = (tournamentId: string, p1PlayerId: string, p2PlayerId: string) => ({
+    tournamentId,
+    p1PlayerId,
+    p2PlayerId,
+    challongeMatchId: nextMatch++,
+    state: 'complete',
+    round: 1,
+    winner: 1 as const,
+    scoresCsv: '3-0',
+  });
+
+  await db.insert(sets).values([
+    ...earlierMembers.map(({ id }) => played(earlier!.id, favourite!.id, id)),
+    ...(history === 'debut'
+      ? []
+      : otherMembers.map(({ id }) => played(earlier!.id, id, underdog!.id))),
+    { ...played(earlier!.id, favourite!.id, underdog!.id), raw: { outcome: 'forfeit' } },
+    {
+      ...played(bridge!.id, favourite!.id, underdog!.id),
+      p1ParticipantId: teamOne!.id,
+      p2ParticipantId: teamTwo!.id,
+    },
+    played(later!.id, favourite!.id, underdog!.id),
+  ]);
+  const [set] = await db
+    .insert(sets)
+    .values({
+      ...played(featured!.id, underdog!.id, favourite!.id),
+      p1ParticipantId: a!.id,
+      p2ParticipantId: b!.id,
+    })
+    .returning();
+  const { recomputeId } = await runRecompute(db);
+  const api = caller().public;
+  return {
+    recomputeId,
+    bridgeTournamentId: bridge!.id,
+    underdogId: underdog!.id,
+    readRecap: async () => (await api.recap({ slug: featured!.challongeSlug }))!,
+    readImpact: (id: string) =>
+      api.whrResultImpact({
+        setId: set!.id,
+        playerId: underdog!.id,
+        recomputeId: id,
+      }),
+  };
+}
+
 describe('public.recap', () => {
   it('keeps ignored groups visible as excluded but leaves them out of recap results', async () => {
     await sync(['march-main']);
@@ -227,166 +346,49 @@ describe('public.recap', () => {
   });
 
   it.each([
-    { history: 'debut', forecastUnavailable: 'first_night' },
-    { history: 'disconnected', forecastUnavailable: 'disconnected' },
-    { history: 'connected', forecastUnavailable: null },
+    { history: 'debut' as const, forecastUnavailable: 'first_night', probability: null },
+    { history: 'disconnected' as const, forecastUnavailable: 'disconnected', probability: null },
+    { history: 'connected' as const, forecastUnavailable: null, probability: 0.0286 },
   ])(
     'agrees with match odds for $history prior history',
-    async ({ history, forecastUnavailable }) => {
-      const [underdog, favourite, ...opponents] = await db
-        .insert(players)
-        .values(
-          ['Underdog', 'Favourite', ...Array.from({ length: 12 }, (_, i) => `Opponent ${i}`)].map(
-            (canonicalName) => ({ canonicalName }),
-          ),
-        )
-        .returning();
-      const [earlier, sameDay, featured, later] = await db
-        .insert(tournaments)
-        .values(
-          ['2025-03-01T08', '2025-03-08T06', '2025-03-08T08', '2025-03-15T08'].map((date, i) => ({
-            challongeSlug: `forecast-${i}`,
-            name: `Round ${i}`,
-            challongeState: 'complete',
-            eventDate: new Date(`${date}:00:00Z`),
-          })),
-        )
-        .returning();
-      // Link the early same-day result to a doubles bracket. The singles recap
-      // does not display it, though it is part of the combined WHR replay.
-      await db
-        .update(tournaments)
-        .set({ competitionFormat: 'doubles' })
-        .where(eq(tournaments.id, sameDay!.id));
-      const earlierMembers = opponents.slice(0, 6);
-      const otherMembers = history === 'connected' ? earlierMembers : opponents.slice(6);
-      const [a, b] = await db
-        .insert(tournamentParticipants)
-        .values([
-          {
-            tournamentId: featured!.id,
-            challongeParticipantId: 31,
-            rawName: 'Underdog',
-            cleanedName: 'Underdog',
-            playerId: underdog!.id,
-            challongeSeed: 8,
-            finalRank: 1,
-          },
-          {
-            tournamentId: featured!.id,
-            challongeParticipantId: 32,
-            rawName: 'Favourite',
-            cleanedName: 'Favourite',
-            playerId: favourite!.id,
-            challongeSeed: 1,
-            finalRank: 2,
-          },
-        ])
-        .returning();
-      const [teamOne, teamTwo] = await db
-        .insert(tournamentParticipants)
-        .values([
-          {
-            tournamentId: sameDay!.id,
-            challongeParticipantId: 33,
-            rawName: 'Pair One',
-            cleanedName: 'Pair One',
-            memberPlayerIds: [favourite!.id, opponents[0]!.id],
-          },
-          {
-            tournamentId: sameDay!.id,
-            challongeParticipantId: 34,
-            rawName: 'Pair Two',
-            cleanedName: 'Pair Two',
-            memberPlayerIds: [underdog!.id, opponents[6]!.id],
-          },
-        ])
-        .returning();
-      let nextMatch = 1;
-      const played = (tournamentId: string, p1PlayerId: string, p2PlayerId: string) => ({
-        tournamentId,
-        p1PlayerId,
-        p2PlayerId,
-        challongeMatchId: nextMatch++,
-        state: 'complete',
-        round: 1,
-        winner: 1 as const,
-        scoresCsv: '3-0',
-      });
-
-      await db.insert(sets).values([
-        ...earlierMembers.map(({ id }) => played(earlier!.id, favourite!.id, id)),
-        ...(history === 'debut'
-          ? []
-          : otherMembers.map(({ id }) => played(earlier!.id, id, underdog!.id))),
-        { ...played(earlier!.id, favourite!.id, underdog!.id), raw: { outcome: 'forfeit' } },
-        {
-          ...played(sameDay!.id, favourite!.id, underdog!.id),
-          p1ParticipantId: teamOne!.id,
-          p2ParticipantId: teamTwo!.id,
-        },
-        played(later!.id, favourite!.id, underdog!.id),
-      ]);
-      const [set] = await db
-        .insert(sets)
-        .values({
-          ...played(featured!.id, underdog!.id, favourite!.id),
-          p1ParticipantId: a!.id,
-          p2ParticipantId: b!.id,
-        })
-        .returning();
-      const { recomputeId } = await runRecompute(db);
-      const api = caller().public;
-      const impact = await api.whrResultImpact({
-        setId: set!.id,
-        playerId: underdog!.id,
-        recomputeId,
-      });
+    async ({ history, forecastUnavailable, probability }) => {
+      const fixture = await publishForecastFixture(history);
+      const impact = await fixture.readImpact(fixture.recomputeId);
       expect(impact).toMatchObject({ status: 'available', forecastUnavailable });
       if (impact.status !== 'available') throw new Error('Expected the rated result');
 
-      const recap = (await api.recap({ slug: featured!.challongeSlug }))!;
+      const recap = await fixture.readRecap();
       expect(factsOfKind(recap, 'seed_upset')).toMatchObject([
         { winnerSeed: 8, loserSeed: 1, score: '3-0' },
       ]);
-      expect(factsOfKind(recap, 'podium')[0]?.places[0]?.player.playerId).toBe(underdog!.id);
+      expect(factsOfKind(recap, 'podium')[0]?.places[0]?.player.playerId).toBe(fixture.underdogId);
       const odds = factsOfKind(recap, 'rating_upset');
-      if (forecastUnavailable) {
-        expect(impact.forecast).toBeNull();
-        expect(odds).toEqual([]);
-        expect(recap.highlights.map(({ fact }) => fact.kind)).not.toContain('rating_upset');
-
-        if (history === 'disconnected') {
-          // Moving that bridge to an earlier night must not retroactively
-          // authorize odds built from the old recompute's disconnected fit.
-          await db
-            .update(tournaments)
-            .set({ eventDate: new Date('2025-03-05T06:00:00Z') })
-            .where(eq(tournaments.id, sameDay!.id));
-          const readRecap = async () => (await api.recap({ slug: featured!.challongeSlug }))!;
-          expect(factsOfKind(await readRecap(), 'rating_upset')).toEqual([]);
-
-          const updated = await runRecompute(db);
-          const updatedImpact = await api.whrResultImpact({
-            setId: set!.id,
-            playerId: underdog!.id,
-            recomputeId: updated.recomputeId,
-          });
-          expect(updatedImpact).toMatchObject({
-            status: 'available',
-            forecastUnavailable: null,
-          });
-          if (updatedImpact.status !== 'available') throw new Error('Expected the rated result');
-          const [bridged] = factsOfKind(await readRecap(), 'rating_upset');
-          expect(bridged?.probability).toBeCloseTo(updatedImpact.forecast!.winProbability, 10);
-        }
-      } else {
-        expect(odds).toHaveLength(1);
-        expect(odds[0]!.probability).toBeCloseTo(0.0286, 4);
-        expect(odds[0]!.probability).toBeCloseTo(impact.forecast!.winProbability, 10);
-      }
+      expect(odds).toHaveLength(probability === null ? 0 : 1);
+      expect(impact.forecast === null).toBe(probability === null);
+      expect(odds[0]?.probability ?? 0).toBeCloseTo(probability ?? 0, 4);
+      expect(impact.forecast?.winProbability ?? 0).toBeCloseTo(odds[0]?.probability ?? 0, 10);
+      const availableFacts = new Set(recap.facts.map(({ id }) => id));
+      expect(recap.highlights.every(({ id }) => availableFacts.has(id))).toBe(true);
     },
   );
+
+  it('waits for a new run to use a corrected doubles bridge as evidence', async () => {
+    const fixture = await publishForecastFixture('disconnected');
+    // Moving the bridge to an earlier night cannot authorize odds built from
+    // the old recompute's disconnected fit.
+    await db
+      .update(tournaments)
+      .set({ eventDate: new Date('2025-03-05T06:00:00Z') })
+      .where(eq(tournaments.id, fixture.bridgeTournamentId));
+    expect(factsOfKind(await fixture.readRecap(), 'rating_upset')).toEqual([]);
+
+    const updated = await runRecompute(db);
+    const impact = await fixture.readImpact(updated.recomputeId);
+    expect(impact).toMatchObject({ status: 'available', forecastUnavailable: null });
+    if (impact.status !== 'available') throw new Error('Expected the rated result');
+    const [bridged] = factsOfKind(await fixture.readRecap(), 'rating_upset');
+    expect(bridged?.probability).toBeCloseTo(impact.forecast!.winProbability, 10);
+  });
 
   it('counts head-to-head history only from nights before this one', async () => {
     await sync(['march-main', 'march-rookie', 'april-main']);
