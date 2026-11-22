@@ -46,7 +46,7 @@ async function mutate<T>(request: APIRequestContext, procedure: string, data: ob
   expect(response.ok(), await response.text()).toBe(true);
   return (await response.json()).result.data;
 }
-async function night(page: Page, name: string, named = true) {
+async function night(page: Page, name: string, named = true, stationName = 'Main stage') {
   await signIn(page.request);
   const plans = await query<{ id: string; name: string }[]>(
     page.request,
@@ -85,13 +85,13 @@ async function night(page: Page, name: string, named = true) {
     await mutate(page.request, procedure, { planId });
   await mutate(page.request, 'eventOps.softLockPools', { planId, confirm: true });
   await mutate(page.request, 'eventOps.settings', { planId, published: true, playerReports: true });
-  if (named) await mutate(page.request, 'eventOps.saveStation', { planId, name: 'Main stage' });
+  if (named) await mutate(page.request, 'eventOps.saveStation', { planId, name: stationName });
   await page.goto(`/operate/${planId}`);
   const desk = page.getByRole('region', { name: 'TO match queue' });
   await expect(
     desk.getByRole('heading', { name: 'Use a flexible shared match queue' }),
   ).toBeVisible();
-  if (named) await desk.getByRole('checkbox', { name: 'Main stage', exact: true }).check();
+  if (named) await desk.getByRole('checkbox', { name: stationName, exact: true }).check();
   // Selecting a separately reserved station must not double-count it in the
   // untouched default ordinary count.
   await expect(desk.getByRole('spinbutton', { name: 'Ordinary concurrent matches' })).toHaveValue(
@@ -304,6 +304,11 @@ test('shared queue on a phone: snooze/return, focused scoring, and accessible co
     .evaluate((element) => element.getBoundingClientRect().bottom);
   await expect(card).toBeInViewport();
   await expect.poll(async () => (await card.boundingBox())!.y).toBeGreaterThanOrEqual(tabBottom);
+  await expect(card.getByRole('combobox', { name: /^Station for/ })).toHaveCount(0);
+  await expect(card.getByText('Call location · Window setup', { exact: true })).toBeVisible();
+  await expect(
+    card.getByRole('button', { name: 'Return untaken call', exact: true }),
+  ).toBeEnabled();
   await expect(card.getByRole('button', { name: 'Finish match', exact: true })).toBeEnabled();
   await row.getByRole('button', { name: 'Mark playing', exact: true }).press('Enter');
   await expect(card.getByText('Match in progress', { exact: true })).toBeVisible();
@@ -681,17 +686,17 @@ test('organisers can return a blocking call from the draw panel and resume in on
   expect(resumed.matches).toEqual(before.matches);
 });
 
-test('web-started Main stage matches require confirmation before either match card releases them', async ({
+test('web-started Stage assignments are read-only on both cards and change through the queue', async ({
   page,
 }) => {
-  const { planId, desk } = await night(page, 'Shared stage release rehearsal');
+  const { planId, desk } = await night(page, 'Shared stage release rehearsal', true, 'Stage');
   const load = () =>
     query<Awaited<ReturnType<typeof trpc.eventOps.overview.query>>>(
       page.request,
       'eventOps.overview',
       { planId },
     );
-  const station = (await load()).stations.find((item) => item.name === 'Main stage')!;
+  const station = (await load()).stations.find((item) => item.name === 'Stage')!;
   const runTab = page.getByRole('tab', { name: 'Run matches', exact: true });
   const broadcastTab = page.getByRole('tab', { name: 'Broadcast', exact: true });
   const broadcast = page.getByRole('tabpanel', { name: 'Broadcast', exact: true });
@@ -726,6 +731,12 @@ test('web-started Main stage matches require confirmation before either match ca
         .locator(`[data-match-id="${match.id}"]`)
         .getByRole('button', { name: surface, exact: true })
         .press('Enter');
+    }
+    const cardStation = card.getByRole('combobox', { name: `Station for ${match.label}` });
+    await expect(cardStation).toHaveCount(0);
+    await expect(card.getByText('Station · Stage', { exact: true })).toBeVisible();
+    if (surface === 'Broadcast') {
+      await expect(broadcast.getByRole('combobox', { name: 'Station', exact: true })).toBeEnabled();
     }
     const release = card.getByRole('button', { name: 'Release capacity', exact: true });
     await release.press('Enter');
@@ -777,5 +788,24 @@ test('web-started Main stage matches require confirmation before either match ca
       liveScore1: 1,
       liveScore2: 0,
     });
+    if (surface === 'Score / details') {
+      await expect(cardStation).toHaveCount(0);
+      await expect(card.getByText('No station assigned', { exact: true })).toBeVisible();
+      const readyRow = desk.locator(`[data-match-id="${match.id}"]`);
+      await chooseOption(readyRow.getByRole('combobox', { name: 'Named station' }), station.id);
+      await readyRow.getByRole('button', { name: 'Start named station' }).press('Enter');
+      await expect(card.getByText('Station · Stage', { exact: true })).toBeVisible();
+      const restarted = await load();
+      expect(restarted.stations.find((item) => item.id === station.id)?.currentMatchId).toBe(
+        match.id,
+      );
+      expect(restarted.matches.find((item) => item.id === match.id)).toMatchObject({
+        status: 'playing',
+        started: true,
+        stationId: station.id,
+        liveScore1: 1,
+        liveScore2: 0,
+      });
+    }
   }
 });
