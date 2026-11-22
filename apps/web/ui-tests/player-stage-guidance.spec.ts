@@ -160,3 +160,90 @@ for (const width of [390, 1440])
         });
         expect(fixture.unexpected).toEqual([]);
       });
+
+for (const width of [390, 1440])
+  for (const theme of ['dark', 'light'] as const)
+    test(`${theme} ${width}px late withdrawal leaves a frozen qualifier in the public draw only`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const fixture = await mockEvent(page, { bracket: true, idle: true });
+      const { snapshot } = fixture;
+      const bracket = snapshot.nativeBrackets[0]!;
+      const player = bracket.entrantIds[0]!;
+      const opponent = bracket.entrantIds[1]!;
+      const ownPool = snapshot.matches.find(
+        (match) => match.stage === 'group' && match.player1Id === player,
+      )!;
+      const otherPool = snapshot.matches.find(
+        (match) => match.stage === 'group' && match.player1Id === opponent,
+      )!;
+      const slots: PoolQualifierSlot[] = [ownPool, otherPool].map((pool) => ({
+        poolId: `upper-pool-${pool.poolIndex}`,
+        poolIndex: pool.poolIndex!,
+        division: pool.division,
+        place: 1,
+        status: 'pending',
+        entrantId: null,
+        eligibleEntrantIds: [pool.player1Id!, pool.player2Id!],
+      }));
+      Object.assign(bracket, { entrantIds: [], qualifierSlots: slots });
+      const final = snapshot.matches.find((match) => match.id === 'fixture-final')!;
+      Object.assign(final, {
+        nativeRound: 1,
+        parent1MatchId: null,
+        parent2MatchId: null,
+        player1Id: null,
+        player2Id: null,
+        player1Name: null,
+        player2Name: null,
+        player1Qualifier: slots[0],
+        player2Qualifier: slots[1],
+        qualificationBlocks: slots,
+      });
+      snapshot.matches = snapshot.matches.filter(
+        (match) => match.stage === 'group' || match === final,
+      );
+      Object.assign(snapshot, { withdrawals: [{ playerId: player }] });
+
+      await page.goto(`/play/${PLAN_ID}?player=${player}`);
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      const progress = page.getByRole('complementary', { name: 'Your progress' });
+      await expect(progress.getByRole('heading')).toContainText(PLAYER_NAME);
+      await expect(progress).toContainText('You are withdrawn');
+      const nav = page.getByRole('navigation', { name: 'Event sections' });
+      await nav.getByRole('link', { name: 'Brackets' }).press('Enter');
+      await expect(page).toHaveURL(/#event-brackets$/);
+      const draw = page.getByRole('region', { name: 'Brackets', exact: true });
+      await expect(draw.getByText('No bracket is recorded for this player.')).toBeVisible();
+      await expect(draw.getByRole('heading', { name: 'Your bracket path' })).toHaveCount(0);
+      await expect(draw.getByText(/Qualification is pending/)).toHaveCount(0);
+      await ready(page);
+      expect(
+        (
+          await new AxeBuilder({ page })
+            .include('.player-event-hub')
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+            .analyze()
+        ).violations,
+      ).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+      await page.screenshot({
+        path: testInfo.outputPath(`withdrawn-frozen-qualifier-${theme}-${width}.png`),
+        fullPage: true,
+        animations: 'disabled',
+      });
+
+      const filter = page.getByRole('combobox', { name: 'Show matches for' });
+      await filter.press('Enter');
+      await page.getByRole('option', { name: 'Everyone' }).press('Enter');
+      await expect(filter).toHaveAttribute('data-value', '');
+      await expect(draw.getByText(/Qualification is pending/)).toBeVisible();
+      await expect(draw.getByText('Waiting for qualifiers').first()).toBeVisible();
+      expect(fixture.unexpected).toEqual([]);
+    });

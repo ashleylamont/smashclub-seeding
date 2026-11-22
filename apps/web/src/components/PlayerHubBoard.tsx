@@ -254,6 +254,9 @@ function PlayerHubBracketSection({
   archiveOnly: boolean;
   archiveEntry: boolean;
 }) {
+  const recordedPath = board.closed || runEnded;
+  const nativeBrackets = recordedPath && player ? board.assignedBrackets : board.nativeBrackets;
+  const hasBrackets = nativeBrackets.length > 0 || board.linked.some((item) => item.slug);
   const labels = new Map(data.matches.map((match) => [match.id, match.label]));
   const path = player
     ? playerBracketPath(
@@ -265,8 +268,8 @@ function PlayerHubBracketSection({
     : [];
   const bracketView = (
     <EventBrackets
-      title={archiveOnly && !board.nativeBrackets.length ? 'Brackets on Challonge' : undefined}
-      brackets={board.nativeBrackets}
+      title={archiveOnly && !nativeBrackets.length ? 'Brackets on Challonge' : undefined}
+      brackets={nativeBrackets}
       matches={data.matches}
       entrants={data.entrants}
       linked={board.linked}
@@ -280,7 +283,6 @@ function PlayerHubBracketSection({
       }}
     />
   );
-  const recordedPath = board.closed || runEnded;
   const qualifying = !recordedPath && board.pendingBrackets.length > 0;
   const pendingFinals = (recordedPath ? [] : (data.pendingFinals ?? [])).flatMap((field) => {
     if (!player) return [field];
@@ -300,7 +302,7 @@ function PlayerHubBracketSection({
       tabIndex={archiveEntry ? -1 : undefined}
       className="app-event-board player-event-board-section"
     >
-      {player && board.nativeBrackets.length > 0 ? (
+      {player && nativeBrackets.length > 0 ? (
         <>
           <h2>{qualifying ? 'Finals qualification' : 'Your bracket path'}</h2>
           {qualifying ? (
@@ -329,7 +331,7 @@ function PlayerHubBracketSection({
               ))}
             </ol>
           )}
-          {board.nativeBrackets.map((bracket) => {
+          {nativeBrackets.map((bracket) => {
             const place = bracket.standings.find((item) => board.identities.has(item.playerId));
             return place ? (
               <p key={bracket.id}>
@@ -349,7 +351,7 @@ function PlayerHubBracketSection({
       {pendingFinals.length > 0 && (
         <PendingFinals fields={pendingFinals} entrants={data.entrants} />
       )}
-      {!pendingFinals.length && !board.hasBrackets && (
+      {!pendingFinals.length && !hasBrackets && (
         <>
           <h2>Brackets</h2>
           <p>
