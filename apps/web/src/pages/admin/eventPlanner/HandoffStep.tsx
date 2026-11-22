@@ -106,7 +106,12 @@ export function HandoffStep({ view, onChanged }: { view: EventPlanView; onChange
   );
 }
 
-function nativeInstructions({ status, structure, structureOptions }: EventPlanView['plan']) {
+function nativeInstructions({
+  status,
+  softLockedAt,
+  structure,
+  structureOptions,
+}: EventPlanView['plan']) {
   if (status === 'complete')
     return 'Results are finalized. Review the recorded results in the event desk.';
   if (status === 'cancelled')
@@ -117,20 +122,21 @@ function nativeInstructions({ status, structure, structureOptions }: EventPlanVi
       : 'Generate pools in Divisions before soft-locking the pool draw in the event desk.';
 
   if (isKnockout(structure)) {
-    const instruction =
-      'Lock the seeded knockout draw and complete all matches. Resolve pending reports before finalizing results.';
+    const lock = softLockedAt ? '' : 'Lock the seeded knockout draw. ';
+    const instruction = `${lock}Complete all matches and resolve pending reports before finalizing results.`;
     return structure === 'double_elimination'
       ? `${instruction} A reset final runs if the losers-bracket finalist wins the first final.`
       : instruction;
   }
+  const lock = softLockedAt ? '' : 'Soft-lock the pool draw. ';
   if (structure === 'round_robin')
-    return 'Soft-lock the pool draw, complete the round robin, and confirm its finishing order. Resolve any pending reports before finalizing results.';
+    return `${lock}Complete the round robin and confirm its finishing order. Resolve pending reports before finalizing results.`;
 
   const main = structure === 'round_robin_finals' ? 'playoffs' : 'championship';
   const finals = finalsRoles(structure, structureOptions).includes('consolation')
     ? `${main} and consolation`
     : main;
-  return `Soft-lock the pool draw and confirm any required tiebreak rulings as pool matches finish. Preview and create the ${finals} in the event desk. Complete all matches and resolve pending reports before finalizing results.`;
+  return `${lock}Confirm any required tiebreak rulings as pool matches finish. Preview and create the ${finals} in the event desk. Complete all matches and resolve pending reports before finalizing results.`;
 }
 
 function BracketCard({

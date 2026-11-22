@@ -1,4 +1,5 @@
 import { finalsRoles, isKnockout } from '@smashclub/shared';
+import { winnersCount } from '@smashclub/tournament-formats';
 import { Select, SelectItem } from '../../../components/ui/Select';
 import { Button } from '../../../components/ui/Button';
 import { useState } from 'react';
@@ -17,19 +18,34 @@ import { DIVISION_LABEL } from './labels';
 
 export function PoolsStep({ view, onChanged }: { view: EventPlanView; onChanged: () => void }) {
   const { plan } = view;
-  if (isKnockout(plan.structure))
+  if (isKnockout(plan.structure)) {
+    if (plan.status === 'roster_frozen')
+      return (
+        <section className="card section">
+          <h3>Knockout draw</h3>
+          <p>Generate the seeded knockout draw in Divisions.</p>
+        </section>
+      );
+
+    const closed = plan.status === 'complete' || plan.status === 'cancelled';
+    const readyToLock = !closed && !plan.softLockedAt;
     return (
       <section className="card section">
-        <h3>Knockout draw ready</h3>
+        <h3>{readyToLock ? 'Knockout draw ready' : 'Knockout draw'}</h3>
         <p>
-          Open the event desk to lock the seeded draw and start matches. Automatic byes use no
-          played games.
+          {closed
+            ? 'Review the draw in the event desk.'
+            : readyToLock
+              ? 'Open the event desk to lock the seeded draw and start matches.'
+              : 'The seeded draw is locked. Open the event desk to run matches.'}
+          {!closed && ' Automatic byes use no played games.'}
         </p>
         <Button asChild variant="primary">
-          <a href={`/admin/event-operations?plan=${view.plan.id}`}>Open event desk</a>
+          <a href={`/admin/event-operations?plan=${plan.id}`}>Open event desk</a>
         </Button>
       </section>
     );
+  }
 
   const linked = plan.bracketMode === 'challonge';
   const hasConsolation =
@@ -45,7 +61,7 @@ export function PoolsStep({ view, onChanged }: { view: EventPlanView; onChanged:
             ? 'Every entrant plays every other entrant. Confirm the finishing order after resolving ties, then finalize the event.'
             : plan.structure === 'round_robin_finals'
               ? `Every entrant plays every other entrant. Confirm the finishing order, then advance ${playoffSize ? `the top ${playoffSize} active entrants` : 'all active entrants'} to playoffs.`
-              : `Balanced pools of three to five ${plan.competitionFormat === 'doubles' ? 'teams' : 'players'}, striped across seed order. The top half of the active field in each pool, rounded up, advances to championship.`}
+              : `Balanced pools of three to five ${plan.competitionFormat === 'doubles' ? 'teams' : 'players'}, striped across seed order. The top half of the active field in each pool, rounded up, advances to championship, and at least two advance when available.`}
           {hasConsolation &&
             (plan.structure !== 'round_robin_finals' || playoffSize) &&
             ' Remaining active entrants are eligible for consolation.'}
@@ -108,9 +124,8 @@ function DivisionPools({
           ? 'Reconcile and detach the linked consolation bracket before changing pool placements.'
           : null;
   const linked = bracketMode === 'challonge';
-  const withdrawalGuidance = linked
-    ? 'The top half of active entrants, rounded up, advances to championship. Update linked Challonge brackets to match.'
-    : structure === 'round_robin'
+  const nativeWithdrawalGuidance =
+    structure === 'round_robin'
       ? ''
       : 'Before the finals field is set, only active entrants are eligible to advance.';
   return (
@@ -166,7 +181,7 @@ function DivisionPools({
             divisionKey={division.division}
             pool={pool}
             locked={lockReason !== null}
-            withdrawalGuidance={withdrawalGuidance}
+            withdrawalGuidance={linked ? linkedWithdrawalGuidance(pool) : nativeWithdrawalGuidance}
             fixedLegacyFinals={division.fixedLegacyFinals === true}
             onChanged={onChanged}
           />
@@ -211,6 +226,11 @@ function DivisionPools({
         ))}
     </div>
   );
+}
+
+function linkedWithdrawalGuidance(pool: EventPlanPool): string {
+  const count = winnersCount(pool.members.filter((member) => !member.withdrawn).length);
+  return `This pool sends ${count} to championship. Update linked Challonge brackets to match.`;
 }
 
 function nameOf(division: EventPlanDivision, playerId: string): string {

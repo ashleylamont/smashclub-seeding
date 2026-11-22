@@ -276,7 +276,7 @@ export function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void
                 )}
                 <span className="form-hint">
                   The default splits attendance evenly. The top half of each pool, rounded up,
-                  advances to championship.
+                  advances to championship, and at least two advance when available.
                   {hasConsolation && ' The remaining entrants enter consolation.'}
                 </span>
               </label>

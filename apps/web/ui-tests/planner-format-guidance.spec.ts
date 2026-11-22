@@ -165,6 +165,19 @@ for (const theme of ['dark', 'light'] as const) {
         await expect(prefix).toHaveValue('club-night');
         await expect(attendance).toHaveValue(aliases.join('\n'));
 
+        view.plan.status = 'roster_frozen';
+        await page.goto(`${savedPlan}&step=pools`);
+        await expect(
+          page.getByText('Generate the seeded knockout draw in Divisions.'),
+        ).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Knockout draw ready' })).toHaveCount(0);
+        await checkPage(page, testInfo, 'frozen-knockout-before-generation');
+        await page.getByRole('button', { name: 'Divisions', exact: true }).press('Enter');
+        await expect(
+          page.getByRole('button', { name: 'Generate draw', exact: true }),
+        ).toBeEnabled();
+
+        view.plan.status = 'pools_ready';
         await page.goto(`${savedPlan}&step=handoff`);
         await expect(page.getByText(/Lock the seeded knockout draw/)).toBeVisible();
         await expect(page.getByText(/losers-bracket finalist/)).toHaveCount(0);
@@ -173,7 +186,11 @@ for (const theme of ['dark', 'light'] as const) {
           `/admin/event-operations?plan=${PLAN_ID}`,
         );
         view.plan.structure = 'double_elimination';
+        view.plan.status = 'underway';
+        view.plan.softLockedAt = eventDate;
         await page.reload();
+        await expect(page.getByText(/Draw: soft-locked/)).toBeVisible();
+        await expect(page.getByText(/Lock the seeded knockout draw/)).toHaveCount(0);
         await expect(
           page.getByText(/reset final runs if the losers-bracket finalist wins/),
         ).toBeVisible();
@@ -204,7 +221,18 @@ for (const theme of ['dark', 'light'] as const) {
           page.getByText(/resolve pending reports before finalizing results/),
         ).toBeVisible();
         await expect(page.getByText(/create the playoffs and consolation/)).toHaveCount(0);
+        await expect(page.getByText(/Soft-lock the pool draw/)).toBeVisible();
         await checkPage(page, testInfo, 'playoffs-handoff');
+
+        view.plan.status = 'underway';
+        view.plan.softLockedAt = eventDate;
+        await page.reload();
+        await expect(page.getByText(/Draw: soft-locked/)).toBeVisible();
+        await expect(page.getByText(/Soft-lock the pool draw/)).toHaveCount(0);
+        await expect(
+          page.getByText(/Preview and create the playoffs in the event desk/),
+        ).toBeVisible();
+        await checkPage(page, testInfo, 'playoffs-underway-handoff');
 
         pool.members.forEach((member, index) => {
           member.place = index + 1;
@@ -243,6 +271,7 @@ for (const theme of ['dark', 'light'] as const) {
       }, testInfo) => {
         const view = planView('challonge');
         const upperPool = view.divisions[0]!.pools[0]!;
+        upperPool.members[2]!.withdrawn = true;
         upperPool.members[3]!.withdrawn = true;
         view.brackets = view.divisions.flatMap(({ division }) =>
           (['main', 'consolation'] as const).map((stage) => ({
@@ -285,7 +314,12 @@ for (const theme of ['dark', 'light'] as const) {
         await expect(
           page.getByText(/generate the consolation draw and its import list/),
         ).toHaveCount(2);
-        await expect(page.getByText(/Update linked Challonge brackets to match/)).toBeVisible();
+        await expect(page.getByText(/Update linked Challonge brackets to match/)).toContainText(
+          'This pool sends 2 to championship.',
+        );
+        await expect(page.getByText(/striped across seed order/)).toContainText(
+          'at least two advance when available',
+        );
         await checkPage(page, testInfo, 'linked-pools');
 
         await page.getByRole('button', { name: 'Challonge', exact: true }).press('Enter');

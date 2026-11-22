@@ -26,7 +26,9 @@ export function TournamentFormatFields({
 }) {
   const id = useId();
   const hasConsolation = finalsRoles(structure, structureOptions).includes('consolation');
-  let description = tournamentStructures.find((option) => option.value === structure)?.description;
+  let description: string | undefined = tournamentStructures.find(
+    (option) => option.value === structure,
+  )?.description;
   if (!hasConsolation && structure === 'pools_finals')
     description = 'Balanced pools, then a championship bracket.';
   if (!hasConsolation && structure === 'dual_division')
