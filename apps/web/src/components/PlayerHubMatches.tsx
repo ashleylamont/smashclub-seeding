@@ -8,6 +8,7 @@ import { EventScoreCard } from './EventScoreCard';
 import { PlayedCharacterReport } from './PlayedCharacterReport';
 import { scoreReportPlayers } from '../lib/scoreReportPlayers';
 import { PlayerMatchFilter } from './PlayerMatchFilter';
+import { PlayerCallAlerts } from './PlayerCallAlerts';
 import { PoolFilter } from './PoolStationQueue';
 import { scoreApprovalPolicy } from '../lib/poolFlow';
 import { matchStatus, matchStation } from '../lib/playerMatchView';
@@ -72,6 +73,15 @@ export function PlayerHubMatches({
           setSearch('');
         }}
       />
+      {player && !closed && data.callSnapshotVersion !== undefined && (
+        <PlayerCallAlerts
+          key={player}
+          data={data}
+          player={player}
+          connected={hub.online && hub.publicEvent.isSuccess && hub.publicEvent.isFetchedAfterMount}
+          playOpen={playOpen}
+        />
+      )}
       {selectedPlayer && !player && (
         <p className="card">
           Your saved player is not in the current draw. Showing Everyone until their pairings

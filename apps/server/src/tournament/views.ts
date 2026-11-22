@@ -53,13 +53,14 @@ import { leadingCharacters } from '../players/characterEvidence';
 type SqlSnapshot = Awaited<ReturnType<typeof sqlSnapshot>>;
 type MatchViewFields = Pick<
   Match,
-  'player1Qualifier' | 'player2Qualifier' | 'qualificationBlocks'
+  'player1Qualifier' | 'player2Qualifier' | 'qualificationBlocks' | 'callSequence'
 > & { labelFromStructure?: true };
 export type EventSnapshot = Omit<
   SqlSnapshot,
   'placements' | 'matches' | 'nativeBrackets' | 'publicCode' | 'twitchBroadcast'
 > & {
   publicCode?: number;
+  callSnapshotVersion?: number;
   memberNames?: Record<string, string>;
   charactersPlayed?: Record<string, SetCharacterPick[]>;
   broadcastSides?: TournamentState['broadcastSides'];

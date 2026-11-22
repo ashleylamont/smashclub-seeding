@@ -11,7 +11,7 @@ import {
   reviewWholeFinalsReset,
 } from './finalsPreview';
 import { poolOrderStatus } from './poolOrders';
-import { sharedDispatch } from './dispatch';
+import { publicCallFact, sharedDispatch } from './dispatch';
 import { isKnockout, type SetCharacterPick } from '@smashclub/shared';
 import { sameSetCharacterPicks } from '../players/setCharacterPicks';
 import { randomUUID } from 'node:crypto';
@@ -243,8 +243,14 @@ export class NativeEventApi {
     // Read presentation first so an already committed Act visibility change always wins.
     const twitch = privateView ? undefined : await readTwitchPromotion(this.ctx.db, this.planId);
     const state = privateView ? await this.state() : await this.publishedState();
+    const snapshot = await eventView(this.ctx.db, state, privateView);
+    if (!privateView && sharedDispatch(state)) {
+      const calls = new Map(state.matches.map((match) => [match.id, publicCallFact(state, match)]));
+      snapshot.callSnapshotVersion = state.sequence;
+      for (const match of snapshot.matches) Object.assign(match, calls.get(match.id));
+    }
     return {
-      ...(await eventView(this.ctx.db, state, privateView)),
+      ...snapshot,
       publicCode: this.publicCode,
       ...publicTwitchPromotion(twitch, nativeTwitchOpen(state)),
     };
