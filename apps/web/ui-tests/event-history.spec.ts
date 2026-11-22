@@ -108,6 +108,7 @@ test(
       ).violations,
     ).toEqual([]);
     // Report both viewport differences in the same run.
+    await expect(history.getByRole('button', { name: 'Refresh history' })).toBeEnabled();
     await darwinScreenshot(page, 'event-history-desktop.png', { soft: true });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => scrollTo(0, 0));
@@ -115,6 +116,7 @@ test(
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
+    await expect(history.getByRole('button', { name: 'Refresh history' })).toBeEnabled();
     await darwinScreenshot(page, 'event-history-phone.png', { fullPage: true });
     options.historyFailure = true;
     await history.getByRole('button', { name: 'Refresh history' }).click();
@@ -239,6 +241,7 @@ for (const theme of ['dark', 'light'] as const) {
                 at: '2026-10-03T23:58:00.000Z',
                 title: 'Entrant restored',
                 summary: `${PLAYER_NAME} returned to the event.`,
+                details: { player: PLAYER_NAME, reason: 'Returned before the next match' },
               },
               {
                 ...earlier,
@@ -248,6 +251,7 @@ for (const theme of ['dark', 'light'] as const) {
                 category: 'results',
                 title: 'Results published',
                 summary: 'Results published to club history.',
+                details: { resultId: 'published-results' },
               },
               earlier,
             ],
@@ -265,12 +269,14 @@ for (const theme of ['dark', 'light'] as const) {
         'Results published',
         'Entrant withdrawn',
       ]);
-      const recordedDetails = history
-        .getByRole('button', { name: 'View recorded details' })
-        .first();
-      await recordedDetails.focus();
+      const restored = history.getByRole('listitem').filter({
+        has: history.getByRole('heading', { name: 'Entrant restored' }),
+      });
+      await restored.getByRole('button', { name: 'View recorded details' }).focus();
       await page.keyboard.press('Enter');
-      await expect(history.getByText('Left before play', { exact: false })).toBeVisible();
+      await expect(
+        restored.getByText('Returned before the next match', { exact: false }),
+      ).toBeVisible();
       await ready(page);
       await page.evaluate(() => scrollTo(0, 0));
       await testInfo.attach('event-history', {
