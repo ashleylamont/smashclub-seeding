@@ -1,5 +1,6 @@
 import { structureOptionsSchema, tournamentStructureSchema } from '@smashclub/shared';
 import { z } from 'zod';
+import { decisionVersionSchema } from './decisionEvents';
 import { Retirement } from './recoverySchema';
 import { additionalCommands } from './commands';
 import { setCharacterPicksSchema } from '../players/setCharacterPicks';
@@ -421,18 +422,7 @@ export const Decision = z.object({
       afterEntrantId: id,
     })
     .optional(),
-  version: z.union([
-    z.literal(1),
-    z.literal(2),
-    z.literal(3),
-    z.literal(4),
-    z.literal(5),
-    z.literal(6),
-    z.literal(7),
-    z.literal(8),
-    z.literal(9),
-    z.literal(10),
-  ]),
+  version: decisionVersionSchema,
   commandId: id,
   actorId: z.string(),
   requestId: z.string(),
