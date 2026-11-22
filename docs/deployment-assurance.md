@@ -17,6 +17,8 @@ Web-only and prose-only PRs skip **PostgreSQL integration** and **Legacy Python 
 - **Production image runtime:** builds `deploy/Dockerfile`, uses its production-only dependencies as the unprivileged `node` user, boots against PostgreSQL 17, upgrades a synthetic pre-stage-aware database, exercises health, public identity API/privacy, anonymous auth/admin boundaries, frontend assets and deep links, then restarts and repeats probes. The internal Docker network prevents external provider calls. Logs are retained on both success and failure.
 - **Browser event flows** rehearse the real API on Ubuntu. **UI behavior and accessibility** runs portable fixture cases in two Ubuntu shards, and **UI accessibility and visuals** runs the fixture cases with Darwin baselines on macOS. Each job retains its diagnostic artifacts. [UI review](ui-visual-review.md)
 
+- **Server bundle boots:** preserves the original missing-`DATABASE_URL` environment-validation check, which catches module-load failures independently of the image check.
+
 The portable UI jobs have a 20-minute budget including checkout, dependencies,
 browser installation, discovery, execution and artifact upload. The named
 **Install portable UI browser** and **Run portable UI shard** steps print elapsed
@@ -36,7 +38,6 @@ shards 1/2 and 2/2 respectively. Five additional job minutes leave room for the
 observed slow setup and execution together without changing test selection,
 workers, per-test timeouts, retries or image baselines. Verify future changes on
 both a PR and its exact-main Publish run using the named step timings.
-- **Server bundle boots:** preserves the original missing-`DATABASE_URL` environment-validation check, which catches module-load failures independently of the image check.
 
 **All checks** rejects failed, cancelled, missing and unexpected skipped jobs. Only the two PR jobs listed above can be skipped, and only with an explicit plan from a successful **Changeset** job. `pnpm test:postgres` additionally validates its JUnit report: all named required suites must appear and no tests may be skipped. Missing binaries, wrong PostgreSQL major, missing Docker, migrations or an empty/skipped suite fail the command.
 
