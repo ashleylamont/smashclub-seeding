@@ -24,9 +24,9 @@ export function PoolsStep({ view, onChanged }: { view: EventPlanView; onChanged:
           Open the event desk to lock the seeded draw and start matches. Winners and losers advance
           along the chosen bracket; automatic byes use no played games.
         </p>
-        <a className="btn btn-primary" href={`/admin/event-operations?plan=${view.plan.id}`}>
-          Open event desk
-        </a>
+        <Button asChild variant="primary">
+          <a href={`/admin/event-operations?plan=${view.plan.id}`}>Open event desk</a>
+        </Button>
       </section>
     );
 
@@ -100,7 +100,7 @@ function DivisionPools({
         <h4>
           {open ? 'Open' : DIVISION_LABEL[division.division]}{' '}
           <span className="muted">
-            {division.poolCount} pools · sizes{' '}
+            {division.poolCount === 1 ? '1 pool' : `${division.poolCount} pools`} · sizes{' '}
             {division.pools.map((pool) => pool.members.length).join(' / ')}
           </span>
         </h4>

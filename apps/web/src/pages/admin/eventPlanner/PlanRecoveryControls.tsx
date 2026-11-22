@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../../lib/trpc';
 import { Button } from '../../../components/ui/Button';
@@ -12,12 +12,14 @@ export function PlanRecoveryControls({
   deleteOnly = false,
   onReopened,
   onDeleted,
+  children,
 }: {
   planId: string;
   name: string;
   deleteOnly?: boolean;
   onReopened?: (planId: string) => void;
   onDeleted: () => void;
+  children?: ReactNode;
 }) {
   const [operation, setOperation] = useState<'reset' | 'delete' | null>(null);
   const [reason, setReason] = useState('');
@@ -50,9 +52,10 @@ export function PlanRecoveryControls({
   });
   return (
     <div className={deleteOnly ? undefined : 'card section'}>
-      {!deleteOnly && <h3>Reset or delete this event</h3>}
+      {!deleteOnly && <h3>Plan recovery</h3>}
       {!operation && (
         <span className="row-actions">
+          {children}
           {!deleteOnly && (
             <Button size="small" onClick={() => setOperation('reset')}>
               Revert to draft

@@ -1,5 +1,5 @@
 import { Checkbox } from '../../../components/ui/Checkbox';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { type TournamentStructure } from '@smashclub/shared';
 import { trpc } from '../../../lib/trpc';
@@ -32,6 +32,7 @@ export function DoublesRosterStep({
   });
   const name = (id: string) =>
     players.data?.find((p) => p.id === id)?.canonicalName ?? 'Choose player';
+  const freezeBlockersId = useId();
   const planId = view.plan.id,
     editable = view.plan.status === 'draft';
   const add = useMutation({
@@ -102,9 +103,31 @@ export function DoublesRosterStep({
   });
   return (
     <section className="card section">
-      <h3>
-        Doubles roster · {view.entries.length} teams / {view.entries.length * 2} players
-      </h3>
+      <div className="page-header">
+        <h3>
+          Doubles roster · {view.entries.length} teams / {view.entries.length * 2} players
+        </h3>
+        {editable && (
+          <Button
+            variant="primary"
+            disabled={Boolean(view.issues.blocking.length) || freeze.isPending || format.isPending}
+            aria-describedby={view.issues.blocking.length ? freezeBlockersId : undefined}
+            onClick={() => freeze.mutate()}
+          >
+            {freeze.isPending ? 'Freezing…' : 'Freeze team seeds'}
+          </Button>
+        )}
+        {!editable &&
+          !view.plan.softLockedAt &&
+          ['roster_frozen', 'pools_ready'].includes(view.plan.status) && (
+            <Button disabled={reopen.isPending} onClick={() => reopen.mutate()}>
+              Reopen roster
+            </Button>
+          )}
+      </div>
+      {editable && (
+        <IssueList issues={view.issues.blocking} kind="blocking" id={freezeBlockersId} />
+      )}
       <p>
         Each person can enter once.{' '}
         {view.plan.softLockedAt
@@ -259,25 +282,6 @@ export function DoublesRosterStep({
           </tbody>
         </table>
       </div>
-      {editable && (
-        <>
-          <IssueList issues={view.issues.blocking} kind="blocking" />
-          <Button
-            variant="primary"
-            disabled={Boolean(view.issues.blocking.length) || freeze.isPending || format.isPending}
-            onClick={() => freeze.mutate()}
-          >
-            Freeze team seeds
-          </Button>
-        </>
-      )}
-      {!editable &&
-        !view.plan.softLockedAt &&
-        ['roster_frozen', 'pools_ready'].includes(view.plan.status) && (
-          <Button disabled={reopen.isPending} onClick={() => reopen.mutate()}>
-            Reopen roster
-          </Button>
-        )}
       {errors.map((m, i) => (
         <p key={i} role="alert" className="error-text">
           {m.error?.message}
