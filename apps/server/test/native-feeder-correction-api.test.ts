@@ -28,7 +28,7 @@ function score(match: { id: string; revision: number }, score1: number, score2: 
   };
 }
 
-describe('native feeder corrections through the application API', () => {
+describe('native score reviews during bracket changes through the application API', () => {
   let db: Db, close: () => Promise<void>, runtime: NativeRuntime;
 
   beforeAll(async () => {
@@ -180,4 +180,146 @@ describe('native feeder corrections through the application API', () => {
     expect(await runtime.state(planId)).toEqual(played);
     expect(await runtime.replay(planId)).toEqual(played);
   });
+
+  it('requires review of a reported final before withdrawing the reported winner', async () => {
+    const { planId, api, final } = await readyFinal();
+    const report = await pendingFinalReport(planId, final);
+    const input = {
+      planId,
+      action: 'withdraw' as const,
+      playerId: final.player1Id!,
+      reason: 'Entrant needed to leave',
+    };
+    const before = await runtime.state(planId);
+    const preview = await api.eventOps.previewAttendance(input);
+    const reviewInstructions = /Approve or reject the pending played score for Final/;
+    expect(preview).toMatchObject({
+      allowed: false,
+      issues: [expect.stringMatching(reviewInstructions)],
+    });
+    await expect(
+      api.eventOps.applyAttendance({ ...input, revisionToken: preview.revisionToken }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: expect.stringMatching(reviewInstructions),
+    });
+    expect(await runtime.state(planId)).toEqual(before);
+    expect(await runtime.replay(planId)).toEqual(before);
+
+    await expect(
+      api.eventOps.reviewReport({ reportId: report.id, approve: true }),
+    ).resolves.toMatchObject({ status: 'approved', winnerId: final.player1Id });
+    const approved = await runtime.state(planId);
+    const retry = await api.eventOps.previewAttendance(input);
+    expect(retry.allowed).toBe(true);
+    await api.eventOps.applyAttendance({ ...input, revisionToken: retry.revisionToken });
+    const withdrawn = await runtime.state(planId);
+    expect(
+      withdrawn.entrants.find((entrant) => entrant.playerId === input.playerId)?.availability,
+    ).toBe('withdrawn');
+    expect(withdrawn.matches).toEqual(approved.matches);
+    expect(withdrawn.matches.find((match) => match.id === final.id)).toMatchObject({
+      outcome: 'played',
+      winnerId: final.player1Id,
+      score1: 2,
+      score2: 1,
+    });
+    expect(await runtime.replay(planId)).toEqual(withdrawn);
+  });
+
+  it('rejects a withdrawal preview taken before a report and permits the forfeit after rejection', async () => {
+    const { planId, api, final } = await readyFinal();
+    const input = {
+      planId,
+      action: 'withdraw' as const,
+      playerId: final.player1Id!,
+      requestId: crypto.randomUUID(),
+    };
+    const preview = await api.eventOps.previewAttendance(input);
+    expect(preview.allowed).toBe(true);
+    const report = await pendingFinalReport(planId, final);
+    const before = await runtime.state(planId);
+
+    await expect(
+      api.eventOps.applyAttendance({ ...input, revisionToken: preview.revisionToken }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: expect.stringMatching(/since this preview/),
+    });
+    expect(await runtime.state(planId)).toEqual(before);
+    expect(await runtime.replay(planId)).toEqual(before);
+
+    await api.eventOps.reviewReport({ reportId: report.id, approve: false });
+    const retry = await api.eventOps.previewAttendance(input);
+    expect(retry.allowed).toBe(true);
+    await api.eventOps.applyAttendance({ ...input, revisionToken: retry.revisionToken });
+    const forfeited = await runtime.state(planId);
+    expect(forfeited.matches.find((match) => match.id === final.id)).toMatchObject({
+      outcome: 'forfeit',
+      winnerId: final.player2Id,
+      score1: null,
+      score2: null,
+      revision: final.revision + 1,
+    });
+    expect(forfeited.reports.find((item) => item.id === report.id)?.status).toBe('rejected');
+    expect(await runtime.replay(planId)).toEqual(forfeited);
+  });
+
+  it('protects the pending final from a direct live availability withdrawal', async () => {
+    const { planId, api, final } = await readyFinal();
+    const report = await pendingFinalReport(planId, final);
+    const before = await runtime.state(planId);
+    const entrant = before.entrants.find(({ playerId }) => playerId === final.player1Id)!;
+    const input = {
+      planId,
+      requestId: crypto.randomUUID(),
+      command: {
+        kind: 'availability' as const,
+        playerId: entrant.playerId,
+        expectedRevision: entrant.revision,
+        availability: 'withdrawn' as const,
+        reason: 'Entrant needed to leave',
+      },
+    };
+    await expect(api.eventOps.live.command(input)).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: expect.stringMatching(/Approve or reject the pending played score for Final/),
+    });
+    expect(await runtime.state(planId)).toEqual(before);
+    expect(await runtime.replay(planId)).toEqual(before);
+    await api.eventOps.reviewReport({ reportId: report.id, approve: false });
+    await api.eventOps.live.command(input);
+    const withdrawn = await runtime.state(planId);
+    expect(withdrawn.matches.find((match) => match.id === final.id)).toMatchObject({
+      outcome: 'forfeit',
+      winnerId: final.player2Id,
+      score1: null,
+      score2: null,
+    });
+    expect(await runtime.replay(planId)).toEqual(withdrawn);
+  });
+
+  it.each([false, true])(
+    'permits withdrawal alongside an unaffected report and a resolved feeder dispute (stale=%s)',
+    async (stale) => {
+      const { planId, api, final, feeder, settings } = await readyFinal();
+      await api.eventOps.settings({ ...settings, scoreReportingMode: 'approve_unless_disputed' });
+      const dispute = await caller(attendee).eventOps.reportScore(score(feeder, 0, 2));
+      expect(dispute.status).toBe('pending');
+      if (stale) await api.eventOps.reportScore(score(feeder, 2, 1));
+      await pendingFinalReport(planId, final);
+      const before = await runtime.state(planId);
+      const input = { planId, action: 'withdraw' as const, playerId: feeder.player2Id! };
+      const preview = await api.eventOps.previewAttendance(input);
+      expect(preview.allowed).toBe(true);
+      await api.eventOps.applyAttendance({ ...input, revisionToken: preview.revisionToken });
+      const withdrawn = await runtime.state(planId);
+      expect(
+        withdrawn.entrants.find((entrant) => entrant.playerId === input.playerId)?.availability,
+      ).toBe('withdrawn');
+      expect(withdrawn.matches).toEqual(before.matches);
+      expect(withdrawn.reports).toEqual(before.reports);
+      expect(await runtime.replay(planId)).toEqual(withdrawn);
+    },
+  );
 });
