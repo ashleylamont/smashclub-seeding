@@ -185,6 +185,7 @@ export function EventOperationsPanel({
     }
   };
   const data = event.data?.overview;
+  const interrupted = !online || event.isError;
   const closed = ['complete', 'cancelled'].includes(data?.plan.status ?? '');
   const liveDisabled = !online || pending || closed || Boolean(data?.plan.drawPaused);
   const dispatchDisabled = !data || liveDisabled || event.isError;
@@ -235,7 +236,6 @@ export function EventOperationsPanel({
     <div className="ops-page">
       <header className="ops-heading">
         <div>
-          <span className="ops-eyebrow">TO desk</span>
           <h2>{data.plan.name}</h2>
           <p className="muted">
             {closed ? 'Event closed · read only' : data.plan.status.replaceAll('_', ' ')}
@@ -265,6 +265,7 @@ export function EventOperationsPanel({
       <OpsAttentionDesk
         data={data}
         pools={pools}
+        interrupted={interrupted}
         onJump={(id, section) => void workspace.openControl(id, section)}
         onMatch={(id) => {
           setFocusedMatchId(id);
@@ -275,7 +276,7 @@ export function EventOperationsPanel({
           void workspace.openControl('match-desk');
         }}
       />
-      {(!online || event.isError) && (
+      {interrupted && (
         <div className="banner banner-warning" role="alert">
           Live updates interrupted. Last loaded data is shown. {event.error?.message}
         </div>

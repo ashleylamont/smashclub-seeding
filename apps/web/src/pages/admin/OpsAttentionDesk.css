@@ -2,10 +2,13 @@
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: var(--s2);
 }
-.ops-attention-heading p {
-  margin: 0.6rem 0;
+.ops-attention-status {
+  margin: 0;
+}
+.ops-attention-disagreements {
+  margin-block: var(--s2);
 }
 .ops-attention-groups {
   display: grid;
