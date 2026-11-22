@@ -166,10 +166,10 @@
   width: 49%;
 }
 .intermission-placed-pool th:first-child {
-  width: 12%;
+  width: 11%;
 }
 .intermission-placed-pool th:nth-child(2) {
-  width: 43%;
+  width: 41%;
 }
 .intermission-placed-pool tbody td:first-child {
   font-family: var(--font-number);

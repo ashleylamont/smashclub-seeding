@@ -2,6 +2,7 @@ import { AxeBuilder } from '@axe-core/playwright';
 import { darwinBaseline, darwinScreenshot } from './darwinScreenshot';
 import { expect, test, type Page } from '@playwright/test';
 import { mockEvent, PLAN_ID, ready } from './fixtures';
+import { broadcastPoolOrderFixture } from './fixtures/broadcastPoolOrder';
 import { bracketFixture, TEAM_ALIAS } from '../test/fixtures/brackets';
 import { chooseOption } from '../test-support/controls';
 import { rpcProcedures } from '../test-support/rpcBatch';
@@ -874,71 +875,7 @@ for (const [width, height, theme] of [
     await page.clock.install({ time: new Date('2026-10-04T00:00:00Z') });
     const fixture = await mockEvent(page, { idle: true });
     const { snapshot } = fixture;
-    const names = [
-      'Harbour Lantern Collector',
-      'Parallax',
-      'Sunset Observatory Recording Desk',
-      'Canary',
-    ];
-    const ids = ['harbour', 'parallax', 'sunset', 'canary'];
-    const base = snapshot.matches.find((match) => match.stage === 'group')!;
-    const lowerMatches: LiveMatch[] = [
-      [0, 2, 0],
-      [1, 0, 1],
-      [2, 1, 1],
-      [0, 3, 0],
-      [1, 3, 0],
-      [2, 3, 0],
-    ].map(([winner, loser, score], index) => ({
-      ...base,
-      id: `audit-pool-set-${index}`,
-      division: 'lower',
-      poolIndex: 0,
-      player1Id: ids[winner!]!,
-      player1Name: names[winner!]!,
-      player2Id: ids[loser!]!,
-      player2Name: names[loser!]!,
-      winnerId: ids[winner!]!,
-      score1: 2,
-      score2: score!,
-      status: 'complete',
-      outcome: 'played',
-      resultUpdatedAt: null,
-    }));
-    const order = { poolId: 'lower-a', division: 'lower', poolIndex: 0 };
-    const upper = snapshot.matches
-      .filter(
-        ({ stage, division, poolIndex }) =>
-          stage === 'group' && division === 'upper' && poolIndex === 0,
-      )
-      .map((match) => ({ ...match, resultUpdatedAt: null }));
-    const finalists = (confirmed: boolean) =>
-      [1, 2, 3, 4].map((place) => ({
-        ...order,
-        place,
-        status: confirmed || place === 4 ? 'resolved' : 'pending',
-        entrantId: confirmed || place === 4 ? ids[[2, 1, 0, 3][place - 1]!]! : null,
-      }));
-    const source = {
-      ...snapshot,
-      matches: [...lowerMatches, ...upper],
-      entrants: [...snapshot.entrants, ...ids.map((id, index) => ({ id, name: names[index]! }))],
-      poolOrders: [
-        { ...order, status: 'partial', reason: 'Confirm a ruling for the tied places.' },
-        {
-          ...order,
-          poolId: 'upper-a',
-          division: 'upper',
-          status: 'incomplete',
-          reason: 'Complete the pool matches.',
-        },
-      ],
-      placements: [],
-      pendingFinals: [
-        { division: 'lower', stage: 'main', slots: finalists(false).slice(0, 2) },
-        { division: 'lower', stage: 'consolation', slots: finalists(false).slice(2) },
-      ],
-    };
+    const { source, names, ids, finalists, order } = broadcastPoolOrderFixture(snapshot);
     fixture.responses['eventOps.snapshot'] = source;
     await page.goto(`/overlay/${PLAN_ID}?presentation=progress&controls=0`);
     const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
