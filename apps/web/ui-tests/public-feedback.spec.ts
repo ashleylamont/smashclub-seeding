@@ -140,7 +140,9 @@ for (const actor of ['guest', 'player', 'admin'] as const) {
   });
 }
 
-test('feedback is hidden on the OBS and venue displays', async ({ page }) => {
+test('feedback stays off OBS and venue displays, including on browser Back', async ({
+  page,
+}, testInfo) => {
   const fixture = await mockEvent(page);
   const venue = {
     id: 'fixture-venue',
@@ -165,9 +167,29 @@ test('feedback is hidden on the OBS and venue displays', async ({ page }) => {
   await page.goto(`/overlay/${PLAN_ID}?presentation=gameplay`);
   await expect(page.locator('.broadcast-identity h1')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Give feedback' })).toHaveCount(0);
-  await page.goto('/tournaments/fixture-venue/live');
+  const bracketPath = `/tournaments/${venue.slug}`;
+  const venuePath = `${bracketPath}/live`;
+  await page.goto(venuePath);
+  const exit = page.getByRole('link', { name: 'Exit', exact: true });
+  const trigger = page.getByRole('button', { name: 'Give feedback' });
   await expect(page.getByRole('heading', { name: venue.name })).toBeVisible();
   await expect(page.locator('.app-footer')).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Give feedback' })).toHaveCount(0);
+  await expect(trigger).toHaveCount(0);
+
+  await exit.click();
+  await expect(page).toHaveURL(bracketPath);
+  await trigger.click();
+  const dialog = page.getByRole('dialog', { name: 'Give feedback' });
+  await expect(dialog).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(venuePath);
+  await expect(page.locator('.venue-header h1')).toHaveText(venue.name);
+  await expect(dialog).toBeHidden();
+  await ready(page);
+  await page.screenshot({ path: testInfo.outputPath('venue-after-browser-back.png') });
+  await exit.click();
+  await expect(page).toHaveURL(bracketPath);
+  await expect(trigger).toBeVisible();
+  await expect(dialog).toBeHidden();
   expect(fixture.unexpected).toEqual([]);
 });

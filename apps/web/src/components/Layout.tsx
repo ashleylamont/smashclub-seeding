@@ -19,6 +19,9 @@ export function Layout() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const venueDisplay = useRouterState({
+    select: (state) => state.matches.some((match) => match.routeId === '/tournaments/$slug/live'),
+  });
   const standaloneDisplay = /^\/(live|overlay)\/[^/]+\/?$/.test(pathname);
   const nav = useRef<HTMLElement>(null);
 
@@ -148,7 +151,8 @@ export function Layout() {
         <span>Smash Club</span>
         <div className="app-footer-links">
           <Link to="/changelog">Changelog</Link>
-          <FeedbackDialog />
+          {/* Venue CSS hides the footer, but dialog content is portalled outside it. */}
+          {!venueDisplay && <FeedbackDialog />}
         </div>
         {/* The build this page was served from, so "is prod actually on the
             new image?" is answerable without kubectl. */}
