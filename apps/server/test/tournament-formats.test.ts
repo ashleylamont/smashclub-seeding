@@ -260,11 +260,12 @@ describe('native format lifecycle through shipped APIs', () => {
     expect(confirmed.pools[0]!.order).toEqual(order);
     expect(confirmed.matches).toEqual(ready.matches);
     expect(confirmed.brackets).toEqual([]);
+    expect((await caller().eventOps.overview({ planId })).finalization).toEqual({ kind: 'ready' });
 
     await caller().eventOps.native.finalize({ planId });
     const result = await caller(null).eventOps.snapshot({ planId });
     expect(result.plan.status).toBe('complete');
-    expect(JSON.stringify(result)).not.toMatch(/matchRevisions|matchRevisionToken/);
+    expect(JSON.stringify(result)).not.toMatch(/matchRevisions|matchRevisionToken|finalization/);
     expect(result.matches).toHaveLength(136);
     expect(result.matches.every((m) => m.stage === 'group' && m.nativeBracketId === null)).toBe(
       true,

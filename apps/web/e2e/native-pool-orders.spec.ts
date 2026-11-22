@@ -43,6 +43,8 @@ type Planner = { divisions: { division: string; pools: Pool[] }[] };
 test('TO desk automatically decides a unique pool, records an explicit tied-pool ruling, then draws and completes finals', async ({
   page,
   request,
+  browser,
+  baseURL,
 }, testInfo) => {
   test.setTimeout(180_000);
   await page.request.post('/api/auth/sign-in/email', {
@@ -83,7 +85,32 @@ test('TO desk automatically decides a unique pool, records an explicit tied-pool
       planId,
       ...(procedure === 'eventOps.softLockPools' ? { confirm: true } : {}),
     });
-  await mutate(page.request, 'eventOps.settings', { planId, published: true, playerReports: true });
+  await mutate(page.request, 'eventOps.settings', {
+    planId,
+    published: true,
+    playerReports: true,
+    scoreReportingMode: 'approve_unless_disputed',
+  });
+  const to = await browser.newPage({ baseURL });
+  const signIn = await to.request.post('/api/auth/sign-in/email', {
+    data: { email: 'rehearsal-player@smashclub.dev', password: 'devpassword123' },
+  });
+  expect(signIn.ok()).toBe(true);
+  const denied = await to.request.post('/api/trpc/eventOps.native.finalize', { data: { planId } });
+  expect(denied.status()).toBe(403);
+  await mutate(page.request, 'eventOps.assignTo', {
+    planId,
+    email: 'rehearsal-player@smashclub.dev',
+  });
+  const deskUrl = `/operate/${planId}?view=draw`;
+  const finalize = to.getByRole('button', { name: 'Finalize native results', exact: true });
+  const dialog = to.getByRole('alertdialog');
+  await to.goto(deskUrl);
+  await expect(finalize).toBeDisabled();
+  await expect(finalize).toHaveAccessibleDescription(/Create the missing finals draws/);
+  await to.getByRole('button', { name: 'Go to finals preview' }).press('Enter');
+  await expect(to.getByRole('button', { name: 'Preview finals', exact: true })).toBeFocused();
+  await expect(dialog).toHaveCount(0);
   const before = await query<Planner>(page.request, 'admin.eventPlanner.plan', { planId });
   const pools = before.divisions[0]!.pools;
   expect(pools).toHaveLength(2);
@@ -219,6 +246,10 @@ test('TO desk automatically decides a unique pool, records an explicit tied-pool
   await expect(standings).toContainText('Confirmed finishing orders are recorded separately.');
   await expect(automatic).toContainText('Decided automatically by distinct set-win totals');
   await expect(tied).toContainText('Set wins do not decide a unique full order');
+  await expect(finalize).toHaveAccessibleDescription(/Confirm the remaining pool finishing order/);
+  await to.getByRole('button', { name: 'Review pool order', exact: true }).press('Enter');
+  await expect(to.getByRole('heading', { name: /Open · Pool B/ })).toBeFocused();
+  await expect(to.getByRole('link', { name: /planner/i })).toHaveCount(0);
   await expect(plannerLink).toHaveAttribute(
     'href',
     `/admin/event-planner?plan=${planId}&step=pools`,
@@ -249,6 +280,14 @@ test('TO desk automatically decides a unique pool, records an explicit tied-pool
   await finals.getByRole('button', { name: 'Create ready finals', exact: true }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm', exact: true }).click();
   await expect(finals.getByRole('status')).toContainText('Ready finals created');
+  await expect(finalize).toHaveAccessibleDescription(/Finish the remaining matches/);
+  await to.getByRole('button', { name: 'Go to unfinished match' }).press('Enter');
+  await expect(to.getByRole('tab', { name: 'Run matches', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(to.getByText('Showing the selected match.')).toBeFocused();
+  await to.getByRole('tab', { name: 'Standings / draw', exact: true }).click();
   for (let round = 0; round < 4; round++) {
     snapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
     const ready = snapshot.matches.filter((m) => m.nativeBracketId && m.status === 'ready');
@@ -264,7 +303,46 @@ test('TO desk automatically decides a unique pool, records an explicit tied-pool
       });
   }
   expect(snapshot.nativeBrackets.every((b) => b.complete)).toBe(true);
-  await finals.getByRole('button', { name: 'Finalize native results', exact: true }).click();
-  await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm', exact: true }).click();
-  await expect(finals.getByRole('status')).toContainText('Event finalized');
+  await expect(finalize).toBeEnabled();
+  await finalize.press('Enter');
+  await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+  const playerSignIn = await request.post('/api/auth/sign-in/email', {
+    data: { email: 'player@smashclub.dev', password: 'devpassword123' },
+  });
+  expect(playerSignIn.ok()).toBe(true);
+  const played = snapshot.matches.find((m) => m.nativeBracketId && m.status === 'complete')!;
+  const dispute = await mutate<{ id: string; status: string }>(request, 'eventOps.reportScore', {
+    matchId: played.id,
+    expectedRevision: played.revision,
+    requestId: crypto.randomUUID(),
+    score1: 0,
+    score2: 2,
+    outcome: 'played',
+  });
+  expect(dispute.status).toBe('pending');
+  const rejected = to.waitForResponse((response) =>
+    response.url().includes('eventOps.native.finalize'),
+  );
+  await dialog.getByRole('button', { name: 'Confirm', exact: true }).click();
+  expect((await rejected).status()).toBe(409);
+  const publication = to.locator('.native-finals-controls');
+  await expect(publication.getByRole('alert')).toContainText(
+    'Resolve pending reports before finalizing.',
+  );
+  await expect(finalize).toBeDisabled();
+  await publication
+    .getByRole('button', { name: 'Review score submissions', exact: true })
+    .press('Enter');
+  await expect(to.getByRole('tab', { name: 'Run matches', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await mutate(to.request, 'eventOps.reviewReport', { reportId: dispute.id, approve: false });
+  await to.getByRole('tab', { name: 'Standings / draw', exact: true }).click();
+  await expect(finalize).toBeEnabled();
+  await finalize.press('Enter');
+  await dialog.getByRole('button', { name: 'Confirm', exact: true }).click();
+  await expect(to.getByText('Event finalized. Club ratings are being recomputed.')).toBeVisible();
+  await expect(finalize).toBeDisabled();
+  await to.close();
 });

@@ -194,6 +194,14 @@ export function EventOperationsPanel({
   const [search, setSearch] = useState('');
   const [poolFilter, setPoolFilter] = useState('all');
   const [focusedMatchId, setFocusedMatchId] = useState<string | null>(null);
+  const openMatch = (id: string) => {
+    setFocusedMatchId(id);
+    setDivision('all');
+    setPoolFilter('all');
+    setSearch('');
+    setFilter('all');
+    void workspace.openControl('match-desk');
+  };
   const dispatchNavigation = useRef<DispatchDeskNavigation>(null);
   const scoreEditor = useRef<ScoreEditor>(null);
   const [revealedCall, setRevealedCall] = useState<{ id: string; resourceRevision: number }>();
@@ -295,14 +303,7 @@ export function EventOperationsPanel({
         pools={pools}
         interrupted={interrupted}
         onJump={(id, section) => void workspace.openControl(id, section)}
-        onMatch={(id) => {
-          setFocusedMatchId(id);
-          setDivision('all');
-          setPoolFilter('all');
-          setSearch('');
-          setFilter('all');
-          void workspace.openControl('match-desk');
-        }}
+        onMatch={openMatch}
       />
       {interrupted && (
         <div className="banner banner-warning" role="alert">
@@ -524,14 +525,7 @@ export function EventOperationsPanel({
           <ToPlayerFinder
             data={data}
             onReviewReports={openScoreSubmissions}
-            onMatch={(id) => {
-              setFocusedMatchId(id);
-              setSearch('');
-              setDivision('all');
-              setPoolFilter('all');
-              setFilter('all');
-              void workspace.openControl('match-desk');
-            }}
+            onMatch={openMatch}
             onPool={(key) => {
               setFocusedMatchId(null);
               setSearch('');
@@ -580,6 +574,8 @@ export function EventOperationsPanel({
                 closed={closed || Boolean(data.plan.drawPaused)}
                 dispatchDisabled={dispatchDisabled}
                 callDesk={callDesk}
+                onOpenControl={(id, section) => void workspace.openControl(id, section)}
+                onOpenMatch={openMatch}
               />
               <NativeDrawTools data={data} />
               <NativeResultControls

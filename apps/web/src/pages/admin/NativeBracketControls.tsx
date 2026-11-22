@@ -10,9 +10,10 @@ import { isKnockout } from '@smashclub/shared';
 import { useConfirmation } from '../../lib/confirmation';
 import { Button } from '../../components/ui/Button';
 import { Select, SelectItem } from '../../components/ui/Select';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
+import { poolOrderControlId, type OpsSection } from '../../lib/opsWorkspace';
 import '../../styles/event-board.css';
 import './NativeBracketControls.css';
 
@@ -29,11 +30,15 @@ export function NativeBracketControls({
   closed,
   dispatchDisabled,
   callDesk,
+  onOpenControl,
+  onOpenMatch,
 }: {
   data: Overview;
   closed: boolean;
   dispatchDisabled: boolean;
   callDesk: UntakenCallDesk;
+  onOpenControl: (id: string, section: OpsSection) => void;
+  onOpenMatch: (id: string) => void;
 }) {
   const {
     plan: { id: planId, structure },
@@ -58,7 +63,7 @@ export function NativeBracketControls({
         : qualifier
           ? qualifierLabel(qualifier)
           : 'Bye';
-  const act = async (work: () => Promise<unknown>, success: string) => {
+  const act = async (work: () => Promise<unknown>, success: string, refreshOnFailure = false) => {
     setBusy(true);
     setError('');
     setMessage('');
@@ -68,6 +73,7 @@ export function NativeBracketControls({
       await cache.invalidateQueries({ queryKey: ['eventOps', planId] });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not update native brackets.');
+      if (refreshOnFailure) await cache.invalidateQueries({ queryKey: ['eventOps', planId] });
     } finally {
       setBusy(false);
     }
@@ -87,18 +93,12 @@ export function NativeBracketControls({
           double-elimination reset final runs only when required.
         </p>
       ) : structure === 'round_robin' ? (
-        <p>
-          Complete every pool match. New draws decide a unique set-win order automatically; confirm
-          any required tiebreak ruling in the planner. Then finalize the results.
-        </p>
+        <p>New draws decide a unique set-win order automatically. Ties need an organiser ruling.</p>
       ) : (
         <>
-          <p>
-            Preview the available finals and review their seeds before creating them. Confirm any
-            required tiebreak rulings in the planner. Finalize the completed event to publish club
-            results.
-          </p>
+          <p>Preview the available finals to review their seeds before creating the draws.</p>
           <Button
+            id="native-finals-preview"
             type="submit"
             disabled={closed || busy}
             onClick={() =>
@@ -287,14 +287,14 @@ export function NativeBracketControls({
           )}
         </>
       )}
-      <p className="muted">
-        When every bracket is finished, finalize once to publish the night into club results and
-        ratings. Finalized results become read-only.
-      </p>
-      <Button
-        type="submit"
-        disabled={closed || busy}
-        onClick={async () => {
+      <FinalizeNativeResults
+        data={data}
+        closed={closed}
+        disabled={closed || dispatchDisabled || busy}
+        error={error}
+        onOpenControl={onOpenControl}
+        onOpenMatch={onOpenMatch}
+        onFinalize={async () => {
           if (
             await confirmAction(
               'Finalize all results and close this event? Scores will become read-only and enter club ratings.',
@@ -303,18 +303,108 @@ export function NativeBracketControls({
             void act(
               () => trpc.eventOps.native.finalize.mutate({ planId }),
               'Event finalized. Club ratings are being recomputed.',
+              true,
             );
         }}
-      >
-        Finalize native results
-      </Button>
-      {error && (
+      />
+      {message && <p role="status">{message}</p>}
+    </section>
+  );
+}
+
+function FinalizeNativeResults({
+  data,
+  closed,
+  disabled,
+  error,
+  onOpenControl,
+  onOpenMatch,
+  onFinalize,
+}: {
+  data: Overview;
+  closed: boolean;
+  disabled: boolean;
+  error: string;
+  onOpenControl: (id: string, section: OpsSection) => void;
+  onOpenMatch: (id: string) => void;
+  onFinalize: () => void;
+}) {
+  const finalizationDetailsId = useId();
+  const finalization = data.finalization;
+  const readyToFinalize = finalization?.kind === 'ready';
+  const poolOrder =
+    finalization?.kind === 'pool_order' && 'poolOrders' in data
+      ? data.poolOrders?.find((order) => order.poolId === finalization.poolId)
+      : undefined;
+  const poolOrderLock =
+    poolOrder?.plannerConfirmation?.available === false ? poolOrder.plannerConfirmation.reason : '';
+  let finalizationDetails = finalization?.kind === 'ready' ? undefined : finalization?.message;
+  if (poolOrderLock) finalizationDetails = `A pool finishing order is missing. ${poolOrderLock}`;
+  else if (readyToFinalize)
+    finalizationDetails =
+      'Publishing closes the event, makes scores read-only and enters the results into club ratings.';
+  else if (data.plan.drawPaused)
+    finalizationDetails = 'Resume the pool draw before publishing results.';
+  else if (!closed && !finalization)
+    finalizationDetails = data.plan.softLockedAt
+      ? 'Finalization status unavailable.'
+      : 'Lock the draw before publishing results.';
+  const poolControlId =
+    poolOrder &&
+    data.matches.some(
+      (match) =>
+        match.stage === 'group' &&
+        match.division === poolOrder.division &&
+        match.poolIndex === poolOrder.poolIndex,
+    )
+      ? poolOrderControlId(poolOrder.poolId)
+      : undefined;
+  return (
+    <>
+      <div className="native-finalization">
+        {finalizationDetails && (
+          <p
+            id={finalizationDetailsId}
+            className={error === finalizationDetails ? 'error-text' : 'muted'}
+            role={error === finalizationDetails ? 'alert' : undefined}
+          >
+            {finalizationDetails}
+          </p>
+        )}
+        <div className="ui-actions">
+          <Button
+            disabled={disabled || !readyToFinalize}
+            aria-describedby={finalizationDetails ? finalizationDetailsId : undefined}
+            onClick={onFinalize}
+          >
+            Finalize native results
+          </Button>
+          {finalization?.kind === 'missing_draw' && (
+            <Button onClick={() => onOpenControl('native-finals-preview', 'draw')}>
+              Go to finals preview
+            </Button>
+          )}
+          {finalization?.kind === 'unfinished_matches' && (
+            <Button onClick={() => onOpenMatch(finalization.matchId)}>
+              Go to unfinished match
+            </Button>
+          )}
+          {poolControlId && (
+            <Button onClick={() => onOpenControl(poolControlId, 'draw')}>Review pool order</Button>
+          )}
+          {finalization?.kind === 'pending_reports' && (
+            <Button onClick={() => onOpenControl('score-submissions', 'run')}>
+              Review score submissions
+            </Button>
+          )}
+        </div>
+      </div>
+      {error && error !== finalizationDetails && (
         <p role="alert" className="error-text">
           {error}
         </p>
       )}
-      {message && <p role="status">{message}</p>}
-    </section>
+    </>
   );
 }
 
