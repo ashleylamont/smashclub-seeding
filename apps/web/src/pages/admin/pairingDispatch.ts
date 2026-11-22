@@ -6,6 +6,7 @@ import { focusDispatchTarget } from './dispatchKeyboard';
 export type StartPairing = Extract<Command, { kind: 'dispatch' }>;
 
 type DispatchAttempt = {
+  matchId: string;
   source: HTMLButtonElement;
   pending: boolean;
   removedWithFocus: boolean;
@@ -42,7 +43,13 @@ export function usePairingDispatch({
       attempt.current = null;
       return;
     }
-    if (!current || current.pending) return;
+    if (!current) return;
+    if (current.removedWithFocus && !current.source.isConnected) {
+      // A filter or queue reorder can remove the button before the call completes.
+      const state = desk?.queue.find(({ matchId }) => matchId === current.matchId)?.state;
+      current.removedWithFocus = state === 'called' || state === 'playing';
+    }
+    if (current.pending) return;
     // Only the commit that settles this command and its refresh owns the focus handoff.
     attempt.current = null;
     if (
@@ -56,7 +63,7 @@ export function usePairingDispatch({
   });
   const startPairing = (command: StartPairing, title: string, source: HTMLButtonElement) => {
     if (dispatch.busy || attempt.current?.pending) return;
-    const current = { source, pending: true, removedWithFocus: false };
+    const current = { matchId: command.matchId, source, pending: true, removedWithFocus: false };
     attempt.current = current;
     setConfirmation(undefined);
     const stationId = command.stationId;

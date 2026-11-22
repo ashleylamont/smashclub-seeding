@@ -102,6 +102,8 @@ async function callFixture(page: Page, { applyOnSuccess = true } = {}) {
       failure = message;
     },
     applyDispatch,
+    desk,
+    overview,
     readyMatch,
     station,
     queue,
@@ -257,8 +259,18 @@ test('a named station start confirms the station and leaves ordinary capacity fr
   const { commands, release, queue, receipt, source, station, unexpected } =
     await callFixture(page);
   await page.goto(`/operate/${PLAN_ID}`);
-  await chooseOption(source.getByRole('combobox', { name: 'Named station' }), station.id);
-  await source.getByRole('button', { name: 'Start named station' }).press('Enter');
+  const picker = source.getByRole('combobox', { name: 'Named station' });
+  const start = source.getByRole('button', { name: 'Start named station' });
+  await picker.press('Enter');
+  const option = page.getByRole('option', { name: station.name, exact: true });
+  await expect(option).toBeVisible();
+  await page.keyboard.press('End');
+  await expect(option).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(picker).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(start).toBeFocused();
+  await page.keyboard.press('Enter');
   const pending = source.getByRole('button', { name: 'Starting named station…' });
   await expect(pending).toBeFocused();
   await expect(pending).toBeDisabled();
@@ -322,6 +334,44 @@ test('a later poll does not restore focus when a successful call left its button
   applyDispatch(command);
   await expect(source).toHaveCount(0);
   await expect(queue.getByRole('heading', { name: 'Pairings', exact: true })).not.toBeFocused();
+  expect(unexpected).toEqual([]);
+});
+
+test('a queue reorder while the command is pending does not trigger focus after it succeeds', async ({
+  page,
+}) => {
+  const {
+    call,
+    commands,
+    desk,
+    overview,
+    queue,
+    readyMatch,
+    receipt,
+    release,
+    source,
+    unexpected,
+  } = await callFixture(page);
+  const pairing = desk.queue[0]!;
+  const otherPairings = Array.from({ length: 12 }, (_, index) => {
+    const id = `ready-pairing-${index}`;
+    overview.matches.push({ ...readyMatch, id, player1Name: `Other player ${index}` });
+    return { ...pairing, matchId: id };
+  });
+  desk.queue = [...otherPairings.slice(0, 11), pairing, otherPairings[11]!, ...desk.queue.slice(1)];
+
+  await page.goto(`/operate/${PLAN_ID}`);
+  await call.press('Enter');
+  await expect.poll(() => commands.length).toBe(1);
+  desk.queue.splice(11, 2, otherPairings[11]!, pairing);
+  desk.queueRevision++;
+  await expect(source).toHaveCount(0);
+  await expect(receipt).toHaveCount(0);
+
+  release();
+  await expect(receipt).toHaveCount(1);
+  await expect(queue.getByRole('heading', { name: 'Pairings', exact: true })).not.toBeFocused();
+  expect(commands).toHaveLength(1);
   expect(unexpected).toEqual([]);
 });
 
