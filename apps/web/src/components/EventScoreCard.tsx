@@ -1,8 +1,10 @@
+import { useRef } from 'react';
 import { matchPresentation } from '../lib/matchPresentation';
 import { linkedFinalCaption } from '../lib/linkedFinalCaption';
 import { qualificationSummary } from '../lib/qualification';
 import type { LiveMatch } from '../lib/eventDisplay';
 import { Button } from './ui/Button';
+import { Notice } from './ui/Feedback';
 import { ScoreFields, type ScoreInputValue } from './ScoreFields';
 import {
   CompletedScoreReport,
@@ -70,6 +72,7 @@ function ScoreCard({
   lateReport,
   recordedOnly = false,
 }: EventScoreCardProps) {
+  const card = useRef<HTMLElement>(null);
   const enabled = reportingEnabled && !recordedOnly;
   const presentation = matchPresentation(match, recordedOnly);
   const qualification = recordedOnly ? null : qualificationSummary(match);
@@ -80,6 +83,10 @@ function ScoreCard({
   const stale = revision !== match.revision;
   const score = decisiveDraft(score1, score2);
   const blockedSubmission = pending || stale || !score || !presentation.canReport;
+  const reload = () => {
+    editor.reload();
+    card.current?.focus({ preventScroll: true });
+  };
   const submit = async () => {
     if (!enabled || blockedSubmission || !score) return;
     editor.begin(requestId);
@@ -100,6 +107,7 @@ function ScoreCard({
   };
   return (
     <article
+      ref={card}
       className={`card ops-match${!recordedOnly || match.status === 'complete' ? ` ops-match-${match.status}` : ''}`}
       data-player-match-id={match.id}
       tabIndex={-1}
@@ -132,6 +140,7 @@ function ScoreCard({
           showUnavailableHint={unavailableMessage !== null}
           onSubmit={onSubmit}
           editor={editor}
+          onReload={reload}
           players={players}
           report={report}
           recordedOnly={recordedOnly}
@@ -176,14 +185,15 @@ function ScoreCard({
           }}
         >
           {stale && (
-            <div role="alert">
-              <p>
-                Match details changed. Reload the match and check the players before submitting.
+            <Notice tone="warning" live={false}>
+              <p role="alert">
+                Match details changed. Reload to keep your draft, then check the players and score
+                before submitting.
               </p>
-              <Button type="button" onClick={editor.reset}>
+              <Button disabled={pending} onClick={reload}>
                 Reload match
               </Button>
-            </div>
+            </Notice>
           )}
           <ScoreFields
             player1Name={match.player1Name}
