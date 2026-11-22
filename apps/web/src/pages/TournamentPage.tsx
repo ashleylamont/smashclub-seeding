@@ -68,6 +68,16 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
     [data.sets, effectiveStage],
   );
 
+  const finalsSetIds = useMemo(
+    () =>
+      new Set(
+        data.bracketGraphic?.matches
+          .filter((match) => match.bracketLane === 'final' || match.bracketLane === 'reset')
+          .map((match) => match.id),
+      ),
+    [data.bracketGraphic],
+  );
+
   const standings = useMemo(() => {
     if (!isComplete) return [];
     return data.participants.filter((p) => p.finalRank != null);
@@ -262,6 +272,10 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
               </thead>
               <tbody>
                 {visibleSets.map((set) => {
+                  const round =
+                    set.round != null && set.resultStage !== 'group'
+                      ? roundLabel(set.round)
+                      : (set.round ?? '—');
                   const state =
                     set.unplayedOutcome && set.state === 'complete'
                       ? { label: 'Complete', hint: 'Resolved without a played score.' }
@@ -278,13 +292,7 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
                             ? 'Bracket'
                             : '—'}
                       </td>
-                      <td className="mono">
-                        {set.resultStage === 'group'
-                          ? (set.round ?? '—')
-                          : set.round != null
-                            ? roundLabel(set.round)
-                            : '—'}
-                      </td>
+                      <td className="mono">{finalsSetIds.has(set.id) ? 'Finals' : round}</td>
                       <td
                         className={set.displayLabel ? 'mono set-structural-label' : 'mono'}
                         title={set.displayLabel ? (set.identifier ?? undefined) : undefined}
