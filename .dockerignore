@@ -1,4 +1,5 @@
 .git
+.nx
 .idea
 **/node_modules
 **/dist

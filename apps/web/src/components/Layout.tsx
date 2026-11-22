@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { authClient, useCurrentUser } from '../lib/auth';
 import { APP_VERSION, BUILD_COMMIT_URL, BUILD_LABEL, BUILD_SHA } from '../lib/build';
 import { useEventSource } from '../lib/useEventSource';
+import { FeedbackDialog } from './FeedbackDialog';
 import { NemesisMark } from './NemesisMark';
 import { ThemeToggle } from './ThemeToggle';
 import '../App.css';
@@ -18,6 +19,9 @@ export function Layout() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const venueDisplay = useRouterState({
+    select: (state) => state.matches.some((match) => match.routeId === '/tournaments/$slug/live'),
+  });
   const standaloneDisplay = /^\/(live|overlay)\/[^/]+\/?$/.test(pathname);
   const nav = useRef<HTMLElement>(null);
 
@@ -145,7 +149,11 @@ export function Layout() {
 
       <footer className="app-footer">
         <span>Smash Club</span>
-        <Link to="/changelog">Changelog</Link>
+        <div className="app-footer-links">
+          <Link to="/changelog">Changelog</Link>
+          {/* Venue CSS hides the footer, but dialog content is portalled outside it. */}
+          {!venueDisplay && <FeedbackDialog />}
+        </div>
         {/* The build this page was served from, so "is prod actually on the
             new image?" is answerable without kubectl. */}
         <span className="build-tag">

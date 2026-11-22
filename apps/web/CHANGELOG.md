@@ -2,6 +2,19 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.20.2
+
+### Patch Changes
+
+- 22 November 2026 · **Fix** · Make warning, approved and rejected status chips easier to read in the light theme. [#392](https://github.com/ashleylamont/smashclub-seeding/pull/392) · [build 9891e33](https://github.com/ashleylamont/smashclub-seeding/commit/9891e33d31c52b719d2b2e3d5e71282ed72d14f1)
+
+## 0.20.1
+
+### Patch Changes
+
+- 22 November 2026 · **Maintenance** · Document when a native tournament journal prevents an older-image rollback, and verify forward recovery preserves recorded doubles scores, frozen seeds and history after a team rename. [#391](https://github.com/ashleylamont/smashclub-seeding/pull/391) · [build 925489e](https://github.com/ashleylamont/smashclub-seeding/commit/925489e5e546cfa53e271bd51f753fe4c0cc451c)
+- 22 November 2026 · **Maintenance** · Give portable interface checks enough time for browser setup and normal runner variation, reducing avoidable release delays. [#390](https://github.com/ashleylamont/smashclub-seeding/pull/390) · [build 426f692](https://github.com/ashleylamont/smashclub-seeding/commit/426f6928e3aab3b57b9fbd3409a5aff41d33b001)
+
 ## 0.20.0
 
 ### Minor Changes

@@ -11,6 +11,7 @@ import {
   dispatchDesk,
   dispatchQueue,
   ordinaryUsage,
+  publicCallFact,
   publicSettings,
 } from '../src/tournament/dispatch';
 import {
@@ -253,6 +254,19 @@ describe('shared native dispatch', () => {
       expectedResourceRevision: state.settings.resourceRevision,
     });
     expect(state.matches[0]).toMatchObject({ started: false, revision: 0, callLocation: 'Window' });
+    const firstCall = events[0]!;
+    expect(publicCallFact(state, state.matches[0]!)).toEqual({
+      callSequence: firstCall.receipt.sequence,
+    });
+    const oldFact = structuredClone(firstCall);
+    delete oldFact.after.matches![0]!.callSequence;
+    const oldReplay = reduceDecision(baseline, Decision.parse(oldFact));
+    expect(oldReplay.matches[0]).toMatchObject({
+      status: 'playing',
+      started: false,
+      callLocation: 'Window',
+    });
+    expect(publicCallFact(oldReplay, oldReplay.matches[0]!)).toBeUndefined();
     execute({
       kind: 'matchControl',
       matchId: first.id,
@@ -270,6 +284,11 @@ describe('shared native dispatch', () => {
       expectedRevision: 0,
       expectedResourceRevision: state.settings.resourceRevision,
     });
+    expect(events[2]!.at).toBe(firstCall.at);
+    expect(publicCallFact(state, state.matches[0]!)).toEqual({
+      callSequence: events[2]!.receipt.sequence,
+    });
+    expect(events[2]!.receipt.sequence).toBeGreaterThan(firstCall.receipt.sequence);
     execute({
       kind: 'progress',
       matchId: first.id,

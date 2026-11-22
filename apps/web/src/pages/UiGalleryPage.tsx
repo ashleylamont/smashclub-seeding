@@ -294,6 +294,15 @@ function Foundations() {
         </p>
       </section>
       <section className="card ui-example">
+        <h2>Status chips</h2>
+        <div className="ui-actions">
+          <span className="chip chip-success">approved</span>
+          <span className="chip chip-warning">pending</span>
+          <span className="chip chip-danger">rejected</span>
+        </div>
+        <p>Small status labels keep their text readable over the tinted fill.</p>
+      </section>
+      <section className="card ui-example">
         <h2>Type and spacing</h2>
         <h3>Oswald · headings</h3>
         <p>Body text · 15px / 1.5</p>

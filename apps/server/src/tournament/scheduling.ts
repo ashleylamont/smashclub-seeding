@@ -58,6 +58,7 @@ export function dispatchMatch(
       command.callOnly === false || Boolean(command.stationId && command.callOnly !== true);
     match.stationId = command.stationId;
     match.calledAt = envelope.at;
+    if (!match.started) match.callSequence = next.sequence + 1;
     match.callLocation = command.callLocation ?? null;
     next.settings.resourceRevision++;
     return;

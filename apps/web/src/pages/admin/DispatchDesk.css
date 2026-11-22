@@ -76,3 +76,26 @@
     flex-wrap: wrap;
   }
 }
+
+.dispatch-pairings-heading,
+.dispatch-shortcut-list > div {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+.dispatch-shortcut-list > div {
+  justify-content: space-between;
+}
+.dispatch-shortcut-list {
+  display: grid;
+  gap: var(--s3);
+  margin: 0;
+}
+.dispatch-shortcut-list dd {
+  margin: 0;
+}
+.dispatch-shortcut-list kbd {
+  font-family: var(--mono);
+  white-space: nowrap;
+}

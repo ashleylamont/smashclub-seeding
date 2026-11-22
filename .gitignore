@@ -3,6 +3,7 @@ node_modules/
 dist/
 *.tsbuildinfo
 .eslintcache
+/.nx/
 
 # Local secrets
 .env

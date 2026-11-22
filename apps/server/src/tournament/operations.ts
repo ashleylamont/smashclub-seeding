@@ -204,6 +204,7 @@ export function additionalDecision(
       basis[m.id] = m.revision;
       basis.resources = state.settings.resourceRevision;
       m.status = command.status;
+      delete m.callSequence;
       if (sharedDispatch(state) || rollingFinals(state)) m.held = command.status === 'blocked';
       m.stationId = command.stationId;
       m.blockedReason = command.reason;
