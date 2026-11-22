@@ -1,11 +1,11 @@
 import { matchPresentation } from '../lib/matchPresentation';
 import type { LiveMatch } from '../lib/eventDisplay';
-import { useReportFeedback } from '../lib/useReportFeedback';
 import { Button } from './ui/Button';
 import { ScoreFields, type ScoreInputValue } from './ScoreFields';
-import { useState } from 'react';
 import type { SetCharacterPick } from '@smashclub/shared';
-import { SetCharacterFields, type SetCharacterDraft } from './SetCharacterFields';
+import { SetCharacterFields } from './SetCharacterFields';
+import type { ReportEditor } from '../lib/useScoreReportDrafts';
+import type { ScoreReportPlayer } from '../lib/scoreReportPlayers';
 
 type RecordedMatch = LiveMatch & { revision: number; pendingDisputeCount?: number };
 export type ResultSubmission = {
@@ -19,45 +19,36 @@ export type ResultSubmission = {
 export function CompletedScoreReport({
   match,
   enabled,
-  reportingIdentity = 'reporter',
   allowReports,
   showUnavailableHint = true,
   onSubmit,
-  characterDraft,
+  editor,
+  players,
   pendingReport,
   label = 'Confirmed result',
   recordedOnly = false,
 }: {
   match: RecordedMatch;
   enabled: boolean;
-  reportingIdentity?: string;
   allowReports: boolean;
   showUnavailableHint?: boolean;
   pendingReport?: { score1: number | null; score2: number | null; isDispute: boolean };
   onSubmit: (input: ResultSubmission) => Promise<{ isDispute: boolean }>;
-  characterDraft: SetCharacterDraft;
+  editor: ReportEditor;
+  players: ScoreReportPlayer[];
   label?: string;
   recordedOnly?: boolean;
 }) {
   const presentation = matchPresentation(match);
-  const [editing, setEditing] = useState(false);
-  const [score1, setScore1] = useState<ScoreInputValue>(match.score1 ?? 0);
-  const [score2, setScore2] = useState<ScoreInputValue>(match.score2 ?? 0);
-  const [revision, setRevision] = useState(match.revision);
-  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
-  const [confirmationId, setConfirmationId] = useState(() => crypto.randomUUID());
-  const { pending, message, error, begin, update } = useReportFeedback(reportingIdentity);
+  const { editing, score1, score2, revision, requestId, confirmationId, picks, message, error } =
+    editor.draft;
+  const pending = editor.draft.pendingRequestId !== null;
   const showEditor = editing && !message;
   const showReporting =
     !recordedOnly &&
     allowReports &&
     presentation.canReport &&
     (enabled || Boolean(pendingReport) || showUnavailableHint);
-  const editPicks = (picks: SetCharacterPick[]) => {
-    characterDraft.onChange(picks);
-    setRequestId(crypto.randomUUID());
-    setConfirmationId(crypto.randomUUID());
-  };
   const submit = async (first: ScoreInputValue, second: ScoreInputValue, id: string) => {
     if (
       first === '' ||
@@ -68,26 +59,25 @@ export function CompletedScoreReport({
       revision !== match.revision
     )
       return;
-    begin();
+    editor.begin(id);
     try {
       const result = await onSubmit({
         expectedRevision: revision,
         requestId: id,
         score1: first,
         score2: second,
-        ...(characterDraft.picks.length && { characterPicks: characterDraft.picks }),
+        ...(picks.length && { characterPicks: picks }),
       });
-      update({
+      editor.succeed(id, {
         message: result.isDispute
           ? 'Different score sent to the TOs for review. The recorded result stays official until they resolve it.'
           : 'Thanks — your score agrees with the recorded result.',
       });
     } catch (cause) {
-      update({
-        error: cause instanceof Error ? cause.message : 'Could not send this report. Try again.',
-      });
-    } finally {
-      update({ pending: false });
+      editor.fail(
+        id,
+        cause instanceof Error ? cause.message : 'Could not send this report. Try again.',
+      );
     }
   };
   return (
@@ -118,24 +108,16 @@ export function CompletedScoreReport({
               {revision !== match.revision && (
                 <div role="alert">
                   <p>The recorded result changed. Reload it before reporting.</p>
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      setRevision(match.revision);
-                      setScore1(match.score1 ?? 0);
-                      setScore2(match.score2 ?? 0);
-                      editPicks([]);
-                      update({ error: '', message: '' });
-                    }}
-                  >
+                  <Button type="button" onClick={editor.reset}>
                     Reload match
                   </Button>
                 </div>
               )}
               <div className="ops-toolbar">
                 <SetCharacterFields
-                  {...characterDraft}
-                  onChange={editPicks}
+                  players={players}
+                  picks={picks}
+                  onChange={editor.editPicks}
                   disabled={pending || revision !== match.revision}
                 />
                 <Button
@@ -147,9 +129,11 @@ export function CompletedScoreReport({
                 <Button
                   disabled={pending}
                   onClick={() => {
-                    setEditing(!showEditor);
-                    setRequestId(crypto.randomUUID());
-                    update({ message: '' });
+                    editor.update({
+                      editing: !showEditor,
+                      requestId: crypto.randomUUID(),
+                      message: '',
+                    });
                   }}
                 >
                   Report a different score
@@ -168,14 +152,8 @@ export function CompletedScoreReport({
                     player2Name={match.player2Name}
                     score1={score1}
                     score2={score2}
-                    onScore1={(value) => {
-                      setScore1(value);
-                      setRequestId(crypto.randomUUID());
-                    }}
-                    onScore2={(value) => {
-                      setScore2(value);
-                      setRequestId(crypto.randomUUID());
-                    }}
+                    onScore1={(value) => editor.editScore('score1', value)}
+                    onScore2={(value) => editor.editScore('score2', value)}
                   />
                   <Button
                     type="submit"

@@ -140,7 +140,57 @@ test('signed-in attendee redeems old QR into guest adapter when account reportin
   });
 });
 
-test('retry keeps the same report identity and scores after a transport failure', async ({
+for (const theme of ['dark', 'light'] as const)
+  for (const width of [390, 1440])
+    test(`${theme} ${width}px score draft survives changing the player filter`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const fixture = await mockEvent(page, { role: 'player' });
+      const match = fixture.snapshot.matches.find((item) => item.status === 'playing')!;
+      const other = fixture.snapshot.matches.find(
+        ({ player1Id }) =>
+          player1Id && player1Id !== match.player1Id && player1Id !== match.player2Id,
+      )!;
+      await page.goto(`/play/${PLAN_ID}#my-matches`);
+      const card = page.locator('article.ops-match').filter({ hasText: match.label });
+      const scores = card.getByRole('spinbutton');
+      await scores.nth(0).fill('2');
+      await scores.nth(1).fill('1');
+      const filter = page.getByLabel('Show matches for');
+      await chooseOption(filter, other.player1Id!);
+      await expect(card).toHaveCount(0);
+
+      await filter.press('Enter');
+      await page.keyboard.press('Home');
+      await expect(page.getByRole('option', { name: 'Everyone' })).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(filter).toBeFocused();
+      await expect(scores.nth(0)).toHaveValue('2');
+      await expect(scores.nth(1)).toHaveValue('1');
+      await expect(card.getByRole('button', { name: /Submit score/ })).toBeEnabled();
+      await expect(card).toContainText('Alex with a long tournament alias');
+      expect(fixture.submissions).toEqual([]);
+
+      await ready(page);
+      await card.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: testInfo.outputPath('restored-score-draft.png') });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      expect(
+        (
+          await new AxeBuilder({ page })
+            .include('.player-event-hub')
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+            .analyze()
+        ).violations,
+      ).toEqual([]);
+      expect(fixture.unexpected).toEqual([]);
+    });
+
+test('retry keeps the same report request and scores after a transport failure and filtering', async ({
   page,
 }) => {
   const fixture = await mockEvent(page, { role: 'player' });
@@ -164,16 +214,99 @@ test('retry keeps the same report identity and scores after a transport failure'
     });
   });
   await page.goto(`/play/${PLAN_ID}`);
-  const card = page.locator('article.ops-match').first();
+  const match = fixture.snapshot.matches.find((item) => item.status === 'playing')!;
+  const card = page.locator('article.ops-match').filter({ hasText: match.label });
   await card.getByRole('spinbutton').nth(0).fill('2');
+  await card.getByRole('spinbutton').nth(1).fill('1');
+  await card.getByRole('button', { name: 'Add characters (optional)' }).click();
+  await chooseOption(page.getByRole('dialog').getByRole('combobox').first(), 'fox');
+  await page.getByRole('dialog').getByRole('button', { name: 'Done', exact: true }).click();
   await card.getByRole('button', { name: /Submit score/ }).click();
   await expect(card.getByRole('alert')).toContainText('Temporary reporting failure');
+  const filter = page.getByLabel('Show matches for');
+  const other = fixture.snapshot.matches.find(
+    ({ player1Id }) => player1Id && player1Id !== match.player1Id && player1Id !== match.player2Id,
+  )!;
+  await chooseOption(filter, other.player1Id!);
+  await expect(card).toHaveCount(0);
+  await chooseOption(filter, '');
   await expect(card.getByRole('spinbutton').nth(0)).toHaveValue('2');
+  await expect(card.getByRole('spinbutton').nth(1)).toHaveValue('1');
+  await expect(card.getByRole('button', { name: 'Edit characters (1)' })).toBeVisible();
+  await expect(card.getByRole('alert')).toContainText('Temporary reporting failure');
   await card.getByRole('button', { name: /Submit score/ }).click();
   await expect(card).toContainText('Score submitted for TO approval');
   expect(requests).toHaveLength(2);
+  expect(requests[0]).toMatchObject({
+    matchId: match.id,
+    expectedRevision: match.revision,
+    requestId: expect.any(String),
+    score1: 2,
+    score2: 1,
+    characterPicks: [{ playerId: match.player1Id, characters: ['fox'] }],
+  });
   expect(requests[1]).toEqual(requests[0]);
   expect(fixture.unexpected).toEqual([]);
+});
+
+test('a draft restored by a filter still requires reloading after a revision change', async ({
+  page,
+}) => {
+  const fixture = await mockEvent(page, { role: 'player' });
+  const match = fixture.snapshot.matches.find((item) => item.status === 'playing')!;
+  const other = fixture.snapshot.matches.find(
+    ({ player1Id }) => player1Id && player1Id !== match.player1Id && player1Id !== match.player2Id,
+  )!;
+  await page.goto(`/play/${PLAN_ID}`);
+  const card = page.locator('article.ops-match').filter({ hasText: match.label });
+  await card.getByRole('spinbutton').first().fill('2');
+  const filter = page.getByLabel('Show matches for');
+  await chooseOption(filter, other.player1Id!);
+  await expect(card).toHaveCount(0);
+  match.revision++;
+  await page.waitForResponse((response) => response.url().includes('eventOps.snapshot'));
+  await chooseOption(filter, '');
+  await expect(card.getByRole('spinbutton').first()).toHaveValue('2');
+  await expect(card.getByRole('button', { name: /Submit score/ })).toBeDisabled();
+  await card.getByRole('button', { name: 'Reload match' }).click();
+  await expect(card.getByRole('spinbutton').first()).toHaveValue('0');
+  expect(fixture.submissions).toEqual([]);
+});
+
+test('an official result recorded while filtered out clears the open score draft', async ({
+  page,
+}) => {
+  const fixture = await mockEvent(page, { role: 'player' });
+  fixture.snapshot.settings.scoreReportingMode = 'approve_unless_disputed';
+  const match = fixture.snapshot.matches.find((item) => item.status === 'playing')!;
+  const other = fixture.snapshot.matches.find(
+    ({ player1Id }) => player1Id && player1Id !== match.player1Id && player1Id !== match.player2Id,
+  )!;
+  await page.goto(`/play/${PLAN_ID}`);
+  const card = page.locator('article.ops-match').filter({ hasText: match.label });
+  await card.getByRole('spinbutton').first().fill('2');
+  await card.getByRole('button', { name: 'Add characters (optional)' }).click();
+  await chooseOption(page.getByRole('dialog').getByRole('combobox').first(), 'fox');
+  await page.getByRole('dialog').getByRole('button', { name: 'Done', exact: true }).click();
+  const filter = page.getByLabel('Show matches for');
+  await chooseOption(filter, other.player1Id!);
+  await expect(card).toHaveCount(0);
+  Object.assign(match, {
+    status: 'complete',
+    outcome: 'played',
+    winnerId: match.player2Id,
+    score1: 1,
+    score2: 3,
+    revision: match.revision + 1,
+  });
+  await page.waitForResponse((response) => response.url().includes('eventOps.snapshot'));
+  await chooseOption(filter, '');
+  await expect(card).toContainText('1 – 3');
+  await expect(card.getByRole('button', { name: 'Add characters (optional)' })).toBeVisible();
+  await card.getByRole('button', { name: 'Report a different score' }).click();
+  await expect(card.getByRole('spinbutton').nth(0)).toHaveValue('1');
+  await expect(card.getByRole('spinbutton').nth(1)).toHaveValue('3');
+  expect(fixture.submissions).toEqual([]);
 });
 
 test('cold results links scroll after the public snapshot mounts', async ({ page }) => {
@@ -191,7 +324,7 @@ test('cold results links scroll after the public snapshot mounts', async ({ page
   expect(fixture.unexpected).toEqual([]);
 });
 
-test('account expiry and replacement hide private reports and feedback while retaining score drafts', async ({
+test('account expiry and replacement keep private reports, feedback and drafts isolated', async ({
   page,
 }) => {
   const fixture = await mockEvent(page, { role: 'player' });
@@ -275,8 +408,8 @@ test('account expiry and replacement hide private reports and feedback while ret
   await page.clock.setFixedTime(new Date('2026-10-04T00:00:20Z'));
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await expect(page.getByRole('link', { name: 'account-B', exact: true })).toBeVisible();
-  await expect(submittedCard.getByRole('spinbutton').nth(0)).toHaveValue('2');
-  await expect(draftCard.getByRole('spinbutton').nth(0)).toHaveValue('3');
+  await expect(submittedCard.getByRole('spinbutton').nth(0)).toHaveValue('0');
+  await expect(draftCard.getByRole('spinbutton').nth(0)).toHaveValue('0');
   await expect(draftCard.getByRole('button', { name: 'Add characters (optional)' })).toBeVisible();
   await expect(
     submittedCard.getByText('Score submitted for TO approval', { exact: false }),
@@ -284,6 +417,33 @@ test('account expiry and replacement hide private reports and feedback while ret
   await expect(rejectedCard.getByRole('spinbutton')).toHaveCount(2);
   await expect(page.getByText('Private profile A', { exact: true })).toHaveCount(0);
   await expect(completedCard.getByText('your score agrees', { exact: false })).toHaveCount(0);
+  expect(fixture.unexpected).toEqual([]);
+});
+
+test('switching between guest and account reporting clears the previous draft', async ({
+  page,
+}) => {
+  const fixture = await mockEvent(page, { role: 'player' });
+  fixture.responses['eventOps.guests.redeem'] = {
+    sessionToken: 'saved-venue-pass'.repeat(3),
+    expiresAt: null,
+  };
+  fixture.responses['eventOps.guests.matches'] = { ...fixture.snapshot, reports: [] };
+  await page.goto(`/play/${PLAN_ID}#token=venue-invitation`);
+  await expect(page.getByText('Reporting with your venue guest pass.')).toBeVisible();
+  const match = fixture.snapshot.matches.find((item) => item.status === 'playing')!;
+  const card = page.locator('article.ops-match').filter({ hasText: match.label });
+  const scores = card.getByRole('spinbutton');
+  await scores.nth(0).fill('2');
+  await scores.nth(1).fill('1');
+  await page.getByRole('button', { name: 'Use signed-in reporting' }).click();
+  await expect(scores.nth(0)).toHaveValue('0');
+  await expect(scores.nth(1)).toHaveValue('0');
+  await scores.nth(0).fill('3');
+  await page.getByRole('button', { name: 'Use venue guest pass' }).click();
+  await expect(scores.nth(0)).toHaveValue('0');
+  await expect(scores.nth(1)).toHaveValue('0');
+  expect(fixture.submissions).toEqual([]);
   expect(fixture.unexpected).toEqual([]);
 });
 
