@@ -2,6 +2,20 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.21.2
+
+### Patch Changes
+
+- 22 November 2026 · **Fix** · Keep pool floor sheets, bracket backups and station signs readable when printing from dark mode. [#438](https://github.com/ashleylamont/smashclub-seeding/pull/438) · [build c2c8d11](https://github.com/ashleylamont/smashclub-seeding/commit/c2c8d11440c7304cf37ab1d8449abaefc5a2a47f)
+- 22 November 2026 · **Fix** · Label verified grand finals and bracket resets as Finals in archived set tables. [#437](https://github.com/ashleylamont/smashclub-seeding/pull/437) · [build a3666f2](https://github.com/ashleylamont/smashclub-seeding/commit/a3666f2df26c5b931a306d7cf8afdefc1c83611e)
+- 22 November 2026 · **Improvement** · Show one short status when the TO desk is clear and put score reviews, pool rulings and held matches up front when organisers have decisions to make. [#428](https://github.com/ashleylamont/smashclub-seeding/pull/428) · [build 86a82c7](https://github.com/ashleylamont/smashclub-seeding/commit/86a82c71d14bd86239add3e1dbf6417804f46a78)
+- 22 November 2026 · **Maintenance** · Wait for the attendance preview’s theme to settle before checking text contrast. [#443](https://github.com/ashleylamont/smashclub-seeding/pull/443) · [build 881f40d](https://github.com/ashleylamont/smashclub-seeding/commit/881f40d0b437dd4c4151497b737ff31af5ff2349)
+- 22 November 2026 · **Improvement** · Open a fresh player hub on the signed-in player's approved profile when they have matches in the event. Keep device preferences, printed link filters and guest passes. [#439](https://github.com/ashleylamont/smashclub-seeding/pull/439) · [build adbfeed](https://github.com/ashleylamont/smashclub-seeding/commit/adbfeed778b66d8719b7af04b15011e25cea1d53)
+- 22 November 2026 · **Fix** · Show why calls, scores and queue changes are paused beside the organiser’s pairings when live updates are interrupted. [#436](https://github.com/ashleylamont/smashclub-seeding/pull/436) · [build f14a5d2](https://github.com/ashleylamont/smashclub-seeding/commit/f14a5d2fa284adc09627dc00e20941d5e0c92e57)
+- 22 November 2026 · **Maintenance** · Stabilize keyboard testing for releasing station capacity from a selected match. [#435](https://github.com/ashleylamont/smashclub-seeding/pull/435) · [build d708b11](https://github.com/ashleylamont/smashclub-seeding/commit/d708b11663d509ba78f95f5a04a0ce38270109c6)
+- 22 November 2026 · **Fix** · Return keyboard focus to Print station signs when the preview closes. [#441](https://github.com/ashleylamont/smashclub-seeding/pull/441) · [build 10ca34b](https://github.com/ashleylamont/smashclub-seeding/commit/10ca34bfd87845e1a683761610a12b9b057e28fe)
+- 22 November 2026 · **Fix** · Keep the score approval controls and organiser Settings within the phone screen. [#442](https://github.com/ashleylamont/smashclub-seeding/pull/442) · [build d8bfaa3](https://github.com/ashleylamont/smashclub-seeding/commit/d8bfaa3a2126ce7b74c992524c8b2e45aaed1074)
+
 ## 0.21.1
 
 ### Patch Changes
