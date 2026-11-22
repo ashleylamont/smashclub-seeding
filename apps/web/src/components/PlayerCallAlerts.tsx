@@ -15,16 +15,17 @@ type Call = {
   location: string;
 };
 
-type CallStatus = 'called' | 'returned' | 'cancelled';
-type CallNotice = { call: Call; status: CallStatus };
+type EndedCallStatus = 'returned' | 'cancelled';
+type CallNotice = { call: Call; status: 'called' | EndedCallStatus };
 type Observation = { version: number; call?: Call; notice?: CallNotice };
+type AlertMode = 'off' | 'paused' | 'live';
 
 function currentCall(data: PublicEventSnapshot, player: string, version: number): Call | undefined {
   const match = data.matches.find(
     (row) =>
       row.status === 'playing' &&
       row.called &&
-      !row.started &&
+      row.started === false &&
       row.callSequence !== undefined &&
       row.callSequence <= version &&
       includesPlayer(row, player),
@@ -44,6 +45,19 @@ function currentCall(data: PublicEventSnapshot, player: string, version: number)
   };
 }
 
+function endedCallStatus(data: PublicEventSnapshot, call: Call): EndedCallStatus | undefined {
+  const match = data.matches.find(
+    (row) =>
+      row.id === call.matchId &&
+      row.player1Id === call.player1Id &&
+      row.player2Id === call.player2Id,
+  );
+  // Actual play can begin and release capacity between polls.
+  if (match?.started !== false) return;
+  if (match.status === 'ready') return 'returned';
+  if (match.status === 'blocked') return 'cancelled';
+}
+
 function observe(
   data: PublicEventSnapshot,
   player: string,
@@ -61,6 +75,7 @@ function observe(
 
   const notice = previous.notice;
   if (call) {
+    if (call.sequence !== previous.call?.sequence) return { version };
     // Edits to public call details are shown in the match list. Replacing the
     // message in the live region would announce that same call a second time.
     const unchanged =
@@ -73,20 +88,33 @@ function observe(
     return { version, call, notice: unchanged ? notice : undefined };
   }
 
-  const formerCall = previous.call ?? notice?.call;
-  if (formerCall) {
-    const match = data.matches.find(
-      (row) =>
-        row.id === formerCall.matchId &&
-        row.player1Id === formerCall.player1Id &&
-        row.player2Id === formerCall.player2Id,
-    );
-    if (match?.status === 'ready')
-      return { version, notice: { call: formerCall, status: 'returned' } };
-    if (match?.status === 'blocked')
-      return { version, notice: { call: formerCall, status: 'cancelled' } };
+  if (previous.call && version > previous.version) {
+    const status = endedCallStatus(data, previous.call);
+    return { version, notice: status ? { call: previous.call, status } : undefined };
   }
+  // An ended banner can persist while its facts still apply. Only a previously
+  // active call can produce a new announcement.
+  if (notice && notice.status !== 'called' && endedCallStatus(data, notice.call) === notice.status)
+    return { version, notice };
   return { version };
+}
+
+function updateObservation(
+  source: PublicEventSnapshot | null,
+  player: string,
+  mode: AlertMode,
+  previous: Observation | null,
+): Observation | null {
+  if (mode === 'off') return null;
+  if (mode === 'paused') {
+    const version = source?.callSnapshotVersion ?? previous?.version;
+    // A paused snapshot is a baseline for new calls after relock.
+    return version === undefined
+      ? null
+      : { version: Math.max(version, previous?.version ?? version) };
+  }
+  if (source) return observe(source, player, previous);
+  return previous && { version: previous.version, call: previous.call };
 }
 
 export function PlayerCallAlerts({
@@ -109,22 +137,19 @@ export function PlayerCallAlerts({
     }
   });
   const hintId = useId();
-  const active = enabled && playOpen;
-  const source = active && connected ? data : null;
+  const mode: AlertMode = !enabled ? 'off' : playOpen ? 'live' : 'paused';
+  const source = enabled && connected ? data : null;
   const [record, setRecord] = useState<{
     source: typeof source;
-    active: boolean;
+    mode: AlertMode;
     observation: Observation | null;
   }>();
-  if (record?.source !== source || record.active !== active) {
-    const previous = record?.observation ?? null;
-    let observation: Observation | null = null;
-    if (active)
-      observation = source
-        ? observe(source, player, previous)
-        : previous && { ...previous, notice: undefined };
-    setRecord({ source, active, observation });
-  }
+  if (record?.source !== source || record.mode !== mode)
+    setRecord({
+      source,
+      mode,
+      observation: updateObservation(source, player, mode, record?.observation ?? null),
+    });
 
   const toggle = (checked: boolean) => {
     setEnabled(checked);
@@ -137,7 +162,7 @@ export function PlayerCallAlerts({
     }
   };
 
-  const notice = active && source ? record?.observation?.notice : undefined;
+  const notice = mode === 'live' && source ? record?.observation?.notice : undefined;
   return (
     <div className="player-call-alerts">
       <label className="ui-actions">

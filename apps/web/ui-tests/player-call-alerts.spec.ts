@@ -38,6 +38,17 @@ async function callFixture(page: Page) {
       callSequence: version,
     });
   };
+  const removeCall = (version: number, status: 'ready' | 'blocked', started = false) => {
+    snapshot.callSnapshotVersion = version;
+    Object.assign(match, {
+      status,
+      called: false,
+      started,
+      stationId: null,
+      callLocation: null,
+      callSequence: undefined,
+    });
+  };
   const poll = async () => {
     await Promise.all([
       page.waitForResponse((response) => snapshotPath.test(response.url())),
@@ -45,7 +56,14 @@ async function callFixture(page: Page) {
     ]);
     await ready(page);
   };
-  return { ...fixture, snapshot, match, call, poll };
+  const enableAlerts = async () => {
+    await page.goto(`/play/${PLAN_ID}?player=${match.player1Id}`);
+    const alerts = page.getByRole('switch', { name: 'Match call alerts' });
+    await alerts.press('Space');
+    await expect(alerts).toBeChecked();
+    return page.getByRole('status', { name: 'Player call announcements' });
+  };
+  return { ...fixture, snapshot, match, call, removeCall, poll, enableAlerts };
 }
 
 test('player alerts baseline on reload, ignore stale/repeated polls and only announce a committed new call', async ({
@@ -132,6 +150,93 @@ test('player alerts baseline on reload, ignore stale/repeated polls and only ann
   expect(starts).toEqual([]);
   expect(submissions).toEqual([]);
   expect(unexpected).toEqual([]);
+});
+
+test('released capacity after actual play clears the call without announcing a return', async ({
+  page,
+}) => {
+  await page.clock.install();
+  const { snapshot, call, removeCall, poll, enableAlerts } = await callFixture(page);
+  const announcement = await enableAlerts();
+  call(11, 'Window setup');
+  snapshot.callSnapshotVersion = 12;
+  await poll();
+  await expect(announcement).toContainText('Window setup');
+
+  // Begin play and release capacity both commit before the next public poll.
+  removeCall(14, 'ready', true);
+  await poll();
+  await expect(announcement).toBeEmpty();
+});
+
+test('holding and releasing a pairing cannot announce an already ended call again', async ({
+  page,
+}) => {
+  await page.clock.install();
+  const { snapshot, call, removeCall, poll, enableAlerts } = await callFixture(page);
+  const announcement = await enableAlerts();
+  call(11, 'Window setup');
+  await poll();
+  await expect(announcement).toContainText('Window setup');
+  removeCall(12, 'ready');
+  await poll();
+  await expect(announcement).toContainText('Call returned to the queue.');
+  snapshot.callSnapshotVersion = 13;
+  await poll();
+  await expect(announcement).toContainText('Call returned to the queue.');
+  removeCall(14, 'blocked');
+  await poll();
+  await expect(announcement).toBeEmpty();
+  removeCall(15, 'ready');
+  await poll();
+  await expect(announcement).toBeEmpty();
+
+  call(16, 'Courtyard setup');
+  await poll();
+  await expect(announcement).toContainText('Courtyard setup');
+  removeCall(17, 'blocked');
+  await poll();
+  await expect(announcement).toContainText('Call cancelled.');
+  removeCall(18, 'ready');
+  await poll();
+  await expect(announcement).toBeEmpty();
+});
+
+test('a paused poll keeps the baseline for a call committed immediately after relock', async ({
+  page,
+}, testInfo) => {
+  await page.clock.install();
+  const { snapshot, call, removeCall, poll, enableAlerts } = await callFixture(page);
+  const announcement = await enableAlerts();
+  call(11, 'Window setup');
+  await poll();
+  await expect(announcement).toContainText('Window setup');
+
+  // Return the untaken call and pause the draw between polls.
+  removeCall(13, 'ready');
+  snapshot.plan.drawPaused = true;
+  await poll();
+  await expect(page.getByText(/The draw is paused/)).toBeVisible();
+  await expect(announcement).toBeEmpty();
+  await page.screenshot({ path: testInfo.outputPath('paused.png') });
+
+  // The first poll after relock already sees the next call and a later commit.
+  snapshot.plan.drawPaused = false;
+  call(15, 'Courtyard setup');
+  snapshot.callSnapshotVersion = 16;
+  await poll();
+  await expect(announcement).toContainText('Courtyard setup');
+  await page.screenshot({ path: testInfo.outputPath('relocked.png') });
+
+  snapshot.plan.drawPaused = true;
+  removeCall(13, 'ready');
+  await poll();
+  await expect(announcement).toBeEmpty();
+  snapshot.plan.drawPaused = false;
+  call(15, 'Courtyard setup');
+  snapshot.callSnapshotVersion = 16;
+  await poll();
+  await expect(announcement).toBeEmpty();
 });
 
 for (const theme of ['dark', 'light']) {
