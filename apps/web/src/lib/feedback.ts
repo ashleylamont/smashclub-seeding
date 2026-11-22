@@ -23,5 +23,6 @@ export async function sendFeedback(requestId: string, summary: string, descripti
   if (response.status === 409) return 'conflict';
   if (!response.ok) return 'failed';
   const receipt: { reference?: unknown } = await response.json();
-  return receipt.reference === requestId ? 'sent' : 'failed';
+  if (typeof receipt.reference !== 'string' || !receipt.reference) return 'failed';
+  return { reference: receipt.reference };
 }

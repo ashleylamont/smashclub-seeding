@@ -3,7 +3,8 @@ import { index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 export const appFeedback = pgTable(
   'app_feedback',
   {
-    id: uuid('id').primaryKey(),
+    id: uuid('id').defaultRandom().primaryKey(),
+    requestId: uuid('request_id').notNull().unique(),
     summary: text('summary').notNull(),
     description: text('description').notNull(),
     version: text('version').notNull(),

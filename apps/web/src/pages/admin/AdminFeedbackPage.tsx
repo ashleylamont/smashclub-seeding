@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { Button } from '../../components/ui/Button';
 import { EmptyState, LoadingState, Notice } from '../../components/ui/Feedback';
 import { githubIssueUrl } from '../../lib/feedback';
@@ -25,11 +26,16 @@ export function AdminFeedbackPage() {
         <p className="muted">
           Private reports expire after 90 days. Review details before sharing them publicly.
         </p>
-        <Button asChild>
-          <a href={githubIssueUrl} target="_blank" rel="noopener noreferrer">
-            Open public GitHub issue (new tab)
-          </a>
-        </Button>
+        <div className="ui-actions">
+          <Button asChild>
+            <Link to="/admin/review">Identity review queue</Link>
+          </Button>
+          <Button asChild>
+            <a href={githubIssueUrl} target="_blank" rel="noopener noreferrer">
+              Open public GitHub issue (new tab)
+            </a>
+          </Button>
+        </div>
       </header>
       {inbox.isPending && <LoadingState>Loading feedback…</LoadingState>}
       {inbox.isError && (

@@ -58,14 +58,17 @@ async function storeFeedback(db: Db, input: z.infer<typeof feedbackInput>) {
   return db.transaction(async (tx) => {
     // Serialize the count and insert across connections without storing network identifiers.
     await tx.execute(sql`select pg_advisory_xact_lock(782393)`);
-    const [existing] = await tx.select().from(appFeedback).where(eq(appFeedback.id, requestId));
+    const [existing] = await tx
+      .select()
+      .from(appFeedback)
+      .where(eq(appFeedback.requestId, requestId));
     if (existing) {
       const unchanged =
         existing.summary === report.summary &&
         existing.description === report.description &&
         existing.version === report.version &&
         existing.build === report.build;
-      return unchanged ? 'replayed' : 'conflict';
+      return unchanged ? { created: false, reference: existing.id } : 'conflict';
     }
 
     const now = Date.now();
@@ -81,8 +84,11 @@ async function storeFeedback(db: Db, input: z.infer<typeof feedbackInput>) {
     if (volume!.hour >= 60) return 'hour-limit';
     if (volume!.day >= 200) return 'day-limit';
 
-    await tx.insert(appFeedback).values({ id: requestId, ...report, createdAt: new Date(now) });
-    return 'created';
+    const [created] = await tx
+      .insert(appFeedback)
+      .values({ requestId, ...report, createdAt: new Date(now) })
+      .returning({ reference: appFeedback.id });
+    return { created: true, reference: created!.reference };
   });
 }
 
@@ -138,8 +144,8 @@ export function registerFeedbackRoute(app: FastifyInstance, db: Db) {
             .code(429)
             .send({ error: 'feedback limit reached' });
         }
-        return reply.code(result === 'created' ? 201 : 200).send({
-          reference: parsed.data.requestId,
+        return reply.code(result.created ? 201 : 200).send({
+          reference: result.reference,
         });
       } finally {
         activeSubmissions--;

@@ -1,5 +1,5 @@
 {
-  "id": "ca376a91-b5d2-49f4-84a3-434635b7cc1f",
+  "id": "a1f61b6d-773a-4e79-9bcd-6c7dd25285c5",
   "prevId": "7d43b0ee-636a-4072-8bd5-1c551a87dab5",
   "version": "7",
   "dialect": "postgresql",
@@ -5603,6 +5603,13 @@
           "name": "id",
           "type": "uuid",
           "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "uuid",
+          "primaryKey": false,
           "notNull": true
         },
         "summary": {
@@ -5662,7 +5669,15 @@
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "app_feedback_request_id_unique": {
+          "name": "app_feedback_request_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "request_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

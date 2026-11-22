@@ -209,6 +209,7 @@ test('a private feedback retry sends the same draft without cookies, referrer or
   await page.emulateMedia({ colorScheme: 'light' });
   const fixture = await mockEvent(page);
   const requests: Request[] = [];
+  const reference = '00000000-0000-4000-8000-000000000001';
   let finishFailedAttempt!: () => void;
   const pendingAttempt = new Promise<void>((resolve) => {
     finishFailedAttempt = resolve;
@@ -221,7 +222,7 @@ test('a private feedback retry sends the same draft without cookies, referrer or
       await route.abort('connectionreset');
       return;
     }
-    await route.fulfill({ json: { reference: request.postDataJSON().requestId } });
+    await route.fulfill({ json: { reference } });
   });
   await page.goto('/changelog?guest=synthetic-private-value#synthetic-fragment');
   // Demonstrate that fetch omits a cookie even when the browser has one for this origin.
@@ -240,20 +241,29 @@ test('a private feedback retry sends the same draft without cookies, referrer or
   await expect(description).toHaveAttribute('readonly', '');
   finishFailedAttempt();
   await expect(dialog.getByRole('alert')).toContainText('Try again');
+  await expect(send).toBeFocused();
+  await expect(send).toBeInViewport({ ratio: 0.9 });
+  await ready(page);
+  await page.screenshot({ path: testInfo.outputPath('retry-draft.png') });
   await page.keyboard.press('Escape');
   await expect(opener).toBeFocused();
   await opener.press('Enter');
   await expect(summary).toHaveValue('Synthetic feedback');
   await expect(description).toHaveValue(text);
-  await ready(page);
-  await page.screenshot({ path: testInfo.outputPath('retry-draft.png') });
   await send.press('Enter');
   await expect(dialog.getByRole('status')).toContainText('Feedback sent');
-  await expect(dialog).toContainText(requests[0]!.postDataJSON().requestId);
+  const next = dialog.getByRole('button', { name: 'Send another report' });
+  await expect(next).toBeFocused();
+  await expect(next).toBeInViewport({ ratio: 0.9 });
+  await expect(dialog).toContainText(reference);
+  expect(reference).not.toBe(requests[0]!.postDataJSON().requestId);
   await ready(page);
   await page.screenshot({ path: testInfo.outputPath('receipt.png') });
   const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
   expect(axe.violations).toEqual([]);
+  await next.press('Enter');
+  await expect(summary).toBeFocused();
+  await expect(summary).toHaveValue('');
   expect(requests).toHaveLength(2);
   const version = await page.locator('.app-version').innerText();
   const build = await page.locator('.build-label').innerText();
@@ -297,8 +307,19 @@ for (const [theme, width] of [
       ],
       nextCursor: null,
     };
-    await page.goto('/admin/feedback');
+    fixture.responses['admin.reviewQueue'] = [];
+    await page.goto('/admin/review');
+    const inboxLink = page.getByRole('link', { name: 'Feedback inbox', exact: true });
+    await expect(inboxLink).toBeVisible();
+    await inboxLink.press('Enter');
+    await expect(page).toHaveURL('/admin/review/feedback');
+    await page.reload();
     await expect(page.getByRole('heading', { name: 'Feedback inbox' })).toBeVisible();
+    const reviewTab = page
+      .getByRole('navigation', { name: 'Admin sections' })
+      .getByRole('link', { name: 'Review', exact: true });
+    await expect(reviewTab).toHaveClass(/active/);
+    await expect(reviewTab).toBeInViewport();
     await expect(page.getByRole('heading', { name: PLAYER_NAME })).toBeVisible();
     await expect(page.getByText(reference)).toBeVisible();
     await expect(page.getByText('<example>', { exact: false })).toBeVisible();
@@ -314,3 +335,46 @@ for (const [theme, width] of [
     expect(fixture.unexpected).toEqual([]);
   });
 }
+
+test('feedback completion preserves a new keyboard focus target or a dismissed dialog', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 500 });
+  const fixture = await mockEvent(page);
+  let finishAttempt: (() => Promise<void>) | undefined;
+  await page.route('**/api/feedback', async (route) => {
+    await new Promise<void>((resolve) => {
+      finishAttempt = async () => {
+        await route.fulfill({ status: 503, json: { error: 'synthetic interruption' } });
+        resolve();
+      };
+    });
+  });
+  await page.goto('/changelog');
+  const opener = page.getByRole('button', { name: 'Give feedback' });
+  await opener.press('Enter');
+  const dialog = page.getByRole('dialog', { name: 'Give feedback' });
+  await dialog.getByRole('textbox', { name: 'Summary' }).fill('Synthetic report');
+  await dialog.getByRole('textbox', { name: 'Description' }).fill('Example reproduction steps.');
+  const send = dialog.getByRole('button', { name: 'Send private feedback' });
+  await send.press('Enter');
+  await expect.poll(() => Boolean(finishAttempt)).toBe(true);
+  const fallback = dialog.getByRole('link', { name: 'Open GitHub draft (new tab)' });
+  await fallback.focus();
+  await finishAttempt!();
+  finishAttempt = undefined;
+  await expect(dialog.getByRole('alert')).toContainText('Try again');
+  await expect(fallback).toBeFocused();
+
+  await send.press('Enter');
+  await expect.poll(() => Boolean(finishAttempt)).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(opener).toBeFocused();
+  await finishAttempt!();
+  await expect(dialog).toBeHidden();
+  await expect(opener).toBeFocused();
+  await opener.press('Enter');
+  await expect(dialog.getByRole('button', { name: 'Close dialog' })).toBeFocused();
+  await expect(dialog.getByRole('textbox', { name: 'Summary' })).toHaveValue('Synthetic report');
+  expect(fixture.unexpected).toEqual([]);
+});

@@ -30,6 +30,7 @@ test('a signed-out reporter recovers a lost response and an admin sees one priva
   const response = await retried;
   expect(response.status()).toBe(200);
   const { reference } = await response.json();
+  expect(reference).not.toBe(response.request().postDataJSON().requestId);
   await expect(dialog.getByRole('status')).toContainText(reference);
   expect((await page.request.get('/api/trpc/admin.feedbackInbox')).status()).toBe(401);
 
@@ -40,7 +41,8 @@ test('a signed-out reporter recovers a lost response and an admin sees one priva
     });
     expect(signIn.ok()).toBe(true);
     const adminPage = await maintainer.newPage();
-    await adminPage.goto('/admin/feedback');
+    await adminPage.goto('/admin/review');
+    await adminPage.getByRole('link', { name: 'Feedback inbox', exact: true }).click();
     await expect(adminPage.getByRole('heading', { name: 'Feedback inbox' })).toBeVisible();
     const report = adminPage.getByRole('article').filter({ hasText: summary });
     await expect(report).toHaveCount(1);

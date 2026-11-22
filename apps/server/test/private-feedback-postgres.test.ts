@@ -113,8 +113,11 @@ it('stores only the form and visible build, returns a durable reference, and res
     send(payload, secondApp),
   ]);
   expect(responses.map((response) => response.statusCode).sort()).toEqual([200, 201]);
-  expect(responses[0]?.json()).toEqual({ reference: payload.requestId });
-  expect(responses[1]?.json()).toEqual({ reference: payload.requestId });
+  const reference = responses[0]?.json().reference;
+  expect(reference).toMatch(/^[0-9a-f-]{36}$/);
+  expect(reference).not.toBe(payload.requestId);
+  expect(responses[0]?.json()).toEqual({ reference });
+  expect(responses[1]?.json()).toEqual({ reference });
   expect(responses[0]?.headers['cache-control']).toBe('no-store');
   expect((await inbox()).statusCode).toBe(401);
   expect((await inbox(memberCookie)).statusCode).toBe(403);
@@ -125,7 +128,7 @@ it('stores only the form and visible build, returns a durable reference, and res
   expect(privateInbox.json().result.data).toEqual({
     reports: [
       {
-        reference: payload.requestId,
+        reference,
         summary: payload.summary.trim(),
         description: payload.description.trim(),
         version: payload.version,
@@ -141,9 +144,12 @@ it('stores only the form and visible build, returns a durable reference, and res
     'created_at',
     'description',
     'id',
+    'request_id',
     'summary',
     'version',
   ]);
+  expect(row.id).toBe(reference);
+  expect(row.request_id).toBe(payload.requestId);
   expect(await send({ ...payload, summary: 'Edited text' })).toMatchObject({ statusCode: 409 });
   expect((await app.inject({ method: 'GET', url: '/api/feedback' })).statusCode).toBe(404);
 });
@@ -180,7 +186,7 @@ it('allows distinct reports at one address and limits the rolling volume across 
   );
   expect(sameAddress.every((response) => response.statusCode === 201)).toBe(true);
   await cluster.pool.query(`
-    INSERT INTO app_feedback (id, summary, description, version, build)
+    INSERT INTO app_feedback (request_id, summary, description, version, build)
     SELECT gen_random_uuid(), 'Example', 'Synthetic', '1.2.3', 'dev'
     FROM generate_series(1, 52)
   `);
@@ -193,7 +199,7 @@ it('allows distinct reports at one address and limits the rolling volume across 
 
   await cluster.pool.query("UPDATE app_feedback SET created_at = now() - interval '2 hours'");
   await cluster.pool.query(`
-    INSERT INTO app_feedback (id, summary, description, version, build, created_at)
+    INSERT INTO app_feedback (request_id, summary, description, version, build, created_at)
     SELECT gen_random_uuid(), 'Example', 'Synthetic', '1.2.3', 'dev', now() - interval '2 hours'
     FROM generate_series(1, 140)
   `);
@@ -202,11 +208,11 @@ it('allows distinct reports at one address and limits the rolling volume across 
 
 it('expires old reports and pages past identical timestamps without missing references', async () => {
   await cluster.pool.query(`
-    INSERT INTO app_feedback (id, summary, description, version, build, created_at)
+    INSERT INTO app_feedback (request_id, summary, description, version, build, created_at)
     VALUES (gen_random_uuid(), 'Expired fixture', 'Example', '1.2.3', 'dev', now() - interval '91 days')
   `);
   await cluster.pool.query(`
-    INSERT INTO app_feedback (id, summary, description, version, build, created_at)
+    INSERT INTO app_feedback (request_id, summary, description, version, build, created_at)
     SELECT gen_random_uuid(), 'Inbox fixture', 'Example', '1.2.3', 'dev', date_trunc('second', now())
     FROM generate_series(1, 26)
   `);
