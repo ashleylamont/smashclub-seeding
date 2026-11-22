@@ -114,6 +114,47 @@ test('downloaded results SVG preserves whole Unicode graphemes at label cutoffs'
   expect(fixture.unexpected).toEqual([]);
 });
 
+test('downloads well-formed XML with public names containing XML-disallowed characters', async ({
+  page,
+}, testInfo) => {
+  const fixture = await mockEvent(page);
+  const title = 'Doubles & Finals';
+  const teamName = 'T'.repeat(60);
+  const members = ['First & <界> 👩🏿‍🚀', 'Second Alias'];
+  const storedMembers = ['First\u0001 & <界> 👩🏿‍🚀', members[1]!];
+  const team = {
+    ...entrant(`${teamName} (${storedMembers.join(' / ')})`, 1),
+    graphic: { teamName, members: storedMembers.map((name) => ({ name, character: null })) },
+  };
+  fixture.responses['public.eventOverview'] = archive('Doub\u000bles & Finals', 'doubles', [team]);
+  await page.goto('/events/results-svg');
+
+  const { labels } = await renderedDownload(page, testInfo);
+  expect(labels.map(({ text }) => text)).toEqual([
+    'SMASH CLUB · RESULTS',
+    title,
+    '1',
+    teamName,
+    ...members,
+  ]);
+  expect(fixture.unexpected).toEqual([]);
+});
+
+for (const { name, title, alias } of [
+  { name: 'emoji heading', title: '⛺'.repeat(52), alias: 'Player One' },
+  { name: 'wide alias', title: 'Singles finals', alias: '⸻'.repeat(40) },
+]) {
+  test(`fits standalone SVG fallback glyphs in a long ${name}`, async ({ page }, testInfo) => {
+    const fixture = await mockEvent(page);
+    fixture.responses['public.eventOverview'] = archive(title, 'singles', [entrant(alias, 1)]);
+    await page.goto('/events/results-svg');
+
+    const { labels } = await renderedDownload(page, testInfo);
+    expect(labels.map(({ text }) => text)).toEqual(['SMASH CLUB · RESULTS', title, '1', alias]);
+    expect(fixture.unexpected).toEqual([]);
+  });
+}
+
 for (const theme of ['dark', 'light'] as const)
   for (const width of [390, 1440])
     test(`${theme} ${width}px downloads bounded SVG rows for long public doubles aliases`, async ({

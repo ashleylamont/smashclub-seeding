@@ -1,16 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { confirmedPoolGraphics, escapeSvg, resultsSvg } from '../src/lib/resultGraphic';
+import { confirmedPoolGraphics, resultsSvg } from '../src/lib/resultGraphic';
 
 describe('downloadable public results', () => {
   it('escapes names, titles and descriptions so aliases cannot introduce SVG markup', () => {
     const svg = resultsSvg('<script>event</script>', [
-      { place: 1, alias: '<image href="bad"/>', detail: 'A & B' },
+      { place: 1, alias: '<image href="bad"/>', detail: "A & B's score" },
     ]);
     expect(svg).not.toContain('<script>');
     expect(svg).not.toContain('<image');
     expect(svg).toContain('&lt;image href=&quot;bad&quot;/&gt;');
-    expect(svg).toContain('A &amp; B');
-    expect(escapeSvg("a'b")).toBe('a&apos;b');
+    expect(svg).toContain('A &amp; B&apos;s score');
   });
   it('includes all tied eighth places and preserves full pool standings', () => {
     const rows = [1, 2, 3, 3, 5, 6, 7, 8, 8, 10].map((place, i) => ({

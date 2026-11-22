@@ -1,5 +1,6 @@
 import type { TournamentStructure } from '@smashclub/shared';
 import { poolLabel } from '@smashclub/tournament-formats';
+import { escapeSvg, stripInvalidXmlCharacters } from './svgText';
 
 export const FIGHTER_ART_CREDIT = 'Fighter artwork © Nintendo and respective rights holders';
 
@@ -30,13 +31,7 @@ export interface GraphicResult {
   graphic?: GraphicIdentity;
   detail?: string;
 }
-export function escapeSvg(value: string): string {
-  return value.replace(
-    /[&<>"']/g,
-    (character) =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[character]!,
-  );
-}
+
 const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 const resultFont = 'Arial, sans-serif';
 const rowTextX = 158;
@@ -64,7 +59,23 @@ function fittedFontSize(
   bold: boolean,
   measure: MeasureText,
 ) {
-  return Math.min(size, (size * width) / Math.max(1, measure(text, size, bold))).toFixed(2);
+  const scaled = Math.min(size, (size * width) / Math.max(1, measure(text, size, bold)));
+  // Leave a small allowance for differences in browser SVG and canvas text rounding.
+  const maxGlyphWidth = width - 2;
+  const fits = (hundredths: number) => measure(text, hundredths / 100, bold) <= maxGlyphWidth;
+  const preferred = Math.round(scaled * 100);
+  if (fits(preferred)) return (preferred / 100).toFixed(2);
+
+  // Bitmap and fallback glyph widths can jump between sizes. Measure each candidate
+  // at the size the SVG will render and retain only sizes that fit.
+  let fitting = 0;
+  let overflowing = preferred;
+  while (overflowing - fitting > 1) {
+    const candidate = Math.floor((fitting + overflowing) / 2);
+    if (fits(candidate)) fitting = candidate;
+    else overflowing = candidate;
+  }
+  return (fitting / 100).toFixed(2);
 }
 
 function singleLine(
@@ -75,7 +86,7 @@ function singleLine(
 ) {
   const { x, y, width, size, fill, bold = false } = style;
   let text = '';
-  for (const { index, segment } of graphemes.segment(value)) {
+  for (const { index, segment } of graphemes.segment(stripInvalidXmlCharacters(value))) {
     if (index >= limit) break;
     text += segment;
   }
@@ -128,7 +139,10 @@ function teamLabels(
   const markup = labels
     .map(({ value, size, color, bold }, index) => {
       if (index > 0) baseline += 6;
-      const lines = wrapLabel(value, (line) => measure(line, size, bold) <= teamTextWidth);
+      const lines = wrapLabel(
+        stripInvalidXmlCharacters(value),
+        (line) => measure(line, size, bold) <= teamTextWidth,
+      );
       const label = lines.map((line) => {
         baseline += size + 8;
         return `<tspan x="${rowTextX}" y="${baseline}" font-size="${fittedFontSize(line, size, teamTextWidth, bold, measure)}">${escapeSvg(line)}</tspan>`;

@@ -10,8 +10,8 @@ import {
 } from './eventBracket';
 import type { LiveMatch } from './eventDisplay';
 import { isUntakenCall, matchPresentation } from './matchPresentation';
-import { escapeSvg } from './resultGraphic';
 import { NEMESIS_MARK_PATHS } from './nemesisMark';
+import { escapeSvg, stripInvalidXmlCharacters } from './svgText';
 
 export type BracketGraphicContext = {
   eventName: string;
@@ -112,12 +112,7 @@ function wrapText(value: string, width: number, size: number, bold: boolean, mea
   return lines;
 }
 
-const xmlText = (value: string) =>
-  escapeSvg(
-    // XML disallows control characters even inside escaped text.
-    // oxlint-disable-next-line eslint/no-control-regex
-    value.replace(/[^\u0009\u000A\u000D\u0020-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/gu, ''),
-  );
+const xmlText = (value: string) => escapeSvg(stripInvalidXmlCharacters(value));
 
 function text(value: string, x: number, y: number, size: number, color: string, bold = false) {
   return `<text x="${x}" y="${y}" fill="${color}" font-size="${size}"${bold ? ' font-weight="700"' : ''}>${xmlText(value)}</text>`;
