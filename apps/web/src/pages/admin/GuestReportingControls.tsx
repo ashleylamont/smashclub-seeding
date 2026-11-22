@@ -150,7 +150,6 @@ export function GuestReportingControls({
                 <Button
                   disabled={!canPrint || !stations.length}
                   aria-disabled={pending || undefined}
-                  aria-busy={pending || undefined}
                 >
                   Print station signs
                 </Button>
