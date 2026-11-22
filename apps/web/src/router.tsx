@@ -192,6 +192,15 @@ const adminSettingsRoute = createRoute({
   component: AdminSettingsPage,
 });
 
+const adminFeedbackRoute = createRoute({
+  getParentRoute: () => adminRoute,
+  path: '/review/feedback',
+  component: lazyRouteComponent(
+    () => import('./pages/admin/AdminFeedbackPage'),
+    'AdminFeedbackPage',
+  ),
+});
+
 const adminAccountsRoute = createRoute({
   getParentRoute: () => adminRoute,
   path: '/accounts',
@@ -323,6 +332,7 @@ const routeTree = rootRoute.addChildren([
     adminEventOperationsRoute,
     adminSettingsRoute,
     adminAccountsRoute,
+    adminFeedbackRoute,
   ]),
 ]);
 

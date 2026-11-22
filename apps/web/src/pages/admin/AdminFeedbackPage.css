@@ -1,0 +1,15 @@
+.admin-feedback-inbox,
+.admin-feedback-report {
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.admin-feedback-inbox .page-header {
+  display: grid;
+  justify-items: start;
+  gap: var(--s2);
+}
+.admin-feedback-description {
+  white-space: pre-wrap;
+}

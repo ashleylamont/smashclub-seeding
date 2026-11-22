@@ -9,3 +9,4 @@ export * from './competition';
 export * from './broadcast';
 
 export * from './twitchChannel';
+export * from './feedback';

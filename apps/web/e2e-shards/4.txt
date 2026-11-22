@@ -1,5 +1,6 @@
 linked-finals-caption.spec.ts
 pool-stations.spec.ts
+private-feedback.spec.ts
 score-without-start.spec.ts
 screenshots.spec.ts
 shared-dispatch.spec.ts

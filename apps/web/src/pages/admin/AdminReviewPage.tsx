@@ -1,4 +1,6 @@
+import { Link } from '@tanstack/react-router';
 import { Button } from '../../components/ui/Button';
+import { LoadingState, Notice } from '../../components/ui/Feedback';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
@@ -47,16 +49,16 @@ export function AdminReviewPage() {
     onSuccess: invalidate,
   });
 
-  if (queue.isPending) return <p className="loading-text">Loading review queue…</p>;
-  if (queue.isError) return <p className="error-text">{queue.error.message}</p>;
-
   return (
     <div>
       <div className="page-header">
         <h2>Identity review queue</h2>
         <span className="admin-form-row">
-          <span className="muted">{queue.data.length} pending</span>
-          {queue.data.length > 0 && (
+          <Button asChild size="small">
+            <Link to="/admin/review/feedback">Feedback inbox</Link>
+          </Button>
+          {queue.isSuccess && <span className="muted">{queue.data.length} pending</span>}
+          {queue.isSuccess && queue.data.length > 0 && (
             <Button
               size="small"
               type="button"
@@ -70,15 +72,18 @@ export function AdminReviewPage() {
           {recompute.isError && <span className="error-text">{recompute.error.message}</span>}
         </span>
       </div>
-      {queue.data.length === 0 ? (
-        <p className="muted">All clear — no unresolved participant names. 🎉</p>
-      ) : (
-        <div className="review-list">
-          {queue.data.map((item) => (
-            <ReviewCard key={item.id} item={item} onResolved={invalidate} />
-          ))}
-        </div>
-      )}
+      {queue.isPending && <LoadingState>Loading review queue…</LoadingState>}
+      {queue.isError && <Notice tone="danger">{queue.error.message}</Notice>}
+      {queue.isSuccess &&
+        (queue.data.length === 0 ? (
+          <p className="muted">All clear — no unresolved participant names. 🎉</p>
+        ) : (
+          <div className="review-list">
+            {queue.data.map((item) => (
+              <ReviewCard key={item.id} item={item} onResolved={invalidate} />
+            ))}
+          </div>
+        ))}
     </div>
   );
 }
