@@ -147,16 +147,19 @@ test('initial history loading and failure stay distinct from a confirmed empty h
 }, testInfo) => {
   const options: FixtureOptions = { role: 'admin', historyFailure: true };
   const fixture = await mockEvent(page, options);
-  const response = Promise.withResolvers<void>();
+  let releaseHistory!: () => void;
+  const response = new Promise<void>((resolve) => {
+    releaseHistory = resolve;
+  });
   await page.route(/\/api\/trpc\/.*eventOps\.live\.history/, async (route) => {
-    await response.promise;
+    await response;
     await route.fallback();
   });
   await page.goto(`/operate/${PLAN_ID}?view=history`);
   const history = page.getByRole('region', { name: 'Event history', exact: true });
   await expect(history.getByRole('status')).toContainText('Loading event history');
   await expect(history.getByText(/0 of 0/)).toHaveCount(0);
-  response.resolve();
+  releaseHistory();
   await expect(history.getByRole('alert')).toContainText('History connection interrupted');
   await expect(history.getByText(/0 of 0/)).toHaveCount(0);
   await expect(history.getByText(/No event changes/)).toHaveCount(0);
