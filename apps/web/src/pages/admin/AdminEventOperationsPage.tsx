@@ -194,13 +194,13 @@ export function EventOperationsPanel({
   const [search, setSearch] = useState('');
   const [poolFilter, setPoolFilter] = useState('all');
   const [focusedMatchId, setFocusedMatchId] = useState<string | null>(null);
-  const openMatch = (id: string) => {
+  const openMatch = (id: string, target = 'match-desk') => {
     setFocusedMatchId(id);
     setDivision('all');
     setPoolFilter('all');
     setSearch('');
     setFilter('all');
-    void workspace.openControl('match-desk');
+    void workspace.openControl(target);
   };
   const dispatchNavigation = useRef<DispatchDeskNavigation>(null);
   const scoreEditor = useRef<ScoreEditor>(null);
@@ -398,7 +398,7 @@ export function EventOperationsPanel({
           {focusedMatchId && (
             <p
               className="ops-focus-match card"
-              id={data.sharedDispatch ? 'match-desk' : undefined}
+              id={data.sharedDispatch ? 'match-desk' : 'selected-match'}
               tabIndex={-1}
             >
               Showing the selected match.
@@ -575,7 +575,9 @@ export function EventOperationsPanel({
                 dispatchDisabled={dispatchDisabled}
                 callDesk={callDesk}
                 onOpenControl={(id, section) => void workspace.openControl(id, section)}
-                onOpenMatch={openMatch}
+                onOpenMatch={(id) =>
+                  openMatch(id, data.sharedDispatch ? 'match-desk' : 'selected-match')
+                }
               />
               <NativeDrawTools data={data} />
               <NativeResultControls
