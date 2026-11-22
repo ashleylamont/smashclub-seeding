@@ -30,23 +30,28 @@ async function capture(page: Page, selector: string, path: string, contrastTarge
   await page.screenshot({ path, fullPage: true });
 }
 
-for (const theme of ['dark', 'light'] as const)
-  for (const width of [390, 1440])
-    test(`${theme} ${width}px stations and pool rounds show the actual match state`, async ({
+async function stationMatchFixture(page: Page, theme: 'dark' | 'light', width: number) {
+  await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+  await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+  const { overview, snapshot, unexpected } = await mockEvent(page, { role: 'admin' });
+  const match = snapshot.matches.find((item) => item.status === 'playing')!;
+  const station = snapshot.stations.find(({ id }) => id === match.stationId)!;
+  const alias = 'Alexandria with a long tournament alias from Western Sydney';
+  const entrant = snapshot.entrants.find(({ id }) => id === match.player1Id)!;
+  entrant.name = alias;
+  for (const row of snapshot.matches) {
+    if (row.player1Id === entrant.id) row.player1Name = alias;
+    if (row.player2Id === entrant.id) row.player2Name = alias;
+  }
+  return { overview, snapshot, unexpected, match, station, alias };
+}
+
+for (const theme of ['dark', 'light'] as const) {
+  for (const width of [390, 1440]) {
+    test(`${theme} ${width}px station summaries distinguish unscored play from a live 0–0`, async ({
       page,
     }, testInfo) => {
-      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
-      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
-      const { overview, snapshot, unexpected } = await mockEvent(page, { role: 'admin' });
-      const match = snapshot.matches.find((item) => item.status === 'playing')!;
-      const station = snapshot.stations.find(({ id }) => id === match.stationId)!;
-      const alias = 'Alexandria with a long tournament alias from Western Sydney';
-      const entrant = snapshot.entrants.find(({ id }) => id === match.player1Id)!;
-      entrant.name = alias;
-      for (const row of snapshot.matches) {
-        if (row.player1Id === entrant.id) row.player1Name = alias;
-        if (row.player2Id === entrant.id) row.player2Name = alias;
-      }
+      const { unexpected, match, station, alias } = await stationMatchFixture(page, theme, width);
       Object.assign(match, { started: true, called: false });
       await page.goto(`/operate/${PLAN_ID}`);
       const run = page.getByRole('tabpanel', { name: 'Run matches' });
@@ -81,7 +86,17 @@ for (const theme of ['dark', 'light'] as const)
       await expect(playerScore).toHaveText('0 – 0');
       await page.goto(`/operate/${PLAN_ID}`);
       await expect(stationScore).toHaveText('0–0');
+      expect(unexpected).toEqual([]);
+    });
 
+    test(`${theme} ${width}px pool rounds distinguish called, playing and completed matches`, async ({
+      page,
+    }, testInfo) => {
+      const { overview, snapshot, unexpected, match, station, alias } = await stationMatchFixture(
+        page,
+        theme,
+        width,
+      );
       Object.assign(match, {
         started: false,
         called: true,
@@ -93,7 +108,9 @@ for (const theme of ['dark', 'light'] as const)
       const shared = { active: 0, capacity: 1, overCapacity: 0 };
       Object.assign(snapshot, { sharedDispatch: shared, stationQueues: [] });
       Object.assign(overview, { sharedDispatch: shared, stationQueues: [] });
-      await page.goto(playerUrl);
+
+      await page.goto(`/play/${PLAN_ID}?player=${match.player1Id}#what-next`);
+      const next = page.getByRole('region', { name: 'What next' });
       await expect(next).toBeInViewport();
       const calls = next.getByRole('region', { name: 'Match calls' });
       const rounds = next.locator('.pool-flow-rounds');
@@ -129,6 +146,8 @@ for (const theme of ['dark', 'light'] as const)
       await expect(roundRow.getByText('2–1 · complete', { exact: true })).toBeVisible();
       expect(unexpected).toEqual([]);
     });
+  }
+}
 
 for (const theme of ['dark', 'light'] as const)
   for (const width of [390, 1440])
