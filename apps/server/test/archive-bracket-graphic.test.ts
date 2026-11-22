@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { InMemoryStore } from '@rotorsoft/act';
 import { eq } from 'drizzle-orm';
-import { players, tournaments, user, type Db } from '@smashclub/db';
+import { players, sets, tournaments, user, type Db } from '@smashclub/db';
 import { ChallongeClient } from '../src/challonge/client';
 import { loadEnv } from '../src/env';
 import { RecomputeTrigger } from '../src/recompute/trigger';
@@ -10,7 +10,6 @@ import { createNativeRuntime, type NativeRuntime } from '../src/tournament/runti
 import { appRouter } from '../src/trpc/router';
 import { nativeAdmin } from './helpers/nativeLiveFixture';
 import { createTestDb } from './helpers/testDb';
-import { bracketGraphicSvg } from '../../web/src/lib/bracketGraphic';
 
 describe('verified native archive graphics', () => {
   let db: Db, close: () => Promise<void>, runtime: NativeRuntime;
@@ -225,25 +224,49 @@ describe('verified native archive graphics', () => {
         /^Team \d \(Entrant \d \/ Entrant \d\)$/,
       );
 
-      const firstLosersMatch = graphic!.matches.find(
+      const firstLosersMatch = sealed.result!.matches.find(
         (match) => match.bracketLane === 'losers' && match.bracketRound === 1,
       )!;
-      const sourceId =
-        firstLosersMatch.player1Id === null
-          ? firstLosersMatch.parent1MatchId
-          : firstLosersMatch.parent2MatchId;
-      const source = graphic!.matches.find(({ id }) => id === sourceId)!;
-      expect(source.outcome).toBe('bye');
-      expect(firstLosersMatch.outcome).toBe('bye');
-
-      const exported = bracketGraphicSvg(
-        { ...graphic!, eventDate: '', state: 'closed' },
-        graphic!.matches,
-        (value, size) => value.length * size * 0.56,
+      const publishedSets = await db
+        .select()
+        .from(sets)
+        .where(eq(sets.tournamentId, tournament!.id));
+      const archivedSetId = (matchId: string | null) =>
+        publishedSets.find(
+          (row) => (row.raw as { eventMatchId?: string } | null)?.eventMatchId === matchId,
+        )!.id;
+      const byeSource = graphic!.matches.find(
+        ({ id }) => id === archivedSetId(firstLosersMatch.parent1Id),
       )!;
-      expect(exported.svg.match(/>Bye<\/text><text[^>]+>[^<]+<\/text>/g)).toEqual(
-        expect.arrayContaining([expect.stringContaining(`>Loser of ${source.label}</text>`)]),
-      );
+      const playedSource = graphic!.matches.find(
+        ({ id }) => id === archivedSetId(firstLosersMatch.parent2Id),
+      )!;
+      expect(byeSource.outcome).toBe('bye');
+      expect(playedSource.outcome).toBe('played');
+      const playedLoser =
+        playedSource.winnerId === playedSource.player1Id
+          ? { id: playedSource.player2Id, name: playedSource.player2Name }
+          : { id: playedSource.player1Id, name: playedSource.player1Name };
+      expect(playedLoser.id).toEqual(expect.any(String));
+      expect(
+        graphic!.matches.find(({ id }) => id === archivedSetId(firstLosersMatch.id)),
+      ).toMatchObject({
+        bracketLane: 'losers',
+        bracketRound: 1,
+        status: 'complete',
+        outcome: 'bye',
+        score1: null,
+        score2: null,
+        player1Id: null,
+        player1Name: null,
+        player2Id: playedLoser.id,
+        player2Name: playedLoser.name,
+        winnerId: playedLoser.id,
+        parent1MatchId: byeSource.id,
+        parent1Outcome: 'loser',
+        parent2MatchId: playedSource.id,
+        parent2Outcome: 'loser',
+      });
     },
   );
 });
