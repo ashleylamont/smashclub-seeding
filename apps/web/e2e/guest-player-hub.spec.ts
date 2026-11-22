@@ -313,7 +313,7 @@ test('a selected attendee keeps their draft through board navigation and Everyon
     await chooseOption(attendee.getByLabel('Show matches for'), match.player1Id);
     await expect(card.getByRole('spinbutton').nth(0)).toHaveValue('2');
     await card.getByRole('button', { name: /Submit score/ }).click();
-    await expect(card).toContainText('Score submitted for TO approval');
+    await expect(card.getByRole('status')).toHaveText('Your report: 2 – 0 · Awaiting TO approval');
     await attendee.reload();
     await expect(attendee.getByLabel('Show matches for')).toHaveAttribute(
       'data-value',

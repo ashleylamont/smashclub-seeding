@@ -103,22 +103,7 @@ export function useScoreReportDrafts(
               draft.attemptedRequestId === null &&
               draft.touchedAt !== null &&
               recovery(match, null) === 'available';
-            return [
-              [
-                key,
-                edited
-                  ? {
-                      ...draft,
-                      confirmationId: crypto.randomUUID(),
-                      pendingRequestId: null,
-                      feedbackRequestId: null,
-                      sent: null,
-                      completedFeedback: null,
-                      error: '',
-                    }
-                  : initialDraft(match),
-              ],
-            ];
+            return [[key, settleDraft(match, draft, edited)]];
           }
           const unsent = draft.touchedAt !== null || draft.editing || draft.retryRejected;
           if (
@@ -231,6 +216,28 @@ function initialDraft(match: DraftMatch): ScoreReportDraft {
     completedFeedback: null,
     error: '',
   };
+}
+
+function settleDraft(
+  match: DraftMatch,
+  draft: ScoreReportDraft,
+  edited: boolean,
+): ScoreReportDraft {
+  if (edited)
+    return {
+      ...draft,
+      confirmationId: crypto.randomUUID(),
+      pendingRequestId: null,
+      feedbackRequestId: null,
+      sent: null,
+      completedFeedback: null,
+      error: '',
+    };
+  const fresh = initialDraft(match);
+  // A rejected open-match report can be reopened with the same score and character draft.
+  return match.status === 'complete'
+    ? fresh
+    : { ...fresh, score1: draft.score1, score2: draft.score2, picks: draft.picks };
 }
 
 export function useScoreReportDraft(match: DraftMatch, store?: ScoreReportDrafts) {

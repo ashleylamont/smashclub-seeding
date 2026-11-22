@@ -112,7 +112,9 @@ test('an unlinked signed-in attendee reports different players and loses the for
       await card.locator('input[type="number"]').nth(0).fill('2');
       await card.locator('input[type="number"]').nth(1).fill('1');
       await card.getByRole('button', { name: 'Submit score for TO approval' }).click();
-      await expect(card).toContainText('Score submitted for TO approval');
+      await expect(card.getByRole('status')).toHaveText(
+        'Your report: 2 – 1 · Awaiting TO approval',
+      );
     }
     const reports = await query<{ id: string; matchId: string; status: string }[]>(
       attendee.request,

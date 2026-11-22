@@ -394,9 +394,7 @@ for (const actor of ['guest', 'player']) {
     await expect(card.getByRole('spinbutton').nth(1)).toHaveValue('1');
     expect((await overview(request, night)).reports).toHaveLength(0);
     await card.getByRole('button', { name: submitName }).click();
-    await expect(card).toContainText(
-      actor === 'guest' ? 'Awaiting TO approval' : 'Score submitted for TO approval',
-    );
+    await expect(card.getByRole('status')).toHaveText('Your report: 2 – 1 · Awaiting TO approval');
     const after = await overview(request, night);
     expect(after.reports).toHaveLength(1);
     expect(after.matches.find((item) => item.id === match.id)).toMatchObject({
