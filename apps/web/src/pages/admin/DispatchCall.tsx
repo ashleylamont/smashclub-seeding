@@ -1,5 +1,5 @@
 import { matchPresentation } from '../../lib/matchPresentation';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Select, SelectItem } from '../../components/ui/Select';
@@ -21,7 +21,6 @@ export function ActiveCall({
   disabled: boolean;
   onMatch: (id: string) => void;
 }) {
-  const confirm = useConfirmation();
   return (
     <article className="dispatch-row" data-match-id={match.id}>
       <strong>{matchPresentation(match).title}</strong>
@@ -32,51 +31,83 @@ export function ActiveCall({
           'Any available ordinary setup'}
       </p>
       <div className="ops-match-actions">
-        {!match.started && (
-          <Button
-            disabled={disabled}
-            onClick={() =>
-              void run({
-                kind: 'beginPlay',
-                matchId: match.id,
-                expectedRevision: match.revision,
-                expectedResourceRevision: desk.resourceRevision,
-              })
-            }
-          >
-            Mark playing
-          </Button>
-        )}
-        <Button disabled={disabled} onClick={() => onMatch(match.id)}>
-          Score / details
-        </Button>
-        <Button
-          key={match.started ? 'release-capacity' : 'return-call'}
-          id={!match.started ? returnCallControlId(match.id) : undefined}
+        <ActiveCallControls
+          match={match}
+          resourceRevision={desk.resourceRevision}
+          run={run}
           disabled={disabled}
-          onClick={async () => {
-            if (
-              match.started &&
-              !(await confirm(
-                'Release this match’s capacity? Actual play and live scores remain recorded. Resolve any result before changing its opponents.',
-              ))
-            )
-              return;
-            await run({
-              kind: 'matchControl',
-              matchId: match.id,
-              expectedRevision: match.revision,
-              expectedResourceRevision: desk.resourceRevision,
-              status: 'ready',
-              stationId: null,
-              reason: null,
-            });
-          }}
+          returnControlId={returnCallControlId(match.id)}
         >
-          {match.started ? 'Release capacity' : 'Return untaken call'}
-        </Button>
+          <Button disabled={disabled} onClick={() => onMatch(match.id)}>
+            Score / details
+          </Button>
+        </ActiveCallControls>
       </div>
     </article>
+  );
+}
+
+export function ActiveCallControls({
+  match,
+  resourceRevision,
+  run,
+  disabled,
+  size,
+  returnControlId,
+  children,
+}: {
+  match: Overview['matches'][number];
+  resourceRevision: number;
+  run: Run;
+  disabled: boolean;
+  size?: 'small';
+  returnControlId?: string;
+  children?: ReactNode;
+}) {
+  const confirm = useConfirmation();
+  const basis = {
+    matchId: match.id,
+    expectedRevision: match.revision,
+    expectedResourceRevision: resourceRevision,
+  };
+  return (
+    <>
+      {!match.started && (
+        <Button
+          size={size}
+          disabled={disabled}
+          onClick={() => void run({ kind: 'beginPlay', ...basis })}
+        >
+          Mark playing
+        </Button>
+      )}
+      {children}
+      <Button
+        key={match.started ? 'release-capacity' : 'return-call'}
+        id={!match.started ? returnControlId : undefined}
+        size={size}
+        disabled={disabled}
+        onClick={async () => {
+          if (
+            match.started &&
+            !(await confirm(
+              'Release this match’s capacity? Actual play and live scores remain recorded. Resolve any result before changing its opponents.',
+            ))
+          )
+            return;
+          await run({
+            kind: 'matchControl',
+            ...basis,
+            status: 'ready',
+            stationId: null,
+            reason: null,
+            onlyIfUntaken: match.started ? undefined : true,
+          });
+        }}
+      >
+        {match.started ? 'Release capacity' : 'Return untaken call'}
+      </Button>
+    </>
   );
 }
 

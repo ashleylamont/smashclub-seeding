@@ -30,6 +30,7 @@ export function MainStagePanel({
   const station = data.stations.find((item) => item.id === search.station) ?? data.stations[0];
   const match = data.matches.find((item) => item.id === station?.currentMatchId);
   const desk = data.operatorDispatch;
+  const matchDisabled = disabled || (desk?.mode === 'shared' && dispatch.busy);
   // Run exposes direct named starts only for shared dispatch's reserved resources.
   const idleReservedStation =
     station &&
@@ -72,18 +73,23 @@ export function MainStagePanel({
             key={`sides:${match.id}`}
             data={data}
             match={match}
-            disabled={disabled || unavailable}
+            disabled={matchDisabled || unavailable}
             act={act}
           />
           <MatchCard
             key={match.id}
             match={match}
             stations={data.stations}
-            disabled={disabled}
+            disabled={matchDisabled}
             canStart={callable.has(match.id)}
             native={data.plan.bracketMode === 'native'}
             liveOwned={data.plan.liveOwned}
             act={act}
+            sharedDispatch={
+              desk?.mode === 'shared'
+                ? { resourceRevision: desk.resourceRevision, dispatch }
+                : undefined
+            }
           />
         </>
       ) : idleReservedStation && desk ? (

@@ -111,6 +111,31 @@ export function resetFinals(state: TournamentState) {
   if (rollingFinals(state)) for (const pool of state.pools) delete pool.qualifierRoster;
   state.settings.resourceRevision++;
 }
+function requireMatchControlTarget(
+  state: TournamentState,
+  command: Extract<CommandEnvelope['command'], { kind: 'matchControl' }>,
+) {
+  const m = state.matches.find((m) => m.id === command.matchId);
+  requireFact(
+    m &&
+      !resolved(m) &&
+      m.revision === command.expectedRevision &&
+      state.settings.resourceRevision === command.expectedResourceRevision,
+    'Match or resources changed.',
+  );
+  // Recording a live score can start play without changing the revisions above.
+  if (command.onlyIfUntaken)
+    requireFact(
+      unconfirmedCall(m),
+      'The call changed. Review the match before releasing capacity.',
+    );
+  requireFact(
+    !command.stationId || state.stations.some((s) => s.id === command.stationId && s.enabled),
+    'Unknown station.',
+  );
+  return m;
+}
+
 export function additionalDecision(
   state: TournamentState,
   envelope: CommandEnvelope,
@@ -175,18 +200,7 @@ export function additionalDecision(
       break;
     }
     case 'matchControl': {
-      const m = state.matches.find((m) => m.id === command.matchId);
-      requireFact(
-        m &&
-          !resolved(m) &&
-          m.revision === command.expectedRevision &&
-          state.settings.resourceRevision === command.expectedResourceRevision,
-        'Match or resources changed.',
-      );
-      requireFact(
-        !command.stationId || state.stations.some((s) => s.id === command.stationId && s.enabled),
-        'Unknown station.',
-      );
+      const m = requireMatchControlTarget(state, command);
       basis[m.id] = m.revision;
       basis.resources = state.settings.resourceRevision;
       m.status = command.status;
