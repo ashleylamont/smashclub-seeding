@@ -167,7 +167,9 @@ jobs:
   ui-portable:
     name: UI behavior and accessibility (1/2)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Browser setup has taken almost three minutes before a 12-minute shard.
+    # Allow setup/test variance and artifact upload without changing coverage.
+    timeout-minutes: 20
     env:
       UI_PORTABLE_SHARD: '1'
     outputs: &portable-ui-outputs
@@ -177,9 +179,11 @@ jobs:
     steps: &portable-ui-steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-node-pnpm
-      - run: pnpm --filter @smashclub/web exec playwright install --with-deps chromium
-      - id: browser
-        run: node scripts/run-ui-platform.mjs portable "$UI_PORTABLE_SHARD/2"
+      - name: Install portable UI browser
+        run: time pnpm --filter @smashclub/web exec playwright install --with-deps chromium
+      - name: Run portable UI shard
+        id: browser
+        run: time node scripts/run-ui-platform.mjs portable "$UI_PORTABLE_SHARD/2"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -193,7 +197,7 @@ jobs:
   ui-portable-2:
     name: UI behavior and accessibility (2/2)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       UI_PORTABLE_SHARD: '2'
     outputs: *portable-ui-outputs
