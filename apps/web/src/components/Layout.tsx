@@ -1,6 +1,6 @@
 import { Button } from './ui/Button';
 import { useEffect, useRef } from 'react';
-import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
+import { Link, Outlet, useMatch, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { authClient, useCurrentUser } from '../lib/auth';
 import { APP_VERSION, BUILD_COMMIT_URL, BUILD_LABEL, BUILD_SHA } from '../lib/build';
@@ -8,6 +8,7 @@ import { useEventSource } from '../lib/useEventSource';
 import { FeedbackDialog } from './FeedbackDialog';
 import { NemesisMark } from './NemesisMark';
 import { ThemeToggle } from './ThemeToggle';
+import { operatorDestination } from '../lib/operatorDestination';
 import '../App.css';
 
 /** App shell: top nav, routed content, footer. Also holds the global SSE
@@ -19,6 +20,14 @@ export function Layout() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const operatorRoute = useMatch({ from: '/operate/$planId', shouldThrow: false });
+  const signInTarget =
+    operatorRoute &&
+    operatorDestination({
+      operate: operatorRoute.params.planId,
+      view: operatorRoute.search.view,
+      station: operatorRoute.search.station,
+    });
   const venueDisplay = useRouterState({
     select: (state) => state.matches.some((match) => match.routeId === '/tournaments/$slug/live'),
   });
@@ -136,9 +145,11 @@ export function Layout() {
               </Button>
             </>
           ) : (
-            <Link to="/login" className="btn btn-small">
-              Sign in
-            </Link>
+            <Button asChild size="small">
+              <Link to="/login" search={signInTarget ?? {}}>
+                Sign in
+              </Link>
+            </Button>
           )}
         </div>
       </nav>
