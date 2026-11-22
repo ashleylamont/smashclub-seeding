@@ -206,7 +206,8 @@ function PlanWizard({
         <p className="muted">
           {formatDateTime(view.plan.eventDate)} · {view.entries.length}{' '}
           {adopted ? 'planned entrants' : 'entrants'}
-          {view.plan.rankingSnapshotAt &&
+          {current !== 'divisions' &&
+            view.plan.rankingSnapshotAt &&
             ` · ranking snapshot ${formatDateTime(view.plan.rankingSnapshotAt)}`}
         </p>
         {close.isError && close.variables === 'complete' && (

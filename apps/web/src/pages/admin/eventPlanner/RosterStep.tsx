@@ -65,7 +65,7 @@ export function RosterStep({ view, onChanged }: { view: EventPlanView; onChanged
   };
 
   return (
-    <div>
+    <div className="section">
       <div className="page-header">
         <h3>
           Roster{' '}
