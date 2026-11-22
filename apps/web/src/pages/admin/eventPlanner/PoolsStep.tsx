@@ -37,7 +37,7 @@ export function PoolsStep({ view, onChanged }: { view: EventPlanView; onChanged:
             ? 'Review the draw in the event desk.'
             : readyToLock
               ? 'Open the event desk to lock the seeded draw and start matches.'
-              : 'The seeded draw is locked. Open the event desk to run matches.'}
+              : 'Review the draw and manage matches in the event desk.'}
           {!closed && ' Automatic byes use no played games.'}
         </p>
         <Button asChild variant="primary">

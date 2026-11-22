@@ -194,6 +194,18 @@ for (const theme of ['dark', 'light'] as const) {
         await expect(
           page.getByText(/reset final runs if the losers-bracket finalist wins/),
         ).toBeVisible();
+
+        // A paused draw keeps the same status and soft-lock timestamp in the planner.
+        fixture.overview.plan.drawPaused = true;
+        await page.getByRole('button', { name: 'Draw', exact: true }).press('Enter');
+        await expect(
+          page.getByRole('heading', { name: 'Knockout draw', exact: true }),
+        ).toBeVisible();
+        await expect(
+          page.getByText('Review the draw and manage matches in the event desk.'),
+        ).toBeVisible();
+        await expect(page.getByText(/The seeded draw is locked/)).toHaveCount(0);
+        await checkPage(page, testInfo, 'knockout-draw-event-desk');
         expect(fixture.unexpected).toEqual([]);
       });
 
