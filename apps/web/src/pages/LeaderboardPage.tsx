@@ -260,10 +260,9 @@ export function LeaderboardPage() {
 
       {leaderboard.data.rows.length === 0 ? (
         <div className="empty-state">
-          <h2>Nothing ranked yet</h2>
+          <h2>No club ratings yet</h2>
           <p className="muted">
-            Register a Challonge tournament in the admin area and sync it — ratings appear here once
-            the first recompute finishes.
+            Rankings appear after the club publishes eligible tournament results.
           </p>
         </div>
       ) : (

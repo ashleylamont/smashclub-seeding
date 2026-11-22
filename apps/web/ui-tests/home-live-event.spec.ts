@@ -114,6 +114,9 @@ for (const theme of ['light', 'dark'] as const) {
       ];
       await page.goto('/');
       const entry = page.getByRole('region', { name: 'Currently live' });
+      const ratings = page.locator('.empty-state');
+      await expect(ratings).toContainText(/eligible tournament results/i);
+      await expect(ratings).not.toContainText(/Challonge|admin/i);
       await expect(entry).toContainText('2 live tournaments · choose yours.');
       const choices = entry.getByRole('link', { name: 'Open live tournament', exact: true });
       await expect(choices).toHaveCount(2);
@@ -128,13 +131,16 @@ for (const theme of ['light', 'dark'] as const) {
         entry.locator('li').first().getByRole('link', { name: 'Watch on Twitch' }),
       ).toBeVisible();
       expect(twitchRequests).toEqual([]);
-      await choices.first().focus();
+      const allEvents = entry.getByRole('link', { name: 'All events →' });
+      await allEvents.focus();
+      await page.keyboard.press('Tab');
       await expect(choices.first()).toBeFocused();
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
       ).toBe(true);
       const accessibility = await new AxeBuilder({ page })
         .include('.home-live')
+        .include('.empty-state')
         .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
         .analyze();
       expect(accessibility.violations).toEqual([]);
@@ -150,6 +156,14 @@ for (const theme of ['light', 'dark'] as const) {
       await page.clock.fastForward(24 * 60 * 60_000);
       await expect(entry).toContainText('No tournament is live right now.');
       await expect(choices).toHaveCount(0);
+      await expect(ratings).toContainText(/eligible tournament results/i);
+      await expect(allEvents).toHaveAttribute('href', '/play');
+      await allEvents.focus();
+      await ready(page);
+      await page.screenshot({
+        path: testInfo.outputPath(`home-no-live-${viewport.width}-${theme}.png`),
+        fullPage: true,
+      });
     });
   }
 }
