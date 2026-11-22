@@ -26,6 +26,7 @@ import {
 import type { TrpcContext } from '../trpc/trpc';
 import { nativeEvent, reportViews, type NativeEventApi } from './api';
 import { missingMainsByMatch } from './matchMains';
+import { finalizationBlocker } from './results';
 
 export async function nativeOverview(api: NativeEventApi) {
   const { ctx, planId } = api;
@@ -85,6 +86,10 @@ export async function nativeOverview(api: NativeEventApi) {
     ),
     twitchBroadcast: operatorTwitchPromotion(await readTwitchPromotion(ctx.db, planId)),
     poolDrawPauseBlocker: poolDrawPauseBlocker(state),
+    finalization:
+      state.lifecycle === 'locked'
+        ? (finalizationBlocker(state) ?? { kind: 'ready' as const })
+        : null,
     operatorDispatch: dispatchDesk(
       state,
       new Map(snapshot.entrants.map((entry) => [entry.id, entry.name])),
