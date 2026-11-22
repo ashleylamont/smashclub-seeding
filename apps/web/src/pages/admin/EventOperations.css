@@ -537,10 +537,32 @@
   }
 }
 
-.ops-broadcast-source-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s3);
+.ops-broadcast-sources {
+  display: grid;
+  gap: var(--s2);
+  max-inline-size: 26rem;
+  margin-block-start: var(--s3);
+}
+
+.ops-broadcast-source {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 5.5rem;
+  gap: var(--s2);
+}
+
+.ops-broadcast-source > a {
+  text-align: center;
+}
+
+.ops-broadcast-source-fallback {
+  grid-column: 1 / -1;
+}
+
+.ops-broadcast-source-url {
+  display: block;
+  field-sizing: content;
+  inline-size: 100%;
+  margin-block-start: var(--s2);
 }
 
 .ops-twitch-promotion,
