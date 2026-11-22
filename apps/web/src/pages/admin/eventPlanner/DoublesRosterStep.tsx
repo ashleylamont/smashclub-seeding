@@ -1,5 +1,5 @@
 import { Checkbox } from '../../../components/ui/Checkbox';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { type TournamentStructure } from '@smashclub/shared';
 import { trpc } from '../../../lib/trpc';
@@ -32,6 +32,7 @@ export function DoublesRosterStep({
   });
   const name = (id: string) =>
     players.data?.find((p) => p.id === id)?.canonicalName ?? 'Choose player';
+  const freezeBlockersId = useId();
   const planId = view.plan.id,
     editable = view.plan.status === 'draft';
   const add = useMutation({
@@ -82,7 +83,7 @@ export function DoublesRosterStep({
     }) => trpc.admin.eventPlanner.updateNativeFormat.mutate({ planId, structure, usePairRatings }),
     onSuccess: onChanged,
   });
-  const errors = [add, remove, pin, freeze, reopen, format].filter((m) => m.isError);
+  const rosterError = editable ? freeze.error : reopen.error;
   const displayedEntries = [...view.entries].sort((a, b) => {
     const skill = (e: (typeof view.entries)[number]) => e.snapshotMean ?? e.currentMean ?? 1500;
     const seed = (e: (typeof view.entries)[number]) => e.snapshotScore ?? e.currentScore ?? 0;
@@ -102,9 +103,36 @@ export function DoublesRosterStep({
   });
   return (
     <section className="card section">
-      <h3>
-        Doubles roster · {view.entries.length} teams / {view.entries.length * 2} players
-      </h3>
+      <div className="page-header">
+        <h3>
+          Doubles roster · {view.entries.length} teams / {view.entries.length * 2} players
+        </h3>
+        {editable && (
+          <Button
+            variant="primary"
+            disabled={Boolean(view.issues.blocking.length) || freeze.isPending || format.isPending}
+            aria-describedby={view.issues.blocking.length ? freezeBlockersId : undefined}
+            onClick={() => freeze.mutate()}
+          >
+            {freeze.isPending ? 'Freezing…' : 'Freeze team seeds'}
+          </Button>
+        )}
+        {!editable &&
+          !view.plan.softLockedAt &&
+          ['roster_frozen', 'pools_ready'].includes(view.plan.status) && (
+            <Button disabled={reopen.isPending} onClick={() => reopen.mutate()}>
+              Reopen roster
+            </Button>
+          )}
+      </div>
+      {rosterError && (
+        <p role="alert" className="error-text">
+          {rosterError.message}
+        </p>
+      )}
+      {editable && (
+        <IssueList issues={view.issues.blocking} kind="blocking" id={freezeBlockersId} />
+      )}
       <p>
         Each person can enter once.{' '}
         {view.plan.softLockedAt
@@ -138,6 +166,11 @@ export function DoublesRosterStep({
             />{' '}
             Include experimental WHR pair adjustments in seeds
           </label>
+          {format.error && (
+            <p role="alert" className="error-text">
+              {format.error.message}
+            </p>
+          )}
           <p className="muted">
             With the model off, seeds use average singles skill and uncertainty. With it on, they
             also include the pair’s mean adjustment and uncertainty.
@@ -163,6 +196,11 @@ export function DoublesRosterStep({
               Add pair
             </Button>
           </div>
+          {add.error && (
+            <p role="alert" className="error-text">
+              {add.error.message}
+            </p>
+          )}
         </>
       )}
       {picking && (
@@ -229,6 +267,11 @@ export function DoublesRosterStep({
                       <SelectItem value="lower">Pin to Lower</SelectItem>
                     </Select>
                   )}
+                  {pin.error && pin.variables?.entryId === e.id && (
+                    <p role="alert" className="error-text">
+                      {pin.error.message}
+                    </p>
+                  )}
                 </td>
                 <td className="num">
                   {e.memberSubstituted || e.latePair
@@ -253,36 +296,17 @@ export function DoublesRosterStep({
                       </Button>
                     )}
                   </div>
+                  {remove.error && remove.variables === e.id && (
+                    <p role="alert" className="error-text">
+                      {remove.error.message}
+                    </p>
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      {editable && (
-        <>
-          <IssueList issues={view.issues.blocking} kind="blocking" />
-          <Button
-            variant="primary"
-            disabled={Boolean(view.issues.blocking.length) || freeze.isPending || format.isPending}
-            onClick={() => freeze.mutate()}
-          >
-            Freeze team seeds
-          </Button>
-        </>
-      )}
-      {!editable &&
-        !view.plan.softLockedAt &&
-        ['roster_frozen', 'pools_ready'].includes(view.plan.status) && (
-          <Button disabled={reopen.isPending} onClick={() => reopen.mutate()}>
-            Reopen roster
-          </Button>
-        )}
-      {errors.map((m, i) => (
-        <p key={i} role="alert" className="error-text">
-          {m.error?.message}
-        </p>
-      ))}
     </section>
   );
 }

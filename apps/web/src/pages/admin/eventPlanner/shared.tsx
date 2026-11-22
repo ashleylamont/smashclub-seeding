@@ -61,15 +61,17 @@ export function CopyBlock({
 export function IssueList({
   issues,
   kind,
+  id,
   onFocusRows,
 }: {
   issues: EventPlanIssue[];
   kind: 'blocking' | 'warning';
+  id?: string;
   onFocusRows?: (entryIds: string[]) => void;
 }) {
   if (issues.length === 0) return null;
   return (
-    <div className={`banner ${kind === 'blocking' ? 'banner-danger' : 'banner-warning'}`}>
+    <div id={id} className={`banner ${kind === 'blocking' ? 'banner-danger' : 'banner-warning'}`}>
       <strong>{kind === 'blocking' ? 'Fix before freezing' : 'Worth a look'}</strong>
       <ul className="planner-issues">
         {issues.map((issue) => (
@@ -82,7 +84,7 @@ export function IssueList({
                 className="planner-issue-link"
                 onClick={() => onFocusRows(issue.entryIds!)}
               >
-                Show {issue.entryIds.length} row{issue.entryIds.length === 1 ? '' : 's'}
+                Show affected entrants
               </Button>
             )}
           </li>

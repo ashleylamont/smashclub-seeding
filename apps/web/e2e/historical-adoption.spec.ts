@@ -128,7 +128,7 @@ test('adopt a completed night with changed attendance, without rewriting the pla
   await expect(
     page.getByRole('heading', { name: 'Historical results adopted', exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Run event →', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Open event desk', exact: true })).toHaveCount(0);
   await expect(
     page.getByText('Original plan — may differ from the event played', { exact: true }),
   ).toBeVisible();

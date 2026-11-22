@@ -75,7 +75,7 @@ export function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void
 
   return (
     <>
-      <div className="card section">
+      <div className="card section" id="new-event-plan" tabIndex={-1}>
         <h3>New event plan</h3>
         <label className="form-field">
           <span className="form-label">Competition</span>

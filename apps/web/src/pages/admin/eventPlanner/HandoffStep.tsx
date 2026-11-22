@@ -41,9 +41,9 @@ export function HandoffStep({ view, onChanged }: { view: EventPlanView; onChange
               ? 'Complete the round robin, confirm its finishing order, and finalize the event. Teams remain fixed after draw lock.'
               : 'Complete pools and confirm their finishing orders, then create championship and consolation finals. Winners advance and byes are shown explicitly.'}
         </p>
-        <a className="btn btn-primary" href={`/admin/event-operations?plan=${view.plan.id}`}>
-          Open event desk
-        </a>
+        <Button asChild variant="primary">
+          <a href={`/admin/event-operations?plan=${view.plan.id}`}>Open event desk</a>
+        </Button>
       </div>
     );
 

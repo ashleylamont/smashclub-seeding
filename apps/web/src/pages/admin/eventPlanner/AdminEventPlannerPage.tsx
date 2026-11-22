@@ -66,14 +66,14 @@ export function AdminEventPlannerPage() {
   return (
     <div>
       <div className="card section">
-        <h2>Event planner</h2>
-        <p className="muted">
-          Plan singles or doubles, resolve the roster, and freeze the seeds. Nemesis supports open
-          round robins, open pools with finals, and Upper/Lower pools with finals.
-        </p>
+        <div className="page-header">
+          <h2>Event planner</h2>
+          <Button asChild size="small">
+            <a href="#new-event-plan">New event plan</a>
+          </Button>
+        </div>
+        <p className="muted">Create or resume a singles or doubles plan.</p>
       </div>
-
-      <NewPlanForm onCreated={setPlanId} />
 
       <div className="card section">
         <h3>Saved plans</h3>
@@ -97,6 +97,7 @@ export function AdminEventPlannerPage() {
           </ul>
         )}
       </div>
+      <NewPlanForm onCreated={setPlanId} />
     </div>
   );
 }
@@ -147,53 +148,17 @@ function PlanWizard({
     );
   }
 
-  const available = availableSteps(view);
   const adopted = view.plan.historicalAdoption;
   const resultsSlug = view.brackets.find(
     (bracket) => bracket.division === 'upper' && bracket.stage === 'main',
   )?.challongeSlug;
   const resultsUrl = resultsSlug ? `/events/${encodeURIComponent(resultsSlug)}` : null;
-  const steps = adopted ? STEPS.filter((entry) => entry.key !== 'handoff') : STEPS;
-  const originalPlan = (
-    <>
-      <PlanSummary view={view} />
-      <nav className="planner-steps" aria-label={adopted ? 'Original plan steps' : 'Planner steps'}>
-        {steps.map((entry) => (
-          <Button
-            key={entry.key}
-            type="button"
-            className={`admin-tab${current === entry.key ? ' active' : ''}`}
-            disabled={!available.has(entry.key)}
-            onClick={() => onStep(entry.key)}
-          >
-            {entry.key === 'handoff' && view.plan.bracketMode === 'native'
-              ? 'Run event'
-              : entry.key === 'pools' && isKnockout(view.plan.structure)
-                ? 'Draw'
-                : entry.label}
-          </Button>
-        ))}
-      </nav>
-    </>
-  );
-  const stepContent = (
-    <>
-      {current === 'roster' &&
-        view.plan.status === 'draft' &&
-        view.plan.bracketMode === 'native' && (
-          <NativeFormatEditor view={view} onChanged={invalidate} />
-        )}
-      {current === 'roster' &&
-        (view.plan.competitionFormat === 'doubles' ? (
-          <DoublesRosterStep view={view} onChanged={invalidate} />
-        ) : (
-          <RosterStep view={view} onChanged={invalidate} />
-        ))}
-      {current === 'divisions' && <DivisionsStep view={view} onChanged={invalidate} />}
-      {current === 'pools' && <PoolsStep view={view} onChanged={invalidate} />}
-      {current === 'handoff' && <HandoffStep view={view} onChanged={invalidate} />}
-    </>
-  );
+  const deskUrl = `/admin/event-operations?plan=${planId}`;
+  const native = view.plan.bracketMode === 'native';
+  const deskLinkInStep =
+    native && (current === 'handoff' || (current === 'pools' && isKnockout(view.plan.structure)));
+  const planSteps = <PlanSteps view={view} current={current} onStep={onStep} />;
+  const stepContent = <PlanStepContent view={view} current={current} onChanged={invalidate} />;
 
   return (
     <div>
@@ -211,45 +176,26 @@ function PlanWizard({
             )}
           </h2>
           <span className="row-actions">
-            {adopted ? (
-              resultsUrl && (
-                <a className="btn btn-small" href={resultsUrl}>
-                  Imported results →
-                </a>
-              )
-            ) : (
-              <a className="btn btn-small" href={`/admin/event-operations?plan=${planId}`}>
-                Run event →
-              </a>
-            )}
-            {view.plan.bracketMode !== 'native' &&
-              (view.plan.status === 'pools_ready' || view.plan.status === 'underway') && (
-                <Button
-                  size="small"
-                  type="button"
-                  disabled={close.isPending}
-                  title="The night is played and synced"
-                  onClick={() => close.mutate('complete')}
-                >
-                  Mark complete
-                </Button>
-              )}
-            {view.plan.status !== 'complete' && view.plan.status !== 'cancelled' && (
+            {adopted
+              ? resultsUrl && (
+                  <Button asChild size="small">
+                    <a href={resultsUrl}>Imported results →</a>
+                  </Button>
+                )
+              : !deskLinkInStep && (
+                  <Button asChild size="small">
+                    <a href={deskUrl}>Open event desk</a>
+                  </Button>
+                )}
+            {!native && (view.plan.status === 'pools_ready' || view.plan.status === 'underway') && (
               <Button
                 size="small"
                 type="button"
                 disabled={close.isPending}
-                onClick={async () => {
-                  if (
-                    await confirmAction(
-                      'Cancel this plan? It stays as a record but can no longer be run.',
-                    )
-                  ) {
-                    close.mutate('cancelled');
-                  }
-                }}
+                title="The night is played and synced"
+                onClick={() => close.mutate('complete')}
               >
-                Cancel plan
+                Mark complete
               </Button>
             )}
             <Button size="small" type="button" onClick={onBack}>
@@ -260,15 +206,21 @@ function PlanWizard({
         <p className="muted">
           {formatDateTime(view.plan.eventDate)} · {view.entries.length}{' '}
           {adopted ? 'planned entrants' : 'entrants'}
-          {view.plan.rankingSnapshotAt &&
+          {current !== 'divisions' &&
+            view.plan.rankingSnapshotAt &&
             ` · ranking snapshot ${formatDateTime(view.plan.rankingSnapshotAt)}`}
         </p>
-        {close.isError && <p className="error-text">{close.error.message}</p>}
-        {!adopted && originalPlan}
+        {close.isError && close.variables === 'complete' && (
+          <p role="alert" className="error-text">
+            {close.error.message}
+          </p>
+        )}
+        {!adopted && planSteps}
       </div>
 
+      {!adopted && stepContent}
       {!adopted &&
-        view.plan.bracketMode === 'native' &&
+        native &&
         ['draft', 'roster_frozen', 'pools_ready'].includes(view.plan.status) && (
           <TournamentProjection
             entrantCount={view.entries.length}
@@ -279,6 +231,25 @@ function PlanWizard({
             eventDate={view.plan.eventDate}
           />
         )}
+      {view.plan.status !== 'cancelled' &&
+        (adopted ||
+          ((view.plan.structure ?? 'dual_division') === 'dual_division' &&
+            view.plan.structureOptions?.consolation !== false)) && (
+          <HistoricalAdoption view={view} onChanged={invalidate} />
+        )}
+      {adopted && (
+        <Disclosure
+          title="Original plan — may differ from the event played"
+          className="historical-original-plan card section"
+        >
+          <p className="muted">
+            These are the saved roster, seeds and proposed pools. Use the imported results above for
+            the matches and placements that actually happened.
+          </p>
+          {planSteps}
+          {stepContent}
+        </Disclosure>
+      )}
       <PlanRecoveryControls
         planId={planId}
         name={view.plan.name}
@@ -290,29 +261,99 @@ function PlanWizard({
           invalidate();
           onReopened(id);
         }}
-      />
-      {view.plan.status !== 'cancelled' &&
-        (adopted ||
-          ((view.plan.structure ?? 'dual_division') === 'dual_division' &&
-            view.plan.structureOptions?.consolation !== false)) && (
-          <HistoricalAdoption view={view} onChanged={invalidate} />
+      >
+        {view.plan.status !== 'complete' && view.plan.status !== 'cancelled' && (
+          <Button
+            size="small"
+            type="button"
+            disabled={close.isPending}
+            onClick={async () => {
+              if (
+                await confirmAction(
+                  'Cancel this plan? It stays as a record but can no longer be run.',
+                )
+              ) {
+                close.mutate('cancelled');
+              }
+            }}
+          >
+            Cancel plan
+          </Button>
         )}
-      {adopted ? (
-        <Disclosure
-          title="Original plan — may differ from the event played"
-          className="historical-original-plan card section"
-        >
-          <p className="muted">
-            These are the saved roster, seeds and proposed pools. Use the imported results above for
-            the matches and placements that actually happened.
-          </p>
-          {originalPlan}
-          {stepContent}
-        </Disclosure>
-      ) : (
-        stepContent
-      )}
+        {close.isError && close.variables === 'cancelled' && (
+          <span role="alert" className="error-text">
+            {close.error.message}
+          </span>
+        )}
+      </PlanRecoveryControls>
     </div>
+  );
+}
+
+function PlanStepContent({
+  view,
+  current,
+  onChanged,
+}: {
+  view: EventPlanView;
+  current: StepKey;
+  onChanged: () => Promise<void>;
+}) {
+  switch (current) {
+    case 'roster':
+      return view.plan.competitionFormat === 'doubles' ? (
+        <>
+          <DoublesRosterStep view={view} onChanged={onChanged} />
+          {view.plan.status === 'draft' && view.plan.bracketMode === 'native' && (
+            <NativeFormatEditor view={view} onChanged={onChanged} />
+          )}
+        </>
+      ) : (
+        <RosterStep view={view} onChanged={onChanged} />
+      );
+    case 'divisions':
+      return <DivisionsStep view={view} onChanged={onChanged} />;
+    case 'pools':
+      return <PoolsStep view={view} onChanged={onChanged} />;
+    case 'handoff':
+      return <HandoffStep view={view} onChanged={onChanged} />;
+  }
+}
+
+function PlanSteps({
+  view,
+  current,
+  onStep,
+}: {
+  view: EventPlanView;
+  current: StepKey;
+  onStep: (step: StepKey) => void;
+}) {
+  const adopted = Boolean(view.plan.historicalAdoption);
+  const available = availableSteps(view);
+  const steps = adopted ? STEPS.filter((entry) => entry.key !== 'handoff') : STEPS;
+  return (
+    <>
+      <PlanSummary view={view} />
+      <nav className="planner-steps" aria-label={adopted ? 'Original plan steps' : 'Planner steps'}>
+        {steps.map((entry) => (
+          <Button
+            key={entry.key}
+            type="button"
+            className={`admin-tab${current === entry.key ? ' active' : ''}`}
+            disabled={!available.has(entry.key)}
+            aria-current={current === entry.key ? 'step' : undefined}
+            onClick={() => onStep(entry.key)}
+          >
+            {entry.key === 'handoff' && view.plan.bracketMode === 'native'
+              ? 'Run event'
+              : entry.key === 'pools' && isKnockout(view.plan.structure)
+                ? 'Draw'
+                : entry.label}
+          </Button>
+        ))}
+      </nav>
+    </>
   );
 }
 
@@ -335,7 +376,9 @@ function PlanSummary({ view }: { view: EventPlanView }) {
             <dd>
               {division.size}{' '}
               {division.poolCount > 0 && (
-                <span className="muted">· {division.poolCount} pools</span>
+                <span className="muted">
+                  · {division.poolCount} {division.poolCount === 1 ? 'pool' : 'pools'}
+                </span>
               )}
             </dd>
           </div>

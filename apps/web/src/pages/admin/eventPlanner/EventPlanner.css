@@ -4,6 +4,10 @@
  * and nothing important is conveyed by colour alone.
  */
 
+#new-event-plan {
+  scroll-margin-top: calc(var(--nav-h, 0px) + var(--s3));
+}
+
 .planner-textarea {
   width: 100%;
   min-height: 120px;

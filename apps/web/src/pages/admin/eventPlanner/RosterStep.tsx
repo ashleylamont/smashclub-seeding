@@ -2,7 +2,9 @@ import { useConfirmation } from '../../../lib/confirmation';
 import { Button } from '../../../components/ui/Button';
 import { Textarea, Input } from '../../../components/ui/Input';
 import { Select, SelectItem } from '../../../components/ui/Select';
-import { useState } from 'react';
+import { useId, useState } from 'react';
+import { Disclosure } from '../../../components/ui/Disclosure';
+import { NativeFormatEditor } from './TournamentFormatFields';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../../lib/trpc';
 import type { EventPlanEntry, EventPlanView, ReviewCandidate } from '../../../lib/apiTypes';
@@ -31,6 +33,8 @@ const METHOD_LABEL: Record<string, string> = {
 export function RosterStep({ view, onChanged }: { view: EventPlanView; onChanged: () => void }) {
   const confirmAction = useConfirmation();
   const planId = view.plan.id;
+  const freezeBlockersId = useId();
+  const rosterId = useId();
   const [highlighted, setHighlighted] = useState<Set<string>>(new Set());
   const [addingText, setAddingText] = useState('');
   const editable = view.plan.status === 'draft';
@@ -55,9 +59,13 @@ export function RosterStep({ view, onChanged }: { view: EventPlanView; onChanged
 
   const resolved = view.entries.filter((entry) => entry.playerId !== null).length;
   const canFreeze = editable && view.issues.blocking.length === 0;
+  const showAffectedEntries = (ids: string[]) => {
+    setHighlighted(new Set(ids));
+    document.getElementById(`${rosterId}-${ids[0]}`)?.focus();
+  };
 
   return (
-    <div>
+    <div className="section">
       <div className="page-header">
         <h3>
           Roster{' '}
@@ -71,12 +79,8 @@ export function RosterStep({ view, onChanged }: { view: EventPlanView; onChanged
               variant="primary"
               type="button"
               disabled={!canFreeze || freeze.isPending}
+              aria-describedby={canFreeze ? undefined : freezeBlockersId}
               onClick={() => freeze.mutate()}
-              title={
-                canFreeze
-                  ? 'Snapshot the leaderboard and split the divisions'
-                  : 'Fix the blocking problems first'
-              }
             >
               {freeze.isPending ? 'Freezing…' : 'Freeze roster & split divisions'}
             </Button>
@@ -114,24 +118,26 @@ export function RosterStep({ view, onChanged }: { view: EventPlanView; onChanged
       )}
 
       {editable && (
-        <DraftSettings
-          key={`${planId}:${view.plan.name}:${view.plan.upperTargetSize}:${view.entries.length}`}
-          view={view}
-          onChanged={onChanged}
-        />
-      )}
-      {editable && (
         <IssueList
           issues={view.issues.blocking}
           kind="blocking"
-          onFocusRows={(ids) => setHighlighted(new Set(ids))}
+          id={freezeBlockersId}
+          onFocusRows={showAffectedEntries}
         />
       )}
-      <IssueList
-        issues={view.issues.warnings}
-        kind="warning"
-        onFocusRows={(ids) => setHighlighted(new Set(ids))}
-      />
+      <IssueList issues={view.issues.warnings} kind="warning" onFocusRows={showAffectedEntries} />
+      {editable && (
+        <Disclosure title="Draft settings">
+          {view.plan.bracketMode === 'native' && (
+            <NativeFormatEditor view={view} onChanged={onChanged} />
+          )}
+          <DraftSettings
+            key={`${planId}:${view.plan.name}:${view.plan.upperTargetSize}:${view.entries.length}`}
+            view={view}
+            onChanged={onChanged}
+          />
+        </Disclosure>
+      )}
       {highlighted.size > 0 && (
         <p className="muted">
           Highlighting {highlighted.size} row(s).{' '}
@@ -153,6 +159,7 @@ export function RosterStep({ view, onChanged }: { view: EventPlanView; onChanged
         {view.entries.map((entry) => (
           <RosterRow
             key={entry.id}
+            rowId={`${rosterId}-${entry.id}`}
             planId={planId}
             entry={entry}
             editable={editable}
@@ -164,14 +171,16 @@ export function RosterStep({ view, onChanged }: { view: EventPlanView; onChanged
 
       {editable && (
         <div className="card section">
-          <span className="form-label">Somebody turned up late</span>
-          <Textarea
-            className="planner-textarea"
-            rows={3}
-            placeholder="Paste more names, one per line…"
-            value={addingText}
-            onChange={(event) => setAddingText(event.target.value)}
-          />
+          <label className="form-field">
+            <span className="form-label">Somebody turned up late</span>
+            <Textarea
+              className="planner-textarea"
+              rows={3}
+              placeholder="Paste more names, one per line…"
+              value={addingText}
+              onChange={(event) => setAddingText(event.target.value)}
+            />
+          </label>
           <div className="admin-form-row">
             <Button
               type="button"
@@ -189,12 +198,14 @@ export function RosterStep({ view, onChanged }: { view: EventPlanView; onChanged
 }
 
 function RosterRow({
+  rowId,
   planId,
   entry,
   editable,
   highlighted,
   onChanged,
 }: {
+  rowId: string;
   planId: string;
   entry: EventPlanEntry;
   editable: boolean;
@@ -280,6 +291,8 @@ function RosterRow({
     <div
       className={`roster-row${highlighted ? ' highlighted' : ''}${entry.playerId ? '' : ' unresolved'}`}
       role="row"
+      tabIndex={-1}
+      id={rowId}
     >
       <span role="cell" className="roster-raw" title={`Line ${entry.sourceLineNumber}`}>
         {entry.rawInput}
@@ -455,7 +468,6 @@ function DraftSettings({ view, onChanged }: { view: EventPlanView; onChanged: ()
         update.mutate();
       }}
     >
-      <h4>Draft settings</h4>
       <label className="form-field">
         Event name
         <Input value={name} onChange={(event) => setName(event.target.value)} />

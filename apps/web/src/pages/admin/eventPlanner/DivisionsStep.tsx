@@ -46,7 +46,7 @@ export function DivisionsStep({ view, onChanged }: { view: EventPlanView; onChan
   });
 
   return (
-    <div>
+    <div className="section">
       <div className="page-header">
         <h3>Divisions</h3>
         <span className="row-actions">
