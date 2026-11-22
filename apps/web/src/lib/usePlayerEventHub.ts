@@ -130,7 +130,7 @@ export function usePlayerEventHub(planId: string) {
   const hiddenHistory = matching.length - visible.length;
   const board = data ? playerHubView(data, player, selectedPool) : undefined;
   const [initialSection] = useState(() =>
-    /^#(?:my-matches|what-next|event-pools|event-brackets|event-results)$/.test(
+    /^#(?:my-matches|what-next|event-pools|event-brackets|event-results|event-archive)$/.test(
       window.location.hash,
     )
       ? window.location.hash.slice(1)
@@ -139,10 +139,16 @@ export function usePlayerEventHub(planId: string) {
   const initialSectionOpened = useRef(false);
   useEffect(() => {
     if (!data || !initialSection || initialSectionOpened.current) return;
-    initialSectionOpened.current = true;
-    const frame = requestAnimationFrame(() =>
-      document.getElementById(initialSection)?.scrollIntoView(),
-    );
+    const frame = requestAnimationFrame(() => {
+      initialSectionOpened.current = true;
+      const section = document.getElementById(initialSection);
+      // The directory asks for the archive entry. An old link whose section was
+      // omitted can still open the archive at its available content.
+      const target =
+        section ?? document.querySelector<HTMLElement>('.player-event-hub [data-archive-entry]');
+      if (!section) target?.focus({ preventScroll: true });
+      target?.scrollIntoView();
+    });
     return () => cancelAnimationFrame(frame);
   }, [data, initialSection]);
   const start = async (input: StartPoolMatch) => {

@@ -1,6 +1,7 @@
 import '../pages/EventLive.css';
 import { EventBracketLane } from './EventBracketLane';
 import { Progress } from './ui/Progress';
+import { Button } from './ui/Button';
 import { liveBracketLanes } from '../lib/eventBracket';
 import { isKnockout } from '@smashclub/shared';
 import { hasExportableBracket, type BracketGraphicContext } from '../lib/bracketGraphic';
@@ -198,6 +199,7 @@ export function EventPools({
   );
 }
 export function EventBrackets({
+  title = 'Brackets',
   brackets,
   matches,
   entrants,
@@ -205,6 +207,7 @@ export function EventBrackets({
   recordedOnly = false,
   graphicContext,
 }: {
+  title?: string;
   brackets: NativeBracketView[];
   matches: LiveMatch[];
   entrants: { id: string; name: string }[];
@@ -217,7 +220,7 @@ export function EventBrackets({
   const labels = new Map(matches.map((match) => [match.id, match.label]));
   return (
     <section className="event-brackets live-event-brackets">
-      <h2>Brackets</h2>
+      <h2>{title}</h2>
       {brackets.map((bracket) => {
         const games = matches.filter((match) => match.nativeBracketId === bracket.id);
         const open =
@@ -296,16 +299,16 @@ export function EventBrackets({
           {linked
             .filter((item) => item.slug)
             .map((item) => (
-              <a
-                className="btn"
-                href={`https://challonge.com/${encodeURIComponent(item.slug!)}`}
-                target="_blank"
-                rel="noreferrer"
-                key={`${item.division}:${item.stage}`}
-              >
-                {item.division} · {item.stage === 'main' ? 'Groups & championship' : 'Consolation'}{' '}
-                ↗
-              </a>
+              <Button asChild key={`${item.division}:${item.stage}`}>
+                <a
+                  href={`https://challonge.com/${encodeURIComponent(item.slug!)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {item.division} ·{' '}
+                  {item.stage === 'main' ? 'Groups & championship' : 'Consolation'} ↗
+                </a>
+              </Button>
             ))}
         </nav>
       )}

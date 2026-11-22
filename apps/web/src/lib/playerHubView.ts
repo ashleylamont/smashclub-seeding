@@ -124,6 +124,7 @@ export function playerHubView(data: HubData, player = '', selectedPool = '') {
     assignedBrackets,
     pendingBrackets,
     linked,
+    hasBrackets,
     sections,
     results,
     activePools,

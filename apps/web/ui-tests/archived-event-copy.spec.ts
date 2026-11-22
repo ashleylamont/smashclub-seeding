@@ -72,11 +72,11 @@ for (const theme of ['dark', 'light'] as const) {
       const cancelledCard = page.getByRole('article').filter({ hasText: cancelled.name });
       const completedCard = page.getByRole('article').filter({ hasText: completed.name });
       const cancelledLink = cancelledCard.getByRole('link', { name: 'View event →' });
-      const completedLink = completedCard.getByRole('link', { name: 'View results →' });
+      const completedLink = completedCard.getByRole('link', { name: 'View archive' });
       await expect(cancelledCard).toContainText('· Cancelled');
       await expect(cancelledLink).toHaveAttribute('href', `/play/${cancelled.id}`);
       await expect(completedCard).toContainText('· Finished');
-      await expect(completedLink).toHaveAttribute('href', `/play/${completed.id}#event-results`);
+      await expect(completedLink).toHaveAttribute('href', `/play/${completed.id}#event-archive`);
       await reviewRoute(page, testInfo, 'events-archives');
 
       await cancelledLink.focus();

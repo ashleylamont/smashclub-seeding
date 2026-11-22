@@ -8,6 +8,7 @@ import { playerBracketPath, playerHubView } from '../lib/playerHubView';
 import { liveBracketSide, liveBracketStatus } from '../lib/eventBracket';
 import { formatDate } from '../lib/format';
 import { Disclosure } from './ui/Disclosure';
+import { Button } from './ui/Button';
 import { matchStation } from '../lib/playerMatchView';
 import { matchPresentation, nextMeaningfulMatch } from '../lib/matchPresentation';
 import type { PublicEventSnapshot } from '../lib/usePlayerEventHub';
@@ -16,10 +17,12 @@ export function PlayerHubBoard({
   data,
   selectedPool,
   player,
+  archiveOnly = false,
 }: {
   data: PublicEventSnapshot;
   selectedPool: string;
   player: string;
+  archiveOnly?: boolean;
 }) {
   const board = playerHubView(data, player, selectedPool);
   const superseded = (data.supersededPlayedSets ?? []).filter((set) =>
@@ -27,41 +30,6 @@ export function PlayerHubBoard({
       ? [set.player1Id, set.player2Id].some((id) => id && board.identities.has(id))
       : !selectedPool,
   );
-  const labels = new Map(data.matches.map((match) => [match.id, match.label]));
-  const path = player
-    ? playerBracketPath(
-        data.matches.filter((match) =>
-          board.assignedBrackets.some((bracket) => bracket.id === match.nativeBracketId),
-        ),
-        player,
-      )
-    : [];
-  const bracketView = (
-    <EventBrackets
-      brackets={board.nativeBrackets}
-      matches={data.matches}
-      entrants={data.entrants}
-      linked={board.linked}
-      recordedOnly={board.closed}
-      graphicContext={{
-        eventName: data.plan.name,
-        eventDate: formatDate(data.plan.eventDate),
-        format: data.plan.competitionFormat ?? 'singles',
-        structure: data.plan.structure,
-        state: board.closed ? 'closed' : data.plan.drawPaused ? 'paused' : 'published',
-      }}
-    />
-  );
-  const pendingFinals = (board.closed ? [] : (data.pendingFinals ?? [])).flatMap((field) => {
-    if (!player) return [field];
-    if (board.assignedBrackets.length) return [];
-    const slots = field.slots.filter((slot) =>
-      slot.entrantId
-        ? board.identities.has(slot.entrantId)
-        : board.ownPools.has(`${slot.division}:${slot.poolIndex}`),
-    );
-    return slots.length ? [{ ...field, slots }] : [];
-  });
   const poolResults = confirmedPoolGraphics(
     data.placements.filter(
       (place) =>
@@ -71,6 +39,33 @@ export function PlayerHubBoard({
     data.entrants,
     data.plan.structure,
   );
+  const { hasBrackets } = board;
+  const resultsSlug = data.plan.resultsSlug ?? data.plan.historicalResultsSlug;
+  const hasSets = board.results.length > 0 || superseded.length > 0;
+  const hasResults = hasSets || poolResults.length > 0 || Boolean(resultsSlug);
+  const prizes = player ? [] : data.prizes;
+  const archiveEntry = board.closed
+    ? hasResults
+      ? 'results'
+      : hasBrackets
+        ? 'brackets'
+        : undefined
+    : undefined;
+  const sectionOrder = archiveOnly
+    ? board.sections.filter((section) =>
+        section === 'brackets'
+          ? hasBrackets
+          : section === 'results' && (hasResults || prizes.length > 0),
+      )
+    : board.sections;
+  if (archiveOnly && !sectionOrder.length)
+    return (
+      <section className="card" aria-label="Event archive" data-archive-entry tabIndex={-1}>
+        <h2>Event archive</h2>
+        <p>No results or brackets are available for this event.</p>
+      </section>
+    );
+
   const sections = {
     pools: (
       <section
@@ -98,110 +93,48 @@ export function PlayerHubBoard({
       </section>
     ),
     brackets: (
-      <section
-        id="event-brackets"
-        aria-label="Brackets"
-        className="app-event-board player-event-board-section"
-      >
-        {player && board.nativeBrackets.length > 0 ? (
-          <>
-            <h2>
-              {!board.closed && board.pendingBrackets.length
-                ? 'Finals qualification'
-                : 'Your bracket path'}
-            </h2>
-            {!board.closed && board.pendingBrackets.length ? (
-              <p className="event-live-note">
-                Your pool order will determine your bracket. These draws show reserved pool places;
-                your finals opponents are not confirmed yet.
-              </p>
-            ) : (
-              <p className="event-live-note">
-                {board.closed
-                  ? 'Your recorded bracket matches and results.'
-                  : 'Published pairings and possible later rounds. Later opponents depend on confirmed results.'}
-              </p>
-            )}
-            {path.length > 0 && (
-              <ol className="player-bracket-path">
-                {path.map((match) => (
-                  <li key={match.id}>
-                    <strong>{match.label}</strong> · {liveBracketStatus(match, board.closed)}
-                    <p>
-                      {board.closed && match.status === 'complete' && match.outcome === 'bye'
-                        ? matchPresentation(match, true).result
-                        : `${liveBracketSide(match, 0, labels)} vs ${liveBracketSide(match, 1, labels)}`}
-                    </p>
-                  </li>
-                ))}
-              </ol>
-            )}
-            {board.nativeBrackets.map((bracket) => {
-              const place = bracket.standings.find((item) => board.identities.has(item.playerId));
-              return place ? (
-                <p key={bracket.id}>
-                  Confirmed {bracket.stage === 'main' ? 'championship' : 'consolation'} place ·{' '}
-                  {place.place}
-                </p>
-              ) : null;
-            })}
-            {!board.closed && !path.length && !board.pendingBrackets.length && (
-              <p>Your bracket is published. Open the full draw for its current standings.</p>
-            )}
-            <Disclosure title="Full draw & bracket standings">{bracketView}</Disclosure>
-          </>
-        ) : (
-          bracketView
-        )}
-        {pendingFinals.length > 0 && (
-          <PendingFinals fields={pendingFinals} entrants={data.entrants} />
-        )}
-        {!pendingFinals.length &&
-          !board.nativeBrackets.length &&
-          !board.linked.some((item) => item.slug) && (
-            <>
-              <h2>Brackets</h2>
-              <p>
-                {data.plan.structure === 'round_robin'
-                  ? 'This event uses pool standings to decide the result; there is no finals bracket.'
-                  : board.closed
-                    ? `No bracket is recorded for this ${player ? 'player' : 'event'}.`
-                    : player
-                      ? 'Brackets will appear here for this player when the organisers publish the draw. Pool results do not imply a bracket seed.'
-                      : 'Brackets will appear here when the organisers publish the draw. Pool results do not imply a bracket seed.'}
-              </p>
-            </>
-          )}
-      </section>
+      <PlayerHubBracketSection
+        data={data}
+        board={board}
+        player={player}
+        archiveOnly={archiveOnly}
+        archiveEntry={archiveEntry === 'brackets'}
+      />
     ),
     results: (
       <section
         id="event-results"
-        aria-label="Results"
+        aria-label={archiveOnly && !hasResults ? 'Prizes' : 'Results'}
+        data-archive-entry={archiveEntry === 'results' || undefined}
+        tabIndex={archiveEntry === 'results' ? -1 : undefined}
         className="app-event-board player-event-board-section event-recent"
       >
-        <h2>Recorded results</h2>
-        <div className="event-results-grid">
-          {board.results.map((match) => (
-            <MatchCard
-              key={match.id}
-              match={match}
-              structure={data.plan.structure}
-              nextMatch={board.closed ? undefined : nextMeaningfulMatch(data.matches, match)}
-              station={matchStation(data, match, board.closed).name ?? undefined}
-            />
-          ))}
-        </div>
-        {!board.results.length && !superseded.length && (
+        <h2>{archiveOnly && !hasResults ? 'Prizes' : 'Recorded results'}</h2>
+        {(!archiveOnly || board.results.length > 0) && (
+          <div className="event-results-grid">
+            {board.results.map((match) => (
+              <MatchCard
+                key={match.id}
+                match={match}
+                structure={data.plan.structure}
+                nextMatch={board.closed ? undefined : nextMeaningfulMatch(data.matches, match)}
+                station={matchStation(data, match, board.closed).name ?? undefined}
+              />
+            ))}
+          </div>
+        )}
+        {!archiveOnly && !hasSets && (
           <p>
             {board.closed
               ? 'No recorded sets in this view.'
               : 'Results appear here once confirmed.'}
           </p>
         )}
-        <p className="event-live-note">
-          Set results are shown as recorded. They do not imply final tournament placements.
-        </p>
+        {(!archiveOnly || hasSets) && (
+          <p className="event-live-note">
+            Set results are shown as recorded. They do not imply final tournament placements.
+          </p>
+        )}
         {superseded.length > 0 && (
           <section
             className="player-event-archived-sets"
@@ -256,23 +189,22 @@ export function PlayerHubBoard({
             </div>
           </section>
         )}
-        {(data.plan.resultsSlug || data.plan.historicalResultsSlug) && (
+        {resultsSlug && (
           <p>
-            <a
-              className="btn"
-              href={`/events/${encodeURIComponent(data.plan.resultsSlug ?? data.plan.historicalResultsSlug!)}`}
-            >
-              {data.plan.historicalResultsSlug
-                ? 'View historical results →'
-                : 'Final standings and club results →'}
-            </a>
+            <Button asChild>
+              <a href={`/events/${encodeURIComponent(resultsSlug)}`}>
+                {data.plan.historicalResultsSlug
+                  ? 'View historical results →'
+                  : 'Final standings and club results →'}
+              </a>
+            </Button>
           </p>
         )}
-        {!player && data.prizes.length > 0 && (
+        {prizes.length > 0 && (
           <>
-            <h2>{board.closed ? 'Prizes' : 'On the line'}</h2>
+            {(!archiveOnly || hasResults) && <h2>{board.closed ? 'Prizes' : 'On the line'}</h2>}
             <div className="event-results-grid">
-              {data.prizes.map((prize) => (
+              {prizes.map((prize) => (
                 <article className="event-prize" key={prize.id}>
                   <h3>{prize.title}</h3>
                   <p>{prize.description}</p>
@@ -297,11 +229,139 @@ export function PlayerHubBoard({
             Other pool sets are still in progress; follow published pairings for your next stage.
           </p>
         )}
-      {board.sections.map((section) => (
+      {sectionOrder.map((section) => (
         <div className="player-event-board-group" key={section}>
           {sections[section]}
         </div>
       ))}
     </>
+  );
+}
+
+function PlayerHubBracketSection({
+  data,
+  board,
+  player,
+  archiveOnly,
+  archiveEntry,
+}: {
+  data: PublicEventSnapshot;
+  board: ReturnType<typeof playerHubView>;
+  player: string;
+  archiveOnly: boolean;
+  archiveEntry: boolean;
+}) {
+  const labels = new Map(data.matches.map((match) => [match.id, match.label]));
+  const path = player
+    ? playerBracketPath(
+        data.matches.filter((match) =>
+          board.assignedBrackets.some((bracket) => bracket.id === match.nativeBracketId),
+        ),
+        player,
+      )
+    : [];
+  const bracketView = (
+    <EventBrackets
+      title={archiveOnly && !board.nativeBrackets.length ? 'Brackets on Challonge' : undefined}
+      brackets={board.nativeBrackets}
+      matches={data.matches}
+      entrants={data.entrants}
+      linked={board.linked}
+      recordedOnly={board.closed}
+      graphicContext={{
+        eventName: data.plan.name,
+        eventDate: formatDate(data.plan.eventDate),
+        format: data.plan.competitionFormat ?? 'singles',
+        structure: data.plan.structure,
+        state: board.closed ? 'closed' : data.plan.drawPaused ? 'paused' : 'published',
+      }}
+    />
+  );
+  const pendingFinals = (board.closed ? [] : (data.pendingFinals ?? [])).flatMap((field) => {
+    if (!player) return [field];
+    if (board.assignedBrackets.length) return [];
+    const slots = field.slots.filter((slot) =>
+      slot.entrantId
+        ? board.identities.has(slot.entrantId)
+        : board.ownPools.has(`${slot.division}:${slot.poolIndex}`),
+    );
+    return slots.length ? [{ ...field, slots }] : [];
+  });
+  return (
+    <section
+      id="event-brackets"
+      aria-label="Brackets"
+      data-archive-entry={archiveEntry || undefined}
+      tabIndex={archiveEntry ? -1 : undefined}
+      className="app-event-board player-event-board-section"
+    >
+      {player && board.nativeBrackets.length > 0 ? (
+        <>
+          <h2>
+            {!board.closed && board.pendingBrackets.length
+              ? 'Finals qualification'
+              : 'Your bracket path'}
+          </h2>
+          {!board.closed && board.pendingBrackets.length ? (
+            <p className="event-live-note">
+              Your pool order will determine your bracket. These draws show reserved pool places;
+              your finals opponents are not confirmed yet.
+            </p>
+          ) : (
+            <p className="event-live-note">
+              {board.closed
+                ? 'Your recorded bracket matches and results.'
+                : 'Published pairings and possible later rounds. Later opponents depend on confirmed results.'}
+            </p>
+          )}
+          {path.length > 0 && (
+            <ol className="player-bracket-path">
+              {path.map((match) => (
+                <li key={match.id}>
+                  <strong>{match.label}</strong> · {liveBracketStatus(match, board.closed)}
+                  <p>
+                    {board.closed && match.status === 'complete' && match.outcome === 'bye'
+                      ? matchPresentation(match, true).result
+                      : `${liveBracketSide(match, 0, labels)} vs ${liveBracketSide(match, 1, labels)}`}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          )}
+          {board.nativeBrackets.map((bracket) => {
+            const place = bracket.standings.find((item) => board.identities.has(item.playerId));
+            return place ? (
+              <p key={bracket.id}>
+                Confirmed {bracket.stage === 'main' ? 'championship' : 'consolation'} place ·{' '}
+                {place.place}
+              </p>
+            ) : null;
+          })}
+          {!board.closed && !path.length && !board.pendingBrackets.length && (
+            <p>Your bracket is published. Open the full draw for its current standings.</p>
+          )}
+          <Disclosure title="Full draw & bracket standings">{bracketView}</Disclosure>
+        </>
+      ) : (
+        bracketView
+      )}
+      {pendingFinals.length > 0 && (
+        <PendingFinals fields={pendingFinals} entrants={data.entrants} />
+      )}
+      {!pendingFinals.length && !board.hasBrackets && (
+        <>
+          <h2>Brackets</h2>
+          <p>
+            {data.plan.structure === 'round_robin'
+              ? 'This event uses pool standings to decide the result; there is no finals bracket.'
+              : board.closed
+                ? `No bracket is recorded for this ${player ? 'player' : 'event'}.`
+                : player
+                  ? 'Brackets will appear here for this player when the organisers publish the draw. Pool results do not imply a bracket seed.'
+                  : 'Brackets will appear here when the organisers publish the draw. Pool results do not imply a bracket seed.'}
+          </p>
+        </>
+      )}
+    </section>
   );
 }

@@ -57,7 +57,9 @@ export function EventNightsPage() {
                 {event.status === 'cancelled' ? (
                   <a href={`/play/${event.id}`}>View event →</a>
                 ) : (
-                  <a href={`/play/${event.id}#event-results`}>View results →</a>
+                  <Button asChild>
+                    <a href={`/play/${event.id}#event-archive`}>View archive</a>
+                  </Button>
                 )}
               </article>
             ))}
