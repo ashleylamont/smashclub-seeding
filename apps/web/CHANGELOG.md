@@ -2,6 +2,12 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.21.4
+
+### Patch Changes
+
+- 23 November 2026 · **Fix** · Link an organiser's score correction to the result it changed in event history, including when the organiser approves a disputed score. Confirmations, pending disputes and rejected reports keep their own history entries. [#462](https://github.com/ashleylamont/smashclub-seeding/pull/462) · [build a7b1df3](https://github.com/ashleylamont/smashclub-seeding/commit/a7b1df31c1cec05737d3324fa949bf6bd22c2f55)
+
 ## 0.21.3
 
 ### Patch Changes
