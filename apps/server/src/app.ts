@@ -1,13 +1,15 @@
 import path from 'node:path';
-import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
+import Fastify, { LogController, type FastifyInstance, type FastifyRequest } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify';
 import { sql } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
+import { FEEDBACK_PATH } from '@smashclub/shared';
 import type { Auth } from './auth';
 import { getSessionUser } from './auth';
 import type { ChallongeClient } from './challonge/client';
 import type { Env } from './env';
+import { registerFeedbackRoute } from './feedback';
 import { SseRegistry } from './live/sse';
 import type { RecomputeTrigger } from './recompute/trigger';
 import { appRouter } from './trpc/router';
@@ -30,6 +32,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({
     logger: env.NODE_ENV === 'test' ? false : { level: env.LOG_LEVEL },
     trustProxy: env.TRUST_PROXY,
+    logController: new LogController({
+      disableRequestLogging: (request) => request.url.split('?', 1)[0] === FEEDBACK_PATH,
+    }),
   });
   const sse = new SseRegistry({
     maxConnections: env.SSE_MAX_CONNECTIONS,
@@ -51,6 +56,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     ),
   }));
 
+  registerFeedbackRoute(app, db);
+
   // --- better-auth (fetch-style handler bridged onto Fastify) ---
   app.route({
     method: ['GET', 'POST'],
@@ -70,6 +77,11 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     prefix: '/api/trpc',
     trpcOptions: {
       router: appRouter,
+      responseMeta({ paths }: { paths?: readonly string[] }) {
+        return paths?.includes('admin.feedbackInbox')
+          ? { headers: new Headers({ 'Cache-Control': 'no-store' }) }
+          : {};
+      },
       createContext: async ({ req }: { req: FastifyRequest }): Promise<TrpcContext> => {
         const user = await getSessionUser(auth, db, env, toWebHeaders(req));
         return {

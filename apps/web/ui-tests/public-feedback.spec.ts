@@ -34,11 +34,17 @@ for (const theme of ['dark', 'light'] as const) {
       const close = dialog.getByRole('button', { name: 'Close dialog' });
       await expect(close).toBeFocused();
       await page.keyboard.press('Tab');
+      await expect(dialog.getByRole('textbox', { name: 'Summary' })).toBeFocused();
+      await page.keyboard.press('Tab');
+      await expect(dialog.getByRole('textbox', { name: 'Description' })).toBeFocused();
+      await page.keyboard.press('Tab');
+      await expect(dialog.getByRole('button', { name: 'Send private feedback' })).toBeFocused();
+      await page.keyboard.press('Tab');
       await expect(dialog.getByRole('link', { name: 'Open GitHub draft (new tab)' })).toBeFocused();
       await page.keyboard.press('Tab');
       await expect(close).toBeFocused();
-      await expect(dialog).toContainText('Issues are public');
-      await expect(dialog).toContainText('requires a GitHub account');
+      await expect(dialog).toContainText('Public issues require a GitHub account.');
+      await expect(dialog).toContainText('No account required');
       await ready(page);
       const result = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
@@ -115,6 +121,7 @@ for (const actor of ['guest', 'player', 'admin'] as const) {
     const metadata = `${version} · build ${build}`;
     await expect(dialog).toContainText(metadata);
     await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    await dialog.getByRole('textbox', { name: 'Summary' }).fill('Private draft text');
     expect(requests).toHaveLength(0);
     const [popup] = await Promise.all([page.waitForEvent('popup'), link.click()]);
     await expect(popup).toHaveTitle('Intercepted GitHub draft');
@@ -193,3 +200,117 @@ test('feedback stays off OBS and venue displays, including on browser Back', asy
   await expect(dialog).toBeHidden();
   expect(fixture.unexpected).toEqual([]);
 });
+
+test('a private feedback retry sends the same draft without cookies, referrer or page context', async ({
+  page,
+  context,
+}, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 500 });
+  await page.emulateMedia({ colorScheme: 'light' });
+  const fixture = await mockEvent(page);
+  const requests: Request[] = [];
+  let finishFailedAttempt!: () => void;
+  const pendingAttempt = new Promise<void>((resolve) => {
+    finishFailedAttempt = resolve;
+  });
+  await page.route('**/api/feedback', async (route) => {
+    const request = route.request();
+    requests.push(request);
+    if (requests.length === 1) {
+      await pendingAttempt;
+      await route.abort('connectionreset');
+      return;
+    }
+    await route.fulfill({ json: { reference: request.postDataJSON().requestId } });
+  });
+  await page.goto('/changelog?guest=synthetic-private-value#synthetic-fragment');
+  // Demonstrate that fetch omits a cookie even when the browser has one for this origin.
+  await context.addCookies([{ name: 'private-fixture', value: 'example', url: page.url() }]);
+  const opener = page.getByRole('button', { name: 'Give feedback' });
+  await opener.click();
+  const dialog = page.getByRole('dialog', { name: 'Give feedback' });
+  const summary = dialog.getByRole('textbox', { name: 'Summary' });
+  const description = dialog.getByRole('textbox', { name: 'Description' });
+  const send = dialog.getByRole('button', { name: 'Send private feedback' });
+  const text = `The form clipped a long alias: ${PLAYER_NAME}`;
+  await summary.fill('Synthetic feedback');
+  await description.fill(text);
+  await send.press('Enter');
+  await expect(dialog.getByRole('button', { name: 'Sending feedback…' })).toBeDisabled();
+  await expect(description).toHaveAttribute('readonly', '');
+  finishFailedAttempt();
+  await expect(dialog.getByRole('alert')).toContainText('Try again');
+  await page.keyboard.press('Escape');
+  await expect(opener).toBeFocused();
+  await opener.press('Enter');
+  await expect(summary).toHaveValue('Synthetic feedback');
+  await expect(description).toHaveValue(text);
+  await ready(page);
+  await page.screenshot({ path: testInfo.outputPath('retry-draft.png') });
+  await send.press('Enter');
+  await expect(dialog.getByRole('status')).toContainText('Feedback sent');
+  await expect(dialog).toContainText(requests[0]!.postDataJSON().requestId);
+  await ready(page);
+  await page.screenshot({ path: testInfo.outputPath('receipt.png') });
+  const axe = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
+  expect(axe.violations).toEqual([]);
+  expect(requests).toHaveLength(2);
+  const version = await page.locator('.app-version').innerText();
+  const build = await page.locator('.build-label').innerText();
+  for (const request of requests) {
+    expect(request.postDataJSON()).toEqual({
+      requestId: requests[0]!.postDataJSON().requestId,
+      summary: 'Synthetic feedback',
+      description: text,
+      version: version.slice(1),
+      build,
+    });
+    expect(await request.headerValue('cookie')).toBeNull();
+    expect(await request.headerValue('referer')).toBeNull();
+  }
+  expect(fixture.unexpected).toEqual([]);
+});
+
+for (const [theme, width] of [
+  ['dark', 390],
+  ['dark', 1440],
+  ['light', 390],
+  ['light', 1440],
+] as const) {
+  test(`the private inbox presents long report text at ${width}px in ${theme}`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    await page.emulateMedia({ colorScheme: theme });
+    const fixture = await mockEvent(page, { role: 'admin' });
+    const reference = '00000000-0000-4000-8000-000000000001';
+    fixture.responses['admin.feedbackInbox'] = {
+      reports: [
+        {
+          reference,
+          summary: PLAYER_NAME,
+          description: `<example>\n${'WordsWithoutSpaces'.repeat(20)}`,
+          version: '1.2.3',
+          build: '1a2b3c4',
+          createdAt: '2026-10-04T00:00:00.000Z',
+        },
+      ],
+      nextCursor: null,
+    };
+    await page.goto('/admin/feedback');
+    await expect(page.getByRole('heading', { name: 'Feedback inbox' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: PLAYER_NAME })).toBeVisible();
+    await expect(page.getByText(reference)).toBeVisible();
+    await expect(page.getByText('<example>', { exact: false })).toBeVisible();
+    await ready(page);
+    const result = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+      .analyze();
+    expect(result.violations).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.screenshot({ path: testInfo.outputPath('inbox.png') });
+    expect(fixture.unexpected).toEqual([]);
+  });
+}

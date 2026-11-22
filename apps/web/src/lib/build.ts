@@ -16,10 +16,10 @@ import { version } from '../../package.json';
 /** Application version from the same manifest used by Changesets. */
 export const APP_VERSION = version;
 
-const sha = import.meta.env.VITE_BUILD_SHA?.trim();
+const sha = import.meta.env.VITE_BUILD_SHA?.trim().toLowerCase();
 
 /** Full 40-char git SHA, or null for an unstamped (local) build. */
-export const BUILD_SHA: string | null = sha && sha.length > 0 ? sha : null;
+export const BUILD_SHA: string | null = sha && /^[0-9a-f]{40}$/.test(sha) ? sha : null;
 
 /** What the footer shows: the 7-char short SHA, matching the `sha-` image tag. */
 export const BUILD_LABEL: string = BUILD_SHA ? BUILD_SHA.slice(0, 7) : 'dev';

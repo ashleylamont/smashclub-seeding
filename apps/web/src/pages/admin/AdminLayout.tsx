@@ -14,6 +14,7 @@ const TABS = [
   { to: '/admin/event-planner', label: 'Event planner' },
   { to: '/admin/event-operations', label: 'Run event' },
   { to: '/admin/settings', label: 'Settings' },
+  { to: '/admin/feedback', label: 'Feedback' },
   { to: '/admin/accounts', label: 'Admins' },
 ] as const;
 
