@@ -6,12 +6,15 @@ import {
   requireFact,
   resolved,
   sameScore,
+  TournamentConflict,
   unconfirmedCall,
   UntakenFeederCallsConflict,
 } from './facts';
 import type { CommandEnvelope, Match, TournamentState } from './schemas';
 import { matchMemberIds } from './entrants';
 import { validSetCharacterParticipants } from '../players/setCharacterPicks';
+import { hasCurrentPendingScoreReview } from './scoreReview';
+import { projectMatchLabels } from './matchNames';
 
 export function winner(
   command: Extract<CommandEnvelope['command'], { kind: 'score' }>,
@@ -75,6 +78,18 @@ export function applyScore(
           if (unconfirmedCall(item)) untakenCallIds.push(item.id);
           descendants.add(item.id);
         }
+      }
+      const pendingMatch = state.matches.find(
+        (item) =>
+          item.id !== match.id &&
+          descendants.has(item.id) &&
+          hasCurrentPendingScoreReview(item, state.reports),
+      );
+      if (pendingMatch) {
+        const label = projectMatchLabels(state).get(pendingMatch.id)?.label ?? pendingMatch.label;
+        throw new TournamentConflict(
+          `Review the pending score report for ${label} before changing this winner.`,
+        );
       }
       if (untakenCallIds.length) throw new UntakenFeederCallsConflict(untakenCallIds);
     }
