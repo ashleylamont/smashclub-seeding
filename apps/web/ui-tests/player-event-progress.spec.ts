@@ -96,10 +96,19 @@ for (const theme of ['dark', 'light'] as const)
       ).toEqual([]);
 
       await chooseOption(poolFilter, '');
-      fixture.responses['eventOps.snapshot'] = { ...afterDraw, pendingFinals: [pendingField] };
-      const completed = afterDraw.matches.filter((match) => match.status === 'complete').length;
+      const partialMatches = afterDraw.matches.map((match) =>
+        match.stage === 'group' && match.division === 'lower'
+          ? { ...match, status: 'ready', outcome: null, score1: null, score2: null, winnerId: null }
+          : match,
+      );
+      fixture.responses['eventOps.snapshot'] = {
+        ...afterDraw,
+        matches: partialMatches,
+        pendingFinals: [pendingField],
+      };
+      const partialComplete = partialMatches.filter((match) => match.status === 'complete').length;
       await expect(progress(page)).toContainText(
-        `Event progress · ${completed} / ${afterDraw.matches.length} sets complete`,
+        `Event progress · ${partialComplete} / ${partialMatches.length} sets complete`,
       );
       await expect(progress(page).getByRole('progressbar')).toHaveAccessibleDescription(
         'The remaining finals draws are pending.',
@@ -110,6 +119,7 @@ for (const theme of ['dark', 'light'] as const)
       );
 
       fixture.responses['eventOps.snapshot'] = afterDraw;
+      const completed = afterDraw.matches.filter((match) => match.status === 'complete').length;
       await expect(progress(page)).toHaveText(
         `Event progress · ${completed} / ${afterDraw.matches.length} sets complete`,
       );
@@ -134,9 +144,10 @@ test(
 test('only an open native pool-and-finals event implies an unpublished finals draw', async ({
   page,
 }) => {
-  const { fixture, beforeDraw } = await finishedPools(page);
-  const total = beforeDraw.matches.length;
+  const { fixture, beforeDraw, afterDraw } = await finishedPools(page);
   const { plan } = beforeDraw;
+  const partialDraw = { ...afterDraw, pendingFinals: [pendingField] };
+  const linkedFinals = [{ slug: 'linked-finals', stage: 'main', division: 'upper' }];
   for (const variation of [
     { ...beforeDraw, plan: { ...plan, structure: 'round_robin' } },
     { ...beforeDraw, plan: { ...plan, structure: 'single_elimination' } },
@@ -145,11 +156,17 @@ test('only an open native pool-and-finals event implies an unpublished finals dr
     { ...beforeDraw, plan: { ...plan, status: 'cancelled' } },
     { ...beforeDraw, plan: { ...plan, status: 'draft' } },
     { ...beforeDraw, plan: { ...plan, bracketMode: 'challonge' } },
-    { ...beforeDraw, brackets: [{ slug: 'linked-finals', stage: 'main', division: 'upper' }] },
+    { ...beforeDraw, brackets: linkedFinals },
+    { ...partialDraw, plan: { ...plan, status: 'complete' } },
+    { ...partialDraw, plan: { ...plan, status: 'cancelled' } },
+    { ...partialDraw, brackets: linkedFinals },
   ]) {
     fixture.responses['eventOps.snapshot'] = variation;
     await page.goto(`/play/${PLAN_ID}`);
-    await expect(progress(page)).toHaveText(`Event progress · ${total} / ${total} sets complete`);
+    const complete = variation.matches.filter((match) => match.status === 'complete').length;
+    await expect(progress(page)).toHaveText(
+      `Event progress · ${complete} / ${variation.matches.length} sets complete`,
+    );
     await expect(
       progress(page).getByRole('progressbar', { name: 'Sets completed', exact: true }),
     ).toBeVisible();

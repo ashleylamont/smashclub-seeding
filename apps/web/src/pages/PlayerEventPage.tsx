@@ -248,15 +248,14 @@ function eventFinalsProgress(data: PublicEventSnapshot) {
   )
     return;
 
-  const pools = matches.filter((match) => match.stage === 'group');
-  if (!pools.length || pools.some((match) => match.status !== 'complete')) return;
-
-  // A published bracket can have no sets, and a snapshot can already contain finals pairings.
+  // Published brackets can be empty. Finals match records also establish that a draw exists.
   const hasDraw =
     nativeBrackets.length > 0 ||
     matches.some((match) => match.stage === 'main' || match.stage === 'consolation');
-  if (!hasDraw) return 'pending';
-  if (pendingFinals?.length) return 'partial';
+  if (hasDraw) return pendingFinals?.length ? 'partial' : undefined;
+
+  const pools = matches.filter((match) => match.stage === 'group');
+  if (pools.length && pools.every((match) => match.status === 'complete')) return 'pending';
 }
 
 function PlayerEventNavigation({
