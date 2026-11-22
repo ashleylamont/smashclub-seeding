@@ -244,7 +244,7 @@ it('keeps both portable shards and Darwin independent with separate review artif
   ]) {
     expect(job).toMatchObject({
       'runs-on': 'ubuntu-latest',
-      'timeout-minutes': 15,
+      'timeout-minutes': 20,
       env: { UI_PORTABLE_SHARD: ordinal },
       outputs: {
         ui_case_set: sharedCaseOutput,
@@ -252,7 +252,15 @@ it('keeps both portable shards and Darwin independent with separate review artif
         ui_portable_shard: '${{ steps.browser.outputs.ui_portable_shard }}',
       },
       steps: expect.arrayContaining([
-        { id: 'browser', run: 'node scripts/run-ui-platform.mjs portable "$UI_PORTABLE_SHARD/2"' },
+        {
+          name: 'Install portable UI browser',
+          run: 'time pnpm --filter @smashclub/web exec playwright install --with-deps chromium',
+        },
+        {
+          name: 'Run portable UI shard',
+          id: 'browser',
+          run: 'time node scripts/run-ui-platform.mjs portable "$UI_PORTABLE_SHARD/2"',
+        },
         expect.objectContaining({
           if: 'always()',
           with: expect.objectContaining({
