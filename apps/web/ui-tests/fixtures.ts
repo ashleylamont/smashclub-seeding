@@ -58,6 +58,7 @@ export async function mockEvent(page: Page, options: FixtureOptions = {}) {
   const starts: Record<string, unknown>[] = [];
   const unexpected: string[] = [];
   const queryResponses = new Map<string, (input: unknown) => unknown>();
+  const mutationResponses = new Map<string, (input: unknown) => unknown>();
   const responses: Record<string, unknown> = {
     'me.whoami': user,
     'me.claims': [],
@@ -75,7 +76,8 @@ export async function mockEvent(page: Page, options: FixtureOptions = {}) {
   };
   await page.clock.setFixedTime(new Date('2026-10-04T00:00:00Z'));
   await page.route('**/api/**', async (route) => {
-    const url = new URL(route.request().url());
+    const request = route.request();
+    const url = new URL(request.url());
     if (url.pathname === '/api/auth/get-session') {
       await route.fulfill({
         json: options.role
@@ -98,12 +100,15 @@ export async function mockEvent(page: Page, options: FixtureOptions = {}) {
     }
     if (options.loading && url.pathname.includes('eventOps.snapshot')) await options.loading;
     const procedures = decodeURIComponent(url.pathname.replace('/api/trpc/', '')).split(',');
+    const isPost = request.method() === 'POST';
+    const responseHandlers = isPost ? mutationResponses : queryResponses;
     const result = procedures.map((procedure, index) => {
-      const queryResponse = queryResponses.get(procedure);
-      if (queryResponse) {
-        const inputs = JSON.parse(url.searchParams.get('input') ?? '{}');
+      const response = responseHandlers.get(procedure);
+      if (response) {
+        const body = isPost ? request.postData() : url.searchParams.get('input');
+        const inputs = JSON.parse(body ?? '{}');
         const input = url.searchParams.has('batch') ? inputs[index] : inputs;
-        return { result: { data: queryResponse(input) } };
+        return { result: { data: response(input) } };
       }
       if (procedure === 'eventOps.live.history') {
         if (options.historyFailure)
@@ -155,7 +160,16 @@ export async function mockEvent(page: Page, options: FixtureOptions = {}) {
     });
     await route.fulfill({ json: url.searchParams.get('batch') ? result : result[0] });
   });
-  return { snapshot, overview, responses, queryResponses, submissions, starts, unexpected };
+  return {
+    snapshot,
+    overview,
+    responses,
+    queryResponses,
+    mutationResponses,
+    submissions,
+    starts,
+    unexpected,
+  };
 }
 
 export async function ready(page: Page) {
