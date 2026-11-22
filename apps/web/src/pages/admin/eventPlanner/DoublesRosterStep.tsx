@@ -83,7 +83,7 @@ export function DoublesRosterStep({
     }) => trpc.admin.eventPlanner.updateNativeFormat.mutate({ planId, structure, usePairRatings }),
     onSuccess: onChanged,
   });
-  const errors = [add, remove, pin, freeze, reopen, format].filter((m) => m.isError);
+  const rosterError = editable ? freeze.error : reopen.error;
   const displayedEntries = [...view.entries].sort((a, b) => {
     const skill = (e: (typeof view.entries)[number]) => e.snapshotMean ?? e.currentMean ?? 1500;
     const seed = (e: (typeof view.entries)[number]) => e.snapshotScore ?? e.currentScore ?? 0;
@@ -125,6 +125,11 @@ export function DoublesRosterStep({
             </Button>
           )}
       </div>
+      {rosterError && (
+        <p role="alert" className="error-text">
+          {rosterError.message}
+        </p>
+      )}
       {editable && (
         <IssueList issues={view.issues.blocking} kind="blocking" id={freezeBlockersId} />
       )}
@@ -161,6 +166,11 @@ export function DoublesRosterStep({
             />{' '}
             Include experimental WHR pair adjustments in seeds
           </label>
+          {format.error && (
+            <p role="alert" className="error-text">
+              {format.error.message}
+            </p>
+          )}
           <p className="muted">
             With the model off, seeds use average singles skill and uncertainty. With it on, they
             also include the pair’s mean adjustment and uncertainty.
@@ -186,6 +196,11 @@ export function DoublesRosterStep({
               Add pair
             </Button>
           </div>
+          {add.error && (
+            <p role="alert" className="error-text">
+              {add.error.message}
+            </p>
+          )}
         </>
       )}
       {picking && (
@@ -252,6 +267,11 @@ export function DoublesRosterStep({
                       <SelectItem value="lower">Pin to Lower</SelectItem>
                     </Select>
                   )}
+                  {pin.error && pin.variables?.entryId === e.id && (
+                    <p role="alert" className="error-text">
+                      {pin.error.message}
+                    </p>
+                  )}
                 </td>
                 <td className="num">
                   {e.memberSubstituted || e.latePair
@@ -276,17 +296,17 @@ export function DoublesRosterStep({
                       </Button>
                     )}
                   </div>
+                  {remove.error && remove.variables === e.id && (
+                    <p role="alert" className="error-text">
+                      {remove.error.message}
+                    </p>
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      {errors.map((m, i) => (
-        <p key={i} role="alert" className="error-text">
-          {m.error?.message}
-        </p>
-      ))}
     </section>
   );
 }

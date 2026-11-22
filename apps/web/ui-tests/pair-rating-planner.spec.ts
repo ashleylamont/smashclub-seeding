@@ -449,3 +449,47 @@ for (const theme of ['dark', 'light'] as const)
       expect(intents[1]!.requestId).not.toBe(intents[0]!.requestId);
       expect(fixture.unexpected).toEqual([]);
     });
+
+for (const action of [
+  { name: 'freeze', label: 'Freeze team seeds', procedure: 'freezeRoster', status: 'draft' },
+  { name: 'reopen', label: 'Reopen roster', procedure: 'unfreezeRoster', status: 'roster_frozen' },
+] as const) {
+  test(`a rejected doubles ${action.name} reports beside the control on a phone`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    const fixture = await planner(page);
+    fixture.view.plan.status = action.status;
+    if (action.status === 'roster_frozen')
+      fixture.view.divisions[0]!.size = fixture.view.entries.length;
+    const message = 'The roster changed. Review the latest pairs before trying again.';
+    await page.route(`**/api/trpc/admin.eventPlanner.${action.procedure}*`, (route) =>
+      route.fulfill({
+        status: 409,
+        json: [
+          {
+            error: {
+              message,
+              code: -32009,
+              data: { code: 'CONFLICT', httpStatus: 409 },
+            },
+          },
+        ],
+      }),
+    );
+
+    await page.goto(`/admin/event-planner?plan=${PLAN_ID}&step=roster`);
+    const control = page.getByRole('button', { name: action.label, exact: true });
+    await control.press('Enter');
+    const error = page.getByRole('alert').filter({ hasText: message });
+    await expect(error).toBeVisible();
+    await expect(error).toBeInViewport();
+    await expect(control).toBeInViewport();
+    await expect(control).toBeEnabled();
+    const ratings = page.getByRole('region', { name: 'Pair ratings', exact: true });
+    expect((await error.boundingBox())!.y).toBeLessThan((await ratings.boundingBox())!.y);
+    await ready(page);
+    await page.screenshot({ path: testInfo.outputPath('roster-action-error.png') });
+    expect(fixture.unexpected).toEqual([]);
+  });
+}

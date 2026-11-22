@@ -87,6 +87,7 @@ for (const [structure, played] of [
       },
     );
     await page.goto(`/admin/event-planner?plan=${planId}`);
+    await page.getByRole('button', { name: 'Draft settings', exact: true }).click();
     await chooseOption(
       page.getByRole('combobox', { name: 'Tournament structure', exact: true }),
       structure,
