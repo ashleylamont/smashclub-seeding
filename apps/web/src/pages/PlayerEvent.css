@@ -203,3 +203,8 @@
   gap: var(--s4);
   margin: 0;
 }
+.player-event-archive .event-recent {
+  display: grid;
+  gap: var(--s4);
+  margin-block-start: 0;
+}
