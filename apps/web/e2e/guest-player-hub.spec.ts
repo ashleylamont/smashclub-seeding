@@ -374,7 +374,9 @@ test('QR and unlinked attendees confirm recorded results or flag a different sco
     await chooseOption(other.getByLabel('Match view', { exact: true }), 'results');
     const otherCard = other.locator('article.ops-match').filter({ hasText: first.label });
     await otherCard.getByRole('button', { name: 'Confirm recorded score', exact: true }).click();
-    await expect(otherCard).toContainText('your score agrees');
+    await expect(
+      otherCard.getByText('Your report: 2 – 1 · Confirmed result', { exact: true }),
+    ).toBeVisible();
     await otherCard.getByRole('button', { name: 'Report a different score', exact: true }).click();
     await otherCard.locator('input[type="number"]').nth(0).fill('1');
     await clearInput(otherCard.getByRole('spinbutton').nth(1));
@@ -383,7 +385,11 @@ test('QR and unlinked attendees confirm recorded results or flag a different sco
     ).toBeDisabled();
     await otherCard.getByRole('spinbutton').nth(1).press('2');
     await otherCard.getByRole('button', { name: 'Send different score to TOs' }).click();
-    await expect(otherCard).toContainText('Different score sent to the TOs for review');
+    await expect(
+      otherCard.getByText('Your report: 1 – 2 · Different score awaiting TO review', {
+        exact: true,
+      }),
+    ).toBeVisible();
     await expect(otherCard).toContainText('Confirmed result: 2 – 1');
     await other.screenshot({
       path: testInfo.outputPath('guest-dispute-mobile.png'),
@@ -398,7 +404,9 @@ test('QR and unlinked attendees confirm recorded results or flag a different sco
     await chooseOption(signed.getByLabel('Match view', { exact: true }), 'results');
     const signedCard = signed.locator('article.ops-match').filter({ hasText: first.label });
     await signedCard.getByRole('button', { name: 'Confirm recorded score', exact: true }).click();
-    await expect(signedCard).toContainText('your score agrees');
+    await expect(
+      signedCard.getByText('Your report: 2 – 1 · Confirmed result', { exact: true }),
+    ).toBeVisible();
     await signedCard.getByRole('button', { name: 'Report a different score', exact: true }).click();
     await clearInput(signedCard.getByRole('spinbutton').nth(0));
     await expect(
@@ -411,7 +419,11 @@ test('QR and unlinked attendees confirm recorded results or flag a different sco
     ).toBeDisabled();
     await signedCard.getByRole('spinbutton').nth(1).press('0');
     await signedCard.getByRole('button', { name: 'Send different score to TOs' }).click();
-    await expect(signedCard).toContainText('Different score sent to the TOs for review');
+    await expect(
+      signedCard.getByText('Your report: 2 – 0 · Different score awaiting TO review', {
+        exact: true,
+      }),
+    ).toBeVisible();
     const official = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
     expect(official.matches.find((match) => match.id === first.id)).toMatchObject({
       status: 'complete',
