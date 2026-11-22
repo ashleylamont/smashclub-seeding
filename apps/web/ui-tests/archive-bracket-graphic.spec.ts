@@ -3,6 +3,7 @@ import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import type { EventOverviewData, TournamentData } from '../src/lib/apiTypes';
 import { mockEvent, ready } from './fixtures';
+import { bracketFixture } from '../test/fixtures/brackets';
 
 const eventDate = '2026-10-02T08:30:00.000Z';
 const eventName = 'Autumn finals';
@@ -261,3 +262,73 @@ for (const theme of ['dark', 'light'] as const)
       await expect(action).toHaveCount(0);
       expect(fixture.unexpected).toEqual([]);
     });
+
+test('the archived double-elimination graphic names the loser route into a bye', async ({
+  page,
+}, testInfo) => {
+  const fixture = await mockEvent(page);
+  const matches = bracketFixture(3).filter((match) => match.bracketLane !== 'reset');
+  const byId = new Map(matches.map((match) => [match.id, match]));
+  function entrantFrom(parentId: string | null | undefined, outcome?: 'winner' | 'loser') {
+    const parent = parentId ? byId.get(parentId) : undefined;
+    if (!parent?.winnerId) return null;
+    return outcome === 'loser'
+      ? parent.winnerId === parent.player1Id
+        ? parent.player2Id
+        : parent.player1Id
+      : parent.winnerId;
+  }
+  const aliasById = new Map(participants.map(({ name }, index) => [`entrant-${index}`, name]));
+  for (const match of matches) {
+    const first = match.parent1MatchId
+      ? entrantFrom(match.parent1MatchId, match.parent1Outcome)
+      : match.player1Id;
+    const second = match.parent2MatchId
+      ? entrantFrom(match.parent2MatchId, match.parent2Outcome)
+      : match.player2Id;
+    const played = Boolean(first && second);
+    Object.assign(match, {
+      player1Id: first,
+      player2Id: second,
+      player1Name: first ? aliasById.get(first) : null,
+      player2Name: second ? aliasById.get(second) : null,
+      status: 'complete',
+      outcome: played ? 'played' : 'bye',
+      score1: played ? 2 : null,
+      score2: played ? 0 : null,
+      winnerId: first ?? second,
+    });
+  }
+  fixture.responses['public.eventOverview'] = {
+    ...overview,
+    structure: 'double_elimination',
+    brackets: [{ ...overview.brackets[0], bracketGraphic: { ...bracketGraphic, matches } }],
+  };
+
+  await page.goto(`/events/${slug}`);
+  await page.getByRole('button', { name: `Preview bracket graphic for ${scope}` }).press('Enter');
+  const dialog = page.getByRole('dialog', { name: 'Bracket graphic' });
+  await expect(dialog.getByRole('img')).toBeVisible();
+  const download = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Download bracket SVG' }).press('Enter');
+  const svgPath = testInfo.outputPath('double-elimination-archive.svg');
+  await (await download).saveAs(svgPath);
+  const exported = await page.context().newPage();
+  try {
+    await exported.setContent(await readFile(svgPath, 'utf8'));
+    const losers = exported.getByText('losers 1 · M1 · Bye', { exact: true }).locator('..');
+    await expect(losers.getByText('Bye', { exact: true })).toBeVisible();
+    await expect(losers.getByText('Loser of winners 1 · M1', { exact: true })).toBeVisible();
+    await expect(losers.getByText('Loser of winners 1 · M2', { exact: true })).toBeVisible();
+    await exported.locator('svg').screenshot({
+      path: testInfo.outputPath('double-elimination-archive.png'),
+    });
+  } finally {
+    await exported.close();
+  }
+
+  const pngEvent = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Download bracket PNG' }).press('Enter');
+  await (await pngEvent).saveAs(testInfo.outputPath('double-elimination-download.png'));
+  expect(fixture.unexpected).toEqual([]);
+});

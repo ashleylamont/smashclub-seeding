@@ -27,6 +27,7 @@ import {
   resetNativeBrackets,
 } from '../src/event-operations/nativeBrackets';
 import { BRACKET_SLOTS, getPlan, savePoolPlacements } from '../src/event-planner/plans';
+import { applyPlanRetirement } from '../src/event-planner/retirement';
 import { latestRecomputeId, runRecompute } from '../src/recompute/recompute';
 import { loadEventOverview } from '../src/events/overview';
 import { loadEnv } from '../src/env';
@@ -223,34 +224,8 @@ describe('native brackets', () => {
   });
 
   it('projects archive captions from exact legacy publication links and the complete stored draw', async () => {
-    // The normal planner creates these slots before legacy finalization links the results.
-    await db
-      .insert(eventPlanBrackets)
-      .values(BRACKET_SLOTS.map((slot) => ({ eventPlanId: planId, ...slot })));
-    await finishPools();
-    await generate();
-    for (;;) {
-      const ready = (await db.select().from(eventMatches)).filter(
-        (match) => match.nativeBracketId && match.status === 'ready',
-      );
-      if (!ready.length) break;
-      for (const match of ready) await score(match);
-    }
-    await finalizeNativeEvent(db, admin, planId);
-    const publicApi = publicRouter.createCaller({
-      db,
-      user: null,
-      env: loadEnv({
-        NODE_ENV: 'test',
-        DATABASE_URL: 'postgres://unused',
-        BETTER_AUTH_SECRET: 'test-secret-test-secret-test',
-      }),
-      challonge: fixtureClient([]),
-      recomputeTrigger: new RecomputeTrigger(db, 1_000_000),
-    });
-    const tournament = (await db.select().from(tournaments)).find((row) =>
-      row.challongeSlug.endsWith('_upper_consolation'),
-    );
+    const tournament = await publishLegacyConsolation();
+    const publicApi = legacyArchiveCaller();
     const read = () => publicApi.tournament({ slug: tournament!.challongeSlug });
     const archive = (await read())!;
     const stored = await db.select().from(sets).where(eq(sets.tournamentId, archive.id));
@@ -342,6 +317,55 @@ describe('native brackets', () => {
       .where(eq(tournaments.id, archive.id));
     expect(await read()).toEqual({ ...fallback, provider: 'challonge' });
   });
+
+  it.each([
+    { withdrawResults: false, verified: true },
+    { withdrawResults: true, verified: false },
+  ])(
+    'honours a legacy retirement (withdraw results=$withdrawResults)',
+    async ({ withdrawResults, verified }) => {
+      const { challongeSlug: slug, id } = (await publishLegacyConsolation())!;
+      const publicApi = legacyArchiveCaller();
+      const readTournament = () => publicApi.tournament({ slug });
+      const readEvent = () => publicApi.eventOverview({ slug });
+      const original = (await readTournament())!.bracketGraphic;
+      expect(original).toBeDefined();
+
+      await applyPlanRetirement(db, planId, {
+        requestId: crypto.randomUUID(),
+        actorId: admin.id,
+        at: Date.now(),
+        operation: 'delete',
+        replacementPlanId: null,
+        withdrawResults,
+        reason: 'Archive the event plan',
+      });
+
+      const expected = verified ? original : undefined;
+      expect((await readTournament())?.bracketGraphic).toEqual(expected);
+      expect(
+        (await readEvent())?.brackets.find((bracket) => bracket.tournamentId === id)
+          ?.bracketGraphic,
+      ).toEqual(expected);
+
+      // A retained archive still depends on the original two-way linkage.
+      const final = original!.matches.find(({ label }) => label === 'Final')!;
+      await db
+        .update(eventMatches)
+        .set({ score1: 0, score2: 2 })
+        .where(eq(eventMatches.sourceSetId, final.id));
+      expect((await readTournament())?.bracketGraphic).toEqual(expected);
+      await db
+        .update(eventMatches)
+        .set({ parent1MatchId: null })
+        .where(eq(eventMatches.sourceSetId, final.id));
+      expect((await readTournament())?.bracketGraphic).toBeUndefined();
+      expect(
+        (await readEvent())?.brackets.find((bracket) => bracket.tournamentId === id)
+          ?.bracketGraphic,
+      ).toBeUndefined();
+    },
+  );
 
   it('draws honest byes and completes all four brackets into history exactly once', async () => {
     expect(nativeDraw(['a', 'b', 'c', 'd', 'e'])).toEqual([
@@ -700,3 +724,37 @@ describe('native brackets', () => {
     expect([downstream.player1Id, downstream.player2Id]).toContain(match.player1Id);
   });
 });
+
+async function publishLegacyConsolation() {
+  // The normal planner creates these slots before legacy finalization links the results.
+  await db
+    .insert(eventPlanBrackets)
+    .values(BRACKET_SLOTS.map((slot) => ({ eventPlanId: planId, ...slot })));
+  await finishPools();
+  await generate();
+  for (;;) {
+    const ready = (await db.select().from(eventMatches)).filter(
+      (match) => match.nativeBracketId && match.status === 'ready',
+    );
+    if (!ready.length) break;
+    for (const match of ready) await score(match);
+  }
+  await finalizeNativeEvent(db, admin, planId);
+  return (await db.select().from(tournaments)).find((row) =>
+    row.challongeSlug.endsWith('_upper_consolation'),
+  );
+}
+
+function legacyArchiveCaller() {
+  return publicRouter.createCaller({
+    db,
+    user: null,
+    env: loadEnv({
+      NODE_ENV: 'test',
+      DATABASE_URL: 'postgres://unused',
+      BETTER_AUTH_SECRET: 'test-secret-test-secret-test',
+    }),
+    challonge: fixtureClient([]),
+    recomputeTrigger: new RecomputeTrigger(db, 1_000_000),
+  });
+}

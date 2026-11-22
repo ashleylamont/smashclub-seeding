@@ -1,4 +1,4 @@
-import { and, eq, isNull, ne, notExists, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, ne, notExists, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   eventMatches,
@@ -86,9 +86,17 @@ export async function legacyNativeArchiveDraw(
               ),
             ),
         ),
-        eq(eventPlans.status, 'complete'),
+        // Retirement closes the plan. The explicit keep-results decision leaves
+        // its completed publication and original set links available.
+        or(
+          and(eq(eventPlans.status, 'complete'), isNull(eventPlans.deletedAt)),
+          and(
+            eq(eventPlans.status, 'cancelled'),
+            isNotNull(eventPlans.deletedAt),
+            sql`${eventPlans.retirement}->'withdrawResults' = 'false'::jsonb`,
+          ),
+        ),
         eq(eventPlans.bracketMode, 'native'),
-        isNull(eventPlans.deletedAt),
         isNull(eventPlans.historicalAdoption),
         isNull(eventPlans.resultsWithdrawnAt),
       ),

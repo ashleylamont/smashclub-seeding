@@ -10,6 +10,7 @@ import { createNativeRuntime, type NativeRuntime } from '../src/tournament/runti
 import { appRouter } from '../src/trpc/router';
 import { nativeAdmin } from './helpers/nativeLiveFixture';
 import { createTestDb } from './helpers/testDb';
+import { bracketGraphicSvg } from '../../web/src/lib/bracketGraphic';
 
 describe('verified native archive graphics', () => {
   let db: Db, close: () => Promise<void>, runtime: NativeRuntime;
@@ -222,6 +223,26 @@ describe('verified native archive graphics', () => {
       expect(graphic?.matches.some(({ bracketLane }) => bracketLane === 'reset')).toBe(reset);
       expect(graphic?.matches.find(({ player1Name }) => player1Name)?.player1Name).toMatch(
         /^Team \d \(Entrant \d \/ Entrant \d\)$/,
+      );
+
+      const firstLosersMatch = graphic!.matches.find(
+        (match) => match.bracketLane === 'losers' && match.bracketRound === 1,
+      )!;
+      const sourceId =
+        firstLosersMatch.player1Id === null
+          ? firstLosersMatch.parent1MatchId
+          : firstLosersMatch.parent2MatchId;
+      const source = graphic!.matches.find(({ id }) => id === sourceId)!;
+      expect(source.outcome).toBe('bye');
+      expect(firstLosersMatch.outcome).toBe('bye');
+
+      const exported = bracketGraphicSvg(
+        { ...graphic!, eventDate: '', state: 'closed' },
+        graphic!.matches,
+        (value, size) => value.length * size * 0.56,
+      )!;
+      expect(exported.svg.match(/>Bye<\/text><text[^>]+>[^<]+<\/text>/g)).toEqual(
+        expect.arrayContaining([expect.stringContaining(`>Loser of ${source.label}</text>`)]),
       );
     },
   );

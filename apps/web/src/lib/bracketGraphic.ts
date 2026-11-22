@@ -156,7 +156,9 @@ export function bracketGraphicSvg(
           const name = wrap(liveBracketSide(match, side, labels), 17, winner, cardWidth - 74);
           const feed = liveBracketFeeds(match).find((edge) => edge.side === side);
           const origin =
-            feed && id && laneByMatch.get(feed.matchId) !== lane.key
+            feed &&
+            (id || match.status === 'complete') &&
+            laneByMatch.get(feed.matchId) !== lane.key
               ? wrap(
                   `${feed.outcome === 'winner' ? 'Winner' : 'Loser'} of ${labels.get(feed.matchId)}`,
                   13,
