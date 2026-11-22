@@ -706,7 +706,8 @@ describe('Changeset merge gate', () => {
     return '## 0.1.1\n\n### Patch Changes\n\n- Keep the QR visible.';
   };
 
-  describe.sequential('tested merge checkout', () => {
+  // Git, Node and pnpm process startup can exceed five seconds during parallel runs.
+  describe.sequential('tested merge checkout', { timeout: 15_000 }, () => {
     let cwd: string;
     let eventBase: string;
     let testedBase: string;
