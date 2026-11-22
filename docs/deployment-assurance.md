@@ -4,9 +4,9 @@ PRs run **CI**. Main pushes, version tags and manual publication run the full re
 
 ## Affected checks on pull requests
 
-The **Changeset** job summary reports affected pnpm workspaces and their dependents, the checks it authorized skipping, and any further candidates that still run. It compares the tested merge tree against its first parent and verifies the second parent matches the PR head. Moves across scopes count both paths.
+The **Changeset** job summary reports affected pnpm workspaces and their dependents, the checks it authorized skipping, and any further candidates that still run. It compares the tested merge tree against its first parent and verifies the second parent matches the PR head. Moves across scopes count both paths. On PRs, the **Typecheck** job runs the full typecheck and then adds a bounded, advisory **Preview Nx affected tasks** step. It reports which package typechecks and unit suites Nx would select for the same comparison. **Unit tests** runs the full suite, and Publish runs both full checks.
 
-Web-only and prose-only PRs skip **PostgreSQL integration** and **Legacy Python tests**. Prose covers repository Markdown guidance, Markdown under `docs/` and Changeset notes. Browser, visual, bundle and production-image checks still run. A change outside those isolated scopes, including workspace configuration, migrations or workflow scripts, runs the full suite. Set the repository Actions variable `CI_REPORT_ONLY` to `true` to keep the summary and run every check on PRs.
+Web-only and prose-only PRs skip **PostgreSQL integration** and **Legacy Python tests**. Prose covers repository Markdown guidance, Markdown under `docs/` and Changeset notes. Visual, bundle, and production-image checks still run. Browser event flows and their report also run, with a deferral for validated version-only PRs until Publish verifies the exact main commit. A change outside the isolated scopes, including workspace configuration, migrations, or workflow scripts, runs the full suite. Set the repository Actions variable `CI_REPORT_ONLY` to `true` to keep the summaries and run every check on PRs.
 
 ## Required contracts
 
@@ -39,7 +39,7 @@ observed slow setup and execution together without changing test selection,
 workers, per-test timeouts, retries or image baselines. Verify future changes on
 both a PR and its exact-main Publish run using the named step timings.
 
-**All checks** rejects failed, cancelled, missing and unexpected skipped jobs. Only the two PR jobs listed above can be skipped, and only with an explicit plan from a successful **Changeset** job. `pnpm test:postgres` additionally validates its JUnit report: all named required suites must appear and no tests may be skipped. Missing binaries, wrong PostgreSQL major, missing Docker, migrations or an empty/skipped suite fail the command.
+**All checks** rejects failed, cancelled, missing and unexpected skipped jobs. The two optional PR jobs and the version-only browser deferral require an explicit plan from a successful **Changeset** job. The browser deferral must apply to both the event flows and their report. Publish requires every job to pass. `pnpm test:postgres` additionally validates its JUnit report: all named required suites must appear and no tests may be skipped. Missing binaries, wrong PostgreSQL major, missing Docker, migrations or an empty/skipped suite fail the command.
 
 ## Run locally
 

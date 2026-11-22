@@ -43,5 +43,12 @@
   },
   "engines": {
     "node": ">=22.23.4"
+  },
+  "nx": {
+    "targets": {
+      "test": {
+        "command": "pnpm exec vitest run --project server"
+      }
+    }
   }
 }
