@@ -34,7 +34,12 @@ const nights = [
   { playerId: debut.playerId, eventKey: dates[2]!, postRating: 1450, postRd: 118, played: true },
 ];
 
-async function mockRatingHistory(page: Page, withNightLedger = true, withSetHistory = true) {
+async function mockRatingHistory(
+  page: Page,
+  withNightLedger = true,
+  withSetHistory = true,
+  emptySelection = false,
+) {
   const fixture = await mockEvent(page);
   const leaderboard: LeaderboardData = {
     computedAt: '2026-09-29T10:00:00Z',
@@ -92,7 +97,18 @@ async function mockRatingHistory(page: Page, withNightLedger = true, withSetHist
   fixture.queryResponses.set('public.ratingNightHistory', (input) => {
     const { playerIds } = input as { playerIds: string[] };
     requests.push(playerIds);
-    return withNightLedger ? nights.filter(({ playerId }) => playerIds.includes(playerId)) : [];
+    const points = emptySelection
+      ? []
+      : nights.filter(
+          (night) => playerIds.includes(night.playerId) && (withNightLedger || night.played),
+        );
+    return {
+      mode: withNightLedger ? 'nightly' : 'played',
+      eventKeys: withNightLedger
+        ? [...new Set(points.map((night) => night.eventKey))].sort()
+        : dates,
+      points,
+    };
   });
   return { requests, unexpected: fixture.unexpected };
 }
@@ -173,4 +189,36 @@ test('the published chart can load independently of set history', async ({ page 
   await expect(plot).toBeVisible();
   await plot.focus();
   await expect(chart.locator('.tooltip-row')).toContainText('1600');
+});
+
+test('a legacy gap stays on the axis after deselecting everyone who played that night', async ({
+  page,
+}, info) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  const { requests } = await mockRatingHistory(page, false);
+  await page.goto('/');
+  const chart = page.locator('.ratings-over-time');
+  const plot = chart.getByRole('application');
+  await expect(plot).toContainText(dates[1]!);
+  await chart.locator('.chart-legend').getByRole('button', { name: debut.name }).click();
+  await expect.poll(() => requests.at(-1)).toEqual([returning.playerId]);
+  await expect(plot).toContainText(dates[1]!);
+  await plot.focus();
+  await expect(chart.locator('.tooltip-label')).toHaveText(dates[0]!);
+  await plot.press('ArrowRight');
+  await expect(chart.locator('.tooltip-label')).toHaveText(dates[1]!);
+  await expect(chart.getByRole('status')).toContainText('No recorded estimates');
+  await expect(chart.locator('.tooltip-row')).toHaveCount(0);
+  await ready(page);
+  await chart.screenshot({ path: info.outputPath('legacy-gap.png') });
+});
+
+test('a modern selection absent from the published run cannot recover cached played estimates', async ({
+  page,
+}) => {
+  await mockRatingHistory(page, true, true, true);
+  await page.goto('/');
+  const chart = page.locator('.ratings-over-time');
+  await expect(chart).toContainText('No night estimates for these players.');
+  await expect(chart.getByRole('application')).toHaveCount(0);
 });

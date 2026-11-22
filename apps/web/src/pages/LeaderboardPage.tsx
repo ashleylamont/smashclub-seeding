@@ -276,7 +276,7 @@ export function LeaderboardPage() {
       )}
 
       {ratingHistory.data && ratingHistory.data.players.length > 0 && (
-        <RatingsOverTime history={ratingHistory.data} />
+        <RatingsOverTime players={ratingHistory.data.players} />
       )}
     </div>
   );

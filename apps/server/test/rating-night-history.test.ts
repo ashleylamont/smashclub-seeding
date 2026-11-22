@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
-import { players, sets, tournaments } from '@smashclub/db';
+import { eq } from 'drizzle-orm';
+import { players, ratingNights, recomputes, sets, tournaments } from '@smashclub/db';
 import { loadEnv } from '../src/env';
 import { runRecompute } from '../src/recompute/recompute';
 import { RecomputeTrigger } from '../src/recompute/trigger';
@@ -56,7 +57,7 @@ it('returns the same published night estimates as the profile for selected playe
         scoresCsv: '3-0',
       },
     ]);
-    await runRecompute(db);
+    const { recomputeId } = await runRecompute(db);
     const api = appRouter.createCaller({
       db,
       user: null,
@@ -77,9 +78,14 @@ it('returns the same published night estimates as the profile for selected playe
     expect(profile.nights[1]).toMatchObject({ eventKey: '2026-08-27', played: false });
     expect(profile.nights[1]!.postRd).not.toBe(profile.nights[0]!.postRd);
 
-    const points = await api.ratingNightHistory({
+    const result = await api.ratingNightHistory({
       playerIds: [returning!.id, debut!.id, unrated!.id],
     });
+    expect(result).toMatchObject({
+      mode: 'nightly',
+      eventKeys: ['2026-05-28', '2026-08-27'],
+    });
+    const { points } = result;
     expect(points).toHaveLength(3);
     expect(points.filter(({ playerId }) => playerId === returning!.id)).toEqual(
       profile.nights.map(({ eventKey, played, postRating, postRd }) => ({
@@ -97,6 +103,20 @@ it('returns the same published night estimates as the profile for selected playe
     await expect(
       api.ratingNightHistory({ playerIds: Array(9).fill(returning!.id) }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(await api.ratingNightHistory({ playerIds: [unrated!.id] })).toEqual({
+      mode: 'nightly',
+      eventKeys: [],
+      points: [],
+    });
+
+    // Reproduce a pre-ledger WHR run. Another player's set still establishes a club night.
+    await db.delete(ratingNights).where(eq(ratingNights.recomputeId, recomputeId));
+    await db.update(recomputes).set({ stats: {} }).where(eq(recomputes.id, recomputeId));
+    expect(await api.ratingNightHistory({ playerIds: [returning!.id] })).toEqual({
+      mode: 'played',
+      eventKeys: ['2026-05-28', '2026-08-27'],
+      points: [points.find(({ playerId }) => playerId === returning!.id)],
+    });
   } finally {
     await close();
   }

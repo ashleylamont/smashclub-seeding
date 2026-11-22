@@ -18,7 +18,7 @@ import type { RatingHistoryData } from '../lib/apiTypes';
 import './RatingsOverTime.css';
 
 interface RatingsOverTimeProps {
-  history: RatingHistoryData;
+  players: RatingHistoryData['players'];
 }
 
 /**
@@ -62,7 +62,7 @@ interface Snapshot {
   attendance: Record<string, boolean>;
 }
 
-export function RatingsOverTime({ history }: RatingsOverTimeProps) {
+export function RatingsOverTime({ players }: RatingsOverTimeProps) {
   const [yMode, setYMode] = useState<YMode>('rating');
   const [search, setSearch] = useState('');
 
@@ -73,7 +73,7 @@ export function RatingsOverTime({ history }: RatingsOverTimeProps) {
    */
   const [slots, setSlots] = useState<(string | null)[]>(() => {
     const initial: (string | null)[] = Array.from({ length: MAX_SERIES }, () => null);
-    history.players.slice(0, DEFAULT_SELECTION).forEach((player, i) => {
+    players.slice(0, DEFAULT_SELECTION).forEach((player, i) => {
       initial[i] = player.playerId;
     });
     return initial;
@@ -111,45 +111,39 @@ export function RatingsOverTime({ history }: RatingsOverTimeProps) {
     });
   }, []);
 
-  const nameById = useMemo(
-    () => new Map(history.players.map((p) => [p.playerId, p.name])),
-    [history.players],
-  );
+  const nameById = useMemo(() => new Map(players.map((p) => [p.playerId, p.name])), [players]);
 
   const searchResults = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return [];
-    return history.players.filter((p) => p.name.toLowerCase().includes(query)).slice(0, 8);
-  }, [history.players, search]);
+    return players.filter((p) => p.name.toLowerCase().includes(query)).slice(0, 8);
+  }, [players, search]);
 
   const chartData = useMemo(() => {
     if (!nightly.data) return [];
-    // An older run may have played-set evidence but no separate night ledger.
-    const estimates = nightly.data.length
-      ? nightly.data
-      : history.events
-          .filter(
-            (event) => !event.isDecay && event.won !== null && selectedIds.has(event.playerId),
-          )
-          .map((event) => ({ ...event, played: true }));
-    const byNight = new Map<string, Snapshot>();
-    for (const { eventKey, playerId, postRating, postRd, played } of estimates) {
-      const night = byNight.get(eventKey) ?? { label: eventKey, values: {}, attendance: {} };
+    const byNight = new Map(
+      nightly.data.eventKeys.map((label): [string, Snapshot] => [
+        label,
+        { label, values: {}, attendance: {} },
+      ]),
+    );
+    for (const { eventKey, playerId, postRating, postRd, played } of nightly.data.points) {
+      const night = byNight.get(eventKey)!;
       night.values[playerId] = yMode === 'cautious' ? postRating - 2 * postRd : postRating;
       night.attendance[playerId] = played;
-      byNight.set(eventKey, night);
     }
-    return [...byNight.values()].sort((a, b) => a.label.localeCompare(b.label));
-  }, [nightly.data, history.events, selectedIds, yMode]);
+    return [...byNight.values()];
+  }, [nightly.data, yMode]);
 
   return (
     <section className="ratings-over-time section">
       <h2>Ratings over time</h2>
       <p className="muted chart-caption">
         Compare up to {MAX_SERIES} players. Each estimate uses results through that club night.
-        {nightly.data?.length
-          ? ' Estimates include missed nights.'
-          : nightly.data && ' Showing the available played-night estimates.'}
+        {Boolean(nightly.data?.points.length) &&
+          (nightly.data?.mode === 'played'
+            ? ' Showing the available played-night estimates.'
+            : ' Estimates include missed nights.')}
       </p>
 
       <div className="chart-controls">
@@ -238,7 +232,7 @@ export function RatingsOverTime({ history }: RatingsOverTimeProps) {
             Try again
           </Button>
         </Notice>
-      ) : chartData.length === 0 ? (
+      ) : !nightly.data.points.length ? (
         <p className="no-data">No night estimates for these players.</p>
       ) : (
         <ResponsiveContainer width="100%" height={380}>
@@ -269,14 +263,15 @@ export function RatingsOverTime({ history }: RatingsOverTimeProps) {
             <Tooltip
               cursor={{ stroke: 'var(--border-strong)' }}
               content={({ active, payload, label }) => {
-                if (!active || !payload || payload.length === 0) return null;
-                const sorted = [...payload]
+                if (!active || typeof label !== 'string') return null;
+                const sorted = [...(payload ?? [])]
                   .filter((p) => p.value != null)
                   .sort((a, b) => (b.value as number) - (a.value as number));
                 const night = chartData.find((point) => point.label === label);
                 return (
                   <div className="custom-tooltip ratings-tooltip" role="status">
                     <p className="tooltip-label">{label}</p>
+                    {sorted.length === 0 && <p>No recorded estimates for these players.</p>}
                     {sorted.map((entry) => (
                       <p key={entry.name as string} className="tooltip-row">
                         <span className="tooltip-swatch" style={{ background: entry.color }} />
