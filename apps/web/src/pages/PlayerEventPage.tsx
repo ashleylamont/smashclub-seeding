@@ -54,6 +54,7 @@ function PlayerEventHubPage({ hub }: { hub: PlayerEventHub }) {
     online,
     selectedPool,
     player,
+    journey,
     usingLinkedDefault,
     error,
     board,
@@ -146,7 +147,12 @@ function PlayerEventHubPage({ hub }: { hub: PlayerEventHub }) {
               </section>
             </>
           )}
-          <PlayerHubBoard data={data} selectedPool={selectedPool} player={player} />
+          <PlayerHubBoard
+            data={data}
+            selectedPool={selectedPool}
+            player={player}
+            journeyState={journey?.state}
+          />
         </>
       )}
       {error && !matches.isError && (

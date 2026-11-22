@@ -11,20 +11,31 @@ import { Disclosure } from './ui/Disclosure';
 import { Button } from './ui/Button';
 import { matchStation } from '../lib/playerMatchView';
 import { matchPresentation, nextMeaningfulMatch } from '../lib/matchPresentation';
+import type { PlayerJourney } from '../lib/playerJourney';
 import type { PublicEventSnapshot } from '../lib/usePlayerEventHub';
+
+const endedJourneys = new Set<PlayerJourney['state']>([
+  'withdrawn',
+  'bracket_finished',
+  'winner',
+  'pool_finished',
+]);
 
 export function PlayerHubBoard({
   data,
   selectedPool,
   player,
+  journeyState,
   archiveOnly = false,
 }: {
   data: PublicEventSnapshot;
   selectedPool: string;
   player: string;
+  journeyState?: PlayerJourney['state'];
   archiveOnly?: boolean;
 }) {
   const board = playerHubView(data, player, selectedPool);
+  const runEnded = journeyState !== undefined && endedJourneys.has(journeyState);
   const superseded = (data.supersededPlayedSets ?? []).filter((set) =>
     player
       ? [set.player1Id, set.player2Id].some((id) => id && board.identities.has(id))
@@ -87,6 +98,7 @@ export function PlayerHubBoard({
         data={data}
         board={board}
         player={player}
+        runEnded={runEnded}
         archiveOnly={archiveOnly}
         archiveEntry={archiveEntry === 'brackets'}
       />
@@ -209,14 +221,13 @@ export function PlayerHubBoard({
   };
   return (
     <>
-      {!board.closed &&
+      {!runEnded &&
         board.activePools &&
         (board.activeBrackets || (player && board.resolvedPools)) && (
           <p className="card player-event-stage-note">
             {player && board.resolvedPools
-              ? 'Your pool sets are recorded. '
-              : 'Brackets and pools are both in progress. '}
-            Other pool sets are still in progress; follow published pairings for your next stage.
+              ? 'Other pool sets are still in progress.'
+              : 'Brackets and pools are both in progress.'}
           </p>
         )}
       {sectionOrder.map((section) => (
@@ -232,12 +243,14 @@ function PlayerHubBracketSection({
   data,
   board,
   player,
+  runEnded,
   archiveOnly,
   archiveEntry,
 }: {
   data: PublicEventSnapshot;
   board: ReturnType<typeof playerHubView>;
   player: string;
+  runEnded: boolean;
   archiveOnly: boolean;
   archiveEntry: boolean;
 }) {
@@ -267,7 +280,9 @@ function PlayerHubBracketSection({
       }}
     />
   );
-  const pendingFinals = (board.closed ? [] : (data.pendingFinals ?? [])).flatMap((field) => {
+  const recordedPath = board.closed || runEnded;
+  const qualifying = !recordedPath && board.pendingBrackets.length > 0;
+  const pendingFinals = (recordedPath ? [] : (data.pendingFinals ?? [])).flatMap((field) => {
     if (!player) return [field];
     if (board.assignedBrackets.length) return [];
     const slots = field.slots.filter((slot) =>
@@ -287,19 +302,15 @@ function PlayerHubBracketSection({
     >
       {player && board.nativeBrackets.length > 0 ? (
         <>
-          <h2>
-            {!board.closed && board.pendingBrackets.length
-              ? 'Finals qualification'
-              : 'Your bracket path'}
-          </h2>
-          {!board.closed && board.pendingBrackets.length ? (
+          <h2>{qualifying ? 'Finals qualification' : 'Your bracket path'}</h2>
+          {qualifying ? (
             <p className="event-live-note">
               Your pool order will determine your bracket. These draws show reserved pool places;
               your finals opponents are not confirmed yet.
             </p>
           ) : (
             <p className="event-live-note">
-              {board.closed
+              {recordedPath
                 ? 'Your recorded bracket matches and results.'
                 : 'Published pairings and possible later rounds. Later opponents depend on confirmed results.'}
             </p>
@@ -327,7 +338,7 @@ function PlayerHubBracketSection({
               </p>
             ) : null;
           })}
-          {!board.closed && !path.length && !board.pendingBrackets.length && (
+          {!recordedPath && !path.length && !qualifying && (
             <p>Your bracket is published. Open the full draw for its current standings.</p>
           )}
           <Disclosure title="Full draw & bracket standings">{bracketView}</Disclosure>
@@ -344,7 +355,7 @@ function PlayerHubBracketSection({
           <p>
             {data.plan.structure === 'round_robin'
               ? 'This event uses pool standings to decide the result; there is no finals bracket.'
-              : board.closed
+              : recordedPath
                 ? `No bracket is recorded for this ${player ? 'player' : 'event'}.`
                 : player
                   ? 'Brackets will appear here for this player when the organisers publish the draw. Pool results do not imply a bracket seed.'
