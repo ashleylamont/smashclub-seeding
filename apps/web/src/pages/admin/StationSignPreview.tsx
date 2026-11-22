@@ -1,4 +1,3 @@
-import { Dialog } from '../../components/ui/Dialog';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { Button } from '../../components/ui/Button';
 import { useEffect, useState } from 'react';
@@ -61,15 +60,7 @@ export function StationSignPreview({
   }, [planId, stations, token]);
 
   return (
-    <Dialog
-      title="Print station signs"
-      className="station-sign-dialog"
-      print
-      open
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-    >
+    <>
       <div className="station-sign-toolbar">
         <p>
           One A4 page per station. These QR codes remain valid until guest access is revoked,
@@ -137,6 +128,6 @@ export function StationSignPreview({
             </article>
           ))}
       </div>
-    </Dialog>
+    </>
   );
 }
