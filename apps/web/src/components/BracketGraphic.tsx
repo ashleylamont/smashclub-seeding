@@ -31,10 +31,11 @@ export function BracketGraphic({
     },
     [snapshot],
   );
+  const { scope, revision } = snapshot?.context ?? context;
   return (
     <Dialog
       title="Bracket graphic"
-      description={`${snapshot?.context.scope ?? context.scope} · Scroll the preview to follow later rounds. The image shows recorded scores.`}
+      description={`${scope}${revision ? ` · Revision ${revision}` : ''} · Scroll the preview to follow later rounds. The image shows recorded scores.`}
       trigger={
         <Button aria-label={`Preview bracket graphic for ${context.scope}`}>Bracket graphic</Button>
       }
@@ -81,7 +82,8 @@ function BracketPreview({
     .replace(/^-|-$/g, '')
     .toLowerCase()
     .slice(0, 84);
-  const base = `nemesis-${filename || 'draw'}-bracket`;
+  const revision = context.revision ? `-r${context.revision}` : '';
+  const base = `nemesis-${filename || 'draw'}-bracket${revision}`;
   async function downloadPng() {
     setPending(true);
     setError(false);

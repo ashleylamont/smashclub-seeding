@@ -19,6 +19,7 @@ export type BracketGraphicContext = {
   scope: string;
   state: 'published' | 'paused' | 'closed';
   format: 'singles' | 'doubles';
+  revision?: number;
 };
 type Measure = (value: string, size: number, bold: boolean) => number;
 export type BracketGraphicImage = { svg: string; width: number; height: number };
@@ -210,7 +211,7 @@ export function bracketGraphicSvg(
     closed: 'Recorded draw',
   }[context.state];
   const scope = wrap(
-    `${context.scope} · ${context.format === 'doubles' ? 'Doubles' : 'Singles'} · ${state}${context.eventDate ? ` · ${context.eventDate}` : ''}`,
+    `${context.scope} · ${context.format === 'doubles' ? 'Doubles' : 'Singles'} · ${state}${context.revision ? ` · Revision ${context.revision}` : ''}${context.eventDate ? ` · ${context.eventDate}` : ''}`,
     17,
     false,
     width - padding * 2,

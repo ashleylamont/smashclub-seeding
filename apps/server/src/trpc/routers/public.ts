@@ -27,7 +27,7 @@ import { loadRecap } from '../../recap/recap';
 import { loadEventOverview } from '../../events/overview';
 import { nativeHistory } from '../../events/nativeHistory';
 import { archiveCharacterEvidence } from '../../events/archivedCharacters';
-import { legacyNativeArchiveLabels } from '../../events/legacyNativeArchiveLabels';
+import { archivedBracketGraphic } from '../../events/archiveBracketGraphic';
 import { headToHeadInput, readHeadToHead } from '../../events/headToHead';
 import { publicProcedure, router } from '../trpc';
 
@@ -444,7 +444,12 @@ export const publicRouter = router({
         // did while `suggested_play_order` was never populated) is bracket
         // *creation* order: the whole winners side, then the whole losers side.
         .orderBy(asc(sets.suggestedPlayOrder), asc(sets.completedAt), asc(sets.challongeMatchId));
-      const archiveLabels = await legacyNativeArchiveLabels(ctx.db, tournament, setRows);
+      const { labels: archiveLabels, graphic: bracketGraphic } = await archivedBracketGraphic(
+        ctx.db,
+        tournament,
+        setRows,
+        participantName,
+      );
       const characterSets = await archiveCharacterEvidence(ctx.db, setRows, ctx.nativeRuntime);
 
       return {
@@ -465,6 +470,7 @@ export const publicRouter = router({
          * watched right now.
          */
         liveUntil: tournament.liveUntil?.toISOString() ?? null,
+        ...(bracketGraphic && { bracketGraphic }),
         participants: participants
           .map((p) => ({
             id: p.id,

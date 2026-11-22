@@ -11,6 +11,7 @@ import { useEventSource } from '../lib/useEventSource';
 import { useNow } from '../lib/useNow';
 import { InfoTip } from '../components/InfoTip';
 import { ReportedCharacters } from '../components/ReportedCharacters';
+import { ArchiveBracketGraphic } from '../components/ArchiveBracketGraphic';
 import { PlayedCharacterReport } from '../components/PlayedCharacterReport';
 import { useCharacterReporter } from '../lib/useCharacterReporter';
 import './Tournaments.css';
@@ -136,6 +137,12 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
           </Link>
         )}
       </p>
+
+      {data.bracketGraphic && (
+        <div className="ui-actions tournament-archive-actions">
+          <ArchiveBracketGraphic graphic={data.bracketGraphic} />
+        </div>
+      )}
 
       {isLive && recentSets.length > 0 && (
         <div className="section card live-feed">

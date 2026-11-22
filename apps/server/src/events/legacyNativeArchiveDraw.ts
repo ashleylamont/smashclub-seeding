@@ -21,18 +21,18 @@ const entrantIds = z.array(z.uuid()).min(1).max(maxEntrants);
 const otherMembership = alias(eventPlanBrackets, 'other_membership');
 
 /** SQL-era finalization kept both directions of the published set link. Only
- * project names if the completed bracket still proves every set's position. */
-export async function legacyNativeArchiveLabels(
+ * use it if the completed bracket still proves every set's position. */
+export async function legacyNativeArchiveDraw(
   db: Db,
   tournament: { id: string; provider: string; challongeState: string | null; raw: unknown },
   sets: readonly { id: string; resultStage: string | null; round: number | null; raw: unknown }[],
-): Promise<Map<string, string>> {
-  const labels = new Map<string, string>();
-  if (tournament.provider !== 'native' || tournament.challongeState !== 'complete') return labels;
+) {
+  if (tournament.provider !== 'native' || tournament.challongeState !== 'complete')
+    return undefined;
   const source = sqlPublication.safeParse(tournament.raw);
-  if (!source.success) return labels;
+  if (!source.success) return undefined;
   const finals = sets.filter(({ resultStage }) => resultStage === 'final');
-  if (!finals.length || finals.length >= maxEntrants) return labels;
+  if (!finals.length || finals.length >= maxEntrants) return undefined;
   const bySetId = new Map(finals.map((set) => [set.id, set]));
   const planId = source.data.eventPlanId;
   const rows = await db
@@ -95,10 +95,10 @@ export async function legacyNativeArchiveLabels(
     )
     .limit(finals.length + 1);
 
-  if (rows.length !== finals.length) return labels;
+  if (rows.length !== finals.length) return undefined;
   const bracket = rows[0]!.bracket;
   const entrants = entrantIds.safeParse(bracket.entrantIds);
-  if (!entrants.success || new Set(entrants.data).size !== entrants.data.length) return labels;
+  if (!entrants.success || new Set(entrants.data).size !== entrants.data.length) return undefined;
   for (const row of rows) {
     const set = row.sourceSetId ? bySetId.get(row.sourceSetId) : undefined;
     const raw = set?.raw as { provider?: unknown; eventMatchId?: unknown } | null | undefined;
@@ -111,7 +111,7 @@ export async function legacyNativeArchiveLabels(
       raw?.provider !== 'native' ||
       raw.eventMatchId !== row.id
     )
-      return labels;
+      return undefined;
   }
 
   const names = projectMatchLabels({
@@ -125,7 +125,7 @@ export async function legacyNativeArchiveLabels(
       label: row.label,
     })),
   });
-  if (rows.some((row) => !names.get(row.id)?.labelFromStructure)) return labels;
+  if (rows.some((row) => !names.get(row.id)?.labelFromStructure)) return undefined;
 
   // The naming helper checks every round and slot. Check both feeder edges
   // too, so a correct-looking set of coordinates cannot misname another draw.
@@ -137,7 +137,19 @@ export async function legacyNativeArchiveLabels(
       row.parent1 !== (previous ? positions.get(`${previous}:${slot}`) : null) ||
       row.parent2 !== (previous ? positions.get(`${previous}:${slot + 1}`) : null)
     )
-      return labels;
+      return undefined;
   }
-  return new Map(rows.map((row) => [row.sourceSetId!, names.get(row.id)!.label]));
+  return {
+    division: bracket.division,
+    stage: bracket.stage,
+    matches: rows.map(({ id, sourceSetId, round, slot, parent1, parent2 }) => ({
+      id,
+      setId: sourceSetId!,
+      round: round!,
+      slot: slot!,
+      parent1,
+      parent2,
+      label: names.get(id)!.label,
+    })),
+  };
 }

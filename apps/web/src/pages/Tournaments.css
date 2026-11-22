@@ -93,6 +93,10 @@
   font-size: var(--fs-sm);
 }
 
+.tournament-archive-actions {
+  margin-bottom: var(--s3);
+}
+
 .tournament-sync {
   display: inline-flex;
   align-items: center;

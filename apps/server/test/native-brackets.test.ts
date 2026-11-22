@@ -267,9 +267,17 @@ describe('native brackets', () => {
         .sort((a, b) => a.suggestedPlayOrder! - b.suggestedPlayOrder!)
         .map(({ id, identifier }) => ({ id, identifier })),
     );
-    expect(JSON.stringify(archive)).not.toMatch(/canonicalName|eventMatchId|sourceSetId|parent1/);
+    expect(archive.bracketGraphic?.matches).toHaveLength(3);
+    expect(archive.bracketGraphic?.matches.find(({ label }) => label === 'Final')).toMatchObject({
+      score1: 2,
+      score2: 0,
+      parent1MatchId: expect.any(String),
+      parent2MatchId: expect.any(String),
+    });
+    expect(JSON.stringify(archive)).not.toMatch(/canonicalName|eventMatchId|sourceSetId/);
+    const { bracketGraphic: _bracketGraphic, ...archiveWithoutGraphic } = archive;
     const fallback = {
-      ...archive,
+      ...archiveWithoutGraphic,
       sets: archive.sets.map(({ displayLabel: _displayLabel, ...set }) => set),
     };
 
