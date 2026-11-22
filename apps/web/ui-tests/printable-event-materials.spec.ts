@@ -19,7 +19,7 @@ test.describe('A4 event printouts', () => {
   test(
     'published pool floor sheet keeps pairings and the public QR readable',
     darwinBaseline,
-    async ({ page }, testInfo) => {
+    async ({ page }) => {
       const { overview, unexpected } = await mockEvent(page, { role: 'admin' });
       const active = overview.matches.find(
         (match) =>
@@ -85,10 +85,6 @@ test.describe('A4 event printouts', () => {
       expect(bounds.height).toBeLessThanOrEqual(A4_CONTENT.height);
       expect(bounds.width).toBeLessThanOrEqual(A4_CONTENT.width);
       expect(unexpected).toEqual([]);
-      await sheet.screenshot({
-        path: testInfo.outputPath('published-pool-floor-sheet-a4-actual.png'),
-        animations: 'disabled',
-      });
       await darwinScreenshot(sheet, 'published-pool-floor-sheet-a4.png');
     },
   );
@@ -96,7 +92,7 @@ test.describe('A4 event printouts', () => {
   test(
     'station sign keeps its name and permanent guest QR readable',
     darwinBaseline,
-    async ({ page }, testInfo) => {
+    async ({ page }) => {
       const { overview, responses, unexpected } = await mockEvent(page, { role: 'admin' });
       const station = overview.stations[0]!;
       station.name = 'North Hall · Main Stage';
@@ -129,10 +125,6 @@ test.describe('A4 event printouts', () => {
       expect(bounds.height).toBeLessThanOrEqual(A4_CONTENT.height);
       expect(bounds.width).toBeLessThanOrEqual(A4_CONTENT.width);
       expect(unexpected).toEqual([]);
-      await sign.screenshot({
-        path: testInfo.outputPath('guest-station-sign-a4-actual.png'),
-        animations: 'disabled',
-      });
       await darwinScreenshot(sign, 'guest-station-sign-a4.png');
     },
   );
