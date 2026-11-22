@@ -9,12 +9,25 @@ import { FeedbackDialog } from './FeedbackDialog';
 import { NemesisMark } from './NemesisMark';
 import { ThemeToggle } from './ThemeToggle';
 import { operatorDestination } from '../lib/operatorDestination';
+import {
+  accountDraftSource,
+  clearOtherAccountScoreDrafts,
+  clearScoreDrafts,
+  useScoreDraftOwner,
+} from '../lib/scoreDraftSession';
 import '../App.css';
 
 /** App shell: top nav, routed content, footer. Also holds the global SSE
  *  subscription that keeps cached queries fresh across the whole app. */
 export function Layout() {
-  const { data: session, isPending } = authClient.useSession();
+  const { data: session, isPending, error } = authClient.useSession();
+  const draftOwner = useScoreDraftOwner(
+    'account',
+    accountDraftSource(session, isPending || Boolean(error)),
+  );
+  useEffect(() => {
+    if (draftOwner !== undefined) clearOtherAccountScoreDrafts(draftOwner);
+  }, [draftOwner]);
   const currentUser = useCurrentUser(session);
   const role = currentUser.data?.role;
   const navigate = useNavigate();
@@ -71,8 +84,11 @@ export function Layout() {
   });
 
   const signOut = async () => {
+    clearScoreDrafts();
     await authClient.signOut();
-    void navigate({ to: '/' });
+    await navigate({ to: '/' });
+    // A mounted editor may have persisted an edit while sign-out was in flight.
+    clearScoreDrafts();
   };
 
   const userName = session?.user.name ?? '';

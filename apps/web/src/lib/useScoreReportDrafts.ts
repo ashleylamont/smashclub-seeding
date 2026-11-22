@@ -1,8 +1,16 @@
-import { useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import type { SetCharacterPick } from '@smashclub/shared';
 import type { LiveMatch } from './eventDisplay';
 import { matchPresentation } from './matchPresentation';
 import type { ScoreInputValue } from '../components/ScoreFields';
+import { scoreReportPlayers } from './scoreReportPlayers';
+import {
+  clearScoreDrafts,
+  readScoreDrafts,
+  saveScoreDrafts,
+  type DraftOwner,
+  type SavedScoreDraft,
+} from './scoreDraftSession';
 
 type DraftMatch = LiveMatch & { revision: number };
 
@@ -12,15 +20,8 @@ type CompletedReportFeedback = {
   message: string;
 };
 
-type ScoreReportDraft = {
-  score1: ScoreInputValue;
-  score2: ScoreInputValue;
-  revision: number;
-  requestId: string;
-  confirmationId: string;
-  picks: SetCharacterPick[];
-  editing: boolean;
-  retryRejected: boolean;
+type ScoreReportDraft = Omit<SavedScoreDraft, 'touchedAt'> & {
+  touchedAt: number | null;
   pendingRequestId: string | null;
   sent: 'approved' | 'pending' | null;
   completedFeedback: CompletedReportFeedback | null;
@@ -53,18 +54,77 @@ export type ScoreReportDrafts = {
 export function useScoreReportDrafts(
   scope: string,
   matches: readonly DraftMatch[],
+  {
+    planId,
+    owner,
+    canRecover,
+  }: {
+    planId: string;
+    owner: DraftOwner | null | undefined;
+    canRecover: (match: DraftMatch, attemptedRequestId: string | null) => boolean;
+  },
 ): ScoreReportDrafts {
-  const [state, setState] = useState({ scope, matches, drafts: new Map() as Drafts });
+  const [state, setState] = useState({
+    scope,
+    matches,
+    drafts: new Map() as Drafts,
+    recoveredOwner: undefined as DraftOwner | undefined,
+  });
 
   let drafts = state.drafts;
-  if (state.scope !== scope || state.matches !== matches) {
-    if (state.scope !== scope) drafts = new Map();
-    else if (drafts.size) {
+  if (state.scope !== scope || (owner === null && state.recoveredOwner)) {
+    drafts = new Map();
+    setState({ scope, matches, drafts, recoveredOwner: undefined });
+  } else if (state.matches !== matches) {
+    if (drafts.size) {
       const currentKeys = new Set(matches.map(scoreReportDraftKey));
       drafts = new Map([...drafts].filter(([key]) => currentKeys.has(key)));
     }
-    setState({ scope, matches, drafts });
+    setState({ ...state, matches, drafts });
+  } else if (owner && state.recoveredOwner !== owner) {
+    const eligible = new Map(matches.map((match) => [scoreReportDraftKey(match), match]));
+    const recovered = new Map<string, ScoreReportDraft>();
+    for (const [key, saved] of readScoreDrafts(planId, owner)) {
+      const match = eligible.get(key);
+      if (!match || !canRecover(match, saved.attemptedRequestId)) continue;
+      const players = new Set(scoreReportPlayers(match).map(({ id }) => id));
+      if (saved.picks.some(({ playerId }) => !players.has(playerId))) continue;
+      recovered.set(key, {
+        ...saved,
+        pendingRequestId: null,
+        sent: null,
+        completedFeedback: null,
+        error: '',
+      });
+    }
+    // An edit typed while the reporting queries loaded takes precedence.
+    drafts = new Map([...recovered, ...drafts]);
+    setState({ ...state, drafts, recoveredOwner: owner });
   }
+
+  useLayoutEffect(() => {
+    // Undefined means the event or credential is still being verified.
+    if (owner === undefined) return;
+    if (owner === null) {
+      clearScoreDrafts(planId);
+      return;
+    }
+    const eligible = new Map(matches.map((match) => [scoreReportDraftKey(match), match]));
+    saveScoreDrafts(
+      planId,
+      owner,
+      [...drafts].flatMap(([key, draft]) => {
+        const match = eligible.get(key);
+        if (!match || draft.touchedAt === null || !canRecover(match, draft.attemptedRequestId))
+          return [];
+        const { score1, score2, picks, attemptedRequestId, touchedAt } = draft;
+        const [initial1, initial2] = initialScores(match);
+        return attemptedRequestId || picks.length || score1 !== initial1 || score2 !== initial2
+          ? [[key, { ...draft, touchedAt }]]
+          : [];
+      }),
+    );
+  }, [canRecover, drafts, matches, owner, planId]);
 
   return {
     drafts,
@@ -77,16 +137,23 @@ export function useScoreReportDrafts(
   };
 }
 
+function initialScores(match: DraftMatch): [ScoreInputValue, ScoreInputValue] {
+  return match.status === 'complete' ? [match.score1 ?? 0, match.score2 ?? 0] : [0, 0];
+}
+
 function initialDraft(match: DraftMatch): ScoreReportDraft {
+  const [score1, score2] = initialScores(match);
   return {
-    score1: match.status === 'complete' ? (match.score1 ?? 0) : 0,
-    score2: match.status === 'complete' ? (match.score2 ?? 0) : 0,
+    score1,
+    score2,
     revision: match.revision,
     requestId: crypto.randomUUID(),
     confirmationId: crypto.randomUUID(),
     picks: [],
     editing: false,
     retryRejected: false,
+    attemptedRequestId: null,
+    touchedAt: null,
     pendingRequestId: null,
     sent: null,
     completedFeedback: null,
@@ -99,10 +166,16 @@ export function useScoreReportDraft(match: DraftMatch, store?: ScoreReportDrafts
   const key = scoreReportDraftKey(match);
   const draft = store?.drafts.get(key) ?? local;
   const update = (changes: Partial<ScoreReportDraft>, forRequest?: string) => {
-    const apply = (previous: ScoreReportDraft) =>
-      forRequest === undefined || previous.pendingRequestId === forRequest
-        ? { ...previous, ...changes }
-        : previous;
+    const apply = (previous: ScoreReportDraft) => {
+      if (forRequest !== undefined && previous.pendingRequestId !== forRequest) return previous;
+      const next = { ...previous, ...changes };
+      if (
+        next.attemptedRequestId !== next.requestId &&
+        next.attemptedRequestId !== next.confirmationId
+      )
+        next.attemptedRequestId = null;
+      return next;
+    };
     if (!store) {
       setLocal(apply);
       return;
@@ -117,9 +190,20 @@ export function useScoreReportDraft(match: DraftMatch, store?: ScoreReportDrafts
     draft,
     update,
     editScore: (side: 'score1' | 'score2', value: ScoreInputValue) =>
-      update({ [side]: value, requestId: crypto.randomUUID() }),
+      update({
+        [side]: value,
+        requestId: crypto.randomUUID(),
+        attemptedRequestId: null,
+        touchedAt: Date.now(),
+      }),
     editPicks: (picks: SetCharacterPick[]) =>
-      update({ picks, requestId: crypto.randomUUID(), confirmationId: crypto.randomUUID() }),
+      update({
+        picks,
+        requestId: crypto.randomUUID(),
+        confirmationId: crypto.randomUUID(),
+        attemptedRequestId: null,
+        touchedAt: Date.now(),
+      }),
     reload: () => {
       if (draft.pendingRequestId !== null || draft.revision === match.revision) return;
       // The revised submission has a different payload; it cannot retry either earlier request.
@@ -127,11 +211,19 @@ export function useScoreReportDraft(match: DraftMatch, store?: ScoreReportDrafts
         revision: match.revision,
         requestId: crypto.randomUUID(),
         confirmationId: crypto.randomUUID(),
+        attemptedRequestId: null,
         error: '',
       });
     },
     begin: (id: string) =>
-      update({ pendingRequestId: id, completedFeedback: null, error: '', sent: null }),
+      update({
+        pendingRequestId: id,
+        completedFeedback: null,
+        error: '',
+        sent: null,
+        attemptedRequestId: id,
+        touchedAt: Date.now(),
+      }),
     succeed: (
       id: string,
       feedback: Pick<Partial<ScoreReportDraft>, 'completedFeedback' | 'sent'>,
@@ -141,6 +233,8 @@ export function useScoreReportDraft(match: DraftMatch, store?: ScoreReportDrafts
           pendingRequestId: null,
           editing: false,
           retryRejected: false,
+          attemptedRequestId: null,
+          touchedAt: null,
           // A definitive report for a completed result supersedes earlier confirmation attempts.
           ...(feedback.completedFeedback && { confirmationId: crypto.randomUUID() }),
           ...feedback,

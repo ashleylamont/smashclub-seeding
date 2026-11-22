@@ -324,6 +324,7 @@ export async function guestMatches(
       .select({
         id: eventScoreReports.id,
         matchId: eventScoreReports.matchId,
+        requestId: eventScoreReports.requestId,
         status: eventScoreReports.status,
         isDispute: eventScoreReports.isDispute,
         score1: eventScoreReports.score1,
@@ -341,6 +342,7 @@ export async function guestMatches(
       ...(await loadStationQueues(tx, input.planId)),
       matches: data.matches,
       reports,
+      reportingDraftOwnerId: guest.id,
       expiresAt: guest.expiresAt?.toISOString() ?? null,
     };
   });

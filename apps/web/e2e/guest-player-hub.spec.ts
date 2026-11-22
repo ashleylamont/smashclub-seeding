@@ -436,3 +436,109 @@ test('QR and unlinked attendees confirm recorded results or flag a different sco
     await attendee.close();
   }
 });
+
+test('real account and guest score drafts recover in one tab and clear on identity changes', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  await signIn(page.request, 'admin@smashclub.dev');
+  const { planId, snapshot } = await freshEvent(page.request, 'score recovery');
+  await mutate(page.request, 'eventOps.guests.configure', {
+    planId,
+    enabled: true,
+    showOnOverlay: false,
+  });
+  const { token } = await mutate<{ token: string }>(page.request, 'eventOps.guests.invitation', {
+    planId,
+  });
+  const match = snapshot.matches.find(({ status }) => status === 'ready')!;
+  const url = `/play/${planId}?player=${match.player1Id}&match=${match.id}`;
+  const context = await browser.newContext({ baseURL, viewport: { width: 390, height: 844 } });
+  try {
+    await signIn(context.request, 'player@smashclub.dev');
+    const player = await context.newPage();
+    await player.goto(url);
+    const card = player.locator(`[data-player-match-id="${match.id}"]`);
+    const scores = card.getByRole('spinbutton');
+    const fillDraft = async () => {
+      await scores.nth(0).fill('2');
+      await scores.nth(1).fill('1');
+      await card.getByRole('button', { name: 'Add characters (optional)' }).click();
+      await chooseOption(player.getByRole('dialog').getByRole('combobox').first(), 'fox');
+      await player.keyboard.press('Escape');
+    };
+    const expectDraft = async () => {
+      await expect(scores.nth(0)).toHaveValue('2');
+      await expect(scores.nth(1)).toHaveValue('1');
+      await expect(card.getByRole('button', { name: 'Edit characters (1)' })).toBeVisible();
+    };
+    const expectClean = async () => {
+      await expect(scores.nth(0)).toHaveValue('0');
+      await expect(scores.nth(1)).toHaveValue('0');
+      await expect(card.getByRole('button', { name: 'Add characters (optional)' })).toBeVisible();
+    };
+    await fillDraft();
+    await player.reload();
+    await expectDraft();
+
+    // A tab opened by this tab can inherit a browser sessionStorage copy.
+    const popupEvent = player.waitForEvent('popup');
+    await player.evaluate((target) => window.open(target, '_blank'), url);
+    const popup = await popupEvent;
+    const popupScore = popup
+      .locator(`[data-player-match-id="${match.id}"]`)
+      .getByRole('spinbutton')
+      .first();
+    await expect(popupScore).toHaveValue('0');
+    await popup.reload();
+    await expect(popupScore).toHaveValue('0');
+    await popup.close();
+
+    const storedDraft = () =>
+      player.evaluate(() =>
+        Object.keys(sessionStorage).some((key) => key.startsWith('nemesis:score-drafts:')),
+      );
+    await player.getByRole('link', { name: 'Home', exact: true }).click();
+    await expect.poll(storedDraft).toBe(true);
+    await player.getByRole('button', { name: 'Sign out', exact: true }).click();
+    await expect(player.getByRole('link', { name: 'Sign in', exact: true })).toBeVisible();
+    await expect.poll(storedDraft).toBe(false);
+    await signIn(context.request, 'player@smashclub.dev');
+    await player.goto(url);
+    await expectClean();
+
+    await player.goto(`${url}#token=${encodeURIComponent(token)}`);
+    await expect(player.getByText('Reporting with your venue guest pass.')).toBeVisible();
+    await expect.poll(() => new URL(player.url()).hash).toBe('');
+    await fillDraft();
+    await player.reload();
+    await expectDraft();
+
+    await player.getByRole('button', { name: 'Use signed-in reporting' }).click();
+    await expectClean();
+    await fillDraft();
+    await player.reload();
+    await expect(player.getByText('Reporting with your signed-in account.')).toBeVisible();
+    await expectDraft();
+
+    // Redeeming again creates a different server-verified guest identity.
+    await player.goto(`${url}#token=${encodeURIComponent(token)}`);
+    await expect(player.getByText('Reporting with your venue guest pass.')).toBeVisible();
+    await expectClean();
+    await fillDraft();
+    await player.goto(`${url}#token=${encodeURIComponent(token)}`);
+    await expectClean();
+    await player.reload();
+    await expectClean();
+
+    const current = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
+    expect(current.matches.find(({ id }) => id === match.id)).toMatchObject({
+      revision: match.revision,
+      score1: match.score1,
+      score2: match.score2,
+    });
+  } finally {
+    await context.close();
+  }
+});

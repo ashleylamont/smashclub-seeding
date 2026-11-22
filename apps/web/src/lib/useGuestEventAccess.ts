@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { TRPCClientError } from '@trpc/client';
 import { trpc } from './trpc';
+import { clearScoreDrafts } from './scoreDraftSession';
 import {
   guestSessionCurrent,
   readGuestSession,
@@ -18,7 +19,7 @@ export function useGuestEventAccess(planId: string) {
   const [session, setSession] = useState<GuestSession | null>(() => readGuestSession(planId));
   const [redeeming, setRedeeming] = useState(Boolean(invitation));
   const [error, setError] = useState('');
-  const [reportingPreference, setReportingPreference] = useState<'guest' | 'signed-in'>('guest');
+  const [reportingPreference, setReportingPreference] = useState<'guest' | 'signed-in'>();
   const [cacheId] = useState(() => crypto.randomUUID());
   const [passVersion, setPassVersion] = useState(0);
   const redemption = useRef<{
@@ -64,6 +65,7 @@ export function useGuestEventAccess(planId: string) {
     void redemption.current.promise
       .then((value) => {
         if (!active) return;
+        clearScoreDrafts(planId);
         setSession(value);
         setReportingPreference('guest');
         saveGuestSession(planId, value);

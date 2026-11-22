@@ -5,7 +5,6 @@ import { Select, SelectItem } from './ui/Select';
 import { Input } from './ui/Input';
 import { Button } from './ui/Button';
 import { EventScoreCard } from './EventScoreCard';
-import { useScoreReportDrafts } from '../lib/useScoreReportDrafts';
 import { PlayedCharacterReport } from './PlayedCharacterReport';
 import { scoreReportPlayers } from '../lib/scoreReportPlayers';
 import { PlayerMatchFilter } from './PlayerMatchFilter';
@@ -49,6 +48,7 @@ export function PlayerHubMatches({
     stationId,
     hasAutomaticReports,
     reportingIdentity,
+    scoreDrafts,
     canWrite,
     closed,
     reporter,
@@ -59,10 +59,6 @@ export function PlayerHubMatches({
     signedIn,
     keepBrowsingScope,
   } = hub;
-  const scoreDrafts = useScoreReportDrafts(
-    JSON.stringify([data.plan.id, reportingIdentity, closed]),
-    data.matches,
-  );
   const journey = player ? playerJourney(data, player) : undefined;
   const nextMatchId = nextMatch?.id;
   const matchGrid = useRef<HTMLDivElement>(null);
