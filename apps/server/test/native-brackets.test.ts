@@ -630,6 +630,9 @@ describe('native brackets', () => {
   });
 
   it('resolves withdrawn branches without inventing games or a champion', async () => {
+    await db
+      .insert(eventPlanBrackets)
+      .values(BRACKET_SLOTS.map((slot) => ({ eventPlanId: planId, ...slot })));
     await finishPools();
     await generate();
     const withdraw = async (playerId: string) => {
@@ -671,6 +674,69 @@ describe('native brackets', () => {
     expect(lower.complete).toBe(true);
     expect(lower.winnerId).toBeNull();
     expect(lower.standings.some((p) => p.place === 1)).toBe(false);
+
+    await finishReadyFinals();
+    await finalizeNativeEvent(db, admin, planId);
+    const [linked] = await db.select().from(eventMatches).where(eq(eventMatches.id, lowerFinal.id));
+    const [record] = await db.select().from(sets).where(eq(sets.id, linked!.sourceSetId!));
+    expect(record).toMatchObject({
+      state: 'complete',
+      winner: null,
+      scoresCsv: null,
+      raw: { provider: 'native', eventMatchId: lowerFinal.id, outcome: null },
+    });
+    const [tournament] = await db
+      .select()
+      .from(tournaments)
+      .where(eq(tournaments.id, record!.tournamentId));
+    const slug = tournament!.challongeSlug;
+    const publicApi = legacyArchiveCaller();
+    const readGraphics = async () => {
+      const detail = await publicApi.tournament({ slug });
+      const event = await publicApi.eventOverview({ slug });
+      return [
+        detail?.bracketGraphic,
+        event?.brackets.find((bracket) => bracket.tournamentId === tournament!.id)?.bracketGraphic,
+      ] as const;
+    };
+    const [detailGraphic, eventGraphic] = await readGraphics();
+    expect(detailGraphic).toMatchObject({
+      matches: expect.arrayContaining([
+        expect.objectContaining({
+          id: record!.id,
+          label: 'Final',
+          outcome: 'no_contest',
+          score1: null,
+          score2: null,
+          winnerId: null,
+          player1Name: expect.stringMatching(/^Alias /),
+          player2Name: expect.stringMatching(/^Alias /),
+          parent1MatchId: expect.any(String),
+          parent2MatchId: expect.any(String),
+        }),
+      ]),
+    });
+    expect(eventGraphic).toEqual(detailGraphic);
+
+    // Missing proof or contradictory archive facts must keep both downloads unavailable.
+    await db
+      .update(eventMatches)
+      .set({ blockedReason: 'Waiting for previous round winners' })
+      .where(eq(eventMatches.id, lowerFinal.id));
+    expect(await readGraphics()).toEqual([undefined, undefined]);
+    await db
+      .update(eventMatches)
+      .set({ blockedReason: linked!.blockedReason })
+      .where(eq(eventMatches.id, lowerFinal.id));
+    await db.update(sets).set({ scoresCsv: '2-0' }).where(eq(sets.id, record!.id));
+    expect(await readGraphics()).toEqual([undefined, undefined]);
+    await db.update(sets).set({ scoresCsv: null, winner: 1 }).where(eq(sets.id, record!.id));
+    expect(await readGraphics()).toEqual([undefined, undefined]);
+    await db
+      .update(sets)
+      .set({ winner: null, raw: { provider: 'native', outcome: null } })
+      .where(eq(sets.id, record!.id));
+    expect(await readGraphics()).toEqual([undefined, undefined]);
   });
 
   it('closes a vacant final when its sole qualifier has withdrawn', async () => {
@@ -725,13 +791,7 @@ describe('native brackets', () => {
   });
 });
 
-async function publishLegacyConsolation() {
-  // The normal planner creates these slots before legacy finalization links the results.
-  await db
-    .insert(eventPlanBrackets)
-    .values(BRACKET_SLOTS.map((slot) => ({ eventPlanId: planId, ...slot })));
-  await finishPools();
-  await generate();
+async function finishReadyFinals() {
   for (;;) {
     const ready = (await db.select().from(eventMatches)).filter(
       (match) => match.nativeBracketId && match.status === 'ready',
@@ -739,6 +799,16 @@ async function publishLegacyConsolation() {
     if (!ready.length) break;
     for (const match of ready) await score(match);
   }
+}
+
+async function publishLegacyConsolation() {
+  // The normal planner creates these slots before legacy finalization links the results.
+  await db
+    .insert(eventPlanBrackets)
+    .values(BRACKET_SLOTS.map((slot) => ({ eventPlanId: planId, ...slot })));
+  await finishPools();
+  await generate();
+  await finishReadyFinals();
   await finalizeNativeEvent(db, admin, planId);
   return (await db.select().from(tournaments)).find((row) =>
     row.challongeSlug.endsWith('_upper_consolation'),

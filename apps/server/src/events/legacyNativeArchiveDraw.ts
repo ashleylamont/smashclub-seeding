@@ -9,6 +9,7 @@ import {
 } from '@smashclub/db';
 import { z } from 'zod';
 import { projectMatchLabels } from '../tournament/matchNames';
+import { legacyWithdrawalNoContestReason } from '../tournament/resultEvidence';
 
 const maxEntrants = 512;
 const sqlPublication = z.object({
@@ -52,6 +53,7 @@ export async function legacyNativeArchiveDraw(
       slot: eventMatches.nativeSlot,
       parent1: eventMatches.parent1MatchId,
       parent2: eventMatches.parent2MatchId,
+      blockedReason: eventMatches.blockedReason,
     })
     .from(eventPlanBrackets)
     .innerJoin(eventPlans, eq(eventPlans.id, eventPlanBrackets.eventPlanId))
@@ -150,7 +152,7 @@ export async function legacyNativeArchiveDraw(
   return {
     division: bracket.division,
     stage: bracket.stage,
-    matches: rows.map(({ id, sourceSetId, round, slot, parent1, parent2 }) => ({
+    matches: rows.map(({ id, sourceSetId, round, slot, parent1, parent2, blockedReason }) => ({
       id,
       setId: sourceSetId!,
       round: round!,
@@ -158,6 +160,7 @@ export async function legacyNativeArchiveDraw(
       parent1,
       parent2,
       label: names.get(id)!.label,
+      ...(blockedReason === legacyWithdrawalNoContestReason && { legacyNoContest: true as const }),
     })),
   };
 }

@@ -207,9 +207,11 @@ function verifiedPublishedTopology(bracket: DrawBracket, matches: Match[], doubl
   );
 }
 
-function archivedFact(row: ArchivedSet) {
+function archivedFact(row: ArchivedSet, legacyNoContest?: true) {
   const raw = row.raw as { outcome?: unknown } | null;
-  const outcome = raw?.outcome;
+  // Legacy finalization copied its null outcome. Its verified match link
+  // can supply the reason, while the archived row still supplies the result.
+  const outcome = raw?.outcome === null && legacyNoContest ? 'no_contest' : raw?.outcome;
   const { p1ParticipantId: first, p2ParticipantId: second, winner, scoresCsv } = row;
   if (
     row.state !== 'complete' ||
@@ -264,7 +266,7 @@ function archiveMatches(
   const matches = [];
   for (const node of nodes) {
     const row = bySet.get(node.setId)!;
-    const fact = archivedFact(row);
+    const fact = archivedFact(row, node.legacyNoContest);
     const player1Name = row.p1ParticipantId ? names.get(row.p1ParticipantId) : null;
     const player2Name = row.p2ParticipantId ? names.get(row.p2ParticipantId) : null;
     if (
