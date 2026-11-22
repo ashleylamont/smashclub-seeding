@@ -101,6 +101,9 @@ function ScoreCard({
   return (
     <article
       className={`card ops-match${!recordedOnly || match.status === 'complete' ? ` ops-match-${match.status}` : ''}`}
+      data-player-match-id={match.id}
+      tabIndex={-1}
+      aria-label={presentation.title}
     >
       <div className="ops-match-meta">
         <span>{scoreCardCaption(match)}</span>

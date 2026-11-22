@@ -144,7 +144,7 @@ test('stored doubles member focuses the public team, and closed events retain hi
   await expect(page.getByRole('complementary', { name: 'Your progress' })).toContainText(
     'This event is closed',
   );
-  await expect(page.getByRole('button', { name: 'Find next match' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^View (current|next) match$/ })).toHaveCount(0);
   const schedule = page.getByRole('region', { name: 'Pool schedule', exact: true });
   await expect(
     schedule.getByRole('button', { name: 'Pool schedule history', exact: true }),
