@@ -7,8 +7,20 @@ for (const theme of ['dark', 'light'] as const)
     test(`missing finals explain the next step at ${width}px in ${theme} mode`, async ({
       page,
     }, testInfo) => {
-      const fixture = await mockEvent(page, { role: 'player' });
+      const fixture = await mockEvent(page, { role: 'player', idle: true });
+      for (const match of fixture.snapshot.matches) {
+        if (match.stage !== 'group' || match.status === 'complete') continue;
+        Object.assign(match, {
+          status: 'complete',
+          outcome: 'played',
+          winnerId: match.player1Id,
+          score1: 2,
+          score2: 0,
+        });
+      }
       Object.assign(fixture.overview, {
+        stationQueues: [],
+        reports: fixture.overview.reports.filter(({ status }) => status !== 'pending'),
         finalization: {
           kind: 'missing_draw',
           message: 'Create the missing finals draws before publishing results.',

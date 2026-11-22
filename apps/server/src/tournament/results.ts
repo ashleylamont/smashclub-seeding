@@ -2,10 +2,25 @@ import { rollingFinals } from './qualifiers';
 import { expectedBracketCount, isKnockout } from '@smashclub/shared';
 import { drawFinals } from './brackets';
 import { requireFact, resolved } from './facts';
-import type { TournamentState, CommandEnvelope } from './schemas';
+import type { TournamentState, CommandEnvelope, Match } from './schemas';
 
 const createsRoundRobinResult = (state: TournamentState) =>
   state.baseline!.structure === 'round_robin' && !state.brackets.length;
+
+function unfinishedMatchBlocker(matches: Match[]) {
+  const nextMatch =
+    matches.find(({ status }) => status === 'playing' || status === 'ready') ?? matches[0];
+  if (nextMatch)
+    return {
+      kind: 'unfinished_matches',
+      matchId: nextMatch.id,
+      message:
+        nextMatch.stage === 'group'
+          ? 'Finish the remaining pool matches before publishing results.'
+          : 'Finish the remaining matches before publishing results.',
+    } as const;
+  return null;
+}
 
 /** Used by the organiser's desk and by the protected finalize decision. */
 export function finalizationBlocker(state: TournamentState) {
@@ -15,37 +30,39 @@ export function finalizationBlocker(state: TournamentState) {
       message: 'Resolve pending reports before finalizing.',
     } as const;
 
+  const unfinished = state.matches.filter((match) => !resolved(match));
+  const poolMatchBlocker = unfinishedMatchBlocker(
+    unfinished.filter((match) => match.stage === 'group'),
+  );
+  if (poolMatchBlocker) return poolMatchBlocker;
+
   const { structure, structureOptions } = state.baseline!;
   const roundRobinResult = createsRoundRobinResult(state);
-  const unfinished = state.matches.filter((match) => !resolved(match));
+  const missingDraw =
+    !roundRobinResult &&
+    state.brackets.length !== expectedBracketCount(structure, structureOptions);
+  const needsSeparateFinals = missingDraw && !isKnockout(structure) && structure !== 'round_robin';
+  // Legacy formats need orders to create a draw. They can seal an existing draw without them.
   const missingOrder =
-    (roundRobinResult || rollingFinals(state)) && state.pools.find((pool) => !pool.order);
-  if (missingOrder && !unfinished.some((match) => match.poolId))
+    (roundRobinResult || rollingFinals(state) || needsSeparateFinals) &&
+    state.pools.find((pool) => !pool.order);
+  if (missingOrder)
     return {
       kind: 'pool_order',
       poolId: missingOrder.id,
       message: 'Confirm the remaining pool finishing order before publishing results.',
     } as const;
 
-  if (
-    !roundRobinResult &&
-    state.brackets.length !== expectedBracketCount(structure, structureOptions)
-  )
-    return isKnockout(structure) || structure === 'round_robin'
-      ? ({ kind: 'draw_invalid', message: 'The event draw is incomplete.' } as const)
-      : ({
+  if (missingDraw)
+    return needsSeparateFinals
+      ? ({
           kind: 'missing_draw',
           message: 'Create the missing finals draws before publishing results.',
-        } as const);
+        } as const)
+      : ({ kind: 'draw_invalid', message: 'The event draw is incomplete.' } as const);
 
-  const nextMatch =
-    unfinished.find(({ status }) => status === 'playing' || status === 'ready') ?? unfinished[0];
-  if (nextMatch)
-    return {
-      kind: 'unfinished_matches',
-      matchId: nextMatch.id,
-      message: 'Finish the remaining matches before publishing results.',
-    } as const;
+  const finalsMatchBlocker = unfinishedMatchBlocker(unfinished);
+  if (finalsMatchBlocker) return finalsMatchBlocker;
 
   const archived = state.supersededPlayedSets ?? [];
   if (!archived.length) return null;

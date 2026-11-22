@@ -105,16 +105,28 @@ test('TO desk automatically decides a unique pool, records an explicit tied-pool
   const deskUrl = `/operate/${planId}?view=draw`;
   const finalize = to.getByRole('button', { name: 'Finalize native results', exact: true });
   const dialog = to.getByRole('alertdialog');
-  await to.goto(deskUrl);
-  await expect(finalize).toBeDisabled();
-  await expect(finalize).toHaveAccessibleDescription(/Create the missing finals draws/);
-  await to.getByRole('button', { name: 'Go to finals preview' }).press('Enter');
-  await expect(to.getByRole('button', { name: 'Preview finals', exact: true })).toBeFocused();
-  await expect(dialog).toHaveCount(0);
   const before = await query<Planner>(page.request, 'admin.eventPlanner.plan', { planId });
   const pools = before.divisions[0]!.pools;
   expect(pools).toHaveLength(2);
   let snapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
+  const unreadyDraw = await query<{ allowed: boolean }>(to.request, 'eventOps.native.preview', {
+    planId,
+    seedPolicy: 'pool_place_whr_v1',
+  });
+  expect(unreadyDraw.allowed).toBe(false);
+  await to.goto(deskUrl);
+  await expect(finalize).toBeDisabled();
+  await expect(finalize).toHaveAccessibleDescription(/Finish the remaining pool matches/);
+  await to.getByRole('button', { name: 'Go to unfinished match' }).press('Enter');
+  await expect(to.getByText('Showing the selected match.')).toBeFocused();
+  const selectedMatch = to.locator('article.ops-match:visible');
+  await expect(selectedMatch).toHaveCount(1);
+  await expect(selectedMatch).toHaveClass(/ops-match-ready/);
+  await expect(
+    selectedMatch.getByRole('button', { name: 'Finish match', exact: true }),
+  ).toBeEnabled();
+  await expect(dialog).toHaveCount(0);
+  await to.getByRole('tab', { name: 'Standings / draw', exact: true }).click();
   const firstPool = pools[0]!;
   const finalPoolMatch = snapshot.matches.findLast((m) => m.poolIndex === firstPool.poolIndex)!;
   for (const m of snapshot.matches.filter((m) => m.id !== finalPoolMatch.id)) {
@@ -271,14 +283,17 @@ test('TO desk automatically decides a unique pool, records an explicit tied-pool
   await expect(attention.getByText('No decisions pending.', { exact: true })).toBeVisible();
   await expect(poolOrders).toHaveCount(0);
   await captureStandings('confirmed');
-  const finals = page.locator('section.card').filter({
-    has: page.getByRole('heading', { name: 'Championship and consolation', exact: true }),
-  });
-  await finals.getByRole('button', { name: 'Preview finals', exact: true }).click();
+  await expect(finalize).toBeDisabled();
+  await expect(finalize).toHaveAccessibleDescription(/Create the missing finals draws/);
+  await to.getByRole('button', { name: 'Go to finals preview' }).press('Enter');
+  const finals = to.locator('.native-finals-controls');
+  const preview = finals.getByRole('button', { name: 'Preview finals', exact: true });
+  await expect(preview).toBeFocused();
+  await preview.press('Enter');
   await expect(finals).toContainText('Decided automatically by distinct set-win totals');
   await expect(finals).toContainText('Finishing order confirmed by an organiser');
   await finals.getByRole('button', { name: 'Create ready finals', exact: true }).click();
-  await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Confirm', exact: true }).click();
   await expect(finals.getByRole('status')).toContainText('Ready finals created');
   await expect(finalize).toHaveAccessibleDescription(/Finish the remaining matches/);
   await to.getByRole('button', { name: 'Go to unfinished match' }).press('Enter');
