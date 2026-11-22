@@ -663,6 +663,7 @@ test('web-started Main stage matches require confirmation before either match ca
       { planId },
     );
   const station = (await load()).stations.find((item) => item.name === 'Main stage')!;
+  const runTab = page.getByRole('tab', { name: 'Run matches', exact: true });
   const broadcastTab = page.getByRole('tab', { name: 'Broadcast', exact: true });
   const broadcast = page.getByRole('tabpanel', { name: 'Broadcast', exact: true });
   const dialog = page.getByRole('alertdialog', { name: 'Confirm action' });
@@ -691,7 +692,7 @@ test('web-started Main stage matches require confirmation before either match ca
       .poll(async () => (await load()).matches.find((item) => item.id === match.id)?.liveScore1)
       .toBe(1);
     if (surface === 'Score / details') {
-      await page.getByRole('tab', { name: 'Run matches', exact: true }).press('Enter');
+      await runTab.press('Enter');
       await desk
         .locator(`[data-match-id="${match.id}"]`)
         .getByRole('button', { name: surface, exact: true })
@@ -731,7 +732,9 @@ test('web-started Main stage matches require confirmation before either match ca
       expect((await load()).stations.find((item) => item.id === station.id)?.currentMatchId).toBe(
         match.id,
       );
-      await page.reload();
+      await runTab.press('Enter');
+      await expect(desk.getByText('0 / 2 in use', { exact: true })).toBeVisible();
+      await broadcastTab.press('Enter');
     }
     await release.press('Enter');
     await confirm.press('Enter');
