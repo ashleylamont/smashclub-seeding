@@ -116,6 +116,76 @@ for (const theme of ['dark', 'light'] as const)
       await expect(call).toHaveCount(2);
       expect(unexpected).toEqual([]);
     });
+
+    test(`shared queue explains interrupted actions at ${width}px in ${theme}`, async ({
+      page,
+      context,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const { unexpected } = await fixture(page);
+      await page.goto(`/operate/${PLAN_ID}`);
+      await ready(page);
+      const desk = page.getByRole('region', { name: 'TO match queue' });
+      const row = desk.getByRole('article').filter({ hasText: longAlias });
+      const location = row.getByRole('textbox', { name: 'Call location (optional)' });
+      const call = row.getByRole('button', { name: 'Call ordinary match' });
+      const score = row.getByRole('button', { name: 'Score / details' });
+      const reorder = row.getByRole('button', { name: 'Move down' });
+      const notice = desk.getByText(/Calling, scoring and reordering are paused/);
+      const alert = page.getByRole('alert').filter({ hasText: 'Live updates interrupted.' });
+      const tabs = page.getByRole('tablist', { name: 'Event workspace' });
+      await expect(notice).toHaveCount(0);
+      await expect(score).toBeEnabled();
+      await expect(reorder).toBeEnabled();
+      await location.fill('Near the front desk');
+      await location.press('Tab');
+      await expect(call).toBeFocused();
+      await call.evaluate((button) => button.scrollIntoView({ block: 'center' }));
+
+      await context.setOffline(true);
+      await page.evaluate(() => window.dispatchEvent(new Event('offline')));
+      await expect(call).toBeDisabled();
+      await expect(score).toBeDisabled();
+      await expect(reorder).toBeDisabled();
+      await expect(alert).toHaveCount(1);
+      await expect(alert).not.toBeInViewport();
+      await expect(notice).toBeInViewport();
+      await expect
+        .poll(async () => (await notice.boundingBox())!.y)
+        .toBeGreaterThanOrEqual((await tabs.boundingBox())!.y + (await tabs.boundingBox())!.height);
+      await expect(desk.getByRole('alert')).toHaveCount(0);
+      await expect(desk.getByRole('status').filter({ hasText: 'reordering' })).toHaveCount(0);
+      await expect(location).toHaveValue('Near the front desk');
+      const help = desk.getByRole('button', { name: 'How queue order works' });
+      await help.press('Enter');
+      await expect(help).toHaveAttribute('aria-expanded', 'true');
+      await expect(desk.getByText(/Suggested order groups pairings/)).toBeVisible();
+      await call.evaluate((button) => button.scrollIntoView({ block: 'center' }));
+      await ready(page);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+      expect(
+        (
+          await new AxeBuilder({ page })
+            .include('.ops-page')
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+            .analyze()
+        ).violations,
+      ).toEqual([]);
+      await page.screenshot({ path: testInfo.outputPath('queue-interrupted.png') });
+      await page.evaluate(() => scrollTo(0, 0));
+      await page.screenshot({ path: testInfo.outputPath('queue-full-page.png'), fullPage: true });
+
+      await context.setOffline(false);
+      await page.evaluate(() => window.dispatchEvent(new Event('online')));
+      await expect(notice).toHaveCount(0);
+      await expect(alert).toHaveCount(0);
+      await expect(call).toBeEnabled();
+      await expect(score).toBeEnabled();
+      await expect(reorder).toBeEnabled();
+      await expect(location).toHaveValue('Near the front desk');
+      expect(unexpected).toEqual([]);
+    });
   }
 
 test('shared queue distinguishes waiting, held and empty views', async ({ page }) => {

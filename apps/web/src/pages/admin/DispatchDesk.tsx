@@ -6,6 +6,7 @@ import type { DispatchCommandController } from './dispatchCommand';
 import { useImperativeHandle, useRef, useState, type Ref } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Disclosure } from '../../components/ui/Disclosure';
+import { Notice } from '../../components/ui/Feedback';
 import { Input } from '../../components/ui/Input';
 import { Select, SelectItem } from '../../components/ui/Select';
 import { DispatchShortcuts } from './DispatchShortcuts';
@@ -14,25 +15,29 @@ import './DispatchDesk.css';
 
 export type DispatchDeskNavigation = { goToReadyQueue: () => boolean };
 
-export function DispatchDesk({
-  data,
-  dispatch,
-  callDesk,
-  onMatch,
-  onReviewReports,
-  shortcutsActive,
-  focusScore,
-  navigationRef,
-}: {
+type DispatchDeskProps = {
   data: Overview;
   dispatch: DispatchCommandController;
+  interrupted: boolean;
   callDesk: UntakenCallDesk;
   onMatch: (id: string) => void;
   onReviewReports: () => void;
   shortcutsActive: boolean;
   focusScore: () => boolean;
   navigationRef: Ref<DispatchDeskNavigation>;
-}) {
+};
+
+export function DispatchDesk({
+  data,
+  dispatch,
+  interrupted,
+  callDesk,
+  onMatch,
+  onReviewReports,
+  shortcutsActive,
+  focusScore,
+  navigationRef,
+}: DispatchDeskProps) {
   const [search, setSearch] = useState('');
   const [view, setView] = useState('ready');
   const [limit, setLimit] = useState(12);
@@ -161,6 +166,11 @@ export function DispatchDesk({
               }}
               onViewChange={changeView}
             />
+            {interrupted && (
+              <Notice tone="warning" live={false}>
+                Showing the last loaded queue. Calling, scoring and reordering are paused.
+              </Notice>
+            )}
             <ol className="dispatch-list" hidden={!visiblePairings.length}>
               {visiblePairings.slice(0, limit).map((pairing) => {
                 const { match, row } = pairing;
