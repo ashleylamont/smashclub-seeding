@@ -29,7 +29,7 @@ WEB_DIST_DIR="$PWD/apps/web/dist" pnpm dev:harness
 | --- | --- |
 | `pnpm check` | Typecheck, lint, format, unit/server tests and build; no external services. |
 | `pnpm typecheck` | App and package source, UI fixtures and E2E tests; does not build frontend assets. |
-| `pnpm test:watch` | Vitest watch loop. Server files run serially because each applies migrations to PGlite. |
+| `pnpm test:watch` | Vitest watch loop. Server tests apply migrations to PGlite. |
 | `pnpm test:ui` | Isolated visual/accessibility fixtures in Chromium, no API; macOS baselines. |
 | `pnpm test:e2e` | Rebuilds the frontend and starts a fresh synthetic API harness. |
 | `pnpm test:postgres` | Disposable PostgreSQL 17 clusters, requiring `initdb` and `pg_ctl` on PATH. |
@@ -82,7 +82,7 @@ pnpm exec nx affected -t typecheck test --explain
 
 Nx uses package dependencies and each task's inputs to select changed packages and consumers. The preview prints the selected tasks and the paths that selected them. For a comparison between committed trees, pass `--base=origin/main --head=HEAD`. Giving `--head` excludes uncommitted edits.
 
-The `typecheck` targets run the existing package scripts and reuse successful results locally. Pass `--skipNxCache` when you need a fresh typecheck. The `test` targets run the five package Vitest projects in the root configuration. The server still runs its PGlite files serially and reads the database package's migrations. Unit tests run fresh each time. If Nx cannot build the graph or a change spans workflows, infrastructure, or another root-level input outside Nx, run `pnpm check`. It includes the root `ci` Vitest project, lint, format, and build. Run the browser, PostgreSQL, and production-image commands separately when they apply.
+The `typecheck` targets run the existing package scripts and reuse successful results locally. Pass `--skipNxCache` when you need a fresh typecheck. The `test` targets run the five package Vitest projects in the root configuration. The server suite uses the same Vitest configuration and reads the database package's migrations. Unit tests run fresh each time. If Nx cannot build the graph or a change spans workflows, infrastructure, or another root-level input outside Nx, run `pnpm check`. It includes the root `ci` Vitest project, lint, format, and build. Run the browser, PostgreSQL, and production-image commands separately when they apply.
 
 If a restricted shell denies Nx's local sockets, retry with `NX_DAEMON=false NX_ISOLATE_PLUGINS=false` or use `pnpm check`.
 
