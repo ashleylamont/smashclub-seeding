@@ -9,6 +9,7 @@ import { poolStandings } from './eventQueue';
 import { intermissionRecentResults } from './broadcastResults';
 import type { LiveMatch, PoolQualifierSlot } from './eventDisplay';
 import type { PublicFinalsField } from './qualification';
+import type { trpc } from './trpc';
 import type { NativeBracketView } from '../components/EventNightBoard';
 
 export type BroadcastPresentation = 'gameplay' | 'auto' | 'progress';
@@ -23,6 +24,19 @@ export function progressInterval(search: string): number {
   const seconds = Number(new URLSearchParams(search).get('cycleSeconds'));
   return progressIntervals.find((option) => option === seconds) ?? DEFAULT_PROGRESS_SECONDS;
 }
+type PublicSnapshot = Awaited<ReturnType<typeof trpc.eventOps.snapshot.query>>;
+type PoolOrder = Pick<
+  NonNullable<PublicSnapshot['poolOrders']>[number],
+  'division' | 'poolIndex' | 'status'
+>;
+type Placement = {
+  division: string;
+  poolIndex: number;
+  playerId: string;
+  place: number;
+  source: string;
+};
+
 export type ProgressData = {
   publicCode?: number;
   plan: { id: string; name: string; status: string; bracketMode?: string; structure?: string };
@@ -31,6 +45,9 @@ export type ProgressData = {
   linkedBrackets?: LinkedBracket[];
   pendingFinals?: PublicFinalsField[];
   poolScope?: string;
+  poolOrders?: PoolOrder[];
+  placements?: Placement[];
+  withdrawals?: { playerId: string }[];
   entrants: { id: string; name: string }[];
 };
 type Pool = ReturnType<typeof poolStandings>[number];
@@ -39,7 +56,15 @@ type PoolQualification = QualificationSlot & { stage: PublicFinalsField['stage']
 export type PoolPanel = {
   key: string;
   pool: Pool;
-  players: Pool['players'];
+  players: {
+    id: string;
+    name: string;
+    record?: Pool['players'][number];
+    place?: number;
+    withdrawn: boolean;
+  }[];
+  orderStatus?: PoolOrder['status'];
+  placementSource?: Placement['source'];
   qualifications: PoolQualification[];
 };
 type Bracket = ProgressData['nativeBrackets'][number];
@@ -134,6 +159,18 @@ function poolPanels(data: ProgressData) {
   const keyFor = ({ division, poolIndex }: { division: string; poolIndex: number }) =>
     `${division}:${poolIndex}`;
   const pools = new Map(poolStandings(data.matches).map((pool) => [keyFor(pool), pool]));
+  const orderStatuses = new Map(
+    (data.poolOrders ?? []).map((order) => [keyFor(order), order.status]),
+  );
+  const placements = new Map<string, Placement[]>();
+  for (const placement of data.placements ?? []) {
+    const key = keyFor(placement);
+    const existing = placements.get(key) ?? [];
+    existing.push(placement);
+    placements.set(key, existing);
+  }
+  const entrantNames = new Map(data.entrants.map(({ id, name }) => [id, name]));
+  const withdrawnIds = new Set(data.withdrawals?.map(({ playerId }) => playerId));
   const qualifications = new Map<string, PoolQualification[]>();
   for (const { stage, slots } of [
     ...(data.pendingFinals ?? []),
@@ -167,12 +204,37 @@ function poolPanels(data: ProgressData) {
     .sort(([, a], [, b]) => a.division.localeCompare(b.division) || a.poolIndex - b.poolIndex)
     .flatMap(([key, pool]): PoolPanel[] => {
       const slots = qualifications.get(key) ?? [];
-      const playerIds = new Set(pool.players.map(({ id }) => id));
-      const groups = pool.players.length ? chunks(pool.players, 6) : [[]];
+      const orderStatus = orderStatuses.get(key);
+      // The public placements contain the recorded order even when current results
+      // or active finals qualification differ from the original finishing places.
+      const recorded = (placements.get(key) ?? []).toSorted((a, b) => a.place - b.place);
+      const records = new Map(pool.players.map((player) => [player.id, player]));
+      const players: PoolPanel['players'] = recorded.map(({ playerId: id, place }) => {
+        const record = records.get(id);
+        records.delete(id);
+        return {
+          id,
+          name: entrantNames.get(id) ?? record?.name ?? 'Player',
+          place,
+          record,
+          withdrawn: withdrawnIds.has(id),
+        };
+      });
+      for (const record of records.values())
+        players.push({
+          id: record.id,
+          name: record.name,
+          record,
+          withdrawn: withdrawnIds.has(record.id),
+        });
+      const playerIds = new Set(players.map(({ id }) => id));
+      const groups = players.length ? chunks(players, 6) : [[]];
       return groups.map((players, index) => ({
         key: `${key}:${index}`,
         pool,
         players,
+        orderStatus,
+        placementSource: recorded[0]?.source,
         qualifications: slots.filter(({ status, entrantId }) =>
           status === 'resolved' && entrantId && playerIds.has(entrantId)
             ? players.some(({ id }) => id === entrantId)

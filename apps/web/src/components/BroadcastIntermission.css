@@ -153,17 +153,41 @@
   display: grid;
   gap: var(--s1);
 }
+.intermission-pool-panel caption {
+  padding-bottom: var(--s1);
+  color: var(--event-muted);
+  font-size: 0.85em;
+  text-align: left;
+}
 .intermission-pool-panel th {
   overflow-wrap: normal;
 }
 .intermission-pool-panel th:first-child {
   width: 49%;
 }
+.intermission-placed-pool th:first-child {
+  width: 12%;
+}
+.intermission-placed-pool th:nth-child(2) {
+  width: 43%;
+}
+.intermission-placed-pool tbody td:first-child {
+  font-family: var(--font-number);
+}
+.intermission-placed-pool tbody td:nth-child(2) {
+  font-family: inherit;
+  font-weight: 700;
+}
 .intermission-pool-grid .intermission-standings {
   font-size: 0.88em;
 }
 .intermission-pool-grid .intermission-standings :is(th, td) {
   padding: 0.9vh var(--s2);
+}
+.intermission-withdrawn {
+  display: block;
+  color: var(--event-muted);
+  font-size: 0.78em;
 }
 .intermission-qualifier {
   display: block;
@@ -289,6 +313,12 @@
   }
   .intermission-section-heading {
     display: block;
+  }
+  .intermission-placed-pool th:first-child {
+    width: 15%;
+  }
+  .intermission-placed-pool :is(th, td) {
+    padding-inline: var(--s2);
   }
 }
 

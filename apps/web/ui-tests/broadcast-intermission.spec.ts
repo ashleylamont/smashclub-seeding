@@ -87,7 +87,7 @@ async function fits(page: Page) {
     .poll(() =>
       page
         .locator(
-          '.intermission-heading h1, .intermission-section-heading h2, .intermission-pool-status, .intermission-standings td, .event-bracket-match small, .event-bracket-match > div > span, .intermission-footer button, .intermission-pagination',
+          '.intermission-heading h1, .intermission-section-heading h2, .intermission-pool-status, .intermission-standings td, .intermission-pool-panel caption, .event-bracket-match small, .event-bracket-match > div > span, .intermission-footer button, .intermission-pagination',
         )
         .evaluateAll((elements) =>
           elements
@@ -199,7 +199,7 @@ for (const width of [1280, 1920]) {
   );
 
   test(
-    `${width}px pool pages show all records without claiming confirmed places`,
+    `${width}px pool pages distinguish recorded places from match records`,
     darwinBaseline,
     async ({ page }, testInfo) => {
       await page.setViewportSize({ width, height: (width * 9) / 16 });
@@ -209,6 +209,11 @@ for (const width of [1280, 1920]) {
       await expect(progress.getByRole('table')).toHaveCount(2);
       const firstPool = progress.getByRole('region', { name: /lower.*Pool A/i });
       await expect(firstPool).toContainText('10 / 10 sets complete');
+      await expect(firstPool).toContainText('Confirmed by an organiser');
+      await expect(
+        firstPool.getByRole('columnheader', { name: 'Place', exact: true }),
+      ).toBeVisible();
+      await expect(progress.getByText('Places pending', { exact: true }).first()).toBeVisible();
       const poolMeter = firstPool.getByRole('progressbar', { name: 'Pool sets completed' });
       await expect(poolMeter).toHaveAttribute('value', '10');
       await expect(poolMeter).toHaveAttribute('max', '10');
@@ -808,7 +813,7 @@ for (const [width, height, theme] of [
     await fits(page);
     if (!wide) await page.keyboard.press('ArrowRight');
     await expect(upper.getByRole('row', { name: /The very long doubles team/ })).toContainText(
-      'Qualified · Championship · #1',
+      'Qualified · Championship',
     );
     await expect(upper).toContainText('#2, #3 · Championship · Awaiting qualification');
     await expect(upper.getByText('Qualified', { exact: false })).toHaveCount(1);
@@ -847,10 +852,200 @@ for (const [width, height, theme] of [
           .isVisible();
       })
       .toBe(true);
-    await expect(upper).toContainText('Qualified · Championship · #1');
+    await expect(upper).toContainText('Qualified · Championship');
     await expect(upper).not.toContainText('Awaiting qualification');
     await page.keyboard.press('ArrowRight');
     await expect(progress.locator('.event-bracket-match').first()).toBeVisible();
+    expect(fixture.unexpected).toEqual([]);
+  });
+}
+
+for (const [width, height, theme] of [
+  [390, 844, 'light'],
+  [1280, 720, 'dark'],
+  [1920, 1080, 'light'],
+] as const) {
+  test(`${width}px intermission distinguishes a tied pool from recorded places`, async ({
+    page,
+  }, testInfo) => {
+    test.slow();
+    await page.setViewportSize({ width, height });
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    await page.clock.install({ time: new Date('2026-10-04T00:00:00Z') });
+    const fixture = await mockEvent(page, { idle: true });
+    const { snapshot } = fixture;
+    const names = [
+      'Harbour Lantern Collector',
+      'Parallax',
+      'Sunset Observatory Recording Desk',
+      'Canary',
+    ];
+    const ids = ['harbour', 'parallax', 'sunset', 'canary'];
+    const base = snapshot.matches.find((match) => match.stage === 'group')!;
+    const lowerMatches: LiveMatch[] = [
+      [0, 2, 0],
+      [1, 0, 1],
+      [2, 1, 1],
+      [0, 3, 0],
+      [1, 3, 0],
+      [2, 3, 0],
+    ].map(([winner, loser, score], index) => ({
+      ...base,
+      id: `audit-pool-set-${index}`,
+      division: 'lower',
+      poolIndex: 0,
+      player1Id: ids[winner!]!,
+      player1Name: names[winner!]!,
+      player2Id: ids[loser!]!,
+      player2Name: names[loser!]!,
+      winnerId: ids[winner!]!,
+      score1: 2,
+      score2: score!,
+      status: 'complete',
+      outcome: 'played',
+      resultUpdatedAt: null,
+    }));
+    const order = { poolId: 'lower-a', division: 'lower', poolIndex: 0 };
+    const upper = snapshot.matches
+      .filter(
+        ({ stage, division, poolIndex }) =>
+          stage === 'group' && division === 'upper' && poolIndex === 0,
+      )
+      .map((match) => ({ ...match, resultUpdatedAt: null }));
+    const finalists = (confirmed: boolean) =>
+      [1, 2, 3, 4].map((place) => ({
+        ...order,
+        place,
+        status: confirmed || place === 4 ? 'resolved' : 'pending',
+        entrantId: confirmed || place === 4 ? ids[[2, 1, 0, 3][place - 1]!]! : null,
+      }));
+    const source = {
+      ...snapshot,
+      matches: [...lowerMatches, ...upper],
+      entrants: [...snapshot.entrants, ...ids.map((id, index) => ({ id, name: names[index]! }))],
+      poolOrders: [
+        { ...order, status: 'partial', reason: 'Confirm a ruling for the tied places.' },
+        {
+          ...order,
+          poolId: 'upper-a',
+          division: 'upper',
+          status: 'incomplete',
+          reason: 'Complete the pool matches.',
+        },
+      ],
+      placements: [],
+      pendingFinals: [
+        { division: 'lower', stage: 'main', slots: finalists(false).slice(0, 2) },
+        { division: 'lower', stage: 'consolation', slots: finalists(false).slice(2) },
+      ],
+    };
+    fixture.responses['eventOps.snapshot'] = source;
+    await page.goto(`/overlay/${PLAN_ID}?presentation=progress&controls=0`);
+    const progress = page.getByRole('region', { name: 'Tournament progress', exact: true });
+    const lower = progress.getByRole('region', { name: /lower.*Pool A/i });
+    const upperPool = progress.getByRole('region', { name: /upper.*Pool A/i });
+    const rows = lower.getByRole('row').filter({ has: page.getByRole('cell') });
+    const records = () =>
+      rows.evaluateAll((elements) =>
+        elements.map((row) =>
+          [...(row as HTMLTableRowElement).cells].map((cell) => cell.innerText.split('\n')[0]),
+        ),
+      );
+    const capture = async (state: string) => {
+      await fits(page);
+      await page.screenshot({ path: testInfo.outputPath(`pool-${state}-${width}.png`) });
+    };
+    const refreshUntil = (text: string) =>
+      expect
+        .poll(async () => {
+          await page.clock.runFor(2000);
+          return lower.getByText(text, { exact: true }).isVisible();
+        })
+        .toBe(true);
+
+    await expect(
+      lower.getByText('Places pending · tiebreak required', { exact: true }),
+    ).toBeVisible();
+    await expect(lower.getByRole('columnheader', { name: 'Place', exact: true })).toHaveCount(0);
+    expect((await records()).map(([name]) => name)).toEqual(names);
+    await expect(lower).toContainText('Qualified · Consolation');
+    if (width !== 390) {
+      await expect(upperPool.getByText('Places pending', { exact: true })).toBeVisible();
+      await expect(upperPool.getByRole('columnheader', { name: 'Place', exact: true })).toHaveCount(
+        0,
+      );
+    }
+    await capture('pending');
+
+    const placements = [0, 2, 3, 1].map((index) => ({
+      ...order,
+      playerId: ids[index]!,
+      place: [3, 2, 1, 4][index]!,
+      source: 'manual',
+    }));
+    const ruled = {
+      ...source,
+      placements,
+      poolOrders: [
+        { ...order, status: 'manual', reason: 'Finishing order confirmed by an organiser.' },
+        source.poolOrders[1]!,
+      ],
+      pendingFinals: [
+        { division: 'lower', stage: 'main', slots: finalists(true).slice(0, 2) },
+        { division: 'lower', stage: 'consolation', slots: finalists(true).slice(2) },
+      ],
+    };
+    fixture.responses['eventOps.snapshot'] = ruled;
+    await refreshUntil('Confirmed by an organiser');
+    expect(await records()).toEqual([
+      ['1', names[2], '2–1', '+1', '0'],
+      ['2', names[1], '2–1', '+2', '0'],
+      ['3', names[0], '2–1', '+3', '0'],
+      ['4', names[3], '0–3', '-6', '0'],
+    ]);
+    await expect(lower.getByRole('columnheader', { name: 'Place', exact: true })).toBeVisible();
+    await capture('confirmed');
+
+    fixture.responses['eventOps.snapshot'] = {
+      ...ruled,
+      plan: { ...source.plan, status: 'complete' },
+      matches: source.matches.map((match) =>
+        match.id === 'audit-pool-set-0' ? { ...match, score2: 1 } : match,
+      ),
+      placements: placements.map((placement) => ({ ...placement, source: 'retained' })),
+      poolOrders: [
+        {
+          ...order,
+          status: 'retained_after_correction',
+          reason: 'The recorded order remains fixed.',
+        },
+        source.poolOrders[1]!,
+      ],
+      withdrawals: [{ playerId: ids[1]! }],
+    };
+    await refreshUntil('Recorded order · results changed');
+    expect((await records()).map(([place, name, , games]) => [place, name, games])).toEqual([
+      ['1', names[2], '+2'],
+      ['2', names[1], '+2'],
+      ['3', names[0], '+2'],
+      ['4', names[3], '-6'],
+    ]);
+    await expect(rows.nth(1)).toContainText('Withdrawn');
+    if (width !== 390)
+      await expect(upperPool.getByText('Places unconfirmed', { exact: true })).toBeVisible();
+    await capture('retained');
+    expect(
+      (
+        await new AxeBuilder({ page })
+          .include('.broadcast-intermission')
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+          .analyze()
+      ).violations,
+    ).toEqual([]);
+
+    await page.goto(`/overlay/${PLAN_ID}?presentation=progress&controls=0&pool=upper%3A0`);
+    await expect(upperPool.getByRole('table')).toBeVisible();
+    await expect(lower).toHaveCount(0);
     expect(fixture.unexpected).toEqual([]);
   });
 }
