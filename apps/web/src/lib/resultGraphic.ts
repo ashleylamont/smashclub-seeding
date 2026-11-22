@@ -37,18 +37,159 @@ export function escapeSvg(value: string): string {
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[character]!,
   );
 }
-/** Bound even wide glyphs to the available canvas; truncation alone is insufficient. */
-function fittedFontSize(text: string, preferred: number, width: number) {
-  return Math.min(preferred, width / Math.max(1, Array.from(text).length)).toFixed(2);
+const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+const resultFont = 'Arial, sans-serif';
+const rowTextX = 158;
+const rowTextWidth = 994;
+// The standalone SVG may be opened with a different fallback font.
+const teamTextWidth = rowTextWidth - 16;
+
+type MeasureText = (value: string, size: number, bold: boolean) => number;
+
+function resultTextMeasure(): MeasureText {
+  const ctx =
+    typeof document === 'undefined' ? null : document.createElement('canvas').getContext('2d');
+  return (value, size, bold) => {
+    if (!ctx) return Array.from(value).length * size;
+    ctx.font = `${bold ? 'bold ' : ''}${size}px ${resultFont}`;
+    const { width, actualBoundingBoxRight } = ctx.measureText(value);
+    return Math.max(width, actualBoundingBoxRight);
+  };
 }
+
+function fittedFontSize(
+  text: string,
+  size: number,
+  width: number,
+  bold: boolean,
+  measure: MeasureText,
+) {
+  return Math.min(size, (size * width) / Math.max(1, measure(text, size, bold))).toFixed(2);
+}
+
+function singleLine(
+  value: string,
+  limit: number,
+  style: { x: number; y: number; width: number; size: number; fill: string; bold?: boolean },
+  measure: MeasureText,
+) {
+  const { x, y, width, size, fill, bold = false } = style;
+  let text = '';
+  for (const { index, segment } of graphemes.segment(value)) {
+    if (index >= limit) break;
+    text += segment;
+  }
+  // Keep the existing scale for short labels and reserve room for wide fallback glyphs.
+  const preferred = Math.min(size, width / Math.max(1, Array.from(text).length));
+  return `<text x="${x}" y="${y}" fill="${fill}"${bold ? ' font-weight="bold"' : ''} font-size="${fittedFontSize(text, preferred, width, bold, measure)}">${escapeSvg(text)}</text>`;
+}
+
+function wrapLabel(value: string, fits: (line: string) => boolean) {
+  const lines: string[] = [];
+  let line = '';
+  let lastSpace = 0;
+  for (const { segment } of graphemes.segment(value)) {
+    if (line && !fits(line + segment)) {
+      // Prefer a nearby word break while keeping long, unbroken aliases intact.
+      const tailFits = fits(line.slice(lastSpace) + segment);
+      const split = tailFits && lastSpace >= line.length / 2 ? lastSpace : line.length;
+      lines.push(line.slice(0, split));
+      line = line.slice(split);
+      lastSpace = 0;
+    }
+    line += segment;
+    if (/^\s+$/u.test(segment)) lastSpace = line.length;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function teamLabels(
+  graphic: GraphicIdentity,
+  detail: string | undefined,
+  top: number,
+  textColor: string,
+  secondaryColor: string,
+  measure: MeasureText,
+) {
+  const labels = [
+    ...(graphic.teamName
+      ? [{ value: graphic.teamName, size: 29, color: textColor, bold: true }]
+      : []),
+    ...graphic.members.map(({ name }) => ({
+      value: name,
+      size: 22,
+      color: secondaryColor,
+      bold: false,
+    })),
+    ...(detail ? [{ value: detail, size: 18, color: secondaryColor, bold: false }] : []),
+  ];
+  let baseline = top + 8;
+  const markup = labels
+    .map(({ value, size, color, bold }, index) => {
+      if (index > 0) baseline += 6;
+      const lines = wrapLabel(value, (line) => measure(line, size, bold) <= teamTextWidth);
+      const label = lines.map((line) => {
+        baseline += size + 8;
+        return `<tspan x="${rowTextX}" y="${baseline}" font-size="${fittedFontSize(line, size, teamTextWidth, bold, measure)}">${escapeSvg(line)}</tspan>`;
+      });
+      return `<text fill="${color}" font-size="${size}"${bold ? ' font-weight="bold"' : ''}>${label.join('')}</text>`;
+    })
+    .join('');
+  return { markup, height: Math.max(86, baseline - top + 17) };
+}
+
 export function resultsSvg(
   title: string,
   results: readonly GraphicResult[],
   kind: GraphicContext['kind'] = 'bracket',
 ): string {
-  const rows = rankedGraphicResults(results, kind);
-  const height = 230 + rows.length * 98;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="${height}" viewBox="0 0 1200 ${height}"><rect width="1200" height="${height}" fill="#141411"/><rect width="14" height="${height}" fill="#f34b2c"/><g font-family="Arial, sans-serif"><text x="64" y="64" fill="#f34b2c" font-size="22" letter-spacing="5">SMASH CLUB · RESULTS</text><text x="64" y="126" fill="white" font-weight="bold" font-size="${fittedFontSize(title.slice(0, 52), 38, 1088)}">${escapeSvg(title.slice(0, 52))}</text>${rows.map((row, index) => `<rect x="48" y="${166 + index * 98}" width="1104" height="86" fill="${index === 0 ? '#eee9dc' : '#24231e'}"/><text x="76" y="${220 + index * 98}" fill="#f34b2c" font-size="32">${row.place}</text><text x="158" y="${211 + index * 98}" fill="${index === 0 ? '#141411' : '#eee9dc'}" font-weight="bold" font-size="${fittedFontSize(row.alias.slice(0, 48), 29, 994)}">${escapeSvg(row.alias.slice(0, 48))}</text><text x="158" y="${238 + index * 98}" fill="#9c9588" font-size="${fittedFontSize((row.detail ?? '').slice(0, 82), 18, 994)}">${escapeSvg((row.detail ?? '').slice(0, 82))}</text>`).join('')}</g></svg>`;
+  const measure = resultTextMeasure();
+  let top = 166;
+  const rows = rankedGraphicResults(results, kind)
+    .map((row, index) => {
+      const fill = index === 0 ? '#eee9dc' : '#24231e';
+      const text = index === 0 ? '#141411' : '#eee9dc';
+      const { graphic } = row;
+      const labels =
+        graphic?.members.length && (graphic.teamName || graphic.members.length > 1)
+          ? teamLabels(graphic, row.detail, top, text, index === 0 ? '#514b41' : '#bcb3a4', measure)
+          : {
+              height: 86,
+              markup:
+                singleLine(
+                  row.alias,
+                  48,
+                  {
+                    x: rowTextX,
+                    y: top + 45,
+                    width: rowTextWidth,
+                    size: 29,
+                    fill: text,
+                    bold: true,
+                  },
+                  measure,
+                ) +
+                singleLine(
+                  row.detail ?? '',
+                  82,
+                  { x: rowTextX, y: top + 72, width: rowTextWidth, size: 18, fill: '#9c9588' },
+                  measure,
+                ),
+            };
+      const markup = `<rect x="48" y="${top}" width="1104" height="${labels.height}" fill="${fill}"/><text x="76" y="${top + 54}" fill="#f34b2c" font-size="32">${row.place}</text>${labels.markup}`;
+      top += labels.height + 12;
+      return markup;
+    })
+    .join('');
+  const height = top + 64;
+  const heading = singleLine(
+    title,
+    52,
+    { x: 64, y: 126, width: 1088, size: 38, fill: 'white', bold: true },
+    measure,
+  );
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="${height}" viewBox="0 0 1200 ${height}"><rect width="1200" height="${height}" fill="#141411"/><rect width="14" height="${height}" fill="#f34b2c"/><g font-family="${resultFont}"><text x="64" y="64" fill="#f34b2c" font-size="22" letter-spacing="5">SMASH CLUB · RESULTS</text>${heading}${rows}</g></svg>`;
 }
 
 /** A tie at the cutoff shares its actual place and stays together. */
