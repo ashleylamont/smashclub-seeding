@@ -12,6 +12,12 @@
   grid-column: 1 / -1;
   width: min(100%, 44rem);
 }
+.ops-match-assignment {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-soft);
+  overflow-wrap: anywhere;
+}
 .ops-finals-replay-review {
   display: grid;
   gap: var(--s2);
