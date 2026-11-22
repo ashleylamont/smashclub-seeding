@@ -8,7 +8,9 @@ const longAlias = 'Alexandria with a long tournament alias from Western Sydney';
 const searchMiss = 'No pairings match this search. Clear the search to see this view.';
 
 async function fixture(page: Page) {
-  const { overview, responses, unexpected } = await mockEvent(page, { role: 'admin' });
+  const { overview, responses, unexpected, submissions, starts } = await mockEvent(page, {
+    role: 'admin',
+  });
   const [readyMatch, waitingMatch, heldMatch] = overview.matches.filter(
     ({ status }) => status === 'ready',
   );
@@ -47,7 +49,7 @@ async function fixture(page: Page) {
     sharedDispatch: { active: 0, capacity: 2, overCapacity: 0 },
   });
   responses['eventOps.delivery.status'] = { configured: false };
-  return { desk, unexpected };
+  return { desk, unexpected, submissions, starts };
 }
 
 for (const theme of ['dark', 'light'] as const)
@@ -156,3 +158,117 @@ test('shared queue distinguishes waiting, held and empty views', async ({ page }
   await expect(holds).toHaveCount(0);
   expect(unexpected).toEqual([]);
 });
+
+for (const theme of ['dark', 'light'] as const)
+  for (const width of [390, 1440]) {
+    test(`shared desk shortcuts keep focus and drafts at ${width}px in ${theme}`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const { unexpected, submissions, starts } = await fixture(page);
+      await page.goto(`/operate/${PLAN_ID}`);
+      await ready(page);
+      const queue = page.getByRole('region', { name: 'TO match queue' });
+      const pairings = queue.getByRole('heading', { name: 'Pairings', exact: true });
+      const search = queue.getByRole('textbox', { name: 'Find a pairing' });
+      const view = queue.getByRole('combobox', { name: 'Queue view' });
+      const trigger = queue.getByRole('button', { name: 'Keyboard shortcuts' });
+      const help = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
+      await trigger.press('Enter');
+      const close = help.getByRole('button', { name: 'Close dialog' });
+      await expect(close).toBeFocused();
+      await page.keyboard.press('Control+Shift+Digit1');
+      await expect(close).toBeFocused();
+      await expect(help.getByText('Find a pairing', { exact: true })).toBeVisible();
+      await expect(help.getByText('Focus score editor')).toBeVisible();
+      await expect(help.getByText('Go to the ready queue')).toBeVisible();
+      await ready(page);
+      expect(
+        (await new AxeBuilder({ page }).include('[role="dialog"]').analyze()).violations,
+      ).toEqual([]);
+      await page.screenshot({
+        path: testInfo.outputPath('shortcuts-help.png'),
+        animations: 'disabled',
+      });
+      await page.keyboard.press('Escape');
+      await expect(trigger).toBeFocused();
+
+      await page.keyboard.press('Control+Shift+Digit2');
+      await expect(trigger).toBeFocused();
+      await page.keyboard.press('Control+Shift+Digit1');
+      await expect(search).toBeFocused();
+      await search.fill('Alexandria');
+      await page.keyboard.press('Control+Shift+Digit3');
+      await expect(search).toBeFocused();
+      await view.press('Enter');
+      const menu = page.getByRole('listbox');
+      const selectedOption = menu.getByRole('option', { name: 'Ready to call' });
+      await expect(selectedOption).toBeFocused();
+      await page.keyboard.press('Control+Shift+Digit1');
+      await expect(selectedOption).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(view).toBeFocused();
+
+      const row = queue.locator('.dispatch-list article').filter({ hasText: longAlias });
+      await row.getByRole('button', { name: 'Score / details' }).press('Enter');
+      await expect(page.getByText('Showing the selected match.')).toBeFocused();
+      await page.keyboard.press('Control+Shift+Digit2');
+      const form = page.getByRole('form', {
+        name: 'Confirm the final result and finish this match',
+      });
+      const score = form.getByRole('spinbutton', { name: longAlias });
+      await expect(form).toBeFocused();
+      await page.keyboard.press('Tab');
+      await expect(score).toBeFocused();
+      await score.fill('');
+      await page.keyboard.press('Control+Shift+Digit1');
+      await expect(score).toBeFocused();
+      await expect(score).toHaveValue('');
+
+      await chooseOption(view, 'waiting');
+      const readyQueue = page.getByRole('button', { name: 'Go to ready queue' });
+      await readyQueue.focus();
+      await page.keyboard.press('Control+Shift+Digit3');
+      await expect(pairings).toBeFocused();
+      await expect(view).toHaveAttribute('data-value', 'ready');
+      await expect(search).toHaveValue('Alexandria');
+      await expect(row).toBeVisible();
+      await page.keyboard.press('Control+Shift+Digit2');
+      await expect(form).toBeFocused();
+      await expect(score).toHaveValue('');
+      await expect(form.getByRole('button', { name: 'Confirm result' })).toBeDisabled();
+      const tabs = page.getByRole('tablist', { name: 'Event workspace' });
+      await expect
+        .poll(async () => (await form.boundingBox())!.y)
+        .toBeGreaterThanOrEqual((await tabs.boundingBox())!.y + (await tabs.boundingBox())!.height);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+      await page.screenshot({
+        path: testInfo.outputPath('shortcuts-score.png'),
+        animations: 'disabled',
+      });
+      expect(
+        (
+          await new AxeBuilder({ page })
+            .include('.ops-page')
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+            .analyze()
+        ).violations,
+      ).toEqual([]);
+
+      await readyQueue.press('Enter');
+      await expect(pairings).toBeFocused();
+      const players = tabs.getByRole('tab', { name: 'Players' });
+      await players.press('Enter');
+      await expect(players).toHaveAttribute('aria-selected', 'true');
+      await page.keyboard.press('Control+Shift+Digit1');
+      await expect(players).toBeFocused();
+      await expect(search).toBeHidden();
+      await tabs.getByRole('tab', { name: 'Run matches' }).press('Enter');
+      await expect(search).toHaveValue('Alexandria');
+      await expect(score).toHaveValue('');
+      expect(starts).toEqual([]);
+      expect(submissions).toEqual([]);
+      expect(unexpected).toEqual([]);
+    });
+  }

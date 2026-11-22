@@ -1,6 +1,7 @@
 import { NativeDrawTools } from './NativeDrawTools';
 import { filterDeskMatches } from '../../lib/opsMatchFilter';
-import { DispatchDesk } from './DispatchDesk';
+import { DispatchDesk, type DispatchDeskNavigation } from './DispatchDesk';
+import { dispatchShortcut } from './dispatchKeyboard';
 import { useDispatchCommand } from './dispatchCommand';
 import { DoublesAvailabilityControls } from './DoublesAvailabilityControls';
 import { PoolDrawControls } from './PoolDrawControls';
@@ -25,7 +26,8 @@ import { ScorePolicyControls } from './ScorePolicyControls';
 import { StationPoolControls } from './StationPoolControls';
 import { NativeBracketControls } from './NativeBracketControls';
 import { QueueResetControls } from './QueueResetControls';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import type { ScoreEditor } from './OpsMatchScoring';
 import { ToPlayerFinder } from './ToPlayerFinder';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearch, useParams } from '@tanstack/react-router';
@@ -100,6 +102,8 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
   const [search, setSearch] = useState('');
   const [poolFilter, setPoolFilter] = useState('all');
   const [focusedMatchId, setFocusedMatchId] = useState<string | null>(null);
+  const dispatchNavigation = useRef<DispatchDeskNavigation>(null);
+  const scoreEditor = useRef<ScoreEditor>(null);
   const [revealedCall, setRevealedCall] = useState<{ id: string; resourceRevision: number }>();
   const act = async (work: () => Promise<unknown>, message = 'Saved') => {
     setPending(true);
@@ -132,6 +136,8 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
       </section>
     );
   const data = event.data;
+  const sharedQueue =
+    data.plan.bracketMode === 'native' && data.operatorDispatch?.mode === 'shared';
   const available = availableMatches(data.matches).filter((match) => match.availability.canStart);
   const callable = new Set(available.map((match) => match.id));
   const pools = poolStandings(data.matches);
@@ -236,6 +242,9 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
               dispatch={dispatch}
               callDesk={callDesk}
               onReviewReports={openScoreSubmissions}
+              shortcutsActive={workspace.section === 'run'}
+              navigationRef={dispatchNavigation}
+              focusScore={() => scoreEditor.current?.focus() ?? false}
               onMatch={(id) => {
                 setFocusedMatchId(id);
                 setFilter('all');
@@ -293,9 +302,20 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
               tabIndex={-1}
             >
               Showing the selected match.
-              <Button size="small" type="submit" onClick={() => setFocusedMatchId(null)}>
-                Show all matches
-              </Button>
+              <span className="ops-match-actions">
+                {sharedQueue && (
+                  <Button
+                    size="small"
+                    aria-keyshortcuts={dispatchShortcut('readyQueue')}
+                    onClick={() => dispatchNavigation.current?.goToReadyQueue()}
+                  >
+                    Go to ready queue
+                  </Button>
+                )}
+                <Button size="small" type="submit" onClick={() => setFocusedMatchId(null)}>
+                  Show all matches
+                </Button>
+              </span>
             </p>
           )}
           {!data.sharedDispatch && (
@@ -360,6 +380,9 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
                 liveOwned={data.plan.liveOwned}
                 act={act}
                 callDesk={callDesk}
+                scoreEditorRef={
+                  sharedQueue && match.id === focusedMatchId ? scoreEditor : undefined
+                }
               />
             ))}
           </div>
