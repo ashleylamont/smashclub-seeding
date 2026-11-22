@@ -270,9 +270,11 @@ for (const theme of ['dark', 'light'] as const) {
         'Entrant withdrawn',
       ]);
       const restored = history.getByRole('listitem').filter({
-        has: history.getByRole('heading', { name: 'Entrant restored' }),
+        has: page.getByRole('heading', { name: 'Entrant restored' }),
       });
-      await restored.getByRole('button', { name: 'View recorded details' }).focus();
+      const disclosure = restored.getByRole('button', { name: 'View recorded details' });
+      await expect(disclosure).toBeVisible();
+      await disclosure.focus();
       await page.keyboard.press('Enter');
       await expect(
         restored.getByText('Returned before the next match', { exact: false }),
