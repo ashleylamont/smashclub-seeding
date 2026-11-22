@@ -47,7 +47,16 @@ export function usePlayerEventHub(planId: string) {
       window.history.replaceState(window.history.state, '', url);
     }
   };
-  const [preferredView, setView] = useState(selectedPlayer ? 'mine' : 'queue');
+  const [preferredView, setView] = useState<string>();
+  const [linkedDefaultAllowed, setLinkedDefaultAllowed] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return !(
+      params.has('pool') ||
+      params.has('station') ||
+      params.has('match') ||
+      window.location.hash
+    );
+  });
   const [selectedPool, setSelectedPool] = usePoolFilter();
   const [selectedStation, setSelectedStation] = useState(
     () => new URLSearchParams(window.location.search).get('station') ?? '',
@@ -103,8 +112,22 @@ export function usePlayerEventHub(planId: string) {
   );
   const closed = data !== undefined && ['complete', 'cancelled'].includes(data.plan.status);
   const players = eventPlayers(data?.matches ?? []);
-  const player = resolveHubPlayer(players, selectedPlayer, data?.entrants);
-  const view = effectivePlayerView(preferredView, player);
+  // A linked profile supplies browsing context only, without persisting the account's player ID.
+  const linkedPlayerId =
+    linkedDefaultAllowed && !session && !redeeming ? claim?.playerId : undefined;
+  const player = resolveHubPlayer(players, selectedPlayer ?? linkedPlayerId ?? '', data?.entrants);
+  const usingLinkedDefault = selectedPlayer === undefined && Boolean(player);
+  const view = effectivePlayerView(preferredView, player, selectedPlayer);
+  const keepBrowsingScope = () => {
+    // An account response arriving after the user starts browsing cannot narrow their view.
+    if (!player) setLinkedDefaultAllowed(false);
+  };
+  const scoped =
+    <T>(update: (value: T) => void) =>
+    (value: T) => {
+      keepBrowsingScope();
+      update(value);
+    };
   const playerName = players.find((item) => item.id === player)?.name;
   const reportedIds = new Set(ownReports?.map((report) => report.matchId));
   const stationId =
@@ -153,6 +176,7 @@ export function usePlayerEventHub(planId: string) {
   }, [data, initialSection]);
   const start = async (input: StartPoolMatch) => {
     if (!canWrite) return;
+    keepBrowsingScope();
     setStarting(input.matchId);
     setError('');
     try {
@@ -179,6 +203,7 @@ export function usePlayerEventHub(planId: string) {
     }
   };
   const chooseMatch = (id: string) => {
+    keepBrowsingScope();
     const match = data?.matches.find((item) => item.id === id);
     if (match && selectedPool && !matchesPool(match, selectedPool)) setSelectedPool('');
     if (match && player && !includesPlayer(match, player)) setSelectedPlayer('');
@@ -243,6 +268,7 @@ export function usePlayerEventHub(planId: string) {
     players,
     player,
     playerName,
+    usingLinkedDefault,
     playerMatches,
     completed,
     nextMatch,
@@ -250,20 +276,21 @@ export function usePlayerEventHub(planId: string) {
     board,
     hiddenHistory,
     selectedPool,
-    setSelectedPool,
+    setSelectedPool: scoped(setSelectedPool),
     selectedStation,
-    setSelectedStation,
+    setSelectedStation: scoped(setSelectedStation),
     selectedMatch,
     setSelectedMatch,
     selectedPlayer,
     setSelectedPlayer,
     view,
-    setView,
+    setView: scoped(setView),
     search,
-    setSearch,
+    setSearch: scoped(setSearch),
     visible,
     stationId,
     starting,
+    keepBrowsingScope,
     start,
     chooseMatch,
     submitScore,

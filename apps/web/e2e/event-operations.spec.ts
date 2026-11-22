@@ -123,10 +123,11 @@ test('rehearsal: two TOs, score approval, station safety, public board and OBS',
     await signIn(playerContext.request, 'rehearsal-player@smashclub.dev');
     const playerPage = await playerContext.newPage();
     await playerPage.goto(`/play/${planId}`);
-    await chooseOption(
-      playerPage.getByRole('combobox', { name: 'Match view', exact: true }),
-      'matches',
+    await expect(playerPage.getByLabel('Show matches for')).toHaveAttribute(
+      'data-value',
+      playing.player1Id,
     );
+    await expect(playerPage.getByRole('button', { name: 'View current match' })).toBeVisible();
     const playerCard = playerPage
       .locator('article.ops-match:visible')
       .filter({ hasText: playing.label });
@@ -276,10 +277,7 @@ test('player score draft survives a station dispatch without changing its score 
     )!;
     const playerPage = await playerContext.newPage();
     await playerPage.goto(`/play/${planId}`);
-    await chooseOption(
-      playerPage.getByRole('combobox', { name: 'Match view', exact: true }),
-      'matches',
-    );
+    await expect(playerPage.getByLabel('Show matches for')).toHaveAttribute('data-value', playerId);
     const card = playerPage.locator('article.ops-match:visible').filter({ hasText: match.label });
     await card.locator('input[type="number"]').nth(0).fill('2');
     await card.locator('input[type="number"]').nth(1).fill('1');
@@ -332,10 +330,7 @@ test('a rejected player score starts a new request even when its scores are unch
     )!;
     const playerPage = await playerContext.newPage();
     await playerPage.goto(`/play/${planId}`);
-    await chooseOption(
-      playerPage.getByRole('combobox', { name: 'Match view', exact: true }),
-      'matches',
-    );
+    await expect(playerPage.getByLabel('Show matches for')).toHaveAttribute('data-value', playerId);
     const card = playerPage.locator('article.ops-match:visible').filter({ hasText: match.label });
     await card.locator('input[type="number"]').nth(0).fill('2');
     await card.locator('input[type="number"]').nth(1).fill('1');

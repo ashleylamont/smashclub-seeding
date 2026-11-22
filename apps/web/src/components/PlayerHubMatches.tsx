@@ -31,6 +31,7 @@ export function PlayerHubMatches({
     player,
     selectedPlayer,
     playerName,
+    usingLinkedDefault,
     setSelectedPlayer,
     view,
     setView,
@@ -56,6 +57,7 @@ export function PlayerHubMatches({
     ownReports,
     claim,
     signedIn,
+    keepBrowsingScope,
   } = hub;
   const scoreDrafts = useScoreReportDrafts(
     JSON.stringify([data.plan.id, reportingIdentity, closed]),
@@ -89,6 +91,7 @@ export function PlayerHubMatches({
       <PlayerMatchFilter
         players={players}
         value={player}
+        usingLinkedDefault={usingLinkedDefault}
         onChange={(id) => {
           setSelectedPlayer(id);
           setView(id ? 'mine' : 'matches');
@@ -230,7 +233,7 @@ export function PlayerHubMatches({
             </div>
           </div>
         </Disclosure>
-        <div className="ops-match-grid" ref={matchGrid}>
+        <div className="ops-match-grid" ref={matchGrid} onChangeCapture={keepBrowsingScope}>
           {visible.map((match) => (
             <EventScoreCard
               key={match.id}

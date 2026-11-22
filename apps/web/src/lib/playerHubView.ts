@@ -22,8 +22,13 @@ export function resolveHubPlayer(
 }
 
 /** Keep the preference so a temporarily absent player can reappear on the next public poll. */
-export function effectivePlayerView(preferred: string, player: string) {
-  return preferred === 'mine' && !player ? 'matches' : preferred;
+export function effectivePlayerView(
+  preferred: string | undefined,
+  player: string,
+  selected?: string,
+) {
+  const view = preferred ?? (selected || player ? 'mine' : 'queue');
+  return view === 'mine' && !player ? 'matches' : view;
 }
 
 export function playerMatchProgress(matches: PoolFlowMatch[], closed: boolean) {
