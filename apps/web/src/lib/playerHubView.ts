@@ -5,7 +5,7 @@ import { matchesPool, poolKey, type PoolFlowData, type PoolFlowMatch } from './p
 
 export type HubBoardSection = 'brackets' | 'pools' | 'results';
 type HubData = PoolFlowData & {
-  plan: PoolFlowData['plan'] & { structure?: string };
+  plan: PoolFlowData['plan'] & { structure?: string; historicalResultsSlug?: string | null };
   nativeBrackets?: NativeBracketView[];
   brackets?: { division: string; stage: string; slug: string | null }[];
   entrants?: { id: string; name: string; memberPlayerIds?: string[] }[];
@@ -80,8 +80,9 @@ export function playerHubView(data: HubData, player = '', selectedPool = '') {
       )
     : eliminationBrackets;
   const divisions = new Set(ownMatches.map((match) => match.division));
+  // Historical adoption keeps the saved plan bracket mode.
   const linked =
-    data.plan.bracketMode === 'native'
+    data.plan.bracketMode === 'native' && !data.plan.historicalResultsSlug
       ? []
       : (data.brackets ?? []).filter((bracket) => !player || divisions.has(bracket.division));
   const bracketIds = new Set(assignedBrackets.map((bracket) => bracket.id));

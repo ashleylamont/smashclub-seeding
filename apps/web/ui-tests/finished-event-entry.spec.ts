@@ -86,19 +86,15 @@ for (const theme of ['dark', 'light'] as const) {
       await page.goto(`/play/${PLAN_ID}#event-results`);
       await page.reload();
       await expect(bracketPanel).toBeFocused();
-      Object.assign(snapshot.plan, { historicalResultsSlug: 'rehearsal-results' });
       snapshot.placements = placements;
       await page.reload();
-      await expect(
-        results.getByRole('link', { name: 'View historical results →' }),
-      ).toHaveAttribute('href', '/events/rehearsal-results');
       await expect(
         results.getByRole('heading', { name: 'Confirmed pool standings' }),
       ).toBeVisible();
       await expect(results.getByText('No recorded sets in this view.')).toHaveCount(0);
       await expect(links.getByRole('link')).toHaveCount(2);
 
-      Object.assign(snapshot.plan, finished, { historicalResultsSlug: null, liveOwned: true });
+      Object.assign(snapshot.plan, finished, { liveOwned: true });
       snapshot.matches = [played];
       snapshot.nativeBrackets = nativeBrackets;
       snapshot.placements = [];
@@ -130,3 +126,67 @@ for (const theme of ['dark', 'light'] as const) {
     });
   }
 }
+
+test('adopted historical archive retains recorded links on a native plan', async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => localStorage.setItem('smashclub:theme', 'light'));
+  const { snapshot, responses, unexpected } = await mockEvent(page);
+  Object.assign(snapshot.plan, finished, {
+    liveOwned: false,
+    historicalResultsSlug: 'adopted-upper',
+    resultsSlug: 'adopted-upper',
+  });
+  snapshot.matches = [];
+  snapshot.entrants = [];
+  snapshot.placements = [];
+  snapshot.announcements = [];
+  snapshot.prizes = [];
+  Object.assign(snapshot.brackets[0]!, { slug: 'adopted-upper' });
+  Object.assign(snapshot.brackets[2]!, { slug: 'adopted-lower' });
+  responses['eventOps.publicEvents'] = [finished];
+
+  await enterArchive(page);
+  const results = page.getByRole('region', { name: 'Results', exact: true });
+  await expect(results).toBeFocused();
+  const standings = results.getByRole('link', { name: 'View historical results →' });
+  await expect(standings).toHaveAttribute('href', '/events/adopted-upper');
+  const brackets = page.getByRole('navigation', { name: 'Challonge brackets' });
+  await expect(brackets.getByRole('link')).toHaveCount(2);
+  await expect(brackets.getByRole('link', { name: /upper/i })).toHaveAttribute(
+    'href',
+    'https://challonge.com/adopted-upper',
+  );
+  await expect(brackets.getByRole('link', { name: /lower/i })).toHaveAttribute(
+    'href',
+    'https://challonge.com/adopted-lower',
+  );
+  await expect(page.getByRole('region', { name: 'Pools', exact: true })).toHaveCount(0);
+  await expect(page.getByText(/No recorded sets|What next|Score reporting/)).toHaveCount(0);
+  await page.keyboard.press('Tab');
+  await expect(standings).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(brackets.getByRole('link', { name: /upper/i })).toBeFocused();
+  await reviewRoute(page, testInfo, 'adopted-native-plan');
+  expect(unexpected).toEqual([]);
+});
+
+test('prizes-only archive focuses its recorded prize', async ({ page }, testInfo) => {
+  const { snapshot, responses, unexpected } = await mockEvent(page);
+  Object.assign(snapshot.plan, imported, { liveOwned: false });
+  snapshot.matches = [];
+  snapshot.placements = [];
+  snapshot.announcements = [];
+  snapshot.prizes = snapshot.prizes.filter((prize) => prize.playerName);
+  responses['eventOps.publicEvents'] = [imported];
+
+  await enterArchive(page);
+  const prizes = page.getByRole('region', { name: 'Prizes', exact: true });
+  await expect(prizes).toBeFocused();
+  await expect(prizes).toContainText('Good games award');
+  await expect(prizes).toContainText('Roy');
+  await expect(page.getByRole('region', { name: 'Results', exact: true })).toHaveCount(0);
+  await reviewRoute(page, testInfo, 'prizes-only');
+  expect(unexpected).toEqual([]);
+});

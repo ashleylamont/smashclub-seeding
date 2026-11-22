@@ -28,8 +28,14 @@ export function PlayerEvent({ planId }: { planId: string }) {
   const hub = usePlayerEventHub(planId);
   if (hub.unpublished)
     return <Notice tone="danger">This event is unavailable or has not been published.</Notice>;
-  if (hub.closed && hub.data?.plan.bracketMode === 'challonge' && !hub.data.matches.length)
-    return <ImportedArchive data={hub.data} hub={hub} />;
+  const { data } = hub;
+  if (
+    hub.closed &&
+    data &&
+    !data.matches.length &&
+    (data.plan.bracketMode === 'challonge' || data.plan.historicalResultsSlug)
+  )
+    return <ImportedArchive data={data} hub={hub} />;
   return <PlayerEventHubPage hub={hub} />;
 }
 

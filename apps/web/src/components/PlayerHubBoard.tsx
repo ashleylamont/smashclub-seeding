@@ -4,7 +4,7 @@ import { PendingFinals } from './PendingFinals';
 import { MatchCard } from './EventMatchCard';
 import { ResultGraphic } from './ResultGraphic';
 import { confirmedPoolGraphics } from '../lib/resultGraphic';
-import { playerBracketPath, playerHubView } from '../lib/playerHubView';
+import { playerBracketPath, playerHubView, type HubBoardSection } from '../lib/playerHubView';
 import { liveBracketSide, liveBracketStatus } from '../lib/eventBracket';
 import { formatDate } from '../lib/format';
 import { Disclosure } from './ui/Disclosure';
@@ -39,25 +39,15 @@ export function PlayerHubBoard({
     data.entrants,
     data.plan.structure,
   );
-  const { hasBrackets } = board;
   const resultsSlug = data.plan.resultsSlug ?? data.plan.historicalResultsSlug;
   const hasSets = board.results.length > 0 || superseded.length > 0;
   const hasResults = hasSets || poolResults.length > 0 || Boolean(resultsSlug);
   const prizes = player ? [] : data.prizes;
-  const archiveEntry = board.closed
-    ? hasResults
-      ? 'results'
-      : hasBrackets
-        ? 'brackets'
-        : undefined
-    : undefined;
-  const sectionOrder = archiveOnly
-    ? board.sections.filter((section) =>
-        section === 'brackets'
-          ? hasBrackets
-          : section === 'results' && (hasResults || prizes.length > 0),
-      )
-    : board.sections;
+  const archiveSections: HubBoardSection[] = hasResults ? ['results'] : [];
+  if (board.hasBrackets) archiveSections.push('brackets');
+  if (archiveOnly && !hasResults && prizes.length > 0) archiveSections.push('results');
+  const archiveEntry = board.closed ? archiveSections[0] : undefined;
+  const sectionOrder = archiveOnly ? archiveSections : board.sections;
   if (archiveOnly && !sectionOrder.length)
     return (
       <section className="card" aria-label="Event archive" data-archive-entry tabIndex={-1}>
