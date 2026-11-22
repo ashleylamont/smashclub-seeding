@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { players, sets, tournamentParticipants, tournaments, type Db } from '@smashclub/db';
 import type { RecapFact, RecapFactKind } from '@smashclub/engine';
@@ -6,7 +6,9 @@ import { importRegistryPlayers, registerTournamentSlugs } from '../src/bootstrap
 import { syncTournament } from '../src/sync/sync';
 import { runRecompute } from '../src/recompute/recompute';
 import { RecomputeTrigger } from '../src/recompute/trigger';
+import * as whrProvenance from '../src/recompute/whrProvenance';
 import { loadEnv } from '../src/env';
+import * as characterReads from '../src/players/characters';
 import { appRouter } from '../src/trpc/router';
 import { createTestDb } from './helpers/testDb';
 import { fixtureClient, type FixtureTournament } from './helpers/challongeFixtures';
@@ -255,6 +257,7 @@ async function publishForecastFixture(history: 'debut' | 'disconnected' | 'conne
   return {
     recomputeId,
     bridgeTournamentId: bridge!.id,
+    featuredSetId: set!.id,
     underdogId: underdog!.id,
     readRecap: async () => (await api.recap({ slug: featured!.challongeSlug }))!,
     readImpact: (id: string) =>
@@ -371,6 +374,55 @@ describe('public.recap', () => {
       expect(recap.highlights.every(({ id }) => availableFacts.has(id))).toBe(true);
     },
   );
+
+  it('omits the upset when the result and rating run disagree on the winner', async () => {
+    const fixture = await publishForecastFixture('connected');
+    expect(factsOfKind(await fixture.readRecap(), 'rating_upset')).toHaveLength(1);
+
+    const readCharacters = characterReads.charactersByPlayer;
+    const intercept = vi
+      .spyOn(characterReads, 'charactersByPlayer')
+      .mockImplementationOnce(async (...args) => {
+        // The recap has already read the old score. Publish a new rating run
+        // for the reversed result before it reads the rating events.
+        await db
+          .update(sets)
+          .set({ winner: 2, scoresCsv: '0-3' })
+          .where(eq(sets.id, fixture.featuredSetId));
+        await runRecompute(db);
+        return readCharacters(...args);
+      });
+
+    try {
+      const recap = await fixture.readRecap();
+      expect(factsOfKind(recap, 'seed_upset')).toMatchObject([
+        { winnerSeed: 8, loserSeed: 1, score: '3-0' },
+      ]);
+      expect(factsOfKind(recap, 'rating_upset')).toEqual([]);
+      expect(factsOfKind(await fixture.readRecap(), 'seed_upset')).toEqual([]);
+    } finally {
+      intercept.mockRestore();
+    }
+  });
+
+  it('skips the WHR history reread when the favourite won', async () => {
+    const fixture = await publishForecastFixture('connected');
+    await db
+      .update(sets)
+      .set({ winner: 2, scoresCsv: '0-3' })
+      .where(eq(sets.id, fixture.featuredSetId));
+    await runRecompute(db);
+
+    const history = vi.spyOn(whrProvenance, 'loadWhrHistoryThroughDay');
+    try {
+      const recap = await fixture.readRecap();
+      expect(recap.setsPlayed).toBe(1);
+      expect(factsOfKind(recap, 'rating_upset')).toEqual([]);
+      expect(history.mock.calls.length).toBe(0);
+    } finally {
+      history.mockRestore();
+    }
+  });
 
   it('waits for a new run to use a corrected doubles bridge as evidence', async () => {
     const fixture = await publishForecastFixture('disconnected');

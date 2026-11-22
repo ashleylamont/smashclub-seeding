@@ -432,6 +432,28 @@ interface PlayedSet {
   scoreKnown: boolean;
 }
 
+function playedRecapSets(
+  sets: readonly RecapSet[],
+  participants: readonly RecapParticipant[],
+): PlayedSet[] {
+  const byId = new Map(participants.map((p) => [p.id, p]));
+  const played: PlayedSet[] = [];
+  for (const set of sets) {
+    if (set.state !== 'complete' || set.winner == null || !wasPlayed(set)) continue;
+    const p1 = set.p1ParticipantId ? byId.get(set.p1ParticipantId) : undefined;
+    const p2 = set.p2ParticipantId ? byId.get(set.p2ParticipantId) : undefined;
+    if (!p1 || !p2) continue;
+    const winner = set.winner === 1 ? p1 : p2;
+    const loser = set.winner === 1 ? p2 : p1;
+    const score = parseScoresCsv(set.scoresCsv);
+    // scores_csv is always player1-first; flip it when player 2 won.
+    const winnerGames = set.winner === 1 ? score.p1 : score.p2;
+    const loserGames = set.winner === 1 ? score.p2 : score.p1;
+    played.push({ set, winner, loser, winnerGames, loserGames, scoreKnown: !score.unknown });
+  }
+  return played;
+}
+
 const refOf = (p: RecapParticipant): RecapPlayerRef => ({
   playerId: p.playerId,
   name: p.name,
@@ -790,7 +812,6 @@ export function buildRecap(input: RecapInput): RecapResult {
   // counts as over — the conservative reading, and the one the old code had.
   const now = input.now ?? Number.NEGATIVE_INFINITY;
 
-  const byId = new Map(participants.map((p) => [p.id, p]));
   /**
    * Main bracket first, then rookie: a night's headline result is the main
    * bracket's, and `eventDate` alone does not order them reliably.
@@ -800,20 +821,7 @@ export function buildRecap(input: RecapInput): RecapResult {
   );
   const eventKey = orderedTournaments.find((t) => t.eventDate)?.eventDate ?? null;
 
-  const played: PlayedSet[] = [];
-  for (const set of sets) {
-    if (set.state !== 'complete' || set.winner == null || !wasPlayed(set)) continue;
-    const p1 = set.p1ParticipantId ? byId.get(set.p1ParticipantId) : undefined;
-    const p2 = set.p2ParticipantId ? byId.get(set.p2ParticipantId) : undefined;
-    if (!p1 || !p2) continue;
-    const winner = set.winner === 1 ? p1 : p2;
-    const loser = set.winner === 1 ? p2 : p1;
-    const score = parseScoresCsv(set.scoresCsv);
-    // scores_csv is always player1-first; flip it when player 2 won.
-    const winnerGames = set.winner === 1 ? score.p1 : score.p2;
-    const loserGames = set.winner === 1 ? score.p2 : score.p1;
-    played.push({ set, winner, loser, winnerGames, loserGames, scoreKnown: !score.unknown });
-  }
+  const played = playedRecapSets(sets, participants);
 
   /*
    * Each finished bracket read once, so every fact that depends on "who won
@@ -909,7 +917,7 @@ export function buildRecap(input: RecapInput): RecapResult {
     weightOf,
     push,
   );
-  if (input.priorWhrEvidence)
+  if (input.priorWhrEvidence?.size)
     collectRatingUpsets(played, ratingEvents, input.priorWhrEvidence, stageOf, weightOf, push);
   collectNailbiters(played, deciderSetIds, stageOf, weightOf, push);
   collectLosersRuns(played, placement, push);
@@ -1060,22 +1068,20 @@ function collectSeedUpsets(
   }
 }
 
-/**
- * Upsets by rating: how unlikely the result was given what we knew going in.
- *
- * Pre-set ratings come from the rating events themselves, which is the only
- * place the *going-in* number survives — the player's current rating already
- * has tonight's results baked in.
- */
-function collectRatingUpsets(
+const MAX_UPSET_WIN_PROBABILITY = 0.35;
+
+interface RatingUpsetCandidate {
+  played: PlayedSet;
+  winnerEvent: RecapRatingEvent;
+  loserEvent: RecapRatingEvent;
+  probability: number;
+}
+
+/** Pre-set estimates live in the ledger. The archived result must agree with it. */
+function ratingUpsetCandidates(
   played: readonly PlayedSet[],
   ratingEvents: readonly RecapRatingEvent[],
-  priorWhrEvidence: ReadonlyMap<string, WhrPriorEvidence>,
-  stageOf: (p: PlayedSet) => string | null,
-  weightOf: (p: PlayedSet) => number,
-  push: Push,
-): void {
-  if (ratingEvents.length === 0) return;
+): RatingUpsetCandidate[] {
   const bySet = new Map<string, RecapRatingEvent[]>();
   for (const event of ratingEvents) {
     if (event.isDecay || !event.setId) continue;
@@ -1084,23 +1090,54 @@ function collectRatingUpsets(
     else bySet.set(event.setId, [event]);
   }
 
-  for (const p of played) {
-    const events = bySet.get(p.set.id);
-    const evidence = priorWhrEvidence.get(p.set.tournamentId);
-    if (!evidence || !events || events.length !== 2) continue;
-    const winnerEvent = events.find((e) => e.playerId === p.winner.playerId);
-    const loserEvent = events.find((e) => e.playerId === p.loser.playerId);
-    if (!winnerEvent || !loserEvent) continue;
-    if (whrForecastUnavailable(evidence, [winnerEvent, loserEvent])) continue;
+  const candidates: RatingUpsetCandidate[] = [];
+  for (const result of played) {
+    const events = bySet.get(result.set.id);
+    if (!events || events.length !== 2) continue;
+    const winnerEvent = events.find((event) => event.playerId === result.winner.playerId);
+    const loserEvent = events.find((event) => event.playerId === result.loser.playerId);
+    if (winnerEvent?.won !== true || loserEvent?.won !== false) continue;
 
     const probability = probabilityFromRatings(
       (winnerEvent.preRating - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY,
       (loserEvent.preRating - DISPLAY_CENTRE) / NATURAL_TO_DISPLAY,
       (winnerEvent.preRd / NATURAL_TO_DISPLAY) ** 2 + (loserEvent.preRd / NATURAL_TO_DISPLAY) ** 2,
     );
-    // Only genuine longshots; an even set is not an upset.
-    if (probability > 0.35) continue;
-    const notability = 0.6 * (1 - probability / 0.35) + 0.3 * weightOf(p) + 0.1;
+    if (probability <= MAX_UPSET_WIN_PROBABILITY)
+      candidates.push({ played: result, winnerEvent, loserEvent, probability });
+  }
+  return candidates;
+}
+
+/** Select brackets that could have an upset so the caller can load their prior evidence. */
+export function recapRatingUpsetBrackets({
+  sets,
+  participants,
+  ratingEvents = [],
+}: Pick<RecapInput, 'sets' | 'participants' | 'ratingEvents'>): ReadonlySet<string> {
+  if (ratingEvents.length === 0) return new Set();
+  const played = playedRecapSets(sets, participants);
+  return new Set(
+    ratingUpsetCandidates(played, ratingEvents).map(({ played }) => played.set.tournamentId),
+  );
+}
+
+function collectRatingUpsets(
+  played: readonly PlayedSet[],
+  ratingEvents: readonly RecapRatingEvent[],
+  priorWhrEvidence: ReadonlyMap<string, WhrPriorEvidence>,
+  stageOf: (p: PlayedSet) => string | null,
+  weightOf: (p: PlayedSet) => number,
+  push: Push,
+): void {
+  for (const { played: p, winnerEvent, loserEvent, probability } of ratingUpsetCandidates(
+    played,
+    ratingEvents,
+  )) {
+    const evidence = priorWhrEvidence.get(p.set.tournamentId);
+    if (!evidence || whrForecastUnavailable(evidence, [winnerEvent, loserEvent])) continue;
+    const notability =
+      0.6 * (1 - probability / MAX_UPSET_WIN_PROBABILITY) + 0.3 * weightOf(p) + 0.1;
     push(`rating_upset:${p.set.id}`, notability, {
       kind: 'rating_upset',
       tournamentId: p.set.tournamentId,

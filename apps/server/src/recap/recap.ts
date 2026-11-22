@@ -20,6 +20,7 @@ import {
   eventKeyOf,
   formatFact,
   pairKey,
+  recapRatingUpsetBrackets,
   type RankedRecapFact,
   type RecapHistory,
   type RecapParticipant,
@@ -289,13 +290,17 @@ export async function loadRecap(
   const { nightEvents, history, rankMovement } = recomputeId
     ? await loadRatingContext(db, recomputeId, nightIds)
     : { nightEvents: [], history: undefined, rankMovement: [] };
-  const ratedBrackets = new Set(nightEvents.map(({ tournamentId }) => tournamentId));
+  const upsetBrackets = recapRatingUpsetBrackets({
+    sets: recapSets,
+    participants,
+    ratingEvents: nightEvents,
+  });
   const priorWhrEvidence =
-    recomputeId && ratedBrackets.size
+    recomputeId && upsetBrackets.size
       ? await loadRecapWhrEvidence(
           db,
           recomputeId,
-          nightTournaments.filter(({ id }) => ratedBrackets.has(id)),
+          nightTournaments.filter(({ id }) => upsetBrackets.has(id)),
         )
       : undefined;
 
