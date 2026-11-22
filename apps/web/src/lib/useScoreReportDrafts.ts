@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState } from 'react';
+import { useLayoutEffect, useMemo, useState } from 'react';
 import type { SetCharacterPick } from '@smashclub/shared';
 import type { LiveMatch } from './eventDisplay';
 import { matchPresentation } from './matchPresentation';
@@ -53,7 +53,7 @@ export type ScoreReportDrafts = {
 /** Retain only edited pairings from the current event and reporting credential. */
 export function useScoreReportDrafts(
   scope: string,
-  matches: readonly DraftMatch[],
+  matches: readonly DraftMatch[] | undefined,
   {
     planId,
     owner,
@@ -64,42 +64,77 @@ export function useScoreReportDrafts(
     canRecover: (match: DraftMatch, attemptedRequestId: string | null) => boolean;
   },
 ): ScoreReportDrafts {
+  const matchesByKey = useMemo(
+    () => matches && new Map(matches.map((match) => [scoreReportDraftKey(match), match])),
+    [matches],
+  );
+  const verifiedEligibility = owner ? canRecover : undefined;
   const [state, setState] = useState({
     scope,
     matches,
     drafts: new Map() as Drafts,
     recoveredOwner: undefined as DraftOwner | undefined,
+    verifiedEligibility,
   });
 
   let drafts = state.drafts;
-  if (state.scope !== scope || (owner === null && state.recoveredOwner)) {
+  if (state.scope !== scope || (owner === null && (state.recoveredOwner || drafts.size))) {
     drafts = new Map();
-    setState({ scope, matches, drafts, recoveredOwner: undefined });
-  } else if (state.matches !== matches) {
-    if (drafts.size) {
-      const currentKeys = new Set(matches.map(scoreReportDraftKey));
-      drafts = new Map([...drafts].filter(([key]) => currentKeys.has(key)));
+    setState({ scope, matches, drafts, recoveredOwner: undefined, verifiedEligibility });
+  } else if (
+    state.matches !== matches ||
+    state.verifiedEligibility !== verifiedEligibility ||
+    (owner && state.recoveredOwner !== owner)
+  ) {
+    if (matchesByKey && drafts.size) {
+      drafts = new Map(
+        [...drafts].flatMap(([key, draft]) => {
+          const match = matchesByKey.get(key);
+          if (!match) return [];
+          const unsent = draft.touchedAt !== null || draft.editing || draft.retryRejected;
+          if (
+            unsent &&
+            verifiedEligibility &&
+            !verifiedEligibility(match, draft.attemptedRequestId)
+          ) {
+            return [
+              [
+                key,
+                {
+                  ...initialDraft(match),
+                  // An outstanding request can still receive its authoritative response.
+                  pendingRequestId: draft.pendingRequestId,
+                  sent: draft.sent,
+                  completedFeedback: draft.completedFeedback,
+                },
+              ],
+            ];
+          }
+          return [[key, draft]];
+        }),
+      );
     }
-    setState({ ...state, matches, drafts });
-  } else if (owner && state.recoveredOwner !== owner) {
-    const eligible = new Map(matches.map((match) => [scoreReportDraftKey(match), match]));
-    const recovered = new Map<string, ScoreReportDraft>();
-    for (const [key, saved] of readScoreDrafts(planId, owner)) {
-      const match = eligible.get(key);
-      if (!match || !canRecover(match, saved.attemptedRequestId)) continue;
-      const players = new Set(scoreReportPlayers(match).map(({ id }) => id));
-      if (saved.picks.some(({ playerId }) => !players.has(playerId))) continue;
-      recovered.set(key, {
-        ...saved,
-        pendingRequestId: null,
-        sent: null,
-        completedFeedback: null,
-        error: '',
-      });
+    let recoveredOwner = state.recoveredOwner;
+    if (owner && recoveredOwner !== owner && matchesByKey) {
+      const recovered = new Map<string, ScoreReportDraft>();
+      for (const [key, saved] of readScoreDrafts(planId, owner)) {
+        const match = matchesByKey.get(key);
+        if (!match || !canRecover(match, saved.attemptedRequestId)) continue;
+        const players = new Set(scoreReportPlayers(match).map(({ id }) => id));
+        if (saved.picks.some(({ playerId }) => !players.has(playerId))) continue;
+        recovered.set(key, {
+          ...saved,
+          pendingRequestId: null,
+          sent: null,
+          completedFeedback: null,
+          error: '',
+        });
+      }
+      // An edit typed while the reporting queries loaded takes precedence.
+      drafts = new Map([...recovered, ...drafts]);
+      recoveredOwner = owner;
     }
-    // An edit typed while the reporting queries loaded takes precedence.
-    drafts = new Map([...recovered, ...drafts]);
-    setState({ ...state, drafts, recoveredOwner: owner });
+    setState({ scope, matches, drafts, recoveredOwner, verifiedEligibility });
   }
 
   useLayoutEffect(() => {
@@ -109,12 +144,12 @@ export function useScoreReportDrafts(
       clearScoreDrafts(planId);
       return;
     }
-    const eligible = new Map(matches.map((match) => [scoreReportDraftKey(match), match]));
+    if (!matchesByKey) return;
     saveScoreDrafts(
       planId,
       owner,
       [...drafts].flatMap(([key, draft]) => {
-        const match = eligible.get(key);
+        const match = matchesByKey.get(key);
         if (!match || draft.touchedAt === null || !canRecover(match, draft.attemptedRequestId))
           return [];
         const { score1, score2, picks, attemptedRequestId, touchedAt } = draft;
@@ -124,7 +159,7 @@ export function useScoreReportDrafts(
           : [];
       }),
     );
-  }, [canRecover, drafts, matches, owner, planId]);
+  }, [canRecover, drafts, matchesByKey, owner, planId]);
 
   return {
     drafts,

@@ -30,7 +30,7 @@ const key = 'nemesis:score-drafts:v1';
 const maximumAge = 12 * 60 * 60 * 1000;
 const maximumEvents = 4;
 const maximumDrafts = 16;
-const maximumCharacters = 64_000;
+const maximumStorageLength = 64_000;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ownerFormat = /^(account|guest):[0-9a-f]{64}$/;
 let initialized = false;
@@ -38,13 +38,12 @@ let initialized = false;
 function tabStorage() {
   const storage = window.sessionStorage;
   if (!initialized) {
-    // An opener can give a new tab a copy of sessionStorage. Only a reload
-    // may recover an earlier document's entries.
-    if (
-      window.opener &&
-      (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)
-        ?.type !== 'reload'
-    )
+    const navigation = (
+      performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
+    )?.type;
+    // Chromium can clone tab storage through a fresh history document with no opener.
+    // A same-document history traversal never reinitializes this module.
+    if (navigation === 'back_forward' || (window.opener && navigation !== 'reload'))
       storage.removeItem(key);
     initialized = true;
   }
@@ -170,7 +169,7 @@ function parseDraft(value: unknown, now: number): SavedScoreDraft | undefined {
 function read(): EventDrafts[] {
   try {
     const raw = tabStorage().getItem(key);
-    if (!raw || raw.length > maximumCharacters) return [];
+    if (!raw || raw.length > maximumStorageLength) return [];
     const stored: unknown = JSON.parse(raw);
     if (!Array.isArray(stored) || stored.length > maximumEvents) return [];
     const now = Date.now();
@@ -208,12 +207,21 @@ function read(): EventDrafts[] {
 function write(records: EventDrafts[]) {
   try {
     const storage = tabStorage();
-    if (!records.length) storage.removeItem(key);
-    else {
-      const serialized = JSON.stringify(records);
-      if (serialized.length <= maximumCharacters && storage.getItem(key) !== serialized)
-        storage.setItem(key, serialized);
+    let serialized = JSON.stringify(records);
+    while (serialized.length > maximumStorageLength) {
+      // The entries of each event are newest first. Discard the oldest edit
+      // across events so a new edit can still replace the previous snapshot.
+      const oldest = records.reduce((previous, record) =>
+        record.entries.at(-1)![1].touchedAt <= previous.entries.at(-1)![1].touchedAt
+          ? record
+          : previous,
+      );
+      oldest.entries.pop();
+      records = records.filter((record) => record.entries.length);
+      serialized = JSON.stringify(records);
     }
+    if (!records.length) storage.removeItem(key);
+    else if (storage.getItem(key) !== serialized) storage.setItem(key, serialized);
   } catch {
     // Reporting still works in memory when storage is unavailable.
   }
@@ -231,7 +239,7 @@ export function saveScoreDrafts(planId: string, owner: DraftOwner, entries: Draf
   const now = Date.now();
   const valid = entries.flatMap(([key, value]): DraftEntry[] => {
     const draft = parseDraft(value, now);
-    return draft ? [[key, draft]] : [];
+    return draft && key.length <= 512 ? [[key, draft]] : [];
   });
   const latest = valid.sort((a, b) => b[1].touchedAt - a[1].touchedAt).slice(0, maximumDrafts);
   const events = read().filter((item) => item.planId !== planId);

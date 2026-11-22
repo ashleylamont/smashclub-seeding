@@ -220,3 +220,114 @@ test('a verified confirmation receipt retires its draft after an interrupted res
   await expect(card.getByRole('button', { name: 'Edit characters (1)' })).toHaveCount(0);
   expect(requests).toHaveLength(1);
 });
+
+test('a completed report starts clean if the event removes and restores its reporting policy', async ({
+  page,
+}) => {
+  const fixture = await mockEvent(page, { role: 'player' });
+  fixture.snapshot.settings.scoreReportingMode = 'approve_unless_disputed';
+  const match = fixture.snapshot.matches.find(
+    (row) => row.status === 'complete' && row.outcome === 'played',
+  )!;
+  await page.goto(`/play/${PLAN_ID}?match=${match.id}`);
+  const card = page.locator(`[data-player-match-id="${match.id}"]`);
+  const reportDifferent = card.getByRole('button', { name: 'Report a different score' });
+  const scores = card.getByRole('spinbutton');
+  const stored = () => page.evaluate(() => sessionStorage.getItem('nemesis:score-drafts:v1'));
+
+  await reportDifferent.click();
+  await scores.first().fill('4');
+  await card.getByRole('button', { name: 'Add characters (optional)' }).click();
+  await chooseOption(page.getByRole('dialog').getByRole('combobox').first(), 'fox');
+  await page.keyboard.press('Escape');
+  await expect.poll(stored).toContain('"score1":4');
+
+  fixture.snapshot.settings.scoreReportingMode = 'to_review';
+  await expect(reportDifferent).toHaveCount(0);
+  await expect.poll(stored).toBeNull();
+
+  fixture.snapshot.settings.scoreReportingMode = 'approve_unless_disputed';
+  await expect(reportDifferent).toBeVisible();
+  await expect(scores).toHaveCount(0);
+  await expect(card.getByRole('button', { name: 'Add characters (optional)' })).toBeVisible();
+  await expect.poll(stored).toBeNull();
+  await reportDifferent.click();
+  await expect(scores.nth(0)).toHaveValue(String(match.score1));
+  await expect(scores.nth(1)).toHaveValue(String(match.score2));
+  expect(fixture.submissions).toEqual([]);
+});
+
+test('an offline failure loading the event document still allows a same-tab retry after reconnect', async ({
+  page,
+  context,
+}) => {
+  const fixture = await mockEvent(page, { role: 'player' });
+  const match = fixture.snapshot.matches.find((row) => row.status === 'playing')!;
+  await page.goto(`/play/${PLAN_ID}?match=${match.id}`);
+  const card = page.locator(`[data-player-match-id="${match.id}"]`);
+  const score = card.getByRole('spinbutton').first();
+  await score.fill('2');
+  await expect
+    .poll(() => page.evaluate(() => sessionStorage.getItem('nemesis:score-drafts:v1')))
+    .toContain('"score1":2');
+  await page.evaluate(() => {
+    document.documentElement.dataset.beforeOffline = 'true';
+  });
+  await context.setOffline(true);
+  try {
+    await expect(page.reload()).rejects.toThrow('ERR_INTERNET_DISCONNECTED');
+  } finally {
+    await context.setOffline(false);
+  }
+  await page.reload();
+  await expect(page.locator('html')).not.toHaveAttribute('data-before-offline', 'true');
+  await expect(score).toHaveValue('2');
+  expect(fixture.submissions).toEqual([]);
+});
+
+test('a definitive reporting denial retires even a draft started during the first private check', async ({
+  page,
+}) => {
+  const fixture = await mockEvent(page, { role: 'player' });
+  const match = fixture.snapshot.matches.find((row) => row.status === 'playing')!;
+  let finishVerification!: () => void;
+  const verification = new Promise<void>((resolve) => {
+    finishVerification = resolve;
+  });
+  let denied = true;
+  await page.route('**/api/trpc/*eventOps.myReports*', async (route) => {
+    await verification;
+    if (!denied) return route.fallback();
+    const url = new URL(route.request().url());
+    const error = {
+      error: {
+        message: 'Reporting access is unavailable.',
+        code: -32003,
+        data: { code: 'FORBIDDEN', httpStatus: 403 },
+      },
+    };
+    await route.fulfill({
+      status: 403,
+      json: url.searchParams.has('batch')
+        ? decodeURIComponent(url.pathname)
+            .split(',')
+            .map(() => error)
+        : error,
+    });
+  });
+  try {
+    await page.goto(`/play/${PLAN_ID}?match=${match.id}`);
+    const card = page.locator(`[data-player-match-id="${match.id}"]`);
+    const scores = card.getByRole('spinbutton');
+    await scores.first().fill('2');
+    await expect(scores.first()).toHaveValue('2');
+    finishVerification();
+    await expect(scores).toHaveCount(0);
+
+    denied = false;
+    await expect(scores.first()).toHaveValue('0');
+    expect(fixture.submissions).toEqual([]);
+  } finally {
+    finishVerification();
+  }
+});

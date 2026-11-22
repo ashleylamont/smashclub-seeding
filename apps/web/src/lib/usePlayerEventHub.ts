@@ -37,8 +37,6 @@ import {
 } from './playerHubView';
 import type { ResultSubmission } from '../components/CompletedScoreReport';
 
-const noMatches: PublicEventSnapshot['matches'] = [];
-
 export function usePlayerEventHub(planId: string) {
   const auth = authClient.useSession();
   const signedIn = auth.data;
@@ -324,18 +322,19 @@ function usePlayerReporting(
     data,
     reportingPreference,
   );
+  const signedReportingDenied = eventUnavailable(signedReports.error);
   const canWrite =
     online &&
     playOpen &&
     !publicEvent.isError &&
     Boolean(reporter) &&
-    (reporter === 'guest' ? guestCredential : signedCredential) &&
+    (reporter === 'guest' ? guestCredential : signedCredential && !signedReportingDenied) &&
     !redeeming &&
     !['complete', 'cancelled'].includes(data?.plan.status ?? '');
   const ownReports =
     reporter === 'guest'
       ? matches.data?.reports
-      : reporter === 'signed-in'
+      : reporter === 'signed-in' && !signedReportingDenied
         ? signedReports.data
         : undefined;
   const closed = data !== undefined && ['complete', 'cancelled'].includes(data.plan.status);
@@ -354,7 +353,7 @@ function usePlayerReporting(
       return guestCredential ? guestOwner : undefined;
     }
     if (reporter === 'signed-in') {
-      if (eventUnavailable(signedReports.error)) return null;
+      if (signedReportingDenied) return null;
       return signedReports.isSuccess && signedReports.isFetchedAfterMount
         ? accountOwner
         : undefined;
@@ -382,10 +381,10 @@ function usePlayerReporting(
   );
   const scoreDrafts = useScoreReportDrafts(
     JSON.stringify([planId, reportingIdentity, closed]),
-    data?.matches ?? noMatches,
+    data?.matches,
     {
       planId,
-      owner: verifiedDraftOwner && !playOpen ? undefined : verifiedDraftOwner,
+      owner: verifiedDraftOwner && (!playOpen || !online) ? undefined : verifiedDraftOwner,
       canRecover: canRecoverDraft,
     },
   );
