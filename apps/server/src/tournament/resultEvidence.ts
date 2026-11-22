@@ -1,5 +1,9 @@
 import type { Match, SupersededPlayedSet, TournamentResult, TournamentState } from './schemas';
 
+// SQL-era finalization used this exact reason to close a scoreless withdrawal.
+export const legacyWithdrawalNoContestReason =
+  'Both players withdrawn: no contest; no winner or score recorded';
+
 type MatchEvidence = { match: Match; superseded?: SupersededPlayedSet };
 
 /** Actual history includes a superseded set before its replay. Advancement uses

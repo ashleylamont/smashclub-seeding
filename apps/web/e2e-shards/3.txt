@@ -8,6 +8,7 @@ native-draw-tools.spec.ts
 native-match-names.spec.ts
 native-pool-orders.spec.ts
 native-rolling-finals.spec.ts
+operator-sign-in.spec.ts
 plan-recovery.spec.ts
 player-journey.spec.ts
 pool-floor-sheets.spec.ts

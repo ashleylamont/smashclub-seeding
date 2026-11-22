@@ -65,6 +65,7 @@ async function fixtureWithLinkedFinals(page: Page) {
   Object.assign(fixture.snapshot.plan, { bracketMode: 'challonge' });
   Object.assign(fixture.snapshot, {
     matches: [upper, lower, custom, reportable],
+    placements: [],
     stationQueues: [],
     poolRounds: [],
     brackets: [

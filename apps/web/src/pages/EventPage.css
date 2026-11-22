@@ -16,6 +16,7 @@
   gap: var(--s4);
 }
 .event-bracket-card {
+  min-width: 0;
   padding: var(--s4);
 }
 .event-bracket-card .page-header {

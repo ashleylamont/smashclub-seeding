@@ -6,6 +6,7 @@ import type { EventOverviewData } from '../lib/apiTypes';
 import { formatDate } from '../lib/format';
 import './EventPage.css';
 import { ResultGraphic } from '../components/ResultGraphic';
+import { ArchiveBracketGraphic } from '../components/ArchiveBracketGraphic';
 
 export function EventPage() {
   const { slug } = useParams({ from: '/events/$slug' });
@@ -68,7 +69,12 @@ function EventOverview({ data }: { data: EventOverviewData }) {
               W-L excludes byes and setup results.
             </p>
             {division.notice && <p className="banner banner-warning">{division.notice}</p>}
-            <Standings players={division.players} doubles={doubles} roundRobin={roundRobin} />
+            <Standings
+              label={`${divisionLabel(division.division)} standings`}
+              players={division.players}
+              doubles={doubles}
+              roundRobin={roundRobin}
+            />
             {!division.notice &&
               data.brackets
                 .filter((bracket) => bracket.division === division.division)
@@ -120,32 +126,47 @@ function EventOverview({ data }: { data: EventOverviewData }) {
                 </span>
               </div>
               {bracket.isComplete && (
-                <ResultGraphic
-                  title={bracket.name}
-                  context={{
-                    ...graphicEvent,
-                    kind: 'bracket',
-                    scopeLabel:
-                      bracket.division && bracket.stage
-                        ? `${divisionLabel(bracket.division)} ${bracket.stage === 'consolation' ? 'consolation' : roundRobin ? 'round robin' : 'championship'}`
-                        : bracket.name,
-                    source: { tournamentIds: [bracket.tournamentId] },
-                  }}
-                  results={bracket.players
-                    .filter((player) => player.place !== null && !player.provisional)
-                    .map((player) => ({
-                      place: player.place!,
-                      alias: player.name,
-                      entryKey: player.entryKey,
-                      graphic: player.graphic,
-                    }))}
-                />
+                <div className="ui-actions">
+                  {bracket.bracketGraphic && (
+                    <ArchiveBracketGraphic graphic={bracket.bracketGraphic} />
+                  )}
+                  <ResultGraphic
+                    title={bracket.name}
+                    context={{
+                      ...graphicEvent,
+                      kind: 'bracket',
+                      scopeLabel:
+                        bracket.division && bracket.stage
+                          ? `${divisionLabel(bracket.division)} ${bracket.stage === 'consolation' ? 'consolation' : roundRobin ? 'round robin' : 'championship'}`
+                          : bracket.name,
+                      source: { tournamentIds: [bracket.tournamentId] },
+                    }}
+                    results={bracket.players
+                      .filter((player) => player.place !== null && !player.provisional)
+                      .map((player) => ({
+                        place: player.place!,
+                        alias: player.name,
+                        entryKey: player.entryKey,
+                        graphic: player.graphic,
+                      }))}
+                  />
+                </div>
               )}
               {bracket.roleSource === 'unclassified' ? (
-                <Standings players={bracket.players} doubles={doubles} roundRobin={roundRobin} />
+                <Standings
+                  label={`${bracket.name} standings`}
+                  players={bracket.players}
+                  doubles={doubles}
+                  roundRobin={roundRobin}
+                />
               ) : (
                 <Disclosure title="View bracket standings">
-                  <Standings players={bracket.players} doubles={doubles} roundRobin={roundRobin} />
+                  <Standings
+                    label={`${bracket.name} standings`}
+                    players={bracket.players}
+                    doubles={doubles}
+                    roundRobin={roundRobin}
+                  />
                 </Disclosure>
               )}
             </article>
@@ -157,17 +178,19 @@ function EventOverview({ data }: { data: EventOverviewData }) {
 }
 
 function Standings({
+  label,
   players,
   doubles,
   roundRobin,
 }: {
+  label: string;
   players: EventOverviewData['divisions'][number]['players'];
   doubles: boolean;
   roundRobin: boolean;
 }) {
   const hasPools = !roundRobin && players.some((p) => p.poolWins + p.poolLosses > 0);
   return (
-    <div className="table-scroll">
+    <div className="table-scroll" role="region" aria-label={label} tabIndex={0}>
       <table className="data-table event-standings">
         <thead>
           <tr>

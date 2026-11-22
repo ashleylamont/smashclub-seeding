@@ -193,7 +193,7 @@ function AttendeeRow({
       setEditing(false);
       await Promise.all([
         cache.invalidateQueries({ queryKey: ['eventOps', 'attendeeRoster', planId] }),
-        cache.invalidateQueries({ queryKey: ['eventOps', planId], exact: true }),
+        cache.invalidateQueries({ queryKey: ['eventOps', planId, 'overview'] }),
         cache.invalidateQueries({ queryKey: ['admin', 'players'] }),
       ]);
     } catch (cause) {

@@ -23,7 +23,7 @@ import { broadcastPlayers } from '../lib/broadcastPlayers';
 import { recentResultCount } from '../lib/broadcastSidebar';
 import { useGuestClock } from '../lib/guestReporting';
 
-import { liveSections, overlayGeometry, type LiveMatch } from '../lib/eventDisplay';
+import { liveSections, overlayGeometry } from '../lib/eventDisplay';
 export function EventLivePage() {
   return <PlayerEventAlias />;
 }
@@ -157,7 +157,6 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
       ? { '--capture-width': `${geometry.width}vw`, '--capture-height': `${geometry.height}vh` }
       : {}
   ) as CSSProperties;
-  const station = (match: LiveMatch) => data.stations.find((s) => s.id === match.stationId)?.name;
   const focusedStation = focus
     ? data.stations.find(
         (item) => item.id === focus || item.name.toLowerCase() === focus.toLowerCase(),
@@ -174,6 +173,13 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
       ? undefined
       : playing[0];
   const displayPlayers = broadcastPlayers(data, onStream);
+  const stationName =
+    broadcastStation?.name ?? data.stations.find((item) => item.id === onStream?.stationId)?.name;
+  const setLabel = closed
+    ? 'NO ACTIVE SET'
+    : onStream?.stage === 'group'
+      ? 'ROUND ROBIN'
+      : onStream?.stage?.toUpperCase();
   const [showName, ...editionParts] = data.plan.name.split(' · ');
   const edition = editionParts.join(' · ');
   const intermission = presentation === 'progress' || (presentation === 'auto' && !onStream);
@@ -223,31 +229,29 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
             <i /> {closed ? closedLabel : onStream ? 'PLAYING NOW' : 'WAITING FOR A MATCH'}
           </span>
           <span>
-            {broadcastStation?.name ??
-              (onStream ? station(onStream) : null) ??
-              (focus ? 'Selected station' : 'Main broadcast')}{' '}
-            /{' '}
-            {closed
-              ? 'NO ACTIVE SET'
-              : onStream?.stage === 'group'
-                ? 'ROUND ROBIN'
-                : (onStream?.stage?.toUpperCase() ?? 'NEXT SET SOON')}
+            {setLabel
+              ? `${stationName ?? (focus ? 'Selected station' : 'Main broadcast')} / ${setLabel}`
+              : stationName}
           </span>
           {twitch ? <OverlayTwitchLink channel={twitch} /> : <span>nemesis.ashl.dev</span>}
         </header>
-        <div className="broadcast-matchup" aria-label={closed ? undefined : 'Current match'}>
+        <div className="broadcast-matchup" aria-label={onStream ? 'Current match' : undefined}>
           {!closed && (
             <>
               <div className="broadcast-fighter broadcast-fighter-one">
                 <span className="broadcast-side">LEFT</span>
-                <strong>{displayPlayers?.left.name || 'AWAITING MATCH'}</strong>
+                <strong>
+                  {displayPlayers ? displayPlayers.left.name || 'AWAITING MATCH' : null}
+                </strong>
                 <CharacterIcons slugs={displayPlayers?.left.characters ?? []} />
                 <b>{displayPlayers?.left.score ?? '—'}</b>
               </div>
               <span className="broadcast-match-versus">VS</span>
               <div className="broadcast-fighter broadcast-fighter-two">
                 <b>{displayPlayers?.right.score ?? '—'}</b>
-                <strong>{displayPlayers?.right.name || 'AWAITING MATCH'}</strong>
+                <strong>
+                  {displayPlayers ? displayPlayers.right.name || 'AWAITING MATCH' : null}
+                </strong>
                 <CharacterIcons slugs={displayPlayers?.right.characters ?? []} />
                 <span className="broadcast-side">RIGHT</span>
               </div>

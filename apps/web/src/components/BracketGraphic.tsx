@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import {
-  bracketGraphicPng,
+  bracketGraphicFont,
+  bracketGraphicSvg,
   bracketPngScale,
-  browserBracketGraphic,
   type BracketGraphicContext,
   type BracketGraphicImage,
 } from '../lib/bracketGraphic';
@@ -31,10 +31,11 @@ export function BracketGraphic({
     },
     [snapshot],
   );
+  const { scope, revision } = snapshot?.context ?? context;
   return (
     <Dialog
       title="Bracket graphic"
-      description={`${snapshot?.context.scope ?? context.scope} · Scroll the preview to follow later rounds. The image shows recorded scores.`}
+      description={`${scope}${revision ? ` · Revision ${revision}` : ''} · Scroll the preview to follow later rounds. The image shows recorded scores.`}
       trigger={
         <Button aria-label={`Preview bracket graphic for ${context.scope}`}>Bracket graphic</Button>
       }
@@ -81,7 +82,8 @@ function BracketPreview({
     .replace(/^-|-$/g, '')
     .toLowerCase()
     .slice(0, 84);
-  const base = `nemesis-${filename || 'draw'}-bracket`;
+  const revision = context.revision ? `-r${context.revision}` : '';
+  const base = `nemesis-${filename || 'draw'}-bracket${revision}`;
   async function downloadPng() {
     setPending(true);
     setError(false);
@@ -136,4 +138,32 @@ function BracketPreview({
       )}
     </div>
   );
+}
+
+function browserBracketGraphic(context: BracketGraphicContext, matches: LiveMatch[]) {
+  const canvas = document.createElement('canvas').getContext('2d');
+  return bracketGraphicSvg(context, matches, (value, size, bold) => {
+    if (!canvas) return Array.from(value).length * size;
+    canvas.font = `${bold ? 700 : 400} ${size}px ${bracketGraphicFont}`;
+    return canvas.measureText(value).width;
+  });
+}
+
+async function bracketGraphicPng(graphic: BracketGraphicImage, blob: Blob) {
+  const scale = bracketPngScale(graphic);
+  const url = URL.createObjectURL(blob);
+  try {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.floor(graphic.width * scale);
+    canvas.height = Math.floor(graphic.height * scale);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }

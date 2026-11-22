@@ -60,6 +60,20 @@ describe('public bracket graphics', () => {
     expect(result.svg).not.toContain('<script>');
   });
 
+  it('keeps a cross-lane feed when a recorded no contest leaves the destination empty', () => {
+    const matches = bracketFixture(3);
+    const match = matches.find(
+      (candidate) => candidate.bracketLane === 'losers' && candidate.bracketRound === 1,
+    )!;
+    const parent = matches.find(({ id }) => id === match.parent1MatchId)!;
+    Object.assign(parent, { status: 'complete', outcome: 'no_contest', winnerId: null });
+    Object.assign(match, { status: 'complete', outcome: 'no_contest' });
+    const graphic = bracketGraphicSvg({ ...context, state: 'closed' }, matches, measure)!;
+    expect(graphic.svg.match(/>No entrant<\/text><text[^>]+>[^<]+<\/text>/g) ?? []).toContainEqual(
+      expect.stringContaining(`>Loser of ${parent.label}</text>`),
+    );
+  });
+
   it('rejects empty, unknown, oversize, duplicate and unresolved topology', () => {
     const matches = bracketFixture(8, false);
     expect(hasExportableBracket(matches)).toBe(true);
