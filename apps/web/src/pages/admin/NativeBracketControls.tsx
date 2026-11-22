@@ -338,7 +338,7 @@ function FinalizeNativeResults({
       : undefined;
   const poolOrderLock =
     poolOrder?.plannerConfirmation?.available === false ? poolOrder.plannerConfirmation.reason : '';
-  let finalizationDetails = finalization?.kind === 'ready' ? undefined : finalization?.message;
+  let finalizationDetails: string | undefined = readyToFinalize ? undefined : finalization?.message;
   if (poolOrderLock) finalizationDetails = `A pool finishing order is missing. ${poolOrderLock}`;
   else if (readyToFinalize)
     finalizationDetails =
