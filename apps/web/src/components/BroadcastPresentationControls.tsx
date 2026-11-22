@@ -32,10 +32,7 @@ export function BroadcastPresentationControls({
           ))}
         </Select>
       </label>
-      <p className="muted">
-        These settings belong to this browser source. Copy the updated URL into OBS. Reduced motion
-        keeps pages manual.
-      </p>
+      <p className="muted">Reduced motion keeps pages manual.</p>
     </>
   );
 }
