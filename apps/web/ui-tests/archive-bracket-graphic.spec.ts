@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+import { knockoutMatchName } from '@smashclub/tournament-formats';
+import type { LiveMatch } from '../src/lib/eventDisplay';
 import type { EventOverviewData, TournamentData } from '../src/lib/apiTypes';
 import { mockEvent, ready } from './fixtures';
 import { bracketFixture } from '../test/fixtures/brackets';
@@ -260,17 +262,17 @@ for (const theme of ['dark', 'light'] as const)
       await page.goto('/tournaments/unverified');
       await expect(page.getByRole('heading', { name: 'Unverified archive' })).toBeVisible();
       await expect(action).toHaveCount(0);
+      const importedFinal = page.getByRole('row').filter({
+        has: page.getByRole('cell', { name: 'Final', exact: true }),
+      });
+      await expect(importedFinal.getByRole('cell').nth(1)).toHaveText('W2');
       expect(fixture.unexpected).toEqual([]);
     });
 
-test('the archived double-elimination graphic names the loser route into a bye', async ({
-  page,
-}, testInfo) => {
-  const fixture = await mockEvent(page);
-  const matches = bracketFixture(3).filter((match) => match.bracketLane !== 'reset');
-  const byId = new Map(matches.map((match) => [match.id, match]));
-  function entrantFrom(parentId: string | null | undefined, outcome?: 'winner' | 'loser') {
-    const parent = parentId ? byId.get(parentId) : undefined;
+function recordedDoubleElimination(names: string[], { playReset = false } = {}) {
+  const recorded = new Map<string, LiveMatch>();
+  function entrantFrom(parentId: string, outcome?: 'winner' | 'loser') {
+    const parent = recorded.get(parentId);
     if (!parent?.winnerId) return null;
     return outcome === 'loser'
       ? parent.winnerId === parent.player1Id
@@ -278,27 +280,45 @@ test('the archived double-elimination graphic names the loser route into a bye',
         : parent.player1Id
       : parent.winnerId;
   }
-  const aliasById = new Map(participants.map(({ name }, index) => [`entrant-${index}`, name]));
-  for (const match of matches) {
-    const first = match.parent1MatchId
-      ? entrantFrom(match.parent1MatchId, match.parent1Outcome)
-      : match.player1Id;
-    const second = match.parent2MatchId
-      ? entrantFrom(match.parent2MatchId, match.parent2Outcome)
-      : match.player2Id;
-    const played = Boolean(first && second);
-    Object.assign(match, {
-      player1Id: first,
-      player2Id: second,
-      player1Name: first ? aliasById.get(first) : null,
-      player2Name: second ? aliasById.get(second) : null,
-      status: 'complete',
-      outcome: played ? 'played' : 'bye',
-      score1: played ? 2 : null,
-      score2: played ? 0 : null,
-      winnerId: first ?? second,
+  const aliasById = new Map(names.map((name, index) => [`entrant-${index}`, name]));
+  return bracketFixture(names.length)
+    .filter((match) => playReset || match.bracketLane !== 'reset')
+    .map((match) => {
+      const first = match.parent1MatchId
+        ? entrantFrom(match.parent1MatchId, match.parent1Outcome)
+        : match.player1Id;
+      const second = match.parent2MatchId
+        ? entrantFrom(match.parent2MatchId, match.parent2Outcome)
+        : match.player2Id;
+      const played = Boolean(first && second);
+      const secondWon = playReset && match.bracketLane === 'final';
+      const result = {
+        ...match,
+        nativeBracketId: match.nativeBracketId!,
+        nativeRound: match.nativeRound!,
+        nativeSlot: match.nativeSlot!,
+        parent1MatchId: match.parent1MatchId ?? null,
+        parent2MatchId: match.parent2MatchId ?? null,
+        player1Id: first,
+        player2Id: second,
+        player1Name: first ? aliasById.get(first)! : null,
+        player2Name: second ? aliasById.get(second)! : null,
+        status: 'complete',
+        outcome: played ? ('played' as const) : ('bye' as const),
+        score1: played ? (secondWon ? 1 : 2) : null,
+        score2: played ? (secondWon ? 2 : 0) : null,
+        winnerId: secondWon ? second : (first ?? second),
+      };
+      recorded.set(match.id, result);
+      return result;
     });
-  }
+}
+
+test('the archived double-elimination graphic names the loser route into a bye', async ({
+  page,
+}, testInfo) => {
+  const fixture = await mockEvent(page);
+  const matches = recordedDoubleElimination(participants.map(({ name }) => name));
   fixture.responses['public.eventOverview'] = {
     ...overview,
     structure: 'double_elimination',
@@ -330,5 +350,149 @@ test('the archived double-elimination graphic names the loser route into a bye',
   const pngEvent = page.waitForEvent('download');
   await dialog.getByRole('button', { name: 'Download bracket PNG' }).press('Enter');
   await (await pngEvent).saveAs(testInfo.outputPath('double-elimination-download.png'));
+  expect(fixture.unexpected).toEqual([]);
+});
+
+const doubleEliminationPlayers = [alias, 'Blair', 'Ren', 'Chris'].map((name, index) => ({
+  ...participants[0]!,
+  id: `entrant-${index}`,
+  name,
+  challongeSeed: index + 1,
+  finalRank: [2, 3, 4, 1][index]!,
+}));
+const playedResetDraw = recordedDoubleElimination(
+  doubleEliminationPlayers.map(({ name }) => name),
+  { playReset: true },
+).map((match) => {
+  const { outcome, score1, score2 } = match;
+  if (outcome !== 'played' || score1 === null || score2 === null)
+    throw new Error('The four-entrant fixture must play every set.');
+  const bracketLane = match.bracketLane as Parameters<typeof knockoutMatchName>[0]['bracketLane'];
+  return {
+    ...match,
+    nativeBracketId: tournament.id,
+    poolIndex: null,
+    stationId: null,
+    bracketLane,
+    outcome,
+    score1,
+    score2,
+    label:
+      knockoutMatchName(
+        {
+          bracketLane,
+          bracketRound: match.bracketRound,
+          round: match.nativeRound,
+          slot: match.nativeSlot,
+        },
+        doubleEliminationPlayers.length,
+      ) ?? match.label,
+  };
+});
+const doubleEliminationArchive = {
+  ...tournament,
+  participants: [...doubleEliminationPlayers].sort((a, b) => a.finalRank - b.finalRank),
+  bracketGraphic: { ...bracketGraphic, matches: playedResetDraw },
+  sets: [
+    {
+      ...tournament.sets[2]!,
+      id: 'pool-match',
+      identifier: 'Pool A · Match 4',
+      resultStage: 'group',
+      round: 2,
+      p1ParticipantId: 'entrant-0',
+      p2ParticipantId: 'entrant-1',
+    },
+    ...playedResetDraw.map((match) => ({
+      id: match.id,
+      round: match.bracketLane === 'losers' ? -match.bracketRound! : match.bracketRound!,
+      identifier: match.label,
+      resultStage: 'final' as const,
+      state: 'complete',
+      winner: match.winnerId === match.player1Id ? 1 : 2,
+      scoresCsv: `${match.score1}-${match.score2}`,
+      unplayedOutcome: null,
+      excludedFromRatings: false,
+      excludedByResultsMode: false,
+      completedAt: eventDate,
+      p1ParticipantId: match.player1Id,
+      p2ParticipantId: match.player2Id,
+      p1Name: match.player1Name,
+      p2Name: match.player2Name,
+      p1PlayerId: null,
+      p2PlayerId: null,
+    })),
+  ],
+} satisfies TournamentData;
+
+for (const theme of ['dark', 'light'] as const)
+  for (const width of [390, 1440])
+    test(`${theme} ${width}px archive labels the grand final and a played reset as Finals`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const fixture = await mockEvent(page);
+      fixture.queryResponses.set('public.tournament', () => doubleEliminationArchive);
+      await page.goto(`/tournaments/${slug}`);
+      const table = page.getByRole('region', { name: 'Tournament sets' });
+      const rows = table.locator('tbody').getByRole('row');
+      const grandFinal = rows.filter({
+        has: page.getByRole('cell', { name: 'Grand final', exact: true }),
+      });
+      const reset = rows.filter({
+        has: page.getByRole('cell', { name: 'Reset final (if needed)', exact: true }),
+      });
+      await expect(grandFinal.getByRole('cell').nth(1)).toHaveText('Finals');
+      await expect(reset.getByRole('cell').nth(1)).toHaveText('Finals');
+      await expect(grandFinal.getByRole('cell', { name: '1-2', exact: true })).toBeVisible();
+      await expect(reset.getByRole('cell', { name: '2-0', exact: true })).toBeVisible();
+      await expect(rows.locator(':scope > td:nth-child(2)')).toHaveText([
+        '2',
+        'W1',
+        'W1',
+        'L1',
+        'W2',
+        'L2',
+        'Finals',
+        'Finals',
+      ]);
+
+      await ready(page);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+      expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+      await page.screenshot({ path: testInfo.outputPath('finals-archive.png'), fullPage: true });
+      await page.getByRole('combobox', { name: 'Filter sets by stage' }).press('Tab');
+      await expect(table).toBeFocused();
+      await table.screenshot({ path: testInfo.outputPath('finals-round-table.png') });
+      if (width === 390) {
+        await page.keyboard.press('ArrowRight');
+        await expect.poll(() => table.evaluate((node) => node.scrollLeft)).toBeGreaterThan(0);
+      }
+      expect(fixture.unexpected).toEqual([]);
+    });
+
+test('an unverified legacy archive retains set labels and recorded round codes', async ({
+  page,
+}) => {
+  const fixture = await mockEvent(page);
+  fixture.queryResponses.set('public.tournament', () => ({
+    ...doubleEliminationArchive,
+    bracketGraphic: undefined,
+    sets: doubleEliminationArchive.sets.map((set) => ({
+      ...set,
+      displayLabel: set.identifier,
+    })),
+  }));
+  await page.goto(`/tournaments/${slug}`);
+  const table = page.getByRole('region', { name: 'Tournament sets' });
+  const grandFinal = table.getByRole('row').filter({
+    has: page.getByRole('cell', { name: 'Grand final', exact: true }),
+  });
+  const reset = table.getByRole('row').filter({
+    has: page.getByRole('cell', { name: 'Reset final (if needed)', exact: true }),
+  });
+  await expect(grandFinal.getByRole('cell').nth(1)).toHaveText('W3');
+  await expect(reset.getByRole('cell').nth(1)).toHaveText('W3');
   expect(fixture.unexpected).toEqual([]);
 });
