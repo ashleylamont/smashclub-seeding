@@ -308,6 +308,7 @@ export function EventOperationsPanel({
             <DispatchDesk
               data={data}
               dispatch={dispatch}
+              interrupted={interrupted}
               callDesk={callDesk}
               onReviewReports={openScoreSubmissions}
               shortcutsActive={workspace.section === 'run'}
