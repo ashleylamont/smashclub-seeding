@@ -14,10 +14,16 @@ import { createTestDb } from './helpers/testDb';
 
 describe('native double-elimination grand-final correction through shipped APIs', () => {
   let db: Db, close: () => Promise<void>, runtime: NativeRuntime;
+  const attendee: SessionUser = {
+    id: 'finals-score-attendee',
+    name: 'Finals attendee',
+    email: 'finals-score-attendee@example.test',
+    role: 'user',
+  };
 
   beforeAll(async () => {
     ({ db, close } = await createTestDb());
-    await db.insert(user).values(nativeAdmin);
+    await db.insert(user).values([nativeAdmin, attendee]);
     runtime = createNativeRuntime(db, new InMemoryStore());
   });
   afterAll(async () => {
@@ -33,7 +39,7 @@ describe('native double-elimination grand-final correction through shipped APIs'
     challonge: new ChallongeClient({}),
     recomputeTrigger: new RecomputeTrigger(db),
   });
-  const caller = () => appRouter.createCaller(context(nativeAdmin));
+  const caller = (actor = nativeAdmin) => appRouter.createCaller(context(actor));
 
   async function rpc(path: string, input: object, actor: SessionUser) {
     const response = await fetchRequestHandler({
@@ -75,22 +81,34 @@ describe('native double-elimination grand-final correction through shipped APIs'
     await caller().admin.eventPlanner.freezeRoster({ planId });
     await caller().admin.eventPlanner.generatePools({ planId });
     await caller().eventOps.softLockPools({ planId, confirm: true });
-    await caller().eventOps.settings({ planId, published: true, playerReports: true });
+    await caller().eventOps.settings({
+      planId,
+      published: true,
+      playerReports: true,
+      scoreReportingMode: 'to_review',
+    });
     return planId;
   }
 
-  async function scoreOpeningAndGrandFinal(planId: string) {
+  async function scoreOpeningAndGrandFinal(
+    planId: string,
+    recording: 'operator' | 'review' = 'operator',
+  ) {
     for (const bracketLane of ['winners', 'final'] as const) {
       const state = await runtime.state(planId);
       const match = state.matches.find((m) => m.bracketLane === bracketLane)!;
-      await caller().eventOps.reportScore({
+      const score = {
         matchId: match.id,
         expectedRevision: match.revision,
         requestId: crypto.randomUUID(),
         score1: 2,
         score2: 0,
-        outcome: 'played',
-      });
+        outcome: 'played' as const,
+      };
+      if (bracketLane === 'final' && recording === 'review') {
+        const pending = await caller(attendee).eventOps.reportScore(score);
+        await caller().eventOps.reviewReport({ reportId: pending.id, approve: true });
+      } else await caller().eventOps.reportScore(score);
     }
   }
 
@@ -227,4 +245,52 @@ describe('native double-elimination grand-final correction through shipped APIs'
     ).toMatchObject([{ scoresCsv: '2-1', excludedFromRatings: false }]);
     expect(await runtime.replay(planId)).toEqual(sealed);
   });
+
+  it.each(['operator', 'review'] as const)(
+    'reopens the original %s reset skip after a same-winner score edit',
+    async (recording) => {
+      const planId = await draftDoubleElimination();
+      await scoreOpeningAndGrandFinal(planId, recording);
+      const closed = await runtime.state(planId);
+      const final = closed.matches.find((m) => m.bracketLane === 'final')!;
+      const reset = closed.matches.find((m) => m.bracketLane === 'reset')!;
+      expect(reset.resultCommandId).toBe(final.resultCommandId);
+
+      await caller().eventOps.reportScore({
+        matchId: final.id,
+        expectedRevision: final.revision,
+        requestId: 'edit-score-with-same-grand-final-winner',
+        score1: 2,
+        score2: 1,
+        outcome: 'played',
+      });
+      const edited = await runtime.state(planId);
+      const updatedFinal = edited.matches.find((m) => m.id === final.id)!;
+      expect(updatedFinal.resultCommandId).not.toBe(final.resultCommandId);
+      expect(edited.matches.find((m) => m.id === reset.id)).toEqual(reset);
+
+      const corrected = await rpc(
+        'eventOps.reportScore',
+        {
+          matchId: updatedFinal.id,
+          expectedRevision: updatedFinal.revision,
+          requestId: 'change-winner-after-grand-final-score-edit',
+          score1: 0,
+          score2: 2,
+          outcome: 'played',
+        },
+        nativeAdmin,
+      );
+      expect(corrected.status).toBe(200);
+      const reopened = await runtime.state(planId);
+      expect(reopened.matches.find((m) => m.id === reset.id)).toMatchObject({
+        status: 'ready',
+        player1Id: final.player2Id,
+        player2Id: final.player1Id,
+        resultCommandId: null,
+        revision: reset.revision + 1,
+      });
+      expect(await runtime.replay(planId)).toEqual(reopened);
+    },
+  );
 });
