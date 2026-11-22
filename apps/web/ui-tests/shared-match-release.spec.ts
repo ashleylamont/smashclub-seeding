@@ -4,7 +4,7 @@ import type { Command, Desk } from '../src/pages/admin/dispatchTypes';
 import { mockEvent, PLAN_ID, ready } from './fixtures';
 
 async function activeStage(page: Page) {
-  const { overview, unexpected } = await mockEvent(page, { role: 'admin' });
+  const { overview, responses, unexpected } = await mockEvent(page, { role: 'admin' });
   const match = overview.matches.find((item) => item.status === 'playing')!;
   const station = overview.stations.find((item) => item.currentMatchId === match.id)!;
   Object.assign(match, {
@@ -53,7 +53,18 @@ async function activeStage(page: Page) {
   };
   const card = page.locator('article.ops-match:visible');
   const release = card.getByRole('button', { name: 'Release capacity', exact: true });
-  return { match, station, desk, unexpected, broadcastUrl, details, card, release, active };
+  return {
+    match,
+    station,
+    desk,
+    responses,
+    unexpected,
+    broadcastUrl,
+    details,
+    card,
+    release,
+    active,
+  };
 }
 
 for (const theme of ['dark', 'light'] as const)
@@ -163,4 +174,71 @@ test('the match card release stays offline-safe and retries the same command fro
   } finally {
     loseResponse();
   }
+});
+
+test('browser Back dismisses a release prompt when leaving the event in the same document', async ({
+  page,
+}) => {
+  const { broadcastUrl, release, responses } = await activeStage(page);
+  Object.assign(responses, {
+    'public.leaderboard': {
+      rows: [],
+      eventCount: 0,
+      computedAt: null,
+      model: 'test',
+      activityPolicy: { graceEvents: 1, penaltyPerEvent: 10, penaltyCap: 100 },
+    },
+    'public.ratingHistory': { players: [], events: [] },
+    'public.tournaments': [],
+    'eventOps.publicEvents': [],
+  });
+  const writes: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().includes('/api/trpc/'))
+      writes.push(new URL(request.url()).pathname);
+  });
+  await page.goto('/');
+  await expect(page.getByRole('region', { name: 'Currently live' })).toBeVisible();
+  // The assigned event is a direct link. Add it to the live SPA's history without a document load.
+  await page.evaluate((url) => {
+    document.documentElement.dataset.releaseTest = 'same document';
+    history.pushState(null, '', url);
+  }, broadcastUrl);
+  await release.press('Enter');
+  const dialog = page.getByRole('alertdialog', { name: 'Confirm action' });
+  await expect(dialog).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL('/');
+  await expect(page.locator('#home-live-title')).toBeAttached();
+  await expect(page.locator('html')).toHaveAttribute('data-release-test', 'same document');
+  await expect(dialog).toBeHidden();
+  await page.goForward();
+  await expect(release).toBeEnabled();
+  await expect(dialog).toBeHidden();
+  expect(writes).toEqual([]);
+});
+
+test('browser Back dismisses a release prompt when switching to another mounted workspace view', async ({
+  page,
+}) => {
+  const { broadcastUrl, details, release, unexpected } = await activeStage(page);
+  await page.goto(broadcastUrl);
+  await details();
+  await release.press('Enter');
+  const dialog = page.getByRole('alertdialog', { name: 'Confirm action' });
+  await expect(dialog).toBeVisible();
+  await page.goBack();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('tab', { name: 'Broadcast', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await page.goForward();
+  await expect(page.getByRole('tab', { name: 'Run matches', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(release).toBeEnabled();
+  await expect(dialog).toBeHidden();
+  expect(unexpected).toEqual([]);
 });

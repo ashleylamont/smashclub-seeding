@@ -8,16 +8,18 @@ export function useDispatchCommand(planId: string, disabled: boolean) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const inFlight = useRef(false);
-  const current = useRef({ planId, disabled });
+  const current = useRef<{ planId: string; disabled: boolean } | null>(null);
   useLayoutEffect(() => {
     current.current = { planId, disabled };
+    return () => {
+      current.current = null;
+    };
   }, [planId, disabled]);
   const retry = useRef<{ input: string; id: string } | null>(null);
   const busy = disabled || pending;
   const run: Run = async (command) => {
-    // A confirmation can remain open while connection or event state changes.
-    if (current.current.disabled || current.current.planId !== planId || inFlight.current)
-      return false;
+    const mounted = current.current;
+    if (!mounted || mounted.disabled || mounted.planId !== planId || inFlight.current) return false;
     inFlight.current = true;
     setPending(true);
     setError('');
