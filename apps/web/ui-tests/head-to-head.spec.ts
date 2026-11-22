@@ -162,6 +162,10 @@ for (const theme of ['dark', 'light'] as const)
       await expect(ratingNight.getByText(`${BEA.name} ahead`)).toHaveCount(2);
       await expect(ratingNight.getByText('40 → 0 points')).toBeVisible();
       await expect(ratingNight.locator('time')).toHaveAttribute('datetime', '2026-10-03');
+      await expect(ratingNight).toContainText('raw WHR estimates');
+      await expect(ratingNight).toContainText(
+        'Club rating deducts the attendance penalty and can adjust for rookie records with little main-bracket evidence.',
+      );
       const recent = page.getByRole('region', { name: 'Recent meetings' });
       await expect(recent.getByRole('link', { name: 'October Championship' })).toHaveAttribute(
         'href',

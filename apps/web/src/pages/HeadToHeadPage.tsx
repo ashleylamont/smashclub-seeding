@@ -229,8 +229,9 @@ function RatingNightComparison({
             </div>
           </div>
           <p className="muted">
-            The change reflects all rated results from that night. Club rating subtracts the
-            attendance penalty from the skill estimate.
+            The gap uses raw WHR estimates before and after all rated sets that night. Club rating
+            deducts the attendance penalty and can adjust for rookie records with little
+            main-bracket evidence.
           </p>
         </>
       ) : (
