@@ -15,6 +15,7 @@ import {
 import { guestTimeLeft, type GuestSession } from '../lib/guestReporting';
 import { Disclosure } from '../components/ui/Disclosure';
 import { matchesPool } from '../lib/poolFlow';
+import { formatDate } from '../lib/format';
 import '../styles/event.css';
 import './EventLive.css';
 import './PlayerEvent.css';
@@ -25,8 +26,20 @@ export function PlayerEventPage() {
 }
 export function PlayerEvent({ planId }: { planId: string }) {
   const hub = usePlayerEventHub(planId);
+  if (hub.unpublished)
+    return <Notice tone="danger">This event is unavailable or has not been published.</Notice>;
+  const { data } = hub;
+  if (
+    data?.plan.status === 'complete' &&
+    !data.matches.length &&
+    (data.plan.bracketMode === 'challonge' || data.plan.historicalResultsSlug)
+  )
+    return <ImportedArchive data={data} hub={hub} />;
+  return <PlayerEventHubPage hub={hub} />;
+}
+
+function PlayerEventHubPage({ hub }: { hub: PlayerEventHub }) {
   const {
-    unpublished,
     publicEvent,
     claim,
     data,
@@ -56,12 +69,6 @@ export function PlayerEvent({ planId }: { planId: string }) {
   const reportingStatus = (
     <MatchReportingStatus hub={hub} hasRecordedResults={hasRecordedResults} />
   );
-  const announcements =
-    data?.announcements
-      .filter((item) => !item.expiresAt || Date.parse(item.expiresAt) > now)
-      .slice(0, 2) ?? [];
-  if (unpublished)
-    return <Notice tone="danger">This event is unavailable or has not been published.</Notice>;
   return (
     <div className="ops-page player-event-hub">
       <div className="player-event-intro">
@@ -90,16 +97,7 @@ export function PlayerEvent({ planId }: { planId: string }) {
             Your linked profile: <strong>{claim.playerName}</strong>.
           </p>
         )}
-        {announcements.length > 0 && (
-          <aside className="card event-announcements" aria-label="Announcements">
-            <strong>Announcements</strong>
-            <div>
-              {announcements.map((item) => (
-                <p key={item.id}>{item.message}</p>
-              ))}
-            </div>
-          </aside>
-        )}
+        <EventAnnouncements data={data} now={now} />
         {reporter && reportingVisible && (
           <p className="muted">
             {reporter === 'guest'
@@ -130,7 +128,7 @@ export function PlayerEvent({ planId }: { planId: string }) {
                 : 'Live event · results refresh automatically'}
           </p>
         )}
-        {!data && !unpublished && (
+        {!data && (
           <GuestLoadState
             pending={publicEvent.isPending}
             onRetry={() => void publicEvent.refetch()}
@@ -156,6 +154,41 @@ export function PlayerEvent({ planId }: { planId: string }) {
         </p>
       )}
     </div>
+  );
+}
+
+function ImportedArchive({ data, hub }: { data: PublicEventSnapshot; hub: PlayerEventHub }) {
+  return (
+    <div className="ops-page player-event-hub player-event-archive">
+      <PageHeader
+        title={data.plan.name}
+        description={`Finished · ${formatDate(data.plan.eventDate)}`}
+      />
+      {(!hub.online || hub.publicEvent.isError) && (
+        <Notice tone="warning">
+          Could not refresh this archive. Showing the last available record.
+        </Notice>
+      )}
+      <PlayerHubBoard data={data} selectedPool="" player="" archiveOnly />
+      <EventAnnouncements data={data} now={hub.now} />
+    </div>
+  );
+}
+
+function EventAnnouncements({ data, now }: { data?: PublicEventSnapshot; now: number }) {
+  const announcements = data?.announcements
+    .filter((item) => !item.expiresAt || Date.parse(item.expiresAt) > now)
+    .slice(0, 2);
+  if (!announcements?.length) return null;
+  return (
+    <aside className="card event-announcements" aria-label="Announcements">
+      <strong>Announcements</strong>
+      <div>
+        {announcements.map((item) => (
+          <p key={item.id}>{item.message}</p>
+        ))}
+      </div>
+    </aside>
   );
 }
 
