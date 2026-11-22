@@ -10,7 +10,7 @@ Coverage includes:
 - Dialog labels, validation, focus containment, Escape and focus restoration, including the registry's existing conditional caller.
 - Manual tab activation and keyboard help.
 - Player phone reporting, tied-score guards, pending submission, revision preservation and retry after loading failure for signed-in and guest users.
-- TO desktop and phone destinations, preserved score drafts, refresh, station-to-match focus, cleared drafts when changing broadcast matches and axe accessibility checks.
+- TO desktop and phone destinations, preserved score drafts, refresh, station-to-match focus, cleared drafts when changing broadcast matches and axe accessibility checks. Shared-dispatch shortcut coverage checks focus and drafts in both themes, and keeps the score title and first field visible below sticky navigation in a 390 × 500 window.
 - Active and idle 1920×1080 OBS composition, transparent gameplay aperture and unclipped `Tech In Place` identity.
 - Phone bracket with a bye, unresolved dependency, uneven rounds and a long alias.
 

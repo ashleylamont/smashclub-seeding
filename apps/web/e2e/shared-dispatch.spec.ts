@@ -327,7 +327,7 @@ test('shared queue on a phone: snooze/return, focused scoring, and accessible co
   await release.press('Enter');
   const cancel = page.getByRole('alertdialog').getByRole('button', { name: 'Cancel' });
   await expect(cancel).toBeFocused();
-  await page.keyboard.press('Control+Shift+Digit3');
+  await page.keyboard.press('Control+Shift+Digit5');
   await expect(cancel).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(release).toBeFocused();
@@ -343,7 +343,7 @@ test('shared queue on a phone: snooze/return, focused scoring, and accessible co
   await form.getByRole('spinbutton').nth(0).fill('2');
   await form.getByRole('spinbutton').nth(1).fill('0');
   await form.focus();
-  await page.keyboard.press('Control+Shift+Digit3');
+  await page.keyboard.press('Control+Shift+Digit5');
   await expect(queueHeading).toBeFocused();
   await expect(search).toHaveValue(target.player1Name);
   await page.keyboard.press('Control+Shift+Digit2');
