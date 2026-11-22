@@ -2,6 +2,20 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.21.3
+
+### Patch Changes
+
+- 23 November 2026 · **Fix** · Confirm ordinary calls and named-station starts in the organiser queue. Return keyboard focus to Pairings when the confirmed action removes the focused button. [#455](https://github.com/ashleylamont/smashclub-seeding/pull/455) · [build 72dacd1](https://github.com/ashleylamont/smashclub-seeding/commit/72dacd1455defdc4c49bdeb422894b6b19a03adf)
+- 23 November 2026 · **Fix** · Reopen an unplayed double-elimination bracket reset when an organiser corrects the grand-final winner. [#454](https://github.com/ashleylamont/smashclub-seeding/pull/454) · [build 0b20a8d](https://github.com/ashleylamont/smashclub-seeding/commit/0b20a8d24ad33e47e3cebe0af9f51e390b14f072)
+- 23 November 2026 · **Improvement** · See the current setup step first in the event planner, with roster blockers beside Freeze and saved plans above the creation form. [#450](https://github.com/ashleylamont/smashclub-seeding/pull/450) · [build 41956d4](https://github.com/ashleylamont/smashclub-seeding/commit/41956d495df555c5fa47d83d7a100a2a506ff851)
+- 23 November 2026 · **Fix** · Clarify what organisers can search in event and attendance history, and distinguish empty records from loading or connection problems. [#447](https://github.com/ashleylamont/smashclub-seeding/pull/447) · [build 30a4a67](https://github.com/ashleylamont/smashclub-seeding/commit/30a4a673ede1be8922c503876f862612e3a764ac)
+- 23 November 2026 · **Fix** · Keep your score and optional characters when you reload a changed match with the same players in the same positions. Review the updated match before submitting. [#449](https://github.com/ashleylamont/smashclub-seeding/pull/449) · [build d0e7266](https://github.com/ashleylamont/smashclub-seeding/commit/d0e726639ac49668749be082c7ab977aa1b4aa91)
+- 23 November 2026 · **Fix** · Keep the original completion time when an organiser corrects a played set’s score, preserving dispatch wait times and published match history. [#453](https://github.com/ashleylamont/smashclub-seeding/pull/453) · [build dd68ac6](https://github.com/ashleylamont/smashclub-seeding/commit/dd68ac65f3fbd7a51015aca85442618ec31cfd7f)
+- 23 November 2026 · **Fix** · Restore unsent player scores and character picks after reloading the event in the same tab. Your draft is available when the same account or venue pass can still report the same pairing. [#458](https://github.com/ashleylamont/smashclub-seeding/pull/458) · [build 04a0ad9](https://github.com/ashleylamont/smashclub-seeding/commit/04a0ad9db8c768bd7f1c2a97bfcc98005d0661c8)
+- 23 November 2026 · **Fix** · Ask organisers to review pending downstream scores before changing a feeder winner. [#451](https://github.com/ashleylamont/smashclub-seeding/pull/451) · [build f98dc4b](https://github.com/ashleylamont/smashclub-seeding/commit/f98dc4bfcb381755817e93853bfd837b796acc0b)
+- 23 November 2026 · **Fix** · Keep the start of the organiser panel in view when switching workspace tabs from a scrolled page. [#448](https://github.com/ashleylamont/smashclub-seeding/pull/448) · [build c47a4d3](https://github.com/ashleylamont/smashclub-seeding/commit/c47a4d321b813df3b31a8bd822bcfbbeaeaf781a)
+
 ## 0.21.2
 
 ### Patch Changes
