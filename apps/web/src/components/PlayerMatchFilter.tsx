@@ -4,10 +4,12 @@ import type { PublicPlayer } from '../lib/playerSelection';
 export function PlayerMatchFilter({
   players,
   value,
+  usingLinkedDefault,
   onChange,
 }: {
   players: PublicPlayer[];
   value: string;
+  usingLinkedDefault: boolean;
   onChange: (id: string) => void;
 }) {
   return (
@@ -26,10 +28,16 @@ export function PlayerMatchFilter({
         ))}
       </Select>
       <p className="muted">
-        {value
-          ? 'Showing only this player’s matches. '
-          : 'Choose your name to see your matches first. '}
-        Your choice is saved on this device; it does not verify your identity.
+        {usingLinkedDefault ? (
+          'Changing this filter does not change your reporting identity.'
+        ) : (
+          <>
+            {value
+              ? 'Showing only this player’s matches. '
+              : 'Choose your name to see your matches first. '}
+            Your choice is saved on this device; it does not verify your identity.
+          </>
+        )}
       </p>
     </div>
   );

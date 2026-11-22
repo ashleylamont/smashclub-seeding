@@ -58,16 +58,16 @@ export function useDevicePlayer(planId: string, initialPlayer?: string) {
   const [selected, setSelected] = useState(() => {
     if (initialPlayer !== undefined) return initialPlayer;
     try {
-      return localStorage.getItem(key) ?? '';
+      return localStorage.getItem(key) ?? undefined;
     } catch {
-      return '';
+      return undefined;
     }
   });
   const update = (id: string) => {
     setSelected(id);
     try {
-      if (id) localStorage.setItem(key, id);
-      else localStorage.removeItem(key);
+      // Everyone is an explicit preference. An absent entry permits an account default.
+      localStorage.setItem(key, id);
     } catch {
       /* Filtering still works without storage. */
     }

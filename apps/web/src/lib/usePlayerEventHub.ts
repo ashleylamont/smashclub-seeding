@@ -47,7 +47,16 @@ export function usePlayerEventHub(planId: string) {
       window.history.replaceState(window.history.state, '', url);
     }
   };
-  const [preferredView, setView] = useState(selectedPlayer ? 'mine' : 'queue');
+  const [preferredView, setView] = useState<string>();
+  const [initialMatchScope] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return (
+      params.has('pool') ||
+      params.has('station') ||
+      params.has('match') ||
+      new URLSearchParams(window.location.hash.slice(1)).has('token')
+    );
+  });
   const [selectedPool, setSelectedPool] = usePoolFilter();
   const [selectedStation, setSelectedStation] = useState(
     () => new URLSearchParams(window.location.search).get('station') ?? '',
@@ -103,8 +112,11 @@ export function usePlayerEventHub(planId: string) {
   );
   const closed = data !== undefined && ['complete', 'cancelled'].includes(data.plan.status);
   const players = eventPlayers(data?.matches ?? []);
-  const player = resolveHubPlayer(players, selectedPlayer, data?.entrants);
-  const view = effectivePlayerView(preferredView, player);
+  // A linked profile supplies browsing context only, without persisting the account's player ID.
+  const linkedPlayerId = !initialMatchScope && !session && !redeeming ? claim?.playerId : undefined;
+  const player = resolveHubPlayer(players, selectedPlayer ?? linkedPlayerId ?? '', data?.entrants);
+  const usingLinkedDefault = selectedPlayer === undefined && Boolean(player);
+  const view = effectivePlayerView(preferredView, player, selectedPlayer);
   const playerName = players.find((item) => item.id === player)?.name;
   const reportedIds = new Set(ownReports?.map((report) => report.matchId));
   const stationId =
@@ -243,6 +255,7 @@ export function usePlayerEventHub(planId: string) {
     players,
     player,
     playerName,
+    usingLinkedDefault,
     playerMatches,
     completed,
     nextMatch,

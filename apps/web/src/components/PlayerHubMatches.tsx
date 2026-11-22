@@ -31,6 +31,7 @@ export function PlayerHubMatches({
     player,
     selectedPlayer,
     playerName,
+    usingLinkedDefault,
     setSelectedPlayer,
     view,
     setView,
@@ -89,6 +90,7 @@ export function PlayerHubMatches({
       <PlayerMatchFilter
         players={players}
         value={player}
+        usingLinkedDefault={usingLinkedDefault}
         onChange={(id) => {
           setSelectedPlayer(id);
           setView(id ? 'mine' : 'matches');

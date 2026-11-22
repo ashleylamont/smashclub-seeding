@@ -54,6 +54,7 @@ function PlayerEventHubPage({ hub }: { hub: PlayerEventHub }) {
     online,
     selectedPool,
     player,
+    usingLinkedDefault,
     error,
     board,
   } = hub;
@@ -69,15 +70,15 @@ function PlayerEventHubPage({ hub }: { hub: PlayerEventHub }) {
   const reportingStatus = (
     <MatchReportingStatus hub={hub} hasRecordedResults={hasRecordedResults} />
   );
+  const description = empty
+    ? 'Event information and results.'
+    : usingLinkedDefault
+      ? undefined
+      : 'Choose your name to find your matches.';
   return (
     <div className="ops-page player-event-hub">
       <div className="player-event-intro">
-        <PageHeader
-          title={publicEvent.data?.plan.name ?? 'Your event'}
-          description={
-            empty ? 'Event information and results.' : 'Choose your name to find your matches.'
-          }
-        />
+        <PageHeader title={publicEvent.data?.plan.name ?? 'Your event'} description={description} />
         {data && !empty && <EventProgress data={data} selectedPool={selectedPool} />}
         <PlayerEventNavigation board={board} empty={empty} nextLabel={labels.next} />
         <EventTwitchPromotion
