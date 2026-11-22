@@ -8,7 +8,8 @@ import { useConfirmation } from '../../lib/confirmation';
 import { Select, SelectItem } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
 import { trpc } from '../../lib/trpc';
-import { MatchScoring } from './OpsMatchScoring';
+import { MatchScoring, type ScoreEditor } from './OpsMatchScoring';
+import type { Ref } from 'react';
 import { returnCallControlId } from '../../lib/opsWorkspace';
 import type { UntakenCallDesk } from './UntakenCallRecovery';
 import { MatchMainDialog } from './MatchMainDialog';
@@ -25,6 +26,7 @@ export function MatchCard({
   liveOwned,
   act,
   callDesk,
+  scoreEditorRef,
 }: {
   match: Match;
   missingMains?: {
@@ -39,6 +41,7 @@ export function MatchCard({
   liveOwned: boolean;
   act: Action;
   callDesk?: UntakenCallDesk;
+  scoreEditorRef?: Ref<ScoreEditor>;
 }) {
   const confirmAction = useConfirmation();
   const eligible = eligibleStations(match, stations);
@@ -117,7 +120,13 @@ export function MatchCard({
           ))}
         </Select>
       </label>
-      <MatchScoring match={match} disabled={disabled} act={act} callDesk={callDesk}>
+      <MatchScoring
+        match={match}
+        disabled={disabled}
+        act={act}
+        callDesk={callDesk}
+        scoreEditorRef={scoreEditorRef}
+      >
         {match.status !== 'complete' && (
           <Button
             id={

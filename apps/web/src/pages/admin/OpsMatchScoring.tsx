@@ -1,4 +1,12 @@
-import { useState, type ReactNode } from 'react';
+import {
+  useId,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type Ref,
+} from 'react';
 import { TRPCClientError } from '@trpc/client';
 import { useConfirmation } from '../../lib/confirmation';
 import { Select, SelectItem } from '../../components/ui/Select';
@@ -9,10 +17,12 @@ import { returnUntakenCallMatchIds } from '../../lib/eventErrors';
 import { UntakenCallRecovery, type UntakenCallDesk } from './UntakenCallRecovery';
 import { FinalsSlotReplayReview } from './FinalsSlotReplayReview';
 import type { Overview } from './dispatchTypes';
+import { dispatchShortcut, focusDispatchTarget } from './dispatchKeyboard';
 
 type Match = Overview['matches'][number];
 type Outcome = 'played' | 'forfeit' | 'bye';
 type Action = (work: () => Promise<unknown>, message?: string) => Promise<void>;
+export type ScoreEditor = { focus: () => boolean };
 
 function replayScoreDraft(
   match: Match,
@@ -50,12 +60,14 @@ export function MatchScoring({
   act,
   callDesk,
   children,
+  scoreEditorRef,
 }: {
   match: Match;
   disabled: boolean;
   act: Action;
   callDesk?: UntakenCallDesk;
   children: ReactNode;
+  scoreEditorRef?: Ref<ScoreEditor>;
 }) {
   const confirmAction = useConfirmation();
   const [editing, setEditing] = useState<'live' | 'final' | null>(null);
@@ -102,6 +114,12 @@ export function MatchScoring({
     setRequestId(crypto.randomUUID());
     setReviewError('');
   };
+  const { formProps, titleId, openShortcut } = useDispatchScoreFocus(
+    scoreEditorRef,
+    editing !== null,
+    disabled,
+    () => begin('final'),
+  );
   const reviewScore = async (score1: number, score2: number) => {
     setReviewing(true);
     setReviewError('');
@@ -157,7 +175,12 @@ export function MatchScoring({
             Update live score
           </Button>
         )}
-        <Button size="small" disabled={disabled} onClick={() => begin('final')}>
+        <Button
+          size="small"
+          disabled={disabled}
+          aria-keyshortcuts={openShortcut}
+          onClick={() => begin('final')}
+        >
           {match.status === 'complete' ? 'Correct score' : 'Finish match'}
         </Button>
         {match.status !== 'complete' && match.player1Id && match.player2Id && (
@@ -169,6 +192,7 @@ export function MatchScoring({
       {editing && (
         <form
           className="ops-score-form"
+          {...formProps}
           onSubmit={async (event) => {
             event.preventDefault();
             if (disabled || reviewing || stale || (needsScores && (score1 === '' || score2 === '')))
@@ -230,14 +254,8 @@ export function MatchScoring({
             );
           }}
         >
-          <strong>
-            {editing === 'live'
-              ? 'Update the score without finishing the match'
-              : outcome === 'forfeit'
-                ? 'Record a forfeit without played games'
-                : match.status === 'complete'
-                  ? 'Confirm the corrected result'
-                  : 'Confirm the final result and finish this match'}
+          <strong id={titleId}>
+            {scoreFormTitle(editing, outcome, match.status === 'complete')}
           </strong>
           {stale && (
             <p role="alert" className="error-text">
@@ -338,6 +356,52 @@ export function MatchScoring({
       )}
     </>
   );
+}
+
+function scoreFormTitle(editing: 'live' | 'final', outcome: Outcome, completed: boolean) {
+  if (editing === 'live') return 'Update the score without finishing the match';
+  if (outcome === 'forfeit') return 'Record a forfeit without played games';
+  return completed
+    ? 'Confirm the corrected result'
+    : 'Confirm the final result and finish this match';
+}
+
+function useDispatchScoreFocus(
+  scoreEditorRef: Ref<ScoreEditor> | undefined,
+  editing: boolean,
+  disabled: boolean,
+  openFinalScore: () => void,
+) {
+  const scoreForm = useRef<HTMLFormElement>(null);
+  const scoreTitleId = useId();
+  const focusOnOpen = useRef(false);
+  useImperativeHandle(scoreEditorRef, () => ({
+    focus() {
+      // Reopening through begin would replace the draft, revision and request ID.
+      if (editing) return focusDispatchTarget(scoreForm.current);
+      if (disabled) return false;
+      focusOnOpen.current = true;
+      openFinalScore();
+      return true;
+    },
+  }));
+  useLayoutEffect(() => {
+    if (!editing || !focusOnOpen.current) return;
+    focusOnOpen.current = false;
+    focusDispatchTarget(scoreForm.current);
+  }, [editing]);
+  const titleId = scoreEditorRef ? scoreTitleId : undefined;
+  const shortcut = scoreEditorRef ? dispatchShortcut('focusScore') : undefined;
+  return {
+    titleId,
+    openShortcut: !editing && !disabled ? shortcut : undefined,
+    formProps: {
+      ref: scoreForm,
+      tabIndex: scoreEditorRef ? -1 : undefined,
+      'aria-labelledby': titleId,
+      'aria-keyshortcuts': shortcut,
+    },
+  };
 }
 
 function OutcomeFields({
