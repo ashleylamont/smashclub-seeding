@@ -129,7 +129,18 @@ export function useScoreReportDraft(match: DraftMatch, store?: ScoreReportDrafts
     succeed: (
       id: string,
       feedback: Pick<Partial<ScoreReportDraft>, 'completedFeedback' | 'sent'>,
-    ) => update({ pendingRequestId: null, editing: false, retryRejected: false, ...feedback }, id),
+    ) =>
+      update(
+        {
+          pendingRequestId: null,
+          editing: false,
+          retryRejected: false,
+          // The next deliberate confirmation is a new report once this request has resolved.
+          ...(id === draft.confirmationId && { confirmationId: crypto.randomUUID() }),
+          ...feedback,
+        },
+        id,
+      ),
     fail: (id: string, error: string) => update({ pendingRequestId: null, error }, id),
   };
 }

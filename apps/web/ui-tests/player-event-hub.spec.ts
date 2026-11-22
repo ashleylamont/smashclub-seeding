@@ -394,6 +394,89 @@ test('reloading a stale match keeps a reopened rejected report editable', async 
   expect(fixture.unexpected).toEqual([]);
 });
 
+test('confirming the recorded score after a rejected dispute starts a fresh request', async ({
+  page,
+}) => {
+  const fixture = await mockEvent(page, { role: 'player' });
+  fixture.snapshot.settings.scoreReportingMode = 'approve_unless_disputed';
+  const match = fixture.snapshot.matches.find((item) => item.status === 'complete')!;
+  const other = fixture.snapshot.matches.find((item) => item.status === 'playing')!;
+  type ReportInput = { requestId: string; score1: number; score2: number };
+  type Receipt = ReportInput & {
+    id: string;
+    matchId: string;
+    status: 'approved' | 'pending' | 'rejected';
+    isDispute: boolean;
+  };
+  const inputs: ReportInput[] = [];
+  const reports = new Map<string, Receipt>();
+  let failNext = false;
+  await page.route('**/api/trpc/eventOps.reportScore*', async (route) => {
+    const body = JSON.parse(route.request().postData()!);
+    const batch = new URL(route.request().url()).searchParams.has('batch');
+    const input: ReportInput = batch ? body[0] : body;
+    inputs.push(input);
+    if (failNext) {
+      failNext = false;
+      const error = {
+        error: {
+          message: 'Temporary reporting failure. Try again.',
+          code: -32603,
+          data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
+        },
+      };
+      await route.fulfill({ status: 500, json: batch ? [error] : error });
+      return;
+    }
+    let report = reports.get(input.requestId);
+    if (!report) {
+      const isDispute = input.score1 !== match.score1 || input.score2 !== match.score2;
+      report = {
+        ...input,
+        id: `receipt-${reports.size + 1}`,
+        matchId: match.id,
+        status: isDispute ? 'pending' : 'approved',
+        isDispute,
+      };
+      reports.set(input.requestId, report);
+      fixture.responses['eventOps.myReports'] = [report];
+    }
+    const result = { result: { data: report } };
+    await route.fulfill({ json: batch ? [result] : result });
+  });
+
+  await page.goto(`/play/${PLAN_ID}`);
+  await chooseOption(page.getByLabel('Match view', { exact: true }), 'matches');
+  const card = page.locator('article.ops-match').filter({ hasText: match.label });
+  const confirm = card.getByRole('button', { name: 'Confirm recorded score' });
+  await confirm.click();
+  await expect(card).toContainText('Your report: 2 – 0 · Confirmed result');
+  await card.getByRole('button', { name: 'Report a different score' }).click();
+  await card.getByRole('spinbutton').nth(1).fill('1');
+  await card.getByRole('button', { name: 'Send different score to TOs' }).click();
+  await expect(card).toContainText('Your report: 2 – 1 · Different score awaiting TO review');
+  const dispute = reports.get(inputs[1]!.requestId)!;
+  const filter = page.getByLabel('Show matches for');
+  await chooseOption(filter, other.player1Id!);
+  await expect(card).toHaveCount(0);
+  dispute.status = 'rejected';
+  dispute.isDispute = false;
+  await page.waitForResponse((response) => response.url().includes('eventOps.myReports'));
+  await chooseOption(filter, '');
+  await expect(card).toContainText('Your report: 2 – 1 · Rejected by a TO');
+
+  failNext = true;
+  await confirm.click();
+  await expect(card.getByRole('alert')).toContainText('Temporary reporting failure');
+  await confirm.click();
+  await expect.poll(() => inputs.length).toBe(4);
+  expect(inputs[2]!.requestId).not.toBe(inputs[0]!.requestId);
+  expect(inputs[3]).toEqual(inputs[2]);
+  await expect(card).toContainText('Your report: 2 – 0 · Confirmed result');
+  await expect(card.getByText('Rejected by a TO', { exact: false })).toHaveCount(0);
+  expect(fixture.unexpected).toEqual([]);
+});
+
 test('cold results links scroll after the public snapshot mounts', async ({ page }) => {
   let release!: () => void;
   const fixture = await mockEvent(page, {
