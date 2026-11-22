@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import {
   broadcastPageDensity,
   broadcastProgressPages,
@@ -344,8 +344,25 @@ function RoundRobinResultsPage({
   );
 }
 
+function poolOrderLabel({ orderStatus, placementSource }: PoolPanel, closed: boolean) {
+  if (placementSource) {
+    if (orderStatus === 'review_pending') return 'Recorded order · score review pending';
+    if (orderStatus === 'retained_after_correction' || placementSource === 'retained')
+      return 'Recorded order · results changed';
+    if (placementSource === 'automatic') return 'Confirmed by set wins';
+    if (placementSource === 'challonge') return 'Placements from Challonge';
+    if (placementSource === 'manual') return 'Confirmed by an organiser';
+    return 'Recorded places';
+  }
+  if (closed) return 'Places unconfirmed';
+  if (orderStatus === 'review_pending') return 'Places pending · score review';
+  if (orderStatus === 'partial' || orderStatus === 'ruling_required')
+    return 'Places pending · tiebreak required';
+  return 'Places pending';
+}
+
 function PoolStandingsPanel({
-  panel: { pool, players, qualifications },
+  panel,
   closed,
   structure,
   entrantNames,
@@ -355,6 +372,8 @@ function PoolStandingsPanel({
   structure?: string;
   entrantNames: ReadonlyMap<string, string>;
 }) {
+  const { pool, players, qualifications, placementSource } = panel;
+  const captionId = useId();
   const heading = poolTitle(`${pool.division}:${pool.poolIndex}`, structure, 'heading');
   const shortStage = (stage: PoolPanel['qualifications'][number]['stage']) =>
     stage === 'main' ? 'Championship' : 'Consolation';
@@ -389,9 +408,19 @@ function PoolStandingsPanel({
         )}
       </div>
       {players.length > 0 && (
-        <table className="intermission-standings" aria-label={heading}>
+        <table
+          className={
+            placementSource
+              ? 'intermission-standings intermission-placed-pool'
+              : 'intermission-standings'
+          }
+          aria-label={heading}
+          aria-describedby={captionId}
+        >
+          <caption id={captionId}>{poolOrderLabel(panel, closed)}</caption>
           <thead>
             <tr>
+              {placementSource && <th scope="col">Place</th>}
               <th scope="col">Player</th>
               <th scope="col" aria-label="Sets won–lost">
                 W–L
@@ -401,28 +430,27 @@ function PoolStandingsPanel({
             </tr>
           </thead>
           <tbody>
-            {players.map((player) => {
+            {players.map(({ id, name, place, record, withdrawn }) => {
               const confirmed = qualifications.filter(
-                ({ entrantId, status }) => entrantId === player.id && status === 'resolved',
+                ({ entrantId, status }) => entrantId === id && status === 'resolved',
               );
               return (
-                <tr key={player.id}>
+                <tr key={id}>
+                  {placementSource && <td>{place ?? '—'}</td>}
                   <td>
-                    {player.name}
+                    {name}
+                    {withdrawn && <span className="intermission-withdrawn">Withdrawn</span>}
                     {confirmed.map(({ stage, place }) => (
                       <strong className="intermission-qualifier" key={`${stage}:${place}`}>
-                        Qualified · {shortStage(stage)} · #{place}
+                        Qualified · {shortStage(stage)}
                       </strong>
                     ))}
                   </td>
+                  <td>{record ? `${record.wins}–${record.losses}` : '—'}</td>
                   <td>
-                    {player.wins}–{player.losses}
+                    {record ? `${record.differential > 0 ? '+' : ''}${record.differential}` : '—'}
                   </td>
-                  <td>
-                    {player.differential > 0 ? '+' : ''}
-                    {player.differential}
-                  </td>
-                  <td>{player.remaining}</td>
+                  <td>{record?.remaining ?? '—'}</td>
                 </tr>
               );
             })}

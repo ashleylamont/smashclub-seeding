@@ -17,6 +17,7 @@ async function graphFixture(page: Page, size = 7, double = true) {
     });
   Object.assign(fixture.snapshot, {
     matches,
+    placements: [],
     stationQueues: [],
     poolRounds: [],
     poolSchedules: [],
