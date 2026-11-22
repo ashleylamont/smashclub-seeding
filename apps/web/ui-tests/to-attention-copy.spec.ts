@@ -1,5 +1,6 @@
 import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import type { Desk } from '../src/pages/admin/dispatchTypes';
 import { mockEvent, PLAN_ID, ready } from './fixtures';
 
 const title = 'Tech In Place · Greater Western Sydney November Championship';
@@ -32,11 +33,41 @@ for (const theme of ['dark', 'light'] as const)
     }, testInfo) => {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
       await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
-      const { overview, unexpected } = await mockEvent(page, { role: 'player' });
+      const { overview, responses, unexpected } = await mockEvent(page, { role: 'player' });
       overview.plan.name = title;
       overview.stationQueues = [];
-      const [recorded, approval] = overview.matches.filter((match) => match.status === 'complete');
-      recorded!.player1Name = alias;
+      const playing = overview.matches.find((match) => match.status === 'playing')!;
+      const readyMatch = overview.matches.find(
+        (match) => match.status === 'ready' && match.division === 'upper',
+      )!;
+      const capacity = { active: 0, capacity: 2, overCapacity: 0 };
+      const desk: Desk = {
+        ...capacity,
+        mode: 'shared',
+        resourceRevision: overview.settings.resourceRevision,
+        queueRevision: 0,
+        stations: overview.stations.map((station) => ({
+          ...station,
+          enabled: true,
+          reserved: station.currentMatchId === playing.id,
+          revision: 0,
+        })),
+        entrants: [],
+        pools: [],
+        queue: [playing, readyMatch].map((match) => ({
+          matchId: match.id,
+          state: match.id === playing.id ? 'playing' : 'ready',
+          waitingSince: 0,
+          downstream: 0,
+          reason: match.id === playing.id ? 'Playing' : 'Waiting time, then draw order',
+          canStart: match.id === readyMatch.id,
+          canDispatchOrdinary: match.id === readyMatch.id,
+          eligibleStationIds: match.availability.eligibleStationIds,
+          reasons: [],
+        })),
+      };
+      Object.assign(overview, { sharedDispatch: capacity, operatorDispatch: desk });
+      responses['eventOps.delivery.status'] = { configured: false };
       const alreadyReviewed = overview.reports;
       const route = `/operate/${PLAN_ID}`;
       const attention = page.getByRole('region', { name: 'Needs attention' });
@@ -47,7 +78,7 @@ for (const theme of ['dark', 'light'] as const)
       await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
       await expect(attention).toHaveText('No decisions pending.');
       await expect(empty).toHaveText('No decisions pending.');
-      await expect(page.getByText('TO desk', { exact: true })).toHaveCount(0);
+      await expect(page.getByText('TO desk', { exact: true })).toBeVisible();
       await inspect(page, testInfo, 'empty-attention', width);
 
       await context.setOffline(true);
@@ -58,26 +89,49 @@ for (const theme of ['dark', 'light'] as const)
       await expect(interruption).toHaveCount(0);
       await expect(empty).toBeVisible();
 
-      // Reverse the Roy–Meta K result to create an actual three-way tie in Lower Pool A.
-      Object.assign(approval!, { score1: 0, score2: 2, winnerId: approval!.player2Id });
-      const held = overview.matches.find((match) => match.status === 'ready')!;
-      Object.assign(held, { status: 'blocked', blockedReason: 'Organiser hold' });
+      // Reverse the Roy–Meta K result to create a three-way tie in Lower Pool A.
+      const tiebreak = overview.matches.find(
+        (match) => match.player1Name === 'Roy' && match.player2Name === 'Meta K',
+      )!;
+      Object.assign(tiebreak, { score1: 0, score2: 2, winnerId: tiebreak.player2Id });
+
+      // Keep the report and organiser hold in a different pool from the ruling.
+      const [recorded, held] = overview.matches.filter(
+        (match) => match.status === 'ready' && match.division === 'lower' && match.poolIndex === 1,
+      );
+      Object.assign(recorded!, {
+        status: 'complete',
+        player1Name: alias,
+        started: true,
+        score1: 2,
+        score2: 0,
+        winnerId: recorded!.player1Id,
+        outcome: 'played',
+        revision: 1,
+      });
+      Object.assign(held!, { status: 'blocked', blockedReason: 'Organiser hold' });
       overview.reports = [
         {
           ...alreadyReviewed[0]!,
           id: 'fixture-disagreement',
           matchId: recorded!.id,
+          submittedRevision: recorded!.revision,
           expectedRevision: recorded!.revision,
           status: 'pending',
           isDispute: true,
+          score1: 1,
+          score2: 2,
+          winnerId: recorded!.player2Id!,
         },
         {
           ...alreadyReviewed[1]!,
           id: 'fixture-approval',
-          matchId: approval!.id,
-          expectedRevision: approval!.revision,
+          matchId: playing.id,
+          submittedRevision: playing.revision,
+          expectedRevision: playing.revision,
           status: 'pending',
           isDispute: false,
+          winnerId: playing.player1Id!,
         },
       ];
       Object.assign(overview, {
@@ -122,7 +176,10 @@ for (const theme of ['dark', 'light'] as const)
       await expect(attention.getByText(/Organiser hold/)).toBeVisible();
       await inspect(page, testInfo, 'expanded-attention', width);
       await shortcut.press('Enter');
-      await expect(page.locator('#score-report-fixture-disagreement')).toBeFocused();
+      const dispute = page.locator('#score-report-fixture-disagreement');
+      await expect(dispute).toBeFocused();
+      await expect(dispute).toContainText(`Recorded result · ${alias} 2–0`);
+      await expect(dispute).toContainText(`Submitted result · ${alias} 1 – 2`);
 
       // An interruption retains actionable facts from the last loaded overview.
       await context.setOffline(true);

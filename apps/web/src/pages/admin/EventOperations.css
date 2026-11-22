@@ -42,6 +42,11 @@
   font-size: 2.2rem;
   margin: 0.25rem 0;
 }
+.ops-eyebrow {
+  color: var(--accent);
+  font: 700 0.75rem var(--mono);
+  letter-spacing: 0.15em;
+}
 .ops-links {
   display: flex;
   gap: 14px;

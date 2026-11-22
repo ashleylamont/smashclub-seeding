@@ -236,6 +236,7 @@ export function EventOperationsPanel({
     <div className="ops-page">
       <header className="ops-heading">
         <div>
+          <span className="ops-eyebrow">TO desk</span>
           <h2>{data.plan.name}</h2>
           <p className="muted">
             {closed ? 'Event closed · read only' : data.plan.status.replaceAll('_', ' ')}
