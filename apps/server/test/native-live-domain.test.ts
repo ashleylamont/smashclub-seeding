@@ -59,6 +59,24 @@ describe('native tournament decisions', () => {
     });
     expect(state.reports.find((r) => r.actorId === 'player-c')!.status).toBe('rejected');
   });
+  it('links a score correction to the last applied result after an equal score is resubmitted', () => {
+    const initial = pureState();
+    const target = initial.matches[0]!;
+    const recorded = decide(initial, envelope(score(target)))!;
+    const completed = reduceDecision(initial, recorded);
+
+    const equal = decide(completed, envelope(score(completed.matches[0]!)))!;
+    expect(equal).toMatchObject({
+      correctionOf: null,
+      basis: { [target.id]: 1 },
+      causation: [recorded.commandId],
+    });
+    const resubmitted = reduceDecision(completed, equal);
+    expect(resubmitted.matches[0]).toMatchObject({ revision: 2, resultCommandId: equal.commandId });
+
+    const corrected = decide(resubmitted, envelope(score(resubmitted.matches[0]!, 2, 1)))!;
+    expect(corrected.correctionOf).toBe(equal.commandId);
+  });
   it('preserves approval mode and decisive-winner validation', () => {
     const state = pureState();
     state.settings.scoreReportingMode = 'to_review';

@@ -186,6 +186,85 @@ describe('organiser event history', () => {
       'wins by forfeit',
     );
   });
+  it('records correction provenance when a review changes the settled score', async () => {
+    const planId = await seedNativeDraft(db);
+    await runtime.lock(nativeAdmin, planId);
+    const operator = caller().eventOps.live;
+    const match = (await operator.overview({ planId })).matches[0]!;
+    const submitScore = (requestId: string, score2: number) =>
+      caller({ ...nativeAdmin, id: requestId, role: 'user' }).eventOps.live.command({
+        planId,
+        requestId,
+        command: {
+          kind: 'score',
+          matchId: match.id,
+          expectedRevision: match.revision,
+          score1: 2,
+          score2,
+          outcome: 'played',
+        },
+      });
+    const original = await submitScore('record', 0);
+    const confirmation = await submitScore('confirm', 0);
+    const rejectedReport = await submitScore('dispute-to-reject', 1);
+    const rejection = await operator.command({
+      planId,
+      requestId: 'reject',
+      command: {
+        kind: 'review',
+        reportId: rejectedReport.receipt.reportId!,
+        approve: false,
+        expectedRevision: match.revision + 1,
+      },
+    });
+    const approvedReport = await submitScore('dispute-to-approve', 1);
+    const priorResult = (await runtime.state(planId)).matches.find((row) => row.id === match.id)!;
+    expect(priorResult).toMatchObject({
+      revision: match.revision + 1,
+      score2: 0,
+      resultCommandId: original.receipt.commandId,
+    });
+    const approvalRequest = {
+      planId,
+      requestId: 'approve',
+      command: {
+        kind: 'review' as const,
+        reportId: approvedReport.receipt.reportId!,
+        approve: true,
+        expectedRevision: priorResult.revision,
+      },
+    };
+    const approval = await operator.command(approvalRequest);
+    expect((await operator.command(approvalRequest)).receipt).toEqual(approval.receipt);
+
+    const state = await runtime.state(planId);
+    expect(state.matches.find((row) => row.id === match.id)).toMatchObject({
+      revision: priorResult.revision + 1,
+      score1: 2,
+      score2: 1,
+      winnerId: priorResult.winnerId,
+      resultCommandId: approval.receipt.commandId,
+    });
+    expect(await runtime.replay(planId)).toEqual(state);
+
+    const { entries } = await operator.history({ planId });
+    expect(entries[0]).toMatchObject({
+      title: 'Score approved',
+      matchId: match.id,
+      details: {
+        commandId: approval.receipt.commandId,
+        correctionOf: original.receipt.commandId,
+        causedBy: [original.receipt.commandId],
+      },
+    });
+    expect(entries.slice(1, 5).map((entry) => entry.details)).toMatchObject(
+      [approvedReport, rejection, rejectedReport, confirmation].map(({ receipt }) => ({
+        commandId: receipt.commandId,
+        correctionOf: null,
+        causedBy: [original.receipt.commandId],
+      })),
+    );
+  });
   it('retains original pre-cutover evidence as imported records without inventing stream events', async () => {
     const planId = await seedNativeDraft(db);
     await softLockPools(db, nativeAdmin, planId);
