@@ -2,24 +2,60 @@ import { matchPresentation } from '../lib/matchPresentation';
 import { linkedFinalCaption } from '../lib/linkedFinalCaption';
 import { qualificationSummary } from '../lib/qualification';
 import type { LiveMatch } from '../lib/eventDisplay';
-import { useReportFeedback } from '../lib/useReportFeedback';
 import { Button } from './ui/Button';
 import { ScoreFields, type ScoreInputValue } from './ScoreFields';
-import { useState } from 'react';
-import { CompletedScoreReport, type ResultSubmission } from './CompletedScoreReport';
+import {
+  CompletedScoreReport,
+  type ResultSubmission,
+  type ResultSubmissionReceipt,
+} from './CompletedScoreReport';
 import type { PoolFlowMatch, ScoreApprovalPolicy } from '../lib/poolFlow';
 import type { trpc } from '../lib/trpc';
 import type { SetCharacterPick } from '@smashclub/shared';
 import { scoreReportPlayers, type ScoreReportPlayer } from '../lib/scoreReportPlayers';
 import { SetCharacterFields } from './SetCharacterFields';
 import { ReportedCharacters } from './ReportedCharacters';
+import {
+  scoreReportDraftKey,
+  useScoreReportDraft,
+  type ScoreReportDrafts,
+} from '../lib/useScoreReportDrafts';
 
 type GuestData = Awaited<ReturnType<typeof trpc.eventOps.guests.matches.mutate>>;
 export type GuestMatch = GuestData['matches'][number];
 
-export function EventScoreCard({
+type EventScoreCardProps = {
+  enabled: boolean;
+  reportingIdentity?: string;
+  scoreDrafts?: ScoreReportDrafts;
+  /** Pass null when the match list already explains why reporting is unavailable. */
+  unavailableMessage?: string | null;
+  pendingMessage?: string;
+  onSubmit: (input: ResultSubmission) => Promise<ResultSubmissionReceipt>;
+  match: PoolFlowMatch & { pendingDisputeCount?: number };
+  report?: GuestData['reports'][number];
+  status: string;
+  station?: string;
+  approvalPolicy: ScoreApprovalPolicy;
+  nextMatch?: LiveMatch;
+  memberNames?: Readonly<Record<string, string>>;
+  playedCharacters?: SetCharacterPick[];
+  lateReport?: React.ReactNode;
+  recordedOnly?: boolean;
+};
+
+export function EventScoreCard(props: EventScoreCardProps) {
+  return (
+    <ScoreCard
+      key={JSON.stringify([props.reportingIdentity, scoreReportDraftKey(props.match)])}
+      {...props}
+    />
+  );
+}
+
+function ScoreCard({
   enabled: reportingEnabled,
-  reportingIdentity = 'reporter',
+  scoreDrafts,
   unavailableMessage = 'Scan a guest reporting QR to start matches and report scores.',
   onSubmit,
   pendingMessage = 'Thanks! A TO will review your score.',
@@ -33,58 +69,20 @@ export function EventScoreCard({
   playedCharacters,
   lateReport,
   recordedOnly = false,
-}: {
-  enabled: boolean;
-  reportingIdentity?: string;
-  /** Pass null when the match list already explains why reporting is unavailable. */
-  unavailableMessage?: string | null;
-  pendingMessage?: string;
-  onSubmit: (input: ResultSubmission) => Promise<{ status: string; isDispute: boolean }>;
-  match: PoolFlowMatch & { pendingDisputeCount?: number };
-  report?: GuestData['reports'][number];
-  status: string;
-  station?: string;
-  approvalPolicy: ScoreApprovalPolicy;
-  nextMatch?: LiveMatch;
-  memberNames?: Readonly<Record<string, string>>;
-  playedCharacters?: SetCharacterPick[];
-  lateReport?: React.ReactNode;
-  recordedOnly?: boolean;
-}) {
+}: EventScoreCardProps) {
   const enabled = reportingEnabled && !recordedOnly;
   const presentation = matchPresentation(match, recordedOnly);
   const qualification = recordedOnly ? null : qualificationSummary(match);
-  const [score1, setScore1] = useState<ScoreInputValue>(0);
-  const [score2, setScore2] = useState<ScoreInputValue>(0);
-  const [revision, setRevision] = useState(match.revision);
-  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const editor = useScoreReportDraft(match, scoreDrafts);
+  const { score1, score2, revision, requestId, picks, sent, error, retryRejected } = editor.draft;
   const players = scoreReportPlayers(match, memberNames);
-  const characterDraftKey = JSON.stringify([reportingIdentity, players.map(({ id }) => id)]);
-  const [characterDraft, setCharacterDraft] = useState<{
-    key: string;
-    picks: SetCharacterPick[];
-  }>();
-  const picks = characterDraft?.key === characterDraftKey ? characterDraft.picks : [];
-  const editPicks = (next: SetCharacterPick[]) => {
-    setCharacterDraft({ key: characterDraftKey, picks: next });
-    setRequestId(crypto.randomUUID());
-  };
-  const { pending, sent, error, begin, update } = useReportFeedback(reportingIdentity);
-  const [retryRejectedFor, setRetryRejectedFor] = useState<string | null>(null);
-  const retryRejected = retryRejectedFor === reportingIdentity;
+  const pending = editor.draft.pendingRequestId !== null;
   const stale = revision !== match.revision;
   const score = decisiveDraft(score1, score2);
   const blockedSubmission = pending || stale || !score || !presentation.canReport;
-  const reset = () => {
-    setRevision(match.revision);
-    setScore1(0);
-    setScore2(0);
-    editPicks([]);
-    update({ error: '', sent: null });
-  };
   const submit = async () => {
     if (!enabled || blockedSubmission || !score) return;
-    begin();
+    editor.begin(requestId);
     try {
       const result = await onSubmit({
         expectedRevision: revision,
@@ -92,19 +90,20 @@ export function EventScoreCard({
         ...score,
         ...(picks.length && { characterPicks: picks }),
       });
-      update({ sent: result.status === 'approved' ? 'approved' : 'pending' });
-      setRetryRejectedFor((previous) => (previous === reportingIdentity ? null : previous));
+      editor.succeed(requestId, { sent: result.status === 'approved' ? 'approved' : 'pending' });
     } catch (cause) {
-      update({
-        error: cause instanceof Error ? cause.message : 'Could not send the score. Try again.',
-      });
-    } finally {
-      update({ pending: false });
+      editor.fail(
+        requestId,
+        cause instanceof Error ? cause.message : 'Could not send the score. Try again.',
+      );
     }
   };
   return (
     <article
       className={`card ops-match${!recordedOnly || match.status === 'complete' ? ` ops-match-${match.status}` : ''}`}
+      data-player-match-id={match.id}
+      tabIndex={-1}
+      aria-label={presentation.title}
     >
       <div className="ops-match-meta">
         <span>{scoreCardCaption(match)}</span>
@@ -128,13 +127,13 @@ export function EventScoreCard({
       {match.status === 'complete' ? (
         <CompletedScoreReport
           match={match}
-          reportingIdentity={reportingIdentity}
           enabled={enabled}
           allowReports={approvalPolicy !== 'review'}
           showUnavailableHint={unavailableMessage !== null}
           onSubmit={onSubmit}
-          characterDraft={{ players, picks, onChange: editPicks }}
-          pendingReport={report?.status === 'pending' ? report : undefined}
+          editor={editor}
+          players={players}
+          report={report}
           recordedOnly={recordedOnly}
         />
       ) : presentation.kind === 'no-contest' ? (
@@ -156,10 +155,13 @@ export function EventScoreCard({
           <p>Check the score with a TO before submitting again.</p>
           <Button
             onClick={() => {
-              setRevision(match.revision);
-              setRequestId(crypto.randomUUID());
-              update({ error: '', sent: null });
-              setRetryRejectedFor(reportingIdentity);
+              editor.update({
+                revision: match.revision,
+                requestId: crypto.randomUUID(),
+                error: '',
+                sent: null,
+                retryRejected: true,
+              });
             }}
           >
             Start a new report
@@ -178,7 +180,7 @@ export function EventScoreCard({
               <p>
                 Match details changed. Reload the match and check the players before submitting.
               </p>
-              <Button type="button" onClick={reset}>
+              <Button type="button" onClick={editor.reset}>
                 Reload match
               </Button>
             </div>
@@ -188,19 +190,13 @@ export function EventScoreCard({
             player2Name={match.player2Name}
             score1={score1}
             score2={score2}
-            onScore1={(value) => {
-              setScore1(value);
-              setRequestId(crypto.randomUUID());
-            }}
-            onScore2={(value) => {
-              setScore2(value);
-              setRequestId(crypto.randomUUID());
-            }}
+            onScore1={(value) => editor.editScore('score1', value)}
+            onScore2={(value) => editor.editScore('score2', value)}
           />
           <SetCharacterFields
             players={players}
             picks={picks}
-            onChange={editPicks}
+            onChange={editor.editPicks}
             disabled={pending || stale}
           />
           <Button type="submit" pending={pending} variant="primary" disabled={blockedSubmission}>
@@ -218,7 +214,7 @@ export function EventScoreCard({
       )}
       <ReportedCharacters picks={playedCharacters} players={players} />
       {lateReport}
-      {!recordedOnly && error && (
+      {!recordedOnly && match.status !== 'complete' && error && (
         <p className="error-text" role="alert">
           {error}
         </p>

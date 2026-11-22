@@ -71,7 +71,7 @@ for (const theme of ['dark', 'light'] as const) {
               page.getByText('Showing your upcoming matches', { exact: false }),
             ).toHaveCount(0);
             await expect(
-              page.getByRole('button', { name: 'Find next match', exact: true }),
+              page.getByRole('button', { name: /^View (current|next) match$/ }),
             ).toHaveCount(0);
             await expect(page.locator('article.ops-match').getByRole('spinbutton')).toHaveCount(0);
           } else {

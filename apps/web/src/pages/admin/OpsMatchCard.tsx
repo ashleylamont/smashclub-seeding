@@ -48,7 +48,7 @@ export function MatchCard({
   scoreEditorRef?: Ref<ScoreEditor>;
 }) {
   const confirmAction = useConfirmation();
-  const eligible = eligibleStations(match, stations);
+  const eligible = sharedDispatch ? [] : eligibleStations(match, stations);
   const active = match.status === 'playing';
   const sharedCall = active && sharedDispatch;
   const untakenCall = isUntakenCall(match, liveOwned);
@@ -87,44 +87,48 @@ export function MatchCard({
             ))}
           </ul>
         )}
-      <label className="ops-station">
-        Station
-        <Select
-          aria-label={`Station for ${caption}`}
-          value={match.stationId ?? ''}
-          disabled={disabled || match.status === 'complete'}
-          onValueChange={(selectedValue) =>
-            void act(() =>
-              trpc.eventOps.updateMatch.mutate({
-                matchId: match.id,
-                expectedRevision: match.revision,
-                expectedResourceRevision: match.resourceRevision,
-                status:
-                  match.status === 'playing'
-                    ? 'playing'
-                    : match.status === 'blocked'
-                      ? 'blocked'
-                      : 'ready',
-                stationId: selectedValue || null,
-                ...(match.blockedReason ? { blockedReason: match.blockedReason } : {}),
-              }),
-            )
-          }
-        >
-          <SelectItem value="">Choose a free station</SelectItem>
-          {match.stationId && !eligible.some((station) => station.id === match.stationId) && (
-            <SelectItem value={match.stationId} disabled>
-              {stations.find((station) => station.id === match.stationId)?.name ?? 'Station'} —
-              unavailable
-            </SelectItem>
-          )}
-          {eligible.map((station) => (
-            <SelectItem key={station.id} value={station.id}>
-              {station.name}
-            </SelectItem>
-          ))}
-        </Select>
-      </label>
+      {sharedDispatch ? (
+        <p className="ops-match-assignment">{sharedStationContext(match, stations)}</p>
+      ) : (
+        <label className="ops-station">
+          Station
+          <Select
+            aria-label={`Station for ${caption}`}
+            value={match.stationId ?? ''}
+            disabled={disabled || match.status === 'complete'}
+            onValueChange={(selectedValue) =>
+              void act(() =>
+                trpc.eventOps.updateMatch.mutate({
+                  matchId: match.id,
+                  expectedRevision: match.revision,
+                  expectedResourceRevision: match.resourceRevision,
+                  status:
+                    match.status === 'playing'
+                      ? 'playing'
+                      : match.status === 'blocked'
+                        ? 'blocked'
+                        : 'ready',
+                  stationId: selectedValue || null,
+                  ...(match.blockedReason ? { blockedReason: match.blockedReason } : {}),
+                }),
+              )
+            }
+          >
+            <SelectItem value="">Choose a free station</SelectItem>
+            {match.stationId && !eligible.some((station) => station.id === match.stationId) && (
+              <SelectItem value={match.stationId} disabled>
+                {stations.find((station) => station.id === match.stationId)?.name ?? 'Station'} —
+                unavailable
+              </SelectItem>
+            )}
+            {eligible.map((station) => (
+              <SelectItem key={station.id} value={station.id}>
+                {station.name}
+              </SelectItem>
+            ))}
+          </Select>
+        </label>
+      )}
       <MatchScoring
         match={match}
         disabled={disabled}
@@ -220,6 +224,17 @@ function MatchContestants({ match }: { match: Match }) {
       {presentation.result && <p>{presentation.result}</p>}
     </>
   );
+}
+
+function sharedStationContext(match: Match, stations: Overview['stations']) {
+  if (match.stationId) {
+    const station = stations.find((item) => item.id === match.stationId);
+    return station ? `Station · ${station.name}` : 'Assigned station unavailable';
+  }
+  if (match.status !== 'playing') return 'No station assigned';
+  return match.callLocation
+    ? `Call location · ${match.callLocation}`
+    : 'Any available ordinary setup';
 }
 
 function eligibleStations(match: Match, stations: Overview['stations']) {

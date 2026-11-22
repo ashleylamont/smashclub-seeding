@@ -1,8 +1,11 @@
 import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { chooseOption } from '../test-support/controls';
+import type { trpc } from '../src/lib/trpc';
 import type { Desk } from '../src/pages/admin/dispatchTypes';
 import { mockEvent, PLAN_ID, ready } from './fixtures';
+
+type PreviewInput = Parameters<typeof trpc.eventOps.previewAttendance.query>[0];
 
 async function reviewPage(page: Page, path: string) {
   await ready(page);
@@ -32,10 +35,13 @@ for (const { theme, width, mode } of cases)
   }, testInfo) => {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
     await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
-    const { overview, responses, unexpected } = await mockEvent(page, {
-      role: 'admin',
-      idle: true,
-    });
+    const { overview, responses, queryResponses, mutationResponses, unexpected } = await mockEvent(
+      page,
+      {
+        role: 'admin',
+        idle: true,
+      },
+    );
     const call = overview.matches.find((match) => match.status === 'ready')!;
     const unrelated = overview.matches.find(
       (match) =>
@@ -86,39 +92,27 @@ for (const { theme, width, mode } of cases)
     });
     responses['eventOps.delivery.status'] = { configured: false };
     let returned = false;
-    const previews: object[] = [];
-    const applications: object[] = [];
-    const returns: object[] = [];
-    await page.route('**/api/trpc/eventOps.previewAttendance*', async (route) => {
-      const params = new URL(route.request().url()).searchParams;
-      const data = JSON.parse(params.get('input')!);
-      previews.push(params.has('batch') ? data[0] : data);
-      const response = {
-        result: {
-          data: {
-            allowed: returned,
-            issues: returned
-              ? []
-              : ['Return this entrant’s untaken call before changing the draw.'],
-            ...(returned ? {} : { returnCallMatchIds: [call.id] }),
-            warnings: [],
-            requiresExternalAcknowledgement: false,
-            requiresRedistributionApproval: false,
-            relocations: [],
-            affectedMatches: [{ id: call.id, label: call.label, status: call.status }],
-            addedMatches: 0,
-            revisionToken: returned ? 'fresh-review' : 'blocked-review',
-          },
-        },
+    const previews: PreviewInput[] = [];
+    const applications: unknown[] = [];
+    const returns: unknown[] = [];
+    queryResponses.set('eventOps.previewAttendance', (input) => {
+      previews.push(input as PreviewInput);
+      return {
+        allowed: returned,
+        issues: returned ? [] : ['Return this entrant’s untaken call before changing the draw.'],
+        ...(returned ? {} : { returnCallMatchIds: [call.id] }),
+        warnings: [],
+        requiresExternalAcknowledgement: false,
+        requiresRedistributionApproval: false,
+        relocations: [],
+        affectedMatches: [{ id: call.id, label: call.label, status: call.status }],
+        addedMatches: 0,
+        revisionToken: returned ? 'fresh-review' : 'blocked-review',
       };
-      await route.fulfill({ json: params.has('batch') ? [response] : response });
     });
-    const returnPath = `/api/trpc/eventOps.${mode === 'shared' ? 'live.command' : 'updateMatch'}`;
-    await page.route(`**${returnPath}*`, async (route) => {
-      const batched = new URL(route.request().url()).searchParams.has('batch');
-      const body = route.request().postDataJSON();
-      const input = batched ? body[0] : body;
-      returns.push(mode === 'shared' ? input.command : input);
+    const returnProcedure = mode === 'shared' ? 'eventOps.live.command' : 'eventOps.updateMatch';
+    mutationResponses.set(returnProcedure, (input) => {
+      returns.push(mode === 'shared' ? (input as { command: unknown }).command : input);
       Object.assign(call, {
         status: 'ready',
         called: false,
@@ -128,15 +122,11 @@ for (const { theme, width, mode } of cases)
       desk.queue = desk.queue.filter((row) => row.matchId !== call.id);
       desk.active = 1;
       returned = true;
-      const result = { result: { data: {} } };
-      await route.fulfill({ json: batched ? [result] : result });
+      return {};
     });
-    await page.route('**/api/trpc/eventOps.applyAttendance*', async (route) => {
-      const batched = new URL(route.request().url()).searchParams.has('batch');
-      const body = route.request().postDataJSON();
-      applications.push(batched ? body[0] : body);
-      const response = { result: { data: { applied: true } } };
-      await route.fulfill({ json: batched ? [response] : response });
+    mutationResponses.set('eventOps.applyAttendance', (input) => {
+      applications.push(input);
+      return { applied: true };
     });
 
     await page.goto(`/operate/${PLAN_ID}?view=players`);
@@ -182,7 +172,10 @@ for (const { theme, width, mode } of cases)
     const [response] = await Promise.all([
       page.waitForResponse(
         (reply) =>
-          reply.request().method() === 'POST' && new URL(reply.url()).pathname === returnPath,
+          reply.request().method() === 'POST' &&
+          decodeURIComponent(new URL(reply.url()).pathname.replace('/api/trpc/', ''))
+            .split(',')
+            .includes(returnProcedure),
       ),
       returnCall.press('Enter'),
     ]);
@@ -220,5 +213,41 @@ for (const { theme, width, mode } of cases)
         revisionToken: 'fresh-review',
       },
     ]);
+
+    if (theme === 'light' && width === 1440) {
+      await test.step('serve a refreshed preview after roster and settings in the same batch', async () => {
+        const input = { ...previews[0], requestId: '9879a1cb-2169-4cff-a0ab-e0ca802f4dcd' };
+        const batch = await page.evaluate(
+          async ({ planId, input }) => {
+            const procedures = [
+              'eventOps.attendeeRoster',
+              'eventOps.guests.settings',
+              'eventOps.previewAttendance',
+            ];
+            const params = new URLSearchParams({
+              batch: '1',
+              input: JSON.stringify({ 0: { planId }, 1: { planId }, 2: input }),
+            });
+            const response = await fetch(`/api/trpc/${procedures.join(',')}?${params}`);
+            return response.json();
+          },
+          { planId: PLAN_ID, input },
+        );
+        expect(batch).toEqual([
+          { result: { data: responses['eventOps.attendeeRoster'] } },
+          { result: { data: responses['eventOps.guests.settings'] } },
+          {
+            result: {
+              data: expect.objectContaining({
+                allowed: true,
+                affectedMatches: [{ id: call.id, label: call.label, status: 'ready' }],
+                revisionToken: 'fresh-review',
+              }),
+            },
+          },
+        ]);
+        expect(previews[2]).toEqual(input);
+      });
+    }
     expect(unexpected).toEqual([]);
   });

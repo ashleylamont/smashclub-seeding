@@ -1,7 +1,7 @@
 import type { NativeBracketView } from '../components/EventNightBoard';
 import { linkedFinalCaption } from './linkedFinalCaption';
 import { includesPlayer, matchStation, matchStatus, sortPlayerMatches } from './playerMatchView';
-import { playerBracketPath, playerHubView } from './playerHubView';
+import { playerBracketPath, playerHubView, playerMatchProgress } from './playerHubView';
 import type { PoolFlowData, PoolFlowMatch } from './poolFlow';
 import { qualificationSummary } from './qualification';
 
@@ -75,11 +75,8 @@ export function playerJourney(data: JourneyData, player: string): PlayerJourney 
     data,
     data.matches.filter((match) => includesPlayer(match, player)),
   );
-  const open = own.filter((match) => match.status !== 'complete');
-  const current =
-    open.find((match) => match.status === 'playing') ??
-    open.find((match) => match.status === 'ready' && match.player1Id && match.player2Id) ??
-    open[0];
+  const { nextMatch, waitingMatch } = playerMatchProgress(own, false);
+  const current = nextMatch ?? waitingMatch;
   if (current) {
     const caption = linkedFinalCaption(current)?.text ?? current.label;
     const consequences = playerConsequences(data.matches, current);

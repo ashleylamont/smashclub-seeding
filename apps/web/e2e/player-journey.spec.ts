@@ -91,12 +91,13 @@ test('personal progress follows a real loss, safe correction and confirmed brack
   const playerId = semi.player1Id!;
   const visit = () => page.goto(`/play/${planId}?player=${playerId}`);
   const progress = page.getByRole('complementary', { name: 'Your progress' });
+  const shortcut = progress.getByRole('button', { name: /^View (current|next) match$/ });
 
   await report(semi, 0, 2);
   await visit();
   await expect(progress).toHaveAttribute('data-journey-state', 'bracket_finished');
   await expect(progress).toContainText('while the event continues');
-  await expect(progress.getByRole('button', { name: 'Find next match' })).toHaveCount(0);
+  await expect(shortcut).toHaveCount(0);
   await expect(page.locator('#event-results')).toContainText(semi.label);
   expect((await snapshot()).plan.status).not.toBe('complete');
 
@@ -126,10 +127,12 @@ test('personal progress follows a real loss, safe correction and confirmed brack
   await visit();
   await expect(progress).toHaveAttribute('data-journey-state', 'active');
   await expect(progress).toContainText(final.label);
+  await expect(shortcut).toHaveText('View next match');
   await report(final, final.player1Id === playerId ? 2 : 0, final.player2Id === playerId ? 2 : 0);
   await visit();
   await expect(progress).toHaveAttribute('data-journey-state', 'winner');
   await expect(progress).toContainText('You won the championship bracket');
+  await expect(shortcut).toHaveCount(0);
   expect((await snapshot()).plan.status).not.toBe('complete');
   await page.setViewportSize({ width: 390, height: 844 });
   expect(

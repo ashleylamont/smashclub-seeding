@@ -1,6 +1,8 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Disclosure } from '../../components/ui/Disclosure';
+import { Notice } from '../../components/ui/Feedback';
+import { Textarea } from '../../components/ui/Input';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { Select, SelectItem } from '../../components/ui/Select';
 import { BroadcastSideControls } from './BroadcastSideControls';
@@ -118,27 +120,135 @@ export function MainStagePanel({
           In Display setup (S), you can add a Twitch channel before copying the updated URL into
           OBS.
         </p>
-        <div className="ops-broadcast-source-links">
-          {(
-            [
-              ['auto', 'Automatic intermission overlay ↗'],
-              ['gameplay', 'Gameplay-only overlay ↗'],
-              ['progress', 'Progress-only overlay ↗'],
-            ] as const
-          ).map(([mode, label]) => (
-            <Button asChild key={mode}>
-              <a
-                href={`/overlay/${encodeURIComponent(data.plan.id)}?${new URLSearchParams({ ...(station ? { station: station.id } : {}), presentation: mode, controls: '0' })}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {label}
-              </a>
-            </Button>
-          ))}
-        </div>
+        <BroadcastSources planId={data.plan.id} stationId={station?.id} />
       </Disclosure>
     </section>
+  );
+}
+
+const broadcastSources = [
+  ['auto', 'Automatic intermission overlay'],
+  ['gameplay', 'Gameplay-only overlay'],
+  ['progress', 'Progress-only overlay'],
+] as const;
+
+type CopyFeedback = {
+  mode: (typeof broadcastSources)[number][0];
+  state: 'copying' | 'copied' | 'failed';
+  url: string;
+};
+
+function BroadcastSources({ planId, stationId }: { planId: string; stationId?: string }) {
+  const inFlight = useRef(false);
+  const [busy, setBusy] = useState(false);
+
+  async function copyUrl(url: string, onState: (state: CopyFeedback['state']) => void) {
+    // The clipboard is shared by every row, even when the station changes mid-write.
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    onState('copying');
+    try {
+      await navigator.clipboard.writeText(url);
+      onState('copied');
+    } catch {
+      onState('failed');
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  }
+
+  return (
+    <BroadcastSourceRows
+      key={`${planId}:${stationId ?? ''}`}
+      planId={planId}
+      stationId={stationId}
+      busy={busy}
+      copyUrl={copyUrl}
+    />
+  );
+}
+
+function BroadcastSourceRows({
+  planId,
+  stationId,
+  busy,
+  copyUrl,
+}: {
+  planId: string;
+  stationId?: string;
+  busy: boolean;
+  copyUrl: (url: string, onState: (state: CopyFeedback['state']) => void) => Promise<void>;
+}) {
+  const [feedback, setFeedback] = useState<CopyFeedback>();
+
+  useEffect(() => {
+    if (feedback?.state !== 'copied') return;
+    const timeout = window.setTimeout(
+      () => setFeedback((current) => (current === feedback ? undefined : current)),
+      3000,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [feedback]);
+
+  return (
+    <div className="ops-broadcast-sources">
+      {busy && feedback?.state !== 'copying' && (
+        <Notice>Waiting for the previous copy to finish.</Notice>
+      )}
+      {broadcastSources.map(([mode, label]) => {
+        const params = new URLSearchParams({
+          ...(stationId ? { station: stationId } : {}),
+          presentation: mode,
+          controls: '0',
+        });
+        const href = `/overlay/${encodeURIComponent(planId)}?${params}`;
+        const rowFeedback = feedback?.mode === mode ? feedback : undefined;
+        const state = rowFeedback?.state;
+        const action = state === 'copying' ? 'Copying' : state === 'copied' ? 'Copied' : 'Copy';
+        return (
+          <div className="ops-broadcast-source" key={mode}>
+            <Button asChild>
+              <a href={href} target="_blank" rel="noreferrer">
+                {label}
+                {'\u00a0'}↗
+              </a>
+            </Button>
+            <Button
+              aria-label={`${action} ${label.toLowerCase()} URL`}
+              aria-disabled={busy || undefined}
+              onClick={() => {
+                const url = new URL(href, window.location.origin).href;
+                void copyUrl(url, (state) => setFeedback({ mode, state, url }));
+              }}
+            >
+              {action === 'Copying' ? 'Copying…' : action}
+            </Button>
+            <span className="visually-hidden" role="status">
+              {state === 'copied' && `${label} URL copied.`}
+              {state === 'failed' &&
+                `Could not copy the ${label.toLowerCase()} URL. Select the URL below to copy it manually.`}
+            </span>
+            {rowFeedback?.state === 'failed' && (
+              <div className="ops-broadcast-source-fallback">
+                <Notice tone="warning" live={false}>
+                  Clipboard unavailable. Copy this URL, then paste it into OBS.
+                  <Textarea
+                    className="ops-broadcast-source-url"
+                    aria-label={`${label} URL`}
+                    readOnly
+                    rows={6}
+                    value={rowFeedback.url}
+                    spellCheck={false}
+                  />
+                </Notice>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

@@ -74,13 +74,19 @@ for (const theme of ['dark', 'light'] as const)
     }, testInfo) => {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
       await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
-      const { broadcastUrl, details, card, release, unexpected } = await activeStage(page);
+      const { broadcastUrl, details, card, release, station, unexpected } = await activeStage(page);
       await page.goto(broadcastUrl);
       await ready(page);
       const dialog = page.getByRole('alertdialog', { name: 'Confirm action' });
       for (const surface of ['broadcast', 'details'] as const) {
         if (surface === 'details') await details();
         await expect(card.locator('.ops-contestant b')).toHaveText(['1', '0']);
+        await expect(card.getByRole('combobox', { name: /^Station for/ })).toHaveCount(0);
+        await expect(card.getByText(`Station · ${station.name}`, { exact: true })).toBeVisible();
+        await page.screenshot({
+          path: testInfo.outputPath(`${surface}-active.png`),
+          fullPage: true,
+        });
         await release.press('Enter');
         await expect(dialog).toHaveAccessibleDescription(
           /Actual play and live scores remain recorded/,
