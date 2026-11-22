@@ -1,6 +1,7 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { InMemoryStore } from '@rotorsoft/act';
-import { eventOperators, user, type Db } from '@smashclub/db';
+import { inArray } from 'drizzle-orm';
+import { eventOperators, players, sets, user, type Db } from '@smashclub/db';
 import type { SessionUser } from '../src/auth';
 import { createTestDb } from './helpers/testDb';
 import { nativeAdmin, seedNativeDraft } from './helpers/nativeLiveFixture';
@@ -9,6 +10,7 @@ import { appRouter } from '../src/trpc/router';
 import { loadEnv } from '../src/env';
 import { ChallongeClient } from '../src/challonge/client';
 import { RecomputeTrigger } from '../src/recompute/trigger';
+import { loadSinglesHistory } from '../src/recompute/inputs';
 import { charactersForPlayer } from '../src/players/characters';
 
 describe('shared dispatch through the application API', () => {
@@ -47,6 +49,169 @@ describe('shared dispatch through the application API', () => {
     });
     return { planId, api };
   }
+
+  async function knockout(count: number) {
+    await db.insert(user).values(nativeAdmin).onConflictDoNothing();
+    const entrants = await db
+      .insert(players)
+      .values(Array.from({ length: count }, () => ({ canonicalName: crypto.randomUUID() })))
+      .returning();
+    const { admin, eventOps } = caller();
+    const { planId } = await admin.eventPlanner.createPlan({
+      name: 'Knockout score correction',
+      eventDate: '2026-10-22T12:00:00Z',
+      structure: 'single_elimination',
+      rows: entrants.map((player, i) => ({
+        lineNumber: i + 1,
+        rawInput: player.canonicalName,
+        cleanedName: player.canonicalName,
+        companyId: null,
+        playerId: player.id,
+        resolutionMethod: 'manual',
+      })),
+    });
+    await admin.eventPlanner.freezeRoster({ planId });
+    await admin.eventPlanner.generatePools({ planId });
+    await eventOps.softLockPools({ planId, confirm: true });
+    return planId;
+  }
+
+  it('keeps the original played time when a live feeder score is corrected', async () => {
+    const planId = await knockout(4);
+    const { eventOps } = caller();
+    const locked = await runtime.state(planId);
+    await eventOps.live.command({
+      planId,
+      requestId: 'enable-shared-dispatch',
+      command: {
+        kind: 'configureDispatch',
+        capacity: 2,
+        reservedStationIds: [],
+        expectedResourceRevision: locked.settings.resourceRevision,
+      },
+    });
+    const report = (match: (typeof locked.matches)[number], score2: number) =>
+      eventOps.reportScore({
+        matchId: match.id,
+        expectedRevision: match.revision,
+        requestId: crypto.randomUUID(),
+        score1: 2,
+        score2,
+        outcome: 'played',
+      });
+    const playedAt = Date.now() + 30_000;
+    const correctedAt = playedAt + 600_000;
+    try {
+      vi.setSystemTime(playedAt);
+      for (const match of locked.matches.filter((m) => m.round === 1)) await report(match, 0);
+      const before = await runtime.state(planId);
+      const final = before.matches.find((m) => m.round === 2)!;
+      const feeder = before.matches.find((m) => m.id === final.parent1Id)!;
+      const finalQueueRow = async () =>
+        (await eventOps.live.dispatchDesk({ planId })).queue.find(
+          (row) => row.matchId === final.id,
+        );
+      expect(feeder.completedAt).toBe(playedAt);
+      expect(await finalQueueRow()).toMatchObject({ state: 'ready', waitingSince: playedAt });
+
+      vi.setSystemTime(correctedAt);
+      const correction = await report(feeder, 1);
+      const after = await runtime.state(planId);
+      expect(correction.createdAt).toEqual(new Date(correctedAt));
+      expect(after.matches.find((m) => m.id === feeder.id)).toMatchObject({
+        score1: 2,
+        score2: 1,
+        winnerId: feeder.winnerId,
+        revision: feeder.revision + 1,
+        resultCommandId: correction.id,
+        completedAt: playedAt,
+      });
+      expect(after.matches.find((m) => m.id === final.id)).toEqual(final);
+      expect(await finalQueueRow()).toMatchObject({ state: 'ready', waitingSince: playedAt });
+      expect((await eventOps.live.history({ planId })).entries).toContainEqual(
+        expect.objectContaining({
+          matchId: feeder.id,
+          at: new Date(correctedAt).toISOString(),
+          details: expect.objectContaining({
+            commandId: correction.id,
+            correctionOf: feeder.resultCommandId,
+          }),
+        }),
+      );
+
+      await report(final, 0);
+      await eventOps.native.finalize({ planId });
+      const sealed = await runtime.state(planId);
+      const published = await db
+        .select()
+        .from(sets)
+        .where(inArray(sets.tournamentId, sealed.publication!.tournamentIds));
+      const publishedFeeder = published.find(
+        (row) => (row.raw as { eventMatchId: string }).eventMatchId === feeder.id,
+      )!;
+      expect(publishedFeeder).toMatchObject({
+        scoresCsv: '2-1',
+        completedAt: new Date(playedAt),
+        excludedFromRatings: false,
+      });
+      const { engineSets } = await loadSinglesHistory(db);
+      expect(engineSets.find((row) => row.id === publishedFeeder.id)).toMatchObject({
+        completedAt: new Date(playedAt).toISOString(),
+        p1Games: 2,
+        p2Games: 1,
+      });
+      expect(await runtime.replay(planId)).toEqual(sealed);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stamps a new completion time when an organiser changes the recorded outcome', async () => {
+    const planId = await knockout(2);
+    const { eventOps } = caller();
+    const ready = (await runtime.state(planId)).matches.find((m) => m.status === 'ready')!;
+    const playedAt = Date.now() + 30_000;
+    try {
+      vi.setSystemTime(playedAt);
+      await eventOps.reportScore({
+        matchId: ready.id,
+        expectedRevision: ready.revision,
+        requestId: 'record-played-result',
+        score1: 2,
+        score2: 0,
+        outcome: 'played',
+      });
+      const forfeitedAt = playedAt + 600_000;
+      vi.setSystemTime(forfeitedAt);
+      await eventOps.reportScore({
+        matchId: ready.id,
+        expectedRevision: ready.revision + 1,
+        requestId: 'replace-with-forfeit',
+        score1: 0,
+        score2: 0,
+        winnerId: ready.player1Id!,
+        outcome: 'forfeit',
+      });
+      const correctedToPlayedAt = forfeitedAt + 600_000;
+      vi.setSystemTime(correctedToPlayedAt);
+      const forfeited = (await runtime.state(planId)).matches.find((m) => m.id === ready.id)!;
+      expect(forfeited).toMatchObject({ outcome: 'forfeit', completedAt: forfeitedAt });
+      await eventOps.reportScore({
+        matchId: ready.id,
+        expectedRevision: forfeited.revision,
+        requestId: 'replace-with-played-result',
+        score1: 2,
+        score2: 0,
+        outcome: 'played',
+      });
+      expect((await runtime.state(planId)).matches.find((m) => m.id === ready.id)).toMatchObject({
+        outcome: 'played',
+        completedAt: correctedToPlayedAt,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
   it('keeps queue order and private snooze details out of every public snapshot', async () => {
     const { planId, api } = await night();

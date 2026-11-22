@@ -52,8 +52,9 @@ export function applyScore(
   automatic: boolean,
   commandId: string,
 ) {
-  const changed = !resolved(match) || !sameScore(match, result);
-  if (resolved(match)) {
+  const complete = resolved(match);
+  const changed = !complete || !sameScore(match, result);
+  if (complete) {
     requireFact(match.outcome !== 'bye', 'An automatic bye is fixed by the draw.');
     if (match.stage === 'group' && state.brackets.length && !sameScore(match, result)) {
       if (rollingFinals(state)) requirePoolCorrectionAllowed(state, match.poolId!);
@@ -79,6 +80,11 @@ export function applyScore(
       if (untakenCallIds.length) throw new UntakenFeederCallsConflict(untakenCallIds);
     }
   }
+  // The decision and report record the correction time separately.
+  const completedAt =
+    complete && match.outcome === 'played' && result.outcome === 'played'
+      ? (match.completedAt ?? at)
+      : at;
   Object.assign(match, {
     score1: result.score1,
     score2: result.score2,
@@ -89,7 +95,7 @@ export function applyScore(
     liveScore2: null,
     blockedReason: null,
     stationId: null,
-    completedAt: at,
+    completedAt,
     automaticFromRevision: automatic ? match.revision : null,
     revision: match.revision + 1,
   });
