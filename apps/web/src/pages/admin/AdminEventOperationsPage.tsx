@@ -27,7 +27,7 @@ import { ScorePolicyControls } from './ScorePolicyControls';
 import { StationPoolControls } from './StationPoolControls';
 import { NativeBracketControls } from './NativeBracketControls';
 import { QueueResetControls } from './QueueResetControls';
-import { useId, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
 import type { ScoreEditor } from './OpsMatchScoring';
 import { ToPlayerFinder } from './ToPlayerFinder';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -153,6 +153,33 @@ export function EventOperationsPanel({
 }) {
   const online = useOnlineStatus();
   const workspace = useOpsWorkspace();
+  const tabList = useRef<HTMLDivElement>(null);
+  const requestedTab = useRef<string>(null);
+  useLayoutEffect(() => {
+    // Only the tab strip requests this position. History and control links have their own targets.
+    const revealPanel = requestedTab.current === workspace.section;
+    requestedTab.current = null;
+    const tabs = tabList.current;
+    if (!revealPanel || !tabs) return;
+
+    const panel = tabs.parentElement?.querySelector<HTMLElement>(
+      ':scope > [role="tabpanel"][data-state="active"]',
+    );
+    if (!panel) return;
+
+    const tabsBounds = tabs.getBoundingClientRect();
+    const panelTop = panel.getBoundingClientRect().top;
+    const headingBottom = panel.querySelector('h3')?.getBoundingClientRect().bottom ?? panelTop;
+    if (panelTop >= tabsBounds.bottom && headingBottom <= document.documentElement.clientHeight) {
+      // Stop any smooth control jump already carrying the viewport into the old panel.
+      window.scrollTo({ top: window.scrollY, behavior: 'instant' });
+      return;
+    }
+
+    // The computed sticky offset includes the measured app header above the tab strip.
+    const stickyBottom = Number.parseFloat(getComputedStyle(tabs).top) + tabsBounds.height;
+    window.scrollBy({ top: panelTop - stickyBottom, behavior: 'instant' });
+  }, [planId, workspace.section]);
   const openScoreSubmissions = () => void workspace.openControl('score-submissions');
   const cache = useQueryClient();
   const { data: session, refetch: refetchSession } = authClient.useSession();
@@ -294,9 +321,12 @@ export function EventOperationsPanel({
       )}
       <Tabs
         value={workspace.section}
-        onValueChange={(value) => void workspace.changeSection(value)}
+        onValueChange={(value) => {
+          requestedTab.current = value;
+          void workspace.changeSection(value);
+        }}
       >
-        <TabList className="ops-workspace-nav" aria-label="Event workspace">
+        <TabList ref={tabList} className="ops-workspace-nav" aria-label="Event workspace">
           {OPS_SECTIONS.map((section) => (
             <Tab key={section.value} value={section.value}>
               {section.label}
