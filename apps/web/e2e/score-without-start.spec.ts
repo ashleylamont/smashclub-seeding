@@ -219,7 +219,9 @@ for (const actor of ['guest', 'signed-in'] as const)
           await recorded
             .getByRole('button', { name: 'Confirm recorded score', exact: true })
             .click();
-          await expect(recorded).toContainText('your score agrees');
+          await expect(
+            recorded.getByText('Your report: 2 – 0 · Confirmed result', { exact: true }),
+          ).toBeVisible();
           await recorded
             .getByRole('button', { name: 'Report a different score', exact: true })
             .click();
