@@ -279,6 +279,7 @@ for (const automatic of [false, true]) {
     expect(
       (await overview(request, night)).reports.filter((report) => report.matchId === match.id),
     ).toHaveLength(1);
+    await page.unrouteAll({ behavior: 'wait' });
   });
 }
 
@@ -350,6 +351,7 @@ test('a signed-in score retry recovers its private receipt when the server respo
   }
   await expect(card.getByText('Your report: 2 – 1 · Confirmed result')).toBeVisible();
   expect((await overview(request, night)).reports).toHaveLength(1);
+  await page.unrouteAll({ behavior: 'wait' });
 });
 
 for (const actor of ['guest', 'player']) {

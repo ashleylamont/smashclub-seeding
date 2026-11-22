@@ -134,7 +134,9 @@ test('rehearsal: two TOs, score approval, station safety, public board and OBS',
     await playerCard.locator('input[type="number"]').nth(0).fill('2');
     await playerCard.locator('input[type="number"]').nth(1).fill('0');
     await playerCard.getByRole('button', { name: 'Submit score for TO approval' }).click();
-    await expect(playerCard).toContainText(/submitted|pending/i);
+    await expect(playerCard.getByRole('status')).toHaveText(
+      'Your report: 2 – 0 · Awaiting TO approval',
+    );
     const pendingSnapshot = await query<Snapshot>(page.request, 'eventOps.snapshot', { planId });
     expect(pendingSnapshot.matches.find((match) => match.id === playing.id)!.status).toBe(
       'playing',
