@@ -4,7 +4,7 @@ import { rollingFinals } from './qualifiers';
 import { finalsRoles, isKnockout } from '@smashclub/shared';
 import { instantiateElimination } from './structureAdapter';
 import { buildFormatFinals, buildEliminationTree } from '@smashclub/tournament-formats';
-import { requireFact, resolved, stableId } from './facts';
+import { hash, requireFact, resolved, stableId } from './facts';
 import type { CommandEnvelope, Match, TournamentState } from './schemas';
 
 /** Resolve qualifier, feeder and conditional prerequisites before using a bracket pairing. */
@@ -23,6 +23,113 @@ export function matchInputStatus(match: Match, byId: ReadonlyMap<string, Match>)
   if (!resolved(parent)) return 'waiting';
   const required = match.activation.winnerSide === 1 ? parent.player1Id : parent.player2Id;
   return required && parent.winnerId === required ? 'ready' : 'inactive';
+}
+
+function hasGrandFinalSkipProvenance(state: TournamentState, final: Match, reset: Match) {
+  if (!reset.resultCommandId || reset.completedAt === null) return false;
+  if (reset.resultCommandId === final.resultCommandId)
+    return reset.completedAt === final.completedAt;
+
+  // Advancement is the only writer of the skip marker. The first revision of an
+  // empty reset from the immutable draw proves advancement never populated it.
+  const drawn = state.baseline?.matches.find((match) => match.id === reset.id);
+  if (
+    !drawn ||
+    drawn.status !== 'blocked' ||
+    drawn.skipped ||
+    drawn.outcome !== null ||
+    drawn.player1Id !== null ||
+    drawn.player2Id !== null ||
+    drawn.activation?.matchId !== final.id ||
+    drawn.resultCommandId !== null ||
+    reset.revision !== drawn.revision + 1
+  )
+    return false;
+
+  // A same-winner edit advances the grand final's result command but leaves
+  // the skip on the original decision. Locate that original score or approval
+  // through the receipts; review stores the approval command hash.
+  const receipts = Object.values(state.receipts);
+  const skip = receipts.find((receipt) => receipt.commandId === reset.resultCommandId);
+  const current = receipts.find((receipt) => receipt.commandId === final.resultCommandId);
+  if (!skip || !current || skip.sequence >= current.sequence) return false;
+  return state.reports.some(
+    (report) =>
+      report.matchId === final.id &&
+      report.status === 'approved' &&
+      report.winnerId === final.player1Id &&
+      (skip.reportId
+        ? skip.reportId === report.id
+        : skip.hash ===
+          hash({
+            kind: 'review',
+            reportId: report.id,
+            approve: true,
+            expectedRevision: report.expectedRevision,
+          })),
+  );
+}
+
+/** Reopen only the untouched reset that the grand final itself skipped. Advancement fills its feeds. */
+export function reopenAutomaticallySkippedReset(
+  state: TournamentState,
+  final: Match,
+  correctedWinnerId: string | null,
+) {
+  if (
+    final.bracketLane !== 'final' ||
+    !final.bracketId ||
+    !final.resultCommandId ||
+    !final.player1Id ||
+    final.winnerId !== final.player1Id ||
+    !correctedWinnerId ||
+    correctedWinnerId !== final.player2Id
+  )
+    return;
+  const reset = state.matches.find(
+    (match) =>
+      match.bracketLane === 'reset' &&
+      match.bracketId === final.bracketId &&
+      match.activation?.matchId === final.id &&
+      match.activation.winnerSide === 2 &&
+      match.parent1Id === final.id &&
+      match.parent2Id === final.id &&
+      match.parent1Outcome !== 'loser' &&
+      match.parent2Outcome === 'loser',
+  );
+  if (
+    !reset ||
+    !resolved(reset) ||
+    !reset.skipped ||
+    reset.outcome !== 'no_contest' ||
+    reset.player1Id !== null ||
+    reset.player2Id !== null ||
+    reset.started ||
+    reset.calledAt != null ||
+    reset.callSequence != null ||
+    reset.callLocation != null ||
+    reset.stationId !== null ||
+    reset.score1 !== null ||
+    reset.score2 !== null ||
+    reset.liveScore1 !== null ||
+    reset.liveScore2 !== null ||
+    reset.progressRevision !== 0 ||
+    reset.winnerId !== null ||
+    reset.automaticFromRevision !== null ||
+    state.reports.some((report) => report.matchId === reset.id) ||
+    state.supersededPlayedSets?.some(
+      ({ match, replacementMatchId }) => match.id === reset.id || replacementMatchId === reset.id,
+    ) ||
+    !hasGrandFinalSkipProvenance(state, final, reset)
+  )
+    return;
+  delete reset.skipped;
+  Object.assign(reset, {
+    status: 'blocked',
+    outcome: null,
+    completedAt: null,
+    resultCommandId: null,
+  });
 }
 
 /** Execute advancement once on the decision path; persist resulting matches. */

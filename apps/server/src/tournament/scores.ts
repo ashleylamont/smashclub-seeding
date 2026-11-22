@@ -1,7 +1,7 @@
 import { rollingFinals, requirePoolCorrectionAllowed } from './qualifiers';
 import { hasFixedLegacyPoolQualifiers } from './legacyFinalQualifiers';
 import { reviewPoolGameCorrection } from './poolGameCorrection';
-import { advance } from './brackets';
+import { advance, reopenAutomaticallySkippedReset } from './brackets';
 import {
   requireFact,
   resolved,
@@ -68,6 +68,7 @@ export function applyScore(
         );
     }
     if (match.winnerId !== result.winnerId) {
+      reopenAutomaticallySkippedReset(state, match, result.winnerId);
       const descendants = new Set([match.id]);
       const untakenCallIds: string[] = [];
       for (const item of [...state.matches].sort((a, b) => a.round - b.round)) {
