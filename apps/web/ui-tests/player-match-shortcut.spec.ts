@@ -10,6 +10,38 @@ const cases = [
   { theme: 'light', width: 1440, status: 'Playing now' },
 ] as const;
 
+test('match shortcut skips an earlier ready row whose opponent is unresolved', async ({ page }) => {
+  const fixture = await mockEvent(page, { role: 'player', idle: true });
+  fixture.snapshot.stationQueues = [];
+  const matchIndex = fixture.snapshot.matches.findIndex((item) => item.stationId);
+  const match = fixture.snapshot.matches[matchIndex]!;
+  const unresolved = Object.assign(
+    { ...match },
+    {
+      id: 'unresolved-ready-match',
+      stationId: null,
+      player2Id: null,
+      player2Name: null,
+      label: 'Unresolved ready pairing',
+    },
+  );
+  fixture.snapshot.matches.splice(matchIndex, 0, unresolved);
+
+  await page.goto(`/play/${PLAN_ID}?player=${match.player1Id}`);
+  const progress = page.getByRole('complementary', { name: 'Your progress' });
+  const cards = page.locator('article.ops-match');
+  await expect(progress).toContainText(match.label);
+  await expect(cards.first()).toContainText(unresolved.label);
+  await progress.getByRole('button', { name: 'View next match' }).press('Enter');
+  const card = cards.filter({ hasText: match.label });
+  await expect(card).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(card.getByRole('spinbutton').first()).toBeFocused();
+  expect(fixture.starts).toEqual([]);
+  expect(fixture.submissions).toEqual([]);
+  expect(fixture.unexpected).toEqual([]);
+});
+
 for (const { theme, width, status } of cases) {
   test(`${theme} ${width}px match shortcut lands on the ${status} card`, async ({
     page,

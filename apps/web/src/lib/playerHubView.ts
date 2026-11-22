@@ -31,7 +31,8 @@ export function playerMatchProgress(matches: PoolFlowMatch[], closed: boolean) {
     completed: matches.filter((match) => match.status === 'complete').length,
     nextMatch: closed
       ? undefined
-      : matches.find((match) => ['ready', 'playing'].includes(match.status)),
+      : (matches.find((match) => match.status === 'playing') ??
+        matches.find((match) => match.status === 'ready' && match.player1Id && match.player2Id)),
     waitingMatch: closed ? undefined : matches.find((match) => match.status !== 'complete'),
   };
 }
