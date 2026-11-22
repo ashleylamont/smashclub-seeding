@@ -726,6 +726,7 @@ test('web-started Main stage matches require confirmation before either match ca
         .locator(`[data-match-id="${match.id}"]`)
         .getByRole('button', { name: surface, exact: true })
         .press('Enter');
+      await expect(page.locator('#match-desk')).toBeFocused();
     }
     const release = card.getByRole('button', { name: 'Release capacity', exact: true });
     await release.press('Enter');
