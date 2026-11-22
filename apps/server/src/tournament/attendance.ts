@@ -1,9 +1,11 @@
 import { previewRestoration, restoreEntrant } from './restoration';
 import { isKnockout } from '@smashclub/shared';
 import { buildRoundRobin } from '@smashclub/tournament-formats';
-import { hash, requireFact, resolved, unconfirmedCall } from './facts';
+import { hash, requireFact, resolved, TournamentConflict, unconfirmedCall } from './facts';
 import { advance, matchInputStatus } from './brackets';
 import { attendancePoolCandidates, poolMatch, lastPoolRound } from './poolAttendance';
+import { completeCommandProgression } from './progression';
+import { hasCurrentPendingScoreReview } from './scoreReview';
 import { projectMatchLabels } from './matchNames';
 import { qualifierFieldFrozen } from './qualifiers';
 import {
@@ -11,26 +13,42 @@ import {
   hasLegacyQualifier,
   legacyPendingRosterMessage,
 } from './legacyFinalQualifiers';
-import type { CommandEnvelope, Match, TournamentState } from './schemas';
+import type { CommandEnvelope, Match, TournamentCommand, TournamentState } from './schemas';
 
 type Input = Extract<CommandEnvelope['command'], { kind: 'attendance' }>;
 type WithdrawalConsequence = {
   state?: 'called' | 'playing' | 'held';
   forfeit?: 'automatic' | 'organiser';
 };
-type AttendancePreview = ReturnType<typeof ordinaryAttendancePreview> & {
-  restoration?: ReturnType<typeof previewRestoration>['restoration'];
-};
+type AttendancePreview = ReturnType<typeof ordinaryAttendancePreview> &
+  ReturnType<typeof reviewWithdrawal> & {
+    restoration?: ReturnType<typeof previewRestoration>['restoration'];
+  };
 export function attendancePreview(
   state: TournamentState,
   input: Parameters<typeof ordinaryAttendancePreview>[1],
 ): AttendancePreview {
-  return input.action === 'restore'
-    ? previewRestoration(state, input.playerId, input.reason)
-    : ordinaryAttendancePreview(state, input);
+  if (input.action === 'restore') return previewRestoration(state, input.playerId, input.reason);
+  const preview = ordinaryAttendancePreview(state, input);
+  if (input.action === 'withdraw' && preview.allowed) {
+    try {
+      preview.issues.push(
+        ...withdrawalScoreReviewIssues(state, () =>
+          projectWithdrawal(state, input.playerId, preview),
+        ),
+      );
+    } catch (error) {
+      if (!(error instanceof TournamentConflict)) throw error;
+      preview.issues.push(error.message);
+    }
+    preview.allowed = preview.issues.length === 0;
+  }
+  return { ...preview, ...reviewWithdrawal(state, input, preview.allowed) };
 }
 
-export function attendanceEffect(preview: AttendancePreview) {
+export function attendanceEffect(
+  preview: Pick<AttendancePreview, 'addedMatches' | 'affectedMatches'>,
+) {
   return { addedMatches: preview.addedMatches, affectedMatches: preview.affectedMatches.length };
 }
 
@@ -102,7 +120,6 @@ function ordinaryAttendancePreview(
     ...(input.action === 'no_show' && matchReview.untakenCallIds.length > 0 && issues.length === 1
       ? { returnCallMatchIds: matchReview.untakenCallIds }
       : {}),
-    ...reviewWithdrawal(state, involved, input, !issues.length),
     requiresExternalAcknowledgement: false,
     requiresRedistributionApproval: Boolean(relocations.length),
     relocations,
@@ -130,9 +147,71 @@ function ordinaryAttendancePreview(
   };
 }
 
+function projectWithdrawal(
+  state: TournamentState,
+  playerId: string,
+  { poolIndex, revisionToken }: Pick<AttendancePreview, 'poolIndex' | 'revisionToken'>,
+) {
+  const trial = structuredClone(state);
+  const envelope: CommandEnvelope = {
+    id: 'withdrawal-preview',
+    requestId: 'withdrawal-preview',
+    actorId: 'withdrawal-preview',
+    at: 0,
+    operator: true,
+    command: {
+      kind: 'attendance',
+      action: 'withdraw',
+      playerId,
+      revisionToken,
+      reason: 'withdraw',
+      approveRedistribution: false,
+    },
+  };
+  withdrawEntrant(trial, envelope, playerId, poolIndex);
+  completeCommandProgression(state, trial, envelope, {});
+  return trial.matches;
+}
+
+export function requireWithdrawalScoreReview(
+  previous: TournamentState,
+  next: TournamentState,
+  command: TournamentCommand,
+) {
+  if (
+    (command.kind === 'attendance' && command.action === 'withdraw') ||
+    (command.kind === 'availability' && command.availability === 'withdrawn')
+  ) {
+    const issues = withdrawalScoreReviewIssues(previous, () => next.matches);
+    requireFact(!issues.length, issues.join(' '));
+  }
+}
+
+/** A revision change would make current evidence unapprovable, even on a later bracket feed. */
+function withdrawalScoreReviewIssues(
+  previous: TournamentState,
+  getNextMatches: () => readonly Match[],
+) {
+  const reports = previous.reports.filter(
+    (report) => report.outcome === 'played' && report.status === 'pending',
+  );
+  if (!reports.length) return [];
+  const pending = previous.matches.filter(
+    (match) => !resolved(match) && hasCurrentPendingScoreReview(match, reports),
+  );
+  if (!pending.length) return [];
+  const revisions = new Map(getNextMatches().map(({ id, revision }) => [id, revision]));
+  const affected = pending.filter((match) => revisions.get(match.id) !== match.revision);
+  if (!affected.length) return [];
+  const labels = projectMatchLabels(previous);
+  return affected.map(
+    (match) =>
+      `Approve or reject the pending played score for ${labels.get(match.id)?.label ?? match.label} in Score reviews before withdrawing this entrant.`,
+  );
+}
+
 function reviewWithdrawal(
   state: TournamentState,
-  involved: Match[],
   { action, playerId }: Pick<Input, 'action' | 'playerId'>,
   allowed: boolean,
 ): { warnings: string[]; withdrawalMatches?: Record<string, WithdrawalConsequence> } {
@@ -146,8 +225,8 @@ function reviewWithdrawal(
   const matches: Record<string, WithdrawalConsequence> = {};
   let called = false;
   let poolForfeit = false;
-  for (const match of involved) {
-    if (resolved(match)) continue;
+  for (const match of state.matches) {
+    if (resolved(match) || ![match.player1Id, match.player2Id].includes(playerId)) continue;
     const consequence: WithdrawalConsequence = {};
     if (match.status === 'playing') {
       consequence.state = unconfirmedCall(match) ? 'called' : 'playing';
@@ -211,7 +290,10 @@ function finalsRosterIssues(
 }
 
 export function applyAttendance(state: TournamentState, envelope: CommandEnvelope, input: Input) {
-  const preview = attendancePreview(state, input);
+  const preview =
+    input.action === 'restore'
+      ? previewRestoration(state, input.playerId, input.reason)
+      : ordinaryAttendancePreview(state, input);
   requireFact(
     preview.revisionToken === input.revisionToken,
     'The event changed since this preview. Review the updated attendance change.',
@@ -221,30 +303,12 @@ export function applyAttendance(state: TournamentState, envelope: CommandEnvelop
     restoreEntrant(state, envelope, input.playerId);
     return;
   }
-  const pool = state.pools.find(
-    (p) => p.division === preview.division && p.index === preview.poolIndex,
-  );
   if (input.action === 'withdraw') {
-    const entrant = state.entrants.find((e) => e.playerId === input.playerId)!;
-    entrant.availability = 'withdrawn';
-    entrant.revision++;
-    for (const m of state.matches.filter(
-      (m) => m.status === 'playing' && [m.player1Id, m.player2Id].includes(input.playerId),
-    )) {
-      m.status = 'blocked';
-      m.stationId = null;
-      m.blockedReason = 'Player withdrawn: awaiting organiser forfeit decision';
-    }
-    if (
-      pool &&
-      !hasFixedLegacyPoolQualifiers(state, pool) &&
-      (!state.settings.poolOrderPolicy || !qualifierFieldFrozen(state, pool.division))
-    ) {
-      pool.order = null;
-      pool.revision++;
-    }
-    advance(state, envelope.at, envelope.id);
+    withdrawEntrant(state, envelope, input.playerId, preview.poolIndex);
   } else {
+    const pool = state.pools.find(
+      (p) => p.division === preview.division && p.index === preview.poolIndex,
+    );
     requireFact(pool, 'An eligible pool is required.');
     const touched = new Set([pool.id]);
     if (input.action === 'add') {
@@ -312,9 +376,38 @@ export function applyAttendance(state: TournamentState, envelope: CommandEnvelop
       }
     }
     state.pools = state.pools.filter((p) => p.entrantIds.length);
+    state.settings.resourceRevision++;
   }
-  state.settings.resourceRevision++;
   if (input.action === 'add') return attendanceEffect(preview);
+}
+
+function withdrawEntrant(
+  state: TournamentState,
+  envelope: CommandEnvelope,
+  playerId: string,
+  poolIndex: number | null,
+) {
+  const entrant = state.entrants.find((e) => e.playerId === playerId)!;
+  const pool = state.pools.find((p) => p.division === entrant.division && p.index === poolIndex);
+  entrant.availability = 'withdrawn';
+  entrant.revision++;
+  for (const match of state.matches) {
+    if (match.status !== 'playing' || ![match.player1Id, match.player2Id].includes(playerId))
+      continue;
+    match.status = 'blocked';
+    match.stationId = null;
+    match.blockedReason = 'Player withdrawn: awaiting organiser forfeit decision';
+  }
+  if (
+    pool &&
+    !hasFixedLegacyPoolQualifiers(state, pool) &&
+    (!state.settings.poolOrderPolicy || !qualifierFieldFrozen(state, pool.division))
+  ) {
+    pool.order = null;
+    pool.revision++;
+  }
+  advance(state, envelope.at, envelope.id);
+  state.settings.resourceRevision++;
 }
 
 function poolHasCallsOrHistory(state: TournamentState, id: string) {

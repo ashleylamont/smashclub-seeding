@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { buildEliminationTree } from '@smashclub/tournament-formats';
+import { buildDoubleEliminationTree, buildEliminationTree } from '@smashclub/tournament-formats';
 import { captureBaseline, decide, hash, reduceDecision, stableId } from '../src/tournament/domain';
 import { attendancePreview } from '../src/tournament/attendance';
 import { instantiateElimination } from '../src/tournament/structureAdapter';
@@ -54,6 +54,124 @@ const score = (match: TournamentState['matches'][number]) => ({
   score1: 2,
   score2: 0,
   outcome: 'played' as const,
+});
+
+function knockoutBaseline(
+  structure: 'single_elimination' | 'double_elimination' = 'single_elimination',
+) {
+  const baseline = pureBaseline();
+  baseline.version = 2;
+  baseline.competitionFormat = 'singles';
+  baseline.structure = structure;
+  baseline.entrants = baseline.entrants.filter((e) => e.division === 'upper');
+  baseline.pools = [];
+  const bracketId = stableId('attendance-knockout');
+  baseline.brackets = [
+    {
+      id: bracketId,
+      division: 'upper',
+      stage: 'main',
+      entrantIds: baseline.entrants.map((e) => e.playerId),
+    },
+  ];
+  const build =
+    structure === 'single_elimination' ? buildEliminationTree : buildDoubleEliminationTree;
+  baseline.matches = instantiateElimination(
+    build(
+      bracketId,
+      baseline.entrants.map((e) => ({ kind: 'entrant', entrantId: e.playerId })),
+    ),
+    bracketId,
+    'upper',
+    'main',
+  );
+  return baseline;
+}
+
+describe('withdrawal from a native knockout', () => {
+  function capturedDownstreamReport() {
+    const baseline = knockoutBaseline('double_elimination');
+    baseline.settings.scoreReportingMode = 'to_review';
+    const downstream = baseline.matches.find((match) => match.bracketLane === 'losers')!;
+    const feeder = baseline.matches.find((match) => match.id === downstream.parent1Id)!;
+    const otherFeeder = baseline.matches.find((match) => match.id === downstream.parent2Id)!;
+    // A captured draw can supply both slots before its feeder results arrive.
+    Object.assign(downstream, {
+      player1Id: feeder.player2Id,
+      player2Id: otherFeeder.player2Id,
+      status: 'ready',
+    });
+    let state = captureBaseline(baseline);
+    state = apply(state, score(otherFeeder));
+    state = apply(state, score(downstream), false);
+    return { state, downstream, playerId: feeder.player1Id!, otherFeeder };
+  }
+
+  it('protects a played report on a downstream pairing that would change', () => {
+    const { state, downstream, playerId } = capturedDownstreamReport();
+    expect([downstream.player1Id, downstream.player2Id]).not.toContain(playerId);
+    const preview = attendancePreview(state, { action: 'withdraw', playerId });
+    const command = envelope(attendance(state, 'withdraw', playerId));
+    const reviewInstructions = /Approve or reject the pending played score for Losers round 1/;
+    expect(preview).toMatchObject({
+      allowed: false,
+      issues: [expect.stringMatching(reviewInstructions)],
+    });
+    expect(() => decide(state, command)).toThrow(reviewInstructions);
+  });
+
+  it('permits advancement past a downstream report for an earlier revision', () => {
+    const { state, downstream, playerId, otherFeeder } = capturedDownstreamReport();
+    const currentMatch = state.matches.find((match) => match.id === downstream.id)!;
+    currentMatch.revision++;
+    expect(attendancePreview(state, { action: 'withdraw', playerId }).allowed).toBe(true);
+    const next = apply(state, attendance(state, 'withdraw', playerId));
+    expect(next.matches.find((match) => match.id === downstream.id)).toMatchObject({
+      revision: currentMatch.revision + 2,
+      player1Id: playerId,
+      winnerId: otherFeeder.player2Id,
+      outcome: 'forfeit',
+    });
+  });
+
+  it('preserves a pending played report when withdrawal holds an already started pairing', () => {
+    const baseline = knockoutBaseline();
+    baseline.settings.dispatchMode = 'shared';
+    baseline.settings.scoreReportingMode = 'to_review';
+    let state = captureBaseline(baseline);
+    const match = state.matches.find((item) => item.round === 1)!;
+    state = apply(state, {
+      kind: 'dispatch',
+      matchId: match.id,
+      stationId: null,
+      callOnly: false,
+      expectedRevision: match.revision,
+      expectedResourceRevision: state.settings.resourceRevision,
+    });
+    state = apply(state, score(match), false);
+    const report = state.reports[0]!;
+    const playerId = match.player1Id!;
+    expect(attendancePreview(state, { action: 'withdraw', playerId })).toMatchObject({
+      allowed: true,
+      withdrawalMatches: { [match.id]: { state: 'playing', forfeit: 'organiser' } },
+    });
+    state = apply(state, attendance(state, 'withdraw', playerId));
+    expect(state.matches.find((item) => item.id === match.id)).toMatchObject({
+      status: 'blocked',
+      started: true,
+      revision: report.expectedRevision,
+    });
+    state = apply(state, {
+      kind: 'review',
+      reportId: report.id,
+      approve: true,
+      expectedRevision: report.expectedRevision,
+    });
+    expect(state.matches.find((item) => item.id === match.id)).toMatchObject({
+      outcome: 'played',
+      winnerId: playerId,
+    });
+  });
 });
 
 describe('explicit native attendance restoration', () => {
@@ -379,30 +497,7 @@ describe('explicit native attendance restoration', () => {
   });
 
   it('uses the live match name and preserves a knockout route already decided by withdrawal', () => {
-    const baseline = pureBaseline();
-    baseline.version = 2;
-    baseline.competitionFormat = 'singles';
-    baseline.structure = 'single_elimination';
-    baseline.entrants = baseline.entrants.filter((e) => e.division === 'upper');
-    baseline.pools = [];
-    const bracketId = stableId('restore-knockout');
-    baseline.brackets = [
-      {
-        id: bracketId,
-        division: 'upper',
-        stage: 'main',
-        entrantIds: baseline.entrants.map((e) => e.playerId),
-      },
-    ];
-    baseline.matches = instantiateElimination(
-      buildEliminationTree(
-        bracketId,
-        baseline.entrants.map((e) => ({ kind: 'entrant', entrantId: e.playerId })),
-      ),
-      bracketId,
-      'upper',
-      'main',
-    );
+    const baseline = knockoutBaseline();
     let state = captureBaseline(baseline);
     const playerId = state.entrants[0]!.playerId;
     const match = state.matches.find((m) => [m.player1Id, m.player2Id].includes(playerId))!;

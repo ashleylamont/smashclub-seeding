@@ -10,7 +10,7 @@ import { sealResults } from './results';
 import { memberIds, changeAvailability } from './entrants';
 import { dispatchMatch } from './scheduling';
 import { replayFinalsSlot } from './finalsSlotReplay';
-import { applyAttendance } from './attendance';
+import { applyAttendance, requireWithdrawalScoreReview } from './attendance';
 import { additionalDecision, finalsToken, resetFinals, poolDrawPauseBlocker } from './operations';
 import { drawFinals } from './brackets';
 import { hash, receiptKey, requireFact, resolved, sameScore } from './facts';
@@ -381,6 +381,7 @@ export function decide(
   }
   if (command.kind !== 'broadcastSides')
     completeCommandProgression(previous, next, envelope, basis);
+  requireWithdrawalScoreReview(previous, next, command);
   const after: TournamentDecision['after'] = {};
   for (const field of [
     'lifecycle',
