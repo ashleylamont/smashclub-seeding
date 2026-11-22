@@ -73,7 +73,7 @@ for (const theme of ['dark', 'light'] as const)
       await page.keyboard.press('Enter');
       await expect(page).toHaveURL(/#event-brackets$/);
       await expect(page.getByRole('heading', { name: 'Finals qualification' })).toBeVisible();
-      const poolFilter = page.getByRole('combobox', { name: 'Your pool' });
+      const poolFilter = page.getByLabel('Your pool');
       const first = beforeDraw.matches.find((match) => match.player1Name === PLAYER_NAME)!;
       const poolCount = beforeDraw.matches.filter(
         ({ division, poolIndex }) => division === first.division && poolIndex === first.poolIndex,
@@ -95,8 +95,8 @@ for (const theme of ['dark', 'light'] as const)
         ).violations,
       ).toEqual([]);
 
+      await chooseOption(poolFilter, '');
       fixture.responses['eventOps.snapshot'] = { ...afterDraw, pendingFinals: [pendingField] };
-      await page.goto(`/play/${PLAN_ID}`);
       const completed = afterDraw.matches.filter((match) => match.status === 'complete').length;
       await expect(progress(page)).toContainText(
         `Event progress · ${completed} / ${afterDraw.matches.length} sets complete`,
@@ -110,7 +110,6 @@ for (const theme of ['dark', 'light'] as const)
       );
 
       fixture.responses['eventOps.snapshot'] = afterDraw;
-      await page.reload();
       await expect(progress(page)).toHaveText(
         `Event progress · ${completed} / ${afterDraw.matches.length} sets complete`,
       );

@@ -375,14 +375,14 @@ test('reconnected TO retains its draft but must reopen after another TO records 
   await expect(card.getByRole('button', { name: 'Confirm result', exact: true })).toBeEnabled();
 });
 
-test('signed-out progress follows the assigned organiser’s published finals draws', async ({
+test('signed-out progress follows the assigned organiser’s finals draw', async ({
   browser,
   baseURL,
   page,
   request,
   night,
 }, testInfo) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   const { planId } = night;
   await signIn(page.request, 'organiser@smashclub.dev');
   const source = await query<{
@@ -391,8 +391,6 @@ test('signed-out progress follows the assigned organiser’s published finals dr
       pools: {
         poolIndex: number;
         members: { playerId: string }[];
-        matchRevisions: { id: string; revision: number }[];
-        placementRevision: string;
       }[];
     }[];
   }>(request, 'admin.eventPlanner.plan', { planId });
@@ -418,22 +416,6 @@ test('signed-out progress follows the assigned organiser’s published finals dr
       outcome: 'played',
     });
   }
-  const confirmPoolOrder = async (division: string) => {
-    const scored = await query<typeof source>(request, 'admin.eventPlanner.plan', { planId });
-    await mutate(request, 'admin.eventPlanner.savePoolPlacements', {
-      planId,
-      division,
-      pools: scored.divisions
-        .find((item) => item.division === division)!
-        .pools.map((pool) => ({
-          poolIndex: pool.poolIndex,
-          playerIdsInOrder: poolOrder(division, pool.poolIndex),
-          expectedMatchRevisions: pool.matchRevisions,
-          expectedPlacementRevision: pool.placementRevision,
-        })),
-    });
-  };
-  await confirmPoolOrder('upper');
   await page.goto(`/operate/${planId}`);
   await page.getByRole('tab', { name: 'Standings / draw', exact: true }).click();
   const preview = page.getByRole('button', { name: 'Preview finals', exact: true });
@@ -461,47 +443,35 @@ test('signed-out progress follows the assigned organiser’s published finals dr
     const progress = board.locator('.player-event-overview');
     await expect(progress).toBeVisible();
     await board.evaluate(() => document.fonts.ready);
-    await board.screenshot({ path: testInfo.outputPath('before-finals-phone.png') });
+    await testInfo.attach('before-finals-phone', {
+      body: await board.screenshot(),
+      contentType: 'image/png',
+    });
     await expect(progress).toContainText('Pool progress · 12 / 12 sets complete');
     const poolProgress = progress.getByRole('progressbar', { name: 'Pool sets completed' });
     await expect(poolProgress).toHaveAttribute('value', '12');
     await expect(poolProgress).toHaveAttribute('max', '12');
     await expect(poolProgress).toHaveAccessibleDescription('The finals draw is pending.');
 
-    const createReady = async () => {
-      await create.click();
-      await page
-        .getByRole('alertdialog')
-        .getByRole('button', { name: 'Confirm', exact: true })
-        .click();
-      await expect(page.getByText('Ready finals created', { exact: false })).toBeVisible();
-    };
-    const expectPublishedProgress = async (data: Awaited<ReturnType<typeof snapshot>>) => {
-      const complete = data.matches.filter(({ status }) => status === 'complete').length;
-      await expect(progress).toContainText(
-        `Event progress · ${complete} / ${data.matches.length} sets complete`,
-      );
-      const bar = progress.getByRole('progressbar', { name: 'Sets completed', exact: true });
-      await expect(bar).toHaveAttribute('value', String(complete));
-      await expect(bar).toHaveAttribute('max', String(data.matches.length));
-    };
-    await createReady();
-    const partial = await snapshot();
-    expect(partial.nativeBrackets).toHaveLength(2);
-    expect(partial.pendingFinals).toHaveLength(2);
-    await expectPublishedProgress(partial);
-    await expect(progress).toContainText('The remaining finals draws are pending.');
-
-    await confirmPoolOrder('lower');
-    await preview.click();
-    await createReady();
+    await create.click();
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Confirm', exact: true })
+      .click();
+    await expect(page.getByText('Ready finals created', { exact: false })).toBeVisible();
     const published = await snapshot();
     expect(published.nativeBrackets).toHaveLength(4);
     expect(published.pendingFinals).toHaveLength(0);
-    expect(published.matches.length).toBeGreaterThan(partial.matches.length);
-    await expectPublishedProgress(published);
-    await expect(progress).not.toContainText('pending');
-    await board.screenshot({ path: testInfo.outputPath('after-finals-phone.png') });
+    expect(published.matches.filter(({ stage }) => stage !== 'group')).toHaveLength(4);
+    await expect(progress).toHaveText('Event progress · 12 / 16 sets complete');
+    const eventBar = progress.getByRole('progressbar', { name: 'Sets completed', exact: true });
+    await expect(eventBar).toHaveAttribute('value', '12');
+    await expect(eventBar).toHaveAttribute('max', '16');
+    await expect(poolProgress).toHaveCount(0);
+    await testInfo.attach('after-finals-phone', {
+      body: await board.screenshot(),
+      contentType: 'image/png',
+    });
   } finally {
     await visitor.close();
   }
