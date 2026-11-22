@@ -54,7 +54,8 @@ async function openFixture(page: Page, theme: 'dark' | 'light', width: number) {
   });
   const recordedIds = new Set([native.id, imported.id, played.id]);
   for (const queue of snapshot.stationQueues) {
-    if (queue.nextMatchId && recordedIds.has(queue.nextMatchId)) queue.nextMatchId = null;
+    if (queue.nextMatchId && recordedIds.has(queue.nextMatchId))
+      Object.assign(queue, { nextMatchId: null });
     queue.upcoming = queue.upcoming.filter(({ matchId }) => !recordedIds.has(matchId));
   }
 
