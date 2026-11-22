@@ -50,6 +50,7 @@ async function activeStage(page: Page) {
   const details = async () => {
     await page.getByRole('tab', { name: 'Run matches', exact: true }).press('Enter');
     await active.getByRole('button', { name: 'Score / details', exact: true }).press('Enter');
+    await expect(page.locator('#match-desk')).toBeFocused();
   };
   const card = page.locator('article.ops-match:visible');
   const release = card.getByRole('button', { name: 'Release capacity', exact: true });
