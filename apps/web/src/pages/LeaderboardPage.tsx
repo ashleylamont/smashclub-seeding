@@ -81,9 +81,8 @@ export function LeaderboardPage() {
   }, [tournaments.data, leaderboard.data]);
 
   /**
-   * Per-player sparkline traces and form pips, derived from the same rating
-   * history the chart uses — one request serves both rather than adding a
-   * per-row query.
+   * Per-player sparklines show estimates after played nights. Form pips use
+   * the same played-set history, without a per-row query.
    */
   const trends = useMemo(() => {
     const map = new Map<string, PlayerTrend>();

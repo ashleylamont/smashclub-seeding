@@ -675,6 +675,9 @@
     align-items: flex-start;
     gap: 0;
   }
+  .board-link .identity-name {
+    max-inline-size: 100%;
+  }
   .identity-league {
     display: inline;
   }

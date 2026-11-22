@@ -336,7 +336,7 @@ export const publicRouter = router({
     .input(z.object({ playerId: z.uuid(), setId: z.uuid(), recomputeId: z.uuid() }))
     .query(({ ctx, input }) => readWhrResultImpact(ctx.db, input)),
 
-  /** Full rating history for every ranked player (the RatingsOverTime chart). */
+  /** Played-set history for rankings form and the player list for rating comparisons. */
   ratingHistory: publicProcedure.query(async ({ ctx }) => {
     const recomputeId = await latestRecomputeId(ctx.db);
     if (!recomputeId) return { events: [], players: [] };
@@ -379,6 +379,30 @@ export const publicRouter = router({
       })),
     };
   }),
+
+  /** Night estimates for the chart's selected players, including nights they missed. */
+  ratingNightHistory: publicProcedure
+    .input(z.object({ playerIds: z.array(z.uuid()).min(1).max(8) }))
+    .query(async ({ ctx, input }) => {
+      const recomputeId = await latestRecomputeId(ctx.db);
+      if (!recomputeId) return [];
+      return ctx.db
+        .select({
+          playerId: ratingNights.playerId,
+          eventKey: ratingNights.eventKey,
+          played: ratingNights.played,
+          postRating: ratingNights.postRating,
+          postRd: ratingNights.postRd,
+        })
+        .from(ratingNights)
+        .where(
+          and(
+            eq(ratingNights.recomputeId, recomputeId),
+            inArray(ratingNights.playerId, input.playerIds),
+          ),
+        )
+        .orderBy(asc(ratingNights.eventKey), asc(ratingNights.playerId));
+    }),
 
   tournaments: publicProcedure.query(async ({ ctx }) => {
     const rows = await ctx.db.select().from(tournaments).orderBy(desc(tournaments.eventDate));

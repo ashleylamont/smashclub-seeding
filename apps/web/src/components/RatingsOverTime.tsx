@@ -1,10 +1,12 @@
 import { Select, SelectItem } from './ui/Select';
 import { Input } from './ui/Input';
 import { Button } from './ui/Button';
+import { LoadingState, Notice } from './ui/Feedback';
+import { useQuery } from '@tanstack/react-query';
+import { trpc } from '../lib/trpc';
 import { useCallback, useMemo, useState } from 'react';
 import {
   CartesianGrid,
-  LabelList,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -56,8 +58,8 @@ type YMode = 'rating' | 'cautious';
 
 interface Snapshot {
   label: string;
-  index: number;
-  [playerId: string]: string | number | null;
+  values: Record<string, number>;
+  attendance: Record<string, boolean>;
 }
 
 export function RatingsOverTime({ history }: RatingsOverTimeProps) {
@@ -84,7 +86,13 @@ export function RatingsOverTime({ history }: RatingsOverTimeProps) {
         .filter((entry): entry is { playerId: string; slot: number } => entry !== null),
     [slots],
   );
-  const selectedIds = useMemo(() => new Set(selected.map((s) => s.playerId)), [selected]);
+  const playerIds = useMemo(() => selected.map(({ playerId }) => playerId).sort(), [selected]);
+  const selectedIds = useMemo(() => new Set(playerIds), [playerIds]);
+  const nightly = useQuery({
+    queryKey: ['ratingNightHistory', playerIds],
+    queryFn: () => trpc.public.ratingNightHistory.query({ playerIds }),
+    enabled: playerIds.length > 0,
+  });
   const full = selected.length >= MAX_SERIES;
 
   const toggle = useCallback((playerId: string) => {
@@ -115,65 +123,33 @@ export function RatingsOverTime({ history }: RatingsOverTimeProps) {
   }, [history.players, search]);
 
   const chartData = useMemo(() => {
-    if (history.events.length === 0 || selected.length === 0) return [];
-    const value = (rating: number, rd: number) => (yMode === 'cautious' ? rating - 2 * rd : rating);
-
-    const state = new Map<string, { rating: number; rd: number }>();
-    const snapshots: Snapshot[] = [];
-
-    const takeSnapshot = (label: string, index: number) => {
-      const snapshot: Snapshot = { label, index };
-      for (const { playerId } of selected) {
-        const s = state.get(playerId);
-        snapshot[playerId] = s ? value(s.rating, s.rd) : null;
-      }
-      snapshots.push(snapshot);
-    };
-
-    const byNight = new Map<string, RatingHistoryData['events']>();
-    for (const event of history.events) {
-      const list = byNight.get(event.eventKey) ?? [];
-      list.push(event);
-      byNight.set(event.eventKey, list);
+    if (!nightly.data) return [];
+    // An older run may have played-set evidence but no separate night ledger.
+    const estimates = nightly.data.length
+      ? nightly.data
+      : history.events
+          .filter(
+            (event) => !event.isDecay && event.won !== null && selectedIds.has(event.playerId),
+          )
+          .map((event) => ({ ...event, played: true }));
+    const byNight = new Map<string, Snapshot>();
+    for (const { eventKey, playerId, postRating, postRd, played } of estimates) {
+      const night = byNight.get(eventKey) ?? { label: eventKey, values: {}, attendance: {} };
+      night.values[playerId] = yMode === 'cautious' ? postRating - 2 * postRd : postRating;
+      night.attendance[playerId] = played;
+      byNight.set(eventKey, night);
     }
-    let index = 0;
-    for (const [eventKey, events] of byNight) {
-      for (const event of events)
-        state.set(event.playerId, { rating: event.postRating, rd: event.postRd });
-      takeSnapshot(eventKey, index++);
-    }
-    return snapshots;
-  }, [history.events, selected, yMode]);
-
-  /** Last snapshot index at which each series has a value, for direct labels. */
-  const lastIndexOf = useMemo(() => {
-    const map = new Map<string, number>();
-    chartData.forEach((snapshot, i) => {
-      for (const { playerId } of selected) {
-        if (snapshot[playerId] != null) map.set(playerId, i);
-      }
-    });
-    return map;
-  }, [chartData, selected]);
-
-  /** Direct labels only while few enough lines that names will not collide. */
-  const directLabels = selected.length <= 4;
-
-  if (history.events.length === 0) {
-    return (
-      <section className="ratings-over-time section">
-        <h2>Ratings over time</h2>
-        <p className="no-data">No rating history yet — sync a tournament to get started.</p>
-      </section>
-    );
-  }
+    return [...byNight.values()].sort((a, b) => a.label.localeCompare(b.label));
+  }, [nightly.data, history.events, selectedIds, yMode]);
 
   return (
     <section className="ratings-over-time section">
       <h2>Ratings over time</h2>
       <p className="muted chart-caption">
-        Compare up to {MAX_SERIES} players. Each keeps its colour and dash pattern while selected,
-        so removing one never recolours the rest.
+        Compare up to {MAX_SERIES} players. Each estimate uses results through that club night.
+        {nightly.data?.length
+          ? ' Estimates include missed nights.'
+          : nightly.data && ' Showing the available played-night estimates.'}
       </p>
 
       <div className="chart-controls">
@@ -253,11 +229,23 @@ export function RatingsOverTime({ history }: RatingsOverTimeProps) {
 
       {selected.length === 0 ? (
         <p className="no-data">No players selected.</p>
+      ) : nightly.isPending ? (
+        <LoadingState>Loading night estimates…</LoadingState>
+      ) : nightly.isError ? (
+        <Notice tone="danger">
+          Night estimates could not be loaded.{' '}
+          <Button variant="plain" className="link-button" onClick={() => void nightly.refetch()}>
+            Try again
+          </Button>
+        </Notice>
+      ) : chartData.length === 0 ? (
+        <p className="no-data">No night estimates for these players.</p>
       ) : (
         <ResponsiveContainer width="100%" height={380}>
           <LineChart
             data={chartData}
-            margin={{ top: 8, right: directLabels ? 96 : 16, bottom: 4, left: 0 }}
+            margin={{ top: 8, right: 16, bottom: 4, left: 0 }}
+            aria-label="Player estimates by club night"
           >
             <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
             <XAxis
@@ -285,14 +273,18 @@ export function RatingsOverTime({ history }: RatingsOverTimeProps) {
                 const sorted = [...payload]
                   .filter((p) => p.value != null)
                   .sort((a, b) => (b.value as number) - (a.value as number));
+                const night = chartData.find((point) => point.label === label);
                 return (
-                  <div className="custom-tooltip ratings-tooltip">
+                  <div className="custom-tooltip ratings-tooltip" role="status">
                     <p className="tooltip-label">{label}</p>
                     {sorted.map((entry) => (
-                      <p key={entry.dataKey as string} className="tooltip-row">
+                      <p key={entry.name as string} className="tooltip-row">
                         <span className="tooltip-swatch" style={{ background: entry.color }} />
                         <span className="tooltip-name">
-                          {nameById.get(entry.dataKey as string) ?? '?'}
+                          {nameById.get(entry.name as string) ?? '?'}
+                          {night?.attendance[entry.name as string] === false && (
+                            <span className="tooltip-attendance">Missed night</span>
+                          )}
                         </span>
                         <span className="num">{(entry.value as number).toFixed(0)}</span>
                       </p>
@@ -304,40 +296,16 @@ export function RatingsOverTime({ history }: RatingsOverTimeProps) {
             {selected.map(({ playerId, slot }) => (
               <Line
                 key={playerId}
-                type="monotone"
-                dataKey={playerId}
+                type="linear"
+                dataKey={`values.${playerId}`}
                 stroke={SERIES_SLOTS[slot]}
                 name={playerId}
-                dot={false}
+                dot={{ r: 2, fill: SERIES_SLOTS[slot], strokeWidth: 0 }}
                 activeDot={{ r: 4, fill: SERIES_SLOTS[slot], stroke: 'var(--bg)', strokeWidth: 2 }}
-                connectNulls
                 strokeWidth={2}
                 strokeDasharray={SERIES_DASH[slot]}
                 isAnimationActive={false}
-              >
-                {directLabels && (
-                  <LabelList
-                    dataKey={playerId}
-                    content={(props: {
-                      index?: number;
-                      x?: number | string;
-                      y?: number | string;
-                    }) => {
-                      if (props.index !== lastIndexOf.get(playerId)) return null;
-                      return (
-                        <text
-                          x={Number(props.x) + 8}
-                          y={Number(props.y) + 4}
-                          fill={SERIES_SLOTS[slot]}
-                          fontSize={11}
-                        >
-                          {nameById.get(playerId) ?? ''}
-                        </text>
-                      );
-                    }}
-                  />
-                )}
-              </Line>
+              />
             ))}
           </LineChart>
         </ResponsiveContainer>
