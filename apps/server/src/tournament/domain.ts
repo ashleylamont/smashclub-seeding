@@ -168,14 +168,32 @@ function decisionFactVersion(
     : (1 as const);
 }
 
-function correctedScoreCommand(state: TournamentState, command: TournamentCommand) {
-  if (
-    command.kind !== 'score' &&
-    command.kind !== 'replayFinalsSlotV1' &&
-    command.kind !== 'replayFinalsRoutesV2'
-  )
-    return null;
-  return state.matches.find((match) => match.id === command.matchId)?.resultCommandId ?? null;
+function correctedScoreCommand(
+  previous: TournamentState,
+  next: TournamentState,
+  { command, id }: CommandEnvelope,
+) {
+  let matchId: string | undefined;
+  switch (command.kind) {
+    case 'score':
+    case 'replayFinalsSlotV1':
+    case 'replayFinalsRoutesV2':
+      matchId = command.matchId;
+      break;
+    case 'review':
+      matchId = previous.reports.find((report) => report.id === command.reportId)?.matchId;
+      break;
+    default:
+      return null;
+  }
+
+  const prior = previous.matches.find((match) => match.id === matchId);
+  if (!prior?.resultCommandId || !resolved(prior)) return null;
+  const applied = next.matches.find((match) => match.id === matchId);
+  // An equal TO score can refresh the result's command ID while keeping the same score.
+  return applied?.resultCommandId === id && !sameScore(prior, applied)
+    ? prior.resultCommandId
+    : null;
 }
 
 export function decide(
@@ -398,7 +416,7 @@ export function decide(
     command,
     ...replayEvidence,
     source: envelope.operator ? 'operator' : envelope.guest ? 'guest' : 'attendee',
-    correctionOf: correctedScoreCommand(previous, command),
+    correctionOf: correctedScoreCommand(previous, next, envelope),
     causation: [
       ...new Set(
         previous.matches
