@@ -681,19 +681,19 @@
 }
 
 .chip.chip-success {
-  color: var(--good);
+  color: var(--good-chip-text);
   border-color: var(--good);
   background: var(--good-bg);
 }
 
 .chip.chip-danger {
-  color: var(--bad);
+  color: var(--bad-chip-text);
   border-color: var(--bad);
   background: var(--bad-bg);
 }
 
 .chip.chip-warning {
-  color: var(--warn);
+  color: var(--warn-chip-text);
   border-color: var(--warn);
   background: var(--warn-bg);
 }

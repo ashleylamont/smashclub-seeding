@@ -64,11 +64,14 @@
 
   /* ── state ────────────────────────────────────────────────── */
   --good: #46d97a;
+  --good-chip-text: var(--good);
   --good-bg: rgba(70, 217, 122, 0.13);
   /* Deliberately identical to the accent — see the note at the top. */
   --bad: #ff3b30;
+  --bad-chip-text: var(--bad);
   --bad-bg: rgba(255, 59, 48, 0.13);
   --warn: #f5a509;
+  --warn-chip-text: var(--warn);
   --warn-bg: rgba(245, 165, 9, 0.13);
   /* A red LIVE badge is the conventional reading, so it reuses the brand. */
   --live: #ff3b30;
@@ -192,11 +195,15 @@
     --accent-contrast: #fff4f2;
 
     --good: #0f7a3d;
+    /* Chip ink has at least 5.4:1 contrast on its tinted paper fill. */
+    --good-chip-text: #0b6130;
     --good-bg: rgba(15, 122, 61, 0.12);
     /* Same red as the accent, as in dark mode. */
     --bad: #c22014;
+    --bad-chip-text: var(--accent-strong);
     --bad-bg: rgba(194, 32, 20, 0.1);
     --warn: #8a5a00;
+    --warn-chip-text: #704800;
     --warn-bg: rgba(138, 90, 0, 0.12);
     --live: #c22014;
     --live-bg: rgba(194, 32, 20, 0.12);
@@ -247,11 +254,15 @@
   --accent-contrast: #fff4f2;
 
   --good: #0f7a3d;
+  /* Chip ink has at least 5.4:1 contrast on its tinted paper fill. */
+  --good-chip-text: #0b6130;
   --good-bg: rgba(15, 122, 61, 0.12);
   /* Same red as the accent, as in dark mode. */
   --bad: #c22014;
+  --bad-chip-text: var(--accent-strong);
   --bad-bg: rgba(194, 32, 20, 0.1);
   --warn: #8a5a00;
+  --warn-chip-text: #704800;
   --warn-bg: rgba(138, 90, 0, 0.12);
   --live: #c22014;
   --live-bg: rgba(194, 32, 20, 0.12);
