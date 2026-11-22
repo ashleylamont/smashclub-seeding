@@ -1,8 +1,10 @@
+import { readFileSync } from 'node:fs';
 import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { darwinBaseline, darwinScreenshot } from './darwinScreenshot';
 import { bracketCaptureOptions, mockEvent, PLAN_ID, ready } from './fixtures';
 
+const captureStyle = readFileSync(bracketCaptureOptions.stylePath, 'utf8');
 const alias = 'Alexandria with a long tournament alias from Western Sydney';
 const url = `/play/${PLAN_ID}?pool=upper%3A0#what-next`;
 
@@ -126,9 +128,15 @@ for (const theme of ['dark', 'light'] as const)
         await page.evaluate(() => scrollTo(0, 0));
         await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
         await page.screenshot({ path: testInfo.outputPath('player-hub.png'), fullPage: true });
-        await darwinScreenshot(schedule, `active-pool-forfeits-${theme}-${width}.png`, {
-          ...bracketCaptureOptions,
+        const name = `active-pool-forfeits-${theme}-${width}.png`;
+        // A new reference has no comparison artifact with snapshot updates disabled.
+        await schedule.screenshot({
+          path: testInfo.outputPath(name),
+          style: captureStyle,
+          animations: 'disabled',
+          scale: 'css',
         });
+        await darwinScreenshot(schedule, name, bracketCaptureOptions);
       },
     );
   }
