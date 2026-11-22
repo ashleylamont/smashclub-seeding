@@ -16,6 +16,21 @@ async function linkedPlayer(page: Page) {
   return { fixture, match, claim, filter, profile };
 }
 
+async function deferResponse(
+  page: Page,
+  url: string | ((url: URL) => boolean) = '**/api/auth/get-session',
+) {
+  let releaseAuth!: () => void;
+  const authDelay = new Promise<void>((resolve) => {
+    releaseAuth = resolve;
+  });
+  await page.route(url, async (route) => {
+    await authDelay;
+    await route.fallback();
+  });
+  return releaseAuth;
+}
+
 for (const theme of ['dark', 'light'] as const)
   for (const width of [390, 1440])
     test(`opens on the approved linked entrant at ${width}px in ${theme}`, async ({
@@ -75,14 +90,7 @@ for (const theme of ['dark', 'light'] as const)
 
 test('late account data leaves an explicit Everyone choice in place', async ({ page }) => {
   const { fixture, filter, profile } = await linkedPlayer(page);
-  let releaseAuth!: () => void;
-  const authDelay = new Promise<void>((resolve) => {
-    releaseAuth = resolve;
-  });
-  await page.route('**/api/auth/get-session', async (route) => {
-    await authDelay;
-    await route.fallback();
-  });
+  const releaseAuth = await deferResponse(page);
   try {
     await page.goto(route);
     await expect(filter).toHaveAttribute('data-value', '');
@@ -93,6 +101,74 @@ test('late account data leaves an explicit Everyone choice in place', async ({ p
   }
   await expect(profile).toContainText(PLAYER_NAME);
   await expect(filter).toHaveAttribute('data-value', '');
+  expect(fixture.unexpected).toEqual([]);
+});
+
+test('late account data preserves a pool selected while browsing', async ({ page }) => {
+  const { fixture, filter, profile } = await linkedPlayer(page);
+  const releaseAuth = await deferResponse(page);
+  const pool = page.getByRole('combobox', { name: 'Your pool' });
+  try {
+    await page.goto(route);
+    await expect(filter).toHaveAttribute('data-value', '');
+    await chooseOption(pool, 'lower:0');
+    await expect(page).toHaveURL(/pool=lower%3A0/);
+  } finally {
+    releaseAuth();
+  }
+  await expect(profile).toContainText(PLAYER_NAME);
+  await expect(filter).toHaveAttribute('data-value', '');
+  await expect(pool).toHaveAttribute('data-value', 'lower:0');
+  expect(await page.evaluate((key) => localStorage.getItem(key), preferenceKey)).toBeNull();
+  expect(fixture.unexpected).toEqual([]);
+});
+
+test('late account data preserves an in-progress match search', async ({ page }) => {
+  const { fixture, filter, profile } = await linkedPlayer(page);
+  const releaseAuth = await deferResponse(page);
+  const search = page.getByRole('textbox', { name: 'Search matches' });
+  try {
+    await page.goto(route);
+    await expect(filter).toHaveAttribute('data-value', '');
+    await search.fill('Bowser');
+  } finally {
+    releaseAuth();
+  }
+  await expect(profile).toContainText(PLAYER_NAME);
+  await expect(filter).toHaveAttribute('data-value', '');
+  await expect(search).toBeFocused();
+  await expect(search).toHaveValue('Bowser');
+  expect(fixture.unexpected).toEqual([]);
+});
+
+test('late claim data leaves an unrelated score draft visible and editable', async ({ page }) => {
+  const { fixture, claim, filter, profile } = await linkedPlayer(page);
+  const other = fixture.snapshot.matches.find(
+    (match) =>
+      match.status === 'ready' &&
+      match.player1Id &&
+      match.player2Id &&
+      ![match.player1Id, match.player2Id].includes(claim.playerId),
+  )!;
+  other.status = 'playing';
+  const releaseClaim = await deferResponse(page, (url) =>
+    decodeURIComponent(url.pathname).replace('/api/trpc/', '').split(',').includes('me.claims'),
+  );
+  const card = page.locator(`article[data-player-match-id="${other.id}"]`);
+  const score = card.getByRole('spinbutton').first();
+  try {
+    await page.goto(route);
+    await expect(filter).toHaveAttribute('data-value', '');
+    await expect(page.getByText('Reporting with your signed-in account.')).toBeVisible();
+    await score.fill('2');
+  } finally {
+    releaseClaim();
+  }
+  await expect(profile).toContainText(PLAYER_NAME);
+  await expect(filter).toHaveAttribute('data-value', '');
+  await expect(score).toBeFocused();
+  await expect(score).toHaveValue('2');
+  expect(fixture.submissions).toEqual([]);
   expect(fixture.unexpected).toEqual([]);
 });
 
@@ -140,6 +216,16 @@ test('a printed pool and a guest pass retain event-wide browsing', async ({ page
     page.getByText('Reporting with your venue guest pass.', { exact: true }),
   ).toBeVisible();
   await expect(filter).toHaveAttribute('data-value', '');
+  expect(fixture.unexpected).toEqual([]);
+});
+
+test('a public archive link keeps event-wide records for a linked account', async ({ page }) => {
+  const { fixture, filter, profile } = await linkedPlayer(page);
+  fixture.snapshot.plan.status = 'complete';
+  await page.goto(`${route}#event-archive`);
+  await expect(profile).toContainText(PLAYER_NAME);
+  await expect(filter).toHaveAttribute('data-value', '');
+  await expect(page.getByText('Good games award', { exact: true })).toBeVisible();
   expect(fixture.unexpected).toEqual([]);
 });
 
