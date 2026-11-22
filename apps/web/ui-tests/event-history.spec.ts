@@ -71,6 +71,7 @@ test(
     const history = page.getByRole('tabpanel', { name: 'History', exact: true });
     await expect(history.getByRole('heading', { name: 'Event history' })).toBeVisible();
     await expect(history.locator('.ops-history-entry')).toHaveCount(2);
+    await expect(history.getByText('Load older changes to search further back.')).toBeVisible();
     options.historyFailure = true;
     await history.getByRole('button', { name: 'Load older changes' }).click();
     await expect(history.getByRole('alert')).toContainText('History connection interrupted');
@@ -79,7 +80,9 @@ test(
     await history.getByRole('button', { name: 'Retry history' }).click();
     await expect(history.locator('.ops-history-entry')).toHaveCount(3);
     await expect(history.getByRole('button', { name: 'Load older changes' })).toHaveCount(0);
+    await expect(history.getByText('Load older changes to search further back.')).toHaveCount(0);
     await history.getByLabel('Search loaded history').fill('Morgan');
+    await expect(history.getByText(/1 of 3 recorded changes/)).toBeVisible();
     await expect(history.locator('.ops-history-entry')).toHaveCount(1);
     await history.getByLabel('Search loaded history').fill('');
     await chooseOption(history.getByRole('combobox', { name: 'Change type' }), 'results');
@@ -138,3 +141,189 @@ test('native drafts explain when recording starts without issuing a history requ
   await expect(page.getByRole('button', { name: 'Refresh history' })).toHaveCount(0);
   expect(fixture.unexpected).toEqual([]);
 });
+
+test('initial history loading and failure stay distinct from a confirmed empty history', async ({
+  page,
+}, testInfo) => {
+  const options: FixtureOptions = { role: 'admin', historyFailure: true };
+  const fixture = await mockEvent(page, options);
+  const response = Promise.withResolvers<void>();
+  await page.route(/\/api\/trpc\/.*eventOps\.live\.history/, async (route) => {
+    await response.promise;
+    await route.fallback();
+  });
+  await page.goto(`/operate/${PLAN_ID}?view=history`);
+  const history = page.getByRole('region', { name: 'Event history', exact: true });
+  await expect(history.getByRole('status')).toContainText('Loading event history');
+  await expect(history.getByText(/0 of 0/)).toHaveCount(0);
+  response.resolve();
+  await expect(history.getByRole('alert')).toContainText('History connection interrupted');
+  await expect(history.getByText(/0 of 0/)).toHaveCount(0);
+  await expect(history.getByText(/No event changes/)).toHaveCount(0);
+  await ready(page);
+  await testInfo.attach('initial-history-failure', {
+    body: await page.screenshot({ animations: 'disabled' }),
+    contentType: 'image/png',
+  });
+  options.historyFailure = false;
+  await history.getByRole('button', { name: 'Retry history' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(history.getByText('No event changes have been recorded.')).toBeVisible();
+  await expect(history.getByRole('alert')).toHaveCount(0);
+  expect(fixture.unexpected).toEqual([]);
+});
+
+test('opening history offline waits for a connection before stating a record count', async ({
+  page,
+  context,
+}) => {
+  const fixture = await mockEvent(page, { role: 'admin' });
+  await page.goto(`/operate/${PLAN_ID}?view=run`);
+  const historyTab = page.getByRole('tab', { name: 'History', exact: true });
+  await expect(historyTab).toBeVisible();
+  await context.setOffline(true);
+  await expect(page.getByText(/Live updates interrupted/)).toBeVisible();
+  await historyTab.focus();
+  await page.keyboard.press('Enter');
+  const history = page.getByRole('region', { name: 'Event history', exact: true });
+  await expect(history.getByRole('status')).toContainText('Waiting for a connection');
+  await expect(history.getByText(/0 of 0/)).toHaveCount(0);
+  await context.setOffline(false);
+  await expect(history.getByText('No event changes have been recorded.')).toBeVisible();
+  expect(fixture.unexpected).toEqual([]);
+});
+
+test('closed native events without live history do not invite organisers to start play', async ({
+  page,
+}) => {
+  const fixture = await mockEvent(page, { role: 'admin' });
+  fixture.overview.plan.liveOwned = false;
+  fixture.overview.plan.status = 'cancelled';
+  await page.goto(`/operate/${PLAN_ID}?view=history`);
+  await expect(page.getByText('Event closed · read only', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No live history was recorded' })).toBeVisible();
+  await expect(page.getByText(/Native events begin recording/)).toHaveCount(0);
+  expect(fixture.unexpected).toEqual([]);
+});
+
+for (const theme of ['dark', 'light'] as const) {
+  for (const width of [390, 1440] as const) {
+    test(`history and attendance scope in ${theme} at ${width}px`, async ({ page }, testInfo) => {
+      await page.emulateMedia({ colorScheme: theme });
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      const earlier = {
+        id: 'act:19',
+        eventName: 'AttendanceChangedV1',
+        version: 19,
+        at: '2026-10-03T23:49:00.000Z',
+        actor: 'Morgan the organiser',
+        source: 'operator',
+        category: 'players',
+        title: 'Entrant withdrawn',
+        summary: `${PLAYER_NAME} was withdrawn.`,
+        matchId: null,
+        details: { player: PLAYER_NAME, reason: 'Left before play' },
+      } as const;
+      const fixture = await mockEvent(page, {
+        role: 'admin',
+        history: [
+          {
+            entries: [
+              {
+                ...earlier,
+                id: 'act:21',
+                version: 21,
+                at: '2026-10-03T23:58:00.000Z',
+                title: 'Entrant restored',
+                summary: `${PLAYER_NAME} returned to the event.`,
+              },
+              {
+                ...earlier,
+                id: 'act:20',
+                version: 20,
+                at: '2026-10-03T23:50:00.000Z',
+                category: 'results',
+                title: 'Results published',
+                summary: 'Results published to club history.',
+              },
+              earlier,
+            ],
+            nextCursor: null,
+          },
+        ],
+      });
+      fixture.overview.plan.status = 'complete';
+      await page.goto(`/operate/${PLAN_ID}?view=history`);
+      await expect(page.getByText('Event closed · read only', { exact: true })).toBeVisible();
+      const history = page.getByRole('region', { name: 'Event history', exact: true });
+      await expect(history.getByText(/3 of 3 recorded changes.*Newest first/)).toBeVisible();
+      await expect(history.getByRole('listitem').getByRole('heading')).toHaveText([
+        'Entrant restored',
+        'Results published',
+        'Entrant withdrawn',
+      ]);
+      const recordedDetails = history
+        .getByRole('button', { name: 'View recorded details' })
+        .first();
+      await recordedDetails.focus();
+      await page.keyboard.press('Enter');
+      await expect(history.getByText('Left before play', { exact: false })).toBeVisible();
+      await ready(page);
+      await page.evaluate(() => scrollTo(0, 0));
+      await testInfo.attach('event-history', {
+        body: await page.screenshot({ animations: 'disabled', fullPage: true }),
+        contentType: 'image/png',
+      });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      expect(
+        (
+          await new AxeBuilder({ page })
+            .include('.ops-page')
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+            .analyze()
+        ).violations,
+      ).toEqual([]);
+
+      await page.getByRole('tab', { name: 'Players', exact: true }).focus();
+      await page.keyboard.press('Enter');
+      const attendance = page.getByRole('region', { name: 'Attendance history', exact: true });
+      await expect(
+        attendance.getByText(/2 of 2 recorded attendance changes.*Earliest first/),
+      ).toBeVisible();
+      await expect(attendance.getByRole('listitem').getByRole('heading')).toHaveText([
+        'Entrant withdrawn',
+        'Entrant restored',
+      ]);
+      const search = attendance.getByRole('searchbox', { name: 'Search loaded history' });
+      await search.focus();
+      await page.keyboard.insertText('returned');
+      await expect(attendance.getByText(/1 of 2 recorded attendance changes/)).toBeVisible();
+      await expect(attendance.getByRole('heading', { name: 'Entrant restored' })).toBeVisible();
+      await expect(attendance.getByRole('heading', { name: 'Entrant withdrawn' })).toHaveCount(0);
+      await search.fill('nobody');
+      await expect(attendance.getByText('No changes match this view.')).toBeVisible();
+      await search.fill('');
+      await expect(attendance.getByRole('listitem')).toHaveCount(2);
+      await ready(page);
+      await page.evaluate(() => scrollTo(0, 0));
+      await testInfo.attach('attendance-history', {
+        body: await page.screenshot({ animations: 'disabled', fullPage: true }),
+        contentType: 'image/png',
+      });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      expect(
+        (
+          await new AxeBuilder({ page })
+            .include('.ops-page')
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+            .analyze()
+        ).violations,
+      ).toEqual([]);
+      expect(fixture.unexpected).toEqual([]);
+    });
+  }
+}
