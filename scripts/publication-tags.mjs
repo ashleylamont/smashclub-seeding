@@ -1,6 +1,10 @@
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, readFileSync } from 'node:fs';
+import { appendFileSync } from 'node:fs';
 import { assertReleaseTag, publicationPolicy } from './publication-policy.mjs';
+import {
+  compareAppVersionWithFirstParent,
+  readCheckedOutAppVersion,
+} from './publish-app-version.mjs';
 
 const git = (args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
 const sha = git(['rev-parse', 'HEAD']);
@@ -14,16 +18,13 @@ try {
   /* policy rejects */
 }
 
-const appPackage = 'apps/web/package.json';
-const appVersion = JSON.parse(
-  readFileSync(new URL(`../${appPackage}`, import.meta.url), 'utf8'),
-).version;
+const appVersion = readCheckedOutAppVersion();
 const event = process.env.GITHUB_EVENT_NAME;
 const ref = process.env.GITHUB_REF;
 const versionChanged =
   event === 'push' &&
   ref === 'refs/heads/main' &&
-  JSON.parse(git(['show', `HEAD^1:${appPackage}`])).version !== appVersion;
+  compareAppVersionWithFirstParent('HEAD', appVersion).versionChanged;
 const policy = publicationPolicy({
   event,
   ref,
