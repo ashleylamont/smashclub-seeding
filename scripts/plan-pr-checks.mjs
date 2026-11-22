@@ -2,14 +2,14 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { portableUiShards } from './portable-ui-shards.mjs';
 import { readPrChanges, readPrMerge } from './pr-merge.mjs';
 
 export const skippableJobs = ['legacy-python', 'postgres'];
 const appChecks = [
   'e2e',
   'e2e-report',
-  'ui-portable',
-  'ui-portable-2',
+  ...Object.keys(portableUiShards),
   'ui-quality',
   'build',
   'bundle-smoke',

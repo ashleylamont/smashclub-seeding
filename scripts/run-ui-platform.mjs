@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { portableUiShards } from './portable-ui-shards.mjs';
 
 const web = fileURLToPath(new URL('../apps/web', import.meta.url));
 const testDir = join(web, 'ui-tests');
@@ -15,7 +16,7 @@ const partitions = {
   darwin: ['--grep', pattern],
   portable: ['--grep-invert', pattern],
 };
-const ordinals = ['1/2', '2/2'];
+const ordinals = Object.values(portableUiShards);
 const digest = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
 function reportCases({ suites, errors }) {
@@ -100,7 +101,9 @@ function main([mode, ordinal, ...extra]) {
     (mode !== undefined && !Object.hasOwn(partitions, mode)) ||
     (ordinal !== undefined && (mode !== 'portable' || !ordinals.includes(ordinal)))
   )
-    throw new Error('Choose darwin or portable, optionally with a portable shard of 1/2 or 2/2.');
+    throw new Error(
+      `Choose darwin or portable, optionally with a portable shard of ${ordinals.join(', ')}.`,
+    );
   if (mode === 'darwin' && process.platform !== 'darwin')
     throw new Error('Darwin baseline tests require macOS.');
 

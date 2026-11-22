@@ -25,16 +25,22 @@ const input = { event: 'push', ref: 'refs/heads/main', sha, mainSha: sha, onMain
 
 const ui_case_set = 'a'.repeat(64);
 const ui_portable_plan = 'b'.repeat(64);
+const portableJobs = [
+  ['ui-portable', '1'],
+  ['ui-portable-2', '2'],
+  ['ui-portable-3', '3'],
+] as const;
 const successfulJobs = {
   ...Object.fromEntries(requiredJobs.map((name) => [name, { result: 'success' }])),
-  'ui-portable': {
-    result: 'success',
-    outputs: { ui_case_set, ui_portable_plan, ui_portable_shard: '1/2' },
-  },
-  'ui-portable-2': {
-    result: 'success',
-    outputs: { ui_case_set, ui_portable_plan, ui_portable_shard: '2/2' },
-  },
+  ...Object.fromEntries(
+    portableJobs.map(([id, ordinal]) => [
+      id,
+      {
+        result: 'success',
+        outputs: { ui_case_set, ui_portable_plan, ui_portable_shard: `${ordinal}/3` },
+      },
+    ]),
+  ),
   'ui-quality': { result: 'success', outputs: { ui_case_set } },
 };
 
@@ -83,7 +89,13 @@ it('accepts only explicit PR skips from a successful plan', () => {
       assertRequiredJobs({ ...planned, changeset: { ...planned.changeset, result } }, options),
     ).toThrow('changeset');
   }
-  for (const skips of [undefined, 'false', '["e2e"]', '["postgres","postgres"]']) {
+  for (const skips of [
+    undefined,
+    'false',
+    '["e2e"]',
+    '["postgres","postgres"]',
+    ...portableJobs.map(([id]) => JSON.stringify([id])),
+  ]) {
     expect(() =>
       assertRequiredJobs(
         { ...planned, changeset: { result: 'success', outputs: { skips } } },
@@ -131,7 +143,7 @@ it('accepts version browser deferral only as a validated PR pair', () => {
       ),
     ).toThrow(/e2e|plan/);
   }
-  for (const job of ['ui-portable', 'ui-portable-2', 'ui-quality', 'production-image']) {
+  for (const job of [...portableJobs.map(([id]) => id), 'ui-quality', 'production-image']) {
     expect(() => assertRequiredJobs({ ...planned, [job]: { result: 'skipped' } }, options)).toThrow(
       job,
     );
@@ -160,6 +172,7 @@ it('scopes PR skips to web or prose and keeps broader candidates advisory', () =
       'e2e-report',
       'ui-portable',
       'ui-portable-2',
+      'ui-portable-3',
       'ui-quality',
       'production-image',
     ]),
@@ -206,7 +219,13 @@ describe('advisory workspace coverage', () => {
     expect(coverage?.typecheck).toContain('@smashclub/server');
     expect(coverage?.typecheck.includes('@smashclub/rank-eval')).toBe(pkg !== 'tournament-formats');
     expect(coverage?.downstream).toEqual(
-      expect.arrayContaining(['e2e', 'ui-quality', 'postgres', 'production-image']),
+      expect.arrayContaining([
+        'e2e',
+        ...portableJobs.map(([id]) => id),
+        'ui-quality',
+        'postgres',
+        'production-image',
+      ]),
     );
     expect(planPrChecks(paths, false).skips).toEqual([]);
   });
@@ -234,15 +253,15 @@ describe('advisory workspace coverage', () => {
   });
 });
 
-it('keeps both portable shards and Darwin independent with separate review artifacts', () => {
+it('keeps three required portable shards and Darwin independent with separate review artifacts', async () => {
+  const { default: uiConfig } = await import('../../apps/web/playwright.ui.config');
   const sharedCaseOutput = '${{ steps.browser.outputs.ui_case_set }}';
-  const first = ci.jobs['ui-portable'];
-  const second = ci.jobs['ui-portable-2'];
-  for (const [job, ordinal] of [
-    [first, '1'],
-    [second, '2'],
-  ]) {
+  expect(uiConfig).toMatchObject({ fullyParallel: true, workers: 2, retries: 0 });
+  for (const [id, ordinal] of portableJobs) {
+    const job = ci.jobs[id];
+    expect(ci.jobs['all-checks'].needs).toContain(id);
     expect(job).toMatchObject({
+      name: `UI behavior and accessibility (${ordinal}/3)`,
       'runs-on': 'ubuntu-latest',
       'timeout-minutes': 20,
       env: { UI_PORTABLE_SHARD: ordinal },
@@ -259,19 +278,20 @@ it('keeps both portable shards and Darwin independent with separate review artif
         {
           name: 'Run portable UI shard',
           id: 'browser',
-          run: 'time node scripts/run-ui-platform.mjs portable "$UI_PORTABLE_SHARD/2"',
+          run: 'time node scripts/run-ui-platform.mjs portable "$UI_PORTABLE_SHARD/3"',
         },
         expect.objectContaining({
           if: 'always()',
           with: expect.objectContaining({
             name: 'ui-portable-review-${{ env.UI_PORTABLE_SHARD }}',
+            path: 'apps/web/playwright-report/ui\napps/web/ui-test-results\n',
           }),
         }),
       ]),
     });
     expect(job.needs).toBeUndefined();
+    expect(job.steps).toEqual(ci.jobs['ui-portable'].steps);
   }
-  expect(second.steps).toEqual(first.steps);
   expect(ci.jobs['ui-quality']).toMatchObject({
     'runs-on': 'macos-15',
     'timeout-minutes': 15,
@@ -286,28 +306,77 @@ it('keeps both portable shards and Darwin independent with separate review artif
   });
 });
 
-it('requires both portable ordinals on the same plan and case set as Darwin', () => {
-  for (const id of ['ui-portable', 'ui-portable-2', 'ui-quality'] as const)
+it.each(portableJobs)(
+  'rejects an incomplete or unsuccessful %s in PR and Publish verification',
+  (id) => {
+    const jobs = {
+      ...successfulJobs,
+      changeset: { result: 'success', outputs: { skips: '[]' } },
+    };
+    for (const event of ['pull_request', 'push']) {
+      expect(() => assertRequiredJobs(jobs, { event })).not.toThrow();
+      for (const result of [undefined, 'skipped', 'failure', 'cancelled']) {
+        const shard = result === undefined ? undefined : { ...successfulJobs[id], result };
+        expect(() => assertRequiredJobs({ ...jobs, [id]: shard }, { event })).toThrow(id);
+      }
+    }
+  },
+);
+
+it('requires a common case set for all portable shards and Darwin', () => {
+  for (const id of [...portableJobs.map(([job]) => job), 'ui-quality'])
     for (const outputs of [undefined, { ui_case_set: 'c'.repeat(64) }])
       expect(() =>
         assertRequiredJobs({ ...successfulJobs, [id]: { result: 'success', outputs } }),
       ).toThrow(/same UI case set/);
+});
 
-  for (const change of [
-    { ui_portable_plan: undefined },
-    { ui_portable_plan: 'c'.repeat(64) },
-    { ui_portable_shard: undefined },
-    { ui_portable_shard: '1/2' },
-  ])
-    expect(() =>
-      assertRequiredJobs({
-        ...successfulJobs,
-        'ui-portable-2': {
-          result: 'success',
-          outputs: { ...successfulJobs['ui-portable-2'].outputs, ...change },
-        },
-      }),
-    ).toThrow(/both shards of the same plan/);
+it.each(portableJobs)(
+  'requires %s to report its own ordinal and the common plan',
+  (id, ordinal) => {
+    const otherOrdinal = ordinal === '1' ? '2/3' : '1/3';
+    for (const change of [
+      { ui_portable_plan: undefined },
+      { ui_portable_plan: 'c'.repeat(64) },
+      { ui_portable_shard: undefined },
+      { ui_portable_shard: `${ordinal}/2` },
+      { ui_portable_shard: otherOrdinal },
+    ])
+      expect(() =>
+        assertRequiredJobs({
+          ...successfulJobs,
+          [id]: {
+            result: 'success',
+            outputs: { ...successfulJobs[id].outputs, ...change },
+          },
+        }),
+      ).toThrow(/all three shards of the same plan/);
+  },
+);
+
+it('rejects a shared malformed portable plan digest', () => {
+  const invalidJobs = Object.fromEntries(
+    portableJobs.map(([id]) => [
+      id,
+      {
+        ...successfulJobs[id],
+        outputs: { ...successfulJobs[id].outputs, ui_portable_plan: 'invalid' },
+      },
+    ]),
+  );
+  expect(() => assertRequiredJobs({ ...successfulJobs, ...invalidJobs })).toThrow(
+    /all three shards of the same plan/,
+  );
+});
+
+it('rejects an out-of-range portable UI ordinal before discovery', () => {
+  const result = spawnSync(process.execPath, ['scripts/run-ui-platform.mjs', 'portable', '4/3'], {
+    encoding: 'utf8',
+  });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain(
+    'Choose darwin or portable, optionally with a portable shard of 1/3, 2/3, 3/3.',
+  );
 });
 
 it('executes the UI runner through a symlinked worktree path', () => {
@@ -327,28 +396,36 @@ it('executes the UI runner through a symlinked worktree path', () => {
   }
 });
 
-it('requires a disjoint portable selection covering each case exactly once', () => {
+it('requires three nonempty shard assignments covering each portable case exactly once', () => {
   const cases = (...ids: string[]) => new Map(ids.map((id) => [id, true]));
-  const portable = cases('a', 'b', 'c');
-  const plan = (first: Map<string, boolean>, second?: Map<string, boolean>) =>
-    portableShardPlan(
-      portable,
-      new Map(
-        second
-          ? [
-              ['1/2', first],
-              ['2/2', second],
-            ]
-          : [['1/2', first]],
-      ),
+  const portable = cases('a', 'b', 'c', 'd');
+  const shards = new Map([
+    ['1/3', cases('a', 'b')],
+    ['2/3', cases('c')],
+    ['3/3', cases('d')],
+  ]);
+  const plan = portableShardPlan(portable, shards);
+  expect(plan).toBe(portableShardPlan(portable, new Map(shards).set('1/3', cases('b', 'a'))));
+  expect(plan).not.toBe(
+    portableShardPlan(portable, new Map(shards).set('2/3', cases('d')).set('3/3', cases('c'))),
+  );
+  for (const ordinal of shards.keys()) {
+    const missing = new Map(shards);
+    missing.delete(ordinal);
+    expect(() => portableShardPlan(portable, missing)).toThrow(`${ordinal} is missing or empty`);
+    expect(() => portableShardPlan(portable, new Map(shards).set(ordinal, cases()))).toThrow(
+      `${ordinal} is missing or empty`,
     );
-  expect(plan(cases('a', 'b'), cases('c'))).toBe(plan(cases('b', 'a'), cases('c')));
-  expect(plan(cases('a', 'b'), cases('c'))).not.toBe(plan(cases('c'), cases('a', 'b')));
-  expect(() => plan(cases('a', 'b'))).toThrow(/2\/2 is missing/);
-  expect(() => plan(cases('a', 'b'), cases())).toThrow(/2\/2 is missing or empty/);
-  expect(() => plan(cases('a', 'b'), cases('b', 'c'))).toThrow(/repeated case/);
-  expect(() => plan(cases('a'), cases('c'))).toThrow(/cover every portable case/);
-  expect(() => plan(cases('a'), cases('b', 'c', 'darwin'))).toThrow(/unexpected/);
+  }
+  expect(() => portableShardPlan(portable, new Map(shards).set('3/3', cases('c', 'd')))).toThrow(
+    /repeated case/,
+  );
+  expect(() => portableShardPlan(portable, new Map(shards).set('1/3', cases('a')))).toThrow(
+    /cover every portable case/,
+  );
+  expect(() =>
+    portableShardPlan(portable, new Map(shards).set('3/3', cases('d', 'darwin'))),
+  ).toThrow(/unexpected/);
 });
 
 it('rejects missing, skipped, expected-to-fail and errored executions', () => {
