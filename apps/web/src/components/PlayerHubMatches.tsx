@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { Disclosure } from './ui/Disclosure';
 import { Progress } from './ui/Progress';
 import { Select, SelectItem } from './ui/Select';
@@ -43,7 +43,6 @@ export function PlayerHubMatches({
     completed,
     nextMatch,
     hiddenHistory,
-    chooseMatch,
     visible,
     stationId,
     hasAutomaticReports,
@@ -58,6 +57,27 @@ export function PlayerHubMatches({
     signedIn,
   } = hub;
   const journey = player ? playerJourney(data, player) : undefined;
+  const nextMatchId = nextMatch?.id;
+  const matchGrid = useRef<HTMLDivElement>(null);
+  const pendingMatchJump = useRef<string | null>(null);
+  const nextMatchVisible = visible.some((match) => match.id === nextMatchId);
+
+  useLayoutEffect(() => {
+    const requested = pendingMatchJump.current;
+    pendingMatchJump.current = null;
+    if (requested && requested === nextMatchId && nextMatchVisible) {
+      focusMatchCard(matchGrid.current, requested);
+    }
+  }, [nextMatchId, nextMatchVisible]);
+
+  const viewNextMatch = (matchId: string) => {
+    if (focusMatchCard(matchGrid.current, matchId)) return;
+    pendingMatchJump.current = matchId;
+    setView('mine');
+    setSelectedStation('');
+    setSearch('');
+  };
+
   return (
     <section id="my-matches" aria-label="Find my matches and report scores">
       {reportingStatus}
@@ -115,7 +135,9 @@ export function PlayerHubMatches({
             </dl>
           ) : null}
           {nextMatch && journey?.state === 'active' && (
-            <Button onClick={() => chooseMatch(nextMatch.id)}>Find next match</Button>
+            <Button onClick={() => viewNextMatch(nextMatch.id)}>
+              {nextMatch.status === 'playing' ? 'View current match' : 'View next match'}
+            </Button>
           )}
         </aside>
       )}
@@ -203,7 +225,7 @@ export function PlayerHubMatches({
             </div>
           </div>
         </Disclosure>
-        <div className="ops-match-grid">
+        <div className="ops-match-grid" ref={matchGrid}>
           {visible.map((match) => (
             <EventScoreCard
               key={match.id}
@@ -276,4 +298,15 @@ export function PlayerHubMatches({
       </section>
     </section>
   );
+}
+
+function focusMatchCard(grid: HTMLDivElement | null, matchId: string) {
+  const card = grid?.querySelector<HTMLElement>(`[data-match-id="${CSS.escape(matchId)}"]`);
+  if (!card) return false;
+  card.focus({ preventScroll: true });
+  card.scrollIntoView({
+    block: 'start',
+    behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+  });
+  return true;
 }

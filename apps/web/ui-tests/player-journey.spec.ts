@@ -135,7 +135,9 @@ for (const width of [390, 1440])
         await expect(progress).toHaveAttribute('data-journey-state', 'bracket_finished');
         await expect(progress).toContainText('Your published bracket run is finished');
         await expect(progress).toContainText('while the event continues');
-        await expect(progress.getByRole('button', { name: 'Find next match' })).toHaveCount(0);
+        await expect(
+          progress.getByRole('button', { name: /^View (current|next) match$/ }),
+        ).toHaveCount(0);
         await expect(page.locator('#event-results')).toContainText(name(opponent));
       } else if (state === 'loser-path') {
         await expect(progress).toHaveAttribute('data-journey-state', 'awaiting_opponent');

@@ -18,6 +18,7 @@
 }
 #my-matches {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s4);
 }
 .player-call-alerts > p {
@@ -41,10 +42,22 @@
 }
 .player-event-hub .pool-score-selection {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s3);
+}
+.player-event-hub .player-match-controls,
+.player-event-hub .player-match-controls .ops-toolbar > label {
+  grid-template-columns: minmax(0, 1fr);
 }
 .player-event-hub .player-match-refine {
   margin: 0;
+}
+.player-event-hub .ops-match[tabindex='-1'] {
+  scroll-margin-top: calc(var(--nav-h, 80px) + var(--s4));
+}
+.player-event-hub .ops-match[tabindex='-1']:focus {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
 }
 .player-event-hub .ops-match-meta {
   align-items: start;
