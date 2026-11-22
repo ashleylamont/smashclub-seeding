@@ -319,6 +319,10 @@ test('knockout attendance previews use the live match name for withdrawal and re
   const controls = page.locator('section.card').filter({
     has: page.getByRole('heading', { name: 'Attendance changes', exact: true }),
   });
+  const previewPalette = {
+    dark: { background: 'rgb(7, 9, 10)', ink: 'rgb(154, 152, 149)' },
+    light: { background: 'rgb(238, 236, 228)', ink: 'rgb(76, 83, 72)' },
+  };
 
   for (const action of ['withdraw', 'restore'] as const) {
     await chooseOption(controls.getByRole('combobox', { name: 'Change', exact: true }), action);
@@ -361,6 +365,16 @@ test('knockout attendance previews use the live match name for withdrawal and re
         await expect
           .poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth))
           .toBeLessThanOrEqual(0);
+        // System theme emulation can briefly paint the new background with the old text colour.
+        await expect(page.locator('html')).toHaveCSS('color-scheme', colorScheme);
+        await expect(page.locator('body')).toHaveCSS(
+          'background-color',
+          previewPalette[colorScheme].background,
+        );
+        await expect(preview.getByRole('heading', { level: 4 })).toHaveCSS(
+          'color',
+          previewPalette[colorScheme].ink,
+        );
         expect(
           (
             await new AxeBuilder({ page })
