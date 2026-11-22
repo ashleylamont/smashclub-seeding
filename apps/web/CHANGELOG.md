@@ -2,6 +2,29 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.21.0
+
+### Minor Changes
+
+- 22 November 2026 · **Feature** · Turn on in-page match call alerts for the player you follow. New calls show the opponent and where to play. Returned calls tell you to wait for a new call. [#402](https://github.com/ashleylamont/smashclub-seeding/pull/402) · [build fc5f173](https://github.com/ashleylamont/smashclub-seeding/commit/fc5f1736ad7031a195ab9613afd29c2e5d60abf5)
+- 22 November 2026 · **Feature** · Download PNG and SVG bracket graphics from completed native events and tournament archives with a verified draw. [#399](https://github.com/ashleylamont/smashclub-seeding/pull/399) · [build ea63678](https://github.com/ashleylamont/smashclub-seeding/commit/ea63678a0ccf72d063091a354b6dbd17b83b8891)
+
+### Patch Changes
+
+- 22 November 2026 · **Fix** · Show recorded pool places in order on the OBS intermission and label pools whose places are still pending. [#410](https://github.com/ashleylamont/smashclub-seeding/pull/410) · [build da09b4e](https://github.com/ashleylamont/smashclub-seeding/commit/da09b4eecd6e30cc8a13721d6927923af589120b)
+- 22 November 2026 · **Fix** · Open finished events at their recorded results or brackets. Imported events with only bracket links now show those links up front. [#418](https://github.com/ashleylamont/smashclub-seeding/pull/418) · [build 7e2a344](https://github.com/ashleylamont/smashclub-seeding/commit/7e2a34467c7f678b64558391592da91bbcb20b96)
+- 22 November 2026 · **Fix** · Confirm before freeing a shared setup from Broadcast or Score / details once a match has started. The release keeps actual play and live scores recorded. Organisers can return an untaken call directly. [#416](https://github.com/ashleylamont/smashclub-seeding/pull/416) · [build d568855](https://github.com/ashleylamont/smashclub-seeding/commit/d56885540a03d1a40ab65258b07488225f11d5ea)
+- 22 November 2026 · **Maintenance** · Use one catalog for native tournament journal decisions across live state, replay and organiser history. [#401](https://github.com/ashleylamont/smashclub-seeding/pull/401) · [build b517ded](https://github.com/ashleylamont/smashclub-seeding/commit/b517deda4b44cf2625ed5443f745c3eba37b13a2)
+- 22 November 2026 · **Maintenance** · Add focused local typechecking and unit tests for changed workspaces, with an affected-task preview on pull requests. [#408](https://github.com/ashleylamont/smashclub-seeding/pull/408) · [build 2b6f991](https://github.com/ashleylamont/smashclub-seeding/commit/2b6f9910b1c47d50280f8cd2e302fc9addff56b3)
+- 22 November 2026 · **Fix** · Show one waiting message on the OBS gameplay overlay between matches, alongside the station name when known. [#419](https://github.com/ashleylamont/smashclub-seeding/pull/419) · [build 6658945](https://github.com/ashleylamont/smashclub-seeding/commit/6658945ea303552b423587b2db753cf9d0fbc4c5)
+- 22 November 2026 · **Maintenance** · Speed up automated claim-review tests by restoring a fresh database from a migrated snapshot for each case. [#423](https://github.com/ashleylamont/smashclub-seeding/pull/423) · [build 04d9540](https://github.com/ashleylamont/smashclub-seeding/commit/04d95409c23783bcea6a1c2e37a8e16586ca375c)
+- 22 November 2026 · **Feature** · Open a public GitHub feedback draft from the Nemesis footer. The draft includes the version and build, and you can review and submit your report on GitHub. [#404](https://github.com/ashleylamont/smashclub-seeding/pull/404) · [build 1908e41](https://github.com/ashleylamont/smashclub-seeding/commit/1908e4182c26833853800c67c60bcc3ba98601c5)
+- 22 November 2026 · **Improvement** · Use the TO desk keyboard shortcuts to find a pairing, focus the selected match’s score editor, or return to the ready queue while keeping your drafts. [#398](https://github.com/ashleylamont/smashclub-seeding/pull/398) · [build 22d9307](https://github.com/ashleylamont/smashclub-seeding/commit/22d930738c51eabc4a2a7daf17431168d7b34bc1)
+- 22 November 2026 · **Fix** · Return organisers to their event control link after sign-in, with a clear message when their account needs access. [#411](https://github.com/ashleylamont/smashclub-seeding/pull/411) · [build a36ef11](https://github.com/ashleylamont/smashclub-seeding/commit/a36ef11765bac92770277c4da79819aee902c028)
+- 22 November 2026 · **Maintenance** · Use the same app version comparison to queue builds and publish tagged releases. [#424](https://github.com/ashleylamont/smashclub-seeding/pull/424) · [build 471cc80](https://github.com/ashleylamont/smashclub-seeding/commit/471cc805195da9e08463d6e655fc380fefbace3f)
+- 22 November 2026 · **Maintenance** · Make release-note and pull request check tests more reliable during parallel runs. [#407](https://github.com/ashleylamont/smashclub-seeding/pull/407) · [build aa7b002](https://github.com/ashleylamont/smashclub-seeding/commit/aa7b0021210baea6680fb6603aeed06efb7e2894)
+- 22 November 2026 · **Maintenance** · Run portable browser and accessibility checks across three Ubuntu runners to shorten verification before deployment. [#414](https://github.com/ashleylamont/smashclub-seeding/pull/414) · [build 8fc2139](https://github.com/ashleylamont/smashclub-seeding/commit/8fc2139abb3226a3e2474ffae7f8eb497af5c357)
+
 ## 0.20.2
 
 ### Patch Changes
