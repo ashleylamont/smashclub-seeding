@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { LoadingState, Notice } from '../components/ui/Feedback';
 import { Button } from '../components/ui/Button';
@@ -200,17 +201,62 @@ function EventProgress({
   data: PublicEventSnapshot;
   selectedPool: string;
 }) {
+  const noteId = useId();
   const matches = data.matches.filter((match) => matchesPool(match, selectedPool));
   const complete = matches.filter((match) => match.status === 'complete').length;
+  const finals = eventFinalsProgress(data);
+  const poolProgress = Boolean(selectedPool) || finals === 'pending';
+  const title = poolProgress ? 'Pool progress' : 'Event progress';
+  const note =
+    finals === 'pending'
+      ? 'The finals draw is pending.'
+      : finals === 'partial'
+        ? 'The remaining finals draws are pending.'
+        : null;
   return (
-    <aside className="player-event-overview" aria-label="Event progress">
+    <aside className="player-event-overview" aria-label={title}>
       <span>
-        {selectedPool ? 'Pool progress' : 'Event progress'} · {complete} / {matches.length} sets
-        complete
+        {title} · {complete} / {matches.length} sets complete
+        {note && (
+          <span className="player-event-progress-note" id={noteId}>
+            {note}
+          </span>
+        )}
       </span>
-      <Progress label="Sets completed" value={complete} max={Math.max(1, matches.length)} />
+      <Progress
+        label={poolProgress ? 'Pool sets completed' : 'Sets completed'}
+        aria-describedby={note ? noteId : undefined}
+        value={complete}
+        max={Math.max(1, matches.length)}
+      />
     </aside>
   );
+}
+
+function eventFinalsProgress(data: PublicEventSnapshot) {
+  const { plan, matches, nativeBrackets, brackets, pendingFinals } = data;
+  const poolThenFinals =
+    plan.structure === 'dual_division' ||
+    plan.structure === 'pools_finals' ||
+    plan.structure === 'round_robin_finals';
+  if (
+    !poolThenFinals ||
+    plan.bracketMode !== 'native' ||
+    !['pools_ready', 'underway'].includes(plan.status) ||
+    plan.historicalResultsSlug ||
+    brackets.some((bracket) => bracket.slug)
+  )
+    return;
+
+  const pools = matches.filter((match) => match.stage === 'group');
+  if (!pools.length || pools.some((match) => match.status !== 'complete')) return;
+
+  // A published bracket can have no sets, and a snapshot can already contain finals pairings.
+  const hasDraw =
+    nativeBrackets.length > 0 ||
+    matches.some((match) => match.stage === 'main' || match.stage === 'consolation');
+  if (!hasDraw) return 'pending';
+  if (pendingFinals?.length) return 'partial';
 }
 
 function PlayerEventNavigation({

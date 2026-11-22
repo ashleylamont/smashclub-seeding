@@ -127,6 +127,11 @@
   margin-bottom: 0;
   color: var(--text-soft);
 }
+.player-event-progress-note {
+  display: block;
+  margin-top: var(--s1);
+  font-size: var(--fs-sm);
+}
 .player-event-overview progress {
   width: min(100%, 15rem);
 }
