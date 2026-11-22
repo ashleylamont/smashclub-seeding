@@ -430,7 +430,6 @@ test('a reviewed dispute supersedes an earlier confirmation with a lost acknowle
         isDispute,
       };
       reports.set(input.requestId, report);
-      fixture.responses['eventOps.myReports'] = [report];
     }
     if (loseNextAcknowledgement) {
       loseNextAcknowledgement = false;
@@ -444,6 +443,8 @@ test('a reviewed dispute supersedes an earlier confirmation with a lost acknowle
       await route.fulfill({ status: 500, json: batch ? [error] : error });
       return;
     }
+    // Keep the private read unchanged until this fixture delivers the acknowledgement.
+    fixture.responses['eventOps.myReports'] = [report];
     const result = { result: { data: report } };
     await route.fulfill({ json: batch ? [result] : result });
   });
@@ -466,10 +467,12 @@ test('a reviewed dispute supersedes an earlier confirmation with a lost acknowle
   await confirm.click();
   await expect(error).toContainText('Temporary reporting failure');
   expect(inputs[2]!.requestId).not.toBe(inputs[1]!.requestId);
+  await expect(card).toContainText('Your report: 2 – 0 · Confirmed result');
   await card.getByRole('button', { name: 'Report a different score' }).click();
   await card.getByRole('spinbutton').nth(1).fill('1');
   await card.getByRole('button', { name: 'Send different score to TOs' }).click();
   await expect(card).toContainText('Your report: 2 – 1 · Different score awaiting TO review');
+  await expect(card.getByRole('status')).toHaveCount(1);
   const dispute = reports.get(inputs[3]!.requestId)!;
   const filter = page.getByLabel('Show matches for');
   await chooseOption(filter, other.player1Id!);

@@ -13,7 +13,7 @@ import {
   storedScoreDraftOwner,
   useScoreDraftOwner,
 } from './scoreDraftSession';
-import { useScoreReportDrafts } from './useScoreReportDrafts';
+import { useScoreReportDrafts, type ScoreDraftRecovery } from './useScoreReportDrafts';
 import {
   eventPlayOpen,
   scoreApprovalPolicy,
@@ -360,22 +360,25 @@ function usePlayerReporting(
     }
     return authUnresolved ? undefined : null;
   })();
-  const canRecoverDraft = useCallback(
-    (match: PoolFlowMatch, attemptedRequestId: string | null) => {
-      const report = ownReports?.find((item) => item.matchId === match.id);
-      const attemptRecorded =
+  const draftRecovery = useCallback(
+    (match: PoolFlowMatch, attemptedRequestId: string | null): ScoreDraftRecovery => {
+      if (
         attemptedRequestId !== null &&
         ownReports?.some(
           (item) => item.matchId === match.id && item.requestId === attemptedRequestId,
-        );
-      return (
-        !attemptRecorded &&
-        matchPresentation(match).canReport &&
-        report?.status !== 'pending' &&
-        (match.status === 'complete'
-          ? scoreApprovalPolicy(data, match) !== 'review'
-          : report?.status !== 'approved')
-      );
+        )
+      )
+        return 'settled';
+      if (
+        !matchPresentation(match).canReport ||
+        (match.status === 'complete' && scoreApprovalPolicy(data, match) === 'review')
+      )
+        return 'unavailable';
+      const report = ownReports?.find((item) => item.matchId === match.id);
+      return report?.status === 'pending' ||
+        (match.status !== 'complete' && report?.status === 'approved')
+        ? 'blocked-by-report'
+        : 'available';
     },
     [data, ownReports],
   );
@@ -385,7 +388,7 @@ function usePlayerReporting(
     {
       planId,
       owner: verifiedDraftOwner && (!playOpen || !online) ? undefined : verifiedDraftOwner,
-      canRecover: canRecoverDraft,
+      recovery: draftRecovery,
     },
   );
   return {

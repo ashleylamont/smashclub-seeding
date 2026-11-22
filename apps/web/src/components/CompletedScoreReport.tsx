@@ -42,9 +42,6 @@ export function CompletedScoreReport({
   report?: {
     id: string;
     status: ResultSubmissionReceipt['status'];
-    score1: number | null;
-    score2: number | null;
-    isDispute: boolean;
   };
   onSubmit: (input: ResultSubmission) => Promise<ResultSubmissionReceipt>;
   editor: ReportEditor;
@@ -66,7 +63,6 @@ export function CompletedScoreReport({
     error,
   } = editor.draft;
   const pending = editor.draft.pendingRequestId !== null;
-  const pendingReport = report?.status === 'pending' ? report : undefined;
   // Keep the response visible while the private report query catches up with this submission.
   const message =
     completedFeedback &&
@@ -79,7 +75,8 @@ export function CompletedScoreReport({
     !recordedOnly &&
     allowReports &&
     presentation.canReport &&
-    (enabled || Boolean(pendingReport) || showUnavailableHint);
+    report?.status !== 'pending' &&
+    (enabled || showUnavailableHint);
   const submit = async (first: ScoreInputValue, second: ScoreInputValue, id: string) => {
     if (
       first === '' ||
@@ -134,12 +131,7 @@ export function CompletedScoreReport({
             You can confirm this score or flag a different result. A disagreement goes to the TOs
             and does not change the result automatically.
           </p>
-          {pendingReport ? (
-            <p role="status">
-              Your {pendingReport.isDispute ? 'different score' : 'score'}: {pendingReport.score1} –{' '}
-              {pendingReport.score2} · awaiting TO review. Ask a TO if it needs updating.
-            </p>
-          ) : !enabled ? (
+          {!enabled ? (
             <p>Use your current event QR pass to confirm or flag this result.</p>
           ) : (
             <>

@@ -23,12 +23,16 @@ type CompletedReportFeedback = {
 type ScoreReportDraft = Omit<SavedScoreDraft, 'touchedAt'> & {
   touchedAt: number | null;
   pendingRequestId: string | null;
+  // Feedback can outlive a transport failure or an edit that rotates the retry ID.
+  feedbackRequestId: string | null;
   sent: 'approved' | 'pending' | null;
   completedFeedback: CompletedReportFeedback | null;
   error: string;
 };
 
 type Drafts = ReadonlyMap<string, ScoreReportDraft>;
+
+export type ScoreDraftRecovery = 'available' | 'settled' | 'blocked-by-report' | 'unavailable';
 export function scoreReportDraftKey(match: DraftMatch) {
   return JSON.stringify([
     match.id,
@@ -57,33 +61,34 @@ export function useScoreReportDrafts(
   {
     planId,
     owner,
-    canRecover,
+    recovery,
   }: {
     planId: string;
     owner: DraftOwner | null | undefined;
-    canRecover: (match: DraftMatch, attemptedRequestId: string | null) => boolean;
+    recovery: (match: DraftMatch, attemptedRequestId: string | null) => ScoreDraftRecovery;
   },
 ): ScoreReportDrafts {
   const matchesByKey = useMemo(
     () => matches && new Map(matches.map((match) => [scoreReportDraftKey(match), match])),
     [matches],
   );
-  const verifiedEligibility = owner ? canRecover : undefined;
   const [state, setState] = useState({
     scope,
     matches,
     drafts: new Map() as Drafts,
     recoveredOwner: undefined as DraftOwner | undefined,
-    verifiedEligibility,
+    recovery,
+    owner,
   });
 
   let drafts = state.drafts;
   if (state.scope !== scope || (owner === null && (state.recoveredOwner || drafts.size))) {
     drafts = new Map();
-    setState({ scope, matches, drafts, recoveredOwner: undefined, verifiedEligibility });
+    setState({ scope, matches, drafts, recoveredOwner: undefined, recovery, owner });
   } else if (
     state.matches !== matches ||
-    state.verifiedEligibility !== verifiedEligibility ||
+    state.recovery !== recovery ||
+    state.owner !== owner ||
     (owner && state.recoveredOwner !== owner)
   ) {
     if (matchesByKey && drafts.size) {
@@ -91,11 +96,36 @@ export function useScoreReportDrafts(
         [...drafts].flatMap(([key, draft]) => {
           const match = matchesByKey.get(key);
           if (!match) return [];
+          const recoveryState = recovery(match, draft.feedbackRequestId);
+          if (recoveryState === 'settled') {
+            // Release the submission lock so a late callback cannot replace the receipt.
+            const edited =
+              draft.attemptedRequestId === null &&
+              draft.touchedAt !== null &&
+              recovery(match, null) === 'available';
+            return [
+              [
+                key,
+                edited
+                  ? {
+                      ...draft,
+                      confirmationId: crypto.randomUUID(),
+                      pendingRequestId: null,
+                      feedbackRequestId: null,
+                      sent: null,
+                      completedFeedback: null,
+                      error: '',
+                    }
+                  : initialDraft(match),
+              ],
+            ];
+          }
           const unsent = draft.touchedAt !== null || draft.editing || draft.retryRejected;
           if (
+            owner &&
             unsent &&
-            verifiedEligibility &&
-            !verifiedEligibility(match, draft.attemptedRequestId)
+            (recoveryState === 'unavailable' ||
+              (recoveryState === 'blocked-by-report' && !draft.feedbackRequestId))
           ) {
             return [
               [
@@ -104,6 +134,7 @@ export function useScoreReportDrafts(
                   ...initialDraft(match),
                   // An outstanding request can still receive its authoritative response.
                   pendingRequestId: draft.pendingRequestId,
+                  feedbackRequestId: draft.pendingRequestId,
                   sent: draft.sent,
                   completedFeedback: draft.completedFeedback,
                 },
@@ -119,12 +150,13 @@ export function useScoreReportDrafts(
       const recovered = new Map<string, ScoreReportDraft>();
       for (const [key, saved] of readScoreDrafts(planId, owner)) {
         const match = matchesByKey.get(key);
-        if (!match || !canRecover(match, saved.attemptedRequestId)) continue;
+        if (!match || recovery(match, saved.attemptedRequestId) !== 'available') continue;
         const players = new Set(scoreReportPlayers(match).map(({ id }) => id));
         if (saved.picks.some(({ playerId }) => !players.has(playerId))) continue;
         recovered.set(key, {
           ...saved,
           pendingRequestId: null,
+          feedbackRequestId: saved.attemptedRequestId,
           sent: null,
           completedFeedback: null,
           error: '',
@@ -134,7 +166,7 @@ export function useScoreReportDrafts(
       drafts = new Map([...recovered, ...drafts]);
       recoveredOwner = owner;
     }
-    setState({ scope, matches, drafts, recoveredOwner, verifiedEligibility });
+    setState({ scope, matches, drafts, recoveredOwner, recovery, owner });
   }
 
   useLayoutEffect(() => {
@@ -150,7 +182,11 @@ export function useScoreReportDrafts(
       owner,
       [...drafts].flatMap(([key, draft]) => {
         const match = matchesByKey.get(key);
-        if (!match || draft.touchedAt === null || !canRecover(match, draft.attemptedRequestId))
+        if (
+          !match ||
+          draft.touchedAt === null ||
+          recovery(match, draft.attemptedRequestId) !== 'available'
+        )
           return [];
         const { score1, score2, picks, attemptedRequestId, touchedAt } = draft;
         const [initial1, initial2] = initialScores(match);
@@ -159,7 +195,7 @@ export function useScoreReportDrafts(
           : [];
       }),
     );
-  }, [canRecover, drafts, matchesByKey, owner, planId]);
+  }, [drafts, matchesByKey, owner, planId, recovery]);
 
   return {
     drafts,
@@ -190,6 +226,7 @@ function initialDraft(match: DraftMatch): ScoreReportDraft {
     attemptedRequestId: null,
     touchedAt: null,
     pendingRequestId: null,
+    feedbackRequestId: null,
     sent: null,
     completedFeedback: null,
     error: '',
@@ -247,12 +284,14 @@ export function useScoreReportDraft(match: DraftMatch, store?: ScoreReportDrafts
         requestId: crypto.randomUUID(),
         confirmationId: crypto.randomUUID(),
         attemptedRequestId: null,
+        feedbackRequestId: null,
         error: '',
       });
     },
     begin: (id: string) =>
       update({
         pendingRequestId: id,
+        feedbackRequestId: id,
         completedFeedback: null,
         error: '',
         sent: null,
