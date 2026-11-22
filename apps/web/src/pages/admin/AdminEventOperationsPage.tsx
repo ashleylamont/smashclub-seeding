@@ -26,7 +26,7 @@ import { ScorePolicyControls } from './ScorePolicyControls';
 import { StationPoolControls } from './StationPoolControls';
 import { NativeBracketControls } from './NativeBracketControls';
 import { QueueResetControls } from './QueueResetControls';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { ToPlayerFinder } from './ToPlayerFinder';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearch, useParams } from '@tanstack/react-router';
@@ -43,6 +43,33 @@ import { availableMatches, poolStandings } from '../../lib/eventQueue';
 import { poolTitle } from '../../lib/poolFlow';
 import { OpsAttentionDesk } from './OpsAttentionDesk';
 import { MainStagePanel } from './MainStagePanel';
+
+const terminalOverviewErrors = ['FORBIDDEN', 'UNAUTHORIZED', 'NOT_FOUND', 'BAD_REQUEST'];
+
+function overviewErrorCode(error: unknown) {
+  return error instanceof TRPCClientError ? error.data?.code : undefined;
+}
+
+function useEventOverview(planId: string, userId: string | undefined, recheckAccess: boolean) {
+  const entry = useId();
+  return useQuery({
+    // Each assigned desk entry needs its own first permission decision.
+    queryKey: ['eventOps', planId, 'overview', userId, ...(recheckAccess ? [entry] : [])],
+    queryFn: async () => {
+      try {
+        return { overview: await trpc.eventOps.overview.query({ planId }) };
+      } catch (cause) {
+        const code = overviewErrorCode(cause);
+        // A definitive denial replaces the cached desk. Transport errors keep it for this entry.
+        if (recheckAccess && code && terminalOverviewErrors.includes(code))
+          return { accessError: code };
+        throw cause;
+      }
+    },
+    refetchInterval: 2500,
+    ...(recheckAccess && { gcTime: 0 }),
+  });
+}
 
 export function AdminEventOperationsPage() {
   const search = useSearch({ strict: false }) as { plan?: string };
@@ -81,7 +108,13 @@ export function AssignedEventOperationsPage() {
   return <EventOperationsPanel planId={planId} />;
 }
 
-export function EventOperationsPanel({ planId }: { planId: string }) {
+export function EventOperationsPanel({
+  planId,
+  recheckAccess = false,
+}: {
+  planId: string;
+  recheckAccess?: boolean;
+}) {
   const online = useOnlineStatus();
   const workspace = useOpsWorkspace();
   const openScoreSubmissions = () => void workspace.openControl('score-submissions');
@@ -89,11 +122,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
   const { data: session, refetch: refetchSession } = authClient.useSession();
   const currentUser = useCurrentUser(session);
   const admin = currentUser.data?.role === 'admin';
-  const event = useQuery({
-    queryKey: ['eventOps', planId, 'overview', session?.user.id],
-    queryFn: () => trpc.eventOps.overview.query({ planId }),
-    refetchInterval: 2500,
-  });
+  const event = useEventOverview(planId, session?.user.id, recheckAccess);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [pending, setPending] = useState(false);
@@ -117,12 +146,13 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
       setPending(false);
     }
   };
-  const closed = ['complete', 'cancelled'].includes(event.data?.plan.status ?? '');
-  const liveDisabled = !online || pending || closed || Boolean(event.data?.plan.drawPaused);
+  const data = event.data?.overview;
+  const closed = ['complete', 'cancelled'].includes(data?.plan.status ?? '');
+  const liveDisabled = !online || pending || closed || Boolean(data?.plan.drawPaused);
   const dispatchDisabled = liveDisabled || event.isError;
   const dispatch = useDispatchCommand(planId, dispatchDisabled);
   if (event.isPending) return <LoadingState>Opening event…</LoadingState>;
-  const accessError = event.error instanceof TRPCClientError ? event.error.data?.code : undefined;
+  const accessError = event.data?.accessError ?? overviewErrorCode(event.error);
   if (accessError === 'FORBIDDEN')
     return (
       <PageHeader
@@ -132,7 +162,7 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
     );
   if (accessError === 'NOT_FOUND' || accessError === 'BAD_REQUEST')
     return <PageHeader title="Event unavailable" description="Check the event control link." />;
-  if (!event.data || accessError === 'UNAUTHORIZED')
+  if (!data || accessError === 'UNAUTHORIZED')
     return (
       <PageHeader
         title={accessError === 'UNAUTHORIZED' ? 'Could not check sign-in' : 'Could not open event'}
@@ -150,7 +180,6 @@ export function EventOperationsPanel({ planId }: { planId: string }) {
         }
       />
     );
-  const data = event.data;
   const available = availableMatches(data.matches).filter((match) => match.availability.canStart);
   const callable = new Set(available.map((match) => match.id));
   const pools = poolStandings(data.matches);

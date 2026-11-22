@@ -134,6 +134,73 @@ test('offers retry after a connection failure while loading an assigned event', 
   await expect(page.getByRole('link', { name: 'Sign in to event control' })).toHaveCount(0);
   interrupted = false;
   await retry.press('Enter');
-  await expect(page.getByRole('heading', { name: fixture.overview.plan.name })).toBeVisible();
+  const deskHeading = page.getByRole('heading', { name: fixture.overview.plan.name });
+  await expect(deskHeading).toBeVisible();
+
+  interrupted = true;
+  const warning = page.getByRole('alert').filter({ hasText: 'Live updates interrupted' });
+  await expect(warning).toBeVisible();
+  await expect(deskHeading).toBeVisible();
+  interrupted = false;
+  await expect(warning).toHaveCount(0);
+  await expect(deskHeading).toBeVisible();
+  expect(fixture.unexpected).toEqual([]);
+});
+
+test('waits for permission before showing an assigned desk on same-account re-entry', async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  const fixture = await mockEvent(page, { role: 'player' });
+  fixture.responses['eventOps.publicEvents'] = [];
+  const eventName = fixture.overview.plan.name;
+  let revoked = false;
+  let deniedRequests = 0;
+  let releaseDenial!: () => void;
+  const pendingDenial = new Promise<void>((resolve) => {
+    releaseDenial = resolve;
+  });
+  await page.route('**/api/trpc/**', async (route) => {
+    const url = new URL(route.request().url());
+    const procedures = decodeURIComponent(url.pathname.replace('/api/trpc/', '')).split(',');
+    if (!revoked || !procedures.includes('eventOps.overview')) return route.fallback();
+    deniedRequests++;
+    await pendingDenial;
+    const result = procedures.map((procedure) =>
+      procedure === 'eventOps.overview'
+        ? { error: { message: 'Access revoked', code: -32003, data: { code: 'FORBIDDEN' } } }
+        : { result: { data: fixture.responses[procedure] } },
+    );
+    await route.fulfill({ json: url.searchParams.has('batch') ? result : result[0] });
+  });
+
+  const path = `/operate/${PLAN_ID}`;
+  const deskHeading = page.getByRole('heading', { name: eventName });
+  const workspace = page.getByRole('tablist', { name: 'Event workspace' });
+  await page.goto(path);
+  await expect(deskHeading).toBeVisible();
+  await expect(workspace).toBeVisible();
+  await page.getByRole('link', { name: 'Event night', exact: true }).click();
+  await expect(page).toHaveURL('/play');
+  await expect(page.getByRole('heading', { name: 'Events', exact: true })).toBeVisible();
+
+  try {
+    revoked = true;
+    await page.goBack();
+    await expect(page).toHaveURL(path);
+    await expect(deskHeading).toHaveCount(0);
+    await expect(workspace).toHaveCount(0);
+    await expect(page.getByRole('status')).toHaveText('Opening event…');
+    await expect.poll(() => deniedRequests).toBe(1);
+    await inspect(page, testInfo, '05-awaiting-re-entry-permission');
+  } finally {
+    releaseDenial();
+  }
+  await expect(page.getByRole('heading', { name: 'Event access denied' })).toBeVisible();
+  expect(deniedRequests).toBe(1);
+  await expect(deskHeading).toHaveCount(0);
+  await expect(workspace).toHaveCount(0);
+  await inspect(page, testInfo, '06-denied-after-re-entry');
   expect(fixture.unexpected).toEqual([]);
 });

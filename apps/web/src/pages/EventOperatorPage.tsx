@@ -17,7 +17,14 @@ export function EventOperatorPage() {
   if (!destination)
     return <PageHeader title="Event unavailable" description="Check the event control link." />;
   if (isPending) return <LoadingState>Checking sign-in…</LoadingState>;
-  if (session) return <EventOperationsPanel key={session.user.id} planId={destination.operate} />;
+  if (session)
+    return (
+      <EventOperationsPanel
+        key={`${session.user.id}:${destination.operate}`}
+        planId={destination.operate}
+        recheckAccess
+      />
+    );
   if (error && error.status !== 401)
     return (
       <PageHeader
