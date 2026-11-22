@@ -579,7 +579,7 @@ export function EventOperationsPanel({
           />
           <OpsAnnouncements data={data} pending={pending} closed={closed} act={act} />
         </TabPanel>
-        <TabPanel value="settings">
+        <TabPanel value="settings" className="ops-settings">
           <ScorePolicyControls
             onReports={openScoreSubmissions}
             data={data}
