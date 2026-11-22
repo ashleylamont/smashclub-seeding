@@ -51,6 +51,9 @@
 .dispatch-pairings > .btn {
   justify-self: start;
 }
+.dispatch-pairings > .banner {
+  margin-bottom: 0;
+}
 .dispatch-list {
   margin: 0;
   padding-left: 24px;

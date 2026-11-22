@@ -185,6 +185,7 @@ export function EventOperationsPanel({
     }
   };
   const data = event.data?.overview;
+  const interrupted = !online || event.isError;
   const closed = ['complete', 'cancelled'].includes(data?.plan.status ?? '');
   const liveDisabled = !online || pending || closed || Boolean(data?.plan.drawPaused);
   const dispatchDisabled = !data || liveDisabled || event.isError;
@@ -275,7 +276,7 @@ export function EventOperationsPanel({
           void workspace.openControl('match-desk');
         }}
       />
-      {(!online || event.isError) && (
+      {interrupted && (
         <div className="banner banner-warning" role="alert">
           Live updates interrupted. Last loaded data is shown. {event.error?.message}
         </div>
@@ -306,6 +307,7 @@ export function EventOperationsPanel({
             <DispatchDesk
               data={data}
               dispatch={dispatch}
+              interrupted={interrupted}
               callDesk={callDesk}
               onReviewReports={openScoreSubmissions}
               shortcutsActive={workspace.section === 'run'}
