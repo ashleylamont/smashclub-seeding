@@ -1,5 +1,35 @@
 import { createHash } from 'node:crypto';
-import { defaultWhrConfig, type PreparedWhrHistory } from '@smashclub/engine';
+import { eq } from 'drizzle-orm';
+import { recomputes, type Db } from '@smashclub/db';
+import { defaultWhrConfig, prepareWhrHistory, type PreparedWhrHistory } from '@smashclub/engine';
+import { ratingSettingsSchema, type RatingSettings } from '@smashclub/shared';
+import { loadWhrHistory } from './inputs';
+
+const HISTORY_LIMITS = { maxTournaments: 256, maxSets: 4000, maxNativeRows: 512 };
+
+export async function readWhrRunProvenance(db: Db, recomputeId: string) {
+  const [run] = await db
+    .select({ stats: recomputes.stats, settingsSnapshot: recomputes.settingsSnapshot })
+    .from(recomputes)
+    .where(eq(recomputes.id, recomputeId));
+  const fingerprints = currentWhrPrefixFingerprints(run?.stats);
+  const snapshot = run?.settingsSnapshot as { rating?: unknown } | null;
+  if (!fingerprints || !snapshot?.rating) return null;
+  const settings = ratingSettingsSchema.safeParse(snapshot.rating);
+  return settings.success ? { fingerprints, settings: settings.data } : null;
+}
+
+export async function loadWhrHistoryThroughDay(db: Db, day: Date, settings: RatingSettings) {
+  const before = new Date(day);
+  before.setUTCHours(24, 0, 0, 0);
+  const inputs = await loadWhrHistory(db, { before, ...HISTORY_LIMITS });
+  if (!inputs) return null;
+  return prepareWhrHistory({
+    sets: inputs.engineSets,
+    tournaments: inputs.engineTournaments,
+    settings,
+  });
+}
 
 // Bump when the preparation, fitter or omission method changes.
 export const WHR_PREFIX_FINGERPRINT_VERSION = 2;

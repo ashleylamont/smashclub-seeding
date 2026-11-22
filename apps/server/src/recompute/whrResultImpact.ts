@@ -1,18 +1,20 @@
 import { and, eq } from 'drizzle-orm';
-import { recomputes, ratingEvents, tournaments, type Db } from '@smashclub/db';
+import { ratingEvents, tournaments, type Db } from '@smashclub/db';
 import {
   DISPLAY_CENTRE,
   NATURAL_TO_DISPLAY,
+  buildWhrPriorEvidence,
   fitWhrPrefix,
-  prepareWhrHistory,
   probabilityFromRatings,
+  whrForecastUnavailable,
   whrSetSides,
-  type PreparedWhrHistory,
 } from '@smashclub/engine';
-import { ratingSettingsSchema } from '@smashclub/shared';
-import { loadWhrHistory } from './inputs';
 import { latestRecomputeId } from './recompute';
-import { currentWhrPrefixFingerprints, whrPrefixFingerprints } from './whrProvenance';
+import {
+  loadWhrHistoryThroughDay,
+  readWhrRunProvenance,
+  whrPrefixFingerprints,
+} from './whrProvenance';
 
 interface ImpactInput {
   playerId: string;
@@ -32,7 +34,6 @@ const unavailable = (reason: UnavailableReason) => ({ status: 'unavailable' as c
 
 const MAX_ACTIVE_READS = 2;
 const WORK_PER_SECOND = { read: 24, refit: 4 };
-const HISTORY_LIMITS = { maxTournaments: 256, maxSets: 4000, maxNativeRows: 512 };
 const MAX_CACHE_ENTRIES = 256;
 let activeReads = 0;
 let windowStart = 0;
@@ -52,12 +53,8 @@ function reserve(kind: keyof typeof WORK_PER_SECOND) {
 
 async function readSnapshot(db: Db, input: ImpactInput) {
   if ((await latestRecomputeId(db)) !== input.recomputeId) return unavailable('stale_run');
-  const [run] = await db.select().from(recomputes).where(eq(recomputes.id, input.recomputeId));
-  const fingerprints = currentWhrPrefixFingerprints(run?.stats);
-  const snapshot = run?.settingsSnapshot as { rating?: unknown } | null;
-  if (!fingerprints || !snapshot?.rating) return unavailable('older_run');
-  const settings = ratingSettingsSchema.safeParse(snapshot.rating);
-  if (!settings.success) return unavailable('older_run');
+  const provenance = await readWhrRunProvenance(db, input.recomputeId);
+  if (!provenance) return unavailable('older_run');
   const participants = await db
     .select({
       playerId: ratingEvents.playerId,
@@ -80,16 +77,8 @@ async function readSnapshot(db: Db, input: ImpactInput) {
   if (!participant || (participants.length !== 2 && participants.length !== 4))
     return unavailable('not_rated');
   if (!participant.eventDate) return unavailable('history_changed');
-  const before = new Date(participant.eventDate);
-  before.setUTCHours(24, 0, 0, 0);
-  const inputs = await loadWhrHistory(db, { before, ...HISTORY_LIMITS });
-  if (!inputs) return unavailable('history_too_large');
-  const { engineSets, engineTournaments } = inputs;
-  const history = prepareWhrHistory({
-    sets: engineSets,
-    tournaments: engineTournaments,
-    settings: settings.data,
-  });
+  const history = await loadWhrHistoryThroughDay(db, participant.eventDate, provenance.settings);
+  if (!history) return unavailable('history_too_large');
   const setIndex = history.rateable.findIndex(({ set }) => set.id === input.setId);
   const row = history.rateable[setIndex];
   if (!row) return unavailable('history_changed');
@@ -99,41 +88,9 @@ async function readSnapshot(db: Db, input: ImpactInput) {
     !members.every((id) => participants.some(({ playerId }) => playerId === id))
   )
     return unavailable('history_changed');
-  if (whrPrefixFingerprints(history).get(row.eventKey) !== fingerprints[row.eventKey])
+  if (whrPrefixFingerprints(history).get(row.eventKey) !== provenance.fingerprints[row.eventKey])
     return unavailable('history_changed');
   return { status: 'verified' as const, history, setIndex, row, participants, participant };
-}
-
-/** Only earlier rated sets can connect the players for a pre-night estimate. */
-function preNightOpponents(history: PreparedWhrHistory, day: number) {
-  const opponents = new Map<string, Set<string>>();
-  for (const { day: playedDay, set } of history.rateable) {
-    if (playedDay >= day) break;
-    const sides = whrSetSides(set);
-    for (const side of [0, 1] as const) {
-      for (const id of sides[side]) {
-        const played = opponents.get(id) ?? new Set<string>();
-        sides[side === 0 ? 1 : 0].forEach((opponent) => played.add(opponent));
-        opponents.set(id, played);
-      }
-    }
-  }
-  return opponents;
-}
-
-function connected(opponents: Map<string, Set<string>>, playerId: string, opponentId: string) {
-  const visited = new Set([playerId]);
-  const pending = [playerId];
-  while (pending.length) {
-    const next = pending.pop()!;
-    if (next === opponentId) return true;
-    for (const other of opponents.get(next) ?? []) {
-      if (visited.has(other)) continue;
-      visited.add(other);
-      pending.push(other);
-    }
-  }
-  return false;
 }
 
 function meanPreRating(team: readonly { preRating: number }[]) {
@@ -190,23 +147,13 @@ export async function readWhrResultImpact(db: Db, input: ImpactInput) {
     }
     cache.set(cacheKey, deltas);
     if (cache.size > MAX_CACHE_ENTRIES) cache.delete(cache.keys().next().value!);
-    const opponents = preNightOpponents(history, row.day);
-    const firstNight = !opponents.has(input.playerId);
+    const evidence = buildWhrPriorEvidence(history, row.eventKey);
+    const firstNight = !evidence.has(input.playerId);
     const sides = whrSetSides(row.set);
     const side = sides[0].includes(input.playerId) ? 0 : 1;
     const own = participants.filter(({ playerId }) => sides[side].includes(playerId));
     const other = participants.filter(({ playerId }) => !sides[side].includes(playerId));
-    let forecastUnavailable: 'first_night' | 'disconnected' | 'missing_estimate' | null = null;
-    if (participants.some(({ playerId }) => !opponents.has(playerId)))
-      forecastUnavailable = 'first_night';
-    else if (participants.some(({ playerId }) => !connected(opponents, input.playerId, playerId)))
-      forecastUnavailable = 'disconnected';
-    else if (
-      !participants.every(
-        ({ preRating, preRd }) => Number.isFinite(preRating) && Number.isFinite(preRd) && preRd > 0,
-      )
-    )
-      forecastUnavailable = 'missing_estimate';
+    const forecastUnavailable = whrForecastUnavailable(evidence, participants);
     const forecast =
       forecastUnavailable === null
         ? {

@@ -5,6 +5,7 @@ export * from './score';
 export * from './recap';
 export * from './breakthrough';
 export * from './whr';
+export * from './whrForecast';
 export * from './whrRun';
 export * from './evaluate';
 export * from './models';
