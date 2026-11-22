@@ -217,7 +217,11 @@ export function usePlayerEventHub(planId: string) {
       cache.invalidateQueries({ queryKey: ['eventOpsPublic', planId] }),
       cache.invalidateQueries({ queryKey: ['eventOpsReports', planId] }),
     ]);
-    return result;
+    return {
+      reportId: 'reportId' in result ? result.reportId : result.id,
+      status: result.status,
+      isDispute: result.isDispute,
+    };
   };
   return {
     ...guest,

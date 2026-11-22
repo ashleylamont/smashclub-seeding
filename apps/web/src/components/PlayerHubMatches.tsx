@@ -5,6 +5,7 @@ import { Select, SelectItem } from './ui/Select';
 import { Input } from './ui/Input';
 import { Button } from './ui/Button';
 import { EventScoreCard } from './EventScoreCard';
+import { useScoreReportDrafts } from '../lib/useScoreReportDrafts';
 import { PlayedCharacterReport } from './PlayedCharacterReport';
 import { scoreReportPlayers } from '../lib/scoreReportPlayers';
 import { PlayerMatchFilter } from './PlayerMatchFilter';
@@ -57,6 +58,10 @@ export function PlayerHubMatches({
     claim,
     signedIn,
   } = hub;
+  const scoreDrafts = useScoreReportDrafts(
+    JSON.stringify([data.plan.id, reportingIdentity, closed]),
+    data.matches,
+  );
   const journey = player ? playerJourney(data, player) : undefined;
   return (
     <section id="my-matches" aria-label="Find my matches and report scores">
@@ -208,6 +213,7 @@ export function PlayerHubMatches({
             <EventScoreCard
               key={match.id}
               reportingIdentity={reportingIdentity}
+              scoreDrafts={scoreDrafts}
               enabled={
                 canWrite && !closed && ['ready', 'playing', 'complete'].includes(match.status)
               }
