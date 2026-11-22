@@ -24,8 +24,7 @@ export function DispatchShortcuts({
       event.metaKey
     )
       return;
-    // Shift changes the printed character, so match the top-row number keys.
-    const shortcut = dispatchShortcuts.find(({ digit }) => event.code === `Digit${digit}`);
+    const shortcut = dispatchShortcuts.find(({ key }) => event.key === key);
     if (!shortcut) return;
     const target = event.target;
     if (
@@ -54,15 +53,15 @@ export function DispatchShortcuts({
       title="Keyboard shortcuts"
       open={open}
       onOpenChange={setOpen}
-      description="Use these in Run matches outside fields, menus, and dialogs. Choose Score / details to select a match."
+      description="Use these in Run matches outside fields, menus and dialogs. Choose Score / details to select a match. Hold Fn or Globe if these keys control media."
       trigger={<Button size="small">Keyboard shortcuts</Button>}
     >
       <dl className="dispatch-shortcut-list">
-        {dispatchShortcuts.map(({ action, digit, label }) => (
+        {dispatchShortcuts.map(({ action, key, label }) => (
           <div key={action}>
             <dt>{label}</dt>
             <dd>
-              <kbd>Ctrl + Shift + {digit}</kbd>
+              <kbd>Ctrl + Shift + {key}</kbd>
             </dd>
           </div>
         ))}

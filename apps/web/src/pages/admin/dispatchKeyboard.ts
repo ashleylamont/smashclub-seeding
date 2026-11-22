@@ -1,14 +1,14 @@
+// Modified digits are reserved for workspace switching in Vivaldi and capture in some browsers.
 export const dispatchShortcuts = [
-  { digit: 1, action: 'findPairing', label: 'Find a pairing' },
-  { digit: 2, action: 'focusScore', label: 'Focus score editor' },
-  // Avoid Firefox’s macOS capture (3 and 6) and Nightly window-recording (4) bindings.
-  { digit: 5, action: 'readyQueue', label: 'Go to the ready queue' },
+  { key: 'F7', action: 'findPairing', label: 'Find a pairing' },
+  { key: 'F8', action: 'focusScore', label: 'Focus score editor' },
+  { key: 'F9', action: 'readyQueue', label: 'Go to the ready queue' },
 ] as const;
 export type ShortcutAction = (typeof dispatchShortcuts)[number]['action'];
 
 export function dispatchShortcut(action: ShortcutAction) {
   const shortcut = dispatchShortcuts.find((shortcut) => shortcut.action === action);
-  return shortcut && `Control+Shift+${shortcut.digit}`;
+  return shortcut && `Control+Shift+${shortcut.key}`;
 }
 
 export function focusDispatchTarget(target: HTMLElement | null) {
