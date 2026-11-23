@@ -191,27 +191,53 @@ test('the published chart can load independently of set history', async ({ page 
   await expect(chart.locator('.tooltip-row')).toContainText('1600');
 });
 
-test('a legacy gap stays on the axis after deselecting everyone who played that night', async ({
-  page,
-}, info) => {
-  await page.setViewportSize({ width: 390, height: 900 });
-  const { requests } = await mockRatingHistory(page, false);
-  await page.goto('/');
-  const chart = page.locator('.ratings-over-time');
-  const plot = chart.getByRole('application');
-  await expect(plot).toContainText(dates[1]!);
-  await chart.locator('.chart-legend').getByRole('button', { name: debut.name }).click();
-  await expect.poll(() => requests.at(-1)).toEqual([returning.playerId]);
-  await expect(plot).toContainText(dates[1]!);
-  await plot.focus();
-  await expect(chart.locator('.tooltip-label')).toHaveText(dates[0]!);
-  await plot.press('ArrowRight');
-  await expect(chart.locator('.tooltip-label')).toHaveText(dates[1]!);
-  await expect(chart.getByRole('status')).toContainText('No recorded estimates');
-  await expect(chart.locator('.tooltip-row')).toHaveCount(0);
-  await ready(page);
-  await chart.screenshot({ path: info.outputPath('legacy-gap.png') });
-});
+for (const theme of ['light', 'dark'] as const) {
+  for (const width of [390, 1440]) {
+    test(`keyboard navigation across a legacy gap at ${width}px in ${theme}`, async ({
+      page,
+    }, info) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ colorScheme: theme });
+      const { requests, unexpected } = await mockRatingHistory(page, false);
+      await page.goto('/');
+      const chart = page.locator('.ratings-over-time');
+      const plot = chart.getByRole('application', { name: 'Player estimates by club night' });
+      const status = chart.getByRole('status');
+      const playerRows = status.locator('.tooltip-row');
+      await expect(plot).toContainText(dates[1]!);
+      await chart.locator('.chart-legend').getByRole('button', { name: debut.name }).click();
+      await expect.poll(() => requests.at(-1)).toEqual([returning.playerId]);
+      await expect(plot).toContainText(dates[1]!);
+      await plot.focus();
+      await expect(status.getByText(dates[0]!, { exact: true })).toBeVisible();
+      await expect(playerRows).toHaveCount(1);
+      await expect(playerRows).toContainText(returning.name);
+      await expect(playerRows.getByText('1600', { exact: true })).toBeVisible();
+
+      await plot.press('ArrowRight');
+      await ready(page);
+      await expect(status.getByText(dates[1]!, { exact: true })).toBeVisible();
+      await expect(status.getByText('No recorded estimates for these players.')).toBeVisible();
+      await expect(playerRows).toHaveCount(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+        width,
+      );
+      await chart.screenshot({ path: info.outputPath('legacy-gap.png') });
+      const scan = await new AxeBuilder({ page }).include('.ratings-over-time').analyze();
+      expect(scan.violations).toEqual([]);
+
+      await plot.press('Escape');
+      await expect(status).toBeHidden();
+      await expect(plot).toBeFocused();
+      await plot.press('ArrowRight');
+      await expect(status.getByText(dates[2]!, { exact: true })).toBeVisible();
+      await expect(playerRows).toHaveCount(1);
+      await expect(playerRows).toContainText(returning.name);
+      await expect(playerRows.getByText('1710', { exact: true })).toBeVisible();
+      expect(unexpected).toEqual([]);
+    });
+  }
+}
 
 test('a modern selection absent from the published run cannot recover cached played estimates', async ({
   page,
