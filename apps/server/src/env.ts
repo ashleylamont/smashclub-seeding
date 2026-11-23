@@ -19,6 +19,9 @@ const envSchema = z.object({
   DISCORD_CLIENT_SECRET: z.string().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
+  FEEDBACK_GITHUB_APP_ID: z.string().optional(),
+  FEEDBACK_GITHUB_INSTALLATION_ID: z.string().optional(),
+  FEEDBACK_GITHUB_PRIVATE_KEY_FILE: z.string().optional(),
   /**
    * Bootstrap only: verified primary emails allowed to become the first admin
    * when no verified admin exists in the database. After that, admins manage roles in

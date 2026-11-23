@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { buildApp } from '../src/app';
+import { buildApp, type AppDeps } from '../src/app';
 import { createAuth } from '../src/auth';
 import { loadEnv } from '../src/env';
 import { RecomputeTrigger } from '../src/recompute/trigger';
@@ -14,6 +14,12 @@ let app: FastifyInstance;
 let secondApp: FastifyInstance;
 let adminCookie: string;
 let memberCookie: string;
+let publisher: NonNullable<AppDeps['feedbackPublisher']>;
+let posted: Parameters<typeof publisher.create>[0][];
+let createResult: Awaited<ReturnType<typeof publisher.create>>;
+let recoveredIssue: number | undefined;
+let lookups: number;
+let holdCreate: Promise<void> | undefined;
 const origin = 'http://localhost:5173';
 const password = 'synthetic-fixture-password';
 
@@ -26,6 +32,18 @@ beforeAll(async () => {
     BETTER_AUTH_SECRET: 'synthetic-fixture-auth-secret',
     BETTER_AUTH_URL: origin,
   });
+  publisher = {
+    rateKey: 'synthetic-feedback-rate-key',
+    async create(input) {
+      posted.push(input);
+      await holdCreate;
+      return createResult;
+    },
+    async find() {
+      lookups++;
+      return recoveredIssue;
+    },
+  };
   const createApp = (db: typeof cluster.db) =>
     buildApp({
       db,
@@ -33,6 +51,7 @@ beforeAll(async () => {
       auth: createAuth(db, env, { enableCredentials: true }),
       challonge: fixtureClient([]),
       recomputeTrigger: new RecomputeTrigger(db),
+      feedbackPublisher: publisher,
     });
   app = await createApp(cluster.db);
   secondApp = await createApp(secondConnection.db);
@@ -64,7 +83,12 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  await cluster.pool.query('TRUNCATE app_feedback');
+  await cluster.pool.query('TRUNCATE app_feedback, app_feedback_issues');
+  posted = [];
+  createResult = { status: 'created', number: 123 };
+  recoveredIssue = undefined;
+  lookups = 0;
+  holdCreate = undefined;
 });
 
 afterAll(async () => {
@@ -76,6 +100,7 @@ afterAll(async () => {
 function report() {
   return {
     requestId: randomUUID(),
+    publicConsent: true,
     summary: ' Synthetic report ',
     description: ' Example steps to reproduce\nMade up for the test. ',
     version: '1.2.3',
@@ -83,10 +108,16 @@ function report() {
   };
 }
 
-function send(payload: object | string, target = app, headers: Record<string, string> = {}) {
+function send(
+  payload: object | string,
+  target = app,
+  headers: Record<string, string> = {},
+  remoteAddress = '192.0.2.1',
+) {
   return target.inject({
     method: 'POST',
-    url: '/api/feedback',
+    url: '/api/feedback/public',
+    remoteAddress,
     headers: {
       host: 'localhost:5173',
       origin,
@@ -106,56 +137,116 @@ function inbox(cookie?: string, cursor?: unknown) {
   });
 }
 
-it('stores only the form and visible build, returns a durable reference, and restricts inbox reads', async () => {
+it('claims a signed-out public report across replicas and recovers its receipt', async () => {
   const payload = report();
-  const responses = await Promise.all([
-    send(payload, app, { cookie: memberCookie, referer: `${origin}/private?guest=example` }),
-    send(payload, secondApp),
+  const legacy = await app.inject({ method: 'POST', url: '/api/feedback', payload });
+  expect(legacy.statusCode).toBe(410);
+  expect(posted).toHaveLength(0);
+  let release!: () => void;
+  holdCreate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const creating = send(payload, app, {
+    cookie: memberCookie,
+    referer: `${origin}/private?guest=example`,
+  });
+  try {
+    await expect.poll(() => posted.length).toBe(1);
+    const concurrent = await send(payload, secondApp);
+    expect(concurrent.statusCode).toBe(202);
+    expect(concurrent.json()).toEqual({ state: 'unknown' });
+  } finally {
+    release();
+  }
+  const receipt = { number: 123 };
+  const created = await creating;
+  expect(created.statusCode).toBe(201);
+  expect(created.json()).toEqual(receipt);
+  expect((await send(payload, secondApp)).json()).toEqual(receipt);
+  expect((await send({ ...payload, summary: 'Edited text' })).statusCode).toBe(409);
+  expect(posted).toEqual([
+    {
+      summary: payload.summary.trim(),
+      description: payload.description.trim(),
+      version: payload.version,
+      build: payload.build,
+      marker: expect.stringMatching(/^[0-9a-f-]{36}$/),
+    },
   ]);
-  expect(responses.map((response) => response.statusCode).sort()).toEqual([200, 201]);
-  const reference = responses[0]?.json().reference;
-  expect(reference).toMatch(/^[0-9a-f-]{36}$/);
-  expect(reference).not.toBe(payload.requestId);
-  expect(responses[0]?.json()).toEqual({ reference });
-  expect(responses[1]?.json()).toEqual({ reference });
-  expect(responses[0]?.headers['cache-control']).toBe('no-store');
+  expect(posted[0]?.marker).not.toBe(payload.requestId);
+  expect((await cluster.pool.query('SELECT count(*) FROM app_feedback')).rows[0].count).toBe('0');
+  const stored = (await cluster.pool.query('SELECT * FROM app_feedback_issues')).rows[0];
+  expect(JSON.stringify(stored)).not.toContain(payload.description.trim());
+  expect(JSON.stringify(stored)).not.toContain('192.0.2.1');
   expect((await inbox()).statusCode).toBe(401);
   expect((await inbox(memberCookie)).statusCode).toBe(403);
+  const admin = await inbox(adminCookie);
+  expect(admin.headers['cache-control']).toBe('no-store');
+  expect(admin.json().result.data.reports).toEqual([]);
+});
 
-  const privateInbox = await inbox(adminCookie);
-  expect(privateInbox.statusCode).toBe(200);
-  expect(privateInbox.headers['cache-control']).toBe('no-store');
-  expect(privateInbox.json().result.data).toEqual({
-    reports: [
-      {
-        reference,
-        summary: payload.summary.trim(),
-        description: payload.description.trim(),
-        version: payload.version,
-        build: payload.build,
-        createdAt: expect.any(String),
-      },
-    ],
-    nextCursor: null,
-  });
-  const row = (await cluster.pool.query('SELECT * FROM app_feedback')).rows[0];
-  expect(Object.keys(row).sort()).toEqual([
-    'build',
-    'created_at',
-    'description',
-    'id',
-    'request_id',
-    'summary',
-    'version',
-  ]);
-  expect(row.id).toBe(reference);
-  expect(row.request_id).toBe(payload.requestId);
-  expect(await send({ ...payload, summary: 'Edited text' })).toMatchObject({ statusCode: 409 });
-  expect((await app.inject({ method: 'GET', url: '/api/feedback' })).statusCode).toBe(404);
+it('checks an uncertain upload before returning a receipt and never submits it twice', async () => {
+  const payload = report();
+  createResult = { status: 'unknown' };
+  expect((await send(payload)).statusCode).toBe(202);
+  expect((await send(payload, secondApp)).statusCode).toBe(202);
+  await cluster.pool.query(
+    "UPDATE app_feedback_issues SET claimed_at = now() - interval '1 minute'",
+  );
+  expect((await send(payload, secondApp)).statusCode).toBe(202);
+  await cluster.pool.query(
+    "UPDATE app_feedback_issues SET checked_at = now() - interval '1 minute'",
+  );
+  recoveredIssue = 357;
+  const recovered = await send(payload, secondApp);
+  expect(recovered.statusCode).toBe(200);
+  expect(recovered.json()).toEqual({ number: 357 });
+  expect((await send(payload)).json()).toEqual({ number: 357 });
+  expect(posted).toHaveLength(1);
+});
+
+it('bounds GitHub lookups per unresolved receipt and retires lookups after a day', async () => {
+  const payload = report();
+  createResult = { status: 'unknown' };
+  expect((await send(payload)).statusCode).toBe(202);
+  await cluster.pool.query(
+    "UPDATE app_feedback_issues SET claimed_at = now() - interval '1 minute'",
+  );
+  for (let index = 0; index < 6; index++) {
+    await cluster.pool.query(
+      "UPDATE app_feedback_issues SET checked_at = now() - interval '1 minute'",
+    );
+    expect((await send(payload, secondApp)).statusCode).toBe(202);
+  }
+  expect(lookups).toBe(5);
+  expect((await send(payload, secondApp)).json()).toEqual({ state: 'unresolved' });
+
+  const expired = report();
+  expect((await send(expired)).statusCode).toBe(202);
+  await cluster.pool.query(
+    "UPDATE app_feedback_issues SET claimed_at = now() - interval '25 hours' WHERE request_id = $1",
+    [expired.requestId],
+  );
+  expect((await send(expired, secondApp)).json()).toEqual({ state: 'unresolved' });
+  expect(lookups).toBe(5);
+  expect(posted).toHaveLength(2);
+});
+
+it('allows a new attempt after a definite rejection without reusing the earlier request', async () => {
+  const rejected = report();
+  createResult = { status: 'rejected' };
+  expect((await send(rejected)).statusCode).toBe(503);
+  expect((await send(rejected, secondApp)).statusCode).toBe(503);
+  expect(posted).toHaveLength(1);
+  createResult = { status: 'created', number: 456 };
+  expect((await send({ ...rejected, requestId: randomUUID() })).json()).toEqual({ number: 456 });
+  expect(posted).toHaveLength(2);
 });
 
 it('rejects extra metadata, invalid builds, cross-origin and malformed or oversized submissions', async () => {
   const badRequests = await Promise.all([
+    send({ ...report(), publicConsent: false }),
+    send({ ...report(), publicConsent: undefined }),
     send({ ...report(), url: 'https://example.test/private' }),
     send({ ...report(), build: 'https://example.test' }),
     send({ ...report(), version: '1.0.0 private' }),
@@ -171,37 +262,39 @@ it('rejects extra metadata, invalid builds, cross-origin and malformed or oversi
     send(report(), app, { 'sec-fetch-site': 'same-site' }),
   ]);
   expect(badRequests.map((response) => response.statusCode)).toEqual([
-    400, 400, 400, 400, 400, 400, 400, 413, 415, 403, 403, 403, 403,
+    400, 400, 400, 400, 400, 400, 400, 400, 400, 413, 415, 403, 403, 403, 403,
   ]);
-  expect((await cluster.pool.query('SELECT count(*) FROM app_feedback')).rows[0].count).toBe('0');
+  expect(posted).toHaveLength(0);
 });
 
-it('allows distinct reports at one address and limits the rolling volume across connections', async () => {
+it('limits anonymous submissions from one address without blocking a recovered receipt', async () => {
   const first = report();
   expect((await send(first)).statusCode).toBe(201);
-  const sameAddress = await Promise.all(
-    Array.from({ length: 6 }, (_, index) =>
-      send({ ...report(), summary: `Another anonymous report ${index}` }),
-    ),
-  );
-  expect(sameAddress.every((response) => response.statusCode === 201)).toBe(true);
+  for (let index = 0; index < 3; index++) {
+    expect((await send(report(), secondApp)).statusCode).toBe(201);
+  }
+  expect((await send(report())).statusCode).toBe(429);
+  expect((await send(first, secondApp)).statusCode).toBe(200);
+  expect((await send(report(), app, {}, '192.0.2.2')).statusCode).toBe(201);
+});
+
+it('limits rolling repository volume across connections and addresses', async () => {
   await cluster.pool.query(`
-    INSERT INTO app_feedback (request_id, summary, description, version, build)
-    SELECT gen_random_uuid(), 'Example', 'Synthetic', '1.2.3', 'dev'
-    FROM generate_series(1, 52)
+    INSERT INTO app_feedback_issues (request_id, fingerprint)
+    SELECT gen_random_uuid(), 'synthetic' FROM generate_series(1, 11)
   `);
   const concurrent = await Promise.all([send(report()), send(report(), secondApp)]);
   expect(concurrent.map((response) => response.statusCode).sort()).toEqual([201, 429]);
   expect(concurrent.find((response) => response.statusCode === 429)?.headers['retry-after']).toBe(
     '3600',
   );
-  expect((await send(first, secondApp)).statusCode).toBe(200);
 
-  await cluster.pool.query("UPDATE app_feedback SET created_at = now() - interval '2 hours'");
+  await cluster.pool.query(
+    "UPDATE app_feedback_issues SET claimed_at = now() - interval '2 hours'",
+  );
   await cluster.pool.query(`
-    INSERT INTO app_feedback (request_id, summary, description, version, build, created_at)
-    SELECT gen_random_uuid(), 'Example', 'Synthetic', '1.2.3', 'dev', now() - interval '2 hours'
-    FROM generate_series(1, 140)
+    INSERT INTO app_feedback_issues (request_id, fingerprint, claimed_at)
+    SELECT gen_random_uuid(), 'synthetic', now() - interval '2 hours' FROM generate_series(1, 28)
   `);
   expect((await send(report())).statusCode).toBe(429);
 });
@@ -227,13 +320,18 @@ it('expires old reports and pages past identical timestamps without missing refe
   );
   const freshApp = await buildApp({
     db: cluster.db,
-    env: loadEnv({ NODE_ENV: 'test', DATABASE_URL: cluster.connectionString }),
+    env: loadEnv({
+      NODE_ENV: 'test',
+      DATABASE_URL: cluster.connectionString,
+      BETTER_AUTH_URL: origin,
+    }),
     auth: createAuth(
       cluster.db,
       loadEnv({
         NODE_ENV: 'test',
         DATABASE_URL: cluster.connectionString,
         BETTER_AUTH_SECRET: 'synthetic-fixture-auth-secret',
+        BETTER_AUTH_URL: origin,
       }),
     ),
     challonge: fixtureClient([]),

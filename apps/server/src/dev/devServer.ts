@@ -44,7 +44,13 @@ export interface DevHarness {
 }
 
 export async function startDevHarness(
-  options: { port?: number; cacheDir?: string; quiet?: boolean; webDistDir?: string } = {},
+  options: {
+    port?: number;
+    cacheDir?: string;
+    quiet?: boolean;
+    webDistDir?: string;
+    fakePublicFeedback?: boolean;
+  } = {},
 ): Promise<DevHarness> {
   const port = options.port ?? Number(process.env.PORT ?? 3000);
   const cacheDir = options.cacheDir ?? process.env.DEV_CACHE_DIR;
@@ -92,7 +98,25 @@ export async function startDevHarness(
   });
   const recomputeTrigger = new RecomputeTrigger(db, 500);
   const nativeRuntime = createNativeRuntime(db, new InMemoryStore());
-  const app = await buildApp({ db, env, auth, challonge, recomputeTrigger, nativeRuntime });
+  const app = await buildApp({
+    db,
+    env,
+    auth,
+    challonge,
+    recomputeTrigger,
+    nativeRuntime,
+    ...(options.fakePublicFeedback && {
+      feedbackPublisher: {
+        rateKey: 'synthetic-browser-fixture',
+        async create() {
+          return { status: 'created', number: 123 };
+        },
+        async find() {
+          return undefined;
+        },
+      },
+    }),
+  });
 
   // Two accounts so role-gating can actually be tested. The first verified
   // sign-in from ADMIN_EMAILS bootstraps the admin role.
@@ -151,8 +175,10 @@ export async function startDevHarness(
 
 // Run directly (not when imported by tests).
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
-  startDevHarness().catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
+  startDevHarness({ fakePublicFeedback: process.env.DEV_FAKE_PUBLIC_FEEDBACK === '1' }).catch(
+    (error) => {
+      console.error(error);
+      process.exit(1);
+    },
+  );
 }

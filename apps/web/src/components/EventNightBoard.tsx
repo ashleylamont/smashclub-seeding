@@ -10,6 +10,7 @@ import type { LiveMatch, PoolQualifierSlot } from '../lib/eventDisplay';
 import { poolStandings } from '../lib/eventQueue';
 import { poolTitle, usesOpenPools } from '../lib/poolFlow';
 import { CharacterIcons } from './CharacterIcons';
+import { PlayerProfileName } from './PlayerProfilePreview';
 
 export type DisplayStation = {
   id: string;
@@ -90,12 +91,14 @@ export function EventPools({
   stations,
   recordedOnly,
   structure,
+  showPlayerPreviews,
 }: {
   matches: LiveMatch[];
   schedules: PoolSchedule[];
   stations: DisplayStation[];
   recordedOnly: boolean;
   structure?: string;
+  showPlayerPreviews: boolean;
 }) {
   const pools = poolStandings(matches);
   if (!pools.length) return null;
@@ -175,7 +178,10 @@ export function EventPools({
                       return (
                         <tr key={player.id}>
                           <th scope="row">
-                            {player.name}
+                            <PlayerProfileName
+                              playerId={showPlayerPreviews ? player.id : null}
+                              name={player.name}
+                            />
                             <CharacterIcons slugs={characters ?? []} />
                           </th>
                           <td>{player.wins}</td>
@@ -206,6 +212,7 @@ export function EventBrackets({
   linked,
   recordedOnly = false,
   graphicContext,
+  showPlayerPreviews = false,
 }: {
   title?: string;
   brackets: NativeBracketView[];
@@ -214,6 +221,7 @@ export function EventBrackets({
   linked: { division: string; stage: string; slug: string | null }[];
   recordedOnly?: boolean;
   graphicContext?: Omit<BracketGraphicContext, 'scope'> & { structure?: string };
+  showPlayerPreviews?: boolean;
 }) {
   if (!brackets.length && !linked.some((item) => item.slug)) return null;
   const names = new Map(entrants.map((player) => [player.id, player.name]));
@@ -281,6 +289,7 @@ export function EventBrackets({
                 label={`${division} ${bracket.stage} ${lane.title || 'bracket rounds'}`}
                 labels={labels}
                 recordedOnly={recordedOnly}
+                showPlayerPreviews={showPlayerPreviews}
               />
             ))}
             {bracket.complete && bracket.standings.length > 0 && (

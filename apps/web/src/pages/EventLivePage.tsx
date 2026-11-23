@@ -23,7 +23,7 @@ import { broadcastPlayers } from '../lib/broadcastPlayers';
 import { recentResultCount } from '../lib/broadcastSidebar';
 import { useGuestClock } from '../lib/guestReporting';
 
-import { liveSections, overlayGeometry } from '../lib/eventDisplay';
+import { defaultBroadcastStation, liveSections, overlayGeometry } from '../lib/eventDisplay';
 export function EventLivePage() {
   return <PlayerEventAlias />;
 }
@@ -163,9 +163,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
       )
     : undefined;
   // Keep the current broadcast tied to its selected station between sets.
-  const broadcastStation = focus
-    ? focusedStation
-    : (data.stations.find((item) => item.name.toLowerCase() === 'stage') ?? data.stations[0]);
+  const broadcastStation = focus ? focusedStation : defaultBroadcastStation(data.stations);
   const playing = closed ? [] : sections.playing;
   const onStream = broadcastStation
     ? playing.find((match) => match.stationId === broadcastStation.id)

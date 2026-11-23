@@ -90,7 +90,16 @@ async function readSnapshot(db: Db, input: ImpactInput) {
     return unavailable('history_changed');
   if (whrPrefixFingerprints(history).get(row.eventKey) !== provenance.fingerprints[row.eventKey])
     return unavailable('history_changed');
-  return { status: 'verified' as const, history, setIndex, row, participants, participant };
+  const preNightFitConverged = provenance.convergedPreNightKeys?.includes(row.eventKey) === true;
+  return {
+    status: 'verified' as const,
+    history,
+    setIndex,
+    row,
+    participants,
+    participant,
+    preNightFitConverged,
+  };
 }
 
 function meanPreRating(team: readonly { preRating: number }[]) {
@@ -115,7 +124,7 @@ export async function readWhrResultImpact(db: Db, input: ImpactInput) {
       accessMode: 'read only',
     });
     if (snapshot.status === 'unavailable') return snapshot;
-    const { history, row, setIndex, participants, participant } = snapshot;
+    const { history, row, setIndex, participants, participant, preNightFitConverged } = snapshot;
     const cacheKey = `${input.recomputeId}:${input.setId}`;
     let deltas = cache.get(cacheKey);
     if (deltas) cache.delete(cacheKey);
@@ -153,7 +162,9 @@ export async function readWhrResultImpact(db: Db, input: ImpactInput) {
     const side = sides[0].includes(input.playerId) ? 0 : 1;
     const own = participants.filter(({ playerId }) => sides[side].includes(playerId));
     const other = participants.filter(({ playerId }) => !sides[side].includes(playerId));
-    const forecastUnavailable = whrForecastUnavailable(evidence, participants);
+    const forecastUnavailable =
+      whrForecastUnavailable(evidence, participants) ??
+      (preNightFitConverged ? null : 'missing_estimate');
     const forecast =
       forecastUnavailable === null
         ? {

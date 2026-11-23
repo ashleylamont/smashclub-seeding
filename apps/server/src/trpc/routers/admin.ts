@@ -808,25 +808,7 @@ export const adminRouter = router({
 
   seedingRun: adminProcedure
     .input(z.object({ tournamentId: z.uuid() }))
-    .query(async ({ ctx, input }) => {
-      const result = await latestSeedingRun(ctx.db, input.tournamentId);
-      if (!result) return null;
-      return {
-        run: {
-          id: result.run.id,
-          status: result.run.status,
-          createdAt: result.run.createdAt.toISOString(),
-          pushedAt: result.run.pushedAt?.toISOString() ?? null,
-          pushLog: result.run.pushLog,
-        },
-        entries: result.entries.map((entry) => ({
-          ...entry,
-          name: entry.canonicalName
-            ? (entry.displayName ?? entry.canonicalName)
-            : entry.cleanedName,
-        })),
-      };
-    }),
+    .query(({ ctx, input }) => latestSeedingRun(ctx.db, input.tournamentId)),
 
   reorderSeedingRun: adminProcedure
     .input(z.object({ runId: z.uuid(), participantIdsInOrder: z.array(z.uuid()) }))

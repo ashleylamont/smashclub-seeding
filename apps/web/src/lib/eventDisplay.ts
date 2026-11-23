@@ -57,6 +57,12 @@ export interface LiveMatch {
   player2Qualifier?: PoolQualifier;
   qualificationBlocks?: PoolQualifier[];
 }
+export function defaultBroadcastStation<T extends { name: string }>(
+  stations: readonly T[],
+): T | undefined {
+  return stations.find(({ name }) => name.toLowerCase() === 'stage') ?? stations[0];
+}
+
 export function liveSections(matches: readonly LiveMatch[], liveOwned?: boolean) {
   return {
     playing: matches.filter((m) => m.status === 'playing' && !isUntakenCall(m, liveOwned)),

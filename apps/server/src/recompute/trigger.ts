@@ -1,6 +1,6 @@
 import type { Db } from '@smashclub/db';
 import { liveBus } from '../live/bus';
-import { runRecompute } from './recompute';
+import { backfillRatingRecompute, runRecompute } from './recompute';
 
 /**
  * Debounced recompute trigger: bursts of set changes during live polling
@@ -21,7 +21,12 @@ export class RecomputeTrigger {
 
   request(): void {
     if (this.timer) clearTimeout(this.timer);
-    this.timer = setTimeout(() => void this.fire(), this.debounceMs);
+    this.timer = setTimeout(() => void this.fire('source'), this.debounceMs);
+  }
+
+  requestBackfill(): void {
+    if (this.timer) return;
+    this.timer = setTimeout(() => void this.fire('backfill'), this.debounceMs);
   }
 
   /** Run immediately (admin "recompute now", tests). */
@@ -31,22 +36,23 @@ export class RecomputeTrigger {
       clearTimeout(this.timer);
       this.timer = null;
     }
-    await this.fire(true);
+    await this.fire('manual');
   }
 
-  private async fire(propagateError = false): Promise<void> {
+  private async fire(mode: 'source' | 'backfill' | 'manual'): Promise<void> {
     this.timer = null;
     if (this.running) {
-      this.pendingAgain = true;
+      if (mode !== 'backfill') this.pendingAgain = true;
       return;
     }
     this.running = true;
     try {
-      const result = await runRecompute(this.db);
-      liveBus.publish({ type: 'recompute_completed', payload: result });
+      const result =
+        mode === 'backfill' ? await backfillRatingRecompute(this.db) : await runRecompute(this.db);
+      if (result) liveBus.publish({ type: 'recompute_completed', payload: result });
     } catch (error) {
       this.onError(error);
-      if (propagateError) throw error;
+      if (mode === 'manual') throw error;
     } finally {
       this.running = false;
       if (this.pendingAgain) {

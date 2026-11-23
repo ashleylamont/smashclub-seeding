@@ -28,7 +28,7 @@ async function main(): Promise<void> {
   });
   const recomputeTrigger = new RecomputeTrigger(db);
   // Backfill rating history and impact provenance while the last completed board stays available.
-  if (await needsRatingRecompute(db)) recomputeTrigger.request();
+  if (await needsRatingRecompute(db)) recomputeTrigger.requestBackfill();
 
   const nativeRuntime = await createPostgresNativeRuntime(db, env.DATABASE_URL);
   await nativeRuntime.recover();

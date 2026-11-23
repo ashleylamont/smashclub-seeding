@@ -1,5 +1,5 @@
 {
-  "id": "ff2add4f-833b-4886-a110-962d03c4c669",
+  "id": "e3db47e5-58cd-4eae-b3e2-5babda76fbd6",
   "prevId": "a1f61b6d-773a-4e79-9bcd-6c7dd25285c5",
   "version": "7",
   "dialect": "postgresql",
@@ -3691,60 +3691,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.event_broadcast_presentations": {
-      "name": "event_broadcast_presentations",
-      "schema": "",
-      "columns": {
-        "event_plan_id": {
-          "name": "event_plan_id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "mode": {
-          "name": "mode",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "revision": {
-          "name": "revision",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "event_broadcast_presentations_event_plan_id_event_plans_id_fk": {
-          "name": "event_broadcast_presentations_event_plan_id_event_plans_id_fk",
-          "tableFrom": "event_broadcast_presentations",
-          "tableTo": "event_plans",
-          "columnsFrom": [
-            "event_plan_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "event_broadcast_presentation_mode": {
-          "name": "event_broadcast_presentation_mode",
-          "value": "\"event_broadcast_presentations\".\"mode\" in ('auto', 'gameplay', 'progress')"
-        },
-        "event_broadcast_presentation_revision": {
-          "name": "event_broadcast_presentation_revision",
-          "value": "\"event_broadcast_presentations\".\"revision\" > 0"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.event_guest_rate_limits": {
       "name": "event_guest_rate_limits",
       "schema": "",
@@ -5732,6 +5678,114 @@
           ]
         }
       },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.app_feedback_issues": {
+      "name": "app_feedback_issues",
+      "schema": "",
+      "columns": {
+        "request_id": {
+          "name": "request_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "marker": {
+          "name": "marker",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "issue_number": {
+          "name": "issue_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rejected": {
+          "name": "rejected",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "claimed_at": {
+          "name": "claimed_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "checks": {
+          "name": "checks",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "checked_at": {
+          "name": "checked_at",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rate_bucket": {
+          "name": "rate_bucket",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "app_feedback_issues_claimed_at": {
+          "name": "app_feedback_issues_claimed_at",
+          "columns": [
+            {
+              "expression": "claimed_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "app_feedback_issues_rate_bucket": {
+          "name": "app_feedback_issues_rate_bucket",
+          "columns": [
+            {
+              "expression": "rate_bucket",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "claimed_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

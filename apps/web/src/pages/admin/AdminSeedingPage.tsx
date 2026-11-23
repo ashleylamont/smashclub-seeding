@@ -1,7 +1,8 @@
 import { ConfirmDialog, ConfirmCancel } from '../../components/ui/ConfirmDialog';
+import { Disclosure } from '../../components/ui/Disclosure';
 import { Select, SelectItem } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
@@ -38,11 +39,15 @@ export function AdminSeedingPage() {
       <div className="card section">
         <h2>Seeding workbench</h2>
         <p className="muted">
-          Generate seeds from the current leaderboard, adjust by hand, then push them back to
-          Challonge.
+          Generate automatic seeds from the latest published ratings, adjust the order, then push it
+          to Challonge.
         </p>
         <div className="admin-form-row" style={{ marginTop: 10 }}>
-          <Select value={tournamentId} onValueChange={setTournamentId}>
+          <Select
+            aria-label="Tournament to seed"
+            value={tournamentId}
+            onValueChange={setTournamentId}
+          >
             <SelectItem value="">Pick a tournament…</SelectItem>
             {seedable.map((t) => (
               <SelectItem key={t.id} value={t.id}>
@@ -125,7 +130,8 @@ function SeedingRun({
   regenerateError: string | null;
   onChanged: () => void;
 }) {
-  const { run, entries } = data;
+  const { run, ratingSnapshot, entries } = data;
+  const usesWhr = ratingSnapshot?.model === 'whr';
   const serverOrder = useMemo(() => entries.map((e) => e.participantId), [entries]);
   const [order, setOrder] = useState<string[]>(serverOrder);
   const [lastServerOrder, setLastServerOrder] = useState<string[]>(serverOrder);
@@ -249,33 +255,64 @@ function SeedingRun({
       {reorder.isError && <p className="error-text">Reorder failed: {reorder.error.message}</p>}
       {push.isError && <p className="error-text">Push failed: {push.error.message}</p>}
 
-      <div className="seeding-list-header seeding-grid">
-        <span>Seed</span>
-        <span />
-        <span>Player</span>
-        <span title="Conservative rating used for auto-seeding">Score</span>
-        <span title="Seed the leaderboard suggested">Auto</span>
-        <span title="Current Challonge seed vs new seed">Challonge Δ</span>
-        <span>Lock</span>
-      </div>
+      <p className="muted">
+        {ratingSnapshot ? (
+          <>
+            {usesWhr ? 'WHR rating snapshot' : 'Rating snapshot'} published{' '}
+            <time dateTime={ratingSnapshot.publishedAt}>
+              {formatDateTime(ratingSnapshot.publishedAt)}
+            </time>
+            .
+          </>
+        ) : (
+          'No saved rating snapshot is available for this run.'
+        )}
+      </p>
+      <Disclosure title="How automatic seeds are calculated">
+        {usesWhr && (
+          <p>
+            Conservative score is the skill estimate minus twice its uncertainty. The leaderboard
+            ranks by club rating, which subtracts the attendance penalty from the skill estimate.
+            Displayed values are rounded.
+          </p>
+        )}
+        <p>
+          Entrants without a rating score follow rated entrants in alphabetical order. The automatic
+          seed stays recorded when the bracket seed is adjusted.
+        </p>
+      </Disclosure>
+
+      <p className="muted seeding-scroll-hint">Scroll sideways to see all seed columns.</p>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={order} strategy={verticalListSortingStrategy}>
-          <div className="seeding-list">
-            {order.map((participantId, index) => {
-              const entry = byParticipant.get(participantId);
-              if (!entry) return null;
-              return (
-                <SeedingRow
-                  key={participantId}
-                  entry={entry}
-                  seed={index + 1}
-                  draggable={draggable}
-                  onChanged={onChanged}
-                />
-              );
-            })}
+        <div className="table-scroll" role="region" aria-label="Seeding order" tabIndex={0}>
+          <div role="table" aria-label="Seeding entries">
+            <div className="seeding-list-header seeding-grid" role="row">
+              <span className="seeding-entrant" role="columnheader">
+                Bracket seed and player
+              </span>
+              <span role="columnheader">{usesWhr ? 'Conservative score' : 'Saved score'}</span>
+              <span role="columnheader">Auto seed</span>
+              <span role="columnheader">Challonge change</span>
+            </div>
+            <SortableContext items={order} strategy={verticalListSortingStrategy}>
+              <div className="seeding-list" role="rowgroup">
+                {order.map((participantId, index) => {
+                  const entry = byParticipant.get(participantId);
+                  if (!entry) return null;
+                  return (
+                    <SeedingRow
+                      key={participantId}
+                      entry={entry}
+                      seed={index + 1}
+                      draggable={draggable}
+                      onChanged={onChanged}
+                    />
+                  );
+                })}
+              </div>
+            </SortableContext>
           </div>
-        </SortableContext>
+        </div>
       </DndContext>
 
       {confirmingPush && (
@@ -344,6 +381,7 @@ function SeedingRow({
   draggable: boolean;
   onChanged: () => void;
 }) {
+  const nameId = useId();
   const disabled = !draggable || entry.locked;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: entry.participantId,
@@ -361,28 +399,59 @@ function SeedingRow({
   return (
     <div
       ref={setNodeRef}
+      role="row"
       className={`seeding-row seeding-grid${isDragging ? ' dragging' : ''}${entry.locked ? ' locked' : ''}`}
       style={{
         transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
         transition,
       }}
     >
-      <span className="seed-number">{seed}</span>
-      <span
-        className={`drag-handle${disabled ? ' disabled' : ''}`}
-        title={
-          entry.locked ? 'Locked in place' : draggable ? 'Drag to reorder' : 'Run is not editable'
-        }
-        aria-label={entry.locked ? `Seed ${seed} locked` : `Reorder seed ${seed}: ${entry.name}`}
-        {...attributes}
-        {...listeners}
-      >
-        <span aria-hidden="true">{entry.locked ? '🔒' : '☰'}</span>
+      <span className="seeding-entrant" role="rowheader" aria-labelledby={nameId}>
+        <span className="seed-number">{seed}</span>
+        <span
+          className={`drag-handle${disabled ? ' disabled' : ''}`}
+          title={
+            entry.locked ? 'Locked in place' : draggable ? 'Drag to reorder' : 'Run is not editable'
+          }
+          aria-label={entry.locked ? `Seed ${seed} locked` : `Reorder seed ${seed}: ${entry.name}`}
+          {...attributes}
+          {...listeners}
+        >
+          <span aria-hidden="true">{entry.locked ? '🔒' : '☰'}</span>
+        </span>
+        <span className="seeding-name" id={nameId}>
+          {entry.name}
+        </span>
+        <Button
+          className="seeding-lock"
+          size="small"
+          type="button"
+          disabled={toggleLock.isPending || !draggable}
+          onClick={() => toggleLock.mutate()}
+          title={entry.locked ? 'Unlock this seed' : 'Lock this seed in place'}
+          aria-label={
+            entry.locked
+              ? `Unlock seed ${seed} for ${entry.name}`
+              : `Lock seed ${seed} in place for ${entry.name}`
+          }
+          aria-pressed={entry.locked}
+        >
+          {entry.locked ? '🔒' : '🔓'}
+        </Button>
       </span>
-      <span className="seeding-name">{entry.name}</span>
-      <span>{entry.autoScore != null ? entry.autoScore.toFixed(0) : '—'}</span>
-      <span className="muted">#{entry.autoSeed}</span>
-      <span>
+      <span role="cell">
+        {entry.autoScore != null ? entry.autoScore.toFixed(0) : 'Unrated'}
+        {entry.seedRating && (
+          <span className="muted seeding-rating-inputs">
+            <span>Skill estimate {Math.round(entry.seedRating.skill)}</span>
+            <span>Uncertainty {Math.round(entry.seedRating.uncertainty)}</span>
+          </span>
+        )}
+      </span>
+      <span className="muted" role="cell">
+        #{entry.autoSeed}
+      </span>
+      <span role="cell">
         {entry.challongeSeed == null || delta == null ? (
           <span className="muted">—</span>
         ) : delta === 0 ? (
@@ -396,22 +465,6 @@ function SeedingRow({
             ↓ {-delta}
           </span>
         )}
-      </span>
-      <span>
-        {/* The glyph alone is not a label: without aria-label the accessible
-            name is the emoji, which says nothing and conveys the lock state by
-            picture only. */}
-        <Button
-          size="small"
-          type="button"
-          disabled={toggleLock.isPending || !draggable}
-          onClick={() => toggleLock.mutate()}
-          title={entry.locked ? 'Unlock this seed' : 'Lock this seed in place'}
-          aria-label={entry.locked ? `Unlock seed ${seed}` : `Lock seed ${seed} in place`}
-          aria-pressed={entry.locked}
-        >
-          {entry.locked ? '🔒' : '🔓'}
-        </Button>
       </span>
     </div>
   );

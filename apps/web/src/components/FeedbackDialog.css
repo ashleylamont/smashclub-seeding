@@ -16,3 +16,21 @@
   padding-top: var(--s4);
   border-top: 1px solid var(--border);
 }
+
+.feedback-dialog-preview,
+.feedback-dialog-draft {
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
+}
+.feedback-dialog-preview h3,
+.feedback-dialog-draft p {
+  margin: 0;
+}
+.feedback-dialog-draft {
+  padding: var(--s3);
+  overflow-wrap: anywhere;
+}
+.feedback-dialog-draft-description {
+  white-space: pre-wrap;
+}

@@ -11,6 +11,7 @@ import {
   liveBracketWinner,
 } from '../lib/eventBracket';
 import { CharacterIcons } from './CharacterIcons';
+import { PlayerProfileName } from './PlayerProfilePreview';
 
 /** HTML cards stay readable at full text size; only the draw scrolls on narrow screens. */
 export function EventBracketLane({
@@ -23,6 +24,7 @@ export function EventBracketLane({
   recordedOnly = false,
   roundTitles,
   cardWidth = 250,
+  showPlayerPreviews = false,
 }: {
   matches: LiveMatch[];
   lane: EliminationLane;
@@ -33,6 +35,7 @@ export function EventBracketLane({
   recordedOnly?: boolean;
   roundTitles?: string[];
   cardWidth?: number;
+  showPlayerPreviews?: boolean;
 }) {
   const canvas = useRef<HTMLDivElement>(null);
   const [measurements, setMeasurements] = useState<
@@ -197,7 +200,10 @@ export function EventBracketLane({
                       data-entrant-id={id ?? undefined}
                     >
                       <span>
-                        {liveBracketSide(match, side, labels)}
+                        <PlayerProfileName
+                          playerId={showPlayerPreviews ? id : null}
+                          name={liveBracketSide(match, side, labels)}
+                        />
                         <CharacterIcons slugs={id ? (characters ?? []) : []} />
                       </span>
                       <b aria-label={score === null ? 'No score' : `Score ${score}`}>
