@@ -7,7 +7,7 @@ import type { RecapData, RecapFact, RecapFactEntry, RecapPlayer } from '../lib/a
 import { CharacterIcons } from '../components/CharacterIcons';
 import { LoadingState, Notice } from '../components/ui/Feedback';
 import { PageHeader } from '../components/ui/PageHeader';
-import { formatDate } from '../lib/format';
+import { formatDate, winProbabilityDisplay } from '../lib/format';
 import { downloadBlob, renderShareCard } from '../lib/shareCard';
 import { bundledResultPortraitUrl } from '../lib/resultGraphicBundledArt';
 import './Recap.css';
@@ -315,7 +315,10 @@ function statOf(fact: RecapFact): { value: string; label: string } | null {
     case 'seed_upset':
       return { value: `#${fact.winnerSeed}`, label: `beat seed #${fact.loserSeed}` };
     case 'rating_upset':
-      return { value: `${Math.max(1, Math.round(fact.probability * 100))}%`, label: 'win chance' };
+      return {
+        value: winProbabilityDisplay(fact.probability).odds,
+        label: 'WHR pre-night win chance',
+      };
     case 'losers_run':
       return { value: String(fact.wins), label: 'elimination wins in a row' };
     case 'overperformer':

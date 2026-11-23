@@ -29,6 +29,8 @@ The public event page includes station occupancy, live pool standings, pool prog
 
 The overlay uses the shared Nemesis mark, station-specific current match, game score, other station matches, recent-result animation and timed announcements. Open **Display setup** to choose the station; the URL preserves that choice. Press **S** to show or hide setup, and **Escape** to close it.
 
+Open **Broadcast → Intermission browser sources** in the TO desk and copy **Follow event overlay** to control that source from the desk. Use **Event-following presentation** to choose Automatic, Gameplay or Progress, then apply it. Following sources update on their next refresh. Automatic, gameplay-only and progress-only links keep their own presentation. Station, rotation interval and other source settings stay with each link.
+
 Under **Display setup → Use with OBS**, select **Copy OBS source URL** to copy the preview's settings with its controls hidden. Add that URL as a 1920 × 1080 browser source **above** the gameplay source and fit gameplay underneath its transparent 16:9 centre.
 
 For a standalone browser screen, explicitly choose a shared window/screen or camera/capture card in setup, then fullscreen the display. Video remains local and stops when capture is closed or the page unmounts. This mode is video-only; OBS should handle stream audio. Capture requires HTTPS or localhost and a supported browser/device. Tests simulate browser media streams; physical capture-card and venue audio testing remains a rehearsal task.

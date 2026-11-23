@@ -298,7 +298,7 @@ export function NativeBracketControls({
         onFinalize={async () => {
           if (
             await confirmAction(
-              'Finalize all results and close this event? Scores will become read-only and enter club ratings.',
+              'Finalize all results and end live scoring? The published results will count toward club ratings.',
             )
           )
             void act(
@@ -342,8 +342,7 @@ function FinalizeNativeResults({
   let finalizationDetails: string | undefined = readyToFinalize ? undefined : finalization?.message;
   if (poolOrderLock) finalizationDetails = `A pool finishing order is missing. ${poolOrderLock}`;
   else if (readyToFinalize)
-    finalizationDetails =
-      'Publishing closes the event, makes scores read-only and enters the results into club ratings.';
+    finalizationDetails = 'Publishing ends live scoring and sends the results to club ratings.';
   else if (data.plan.drawPaused)
     finalizationDetails = 'Resume the pool draw before publishing results.';
   else if (!closed && !finalization)

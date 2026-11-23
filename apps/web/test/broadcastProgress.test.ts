@@ -29,7 +29,7 @@ describe('OBS intermission source choices and bounded pages', () => {
   it('defaults to Auto and ten seconds while keeping explicit source settings', () => {
     for (const search of ['', '?presentation=', '?presentation=unknown'])
       expect(broadcastPresentation(search)).toBe('auto');
-    for (const mode of ['auto', 'gameplay', 'progress'])
+    for (const mode of ['auto', 'gameplay', 'progress', 'event'])
       expect(broadcastPresentation(`?presentation=${mode}`)).toBe(mode);
     expect(progressInterval('')).toBe(10);
     for (const value of ['', 'NaN', 'Infinity', '-1', '0', '1', '999'])

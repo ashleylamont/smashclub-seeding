@@ -5,11 +5,9 @@ import {
   redirect,
   lazyRouteComponent,
 } from '@tanstack/react-router';
-import { TRPCClientError } from '@trpc/client';
 import { Layout } from './components/Layout';
-import { Button } from './components/ui/Button';
-import { eventUnavailable } from './lib/eventErrors';
-import { LoadingState, Notice } from './components/ui/Feedback';
+import { PageHeader } from './components/ui/PageHeader';
+import { LoadingState } from './components/ui/Feedback';
 import { trpc } from './lib/trpc';
 import { LeaderboardPage } from './pages/LeaderboardPage';
 import { PlayerPage } from './pages/PlayerPage';
@@ -21,6 +19,7 @@ import { EventLivePage, EventOverlayPage } from './pages/EventLivePage';
 import { AdminEventOperationsPage } from './pages/admin/AdminEventOperationsPage';
 import { EventOperatorPage } from './pages/EventOperatorPage';
 import { EventNightsPage } from './pages/EventNightsPage';
+import { EventShortLinkError } from './pages/EventShortLinkError';
 import { PlayerEventPage } from './pages/PlayerEventPage';
 import { GuestEventPage } from './pages/GuestEventPage';
 import { VenuePage } from './pages/VenuePage';
@@ -252,21 +251,15 @@ const eventShortLinkRoute = createRoute({
       replace: true,
     });
   },
-  pendingComponent: () => <LoadingState>Opening event…</LoadingState>,
-  errorComponent: ({ error }) => {
-    if (
-      eventUnavailable(error) ||
-      (error instanceof TRPCClientError && error.data?.code === 'BAD_REQUEST')
-    )
-      return <Notice tone="danger">This event is unavailable or has not been published.</Notice>;
-    return (
-      <>
-        <Notice tone="danger">Could not open the event link.</Notice>
-        <Button onClick={() => window.location.reload()}>Try again</Button>
-      </>
-    );
-  },
+  pendingComponent: () => (
+    <>
+      <PageHeader title="Open event" />
+      <LoadingState>Opening event…</LoadingState>
+    </>
+  ),
+  errorComponent: EventShortLinkError,
 });
+
 const eventOperateRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/operate/$planId',

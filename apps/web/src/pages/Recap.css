@@ -177,6 +177,10 @@
   max-width: 14ch;
 }
 
+.lead-story.fact-rating_upset .lead-story-stat-label {
+  max-width: 16ch;
+}
+
 .fact-kind-bracket {
   letter-spacing: 0.04em;
   text-transform: none;

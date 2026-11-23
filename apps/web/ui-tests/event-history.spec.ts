@@ -205,7 +205,7 @@ test('closed native events without live history do not invite organisers to star
   fixture.overview.plan.liveOwned = false;
   fixture.overview.plan.status = 'cancelled';
   await page.goto(`/operate/${PLAN_ID}?view=history`);
-  await expect(page.getByText('Event closed · read only', { exact: true })).toBeVisible();
+  await expect(page.getByText('Event cancelled.', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'No live history was recorded' })).toBeVisible();
   await expect(page.getByText(/Native events begin recording/)).toHaveCount(0);
   expect(fixture.unexpected).toEqual([]);
@@ -261,7 +261,7 @@ for (const theme of ['dark', 'light'] as const) {
       });
       fixture.overview.plan.status = 'complete';
       await page.goto(`/operate/${PLAN_ID}?view=history`);
-      await expect(page.getByText('Event closed · read only', { exact: true })).toBeVisible();
+      await expect(page.getByText('Live play ended.', { exact: true })).toBeVisible();
       const history = page.getByRole('region', { name: 'Event history', exact: true });
       await expect(history.getByText(/3 of 3 recorded changes.*Newest first/)).toBeVisible();
       await expect(history.getByRole('listitem').getByRole('heading')).toHaveText([

@@ -10,6 +10,7 @@ const sourceLabels = [
   ['auto', 'Automatic intermission overlay'],
   ['gameplay', 'Gameplay-only overlay'],
   ['progress', 'Progress-only overlay'],
+  ['event', 'Follow event overlay'],
 ] as const;
 
 for (const theme of ['dark', 'light'] as const)
@@ -142,9 +143,13 @@ for (const theme of ['dark', 'light'] as const)
       await copy(progress).press('Enter');
       await expect(copy(progress, 'Copied')).toBeFocused();
       expect(clipboardContents).toBe(progressUrl);
+      const following = sourceLabels[3][1];
+      await copy(following).press('Enter');
+      await expect(copy(following, 'Copied')).toBeFocused();
+      expect(clipboardContents).toBe(base + urlFor('event', setup!.id));
 
       rejectClipboard = true;
-      await copy(progress, 'Copied').press('Enter');
+      await copy(progress).press('Enter');
       const fallback = panel.getByRole('textbox', { name: 'Progress-only overlay URL' });
       await expect(fallback).toHaveValue(progressUrl);
       await expect(fallback).toHaveAttribute('readonly', '');

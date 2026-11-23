@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { isBracketOver, scoresIndicateUnplayed } from '@smashclub/shared';
-import { trpc } from '../lib/trpc';
+import { publicTournamentQuery } from '../lib/publicArchive';
 import type { TournamentData, TournamentParticipant, TournamentSet } from '../lib/apiTypes';
 import { orientScore, roundLabel } from '../lib/format';
 import { useEventSource } from '../lib/useEventSource';
@@ -29,8 +29,7 @@ export function VenuePage() {
   const queryClient = useQueryClient();
 
   const query = useQuery({
-    queryKey: ['tournament', slug],
-    queryFn: () => trpc.public.tournament.query({ slug }),
+    ...publicTournamentQuery(slug),
     // A projector left running all evening should recover on its own if an SSE
     // event is ever missed.
     refetchInterval: 30_000,

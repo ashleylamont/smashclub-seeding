@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { trpc } from '../../lib/trpc';
+import { publicTournamentsQuery } from '../../lib/publicArchive';
 import type { TournamentListItem } from '../../lib/apiTypes';
 import { formatDateTime, timeAgo } from '../../lib/format';
 import { useNow } from '../../lib/useNow';
@@ -23,10 +24,7 @@ function formatClock(date: Date): string {
 
 export function AdminTournamentsPage() {
   const queryClient = useQueryClient();
-  const tournaments = useQuery({
-    queryKey: ['tournaments'],
-    queryFn: () => trpc.public.tournaments.query(),
-  });
+  const tournaments = useQuery(publicTournamentsQuery);
   const jobs = useQuery({
     queryKey: ['admin', 'jobs'],
     queryFn: () => trpc.admin.jobs.query(),

@@ -188,6 +188,11 @@
   overflow-wrap: anywhere;
   min-width: 0;
 }
+.event-contender > span:has(> .event-entrant-pair) {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s1);
+}
 .event-contender > strong {
   font-size: 32px;
   min-width: 35px;
@@ -987,7 +992,7 @@
   font-weight: 400;
   overflow-wrap: anywhere;
 }
-.event-pool tbody th:has(> .player-profile-preview-name) {
+.event-pool tbody th:has(> :is(.player-profile-preview-name, .event-entrant-pair)) {
   padding-block: var(--s1);
 }
 .event-pool abbr {

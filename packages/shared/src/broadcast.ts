@@ -1,3 +1,6 @@
+export const broadcastPresentationModes = ['auto', 'gameplay', 'progress'] as const;
+export type BroadcastPresentationMode = (typeof broadcastPresentationModes)[number];
+
 /** Display order is scoped to a station's exact active pairing, never a tournament result. */
 export interface BroadcastSidePreference {
   matchId: string;
