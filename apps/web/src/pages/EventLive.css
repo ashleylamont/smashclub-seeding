@@ -555,7 +555,7 @@
   text-overflow: ellipsis;
 }
 /* Leave room for the separately positioned Display setup trigger. */
-.event-overlay:has(> .overlay-setup-toggle) .broadcast-topline.has-twitch-link {
+.event-overlay:has(> .overlay-setup-toggle:not([hidden])) .broadcast-topline.has-twitch-link {
   padding-right: max(2vw, calc(1vw + 6.5rem));
 }
 .broadcast-matchup {
@@ -805,7 +805,7 @@
   }
 }
 @media (max-width: 540px) {
-  .event-overlay:has(> .overlay-setup-toggle) .broadcast-topline.has-twitch-link {
+  .event-overlay:has(> .overlay-setup-toggle:not([hidden])) .broadcast-topline.has-twitch-link {
     padding-right: calc(1vw + 5.25rem);
   }
   .broadcast-topline .broadcast-twitch-link {
