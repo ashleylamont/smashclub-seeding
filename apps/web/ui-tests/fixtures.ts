@@ -58,6 +58,7 @@ export async function mockEvent(page: Page, options: FixtureOptions = {}) {
   const starts: Record<string, unknown>[] = [];
   const unexpected: string[] = [];
   const queryResponses = new Map<string, (input: unknown) => unknown>();
+  const queryFailures = new Map<string, string>();
   const mutationResponses = new Map<string, (input: unknown) => unknown>();
   const responses: Record<string, unknown> = {
     'me.whoami': user,
@@ -103,6 +104,15 @@ export async function mockEvent(page: Page, options: FixtureOptions = {}) {
     const isPost = request.method() === 'POST';
     const responseHandlers = isPost ? mutationResponses : queryResponses;
     const result = procedures.map((procedure, index) => {
+      const failure = isPost ? undefined : queryFailures.get(procedure);
+      if (failure)
+        return {
+          error: {
+            message: failure,
+            code: -32603,
+            data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
+          },
+        };
       const response = responseHandlers.get(procedure);
       if (response) {
         const body = isPost ? request.postData() : url.searchParams.get('input');
@@ -165,6 +175,7 @@ export async function mockEvent(page: Page, options: FixtureOptions = {}) {
     overview,
     responses,
     queryResponses,
+    queryFailures,
     mutationResponses,
     submissions,
     starts,
