@@ -25,10 +25,12 @@ for (const [width, theme, structure] of [
       softLockedAt: null,
       drawPaused: false,
     });
-    Object.assign(overview, { poolDrawPauseBlocker: null });
+    const { matches, nativeBrackets } = overview;
+    Object.assign(overview, { poolDrawPauseBlocker: null, matches: [], nativeBrackets: [] });
     const calls: { procedure: string; input: unknown }[] = [];
     mutationResponses.set('eventOps.softLockPools', (input) => {
       calls.push({ procedure: 'softLockPools', input });
+      Object.assign(overview, { matches, nativeBrackets });
       overview.plan.softLockedAt = '2026-10-22T18:30:00Z';
       overview.plan.drawPaused = false;
       return { softLockedAt: overview.plan.softLockedAt };
@@ -39,7 +41,15 @@ for (const [width, theme, structure] of [
       return { unlocked: true };
     });
 
-    await page.goto(`/operate/${PLAN_ID}?view=draw`);
+    await page.goto(`/operate/${PLAN_ID}`);
+    await expect(page.locator('.ops-heading')).toContainText('Draw ready to lock.');
+    const matchDesk = page.locator('#match-desk');
+    await expect(matchDesk).toContainText('Soft-lock the bracket in');
+    await expect(page.getByText('Generate pools in the planner', { exact: false })).toHaveCount(0);
+    await matchDesk.getByRole('button', { name: 'Standings / draw', exact: true }).press('Enter');
+    await expect(page.getByRole('region', { name: 'Tournament draw' })).toContainText(
+      'Soft-lock the draw above to view the bracket and print its match order.',
+    );
     const draw = page.getByRole('tabpanel', { name: 'Standings / draw' }).locator('.ops-setup');
     const dialog = page.getByRole('alertdialog', { name: 'Confirm action' });
     const softLock = draw.getByRole('button', { name: 'Soft-lock knockout draw', exact: true });
@@ -65,6 +75,11 @@ for (const [width, theme, structure] of [
     );
     await dialog.getByRole('button', { name: 'Confirm', exact: true }).press('Enter');
     await expect(draw.getByRole('heading', { name: 'Knockout draw: Paused' })).toBeVisible();
+    const finalize = page.getByRole('button', { name: 'Finalize native results', exact: true });
+    await expect(finalize).toBeDisabled();
+    await expect(finalize).toHaveAccessibleDescription(
+      'Resume the knockout draw before publishing results.',
+    );
     await draw.getByRole('button', { name: 'Resume knockout draw', exact: true }).press('Enter');
     await expect(draw.getByRole('heading', { name: 'Knockout draw: Soft-locked' })).toBeVisible();
     expect(calls).toEqual(
@@ -101,6 +116,7 @@ for (const [width, theme, structure] of [
     await draw.screenshot({ path: testInfo.outputPath('finalized-knockout.png') });
 
     Object.assign(overview.plan, { status: 'cancelled' });
+    Object.assign(overview, { publication: null });
     await page.reload();
     await expect(draw.getByRole('heading', { name: 'Knockout draw: Cancelled' })).toBeVisible();
     await expect(draw.getByRole('button')).toHaveCount(0);

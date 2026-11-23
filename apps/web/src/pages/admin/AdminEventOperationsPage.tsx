@@ -1,3 +1,4 @@
+import { isKnockout } from '@smashclub/shared';
 import { NativeDrawTools } from './NativeDrawTools';
 import { filterDeskMatches } from '../../lib/opsMatchFilter';
 import { DispatchDesk, type DispatchDeskNavigation } from './DispatchDesk';
@@ -44,7 +45,7 @@ import { GuestReportingControls } from './GuestReportingControls';
 import { availableMatches, poolStandings } from '../../lib/eventQueue';
 import { poolTitle } from '../../lib/poolFlow';
 import { OpsAttentionDesk } from './OpsAttentionDesk';
-import { describeOpsEventStatus } from './opsEventStatus';
+import { describeEmptyMatchDesk, describeOpsEventStatus } from './opsEventStatus';
 import { MainStagePanel } from './MainStagePanel';
 
 const terminalOverviewErrors = ['FORBIDDEN', 'UNAUTHORIZED', 'NOT_FOUND', 'BAD_REQUEST'];
@@ -240,6 +241,7 @@ export function EventOperationsPanel({
       />
     );
   const desk = data.operatorDispatch;
+  const knockout = isKnockout(data.plan.structure);
   const sharedQueue = data.plan.bracketMode === 'native' && desk?.mode === 'shared';
   const available = availableMatches(data.matches).filter((match) => match.availability.canStart);
   const callable = new Set(available.map((match) => match.id));
@@ -268,6 +270,7 @@ export function EventOperationsPanel({
   );
   // Keep the source match card mounted when a named-station call is outside its filters.
   if (revealed && !matches.some((match) => match.id === revealed.id)) matches.push(revealed);
+  const emptyMatchDesk = describeEmptyMatchDesk(data, matches.length, filter);
   return (
     <div className="ops-page">
       <header className="ops-heading">
@@ -367,7 +370,7 @@ export function EventOperationsPanel({
                   <h3>Match desk</h3>
                   {!data.plan.softLockedAt && (
                     <p>
-                      Soft-lock pools in{' '}
+                      {knockout ? 'Soft-lock the bracket in' : 'Soft-lock pools in'}{' '}
                       <Button
                         size="small"
                         type="submit"
@@ -490,15 +493,7 @@ export function EventOperationsPanel({
               />
             ))}
           </div>
-          {!data.sharedDispatch && matches.length === 0 && (
-            <p className="card muted">
-              {data.matches.length === 0
-                ? 'Generate pools in the planner, then prepare the match queue here.'
-                : filter === 'playing'
-                  ? 'No matches playing. Choose Ready to start to find the next pairing.'
-                  : 'No matches in this view.'}
-            </p>
-          )}
+          {emptyMatchDesk && <p className="card muted">{emptyMatchDesk}</p>}
           <PlayerReports data={data} disabled={liveDisabled} act={act} callDesk={callDesk} />
           {!data.sharedDispatch && (
             <StationPoolControls

@@ -31,7 +31,9 @@ export function NativeDrawTools({ data }: { data: Overview }) {
             {ended
               ? 'No elimination bracket was generated for this event.'
               : isKnockout(data.plan.structure)
-                ? 'Lock the draw in the planner to publish the bracket and print its match order.'
+                ? data.plan.status === 'pools_ready' && !data.plan.softLockedAt
+                  ? 'Soft-lock the draw above to view the bracket and print its match order.'
+                  : 'The knockout bracket is unavailable.'
                 : 'Finals are not created yet. Preview finals above to review the proposed pairings; paper templates are available below.'}
           </p>
         </>

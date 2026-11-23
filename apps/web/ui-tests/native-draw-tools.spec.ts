@@ -126,8 +126,15 @@ test('TO draw tools distinguish single draws, pool templates, unlocked knockouts
   await expect(draw).toContainText('1 TO worksheet');
   fixture.snapshot.nativeBrackets.length = 0;
   fixture.snapshot.matches.length = 0;
+  Object.assign(fixture.snapshot.plan, {
+    status: 'pools_ready',
+    softLockedAt: null,
+    drawPaused: false,
+  });
   await page.reload();
-  await expect(draw).toContainText('Lock the draw in the planner');
+  await expect(draw).toContainText(
+    'Soft-lock the draw above to view the bracket and print its match order.',
+  );
   await expect(draw.getByRole('button', { name: 'Print bracket backup sheets' })).toHaveCount(0);
   Object.assign(fixture.snapshot.plan, { structure: 'dual_division' });
   await page.reload();
