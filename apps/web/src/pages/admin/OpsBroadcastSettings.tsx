@@ -1,7 +1,7 @@
 import type { BroadcastPresentationMode } from '@smashclub/shared';
 import { useMutation } from '@tanstack/react-query';
 import { TRPCClientError } from '@trpc/client';
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Notice } from '../../components/ui/Feedback';
 import { Select, SelectItem } from '../../components/ui/Select';
@@ -51,6 +51,10 @@ function OpsBroadcastPresentation({
   refresh: () => Promise<unknown>;
 }) {
   const current = data.broadcastPresentation;
+  const form = useRef<HTMLFormElement>(null);
+  const applyButton = useRef<HTMLButtonElement>(null);
+  const picker = useRef<HTMLButtonElement>(null);
+  const inFlight = useRef(false);
   const [draft, setDraft] = useState<{ mode: BroadcastPresentationMode; revision: number }>();
   const save = useMutation({
     mutationFn: (request: PresentationRequest) =>
@@ -65,15 +69,29 @@ function OpsBroadcastPresentation({
         await refresh();
       }
     },
+    onSettled: () => {
+      inFlight.current = false;
+    },
   });
+  const open = data.plan.status === 'underway';
+  const published = data.settings.published;
+  const canSave = open && published && !disabled && !save.isPending;
+  useLayoutEffect(() => {
+    if (!canSave || document.activeElement !== form.current) return;
+    const button = applyButton.current;
+    const target = save.isError && button && !button.disabled ? button : picker.current;
+    target?.focus({ preventScroll: true });
+  }, [canSave, save.isError]);
   if (!current) return null;
 
   const { mode, revision } = current;
-  const open = data.plan.status === 'underway';
-  const published = data.settings.published;
   const selection = draft?.revision === revision ? draft.mode : mode;
-  const canSave = open && published && !disabled && !save.isPending;
-  const stale = draft && draft.revision !== revision;
+  const saved = save.data?.revision === revision;
+  const feedback = saved
+    ? `Event presentation set to ${labels[mode]}.`
+    : draft && draft.revision !== revision
+      ? 'The current presentation changed. Choose a mode again.'
+      : '';
   return (
     <section className="card ops-broadcast-presentation" aria-label="Event-following presentation">
       <h3>Event-following presentation</h3>
@@ -82,15 +100,24 @@ function OpsBroadcastPresentation({
         <>
           {!published && <p>Publish the event to switch its presentation.</p>}
           <form
+            ref={form}
+            tabIndex={-1}
+            aria-label="Change event presentation"
+            aria-busy={save.isPending || undefined}
             onSubmit={(event) => {
               event.preventDefault();
-              if (canSave && selection !== mode)
-                save.mutate({ planId: data.plan.id, expectedRevision: revision, mode: selection });
+              if (!canSave || selection === mode || inFlight.current) return;
+              inFlight.current = true;
+              // Hold focus within the form while its controls are disabled.
+              if (document.activeElement === applyButton.current)
+                event.currentTarget.focus({ preventScroll: true });
+              save.mutate({ planId: data.plan.id, expectedRevision: revision, mode: selection });
             }}
           >
             <label className="ui-field">
               Event presentation
               <Select
+                ref={picker}
                 value={selection}
                 disabled={!canSave}
                 onValueChange={(mode) => {
@@ -106,6 +133,7 @@ function OpsBroadcastPresentation({
             {selection !== mode && <p>Current presentation · {labels[mode]}</p>}
             <div className="ui-actions">
               <Button
+                ref={applyButton}
                 type="submit"
                 pending={save.isPending}
                 disabled={!canSave || selection === mode}
@@ -115,12 +143,13 @@ function OpsBroadcastPresentation({
             </div>
           </form>
           {save.error && <Notice tone="danger">{save.error.message}</Notice>}
-          {stale && (
-            <Notice tone="warning">The current presentation changed. Choose a mode again.</Notice>
-          )}
-          {save.data?.revision === revision && (
-            <Notice tone="success">Event presentation set to {labels[mode]}.</Notice>
-          )}
+          <div role="status" className={feedback ? undefined : 'visually-hidden'}>
+            {feedback && (
+              <Notice tone={saved ? 'success' : 'warning'} live={false}>
+                {feedback}
+              </Notice>
+            )}
+          </div>
         </>
       ) : (
         <p className="muted">Presentation can be switched while the event is underway.</p>

@@ -52,6 +52,7 @@ for (const theme of ['dark', 'light'] as const)
       await expect(control.getByRole('status')).toHaveText('Event presentation set to Progress.');
       expect(writes).toEqual([{ planId: PLAN_ID, expectedRevision: 0, mode: 'progress' }]);
       await expect(menu).toContainText('Progress');
+      await expect(menu).toBeFocused();
       await expect(apply).toBeDisabled();
       await ready(page);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
@@ -82,3 +83,71 @@ for (const theme of ['dark', 'light'] as const)
       }
       expect(unexpected).toEqual([]);
     });
+
+test('presentation save keeps keyboard focus predictable through a retry and navigation', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const { overview, unexpected } = await mockEvent(page, { role: 'admin' });
+  const current = { mode: 'auto', revision: 0 };
+  Object.assign(overview, { broadcastPresentation: current });
+  const release: (() => void)[] = [];
+  await page.route('**/api/trpc/eventOps.setBroadcastPresentation**', async (route) => {
+    const attempt = release.length;
+    await new Promise<void>((resolve) => release.push(resolve));
+    if (attempt === 1) Object.assign(current, { mode: 'progress', revision: 1 });
+    const response =
+      attempt === 0
+        ? {
+            error: {
+              message: 'Could not save presentation. Try again.',
+              code: -32603,
+              data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
+            },
+          }
+        : { result: { data: current } };
+    const batched = new URL(route.request().url()).searchParams.has('batch');
+    await route.fulfill({ json: batched ? [response] : response });
+  });
+  await page.goto(`/operate/${PLAN_ID}?view=broadcast&station=${overview.stations[0]!.id}`);
+  const panel = page.getByRole('tabpanel', { name: 'Broadcast', exact: true });
+  const control = panel.getByRole('region', { name: 'Event-following presentation' });
+  const menu = control.getByRole('combobox', { name: 'Event presentation' });
+  const apply = control.getByRole('button', { name: 'Apply presentation' });
+  const pending = control.getByRole('button', { name: 'Applying…' });
+  await menu.press('Enter');
+  await page.getByRole('option', { name: 'Progress', exact: true }).press('Enter');
+  await page.keyboard.press('Tab');
+  await expect(apply).toBeFocused();
+  await page.keyboard.press('Enter');
+
+  try {
+    await expect.poll(() => release.length).toBe(1);
+    await expect(pending).toBeDisabled();
+    await expect(control.locator('form')).toBeFocused();
+    await page.screenshot({ path: testInfo.outputPath('presentation-applying-390.png') });
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Space');
+    expect(release).toHaveLength(1);
+    release[0]!();
+    await expect(control.getByRole('alert')).toHaveText('Could not save presentation. Try again.');
+    await expect(apply).toBeFocused();
+    await expect(menu).toContainText('Progress');
+
+    await page.keyboard.press('Enter');
+    await expect.poll(() => release.length).toBe(2);
+    await expect(pending).toBeDisabled();
+    await page.keyboard.press('Tab');
+    const announcement = panel.getByRole('textbox', { name: 'Message', exact: true });
+    await expect(announcement).toBeFocused();
+    release[1]!();
+    await expect(control.getByRole('status')).toHaveText('Event presentation set to Progress.');
+    await expect(announcement).toBeFocused();
+    await expect(apply).toBeDisabled();
+    expect(release).toHaveLength(2);
+    expect(unexpected).toEqual([]);
+  } finally {
+    for (const respond of release) respond();
+  }
+});
