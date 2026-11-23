@@ -162,12 +162,22 @@ export function resultsSvg(
   let top = 166;
   const rows = rankedGraphicResults(results, kind)
     .map((row, index) => {
-      const fill = index === 0 ? '#eee9dc' : '#24231e';
-      const text = index === 0 ? '#141411' : '#eee9dc';
+      const highlighted = index === 0;
+      const fill = highlighted ? '#eee9dc' : '#24231e';
+      const text = highlighted ? '#141411' : '#eee9dc';
+      const placeColor = highlighted ? '#c22014' : '#f34b2c';
+      const paperDetailColor = '#514b41';
       const { graphic } = row;
       const labels =
         graphic?.members.length && (graphic.teamName || graphic.members.length > 1)
-          ? teamLabels(graphic, row.detail, top, text, index === 0 ? '#514b41' : '#bcb3a4', measure)
+          ? teamLabels(
+              graphic,
+              row.detail,
+              top,
+              text,
+              highlighted ? paperDetailColor : '#bcb3a4',
+              measure,
+            )
           : {
               height: 86,
               markup:
@@ -187,11 +197,17 @@ export function resultsSvg(
                 singleLine(
                   row.detail ?? '',
                   82,
-                  { x: rowTextX, y: top + 72, width: rowTextWidth, size: 18, fill: '#9c9588' },
+                  {
+                    x: rowTextX,
+                    y: top + 72,
+                    width: rowTextWidth,
+                    size: 18,
+                    fill: highlighted ? paperDetailColor : '#9c9588',
+                  },
                   measure,
                 ),
             };
-      const markup = `<rect x="48" y="${top}" width="1104" height="${labels.height}" fill="${fill}"/><text x="76" y="${top + 54}" fill="#f34b2c" font-size="32">${row.place}</text>${labels.markup}`;
+      const markup = `<rect x="48" y="${top}" width="1104" height="${labels.height}" fill="${fill}"/><text x="76" y="${top + 54}" fill="${placeColor}" font-size="32">${row.place}</text>${labels.markup}`;
       top += labels.height + 12;
       return markup;
     })

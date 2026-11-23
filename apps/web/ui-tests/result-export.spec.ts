@@ -6,6 +6,20 @@ import { AxeBuilder } from '@axe-core/playwright';
 import { chooseOption } from '../test-support/controls';
 import { FIGHTER_ART_CREDIT } from '../src/lib/resultGraphic';
 
+function relativeLuminance(rgb: string) {
+  const channels = rgb.match(/\d+/g)!.map((component) => {
+    const value = Number(component) / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!;
+}
+
+function contrastRatio(first: string, second: string) {
+  const a = relativeLuminance(first);
+  const b = relativeLuminance(second);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
 test(
   'actual downloaded results SVG keeps wide aliases inside the exported canvas',
   darwinBaseline,
@@ -28,17 +42,28 @@ test(
     const exported = await page.context().newPage();
     try {
       await exported.setViewportSize({ width: 1200, height: 900 });
-      await exported.setContent(source);
+      const url = new URL('/downloaded-results.svg', page.url()).href;
+      await exported.route(url, (route) => route.fulfill({ path, contentType: 'image/svg+xml' }));
+      await exported.goto(url);
+      await expect(exported.locator('parsererror')).toHaveCount(0);
       const bounds = await exported.locator('svg').evaluate((svg) => {
         const canvas = svg as SVGSVGElement;
+        const rows = [...svg.querySelectorAll<SVGRectElement>('g rect')].map((row) => {
+          const { y, height } = row.getBBox();
+          return { top: y, bottom: y + height, fill: getComputedStyle(row).fill };
+        });
         return [...svg.querySelectorAll('text')].map((text) => {
           const box = text.getBBox();
+          const midpoint = box.y + box.height / 2;
+          const row = rows.find(({ top, bottom }) => midpoint >= top && midpoint <= bottom);
           return {
             text: text.textContent,
             left: box.x,
             right: box.x + box.width,
             bottom: box.y + box.height,
             height: canvas.viewBox.baseVal.height,
+            fill: getComputedStyle(text).fill,
+            background: row?.fill,
           };
         });
       });
@@ -46,6 +71,17 @@ test(
         expect(box.left, box.text!).toBeGreaterThanOrEqual(0);
         expect(box.right, box.text!).toBeLessThanOrEqual(1152);
         expect(box.bottom, box.text!).toBeLessThanOrEqual(box.height);
+      }
+      const details = bounds.filter(({ text }) => text === 'Confirmed pool placement');
+      const places = bounds.filter(({ text }) => /^\d+$/.test(text ?? ''));
+      expect(details.length).toBeGreaterThan(1);
+      expect(places).toHaveLength(details.length);
+      for (const { text, fill, background } of [...details, ...places]) {
+        expect(background, text!).toBeDefined();
+        const minimum = text === 'Confirmed pool placement' ? 4.5 : 3;
+        expect
+          .soft(contrastRatio(fill, background!), `${text} on ${background}`)
+          .toBeGreaterThanOrEqual(minimum);
       }
       await darwinScreenshot(exported.locator('svg'), 'export-wide-alias.png');
     } finally {
