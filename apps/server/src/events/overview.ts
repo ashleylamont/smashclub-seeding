@@ -1,4 +1,8 @@
-import { publicParticipantPresentation, type ResultGraphicIdentity } from './participantNames';
+import {
+  publicParticipantPresentation,
+  type PublicDoublesPair,
+  type ResultGraphicIdentity,
+} from './participantNames';
 import { asc, eq, inArray, isNotNull } from 'drizzle-orm';
 import {
   eventPlanBrackets,
@@ -30,6 +34,7 @@ export interface EventOverviewPlayer {
   entryKey: string;
   name: string;
   graphic?: ResultGraphicIdentity;
+  verifiedDoublesPair?: PublicDoublesPair;
   place: number | null;
   placeSource: PlaceSource;
   inFinalStage: boolean;
@@ -252,6 +257,9 @@ export async function loadEventOverview(
       }
     }
     const isComplete = t.challongeState === 'complete';
+    const isDoubles = t.competitionFormat === 'doubles';
+    const showDoublesPreviews =
+      isComplete && isDoubles && t.provider === 'native' && history.activeTournaments.has(t.id);
     const reported =
       isComplete &&
       finalPlayers.length > 0 &&
@@ -287,26 +295,31 @@ export async function loadEventOverview(
       isComplete,
       placeSource,
       players: ps
-        .map((p) => ({
-          playerId: p.playerId,
-          entryKey: p.memberPlayerIds?.length
-            ? `pair:${JSON.stringify([...p.memberPlayerIds].sort())}`
-            : p.playerId
-              ? `player:${p.playerId}`
-              : `participant:${p.id}`,
-          ...participantPresentation.get(p.id)!,
-          place: places.get(p.id) ?? null,
-          placeSource: places.has(p.id) ? placeSource : ('unavailable' as const),
-          inFinalStage: finalIds.has(p.id),
-          wins: records.get(p.id)?.wins ?? 0,
-          losses: records.get(p.id)?.losses ?? 0,
-          poolWins: records.get(p.id)?.poolWins ?? 0,
-          poolLosses: records.get(p.id)?.poolLosses ?? 0,
-          bracketWins: records.get(p.id)?.bracketWins ?? 0,
-          bracketLosses: records.get(p.id)?.bracketLosses ?? 0,
-          provisional: !places.has(p.id),
-          tournamentId: t.id,
-        }))
+        .map((p) => {
+          const { name, graphic, verifiedDoublesPair } = participantPresentation.get(p.id)!;
+          return {
+            playerId: isDoubles ? null : p.playerId,
+            entryKey: p.memberPlayerIds?.length
+              ? `pair:${JSON.stringify([...p.memberPlayerIds].sort())}`
+              : p.playerId
+                ? `player:${p.playerId}`
+                : `participant:${p.id}`,
+            name,
+            graphic,
+            ...(showDoublesPreviews && verifiedDoublesPair && { verifiedDoublesPair }),
+            place: places.get(p.id) ?? null,
+            placeSource: places.has(p.id) ? placeSource : ('unavailable' as const),
+            inFinalStage: finalIds.has(p.id),
+            wins: records.get(p.id)?.wins ?? 0,
+            losses: records.get(p.id)?.losses ?? 0,
+            poolWins: records.get(p.id)?.poolWins ?? 0,
+            poolLosses: records.get(p.id)?.poolLosses ?? 0,
+            bracketWins: records.get(p.id)?.bracketWins ?? 0,
+            bracketLosses: records.get(p.id)?.bracketLosses ?? 0,
+            provisional: !places.has(p.id),
+            tournamentId: t.id,
+          };
+        })
         .sort(sortPlayers),
     };
   });

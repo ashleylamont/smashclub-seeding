@@ -1,5 +1,5 @@
 import { eventPlans, nativeResultPublications, type Db } from '@smashclub/db';
-import { and, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 
 /** Publication receipts define effective history without deleting prior revisions. */
 export async function nativeHistory(db: Db) {
@@ -34,8 +34,10 @@ export async function loadNativeHistory(db: Db, maxRows?: number, planIds?: stri
       eventPlanId: nativeResultPublications.eventPlanId,
       revision: nativeResultPublications.revision,
       tournamentIds: nativeResultPublications.tournamentIds,
+      deletedAt: eventPlans.deletedAt,
     })
     .from(nativeResultPublications)
+    .innerJoin(eventPlans, eq(nativeResultPublications.eventPlanId, eventPlans.id))
     .where(planIds && inArray(nativeResultPublications.eventPlanId, planIds));
   const receipts = await (maxRows === undefined ? receiptQuery : receiptQuery.limit(maxRows + 1));
   if (maxRows !== undefined && receipts.length > maxRows) return null;
@@ -68,5 +70,10 @@ export async function loadNativeHistory(db: Db, maxRows?: number, planIds?: stri
       if (!effective.includes(id)) superseded.add(id);
     }
   }
-  return { byTournament, superseded, withdrawn, withdrawnPlans };
+  const activeTournaments = new Set(
+    [...latest.values()]
+      .filter((receipt) => !receipt.deletedAt && !withdrawnPlans.has(receipt.eventPlanId))
+      .flatMap((receipt) => receipt.tournamentIds),
+  );
+  return { byTournament, superseded, withdrawn, withdrawnPlans, activeTournaments };
 }

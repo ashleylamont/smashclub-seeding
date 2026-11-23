@@ -8,7 +8,7 @@ import './EventPage.css';
 import { ResultGraphic } from '../components/ResultGraphic';
 import { ArchiveQueryContent, type ArchivePageFeedback } from './ArchiveQueryContent';
 import { ArchiveBracketGraphic } from '../components/ArchiveBracketGraphic';
-import { PlayerProfilePreview } from '../components/PlayerProfilePreview';
+import { DoublesMemberNames, PlayerProfilePreview } from '../components/PlayerProfilePreview';
 
 export function EventPage() {
   const { slug } = useParams({ from: '/events/$slug' });
@@ -192,7 +192,12 @@ function Standings({
 }) {
   const hasPools = !roundRobin && players.some((p) => p.poolWins + p.poolLosses > 0);
   return (
-    <div className="table-scroll" role="region" aria-label={label} tabIndex={0}>
+    <div
+      className="table-scroll event-standings-scroll"
+      role="region"
+      aria-label={label}
+      tabIndex={0}
+    >
       <table className="data-table event-standings">
         <thead>
           <tr>
@@ -213,7 +218,9 @@ function Standings({
             <tr key={p.entryKey}>
               <td className="num">{p.place ?? '—'}</td>
               <td>
-                {p.playerId ? (
+                {p.verifiedDoublesPair ? (
+                  <DoublesMemberNames {...p.verifiedDoublesPair} />
+                ) : p.playerId ? (
                   <div className="event-standings-player ui-actions">
                     <Link to="/players/$playerId" params={{ playerId: p.playerId }}>
                       {p.name}
