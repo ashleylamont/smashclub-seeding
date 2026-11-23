@@ -65,28 +65,41 @@ it('authenticates the app and publishes only the reviewed text and build to the 
 });
 
 it('reconciles the exact marker without sending a second POST after a connection loss', async () => {
-  const upstream = vi
-    .fn<typeof fetch>()
-    .mockResolvedValueOnce(installationToken())
-    .mockRejectedValueOnce(new TypeError('fake transport error'))
-    .mockResolvedValueOnce(
-      Response.json([
-        { number: 19, pull_request: {}, body: `<!-- nemesis-feedback:${form.marker} -->` },
-        { number: 20, body: 'Unrelated report' },
-        { number: 124, body: `A copied marker\n\n<!-- nemesis-feedback:${form.marker} -->` },
-        {
-          number: 123,
-          body: `Issue body\n\n<!-- nemesis-feedback:${form.marker} -->\n\nMaintainer note`,
-        },
-      ]),
-    );
+  const bot = { login: 'nemesis-feedback[bot]' };
+  const marker = `<!-- nemesis-feedback:${form.marker} -->`;
+  const createdAt = '2026-11-23T00:01:10Z';
+  const canonical = `~~~\nReport text\n~~~\n\nNemesis v1.2.3 · build 1a2b3c4\n\n${marker}`;
+  const issues = [
+    { number: 18, user: bot, created_at: '2025-01-01T00:00:00Z', body: canonical },
+    { number: 19, user: bot, created_at: createdAt, pull_request: {}, body: canonical },
+    { number: 20, user: { login: 'another-user' }, created_at: createdAt, body: canonical },
+    {
+      number: 21,
+      user: bot,
+      created_at: createdAt,
+      body: `~~~\n${marker}\n~~~\n\n<!-- nemesis-feedback:different -->`,
+    },
+    { number: 22, body: canonical },
+    { number: 123, user: bot, created_at: createdAt, body: `${canonical}\n\nMaintainer note` },
+  ];
+  const upstream = vi.fn<typeof fetch>(async (input, init) => {
+    const url = new URL(String(input));
+    if (url.pathname === auth) return installationToken();
+    if (url.pathname === '/app') {
+      return Response.json({ id: Number(settings.appId), slug: 'nemesis-feedback' });
+    }
+    if (url.pathname === repo && init?.method === 'GET') return Response.json(issues);
+    throw new TypeError('fake transport error');
+  });
   const publisher = createGitHubFeedbackPublisher(settings, upstream);
   expect(await publisher.create(form)).toEqual({ status: 'unknown' });
   expect(await publisher.find(form.marker, new Date('2026-11-23T00:01:00Z'))).toBe(123);
-  expect(upstream).toHaveBeenCalledTimes(3);
-  const [lookup, init] = upstream.mock.calls[2]!;
+  expect(upstream).toHaveBeenCalledTimes(4);
+  expect(upstream.mock.calls[2]?.[0]).toBe(`${base}/app`);
+  const [lookup, init] = upstream.mock.calls[3]!;
   expect(new URL(String(lookup)).pathname).toBe(repo);
   expect(new URL(String(lookup)).searchParams.get('state')).toBe('all');
+  expect(new URL(String(lookup)).searchParams.get('creator')).toBe(bot.login);
   expect(init?.method).toBe('GET');
 });
 

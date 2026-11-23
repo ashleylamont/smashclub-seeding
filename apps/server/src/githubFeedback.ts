@@ -7,12 +7,20 @@ import type { Env } from './env';
 const api = 'https://api.github.com';
 const issues = `${api}/repos/${FEEDBACK_GITHUB_OWNER}/${FEEDBACK_GITHUB_REPO}/issues`;
 const gitHubTimeoutMs = 4_500;
+const clockSkewMs = 60_000;
+const creationWindowMs = 2 * clockSkewMs;
 const knownRejections = new Set([400, 401, 403, 404, 410, 422, 429]);
 const issueNumber = z.number().int().positive().max(2_147_483_647);
 const installationToken = z.object({ token: z.string().min(1), expires_at: z.iso.datetime() });
+const appIdentity = z.object({ id: z.number().int().positive(), slug: z.string().min(1) });
 const issueReceipt = z.object({ number: issueNumber });
 const issueList = z.array(
-  issueReceipt.extend({ body: z.string().nullish(), pull_request: z.unknown().optional() }),
+  issueReceipt.extend({
+    body: z.string().nullish(),
+    created_at: z.string().optional(),
+    pull_request: z.unknown().optional(),
+    user: z.object({ login: z.string() }).nullish(),
+  }),
 );
 
 type Report = {
@@ -34,6 +42,16 @@ export interface FeedbackPublisher {
 
 function markerComment(marker: string) {
   return `<!-- nemesis-feedback:${marker} -->`;
+}
+
+function hasPublisherMarker(body: string, marker: string) {
+  // The submitted description is fenced literal text. A report can quote
+  // another report's marker, but only Nemesis writes a marker after the fence.
+  const lines = body.split(/\r?\n/);
+  const fence = lines[0];
+  if (!fence || !/^~{3,}$/.test(fence)) return false;
+  const closingFence = lines.indexOf(fence, 1);
+  return closingFence !== -1 && lines.includes(markerComment(marker), closingFence + 1);
 }
 
 export async function configuredFeedbackPublisher(env: Env) {
@@ -63,6 +81,7 @@ export function createGitHubFeedbackPublisher(
     .digest('hex');
   let token: { value: string; expiresAt: number } | undefined;
   let pendingToken: Promise<string> | undefined;
+  let botLogin: string | undefined;
 
   function send(url: string, bearer: string, body?: object) {
     return request(url, {
@@ -81,17 +100,20 @@ export function createGitHubFeedbackPublisher(
     });
   }
 
-  async function refreshToken() {
+  function appJwt() {
     const now = Math.floor(Date.now() / 1000);
     const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
     const claims = Buffer.from(
       JSON.stringify({ iat: now - 60, exp: now + 300, iss: settings.appId }),
     ).toString('base64url');
     const signed = `${header}.${claims}`;
-    const jwt = `${signed}.${sign('RSA-SHA256', Buffer.from(signed), key).toString('base64url')}`;
+    return `${signed}.${sign('RSA-SHA256', Buffer.from(signed), key).toString('base64url')}`;
+  }
+
+  async function refreshToken() {
     const response = await send(
       `${api}/app/installations/${settings.installationId}/access_tokens`,
-      jwt,
+      appJwt(),
       {
         repositories: [FEEDBACK_GITHUB_REPO],
         permissions: { issues: 'write' },
@@ -109,6 +131,16 @@ export function createGitHubFeedbackPublisher(
       pendingToken = undefined;
     });
     return pendingToken;
+  }
+
+  async function appBotLogin() {
+    if (botLogin) return botLogin;
+    const response = await send(`${api}/app`, appJwt());
+    if (!response.ok) throw new Error('Could not verify the feedback app identity');
+    const app = appIdentity.parse(await response.json());
+    if (String(app.id) !== settings.appId) throw new Error('Unexpected feedback app identity');
+    botLogin = `${app.slug}[bot]`;
+    return botLogin;
   }
 
   return {
@@ -134,23 +166,31 @@ export function createGitHubFeedbackPublisher(
     },
     async find(marker, claimedAt) {
       try {
+        const [creator, bearer] = await Promise.all([appBotLogin(), accessToken()]);
+        const earliest = claimedAt.valueOf() - clockSkewMs;
+        const latest = claimedAt.valueOf() + creationWindowMs;
         const url = new URL(issues);
         url.search = new URLSearchParams({
           state: 'all',
           sort: 'created',
           direction: 'asc',
           per_page: '100',
-          since: new Date(claimedAt.valueOf() - 60_000).toISOString(),
+          since: new Date(earliest).toISOString(),
+          creator,
         }).toString();
-        const response = await send(url.href, await accessToken());
+        const response = await send(url.href, bearer);
+        if (response.status === 401 && token?.value === bearer) token = undefined;
         if (!response.ok) return undefined;
-        const line = markerComment(marker);
-        const matches = issueList
-          .parse(await response.json())
-          .filter((issue) => !issue.pull_request && issue.body?.split(/\r?\n/).includes(line));
-        // The marker becomes public with the original issue. A copied marker
-        // can only appear later, so a newer match cannot replace the receipt.
-        return matches.sort((left, right) => left.number - right.number)[0]?.number;
+        return issueList.parse(await response.json()).find((issue) => {
+          const creationTime = Date.parse(issue.created_at ?? '');
+          return (
+            !issue.pull_request &&
+            issue.user?.login === creator &&
+            creationTime >= earliest &&
+            creationTime <= latest &&
+            hasPublisherMarker(issue.body ?? '', marker)
+          );
+        })?.number;
       } catch {
         return undefined;
       }
