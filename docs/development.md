@@ -201,7 +201,7 @@ The public `/api/live` streams have global and per-IP connection caps, a maximum
 
 Nemesis has one application version, tracked in `apps/web/package.json`, covering the web app, API and the rest of the deployed image. Each pull request adds a `@smashclub/web` Changeset with `pnpm changeset`. Choose the SemVer bump and describe the change in terms a player or organiser can understand. Use the [note format](../.changeset/README.md) for a change category and optional screenshots. The required **All checks** gate verifies that the PR adds a valid note. A release-only PR passes by consuming existing notes and updating the version and changelog.
 
-On `main`, **Version Nemesis** opens or updates the Changesets version PR and queues it for GitHub auto-merge. Required CI checks still gate that merge. A version bump on `main` makes **Publish** run full CI, publish the verified image under the numeric version and create the matching annotated tag and GitHub Release. GitHub releases and the in-app `/changelog` group the same notes with new and improved features and fixes first. Each note keeps its Sydney merge date and source build. In-app version headings link to the tagged release.
+On `main`, **Version Nemesis** opens or updates the Changesets version PR and queues it for GitHub auto-merge. Required CI checks still gate that merge. A version bump on `main` makes **Publish** run full CI, publish the verified image under the numeric version and create the matching annotated tag and GitHub Release. GitHub releases and the in-app `/changelog` open with the same short highlights. Expand the full notes to see the grouped changes, their Sydney merge dates and source builds. In-app version headings link to the tagged release.
 
 ### Enable the release bot
 
