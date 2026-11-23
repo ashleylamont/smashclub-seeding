@@ -9,6 +9,7 @@ export function publicationPolicy({
   onMain,
   appVersion,
   versionChanged,
+  numberedSnapshot = false,
 }) {
   if (!['push', 'workflow_dispatch'].includes(event))
     throw new Error('Unsupported publication event');
@@ -16,6 +17,16 @@ export function publicationPolicy({
   if (!onMain) throw new Error('Only commits on main may be published');
   if (event === 'workflow_dispatch' && ref !== 'refs/heads/main')
     throw new Error('Manual publication must select main');
+  if (numberedSnapshot) {
+    if (
+      event !== 'push' ||
+      ref !== 'refs/heads/main' ||
+      !versionChanged ||
+      !stableVersionPattern.test(appVersion)
+    )
+      throw new Error('Expected a validated version snapshot from a main push');
+    return { sha, tags: [appVersion], releaseVersion: appVersion };
+  }
   if (ref === 'refs/heads/main') {
     const tags = mainSha === sha ? ['main'] : [];
     if (event !== 'push' || !versionChanged) return { sha, tags };

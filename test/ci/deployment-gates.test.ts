@@ -162,6 +162,7 @@ it('runs browser shards after only the PR plan, independently of full typecheck 
 
 it('previews Nx tasks after the full typecheck on PRs', () => {
   expect(ci.jobs.typecheck.steps[0].with).toEqual({
+    ref: "${{ inputs.snapshot_sha || '' }}",
     'fetch-depth': "${{ github.event_name == 'pull_request' && 2 || 1 }}",
   });
   expect(ci.jobs.typecheck.steps.slice(-2)).toEqual([
@@ -301,7 +302,7 @@ it('keeps three required portable shards and Darwin independent with separate re
         expect.objectContaining({
           if: 'always()',
           with: expect.objectContaining({
-            name: 'ui-portable-review-${{ env.UI_PORTABLE_SHARD }}',
+            name: '${{ env.ARTIFACT_PREFIX }}ui-portable-review-${{ env.UI_PORTABLE_SHARD }}',
             path: 'apps/web/playwright-report/ui\napps/web/ui-test-results\n',
           }),
         }),
@@ -318,7 +319,7 @@ it('keeps three required portable shards and Darwin independent with separate re
       { id: 'browser', run: 'node scripts/run-ui-platform.mjs darwin' },
       expect.objectContaining({
         if: 'always()',
-        with: expect.objectContaining({ name: 'ui-review' }),
+        with: expect.objectContaining({ name: '${{ env.ARTIFACT_PREFIX }}ui-review' }),
       }),
     ]),
   });
@@ -565,7 +566,7 @@ it('publication runs reusable CI with read permissions and publishes its tested 
   expect(publish.on).not.toHaveProperty('workflow_run');
   expect(publish.jobs.verify.uses).toBe('./.github/workflows/ci.yml');
   expect(publish.jobs.verify.permissions).toEqual({ contents: 'read' });
-  expect(publish.jobs.publish.needs).toBe('verify');
+  expect(publish.jobs.publish.needs).toEqual(['verify', 'numbered-source']);
   expect(publish.jobs.publish.if).toContain("needs.verify.result == 'success'");
   const checkout = publish.jobs.publish.steps.find((step: { uses?: string }) =>
     step.uses?.startsWith('actions/checkout@'),
@@ -574,7 +575,8 @@ it('publication runs reusable CI with read permissions and publishes its tested 
   const artifact = publish.jobs.publish.steps.find((step: { uses?: string }) =>
     step.uses?.startsWith('actions/download-artifact@'),
   );
-  expect(artifact.with.name).toBe('verified-production-image');
+  expect(artifact.with.name).toBe('${{ env.ARTIFACT_PREFIX }}verified-production-image');
+  expect(publish.jobs.publish.env.ARTIFACT_PREFIX).toBe('');
   expect(
     publish.jobs.publish.steps.some((step: { uses?: string }) =>
       step.uses?.startsWith('docker/build-push-action@'),
@@ -585,7 +587,7 @@ it('publication runs reusable CI with read permissions and publishes its tested 
 it('queues exact-build verification and registry writes while superseding PR checks', () => {
   expect(ci.concurrency).toEqual({
     group:
-      "${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}-verification",
+      "${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || inputs.snapshot_sha || github.sha }}-verification",
     'cancel-in-progress': "${{ github.event_name == 'pull_request' }}",
   });
   expect(publish.jobs.classify).toMatchObject({
