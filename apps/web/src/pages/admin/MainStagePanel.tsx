@@ -213,6 +213,7 @@ function BroadcastSourceRows({
         const params = new URLSearchParams({
           ...(stationId ? { station: stationId } : {}),
           presentation: mode,
+          controls: 'preview',
         });
         const overlay = `/overlay/${encodeURIComponent(planId)}`;
         const previewHref = `${overlay}?${params}`;

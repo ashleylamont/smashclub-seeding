@@ -73,13 +73,11 @@ for (const theme of ['dark', 'light'] as const)
       await expect(copy(automatic)).toBeFocused();
 
       const base = new URL(page.url()).origin;
-      const previewUrlFor = (mode: string, station: string) =>
-        `/overlay/${PLAN_ID}?${new URLSearchParams({ station, presentation: mode })}`;
-      const urlFor = (mode: string, station: string) =>
-        `${previewUrlFor(mode, station)}&controls=0`;
+      const urlFor = (mode: string, station: string, controls = '0') =>
+        `/overlay/${PLAN_ID}?${new URLSearchParams({ station, presentation: mode, controls })}`;
       const autoUrl = base + urlFor('auto', stage!.id);
       for (const [mode, label] of sourceLabels)
-        await expect(preview(label)).toHaveAttribute('href', previewUrlFor(mode, stage!.id));
+        await expect(preview(label)).toHaveAttribute('href', urlFor(mode, stage!.id, 'preview'));
       await page.keyboard.press('Enter');
       await expect(copy(automatic, 'Copied')).toBeFocused();
       await expect(panel.getByText('Automatic intermission overlay URL copied.')).toHaveRole(
@@ -138,7 +136,10 @@ for (const theme of ['dark', 'light'] as const)
       } finally {
         releaseClipboard?.();
       }
-      await expect(preview(gameplay)).toHaveAttribute('href', previewUrlFor('gameplay', setup!.id));
+      await expect(preview(gameplay)).toHaveAttribute(
+        'href',
+        urlFor('gameplay', setup!.id, 'preview'),
+      );
       await expect(copy(gameplay)).toBeEnabled();
       await expect(panel.getByText('Waiting for the previous copy to finish.')).toBeHidden();
       expect(clipboardContents).toBe(gameplayUrl);
@@ -242,6 +243,17 @@ for (const width of [390, 1440]) {
         await page.goto(href);
         const setup = page.getByRole('button', { name: 'Display setup', exact: true });
         await expect(setup).toBeVisible();
+        await ready(page);
+        const box = (await setup.boundingBox())!;
+        const appearance = await setup.evaluate((element) => {
+          const { opacity, fontSize } = getComputedStyle(element);
+          return { opacity: Number(opacity), fontSize: parseFloat(fontSize) };
+        });
+        expect(box.height).toBeGreaterThanOrEqual(phone ? 44 : 36);
+        expect(appearance).toEqual({ opacity: 1, fontSize: 13 });
+        const metadata = (await page.locator('.broadcast-topline').boundingBox())!;
+        expect(box.y + box.height).toBeLessThanOrEqual(metadata.y);
+        await page.screenshot({ path: testInfo.outputPath('editable-source-preview.png') });
         if (phone) await setup.tap();
         else await setup.press('Enter');
         const dialog = page.getByRole('dialog', { name: 'Display setup' });
