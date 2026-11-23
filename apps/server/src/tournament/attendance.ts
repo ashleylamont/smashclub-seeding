@@ -13,6 +13,8 @@ import { completeCommandProgression } from './progression';
 import { hasCurrentPendingScoreReview } from './scoreReview';
 import { projectMatchLabels } from './matchNames';
 import { qualifierFieldFrozen } from './qualifiers';
+import { reviewFinalsReset } from './finalsPreview';
+import { finalsDivisionResetScopes } from './operations';
 import {
   hasFixedLegacyPoolQualifiers,
   hasLegacyQualifier,
@@ -79,7 +81,10 @@ function ordinaryAttendancePreview(
     issues.push('Use the reviewed late-pair workflow to add a doubles pair.');
   if (!['locked', 'unlocked'].includes(state.lifecycle))
     issues.push('Attendance changes require an open locked event.');
-  issues.push(...finalsRosterIssues(state, input.action, division, pool?.id));
+  const finalsFrozen = input.action !== 'withdraw' && qualifierFieldFrozen(state, division);
+  if (finalsFrozen) issues.push('Remove unplayed finals before changing the pool draw.');
+  else if (input.action === 'withdraw' && pool && hasLegacyQualifier(state, pool.id, 'pending'))
+    issues.push(legacyPendingRosterMessage);
   if (input.action === 'add' ? entrant : !entrant)
     issues.push(
       input.action === 'add'
@@ -114,10 +119,13 @@ function ordinaryAttendancePreview(
   });
   issues.push(...draw.issues);
   const returnCallMatchIds = lateAddRecovery?.matchIds ?? draw.returnCallMatchIds;
+  const finalsRemoval =
+    finalsFrozen && issues.length === 1 ? finalsRemovalForAttendance(state, division) : undefined;
   return {
     allowed: !issues.length,
     issues,
     ...(returnCallMatchIds.length ? { returnCallMatchIds } : {}),
+    ...(finalsRemoval && { finalsRemoval }),
     requiresExternalAcknowledgement: false,
     requiresRedistributionApproval: Boolean(draw.relocations.length),
     relocations: draw.relocations,
@@ -402,17 +410,16 @@ function reviewAffectedMatches(
   return { issues, untakenCallIds };
 }
 
-function finalsRosterIssues(
-  state: TournamentState,
-  action: Input['action'],
-  division: TournamentState['pools'][number]['division'],
-  poolId: string | undefined,
-) {
-  if (action !== 'withdraw' && qualifierFieldFrozen(state, division))
-    return ['Remove unplayed finals before changing the pool draw.'];
-  if (action === 'withdraw' && poolId && hasLegacyQualifier(state, poolId, 'pending'))
-    return [legacyPendingRosterMessage];
-  return [];
+function finalsRemovalForAttendance(state: TournamentState, division: Pool['division']) {
+  // Combined draws freeze one division. Earlier draws require the whole reset.
+  const scope = state.brackets.every((bracket) => bracket.strengthSeeding)
+    ? finalsDivisionResetScopes(state).find((entry) => entry.division === division)
+    : undefined;
+  if (!reviewFinalsReset(state, scope).resetAllowed) return undefined;
+  return {
+    bracketIds: scope?.bracketIds ?? state.brackets.map(({ id }) => id).sort(),
+    ...(scope && { division: scope.division }),
+  };
 }
 
 export function applyAttendance(state: TournamentState, envelope: CommandEnvelope, input: Input) {

@@ -11,6 +11,7 @@ export const OPS_SECTIONS = [
 ] as const;
 export type OpsSection = (typeof OPS_SECTIONS)[number]['value'];
 
+export const finalsPreviewControlId = 'native-finals-preview';
 export const returnCallControlId = (matchId: string) => `return-call-${matchId}`;
 export const poolOrderControlId = (poolId: string) => `pool-order-${poolId}`;
 

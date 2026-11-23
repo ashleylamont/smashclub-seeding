@@ -156,6 +156,105 @@ describe('recovering two-player pool redistribution from untaken calls', () => {
     };
   }
 
+  it('offers finals removal review and requires a fresh preview of the same redistribution', async () => {
+    const { api, state, move } = await setup();
+    const original = await api.previewAttendance(move);
+    const planId = move.planId;
+    const draw = await api.native.preview({ planId });
+    await api.native.generate({ planId, revisionToken: draw.revisionToken });
+    const drawn = await state();
+
+    const blocked = await api.previewAttendance(move);
+    expect(blocked).toMatchObject({
+      allowed: false,
+      issues: ['Remove unplayed finals before changing the pool draw.'],
+      finalsRemoval: { bracketIds: drawn.brackets.map(({ id }) => id).sort() },
+    });
+    expect(await state()).toEqual(drawn);
+    await expect(
+      api.applyAttendance({ ...move, revisionToken: blocked.revisionToken }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    const removal = await api.native.preview({ planId });
+    expect(removal.resetAllowed).toBe(true);
+    await api.native.reset({ planId, revisionToken: removal.revisionToken });
+    const removed = await state();
+    expect(removed.matches).toEqual(drawn.matches.filter(({ bracketId }) => !bracketId));
+    await expect(
+      api.applyAttendance({ ...move, revisionToken: blocked.revisionToken }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(await api.previewAttendance(move)).toMatchObject({
+      allowed: true,
+      relocations: original.relocations,
+    });
+    expect(await live.replay(planId)).toEqual(removed);
+  });
+
+  it('does not offer finals removal after a finals set starts or finishes', async () => {
+    const { api, state, move } = await setup();
+    const planId = move.planId;
+    const draw = await api.native.preview({ planId });
+    await api.native.generate({ planId, revisionToken: draw.revisionToken });
+    const before = await state();
+    for (const pool of before.pools.filter(({ division }) => division === 'lower')) {
+      for (const match of (await state()).matches.filter(({ poolId }) => poolId === pool.id)) {
+        const first =
+          pool.entrantIds.indexOf(match.player1Id!) < pool.entrantIds.indexOf(match.player2Id!);
+        await api.reportScore({
+          matchId: match.id,
+          expectedRevision: match.revision,
+          requestId: crypto.randomUUID(),
+          score1: first ? 2 : 0,
+          score2: first ? 0 : 2,
+          outcome: 'played',
+        });
+      }
+    }
+    const ready = await state();
+    const match = ready.matches.find(
+      ({ bracketId, division, status }) => bracketId && division === 'lower' && status === 'ready',
+    )!;
+    await api.live.command({
+      planId,
+      requestId: crypto.randomUUID(),
+      command: {
+        kind: 'dispatch',
+        matchId: match.id,
+        expectedRevision: match.revision,
+        expectedResourceRevision: ready.settings.resourceRevision,
+        expectedOrdinaryCapacity: ready.settings.capacity,
+        stationId: null,
+        callOnly: false,
+      },
+    });
+    const started = (await state()).matches.find(({ id }) => id === match.id)!;
+    expect(started.started).toBe(true);
+    const blocked = await api.previewAttendance(move);
+    expect(blocked.allowed).toBe(false);
+    expect(blocked).not.toHaveProperty('finalsRemoval');
+    const removal = await api.native.preview({ planId });
+    expect(removal.resetAllowed).toBe(false);
+    await expect(
+      api.native.reset({ planId, revisionToken: removal.revisionToken }),
+    ).rejects.toThrow(/actual play/);
+
+    await api.reportScore({
+      matchId: match.id,
+      expectedRevision: started.revision,
+      requestId: crypto.randomUUID(),
+      score1: 2,
+      score2: 0,
+      outcome: 'played',
+    });
+    expect((await state()).matches.find(({ id }) => id === match.id)).toMatchObject({
+      outcome: 'played',
+      score1: 2,
+      score2: 0,
+    });
+    const played = await api.previewAttendance(move);
+    expect(played.allowed).toBe(false);
+    expect(played).not.toHaveProperty('finalsRemoval');
+  });
+
   for (const location of ['source', 'destination'] as const) {
     it(`offers guarded Return when only an untaken ${location} call blocks redistribution`, async () => {
       const event = await setup();

@@ -18,7 +18,11 @@ import {
 } from './nativeFinalizationFeedback';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
-import { poolOrderControlId, type OpsSection } from '../../lib/opsWorkspace';
+import {
+  finalsPreviewControlId,
+  poolOrderControlId,
+  type OpsSection,
+} from '../../lib/opsWorkspace';
 import '../../styles/event-board.css';
 import './NativeBracketControls.css';
 
@@ -107,7 +111,7 @@ export function NativeBracketControls({
         <>
           <p>Preview the available finals to review their seeds before creating the draws.</p>
           <Button
-            id="native-finals-preview"
+            id={finalsPreviewControlId}
             type="submit"
             disabled={closed || busy}
             onClick={() =>
@@ -400,7 +404,7 @@ function FinalizeNativeResults({
             Finalize native results
           </Button>
           {finalization?.kind === 'missing_draw' && (
-            <Button onClick={() => onOpenControl('native-finals-preview', 'draw')}>
+            <Button onClick={() => onOpenControl(finalsPreviewControlId, 'draw')}>
               Go to finals preview
             </Button>
           )}
