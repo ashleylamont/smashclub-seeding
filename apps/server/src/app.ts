@@ -4,12 +4,13 @@ import fastifyStatic from '@fastify/static';
 import { fastifyTRPCPlugin } from '@trpc/server/adapters/fastify';
 import { sql } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
-import { FEEDBACK_PATH } from '@smashclub/shared';
+import { FEEDBACK_PATH, PUBLIC_FEEDBACK_PATH } from '@smashclub/shared';
 import type { Auth } from './auth';
 import { getSessionUser } from './auth';
 import type { ChallongeClient } from './challonge/client';
 import type { Env } from './env';
 import { registerFeedbackRoute } from './feedback';
+import { configuredFeedbackPublisher, type FeedbackPublisher } from './githubFeedback';
 import { SseRegistry } from './live/sse';
 import type { RecomputeTrigger } from './recompute/trigger';
 import { appRouter } from './trpc/router';
@@ -23,6 +24,7 @@ export interface AppDeps {
   challonge: ChallongeClient;
   recomputeTrigger: RecomputeTrigger;
   nativeRuntime?: NativeRuntime;
+  feedbackPublisher?: FeedbackPublisher;
 }
 
 const SSE_HEARTBEAT_MS = 25_000;
@@ -33,7 +35,10 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     logger: env.NODE_ENV === 'test' ? false : { level: env.LOG_LEVEL },
     trustProxy: env.TRUST_PROXY,
     logController: new LogController({
-      disableRequestLogging: (request) => request.url.split('?', 1)[0] === FEEDBACK_PATH,
+      disableRequestLogging: (request) => {
+        const requestPath = request.url.split('?', 1)[0];
+        return requestPath === FEEDBACK_PATH || requestPath === PUBLIC_FEEDBACK_PATH;
+      },
     }),
   });
   const sse = new SseRegistry({
@@ -56,7 +61,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     ),
   }));
 
-  registerFeedbackRoute(app, db);
+  const feedbackPublisher =
+    deps.feedbackPublisher ??
+    (await configuredFeedbackPublisher(env).catch(() => {
+      app.log.warn('GitHub feedback is unavailable due to publisher configuration');
+      return undefined;
+    }));
+  registerFeedbackRoute(app, db, feedbackPublisher);
 
   // --- better-auth (fetch-style handler bridged onto Fastify) ---
   app.route({

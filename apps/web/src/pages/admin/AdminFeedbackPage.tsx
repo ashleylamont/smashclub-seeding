@@ -22,9 +22,9 @@ export function AdminFeedbackPage() {
   return (
     <section className="admin-feedback-inbox" aria-labelledby="feedback-inbox-title">
       <header className="page-header">
-        <h2 id="feedback-inbox-title">Feedback inbox</h2>
+        <h2 id="feedback-inbox-title">Past private feedback</h2>
         <p className="muted">
-          Private reports expire after 90 days. Review details before sharing them publicly.
+          Past private reports expire after 90 days. New reports go directly to GitHub.
         </p>
         <div className="ui-actions">
           <Button asChild>
