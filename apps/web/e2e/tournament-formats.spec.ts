@@ -216,11 +216,26 @@ for (const [structure, played] of [
         exact: true,
       }),
     ).toBeVisible();
-    await page.getByRole('button', { name: 'Finalize native results', exact: true }).click();
+    const finalize = page.getByRole('button', { name: 'Finalize native results', exact: true });
+    await expect(finalize).toHaveAccessibleDescription(
+      'Results are ready to publish. Finalizing ends live scoring.',
+    );
+    if (structure === 'double_elimination')
+      expect(final.matches.find((match) => match.bracketLane === 'reset')).toMatchObject({
+        status: 'complete',
+        outcome: 'played',
+      });
+    await finalize.click();
+    const finalized = page.waitForResponse(
+      (response) =>
+        response.url().includes('eventOps.native.finalize') &&
+        response.request().method() === 'POST',
+    );
     await page
       .getByRole('alertdialog')
       .getByRole('button', { name: 'Confirm', exact: true })
       .click();
+    expect((await finalized).ok()).toBe(true);
     await expect(page.getByText('Result revision 1 published.', { exact: false })).toBeVisible();
     const events = await query<{ slug: string; name: string }[]>(
       page.request,

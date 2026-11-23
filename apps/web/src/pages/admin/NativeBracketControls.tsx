@@ -101,12 +101,7 @@ export function NativeBracketControls({
   return (
     <section className="card native-finals-controls">
       <h3>{heading}</h3>
-      {isKnockout(structure) ? (
-        <p>
-          The locked draw already contains the bracket. Complete all outstanding matches; a
-          double-elimination reset final runs only when required.
-        </p>
-      ) : structure === 'round_robin' ? (
+      {isKnockout(structure) ? null : structure === 'round_robin' ? (
         <p>New draws decide a unique set-win order automatically. Ties need an organiser ruling.</p>
       ) : (
         <>
@@ -363,10 +358,10 @@ function FinalizeNativeResults({
     poolOrder?.plannerConfirmation?.available === false ? poolOrder.plannerConfirmation.reason : '';
   let finalizationDetails: string | undefined = readyToFinalize ? undefined : finalization?.message;
   if (poolOrderLock) finalizationDetails = `A pool finishing order is missing. ${poolOrderLock}`;
-  else if (readyToFinalize)
-    finalizationDetails = 'Publishing ends live scoring and sends the results to club ratings.';
   else if (data.plan.drawPaused)
     finalizationDetails = 'Resume the pool draw before publishing results.';
+  else if (readyToFinalize)
+    finalizationDetails = 'Results are ready to publish. Finalizing ends live scoring.';
   else if (!closed && !finalization)
     finalizationDetails = data.plan.softLockedAt
       ? 'Finalization status unavailable.'
