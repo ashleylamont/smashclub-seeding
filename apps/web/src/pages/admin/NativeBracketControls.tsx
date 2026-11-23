@@ -211,6 +211,7 @@ export function NativeBracketControls({
                     bracket.strengthSeeding.seeds.length > 0 && (
                       <StrengthFinalsReview
                         seeding={bracket.strengthSeeding}
+                        qualifierSlots={bracket.qualifierSlots}
                         name={name}
                         historical={
                           'alreadyDrawn' in bracket &&
