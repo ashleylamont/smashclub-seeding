@@ -36,6 +36,7 @@ import { readWhrResultImpact } from '../../recompute/whrResultImpact';
 import { verifiedRankMovementNight } from '../../recompute/whrProvenance';
 import { getRatingSettings } from '../../settings';
 import { charactersByPlayer, charactersForPlayer } from '../../players/characters';
+import { readPublicPlayerPreview } from '../../players/publicPreview';
 import { rankRecapHighlights } from '../../recap/highlightRanking';
 import { loadRecap } from '../../recap/recap';
 import { loadEventOverview } from '../../events/overview';
@@ -359,52 +360,7 @@ export const publicRouter = router({
 
   playerPreview: publicProcedure
     .input(z.object({ playerId: z.uuid() }))
-    .query(({ ctx, input: { playerId } }) =>
-      ctx.db.transaction(
-        async (db) => {
-          const [player] = await db
-            .select({
-              canonicalName: players.canonicalName,
-              displayName: players.displayName,
-              status: players.status,
-              mergedIntoPlayerId: players.mergedIntoPlayerId,
-            })
-            .from(players)
-            .where(eq(players.id, playerId));
-          if (!player) return null;
-          if (player.status === 'merged' && player.mergedIntoPlayerId) {
-            return { profile: null, redirectTo: player.mergedIntoPlayerId };
-          }
-
-          const recomputeId = await latestRecomputeId(db);
-          const ratings = recomputeId
-            ? await db
-                .select({
-                  clubRating: playerRatings.clubRating,
-                  wins: playerRatings.wins,
-                  losses: playerRatings.losses,
-                  isProvisional: playerRatings.isProvisional,
-                })
-                .from(playerRatings)
-                .where(
-                  and(
-                    eq(playerRatings.recomputeId, recomputeId),
-                    eq(playerRatings.playerId, playerId),
-                  ),
-                )
-            : [];
-          return {
-            profile: {
-              name: playerName(player),
-              characters: await charactersForPlayer(db, playerId),
-              rating: ratings.at(0) ?? null,
-            },
-            redirectTo: null,
-          };
-        },
-        { isolationLevel: 'repeatable read', accessMode: 'read only' },
-      ),
-    ),
+    .query(({ ctx, input }) => readPublicPlayerPreview(ctx.db, input.playerId)),
 
   headToHead: publicProcedure
     .input(headToHeadInput)
