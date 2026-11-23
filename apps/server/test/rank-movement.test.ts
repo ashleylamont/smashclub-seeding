@@ -299,6 +299,98 @@ describe('rank movement over the last club night', () => {
     }
   });
 
+  it('requires a complete rated night before a recap can report rank movement', async () => {
+    await sync(['night1', 'night2']);
+    const sideBracket: FixtureTournament = {
+      ...night2,
+      slug: 'night2-side',
+      matches: [
+        { id: 50, p1: 3, p2: 1, winner: 3, order: 1 },
+        { id: 51, p1: 3, p2: 2, winner: 3, order: 2, scores: '99-0' },
+      ],
+    };
+    await registerTournamentSlugs(db, [sideBracket.slug]);
+    const [side] = await db
+      .select()
+      .from(tournaments)
+      .where(eq(tournaments.challongeSlug, sideBracket.slug));
+    await syncTournament(db, fixtureClient([sideBracket]), side!.id);
+    const { recomputeId } = await runRecompute(db);
+    const [primary] = await db
+      .select()
+      .from(tournaments)
+      .where(eq(tournaments.challongeSlug, 'night2'));
+    const [run] = await db
+      .select({ stats: recomputes.stats })
+      .from(recomputes)
+      .where(eq(recomputes.id, recomputeId));
+    if (!primary?.eventDate || !run?.stats) throw new Error('Expected a published, dated night');
+    expect(run.stats).toMatchObject({ whrLatestRatedSetCount: 5 });
+
+    const api = publicApi();
+    const samus = await playerId('Samus Aran');
+    const expectedMover = { kind: 'mover', player: { playerId: samus }, rank: 1, previousRank: 2 };
+    const getRecap = () => api.recap({ slug: sideBracket.slug });
+    const movers = (recap: Awaited<ReturnType<typeof getRecap>>) =>
+      recap?.facts.flatMap(({ fact }) => (fact.kind === 'mover' ? [fact] : []));
+    const expectFullRecap = async () => {
+      const full = await getRecap();
+      expect(full?.tournaments.map(({ slug }) => slug).sort()).toEqual(['night2', 'night2-side']);
+      expect(movers(full)?.find(({ player }) => player.playerId === samus)).toMatchObject(
+        expectedMover,
+      );
+    };
+    const admin = adminCaller(db);
+    const queued = vi.spyOn(RecomputeTrigger.prototype, 'request').mockImplementation(() => {});
+    try {
+      for (const legacy of [false, true]) {
+        if (legacy) {
+          const { whrLatestRatedSetCount: _count, ...legacyStats } = run.stats as Record<
+            string,
+            unknown
+          >;
+          await db
+            .update(recomputes)
+            .set({ stats: legacyStats })
+            .where(eq(recomputes.id, recomputeId));
+        }
+        await expectFullRecap();
+
+        await admin.updateTournament({ tournamentId: primary.id, eventDate: null });
+        const partial = await getRecap();
+        expect(partial?.tournaments.map(({ slug }) => slug)).toEqual(['night2-side']);
+        expect(partial?.setsPlayed).toBe(1);
+        expect
+          .soft(movers(partial), legacy ? 'legacy published run' : 'current published run')
+          .toEqual([]);
+        expect(
+          (await api.leaderboard()).rows.find(({ playerId }) => playerId === samus),
+        ).toMatchObject({
+          rank: 1,
+          previousRank: 2,
+          rankDelta: 1,
+        });
+
+        await admin.updateTournament({
+          tournamentId: primary.id,
+          eventDate: primary.eventDate.toISOString(),
+        });
+        await expectFullRecap();
+      }
+      expect(queued).toHaveBeenCalledTimes(4);
+      expect(await db.select({ id: recomputes.id }).from(recomputes)).toEqual([
+        { id: recomputeId },
+      ]);
+
+      // Removing a fixture set cascades into the older run's ledger. Its
+      // remaining rows can no longer prove complete coverage.
+      await db.delete(sets).where(eq(sets.tournamentId, primary.id));
+      expect.soft(movers(await getRecap())).toEqual([]);
+    } finally {
+      queued.mockRestore();
+    }
+  });
+
   it('keeps converged ranks while withholding movement from a capped previous fit', async () => {
     await updateRatingSettings(db, {
       ...defaultRatingSettings,

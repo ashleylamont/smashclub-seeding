@@ -120,6 +120,12 @@ async function computeRatings(db: Db): Promise<RatingRecomputeResult> {
     const ratingEventRows = run.events;
     const leaderboard = run.leaderboard;
     const previousRanks = run.previousRanks;
+    const history = prepareWhrHistory({
+      sets: engineSets,
+      tournaments: engineTournaments,
+      settings: effectiveSettings,
+    });
+    const ratedSetEnds = [...history.prefixEnds.values()];
     const modelStats = {
       whr: { converged: run.converged, iterations: run.iterations, periods: run.periods },
     };
@@ -129,16 +135,9 @@ async function computeRatings(db: Db): Promise<RatingRecomputeResult> {
       events: ratingEventRows.length,
       ratingNights: run.nightRatings.length,
       whrConvergedPreNightKeys: run.convergedPreNightKeys,
+      whrLatestRatedSetCount: (ratedSetEnds.at(-1) ?? 0) - (ratedSetEnds.at(-2) ?? 0),
       whrPrefixFingerprintVersion: WHR_PREFIX_FINGERPRINT_VERSION,
-      whrPrefixFingerprints: Object.fromEntries(
-        whrPrefixFingerprints(
-          prepareWhrHistory({
-            sets: engineSets,
-            tournaments: engineTournaments,
-            settings: effectiveSettings,
-          }),
-        ),
-      ),
+      whrPrefixFingerprints: Object.fromEntries(whrPrefixFingerprints(history)),
       ...modelStats,
     };
 
