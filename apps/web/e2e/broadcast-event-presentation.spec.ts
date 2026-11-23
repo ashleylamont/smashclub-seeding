@@ -136,6 +136,7 @@ test('assigned TO switches an open event-following OBS source independently of f
     const previewUrl = (await link('Follow event overlay'))!;
     const fixedUrl = new URL((await link('Progress-only overlay'))!, baseURL);
     fixedUrl.searchParams.set('controls', '0');
+    fixedUrl.searchParams.set('twitch', 'fixed_rehearsal_stream');
 
     let copiedUrl = '';
     await following.exposeFunction('copyFollowingSource', (value: string) => {
@@ -158,6 +159,10 @@ test('assigned TO switches an open event-following OBS source independently of f
     await following.reload();
     await openSetup.press('Enter');
     await expect(timing).toContainText('30 seconds');
+    const eventTwitch = setup.getByRole('switch', { name: 'Use event Twitch announcement' });
+    await expect(eventTwitch).not.toBeChecked();
+    await eventTwitch.press('Space');
+    await expect(setup.getByText('No active Twitch announcement.')).toBeVisible();
     await setup.getByRole('button', { name: 'Copy OBS source URL' }).press('Enter');
     await expect(setup.getByText('OBS source URL copied.')).toBeVisible();
     await following.goto(copiedUrl);
@@ -167,6 +172,25 @@ test('assigned TO switches an open event-following OBS source independently of f
     const capture = following.getByRole('region', { name: 'Transparent game capture area' });
     await expect(capture).toBeVisible();
     await expect(fixedProgress).toBeVisible();
+
+    const sharedLink = following.getByRole('link', { name: /^twitch\.tv\// });
+    const localLink = fixed.getByRole('link', { name: /^twitch\.tv\// });
+    const stream = desk.getByRole('region', { name: 'Public Twitch stream' });
+    const hub = await followingContext.newPage();
+    const hubLink = hub.getByRole('link', { name: 'Watch on Twitch' });
+    const channel = 'event_rehearsal_stream';
+    const streamUrl = `https://www.twitch.tv/${channel}`;
+    const announce = async () => {
+      await stream.getByRole('textbox', { name: 'Twitch channel name or link' }).fill(channel);
+      await stream.getByRole('button', { name: 'Announce Twitch stream' }).click();
+      await expect(stream).toContainText('Shown to viewers');
+    };
+    await expect(sharedLink).toHaveCount(0);
+    await expect(localLink).toHaveAttribute('href', 'https://www.twitch.tv/fixed_rehearsal_stream');
+    await announce();
+    await expect(sharedLink).toHaveAttribute('href', streamUrl);
+    await hub.goto(`/play/${planId}`);
+    await expect(hubLink).toHaveAttribute('href', streamUrl);
 
     const control = desk.getByRole('region', { name: 'Event-following presentation' });
     const selection = control.getByRole('combobox', { name: 'Event presentation' });
@@ -181,6 +205,8 @@ test('assigned TO switches an open event-following OBS source independently of f
     await expect(followingProgress).toBeVisible();
     await expect(capture).not.toBeVisible();
     await expect(fixedProgress).toBeVisible();
+    await expect(sharedLink).toHaveAttribute('href', streamUrl);
+    await expect(localLink).toHaveAttribute('href', 'https://www.twitch.tv/fixed_rehearsal_stream');
     await following.screenshot({ path: testInfo.outputPath('following-progress-1280.png') });
     await fixed.screenshot({ path: testInfo.outputPath('fixed-progress-1920.png') });
     expect(await snapshot(following.request)).toMatchObject({
@@ -211,6 +237,7 @@ test('assigned TO switches an open event-following OBS source independently of f
         params.get('presentation') === 'event' &&
         params.get('station') === stationId &&
         params.get('cycleSeconds') === '30' &&
+        params.get('twitchMode') === 'event' &&
         params.get('controls') === '0'
       );
     });
@@ -242,6 +269,15 @@ test('assigned TO switches an open event-following OBS source independently of f
     );
     await expect(fixedProgress).toBeVisible();
 
+    await stream.getByRole('button', { name: 'Stop Twitch announcement' }).click();
+    await expect(stream.getByRole('button', { name: 'Announce Twitch stream' })).toBeVisible();
+    await Promise.all([expect(sharedLink).toHaveCount(0), hub.reload()]);
+    await expect(localLink).toHaveAttribute('href', 'https://www.twitch.tv/fixed_rehearsal_stream');
+    await expect(hub.getByRole('heading', { name: 'OBS event-following rehearsal' })).toBeVisible();
+    await expect(hubLink).toHaveCount(0);
+    await announce();
+    await following.reload();
+    await expect(sharedLink).toHaveAttribute('href', streamUrl);
     await mutate(page.request, 'eventOps.settings', { ...publication, published: false });
     await expect(following.getByRole('status')).toContainText(
       'This event is unavailable or has not been published.',
@@ -249,6 +285,7 @@ test('assigned TO switches an open event-following OBS source independently of f
     await expect(fixed.getByRole('status')).toContainText(
       'This event is unavailable or has not been published.',
     );
+    await expect(sharedLink).toHaveCount(0);
   } finally {
     await Promise.all(contexts.map((context) => context.close()));
   }

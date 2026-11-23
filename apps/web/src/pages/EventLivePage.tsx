@@ -54,9 +54,13 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
   const [showGuestQr, setShowGuestQr] = useState(
     () => new URLSearchParams(location.search).get('guestQr') !== '0',
   );
-  const [twitch, setTwitch] = useState(() =>
-    twitchChannel(new URLSearchParams(location.search).get('twitch') ?? ''),
-  );
+  const [twitchSource, setTwitchSource] = useState(() => {
+    const params = new URLSearchParams(location.search);
+    return {
+      channel: twitchChannel(params.get('twitch') ?? ''),
+      useEventAnnouncement: params.get('twitchMode') === 'event',
+    };
+  });
   const [compactRail, setCompactRail] = useState(false);
   const observeRail = useCallback(
     (rail: HTMLElement | null) => {
@@ -123,12 +127,14 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
     history.replaceState(history.state, '', url);
     setShowGuestQr(show);
   };
-  const changeTwitch = (channel: string) => {
+  const changeTwitch = (channel: string, useEventAnnouncement = false) => {
     const url = new URL(location.href);
     if (channel) url.searchParams.set('twitch', channel);
     else url.searchParams.delete('twitch');
+    if (useEventAnnouncement) url.searchParams.set('twitchMode', 'event');
+    else url.searchParams.delete('twitchMode');
     history.replaceState(history.state, '', url);
-    setTwitch(channel);
+    setTwitchSource({ channel, useEventAnnouncement });
   };
   const guestInvitation = useQuery({
     queryKey: ['overlayGuestInvitation', planId],
@@ -175,6 +181,14 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
     );
   const closed = ['complete', 'cancelled'].includes(data.plan.status);
   const closedLabel = data.plan.status === 'cancelled' ? 'EVENT CANCELLED' : 'EVENT FINISHED';
+  const interrupted = !online || query.isError;
+  const promotion = data.twitchPromotion;
+  const eventChannel =
+    !closed && promotion && Date.parse(promotion.expiresAt) > now
+      ? twitchChannel(promotion.channel)
+      : '';
+  const useEventAnnouncement = twitchSource.useEventAnnouncement && !twitchSource.channel;
+  const twitch = useEventAnnouncement && !interrupted ? eventChannel : twitchSource.channel;
   const visibleMatches = data.matches.filter((match) => matchesPool(match, selectedPool));
   const sections = liveSections(visibleMatches, data.plan.liveOwned);
   const geometry = overlayGeometry(window.location.search);
@@ -302,7 +316,13 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
                 onRecentCount={changeRecentCount}
                 onGuestQr={changeGuestQr}
               />
-              <OverlayTwitchSetting channel={twitch} onChange={changeTwitch} />
+              <OverlayTwitchSetting
+                channel={twitchSource.channel}
+                useEventAnnouncement={useEventAnnouncement}
+                eventChannel={interrupted ? undefined : eventChannel}
+                onChange={changeTwitch}
+                onUseEventAnnouncement={(use) => changeTwitch('', use)}
+              />
             </>
           }
         />
@@ -329,7 +349,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
             preferRecent={effectivePresentation === 'auto'}
           />
         )}
-        {(!online || query.isError) && (
+        {interrupted && (
           <div className="broadcast-offline" role="status">
             Connection interrupted · last received scores
           </div>
