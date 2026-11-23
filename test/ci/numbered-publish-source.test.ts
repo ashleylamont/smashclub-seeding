@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   loadReleasePullRequests,
+  resolveMainRelease,
   resolveNumberedPublish,
 } from '../../scripts/resolve-numbered-publish.mjs';
 
@@ -214,3 +215,39 @@ it('retries delayed merge lookup without losing or inventing associations', asyn
   await expect(loadReleasePullRequests(target, () => [wrong], sleep)).resolves.toEqual([wrong]);
   expect(delays).toEqual([1_000, 3_000, 6_000]);
 });
+
+it(
+  'when the CI lane is unavailable, returns early for an ordinary main push but requires real version proof',
+  { timeout: 30_000 },
+  async () => {
+    const { cwd, git, mergeCut } = history();
+    const repository = 'smashclub/release-fixture';
+    const ordinary = git('rev-parse', 'HEAD');
+    const { merge, cut, pullRequest, verifiedCommit } = mergeCut();
+    const apiCalls: string[][] = [];
+    const api = (...args: string[]) => {
+      apiCalls.push(args);
+      if (args[0] === '--paginate') return [[pullRequest]];
+      expect(args).toEqual([`repos/${repository}/commits/${cut}`]);
+      return verifiedCommit;
+    };
+    const context = { cwd, repository, repositoryId, api };
+    await expect(resolveMainRelease({ ...context, merge: ordinary })).resolves.toBeNull();
+    expect(apiCalls).toEqual([]);
+
+    await expect(resolveMainRelease({ ...context, merge })).resolves.toEqual({
+      source: cut,
+      version: '0.1.1',
+    });
+    expect(apiCalls).toHaveLength(2);
+
+    await expect(
+      resolveMainRelease({
+        ...context,
+        merge,
+        api: () => [[]],
+        sleep: async () => {},
+      }),
+    ).rejects.toThrow(/identify one pull request/);
+  },
+);

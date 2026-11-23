@@ -118,6 +118,44 @@ export async function loadReleasePullRequests(merge, load, sleep = wait) {
   return pullRequests;
 }
 
+const githubApi = (...args) =>
+  JSON.parse(execFileSync('gh', ['api', ...args], { encoding: 'utf8' }));
+
+export async function resolveMainRelease({
+  cwd,
+  merge,
+  repository,
+  repositoryId,
+  api = githubApi,
+  sleep,
+}) {
+  if (!shaPattern.test(merge)) throw new Error('Expected a full release merge SHA');
+  const git = gitReader(cwd);
+  const [first, second] = parents(git, merge);
+  if (!first) throw new Error('Expected a first parent for the main push');
+  const previousVersion = appVersion(git, first);
+  const version = appVersion(git, merge);
+  if (typeof previousVersion !== 'string' || typeof version !== 'string')
+    throw new Error('Expected an app version in both committed package manifests');
+  if (version === previousVersion) return null;
+
+  const pullRequests = await loadReleasePullRequests(
+    merge,
+    () => api('--paginate', '--slurp', `repos/${repository}/commits/${merge}/pulls`).flat(),
+    sleep,
+  );
+  const appPull = pullRequests.find(
+    (pr) => pr?.merge_commit_sha === merge && pr.user?.id === releaseAppId,
+  );
+  return resolveNumberedPublish({
+    cwd,
+    merge,
+    repositoryId,
+    pullRequests,
+    verifiedCommit: appPull && second ? api(`repos/${repository}/commits/${second}`) : undefined,
+  });
+}
+
 if (import.meta.main) {
   const merge = process.env.GITHUB_SHA;
   const repository = process.env.GITHUB_REPOSITORY;
@@ -131,19 +169,10 @@ if (import.meta.main) {
   )
     throw new Error('Numbered release selection requires the exact protected main push');
 
-  const gh = (...args) => JSON.parse(execFileSync('gh', ['api', ...args], { encoding: 'utf8' }));
-  const pullRequests = await loadReleasePullRequests(merge, () =>
-    gh('--paginate', '--slurp', `repos/${repository}/commits/${merge}/pulls`).flat(),
-  );
-  const appPull = pullRequests.find(
-    (pr) => pr?.merge_commit_sha === merge && pr.user?.id === releaseAppId,
-  );
-  const second = parents(git, merge)[1];
-  const proof = resolveNumberedPublish({
+  const proof = await resolveMainRelease({
     merge,
+    repository,
     repositoryId: Number(process.env.GITHUB_REPOSITORY_ID),
-    pullRequests,
-    verifiedCommit: appPull && second ? gh(`repos/${repository}/commits/${second}`) : undefined,
   });
   if (proof) {
     console.log(`Nemesis ${proof.version} will be verified and published from ${proof.source}.`);

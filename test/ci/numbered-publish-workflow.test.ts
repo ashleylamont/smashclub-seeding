@@ -11,9 +11,15 @@ it('runs full isolated verification before publishing a separately selected numb
   const source = '${{ needs.numbered-source.outputs.source_sha }}';
   expect(jobs['numbered-source']).toMatchObject({
     needs: 'classify',
-    if: "needs.classify.outputs.lane == 'version'",
+    if: expect.stringContaining("github.event_name == 'push' && github.ref == 'refs/heads/main'"),
     permissions: { contents: 'read', 'pull-requests': 'read' },
   });
+  expect(jobs['numbered-source'].if).toContain('!cancelled()');
+  expect(jobs['numbered-source'].if).toContain(
+    "(needs.classify.outputs.lane == 'version' || needs.classify.outputs.lane == '')",
+  );
+  expect(jobs['numbered-source']).not.toHaveProperty('continue-on-error');
+  expect(jobs.publish.if).toContain("!cancelled() && needs.verify.result == 'success'");
   expect(jobs['verify-snapshot']).toMatchObject({
     needs: 'numbered-source',
     if: expect.stringContaining('source_sha != github.sha'),

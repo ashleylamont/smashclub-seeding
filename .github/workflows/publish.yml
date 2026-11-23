@@ -34,7 +34,9 @@ jobs:
   numbered-source:
     name: Resolve the numbered release source
     needs: classify
-    if: needs.classify.outputs.lane == 'version'
+    if: >-
+      ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+      && (needs.classify.outputs.lane == 'version' || needs.classify.outputs.lane == '') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -165,24 +167,32 @@ jobs:
     timeout-minutes: 5
     permissions: &release-permissions
       contents: write
-    concurrency:
-      group: release-${{ needs.publish.outputs.version }}
+    # Versions can finish CI in either order. Serialize the Latest decision and write.
+    concurrency: &release-queue
+      group: release-record-publication
       cancel-in-progress: false
+      queue: max
     env:
       VERSION: ${{ needs.publish.outputs.version }}
       VERIFIED_SHA: ${{ needs.publish.outputs.source_sha }}
     steps: &release-steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ env.VERIFIED_SHA }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
       - name: Publish release notes and exact build tag
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          test "$(git rev-parse HEAD)" = "$VERIFIED_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          source_dir="$PWD"
+          if [[ "$VERIFIED_SHA" != "$GITHUB_SHA" ]]; then
+            source_dir="$RUNNER_TEMP/verified-release-source"
+            git worktree add --detach "$source_dir" "$VERIFIED_SHA"
+          fi
+          test "$(git -C "$source_dir" rev-parse HEAD)" = "$VERIFIED_SHA"
           tag="v$VERSION"
-          node scripts/release-notes.mjs "$VERSION" > "$RUNNER_TEMP/release-notes.md"
+          node "$source_dir/scripts/release-notes.mjs" "$VERSION" > "$RUNNER_TEMP/release-notes.md"
           if git show-ref --verify --quiet "refs/tags/$tag"; then
             test "$(git rev-parse "refs/tags/$tag^{commit}")" = "$VERIFIED_SHA"
           else
@@ -191,11 +201,7 @@ jobs:
               tag -a "$tag" "$VERIFIED_SHA" -m "Nemesis $VERSION"
             git push origin "refs/tags/$tag"
           fi
-          if gh release view "$tag" --json tagName --jq .tagName; then
-            exit 0
-          fi
-          gh release create "$tag" --verify-tag \
-            --title "Nemesis $VERSION" --notes-file "$RUNNER_TEMP/release-notes.md"
+          node scripts/publish-release-record.mjs "$tag" "$RUNNER_TEMP/release-notes.md"
 
   release-snapshot:
     needs: publish-snapshot
@@ -203,9 +209,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: *release-permissions
-    concurrency:
-      group: release-${{ needs.publish-snapshot.outputs.version }}
-      cancel-in-progress: false
+    concurrency: *release-queue
     env:
       VERSION: ${{ needs.publish-snapshot.outputs.version }}
       VERIFIED_SHA: ${{ needs.publish-snapshot.outputs.source_sha }}
