@@ -163,6 +163,86 @@ for (const state of ['cancelled', 'blocked'] as const)
     expect(fixture.unexpected).toEqual([]);
   });
 
+for (const [width, theme] of [
+  [390, 'light'],
+  [1440, 'dark'],
+] as const) {
+  test(`withdraws print while a finalized correction is unpublished at ${width}px in ${theme}`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+    const fixture = await mockEvent(page, { role: 'player', idle: true, bracket: true });
+    const { overview } = fixture;
+    Object.assign(overview.plan, { status: 'complete', structure: 'single_elimination' });
+    const final = overview.matches.find((match) => match.id === 'fixture-final')!;
+    const opponent = overview.matches.find((match) => match.id === 'fixture-semi-b')!;
+    Object.assign(final, {
+      status: 'complete',
+      outcome: 'played',
+      score1: 2,
+      score2: 0,
+      winnerId: final.player1Id,
+      player2Id: opponent.player1Id,
+      player2Name: opponent.player1Name,
+    });
+    const publication = { resultId, revision: 1, status: 'published', tournamentIds: [] };
+    Object.assign(overview, { publication });
+    fixture.mutationResponses.set('eventOps.live.recover', () => {
+      publication.status = 'published';
+      return { status: 'published' };
+    });
+
+    await page.goto(path);
+    const draw = page.getByRole('region', { name: 'Tournament draw', exact: true });
+    const print = draw.getByRole('button', { name: 'Print draw record', exact: true });
+    const backup = draw.getByRole('button', { name: 'Print bracket backup sheets', exact: true });
+    const dialog = page.getByRole('dialog', { name: 'Print draw record', exact: true });
+    await expect(print).toBeVisible();
+    await print.press('Enter');
+    await expect(dialog).toContainText('Published draw record · Result revision 1');
+
+    Object.assign(final, { score1: 0, score2: 2, winnerId: final.player2Id });
+    Object.assign(publication, {
+      resultId: 'e92a412f-b54d-4f2c-8dfc-07f9ccbbb3e1',
+      revision: 2,
+      status: 'pending',
+    });
+    const availability = draw.getByText(
+      'Print the draw record after the current results are published.',
+    );
+    await expect(availability).toBeVisible({ timeout: 10_000 });
+    await expect(dialog).toHaveCount(0);
+    await expect(availability).toBeFocused();
+    await expect(print).toHaveCount(0);
+    await expect(backup).toHaveCount(0);
+    await expect(page.locator('body')).not.toHaveClass(/printing-bracket-backups/);
+
+    publication.status = 'blocked';
+    await expect(page.getByText('Result publication needs recovery.')).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(availability).toBeVisible();
+    await expect(print).toHaveCount(0);
+    await expect(backup).toHaveCount(0);
+    await draw.screenshot({ path: testInfo.outputPath('blocked-draw-print.png') });
+
+    await page.getByRole('button', { name: 'Retry result publication' }).press('Enter');
+    await expect(print).toBeVisible();
+    await expect(dialog).toHaveCount(0);
+    await print.press('Enter');
+    await expect(dialog).toContainText('Published draw record · Result revision 2');
+    const finalRow = dialog
+      .getByRole('row')
+      .filter({ has: page.getByRole('cell', { name: /Championship final/ }) });
+    await expect(finalRow).toContainText('0–2');
+    await expect(finalRow).toContainText(`Winner: ${opponent.player1Name}`);
+    await page.keyboard.press('Escape');
+    await expect(print).toBeFocused();
+    expect(fixture.unexpected).toEqual([]);
+  });
+}
+
 test('remote cancellation clears a finals preview error without moving focus', async ({ page }) => {
   const fixture = await mockEvent(page, { role: 'player', idle: true });
   Object.assign(fixture.overview.plan, { status: 'underway', structure: 'dual_division' });

@@ -36,7 +36,7 @@ export async function nativeOverview(api: NativeEventApi) {
   const { ctx, planId } = api;
   await requireOperator(ctx.db, planId, ctx.user!);
   const state = await api.state();
-  const privateView = await api.runtime.snapshot(planId, true);
+  const privateView = await api.runtime.snapshotFromState(state, true);
   const [handoff] = await ctx.db
     .select()
     .from(nativeLiveHandoffs)

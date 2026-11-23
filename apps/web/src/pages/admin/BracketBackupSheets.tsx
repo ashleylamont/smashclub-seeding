@@ -2,24 +2,47 @@ import { Dialog } from '../../components/ui/Dialog';
 import { Button } from '../../components/ui/Button';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { useEffect, useRef, useState } from 'react';
-import { bracketBackupSheets, type BracketBackupData } from '../../lib/bracketBackupSheets';
+import { bracketBackupSheets } from '../../lib/bracketBackupSheets';
+import type { Overview } from './dispatchTypes';
 import './BracketBackupSheets.css';
 
 type Sheet = ReturnType<typeof bracketBackupSheets>[number];
 
-export function BracketBackupSheets({
-  data,
-}: {
-  data: BracketBackupData & { plan: BracketBackupData['plan'] & { name: string } };
-}) {
+export function BracketBackupSheets({ data }: { data: Overview }) {
   const [preview, setPreview] = useState<{
     sheets: Sheet[];
     eventName: string;
     capturedAt: string;
+    resultRevision: number | null;
   } | null>(null);
+  const [focusAvailability, setFocusAvailability] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
-  const sheets = bracketBackupSheets(data);
+  const availability = useRef<HTMLParagraphElement>(null);
+  const publication = 'publication' in data ? data.publication : null;
+  const finalized = data.plan.bracketMode === 'native' && data.plan.status === 'complete';
+  const resultRevision =
+    finalized && publication?.status === 'published' ? publication.revision : null;
+  const published = resultRevision !== null;
+  const unavailable = finalized && !published;
+  const sheets = bracketBackupSheets(data).filter((sheet) => !finalized || !sheet.blank);
+  if (unavailable && preview) {
+    setPreview(null);
+    setFocusAvailability(true);
+  } else if (!unavailable && focusAvailability) {
+    setFocusAvailability(false);
+  }
+  useEffect(() => {
+    if (focusAvailability) availability.current?.focus();
+  }, [focusAvailability]);
   if (!sheets.length) return null;
+  if (unavailable)
+    return (
+      <p className="muted" role="status" ref={availability} tabIndex={-1}>
+        {publication
+          ? 'Print the draw record after the current results are published.'
+          : 'No published draw record is available to print.'}
+      </p>
+    );
   return (
     <div className="bracket-backup-launch">
       <Button
@@ -31,16 +54,28 @@ export function BracketBackupSheets({
             sheets,
             eventName: data.plan.name,
             capturedAt: new Date().toLocaleString(),
+            resultRevision,
           })
         }
       >
-        Print bracket backup sheets
+        {published ? 'Print draw record' : 'Print bracket backup sheets'}
       </Button>
       <small>
-        {sheets.length} {sheets.length === 1 ? 'TO worksheet' : 'TO worksheets'}
-        {sheets.some((sheet) => sheet.blank)
-          ? ', including paper templates for draws not generated yet.'
-          : ', with the current draw and recorded results.'}
+        {sheets.length}{' '}
+        {published ? (
+          sheets.length === 1 ? (
+            'bracket record'
+          ) : (
+            'bracket records'
+          )
+        ) : (
+          <>
+            {sheets.length === 1 ? 'TO worksheet' : 'TO worksheets'}
+            {sheets.some((sheet) => sheet.blank)
+              ? ', including paper templates for draws not generated yet.'
+              : ', with the current draw and recorded results.'}
+          </>
+        )}
       </small>
       {preview && (
         <PrintPreview
@@ -59,21 +94,24 @@ function PrintPreview({
   sheets,
   eventName,
   capturedAt,
+  resultRevision,
   onClose,
 }: {
   sheets: Sheet[];
   eventName: string;
   capturedAt: string;
+  resultRevision: number | null;
   onClose: () => void;
 }) {
   const [selected, setSelected] = useState(sheets.map((sheet) => sheet.key));
+  const published = resultRevision !== null;
   useEffect(() => {
     document.body.classList.add('printing-bracket-backups');
     return () => document.body.classList.remove('printing-bracket-backups');
   }, []);
   return (
     <Dialog
-      title="Print bracket backup sheets"
+      title={published ? 'Print draw record' : 'Print bracket backup sheets'}
       className="bracket-backup-dialog"
       print
       open
@@ -82,11 +120,15 @@ function PrintPreview({
       }}
     >
       <div className="bracket-backup-toolbar">
-        <p>
-          Snapshot captured at {capturedAt}. Reopen the preview after the draw or results change.
-          Before finals are generated, Nemesis sheets show an estimated round structure from the
-          current pool sizes. Fill qualifiers and byes by hand if needed.
-        </p>
+        {published ? (
+          <p>Snapshot captured at {capturedAt}. Reopen the preview after a published correction.</p>
+        ) : (
+          <p>
+            Snapshot captured at {capturedAt}. Reopen the preview after the draw or results change.
+            Before finals are generated, Nemesis sheets show an estimated round structure from the
+            current pool sizes. Fill qualifiers and byes by hand if needed.
+          </p>
+        )}
         <fieldset>
           <legend>Brackets to print</legend>
           {sheets.map((sheet) => (
@@ -105,10 +147,14 @@ function PrintPreview({
             </label>
           ))}
         </fieldset>
-        <p>
-          Use A4 portrait. Reprint if attendance changes; print extra copies if you need more match
-          rows.
-        </p>
+        {published ? (
+          <p>Use A4 portrait.</p>
+        ) : (
+          <p>
+            Use A4 portrait. Reprint if attendance changes; print extra copies if you need more
+            match rows.
+          </p>
+        )}
         <Button
           variant="primary"
           type="submit"
@@ -135,8 +181,9 @@ function PrintPreview({
                 <p>{sheet.source}</p>
               </header>
               <p className="bracket-backup-instructions">
-                TO paper backup · Record every played set once. Mark byes and forfeits clearly. When
-                service returns, enter and reconcile these results before advancing online.
+                {published
+                  ? `Published draw record · Result revision ${resultRevision}`
+                  : 'TO paper backup · Record every played set once. Mark byes and forfeits clearly. When service returns, enter and reconcile these results before advancing online.'}
               </p>
               {sheet.roster.length > 0 && (
                 <section className="bracket-backup-roster">
@@ -157,7 +204,7 @@ function PrintPreview({
                       <th>Round / match</th>
                       <th>Player 1</th>
                       <th>Player 2</th>
-                      <th>Paper score / winner</th>
+                      <th>{published ? 'Recorded result / winner' : 'Paper score / winner'}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -175,9 +222,22 @@ function PrintPreview({
                         <td>{match.player1}</td>
                         <td>{match.player2}</td>
                         <td className="bracket-backup-score">
-                          {match.recorded && <small>Online: {match.recorded}</small>}____ – ____
-                          <br />
-                          Winner: ______________
+                          {published ? (
+                            <>
+                              <span>
+                                {match.unplayedReset
+                                  ? 'Not played'
+                                  : match.recorded || 'No result recorded'}
+                              </span>
+                              {match.winner && <small>Winner: {match.winner}</small>}
+                            </>
+                          ) : (
+                            <>
+                              {match.recorded && <small>Online: {match.recorded}</small>}____ – ____
+                              <br />
+                              Winner: ______________
+                            </>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -185,8 +245,8 @@ function PrintPreview({
                 </table>
               )}
               <footer>
-                Captured {capturedAt} · {sheet.title} · Paper backup — reconcile online before
-                finalizing.
+                Captured {capturedAt} · {sheet.title}
+                {!published && ' · Paper backup — reconcile online before finalizing.'}
               </footer>
             </article>
           ))}

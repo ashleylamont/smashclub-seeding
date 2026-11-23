@@ -6,7 +6,7 @@ import {
 } from '@smashclub/shared';
 import { knockoutMatchName, selectFormatFinalists } from '@smashclub/tournament-formats';
 import type { LiveMatch } from './eventDisplay';
-import { liveBracketSide, liveBracketStatus } from './eventBracket';
+import { liveBracketSide, liveBracketStatus, liveBracketWinner } from './eventBracket';
 import { linkedFinalCaption } from './linkedFinalCaption';
 
 export type BracketBackupData = {
@@ -22,7 +22,22 @@ export type BracketBackupData = {
   withdrawals?: { playerId: string }[];
 };
 
-function blankMatches(data: BracketBackupData, division: string, stage: 'main' | 'consolation') {
+type BackupMatch = {
+  key: string;
+  label: string;
+  round: string;
+  player1: string;
+  player2: string;
+  recorded: string;
+  winner?: string;
+  unplayedReset?: boolean;
+};
+
+function blankMatches(
+  data: BracketBackupData,
+  division: string,
+  stage: 'main' | 'consolation',
+): BackupMatch[] {
   if (data.plan.bracketMode !== 'native')
     return Array.from({ length: 16 }, (_, index) => ({
       key: `blank-${index}`,
@@ -139,38 +154,40 @@ export function bracketBackupSheets(data: BracketBackupData) {
           : groupNames(division),
         matches:
           matches.length || bracket
-            ? matches.map((match) => ({
-                key: match.id,
-                label: labels.get(match.id)!,
-                round:
-                  match.nativeRound && !match.labelFromStructure
-                    ? `Round ${match.nativeRound}`
-                    : '',
-                player1: liveBracketSide(
-                  {
-                    ...match,
-                    player1Name: match.player1Name || names.get(match.player1Id ?? '') || null,
-                  },
-                  0,
-                  labels,
-                ),
-                player2: liveBracketSide(
-                  {
-                    ...match,
-                    player2Name: match.player2Name || names.get(match.player2Id ?? '') || null,
-                  },
-                  1,
-                  labels,
-                ),
-                recorded:
-                  match.status === 'complete'
-                    ? match.outcome === 'played'
-                      ? `${match.score1 ?? '–'}–${match.score2 ?? '–'}`
-                      : liveBracketStatus(match)
-                    : match.bracketLane === 'reset'
-                      ? 'If needed'
+            ? matches.map((match): BackupMatch => {
+                const named = {
+                  ...match,
+                  player1Name: match.player1Name || names.get(match.player1Id ?? '') || null,
+                  player2Name: match.player2Name || names.get(match.player2Id ?? '') || null,
+                };
+                const player1 = liveBracketSide(named, 0, labels);
+                const player2 = liveBracketSide(named, 1, labels);
+                const unplayedReset = match.status !== 'complete' && match.bracketLane === 'reset';
+                return {
+                  key: match.id,
+                  label: labels.get(match.id)!,
+                  round:
+                    match.nativeRound && !match.labelFromStructure
+                      ? `Round ${match.nativeRound}`
                       : '',
-              }))
+                  player1,
+                  player2,
+                  recorded:
+                    match.status === 'complete'
+                      ? match.outcome === 'played'
+                        ? `${match.score1 ?? '–'}–${match.score2 ?? '–'}`
+                        : liveBracketStatus(match)
+                      : unplayedReset
+                        ? 'If needed'
+                        : '',
+                  winner: liveBracketWinner(match, match.player1Id)
+                    ? player1
+                    : liveBracketWinner(match, match.player2Id)
+                      ? player2
+                      : undefined,
+                  unplayedReset,
+                };
+              })
             : blankMatches(data, division, stage),
       };
     }),
