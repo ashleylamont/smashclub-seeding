@@ -271,6 +271,7 @@ async function publishForecastFixture(history: 'debut' | 'disconnected' | 'conne
     bridgeTournamentId: bridge!.id,
     featuredSetId: set!.id,
     underdogId: underdog!.id,
+    favouriteId: favourite!.id,
     readRecap: async () => (await api.recap({ slug: featured!.challongeSlug }))!,
     readImpact: (id: string) =>
       api.whrResultImpact({
@@ -472,6 +473,175 @@ describe('public.recap', () => {
     } finally {
       intercept.mockRestore();
     }
+  });
+
+  it('withholds stale profile evidence for the corrected score on either side', async () => {
+    const fixture = await publishForecastFixture('connected');
+    const api = caller().public;
+    const playerIds = [fixture.underdogId, fixture.favouriteId];
+    const readMatch = async (playerId: string, verifiedFits?: boolean) => {
+      const result = await api.player({ playerId, verifiedFits });
+      if (!result?.events) throw new Error('Expected a current profile');
+      return result.events.find((event) => event.setId === fixture.featuredSetId);
+    };
+    const readBoth = (verifiedFits?: boolean) =>
+      Promise.all(playerIds.map((id) => readMatch(id, verifiedFits)));
+
+    expect(await readBoth(true)).toMatchObject([
+      { score: '3–0', weight: 2, won: true },
+      { score: '0–3', weight: 2, won: false },
+    ]);
+    const originalOdds = factsOfKind(await fixture.readRecap(), 'rating_upset')[0]!.probability;
+
+    // A correction with the same evidence under the frozen rule can retain its units.
+    await db.update(sets).set({ scoresCsv: '4-1' }).where(eq(sets.id, fixture.featuredSetId));
+    expect(await readMatch(fixture.underdogId, true)).toMatchObject({ score: '4–1', weight: 2 });
+
+    await db.update(sets).set({ scoresCsv: '3-2' }).where(eq(sets.id, fixture.featuredSetId));
+    const stale = { weight: null, evidenceUnavailable: 'history_changed' };
+    expect(await readBoth(true)).toMatchObject([
+      { ...stale, score: '3–2', won: true },
+      { ...stale, score: '2–3', won: false },
+    ]);
+    expect(await readBoth()).toMatchObject([
+      { score: '3–2', weight: 2, won: true },
+      { score: '2–3', weight: 2, won: false },
+    ]);
+    expect(await fixture.readImpact(fixture.recomputeId)).toEqual({
+      status: 'unavailable',
+      reason: 'history_changed',
+    });
+    expect(factsOfKind(await fixture.readRecap(), 'rating_upset')).toEqual([]);
+
+    await runRecompute(db);
+    expect(await readBoth(true)).toMatchObject([
+      { score: '3–2', weight: 1, won: true },
+      { score: '2–3', weight: 1, won: false },
+    ]);
+    expect(factsOfKind(await fixture.readRecap(), 'rating_upset')).toMatchObject([
+      { score: '3-2', probability: originalOdds },
+    ]);
+
+    await db
+      .update(sets)
+      .set({ winner: 2, scoresCsv: '2-3' })
+      .where(eq(sets.id, fixture.featuredSetId));
+    expect(await readBoth(true)).toMatchObject([
+      { ...stale, score: '2–3', currentWon: false },
+      { ...stale, score: '3–2', currentWon: true },
+    ]);
+
+    await db
+      .update(sets)
+      .set({ raw: { outcome: 'forfeit' } })
+      .where(eq(sets.id, fixture.featuredSetId));
+    expect(await readMatch(fixture.favouriteId, true)).toMatchObject({
+      currentWon: true,
+      score: null,
+      forfeit: true,
+      weight: null,
+      evidenceUnavailable: 'not_rated',
+    });
+  });
+
+  it('keeps a replacement pairing separate from the profile’s published opponent', async () => {
+    await sync([march.slug]);
+    await runRecompute(db);
+    const [tournament] = await db
+      .select({ id: tournaments.id })
+      .from(tournaments)
+      .where(eq(tournaments.challongeSlug, march.slug));
+    const [original] = await db.select().from(sets).where(eq(sets.challongeMatchId, 11));
+    const api = caller().public;
+    const readMatch = async (verifiedFits: boolean) => {
+      const profile = await api.player({ playerId: original!.p1PlayerId!, verifiedFits });
+      if (!profile?.events) throw new Error('Expected a current profile');
+      return profile.events.find((match) => match.setId === original!.id);
+    };
+    expect(await readMatch(true)).toMatchObject({
+      score: '3–0',
+      opponentName: 'Kirby',
+      won: true,
+      weight: 2,
+    });
+
+    const revised = {
+      ...march,
+      matches: march.matches.map((match) =>
+        match.id === 11 ? { ...match, p2: 2, winner: 2, scores: '0-3' } : match,
+      ),
+    };
+    await syncTournament(db, fixtureClient([revised]), tournament!.id);
+    const [replacement] = await db.select().from(sets).where(eq(sets.id, original!.id));
+    expect(replacement!.p2PlayerId).not.toBe(original!.p2PlayerId);
+    expect(replacement!.winner).toBe(2);
+
+    const verified = await readMatch(true);
+    expect(verified).toMatchObject({
+      score: null,
+      opponentName: 'Kirby',
+      won: true,
+      weight: null,
+      evidenceUnavailable: 'history_changed',
+    });
+    expect(verified?.currentWon).toBeUndefined();
+    expect(await readMatch(false)).toMatchObject({
+      score: null,
+      opponentName: 'Kirby',
+      won: true,
+      weight: 2,
+    });
+
+    await runRecompute(db);
+    expect(await readMatch(true)).toMatchObject({
+      score: '0–3',
+      opponentName: 'Samus A',
+      won: false,
+      weight: 2,
+    });
+  });
+
+  it('withholds stale doubles evidence and keeps a recorded forfeit free of rating evidence', async () => {
+    const fixture = await publishForecastFixture('connected');
+    const api = caller().public;
+    const [set] = await db
+      .select({ id: sets.id })
+      .from(sets)
+      .where(eq(sets.tournamentId, fixture.bridgeTournamentId));
+    const setId = set!.id;
+    const readMatch = async (verifiedFits: boolean) => {
+      const result = await api.player({ playerId: fixture.favouriteId, verifiedFits });
+      if (!result?.doublesMatches) throw new Error('Expected a current profile');
+      return result.doublesMatches.find((match) => match.setId === setId);
+    };
+    expect(await readMatch(true)).toMatchObject({ score: '3–0', ratingWeight: 2, won: true });
+
+    await db.update(sets).set({ scoresCsv: '3-2' }).where(eq(sets.id, setId));
+    expect(await readMatch(true)).toMatchObject({
+      score: '3–2',
+      ratingWeight: null,
+      evidenceUnavailable: 'history_changed',
+      won: true,
+    });
+    expect(await readMatch(false)).toMatchObject({ score: '3–2', ratingWeight: 2, won: true });
+
+    await db
+      .update(sets)
+      .set({ raw: { outcome: 'forfeit' } })
+      .where(eq(sets.id, setId));
+    expect(await readMatch(true)).toMatchObject({
+      score: null,
+      forfeit: true,
+      ratingWeight: null,
+      won: true,
+    });
+    await runRecompute(db);
+    expect(await readMatch(true)).toMatchObject({
+      score: null,
+      forfeit: true,
+      ratingWeight: null,
+      won: true,
+    });
   });
 
   it('skips the WHR history reread when the favourite won', async () => {
