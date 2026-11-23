@@ -4,6 +4,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.23.2
 
+Published Nemesis doubles standings let you preview either registered teammate, and Rankings and recaps show rank movement when earlier standings support the comparison. From a Broadcast preview, open **Display setup** and copy the OBS source, including on phones.
+
 ### Patch Changes
 
 - 23 November 2026 · **Fix** · Clear live finalization prompts when an event ends so organisers can find the draw and published score corrections. [#551](https://github.com/ashleylamont/smashclub-seeding/pull/551) · [build a1d6388](https://github.com/ashleylamont/smashclub-seeding/commit/a1d6388b85aec71342709f87946826237e1f9542)
@@ -15,6 +17,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 - 23 November 2026 · **Fix** · Rankings and event recaps only show rank changes when there are reliable earlier standings to compare against. Current rankings still appear. [#556](https://github.com/ashleylamont/smashclub-seeding/pull/556) · [build c52b208](https://github.com/ashleylamont/smashclub-seeding/commit/c52b208a727e61e63baf34d52ca17c7b53e33fbe)
 
 ## 0.23.1
+
+Rankings labels your active rank when it hides inactive players, and player profiles label your published club rank. Use **Try again** after a temporary results error, and keep reading the results you already opened if a refresh fails.
 
 ### Patch Changes
 
@@ -30,6 +34,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.23.0
 
+Organisers can switch OBS between gameplay, tournament progress and automatic intermissions from Broadcast when OBS uses the **Follow event** source. You can also preview a registered doubles teammate from a live pool, bracket or match card.
+
 ### Minor Changes
 
 - 23 November 2026 · **Feature** · Switch OBS between gameplay, tournament progress and automatic intermissions from the TO desk. Use the Follow event overlay in OBS to receive those changes. [#514](https://github.com/ashleylamont/smashclub-seeding/pull/514) · [build 4609418](https://github.com/ashleylamont/smashclub-seeding/commit/4609418adadc137f9ee52696ef2112425e35968d)
@@ -42,6 +48,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 - 23 November 2026 · **Fix** · Try an event short link again without reloading Nemesis, and keep the chosen pool and results section when the link opens. [#519](https://github.com/ashleylamont/smashclub-seeding/pull/519) · [build b3aab6a](https://github.com/ashleylamont/smashclub-seeding/commit/b3aab6a84697e8b33685d0ea4b6ddfa94144ecd4)
 
 ## 0.22.1
+
+Preview a player's mains, club rating and rated-set record from Rankings, event standings or live singles views. If GitHub posting is enabled, you can review and submit a public issue from Nemesis without a GitHub account.
 
 ### Patch Changes
 
@@ -78,6 +86,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.22.0
 
+Nemesis introduced private feedback reports and gave each report a reference. The player hub also began recovering your score receipt when a submitted score reached the server but the confirmation was lost.
+
 ### Minor Changes
 
 - 23 November 2026 · **Feature** · Send private feedback from Nemesis without a GitHub account and get a report reference. Nemesis admins can review reports in the private Feedback inbox. [#469](https://github.com/ashleylamont/smashclub-seeding/pull/469) · [build 1efacfb](https://github.com/ashleylamont/smashclub-seeding/commit/1efacfbd88add44018bd65cd1f89f4df856679f5)
@@ -91,11 +101,15 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.21.4
 
+Event history records which result an organiser corrected, including when approving a disputed score changes a result that was already recorded.
+
 ### Patch Changes
 
 - 23 November 2026 · **Fix** · Link an organiser's score correction to the result it changed in event history, including when the organiser approves a disputed score. Confirmations, pending disputes and rejected reports keep their own history entries. [#462](https://github.com/ashleylamont/smashclub-seeding/pull/462) · [build a7b1df3](https://github.com/ashleylamont/smashclub-seeding/commit/a7b1df31c1cec05737d3324fa949bf6bd22c2f55)
 
 ## 0.21.3
+
+Reload the event in the same tab to recover an unsent score and character picks when the same account or venue pass can still report that pairing. After a call or named-station start, the organiser queue confirms the pairing and where to play.
 
 ### Patch Changes
 
@@ -111,6 +125,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.21.2
 
+The organiser desk puts score reviews, pool rulings and held matches first, and explains why calls and score changes are paused when live updates drop. Pool floor sheets, bracket backups and station signs are legible when printed from dark mode.
+
 ### Patch Changes
 
 - 22 November 2026 · **Fix** · Keep pool floor sheets, bracket backups and station signs readable when printing from dark mode. [#438](https://github.com/ashleylamont/smashclub-seeding/pull/438) · [build c2c8d11](https://github.com/ashleylamont/smashclub-seeding/commit/c2c8d11440c7304cf37ab1d8449abaefc5a2a47f)
@@ -125,6 +141,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.21.1
 
+Jump from the player progress panel to your current or next match, and keep your score draft when you change filters and return to the same pairing. In Broadcast, copy the selected station’s OBS source.
+
 ### Patch Changes
 
 - 22 November 2026 · **Fix** · Take players straight to their current or next match card from the progress panel. [#425](https://github.com/ashleylamont/smashclub-seeding/pull/425) · [build b4197a8](https://github.com/ashleylamont/smashclub-seeding/commit/b4197a86b11222f346fd04c0a257a3e84d595c7e)
@@ -134,6 +152,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 - 22 November 2026 · **Improvement** · Copy the selected station’s OBS browser source directly from Broadcast, with confirmation beside the source and a manual fallback if clipboard access is unavailable. [#429](https://github.com/ashleylamont/smashclub-seeding/pull/429) · [build c4800d8](https://github.com/ashleylamont/smashclub-seeding/commit/c4800d821a00716e7828616e57e3e3f3ec01292e)
 
 ## 0.21.0
+
+Turn on in-page match call alerts in the player hub to see your opponent and where to play. Download PNG or SVG bracket graphics from completed Nemesis events and tournament archives with a verified draw.
 
 ### Minor Changes
 
@@ -158,11 +178,15 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.20.2
 
+Approved, pending and rejected status labels use darker text in the light theme, making them easier to read on their tinted backgrounds.
+
 ### Patch Changes
 
 - 22 November 2026 · **Fix** · Make warning, approved and rejected status chips easier to read in the light theme. [#392](https://github.com/ashleylamont/smashclub-seeding/pull/392) · [build 9891e33](https://github.com/ashleylamont/smashclub-seeding/commit/9891e33d31c52b719d2b2e3d5e71282ed72d14f1)
 
 ## 0.20.1
+
+The deployment guide explains when saved tournament history requires a newer build. Recovery tests check that doubles scores, frozen seeds and history survive a team rename.
 
 ### Patch Changes
 
@@ -171,17 +195,23 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.20.0
 
+When your signed-in account is linked to a player in a played set, use **Report characters played** in event or player match history. Reports can suggest missing mains for organisers to confirm and supply character defaults for event results graphics.
+
 ### Minor Changes
 
 - 14 November 2026 · **Feature** · Report characters after a set from event or player match history. Character reports appear in histories, suggest missing mains for organisers to confirm, and supply defaults for event results graphics. [#388](https://github.com/ashleylamont/smashclub-seeding/pull/388) · [build a056d64](https://github.com/ashleylamont/smashclub-seeding/commit/a056d645379eb57927410626694aa37387ccd54e)
 
 ## 0.19.0
 
+When reporting a score, players and guests can add the fighters used in the set, including switches. Organisers can see the optional picks alongside the submitted score.
+
 ### Minor Changes
 
 - 13 November 2026 · **Feature** · Players and guests can optionally add the fighters used in a set when reporting a score, including character switches. Organisers can see the picks alongside the submitted score. [#386](https://github.com/ashleylamont/smashclub-seeding/pull/386) · [build 48ca009](https://github.com/ashleylamont/smashclub-seeding/commit/48ca009a54b8889fbb595f390304c08b49f266c6)
 
 ## 0.18.0
+
+During a Nemesis match, organisers can use **Confirm missing main** to add a fighter to a player's public profile after the player confirms their choice.
 
 ### Minor Changes
 
@@ -193,6 +223,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.17.1
 
+Player history shows singles set scores from your side, and archived doubles finals places reflect the teams in the finals draw. Doubles recaps highlight verified pool ties, unbeaten pool runs, close sets and pair rematches, with podium portraits where mains are available.
+
 ### Patch Changes
 
 - 11 November 2026 · **Fix** · **Fix:** Show recorded singles scores from the player’s side and keep pool-only teams out of archived finals standings and profile placements. [#380](https://github.com/ashleylamont/smashclub-seeding/pull/380) · [build 9ded714](https://github.com/ashleylamont/smashclub-seeding/commit/9ded714eb1e864733e6e8d820cb9d69f41da86d2)
@@ -201,17 +233,23 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.17.0
 
+Servers with Jev enabled could use it to order the verified highlights in completed event recaps. Nemesis saved the order and reused it when readers reopened a recap with the same shortlist.
+
 ### Minor Changes
 
 - 11 November 2026 · **Feature** · **Feature:** Optionally rank the recap’s verified highlights with Jev and save the ordering for repeat views. [#379](https://github.com/ashleylamont/smashclub-seeding/pull/379) · [build b5f1d39](https://github.com/ashleylamont/smashclub-seeding/commit/b5f1d39a49d5700258f1a00643681ba428bde7db)
 
 ## 0.16.0
 
+When a server enabled Jev, players with a verified email could opt in to automated review of their profile claim, and likely matches appeared first for administrators. A separate setting could automatically approve eligible high-confidence claims.
+
 ### Minor Changes
 
 - 11 November 2026 · **Feature** · **Feature:** Let players opt in to automated claim triage when a server enables Jev. Administrators can spot likely matches sooner and optionally auto-approve high-confidence claims backed by an account with a provider-verified email. [#377](https://github.com/ashleylamont/smashclub-seeding/pull/377) · [build 4814cb9](https://github.com/ashleylamont/smashclub-seeding/commit/4814cb9ad0d80ff50c44bbe953836c73ea2ba28e)
 
 ## 0.15.0
+
+Eligible doubles sets began counting toward each of the four players’ Whole-History Rating, which feeds rankings and singles seeding. Players could open recaps for published doubles events and see their teammates, opponents and scores in match history.
 
 ### Minor Changes
 
@@ -223,11 +261,15 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.14.4
 
+The OBS intermission shortened its loop by putting pool standings side by side and fitting more rounds and sets on each bracket page. Pool standings showed who had qualified for finals.
+
 ### Patch Changes
 
 - 10 November 2026 · **Improvement** · Shorten the OBS intermission loop with side-by-side pool standings, qualification markers on the pool screens, and wider bracket pages that show more rounds and sets. [#370](https://github.com/ashleylamont/smashclub-seeding/pull/370) · [build ffd64d2](https://github.com/ashleylamont/smashclub-seeding/commit/ffd64d2dc0aba5931549542e9d1690e1256e948d)
 
 ## 0.14.3
+
+Organisers could edit or clear a doubles team’s display name in the event planner before or after locking the draw.
 
 ### Patch Changes
 
@@ -235,11 +277,15 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.14.2
 
+The OBS intermission used larger standings and draw cards, with a countdown and ten seconds per page by default. When Auto switched from gameplay to intermission, it could show the latest recorded sets with available artwork for players’ mains.
+
 ### Patch Changes
 
 - 9 November 2026 · **Improvement** · Make the OBS intermission easier to read on a TV with larger standings and draw cards, shorter captions, one page count and a timer that shows when the next page will appear. Show the latest recorded sets with available profile-main artwork when Auto returns from gameplay. [#365](https://github.com/ashleylamont/smashclub-seeding/pull/365) · [build 59b4ee2](https://github.com/ashleylamont/smashclub-seeding/commit/59b4ee2bb463be949aa11e38d0782d552c81d207)
 
 ## 0.14.1
+
+Results PNGs used shorter footer labels, **POOLS** for pool standings and **TOP 8** for bracket and division results.
 
 ### Patch Changes
 
@@ -247,11 +293,15 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.14.0
 
+Results graphics automatically included available fighter portraits for players’ mains, with Nintendo artwork credit on the preview and downloaded PNG. Local artwork took priority.
+
 ### Minor Changes
 
 - 9 November 2026 · **Feature** · Automatically show available fighter portraits for players’ mains in results graphics, with Nintendo artwork credit in the preview and PNG. Local artwork choices still take priority. [#360](https://github.com/ashleylamont/smashclub-seeding/pull/360) · [build ee774df](https://github.com/ashleylamont/smashclub-seeding/commit/ee774dfc072f2fc424c007fdaf3f0bc461264359)
 
 ## 0.13.0
+
+Players could preview a public Nemesis bracket and download it as a PNG or SVG showing the actual draw, paths between matches and recorded scores.
 
 ### Minor Changes
 
@@ -259,11 +309,15 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.12.0
 
+Organisers could load a local artwork pack for results PNGs, and Nemesis matched portraits to players’ mains automatically. Individually selected portraits took priority.
+
 ### Minor Changes
 
 - 9 November 2026 · **Feature** · Load a local character artwork pack and automatically use matching portraits for players’ mains in results PNGs. Individual portraits still take priority. [#355](https://github.com/ashleylamont/smashclub-seeding/pull/355) · [build 841ef6c](https://github.com/ashleylamont/smashclub-seeding/commit/841ef6c25e24f2c8d8e99bd024bc50712585a8fa)
 
 ## 0.11.0
+
+Players could preview and download branded PNGs for completed brackets and divisions or confirmed pool standings, including tied places and doubles teammates. The organiser’s player finder distinguished calls from sets underway, and compact Gameplay overlays showed the Twitch channel handle.
 
 ### Minor Changes
 
@@ -276,11 +330,15 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.10.4
 
+The event planner opened large Nemesis tournament plans faster by loading less match data for the planning view.
+
 ### Patch Changes
 
 - 9 November 2026 · **Improvement** · Load large native event plans faster by reading only planner metadata and sending compact match revision evidence to the browser. [#349](https://github.com/ashleylamont/smashclub-seeding/pull/349) · [build 941b5a1](https://github.com/ashleylamont/smashclub-seeding/commit/941b5a1fd58b30c2402e09da8e3bf92d48870daa)
 
 ## 0.10.3
+
+Organisers could jump from the attention summary to the pool that needed a finishing-order decision. The planner also let them confirm tied orders in larger Nemesis round-robin pools, checking for changes to matches or placements before confirmation.
 
 ### Patch Changes
 
@@ -290,12 +348,16 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.10.2
 
+Alongside the live pool standings, organisers could see which finishing orders were confirmed and which still needed a ruling or score review.
+
 ### Patch Changes
 
 - 9 November 2026 · **Fix** · Separate the live pool standings from confirmed finishing orders and show the organiser which pools need a ruling or score review. [#337](https://github.com/ashleylamont/smashclub-seeding/pull/337) · [build 5e8c5f4](https://github.com/ashleylamont/smashclub-seeding/commit/5e8c5f4f885dda7f870d6f9bd3e5ced12a11d39c)
 - 9 November 2026 · **Maintenance** · Let the secure Twitch browser fixture recover from one local asset socket reset during startup. [#341](https://github.com/ashleylamont/smashclub-seeding/pull/341) · [build 3586883](https://github.com/ashleylamont/smashclub-seeding/commit/3586883c2d034dbb87ad9b9378a17cfbfa23f699)
 
 ## 0.10.1
+
+Organisers could jump to untaken calls that blocked snoozing, see which withdrawal forfeits to record, and identify blockers to restoring attendance. Finals set names matched in the linked match queue and backup sheets and appeared in native archives when verified.
 
 ### Patch Changes
 
@@ -309,6 +371,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.10.0
 
+The shareable head-to-head page compared two players’ recorded singles sets and games and showed win odds when both had published Whole-History Ratings based on played sets. Player match history also showed pre-night odds where earlier rated results connected both players.
+
 ### Minor Changes
 
 - 9 November 2026 · **Feature** · Compare two players’ recorded singles sets, games, and current WHR odds on a shareable head-to-head page. Find it from Rankings or start with one player already selected from their profile. [#322](https://github.com/ashleylamont/smashclub-seeding/pull/322) · [build 397374a](https://github.com/ashleylamont/smashclub-seeding/commit/397374a5f503bd174fc41bfd22b9fa422493a17b)
@@ -320,12 +384,16 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.9.2
 
+The OBS score flash and recent results used the same verified finals caption for Nemesis and linked brackets.
+
 ### Patch Changes
 
 - 9 November 2026 · **Fix** · Show the same finals caption in the OBS result flash and recent-results rail for native and linked brackets. [#317](https://github.com/ashleylamont/smashclub-seeding/pull/317) · [build 1d226b6](https://github.com/ashleylamont/smashclub-seeding/commit/1d226b6b6831c95623b0364593f68f074d556654)
 - 9 November 2026 · **Maintenance** · Stabilize the homepage browser test that checks live event discovery after a draw is paused. [#316](https://github.com/ashleylamont/smashclub-seeding/pull/316) · [build 15463b3](https://github.com/ashleylamont/smashclub-seeding/commit/15463b360d8973d11b51aef61c1205c6c4baec80)
 
 ## 0.9.1
+
+The player hub kept round-robin results with the confirmed pool standings, and OBS showed the organiser’s confirmed finishing order. Backup worksheets printed one caption per named bracket match, and the main-character and administrator badges gained stronger contrast in the light theme.
 
 ### Patch Changes
 
@@ -334,6 +402,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 - 9 November 2026 · **Fix** · Improve light-theme contrast for the main-character and administrator badges. [#312](https://github.com/ashleylamont/smashclub-seeding/pull/312) · [build 8cade51](https://github.com/ashleylamont/smashclub-seeding/commit/8cade5170f8d2f3219201595e57438226cfe36d7)
 
 ## 0.9.0
+
+Organisers could start a ready match at a free reserved station directly from Broadcast, then score and finish it there. Native pool schedules showed how many times each pair of opponents was scheduled to meet.
 
 ### Minor Changes
 
@@ -346,6 +416,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.8.0
 
+For open, published events, organisers could announce a Twitch stream for up to four hours. Viewers could open it from Home, and player screens and OBS used names such as **Open · Pool AA**.
+
 ### Minor Changes
 
 - 9 November 2026 · **Feature** · Organisers can announce a Twitch stream from Broadcast for an open, published event. Viewers can follow the Twitch link from the homepage or load the player on the event page when there is room. Announcements expire after four hours or when stopped. Unpublishing hides the stream, and republishing resumes an unexpired announcement. [#303](https://github.com/ashleylamont/smashclub-seeding/pull/303) · [build 4417d63](https://github.com/ashleylamont/smashclub-seeding/commit/4417d631c5656ae7b0937ad3c3ee17f3072018a0)
@@ -356,12 +428,16 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.7.4
 
+Organisers could open a conflicting score report from **Needs attention** with the keyboard and compare the recorded and submitted scores next to the decision buttons.
+
 ### Patch Changes
 
 - 9 November 2026 · **Improvement** · Review conflicting score reports directly from Needs attention. The match desk puts the recorded and submitted results beside the decision buttons and makes the review shortcut work by keyboard. [#297](https://github.com/ashleylamont/smashclub-seeding/pull/297) · [build 651c025](https://github.com/ashleylamont/smashclub-seeding/commit/651c02523cd2fdd3d1c7c182eda5913551c57856)
 - 9 November 2026 · **Maintenance** · Run database-backed browser event flows during final build verification for verified automatic version pull requests. [#298](https://github.com/ashleylamont/smashclub-seeding/pull/298) · [build ddbaf2d](https://github.com/ashleylamont/smashclub-seeding/commit/ddbaf2d6b88209d4b88b879c022a183101b288a3)
 
 ## 0.7.3
+
+The match queue explained when a search hid pairings, when none were ready, and where to find blockers. When an untaken consolation call alone blocked a finals replay, organisers could open it from the review and return it while keeping their score correction and reason.
 
 ### Patch Changes
 
@@ -372,17 +448,23 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.7.2
 
+The planner timeline showed bracket round names, and organisers could download a run sheet that named each match and the earlier matches it depended on.
+
 ### Patch Changes
 
 - 9 November 2026 · **Improvement** · See bracket round names on the planner timeline and download a run sheet with match and feeder names. The original set-code CSV remains available for existing spreadsheets. [#286](https://github.com/ashleylamont/smashclub-seeding/pull/286) · [build 2970e89](https://github.com/ashleylamont/smashclub-seeding/commit/2970e890536e9e319d922856f9eb22f5285ce212)
 
 ## 0.7.1
 
+On narrow screens, organisers could tab to the player claims and registry tables and scroll through their columns with the arrow keys.
+
 ### Patch Changes
 
 - 9 November 2026 · **Fix** · Organisers can tab to the player claims and registry tables and use arrow keys to scroll through their columns on narrow screens. [#284](https://github.com/ashleylamont/smashclub-seeding/pull/284) · [build 89b8a93](https://github.com/ashleylamont/smashclub-seeding/commit/89b8a934140b0ae3bd6d87cb7a2d593c99f2e4ad)
 
 ## 0.7.0
+
+Players could start a claim from a public profile and edit their main characters after approval. Organisers could add late doubles pairs to eligible soft-locked pools and review a championship replay alongside its unplayed consolation pairing when a pool correction swapped qualifiers across the championship cutoff.
 
 ### Minor Changes
 
@@ -400,6 +482,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.6.0
 
+After soft-lock, organisers could confirm a last-minute doubles substitute for an eligible pair before it played, keeping its seed, opponents and scheduled rounds. Late singles additions also stayed consistent during player profile merges.
+
 ### Minor Changes
 
 - 8 November 2026 · **Feature** · Let organisers review and confirm a last-minute doubles substitute before that pair plays. The pair keeps its pool, seed, opponents and scheduled rounds, while the original roster and any recorded results stay in the event history. [#267](https://github.com/ashleylamont/smashclub-seeding/pull/267) · [build 23de82a](https://github.com/ashleylamont/smashclub-seeding/commit/23de82ac43894a3d21132ad9d0b17a883738a91c)
@@ -413,6 +497,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.5.0
 
+Organisers could replay one already-played opening finals set after a corrected pool result changed one qualifier, provided later matches had no play, results or reports and any calls were returned. OBS progress showed a short public event link.
+
 ### Minor Changes
 
 - 8 November 2026 · **Feature** · Review a corrected pool winner and replay one affected finals slot. [#265](https://github.com/ashleylamont/smashclub-seeding/pull/265) · [build d299850](https://github.com/ashleylamont/smashclub-seeding/commit/d299850eb410112be4f05755911fc10fb138a01f)
@@ -425,11 +511,15 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.4.3
 
+Player screens and OBS showed the division and stage once for each linked finals match, alongside its original bracket identifier.
+
 ### Patch Changes
 
 - 8 November 2026 · **Fix** · Linked finals show the division and stage once on player and OBS screens, with the original bracket identifier. [#260](https://github.com/ashleylamont/smashclub-seeding/pull/260) · [build c4081f2](https://github.com/ashleylamont/smashclub-seeding/commit/c4081f2a701567c0c24129175beaafda79f5d522)
 
 ## 0.4.2
+
+Pool schedules marked matches **Called** until play began. Native station cards showed the pairing with an empty score before games were entered and displayed 0–0 when that score had been saved.
 
 ### Patch Changes
 
@@ -443,6 +533,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.4.1
 
+Closed event pages showed recorded scores and match history and removed live prompts for unfinished sets. If another organiser changed a finals draw, removing it required a fresh preview.
+
 ### Patch Changes
 
 - 8 November 2026 · **Fix** · **Fixed** · Require a fresh organiser preview before removing a changed finals draw. [#254](https://github.com/ashleylamont/smashclub-seeding/pull/254) · [build 95b2b39](https://github.com/ashleylamont/smashclub-seeding/commit/95b2b3938ac35e3e6302a1f6931d1d588c2e9676)
@@ -453,6 +545,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.4.0
 
+Organisers could remove one division’s unplayed native finals after returning that draw’s untaken calls, then correct pool results and preview a replacement draw.
+
 ### Minor Changes
 
 - 8 November 2026 · **Feature** · Remove one division’s unplayed native finals without disturbing the other division. [#250](https://github.com/ashleylamont/smashclub-seeding/pull/250) · [build bb9ae54](https://github.com/ashleylamont/smashclub-seeding/commit/bb9ae545000c00bbbae2128ff4978a0c07b0ebb1)
@@ -460,6 +554,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
   From Standings / draw, preview finals and choose Upper or Lower under Finals to remove. Return any untaken calls before removing that draw. You can then correct pool results and preview a new draw for that division.
 
 ## 0.3.0
+
+Stream operators could add a Twitch channel link to an OBS overlay from **Display setup**. Automatic OBS sources switched to recorded progress when an event closed, and organiser match details showed when called matches were waiting to start or underway.
 
 ### Minor Changes
 
@@ -477,6 +573,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.2.11
 
+Blank bracket backup worksheets showed named rounds and enough slots for the configured playoff cut. When an untaken call blocked a no-show change, organisers could open and return that call, then refresh the same attendance draft.
+
 ### Patch Changes
 
 - 8 November 2026 · **Fix** · Blank native bracket worksheets use round names and show enough slots for the configured playoff cut. [#238](https://github.com/ashleylamont/smashclub-seeding/pull/238) · [build c242146](https://github.com/ashleylamont/smashclub-seeding/commit/c2421461801ed51af901f1b021e2c19faabcb332)
@@ -484,11 +582,15 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.2.10
 
+Organiser history kept the original pairing when an unplayed finals draw was reset or different qualifiers moved into the same bracket slot.
+
 ### Patch Changes
 
 - 8 November 2026 · **Fix** · Keep the recorded pairing in organiser history when an unplayed finals draw is reset or the same match slot receives different qualifiers. [#236](https://github.com/ashleylamont/smashclub-seeding/pull/236) · [build fda7ab4](https://github.com/ashleylamont/smashclub-seeding/commit/fda7ab4ee7b68a7029b8a202b0d72c4236f965e2)
 
 ## 0.2.9
+
+The planner named knockout rounds in its diagrams and run sheet, which organisers could scroll on phones. Screen readers could identify the read-only **Pool size** field and read the selected format’s explanation.
 
 ### Patch Changes
 
@@ -496,6 +598,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 - 8 November 2026 · **Improvement** · The planner’s knockout diagrams and run sheet use names such as Quarter-final, Winners semi-final and Reset final (if needed). The run sheet scrolls inside the phone preview so match details stay readable. [#234](https://github.com/ashleylamont/smashclub-seeding/pull/234) · [build 3156296](https://github.com/ashleylamont/smashclub-seeding/commit/3156296265b64939a0b9a9833c3f25de85c54acc)
 
 ## 0.2.8
+
+In eligible pools, organisers could correct a played set’s game score after the standings had been used to draw finals, provided the corrected score agreed with the recorded winner.
 
 ### Patch Changes
 
@@ -505,6 +609,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.2.7
 
+A player’s match history showed an estimate of how each rated set affected their Whole-History Rating (WHR) as they scrolled through the list.
+
 ### Patch Changes
 
 - 8 November 2026 · **Maintenance** · Run browser behavior and accessibility checks on Linux and keep screenshot baseline comparisons on macOS. Both remain required in CI and publish separate review artifacts. [#227](https://github.com/ashleylamont/smashclub-seeding/pull/227) · [build 88acd8c](https://github.com/ashleylamont/smashclub-seeding/commit/88acd8ccd5c4aaf2f9325cb81722027419c4d06a)
@@ -512,11 +618,15 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.2.6
 
+The Challonge handoff named the winner of a forfeit. After organisers recorded a matching forfeit in Challonge, refreshing the linked bracket marked that result as synced.
+
 ### Patch Changes
 
 - 8 November 2026 · **Fix** · Linked event handoffs name the forfeit winner without game scores, and refreshing Challonge recognises the same forfeit as reconciled. [#220](https://github.com/ashleylamont/smashclub-seeding/pull/220) · [build 3871d1e](https://github.com/ashleylamont/smashclub-seeding/commit/3871d1e2d543897c57d8a0b41f24c7fd0f51f287)
 
 ## 0.2.5
+
+Organisers could call a ready match after an unrelated station update, such as a rename, if the shared queue had room. Score reporting and OBS used the published names of Nemesis finals matches.
 
 ### Patch Changes
 
@@ -527,12 +637,16 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.2.4
 
+After an entrant withdrew from an older Nemesis finals draw, the organiser worksheet showed the confirmed pool finishes and linked to the existing draw.
+
 ### Patch Changes
 
 - 8 November 2026 · **Fix** · Keep confirmed pool places visible after a withdrawal from a legacy native finals draw. The organiser worksheet points to the existing draw and keeps the original finishing order. [#210](https://github.com/ashleylamont/smashclub-seeding/pull/210) · [build 726e037](https://github.com/ashleylamont/smashclub-seeding/commit/726e037c0da666ed466f3e6d20966e0180cd74bf)
 - 8 November 2026 · **Maintenance** · Split the event archive browser checks into shorter scenarios while retaining coverage for results, prizes and cancelled events. [#215](https://github.com/ashleylamont/smashclub-seeding/pull/215) · [build 7c5145a](https://github.com/ashleylamont/smashclub-seeding/commit/7c5145a4b43b91156df1a040f6c6307122f15073)
 
 ## 0.2.3
+
+The event archive linked to recorded results for completed events and to the event page for cancellations. When an unaccepted match call blocked a score correction, organisers could open that call, return it to the queue, and retry with their draft score.
 
 ### Patch Changes
 
@@ -542,6 +656,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 - 8 November 2026 · **Fix** · Attendance menus stay reachable while the event roster loads. [#209](https://github.com/ashleylamont/smashclub-seeding/pull/209) · [build 1942166](https://github.com/ashleylamont/smashclub-seeding/commit/19421664bfcbe06febc50ff721b2997e27e34f7d)
 
 ## 0.2.2
+
+Organisers could fill missing qualifier spots in older Nemesis finals by confirming the pool places. The OBS break screen showed pairings and results from linked Challonge brackets, with labels for undecided opponents, byes, and forfeits.
 
 ### Patch Changes
 
@@ -555,12 +671,16 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.2.1
 
+The organiser desk explained why an unplayed finals draw could not be removed. If an unaccepted match call was blocking removal, organisers could go straight to it and return it before trying again.
+
 ### Patch Changes
 
 - 8 November 2026 · **Fix** · See why unplayed finals cannot be removed and open the exact untaken call when returning it can unblock removal. The queue reset now explains whether it keeps matches or clears them. [#191](https://github.com/ashleylamont/smashclub-seeding/pull/191) · [build 695a091](https://github.com/ashleylamont/smashclub-seeding/commit/695a091f98a1f0f106dca68662b06f188edc04e0)
 - 8 November 2026 · **Maintenance** · Keep pending build verification and registry publication queued when several changes land on main close together. [#188](https://github.com/ashleylamont/smashclub-seeding/pull/188) · [build 3604c04](https://github.com/ashleylamont/smashclub-seeding/commit/3604c04eaec0b6097806301ad87808c18e94658a)
 
 ## 0.2.0
+
+Players could open **WHR impact** on a rated set to see how including that result affected their estimated skill for the night. Public brackets and OBS labelled forfeits, byes, and no-contests by outcome.
 
 ### Minor Changes
 
@@ -577,6 +697,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.1.9
 
+The organiser desk showed what blocked pausing a pool draw and linked directly to any unaccepted match calls that needed to be returned. Organisers could resume a paused draw from the same panel.
+
 ### Patch Changes
 
 - 8 November 2026 · **Maintenance** · Validate release notes against the merge commit tested by CI when a release advances the base branch. [#181](https://github.com/ashleylamont/smashclub-seeding/pull/181) · [build 9e0b162](https://github.com/ashleylamont/smashclub-seeding/commit/9e0b1625dd1be606fcf587f944941230c35ba330)
@@ -587,6 +709,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.1.8
 
+Before creating a ready finals draw, organisers could preview every round, check which entrants received automatic byes, and see where winners would advance.
+
 ### Patch Changes
 
 - 8 November 2026 · **Maintenance** · Document the TIP12 bracket replay and verify how two alternative renderers handle pending matches, long names and draw progression. [#168](https://github.com/ashleylamont/smashclub-seeding/pull/168) · [build 8721d14](https://github.com/ashleylamont/smashclub-seeding/commit/8721d14818db11c39d35521401133cd8e948bb6b)
@@ -596,17 +720,23 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.1.7
 
+The site footer put the changelog, app version, and build in one place. Colour-coded labels identified the kinds of changes in release notes and historical entries.
+
 ### Patch Changes
 
 - 8 November 2026 · **Improvement** · Find the changelog, app version and build in the site footer. Colour-coded category labels make release notes and historical entries easier to scan. [#172](https://github.com/ashleylamont/smashclub-seeding/pull/172) · [build 45a20eb](https://github.com/ashleylamont/smashclub-seeding/commit/45a20eb91d82f5cbea5479522a1eaefee83153dd)
 
 ## 0.1.6
 
+Measured test run times guided how browser tests were split across four automated jobs. A check verified that each test file belonged to exactly one job.
+
 ### Patch Changes
 
 - 8 November 2026 · **Maintenance** · Balance the four browser CI jobs using measured test times and verify that every spec belongs to exactly one job. [#170](https://github.com/ashleylamont/smashclub-seeding/pull/170) · [build 63d3d54](https://github.com/ashleylamont/smashclub-seeding/commit/63d3d549c84cfb1ad3324b002a792ab0ea79c43e)
 
 ## 0.1.5
+
+While the finals draw was pending, the OBS break screen showed which pool places qualified for each finals bracket and named the confirmed qualifiers.
 
 ### Patch Changes
 
@@ -616,6 +746,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.1.4
 
+During pool play, the public **Brackets** view showed which pool places led to each finals bracket. Confirmed qualifiers appeared as their places became known, and match pairings appeared when the draw was created.
+
 ### Patch Changes
 
 - 8 November 2026 · **Improvement** · See which pool places feed each finals bracket during live pool play. Confirmed qualifiers appear as they become known, and pairings appear when the draw is created. [#162](https://github.com/ashleylamont/smashclub-seeding/pull/162) · [build 23cc78d](https://github.com/ashleylamont/smashclub-seeding/commit/23cc78d5c646180dfa17669e04c7135ace939d9e)
@@ -624,11 +756,15 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.1.3
 
+A browser check verified that OBS shows a connection warning after score refreshes fail.
+
 ### Patch Changes
 
 - 8 November 2026 · **Maintenance** · Stabilise the OBS connection-interruption check by advancing the browser clock through polling and retry. [#161](https://github.com/ashleylamont/smashclub-seeding/pull/161) · [build 414cfb6](https://github.com/ashleylamont/smashclub-seeding/commit/414cfb63dc9e93d8e0d64901ef2fce020738b855)
 
 ## 0.1.2
+
+Archived tournament results labelled forfeits and byes, including in older Nemesis events. The automated release workflow opened version pull requests from pending change notes and published the verified app image and GitHub release after each version merged.
 
 ### Patch Changes
 
@@ -638,6 +774,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 
 ## 0.1.1
 
+Players could see how each club night affected their skill estimate and attendance penalty, including revisions while they were away. The OBS gameplay overlay kept long event names, recent results, and the score-reporting QR code visible together.
+
 ### Patch Changes
 
 - 8 November 2026 · **Improvement** · Browse dated changes by build and version, with change categories and screenshots for selected features. [#155](https://github.com/ashleylamont/smashclub-seeding/pull/155) · [build 087de18](https://github.com/ashleylamont/smashclub-seeding/commit/087de18551fd55dc0e32dea71f8aa89d9890fce2)
@@ -645,6 +783,8 @@ Dates show when each change landed, in Sydney time. Select a version to open its
 - 8 November 2026 · **Fix** · Show how each club night changed a player's skill estimate and attendance penalty, including revisions while they were away. [#154](https://github.com/ashleylamont/smashclub-seeding/pull/154) · [build 6f6c690](https://github.com/ashleylamont/smashclub-seeding/commit/6f6c6908e989d9e23ec100649620e11d6c162cce)
 
 ## 0.1.0
+
+Nemesis introduced numbered releases and a public changelog that traced how rankings, tournament planning, live events, and broadcasts had developed.
 
 Released 8 November 2026 · [release build cecd3d4](https://github.com/ashleylamont/smashclub-seeding/commit/cecd3d4297b78b3fd03531e5f7c016578fa97739)
 
@@ -654,7 +794,7 @@ Released 8 November 2026 · [release build cecd3d4](https://github.com/ashleylam
 
 ## Before versioned releases
 
-Entries are grouped by their original dates. Milestones mark major changes to the app or its rating model. Features add capabilities, improvements refine existing workflows, fixes correct defects and maintenance covers internal work.
+The Smash Club seeding toolkit became the Nemesis web app with persistent rankings. The club moved to Whole-History Rating, and event nights gained guest score reporting, station calls, doubles tournaments and live broadcasts.
 
 ### 8 November 2026
 
