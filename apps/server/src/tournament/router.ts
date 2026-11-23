@@ -70,22 +70,26 @@ export const nativeLiveRouter = router({
       });
     }),
   previewFinalsSlotReplay: authedProcedure
-    .input(plan.extend({ ...FinalsSlotReplayScore.shape, reviewVersion: z.literal(2).optional() }))
+    .input(
+      plan.extend({ ...FinalsSlotReplayScore.shape, reviewVersion: z.literal([2, 3]).optional() }),
+    )
     .query(async ({ ctx, input: { planId, reviewVersion, ...score } }) => {
       await requireOperator(ctx.db, planId, ctx.user);
       return transport(async () => {
         const state = await runtime(ctx).state(planId);
         const preview = previewFinalsSlotReplay(state, score, reviewVersion);
-        if (!preview.qualifierChanges.length) return { ...preview, entrantNames: {} };
-        const names = publicEntrantNames(await ctx.db.select().from(players), state.entrants);
         const ids = preview.qualifierChanges.flatMap((change) => [
           change.beforeEntrantId,
           change.afterEntrantId,
         ]);
-        if (preview.allowed) {
+        if (preview.allowed && 'poolPlacementCorrection' in preview) {
+          ids.push(...preview.changes.map(({ entrantId }) => entrantId));
+        } else if (preview.allowed) {
           ids.push(preview.original.player1Id, preview.original.player2Id);
           if (preview.companion) ids.push(preview.companion.player1Id, preview.companion.player2Id);
         }
+        if (!ids.length) return { ...preview, entrantNames: {} };
+        const names = publicEntrantNames(await ctx.db.select().from(players), state.entrants);
         return {
           ...preview,
           entrantNames: Object.fromEntries<string>(

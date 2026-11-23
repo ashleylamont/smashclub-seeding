@@ -407,7 +407,7 @@ for (const theme of ['dark', 'light'] as const)
             expectedRevision: revision,
             score1: 2,
             score2: 3,
-            reviewVersion: 2,
+            reviewVersion: 3,
           });
         expect(fixture.unexpected).toEqual([]);
       });
@@ -452,3 +452,126 @@ for (const theme of ['dark', 'light'] as const)
       expect(fixture.unexpected).toEqual([]);
     });
   }
+
+for (const theme of ['dark', 'light'] as const)
+  for (const width of [390, 1440])
+    test(`reviews a playoff-neutral pool correction at ${width}px in ${theme}`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const options: FixtureOptions = {
+        role: 'admin',
+        history: [
+          {
+            entries: [
+              {
+                id: 'act:52',
+                eventName: 'DecisionRecordedV6',
+                version: 52,
+                at: '2026-10-03T23:59:00.000Z',
+                actor: 'Organiser',
+                source: 'operator',
+                category: 'scores',
+                title: 'Score recorded',
+                summary: 'Pool score',
+                matchId: '',
+                details: {},
+              },
+            ],
+            nextCursor: null,
+          },
+        ],
+      };
+      const fixture = await mockEvent(page, options);
+      const match = fixture.overview.matches.find(
+        (row) => row.status === 'complete' && row.stage === 'group',
+      )!;
+      options.history![0]!.entries[0]!.matchId = match.id;
+      const alice = match.player1Id!;
+      const bea = match.player2Id!;
+      const entrantNames = {
+        [alice]: 'Alice with a long tournament alias from Western Sydney',
+        [bea]: 'Bea with another long tournament alias',
+      };
+      Object.assign(fixture.overview.plan, {
+        bracketMode: 'native',
+        drawPaused: false,
+        liveOwned: true,
+      });
+      Object.assign(match, {
+        label: 'Recorded pool set',
+        player1Name: entrantNames[alice],
+        player2Name: entrantNames[bea],
+        reviewPlayoffPoolWinner: true,
+        score1: 2,
+        score2: 0,
+        winnerId: alice,
+        outcome: 'played',
+      });
+      const preview: Preview = {
+        allowed: true,
+        issues: [],
+        qualifierChanges: [],
+        entrantNames,
+        revisionToken: 'a'.repeat(64),
+        poolPlacementCorrection: true,
+        changes: [
+          { entrantId: bea, beforePlace: 4, afterPlace: 3 },
+          { entrantId: alice, beforePlace: 3, afterPlace: 4 },
+        ],
+      };
+      fixture.queryResponses.set('eventOps.live.previewFinalsSlotReplay', () => preview);
+      const requests: Command[] = [];
+      await page.route('**/api/trpc/eventOps.live.command*', async (route) => {
+        const batched = new URL(route.request().url()).searchParams.has('batch');
+        const body = route.request().postDataJSON();
+        requests.push(batched ? body[0] : body);
+        if (requests.length === 1) {
+          await route.abort();
+          return;
+        }
+        const result = { result: { data: {} } };
+        await route.fulfill({ json: batched ? [result] : result });
+      });
+      await page.goto(`/operate/${PLAN_ID}?view=history`);
+      await page.getByRole('button', { name: 'Open match', exact: true }).click();
+      await expect(page.locator('#match-desk')).toBeFocused();
+      const card = page.locator('article.ops-match:visible').filter({ hasText: match.label });
+      await card.getByRole('button', { name: 'Correct score' }).press('Enter');
+      await card.getByRole('spinbutton').last().fill('1');
+      await expect(card.getByRole('button', { name: 'Confirm result' })).toBeVisible();
+      await card.getByRole('spinbutton').last().fill('3');
+      await card.getByRole('button', { name: 'Review finals replay' }).press('Enter');
+      const details = card.getByRole('region', { name: 'Pool placement correction review' });
+      await expect(details).toBeFocused();
+      await expect(details).toContainText(`${entrantNames[bea]} · 4 → 3`);
+      await expect(details).toContainText(`${entrantNames[alice]} · 3 → 4`);
+      const apply = card.getByRole('button', { name: 'Correct pool score', exact: true });
+      await checkRoute(page);
+      await page.screenshot({
+        path: testInfo.outputPath('pool-placement-review.png'),
+        fullPage: true,
+        style: readFileSync(bracketCaptureOptions.stylePath, 'utf8'),
+      });
+      await apply.press('Enter');
+      const dialog = page.getByRole('alertdialog');
+      await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(apply).toBeFocused();
+      expect(requests).toHaveLength(0);
+      await apply.press('Enter');
+      await dialog.getByRole('button', { name: 'Confirm', exact: true }).press('Enter');
+      await card.getByRole('button', { name: 'Retry correction' }).press('Enter');
+      await expect(page.getByText('Pool score and finishing order corrected')).toBeVisible();
+      expect(requests).toHaveLength(2);
+      expect(requests[0]).toEqual(requests[1]);
+      expect(requests[0]!.command).toMatchObject({
+        kind: 'score',
+        matchId: match.id,
+        outcome: 'played',
+        score1: 2,
+        score2: 3,
+        poolGameCorrectionToken: preview.revisionToken,
+      });
+    });
