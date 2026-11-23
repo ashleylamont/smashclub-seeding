@@ -86,7 +86,9 @@ test('a phone TO records a forfeit without games, advances its winner and publis
   const dialog = page.getByRole('alertdialog');
   await expect(dialog).toContainText('no played games or rating input');
   await dialog.getByRole('button', { name: 'Confirm', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Forfeit recorded locally');
+  await expect(
+    page.getByRole('status').filter({ hasText: /^Forfeit recorded locally · no played games$/ }),
+  ).toBeVisible();
   let state = await snapshot();
   expect(state.matches.find((m) => m.id === first.id)).toMatchObject({
     status: 'complete',

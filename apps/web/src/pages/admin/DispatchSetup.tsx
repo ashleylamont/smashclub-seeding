@@ -2,9 +2,13 @@ import { useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { Disclosure } from '../../components/ui/Disclosure';
+import { Notice } from '../../components/ui/Feedback';
 import { Input } from '../../components/ui/Input';
 import { useConfirmation } from '../../lib/confirmation';
 import type { Desk, Run } from './dispatchTypes';
+
+const maxCapacity = 128;
+const capacityWarningId = 'dispatch-capacity-warning';
 
 export function DispatchSetup({
   desk,
@@ -31,6 +35,12 @@ export function DispatchSetup({
   const revision = draft?.revision ?? desk.resourceRevision;
   const shared = desk.mode === 'shared';
   const stale = revision !== desk.resourceRevision;
+  const validCapacity = Number.isInteger(capacity) && capacity >= 0 && capacity <= maxCapacity;
+  const excess =
+    shared && draft && !stale && validCapacity
+      ? projectedOrdinaryUsage(desk, selected) - capacity
+      : 0;
+  const warningDescription = excess > 0 ? capacityWarningId : undefined;
   return (
     <section className="card" id="station-controls" tabIndex={-1}>
       <h3>{shared ? 'Match capacity and named stations' : 'Use a flexible shared match queue'}</h3>
@@ -69,9 +79,10 @@ export function DispatchSetup({
           <Input
             type="number"
             min={0}
-            max={128}
+            max={maxCapacity}
             value={capacity}
             required
+            aria-describedby={warningDescription}
             onChange={(e) => {
               setDraft({
                 capacity: Number(e.target.value),
@@ -121,7 +132,26 @@ export function DispatchSetup({
             </Button>
           </p>
         )}
-        <Button variant="primary" type="submit" disabled={disabled || stale}>
+        <div
+          id={capacityWarningId}
+          role="status"
+          aria-atomic="true"
+          className={warningDescription ? 'dispatch-capacity-warning' : 'visually-hidden'}
+        >
+          {warningDescription && (
+            <Notice tone="warning" live={false}>
+              Saving would put {excess} {excess === 1 ? 'match' : 'matches'} above the proposed
+              ordinary limit. Existing calls and matches in play will continue. New ordinary calls
+              will wait until capacity is available.
+            </Notice>
+          )}
+        </div>
+        <Button
+          variant="primary"
+          type="submit"
+          disabled={disabled || stale}
+          aria-describedby={warningDescription}
+        >
           {shared ? 'Save capacity' : 'Enable shared match queue'}
         </Button>
         <p>
@@ -247,4 +277,11 @@ export function DispatchSetup({
       )}
     </section>
   );
+}
+
+function projectedOrdinaryUsage(desk: Desk, reservedIds: readonly string[]) {
+  const occupied = desk.stations.filter(({ currentMatchId }) => currentMatchId);
+  const namedBefore = occupied.filter(({ reserved }) => reserved).length;
+  const namedAfter = occupied.filter(({ id }) => reservedIds.includes(id)).length;
+  return desk.active + namedBefore - namedAfter;
 }
