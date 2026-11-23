@@ -544,6 +544,63 @@ describe('public.recap', () => {
     });
   });
 
+  it('keeps a replacement pairing separate from the profile’s published opponent', async () => {
+    await sync([march.slug]);
+    await runRecompute(db);
+    const [tournament] = await db
+      .select({ id: tournaments.id })
+      .from(tournaments)
+      .where(eq(tournaments.challongeSlug, march.slug));
+    const [original] = await db.select().from(sets).where(eq(sets.challongeMatchId, 11));
+    const api = caller().public;
+    const readMatch = async (verifiedFits: boolean) => {
+      const profile = await api.player({ playerId: original!.p1PlayerId!, verifiedFits });
+      if (!profile?.events) throw new Error('Expected a current profile');
+      return profile.events.find((match) => match.setId === original!.id);
+    };
+    expect(await readMatch(true)).toMatchObject({
+      score: '3–0',
+      opponentName: 'Kirby',
+      won: true,
+      weight: 2,
+    });
+
+    const revised = {
+      ...march,
+      matches: march.matches.map((match) =>
+        match.id === 11 ? { ...match, p2: 2, winner: 2, scores: '0-3' } : match,
+      ),
+    };
+    await syncTournament(db, fixtureClient([revised]), tournament!.id);
+    const [replacement] = await db.select().from(sets).where(eq(sets.id, original!.id));
+    expect(replacement!.p2PlayerId).not.toBe(original!.p2PlayerId);
+    expect(replacement!.winner).toBe(2);
+
+    const verified = await readMatch(true);
+    expect(verified).toMatchObject({
+      score: null,
+      opponentName: 'Kirby',
+      won: true,
+      weight: null,
+      evidenceUnavailable: 'history_changed',
+    });
+    expect(verified?.currentWon).toBeUndefined();
+    expect(await readMatch(false)).toMatchObject({
+      score: null,
+      opponentName: 'Kirby',
+      won: true,
+      weight: 2,
+    });
+
+    await runRecompute(db);
+    expect(await readMatch(true)).toMatchObject({
+      score: '0–3',
+      opponentName: 'Samus A',
+      won: false,
+      weight: 2,
+    });
+  });
+
   it('withholds stale doubles evidence and keeps a recorded forfeit free of rating evidence', async () => {
     const fixture = await publishForecastFixture('connected');
     const api = caller().public;

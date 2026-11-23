@@ -6,16 +6,20 @@ export interface PublishedScorelineEvidence {
   won: boolean | null;
 }
 
+export type ScorelineEvidence =
+  | { weight: number | null; evidenceUnavailable?: never }
+  | { weight: null; evidenceUnavailable: 'history_changed' | 'not_rated' | 'older_run' };
+
 export function verifiedScorelineEvidence(
   result: { eligible: boolean; winner: number | null; scoresCsv: string | null; raw: unknown },
   published: PublishedScorelineEvidence,
   currentWon: boolean | null,
   gamesWeight: number | null,
-) {
+): ScorelineEvidence {
   const { eligible, winner, scoresCsv, raw } = result;
   if (!eligible || (winner !== 1 && winner !== 2) || !isPlayedRatingResult(scoresCsv, raw))
-    return { weight: null, evidenceUnavailable: 'not_rated' as const };
-  if (gamesWeight === null) return { weight: null, evidenceUnavailable: 'older_run' as const };
+    return { weight: null, evidenceUnavailable: 'not_rated' };
+  if (gamesWeight === null) return { weight: null, evidenceUnavailable: 'older_run' };
 
   // Evidence units depend on the set's winner and margin under the frozen rule.
   // The broader fit, impact and forecast have their own prefix checks.
@@ -26,5 +30,5 @@ export function verifiedScorelineEvidence(
   );
   return currentWon !== null && currentWon === published.won && weight === published.weight
     ? { weight }
-    : { weight: null, evidenceUnavailable: 'history_changed' as const };
+    : { weight: null, evidenceUnavailable: 'history_changed' };
 }

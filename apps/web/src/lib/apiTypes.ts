@@ -20,7 +20,7 @@ export interface PlayerEventView {
   postRating: number | null;
   postRd: number | null;
   weight: number | null;
-  evidenceUnavailable?: 'history_changed' | 'not_rated' | 'older_run';
+  evidenceUnavailable?: PlayerDoublesMatch['evidenceUnavailable'];
   currentWon?: boolean;
   forfeit?: boolean;
   /**

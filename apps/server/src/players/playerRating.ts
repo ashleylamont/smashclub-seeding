@@ -128,6 +128,13 @@ export async function readPlayerRating(db: Db, playerId: string, verifiedFits = 
             ? resultWinner === side
             : null;
         const checkEvidence = verifiedFits && singles && row.setId !== null && !row.isDecay;
+        const opponentId = side === 1 ? p2PlayerId : side === 2 ? p1PlayerId : null;
+        // An import can reuse a set ID for a replacement pairing. Keep its
+        // current result separate from the opponent in the published row.
+        const verifiedWon =
+          resultState === 'complete' && opponentId !== null && opponentId === row.opponentPlayerId
+            ? currentWon
+            : null;
         const evidence = checkEvidence
           ? verifiedScorelineEvidence(
               {
@@ -145,7 +152,7 @@ export async function readPlayerRating(db: Db, playerId: string, verifiedFits = 
                   includesResultStage(resultsMode, row.resultStage),
               },
               row,
-              currentWon,
+              verifiedWon,
               gamesWeight ?? null,
             )
           : undefined;
@@ -159,12 +166,16 @@ export async function readPlayerRating(db: Db, playerId: string, verifiedFits = 
                 availability.after.has(eventKeyOf(tournamentDate)) &&
                 (hasLedger ? matchedNight !== null : matchesFullFit(row, rating)),
             )),
-          ...(checkEvidence && currentWon !== null && currentWon !== row.won && { currentWon }),
           ...(checkEvidence &&
-            currentWon !== null &&
+            verifiedWon !== null &&
+            verifiedWon !== row.won && { currentWon: verifiedWon }),
+          ...(checkEvidence &&
+            verifiedWon !== null &&
             unplayedResultOutcome(scoreCsv, resultRaw) === 'forfeit' && { forfeit: true }),
           score:
-            currentWon !== null && side !== null && (checkEvidence || row.won === currentWon)
+            currentWon !== null &&
+            side !== null &&
+            (checkEvidence ? verifiedWon !== null : row.won === currentWon)
               ? playerSetScore(scoreCsv, resultRaw, side)
               : null,
           tournamentDate,

@@ -8,6 +8,7 @@ import { playerIdResolver } from '../identity/playerIds';
 import {
   verifiedScorelineEvidence,
   type PublishedScorelineEvidence,
+  type ScorelineEvidence,
 } from '../recompute/scorelineEvidence';
 
 export async function playerDoublesHistory(
@@ -97,7 +98,7 @@ export async function playerDoublesHistory(
     const teammate = own.participant.memberPlayerIds?.map(canonical).find((id) => id !== playerId);
     const won = row.winner === (onFirst ? 1 : 2);
     const published = publishedEvidence.get(row.id);
-    const { weight: ratingWeight, ...evidence } =
+    const { weight: ratingWeight, evidenceUnavailable }: ScorelineEvidence =
       published && gamesWeight !== undefined
         ? verifiedScorelineEvidence(
             {
@@ -126,7 +127,7 @@ export async function playerDoublesHistory(
         tournamentSlug: own.tournament.challongeSlug,
         won,
         ratingWeight,
-        ...evidence,
+        ...(evidenceUnavailable !== undefined && { evidenceUnavailable }),
         opponentName: pairName(other.participant),
         teammateName: teammate ? (names.get(teammate) ?? 'Player') : null,
         score: playerSetScore(row.scoresCsv, row.raw, onFirst ? 1 : 2),
