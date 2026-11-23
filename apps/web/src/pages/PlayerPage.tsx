@@ -51,6 +51,16 @@ export function PlayerPage() {
   return <PlayerProfile data={query.data as PlayerData} />;
 }
 
+function hasRevisedEstimate({
+  rating,
+  revised,
+}: {
+  rating: number | null;
+  revised: number | null;
+}) {
+  return revised !== null && (rating === null || Math.abs(revised - rating) >= 1);
+}
+
 function PlayerProfile({ data }: { data: PlayerData }) {
   const { player, rating, nights, recomputeId } = data;
   // The server types these rows loosely (Record<string, unknown>); see PlayerEventView.
@@ -77,10 +87,10 @@ function PlayerProfile({ data }: { data: PlayerData }) {
       date: formatDate(point.date),
       played: point.played,
       rating: point.postRating,
-      band: [point.postRating - 2 * point.postRd, point.postRating + 2 * point.postRd] as [
-        number,
-        number,
-      ],
+      band:
+        point.postRating === null || point.postRd === null
+          ? null
+          : [point.postRating - 2 * point.postRd, point.postRating + 2 * point.postRd],
       rd: point.postRd,
       revised: point.revisedRating,
     }));
@@ -91,13 +101,8 @@ function PlayerProfile({ data }: { data: PlayerData }) {
    * right after a recompute of a fresh night the two coincide, and a dashed
    * line perfectly under the solid one is noise.
    */
-  const showRevised = useMemo(
-    () =>
-      chartData.some(
-        (point) => point.revised !== null && Math.abs(point.revised - point.rating) >= 1,
-      ),
-    [chartData],
-  );
+  const showRevised = chartData.some(hasRevisedEstimate);
+  const hasUnavailableEstimate = chartData.some((point) => point.rating === null);
 
   const ratedMatches = useMemo(() => events.filter((e) => !e.isDecay), [events]);
   const singlesMatches = useMemo(
@@ -341,6 +346,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
               : 'WHR estimate after each played club night.'}{' '}
             The shaded band is ±2 standard deviations.
             {showRevised && ' The dashed line shows the current fit’s revised historical estimate.'}
+            {hasUnavailableEstimate && ' Gaps show unavailable night estimates.'}
           </p>
           <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={chartData} margin={{ top: 8, right: 8, bottom: 4, left: 0 }}>
@@ -359,20 +365,25 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                 width={48}
               />
               <Tooltip
+                filterNull={false}
                 content={({ active, payload }) => {
                   if (!active || !payload || payload.length === 0) return null;
                   const d = payload[0]!.payload as (typeof chartData)[number];
                   return (
-                    <div className="custom-tooltip">
+                    <div className="custom-tooltip" role="status">
                       <p className="tooltip-label">{d.tournament}</p>
                       <p>
                         {d.date}
                         {!d.played && ' · No rated sets'}
                       </p>
-                      <p className="num">
-                        {d.rating.toFixed(0)} ± {d.rd.toFixed(0)}
-                      </p>
-                      {showRevised && d.revised !== null && Math.abs(d.revised - d.rating) >= 1 && (
+                      {d.rating === null || d.rd === null ? (
+                        <p>Night estimate unavailable.</p>
+                      ) : (
+                        <p className="num">
+                          {d.rating.toFixed(0)} ± {d.rd.toFixed(0)}
+                        </p>
+                      )}
+                      {showRevised && d.revised !== null && hasRevisedEstimate(d) && (
                         <p className="num">now revised to {d.revised.toFixed(0)}</p>
                       )}
                     </div>
@@ -393,7 +404,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
                 dataKey="rating"
                 stroke="var(--series-1)"
                 strokeWidth={2}
-                dot={false}
+                dot={hasUnavailableEstimate ? { r: 2 } : false}
                 isAnimationActive={false}
                 name="Night estimate"
               />

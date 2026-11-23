@@ -60,6 +60,7 @@ interface Snapshot {
   label: string;
   values: Record<string, number>;
   attendance: Record<string, boolean>;
+  unavailable: boolean;
 }
 
 export function RatingsOverTime({ players }: RatingsOverTimeProps) {
@@ -124,13 +125,17 @@ export function RatingsOverTime({ players }: RatingsOverTimeProps) {
     const byNight = new Map(
       nightly.data.eventKeys.map((label): [string, Snapshot] => [
         label,
-        { label, values: {}, attendance: {} },
+        { label, values: {}, attendance: {}, unavailable: false },
       ]),
     );
     for (const { eventKey, playerId, postRating, postRd, played } of nightly.data.points) {
       const night = byNight.get(eventKey)!;
-      night.values[playerId] = yMode === 'cautious' ? postRating - 2 * postRd : postRating;
-      night.attendance[playerId] = played;
+      if (postRating === null || postRd === null) {
+        night.unavailable = true;
+      } else {
+        night.values[playerId] = yMode === 'cautious' ? postRating - 2 * postRd : postRating;
+        night.attendance[playerId] = played;
+      }
     }
     return [...byNight.values()];
   }, [nightly.data, yMode]);
@@ -144,6 +149,7 @@ export function RatingsOverTime({ players }: RatingsOverTimeProps) {
           (nightly.data?.mode === 'played'
             ? ' Showing the available played-night estimates.'
             : ' Estimates include missed nights.')}
+        {chartData.some((night) => night.unavailable) && ' Gaps show unavailable night estimates.'}
       </p>
 
       <div className="chart-controls">
@@ -276,7 +282,13 @@ export function RatingsOverTime({ players }: RatingsOverTimeProps) {
                 return (
                   <div className="custom-tooltip ratings-tooltip" role="status">
                     <p className="tooltip-label">{label}</p>
-                    {estimates.length === 0 && <p>No recorded estimates for these players.</p>}
+                    {estimates.length === 0 && (
+                      <p>
+                        {night?.unavailable
+                          ? 'Night estimate unavailable.'
+                          : 'No recorded estimates for these players.'}
+                      </p>
+                    )}
                     {estimates.map((entry) => (
                       <p key={entry.name as string} className="tooltip-row">
                         <span className="tooltip-swatch" style={{ background: entry.color }} />

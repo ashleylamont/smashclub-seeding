@@ -39,6 +39,7 @@ async function mockRatingHistory(
   withNightLedger = true,
   withSetHistory = true,
   emptySelection = false,
+  unavailableNight = false,
 ) {
   const fixture = await mockEvent(page);
   const leaderboard: LeaderboardData = {
@@ -83,6 +84,8 @@ async function mockRatingHistory(
       .sort((a, b) => a.eventKey.localeCompare(b.eventKey))
       .map(({ played: _played, ...night }, seq) => ({
         ...night,
+        postRating: unavailableNight && night.eventKey === dates[0] ? null : night.postRating,
+        postRd: unavailableNight && night.eventKey === dates[0] ? null : night.postRd,
         seq,
         tournamentId: returning.playerId,
         isDecay: false,
@@ -107,7 +110,11 @@ async function mockRatingHistory(
       eventKeys: withNightLedger
         ? [...new Set(points.map((night) => night.eventKey))].sort()
         : dates,
-      points,
+      points: points.map((point) =>
+        unavailableNight && point.eventKey === dates[0]
+          ? { ...point, postRating: null, postRd: null }
+          : point,
+      ),
     };
   });
   return { requests, unexpected: fixture.unexpected };
@@ -248,3 +255,44 @@ test('a modern selection absent from the published run cannot recover cached pla
   await expect(chart).toContainText('No night estimates for these players.');
   await expect(chart.getByRole('application')).toHaveCount(0);
 });
+
+for (const theme of ['light', 'dark'] as const) {
+  for (const width of [390, 1440]) {
+    test(`an unavailable rating night leaves a comparison gap at ${width}px in ${theme}`, async ({
+      page,
+    }, info) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ colorScheme: theme });
+      const { unexpected } = await mockRatingHistory(page, true, true, false, true);
+      await page.goto('/');
+      const chart = page.locator('.ratings-over-time');
+      const plot = chart.getByRole('application', { name: 'Player estimates by club night' });
+      const status = chart.getByRole('status');
+      await expect(chart).toContainText('Gaps show unavailable night estimates.');
+      const row = page.locator('.board-row').filter({ hasText: returning.name });
+      await expect(row.locator('.form .pip')).toHaveCount(2);
+      await expect(row.locator('.spark svg')).toHaveCount(0);
+      await plot.focus();
+      await expect(status).toContainText(dates[0]!);
+      await expect(status).toContainText('Night estimate unavailable.');
+      await expect(status).not.toContainText('1600');
+      await ready(page);
+      await chart.screenshot({ path: info.outputPath('unavailable-comparison.png') });
+      await chooseOption(chart.getByRole('combobox', { name: 'Y-axis' }), 'cautious');
+      await plot.focus();
+      await plot.press('ArrowRight');
+      await plot.press('ArrowLeft');
+      await expect(status).toContainText('Night estimate unavailable.');
+      await plot.press('ArrowRight');
+      await expect(status).toContainText('1460');
+      await expect(status).toContainText('Missed night');
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+        width,
+      );
+      expect(
+        (await new AxeBuilder({ page }).include('.ratings-over-time').analyze()).violations,
+      ).toEqual([]);
+      expect(unexpected).toEqual([]);
+    });
+  }
+}

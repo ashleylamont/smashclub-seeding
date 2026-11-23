@@ -18,7 +18,17 @@ import {
 } from '@smashclub/db';
 import { eventKeyOf, type WhrNightRating } from '@smashclub/engine';
 import { includesResultStage, publicPlayerName, unplayedResultOutcome } from '@smashclub/shared';
-import { latestRecomputeId } from '../../recompute/recompute';
+import {
+  hasRatingNightLedger,
+  latestCompletedRecompute,
+  latestRecomputeId,
+} from '../../recompute/recompute';
+import {
+  matchesFullFit,
+  publicPostNightEstimate,
+  readNightFitAvailability,
+  recordedRatingEventNight,
+} from '../../recompute/nightFitAvailability';
 import { readRatingNightHistory } from '../../recompute/ratingNightHistory';
 import { readWhrResultImpact } from '../../recompute/whrResultImpact';
 import { getRatingSettings } from '../../settings';
@@ -33,6 +43,14 @@ import { headToHeadInput, readHeadToHead } from '../../events/headToHead';
 import { publicProcedure, router } from '../trpc';
 
 const playerName = publicPlayerName;
+type PublicRatingNight = Omit<
+  WhrNightRating,
+  'playerId' | 'preRating' | 'postRating' | 'postRd'
+> & {
+  preRating: number | null;
+  postRating: number | null;
+  postRd: number | null;
+};
 
 /*
  * Nothing on this router is authenticated, so every response here is public.
@@ -179,12 +197,16 @@ export const publicRouter = router({
       return { redirectTo: player.mergedIntoPlayerId };
     }
 
-    const recomputeId = await latestRecomputeId(ctx.db);
+    const run = await latestCompletedRecompute(ctx.db);
+    const recomputeId = run?.id ?? null;
     let ratingRow = null;
     let events: Record<string, unknown>[] = [];
     const doublesWeights = new Map<string, number>();
-    let nights: Omit<WhrNightRating, 'playerId'>[] = [];
-    if (recomputeId) {
+    let nights: PublicRatingNight[] = [];
+    if (run) {
+      const { id: recomputeId } = run;
+      const { before, after } = await readNightFitAvailability(ctx.db, run);
+      const hasLedger = hasRatingNightLedger(run.stats);
       const [rating] = await ctx.db
         .select()
         .from(playerRatings)
@@ -196,7 +218,7 @@ export const publicRouter = router({
         );
       ratingRow = rating ?? null;
 
-      nights = await ctx.db
+      const nightRows = await ctx.db
         .select({
           eventKey: ratingNights.eventKey,
           played: ratingNights.played,
@@ -212,6 +234,13 @@ export const publicRouter = router({
           and(eq(ratingNights.recomputeId, recomputeId), eq(ratingNights.playerId, input.playerId)),
         )
         .orderBy(asc(ratingNights.eventKey));
+      nights = nightRows.map((night, index) => ({
+        ...night,
+        // Before their first rated night a player has the configured debut prior.
+        preRating:
+          (index === 0 && night.played) || before.has(night.eventKey) ? night.preRating : null,
+        ...publicPostNightEstimate(night, after.has(night.eventKey)),
+      }));
 
       const opponents = players; // alias for readability in the join below
       const eventRows = await ctx.db
@@ -242,9 +271,11 @@ export const publicRouter = router({
           opponentPlayerId: ratingEvents.opponentPlayerId,
           opponentCanonicalName: opponents.canonicalName,
           opponentDisplayName: opponents.displayName,
+          matchedNight: ratingNights.eventKey,
         })
         .from(ratingEvents)
         .innerJoin(tournaments, eq(ratingEvents.tournamentId, tournaments.id))
+        .leftJoin(ratingNights, recordedRatingEventNight)
         .leftJoin(sets, eq(ratingEvents.setId, sets.id))
         .leftJoin(opponents, eq(ratingEvents.opponentPlayerId, opponents.id))
         .where(
@@ -260,12 +291,20 @@ export const publicRouter = router({
           resultWinner,
           p1PlayerId,
           p2PlayerId,
+          matchedNight,
           ...row
         }) => {
           if (row.competitionFormat === 'doubles' && row.setId)
             doublesWeights.set(row.setId, row.weight);
+          const tournamentDate = row.tournamentDate?.toISOString() ?? null;
           return {
             ...row,
+            ...publicPostNightEstimate(
+              row,
+              tournamentDate !== null &&
+                after.has(eventKeyOf(tournamentDate)) &&
+                (hasLedger ? matchedNight !== null : matchesFullFit(row, rating)),
+            ),
             score: (() => {
               const side =
                 p1PlayerId === input.playerId ? 1 : p2PlayerId === input.playerId ? 2 : null;
@@ -276,7 +315,7 @@ export const publicRouter = router({
                 ? playerSetScore(scoreCsv, resultRaw, side)
                 : null;
             })(),
-            tournamentDate: row.tournamentDate?.toISOString() ?? null,
+            tournamentDate,
             opponentName: opponentCanonicalName
               ? publicPlayerName({
                   displayName: opponentDisplayName,
@@ -388,8 +427,11 @@ export const publicRouter = router({
 
   /** Played-set history for rankings form and the player list for rating comparisons. */
   ratingHistory: publicProcedure.query(async ({ ctx }) => {
-    const recomputeId = await latestRecomputeId(ctx.db);
-    if (!recomputeId) return { events: [], players: [] };
+    const run = await latestCompletedRecompute(ctx.db);
+    if (!run) return { events: [], players: [] };
+    const { id: recomputeId } = run;
+    const { after } = await readNightFitAvailability(ctx.db, run);
+    const hasLedger = hasRatingNightLedger(run.stats);
     const eventRows = await ctx.db
       .select({
         seq: ratingEvents.seq,
@@ -401,15 +443,19 @@ export const publicRouter = router({
         postRd: ratingEvents.postRd,
         tournamentId: ratingEvents.tournamentId,
         eventDate: tournaments.eventDate,
+        matchedNight: ratingNights.eventKey,
       })
       .from(ratingEvents)
       .innerJoin(tournaments, eq(ratingEvents.tournamentId, tournaments.id))
+      .leftJoin(ratingNights, recordedRatingEventNight)
       .where(eq(ratingEvents.recomputeId, recomputeId))
       .orderBy(asc(ratingEvents.seq));
     const playerRows = await ctx.db
       .select({
         playerId: playerRatings.playerId,
         rank: playerRatings.rank,
+        rating: playerRatings.rating,
+        rd: playerRatings.rd,
         conservativeRating: playerRatings.conservativeRating,
         canonicalName: players.canonicalName,
         displayName: players.displayName,
@@ -418,15 +464,25 @@ export const publicRouter = router({
       .innerJoin(players, eq(playerRatings.playerId, players.id))
       .where(eq(playerRatings.recomputeId, recomputeId))
       .orderBy(asc(playerRatings.rank));
+    const legacyBoard = hasLedger ? null : new Map(playerRows.map((row) => [row.playerId, row]));
     return {
-      events: eventRows.map(({ eventDate, ...row }) => ({
-        ...row,
-        eventKey: eventDate!.toISOString().slice(0, 10),
-      })),
-      players: playerRows.map(({ canonicalName, displayName, ...row }) => ({
-        ...row,
-        name: playerName({ canonicalName, displayName }),
-      })),
+      events: eventRows.map(({ eventDate, matchedNight, ...row }) => {
+        const eventKey = eventDate ? eventKeyOf(eventDate.toISOString()) : null;
+        const verified = hasLedger
+          ? matchedNight !== null
+          : matchesFullFit(row, legacyBoard?.get(row.playerId));
+        return {
+          ...row,
+          eventKey,
+          ...publicPostNightEstimate(row, eventKey !== null && after.has(eventKey) && verified),
+        };
+      }),
+      players: playerRows.map(
+        ({ canonicalName, displayName, rating: _rating, rd: _rd, ...row }) => ({
+          ...row,
+          name: playerName({ canonicalName, displayName }),
+        }),
+      ),
     };
   }),
 

@@ -82,16 +82,22 @@ export function LeaderboardPage() {
 
   /**
    * Per-player sparklines show estimates after played nights. Form pips use
-   * the same played-set history, without a per-row query.
+   * the same played-set history, without a per-row query. Restart the trace
+   * after a missing estimate so it never interpolates through a gap.
    */
   const trends = useMemo(() => {
     const map = new Map<string, PlayerTrend>();
     const lastNight = new Map<string, string>();
     for (const event of ratingHistory.data?.events ?? []) {
       const trend = map.get(event.playerId) ?? { points: [], form: [] };
-      if (lastNight.get(event.playerId) !== event.eventKey) trend.points.push(event.postRating);
-      else trend.points[trend.points.length - 1] = event.postRating;
-      lastNight.set(event.playerId, event.eventKey);
+      if (event.postRating === null || event.eventKey === null) {
+        trend.points = [];
+        lastNight.delete(event.playerId);
+      } else {
+        if (lastNight.get(event.playerId) !== event.eventKey) trend.points.push(event.postRating);
+        else trend.points[trend.points.length - 1] = event.postRating;
+        lastNight.set(event.playerId, event.eventKey);
+      }
       if (!event.isDecay && event.won !== null) trend.form.push(event.won);
       map.set(event.playerId, trend);
     }
