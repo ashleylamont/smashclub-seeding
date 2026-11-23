@@ -2,6 +2,12 @@
 
 Dates show when each change landed, in Sydney time. Select a version to open its GitHub release.
 
+## 0.23.8
+
+### Patch Changes
+
+- 23 November 2026 · **Fix** · Your account only offers sign-in providers the site supports. You can still see the providers you’ve already linked. [#612](https://github.com/ashleylamont/smashclub-seeding/pull/612) · [build c4c013a](https://github.com/ashleylamont/smashclub-seeding/commit/c4c013a3a8ccba16544d880256981d42ae0e4ae2)
+
 ## 0.23.7
 
 ### Patch Changes
