@@ -47,6 +47,11 @@ for (const theme of ['dark', 'light'] as const) {
       await page.goto(`/play/${PLAN_ID}`);
       const matches = page.locator('#my-matches');
       const view = matches.getByRole('combobox', { name: 'Match view' });
+      const openMatches = page.getByRole('option', {
+        name: 'Open matches & some results',
+        exact: true,
+      });
+      const recordedResults = page.getByRole('option', { name: 'Recorded results', exact: true });
       const cards = matches.locator('article.ops-match');
       const reviewedCard = cards.filter({ hasText: reviewed.label });
       const selfRunCard = cards.filter({ hasText: selfRun.label });
@@ -55,10 +60,9 @@ for (const theme of ['dark', 'light'] as const) {
       await expect(selfRunCard).toContainText('Confirmed result: 2 – 1');
 
       await view.press('Enter');
-      await expect(
-        page.getByRole('option', { name: 'Recorded results', exact: true }),
-      ).toBeFocused();
+      await expect(recordedResults).toBeFocused();
       await page.keyboard.press('ArrowUp');
+      await expect(openMatches).toBeFocused();
       await page.keyboard.press('Enter');
       await expect(view).toBeFocused();
       await expect(view).toHaveAttribute('data-value', 'matches');
@@ -69,11 +73,10 @@ for (const theme of ['dark', 'light'] as const) {
       await ready(page);
       await view.scrollIntoViewIfNeeded();
       await view.press('Enter');
-      await expect(
-        page.getByRole('option', { name: 'Open matches & some results', exact: true }),
-      ).toBeFocused();
+      await expect(openMatches).toBeFocused();
       await page.screenshot({ path: testInfo.outputPath('match-view-menu.png') });
       await page.keyboard.press('ArrowDown');
+      await expect(recordedResults).toBeFocused();
       await page.keyboard.press('Enter');
       await expect(view).toBeFocused();
       await expect(view).toContainText('Recorded results');
