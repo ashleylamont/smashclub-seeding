@@ -1,4 +1,5 @@
 import {
+  finalsRoles,
   tournamentStructures,
   isKnockout,
   type StructureOptions,
@@ -24,6 +25,15 @@ export function TournamentFormatFields({
   disabled?: boolean;
 }) {
   const id = useId();
+  const hasConsolation = finalsRoles(structure, structureOptions).includes('consolation');
+  let description: string | undefined = tournamentStructures.find(
+    (option) => option.value === structure,
+  )?.description;
+  if (!hasConsolation && structure === 'pools_finals')
+    description = 'Balanced pools, then a championship bracket.';
+  if (!hasConsolation && structure === 'dual_division')
+    description = 'Two seeded divisions, each with a championship bracket.';
+
   return (
     <>
       <label className="form-field">
@@ -44,7 +54,7 @@ export function TournamentFormatFields({
           ))}
         </Select>
         <span className="form-hint" id={`${id}-structure-help`}>
-          {tournamentStructures.find((s) => s.value === structure)?.description}
+          {description}
         </span>
       </label>
       {!isKnockout(structure) && (
@@ -102,7 +112,7 @@ export function TournamentFormatFields({
               <span>
                 <Checkbox
                   disabled={disabled}
-                  checked={structureOptions.consolation ?? structure !== 'round_robin_finals'}
+                  checked={hasConsolation}
                   onCheckedChange={(checked) =>
                     onChange({
                       structure,

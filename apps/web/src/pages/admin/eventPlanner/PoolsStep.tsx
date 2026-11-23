@@ -1,4 +1,5 @@
-import { isKnockout } from '@smashclub/shared';
+import { finalsRoles, isKnockout } from '@smashclub/shared';
+import { winnersCount } from '@smashclub/tournament-formats';
 import { Select, SelectItem } from '../../../components/ui/Select';
 import { Button } from '../../../components/ui/Button';
 import { useState } from 'react';
@@ -16,48 +17,68 @@ import { DIVISION_LABEL } from './labels';
  */
 
 export function PoolsStep({ view, onChanged }: { view: EventPlanView; onChanged: () => void }) {
-  if (isKnockout(view.plan.structure))
+  const { plan } = view;
+  if (isKnockout(plan.structure)) {
+    if (plan.status === 'roster_frozen')
+      return (
+        <section className="card section">
+          <h3>Knockout draw</h3>
+          <p>Generate the seeded knockout draw in Divisions.</p>
+        </section>
+      );
+
+    const closed = plan.status === 'complete' || plan.status === 'cancelled';
+    const readyToLock = !closed && !plan.softLockedAt;
     return (
       <section className="card section">
-        <h3>Knockout draw ready</h3>
+        <h3>{readyToLock ? 'Knockout draw ready' : 'Knockout draw'}</h3>
         <p>
-          Open the event desk to lock the seeded draw and start matches. Winners and losers advance
-          along the chosen bracket; automatic byes use no played games.
+          {closed
+            ? 'Review the draw in the event desk.'
+            : readyToLock
+              ? 'Open the event desk to lock the seeded draw and start matches.'
+              : 'Review the draw and manage matches in the event desk.'}
+          {!closed && ' Automatic byes use no played games.'}
         </p>
         <Button asChild variant="primary">
-          <a href={`/admin/event-operations?plan=${view.plan.id}`}>Open event desk</a>
+          <a href={`/admin/event-operations?plan=${plan.id}`}>Open event desk</a>
         </Button>
       </section>
     );
+  }
+
+  const linked = plan.bracketMode === 'challonge';
+  const hasConsolation =
+    linked || finalsRoles(plan.structure, plan.structureOptions).includes('consolation');
+  const playoffSize = plan.structureOptions?.playoffSize;
 
   return (
     <div>
       <div className="page-header">
         <h3>Pools</h3>
         <span className="muted">
-          {view.plan.structure === 'round_robin'
+          {plan.structure === 'round_robin'
             ? 'Every entrant plays every other entrant. Confirm the finishing order after resolving ties, then finalize the event.'
-            : view.plan.structure === 'round_robin_finals'
-              ? `Every entrant plays every other entrant. Confirm the finishing order, then advance ${view.plan.structureOptions?.playoffSize ?? 'everyone'} to playoffs${view.plan.structureOptions?.consolation ? ' with consolation for the remaining entrants' : ''}.`
-              : `Balanced pools of three to five ${view.plan.competitionFormat === 'doubles' ? 'teams' : 'players'}, striped across seed order. The upper half, rounded up, advances${view.plan.structureOptions?.consolation === false ? '.' : '; everyone else enters consolation.'}`}
+            : plan.structure === 'round_robin_finals'
+              ? `Every entrant plays every other entrant. Confirm the finishing order, then advance ${playoffSize ? `the top ${playoffSize} active entrants` : 'all active entrants'} to playoffs.`
+              : `Balanced pools of three to five ${plan.competitionFormat === 'doubles' ? 'teams' : 'players'}, striped across seed order. The top half of the active field in each pool, rounded up, advances to championship, and at least two advance when available.`}
+          {hasConsolation &&
+            (plan.structure !== 'round_robin_finals' || playoffSize) &&
+            ' Remaining active entrants are eligible for consolation.'}
         </span>
       </div>
       {view.divisions.map((division) => (
         <DivisionPools
           key={division.division}
-          planId={view.plan.id}
+          plan={plan}
           division={division}
-          open={Boolean(view.plan.structure && view.plan.structure !== 'dual_division')}
-          roundRobin={view.plan.structure === 'round_robin'}
-          locked={
-            !['pools_ready', 'underway'].includes(view.plan.status) ||
-            view.brackets.some(
-              (bracket) =>
-                bracket.division === division.division &&
-                bracket.stage === 'consolation' &&
-                bracket.challongeSlug !== null,
-            )
-          }
+          hasConsolation={hasConsolation}
+          consolationAttached={view.brackets.some(
+            (bracket) =>
+              bracket.division === division.division &&
+              bracket.stage === 'consolation' &&
+              bracket.challongeSlug !== null,
+          )}
           onChanged={onChanged}
         />
       ))}
@@ -66,20 +87,20 @@ export function PoolsStep({ view, onChanged }: { view: EventPlanView; onChanged:
 }
 
 function DivisionPools({
-  planId,
+  plan,
   division,
-  locked,
-  open,
-  roundRobin,
+  hasConsolation,
+  consolationAttached,
   onChanged,
 }: {
-  open?: boolean;
-  roundRobin?: boolean;
-  planId: string;
+  plan: EventPlanView['plan'];
   division: EventPlanDivision;
-  locked: boolean;
+  hasConsolation: boolean;
+  consolationAttached: boolean;
   onChanged: () => void;
 }) {
+  const { id: planId, status, bracketMode, structure } = plan;
+  const open = Boolean(structure && structure !== 'dual_division');
   if (division.pools.length === 0) {
     return (
       <div className="card section">
@@ -94,6 +115,19 @@ function DivisionPools({
   ).length;
   const canResolveTies =
     !division.fixedLegacyFinals || division.pools.some((pool) => !pool.orderLockedReason);
+  const lockReason =
+    status === 'complete' || status === 'cancelled'
+      ? 'Placements are read-only while this event is closed.'
+      : status === 'roster_frozen' || status === 'draft'
+        ? 'Generate pools before confirming finishing orders.'
+        : consolationAttached
+          ? 'Reconcile and detach the linked consolation bracket before changing pool placements.'
+          : null;
+  const linked = bracketMode === 'challonge';
+  const nativeWithdrawalGuidance =
+    structure === 'round_robin'
+      ? ''
+      : 'Before the finals field is set, only active entrants are eligible to advance.';
   return (
     <div className="card section">
       <div className="page-header">
@@ -107,7 +141,7 @@ function DivisionPools({
       </div>
       <p className="muted">
         {confirmedPools}/{division.poolCount} pools confirmed.
-        {canResolveTies && ' Resolve ties using the event rules before confirming.'}
+        {canResolveTies && !lockReason && ' Resolve ties using the event rules before confirming.'}
       </p>
       {division.fixedLegacyFinals ? (
         <p className="muted">
@@ -120,16 +154,16 @@ function DivisionPools({
           entrants outside the field do not add finals places.
         </p>
       ) : null}
-      {locked && (
+      {lockReason && (
         <p className="muted">
-          {division.fixedLegacyFinals
-            ? 'This worksheet is read-only.'
-            : 'Placements are read-only while the event is closed or consolation is attached. Reconcile and detach consolation before changing qualifiers.'}
+          {division.fixedLegacyFinals ? 'This worksheet is read-only.' : lockReason}
         </p>
       )}
       {division.championship.length > 0 && (
         <div className="consolation-preview">
-          <h5>Championship qualifiers</h5>
+          <h5>
+            {structure === 'round_robin_finals' ? 'Playoff qualifiers' : 'Championship qualifiers'}
+          </h5>
           <ul>
             {division.championship.map((entrant) => (
               <li key={entrant.playerId}>
@@ -146,14 +180,15 @@ function DivisionPools({
             planId={planId}
             divisionKey={division.division}
             pool={pool}
-            locked={locked}
+            locked={lockReason !== null}
+            withdrawalGuidance={linked ? linkedWithdrawalGuidance(pool) : nativeWithdrawalGuidance}
             fixedLegacyFinals={division.fixedLegacyFinals === true}
             onChanged={onChanged}
           />
         ))}
       </div>
 
-      {!roundRobin &&
+      {hasConsolation &&
         !division.fixedLegacyFinals &&
         (division.consolation ? (
           <div className="consolation-preview">
@@ -184,13 +219,18 @@ function DivisionPools({
           <p className="muted">
             {division.pools.every((pool) => pool.members.every((member) => member.place !== null))
               ? 'No active entrants are eligible for consolation.'
-              : division.pools.some((pool) => pool.qualifierRoster)
-                ? 'The event desk shows the live finals, including any places still awaiting a ruling.'
-                : 'Confirm every pool’s finishing order to generate the consolation draw and its import list.'}
+              : linked
+                ? 'Confirm every pool’s finishing order to generate the consolation draw and its import list.'
+                : 'Consolation places follow confirmed pool results. Review the draw in the event desk.'}
           </p>
         ))}
     </div>
   );
+}
+
+function linkedWithdrawalGuidance(pool: EventPlanPool): string {
+  const count = winnersCount(pool.members.filter((member) => !member.withdrawn).length);
+  return `This pool sends ${count} to championship. Update linked Challonge brackets to match.`;
 }
 
 function nameOf(division: EventPlanDivision, playerId: string): string {
@@ -211,6 +251,7 @@ type PoolCardProps = {
   divisionKey: 'upper' | 'lower';
   pool: EventPlanPool;
   locked: boolean;
+  withdrawalGuidance: string;
   fixedLegacyFinals: boolean;
   onChanged: () => void;
 };
@@ -246,6 +287,7 @@ function PoolOrderEditor({
   divisionKey,
   pool,
   locked,
+  withdrawalGuidance,
   fixedLegacyFinals,
   onChanged,
 }: PoolCardProps) {
@@ -297,11 +339,10 @@ function PoolOrderEditor({
 
   return (
     <>
-      {!fixedLegacyFinals && pool.members.some((member) => member.withdrawn) && (
+      {!locked && !fixedLegacyFinals && pool.members.some((member) => member.withdrawn) && (
         <p className="muted">
-          Include withdrawn entrants in the recorded finishing order. On confirmation, they are
-          excluded from advancement: the upper half of active entrants, rounded up, advance to
-          championship. Update linked Challonge brackets to match.
+          Include withdrawn entrants in the recorded finishing order.{' '}
+          {!pool.qualifierRoster && withdrawalGuidance}
         </p>
       )}
       {pool.members.map((_, place) => {
