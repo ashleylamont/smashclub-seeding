@@ -164,12 +164,10 @@ export async function loadEventOverview(
   const setRows = await db.select().from(sets).where(inArray(sets.tournamentId, ids));
   const evidence = await archiveCharacterEvidence(db, setRows, runtime);
   const eventCharacters = archiveCharacterLeaders(evidence.values());
-  const participantPresentation = await publicParticipantPresentation(
-    db,
-    participants,
-    true,
+  const participantPresentation = await publicParticipantPresentation(db, participants, {
     eventCharacters,
-  );
+    includeProfileMains: true,
+  });
   const warnings: string[] =
     anchorPlanIds.size > 1
       ? ['This bracket belongs to conflicting event plans; only its own results are shown.']
@@ -297,6 +295,18 @@ export async function loadEventOverview(
       players: ps
         .map((p) => {
           const { name, graphic, verifiedDoublesPair } = participantPresentation.get(p.id)!;
+          const publicPair = showDoublesPreviews ? verifiedDoublesPair : undefined;
+          // Imported team aliases can resolve to one player. Keep their established artwork,
+          // but share individual profile mains only alongside verified native pairs.
+          const resultGraphic =
+            isDoubles && !publicPair && graphic
+              ? {
+                  ...graphic,
+                  members: graphic.members.map(
+                    ({ profileMains: _profileMains, ...member }) => member,
+                  ),
+                }
+              : graphic;
           return {
             playerId: isDoubles ? null : p.playerId,
             entryKey: p.memberPlayerIds?.length
@@ -305,8 +315,8 @@ export async function loadEventOverview(
                 ? `player:${p.playerId}`
                 : `participant:${p.id}`,
             name,
-            graphic,
-            ...(showDoublesPreviews && verifiedDoublesPair && { verifiedDoublesPair }),
+            graphic: resultGraphic,
+            ...(publicPair && { verifiedDoublesPair: publicPair }),
             place: places.get(p.id) ?? null,
             placeSource: places.has(p.id) ? placeSource : ('unavailable' as const),
             inFinalStage: finalIds.has(p.id),

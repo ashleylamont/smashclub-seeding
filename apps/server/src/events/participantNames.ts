@@ -5,7 +5,7 @@ import { charactersByPlayer } from '../players/characters';
 
 export interface ResultGraphicIdentity {
   teamName: string | null;
-  members: { name: string; character: string | null }[];
+  members: { name: string; character: string | null; profileMains?: string[] }[];
 }
 
 type PublicDoublesMember = { playerId: string; name: string };
@@ -33,14 +33,16 @@ export async function publicParticipantNames(db: Db, rows: readonly Participant[
 export async function publicParticipantPresentation(
   db: Db,
   rows: readonly Participant[],
-  includeGraphics = false,
-  eventCharacters?: ReadonlyMap<string, { character: string }>,
+  graphics?: {
+    eventCharacters: ReadonlyMap<string, { character: string }>;
+    includeProfileMains?: boolean;
+  },
 ) {
   const profiles = await db.select().from(players);
   const names = new Map(profiles.map((p) => [p.id, publicPlayerName(p)]));
   const canonical = playerIdResolver(profiles);
   const active = new Set(profiles.filter((p) => p.status === 'active').map((p) => p.id));
-  const characters = includeGraphics
+  const characters = graphics
     ? await charactersByPlayer(db, [
         ...new Set(
           rows
@@ -52,6 +54,21 @@ export async function publicParticipantPresentation(
         ),
       ])
     : undefined;
+  const graphicMember = (name: string, playerId?: string) => {
+    const mains = playerId ? characters?.get(playerId) : undefined;
+    return {
+      name,
+      character:
+        (playerId ? graphics?.eventCharacters.get(playerId)?.character : undefined) ??
+        mains?.[0] ??
+        null,
+      ...(graphics?.includeProfileMains &&
+        playerId &&
+        active.has(playerId) &&
+        mains &&
+        mains.length > 1 && { profileMains: mains }),
+    };
+  };
   return new Map(
     rows.map((p) => {
       const members = p.memberPlayerIds?.length
@@ -78,21 +95,8 @@ export async function publicParticipantPresentation(
       const graphic: ResultGraphicIdentity | undefined = characters && {
         teamName: members ? (p.teamName ?? null) : null,
         members: members
-          ? members.map(({ playerId, name }) => ({
-              name,
-              character:
-                eventCharacters?.get(playerId)?.character ?? characters.get(playerId)?.[0] ?? null,
-            }))
-          : [
-              {
-                name,
-                character: p.playerId
-                  ? (eventCharacters?.get(canonical(p.playerId))?.character ??
-                    characters.get(canonical(p.playerId))?.[0] ??
-                    null)
-                  : null,
-              },
-            ],
+          ? members.map(({ playerId, name }) => graphicMember(name, playerId))
+          : [graphicMember(name, p.playerId ? canonical(p.playerId) : undefined)],
       };
       return [p.id, { name, graphic, verifiedDoublesPair }];
     }),

@@ -229,7 +229,7 @@ export async function loadRecap(
     (await archiveCharacterEvidence(db, setRows, runtime)).values(),
   );
   const presentation = doubles
-    ? await publicParticipantPresentation(db, participantRows, true, eventCharacters)
+    ? await publicParticipantPresentation(db, participantRows, { eventCharacters })
     : null;
   const singlesCharacters = doubles
     ? null

@@ -19,6 +19,7 @@ import {
   expectDoublesArchivePair,
   expectDoublesRecapAndHistory,
   expectDoublesFinalsMembership,
+  expectPublishedGraphicPair,
   publishedPlayerRating,
 } from './helpers/doublesRecapAssertions';
 import { createTestDb } from './helpers/testDb';
@@ -187,10 +188,12 @@ describe('native doubles through shipped APIs', () => {
         .select()
         .from(tournaments)
         .where(eq(tournaments.id, complete.publication!.tournamentIds[0]!));
-      const member = members[0]!;
+      const [member, partner] = [members[0]!, members[1]!];
       await db.insert(playerCharacters).values([
         { playerId: member.id, position: 1, characterSlug: 'luigi' },
+        { playerId: partner.id, position: 1, characterSlug: 'daisy' },
         { playerId: member.id, position: 0, characterSlug: 'mario' },
+        { playerId: partner.id, position: 0, characterSlug: 'peach' },
       ]);
       const to = { ...nativeAdmin, id: `graphic-to-${planId}`, role: 'user' as const };
       await db.insert(user).values({ ...to, email: `${to.id}@example.test` });
@@ -206,16 +209,7 @@ describe('native doubles through shipped APIs', () => {
         }),
       ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
       const event = await caller(null).public.eventOverview({ slug: tournament!.challongeSlug });
-      expect(
-        event!.divisions.flatMap((d) => d.players).find((p) => p.graphic?.teamName === 'Pair 0')
-          ?.graphic,
-      ).toEqual({
-        teamName: 'Pair 0',
-        members: [
-          { name: member.displayName, character: 'mario' },
-          { name: members[1]!.displayName, character: null },
-        ],
-      });
+      expectPublishedGraphicPair(event!, member, partner);
       expect(event!.warnings).toEqual([]);
       expect(event!.divisions.every((d) => d.notice === null)).toBe(true);
       expect(event!.divisions.flatMap((d) => d.players)).toHaveLength(count);

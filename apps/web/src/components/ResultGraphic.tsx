@@ -7,6 +7,7 @@ import { Disclosure } from './ui/Disclosure';
 import { LoadingState, Notice } from './ui/Feedback';
 import { Input } from './ui/Input';
 import { Select, SelectItem } from './ui/Select';
+import { Switch } from './ui/Switch';
 import {
   FIGHTER_ART_CREDIT,
   graphicMemberKey,
@@ -16,6 +17,11 @@ import {
   type GraphicContext,
   type GraphicResult,
 } from '../lib/resultGraphic';
+import {
+  graphicProfileMains,
+  loadProfileMainsIcons,
+  type GraphicProfileMains,
+} from '../lib/resultGraphicMains';
 import { renderResultsPng, type GraphicPortraits } from '../lib/resultGraphicPng';
 import { authClient } from '../lib/auth';
 import { trpc } from '../lib/trpc';
@@ -84,6 +90,7 @@ const profileDefault = '__profile_default__';
 
 const noPortraits: GraphicPortraits = {};
 const noCharacterPack: CharacterPortraitPack = new Map();
+const noProfileMains: readonly GraphicProfileMains[] = [];
 
 function ResultGraphicPreview(props: {
   context: GraphicContext;
@@ -107,6 +114,8 @@ function ResultGraphicSession({
 }) {
   const rows = useMemo(() => rankedGraphicResults(results, context.kind), [results, context.kind]);
   const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [includeProfileMains, setIncludeProfileMains] = useState(false);
+  const mainsHintId = useId();
   const [portraits, setPortraits] = useState<GraphicPortraits>(noPortraits);
   const [pack, setPack] = useState<CharacterPortraitPack>(noCharacterPack);
   const bundledCache = useRef(new Map<string, HTMLCanvasElement | null>());
@@ -135,11 +144,27 @@ function ResultGraphicSession({
         : rows,
     [rows, canCustomize, overrides],
   );
+  const availableMains = useMemo(
+    () => (context.kind === 'pool' ? noProfileMains : graphicProfileMains(rows)),
+    [context.kind, rows],
+  );
+  const renderableMains = useMemo(
+    () =>
+      canCustomize ? availableMains.filter(({ key }) => overrides[key] !== '') : availableMains,
+    [availableMains, canCustomize, overrides],
+  );
+  const includedMains =
+    includeProfileMains && renderableMains.length ? renderableMains : noProfileMains;
+  const mainsByMember = useMemo(
+    () => new Map(includedMains.map(({ key, mains }) => [key, mains])),
+    [includedMains],
+  );
   const [output, setOutput] = useState<{
     context: GraphicContext;
     rows: readonly GraphicResult[];
     portraits: GraphicPortraits;
     pack: CharacterPortraitPack;
+    profileMains: readonly GraphicProfileMains[];
     applied: number;
     unreadable: number;
     hasBundledArtwork: boolean;
@@ -156,26 +181,36 @@ function ResultGraphicSession({
         rows: previewRows,
         portraits: previewPortraits,
         pack: previewPack,
+        profileMains: includedMains,
         applied,
         unreadable,
         hasBundledArtwork,
         image: blob && url ? { blob, url } : null,
       });
     };
-    void resolveCharacterPortraits(
-      previewRows,
-      previewPortraits,
-      previewPack,
-      bundledCache.current,
-      controller.signal,
-    )
-      .then(async ({ portraits, bundled, applied, unreadable }) => {
+    void Promise.all([
+      resolveCharacterPortraits(
+        previewRows,
+        previewPortraits,
+        previewPack,
+        bundledCache.current,
+        controller.signal,
+      ),
+      loadProfileMainsIcons(includedMains, controller.signal),
+    ])
+      .then(async ([{ portraits, bundled, applied, unreadable }, icons]) => {
         if (controller.signal.aborted) return;
         receive(
-          await renderResultsPng(context, previewRows, portraits, bundled),
+          await renderResultsPng(
+            context,
+            previewRows,
+            portraits,
+            bundled,
+            includedMains.length ? { entries: includedMains, icons } : undefined,
+          ),
           applied,
           unreadable,
-          bundled.size > 0,
+          bundled.size > 0 || icons.size > 0,
         );
       })
       .catch(() => receive(null));
@@ -183,12 +218,13 @@ function ResultGraphicSession({
       controller.abort();
       if (url) URL.revokeObjectURL(url);
     };
-  }, [context, previewRows, previewPortraits, previewPack]);
+  }, [context, previewRows, previewPortraits, previewPack, includedMains]);
   const current =
     output?.rows === previewRows &&
     output.context === context &&
     output.portraits === previewPortraits &&
-    output.pack === previewPack
+    output.pack === previewPack &&
+    output.profileMains === includedMains
       ? output
       : undefined;
   const fileLabel = context.scopeLabel
@@ -199,8 +235,24 @@ function ResultGraphicSession({
     .slice(0, 64);
   return (
     <div className="result-graphic-preview">
+      {renderableMains.length > 0 && (
+        <div className="result-graphic-format">
+          <label className="ui-actions">
+            <Switch
+              checked={includeProfileMains}
+              onCheckedChange={setIncludeProfileMains}
+              aria-describedby={mainsHintId}
+            />
+            Include profile mains
+          </label>
+          <p id={mainsHintId} className="muted">
+            Adds players’ saved mains below the results in a taller PNG.
+          </p>
+        </div>
+      )}
       {current?.image ? (
         <img
+          className={includedMains.length ? 'result-graphic-image-with-mains' : undefined}
           src={current.image.url}
           alt={`Nemesis results graphic for ${context.eventName}, ${context.scopeLabel}`}
         />
@@ -222,11 +274,16 @@ function ResultGraphicSession({
             <li key={row.entryKey ?? index}>
               <strong>{row.place}</strong> · {row.graphic?.teamName && `${row.graphic.teamName} · `}
               {graphicMembers(row)
-                .map(({ name, character }) =>
-                  character && isCharacterSlug(character)
-                    ? `${name} (${characterName(character)})`
-                    : name,
-                )
+                .map(({ name, character }, memberIndex) => {
+                  const label =
+                    character && isCharacterSlug(character)
+                      ? `${name} (${characterName(character)})`
+                      : name;
+                  const mains = mainsByMember.get(graphicMemberKey(row, index, memberIndex));
+                  return mains
+                    ? `${label} · Profile mains: ${mains.map(characterName).join(', ')}`
+                    : label;
+                })
                 .join(' / ')}
             </li>
           ))}
@@ -240,7 +297,11 @@ function ResultGraphicSession({
           pack={previewPack}
           packResult={current?.image ? current : undefined}
           onPackChange={setPack}
-          onChange={setOverrides}
+          onChange={(next) => {
+            setOverrides(next);
+            if (includeProfileMains && !availableMains.some(({ key }) => next[key] !== ''))
+              setIncludeProfileMains(false);
+          }}
           onPortraitChange={(member, portrait) =>
             setPortraits((current) => {
               const next = { ...current };
@@ -256,8 +317,13 @@ function ResultGraphicSession({
         variant="primary"
         disabled={!current?.image}
         onClick={() => {
-          if (current?.image)
-            downloadBlob(current.image.blob, `nemesis-${fileLabel || 'results'}-results.png`);
+          if (current?.image) {
+            const suffix = includedMains.length ? '-with-profile-mains' : '';
+            downloadBlob(
+              current.image.blob,
+              `nemesis-${fileLabel || 'results'}-results${suffix}.png`,
+            );
+          }
         }}
       >
         Download PNG ↓

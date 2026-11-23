@@ -7,6 +7,7 @@ export const FIGHTER_ART_CREDIT = 'Fighter artwork © Nintendo and respective ri
 export interface GraphicMember {
   name: string;
   character: string | null;
+  profileMains?: readonly string[];
 }
 
 export interface GraphicIdentity {
