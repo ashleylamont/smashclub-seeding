@@ -13,6 +13,7 @@ import './HeadToHeadPage.css';
 type Comparison = Awaited<ReturnType<typeof trpc.public.headToHead.query>>;
 type Player = NonNullable<Comparison['players'][number]>;
 type ReadyComparison = Extract<Comparison, { status: 'ready' }>;
+const eventDate = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' });
 
 function PlayerPicker({
   position,
@@ -177,8 +178,74 @@ function chanceLabel(percent: number) {
   return `${percent}%`;
 }
 
+function RatingNightComparison({
+  players,
+  ratingNight,
+}: Pick<ReadyComparison, 'players' | 'ratingNight'>) {
+  return (
+    <section className="card" aria-labelledby="h2h-rating-night">
+      <h2 id="h2h-rating-night">Skill gap by night</h2>
+      {ratingNight ? (
+        <>
+          <p className="muted">
+            <time dateTime={ratingNight.eventKey}>
+              {eventDate.format(new Date(ratingNight.eventKey))}
+            </time>
+            {' · Latest night both players had rated sets'}
+          </p>
+          <div className="h2h-night-details">
+            <dl className="h2h-figures">
+              {(['preRating', 'postRating'] as const).map((field, index) => {
+                const gap = ratingNight.estimates[0][field] - ratingNight.estimates[1][field];
+                const points = Math.abs(gap).toFixed(1);
+                return (
+                  <div key={field}>
+                    <dt>{index === 0 ? 'Before the night' : 'After the night'}</dt>
+                    <dd className="num">{points} points</dd>
+                    <dd className="muted">
+                      {points === '0.0'
+                        ? 'Level at this precision'
+                        : `${players[gap > 0 ? 0 : 1].name} ahead`}
+                    </dd>
+                  </div>
+                );
+              })}
+            </dl>
+            <div className="h2h-night-attendance">
+              <h3>Attendance penalty before and after</h3>
+              <dl className="h2h-figures">
+                {players.map((player, index) => {
+                  const { prePenalty, postPenalty } = ratingNight.estimates[index]!;
+                  return (
+                    <div key={player.id}>
+                      <dt>{player.name}</dt>
+                      <dd className="num">
+                        {prePenalty} → {postPenalty} points
+                      </dd>
+                    </div>
+                  );
+                })}
+              </dl>
+            </div>
+          </div>
+          <p className="muted">
+            The gap uses raw WHR estimates before and after all rated sets that night. Club rating
+            deducts the attendance penalty and can adjust for rookie records with little
+            main-bracket evidence.
+          </p>
+        </>
+      ) : (
+        <p>
+          A comparison needs a night with rated sets for both players, after each had already played
+          rated sets.
+        </p>
+      )}
+    </section>
+  );
+}
+
 function ComparisonResults({ data }: { data: ReadyComparison }) {
-  const { players, history, forecast } = data;
+  const { players, history, forecast, ratingNight } = data;
   const total = history ? history.wins[0] + history.wins[1] : 0;
   const firstChance = forecast ? Math.round(forecast.firstWinChance * 100) : null;
 
@@ -236,8 +303,8 @@ function ComparisonResults({ data }: { data: ReadyComparison }) {
               <p className="muted">
                 Ratings published{' '}
                 <time dateTime={forecast.ratedAt}>{formatDate(forecast.ratedAt)}</time>. WHR uses
-                each player’s rated singles results. Sparse results and uncertain ratings make the
-                estimate less informative.
+                eligible singles and doubles results and accounts for opponent skill. The estimate
+                is less reliable when either player’s rating is uncertain.
                 {forecast.provisional && ' At least one of these ratings is provisional.'}
               </p>
             </>
@@ -248,6 +315,7 @@ function ComparisonResults({ data }: { data: ReadyComparison }) {
           )}
         </section>
       </div>
+      {forecast && <RatingNightComparison players={players} ratingNight={ratingNight} />}
       {history && history.recent.length > 0 && (
         <section className="card h2h-recent" aria-labelledby="h2h-recent">
           <h2 id="h2h-recent">Recent meetings</h2>
