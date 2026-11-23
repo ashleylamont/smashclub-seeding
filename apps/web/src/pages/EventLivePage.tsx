@@ -180,7 +180,10 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
       : onStream?.stage?.toUpperCase();
   const [showName, ...editionParts] = data.plan.name.split(' · ');
   const edition = editionParts.join(' · ');
-  const intermission = presentation === 'progress' || (presentation === 'auto' && !onStream);
+  const effectivePresentation =
+    presentation === 'event' ? (data.broadcastPresentationMode ?? 'auto') : presentation;
+  const intermission =
+    effectivePresentation === 'progress' || (effectivePresentation === 'auto' && !onStream);
   if (overlay)
     return (
       <div
@@ -291,7 +294,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
             announcement={announcement?.message ?? ''}
             controls={search.get('controls') !== '0'}
             twitchChannel={twitch}
-            preferRecent={presentation === 'auto'}
+            preferRecent={effectivePresentation === 'auto'}
           />
         )}
         {(!online || query.isError) && (

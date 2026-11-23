@@ -18,11 +18,15 @@ import { publicPlayerName } from '@smashclub/shared';
 import { requireOperator } from '../event-operations/access';
 import type { publicEventNights } from '../event-operations/publicEvents';
 import {
-  nativeTwitchOpen,
   operatorTwitchPromotion,
   publicTwitchPromotion,
   readTwitchPromotion,
 } from '../event-operations/twitchPromotion';
+import {
+  operatorBroadcastPresentation,
+  readBroadcastPresentation,
+} from '../event-operations/broadcastPresentation';
+import { nativeBroadcastOpen } from '../event-operations/presentationAccess';
 import type { TrpcContext } from '../trpc/trpc';
 import { nativeEvent, reportViews, type NativeEventApi } from './api';
 import { missingMainsByMatch } from './matchMains';
@@ -85,6 +89,9 @@ export async function nativeOverview(api: NativeEventApi) {
       Object.values(snapshot.charactersPlayed ?? {}),
     ),
     twitchBroadcast: operatorTwitchPromotion(await readTwitchPromotion(ctx.db, planId)),
+    broadcastPresentation: operatorBroadcastPresentation(
+      await readBroadcastPresentation(ctx.db, planId),
+    ),
     poolDrawPauseBlocker: poolDrawPauseBlocker(state),
     finalization:
       state.lifecycle === 'locked'
@@ -188,7 +195,7 @@ export async function nativePublicEvents(
       bracketMode: 'native' as const,
       competitionFormat: state.baseline!.competitionFormat ?? 'singles',
       drawPaused: state.lifecycle === 'unlocked',
-      ...publicTwitchPromotion(twitch, nativeTwitchOpen(state)),
+      ...publicTwitchPromotion(twitch, nativeBroadcastOpen(state)),
     });
   }
   const owned = new Set((await ctx.db.select().from(nativeLiveHandoffs)).map((h) => h.eventPlanId));

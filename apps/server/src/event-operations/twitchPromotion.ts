@@ -1,17 +1,11 @@
-import {
-  eventOperationSettings,
-  eventPlans,
-  eventTwitchPromotions,
-  nativeLiveHandoffs,
-  type Db,
-} from '@smashclub/db';
+import { eventPlans, eventTwitchPromotions, type Db } from '@smashclub/db';
 import { twitchChannel } from '@smashclub/shared';
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { TrpcContext } from '../trpc/trpc';
-import type { TournamentState } from '../tournament/schemas';
 import { requireOperator } from './access';
+import { readPresentationLifecycle } from './presentationAccess';
 
 type SavedTwitch = Pick<
   typeof eventTwitchPromotions.$inferSelect,
@@ -45,12 +39,6 @@ export function publicTwitchPromotion(
 
 export function operatorTwitchPromotion(saved: SavedTwitch | null | undefined) {
   return { promotion: savedPromotion(saved), revision: saved?.revision ?? 0 };
-}
-
-export function nativeTwitchOpen(state: TournamentState) {
-  return Boolean(
-    state.baseline && (state.lifecycle === 'locked' || state.lifecycle === 'unlocked'),
-  );
 }
 
 export const TwitchPromotionInput = z.object({
@@ -111,36 +99,7 @@ export async function setTwitchPromotion(
       return operatorTwitchPromotion(saved);
     }
 
-    const [handoff] = await tx
-      .select({ planId: nativeLiveHandoffs.eventPlanId })
-      .from(nativeLiveHandoffs)
-      .where(eq(nativeLiveHandoffs.eventPlanId, planId));
-
-    let open = plan.status === 'underway';
-    let published = false;
-    if (handoff) {
-      if (!ctx.nativeRuntime)
-        throw new TRPCError({
-          code: 'PRECONDITION_FAILED',
-          message: 'The native live event is unavailable.',
-        });
-      // The journal read does not transfer ownership or lock the SQL plan.
-      // Public reads still check the journal after reading this preference.
-      const state = await ctx.nativeRuntime.state(planId);
-      open = nativeTwitchOpen(state);
-      published = state.settings.published;
-    } else if (plan.bracketMode === 'native' && !plan.historicalAdoption) {
-      throw new TRPCError({
-        code: 'PRECONDITION_FAILED',
-        message: 'Open the event workspace to start the native event first.',
-      });
-    } else if (open) {
-      const [settings] = await tx
-        .select({ published: eventOperationSettings.published })
-        .from(eventOperationSettings)
-        .where(eq(eventOperationSettings.eventPlanId, planId));
-      published = settings?.published ?? false;
-    }
+    const { open, published } = await readPresentationLifecycle(tx, plan, ctx.nativeRuntime);
 
     if (!open || (promotion && !published))
       throw new TRPCError({
