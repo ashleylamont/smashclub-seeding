@@ -2,6 +2,14 @@
 
 Dates show when each change landed, in Sydney time. Select a version to open its GitHub release.
 
+## 0.23.4
+
+### Patch Changes
+
+- 23 November 2026 · **Improvement** · The **Report characters played** button takes up less space on recorded sets, with a 44px-tall tap target on phones. [#578](https://github.com/ashleylamont/smashclub-seeding/pull/578) · [build 9ccde76](https://github.com/ashleylamont/smashclub-seeding/commit/9ccde7683bfa208f55e3c0435931b5d57d58dfa3)
+- 23 November 2026 · **Improvement** · Preview a linked singles player from a tournament's standings, participants or match results without leaving the tournament. [#576](https://github.com/ashleylamont/smashclub-seeding/pull/576) · [build 963d445](https://github.com/ashleylamont/smashclub-seeding/commit/963d44535edc258daaccd876fd022b8076f2b9f1)
+- 23 November 2026 · **Fix** · Match Log flags outdated WHR evidence while ratings update after a score correction. [#575](https://github.com/ashleylamont/smashclub-seeding/pull/575) · [build 771998e](https://github.com/ashleylamont/smashclub-seeding/commit/771998e61873521c3f5df8241d2e62e603bd5ab6)
+
 ## 0.23.3
 
 ### Patch Changes
