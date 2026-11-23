@@ -624,7 +624,9 @@ export function EventOperationsPanel({
             published={data.settings.published}
           />
           {admin && <OpsAccessControls data={data} pending={pending} closed={closed} act={act} />}
-          {admin && !closed && <QueueResetControls data={data} pending={pending} act={act} />}
+          {admin && !closed && (
+            <QueueResetControls data={data} pending={pending} act={act} callDesk={callDesk} />
+          )}
           {data.plan.bracketMode === 'native' ? (
             <Button type="button" onClick={() => void workspace.changeSection('history')}>
               Open event history
