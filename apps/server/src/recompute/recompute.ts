@@ -248,7 +248,7 @@ async function computeRatings(db: Db): Promise<RatingRecomputeResult> {
 
 /** Latest completed WHR run with current history semantics; no legacy fallback. */
 export async function latestCompletedRecompute(db: Db) {
-  const [row] = await db
+  const rows = await db
     .select({ id: recomputes.id, stats: recomputes.stats })
     .from(recomputes)
     .where(
@@ -260,7 +260,7 @@ export async function latestCompletedRecompute(db: Db) {
     )
     .orderBy(sql`${recomputes.startedAt} desc`)
     .limit(1);
-  return row;
+  return rows.at(0);
 }
 
 export async function latestRecomputeId(db: Db): Promise<string | null> {

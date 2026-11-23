@@ -17,8 +17,8 @@ export interface PlayerEventView {
   seq: number;
   isDecay: boolean;
   won: boolean | null;
-  postRating: number;
-  postRd: number;
+  postRating: number | null;
+  postRd: number | null;
   weight: number;
   /**
    * Current fit estimate at this night, revised as later results arrive.

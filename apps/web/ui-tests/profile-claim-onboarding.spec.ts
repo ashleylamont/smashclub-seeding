@@ -151,7 +151,7 @@ for (const theme of ['dark', 'light'] as const)
       };
       let verified = false;
       fixture.queryResponses.set('public.player', (input) => {
-        expect(input).toEqual({ playerId: PLAYER_ID });
+        expect(input).toEqual({ playerId: PLAYER_ID, verifiedFits: true });
         return publicPlayer(PLAYER_ID, verified);
       });
       const requests: unknown[] = [];

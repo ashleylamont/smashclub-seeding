@@ -402,10 +402,9 @@ it('uses the assigned debut prior when the omitted result is the player’s only
     expect(impact).toMatchObject({ status: 'available', firstNight: true, forecast: null });
     if (!profile || !('nights' in profile) || !profile.nights)
       throw new Error('Expected the published player profile and rating nights.');
-    expect(impact.status === 'available' && impact.effectPoints).toBeCloseTo(
-      profile.nights[0]!.postRating - 1400,
-      6,
-    );
+    const postRating = profile.nights[0]?.postRating;
+    if (postRating == null) throw new Error('Expected a converged debut estimate.');
+    expect(impact.status === 'available' && impact.effectPoints).toBeCloseTo(postRating - 1400, 6);
   } finally {
     vi.useRealTimers();
     await close();

@@ -99,7 +99,7 @@ async function mockProfile(
       sampleConfidence: 0.48,
       lastPlayedDate: '2026-09-29T08:30:00Z',
     },
-    nights,
+    nights: structuredClone<PlayerData['nights']>(nights),
     events: nights
       .filter((night) => night.played)
       .map((night, seq) => ({
@@ -181,6 +181,7 @@ async function mockProfile(
           }
         }
         expect(procedure).toBe('public.player');
+        expect(batched ? input[index] : input).toEqual({ playerId, verifiedFits: true });
         return { result: { data: profile } };
       }),
     );
@@ -234,6 +235,69 @@ for (const theme of ['dark', 'light'] as const) {
       await expect(page.getByRole('heading', { name: 'Match log (2 sets)' })).toBeVisible();
       await page.evaluate(() => scrollTo(0, 0));
       await page.screenshot({ path: testInfo.outputPath('night-missed.png'), fullPage: true });
+    });
+  }
+}
+
+for (const theme of ['dark', 'light'] as const) {
+  for (const width of [390, 1440]) {
+    test(`unavailable WHR fits retain known values at ${width}px in ${theme} mode`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ colorScheme: theme });
+      const { profile } = await mockProfile(page);
+      const [first, missed, latest] = profile.nights;
+      first!.postRating = first!.postRd = null;
+      missed!.preRating = missed!.postRating = missed!.postRd = null;
+      latest!.preRating = null;
+      await page.goto(`/players/${playerId}`);
+
+      const breakdown = page.getByRole('region', { name: 'Rating changes by night' });
+      await expect(breakdown).toContainText('Unavailable → 1659.8');
+      await expect(breakdown).toContainText('120 → 0');
+      const change = breakdown.locator('.rating-night-values > div').filter({
+        has: page.getByText('This night’s results', { exact: true }),
+      });
+      await expect(change.getByRole('definition')).toHaveText('Unavailable');
+      await expect(breakdown).toContainText('Revision while away');
+
+      const chart = page.locator('.rating-chart');
+      await expect(chart).toContainText('Gaps show unavailable night estimates.');
+      const plot = chart.getByRole('application');
+      await plot.focus();
+      await expect(chart.getByText('Night estimate unavailable.')).toBeVisible();
+      await expect(chart.getByText('now revised to 1620')).toBeVisible();
+      await ready(page);
+      await chart.screenshot({ path: testInfo.outputPath('unavailable-history-gap.png') });
+      await plot.press('ArrowRight');
+      await expect(chart.getByText('No rated sets', { exact: false })).toBeVisible();
+      await plot.press('ArrowRight');
+      await expect(chart.getByText('1660 ± 100')).toBeVisible();
+      await chart.screenshot({ path: testInfo.outputPath('unavailable-history-chart.png') });
+      await page.evaluate(() => scrollTo(0, 0));
+      await page.screenshot({
+        path: testInfo.outputPath('unavailable-history.png'),
+        fullPage: true,
+      });
+
+      const picker = breakdown.getByRole('combobox', { name: 'Rating night' });
+      await picker.focus();
+      await picker.press('Enter');
+      await expect(page.getByRole('option', { selected: true })).toBeFocused();
+      await page.keyboard.press('End');
+      await expect(page.getByRole('option', { name: '31 July 2025', exact: true })).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(picker).toBeFocused();
+      await expect(breakdown).toContainText('1608.7 → Unavailable');
+      await expect(page.getByRole('heading', { name: 'Match log (2 sets)' })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+        width,
+      );
+      expect(
+        (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
+      ).toEqual([]);
+      await breakdown.screenshot({ path: testInfo.outputPath('unavailable-night.png') });
     });
   }
 }

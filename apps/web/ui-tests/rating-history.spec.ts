@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import type { LeaderboardData, RatingHistoryData } from '../src/lib/apiTypes';
+import { chooseOption } from '../test-support/controls';
 import { bracketCaptureOptions, mockEvent, ready } from './fixtures';
 
 const returning = {
@@ -51,6 +52,7 @@ async function mockRatingHistory(
   withNightLedger = true,
   withSetHistory = true,
   emptySelection = false,
+  unavailableNight = false,
 ) {
   const fixture = await mockEvent(page);
   const leaderboard: LeaderboardData = {
@@ -95,6 +97,9 @@ async function mockRatingHistory(
       .sort((a, b) => a.eventKey.localeCompare(b.eventKey))
       .map(({ played: _played, ...night }, seq) => ({
         ...night,
+        ...(unavailableNight && night.eventKey === dates[0]
+          ? { postRating: null, postRd: null }
+          : { postRating: night.postRating, postRd: night.postRd }),
         seq,
         tournamentId: returning.playerId,
         isDecay: false,
@@ -102,12 +107,16 @@ async function mockRatingHistory(
       })),
     players: [returning, debut],
   };
-  fixture.responses['public.ratingHistory'] = history;
+  fixture.queryResponses.set('public.ratingHistory', (input) => {
+    expect(input).toEqual({ verifiedFits: true });
+    return history;
+  });
   fixture.responses['public.tournaments'] = [];
   fixture.responses['eventOps.publicEvents'] = [];
   const requests: string[][] = [];
   fixture.queryResponses.set('public.ratingNightHistory', (input) => {
-    const { playerIds } = input as { playerIds: string[] };
+    const { playerIds, verifiedFits } = input as { playerIds: string[]; verifiedFits: boolean };
+    expect(verifiedFits).toBe(true);
     requests.push(playerIds);
     const points = emptySelection
       ? []
@@ -119,7 +128,11 @@ async function mockRatingHistory(
       eventKeys: withNightLedger
         ? [...new Set(points.map((night) => night.eventKey))].sort()
         : dates,
-      points,
+      points: points.map((point) =>
+        unavailableNight && point.eventKey === dates[0]
+          ? { ...point, postRating: null, postRd: null }
+          : point,
+      ),
     };
   });
   return { requests, unexpected: fixture.unexpected };
@@ -296,3 +309,63 @@ test('a modern selection absent from the published run cannot recover cached pla
   await expect(chart).toContainText('No night estimates for these players.');
   await expect(chart.getByRole('application')).toHaveCount(0);
 });
+
+for (const theme of ['light', 'dark'] as const) {
+  for (const width of [320, 390, 1440]) {
+    test(`an unavailable rating night leaves a comparison gap at ${width}px in ${theme}`, async ({
+      page,
+    }, info) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ colorScheme: theme });
+      const { unexpected } = await mockRatingHistory(page, true, true, false, true);
+      await page.goto('/');
+      const chart = page.locator('.ratings-over-time');
+      const plot = chart.getByRole('application', { name: 'Player estimates by club night' });
+      const status = chart.getByRole('status');
+      await expect(chart).toContainText('Gaps show unavailable night estimates.');
+      const row = page.locator('.board-row').filter({ hasText: returning.name });
+      await expect(row.locator('.form .pip')).toHaveCount(2);
+      await expect(row.locator('.spark svg')).toHaveCount(0);
+      await plot.focus();
+      await expect(status).toContainText(dates[0]!);
+      await expect(status).toContainText('Night estimate unavailable.');
+      await expect(status).not.toContainText('1600');
+      await ready(page);
+      await chart.screenshot({ path: info.outputPath('unavailable-comparison.png') });
+      await chooseOption(chart.getByRole('combobox', { name: 'Y-axis' }), 'cautious');
+      await plot.focus();
+      await plot.press('ArrowRight');
+      await plot.press('ArrowLeft');
+      await expect(status).toContainText('Night estimate unavailable.');
+      await plot.press('ArrowRight');
+      await expect(status).toContainText('1460');
+      await expect(status).toContainText('Missed night');
+      const geometry = await status.evaluate((element) => {
+        const chart = element.closest('.recharts-wrapper')!.getBoundingClientRect();
+        const tooltip = element.getBoundingClientRect();
+        return {
+          chartLeft: chart.left,
+          chartRight: chart.right,
+          tooltipLeft: tooltip.left,
+          tooltipRight: tooltip.right,
+          pageWidth: document.documentElement.scrollWidth,
+        };
+      });
+      expect(geometry.pageWidth, JSON.stringify(geometry)).toBeLessThanOrEqual(width);
+      expect(geometry.tooltipLeft, JSON.stringify(geometry)).toBeGreaterThanOrEqual(
+        geometry.chartLeft,
+      );
+      expect(geometry.tooltipRight, JSON.stringify(geometry)).toBeLessThanOrEqual(
+        geometry.chartRight,
+      );
+      await chart.screenshot({
+        path: info.outputPath('comparison-missed-night.png'),
+        style: captureStyle,
+      });
+      expect(
+        (await new AxeBuilder({ page }).include('.ratings-over-time').analyze()).violations,
+      ).toEqual([]);
+      expect(unexpected).toEqual([]);
+    });
+  }
+}

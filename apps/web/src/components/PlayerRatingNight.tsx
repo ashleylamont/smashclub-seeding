@@ -10,6 +10,10 @@ function signedPoints(value: number) {
   return sign + Math.abs(rounded).toFixed(1);
 }
 
+function ratingChange(before: number | null, after: number | null) {
+  return before === null || after === null ? 'Unavailable' : signedPoints(after - before);
+}
+
 function nightDate(key: string) {
   return formatUtcDayKey(key);
 }
@@ -22,7 +26,6 @@ export function PlayerRatingNight({ nights }: { nights: PlayerData['nights'] }) 
   if (!night) return null;
   const lastPlayed = nights.slice(0, selected).findLast((previous) => previous.played);
   const returned = night.played && lastPlayed !== undefined && !nights[selected - 1]?.played;
-  const change = night.postRating - night.preRating;
 
   return (
     <section className="section rating-night" aria-label="Rating changes by night">
@@ -32,7 +35,8 @@ export function PlayerRatingNight({ nights }: { nights: PlayerData['nights'] }) 
           <InfoTip label="How nightly rating changes work">
             The WHR comparison uses fits before and after this club night, with the recorded results
             and current settings. Results from other players can revise the estimate during an
-            absence. The attendance penalty changes the club rating separately.
+            absence. We show estimates and changes when the rating calculation can be verified. The
+            attendance penalty changes the club rating separately.
           </InfoTip>
         </h2>
         <Select aria-label="Rating night" value={night.eventKey} onValueChange={setSelectedKey}>
@@ -48,17 +52,19 @@ export function PlayerRatingNight({ nights }: { nights: PlayerData['nights'] }) 
         <div>
           <dt>WHR estimate</dt>
           <dd className="num">
-            {night.preRating.toFixed(1)} → {night.postRating.toFixed(1)}
+            {night.preRating === null && night.postRating === null
+              ? 'Unavailable'
+              : `${night.preRating?.toFixed(1) ?? 'Unavailable'} → ${night.postRating?.toFixed(1) ?? 'Unavailable'}`}
           </dd>
         </div>
         <div>
           <dt>{night.played ? 'This night’s results' : 'Revision from other sets'}</dt>
-          <dd className="num">{signedPoints(change)}</dd>
+          <dd className="num">{ratingChange(night.preRating, night.postRating)}</dd>
         </div>
         {returned && (
           <div>
             <dt>Revision while away</dt>
-            <dd className="num">{signedPoints(night.preRating - lastPlayed.postRating)}</dd>
+            <dd className="num">{ratingChange(lastPlayed.postRating, night.preRating)}</dd>
           </div>
         )}
         <div>

@@ -1,12 +1,18 @@
-import { ratingEvents, ratingNights, tournaments, type Db } from '@smashclub/db';
+import { playerRatings, ratingEvents, ratingNights, tournaments, type Db } from '@smashclub/db';
 import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { hasRatingNightLedger, latestCompletedRecompute } from './recompute';
+import {
+  matchesFullFit,
+  publicPostNightEstimate,
+  readNightFitAvailability,
+} from './nightFitAvailability';
 
-export function readRatingNightHistory(db: Db, playerIds: string[]) {
+export function readRatingNightHistory(db: Db, playerIds: string[], verifiedFits = false) {
   return db.transaction(
     async (tx) => {
       const run = await latestCompletedRecompute(tx);
       if (!run) return { mode: 'unavailable' as const, eventKeys: [], points: [] };
+      const availability = verifiedFits ? await readNightFitAvailability(tx, run) : null;
 
       if (hasRatingNightLedger(run.stats)) {
         const points = await tx
@@ -25,7 +31,12 @@ export function readRatingNightHistory(db: Db, playerIds: string[]) {
         return {
           mode: 'nightly' as const,
           eventKeys: [...new Set(points.map((point) => point.eventKey))],
-          points,
+          points: availability
+            ? points.map((point) => ({
+                ...point,
+                ...publicPostNightEstimate(point, availability.after.has(point.eventKey)),
+              }))
+            : points,
         };
       }
 
@@ -50,15 +61,34 @@ export function readRatingNightHistory(db: Db, playerIds: string[]) {
           eventKey,
           postRating: ratingEvents.postRating,
           postRd: ratingEvents.postRd,
+          rating: playerRatings.rating,
+          rd: playerRatings.rd,
         })
         .from(ratingEvents)
         .innerJoin(tournaments, eq(ratingEvents.tournamentId, tournaments.id))
+        .leftJoin(
+          playerRatings,
+          availability
+            ? and(
+                eq(ratingEvents.recomputeId, playerRatings.recomputeId),
+                eq(ratingEvents.playerId, playerRatings.playerId),
+              )
+            : sql`false`,
+        )
         .where(and(played, inArray(ratingEvents.playerId, playerIds)))
         .orderBy(ratingEvents.playerId, eventKey, desc(ratingEvents.seq));
       return {
         mode: 'played' as const,
         eventKeys: calendar.map((night) => night.eventKey),
-        points: estimates.map((point) => ({ ...point, played: true })),
+        points: estimates.map(({ rating, rd, ...point }) => ({
+          ...point,
+          ...(availability &&
+            publicPostNightEstimate(
+              point,
+              availability.after.has(point.eventKey) && matchesFullFit(point, { rating, rd }),
+            )),
+          played: true,
+        })),
       };
     },
     { isolationLevel: 'repeatable read', accessMode: 'read only' },

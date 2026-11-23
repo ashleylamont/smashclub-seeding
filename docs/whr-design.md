@@ -18,6 +18,10 @@ The profile compares two fits at the selected night. The pre-night estimate uses
 
 When a player returns, the revision while away is the pre-night estimate minus their post-night estimate from their last appearance. The selected night's change is the post-night estimate minus its own pre-night estimate. Attendance shows the separate deduction immediately before and after the selected night. The figures use the current recorded history and settings; the original public board may have used different results or settings. The history displays the model estimate, and the current club rating can also include the optional rookie isolation anchor.
 
+Public charts and profiles leave a gap when a historical fit did not converge or its convergence was not recorded. The before and after estimates are checked separately. Debut priors and the current full fit can still supply estimates, and the current fit can reconstruct past nights even where the historical fit did not converge. Results and attendance remain available.
+
+The app requests `verifiedFits: true` from the three public profile and history procedures. With that option, unavailable `preRating`, `postRating`, and `postRd` values are `null`. A set whose bracket date was cleared can have a `null` `eventKey` until the next publication. Requests without the option retain the original numeric estimates so pages opened before an update can keep loading.
+
 The nightly rows are published with the corresponding completed recompute. The first startup after migration requests a backfill through the existing recompute queue while the last completed board remains available.
 
 ## Uncertainty, attendance and seeds
