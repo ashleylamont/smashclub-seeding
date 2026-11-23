@@ -44,6 +44,7 @@ import { GuestReportingControls } from './GuestReportingControls';
 import { availableMatches, poolStandings } from '../../lib/eventQueue';
 import { poolTitle } from '../../lib/poolFlow';
 import { OpsAttentionDesk } from './OpsAttentionDesk';
+import { describeOpsEventStatus } from './opsEventStatus';
 import { MainStagePanel } from './MainStagePanel';
 
 const terminalOverviewErrors = ['FORBIDDEN', 'UNAUTHORIZED', 'NOT_FOUND', 'BAD_REQUEST'];
@@ -273,9 +274,7 @@ export function EventOperationsPanel({
         <div>
           <span className="ops-eyebrow">TO desk</span>
           <h2>{data.plan.name}</h2>
-          <p className="muted">
-            {closed ? 'Event closed · read only' : data.plan.status.replaceAll('_', ' ')}
-          </p>
+          <p className="muted">{describeOpsEventStatus(data)}</p>
         </div>
         <nav className="ops-links" aria-label="Event links">
           <Button

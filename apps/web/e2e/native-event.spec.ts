@@ -318,14 +318,20 @@ test('native event progresses from pools through reviewed finals to public club 
   const poolGames = played.filter((match) => !match.nativeBracketId).length;
   const finalsGames = played.length - poolGames;
   await finals.getByRole('button', { name: 'Finalize native results', exact: true }).click();
-  await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm', exact: true }).click();
+  const confirmation = page.getByRole('alertdialog');
+  await expect(confirmation).toContainText('Finalize all results and end live scoring?');
+  await confirmation.getByRole('button', { name: 'Confirm', exact: true }).click();
   await expect(finals.getByRole('status')).toContainText('Event finalized');
-  await expect(page.getByText('Event closed · read only', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('Live play ended. Score corrections are in Standings / draw.', { exact: true }),
+  ).toBeVisible();
   expect(await mutate(page.request, 'eventOps.native.finalize', { planId })).toMatchObject({
     alreadyFinalized: true,
   });
   await page.reload();
-  await expect(page.getByText('Event closed · read only', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('Live play ended. Score corrections are in Standings / draw.', { exact: true }),
+  ).toBeVisible();
   await page.goto(`/live/${planId}`);
   await expect(page.locator('.event-bracket')).toHaveCount(4);
   await expect(page.getByText('The next set is coming.', { exact: true })).toHaveCount(0);
