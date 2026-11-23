@@ -987,6 +987,9 @@
   font-weight: 400;
   overflow-wrap: anywhere;
 }
+.event-pool tbody th:has(> .player-profile-preview-name) {
+  padding-block: var(--s1);
+}
 .event-pool abbr {
   text-decoration: none;
 }
@@ -1099,6 +1102,10 @@
   gap: 12px;
   font-size: 12px;
   padding: 7px 0;
+}
+.event-bracket-match > div:has(.player-profile-preview-name) {
+  align-items: center;
+  padding-block: var(--s1);
 }
 .event-bracket-match > div > span {
   overflow-wrap: anywhere;

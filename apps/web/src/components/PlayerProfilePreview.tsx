@@ -45,7 +45,11 @@ export function PlayerProfilePreview({
         <Button
           size="small"
           variant={trigger === 'name' ? 'plain' : 'default'}
-          className={trigger === 'name' ? 'link-button player-profile-preview-name' : undefined}
+          className={
+            trigger === 'name'
+              ? 'link-button link-button-target player-profile-preview-name'
+              : undefined
+          }
           aria-label={`Preview ${name}`}
         >
           {trigger === 'name' ? name : 'Preview'}

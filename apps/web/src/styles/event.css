@@ -37,6 +37,11 @@
 .ops-match-playing {
   border-top: 3px solid var(--accent);
 }
+.ops-match-player-names {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+}
 .ops-match-meta {
   display: flex;
   justify-content: space-between;

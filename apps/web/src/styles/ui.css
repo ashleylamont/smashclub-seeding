@@ -769,6 +769,22 @@
   font: inherit;
 }
 
+.link-button-target {
+  display: inline-flex;
+  align-items: center;
+  min-inline-size: var(--control-height);
+  min-block-size: var(--control-height);
+  vertical-align: middle;
+  padding-inline: var(--s1);
+}
+
+@media (max-width: 560px), (pointer: coarse) {
+  .link-button-target {
+    min-inline-size: var(--touch-target);
+    min-block-size: var(--touch-target);
+  }
+}
+
 .modal-wide {
   max-width: 640px;
 }

@@ -70,9 +70,9 @@ function ScoreCardTitle({
     return <h3>{presentation.title}</h3>;
 
   return (
-    <h3 aria-label={presentation.title}>
+    <h3 className="ops-match-player-names" aria-label={presentation.title}>
       <PlayerProfileName playerId={match.player1Id} name={match.player1Name || 'Player'} />
-      {' vs '}
+      <span>{' vs '}</span>
       <PlayerProfileName playerId={match.player2Id} name={match.player2Name || 'Opponent'} />
     </h3>
   );

@@ -1,4 +1,5 @@
 .player-profile-preview-name {
+  max-inline-size: 100%;
   text-align: start;
   text-transform: inherit;
   overflow-wrap: anywhere;
