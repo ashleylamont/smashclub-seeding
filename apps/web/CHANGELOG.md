@@ -2,6 +2,18 @@
 
 Dates show when each change landed, in Sydney time. Select a version to open its GitHub release.
 
+## 0.23.2
+
+### Patch Changes
+
+- 23 November 2026 · **Fix** · Clear live finalization prompts when an event ends so organisers can find the draw and published score corrections. [#551](https://github.com/ashleylamont/smashclub-seeding/pull/551) · [build a1d6388](https://github.com/ashleylamont/smashclub-seeding/commit/a1d6388b85aec71342709f87946826237e1f9542)
+- 23 November 2026 · **Fix** · Open Display setup from a Broadcast preview, including on phones. Use Copy for a clean OBS link. [#552](https://github.com/ashleylamont/smashclub-seeding/pull/552) · [build 796f6ea](https://github.com/ashleylamont/smashclub-seeding/commit/796f6ea1d145a12e869c05181887e3914a8a730f)
+- 23 November 2026 · **Fix** · See when a past night’s rating estimate is unavailable. Your player profile still shows recorded sets, attendance changes, and estimates from the latest rating update. [#539](https://github.com/ashleylamont/smashclub-seeding/pull/539) · [build da404ed](https://github.com/ashleylamont/smashclub-seeding/commit/da404ede0a19a5b42205ff7aa576197bc8d26990)
+- 23 November 2026 · **Improvement** · Open each player's profile preview from the standings for a published Nemesis doubles event. [#553](https://github.com/ashleylamont/smashclub-seeding/pull/553) · [build da940b8](https://github.com/ashleylamont/smashclub-seeding/commit/da940b802bec45993d24c46a35b498ec764e5784)
+- 23 November 2026 · **Maintenance** · Restore the checks that verify each Nemesis build. [#561](https://github.com/ashleylamont/smashclub-seeding/pull/561) · [build ae1efac](https://github.com/ashleylamont/smashclub-seeding/commit/ae1efacd7a459318da748c98495dbe9886b34dda)
+- 23 November 2026 · **Maintenance** · Keep verified release candidates moving while later changes are prepared for the next version. [#543](https://github.com/ashleylamont/smashclub-seeding/pull/543) · [build 4e8189b](https://github.com/ashleylamont/smashclub-seeding/commit/4e8189bdb18b431ff830984d18a947aeafb4a33a)
+- 23 November 2026 · **Fix** · Rankings and event recaps only show rank changes when there are reliable earlier standings to compare against. Current rankings still appear. [#556](https://github.com/ashleylamont/smashclub-seeding/pull/556) · [build c52b208](https://github.com/ashleylamont/smashclub-seeding/commit/c52b208a727e61e63baf34d52ca17c7b53e33fbe)
+
 ## 0.23.1
 
 ### Patch Changes
