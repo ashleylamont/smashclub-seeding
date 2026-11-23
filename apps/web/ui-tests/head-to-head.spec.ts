@@ -18,7 +18,10 @@ function pairUrl(first: string, second: string) {
   return `/head-to-head?first=${first}&second=${second}`;
 }
 
-async function comparisonFixture(page: Page, { noSharedNight = false } = {}) {
+async function comparisonFixture(
+  page: Page,
+  { noSharedNight = false, beforeUnavailable = false } = {},
+) {
   const fixture = await mockEvent(page);
   fixture.responses['public.leaderboard'] = {
     computedAt: null,
@@ -58,10 +61,14 @@ async function comparisonFixture(page: Page, { noSharedNight = false } = {}) {
         history: { wins: [0, 0], gamesWon: [0, 0], scoredMeetings: 0, recent: [] },
         forecast: null,
         ratingNight: null,
+        partialRatingNight: null,
       };
     const aliceFirst = first.id === ALICE.id;
     const aliceEstimate = { preRating: 1455, postRating: 1510.5, prePenalty: 40, postPenalty: 0 };
     const beaEstimate = { preRating: 1560, postRating: 1540.5, prePenalty: 0, postPenalty: 0 };
+    const estimates = aliceFirst
+      ? ([aliceEstimate, beaEstimate] as const)
+      : ([beaEstimate, aliceEstimate] as const);
     return {
       status: 'ready',
       players: [first, second],
@@ -93,12 +100,17 @@ async function comparisonFixture(page: Page, { noSharedNight = false } = {}) {
         ratedAt: '2026-10-04T00:00:00Z',
         provisional: true,
       },
-      ratingNight: noSharedNight
-        ? null
-        : {
+      ratingNight:
+        noSharedNight || beforeUnavailable ? null : { eventKey: '2026-10-03', estimates },
+      partialRatingNight: beforeUnavailable
+        ? {
             eventKey: '2026-10-03',
-            estimates: aliceFirst ? [aliceEstimate, beaEstimate] : [beaEstimate, aliceEstimate],
-          },
+            estimates: [
+              { ...estimates[0], preRating: null },
+              { ...estimates[1], preRating: null },
+            ],
+          }
+        : null,
     };
   });
   fixture.queryResponses.set('public.searchPlayers', (input) => {
@@ -223,3 +235,46 @@ test('the public route handles canonical redirects, duplicate selection, no meet
   await expect(page.getByRole('heading', { name: 'Current WHR estimate' })).toHaveCount(0);
   expect(fixture.unexpected).toEqual([]);
 });
+
+for (const theme of ['dark', 'light'] as const)
+  for (const width of [390, 1440]) {
+    test(`head to head keeps verified results when the earlier fit is unavailable at ${width}px in ${theme}`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ colorScheme: theme });
+      const fixture = await comparisonFixture(page, { beforeUnavailable: true });
+      await page.goto(pairUrl(ALICE.id, BEA.id));
+
+      const night = page.getByRole('region', { name: 'Skill gap by night' });
+      await expect(night.getByText('No verified estimate')).toBeVisible();
+      await expect(night.getByText('30.0 points')).toBeVisible();
+      const missingTop = await night
+        .getByText('No verified estimate')
+        .evaluate((element) => element.getBoundingClientRect().top);
+      const estimateTop = await night
+        .getByText('30.0 points')
+        .evaluate((element) => element.getBoundingClientRect().top);
+      expect(Math.abs(missingTop - estimateTop)).toBeLessThan(8);
+      await expect(night.getByText(`${BEA.name} ahead`)).toHaveCount(1);
+      await expect(night.getByText('105.0 points')).toHaveCount(0);
+      await expect(night.getByText('40 → 0 points')).toBeVisible();
+      await expect(night.locator('time')).toHaveAttribute('datetime', '2026-10-03');
+      await expect(page.getByRole('region', { name: 'Current WHR estimate' })).toContainText('67%');
+      await expect(page.getByRole('region', { name: 'Played singles' })).toContainText(
+        '2 set wins',
+      );
+      await expect(page.getByRole('region', { name: 'Recent meetings' })).toContainText(
+        'October Championship',
+      );
+
+      const swap = page.getByRole('link', { name: 'Swap players' });
+      await swap.press('Enter');
+      await expect(swap).toBeFocused();
+      await expect(page).toHaveURL(new RegExp(`first=${BEA.id}&second=${ALICE.id}$`));
+      await expect(night.getByText('No verified estimate')).toBeVisible();
+      await expect(night.getByText(`${BEA.name} ahead`)).toHaveCount(1);
+      await review(page, testInfo, 'verified-night-gap');
+      expect(fixture.unexpected).toEqual([]);
+    });
+  }

@@ -13,10 +13,17 @@ import {
   tournaments,
   type Db,
 } from '@smashclub/db';
-import { DISPLAY_CENTRE, NATURAL_TO_DISPLAY, probabilityFromRatings } from '@smashclub/engine';
+import {
+  DISPLAY_CENTRE,
+  NATURAL_TO_DISPLAY,
+  fitWhrPrefix,
+  probabilityFromRatings,
+} from '@smashclub/engine';
+import { defaultRatingSettings } from '@smashclub/shared';
 import { loadEnv } from '../src/env';
 import { ENGINE_VERSION, runRecompute } from '../src/recompute/recompute';
 import { RecomputeTrigger } from '../src/recompute/trigger';
+import { loadWhrHistoryThroughDay } from '../src/recompute/whrProvenance';
 import { appRouter } from '../src/trpc/router';
 import { fixtureClient } from './helpers/challongeFixtures';
 import { createTestDb } from './helpers/testDb';
@@ -448,6 +455,83 @@ it('compares the latest night both players played after debut from the same publ
       forecast: { firstWinChance: expect.any(Number) },
       ratingNight: null,
     });
+  } finally {
+    await close();
+  }
+});
+
+it('preserves the verified after-night gap when the common night starts with a capped fit', async () => {
+  const { db, close } = await createTestDb();
+  try {
+    const [alpha, bravo, charlie, delta] = await db
+      .insert(players)
+      .values(['Alpha', 'Bravo', 'Charlie', 'Delta'].map((canonicalName) => ({ canonicalName })))
+      .returning({ id: players.id });
+    const day = (key: string) => new Date(`${key}T08:00:00Z`);
+    const firstNight = '2026-01-01';
+    const commonNight = '2026-01-08';
+    const laterNight = '2026-01-15';
+    const playedSets = async (key: string, first: string, second: string, wins: (1 | 2)[]) => {
+      const tournamentId = await addTournament(db, `club-${key}`, { eventDate: day(key) });
+      await db.insert(sets).values(
+        wins.map((winner, index) => ({
+          tournamentId,
+          challongeMatchId: index + 1,
+          p1PlayerId: first,
+          p2PlayerId: second,
+          winner,
+          state: 'complete',
+          scoresCsv: winner === 1 ? '3-0' : '0-3',
+        })),
+      );
+    };
+    await playedSets(firstNight, alpha!.id, bravo!.id, [
+      ...Array.from({ length: 38 }, () => 1 as const),
+      ...Array.from({ length: 30 }, () => 2 as const),
+    ]);
+    await playedSets(
+      commonNight,
+      alpha!.id,
+      bravo!.id,
+      Array.from({ length: 9 }, () => 2 as const),
+    );
+    const inputs = await loadWhrHistoryThroughDay(db, day(commonNight), defaultRatingSettings);
+    expect(inputs).not.toBeNull();
+    expect(fitWhrPrefix(inputs!, firstNight)).toMatchObject({ converged: false, iterations: 200 });
+    expect(fitWhrPrefix(inputs!, commonNight).converged).toBe(true);
+
+    const api = publicApi(db);
+    const read = () => api.headToHead({ first: alpha!.id, second: bravo!.id });
+    for (const globallyLatest of [commonNight, laterNight]) {
+      if (globallyLatest === laterNight) await playedSets(laterNight, charlie!.id, delta!.id, [1]);
+      const { recomputeId } = await runRecompute(db);
+      const [run] = await db
+        .select({ stats: recomputes.stats })
+        .from(recomputes)
+        .where(eq(recomputes.id, recomputeId));
+      expect(run?.stats).toMatchObject({
+        whrConvergedPreNightKeys: globallyLatest === laterNight ? [laterNight] : [],
+      });
+
+      const response = await read();
+      expect(response).toMatchObject({
+        status: 'ready',
+        history: { wins: [38, 39], scoredMeetings: 77 },
+        forecast: { firstWinChance: expect.closeTo(0.488, 3) },
+        ratingNight: null,
+        partialRatingNight: {
+          eventKey: commonNight,
+          estimates: [
+            { preRating: null, prePenalty: 0, postPenalty: 0 },
+            { preRating: null, prePenalty: 0, postPenalty: 0 },
+          ],
+        },
+      });
+      if (response.status !== 'ready' || !response.partialRatingNight)
+        throw new Error('Expected a partially verified shared night');
+      const [beforeLeader, afterLeader] = response.partialRatingNight.estimates;
+      expect(afterLeader.postRating! - beforeLeader.postRating!).toBeCloseTo(8.3, 1);
+    }
   } finally {
     await close();
   }

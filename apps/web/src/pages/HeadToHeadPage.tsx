@@ -181,7 +181,10 @@ function chanceLabel(percent: number) {
 function RatingNightComparison({
   players,
   ratingNight,
-}: Pick<ReadyComparison, 'players' | 'ratingNight'>) {
+}: {
+  players: ReadyComparison['players'];
+  ratingNight: ReadyComparison['ratingNight'] | ReadyComparison['partialRatingNight'];
+}) {
   return (
     <section className="card" aria-labelledby="h2h-rating-night">
       <h2 id="h2h-rating-night">Skill gap by night</h2>
@@ -196,17 +199,27 @@ function RatingNightComparison({
           <div className="h2h-night-details">
             <dl className="h2h-figures">
               {(['preRating', 'postRating'] as const).map((field, index) => {
-                const gap = ratingNight.estimates[0][field] - ratingNight.estimates[1][field];
-                const points = Math.abs(gap).toFixed(1);
+                const [first, second] = ratingNight.estimates;
+                const firstRating = first[field];
+                const secondRating = second[field];
+                const gap =
+                  firstRating !== null && secondRating !== null ? firstRating - secondRating : null;
+                const points = gap === null ? null : Math.abs(gap).toFixed(1);
                 return (
                   <div key={field}>
                     <dt>{index === 0 ? 'Before the night' : 'After the night'}</dt>
-                    <dd className="num">{points} points</dd>
-                    <dd className="muted">
-                      {points === '0.0'
-                        ? 'Level at this precision'
-                        : `${players[gap > 0 ? 0 : 1].name} ahead`}
-                    </dd>
+                    {gap === null ? (
+                      <dd className="muted">No verified estimate</dd>
+                    ) : (
+                      <>
+                        <dd className="num">{points} points</dd>
+                        <dd className="muted">
+                          {points === '0.0'
+                            ? 'Level at this precision'
+                            : `${players[gap > 0 ? 0 : 1].name} ahead`}
+                        </dd>
+                      </>
+                    )}
                   </div>
                 );
               })}
@@ -245,7 +258,8 @@ function RatingNightComparison({
 }
 
 function ComparisonResults({ data }: { data: ReadyComparison }) {
-  const { players, history, forecast, ratingNight } = data;
+  const { players, history, forecast } = data;
+  const ratingNight = data.ratingNight ?? data.partialRatingNight;
   const total = history ? history.wins[0] + history.wins[1] : 0;
   const firstChance = forecast ? Math.round(forecast.firstWinChance * 100) : null;
 
