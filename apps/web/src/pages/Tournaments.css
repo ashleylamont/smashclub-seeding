@@ -119,9 +119,6 @@
   max-width: 48ch;
 }
 
-/* The sets table is six columns of short values; squeezed onto a phone it broke
-   every player name into one word per line. It keeps its shape and the
-   container scrolls (see `.table-scroll` in App.css). */
 .sets-table {
   --table-min: 720px;
 }
@@ -133,6 +130,101 @@
 
 .sets-table .set-structural-label {
   white-space: nowrap;
+}
+
+.set-field-label {
+  display: none;
+}
+
+@media (max-width: 46rem) {
+  .tournament-sets-scroll {
+    overflow: visible;
+  }
+
+  .sets-table {
+    --table-min: 0px;
+  }
+
+  .sets-table,
+  .sets-table tbody {
+    display: block;
+  }
+
+  /* Keep column headers available to screen readers. Each visible record has
+     its own field labels on phones. */
+  .sets-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .sets-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      'match match'
+      'score status'
+      'stage round'
+      'identifier reported';
+    gap: var(--s1) var(--s3);
+    padding: var(--s3) var(--s2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sets-table tbody tr:first-child {
+    border-top: 1px solid var(--border);
+  }
+
+  .sets-table td {
+    padding: 0;
+    border-bottom: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .sets-table .set-structural-label {
+    white-space: normal;
+  }
+
+  .set-field-label {
+    display: inline;
+    margin-inline-end: var(--s1);
+    color: var(--text-soft);
+    font-family: var(--sans);
+    font-size: var(--fs-xs);
+    font-weight: 400;
+  }
+
+  .set-field-match {
+    grid-area: match;
+    margin-bottom: var(--s1);
+  }
+
+  .set-field-score {
+    grid-area: score;
+    font-weight: 600;
+  }
+
+  .set-field-status {
+    grid-area: status;
+  }
+
+  .set-field-stage {
+    grid-area: stage;
+  }
+
+  .set-field-round {
+    grid-area: round;
+  }
+
+  .set-field-identifier {
+    grid-area: identifier;
+  }
+
+  .set-field-reported {
+    grid-area: reported;
+  }
 }
 
 .history-stage-filter {
