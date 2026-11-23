@@ -542,6 +542,17 @@
 /* `.visually-hidden` used to be defined here, which meant it only worked on
    admin screens — it is now a global utility in index.css. */
 
+@media (max-width: 380px) {
+  .seeding-entrant {
+    position: static;
+  }
+
+  /* The lock scrolls out of view before the name on narrow screens. */
+  .seeding-entrant > .seeding-name {
+    order: 1;
+  }
+}
+
 @media (max-width: 580px) {
   .seeding-scroll-hint {
     display: block;

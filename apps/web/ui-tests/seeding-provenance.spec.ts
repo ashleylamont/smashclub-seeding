@@ -144,3 +144,57 @@ test('a draft without its source keeps the recorded score without inventing rati
   await expect(page.getByText('1552', { exact: true })).toBeVisible();
   await expect(page.getByText(/Skill estimate 1720/)).toHaveCount(0);
 });
+
+test('320px keeps rating text readable and the visible lock beside its player', async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.addInitScript(() => localStorage.setItem('smashclub:theme', 'light'));
+  const fixture = await openRun(page, true);
+  const table = page.getByRole('region', { name: 'Seeding order' });
+  const rated = table.getByRole('row').filter({ hasText: alias });
+  const skill = rated.getByText('Skill estimate 1720', { exact: true });
+  await table.scrollIntoViewIfNeeded();
+  await ready(page);
+  await skill.evaluate((el) => {
+    const region = el.closest<HTMLElement>('[role="region"]')!;
+    region.scrollLeft += el.getBoundingClientRect().left - region.getBoundingClientRect().left;
+  });
+  for (const detail of ['Skill estimate 1720', 'Uncertainty 84']) {
+    const text = rated.getByText(detail, { exact: true });
+    await expect
+      .poll(() =>
+        text.evaluate((el) => {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          return [...range.getClientRects()].every(({ left, right, top, bottom }) =>
+            [left + 1, right - 1].every((x) =>
+              el.contains(document.elementFromPoint(x, (top + bottom) / 2)),
+            ),
+          );
+        }),
+      )
+      .toBe(true);
+  }
+  await table.screenshot({ path: testInfo.outputPath('readable-rating-320.png') });
+
+  const lock = rated.getByRole('button', { name: `Lock seed 1 in place for ${alias}` });
+  const player = rated.getByText(alias, { exact: true });
+  await expect(lock).not.toBeInViewport();
+  await lock.focus();
+  await expect(lock).toBeFocused();
+  await expect(lock).toBeInViewport({ ratio: 1 });
+  await expect(player).toBeInViewport({ ratio: 1 });
+  const lockRight = await lock.evaluate((el) => el.getBoundingClientRect().right);
+  expect(lockRight).toBeLessThan(await player.evaluate((el) => el.getBoundingClientRect().left));
+  await table.screenshot({ path: testInfo.outputPath('identifiable-lock-320.png') });
+
+  await page.keyboard.press('Enter');
+  await expect(rated.getByRole('button', { name: `Unlock seed 1 for ${alias}` })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  expect(fixture.lockChanges).toEqual([{ entryId: 'first-entry', locked: true }]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+  expect(fixture.unexpected).toEqual([]);
+});
