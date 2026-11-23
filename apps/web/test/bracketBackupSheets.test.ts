@@ -317,11 +317,16 @@ describe('TO bracket backup sheets', () => {
     expect(rows.find((row) => row.key === 'bye')).toMatchObject({
       player2: 'Bye',
       recorded: 'Bye',
+      winner: 'Alice',
     });
     expect(rows.find((row) => row.key === 'no-contest')).toMatchObject({
       player2: 'No entrant',
       recorded: 'No contest',
     });
-    expect(rows.find((row) => row.key === 'reset')!.recorded).toBe('If needed');
+    expect(rows.find((row) => row.key === 'no-contest')!.winner).toBeUndefined();
+    expect(rows.find((row) => row.key === 'reset')).toMatchObject({
+      recorded: 'If needed',
+      unplayedReset: true,
+    });
   });
 });
