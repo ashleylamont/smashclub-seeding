@@ -2,6 +2,13 @@
 
 Dates show when each change landed, in Sydney time. Select a version to open its GitHub release.
 
+## 0.23.13
+
+### Patch Changes
+
+- 23 November 2026 · **Fix** · See opponents and scores together in a player's Match log on your phone without swiping sideways. [#628](https://github.com/ashleylamont/smashclub-seeding/pull/628) · [build 5a5ac93](https://github.com/ashleylamont/smashclub-seeding/commit/5a5ac935058ad227d309cca83f3c7b7c029ce6a5)
+- 23 November 2026 · **Maintenance** · Make the Broadcast keyboard retry check reliable when the match picker closes. [#635](https://github.com/ashleylamont/smashclub-seeding/pull/635) · [build 1443ad6](https://github.com/ashleylamont/smashclub-seeding/commit/1443ad65fc92df04a367b033c306a822eb76daf1)
+
 ## 0.23.12
 
 ### Patch Changes
