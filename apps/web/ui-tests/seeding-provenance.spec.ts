@@ -2,7 +2,7 @@ import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import type { SeedingRunData } from '../src/lib/apiTypes';
 import { chooseOption } from '../test-support/controls';
-import { mockEvent, ready } from './fixtures';
+import { bracketCaptureOptions, mockEvent, ready } from './fixtures';
 
 const snapshotDate = '2026-09-29T08:15:00Z';
 const runDate = '2026-10-04T00:00:00Z';
@@ -48,6 +48,14 @@ async function openRun(page: Page, hasSnapshot: boolean) {
       },
     ],
   };
+  const lockChanges: unknown[] = [];
+  fixture.mutationResponses.set('admin.setSeedingEntryLocked', (input) => {
+    lockChanges.push(input);
+    const { entryId, locked } = input as { entryId: string; locked: boolean };
+    const entry = data.entries.find(({ id }) => id === entryId);
+    if (entry) entry.locked = locked;
+    return { ok: true };
+  });
   Object.assign(fixture.responses, {
     'public.tournaments': [
       { id: 'tournament', name: 'Seeding rehearsal', challongeState: 'pending' },
@@ -58,7 +66,7 @@ async function openRun(page: Page, hasSnapshot: boolean) {
   const tournament = page.getByRole('combobox', { name: 'Tournament to seed' });
   await chooseOption(tournament, 'tournament');
   await expect(page.getByText(alias, { exact: true })).toBeVisible();
-  return fixture;
+  return { ...fixture, lockChanges };
 }
 
 for (const theme of ['dark', 'light'] as const)
@@ -97,6 +105,21 @@ for (const theme of ['dark', 'light'] as const)
         await table.press('ArrowRight');
         await expect.poll(() => table.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
         await table.evaluate((el) => (el.scrollLeft = el.scrollWidth));
+        const player = rated.getByText(alias, { exact: true });
+        const lock = rated.getByRole('button', { name: `Lock seed 1 in place for ${alias}` });
+        await lock.focus();
+        await expect(lock).toBeFocused();
+        await expect(lock).toBeInViewport({ ratio: 1 });
+        await expect(player).toBeInViewport({ ratio: 1 });
+        await expect(rated.locator('.seed-number')).toBeInViewport({ ratio: 1 });
+        await expect
+          .poll(() => table.evaluate((el) => el.scrollWidth - el.clientWidth - el.scrollLeft))
+          .toBe(0);
+        await page.keyboard.press('Enter');
+        await expect(
+          rated.getByRole('button', { name: `Unlock seed 1 for ${alias}` }),
+        ).toHaveAttribute('aria-pressed', 'true');
+        expect(fixture.lockChanges).toEqual([{ entryId: 'first-entry', locked: true }]);
       }
 
       await ready(page);
@@ -105,6 +128,7 @@ for (const theme of ['dark', 'light'] as const)
           .violations,
       ).toEqual([]);
       await page.screenshot({
+        ...bracketCaptureOptions,
         path: testInfo.outputPath(`seed-details-${width}-${theme}.png`),
         fullPage: true,
       });
@@ -115,7 +139,7 @@ test('a draft without its source keeps the recorded score without inventing rati
   page,
 }) => {
   await openRun(page, false);
-  await expect(page.getByText(/original rating snapshot is unavailable/i)).toBeVisible();
+  await expect(page.getByText(/no saved rating snapshot is available/i)).toBeVisible();
   await expect(page.locator('time')).toHaveCount(0);
   await expect(page.getByText('1552', { exact: true })).toBeVisible();
   await expect(page.getByText(/Skill estimate 1720/)).toHaveCount(0);

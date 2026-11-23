@@ -2,7 +2,7 @@ import { ConfirmDialog, ConfirmCancel } from '../../components/ui/ConfirmDialog'
 import { Disclosure } from '../../components/ui/Disclosure';
 import { Select, SelectItem } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
@@ -265,7 +265,7 @@ function SeedingRun({
             .
           </>
         ) : (
-          'The original rating snapshot is unavailable for this run.'
+          'No saved rating snapshot is available for this run.'
         )}
       </p>
       <Disclosure title="How automatic seeds are calculated">
@@ -287,13 +287,12 @@ function SeedingRun({
         <div className="table-scroll" role="region" aria-label="Seeding order" tabIndex={0}>
           <div role="table" aria-label="Seeding entries">
             <div className="seeding-list-header seeding-grid" role="row">
-              <span role="columnheader">Bracket seed</span>
-              <span role="columnheader" aria-label="Reorder" />
-              <span role="columnheader">Player</span>
+              <span className="seeding-entrant" role="columnheader">
+                Bracket seed and player
+              </span>
               <span role="columnheader">{usesWhr ? 'Conservative score' : 'Saved score'}</span>
               <span role="columnheader">Auto seed</span>
               <span role="columnheader">Challonge change</span>
-              <span role="columnheader">Lock</span>
             </div>
             <SortableContext items={order} strategy={verticalListSortingStrategy}>
               <div className="seeding-list" role="rowgroup">
@@ -382,6 +381,7 @@ function SeedingRow({
   draggable: boolean;
   onChanged: () => void;
 }) {
+  const nameId = useId();
   const disabled = !draggable || entry.locked;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: entry.participantId,
@@ -406,10 +406,8 @@ function SeedingRow({
         transition,
       }}
     >
-      <span className="seed-number" role="cell">
-        {seed}
-      </span>
-      <span role="cell">
+      <span className="seeding-entrant" role="rowheader" aria-labelledby={nameId}>
+        <span className="seed-number">{seed}</span>
         <span
           className={`drag-handle${disabled ? ' disabled' : ''}`}
           title={
@@ -421,9 +419,25 @@ function SeedingRow({
         >
           <span aria-hidden="true">{entry.locked ? '🔒' : '☰'}</span>
         </span>
-      </span>
-      <span className="seeding-name" role="rowheader">
-        {entry.name}
+        <span className="seeding-name" id={nameId}>
+          {entry.name}
+        </span>
+        <Button
+          className="seeding-lock"
+          size="small"
+          type="button"
+          disabled={toggleLock.isPending || !draggable}
+          onClick={() => toggleLock.mutate()}
+          title={entry.locked ? 'Unlock this seed' : 'Lock this seed in place'}
+          aria-label={
+            entry.locked
+              ? `Unlock seed ${seed} for ${entry.name}`
+              : `Lock seed ${seed} in place for ${entry.name}`
+          }
+          aria-pressed={entry.locked}
+        >
+          {entry.locked ? '🔒' : '🔓'}
+        </Button>
       </span>
       <span role="cell">
         {entry.autoScore != null ? entry.autoScore.toFixed(0) : 'Unrated'}
@@ -451,22 +465,6 @@ function SeedingRow({
             ↓ {-delta}
           </span>
         )}
-      </span>
-      <span role="cell">
-        {/* The glyph alone is not a label: without aria-label the accessible
-            name is the emoji, which says nothing and conveys the lock state by
-            picture only. */}
-        <Button
-          size="small"
-          type="button"
-          disabled={toggleLock.isPending || !draggable}
-          onClick={() => toggleLock.mutate()}
-          title={entry.locked ? 'Unlock this seed' : 'Lock this seed in place'}
-          aria-label={entry.locked ? `Unlock seed ${seed}` : `Lock seed ${seed} in place`}
-          aria-pressed={entry.locked}
-        >
-          {entry.locked ? '🔒' : '🔓'}
-        </Button>
       </span>
     </div>
   );
