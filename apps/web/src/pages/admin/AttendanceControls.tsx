@@ -1,7 +1,7 @@
 import { isKnockout } from '@smashclub/shared';
 import { DoublesSubstitutionForm } from './DoublesSubstitutionForm';
 import { LateDoublesPairForm } from './LateDoublesPairForm';
-import { useOpsWorkspace } from '../../lib/opsWorkspace';
+import { finalsPreviewControlId, useOpsWorkspace } from '../../lib/opsWorkspace';
 import { OpsEventHistory } from './OpsEventHistory';
 import { UntakenCallRecovery, type UntakenCallDesk } from './UntakenCallRecovery';
 import { Select, SelectItem } from '../../components/ui/Select';
@@ -60,7 +60,7 @@ export function AttendanceControls({
   disabled: boolean;
   callDesk: UntakenCallDesk;
 }) {
-  const historyActive = useOpsWorkspace().section === 'players';
+  const { section, openControl } = useOpsWorkspace();
   const cache = useQueryClient();
   const previewHeading = useRef<HTMLHeadingElement>(null);
   const [action, setAction] = useState<AttendanceAction>(
@@ -287,6 +287,14 @@ export function AttendanceControls({
           disabled={busy || disabled}
           callDesk={callDesk}
           headingRef={previewHeading}
+          finalsStillPresent={data.nativeBrackets.some(({ id }) =>
+            preview.result.finalsRemoval?.bracketIds.includes(id),
+          )}
+          onOpenFinals={
+            data.plan.drawPaused
+              ? undefined
+              : () => void openControl(finalsPreviewControlId, 'draw')
+          }
           onRefresh={() => void inspect(preview.input, true)}
           onAcknowledge={(externalAcknowledged) => setPreview({ ...preview, externalAcknowledged })}
           onApprove={(redistributionApproved) => setPreview({ ...preview, redistributionApproved })}
@@ -301,7 +309,12 @@ export function AttendanceControls({
       {message && <p role="status">{message}</p>}
       {data.plan.liveOwned && (
         <div className="ops-attendance-history">
-          <OpsEventHistory data={data} active={historyActive} attendanceOnly onMatch={() => {}} />
+          <OpsEventHistory
+            data={data}
+            active={section === 'players'}
+            attendanceOnly
+            onMatch={() => {}}
+          />
         </div>
       )}
     </section>
@@ -314,6 +327,8 @@ function AttendancePreviewPanel({
   disabled,
   callDesk,
   headingRef,
+  finalsStillPresent,
+  onOpenFinals,
   onRefresh,
   onAcknowledge,
   onApprove,
@@ -324,6 +339,8 @@ function AttendancePreviewPanel({
   disabled: boolean;
   callDesk: UntakenCallDesk;
   headingRef: Ref<HTMLHeadingElement>;
+  finalsStillPresent: boolean;
+  onOpenFinals?: () => void;
   onRefresh: () => void;
   onAcknowledge: (checked: boolean) => void;
   onApprove: (checked: boolean) => void;
@@ -331,6 +348,9 @@ function AttendancePreviewPanel({
 }) {
   const restoring = preview.input.action === 'restore';
   const returnCallIds = preview.result.returnCallMatchIds;
+  const finalsRemoval = preview.result.finalsRemoval;
+  const needsFinalsReview = finalsRemoval && finalsStillPresent;
+  const refreshAfterFinals = finalsRemoval && !finalsStillPresent;
   const poolWaitingForReturn = preview.input.action === 'add' && Boolean(returnCallIds?.length);
   const callsStillOpen = callDesk.calls.some(({ id }) => returnCallIds?.includes(id));
   const apply = (
@@ -360,7 +380,7 @@ function AttendancePreviewPanel({
           affected existing match(es)
         </p>
       )}
-      {returnCallIds && !callsStillOpen ? (
+      {(returnCallIds && !callsStillOpen) || refreshAfterFinals ? (
         <p className="muted">Refresh the preview before applying this change.</p>
       ) : (
         preview.result.issues.map((issue) => (
@@ -368,6 +388,12 @@ function AttendancePreviewPanel({
             {issue}
           </p>
         ))
+      )}
+      {needsFinalsReview && finalsRemoval.division && (
+        <p className="muted">
+          In the removal review, choose {finalsRemoval.division === 'upper' ? 'Upper' : 'Lower'}{' '}
+          finals only.
+        </p>
       )}
       {returnCallIds && (
         <UntakenCallRecovery matchIds={returnCallIds} desk={callDesk} showInstructions={false} />
@@ -437,11 +463,17 @@ function AttendancePreviewPanel({
             : ''}
         </label>
       )}
-      {returnCallIds ? (
+      {returnCallIds || needsFinalsReview || refreshAfterFinals ? (
         <div className="ops-match-actions">
-          <Button disabled={disabled} onClick={onRefresh}>
-            Refresh attendance preview
-          </Button>
+          {needsFinalsReview ? (
+            <Button disabled={disabled || !onOpenFinals} onClick={onOpenFinals}>
+              Review finals removal
+            </Button>
+          ) : (
+            <Button disabled={disabled} onClick={onRefresh}>
+              Refresh attendance preview
+            </Button>
+          )}
           {apply}
         </div>
       ) : (

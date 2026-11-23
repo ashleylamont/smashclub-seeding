@@ -55,6 +55,7 @@ import type { attendancePreview } from '../tournament/attendance';
 type AttendancePreview = Awaited<ReturnType<typeof previewAttendance>> & {
   restoration?: ReturnType<typeof previewRestoration>['restoration'];
   returnCallMatchIds?: string[];
+  finalsRemoval?: ReturnType<typeof attendancePreview>['finalsRemoval'];
   withdrawalMatches?: ReturnType<typeof attendancePreview>['withdrawalMatches'];
 };
 const attendanceInput = z.object({
