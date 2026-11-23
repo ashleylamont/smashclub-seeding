@@ -66,7 +66,7 @@ const tournament: TournamentData = {
 };
 
 for (const theme of ['dark', 'light'] as const) {
-  for (const width of [390, 1440]) {
+  for (const width of [320, 390, 1440]) {
     test(`archived forfeits and played scores are distinct at ${width}px in ${theme} mode`, async ({
       page,
     }, testInfo) => {
@@ -88,6 +88,28 @@ for (const theme of ['dark', 'light'] as const) {
       await page.goto('/tournaments/archived-sets');
       const table = page.getByRole('region', { name: 'Tournament sets' });
       const rows = table.locator('tbody tr');
+      await expect(rows).toHaveCount(4);
+      await ready(page);
+      const initialWidth = await table.evaluate((region) => ({
+        viewport: region.clientWidth,
+        content: region.scrollWidth,
+        scroll: region.scrollLeft,
+      }));
+      expect(initialWidth.scroll).toBe(0);
+      expect(initialWidth.content).toBe(initialWidth.viewport);
+      for (const cell of await rows.nth(1).getByRole('cell').all()) {
+        expect(
+          await cell.evaluate((element) => {
+            const region = element.closest('[role="region"]')!;
+            const bounds = region.getBoundingClientRect();
+            const text = document.createRange();
+            text.selectNodeContents(element);
+            return Array.from(text.getClientRects()).every(
+              (box) => box.left >= bounds.left && box.right <= bounds.right,
+            );
+          }),
+        ).toBe(true);
+      }
       await expect(rows.nth(0).getByText('Forfeit', { exact: true })).toBeInViewport();
       await expect(rows.nth(0)).not.toContainText(/5-0|Played/);
       await expect(rows.nth(1).getByRole('cell', { name: '5-0', exact: true })).toBeVisible();
@@ -96,22 +118,13 @@ for (const theme of ['dark', 'light'] as const) {
       const namedSet = rows.nth(3);
       const label = namedSet.getByRole('cell', { name: 'Semi-final 1', exact: true });
       await expect(label).toHaveAttribute('title', 'upper Championship · R3 M1');
-      await expect(label).toHaveCSS('white-space', 'nowrap');
+      if (width === 1440) await expect(label).toHaveCSS('white-space', 'nowrap');
       await expect(namedSet.getByRole('cell', { name: '2-1', exact: true })).toBeVisible();
       await ready(page);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
       expect(
         (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
       ).toEqual([]);
-      if (width === 390) {
-        await table.focus();
-        await expect(table).toBeFocused();
-        for (let step = 0; step < 8; step++) await table.press('ArrowRight');
-        await expect.poll(() => table.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
-      }
-      await table.evaluate((element) => {
-        element.scrollLeft = 0;
-      });
       await page.evaluate(() => scrollTo(0, 0));
       await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
       await page.screenshot({ path: testInfo.outputPath('archived-outcomes.png'), fullPage: true });

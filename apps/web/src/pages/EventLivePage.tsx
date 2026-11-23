@@ -1,6 +1,6 @@
 import { BroadcastIntermission } from '../components/BroadcastIntermission';
 import { BroadcastPresentationControls } from '../components/BroadcastPresentationControls';
-import { broadcastPresentation, progressInterval } from '../lib/broadcastProgress';
+import { broadcastPresentation, progressContent, progressInterval } from '../lib/broadcastProgress';
 import { PlayerEventAlias } from './GuestEventPage';
 import { Progress } from '../components/ui/Progress';
 import { useCallback, useEffect, useState, type CSSProperties } from 'react';
@@ -46,6 +46,9 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
     () => new URLSearchParams(window.location.search).get('station') ?? '',
   );
   const [presentation, setPresentation] = useState(() => broadcastPresentation(location.search));
+  const [intermissionContent, setIntermissionContent] = useState(() =>
+    progressContent(location.search),
+  );
   const [cycleSeconds, setCycleSeconds] = useState(() => progressInterval(location.search));
   const [recentCount, setRecentCount] = useState(() => recentResultCount(location.search));
   const [showGuestQr, setShowGuestQr] = useState(
@@ -92,6 +95,13 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
     history.replaceState(history.state, '', url);
     setPresentation(mode);
     setCycleSeconds(seconds);
+  };
+  const changeProgressContent = (content: typeof intermissionContent) => {
+    const url = new URL(location.href);
+    if (content === 'all') url.searchParams.delete('progressContent');
+    else url.searchParams.set('progressContent', content);
+    history.replaceState(history.state, '', url);
+    setIntermissionContent(content);
   };
   const changeFocus = (stationId: string) => {
     const url = new URL(window.location.href);
@@ -282,10 +292,12 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
             <>
               <BroadcastPresentationControls
                 mode={presentation}
+                content={intermissionContent}
                 seconds={cycleSeconds}
                 recentCount={recentCount}
                 showGuestQr={showGuestQr}
                 onMode={(mode) => changePresentation(mode, cycleSeconds)}
+                onContent={changeProgressContent}
                 onSeconds={(seconds) => changePresentation(presentation, seconds)}
                 onRecentCount={changeRecentCount}
                 onGuestQr={changeGuestQr}
@@ -309,6 +321,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
               linkedBrackets: data.brackets,
               poolScope: selectedPool ?? undefined,
             }}
+            content={intermissionContent}
             seconds={cycleSeconds}
             announcement={announcement?.message ?? ''}
             controls={search.get('controls') !== '0'}

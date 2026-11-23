@@ -359,7 +359,9 @@ function FinalizeNativeResults({
   let finalizationDetails: string | undefined = readyToFinalize ? undefined : finalization?.message;
   if (poolOrderLock) finalizationDetails = `A pool finishing order is missing. ${poolOrderLock}`;
   else if (data.plan.drawPaused)
-    finalizationDetails = 'Resume the pool draw before publishing results.';
+    finalizationDetails = isKnockout(data.plan.structure)
+      ? 'Resume the knockout draw before publishing results.'
+      : 'Resume the pool draw before publishing results.';
   else if (readyToFinalize)
     finalizationDetails = 'Results are ready to publish. Finalizing ends live scoring.';
   else if (!closed && !finalization)

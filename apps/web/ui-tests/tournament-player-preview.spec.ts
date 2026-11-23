@@ -137,13 +137,14 @@ async function checkPreview(
   return dialog;
 }
 
-for (const width of [390, 1440])
+for (const width of [320, 390, 1440])
   test.describe(`${width}px tournament player previews`, () => {
-    test.use({ hasTouch: width === 390 });
+    const phone = width !== 1440;
+    test.use({ hasTouch: phone });
 
     for (const theme of ['dark', 'light'] as const)
       test(`opens previews from standings and sets in ${theme}`, async ({ page }, testInfo) => {
-        await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+        await page.setViewportSize({ width, height: phone ? 844 : 900 });
         await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
         const { fixture, previewRequests } = await openTournament(page, tournament);
         const standings = page.getByRole('table').first();
@@ -165,7 +166,7 @@ for (const width of [390, 1440])
         await expect(firstPreview).toBeVisible();
         await ready(page);
         await page.screenshot({ path: testInfo.outputPath('tournament-standings.png') });
-        const dialog = await checkPreview(page, firstPreview, firstAlias, firstId, width === 390);
+        const dialog = await checkPreview(page, firstPreview, firstAlias, firstId, phone);
         await ready(page);
         await page.screenshot({ path: testInfo.outputPath('tournament-preview.png') });
         await page.keyboard.press('Escape');
@@ -175,7 +176,7 @@ for (const width of [390, 1440])
         const stage = page.getByRole('combobox', { name: 'Filter sets by stage' });
         await stage.press('Enter');
         await page.getByRole('option', { name: 'Bracket' }).click();
-        await expect(sets.getByText('Pool set', { exact: true })).toHaveCount(0);
+        await expect(sets.getByRole('cell', { name: 'Pool set', exact: true })).toHaveCount(0);
         const secondPreview = sets.getByRole('button', {
           name: `Preview ${secondAlias}`,
           exact: true,
@@ -184,7 +185,7 @@ for (const width of [390, 1440])
         await sets
           .getByRole('button', { name: `Preview ${firstAlias}`, exact: true })
           .scrollIntoViewIfNeeded();
-        if (width === 390) {
+        if (phone) {
           const target = await secondPreview.boundingBox();
           expect(target?.width ?? 0).toBeGreaterThanOrEqual(44);
           expect(target?.height ?? 0).toBeGreaterThanOrEqual(44);
@@ -201,8 +202,8 @@ for (const width of [390, 1440])
         await page.keyboard.press('Escape');
         await expect(otherDialog).toBeHidden();
         await expect(secondPreview).toBeFocused();
-        await expect(sets.getByText('Pool set', { exact: true })).toHaveCount(0);
-        await expect(sets.getByText('Championship', { exact: true })).toBeVisible();
+        await expect(sets.getByRole('cell', { name: 'Pool set', exact: true })).toHaveCount(0);
+        await expect(sets.getByRole('cell', { name: 'Championship', exact: true })).toBeVisible();
         expect(previewRequests).toEqual([firstId, secondId]);
         expect(fixture.unexpected).toEqual([]);
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);

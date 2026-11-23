@@ -2,6 +2,22 @@
 
 Dates show when each change landed, in Sydney time. Select a version to open its GitHub release.
 
+## 0.23.5
+
+### Patch Changes
+
+- 23 November 2026 · **Improvement** · Read a dated example of how a bracket win can narrow a skill gap while opponents remain higher in the club rankings. [#592](https://github.com/ashleylamont/smashclub-seeding/pull/592) · [build e72418f](https://github.com/ashleylamont/smashclub-seeding/commit/e72418fa940047e7e6f58f39feedba789ece9bb4)
+- 23 November 2026 · **Improvement** · Open a linked player’s profile preview from a recorded singles match in the Event Night archive. [#586](https://github.com/ashleylamont/smashclub-seeding/pull/586) · [build 6f44689](https://github.com/ashleylamont/smashclub-seeding/commit/6f44689d09e026fec4cc3694054735cf25bbdf15)
+- 23 November 2026 · **Maintenance** · Verify that organisers can manually refresh and retry event history without the background poll taking over the test. [#585](https://github.com/ashleylamont/smashclub-seeding/pull/585) · [build 4e0077a](https://github.com/ashleylamont/smashclub-seeding/commit/4e0077a155b1bd1c9fdf44a078768e34a242d3e2)
+- 23 November 2026 · **Maintenance** · Wait for the intended Match view option to receive keyboard focus before pressing Enter in browser tests. [#589](https://github.com/ashleylamont/smashclub-seeding/pull/589) · [build 2ffbea1](https://github.com/ashleylamont/smashclub-seeding/commit/2ffbea117a3a6c81feab0e851f57ef51d303563c)
+- 23 November 2026 · **Feature** · Choose which pages an OBS source shows during intermission. Display setup keeps the choice in the copied source URL. [#593](https://github.com/ashleylamont/smashclub-seeding/pull/593) · [build bfc9750](https://github.com/ashleylamont/smashclub-seeding/commit/bfc975081e690b3d5b993fd873a19ccedf006794)
+- 23 November 2026 · **Maintenance** · Keep results artwork and finals recovery browser checks consistent for the packaged Nemesis app. [#580](https://github.com/ashleylamont/smashclub-seeding/pull/580) · [build 54786fe](https://github.com/ashleylamont/smashclub-seeding/commit/54786feaa11135759ffc1bca7f1f2bcf7fd5cfef)
+- 23 November 2026 · **Improvement** · Hide the score-reporting QR on a single OBS source from Display setup. Copy the updated source URL to keep that choice in OBS. [#584](https://github.com/ashleylamont/smashclub-seeding/pull/584) · [build fe82c55](https://github.com/ashleylamont/smashclub-seeding/commit/fe82c55ecd296fc51e40cad4f259c258700cd8fd)
+- 23 November 2026 · **Improvement** · Read a short summary of each past Nemesis release before opening the full changelog. [#577](https://github.com/ashleylamont/smashclub-seeding/pull/577) · [build d5ed5fc](https://github.com/ashleylamont/smashclub-seeding/commit/d5ed5fcc04722abf7f9447daa6c666c92e61d240)
+- 23 November 2026 · **Fix** · Organisers can jump to the guarded Return action when an untaken match call blocks moving two players out of a pool. [#595](https://github.com/ashleylamont/smashclub-seeding/pull/595) · [build 1b2438f](https://github.com/ashleylamont/smashclub-seeding/commit/1b2438fdbe5502f28db3c733fa530e0a26e547ae)
+- 23 November 2026 · **Improvement** · Scan the highlights from recent Nemesis updates in Changelog. Open an update for full notes or expand Older releases to browse the archive. [#579](https://github.com/ashleylamont/smashclub-seeding/pull/579) · [build 707ee00](https://github.com/ashleylamont/smashclub-seeding/commit/707ee008e3b4f0ff304ffa9fa689fb8c8b53c4c1)
+- 23 November 2026 · **Fix** · Wait for pool standings colors to settle before scanning contrast in the browser rehearsal. [#588](https://github.com/ashleylamont/smashclub-seeding/pull/588) · [build 880a6bf](https://github.com/ashleylamont/smashclub-seeding/commit/880a6bfc4d7fe295e460d3a883597736d0f73d66)
+
 ## 0.23.4
 
 ### Patch Changes

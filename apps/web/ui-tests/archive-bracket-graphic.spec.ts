@@ -265,7 +265,7 @@ for (const theme of ['dark', 'light'] as const)
       const importedFinal = page.getByRole('row').filter({
         has: page.getByRole('cell', { name: 'Final', exact: true }),
       });
-      await expect(importedFinal.getByRole('cell').nth(1)).toHaveText('W2');
+      await expect(importedFinal.getByRole('cell').nth(1)).toHaveAccessibleName('W2');
       expect(fixture.unexpected).toEqual([]);
     });
 
@@ -443,20 +443,15 @@ for (const theme of ['dark', 'light'] as const)
       const reset = rows.filter({
         has: page.getByRole('cell', { name: 'Reset final (if needed)', exact: true }),
       });
-      await expect(grandFinal.getByRole('cell').nth(1)).toHaveText('Finals');
-      await expect(reset.getByRole('cell').nth(1)).toHaveText('Finals');
+      await expect(grandFinal.getByRole('cell').nth(1)).toHaveAccessibleName('Finals');
+      await expect(reset.getByRole('cell').nth(1)).toHaveAccessibleName('Finals');
       await expect(grandFinal.getByRole('cell', { name: '1-2', exact: true })).toBeVisible();
       await expect(reset.getByRole('cell', { name: '2-0', exact: true })).toBeVisible();
-      await expect(rows.locator(':scope > td:nth-child(2)')).toHaveText([
-        '2',
-        'W1',
-        'W1',
-        'L1',
-        'W2',
-        'L2',
-        'Finals',
-        'Finals',
-      ]);
+      const roundCells = rows.locator(':scope > td:nth-child(2)');
+      const expectedRounds = ['2', 'W1', 'W1', 'L1', 'W2', 'L2', 'Finals', 'Finals'];
+      await expect(roundCells).toHaveCount(expectedRounds.length);
+      for (const [index, expectedRound] of expectedRounds.entries())
+        await expect(roundCells.nth(index)).toHaveAccessibleName(expectedRound);
 
       await ready(page);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
@@ -466,8 +461,11 @@ for (const theme of ['dark', 'light'] as const)
       await expect(table).toBeFocused();
       await table.screenshot({ path: testInfo.outputPath('finals-round-table.png') });
       if (width === 390) {
-        await page.keyboard.press('ArrowRight');
-        await expect.poll(() => table.evaluate((node) => node.scrollLeft)).toBeGreaterThan(0);
+        // Phone sets fit without horizontal scrolling, including after this
+        // keyboard entry into the same named results region.
+        expect(await table.evaluate((node) => node.scrollWidth)).toBe(
+          await table.evaluate((node) => node.clientWidth),
+        );
       }
       expect(fixture.unexpected).toEqual([]);
     });
@@ -492,7 +490,7 @@ test('an unverified legacy archive retains set labels and recorded round codes',
   const reset = table.getByRole('row').filter({
     has: page.getByRole('cell', { name: 'Reset final (if needed)', exact: true }),
   });
-  await expect(grandFinal.getByRole('cell').nth(1)).toHaveText('W3');
-  await expect(reset.getByRole('cell').nth(1)).toHaveText('W3');
+  await expect(grandFinal.getByRole('cell').nth(1)).toHaveAccessibleName('W3');
+  await expect(reset.getByRole('cell').nth(1)).toHaveAccessibleName('W3');
   expect(fixture.unexpected).toEqual([]);
 });

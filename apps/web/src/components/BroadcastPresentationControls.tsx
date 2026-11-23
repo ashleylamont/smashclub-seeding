@@ -1,22 +1,30 @@
 import { Select, SelectItem } from './ui/Select';
 import { Switch } from './ui/Switch';
-import { progressIntervals, type BroadcastPresentation } from '../lib/broadcastProgress';
+import {
+  progressIntervals,
+  type BroadcastPresentation,
+  type ProgressContent,
+} from '../lib/broadcastProgress';
 
 export function BroadcastPresentationControls({
   mode,
+  content,
   seconds,
   recentCount,
   showGuestQr,
   onMode,
+  onContent,
   onSeconds,
   onRecentCount,
   onGuestQr,
 }: {
   mode: BroadcastPresentation;
+  content: ProgressContent;
   seconds: number;
   recentCount: number;
   showGuestQr: boolean;
   onMode: (mode: BroadcastPresentation) => void;
+  onContent: (content: ProgressContent) => void;
   onSeconds: (seconds: number) => void;
   onRecentCount: (count: number) => void;
   onGuestQr: (show: boolean) => void;
@@ -35,6 +43,14 @@ export function BroadcastPresentationControls({
       {mode === 'event' && (
         <p className="muted">The event organiser controls this source’s presentation.</p>
       )}
+      <label>
+        Intermission pages
+        <Select value={content} onValueChange={(value) => onContent(value as ProgressContent)}>
+          <SelectItem value="all">All pages</SelectItem>
+          <SelectItem value="standings">Standings and brackets</SelectItem>
+          <SelectItem value="recent">Recent results</SelectItem>
+        </Select>
+      </label>
       <label>
         Change progress page every
         <Select value={String(seconds)} onValueChange={(value) => onSeconds(Number(value))}>

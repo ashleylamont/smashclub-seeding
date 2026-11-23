@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   broadcastPresentation,
   broadcastProgressPages,
+  progressContent,
   progressInterval,
   type ProgressData,
 } from '../src/lib/broadcastProgress';
@@ -36,6 +37,13 @@ describe('OBS intermission source choices and bounded pages', () => {
       expect(progressInterval(`?cycleSeconds=${value}`)).toBe(10);
     for (const seconds of [10, 15, 30, 60])
       expect(progressInterval(`?cycleSeconds=${seconds}`)).toBe(seconds);
+  });
+
+  it('only accepts explicit intermission page choices in a source URL', () => {
+    for (const search of ['', '?progressContent=', '?progressContent=unknown'])
+      expect(progressContent(search)).toBe('all');
+    expect(progressContent('?progressContent=standings')).toBe('standings');
+    expect(progressContent('?progressContent=recent')).toBe('recent');
   });
 
   it.each([
@@ -154,8 +162,29 @@ describe('OBS intermission source choices and bounded pages', () => {
       'recent',
     ]);
     expect(broadcastProgressPages(data, true)[0]).toEqual(recent);
+    const standings = broadcastProgressPages(data, true, undefined, 'standings');
+    expect(standings.length).toBeGreaterThan(0);
+    expect(standings).toEqual(
+      broadcastProgressPages(data, true).filter(({ kind }) => kind !== 'recent-results'),
+    );
+    expect(broadcastProgressPages(data, true, undefined, 'recent')).toEqual([recent]);
     data.plan.status = 'complete';
     expect(broadcastProgressPages(data, true).at(-2)).toEqual(recent);
+    expect(broadcastProgressPages(data, true, undefined, 'recent')).toEqual([recent]);
+  });
+
+  it('uses the factual summary when the chosen intermission pages are unavailable', () => {
+    const data = fixture(4, false);
+    const summary = [{ kind: 'summary', key: 'summary' }];
+    expect(broadcastProgressPages(data, true, undefined, 'recent')).toEqual(summary);
+    expect(
+      broadcastProgressPages(
+        { ...data, matches: [], nativeBrackets: [] },
+        false,
+        undefined,
+        'standings',
+      ),
+    ).toEqual(summary);
   });
 
   it('keeps mixed-stage pools, all entrants and actual completed summaries without inventing winners', () => {
