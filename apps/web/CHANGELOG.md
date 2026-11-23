@@ -2,6 +2,20 @@
 
 Dates show when each change landed, in Sydney time. Select a version to open its GitHub release.
 
+## 0.23.1
+
+### Patch Changes
+
+- 23 November 2026 · **Fix** · Rankings explains what the conservative estimate measures and why it can differ from bracket seeds. [#536](https://github.com/ashleylamont/smashclub-seeding/pull/536) · [build a3f96fa](https://github.com/ashleylamont/smashclub-seeding/commit/a3f96faab4ceed2d6d82165e95700d53e785b4c0)
+- 23 November 2026 · **Fix** · Clarify active and published ranks on Rankings and player profiles. Label club rating and explain when rookie anchoring adjusts the current skill estimate. [#526](https://github.com/ashleylamont/smashclub-seeding/pull/526) · [build 886ea1f](https://github.com/ashleylamont/smashclub-seeding/commit/886ea1f9f262124626571dbb0585b5f322fb87dd)
+- 23 November 2026 · **Improvement** · Open Changelog in the Nemesis footer to see new features and fixes first, with maintenance below. GitHub release notes use the same layout. [#534](https://github.com/ashleylamont/smashclub-seeding/pull/534) · [build 11629a0](https://github.com/ashleylamont/smashclub-seeding/commit/11629a0e62ea572340f3f268fe040b8ed0483564)
+- 23 November 2026 · **Fix** · After live play ends, the organiser desk shows where to correct published scores. Cancelled events are labelled separately. [#538](https://github.com/ashleylamont/smashclub-seeding/pull/538) · [build 4f2127f](https://github.com/ashleylamont/smashclub-seeding/commit/4f2127f2e298e86cec0e861d4e9cde6355341d6f)
+- 23 November 2026 · **Maintenance** · Add an offline comparison to test whether doubles pair ratings predict future club nights better than singles ratings alone. [#532](https://github.com/ashleylamont/smashclub-seeding/pull/532) · [build 2014a29](https://github.com/ashleylamont/smashclub-seeding/commit/2014a29e8cde46939c05b36ad9fd52121db3cdae)
+- 23 November 2026 · **Fix** · Return keyboard focus to Display setup when you close it on an OBS preview. [#554](https://github.com/ashleylamont/smashclub-seeding/pull/554) · [build 0b2e5a6](https://github.com/ashleylamont/smashclub-seeding/commit/0b2e5a6dce15e6f3fb1ce07b1112e6eef1abe1d1)
+- 23 November 2026 · **Fix** · Retry a tournament or event results page without reloading the tab. If a refresh fails, you can still read the results you already opened. [#537](https://github.com/ashleylamont/smashclub-seeding/pull/537) · [build dafdf47](https://github.com/ashleylamont/smashclub-seeding/commit/dafdf47863bfc9bef81a3b5df36daeae76a8edee)
+- 23 November 2026 · **Fix** · Keep the dates in your rating history and night picker the same when you change time zones. [#550](https://github.com/ashleylamont/smashclub-seeding/pull/550) · [build 43a6434](https://github.com/ashleylamont/smashclub-seeding/commit/43a643418687fa51389f9aee2922c3adbbe72eec)
+- 23 November 2026 · **Maintenance** · Verify numbered release builds against the source used for their release notes, including when other changes have already landed. [#542](https://github.com/ashleylamont/smashclub-seeding/pull/542) · [build ee9723e](https://github.com/ashleylamont/smashclub-seeding/commit/ee9723e38948ab1e5a65b65346f241c61f2cb2cb)
+
 ## 0.23.0
 
 ### Minor Changes
