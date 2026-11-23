@@ -205,7 +205,7 @@ export function PlayerHubMatches({
                   </SelectItem>
                   <SelectItem value="matches">
                     {hasAutomaticReports
-                      ? 'All matches & results'
+                      ? `${closed ? 'Unfinished' : 'Open'} matches & some results`
                       : closed
                         ? 'Unfinished matches & my reports'
                         : 'All open matches'}
@@ -298,7 +298,7 @@ export function PlayerHubMatches({
             ) : view === 'reports' ? (
               'Your submitted scores will appear here.'
             ) : (
-              'No matches in this view yet. Choose a pool, search a player, or select All open matches.'
+              'No matches in this view. Change the match view or clear the filters.'
             )}
           </p>
         )}
