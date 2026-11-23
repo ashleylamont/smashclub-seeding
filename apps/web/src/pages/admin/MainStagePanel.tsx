@@ -16,6 +16,7 @@ import type { Desk, Overview } from './dispatchTypes';
 export function MainStagePanel({
   data,
   dispatch,
+  active,
   disabled,
   unavailable,
   callable,
@@ -23,6 +24,7 @@ export function MainStagePanel({
 }: {
   data: Overview;
   dispatch: DispatchCommandController;
+  active: boolean;
   disabled: boolean;
   unavailable: boolean;
   callable: ReadonlySet<string>;
@@ -30,9 +32,14 @@ export function MainStagePanel({
 }) {
   const search = useSearch({ strict: false }) as { station?: string };
   const navigate = useNavigate();
-  const station = search.station
-    ? (data.stations.find((item) => item.id === search.station) ?? data.stations[0])
-    : defaultBroadcastStation(data.stations);
+  const [automaticStationId, setAutomaticStationId] = useState<string>();
+  const requestedStationId = search.station || automaticStationId;
+  const station =
+    data.stations.find((item) => item.id === requestedStationId) ??
+    (search.station ? data.stations[0] : defaultBroadcastStation(data.stations));
+  // Hidden tabs mount before their first visit. Remember the open desk's station across polls.
+  if (!search.station && (active || automaticStationId) && station?.id !== automaticStationId)
+    setAutomaticStationId(station?.id);
   const match = data.matches.find((item) => item.id === station?.currentMatchId);
   const desk = data.operatorDispatch;
   const matchDisabled = disabled || (desk?.mode === 'shared' && dispatch.busy);

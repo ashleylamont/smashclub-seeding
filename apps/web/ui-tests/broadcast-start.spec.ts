@@ -227,3 +227,90 @@ test('Run retries the exact Broadcast start after a lost response', async ({ pag
     loseResponse();
   }
 });
+
+test('Broadcast keeps a score draft on its automatic station during polling', async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const { overview, unexpected } = await mockEvent(page, { role: 'admin' });
+  const [floor, other] = [overview.stations[0]!, overview.stations[1]!];
+  floor.name = 'Floor 1';
+  other.name = 'Floor 2';
+  const match = overview.matches.find(({ id }) => id === floor.currentMatchId)!;
+  const playing = { ...match, player1Name: alias };
+  Object.assign(match, { status: 'ready', stationId: null, started: false });
+  overview.stations = [];
+  await page.goto(`/operate/${PLAN_ID}?view=broadcast`);
+  const panel = page.getByRole('tabpanel', { name: 'Broadcast', exact: true });
+  const station = panel.getByRole('combobox', { name: 'Station', exact: true });
+  const overlay = panel.getByRole('link', { name: 'Open station overlay ↗', exact: true });
+  await expect(station).toContainText('No stations configured');
+
+  Object.assign(match, playing);
+  overview.stations = [floor, other];
+  await expect(station).toHaveAttribute('data-value', floor.id);
+  await panel.getByRole('button', { name: 'Update live score', exact: true }).click();
+  const scores = panel.locator('.ops-score-form').getByRole('spinbutton');
+  await scores.nth(0).fill('2');
+  await scores.nth(1).fill('1');
+
+  other.name = 'Stage';
+  overview.settings.resourceRevision++;
+  await station.press('Enter');
+  await expect(page.getByRole('option', { name: 'Stage', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(station).toHaveAttribute('data-value', floor.id);
+  await expect(overlay).toHaveAttribute('href', `/overlay/${PLAN_ID}?station=${floor.id}`);
+  await expect(scores.nth(0)).toHaveValue('2');
+  await expect(scores.nth(1)).toHaveValue('1');
+  await panel
+    .getByRole('button', { name: 'Intermission browser sources', exact: true })
+    .press('Enter');
+  const automatic = panel.getByRole('link', { name: /^Automatic intermission overlay/ });
+  await expect(automatic).toHaveAttribute(
+    'href',
+    `/overlay/${PLAN_ID}?station=${floor.id}&presentation=auto&controls=0`,
+  );
+  await ready(page);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({
+    path: testInfo.outputPath('broadcast-score-draft.png'),
+    fullPage: true,
+    style: captureStyle,
+  });
+
+  Object.assign(match, {
+    stationId: null,
+    status: 'complete',
+    score1: 2,
+    score2: 0,
+    winnerId: match.player1Id,
+    outcome: 'played',
+    revision: match.revision + 1,
+  });
+  overview.stations = [other];
+  await expect(station).toHaveAttribute('data-value', other.id);
+  await expect(scores).toHaveCount(0);
+  await expect(overlay).toHaveAttribute('href', `/overlay/${PLAN_ID}?station=${other.id}`);
+  expect(unexpected).toEqual([]);
+});
+
+test('Broadcast first opened from Run uses the latest automatic station', async ({ page }) => {
+  const { overview, unexpected } = await mockEvent(page, { role: 'admin' });
+  const [floor, other] = [overview.stations[0]!, overview.stations[1]!];
+  floor.name = 'Floor 1';
+  other.name = 'Floor 2';
+  await page.goto(`/operate/${PLAN_ID}?view=run`);
+  const run = page.getByRole('tabpanel', { name: 'Run matches', exact: true });
+  await expect(run).toBeVisible();
+  other.name = 'Stage';
+  await expect(run.locator('#station-controls').getByText('Stage', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Broadcast', exact: true }).press('Enter');
+  const panel = page.getByRole('tabpanel', { name: 'Broadcast', exact: true });
+  await expect(panel.getByRole('combobox', { name: 'Station', exact: true })).toHaveAttribute(
+    'data-value',
+    other.id,
+  );
+  expect(unexpected).toEqual([]);
+});
