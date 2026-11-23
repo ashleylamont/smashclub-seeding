@@ -39,3 +39,13 @@ No numerical defect was found in the reported no-history behavior. The formula a
 The current model fixes singles means as likelihood offsets, approximates baseline variance with independent marginals, and uses the existing conditional WHR variance calculation rather than a complete joint covariance model. Residuals can absorb doubles aptitude and baseline error as well as partnership effects. The narrow prior and drift parameters have not been calibrated in this audit against recurring club pairs. Existing held-out synthetic tests establish implementation behavior, not club predictive benefit.
 
 The option remains experimental and off by default. A decision to change its prior, conservative bound or default requires whole-night held-out evaluation against the average-singles baseline on real doubles history, reporting repeat-pair coverage, calibration and loss. This audit does not change the separate seeding policy in #57/#99 or rewrite historical ratings.
+
+## Offline comparison
+
+Import `evaluateDoubles` from `@smashclub/engine` and pass `{ sets, preNightSingles }`. Supply the latest result for each set using unique IDs and integer UTC days since 1970-01-01. For each UTC day, supply a map of player IDs to singles estimates fitted using only results from earlier UTC days.
+
+Pass `whrGamesWeight` to match the game-margin weight of the pair model under review. The default is 0.5.
+
+The evaluator scores both models on the same held-out sets and groups those sets by whether both exact pairs had played on an earlier night. Log loss, Brier score and calibration are set-weighted. An exact 50% probability contributes 0.5 observed to the calibration bin because either side is equally favoured.
+
+The paired bootstrap reports the 2.5th and 97.5th percentiles of the loss difference, pair residual minus average singles, with equal weight per held-out night. A group with fewer than two held-out nights has no interval. With only two nights, the bounds are the two individual night differences. Even if the two differences are independent, continuous, and symmetric around zero, they share a sign and the interval excludes zero half the time. Treat such sparse intervals as descriptive evidence.
