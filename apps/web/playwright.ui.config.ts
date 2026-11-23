@@ -4,6 +4,7 @@ import { footerMetadataCapturePath } from './ui-tests/captureStyles';
 const port = Number(process.env.UI_PORT ?? 3411);
 const baseURL = `http://127.0.0.1:${port}`;
 const executionReport = process.env.UI_EXECUTION_REPORT;
+const server = process.env.UI_SERVE_BUILT_APP === '1' ? 'preview' : 'dev';
 const reporter: PlaywrightTestConfig['reporter'] = [
   ['list'],
   ['html', { outputFolder: 'playwright-report/ui', open: 'never' }],
@@ -38,7 +39,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: {
-    command: `pnpm dev --host 127.0.0.1 --port ${port} --strictPort`,
+    command: `pnpm ${server} --host 127.0.0.1 --port ${port} --strictPort`,
     url: baseURL,
     reuseExistingServer: false,
   },

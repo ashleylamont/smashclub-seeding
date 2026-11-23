@@ -81,13 +81,27 @@ export function assertPassedUiShard(expected, report) {
 }
 
 function runShard(ordinal, expected) {
+  // Build from this checkout so a pinned release verifies its own browser assets.
+  const usePreview = process.platform === 'linux' && process.env.GITHUB_ACTIONS === 'true';
+  if (usePreview) {
+    execFileSync('pnpm', ['exec', 'vite', 'build'], { cwd: web, stdio: 'inherit' });
+  }
+
   const directory = mkdtempSync(join(tmpdir(), 'portable-ui-report-'));
   const report = join(directory, 'execution.json');
   try {
     execFileSync(
       'pnpm',
       ['test:ui', '--update-snapshots=none', ...partitions.portable, `--shard=${ordinal}`],
-      { cwd: web, stdio: 'inherit', env: { ...process.env, UI_EXECUTION_REPORT: report } },
+      {
+        cwd: web,
+        stdio: 'inherit',
+        env: {
+          ...process.env,
+          UI_EXECUTION_REPORT: report,
+          UI_SERVE_BUILT_APP: usePreview ? '1' : '0',
+        },
+      },
     );
     assertPassedUiShard(expected, JSON.parse(readFileSync(report, 'utf8')));
   } finally {
