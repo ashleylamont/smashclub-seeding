@@ -10,7 +10,8 @@ import { isKnockout } from '@smashclub/shared';
 import { useConfirmation } from '../../lib/confirmation';
 import { Button } from '../../components/ui/Button';
 import { Select, SelectItem } from '../../components/ui/Select';
-import { useId, useRef, useState } from 'react';
+import { useId, useRef, useState, type RefObject } from 'react';
+import { closedFinalizationFeedback, useFinalizationFocus } from './nativeFinalizationFeedback';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
 import { poolOrderControlId, type OpsSection } from '../../lib/opsWorkspace';
@@ -50,6 +51,9 @@ export function NativeBracketControls({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const ended = data.plan.status === 'complete' || data.plan.status === 'cancelled';
+  const finalizationFocus = useFinalizationFocus(busy, ended, Boolean(error));
+  const heading = nativeFinalizationHeading(structure);
   const combined = preview && 'seedPolicy' in preview ? preview : null;
   const entrantNames = new Map(entrants.map(({ id, name }) => [id, name]));
   const divisionLabel = (division: string) =>
@@ -63,7 +67,8 @@ export function NativeBracketControls({
         : qualifier
           ? qualifierLabel(qualifier)
           : 'Bye';
-  const act = async (work: () => Promise<unknown>, success: string, refreshOnFailure = false) => {
+  const act = async (work: () => Promise<unknown>, success: string, finalizing = false) => {
+    if (finalizing) finalizationFocus.restoreAfterFinalization();
     setBusy(true);
     setError('');
     setMessage('');
@@ -73,20 +78,17 @@ export function NativeBracketControls({
       await cache.invalidateQueries({ queryKey: ['eventOps', planId] });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not update native brackets.');
-      if (refreshOnFailure) await cache.invalidateQueries({ queryKey: ['eventOps', planId] });
+      if (finalizing) await cache.invalidateQueries({ queryKey: ['eventOps', planId] });
     } finally {
       setBusy(false);
     }
   };
+  if (ended)
+    return closedFinalizationFeedback(heading, finalizationFocus.feedbackRef, error, message);
+
   return (
     <section className="card native-finals-controls">
-      <h3>
-        {isKnockout(structure)
-          ? 'Knockout results'
-          : structure === 'round_robin'
-            ? 'Round-robin results'
-            : 'Championship and consolation'}
-      </h3>
+      <h3>{heading}</h3>
       {isKnockout(structure) ? (
         <p>
           The locked draw already contains the bracket. Complete all outstanding matches; a
@@ -289,6 +291,7 @@ export function NativeBracketControls({
         </>
       )}
       <FinalizeNativeResults
+        buttonRef={finalizationFocus.buttonRef}
         data={data}
         closed={closed}
         disabled={closed || dispatchDisabled || busy}
@@ -313,7 +316,13 @@ export function NativeBracketControls({
   );
 }
 
+function nativeFinalizationHeading(structure: Overview['plan']['structure']) {
+  if (isKnockout(structure)) return 'Knockout results';
+  return structure === 'round_robin' ? 'Round-robin results' : 'Championship and consolation';
+}
+
 function FinalizeNativeResults({
+  buttonRef,
   data,
   closed,
   disabled,
@@ -322,6 +331,7 @@ function FinalizeNativeResults({
   onOpenMatch,
   onFinalize,
 }: {
+  buttonRef: RefObject<HTMLButtonElement | null>;
   data: Overview;
   closed: boolean;
   disabled: boolean;
@@ -374,6 +384,7 @@ function FinalizeNativeResults({
         )}
         <div className="ui-actions">
           <Button
+            ref={buttonRef}
             disabled={disabled || !readyToFinalize}
             aria-describedby={finalizationDetails ? finalizationDetailsId : undefined}
             onClick={onFinalize}

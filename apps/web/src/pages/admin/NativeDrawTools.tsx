@@ -14,6 +14,7 @@ export function NativeDrawTools({ data }: { data: Overview }) {
       </Notice>
     );
   const generated = data.nativeBrackets.length > 0;
+  const ended = data.plan.status === 'complete' || data.plan.status === 'cancelled';
   return (
     <section className="app-event-board" aria-label="Tournament draw">
       {generated ? (
@@ -27,9 +28,11 @@ export function NativeDrawTools({ data }: { data: Overview }) {
         <>
           <h2>Tournament draw</h2>
           <p>
-            {isKnockout(data.plan.structure)
-              ? 'Lock the draw in the planner to publish the bracket and print its match order.'
-              : 'Finals are not created yet. Preview finals above to review the proposed pairings; paper templates are available below.'}
+            {ended
+              ? 'No elimination bracket was generated for this event.'
+              : isKnockout(data.plan.structure)
+                ? 'Lock the draw in the planner to publish the bracket and print its match order.'
+                : 'Finals are not created yet. Preview finals above to review the proposed pairings; paper templates are available below.'}
           </p>
         </>
       )}
