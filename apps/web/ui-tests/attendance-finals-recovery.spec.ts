@@ -120,6 +120,9 @@ for (const theme of ['dark', 'light'] as const) {
       const recovery = preview.getByRole('button', { name: 'Review finals removal' });
       await expect(recovery).toBeEnabled();
       await expect(apply).toBeDisabled();
+      await expect(
+        preview.getByText('0 new matches · 1 affected existing match', { exact: true }),
+      ).toBeVisible();
       if (scoped) await expect(preview).toContainText('choose Upper finals only');
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
         width,

@@ -713,6 +713,12 @@ for (const { theme, width, mode, change } of scopedRemovalCases)
     const removeUpper = removal.getByRole('button', { name: 'Remove unplayed Upper finals' });
     const open = removal.getByRole('button', { name: /^Open call for/ });
     await previewButton.press('Enter');
+    await expect(
+      draw.getByRole('heading', { name: 'upper consolation · 1 entrant · Created', exact: true }),
+    ).toBeVisible();
+    await expect(
+      draw.getByRole('heading', { name: 'upper championship · 2 entrants · Created', exact: true }),
+    ).toBeVisible();
     await expect(removal.getByRole('button', { name: 'Remove unplayed finals' })).toBeDisabled();
     await chooseOption(scope, 'lower');
     await expect(

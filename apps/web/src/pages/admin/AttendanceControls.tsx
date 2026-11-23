@@ -347,6 +347,7 @@ function AttendancePreviewPanel({
   onApply: () => void;
 }) {
   const restoring = preview.input.action === 'restore';
+  const { addedMatches, affectedMatches } = preview.result;
   const returnCallIds = preview.result.returnCallMatchIds;
   const finalsRemoval = preview.result.finalsRemoval;
   const needsFinalsReview = finalsRemoval && finalsStillPresent;
@@ -376,8 +377,8 @@ function AttendancePreviewPanel({
       )}
       {!restoring && !poolWaitingForReturn && (
         <p>
-          {preview.result.addedMatches} new match(es) · {preview.result.affectedMatches.length}{' '}
-          affected existing match(es)
+          {addedMatches} new {addedMatches === 1 ? 'match' : 'matches'} · {affectedMatches.length}{' '}
+          affected existing {affectedMatches.length === 1 ? 'match' : 'matches'}
         </p>
       )}
       {(returnCallIds && !callsStillOpen) || refreshAfterFinals ? (
@@ -410,9 +411,9 @@ function AttendancePreviewPanel({
           warnings={preview.result.warnings}
         />
       )}
-      {!restoring && preview.result.affectedMatches.length > 0 && (
+      {!restoring && affectedMatches.length > 0 && (
         <ul>
-          {preview.result.affectedMatches.map((match) => {
+          {affectedMatches.map((match) => {
             const withdrawal = preview.result.withdrawalMatches?.[match.id];
             const status = withdrawal?.state
               ? withdrawalStatusLabels[withdrawal.state]

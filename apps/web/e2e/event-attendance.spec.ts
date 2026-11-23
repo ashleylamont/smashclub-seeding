@@ -117,7 +117,7 @@ test('attendance preview preserves completed play, rejects stale changes, and ho
     latePlayer.playerId,
   );
   await attendance.getByRole('button', { name: 'Preview attendance change' }).click();
-  await expect(attendance.locator('.ops-attendance-preview')).toContainText('4 new match(es)');
+  await expect(attendance.locator('.ops-attendance-preview')).toContainText('4 new matches');
   await expect(attendance.getByRole('checkbox', { name: /Challonge bracket/ })).toHaveCount(0);
   await attendance.getByRole('button', { name: 'Apply this change' }).click();
   await expect(attendance.getByRole('status')).toContainText('Attendance updated');
