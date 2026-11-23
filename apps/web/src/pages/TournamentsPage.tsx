@@ -106,13 +106,6 @@ function TournamentGroup({ title, items }: { title: string; items: TournamentEve
                   </Link>
                 ))}
                 <Link
-                  to="/events/$slug"
-                  params={{ slug: event.slug }}
-                  className="tournament-recap-link"
-                >
-                  Event overview →
-                </Link>
-                <Link
                   to="/recaps/$slug"
                   params={{ slug: event.slug }}
                   className="tournament-recap-link"

@@ -133,40 +133,34 @@ function Recap({ data }: { data: RecapData }) {
         </p>
       )}
 
-      <section className="section">
-        <h2>Highlights</h2>
-        {storyFacts.length === 0 ? (
-          <p className="muted">
-            No standout moments met the selection threshold. Full results remain available below.
-          </p>
-        ) : (
-          <>
-            {/* The most notable fact is the night's lead story, not a card
-                among cards — highlights need a front page. */}
-            <LeadStory
-              entry={storyFacts[0]!}
-              bracket={
-                storyFacts[0]!.fact.tournamentId
-                  ? tournamentName.get(storyFacts[0]!.fact.tournamentId)
-                  : null
-              }
-              multiBracket={data.tournaments.length > 1}
-            />
-            <ul className="fact-grid">
-              {storyFacts.slice(1).map((entry) => (
-                <FactCard
-                  key={entry.id}
-                  entry={entry}
-                  bracket={
-                    entry.fact.tournamentId ? tournamentName.get(entry.fact.tournamentId) : null
-                  }
-                  multiBracket={data.tournaments.length > 1}
-                />
-              ))}
-            </ul>
-          </>
-        )}
-      </section>
+      {storyFacts.length > 0 && (
+        <section className="section">
+          <h2>Highlights</h2>
+          {/* The most notable fact is the night's lead story, not a card
+              among cards — highlights need a front page. */}
+          <LeadStory
+            entry={storyFacts[0]!}
+            bracket={
+              storyFacts[0]!.fact.tournamentId
+                ? tournamentName.get(storyFacts[0]!.fact.tournamentId)
+                : null
+            }
+            multiBracket={data.tournaments.length > 1}
+          />
+          <ul className="fact-grid">
+            {storyFacts.slice(1).map((entry) => (
+              <FactCard
+                key={entry.id}
+                entry={entry}
+                bracket={
+                  entry.fact.tournamentId ? tournamentName.get(entry.fact.tournamentId) : null
+                }
+                multiBracket={data.tournaments.length > 1}
+              />
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="section">
         <h2>Brackets</h2>
