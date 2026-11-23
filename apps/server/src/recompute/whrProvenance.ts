@@ -72,6 +72,16 @@ export function currentWhrConvergedPreNightKeys(
     : null;
 }
 
+/** The latest rated night, if its earlier fit can support a rank comparison. */
+export function verifiedRankMovementNight(stats: unknown): string | null {
+  const fingerprints = currentWhrPrefixFingerprints(stats);
+  if (!fingerprints) return null;
+  const latest = Object.keys(fingerprints).sort().at(-1);
+  return latest && currentWhrConvergedPreNightKeys(stats, fingerprints)?.includes(latest)
+    ? latest
+    : null;
+}
+
 /** Hash the ordered fit inputs. Each checkpoint excludes later nights and debut priors. */
 export function whrPrefixFingerprints(history: PreparedWhrHistory) {
   const hash = createHash('sha256').update(

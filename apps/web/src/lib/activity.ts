@@ -21,7 +21,7 @@
 export interface RankableRow {
   playerId: string;
   rank: number;
-  /** Rank before the club's most recent night; null if unrated then. */
+  /** Rank before the most recent rated night, when that comparison is available. */
   previousRank: number | null;
   rankDelta: number | null;
   /** ISO date of the player's most recent event. */
@@ -109,8 +109,7 @@ function reRank<T extends RankableRow>(rows: readonly T[]): T[] {
 
   return byRank.map((row, index) => {
     const rank = index + 1;
-    // Null previousRank means "had no rating before the last night", which is
-    // still true of the smaller field — they get no arrow, not a ▲.
+    // A missing comparison stays unavailable when the field gets smaller.
     const previousRank = previously.get(row.playerId) ?? null;
     return {
       ...row,

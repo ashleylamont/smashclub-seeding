@@ -38,10 +38,11 @@ import {
   publicParticipantName,
   isPlayedRatingResult,
 } from '@smashclub/shared';
-import { latestRecomputeId } from '../recompute/recompute';
+import { latestCompletedRecompute } from '../recompute/recompute';
 import {
   loadWhrHistoryThroughDay,
   readWhrRunProvenance,
+  verifiedRankMovementNight,
   whrPrefixFingerprints,
 } from '../recompute/whrProvenance';
 import { publicParticipantPresentation } from '../events/participantNames';
@@ -286,9 +287,15 @@ export async function loadRecap(
 
   // --- ratings (optional) -------------------------------------------------
 
-  const recomputeId = doubles ? null : await latestRecomputeId(db);
-  const { nightEvents, history, rankMovement } = recomputeId
-    ? await loadRatingContext(db, recomputeId, nightIds)
+  const recompute = doubles ? null : await latestCompletedRecompute(db);
+  const recomputeId = recompute?.id ?? null;
+  const { nightEvents, history, rankMovement } = recompute
+    ? await loadRatingContext(
+        db,
+        recompute.id,
+        nightIds,
+        anchorKey !== null && verifiedRankMovementNight(recompute.stats) === anchorKey,
+      )
     : { nightEvents: [], history: undefined, rankMovement: [] };
   const upsetBrackets = recapRatingUpsetBrackets({
     sets: recapSets,
@@ -450,6 +457,7 @@ async function loadRatingContext(
   db: Db,
   recomputeId: string,
   nightIds: string[],
+  showRankMovement: boolean,
 ): Promise<RatingContext> {
   const nightRows = await db
     .select({
@@ -546,14 +554,16 @@ async function loadRatingContext(
     [...nightsByPlayer].map(([playerId, nights]) => [playerId, nights.size]),
   );
 
-  const rankMovement = await db
-    .select({
-      playerId: playerRatings.playerId,
-      rank: playerRatings.rank,
-      previousRank: playerRatings.previousRank,
-    })
-    .from(playerRatings)
-    .where(eq(playerRatings.recomputeId, recomputeId));
+  const rankMovement = showRankMovement
+    ? await db
+        .select({
+          playerId: playerRatings.playerId,
+          rank: playerRatings.rank,
+          previousRank: playerRatings.previousRank,
+        })
+        .from(playerRatings)
+        .where(eq(playerRatings.recomputeId, recomputeId))
+    : [];
 
   return {
     nightEvents,

@@ -1,11 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
-import { playerRatings, players, tournaments, type Db } from '@smashclub/db';
+import {
+  playerRatings,
+  players,
+  recomputes,
+  sets,
+  tournamentParticipants,
+  tournaments,
+  type Db,
+} from '@smashclub/db';
+import { defaultRatingSettings } from '@smashclub/shared';
 import { importRegistryPlayers, registerTournamentSlugs } from '../src/bootstrap/importRegistry';
 import { syncTournament } from '../src/sync/sync';
 import { runRecompute } from '../src/recompute/recompute';
 import { RecomputeTrigger } from '../src/recompute/trigger';
 import { loadEnv } from '../src/env';
+import { updateRatingSettings } from '../src/settings';
 import { appRouter } from '../src/trpc/router';
 import { createTestDb } from './helpers/testDb';
 import { fixtureClient, type FixtureTournament } from './helpers/challongeFixtures';
@@ -116,21 +126,24 @@ async function board(
   );
 }
 
-/** What the board actually publishes, through the real router. */
-async function publicDeltas(): Promise<Map<string, number | null>> {
+function publicApi() {
   const env = loadEnv({
     NODE_ENV: 'test',
     DATABASE_URL: 'postgres://unused',
     BETTER_AUTH_SECRET: 'test-secret-test-secret-test',
   });
-  const caller = appRouter.createCaller({
+  return appRouter.createCaller({
     db,
     env,
     user: null,
     challonge: fixtureClient(ALL),
     recomputeTrigger: new RecomputeTrigger(db, 1_000_000),
-  });
-  const { rows } = await caller.public.leaderboard();
+  }).public;
+}
+
+/** What the board actually publishes, through the real router. */
+async function publicDeltas(): Promise<Map<string, number | null>> {
+  const { rows } = await publicApi().leaderboard();
   // Keyed on the canonical name, not the published one, so this map shares a
   // key space with board() above — the published name is the shortened alias,
   // and the canonical one never leaves the server on a public route, so the
@@ -141,6 +154,48 @@ async function publicDeltas(): Promise<Map<string, number | null>> {
     ),
   );
   return new Map(rows.map((row) => [canonicalById.get(row.playerId)!, row.rankDelta]));
+}
+
+async function addRatedNight(key: string, names: readonly [string, string], winners: (1 | 2)[]) {
+  const [first, second] = await Promise.all(names.map(playerId));
+  const slug = `movement-${key}`;
+  const [night] = await db
+    .insert(tournaments)
+    .values({
+      name: slug,
+      challongeSlug: slug,
+      challongeState: 'complete',
+      eventDate: new Date(`${key}T08:00:00Z`),
+    })
+    .returning({ id: tournaments.id });
+  const tournamentId = night!.id;
+  const [firstEntry, secondEntry] = await db
+    .insert(tournamentParticipants)
+    .values(
+      [first!, second!].map((id, index) => ({
+        tournamentId,
+        playerId: id,
+        challongeParticipantId: index + 1,
+        rawName: names[index]!,
+        cleanedName: names[index]!,
+        challongeSeed: index + 1,
+      })),
+    )
+    .returning({ id: tournamentParticipants.id });
+  await db.insert(sets).values(
+    winners.map((winner, index) => ({
+      tournamentId,
+      challongeMatchId: index + 1,
+      p1PlayerId: first!,
+      p2PlayerId: second!,
+      p1ParticipantId: firstEntry!.id,
+      p2ParticipantId: secondEntry!.id,
+      winner,
+      scoresCsv: winner === 1 ? '3-0' : '0-3',
+      state: 'complete',
+    })),
+  );
+  return slug;
 }
 
 describe('rank movement over the last club night', () => {
@@ -180,6 +235,82 @@ describe('rank movement over the last club night', () => {
     );
     expect(deltas.get('Samus Aran')!).toBeGreaterThan(0);
     expect(deltas.get('Fox McCloud')!).toBeLessThan(0);
+
+    const api = publicApi();
+    expect(
+      (await api.recap({ slug: 'night2' }))?.facts.some(({ fact }) => fact.kind === 'mover'),
+    ).toBe(true);
+    expect(
+      (await api.recap({ slug: 'night1' }))?.facts.some(({ fact }) => fact.kind === 'mover'),
+    ).toBe(false);
+  });
+
+  it('keeps converged ranks while withholding movement from a capped previous fit', async () => {
+    await updateRatingSettings(db, {
+      ...defaultRatingSettings,
+      activityGraceEvents: 0,
+      activityPenaltyPerEvent: 15,
+      activityPenaltyCap: 75,
+    });
+    const pair = ['Fox McCloud', 'Samus Aran'] as const;
+    await addRatedNight('2026-01-01', pair, [...Array<1>(38).fill(1), ...Array<2>(30).fill(2)]);
+    const slug = await addRatedNight('2026-01-08', pair, Array<2>(9).fill(2));
+    const { recomputeId } = await runRecompute(db);
+    const [run] = await db
+      .select({ stats: recomputes.stats })
+      .from(recomputes)
+      .where(eq(recomputes.id, recomputeId));
+    expect(run?.stats).toMatchObject({
+      whr: { converged: true },
+      whrConvergedPreNightKeys: [],
+    });
+    expect.soft(await board(recomputeId)).toEqual(
+      new Map([
+        ['Samus Aran', { rank: 1, previousRank: null }],
+        ['Fox McCloud', { rank: 2, previousRank: null }],
+      ]),
+    );
+
+    // An older build stored the capped prefix's ranks. Public readers must
+    // suppress these existing rows without changing the published current run.
+    const samus = await playerId('Samus Aran');
+    await db
+      .update(playerRatings)
+      .set({ previousRank: 2 })
+      .where(and(eq(playerRatings.recomputeId, recomputeId), eq(playerRatings.playerId, samus)));
+    const api = publicApi();
+    const { rows } = await api.leaderboard();
+    expect.soft(rows).toMatchObject([
+      { playerId: samus, rank: 1, previousRank: null, rankDelta: null },
+      { rank: 2, previousRank: null, rankDelta: null },
+    ]);
+    expect.soft(rows.every(({ activityPenalty }) => activityPenalty === 0)).toBe(true);
+    const recap = await api.recap({ slug });
+    expect.soft(recap?.facts.some(({ fact }) => fact.kind === 'mover')).toBe(false);
+
+    // When that run has no convergence provenance, stored ranks still do not
+    // prove that the comparison is reliable.
+    await db
+      .update(recomputes)
+      .set({ stats: { whr: { converged: true } } })
+      .where(eq(recomputes.id, recomputeId));
+    expect.soft((await api.leaderboard()).rows[0]).toMatchObject({
+      rank: 1,
+      previousRank: null,
+      rankDelta: null,
+    });
+
+    await db.insert(players).values({ canonicalName: 'Delta' });
+    await addRatedNight('2026-01-15', ['Kirby', 'Delta'], [1]);
+    await runRecompute(db);
+    const next = (await api.leaderboard()).rows.find(({ playerId }) => playerId === samus);
+    expect(next).toMatchObject({
+      rank: 2,
+      previousRank: 1,
+      rankDelta: -1,
+      missedEvents: 1,
+      activityPenalty: 15,
+    });
   });
 
   it('does not forget the movement when the pipeline runs again', async () => {

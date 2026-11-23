@@ -31,9 +31,8 @@ export interface WhrRunResult {
   /** UTC event keys whose strictly earlier fit converged. */
   convergedPreNightKeys: string[];
   /**
-   * Rank each player held on the board fitted *without* the latest event —
-   * the same prefix the ledger already computes — so the recompute can record
-   * `previousRank` without running a second withheld fit.
+   * Rank each player held on the converged board fitted without the latest
+   * event, using the same prefix already computed for the ledger.
    */
   previousRanks: Map<string, number>;
 }
@@ -332,17 +331,16 @@ export function runWhrModel(input: WhrModelInput): WhrRunResult {
   const leaderboard = buildLeaderboard(fullFit, rateable, orderedEventKeys, settings, priorMeans);
 
   /**
-   * The board as it stood before the latest night: the second-to-last prefix,
-   * scored the same way. This is what the ▲▼ column diffs against, and using
-   * the prefix directly keeps it byte-identical with the ledger's idea of
-   * "before" — no separate withheld refit that could drift.
+   * Compare with the board from the converged prefix before the latest night,
+   * scored the same way as the current board.
    */
   const previousRanks = new Map<string, number>();
-  if (orderedEventKeys.length > 1) {
+  const previousFit = fits.at(-2);
+  if (previousFit?.converged) {
     const withheldKey = orderedEventKeys[orderedEventKeys.length - 1]!;
     const previousRateable = rateable.filter((r) => r.eventKey !== withheldKey);
     const previousBoard = buildLeaderboard(
-      fits[orderedEventKeys.length - 2]!,
+      previousFit,
       previousRateable,
       orderedEventKeys.slice(0, -1),
       settings,

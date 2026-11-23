@@ -21,6 +21,7 @@ import { includesResultStage, publicPlayerName, unplayedResultOutcome } from '@s
 import { latestRecomputeId } from '../../recompute/recompute';
 import { readRatingNightHistory } from '../../recompute/ratingNightHistory';
 import { readWhrResultImpact } from '../../recompute/whrResultImpact';
+import { verifiedRankMovementNight } from '../../recompute/whrProvenance';
 import { getRatingSettings } from '../../settings';
 import { charactersByPlayer, charactersForPlayer } from '../../players/characters';
 import { rankRecapHighlights } from '../../recap/highlightRanking';
@@ -57,7 +58,6 @@ export const publicRouter = router({
           .select({
             playerId: playerRatings.playerId,
             rank: playerRatings.rank,
-            /** Rank before the club's most recent night; null if unrated then. */
             previousRank: playerRatings.previousRank,
             league: playerRatings.league,
             /** Best estimate, shown with its ± band. */
@@ -134,6 +134,7 @@ export const publicRouter = router({
       penaltyPerEvent: rating.activityPenaltyPerEvent,
       penaltyCap: rating.activityPenaltyCap,
     };
+    const movementAvailable = verifiedRankMovementNight(recompute?.stats) !== null;
 
     return {
       computedAt: recompute?.finishedAt?.toISOString() ?? null,
@@ -149,13 +150,10 @@ export const publicRouter = router({
         verified: verifiedIds.has(row.playerId),
         /** Mains, in the player's chosen order; drawn as head icons. */
         characters: characters.get(row.playerId) ?? [],
-        /**
-         * Places gained over the club's most recent night; null if this player
-         * had no rating before it. Recorded by the recompute against a replay
-         * that withholds that night, so it reports what the games did and not
-         * what any other recompute happened to change.
-         */
-        rankDelta: row.previousRank === null ? null : row.previousRank - row.rank,
+        /** Position from the converged standings before the latest rated night. */
+        previousRank: movementAvailable ? row.previousRank : null,
+        rankDelta:
+          movementAvailable && row.previousRank !== null ? row.previousRank - row.rank : null,
       })),
     };
   }),
