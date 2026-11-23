@@ -573,6 +573,16 @@ test('large tie stays complete within the mobile canvas limit', async ({ page },
     playerId: null,
     wins: 1,
     losses: 1,
+    graphic: {
+      teamName: null,
+      members: [
+        {
+          name: `Wide public tag ${index + 1}`,
+          character: null,
+          profileMains: ['mario', 'luigi'],
+        },
+      ],
+    },
   }));
   fixture.responses['public.eventOverview'] = {
     name: 'Large tie',
@@ -605,7 +615,20 @@ test('large tie stays complete within the mobile canvas limit', async ({ page },
   const lastRender = drawn.slice(drawn.lastIndexOf('NEMESIS / SMASH CLUB'));
   expect(lastRender.filter((label) => label === '8')).toHaveLength(63);
   expect(lastRender).toContain('Wide public tag 70');
-  await writeFile(testInfo.outputPath('large-tie-results.png'), await previewBytes(image));
+  const defaultPng = await previewBytes(image);
+  await writeFile(testInfo.outputPath('large-tie-results.png'), defaultPng);
+  const includeMains = page.getByRole('switch', { name: 'Include profile mains' });
+  await includeMains.press('Space');
+  await expect(image).toBeVisible();
+  const appendixPng = await previewBytes(image);
+  expect(appendixPng.readUInt32BE(20)).toBe(4096);
+  expect(appendixPng.readUInt32BE(16)).toBeLessThan(defaultPng.readUInt32BE(16));
+  const appendixRender = drawn.slice(drawn.lastIndexOf('NEMESIS / SMASH CLUB'));
+  expect(appendixRender).toContain('PROFILE MAINS');
+  expect(appendixRender.filter((label) => label === 'Wide public tag 70')).toHaveLength(2);
+  await includeMains.press('Space');
+  await expect(image).toBeVisible();
+  expect(await previewBytes(image)).toEqual(defaultPng);
 
   await page.keyboard.press('Escape');
   const legacy = page.waitForEvent('download');

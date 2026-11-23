@@ -1,7 +1,8 @@
+import type { EventOverview } from '../../src/events/overview';
 import type { TournamentResult } from '../../src/tournament/schemas';
 import { expect } from 'vitest';
 import { and, eq } from 'drizzle-orm';
-import { playerRatings, type Db } from '@smashclub/db';
+import { playerRatings, type Db, type players } from '@smashclub/db';
 import { runRecompute } from '../../src/recompute/recompute';
 import type { appRouter } from '../../src/trpc/router';
 
@@ -106,4 +107,27 @@ export async function expectDoublesArchivePair(
     first,
     second,
   ]);
+}
+
+type PairProfile = Pick<typeof players.$inferSelect, 'id' | 'displayName'>;
+
+export function expectPublishedGraphicPair(
+  event: EventOverview,
+  member: PairProfile,
+  partner: PairProfile,
+) {
+  const publishedPair = event.divisions
+    .flatMap((d) => d.players)
+    .find((p) => p.graphic?.teamName === 'Pair 0');
+  expect(publishedPair?.verifiedDoublesPair?.members.map(({ playerId }) => playerId)).toEqual([
+    member.id,
+    partner.id,
+  ]);
+  expect(publishedPair?.graphic).toEqual({
+    teamName: 'Pair 0',
+    members: [
+      { name: member.displayName, character: 'mario', profileMains: ['mario', 'luigi'] },
+      { name: partner.displayName, character: 'peach', profileMains: ['peach', 'daisy'] },
+    ],
+  });
 }

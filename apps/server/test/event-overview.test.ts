@@ -15,6 +15,8 @@ import { importRegistryPlayers } from '../src/bootstrap/importRegistry';
 import { canCustomizeResultGraphic } from '../src/event-operations/resultGraphicAccess';
 import { nativeAdmin } from './helpers/nativeLiveFixture';
 import { loadEventOverview } from '../src/events/overview';
+import { ensureAlias, matchTournamentParticipants } from '../src/identity/matching';
+import { setPlayerCharacters } from '../src/players/characters';
 import { loadRecap } from '../src/recap/recap';
 import { createTestDb } from './helpers/testDb';
 
@@ -297,9 +299,11 @@ it('limits local result art choices to admin or a common explicit organiser plan
   expect(await canCustomizeResultGraphic(db, to, { tournamentIds: [main] })).toBe(false);
 });
 
-it('leaves imported and unreceipted doubles entrant names without individual previews', async () => {
+it('keeps imported and unreceipted doubles artwork without revealing team-linked profile mains', async () => {
   const [first, second] = await playerIds();
-  const [imported, unreceipted] = await db
+  await setPlayerCharacters(db, first!, ['fox', 'falco']);
+  await ensureAlias(db, first!, 'captain', null, 'manual');
+  const [imported, unreceipted, singles] = await db
     .insert(tournaments)
     .values([
       {
@@ -316,31 +320,92 @@ it('leaves imported and unreceipted doubles entrant names without individual pre
         challongeState: 'complete',
         raw: { structure: 'round_robin' },
       },
+      {
+        name: 'Imported singles',
+        challongeSlug: 'imported-singles',
+        competitionFormat: 'singles',
+        challongeState: 'complete',
+      },
     ])
     .returning();
-  await db.insert(tournamentParticipants).values([
-    {
-      tournamentId: imported!.id,
-      challongeParticipantId: 1,
+  for (const tournament of [imported!, singles!]) {
+    const [captain, opponent] = await db
+      .insert(tournamentParticipants)
+      .values([
+        {
+          tournamentId: tournament.id,
+          challongeParticipantId: 1,
+          rawName: 'Captain',
+          cleanedName: 'Captain',
+          finalRank: 1,
+        },
+        {
+          tournamentId: tournament.id,
+          challongeParticipantId: 2,
+          rawName: 'Unresolved opponent',
+          cleanedName: 'Unresolved opponent',
+          finalRank: 2,
+        },
+      ])
+      .returning();
+    const links = await matchTournamentParticipants(db, tournament.id);
+    expect(links.find(({ participantId }) => participantId === captain!.id)).toMatchObject({
       playerId: first,
-      rawName: 'Unverified pair label',
-      cleanedName: 'Unverified pair label',
-      finalRank: 1,
-    },
-    {
-      tournamentId: unreceipted!.id,
-      challongeParticipantId: 1,
-      teamName: 'Native pair label',
-      memberPlayerIds: [first!, second!],
-      rawName: 'Native pair label',
-      cleanedName: 'Native pair label',
-      finalRank: 1,
-    },
-  ]);
-  for (const t of [imported!, unreceipted!]) {
-    const overview = await loadEventOverview(db, t.challongeSlug);
-    const [entrant] = overview!.brackets[0]!.players;
-    expect(entrant?.verifiedDoublesPair).toBeUndefined();
-    expect(entrant?.playerId).toBeNull();
+    });
+    await db.insert(sets).values({
+      tournamentId: tournament.id,
+      challongeMatchId: 1,
+      round: 1,
+      p1ParticipantId: captain!.id,
+      p2ParticipantId: opponent!.id,
+      state: 'complete',
+      winner: 1,
+      resultStage: 'final',
+      scoresCsv: '2-0',
+      excludedFromRatings: true,
+      raw: { outcome: 'forfeit' },
+    });
   }
+  await db.insert(tournamentParticipants).values({
+    tournamentId: unreceipted!.id,
+    challongeParticipantId: 1,
+    teamName: 'Native pair label',
+    memberPlayerIds: [first!, second!],
+    rawName: 'Native pair label',
+    cleanedName: 'Native pair label',
+    finalRank: 1,
+  });
+
+  const importedEntrant = (await loadEventOverview(
+    db,
+    imported!.challongeSlug,
+  ))!.brackets[0]!.players.find(({ place }) => place === 1);
+  expect(importedEntrant).toMatchObject({ playerId: null, wins: 0, losses: 0 });
+  expect(importedEntrant?.verifiedDoublesPair).toBeUndefined();
+  expect(importedEntrant?.graphic?.members).toEqual([
+    { name: importedEntrant?.name, character: 'fox' },
+  ]);
+
+  const unreceiptedEntrant = (await loadEventOverview(db, unreceipted!.challongeSlug))!.brackets[0]!
+    .players[0];
+  expect(unreceiptedEntrant?.playerId).toBeNull();
+  expect(unreceiptedEntrant?.verifiedDoublesPair).toBeUndefined();
+  expect(
+    unreceiptedEntrant?.graphic?.members.map(({ character, profileMains }) => ({
+      character,
+      profileMains,
+    })),
+  ).toEqual([
+    { character: 'fox', profileMains: undefined },
+    { character: null, profileMains: undefined },
+  ]);
+
+  const singlesEntrant = (await loadEventOverview(
+    db,
+    singles!.challongeSlug,
+  ))!.brackets[0]!.players.find(({ place }) => place === 1);
+  expect(singlesEntrant?.playerId).toBe(first);
+  expect(singlesEntrant?.graphic?.members).toEqual([
+    { name: singlesEntrant?.name, character: 'fox', profileMains: ['fox', 'falco'] },
+  ]);
 });
