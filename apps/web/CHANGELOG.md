@@ -2,6 +2,12 @@
 
 Dates show when each change landed, in Sydney time. Select a version to open its GitHub release.
 
+## 0.23.9
+
+### Patch Changes
+
+- 23 November 2026 · **Fix** · Print the recorded scores and winners from a published bracket in Standings / draw. [#613](https://github.com/ashleylamont/smashclub-seeding/pull/613) · [build 1932a7d](https://github.com/ashleylamont/smashclub-seeding/commit/1932a7da034f1c2270017855fe94bb8c65c75e79)
+
 ## 0.23.8
 
 ### Patch Changes
