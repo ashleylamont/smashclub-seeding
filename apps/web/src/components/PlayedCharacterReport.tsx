@@ -40,6 +40,7 @@ export function PlayedCharacterReport({
       }}
       disabled={save.isPending}
       triggerLabel="Report characters played"
+      compactTrigger
       description="Add the fighters you remember. Saving replaces your previous character report for this set."
       action={
         <Button

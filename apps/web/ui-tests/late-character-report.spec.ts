@@ -47,11 +47,21 @@ for (const [width, colorScheme] of [
     await chooseOption(page.getByRole('combobox', { name: 'Match view' }), 'results');
     const card = page.locator('article.ops-match').filter({ hasText: match.label });
     const opener = card.getByRole('button', { name: 'Report characters played' });
+    await expect(opener).toBeVisible();
+    await ready(page);
+    const openerBounds = (await opener.boundingBox())!;
+    const cardBounds = (await card.boundingBox())!;
+    await card.screenshot({ path: testInfo.outputPath('report-trigger.png') });
+    expect(openerBounds.width).toBeLessThan(cardBounds.width * 0.8);
+    expect(openerBounds.height).toBeGreaterThanOrEqual(width === 390 ? 44 : 32);
+    if (width > 390) expect(openerBounds.height).toBeLessThan(36);
+
     await opener.press('Enter');
     const dialog = page.getByRole('dialog', { name: 'Characters played' });
     const picker = dialog.getByRole('combobox', { name: `Add fighter for ${PLAYER_NAME}` });
     const save = dialog.getByRole('button', { name: 'Save character report' });
     await expect(save).toBeDisabled();
+    await dialog.screenshot({ path: testInfo.outputPath('report-open.png') });
     await chooseOption(picker, 'fox');
     await chooseOption(picker, 'falco');
     await ready(page);
