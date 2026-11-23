@@ -2,6 +2,12 @@
 
 Dates show when each change landed, in Sydney time. Select a version to open its GitHub release.
 
+## 0.23.15
+
+### Patch Changes
+
+- 23 November 2026 · **Fix** · Use browser Back from a player profile to return to Rankings with the same search, company filter and sort order. Preview stays available on phones, and wider layouts give the full row to the player profile link. [#642](https://github.com/ashleylamont/smashclub-seeding/pull/642) · [build 11be3ac](https://github.com/ashleylamont/smashclub-seeding/commit/11be3ac08d360ad1010d03730c1ebc8e5873ce32)
+
 ## 0.23.14
 
 ### Patch Changes
