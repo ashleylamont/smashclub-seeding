@@ -18,7 +18,8 @@ import {
 } from '@smashclub/engine';
 import { isBracketOver, isPlayedRatingResult, publicPlayerName } from '@smashclub/shared';
 import { z } from 'zod';
-import { latestRecomputeId } from '../recompute/recompute';
+import { readNightFitAvailability } from '../recompute/nightFitAvailability';
+import { latestCompletedRecompute } from '../recompute/recompute';
 import { nativeHistoryForTournaments } from './nativeHistory';
 
 const uuid = z.uuid();
@@ -224,7 +225,13 @@ async function publishedForecast(db: Db, recomputeId: string, first: string, sec
   };
 }
 
-async function sharedRatingNight(db: Db, recomputeId: string, first: string, second: string) {
+async function sharedRatingNight(
+  db: Db,
+  run: { id: string; stats: unknown },
+  first: string,
+  second: string,
+) {
+  const recomputeId = run.id;
   const secondNight = alias(ratingNights, 'second_night');
   const earlierNight = alias(ratingNights, 'earlier_night');
   // A debut's pre-night estimate is a prior. Both players need earlier evidence.
@@ -280,10 +287,24 @@ async function sharedRatingNight(db: Db, recomputeId: string, first: string, sec
     .orderBy(desc(ratingNights.eventKey))
     .limit(1);
   if (!night) return null;
-  const estimates = [night.first, night.second] as const;
-  return estimates.every((estimate) => Object.values(estimate).every(Number.isFinite))
-    ? { eventKey: night.eventKey, estimates }
-    : null;
+  const { eventKey, first: firstEstimate, second: secondEstimate } = night;
+  const estimates = [firstEstimate, secondEstimate] as const;
+  if (!estimates.every((estimate) => Object.values(estimate).every(Number.isFinite))) return null;
+
+  const availability = await readNightFitAvailability(db, run);
+  const before = availability.before.has(eventKey);
+  const after = availability.after.has(eventKey);
+  if (before && after) return { full: { eventKey, estimates }, partial: null };
+
+  const mask = (estimate: typeof firstEstimate) => ({
+    ...estimate,
+    preRating: before ? estimate.preRating : null,
+    postRating: after ? estimate.postRating : null,
+  });
+  return {
+    full: null,
+    partial: { eventKey, estimates: [mask(firstEstimate), mask(secondEstimate)] as const },
+  };
 }
 
 export function readHeadToHead(db: Db, input: z.infer<typeof headToHeadInput>) {
@@ -310,20 +331,17 @@ export function readHeadToHead(db: Db, input: z.infer<typeof headToHeadInput>) {
       const ids = (side: number) =>
         identities.filter((row) => row.side === side).map((row) => row.historicalId);
       const history = await recentPairResults(tx, ids(0), ids(1));
-      const recomputeId = await latestRecomputeId(tx);
-      const forecast = recomputeId
-        ? await publishedForecast(tx, recomputeId, first.id, second.id)
-        : null;
-      const ratingNight =
-        forecast && recomputeId
-          ? await sharedRatingNight(tx, recomputeId, first.id, second.id)
-          : null;
+      const run = await latestCompletedRecompute(tx);
+      const forecast = run ? await publishedForecast(tx, run.id, first.id, second.id) : null;
+      const night = forecast && run ? await sharedRatingNight(tx, run, first.id, second.id) : null;
       return {
         status: 'ready' as const,
         players: [first, second] as const,
         history,
         forecast,
-        ratingNight,
+        // Older clients subtract these fields as numbers.
+        ratingNight: night?.full ?? null,
+        partialRatingNight: night?.partial ?? null,
       };
     },
     { isolationLevel: 'repeatable read', accessMode: 'read only' },
