@@ -132,6 +132,16 @@
   white-space: nowrap;
 }
 
+.sets-table .set-field-reported {
+  min-width: calc(14ch + 2 * var(--s3));
+}
+
+@media (min-width: 60rem) {
+  .sets-table .set-field-reported {
+    white-space: nowrap;
+  }
+}
+
 .set-field-label {
   display: none;
 }
@@ -222,8 +232,9 @@
     grid-area: identifier;
   }
 
-  .set-field-reported {
+  .sets-table .set-field-reported {
     grid-area: reported;
+    min-width: 0;
   }
 }
 

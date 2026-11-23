@@ -289,9 +289,7 @@ function TournamentSetsTable({
               Round
             </th>
             <th scope="col">Set</th>
-            <th scope="col" className="col-fill">
-              Match
-            </th>
+            <th scope="col">Match</th>
             <th scope="col">Score</th>
             <th scope="col">Status</th>
             <th scope="col">Reported</th>
