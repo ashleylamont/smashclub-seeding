@@ -95,7 +95,10 @@ function Evidence({
   impact: WhrResultImpact | undefined;
 }) {
   return (
-    <td className="num">
+    <td className="num match-log-evidence">
+      <span className="match-log-field-label" aria-hidden="true">
+        Evidence
+      </span>
       {unavailable && unavailable !== 'not_rated' ? (
         <span className="whr-impact-value">{unavailableLabel[unavailable]}</span>
       ) : weight == null ? (
@@ -140,12 +143,14 @@ export function PlayerMatchLog({
       <table className="match-table data-table">
         <thead>
           <tr>
-            <th>Date</th>
-            <th>Event</th>
-            <th>Stage</th>
-            <th>Opponent</th>
-            <th>Result</th>
-            <th className="num">Evidence</th>
+            <th scope="col">Date</th>
+            <th scope="col">Event</th>
+            <th scope="col">Stage</th>
+            <th scope="col">Opponent</th>
+            <th scope="col">Result</th>
+            <th scope="col" className="num">
+              Evidence
+            </th>
           </tr>
         </thead>
         <tbody ref={body}>
@@ -177,8 +182,8 @@ export function PlayerMatchLog({
                   data-whr-set-id={setId ?? undefined}
                   className={event.won ? 'win' : 'loss'}
                 >
-                  <td className="mono">{formatDate(event.tournamentDate)}</td>
-                  <td>
+                  <td className="mono match-log-date">{formatDate(event.tournamentDate)}</td>
+                  <td className="match-log-event">
                     <Link to="/events/$slug" params={{ slug: event.tournamentSlug }}>
                       {event.tournamentName}
                     </Link>
@@ -195,9 +200,11 @@ export function PlayerMatchLog({
                       />
                     )}
                   </td>
-                  <td>{event.resultStage === 'group' ? 'Pool' : 'Bracket'}</td>
-                  <td>{event.opponentName}</td>
-                  <td className={event.won ? 'result-win' : 'result-loss'}>
+                  <td className="match-log-stage">
+                    {event.resultStage === 'group' ? 'Pool' : 'Bracket'}
+                  </td>
+                  <td className="match-log-opponent">{event.opponentName}</td>
+                  <td className={`match-log-result ${event.won ? 'result-win' : 'result-loss'}`}>
                     <span>
                       {event.won ? 'W' : 'L'}
                       {event.forfeit ? ' · Forfeit' : event.score ? ` · ${event.score}` : ''}
@@ -219,16 +226,18 @@ export function PlayerMatchLog({
                 data-whr-set-id={setId ?? undefined}
                 className={event.isDecay ? 'decay' : won ? 'win' : 'loss'}
               >
-                <td className="mono">{formatDate(event.tournamentDate)}</td>
-                <td>
+                <td className="mono match-log-date">{formatDate(event.tournamentDate)}</td>
+                <td className="match-log-event">
                   {event.tournamentName}
                   {event.isRookie && <span className="chip chip-warning rookie-chip">rookie</span>}
                   {setId && (
                     <ImpactNotes impact={impact} active={activeSetId === setId} won={won} />
                   )}
                 </td>
-                <td>{event.isDecay ? '—' : event.resultStage === 'group' ? 'Pool' : 'Bracket'}</td>
-                <td>
+                <td className="match-log-stage">
+                  {event.isDecay ? '—' : event.resultStage === 'group' ? 'Pool' : 'Bracket'}
+                </td>
+                <td className="match-log-opponent">
                   {event.isDecay ? (
                     <em>Inactivity decay</em>
                   ) : event.opponentPlayerId ? (
@@ -239,7 +248,9 @@ export function PlayerMatchLog({
                     (event.opponentName ?? 'Unknown')
                   )}
                 </td>
-                <td className={event.isDecay ? 'result-decay' : won ? 'result-win' : 'result-loss'}>
+                <td
+                  className={`match-log-result ${event.isDecay ? 'result-decay' : won ? 'result-win' : 'result-loss'}`}
+                >
                   <span>
                     {event.isDecay ? '—' : won ? 'W' : 'L'}
                     {event.forfeit ? ' · Forfeit' : event.score ? ` · ${event.score}` : ''}

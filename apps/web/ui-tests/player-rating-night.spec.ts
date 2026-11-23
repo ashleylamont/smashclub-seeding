@@ -3,7 +3,7 @@ import { AxeBuilder } from '@axe-core/playwright';
 import { rpcProcedures } from '../test-support/rpcBatch';
 import { chooseOption } from '../test-support/controls';
 import { ready } from './fixtures';
-import type { PlayerData, PlayerDoublesMatch } from '../src/lib/apiTypes';
+import type { PlayerData, PlayerDoublesMatch, PlayerEventView } from '../src/lib/apiTypes';
 import type { trpc } from '../src/lib/trpc';
 
 const playerId = 'ac184b5a-fba4-4bc9-9ee9-c1610d3c8373';
@@ -102,7 +102,7 @@ async function mockProfile(
     nights: structuredClone<PlayerData['nights']>(nights),
     events: nights
       .filter((night) => night.played)
-      .map((night, seq) => ({
+      .map<PlayerEventView>((night, seq) => ({
         seq,
         isDecay: false,
         won: seq === 1,
@@ -114,7 +114,7 @@ async function mockProfile(
         tournamentId: `bracket-${seq}`,
         tournamentName: `Singles bracket ${seq + 1}`,
         tournamentDate: `${night.eventKey}T08:30:00Z`,
-        competitionFormat: 'singles' as 'singles' | 'doubles',
+        competitionFormat: 'singles',
         setId: setIds[seq],
         resultStage: seq === 0 ? 'group' : 'final',
         isRookie: false,
@@ -188,6 +188,98 @@ async function mockProfile(
     await route.fulfill({ json: batched ? results : results[0] });
   });
   return { profile, requests, maxActive: () => maxActive };
+}
+
+for (const theme of ['dark', 'light'] as const) {
+  for (const width of [320, 390, 1440]) {
+    test(`profile opponents and results fit without sideways scrolling at ${width}px in ${theme}`, async ({
+      page,
+    }, testInfo) => {
+      const longAlias = 'Opponent With An Exceptionally Long Tournament Alias';
+      const shortOpponentId = '0a5e993f-2fea-4b82-9d59-7ea182608c08';
+      const longOpponentId = '74bc3872-abef-4d5c-a506-ac96df8dbea9';
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ colorScheme: theme });
+      const { profile } = await mockProfile(page);
+      Object.assign(profile.events[1]!, {
+        opponentName: longAlias,
+        opponentPlayerId: longOpponentId,
+        score: '2–1',
+      });
+      Object.assign(profile.events[0]!, {
+        opponentName: 'Cam',
+        opponentPlayerId: shortOpponentId,
+        score: '0–2',
+      });
+      profile.events.push({
+        ...profile.events[0]!,
+        seq: 2,
+        setId: 'a117a2c6-794c-4b8d-966e-57a9aa7e328a',
+        tournamentName: 'Winter bracket',
+        tournamentDate: '2026-10-15T08:30:00Z',
+        opponentName: 'Daisy',
+        opponentPlayerId: null,
+        forfeit: true,
+        score: null,
+        weight: null,
+      });
+      await page.goto(`/players/${playerId}`);
+      const log = page.getByRole('region', { name: 'Match results' });
+      await expect(log.getByRole('columnheader')).toHaveText([
+        'Date',
+        'Event',
+        'Stage',
+        'Opponent',
+        'Result',
+        'Evidence',
+      ]);
+      await ready(page);
+      await log.evaluate((element) => element.scrollIntoView({ block: 'start' }));
+      for (const [name, outcome] of [
+        [longAlias, 'W · 2–1'],
+        ['Cam', 'L · 0–2'],
+        ['Daisy', 'L · Forfeit'],
+      ]) {
+        const row = log.getByRole('row').filter({ hasText: name });
+        for (const text of [name, outcome]) {
+          const label = row.getByText(text, { exact: true });
+          await expect(label).toBeInViewport({ ratio: 0.99 });
+          const bounds = await label.evaluate((element) => {
+            const region = element.closest('[role="region"]')!.getBoundingClientRect();
+            const range = document.createRange();
+            range.selectNodeContents(element);
+            const lines = Array.from(range.getClientRects());
+            return {
+              lineCount: new Set(lines.map((line) => Math.round(line.top))).size,
+              fits: lines.every((line) => line.left >= region.left && line.right <= region.right),
+            };
+          });
+          expect(bounds.fits, text).toBe(true);
+          if (text === longAlias && width < 1440) {
+            expect(bounds.lineCount).toBeGreaterThan(1);
+          } else {
+            expect(bounds.lineCount, text).toBe(1);
+          }
+        }
+      }
+      expect(await log.evaluate((element) => element.scrollLeft)).toBe(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+      await page.screenshot({ path: testInfo.outputPath('profile-match-log.png'), fullPage: true });
+      await log.screenshot({ path: testInfo.outputPath('match-log.png') });
+      expect(
+        (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
+      ).toEqual([]);
+
+      await log.focus();
+      await page.keyboard.press('Tab');
+      const opponent = log.getByRole('link', { name: longAlias });
+      await expect(opponent).toBeFocused();
+      await expect(opponent).toHaveAttribute('href', `/players/${longOpponentId}`);
+      await page.keyboard.press('Tab');
+      await expect(log.getByRole('link', { name: 'Cam' })).toBeFocused();
+      expect(await log.evaluate((element) => element.scrollLeft)).toBe(0);
+    });
+  }
 }
 
 for (const theme of ['dark', 'light'] as const) {
@@ -412,12 +504,7 @@ for (const theme of ['dark', 'light'] as const) {
       await log.focus();
       await expect(log).toBeFocused();
       if (width === 390) {
-        await page.keyboard.press('ArrowRight');
-        await expect.poll(() => log.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
-        await page.keyboard.press('ArrowLeft');
-        await log.evaluate((element) => {
-          element.scrollLeft = 0;
-        });
+        expect(await log.evaluate((element) => element.scrollWidth - element.clientWidth)).toBe(0);
       }
       expect(fixture.requests.map(({ setId }) => setId).sort()).toEqual(
         fixture.profile.events.map(({ setId }) => setId).sort(),
@@ -536,11 +623,8 @@ for (const theme of ['dark', 'light'] as const) {
       await log.focus();
       await expect(log).toBeFocused();
       if (width === 390) {
-        await page.keyboard.press('ArrowRight');
-        await expect.poll(() => log.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
-        await log.evaluate((element) => {
-          element.scrollLeft = element.scrollWidth;
-        });
+        await expect(corrected.getByText('W · 3–2')).toBeInViewport();
+        expect(await log.evaluate((element) => element.scrollLeft)).toBe(0);
       }
       await ready(page);
       await expect(corrected.getByText('Awaiting recompute')).toBeInViewport();
@@ -610,18 +694,15 @@ test('a stale WHR run clears prior estimates and waits for the refreshed profile
       recomputeId,
     ]);
     await log.focus();
-    const scrollLeft = await log.evaluate((element) => {
-      element.scrollLeft = 80;
-      return element.scrollLeft;
-    });
-    expect(scrollLeft).toBeGreaterThan(0);
+    const scrollY = await page.evaluate(() => window.scrollY);
+    expect(scrollY).toBeGreaterThan(0);
     fixture.profile.recomputeId = newRun;
     notifyRecompute('event: recompute_completed\ndata: {}\n\n');
     await expect(recent).toContainText('WHR ≈−20 pts');
     await expect(recent).not.toContainText('WHR ≈+30 pts');
     expect(fixture.requests.at(-1)?.recomputeId).toBe(newRun);
     await expect(log).toBeFocused();
-    expect(await log.evaluate((element) => element.scrollLeft)).toBe(scrollLeft);
+    expect(await page.evaluate(() => window.scrollY)).toBe(scrollY);
   } finally {
     notifyRecompute(': fixture\n\n');
   }
