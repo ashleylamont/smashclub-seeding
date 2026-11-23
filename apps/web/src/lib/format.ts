@@ -26,6 +26,12 @@ export function formatDateTime(iso: string | null | undefined): string {
   });
 }
 
+export function winProbabilityDisplay(probability: number) {
+  const percent = Math.round(probability * 100);
+  const odds = percent === 0 ? '<1%' : percent === 100 ? '>99%' : `${percent}%`;
+  return { percent, odds };
+}
+
 /** "3 minutes ago" style relative timestamp. */
 export function timeAgo(iso: string | null | undefined): string {
   if (!iso) return 'never';
