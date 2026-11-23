@@ -2,6 +2,7 @@ import { Children, cloneElement, isValidElement, type ComponentProps, type React
 import { Markdown } from 'markdown-to-jsx';
 import changelog from '../../CHANGELOG.md?raw';
 import { PageHeader } from '../components/ui/PageHeader';
+import { formatChangelog, releaseGroupHeadings } from '../lib/changelog.mjs';
 import './ChangelogPage.css';
 
 const categoryStyles = new Map([
@@ -11,7 +12,13 @@ const categoryStyles = new Map([
   ['Fix', 'fix'],
   ['Maintenance', 'maintenance'],
 ]);
-const releaseTiers = new Set(['Major Changes', 'Minor Changes', 'Patch Changes']);
+const releaseGroups = new Set([
+  ...releaseGroupHeadings,
+  'Major Changes',
+  'Minor Changes',
+  'Patch Changes',
+]);
+const formattedChangelog = formatChangelog(changelog);
 
 function ReleaseHeading({ children, ...props }: ComponentProps<'h2'>) {
   const [text] = Children.toArray(children);
@@ -19,7 +26,13 @@ function ReleaseHeading({ children, ...props }: ComponentProps<'h2'>) {
   return (
     <h2
       {...props}
-      className={text === 'Before versioned releases' ? 'changelog-archive' : undefined}
+      className={
+        version
+          ? 'changelog-release'
+          : text === 'Before versioned releases'
+            ? 'changelog-archive'
+            : undefined
+      }
     >
       {version ? (
         <a href={`https://github.com/ashleylamont/smashclub-seeding/releases/tag/v${version}`}>
@@ -38,7 +51,7 @@ function GroupHeading({ children, ...props }: ComponentProps<'h3'>) {
     <h3
       {...props}
       className={
-        typeof text === 'string' && releaseTiers.has(text) ? 'changelog-release-tier' : undefined
+        typeof text === 'string' && releaseGroups.has(text) ? 'changelog-release-group' : undefined
       }
     >
       {children}
@@ -107,7 +120,7 @@ export function ChangelogPage() {
           },
         }}
       >
-        {changelog}
+        {formattedChangelog}
       </Markdown>
     </div>
   );

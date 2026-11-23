@@ -1,6 +1,7 @@
 .changelog-page {
   max-inline-size: 76ch;
   margin-inline: auto;
+  overflow-wrap: anywhere;
 }
 
 .changelog-page .ui-page-header {
@@ -9,6 +10,7 @@
 
 .changelog-page h2 {
   margin-block: var(--s6) var(--s3);
+  scroll-margin-block-start: calc(var(--nav-h, 0px) + var(--s3));
 }
 
 .changelog-page h3 {
@@ -20,7 +22,7 @@
 }
 
 .changelog-page li + li {
-  margin-block-start: var(--s2);
+  margin-block-start: var(--s3);
 }
 
 .changelog-page a {
@@ -36,16 +38,30 @@
   border: 1px solid var(--border-strong);
 }
 
+.changelog-page .changelog-release:not(:first-of-type),
 .changelog-page .changelog-archive {
   border-block-start: 1px solid var(--border-strong);
   padding-block-start: var(--s4);
 }
 
-.changelog-page .changelog-release-tier {
-  color: var(--text-soft);
+.changelog-page .changelog-release-group {
   font-family: var(--font-body);
+  font-size: var(--fs-md);
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.changelog-page li > p {
+  margin-block: var(--s2);
+}
+
+.changelog-page li > p:last-child:has(> em:only-child > a[href*='/commit/']) {
+  color: var(--text-soft);
   font-size: var(--fs-sm);
-  letter-spacing: 0.08em;
+
+  > em {
+    font-style: normal;
+  }
 }
 
 .changelog-page .changelog-category {
