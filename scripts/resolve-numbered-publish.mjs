@@ -9,6 +9,28 @@ const packagePath = 'apps/web/package.json';
 const changelogPath = 'apps/web/CHANGELOG.md';
 const changesetFiles = new Set(['README.md', 'config.json', 'changelog.mjs']);
 const shaPattern = /^[a-f0-9]{40}$/;
+const optionalAssociationDelays = [0, 1_000, 3_000, 6_000];
+// Required merge associations can lag the main push. Wait up to 150 seconds in
+// total, within the resolver job's five-minute timeout.
+const requiredAssociationDelays = [
+  ...optionalAssociationDelays,
+  10_000,
+  20_000,
+  30_000,
+  30_000,
+  30_000,
+  20_000,
+];
+
+function isPullRequestList(value) {
+  return (
+    Array.isArray(value) &&
+    value.every((pr) => {
+      const sha = pr?.merge_commit_sha;
+      return sha === null || (typeof sha === 'string' && shaPattern.test(sha));
+    })
+  );
+}
 
 const gitReader =
   (cwd) =>
@@ -54,7 +76,7 @@ export function resolveNumberedPublish({ cwd, merge, repositoryId, pullRequests,
   if (version === appVersion(git, first)) return null;
   if (!stableVersionPattern.test(version)) throw new Error('Expected a stable Nemesis version');
 
-  if (!Number.isSafeInteger(repositoryId) || repositoryId <= 0 || !Array.isArray(pullRequests))
+  if (!Number.isSafeInteger(repositoryId) || repositoryId <= 0 || !isPullRequestList(pullRequests))
     throw new Error('Expected release pull request provenance from GitHub');
   const matching = pullRequests.filter((pr) => pr?.merge_commit_sha === merge);
   if (matching.length > 1 || (second && matching.length !== 1))
@@ -106,14 +128,20 @@ export function resolveNumberedPublish({ cwd, merge, repositoryId, pullRequests,
   return { source: merge, version };
 }
 
-// GitHub can deliver the main push before the merge association is visible.
-export async function loadReleasePullRequests(merge, load, sleep = wait) {
+export async function loadReleasePullRequests(
+  merge,
+  load,
+  sleep = wait,
+  requiresAssociation = true,
+) {
+  const delays = requiresAssociation ? requiredAssociationDelays : optionalAssociationDelays;
   let pullRequests;
-  for (const delay of [0, 1_000, 3_000, 6_000]) {
+  for (const delay of delays) {
     if (delay) await sleep(delay);
     pullRequests = load();
-    if (!Array.isArray(pullRequests) || pullRequests.some((pr) => pr?.merge_commit_sha === merge))
-      break;
+    if (!isPullRequestList(pullRequests))
+      throw new Error('Expected release pull request provenance from GitHub');
+    if (pullRequests.some((pr) => pr.merge_commit_sha === merge)) break;
   }
   return pullRequests;
 }
@@ -141,8 +169,12 @@ export async function resolveMainRelease({
 
   const pullRequests = await loadReleasePullRequests(
     merge,
-    () => api('--paginate', '--slurp', `repos/${repository}/commits/${merge}/pulls`).flat(),
+    () => {
+      const pages = api('--paginate', '--slurp', `repos/${repository}/commits/${merge}/pulls`);
+      return Array.isArray(pages) && pages.every(Array.isArray) ? pages.flat() : null;
+    },
     sleep,
+    Boolean(second),
   );
   const appPull = pullRequests.find(
     (pr) => pr?.merge_commit_sha === merge && pr.user?.id === releaseAppId,

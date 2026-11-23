@@ -142,13 +142,23 @@ describe('numbered release source selection', { timeout: 30_000 }, () => {
     ).toEqual({ source: merge, version: '0.1.1' });
   });
 
-  it('accepts a complete manual version commit on main with no PR association', () => {
+  it('accepts a complete manual version commit with the shorter optional association lookup', async () => {
     const { cwd, prepare } = history();
     const merge = prepare();
-    expect(resolveNumberedPublish({ cwd, merge, repositoryId, pullRequests: [] })).toEqual({
-      source: merge,
-      version: '0.1.1',
-    });
+    const delays: number[] = [];
+    await expect(
+      resolveMainRelease({
+        cwd,
+        merge,
+        repository: 'smashclub/release-fixture',
+        repositoryId,
+        api: () => [[]],
+        sleep: async (delay: number) => {
+          delays.push(delay);
+        },
+      }),
+    ).resolves.toEqual({ source: merge, version: '0.1.1' });
+    expect(delays).toEqual([1_000, 3_000, 6_000]);
   });
 
   it('rejects unsupported or incomplete releases, including a cut that omitted a pending note', () => {
@@ -213,8 +223,80 @@ it('retries delayed merge lookup without losing or inventing associations', asyn
   expect(delays.splice(0)).toEqual([1_000, 3_000]);
 
   await expect(loadReleasePullRequests(target, () => [wrong], sleep)).resolves.toEqual([wrong]);
-  expect(delays).toEqual([1_000, 3_000, 6_000]);
+  expect(delays).toEqual([1_000, 3_000, 6_000, 10_000, 20_000, 30_000, 30_000, 30_000, 20_000]);
 });
+
+it(
+  'resolves a signed numbered release whose merge association arrives after the former window',
+  { timeout: 30_000 },
+  async () => {
+    const { cwd, mergeCut } = history();
+    const { merge, cut, pullRequest, verifiedCommit } = mergeCut();
+    const repository = 'smashclub/release-fixture';
+    let waited = 0;
+    let associationReads = 0;
+    const api = (...args: string[]) => {
+      if (args[0] === '--paginate') {
+        associationReads++;
+        if (waited < 130_000) return [[]];
+        return [[pullRequest]];
+      }
+      expect(args).toEqual([`repos/${repository}/commits/${cut}`]);
+      return verifiedCommit;
+    };
+    await expect(
+      resolveMainRelease({
+        cwd,
+        merge,
+        repository,
+        repositoryId,
+        api,
+        sleep: async (delay: number) => {
+          waited += delay;
+        },
+      }),
+    ).resolves.toEqual({ source: cut, version: '0.1.1' });
+    expect(waited).toBe(130_000);
+    expect(associationReads).toBe(9);
+  },
+);
+
+it(
+  'rejects malformed, ambiguous or invalid merge associations immediately',
+  { timeout: 30_000 },
+  async () => {
+    const { cwd, mergeCut } = history();
+    const { merge, pullRequest, verifiedCommit } = mergeCut();
+    for (const response of [
+      [pullRequest],
+      [[null, pullRequest]],
+      [[{ ...pullRequest, merge_commit_sha: 'invalid' }]],
+      [[pullRequest, pullRequest]],
+      [[{ ...pullRequest, merged_at: null }]],
+    ]) {
+      let associationReads = 0;
+      const delays: number[] = [];
+      await expect(
+        resolveMainRelease({
+          cwd,
+          merge,
+          repository: 'smashclub/release-fixture',
+          repositoryId,
+          api: (...args: string[]) => {
+            if (args[0] !== '--paginate') return verifiedCommit;
+            associationReads++;
+            return response;
+          },
+          sleep: async (delay: number) => {
+            delays.push(delay);
+          },
+        }),
+      ).rejects.toThrow(/pull request provenance|identify one pull request/);
+      expect(associationReads).toBe(1);
+      expect(delays).toEqual([]);
+    }
+  },
+);
 
 it(
   'when the CI lane is unavailable, returns early for an ordinary main push but requires real version proof',
