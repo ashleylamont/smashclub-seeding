@@ -113,7 +113,9 @@ test('rehearsal: two TOs, score approval, station safety, public board and OBS',
     await scoreCard.locator('input[type="number"]').nth(0).fill('2');
     await scoreCard.locator('input[type="number"]').nth(1).fill('1');
     await scoreCard.getByRole('button', { name: 'Confirm result', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText('Score recorded locally');
+    await expect(
+      page.getByRole('status').filter({ hasText: /^Score recorded locally$/ }),
+    ).toBeVisible();
     expect(
       (await query<Snapshot>(page.request, 'eventOps.snapshot', { planId })).matches.find(
         (match) => match.id === ready.id,
@@ -144,7 +146,9 @@ test('rehearsal: two TOs, score approval, station safety, public board and OBS',
     const report = page.locator('.ops-report').filter({ hasText: playing.label });
     await expect(report).toBeVisible();
     await report.getByRole('button', { name: 'Approve', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText('Player score approved');
+    await expect(
+      page.getByRole('status').filter({ hasText: /^Player score approved$/ }),
+    ).toBeVisible();
     await expect(playerCard).toContainText('Confirmed result: 2');
 
     for (const message of [
@@ -405,7 +409,9 @@ test('assigned TO can score on a 390px phone without horizontal overflow', async
     await card.scrollIntoViewIfNeeded();
     await toPage.screenshot({ path: testInfo.outputPath('mobile-to-score-entry.png') });
     await card.getByRole('button', { name: 'Confirm result', exact: true }).click();
-    await expect(toPage.getByRole('status')).toContainText('Score recorded locally');
+    await expect(
+      toPage.getByRole('status').filter({ hasText: /^Score recorded locally$/ }),
+    ).toBeVisible();
     expect(
       (await query<Snapshot>(page.request, 'eventOps.snapshot', { planId })).matches.find(
         (current) => current.id === match.id,
