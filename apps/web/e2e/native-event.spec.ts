@@ -397,6 +397,8 @@ test('native event progresses from pools through reviewed finals to public club 
     .locator('section.card')
     .filter({ has: page.getByRole('heading', { name: 'Published results and corrections' }) });
   await expect(correction).toContainText('Result revision 1 published.');
+  await expect(finals).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Finalize native results' })).toHaveCount(0);
   const correctedMatch = played.find((m) => m.nativeBracketId)!;
   const sealedOverview = () =>
     query<Awaited<ReturnType<typeof trpc.eventOps.live.overview.query>>>(

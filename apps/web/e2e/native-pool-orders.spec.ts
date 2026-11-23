@@ -358,6 +358,9 @@ test('TO desk automatically decides a unique pool, records an explicit tied-pool
   await finalize.press('Enter');
   await dialog.getByRole('button', { name: 'Confirm', exact: true }).click();
   await expect(to.getByText('Event finalized. Club ratings are being recomputed.')).toBeVisible();
-  await expect(finalize).toBeDisabled();
+  await expect(to.locator('.native-result-correction')).toContainText(
+    'Result revision 1 published.',
+  );
+  await expect(finalize).toHaveCount(0);
   await to.close();
 });

@@ -76,6 +76,23 @@ test('a phone TO reads and prints a real native draw before and after finalizati
       'eventOps.snapshot',
       { planId },
     );
+  const matchFacts = (matches: Awaited<ReturnType<typeof snapshot>>['matches']) =>
+    matches.map(({ id, revision, status, outcome, winnerId, score1, score2 }) => ({
+      id,
+      revision,
+      status,
+      outcome,
+      winnerId,
+      score1,
+      score2,
+    }));
+  const saveBracketPdf = async (filename: string) => {
+    await page.emulateMedia({ media: 'print' });
+    const pdf = await page.pdf({ format: 'A4', preferCSSPageSize: true });
+    await writeFile(testInfo.outputPath(filename), pdf);
+    expect(pdf.toString('latin1').match(/\/Type \/Page\b/g)).toHaveLength(1);
+    await page.emulateMedia({ media: 'screen' });
+  };
   const before = (await snapshot()).matches;
   expect(before.some((match) => match.outcome === 'bye')).toBe(true);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -91,17 +108,11 @@ test('a phone TO reads and prints a real native draw before and after finalizati
   await expect(preview).toContainText('Bye');
   const firstMatch = preview.locator('.bracket-backup-page tbody tr').first();
   await expect(firstMatch.getByRole('cell').first()).toHaveText('Quarter-final 1');
-  await page.emulateMedia({ media: 'print' });
-  const pdf = await page.pdf({ format: 'A4', preferCSSPageSize: true });
-  await writeFile(testInfo.outputPath('native-draw-backup.pdf'), pdf);
-  expect(pdf.toString('latin1').match(/\/Type \/Page\b/g)).toHaveLength(1);
-  await page.emulateMedia({ media: 'screen' });
+  await saveBracketPdf('native-draw-backup.pdf');
   await preview.getByRole('button', { name: 'Close preview', exact: true }).click();
   await expect(print).toBeFocused();
   await expect(page.locator('body')).not.toHaveClass(/printing-bracket-backups/);
-  expect(
-    (await snapshot()).matches.map((m) => [m.id, m.revision, m.status, m.score1, m.score2]),
-  ).toEqual(before.map((m) => [m.id, m.revision, m.status, m.score1, m.score2]));
+  expect(matchFacts((await snapshot()).matches)).toEqual(matchFacts(before));
   for (let turn = 0; turn < 8; turn++) {
     const ready = (await snapshot()).matches.filter((match) => match.status === 'ready');
     if (!ready.length) break;
@@ -127,11 +138,16 @@ test('a phone TO reads and prints a real native draw before and after finalizati
     { planId, requestId: crypto.randomUUID(), command: { kind: 'finalize' } },
     true,
   );
+  const finalized = await snapshot();
+  expect(finalized.plan.status).toBe('complete');
   await page.reload();
   await expect(draw).toContainText('Winner ·');
+  await expect(page.locator('.native-result-correction')).toContainText(
+    'Result revision 1 published.',
+  );
   await expect(
     page.getByRole('button', { name: 'Finalize native results', exact: true }),
-  ).toBeDisabled();
+  ).toHaveCount(0);
   expect(
     (
       await new AxeBuilder({ page })
@@ -149,6 +165,8 @@ test('a phone TO reads and prints a real native draw before and after finalizati
   await print.click();
   await expect(preview).toContainText('Online: 2–0');
   await expect(preview.locator('.bracket-backup-page')).toHaveCount(1);
+  await saveBracketPdf('completed-native-draw-backup.pdf');
   await page.keyboard.press('Escape');
   await expect(print).toBeFocused();
+  expect(matchFacts((await snapshot()).matches)).toEqual(matchFacts(finalized.matches));
 });
