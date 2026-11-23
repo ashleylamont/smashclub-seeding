@@ -47,6 +47,7 @@ export default defineConfig({
       WEB_DIST_DIR: new URL('./dist', import.meta.url).pathname,
       // Always rehearse the same synthetic club, even if the shell uses a real cache.
       DEV_CACHE_DIR: '',
+      DEV_FAKE_PUBLIC_FEEDBACK: '1',
     },
   },
 });

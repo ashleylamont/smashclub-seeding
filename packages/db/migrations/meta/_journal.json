@@ -267,6 +267,13 @@
       "when": 1795386345634,
       "tag": "0037_private_app_feedback",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1795403866233,
+      "tag": "0038_public_feedback_issues",
+      "breakpoints": true
     }
   ]
 }

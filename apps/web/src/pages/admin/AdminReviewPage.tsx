@@ -55,7 +55,7 @@ export function AdminReviewPage() {
         <h2>Identity review queue</h2>
         <span className="admin-form-row">
           <Button asChild size="small">
-            <Link to="/admin/review/feedback">Feedback inbox</Link>
+            <Link to="/admin/review/feedback">Past private feedback</Link>
           </Button>
           {queue.isSuccess && <span className="muted">{queue.data.length} pending</span>}
           {queue.isSuccess && queue.data.length > 0 && (

@@ -140,6 +140,16 @@ The source of truth is [`apps/server/src/env.ts`](../apps/server/src/env.ts). Va
 
 Users can link Discord and Google from `/me` after signing in with their original provider. Signing in separately with a new provider creates a separate account. Admin access follows the account across linked providers.
 
+### Optional public GitHub feedback
+
+Nemesis can open public issues on `ashleylamont/smashclub-seeding` from **Give feedback** in the app footer. Reporters review the summary, description, app version and build before posting. They can use Nemesis while signed out. Past private reports remain under **Admin → Review → Past private feedback** until their 90-day expiry.
+
+1. Create a dedicated [GitHub App](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app) with repository **Issues: Read and write**, disable webhooks, and install it only on `ashleylamont/smashclub-seeding`. Generate a private key for the app.
+2. Set `FEEDBACK_GITHUB_APP_ID` and `FEEDBACK_GITHUB_INSTALLATION_ID` on the server. Mount the PEM as a read-only secret and set `FEEDBACK_GITHUB_PRIVATE_KEY_FILE` to that file's absolute path. Keep all three settings out of client builds and committed manifests. The Kubernetes example uses `smashclub-secrets` for scalar settings. Add a separate read-only Secret volume for the PEM in your deployment overlay.
+3. Restart the app to load credentials. Allow server egress to `api.github.com`. If the server trusts forwarded addresses, put it behind an ingress that sanitises them and prevent direct access to the pod. The app limits public posts to four per address per 15 minutes, 12 per hour across the repo, and 40 per day. These limits share the database across replicas. [GitHub App installation authentication](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/authenticating-as-a-github-app-installation)
+
+Without the optional configuration, the dialog offers a manual GitHub draft. Automated tests use a synthetic publisher. Direct submission stores a receipt with the request fingerprint and an anonymous rate bucket. Daily cleanup clears address buckets at least 24 hours old. It keeps the receipt for duplicate protection. The issue body carries an opaque marker so Nemesis can look it up after an interrupted post. When GitHub's response is lost, retrying the same report checks its receipt or looks for the issue up to five times in the first day. Unconfirmed reports can still be checked in GitHub's issue list. Nemesis never sends a second create request for an unresolved attempt.
+
 ### Optional Jev claim review
 
 Set `JEV_CLAIM_REVIEW_ENABLED=true` and provide `TYPESAFE_API_KEY` through the server's secret store. Review is off by default. Enable [TypeSafe's zero data retention setting](https://help.typesafe.ai/articles/5974925716) for the API organisation before using it with real claims.
