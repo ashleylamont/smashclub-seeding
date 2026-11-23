@@ -1,3 +1,4 @@
+import { readdirSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { darwinBaseline, darwinScreenshot } from './darwinScreenshot';
 import { expect, test, type Locator, type Page } from '@playwright/test';
@@ -5,6 +6,20 @@ import { mockEvent, PLAN_ID, ready } from './fixtures';
 import { AxeBuilder } from '@axe-core/playwright';
 import { chooseOption } from '../test-support/controls';
 import { FIGHTER_ART_CREDIT } from '../src/lib/resultGraphic';
+
+const bundledPortraitFilenames = new Set(
+  readdirSync(new URL('../node_modules/smash-ultimate-assets/portraits/full/', import.meta.url)),
+);
+
+function bundledPortraitFilename(url: URL) {
+  if (url.searchParams.has('import')) return;
+  const source = /\/portraits\/full\/([^/]+\.png)$/.exec(url.pathname)?.[1];
+  if (source) return source;
+  // Vite fingerprints the built files. Check their names against the portrait pack.
+  const output = /^\/assets\/([a-z0-9_]+)-[\w-]+\.png$/.exec(url.pathname)?.[1];
+  const filename = output && `${output}.png`;
+  if (filename && bundledPortraitFilenames.has(filename)) return filename;
+}
 
 function relativeLuminance(rgb: string) {
   const channels = rgb.match(/\d+/g)!.map((component) => {
@@ -327,7 +342,7 @@ for (const theme of ['dark', 'light'] as const)
       const requestedPortraits: string[] = [];
       page.on('request', (request) => {
         const url = new URL(request.url());
-        const filename = /\/portraits\/full\/([^/]+\.png)$/.exec(url.pathname)?.[1];
+        const filename = bundledPortraitFilename(url);
         if (filename && request.resourceType() === 'fetch') requestedPortraits.push(filename);
       });
       await page.goto('/events/championship');
@@ -598,8 +613,7 @@ test('a live poll preserves the preview even when organiser access and portrait 
   Object.assign(entrant, {
     graphic: { teamName: null, members: [{ name: entrant.name, character: 'link' }] },
   });
-  const linkPortrait = (url: URL) =>
-    url.pathname.endsWith('/portraits/full/link.png') && !url.searchParams.has('import');
+  const linkPortrait = (url: URL) => bundledPortraitFilename(url) === 'link.png';
   const portraitFailure = page.waitForResponse(
     (response) => linkPortrait(new URL(response.url())) && response.status() === 404,
   );

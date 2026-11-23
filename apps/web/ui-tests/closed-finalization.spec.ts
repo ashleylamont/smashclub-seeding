@@ -167,19 +167,7 @@ test('remote cancellation clears a finals preview error without moving focus', a
   const fixture = await mockEvent(page, { role: 'player', idle: true });
   Object.assign(fixture.overview.plan, { status: 'underway', structure: 'dual_division' });
   const previewError = 'Could not load a finals preview.';
-  await page.route(/\/api\/trpc\/eventOps\.native\.preview(?:\?|$)/, (route) => {
-    const payload = {
-      error: {
-        message: previewError,
-        code: -32603,
-        data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
-      },
-    };
-    return route.fulfill({
-      status: 500,
-      json: new URL(route.request().url()).searchParams.has('batch') ? [payload] : payload,
-    });
-  });
+  fixture.queryFailures.set('eventOps.native.preview', previewError);
 
   await page.goto(path);
   const controls = page.locator('.native-finals-controls');
