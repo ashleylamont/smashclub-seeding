@@ -283,6 +283,7 @@ function ObsSourceCopy() {
   if (current.get('guestQr') === '0') source.searchParams.set('guestQr', '0');
   const content = progressContent(current.toString());
   if (content !== 'all') source.searchParams.set('progressContent', content);
+  if (current.get('twitchMode') === 'event') source.searchParams.set('twitchMode', 'event');
   source.searchParams.set('controls', '0');
   const url = source.href;
   const copying = feedback?.state === 'copying';

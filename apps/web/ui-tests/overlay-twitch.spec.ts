@@ -290,3 +290,138 @@ for (const theme of ['dark', 'light'] as const)
       expect(unexpected).toEqual([]);
     });
   }
+
+const sharedChannel = 'club_event_stream';
+const sharedTwitchSwitch = 'Use event Twitch announcement';
+const activePromotion = { channel: sharedChannel, expiresAt: '2026-10-04T00:10:00.000Z' };
+
+for (const theme of ['dark', 'light'] as const)
+  for (const width of [390, 1440])
+    test(`Display setup opts into the event Twitch announcement at ${width}px in ${theme}`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const fixture = await mockEvent(page);
+      fixture.responses['eventOps.snapshot'] = {
+        ...fixture.snapshot,
+        broadcastPresentationMode: 'gameplay',
+        twitchPromotion: activePromotion,
+      };
+      fixture.responses['eventOps.guests.overlayInvitation'] = {
+        token: 'synthetic-guest-qr',
+        expiresAt: null,
+      };
+      const writes: string[] = [];
+      await page.exposeFunction('copySharedTwitchSource', (value: string) => writes.push(value));
+      await page.addInitScript(() => {
+        Object.defineProperty(navigator, 'clipboard', {
+          value: {
+            writeText: (value: string) => Reflect.get(window, 'copySharedTwitchSource')(value),
+          },
+        });
+      });
+
+      const params = {
+        presentation: 'event',
+        controls: '0',
+        guestQr: '0',
+        cycleSeconds: '30',
+        progressContent: 'standings',
+      };
+      const requests = watchTwitchRequests(page);
+      await page.goto(sourcePath(params));
+      const link = twitchLink(page);
+      const capture = page.getByRole('region', { name: 'Transparent game capture area' });
+      await expect(capture).toBeVisible();
+      await expect(link).toHaveCount(0);
+
+      await page.keyboard.press('s');
+      const setup = page.getByRole('dialog', { name: 'Display setup' });
+      const useEvent = setup.getByRole('switch', { name: sharedTwitchSwitch });
+      await expect(useEvent).not.toBeChecked();
+      await useEvent.press('Space');
+      await expect(useEvent).toBeChecked();
+      await expect(useEvent).toBeFocused();
+      const eventStatus = setup.getByText(`Event channel · twitch.tv/${sharedChannel}`);
+      await expect(eventStatus).toBeVisible();
+      await ready(page);
+      expect(
+        (
+          await new AxeBuilder({ page })
+            .include('.overlay-setup')
+            .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+            .analyze()
+        ).violations,
+      ).toEqual([]);
+      await eventStatus.scrollIntoViewIfNeeded();
+      await expect(useEvent).toBeInViewport({ ratio: 1 });
+      await expect(eventStatus).toBeInViewport({ ratio: 1 });
+      await page.screenshot({ path: testInfo.outputPath('shared-twitch-display-setup.png') });
+
+      await setup.getByRole('button', { name: 'Copy OBS source URL' }).press('Enter');
+      await expect(setup.getByText('OBS source URL copied.')).toBeVisible();
+      expect(writes).toHaveLength(1);
+      expect(Object.fromEntries(new URL(writes[0]!).searchParams)).toEqual({
+        ...params,
+        twitchMode: 'event',
+      });
+      await page.goto(writes[0]!);
+      await ready(page);
+      await expect(capture).toBeVisible();
+      await expectReadable(link);
+      await expect(link).toHaveAttribute('href', `https://www.twitch.tv/${sharedChannel}`);
+      await expect(page.getByRole('img', { name: 'Scan to report a match score' })).toHaveCount(0);
+      await page.screenshot({ path: testInfo.outputPath('shared-twitch-gameplay.png') });
+
+      if (width === 1440) {
+        fixture.responses['eventOps.snapshot'] = {
+          ...fixture.snapshot,
+          broadcastPresentationMode: 'progress',
+          twitchPromotion: activePromotion,
+        };
+        await page.reload();
+        await expect(page.getByRole('region', { name: 'Tournament progress' })).toBeVisible();
+        await expectReadable(link);
+        await page.screenshot({ path: testInfo.outputPath('shared-twitch-progress.png') });
+      }
+
+      await page.keyboard.press('s');
+      await expect(useEvent).toBeChecked();
+      await useEvent.press('Space');
+      await expect(useEvent).not.toBeChecked();
+      await page.keyboard.press('Escape');
+      await expect(link).toHaveCount(0);
+      await page.reload();
+      await expect(link).toHaveCount(0);
+      expect(Object.fromEntries(new URL(page.url()).searchParams)).toEqual(params);
+      expect(requests).toEqual([]);
+      expect(fixture.unexpected).toEqual([]);
+    });
+
+test('OBS Twitch inheritance keeps explicit local links and hides an expired event announcement', async ({
+  page,
+}) => {
+  const fixture = await mockEvent(page);
+  await page.clock.install({ time: new Date('2026-10-04T00:00:00Z') });
+  fixture.responses['eventOps.snapshot'] = {
+    ...fixture.snapshot,
+    broadcastPresentationMode: 'gameplay',
+    twitchPromotion: activePromotion,
+  };
+  const params = { presentation: 'event', controls: '0', twitchMode: 'event' };
+  const link = twitchLink(page);
+  await page.goto(sourcePath({ ...params, twitch: channel }));
+  await expect(link).toHaveAttribute('href', `https://www.twitch.tv/${channel}`);
+  await page.clock.fastForward(10 * 60_000 + 1_001);
+  await expect(link).toHaveAttribute('href', `https://www.twitch.tv/${channel}`);
+
+  await page.goto(sourcePath(params));
+  await expect(page.getByRole('region', { name: 'Transparent game capture area' })).toBeVisible();
+  await expect(link).toHaveCount(0);
+  await page.keyboard.press('s');
+  const setup = page.getByRole('dialog', { name: 'Display setup' });
+  await expect(setup.getByRole('switch', { name: sharedTwitchSwitch })).toBeChecked();
+  await expect(setup.getByText('No active Twitch announcement.')).toBeVisible();
+  expect(fixture.unexpected).toEqual([]);
+});
