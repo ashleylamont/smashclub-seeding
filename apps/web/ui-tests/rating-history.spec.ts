@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import type { LeaderboardData, RatingHistoryData } from '../src/lib/apiTypes';
+import { chooseOption } from '../test-support/controls';
 import { bracketCaptureOptions, mockEvent, ready } from './fixtures';
 
 const returning = {
