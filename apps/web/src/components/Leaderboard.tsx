@@ -8,6 +8,7 @@ import type { LeaderboardRow } from '../lib/apiTypes';
 import { Sparkline } from './Sparkline';
 import { CharacterIcons } from './CharacterIcons';
 import { BoardLegend } from './BoardLegend';
+import { PlayerProfilePreview } from './PlayerProfilePreview';
 import { tierClass } from '../lib/format';
 import './Leaderboard.css';
 
@@ -499,6 +500,7 @@ export function Leaderboard({
                   {seen.text}
                 </span>
               </Link>
+              <PlayerProfilePreview playerId={row.playerId} name={row.name} />
             </li>
           );
         })}
