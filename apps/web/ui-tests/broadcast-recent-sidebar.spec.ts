@@ -376,3 +376,123 @@ test('the bounded recent count survives an OBS reload', async ({ page }) => {
   ).toHaveCount(1);
   await expect(page).toHaveURL(/recent=1/);
 });
+
+for (const theme of ['dark', 'light'] as const)
+  for (const width of [390, 1440])
+    test(`Display setup previews and copies the recent result count at ${width}px in ${theme}`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const fixture = await recentFixture(page, width === 1440);
+      const match = fixture.snapshot.matches.find((item) => item.status === 'playing')!;
+      const initialCount = width === 390 ? 2 : 1;
+      const nextCount = width === 390 ? 1 : 2;
+      const countLabel = (count: number) => (count === 1 ? '1 set' : '2 sets');
+      const settings = {
+        station: match.stationId!,
+        presentation: 'event',
+        cycleSeconds: '30',
+        twitch: 'nemesis_fixture',
+        recent: String(initialCount),
+        controls: 'preview',
+      };
+      const path = `/overlay/${PLAN_ID}`;
+      const writes: string[] = [];
+      await page.exposeFunction('writeRecentSetupClipboard', (value: string) => writes.push(value));
+      await page.addInitScript(() => {
+        Object.defineProperty(navigator, 'clipboard', {
+          configurable: true,
+          value: {
+            writeText: (value: string) =>
+              (
+                window as unknown as {
+                  writeRecentSetupClipboard(value: string): Promise<void>;
+                }
+              ).writeRecentSetupClipboard(value),
+          },
+        });
+      });
+
+      await page.goto(`${path}?${new URLSearchParams(settings)}`);
+      const setup = page.getByRole('button', { name: 'Display setup', exact: true });
+      const dialog = page.getByRole('dialog', { name: 'Display setup' });
+      const count = dialog.getByRole('combobox', {
+        name: 'Recent results in the gameplay sidebar',
+      });
+      const cards = page.getByRole('region', { name: 'Recent resolved sets' }).locator('article');
+      const rail = page.locator('.broadcast-rail');
+      const railCards = rail.locator('article');
+      await expect(cards).toHaveCount(initialCount);
+      await setup.press('Enter');
+      await expect(count).toHaveAttribute('data-value', String(initialCount));
+      await dialog.getByRole('combobox', { name: 'Change progress page every' }).focus();
+      await page.keyboard.press('Tab');
+      await expect(count).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(page.getByRole('option', { name: countLabel(initialCount) })).toBeFocused();
+      await page.keyboard.press(nextCount === 1 ? 'ArrowUp' : 'ArrowDown');
+      await expect(page.getByRole('option', { name: countLabel(nextCount) })).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(count).toHaveAttribute('data-value', String(nextCount));
+      await expect(count).toBeFocused();
+      await expect(railCards).toHaveCount(nextCount);
+      const edited = new URLSearchParams({ ...settings, recent: String(nextCount) });
+      await expect(page).toHaveURL(`${path}?${edited}`);
+      await ready(page);
+      expect(
+        (
+          await new AxeBuilder({ page })
+            .include('.overlay-setup')
+            .withTags(['wcag2a', 'wcag2aa'])
+            .analyze()
+        ).violations,
+      ).toEqual([]);
+      await dialog.screenshot({ path: testInfo.outputPath('recent-results-setup.png') });
+
+      await page.keyboard.press('Escape');
+      await expect(setup).toBeFocused();
+      await page.reload();
+      await expect(cards).toHaveCount(nextCount);
+      await setup.press('Enter');
+      await expect(count).toHaveAttribute('data-value', String(nextCount));
+      const copy = dialog.getByRole('button', { name: 'Copy OBS source URL' });
+      await copy.focus();
+      await expect(copy).toBeInViewport();
+      await page.keyboard.press('Enter');
+      await expect(
+        dialog.getByRole('status').filter({ hasText: 'OBS source URL copied.' }),
+      ).toBeVisible();
+      await dialog.screenshot({ path: testInfo.outputPath('recent-results-copy.png') });
+      const clean = new URLSearchParams({ ...settings, recent: String(nextCount), controls: '0' });
+      expect(writes).toEqual([new URL(`${path}?${clean}`, page.url()).href]);
+
+      await page.goto(writes[0]!);
+      await expect(cards).toHaveCount(nextCount);
+      await expect(cards.first()).toContainText('Alex with a long tournament alias');
+      if (nextCount === 2) await expect(cards.last()).toContainText('Drew forfeits');
+      await expect(setup).toHaveCount(0);
+      await expect(page.getByLabel('Current match')).toContainText(match.player1Name!);
+      await ready(page);
+      const aperture = (await page.getByLabel('Transparent game capture area').boundingBox())!;
+      expect(
+        await page.evaluate(
+          ({ x, y }) =>
+            document
+              .elementsFromPoint(x, y)
+              .filter(
+                (element) =>
+                  !['transparent', 'rgba(0, 0, 0, 0)'].includes(
+                    getComputedStyle(element).backgroundColor,
+                  ),
+              ).length,
+          { x: aperture.x + aperture.width / 2, y: aperture.y + aperture.height / 2 },
+        ),
+      ).toBe(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+      await page.screenshot({
+        path: testInfo.outputPath('recent-results-source.png'),
+        omitBackground: true,
+      });
+      expect(fixture.unexpected).toEqual([]);
+    });

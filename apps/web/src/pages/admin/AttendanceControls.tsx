@@ -331,6 +331,7 @@ function AttendancePreviewPanel({
 }) {
   const restoring = preview.input.action === 'restore';
   const returnCallIds = preview.result.returnCallMatchIds;
+  const poolWaitingForReturn = preview.input.action === 'add' && Boolean(returnCallIds?.length);
   const callsStillOpen = callDesk.calls.some(({ id }) => returnCallIds?.includes(id));
   const apply = (
     <Button
@@ -353,7 +354,7 @@ function AttendancePreviewPanel({
           {String.fromCharCode(65 + preview.result.poolIndex)}
         </p>
       )}
-      {!restoring && (
+      {!restoring && !poolWaitingForReturn && (
         <p>
           {preview.result.addedMatches} new match(es) · {preview.result.affectedMatches.length}{' '}
           affected existing match(es)

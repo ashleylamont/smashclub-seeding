@@ -79,6 +79,10 @@
   margin: 0;
 }
 
+.h2h-night-details > .h2h-figures dt {
+  flex-grow: 0;
+}
+
 .h2h-night-attendance h3 {
   margin-bottom: var(--s1);
 }

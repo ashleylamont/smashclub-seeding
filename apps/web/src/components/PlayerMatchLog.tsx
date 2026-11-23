@@ -87,14 +87,22 @@ function ImpactNotes({
 
 function Evidence({
   weight,
+  unavailable,
   impact,
 }: {
   weight: number | null;
+  unavailable: PlayerMatchLogEntry['evidenceUnavailable'];
   impact: WhrResultImpact | undefined;
 }) {
   return (
     <td className="num">
-      {weight == null ? '—' : `${evidenceUnits.format(weight)} ${weight === 1 ? 'unit' : 'units'}`}
+      {unavailable && unavailable !== 'not_rated' ? (
+        <span className="whr-impact-value">{unavailableLabel[unavailable]}</span>
+      ) : weight == null ? (
+        '—'
+      ) : (
+        `${evidenceUnits.format(weight)} ${weight === 1 ? 'unit' : 'units'}`
+      )}
       {impact?.status === 'available' && (
         <span className="whr-impact-value">Margin weight {impact.gamesWeight}</span>
       )}
@@ -146,7 +154,7 @@ export function PlayerMatchLog({
             const rated = doubles
               ? event.ratingWeight != null
               : !event.isDecay && event.won != null;
-            const setId = recomputeId && rated ? event.setId : null;
+            const setId = recomputeId && rated && !event.evidenceUnavailable ? event.setId : null;
             const impact = setId ? (runImpact ?? results?.get(setId)) : undefined;
             const characterSet = event.setId ? characterSets?.[event.setId] : undefined;
             const characters = characterSet && (
@@ -196,22 +204,27 @@ export function PlayerMatchLog({
                     </span>
                     {characters}
                   </td>
-                  <Evidence weight={event.ratingWeight} impact={impact} />
+                  <Evidence
+                    weight={event.ratingWeight}
+                    unavailable={event.evidenceUnavailable}
+                    impact={impact}
+                  />
                 </tr>
               );
             }
+            const won = event.currentWon ?? event.won;
             return (
               <tr
                 key={event.seq}
                 data-whr-set-id={setId ?? undefined}
-                className={event.isDecay ? 'decay' : event.won ? 'win' : 'loss'}
+                className={event.isDecay ? 'decay' : won ? 'win' : 'loss'}
               >
                 <td className="mono">{formatDate(event.tournamentDate)}</td>
                 <td>
                   {event.tournamentName}
                   {event.isRookie && <span className="chip chip-warning rookie-chip">rookie</span>}
                   {setId && (
-                    <ImpactNotes impact={impact} active={activeSetId === setId} won={event.won} />
+                    <ImpactNotes impact={impact} active={activeSetId === setId} won={won} />
                   )}
                 </td>
                 <td>{event.isDecay ? '—' : event.resultStage === 'group' ? 'Pool' : 'Bracket'}</td>
@@ -226,18 +239,18 @@ export function PlayerMatchLog({
                     (event.opponentName ?? 'Unknown')
                   )}
                 </td>
-                <td
-                  className={
-                    event.isDecay ? 'result-decay' : event.won ? 'result-win' : 'result-loss'
-                  }
-                >
+                <td className={event.isDecay ? 'result-decay' : won ? 'result-win' : 'result-loss'}>
                   <span>
-                    {event.isDecay ? '—' : event.won ? 'W' : 'L'}
-                    {!event.isDecay && event.score && ` · ${event.score}`}
+                    {event.isDecay ? '—' : won ? 'W' : 'L'}
+                    {event.forfeit ? ' · Forfeit' : event.score ? ` · ${event.score}` : ''}
                   </span>
                   {characters}
                 </td>
-                <Evidence weight={event.weight} impact={impact} />
+                <Evidence
+                  weight={event.weight}
+                  unavailable={event.evidenceUnavailable}
+                  impact={impact}
+                />
               </tr>
             );
           })}

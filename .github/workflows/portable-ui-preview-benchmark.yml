@@ -22,11 +22,11 @@ jobs:
       matrix:
         include:
           - ordinal: 1
-            first: dev
-          - ordinal: 2
             first: built
-          - ordinal: 3
+          - ordinal: 2
             first: dev
+          - ordinal: 3
+            first: built
     env:
       PORTABLE_PREVIEW_ORDINAL: ${{ matrix.ordinal }}
       PORTABLE_PREVIEW_FIRST: ${{ matrix.first }}

@@ -3,8 +3,13 @@ import { buildRoundRobin, poolLabel, selectFormatFinalists } from '@smashclub/to
 import { sharedDispatch } from './dispatch';
 import { advance } from './brackets';
 import { memberIds } from './entrants';
-import { hash, hasRecordedMatchEvidence, requireFact, stableId, unconfirmedCall } from './facts';
-import { attendancePoolCandidates, lastPoolRound, poolMatch } from './poolAttendance';
+import { hash, requireFact, stableId } from './facts';
+import {
+  attendancePoolCandidates,
+  lastPoolRound,
+  poolAttendanceBlocker,
+  poolMatch,
+} from './poolAttendance';
 import { qualifierFieldFrozen } from './qualifiers';
 import { eligibleQualifierRoster } from './rollingFinals';
 import type { CommandEnvelope, TournamentCommand, TournamentState } from './schemas';
@@ -12,26 +17,6 @@ import type { CommandEnvelope, TournamentCommand, TournamentState } from './sche
 type Command = Extract<TournamentCommand, { kind: 'addLateDoublesPair' }>;
 export type LateDoublesPair = Omit<Command, 'kind' | 'revisionToken'>;
 type Pool = TournamentState['pools'][number];
-
-function poolIssue(state: TournamentState, pool: Pool, reported: ReadonlySet<string>) {
-  if (pool.order || pool.orderDecision || pool.qualifierRoster || pool.qualifierDecision)
-    return 'qualification';
-  const matches = state.matches.filter((match) => match.poolId === pool.id);
-  const matchIds = new Set(matches.map((match) => match.id));
-  const archived = (state.supersededPlayedSets ?? []).some(
-    ({ match, sourcePoolMatchId }) =>
-      matchIds.has(sourcePoolMatchId) ||
-      [match.player1Id, match.player2Id].some((id) => id && pool.entrantIds.includes(id)),
-  );
-  if (archived || matches.some((match) => hasRecordedMatchEvidence(match, reported)))
-    return 'evidence';
-  const called = matches.filter((match) => match.status === 'playing' || match.calledAt != null);
-  if (called.length)
-    return called.every(unconfirmedCall)
-      ? { kind: 'call' as const, matchIds: called.map(({ id }) => id) }
-      : 'call_state';
-  return null;
-}
 
 function prospectiveFinals(state: TournamentState, pool: Pool) {
   const structure = state.baseline?.structure;
@@ -86,7 +71,7 @@ export function reviewLateDoublesPair(state: TournamentState, input: LateDoubles
   const reported = new Set(state.reports.map((report) => report.matchId));
   const candidates = attendancePoolCandidates(state, division).map((pool) => ({
     pool,
-    issue: poolIssue(state, pool, reported),
+    issue: poolAttendanceBlocker(state, pool, reported),
   }));
   const pool = frozen ? undefined : candidates.find((item) => item.issue === null)?.pool;
   const calledPool =

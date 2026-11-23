@@ -83,7 +83,10 @@ export function PlayerHubMatches({
   };
 
   return (
-    <section id="my-matches" aria-label="Find my matches and report scores">
+    <section
+      id="my-matches"
+      aria-label={closed ? 'Match history' : 'Find my matches and report scores'}
+    >
       {reportingStatus}
       <PlayerMatchFilter
         players={players}
@@ -168,7 +171,7 @@ export function PlayerHubMatches({
           defaultOpen={!player}
         >
           <div className="player-match-controls">
-            {player && view === 'mine' && (
+            {player && view === 'mine' && (!closed || hub.board?.sections.includes('pools')) && (
               <p className="muted">
                 {closed
                   ? 'The pool filter refines standings and schedule history.'
@@ -205,7 +208,7 @@ export function PlayerHubMatches({
                   </SelectItem>
                   <SelectItem value="matches">
                     {hasAutomaticReports
-                      ? 'All matches & results'
+                      ? `${closed ? 'Unfinished' : 'Open'} matches & some results`
                       : closed
                         ? 'Unfinished matches & my reports'
                         : 'All open matches'}
@@ -298,7 +301,7 @@ export function PlayerHubMatches({
             ) : view === 'reports' ? (
               'Your submitted scores will appear here.'
             ) : (
-              'No matches in this view yet. Choose a pool, search a player, or select All open matches.'
+              'No matches in this view. Change the match view or clear the filters.'
             )}
           </p>
         )}

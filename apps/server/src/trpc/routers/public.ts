@@ -1,5 +1,4 @@
 import { hasSupersededAdvancement } from '../../tournament/resultEvidence';
-import { playerSetScore } from '../../events/playerSetScore';
 import { playerDoublesHistory } from '../../events/playerDoublesHistory';
 import { publicParticipantNames } from '../../events/participantNames';
 import { z } from 'zod';
@@ -25,17 +24,17 @@ import {
 } from '../../recompute/recompute';
 import {
   matchesFullFit,
-  publicRatingNights,
   publicPostNightEstimate,
   readNightFitAvailability,
   recordedRatingEventNight,
-  type PublicRatingNight,
 } from '../../recompute/nightFitAvailability';
 import { readRatingNightHistory } from '../../recompute/ratingNightHistory';
 import { readWhrResultImpact } from '../../recompute/whrResultImpact';
 import { verifiedRankMovementNight } from '../../recompute/whrProvenance';
 import { getRatingSettings } from '../../settings';
 import { charactersByPlayer, charactersForPlayer } from '../../players/characters';
+import { readPlayerRating } from '../../players/playerRating';
+import { readPublicPlayerPreview } from '../../players/publicPreview';
 import { rankRecapHighlights } from '../../recap/highlightRanking';
 import { loadRecap } from '../../recap/recap';
 import { loadEventOverview } from '../../events/overview';
@@ -191,137 +190,20 @@ export const publicRouter = router({
       return { redirectTo: player.mergedIntoPlayerId };
     }
 
-    const run = await latestCompletedRecompute(ctx.db);
-    const recomputeId = run?.id ?? null;
-    let ratingRow = null;
-    let events: Record<string, unknown>[] = [];
-    const doublesWeights = new Map<string, number>();
-    let nights: PublicRatingNight[] = [];
-    if (run) {
-      const { id: recomputeId } = run;
-      const availability = input.verifiedFits ? await readNightFitAvailability(ctx.db, run) : null;
-      const hasLedger = hasRatingNightLedger(run.stats);
-      const [rating] = await ctx.db
-        .select()
-        .from(playerRatings)
-        .where(
-          and(
-            eq(playerRatings.recomputeId, recomputeId),
-            eq(playerRatings.playerId, input.playerId),
-          ),
-        );
-      ratingRow = rating ?? null;
-
-      const nightRows = await ctx.db
-        .select({
-          eventKey: ratingNights.eventKey,
-          played: ratingNights.played,
-          preRating: ratingNights.preRating,
-          postRating: ratingNights.postRating,
-          postRd: ratingNights.postRd,
-          revisedRating: ratingNights.revisedRating,
-          prePenalty: ratingNights.prePenalty,
-          postPenalty: ratingNights.postPenalty,
-        })
-        .from(ratingNights)
-        .where(
-          and(eq(ratingNights.recomputeId, recomputeId), eq(ratingNights.playerId, input.playerId)),
-        )
-        .orderBy(asc(ratingNights.eventKey));
-      nights = publicRatingNights(nightRows, availability);
-
-      const opponents = players; // alias for readability in the join below
-      const eventRows = await ctx.db
-        .select({
-          seq: ratingEvents.seq,
-          isDecay: ratingEvents.isDecay,
-          won: ratingEvents.won,
-          postRating: ratingEvents.postRating,
-          postRd: ratingEvents.postRd,
-          weight: ratingEvents.weight,
-          /** WHR only: the current fit's hindsight estimate at this night. */
-          revisedRating: ratingEvents.revisedRating,
-          revisedSd: ratingEvents.revisedSd,
-          /** The played set that produced this event; null for inactivity decay. */
-          setId: ratingEvents.setId,
-          /** Pool or bracket stage for the played set; null for decay. */
-          resultStage: sets.resultStage,
-          scoreCsv: sets.scoresCsv,
-          resultRaw: sets.raw,
-          resultWinner: sets.winner,
-          p1PlayerId: sets.p1PlayerId,
-          p2PlayerId: sets.p2PlayerId,
-          tournamentId: ratingEvents.tournamentId,
-          tournamentName: tournaments.name,
-          competitionFormat: tournaments.competitionFormat,
-          tournamentDate: tournaments.eventDate,
-          isRookie: tournaments.isRookie,
-          opponentPlayerId: ratingEvents.opponentPlayerId,
-          opponentCanonicalName: opponents.canonicalName,
-          opponentDisplayName: opponents.displayName,
-          matchedNight: ratingNights.eventKey,
-        })
-        .from(ratingEvents)
-        .innerJoin(tournaments, eq(ratingEvents.tournamentId, tournaments.id))
-        .leftJoin(ratingNights, availability && hasLedger ? recordedRatingEventNight : sql`false`)
-        .leftJoin(sets, eq(ratingEvents.setId, sets.id))
-        .leftJoin(opponents, eq(ratingEvents.opponentPlayerId, opponents.id))
-        .where(
-          and(eq(ratingEvents.recomputeId, recomputeId), eq(ratingEvents.playerId, input.playerId)),
-        )
-        .orderBy(asc(ratingEvents.seq));
-      events = eventRows.map(
-        ({
-          opponentCanonicalName,
-          opponentDisplayName,
-          scoreCsv,
-          resultRaw,
-          resultWinner,
-          p1PlayerId,
-          p2PlayerId,
-          matchedNight,
-          ...row
-        }) => {
-          if (row.competitionFormat === 'doubles' && row.setId)
-            doublesWeights.set(row.setId, row.weight);
-          const tournamentDate = row.tournamentDate?.toISOString() ?? null;
-          return {
-            ...row,
-            ...(availability &&
-              publicPostNightEstimate(
-                row,
-                tournamentDate !== null &&
-                  availability.after.has(eventKeyOf(tournamentDate)) &&
-                  (hasLedger ? matchedNight !== null : matchesFullFit(row, rating)),
-              )),
-            score: (() => {
-              const side =
-                p1PlayerId === input.playerId ? 1 : p2PlayerId === input.playerId ? 2 : null;
-              return row.competitionFormat === 'singles' &&
-                side !== null &&
-                (resultWinner === 1 || resultWinner === 2) &&
-                row.won === (resultWinner === side)
-                ? playerSetScore(scoreCsv, resultRaw, side)
-                : null;
-            })(),
-            tournamentDate,
-            opponentName: opponentCanonicalName
-              ? publicPlayerName({
-                  displayName: opponentDisplayName,
-                  canonicalName: opponentCanonicalName,
-                })
-              : null,
-          };
-        },
-      );
-    }
+    const { recomputeId, ratingRow, events, nights, doublesEvidence, gamesWeight } =
+      await readPlayerRating(ctx.db, input.playerId, input.verifiedFits);
 
     const verified = await ctx.db
       .select({ id: playerClaims.id })
       .from(playerClaims)
       .where(and(eq(playerClaims.playerId, input.playerId), eq(playerClaims.status, 'approved')));
 
-    const doubles = await playerDoublesHistory(ctx.db, input.playerId);
+    const doubles = await playerDoublesHistory(
+      ctx.db,
+      input.playerId,
+      doublesEvidence,
+      gamesWeight,
+    );
     const setIds = [
       ...new Set([
         ...events.flatMap(({ setId }) => (typeof setId === 'string' ? [setId] : [])),
@@ -350,61 +232,13 @@ export const publicRouter = router({
       model: 'whr' as const,
       ratingScope: 'night' as const,
       doublesResults: doubles.results,
-      doublesMatches: doubles.matches.map((match) => ({
-        ...match,
-        ratingWeight: doublesWeights.get(match.setId) ?? null,
-      })),
+      doublesMatches: doubles.matches,
     };
   }),
 
   playerPreview: publicProcedure
     .input(z.object({ playerId: z.uuid() }))
-    .query(({ ctx, input: { playerId } }) =>
-      ctx.db.transaction(
-        async (db) => {
-          const [player] = await db
-            .select({
-              canonicalName: players.canonicalName,
-              displayName: players.displayName,
-              status: players.status,
-              mergedIntoPlayerId: players.mergedIntoPlayerId,
-            })
-            .from(players)
-            .where(eq(players.id, playerId));
-          if (!player) return null;
-          if (player.status === 'merged' && player.mergedIntoPlayerId) {
-            return { profile: null, redirectTo: player.mergedIntoPlayerId };
-          }
-
-          const recomputeId = await latestRecomputeId(db);
-          const ratings = recomputeId
-            ? await db
-                .select({
-                  clubRating: playerRatings.clubRating,
-                  wins: playerRatings.wins,
-                  losses: playerRatings.losses,
-                  isProvisional: playerRatings.isProvisional,
-                })
-                .from(playerRatings)
-                .where(
-                  and(
-                    eq(playerRatings.recomputeId, recomputeId),
-                    eq(playerRatings.playerId, playerId),
-                  ),
-                )
-            : [];
-          return {
-            profile: {
-              name: playerName(player),
-              characters: await charactersForPlayer(db, playerId),
-              rating: ratings.at(0) ?? null,
-            },
-            redirectTo: null,
-          };
-        },
-        { isolationLevel: 'repeatable read', accessMode: 'read only' },
-      ),
-    ),
+    .query(({ ctx, input }) => readPublicPlayerPreview(ctx.db, input.playerId)),
 
   headToHead: publicProcedure
     .input(headToHeadInput)

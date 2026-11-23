@@ -510,6 +510,49 @@ test('the WHR queue waits for visible rows, paces requests and retains estimates
   }
 });
 
+for (const theme of ['dark', 'light'] as const) {
+  for (const width of [390, 1440]) {
+    test(`a corrected match keeps its score while WHR evidence is pending at ${width}px in ${theme}`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ colorScheme: theme });
+      const fixture = await mockProfile(page, () => forecastEffect);
+      Object.assign(fixture.profile.events[1]!, {
+        score: '3–2',
+        weight: null,
+        evidenceUnavailable: 'history_changed',
+      });
+      await page.goto(`/players/${playerId}`);
+      const log = page.getByRole('region', { name: 'Match results' });
+      const corrected = log.getByRole('row', { name: /Singles bracket 2/ });
+      await corrected.scrollIntoViewIfNeeded();
+      await expect(corrected).toContainText('W · 3–2');
+      await expect(corrected).toContainText('Awaiting recompute');
+      await expect(corrected.getByText(/\bunits?\b/)).toHaveCount(0);
+      await expect(log.getByRole('row', { name: /Singles bracket 1/ })).toContainText('1 unit');
+      expect(fixture.requests.map(({ setId }) => setId)).not.toContain(setIds[1]);
+
+      await log.focus();
+      await expect(log).toBeFocused();
+      if (width === 390) {
+        await page.keyboard.press('ArrowRight');
+        await expect.poll(() => log.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+        await log.evaluate((element) => {
+          element.scrollLeft = element.scrollWidth;
+        });
+      }
+      await ready(page);
+      await expect(corrected.getByText('Awaiting recompute')).toBeInViewport();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+      expect(
+        (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
+      ).toEqual([]);
+      await page.screenshot({ path: testInfo.outputPath('corrected-score-evidence.png') });
+    });
+  }
+}
+
 test('WHR impact distinguishes busy, changed history, small effects and load failure inline', async ({
   page,
 }) => {

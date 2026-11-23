@@ -64,8 +64,13 @@ for (const [width, theme] of [
     await page.goto(path);
     const controls = page.locator('.native-finals-controls');
     const finalize = controls.getByRole('button', { name: 'Finalize native results' });
-    await expect(controls).toContainText('Complete all outstanding matches');
     await expect(finalize).toBeEnabled();
+    await expect(finalize).toHaveAccessibleDescription(
+      'Results are ready to publish. Finalizing ends live scoring.',
+    );
+    await expect(controls.getByText(/outstanding matches|reset final/i)).toHaveCount(0);
+    await ready(page);
+    await controls.screenshot({ path: testInfo.outputPath('ready-finalization.png') });
 
     await finalize.press('Enter');
     const dialog = page.getByRole('alertdialog');
@@ -82,7 +87,7 @@ for (const [width, theme] of [
     const corrections = page.locator('.native-result-correction');
     await expect(corrections).toContainText('Result revision 1 published.');
     await expect(finalize).toHaveCount(0);
-    await expect(controls.getByText(/Complete all outstanding matches/)).toHaveCount(0);
+    await expect(controls.getByText(/Results are ready to publish/)).toHaveCount(0);
     await expect(feedback).toBeFocused();
     expect(finalizations).toEqual([{ planId: PLAN_ID }]);
     await controls.screenshot({ path: testInfo.outputPath('finalization-feedback.png') });
@@ -162,19 +167,7 @@ test('remote cancellation clears a finals preview error without moving focus', a
   const fixture = await mockEvent(page, { role: 'player', idle: true });
   Object.assign(fixture.overview.plan, { status: 'underway', structure: 'dual_division' });
   const previewError = 'Could not load a finals preview.';
-  await page.route(/\/api\/trpc\/eventOps\.native\.preview(?:\?|$)/, (route) => {
-    const payload = {
-      error: {
-        message: previewError,
-        code: -32603,
-        data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
-      },
-    };
-    return route.fulfill({
-      status: 500,
-      json: new URL(route.request().url()).searchParams.has('batch') ? [payload] : payload,
-    });
-  });
+  fixture.queryFailures.set('eventOps.native.preview', previewError);
 
   await page.goto(path);
   const controls = page.locator('.native-finals-controls');

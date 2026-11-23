@@ -126,6 +126,11 @@
   --table-min: 720px;
 }
 
+.tournament-participant,
+.set-line {
+  overflow-wrap: anywhere;
+}
+
 .sets-table .set-structural-label {
   white-space: nowrap;
 }

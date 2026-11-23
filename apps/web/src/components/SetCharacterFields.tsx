@@ -25,12 +25,14 @@ export function SetCharacterFields({
   onChange,
   disabled,
   triggerLabel,
+  compactTrigger = false,
   action,
   feedback,
   description = 'Add the fighters each player used in this set. Leave any player blank if you’re unsure.',
 }: SetCharacterDraft & {
   disabled: boolean;
   triggerLabel?: string;
+  compactTrigger?: boolean;
   action?: ReactNode;
   feedback?: ReactNode;
   description?: string;
@@ -55,7 +57,11 @@ export function SetCharacterFields({
       open={open}
       onOpenChange={setOpen}
       trigger={
-        <Button disabled={disabled}>
+        <Button
+          disabled={disabled}
+          size={compactTrigger ? 'small' : 'default'}
+          className={compactTrigger ? 'set-character-trigger-compact' : undefined}
+        >
           {triggerLabel ?? (count ? `Edit characters (${count})` : 'Add characters (optional)')}
         </Button>
       }

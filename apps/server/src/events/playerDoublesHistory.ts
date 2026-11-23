@@ -2,11 +2,21 @@ import { and, desc, eq, inArray, or } from 'drizzle-orm';
 import { players, sets, tournamentParticipants, tournaments, type Db } from '@smashclub/db';
 import { playerSetScore } from './playerSetScore';
 import { hasSupersededAdvancement } from '../tournament/resultEvidence';
-import { publicPlayerName, unplayedResultOutcome } from '@smashclub/shared';
+import { includesResultStage, publicPlayerName, unplayedResultOutcome } from '@smashclub/shared';
 import { nativeHistory } from './nativeHistory';
 import { playerIdResolver } from '../identity/playerIds';
+import {
+  verifiedScorelineEvidence,
+  type PublishedScorelineEvidence,
+  type ScorelineEvidence,
+} from '../recompute/scorelineEvidence';
 
-export async function playerDoublesHistory(db: Db, playerId: string) {
+export async function playerDoublesHistory(
+  db: Db,
+  playerId: string,
+  publishedEvidence: ReadonlyMap<string, PublishedScorelineEvidence>,
+  gamesWeight: number | null | undefined,
+) {
   const profiles = await db
     .select({
       id: players.id,
@@ -86,6 +96,23 @@ export async function playerDoublesHistory(db: Db, playerId: string) {
     const outcome = unplayedResultOutcome(row.scoresCsv, row.raw);
     if (outcome === 'bye' || (row.excludedFromRatings && outcome !== 'forfeit')) return [];
     const teammate = own.participant.memberPlayerIds?.map(canonical).find((id) => id !== playerId);
+    const won = row.winner === (onFirst ? 1 : 2);
+    const published = publishedEvidence.get(row.id);
+    const { weight: ratingWeight, evidenceUnavailable }: ScorelineEvidence =
+      published && gamesWeight !== undefined
+        ? verifiedScorelineEvidence(
+            {
+              ...row,
+              eligible:
+                !row.excludedFromRatings &&
+                own.tournament.eventDate !== null &&
+                includesResultStage(own.tournament.resultsMode, row.resultStage),
+            },
+            published,
+            won,
+            gamesWeight,
+          )
+        : { weight: published?.weight ?? null };
     return [
       {
         format: 'doubles' as const,
@@ -98,7 +125,9 @@ export async function playerDoublesHistory(db: Db, playerId: string) {
             : own.tournament.name,
         tournamentDate: own.tournament.eventDate?.toISOString() ?? null,
         tournamentSlug: own.tournament.challongeSlug,
-        won: row.winner === (onFirst ? 1 : 2),
+        won,
+        ratingWeight,
+        ...(evidenceUnavailable !== undefined && { evidenceUnavailable }),
         opponentName: pairName(other.participant),
         teammateName: teammate ? (names.get(teammate) ?? 'Player') : null,
         score: playerSetScore(row.scoresCsv, row.raw, onFirst ? 1 : 2),
