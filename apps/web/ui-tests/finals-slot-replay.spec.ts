@@ -458,6 +458,8 @@ for (const theme of ['dark', 'light'] as const)
     test(`reviews a playoff-neutral pool correction at ${width}px in ${theme}`, async ({
       page,
     }, testInfo) => {
+      // Rehearse both organiser entry points across the same device and theme matrix.
+      const strengthDraw = width === (theme === 'dark' ? 390 : 1440);
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
       await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
       const options: FixtureOptions = {
@@ -503,7 +505,7 @@ for (const theme of ['dark', 'light'] as const)
         label: 'Recorded pool set',
         player1Name: entrantNames[alice],
         player2Name: entrantNames[bea],
-        reviewPlayoffPoolWinner: true,
+        ...(strengthDraw ? { reviewPoolGames: true } : { reviewPlayoffPoolWinner: true }),
         score1: 2,
         score2: 0,
         winnerId: alice,
@@ -540,7 +542,9 @@ for (const theme of ['dark', 'light'] as const)
       const card = page.locator('article.ops-match:visible').filter({ hasText: match.label });
       await card.getByRole('button', { name: 'Correct score' }).press('Enter');
       await card.getByRole('spinbutton').last().fill('1');
-      await expect(card.getByRole('button', { name: 'Confirm result' })).toBeVisible();
+      await expect(
+        card.getByRole('button', { name: strengthDraw ? 'Review correction' : 'Confirm result' }),
+      ).toBeVisible();
       await card.getByRole('spinbutton').last().fill('3');
       await card.getByRole('button', { name: 'Review finals replay' }).press('Enter');
       const details = card.getByRole('region', { name: 'Pool placement correction review' });

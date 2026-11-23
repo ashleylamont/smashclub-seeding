@@ -13,9 +13,9 @@ export function previewFinalsSlotReplay(
   const review = reviewFinalsSlotReplay(state, score, replayVersion);
   if (
     reviewVersion === 3 &&
-    state.baseline?.structure === 'round_robin_finals' &&
     !review.preview.allowed &&
-    !review.preview.qualifierChanges.length
+    !review.preview.qualifierChanges.length &&
+    (state.baseline?.structure === 'round_robin_finals' || 'unchangedQualifierSlots' in review)
   ) {
     try {
       const { order, pool, revisionToken } = reviewPlayoffPoolScore(state, score);

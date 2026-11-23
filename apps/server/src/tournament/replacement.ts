@@ -1,4 +1,8 @@
-import { recordPlayoffPoolOrder, reviewPlayoffPoolOrder } from './playoffPoolCorrection';
+import {
+  recordPlayoffPoolOrder,
+  reviewPlayoffPoolOrder,
+  usesFrozenMultiPoolFinals,
+} from './playoffPoolCorrection';
 import { recordReplacementPoolOrder } from './poolOrders';
 import { requireFact } from './facts';
 import { winner } from './scores';
@@ -26,11 +30,19 @@ export function replaceResult(
     );
     state.pools[0]!.order = [...order];
   }
-  const before =
-    state.baseline!.structure === 'round_robin_finals'
-      ? { ...state, matches: structuredClone(state.matches) }
-      : null;
-  let playoffPoolWinnerChanged = false;
+  const reviewedPoolIds = new Set(
+    state.pools
+      .filter(
+        (pool) =>
+          state.baseline!.structure === 'round_robin_finals' ||
+          (pool.orderDecision?.source === 'automatic' && usesFrozenMultiPoolFinals(state, pool)),
+      )
+      .map(({ id }) => id),
+  );
+  const before = reviewedPoolIds.size
+    ? { ...state, matches: structuredClone(state.matches) }
+    : null;
+  const changedPoolIds = new Set<string>();
   for (const correction of command.corrections) {
     const m = state.matches.find((m) => m.id === correction.matchId);
     requireFact(
@@ -40,7 +52,8 @@ export function replaceResult(
     basis[m.id] = m.revision;
     const correctedWinner = winner({ ...correction, kind: 'score' }, m);
     if (correctedWinner !== m.winnerId) {
-      playoffPoolWinnerChanged ||= m.stage === 'group';
+      if (m.stage === 'group' && m.poolId && reviewedPoolIds.has(m.poolId))
+        changedPoolIds.add(m.poolId);
       requireFact(
         !state.matches.some(
           (child) =>
@@ -62,8 +75,11 @@ export function replaceResult(
     });
   }
   if (state.baseline!.structure === 'round_robin') recordReplacementPoolOrder(state, envelope);
-  if (before && playoffPoolWinnerChanged) {
-    const { pool, matches, order } = reviewPlayoffPoolOrder(before, state);
+  // Review every changed pool against the same sealed order and qualifier evidence.
+  const corrections = before
+    ? [...changedPoolIds].map((poolId) => reviewPlayoffPoolOrder(before, state, poolId))
+    : [];
+  for (const { pool, matches, order } of corrections) {
     basis[pool.id] = pool.revision;
     for (const match of matches) basis[match.id] ??= match.revision;
     recordPlayoffPoolOrder(state, pool, order, envelope);
@@ -76,8 +92,8 @@ export function replaceResult(
     replacementReason: command.reason,
     sealedAt: envelope.at,
     matches: structuredClone(state.matches),
-    ...(state.baseline!.structure === 'round_robin' || (before && playoffPoolWinnerChanged)
-      ? { poolOrders: state.pools.map((p) => ({ division: p.division, order: p.order! })) }
+    ...(state.baseline!.structure === 'round_robin' || corrections.length
+      ? { poolOrders: state.pools.map(({ division, order }) => ({ division, order: order ?? [] })) }
       : {}),
   };
   state.publication = null;

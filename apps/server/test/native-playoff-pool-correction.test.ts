@@ -31,7 +31,7 @@ describe('playoff-neutral native pool corrections', () => {
       challonge: new ChallongeClient({}),
       recomputeTrigger: new RecomputeTrigger(db),
     });
-  async function draft() {
+  async function draft(structure: 'round_robin_finals' | 'pools_finals') {
     const entrants = await db
       .insert(players)
       .values(
@@ -44,8 +44,11 @@ describe('playoff-neutral native pool corrections', () => {
     const { planId } = await caller().admin.eventPlanner.createPlan({
       name: 'Round robin with playoffs',
       eventDate: '2026-10-22T12:00:00Z',
-      structure: 'round_robin_finals',
-      structureOptions: { playoffSize: 2, consolation: false },
+      structure,
+      structureOptions: {
+        ...(structure === 'round_robin_finals' && { playoffSize: 2 }),
+        consolation: false,
+      },
       rows: entrants.map((player, index) => ({
         lineNumber: index + 1,
         rawInput: player.canonicalName,
@@ -64,8 +67,9 @@ describe('playoff-neutral native pool corrections', () => {
   async function playedRoundRobinPlayoff(
     combined = true,
     beforeFinal?: (planId: string) => Promise<void>,
+    structure: 'round_robin_finals' | 'pools_finals' = 'round_robin_finals',
   ) {
-    const planId = await draft();
+    const planId = await draft(structure);
     const initial = await runtime.state(planId);
     const order = initial.pools[0]!.entrantIds;
     const score = (match: (typeof initial.matches)[number], winnerId: string) => ({
@@ -196,6 +200,39 @@ describe('playoff-neutral native pool corrections', () => {
     expect(await runtime.replay(planId)).toEqual(corrected);
     await caller().eventOps.native.finalize({ planId });
     await expectPublishedRoundRobinPlaces(planId, newOrder, score.matchId);
+  });
+
+  it('reviews a frozen pools-and-finals correction below the qualifying places', async () => {
+    const { planId, played, order, final, correction } = await playedRoundRobinPlayoff(
+      true,
+      undefined,
+      'pools_finals',
+    );
+    const score = correction(2, 3);
+    const { eventOps } = caller();
+    const overview = await eventOps.overview({ planId });
+    expect(overview.matches.find(({ id }) => id === score.matchId)).toHaveProperty(
+      'reviewPoolGames',
+      true,
+    );
+    const preview = await eventOps.live.previewFinalsSlotReplay({
+      planId,
+      ...score,
+      reviewVersion: 3,
+    });
+    expect(preview).toMatchObject({ allowed: true, poolPlacementCorrection: true });
+    if (!preview.allowed) throw new Error('Expected a reviewed correction');
+    await eventOps.live.command({
+      planId,
+      requestId: crypto.randomUUID(),
+      command: { ...score, kind: 'score', poolGameCorrectionToken: preview.revisionToken },
+    });
+    const updated = await runtime.state(planId);
+    expect(updated.pools[0]!.order).toEqual([order[0], order[1], order[3], order[2]]);
+    expect(updated.matches.find(({ id }) => id === final.id)).toEqual(
+      played.matches.find(({ id }) => id === final.id),
+    );
+    expect(updated.brackets).toEqual(played.brackets);
   });
 
   it('offers the winner review in the organiser overview for an original rolling playoff draw', async () => {
