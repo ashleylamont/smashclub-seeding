@@ -1,7 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { InMemoryStore } from '@rotorsoft/act';
-import { inArray } from 'drizzle-orm';
-import { eventOperators, players, sets, user, type Db } from '@smashclub/db';
+import { eq, inArray } from 'drizzle-orm';
+import {
+  companies,
+  eventOperators,
+  eventPlanEntries,
+  players,
+  sets,
+  user,
+  type Db,
+} from '@smashclub/db';
 import type { SessionUser } from '../src/auth';
 import { createTestDb } from './helpers/testDb';
 import { nativeAdmin, seedNativeDraft } from './helpers/nativeLiveFixture';
@@ -211,6 +219,51 @@ describe('shared dispatch through the application API', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('publishes player affiliation codes on both sides of the native handoff', async () => {
+    const planId = await seedNativeDraft(db);
+    const [affiliated, unaffiliated] = await db
+      .select({ id: eventPlanEntries.playerId })
+      .from(eventPlanEntries)
+      .where(eq(eventPlanEntries.eventPlanId, planId))
+      .orderBy(eventPlanEntries.sourceLineNumber)
+      .limit(2);
+    const [company] = await db
+      .insert(companies)
+      .values({ code: 'AFF', name: 'Affiliation test company' })
+      .returning({ id: companies.id });
+    await db
+      .update(players)
+      .set({ companyId: company!.id, displayName: null, canonicalName: 'Tom Lee' })
+      .where(eq(players.id, affiliated!.id!));
+    await db
+      .update(players)
+      .set({ displayName: null, canonicalName: 'Tom Lloyd' })
+      .where(eq(players.id, unaffiliated!.id!));
+    const [absent] = await db
+      .insert(players)
+      .values({ canonicalName: 'Not an entrant', companyId: company!.id })
+      .returning({ id: players.id });
+
+    const assertEntrants = async (liveOwned: boolean) => {
+      const snapshot = await caller(null).eventOps.snapshot({ planId });
+      expect(snapshot.plan.liveOwned).toBe(liveOwned);
+      expect(snapshot.entrants.find((entry) => entry.id === affiliated!.id)).toEqual({
+        id: affiliated!.id,
+        name: 'Tom L',
+        companyCode: 'AFF',
+      });
+      expect(snapshot.entrants.find((entry) => entry.id === unaffiliated!.id)).toEqual({
+        id: unaffiliated!.id,
+        name: 'Tom L',
+      });
+      expect(snapshot.entrants.some((entry) => entry.id === absent!.id)).toBe(false);
+      expect(JSON.stringify(snapshot)).not.toMatch(/Tom (?:Lee|Lloyd)/);
+    };
+    await assertEntrants(false);
+    await caller().eventOps.softLockPools({ planId, confirm: true });
+    await assertEntrants(true);
   });
 
   it('keeps queue order and private snooze details out of every public snapshot', async () => {

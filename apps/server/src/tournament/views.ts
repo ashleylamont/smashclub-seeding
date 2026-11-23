@@ -33,7 +33,7 @@ import {
 import { asc, inArray } from 'drizzle-orm';
 import { players, playerCharacters, tournaments, type Db, type eventMatches } from '@smashclub/db';
 import { publicPlayerName, type SetCharacterPick } from '@smashclub/shared';
-import type { ResultGraphicIdentity } from '../events/participantNames';
+import { eventEntrantViews } from './entrantViews';
 import { buildStationQueues } from '../event-operations/queue';
 import { matchAvailability, stationAvailability } from '../event-operations/availability';
 import type { snapshot as sqlSnapshot } from '../event-operations/service';
@@ -45,6 +45,7 @@ import { pendingStrengthFinals } from './strengthFinals';
 import type { Match, QualifierSlot, TournamentState } from './schemas';
 import { nativeCharacterEvidence } from '../players/nativeCharacterEvidence';
 import { leadingCharacters } from '../players/characterEvidence';
+import { loadEventPlayerIdentity } from '../players/eventIdentity';
 
 type SqlSnapshot = Awaited<ReturnType<typeof sqlSnapshot>>;
 type MatchViewFields = Pick<
@@ -200,8 +201,8 @@ export async function eventView(
 ): Promise<EventSnapshot> {
   const baseline = state.baseline!;
   const planId = baseline.planId;
-  const allPlayers = await db.select().from(players);
-  const names = publicEntrantNames(allPlayers, state.entrants);
+  const { profiles, companyCodes } = await loadEventPlayerIdentity(db);
+  const names = publicEntrantNames(profiles, state.entrants);
   const ids = state.entrants.flatMap(memberIds);
   const characters = ids.length
     ? await db
@@ -210,7 +211,6 @@ export async function eventView(
         .where(inArray(playerCharacters.playerId, ids))
         .orderBy(asc(playerCharacters.position))
     : [];
-  const placedIds = new Set(state.pools.flatMap(({ order }) => order ?? []));
   const rows = matchRows(state);
   const picks = await nativeCharacterEvidence(db, state);
   const eventCharacters = leadingCharacters(picks.values());
@@ -349,23 +349,7 @@ export async function eventView(
         return value;
       })(),
     })),
-    entrants: state.entrants.map((e) => ({
-      id: e.playerId,
-      name: names.get(e.playerId) ?? 'Player',
-      memberPlayerIds: e.memberPlayerIds,
-      ...(placedIds.has(e.playerId) && {
-        graphic: {
-          teamName: e.teamName ?? null,
-          members: memberIds(e).map((id) => ({
-            name: names.get(id) ?? 'Player',
-            character:
-              eventCharacters.get(id)?.character ??
-              characters.find((row) => row.playerId === id)?.characterSlug ??
-              null,
-          })),
-        } satisfies ResultGraphicIdentity,
-      }),
-    })),
+    entrants: eventEntrantViews(state, names, companyCodes, characters, eventCharacters),
     prizes: state.prizes.map((p) => ({
       ...p,
       eventPlanId: planId,

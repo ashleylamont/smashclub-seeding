@@ -23,7 +23,16 @@ export function PlayerMatchFilter({
         <SelectItem value="">Everyone</SelectItem>
         {players.map((player) => (
           <SelectItem key={player.id} value={player.id}>
-            {player.label}
+            {player.companyCode ? (
+              <span className="player-filter-option">
+                <span className="player-filter-option-label">{player.label}</span>{' '}
+                <span className="chip" translate="no">
+                  {player.companyCode}
+                </span>
+              </span>
+            ) : (
+              player.label
+            )}
           </SelectItem>
         ))}
       </Select>
