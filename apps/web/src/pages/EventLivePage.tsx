@@ -47,6 +47,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
   );
   const [presentation, setPresentation] = useState(() => broadcastPresentation(location.search));
   const [cycleSeconds, setCycleSeconds] = useState(() => progressInterval(location.search));
+  const [recentCount, setRecentCount] = useState(() => recentResultCount(location.search));
   const [twitch, setTwitch] = useState(() =>
     twitchChannel(new URLSearchParams(location.search).get('twitch') ?? ''),
   );
@@ -95,6 +96,12 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
     else url.searchParams.delete('station');
     window.history.replaceState(window.history.state, '', url);
     setFocus(stationId);
+  };
+  const changeRecentCount = (count: number) => {
+    const url = new URL(location.href);
+    url.searchParams.set('recent', String(count));
+    history.replaceState(history.state, '', url);
+    setRecentCount(count);
   };
   const changeTwitch = (channel: string) => {
     const url = new URL(location.href);
@@ -206,10 +213,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
             <h1 title={data.plan.name}>{showName}</h1>
             {edition && <span className="broadcast-edition">{edition}</span>}
           </div>
-          <BroadcastRecentSets
-            matches={visibleMatches}
-            count={recentResultCount(window.location.search)}
-          />
+          <BroadcastRecentSets matches={visibleMatches} count={recentCount} />
           <div className="broadcast-progress">
             <span>{selectedPool ? 'POOL PROGRESS' : 'EVENT PROGRESS'}</span>
             <strong>
@@ -268,8 +272,10 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
               <BroadcastPresentationControls
                 mode={presentation}
                 seconds={cycleSeconds}
+                recentCount={recentCount}
                 onMode={(mode) => changePresentation(mode, cycleSeconds)}
                 onSeconds={(seconds) => changePresentation(presentation, seconds)}
+                onRecentCount={changeRecentCount}
               />
               <OverlayTwitchSetting channel={twitch} onChange={changeTwitch} />
             </>
