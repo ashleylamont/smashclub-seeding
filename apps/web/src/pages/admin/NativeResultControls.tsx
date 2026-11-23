@@ -1,10 +1,36 @@
+import { TRPCClientError } from '@trpc/client';
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { Button } from '../../components/ui/Button';
+import { Notice } from '../../components/ui/Feedback';
 import { Select, SelectItem } from '../../components/ui/Select';
 import { Textarea } from '../../components/ui/Input';
 import { ScoreFields, type ScoreInputValue } from '../../components/ScoreFields';
-import { useState } from 'react';
+import { matchPresentation, recordedScoreText } from '../../lib/matchPresentation';
 import { trpc } from '../../lib/trpc';
+import './NativeResultControls.css';
+
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
+type Match = Overview['matches'][number];
+type CommandInput = Parameters<typeof trpc.eventOps.live.command.mutate>[0];
+type Replacement = CommandInput & {
+  command: Extract<CommandInput['command'], { kind: 'replaceResult' }>;
+};
+type CorrectionBasis = { resultId: string; match: Match; order: string[] };
+
+function canRetryCorrection(cause: unknown) {
+  const code = cause instanceof TRPCClientError ? cause.data?.code : undefined;
+  return (
+    !code ||
+    [
+      'INTERNAL_SERVER_ERROR',
+      'TIMEOUT',
+      'BAD_GATEWAY',
+      'SERVICE_UNAVAILABLE',
+      'GATEWAY_TIMEOUT',
+    ].includes(code)
+  );
+}
+
 export function NativeResultControls({
   data,
   onChanged,
@@ -12,13 +38,9 @@ export function NativeResultControls({
   data: Overview;
   onChanged: () => Promise<unknown>;
 }) {
-  const [matchId, setMatchId] = useState('');
-  const [roundRobinOrder, setRoundRobinOrder] = useState(
-    data.placements
-      .slice()
-      .sort((a, b) => a.place - b.place)
-      .map((p) => p.playerId),
-  );
+  const [basis, setBasis] = useState<CorrectionBasis | null>(null);
+  const [editedOrder, setEditedOrder] = useState<string[] | null>(null);
+  const [retry, setRetry] = useState<Replacement | null>(null);
   const [outcome, setOutcome] = useState<'played' | 'forfeit'>('played');
   const [winnerId, setWinnerId] = useState('');
   const [score1, setScore1] = useState<ScoreInputValue>(0),
@@ -26,10 +48,46 @@ export function NativeResultControls({
   const [reason, setReason] = useState(''),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
+  const reasonField = useRef<HTMLTextAreaElement>(null);
+  const matchPicker = useRef<HTMLButtonElement>(null);
+  const submitButton = useRef<HTMLButtonElement>(null);
+  const latestReview = useRef<HTMLButtonElement>(null);
+  const restoreSubmitFocus = useRef(false);
+  const inFlight = useRef(false);
+  useLayoutEffect(() => {
+    if (busy || !restoreSubmitFocus.current) return;
+    restoreSubmitFocus.current = false;
+    const active = document.activeElement;
+    if (active !== document.body && active !== submitButton.current) return;
+    [submitButton.current, latestReview.current, matchPicker.current]
+      .find((button) => button && !button.disabled)
+      ?.focus();
+  }, [busy]);
   if (!('publication' in data) || !data.publication || data.plan.status !== 'complete') return null;
   const publication = data.publication;
-  const match = data.matches.find((m) => m.id === matchId);
+  const published = publication.status === 'published';
+  const match = basis?.match;
+  const latestMatch = data.matches.find((item) => item.id === match?.id);
+  const changed =
+    basis &&
+    (publication.resultId !== basis.resultId || latestMatch?.revision !== basis.match.revision);
+  const roundRobin = data.plan.structure === 'round_robin';
+  const latestOrder = roundRobin
+    ? [...data.placements].sort((a, b) => a.place - b.place).map(({ playerId }) => playerId)
+    : [];
+  const roundRobinOrder = editedOrder ?? basis?.order ?? latestOrder;
+  const fieldsDisabled = busy || Boolean(retry);
+  const canPublish = Boolean(
+    basis &&
+    !changed &&
+    published &&
+    reason.trim() &&
+    (outcome === 'played' ? score1 !== '' && score2 !== '' && score1 !== score2 : winnerId),
+  );
+
   const run = async (work: () => Promise<unknown>) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     setError('');
     try {
@@ -38,21 +96,85 @@ export function NativeResultControls({
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Could not update results.');
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   };
+
+  const submitCorrection = () => {
+    if (inFlight.current || !basis || (!retry && !canPublish)) return;
+    restoreSubmitFocus.current = document.activeElement === submitButton.current;
+    // An older revision is safe only with the very same command and receipt key.
+    const input: Replacement = retry ?? {
+      planId: data.plan.id,
+      requestId: crypto.randomUUID(),
+      command: {
+        kind: 'replaceResult',
+        ...(roundRobin ? { roundRobinOrder } : {}),
+        resultId: basis.resultId,
+        reason,
+        corrections: [
+          {
+            matchId: basis.match.id,
+            expectedRevision: basis.match.revision,
+            outcome,
+            score1: outcome === 'played' && score1 !== '' ? score1 : null,
+            score2: outcome === 'played' && score2 !== '' ? score2 : null,
+            ...(outcome === 'forfeit' ? { winnerId } : {}),
+          },
+        ],
+      },
+    };
+    void run(async () => {
+      try {
+        await trpc.eventOps.live.command.mutate(input);
+      } catch (cause) {
+        if (canRetryCorrection(cause)) {
+          setRetry(input);
+          return;
+        }
+        setRetry(null);
+        throw cause;
+      }
+      setRetry(null);
+      setBasis(null);
+      setEditedOrder(null);
+      setReason('');
+    });
+  };
+
+  const selectMatch = (id: string) => {
+    const selected = data.matches.find((item) => item.id === id);
+    if (basis?.resultId !== publication.resultId) setEditedOrder(null);
+    setBasis(
+      selected ? { resultId: publication.resultId, match: selected, order: latestOrder } : null,
+    );
+    setScore1(selected?.score1 ?? 0);
+    setScore2(selected?.score2 ?? 0);
+    setOutcome(selected?.outcome === 'forfeit' ? 'forfeit' : 'played');
+    setWinnerId(selected?.winnerId ?? '');
+    setError('');
+  };
+
+  function acceptLatestRevision() {
+    if (!latestMatch || fieldsDisabled || !published) return;
+    setBasis({ resultId: publication.resultId, match: latestMatch, order: latestOrder });
+    setError('');
+    reasonField.current?.focus();
+  }
+
   return (
-    <section className="card">
+    <section className="card native-result-correction">
       <h3>Published results and corrections</h3>
       <p>
-        {publication.status === 'published'
+        {published
           ? `Result revision ${publication.revision} published.`
           : publication.status === 'blocked'
             ? 'Result publication needs recovery.'
             : 'Results are sealed and publication is pending.'}{' '}
         {'ratingIntents' in data && data.ratingIntents.length > 0 ? 'Ratings are updating.' : ''}
       </p>
-      {publication.status !== 'published' && (
+      {!published && !retry && (
         <Button
           disabled={busy}
           onClick={() =>
@@ -69,45 +191,16 @@ export function NativeResultControls({
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          if (!match || (outcome === 'played' && (score1 === '' || score2 === ''))) return;
-          void run(async () => {
-            await trpc.eventOps.live.command.mutate({
-              planId: data.plan.id,
-              requestId: crypto.randomUUID(),
-              command: {
-                kind: 'replaceResult',
-                ...(data.plan.structure === 'round_robin' ? { roundRobinOrder } : {}),
-                resultId: publication.resultId,
-                reason,
-                corrections: [
-                  {
-                    matchId: match.id,
-                    expectedRevision: match.revision,
-                    outcome,
-                    score1: outcome === 'played' && score1 !== '' ? score1 : null,
-                    score2: outcome === 'played' && score2 !== '' ? score2 : null,
-                    ...(outcome === 'forfeit' ? { winnerId } : {}),
-                  },
-                ],
-              },
-            });
-            setMatchId('');
-            setReason('');
-          });
+          submitCorrection();
         }}
       >
         <label>
           Completed match
           <Select
-            value={matchId}
-            onValueChange={(value) => {
-              setMatchId(value);
-              const next = data.matches.find((m) => m.id === value);
-              setScore1(next?.score1 ?? 0);
-              setScore2(next?.score2 ?? 0);
-              setOutcome(next?.outcome === 'forfeit' ? 'forfeit' : 'played');
-              setWinnerId(next?.winnerId ?? '');
-            }}
+            ref={matchPicker}
+            value={match?.id ?? ''}
+            disabled={fieldsDisabled}
+            onValueChange={selectMatch}
           >
             <SelectItem value="">Choose a match</SelectItem>
             {data.matches
@@ -128,6 +221,7 @@ export function NativeResultControls({
               Result type
               <Select
                 value={outcome}
+                disabled={fieldsDisabled}
                 onValueChange={(value) => setOutcome(value as 'played' | 'forfeit')}
               >
                 <SelectItem value="played">Played</SelectItem>
@@ -142,11 +236,17 @@ export function NativeResultControls({
                 score2={score2}
                 onScore1={setScore1}
                 onScore2={setScore2}
+                disabled={fieldsDisabled}
               />
             ) : (
               <label>
                 Forfeit winner
-                <Select value={winnerId} onValueChange={setWinnerId} required>
+                <Select
+                  value={winnerId}
+                  onValueChange={setWinnerId}
+                  disabled={fieldsDisabled}
+                  required
+                >
                   <SelectItem value="">Choose winner</SelectItem>
                   <SelectItem value={match.player1Id!}>{match.player1Name}</SelectItem>
                   <SelectItem value={match.player2Id!}>{match.player2Name}</SelectItem>
@@ -155,7 +255,7 @@ export function NativeResultControls({
             )}
           </>
         )}
-        {data.plan.structure === 'round_robin' && (
+        {roundRobin && (
           <fieldset>
             <legend>Review final finishing order</legend>
             <p>Confirm the full order, including tiebreak rulings, with this score correction.</p>
@@ -164,10 +264,9 @@ export function NativeResultControls({
                 Place {i + 1}
                 <Select
                   value={id}
+                  disabled={fieldsDisabled || !basis}
                   onValueChange={(value) =>
-                    setRoundRobinOrder((order) =>
-                      order.map((old, index) => (index === i ? value : old)),
-                    )
+                    setEditedOrder(roundRobinOrder.map((old, index) => (index === i ? value : old)))
                   }
                 >
                   {data.entrants.map((e) => (
@@ -183,30 +282,110 @@ export function NativeResultControls({
         <label>
           Ruling reason
           <Textarea
+            ref={reasonField}
             required
             maxLength={500}
             value={reason}
+            disabled={fieldsDisabled}
             onChange={(event) => setReason(event.target.value)}
           />
         </label>
-        <Button
-          type="submit"
-          disabled={
-            busy ||
-            publication.status !== 'published' ||
-            !match ||
-            !reason.trim() ||
-            (outcome === 'played' ? score1 === '' || score2 === '' || score1 === score2 : !winnerId)
-          }
-        >
-          Publish reviewed correction
+        {retry && (
+          <Notice tone="warning">
+            Could not confirm whether the correction was published. Retry to check the original
+            submission.
+          </Notice>
+        )}
+        {changed && !retry && (
+          <StaleCorrectionNotice
+            revision={publication.revision}
+            published={published}
+            match={latestMatch}
+            order={
+              roundRobin
+                ? { previous: basis.order, latest: latestOrder, entrants: data.entrants }
+                : undefined
+            }
+            review={acceptLatestRevision}
+            reviewButton={latestReview}
+            disabled={fieldsDisabled}
+          />
+        )}
+        <Button ref={submitButton} type="submit" pending={busy} disabled={!retry && !canPublish}>
+          {busy
+            ? retry
+              ? 'Checking submission…'
+              : 'Publishing correction…'
+            : retry
+              ? 'Retry correction'
+              : 'Publish reviewed correction'}
         </Button>
       </form>
-      {error && (
-        <p role="alert" className="error-text">
-          {error}
+      {error && <Notice tone="danger">{error}</Notice>}
+    </section>
+  );
+}
+
+function StaleCorrectionNotice({
+  revision,
+  published,
+  match,
+  order,
+  review,
+  reviewButton,
+  disabled,
+}: {
+  revision: number;
+  published: boolean;
+  match?: Match;
+  order?: { previous: string[]; latest: string[]; entrants: Overview['entrants'] };
+  review: () => void;
+  reviewButton: RefObject<HTMLButtonElement | null>;
+  disabled: boolean;
+}) {
+  const score = match?.outcome === 'played' ? recordedScoreText(match) : null;
+  const orderChanged =
+    order &&
+    (order.latest.length !== order.previous.length ||
+      order.latest.some((id, index) => id !== order.previous[index]));
+  return (
+    <Notice tone="warning">
+      <p>
+        {published
+          ? 'The published result changed while you were editing.'
+          : 'A newer result is waiting to be published.'}{' '}
+        Your draft is still here.
+      </p>
+      {match && (
+        <p>
+          <strong>
+            {published ? 'Latest result' : 'Pending result'} · Revision {revision}
+          </strong>
+          <br />
+          {score
+            ? `${match.player1Name} ${score} ${match.player2Name}`
+            : matchPresentation(match, true).result}
         </p>
       )}
-    </section>
+      {orderChanged && (
+        <>
+          <p>
+            <strong>Latest finishing order</strong>
+          </p>
+          <ol aria-label="Latest finishing order">
+            {order.latest.map((id) => (
+              <li key={id}>{order.entrants.find((entry) => entry.id === id)?.name ?? 'Player'}</li>
+            ))}
+          </ol>
+        </>
+      )}
+      {match ? (
+        <Button ref={reviewButton} disabled={disabled || !published} onClick={review}>
+          Keep draft for revision {revision}
+        </Button>
+      ) : (
+        <p>Choose a completed match from the latest revision to start a new correction.</p>
+      )}
+    </Notice>
   );
 }

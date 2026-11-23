@@ -1,4 +1,6 @@
 import { chooseOption } from '../test-support/controls';
+import { rpcProcedures, rpcValue } from '../test-support/rpcBatch';
+import type { trpc } from '../src/lib/trpc';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 
 type Match = {
@@ -51,6 +53,8 @@ async function mutate<T>(request: APIRequestContext, procedure: string, data: ob
 
 test('native event progresses from pools through reviewed finals to public club results', async ({
   page,
+  browser,
+  baseURL,
 }, testInfo) => {
   // Rehearse every pool/finals result plus publication and correction through Act.
   // Bound individual API calls above while allowing the complete night on CI.
@@ -369,6 +373,14 @@ test('native event progresses from pools through reviewed finals to public club 
     .filter({ has: page.getByRole('heading', { name: 'Published results and corrections' }) });
   await expect(correction).toContainText('Result revision 1 published.');
   const correctedMatch = played.find((m) => m.nativeBracketId)!;
+  const sealedOverview = () =>
+    query<Awaited<ReturnType<typeof trpc.eventOps.live.overview.query>>>(
+      page.request,
+      'eventOps.live.overview',
+      { planId },
+    );
+  const original = await sealedOverview();
+  const originalMatch = original.matches.find((m) => m.id === correctedMatch.id)!;
   await chooseOption(
     correction.getByRole('combobox', { name: 'Completed match' }),
     correctedMatch.id,
@@ -376,8 +388,84 @@ test('native event progresses from pools through reviewed finals to public club 
   await correction.locator('input[type="number"]').nth(0).fill('3');
   await correction.locator('input[type="number"]').nth(1).fill('1');
   await correction.getByLabel('Ruling reason').fill('The TO reviewed the final game count.');
-  await correction.getByRole('button', { name: 'Publish reviewed correction' }).click();
+
+  // An assigned organiser publishes while the admin's original draft is still open.
+  await mutate(page.request, 'eventOps.assignTo', { planId, email: 'organiser@smashclub.dev' });
+  const organiser = await browser.newContext({ baseURL });
+  try {
+    const signedIn = await organiser.request.post('/api/auth/sign-in/email', {
+      data: { email: 'organiser@smashclub.dev', password: 'devpassword123' },
+    });
+    expect(signedIn.ok()).toBe(true);
+    await mutate(organiser.request, 'eventOps.live.command', {
+      planId,
+      requestId: crypto.randomUUID(),
+      command: {
+        kind: 'replaceResult',
+        resultId: original.publication!.resultId,
+        reason: 'The assigned organiser checked the scoresheet.',
+        corrections: [
+          {
+            matchId: originalMatch.id,
+            expectedRevision: originalMatch.revision,
+            outcome: 'played',
+            score1: 4,
+            score2: 0,
+          },
+        ],
+      },
+    });
+  } finally {
+    await organiser.close();
+  }
+
   await expect(correction).toContainText('Result revision 2 published.');
+  const publish = correction.getByRole('button', { name: 'Publish reviewed correction' });
+  await expect(publish).toBeDisabled();
+  await expect(correction).toContainText('4–0');
+  await expect(correction.locator('input[type="number"]').nth(0)).toHaveValue('3');
+  await expect(correction.locator('input[type="number"]').nth(1)).toHaveValue('1');
+  await correction.getByRole('button', { name: 'Keep draft for revision 2' }).click();
+
+  const procedure = 'eventOps.live.command';
+  type Input = Parameters<typeof trpc.eventOps.live.command.mutate>[0];
+  type Reply = Awaited<ReturnType<typeof trpc.eventOps.live.command.mutate>>;
+  const attempts: Input[] = [];
+  const replies: Reply[] = [];
+  await page.route(
+    (url) => rpcProcedures(url.href).includes(procedure),
+    async (route) => {
+      const input = route.request();
+      attempts.push(rpcValue<Input>(input.url(), input.postDataJSON(), procedure));
+      const response = await route.fetch();
+      expect(response.ok(), await response.text()).toBe(true);
+      replies.push(
+        rpcValue<{ result: { data: Reply } }>(input.url(), await response.json(), procedure).result
+          .data,
+      );
+      if (attempts.length === 1) await route.abort('connectionreset');
+      else await route.fulfill({ response });
+    },
+  );
+  await publish.click();
+  const retry = correction.getByRole('button', { name: 'Retry correction' });
+  await expect(retry).toBeEnabled();
+  await expect(correction).toContainText('Result revision 3 published.');
+  await retry.click();
+  await expect(correction.getByRole('combobox', { name: 'Completed match' })).toContainText(
+    'Choose a match',
+  );
+  expect(attempts).toHaveLength(2);
+  expect(attempts[1]).toEqual(attempts[0]);
+  expect(replies[1]?.receipt).toEqual(replies[0]?.receipt);
+  const final = await sealedOverview();
+  expect(final.publication?.revision).toBe(3);
+  expect(final.matches.find(({ id }) => id === correctedMatch.id)).toMatchObject({
+    player1Id: originalMatch.player1Id,
+    player2Id: originalMatch.player2Id,
+    score1: 3,
+    score2: 1,
+  });
   const replaced = await query<Overview>(page.request, 'public.eventOverview', { slug });
   expect(replaced.brackets).toHaveLength(4);
   expect(replaced.divisions.flatMap((d) => d.players).reduce((sum, p) => sum + p.wins, 0)).toBe(

@@ -583,6 +583,7 @@ export function EventOperationsPanel({
               />
               <NativeDrawTools data={data} />
               <NativeResultControls
+                key={planId}
                 data={data}
                 onChanged={() => cache.invalidateQueries({ queryKey: ['eventOps', planId] })}
               />
