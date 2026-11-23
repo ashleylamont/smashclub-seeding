@@ -194,6 +194,7 @@ test('Run retries the exact Broadcast start after a lost response', async ({ pag
   try {
     await page.goto(url);
     await chooseOption(picker, match.id);
+    await expect(picker).toBeFocused();
     await start.press('Enter');
     await expect.poll(() => requests.length).toBe(1);
     const run = page.getByRole('tabpanel', { name: 'Run matches', exact: true });
@@ -203,7 +204,9 @@ test('Run retries the exact Broadcast start after a lost response', async ({ pag
     await expect(retry).toBeDisabled();
     loseResponse();
     await expect(run.getByRole('alert')).toBeVisible();
-    await chooseOption(readyRow.getByRole('combobox', { name: 'Named station' }), station.id);
+    const stationPicker = readyRow.getByRole('combobox', { name: 'Named station' });
+    await chooseOption(stationPicker, station.id);
+    await expect(stationPicker).toBeFocused();
     await retry.press('Enter');
     await expect.poll(() => requests.length).toBe(2);
     expect(requests[0]).toMatchObject({
