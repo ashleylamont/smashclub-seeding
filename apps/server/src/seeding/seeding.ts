@@ -1,8 +1,9 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { Db } from '@smashclub/db';
 import {
   playerRatings,
   players,
+  recomputes,
   seedingEntries,
   seedingRuns,
   syncJobs,
@@ -13,9 +14,9 @@ import type { ChallongeClient } from '../challonge/client';
 import { latestRecomputeId } from '../recompute/recompute';
 
 /**
- * Seeding workbench backend. A run snapshots auto-seeds from the current
- * leaderboard; admins reorder/lock entries; pushing writes seeds back to
- * Challonge sequentially and verifies by re-fetching.
+ * Seeding workbench backend. A run records automatic seeds from the published
+ * rating snapshot. Admins can reorder and lock entries. Pushing writes seeds
+ * back to Challonge sequentially and verifies by re-fetching.
  */
 
 export async function createSeedingRun(
@@ -272,13 +273,26 @@ export async function markDraftRunsStale(db: Db, tournamentId: string): Promise<
 }
 
 export async function latestSeedingRun(db: Db, tournamentId: string) {
-  const [run] = await db
-    .select()
+  const [result] = await db
+    .select({
+      run: seedingRuns,
+      ratingSource: { model: recomputes.model, publishedAt: recomputes.finishedAt },
+    })
     .from(seedingRuns)
+    .leftJoin(
+      recomputes,
+      and(eq(recomputes.id, seedingRuns.recomputeId), eq(recomputes.status, 'complete')),
+    )
     .where(eq(seedingRuns.tournamentId, tournamentId))
     .orderBy(desc(seedingRuns.createdAt))
     .limit(1);
-  if (!run) return null;
+  if (!result) return null;
+  const { run, ratingSource } = result;
+  const ratingSnapshot = ratingSource?.publishedAt
+    ? { model: ratingSource.model, publishedAt: ratingSource.publishedAt.toISOString() }
+    : null;
+  // Only show WHR inputs when the historical row matches the recorded score.
+  const whrRecomputeId = ratingSnapshot?.model === 'whr' ? run.recomputeId : null;
   const entries = await db
     .select({
       id: seedingEntries.id,
@@ -293,14 +307,38 @@ export async function latestSeedingRun(db: Db, tournamentId: string) {
       challongeSeed: tournamentParticipants.challongeSeed,
       canonicalName: players.canonicalName,
       displayName: players.displayName,
+      seedRating: { skill: playerRatings.skillRating, uncertainty: playerRatings.skillSd },
     })
     .from(seedingEntries)
     .innerJoin(tournamentParticipants, eq(seedingEntries.participantId, tournamentParticipants.id))
     .leftJoin(players, eq(seedingEntries.playerId, players.id))
+    .leftJoin(
+      playerRatings,
+      whrRecomputeId
+        ? and(
+            eq(playerRatings.recomputeId, whrRecomputeId),
+            eq(playerRatings.playerId, seedingEntries.playerId),
+            eq(playerRatings.conservativeRating, seedingEntries.autoScore),
+          )
+        : sql`false`,
+    )
     .where(eq(seedingEntries.runId, run.id));
   entries.sort(
     (a, b) =>
       (a.overrideSeed ?? a.autoSeed) - (b.overrideSeed ?? b.autoSeed) || a.autoSeed - b.autoSeed,
   );
-  return { run, entries };
+  return {
+    run: {
+      id: run.id,
+      status: run.status,
+      createdAt: run.createdAt.toISOString(),
+      pushedAt: run.pushedAt?.toISOString() ?? null,
+      pushLog: run.pushLog,
+    },
+    ratingSnapshot,
+    entries: entries.map((entry) => ({
+      ...entry,
+      name: entry.canonicalName ? (entry.displayName ?? entry.canonicalName) : entry.cleanedName,
+    })),
+  };
 }

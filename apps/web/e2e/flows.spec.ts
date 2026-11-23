@@ -383,9 +383,7 @@ test.describe('admin', () => {
     await expect(cards).toHaveCount(before - 1, { timeout: 30_000 });
   });
 
-  test('seeding generates from the leaderboard, reorders, and survives a reload', async ({
-    page,
-  }) => {
+  test('seeding keeps its rating snapshot and manual locks after a reload', async ({ page }) => {
     await signInAsAdmin(page.request);
     await page.goto('/admin/seeding');
     await settle(page);
@@ -402,6 +400,9 @@ test.describe('admin', () => {
     }
     const rows = page.locator('.seeding-list .seeding-row');
     await expect(rows.first()).toBeVisible({ timeout: 30_000 });
+    const snapshot = page.getByText('WHR rating snapshot published').locator('time');
+    await expect(snapshot).toBeVisible();
+    const publishedAt = (await snapshot.getAttribute('datetime'))!;
 
     // Seeds are dense and start at 1.
     const seeds = await rows
@@ -429,6 +430,7 @@ test.describe('admin', () => {
     await chooseOption(page.locator('[role="combobox"].select').first(), values[0]!);
     await settle(page);
 
+    await expect(snapshot).toHaveAttribute('datetime', publishedAt);
     const reloaded = page.locator('.seeding-list .seeding-row');
     // Names are uppercased in CSS, so the rendered read is not case-comparable.
     await expect(reloaded.nth(1)).toContainText(new RegExp(escapeRegExp(secondName), 'i'));

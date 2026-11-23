@@ -254,13 +254,15 @@
 
 .seeding-grid {
   display: grid;
-  grid-template-columns: 48px 32px minmax(160px, 1fr) 80px 60px 110px 60px;
-  gap: var(--s3);
+  grid-template-columns: 48px 32px minmax(136px, 1fr) 122px 56px 84px 48px;
+  min-inline-size: 620px;
+  gap: var(--s2);
   align-items: center;
 }
 
 .seeding-list-header {
   padding: var(--s2) var(--s2) 6px;
+  border-inline-start: 3px solid transparent;
   font-family: var(--display);
   font-size: var(--fs-xs);
   font-weight: 500;
@@ -303,7 +305,18 @@
   color: var(--text-h);
 }
 
+.seeding-scroll-hint {
+  display: none;
+}
+
+.seeding-rating-inputs {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--fs-xs);
+}
+
 .seeding-name {
+  overflow-wrap: anywhere;
   font-family: var(--display);
   font-size: var(--fs-md);
   text-transform: uppercase;
@@ -503,9 +516,14 @@
 /* `.visually-hidden` used to be defined here, which meant it only worked on
    admin screens — it is now a global utility in index.css. */
 
+@media (max-width: 680px) {
+  .seeding-scroll-hint {
+    display: block;
+  }
+}
+
 @media (max-width: 860px) {
-  .candidate-row,
-  .seeding-grid {
+  .candidate-row {
     grid-template-columns: minmax(0, 1fr) auto;
     row-gap: var(--s1);
   }
