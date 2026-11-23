@@ -279,6 +279,7 @@ function ObsSourceCopy() {
     const value = current.get(key);
     if (value !== null) source.searchParams.set(key, value);
   }
+  if (current.get('guestQr') === '0') source.searchParams.set('guestQr', '0');
   source.searchParams.set('controls', '0');
   const url = source.href;
   const copying = feedback?.state === 'copying';
