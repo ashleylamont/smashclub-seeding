@@ -84,6 +84,13 @@ Nx uses package dependencies and each task's inputs to select changed packages a
 
 The `typecheck` targets run the existing package scripts and reuse successful results locally. Pass `--skipNxCache` when you need a fresh typecheck. The `test` targets run the five package Vitest projects in the root configuration. The server suite uses the same Vitest configuration and reads the database package's migrations. Unit tests run fresh each time. If Nx cannot build the graph or a change spans workflows, infrastructure, or another root-level input outside Nx, run `pnpm check`. It includes the root `ci` Vitest project, lint, format, and build. Run the browser, PostgreSQL, and production-image commands separately when they apply.
 
+Nx's Projects view shows package dependencies. The Tasks view shows execution prerequisites. Typechecks and unit tests read workspace packages from source and can run in parallel. The real browser tests serve the built web app, so Nx runs the web build before the browser test target.
+
+```bash
+pnpm exec nx run @smashclub/web:test:e2e --graph
+pnpm exec nx run @smashclub/web:test:e2e -- local-sign-in.spec.ts
+```
+
 If a restricted shell denies Nx's local sockets, retry with `NX_DAEMON=false NX_ISOLATE_PLUGINS=false` or use `pnpm check`.
 
 ### Troubleshooting
