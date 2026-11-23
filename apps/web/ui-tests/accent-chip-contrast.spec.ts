@@ -64,6 +64,9 @@ for (const { label, system, selected } of themes)
         );
       const fixture = await mockEvent(page, { role: 'admin' });
       await page.route('**/api/auth/list-accounts', (route) => route.fulfill({ json: [] }));
+      await page.route('**/api/auth-options', (route) =>
+        route.fulfill({ json: { credentials: true, providers: [] } }),
+      );
       fixture.responses['me.claims'] = [claim];
       fixture.responses['admin.admins'] = [admin];
       fixture.responses['admin.findAccounts'] = [admin];

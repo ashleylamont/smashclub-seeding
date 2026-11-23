@@ -30,8 +30,16 @@ export function useSignInOptions() {
     retry: false,
     queryFn: async (): Promise<{ credentials: boolean; providers: string[] }> => {
       const response = await fetch('/api/auth-options');
-      if (!response.ok) throw new Error('Sign-in is temporarily unavailable. Please try again.');
-      return response.json();
+      const options: { credentials?: unknown; providers?: unknown } | null = response.ok
+        ? await response.json().catch(() => null)
+        : null;
+      if (
+        typeof options?.credentials !== 'boolean' ||
+        !Array.isArray(options.providers) ||
+        !options.providers.every((provider: unknown) => typeof provider === 'string')
+      )
+        throw new Error('Sign-in is temporarily unavailable. Please try again.');
+      return { credentials: options.credentials, providers: options.providers };
     },
   });
 }
