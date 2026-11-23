@@ -206,6 +206,15 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(
         main.getByRole('heading', { level: 2, name: version, exact: true }),
       ).toBeVisible();
+      const older = main.getByRole('button', { name: 'Older releases' });
+      await expect(older).toHaveAttribute('aria-expanded', 'false');
+      await ready(page);
+      await page.screenshot({ path: testInfo.outputPath('changelog.png') });
+      await older.click();
+      await main.getByRole('button', { name: 'Archive notes' }).click();
+      await main.getByRole('button', { name: /^Full notes for / }).evaluateAll((triggers) => {
+        for (const trigger of triggers) (trigger as HTMLButtonElement).click();
+      });
       await expect(main.getByRole('heading', { level: 3, name: '20 October 2025' })).toBeVisible();
       await expect(
         main.getByRole('heading', { level: 2, name: 'Before versioned releases' }),
@@ -254,7 +263,6 @@ for (const theme of ['light', 'dark'] as const) {
       expect(
         (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
       ).toEqual([]);
-      await page.screenshot({ path: testInfo.outputPath('changelog.png') });
       const image = page.getByRole('img', {
         name: /OBS intermission showing a double-elimination bracket/,
       });

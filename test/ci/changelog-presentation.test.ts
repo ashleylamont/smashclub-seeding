@@ -1,6 +1,10 @@
 import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
-import { formatChangelog, groupReleaseNotes } from '../../apps/web/src/lib/changelog.mjs';
+import {
+  formatChangelog,
+  groupReleaseNotes,
+  readChangelog,
+} from '../../apps/web/src/lib/changelog.mjs';
 
 const repo = 'https://github.com/ashleylamont/smashclub-seeding';
 const build = `[build abcdef1](${repo}/commit/abcdef1234567890abcdef1234567890abcdef12)`;
@@ -54,6 +58,46 @@ describe('release note presentation', () => {
   it('preserves a release with custom Markdown outside the generated list format', () => {
     const release = '### Patch Changes\n\n- **Fix** · A note.\n\n> A historical note.';
     expect(groupReleaseNotes(release)).toBe(release);
+  });
+
+  it('reads historical introductions and chooses actual public changes for newly versioned releases', () => {
+    const futureNotes = [
+      '### Patch Changes',
+      '',
+      `- 8 November 2026 · **Maintenance** · Update browser tooling. ${source}`,
+      '',
+      `- 8 November 2026 · **Fix** · Keep a score draft on reload. ${source}`,
+      '',
+      `- 8 November 2026 · **Feature** · Follow your matches. ${source}`,
+      '',
+      '- **Fix** · A third change stays in the full notes.',
+    ].join('\n');
+    const intro = 'Open your saved score drafts from **Event Night**.';
+    const olderNotes = '### Patch Changes\n\n- **Maintenance** · Update the visual checks.';
+    const { releases, archive: oldNotes } = readChangelog(
+      `# Nemesis changelog\n\n## 1.0.0\n\n${futureNotes}\n\n## 0.21.1\n\n${intro}\n\n${olderNotes}\n\n## 0.2.11\n\n${olderNotes}\n\n${archive}`,
+    );
+    expect(releases).toEqual([
+      {
+        version: '1.0.0',
+        anchor: '100',
+        highlights: '- Follow your matches.\n- Keep a score draft on reload.',
+        notes: groupReleaseNotes(futureNotes),
+      },
+      {
+        version: '0.21.1',
+        anchor: '0211',
+        highlights: intro,
+        notes: groupReleaseNotes(olderNotes),
+      },
+      {
+        version: '0.2.11',
+        anchor: '0211-1',
+        highlights: '- Update the visual checks.',
+        notes: groupReleaseNotes(olderNotes),
+      },
+    ]);
+    expect(oldNotes).toBe(archive);
   });
 
   it('generates GitHub notes with the exact version screenshot URL and no neighboring release', () => {

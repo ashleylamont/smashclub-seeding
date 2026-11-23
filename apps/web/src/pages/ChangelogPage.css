@@ -1,6 +1,7 @@
 .changelog-page {
   max-inline-size: 76ch;
   margin-inline: auto;
+  row-gap: var(--s2);
   overflow-wrap: anywhere;
 }
 
@@ -8,8 +9,25 @@
   margin-block-end: 0;
 }
 
+.changelog-page .changelog-release {
+  padding-block: var(--s3) var(--s2);
+  border-block-end: 1px solid var(--border-strong);
+}
+
 .changelog-page h2 {
-  margin-block: var(--s6) var(--s3);
+  margin-block: 0 var(--s2);
+}
+
+.changelog-page .changelog-highlights {
+  color: var(--text-h);
+}
+
+.changelog-page .changelog-highlights :is(p, ul) {
+  margin-block: 0 var(--s1);
+}
+
+.changelog-page .changelog-highlights li + li {
+  margin-block-start: var(--s1);
 }
 
 .changelog-page :is(h2, h3) {
@@ -41,10 +59,8 @@
   border: 1px solid var(--border-strong);
 }
 
-.changelog-page .changelog-release:not(:first-of-type),
 .changelog-page .changelog-archive {
-  border-block-start: 1px solid var(--border-strong);
-  padding-block-start: var(--s4);
+  margin-block-start: var(--s4);
 }
 
 .changelog-page .changelog-release-group {

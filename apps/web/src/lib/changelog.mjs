@@ -1,3 +1,4 @@
+const releaseVersion = /^(\d+\.\d+\.\d+)\n/;
 const releaseTier = /^### (?:Major|Minor|Patch) Changes[ \t]*$/m;
 const categoryPrefix = /^- (?:\d{1,2} [A-Za-z]+ \d{4} · )?\*\*([^*]+)\*\* · /;
 const generatedSource =
@@ -58,10 +59,54 @@ export function formatChangelog(markdown) {
   return markdown
     .split(/^## /m)
     .map((section, index) => {
-      const version = index > 0 && /^\d+\.\d+\.\d+\n/.exec(section)?.[0];
+      const version = index > 0 && releaseVersion.exec(section)?.[0];
       return version
         ? `${version}\n${groupReleaseNotes(section.slice(version.length))}\n\n`
         : section;
     })
     .join('## ');
+}
+
+function releaseHighlights(notes) {
+  const leadsByGroup = new Map(releaseGroupHeadings.map((heading) => [heading, []]));
+  for (const lead of notes.match(/^- .+$/gm) ?? []) {
+    const kind = categoryPrefix.exec(lead)?.[1];
+    const heading = groups.find(({ categories }) => categories.includes(kind))?.heading;
+    const summary = formatEntry(lead, [], kind).split('\n')[0];
+    leadsByGroup.get(heading ?? otherChanges).push(summary);
+  }
+  // Use the same public-first ordering as the full notes. A maintenance-only
+  // release still has a specific change the reader can see.
+  const [features, fixes, ...other] = leadsByGroup.values();
+  const highlights = [...features, ...fixes].slice(0, 2);
+  return (highlights.length ? highlights : other.flat().slice(0, 1)).join('\n');
+}
+
+export function readChangelog(markdown) {
+  const releases = [];
+  const archive = [];
+  const anchorCounts = new Map();
+  for (const section of markdown.split(/^## /m).slice(1)) {
+    const match = releaseVersion.exec(section);
+    if (!match) {
+      archive.push(`## ${section}`);
+      continue;
+    }
+    const [, version] = match;
+    const notes = section.slice(match[0].length).trim();
+    const firstTier = releaseTier.exec(notes);
+    const introduction = firstTier ? notes.slice(0, firstTier.index).trim() : '';
+    const details = firstTier ? notes.slice(firstTier.index) : notes;
+    // Match the existing Markdown heading IDs, including duplicate slug suffixes.
+    const baseAnchor = version.replaceAll('.', '');
+    const count = anchorCounts.get(baseAnchor) ?? 0;
+    anchorCounts.set(baseAnchor, count + 1);
+    releases.push({
+      version,
+      anchor: count ? `${baseAnchor}-${count}` : baseAnchor,
+      highlights: introduction || releaseHighlights(details),
+      notes: groupReleaseNotes(details),
+    });
+  }
+  return { releases, archive: archive.join('') };
 }
