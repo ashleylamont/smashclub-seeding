@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { trpc } from '../lib/trpc';
+import { isUuidPlayerId } from '../lib/playerSelection';
 import { CharacterIcons } from './CharacterIcons';
 import { Button } from './ui/Button';
 import { Dialog } from './ui/Dialog';
@@ -16,8 +17,6 @@ export function PlayerProfileName({ playerId, name }: { playerId?: string | null
   );
 }
 
-const playerIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 type MemberNames = Readonly<Record<string, string>>;
 
 function publicDoublesMembers(
@@ -31,7 +30,7 @@ function publicDoublesMembers(
   if (!first || !second || first === second) return;
   const [firstMember, secondMember] = [first, second].flatMap((id) => {
     const alias = Object.hasOwn(names, id) ? names[id] : undefined;
-    return id !== entrantId && playerIdPattern.test(id) && alias && alias !== 'Player'
+    return id !== entrantId && isUuidPlayerId(id) && alias && alias !== 'Player'
       ? [{ playerId: id, name: alias }]
       : [];
   });

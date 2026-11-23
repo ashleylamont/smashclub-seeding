@@ -18,6 +18,7 @@ import { scoreReportPlayers, type ScoreReportPlayer } from '../lib/scoreReportPl
 import { SetCharacterFields } from './SetCharacterFields';
 import { ReportedCharacters } from './ReportedCharacters';
 import { EventEntrantName } from './PlayerProfilePreview';
+import type { MatchPlayerPreview } from '../lib/playerHubView';
 import {
   scoreReportDraftKey,
   useScoreReportDraft,
@@ -45,7 +46,7 @@ type EventScoreCardProps = {
   playedCharacters?: SetCharacterPick[];
   lateReport?: React.ReactNode;
   recordedOnly?: boolean;
-  showPlayerPreviews?: boolean;
+  canPreviewMatchPlayer?: MatchPlayerPreview;
   profileMemberNames?: Readonly<Record<string, string>>;
 };
 
@@ -61,16 +62,18 @@ export function EventScoreCard(props: EventScoreCardProps) {
 function ScoreCardTitle({
   match,
   presentation,
-  showPlayerPreviews,
+  canPreviewMatchPlayer,
   profileMemberNames,
 }: {
   match: EventScoreCardProps['match'];
   presentation: ReturnType<typeof matchPresentation>;
-  showPlayerPreviews?: boolean;
+  canPreviewMatchPlayer?: MatchPlayerPreview;
   profileMemberNames?: Readonly<Record<string, string>>;
 }) {
+  const previewFirst = canPreviewMatchPlayer?.(match, 0);
+  const previewSecond = canPreviewMatchPlayer?.(match, 1);
   if (
-    (!showPlayerPreviews && !profileMemberNames) ||
+    (!previewFirst && !previewSecond && !profileMemberNames) ||
     !['scheduled', 'played'].includes(presentation.kind)
   )
     return <h3>{presentation.title}</h3>;
@@ -87,7 +90,7 @@ function ScoreCardTitle({
       <EventEntrantName
         entrantId={match.player1Id}
         name={match.player1Name || 'Player'}
-        singlesPreview={showPlayerPreviews}
+        singlesPreview={previewFirst}
         memberIds={match.player1MemberIds}
         memberNames={profileMemberNames}
       />
@@ -95,7 +98,7 @@ function ScoreCardTitle({
       <EventEntrantName
         entrantId={match.player2Id}
         name={match.player2Name || 'Opponent'}
-        singlesPreview={showPlayerPreviews}
+        singlesPreview={previewSecond}
         memberIds={match.player2MemberIds}
         memberNames={profileMemberNames}
       />
@@ -119,7 +122,7 @@ function ScoreCard({
   playedCharacters,
   lateReport,
   recordedOnly = false,
-  showPlayerPreviews,
+  canPreviewMatchPlayer,
   profileMemberNames,
 }: EventScoreCardProps) {
   const card = useRef<HTMLElement>(null);
@@ -173,7 +176,7 @@ function ScoreCard({
       <ScoreCardTitle
         match={match}
         presentation={presentation}
-        showPlayerPreviews={showPlayerPreviews}
+        canPreviewMatchPlayer={canPreviewMatchPlayer}
         profileMemberNames={profileMemberNames}
       />
       {qualification && presentation.kind === 'scheduled' && match.status !== 'blocked' && (

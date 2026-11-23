@@ -1,5 +1,7 @@
 import type { NativeBracketView } from '../components/EventNightBoard';
+import type { LiveMatch } from './eventDisplay';
 import { includesPlayer } from './playerMatchView';
+import { isUuidPlayerId } from './playerSelection';
 import { isNativeRoundRobin } from './eventBracket';
 import { matchesPool, poolKey, type PoolFlowData, type PoolFlowMatch } from './poolFlow';
 
@@ -11,13 +13,71 @@ type HubData = PoolFlowData & {
   entrants?: { id: string; name: string; memberPlayerIds?: string[] }[];
 };
 
-export function publicEventProfilePreviews(
-  data: { plan: { competitionFormat?: string | null }; memberNames?: Record<string, string> },
-  recordedOnly: boolean,
-) {
-  const { competitionFormat } = data.plan;
+type PreviewEvent = {
+  plan: {
+    competitionFormat?: string | null;
+    bracketMode?: string;
+    liveOwned?: boolean;
+    historicalResultsSlug?: string | null;
+  };
+  entrants: { id: string; name: string; memberPlayerIds?: string[] }[];
+  memberNames?: Record<string, string>;
+};
+
+export type MatchPlayerPreview = (match: LiveMatch, side: 0 | 1) => boolean;
+
+function isSinglesMember(id: string, members?: readonly string[]) {
+  return !members || (members.length === 1 && members[0] === id);
+}
+
+function recordedSinglesPreview(entrants: PreviewEvent['entrants']): MatchPlayerPreview {
+  const names = new Map(
+    entrants
+      .filter(({ id, name, memberPlayerIds }) =>
+        Boolean(
+          isUuidPlayerId(id) &&
+          name.trim() &&
+          name !== 'Player' &&
+          isSinglesMember(id, memberPlayerIds),
+        ),
+      )
+      .map(({ id, name }) => [id, name]),
+  );
+  return (match, side) => {
+    if (
+      match.status !== 'complete' ||
+      match.outcome !== 'played' ||
+      match.sourceSetId != null ||
+      !match.winnerId ||
+      match.score1 == null ||
+      match.score2 == null
+    )
+      return false;
+    const id = side === 0 ? match.player1Id : match.player2Id;
+    const name = side === 0 ? match.player1Name : match.player2Name;
+    const members = side === 0 ? match.player1MemberIds : match.player2MemberIds;
+    // Act projects the match names and roster from the same public identities.
+    return Boolean(id && name && isSinglesMember(id, members) && names.get(id) === name);
+  };
+}
+
+export function publicEventProfilePreviews(data: PreviewEvent, recordedOnly: boolean) {
+  const { competitionFormat, bracketMode, liveOwned, historicalResultsSlug } = data.plan;
+  const showPlayerPreviews = competitionFormat === 'singles' && !recordedOnly;
+  let canPreviewMatchPlayer: MatchPlayerPreview | undefined;
+  if (showPlayerPreviews) canPreviewMatchPlayer = () => true;
+  else if (
+    recordedOnly &&
+    competitionFormat === 'singles' &&
+    bracketMode === 'native' &&
+    liveOwned === true &&
+    !historicalResultsSlug
+  )
+    canPreviewMatchPlayer = recordedSinglesPreview(data.entrants);
+
   return {
-    showPlayerPreviews: competitionFormat === 'singles' && !recordedOnly,
+    showPlayerPreviews,
+    canPreviewMatchPlayer,
     profileMemberNames: competitionFormat === 'doubles' ? data.memberNames : undefined,
   };
 }

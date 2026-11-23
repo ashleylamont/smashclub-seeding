@@ -9,6 +9,7 @@ import {
   playerHubView,
   publicEventProfilePreviews,
   type HubBoardSection,
+  type MatchPlayerPreview,
 } from '../lib/playerHubView';
 import { liveBracketSide, liveBracketStatus } from '../lib/eventBracket';
 import { formatDate } from '../lib/format';
@@ -40,7 +41,7 @@ export function PlayerHubBoard({
   archiveOnly?: boolean;
 }) {
   const board = playerHubView(data, player, selectedPool);
-  const previews = publicEventProfilePreviews(data, board.closed);
+  const { showPlayerPreviews, ...previews } = publicEventProfilePreviews(data, board.closed);
   const runEnded = journeyState !== undefined && endedJourneys.has(journeyState);
   const superseded = (data.supersededPlayedSets ?? []).filter((set) =>
     player
@@ -86,7 +87,8 @@ export function PlayerHubBoard({
           stations={data.stations}
           recordedOnly={board.closed}
           structure={data.plan.structure}
-          {...previews}
+          showPlayerPreviews={showPlayerPreviews}
+          profileMemberNames={previews.profileMemberNames}
         />
         {!board.pools.length && (
           <>
@@ -255,7 +257,7 @@ function PlayerHubBracketSection({
   runEnded,
   archiveOnly,
   archiveEntry,
-  showPlayerPreviews,
+  canPreviewMatchPlayer,
   profileMemberNames,
 }: {
   data: PublicEventSnapshot;
@@ -264,7 +266,7 @@ function PlayerHubBracketSection({
   runEnded: boolean;
   archiveOnly: boolean;
   archiveEntry: boolean;
-  showPlayerPreviews: boolean;
+  canPreviewMatchPlayer?: MatchPlayerPreview;
   profileMemberNames?: Readonly<Record<string, string>>;
 }) {
   const recordedPath = board.closed || runEnded;
@@ -287,7 +289,7 @@ function PlayerHubBracketSection({
       entrants={data.entrants}
       linked={board.linked}
       recordedOnly={board.closed}
-      showPlayerPreviews={showPlayerPreviews}
+      canPreviewMatchPlayer={canPreviewMatchPlayer}
       profileMemberNames={profileMemberNames}
       graphicContext={{
         eventName: data.plan.name,
