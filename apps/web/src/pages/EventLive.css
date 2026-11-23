@@ -188,7 +188,7 @@
   overflow-wrap: anywhere;
   min-width: 0;
 }
-.event-contender > span:has(> .event-entrant-pair) {
+.event-contender > span:has(> :is(.event-entrant-pair, .player-profile-preview-name)) {
   display: flex;
   align-items: baseline;
   gap: var(--s1);

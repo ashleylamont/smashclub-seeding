@@ -7,6 +7,7 @@ import { isKnockout } from '@smashclub/shared';
 import { hasExportableBracket, type BracketGraphicContext } from '../lib/bracketGraphic';
 import { BracketGraphic } from './BracketGraphic';
 import type { LiveMatch, PoolQualifierSlot } from '../lib/eventDisplay';
+import type { MatchPlayerPreview } from '../lib/playerHubView';
 import { poolStandings } from '../lib/eventQueue';
 import { poolTitle, usesOpenPools } from '../lib/poolFlow';
 import { CharacterIcons } from './CharacterIcons';
@@ -216,7 +217,7 @@ export function EventBrackets({
   linked,
   recordedOnly = false,
   graphicContext,
-  showPlayerPreviews = false,
+  canPreviewMatchPlayer,
   profileMemberNames,
 }: {
   title?: string;
@@ -226,7 +227,7 @@ export function EventBrackets({
   linked: { division: string; stage: string; slug: string | null }[];
   recordedOnly?: boolean;
   graphicContext?: Omit<BracketGraphicContext, 'scope'> & { structure?: string };
-  showPlayerPreviews?: boolean;
+  canPreviewMatchPlayer?: MatchPlayerPreview;
   profileMemberNames?: Readonly<Record<string, string>>;
 }) {
   if (!brackets.length && !linked.some((item) => item.slug)) return null;
@@ -295,7 +296,7 @@ export function EventBrackets({
                 label={`${division} ${bracket.stage} ${lane.title || 'bracket rounds'}`}
                 labels={labels}
                 recordedOnly={recordedOnly}
-                showPlayerPreviews={showPlayerPreviews}
+                canPreviewMatchPlayer={canPreviewMatchPlayer}
                 profileMemberNames={profileMemberNames}
               />
             ))}

@@ -1,6 +1,7 @@
 import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 import type { PublicEventNight } from '../src/lib/publicEvents';
+import { chooseOption } from '../test-support/controls';
 import { mockEvent, PLAN_ID, PLAYER_NAME, ready } from './fixtures';
 
 const finished = {
@@ -190,3 +191,150 @@ test('prizes-only archive focuses its recorded prize', async ({ page }, testInfo
   await reviewRoute(page, testInfo, 'prizes-only');
   expect(unexpected).toEqual([]);
 });
+
+for (const width of [390, 1440]) {
+  test.describe(`${width}px finished player previews`, () => {
+    test.use({ hasTouch: width === 390 });
+
+    for (const theme of ['dark', 'light'] as const) {
+      test(`uses verified native match sides in ${theme}`, async ({ page }, testInfo) => {
+        await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+        await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+        const { snapshot, responses, queryResponses, submissions, unexpected } = await mockEvent(
+          page,
+          { bracket: true },
+        );
+        const played = snapshot.matches.find(
+          (match) => match.status === 'complete' && match.outcome === 'played',
+        )!;
+        if (played.nativeBracketId !== null) throw new Error('Expected a recorded pool match.');
+        const linked = snapshot.entrants.find((entrant) => entrant.id === played.player1Id)!;
+        const merged = snapshot.entrants.find(({ name }) => name === 'Peach')!;
+        const team = snapshot.entrants.find(({ name }) => name === 'Ice C')!;
+        const newProfile = 'f014a44e-78d7-44b8-a436-38fe88216f28';
+        const placeholder = snapshot.entrants.find((entrant) => entrant.id === played.player2Id)!;
+        Object.assign(linked, { name: PLAYER_NAME, memberPlayerIds: [linked.id] });
+        Object.assign(placeholder, { name: 'Player', memberPlayerIds: [placeholder.id] });
+        Object.assign(team, { name: 'Side Quest', memberPlayerIds: [linked.id, merged.id] });
+        const semi = snapshot.matches.find(({ id }) => id === 'fixture-semi-b')!;
+        const bye = snapshot.matches.find(({ id }) => id === 'fixture-semi-a')!;
+        const legacyLabel = 'Former alias without verified identity';
+        const missingRoster = 'Visiting player';
+        Object.assign(snapshot.plan, finished, { liveOwned: true });
+        expect(snapshot.plan.resultsSlug).toBeNull();
+        expect(snapshot.plan.historicalResultsSlug).toBeNull();
+        Object.assign(played, {
+          player1Name: linked.name,
+          player1MemberIds: [linked.id],
+          player2Name: placeholder.name,
+          player2MemberIds: [placeholder.id],
+        });
+        Object.assign(semi, {
+          status: 'complete',
+          outcome: 'played',
+          winnerId: merged.id,
+          score1: 2,
+          score2: 1,
+          player2Id: team.id,
+          player2Name: team.name,
+          player2MemberIds: [linked.id, merged.id],
+        });
+        const unverified = {
+          ...played,
+          id: 'fixture-unverified-played',
+          label: 'Unverified pairing',
+          player1Name: legacyLabel,
+          player2Id: '71cbceee-c5d5-411e-8e7f-2029899167dc',
+          player2Name: missingRoster,
+        };
+        snapshot.matches = [played, unverified, semi, bye];
+        snapshot.placements = [];
+        snapshot.prizes = [];
+        responses['eventOps.publicEvents'] = [finished];
+        const previewIds: string[] = [];
+        queryResponses.set('public.playerPreview', (input) => {
+          const { playerId } = input as { playerId: string };
+          previewIds.push(playerId);
+          return playerId === merged.id
+            ? { profile: null, redirectTo: newProfile }
+            : {
+                profile: {
+                  name: linked.name,
+                  characters: ['mario'],
+                  rating: { clubRating: 1560, wins: 9, losses: 5, isProvisional: false },
+                },
+                redirectTo: null,
+              };
+        });
+
+        await enterArchive(page);
+        const results = page.getByRole('region', { name: 'Results', exact: true });
+        await expect(results).toBeFocused();
+        const card = results.getByRole('article').filter({ hasText: played.label });
+        await expect(card.locator('.event-contender strong')).toHaveText(['2', '0']);
+        await expect(card.getByText(placeholder.name, { exact: true })).toBeVisible();
+        await expect(results.getByText(legacyLabel, { exact: true })).toBeVisible();
+        await expect(results.getByText(missingRoster, { exact: true })).toBeVisible();
+        const bracket = page.locator(`[data-match-id="${semi.id}"]`);
+        await expect(bracket.getByText(team.name, { exact: true })).toBeVisible();
+        await expect(page.locator(`[data-match-id="${bye.id}"]`).getByRole('button')).toHaveCount(
+          0,
+        );
+        for (const name of [placeholder.name, legacyLabel, missingRoster, team.name]) {
+          await expect(
+            page.getByRole('button', { name: `Preview ${name}`, exact: true }),
+          ).toHaveCount(0);
+        }
+        expect(previewIds).toEqual([]);
+        const trigger = card.getByRole('button', { name: `Preview ${linked.name}`, exact: true });
+        await expect(trigger).toBeVisible();
+        if (width === 390) await trigger.tap();
+        else await trigger.press('Enter');
+        const dialog = page.getByRole('dialog', { name: linked.name, exact: true });
+        await expect(dialog.getByText('1560', { exact: true })).toBeVisible();
+        await expect(dialog.getByRole('link', { name: 'View full profile' })).toHaveAttribute(
+          'href',
+          `/players/${linked.id}`,
+        );
+        await ready(page);
+        await page.screenshot({ path: testInfo.outputPath('recorded-player-preview.png') });
+        await page.keyboard.press('Escape');
+        await expect(dialog).toBeHidden();
+        await expect(trigger).toBeFocused();
+
+        const moved = bracket.getByRole('button', { name: `Preview ${merged.name}`, exact: true });
+        await moved.press('Enter');
+        const movedDialog = page.getByRole('dialog', { name: merged.name, exact: true });
+        await expect(movedDialog.getByText('This profile has moved.')).toBeVisible();
+        await expect(movedDialog.getByRole('link', { name: 'View full profile' })).toHaveAttribute(
+          'href',
+          `/players/${newProfile}`,
+        );
+        await page.keyboard.press('Escape');
+        await expect(moved).toBeFocused();
+        expect(previewIds).toEqual([linked.id, merged.id]);
+
+        await chooseOption(page.getByLabel('Match view', { exact: true }), 'results');
+        const history = page.getByRole('region', { name: 'Match history', exact: true });
+        const historyCard = history.locator(`[data-player-match-id="${played.id}"]`);
+        await expect(
+          historyCard.getByRole('button', { name: `Preview ${linked.name}`, exact: true }),
+        ).toBeVisible();
+        await expect(page.getByRole('spinbutton')).toHaveCount(0);
+        await expect(page).toHaveURL(`/play/${PLAN_ID}#event-archive`);
+        await reviewRoute(page, testInfo, 'finished-match-history');
+
+        // Legacy/adopted native metadata must not make these same names actionable.
+        Object.assign(snapshot.plan, { liveOwned: false, historicalResultsSlug: 'linked-history' });
+        await page.reload();
+        await expect(card.getByText(linked.name, { exact: true })).toBeVisible();
+        await expect(results.getByRole('button', { name: `Preview ${linked.name}` })).toHaveCount(
+          0,
+        );
+        expect(previewIds).toEqual([linked.id, merged.id]);
+        expect(submissions).toEqual([]);
+        expect(unexpected).toEqual([]);
+      });
+    }
+  });
+}

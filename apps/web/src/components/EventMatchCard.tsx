@@ -4,19 +4,20 @@ import { poolKey, poolTitle, usesOpenPools } from '../lib/poolFlow';
 import { CharacterIcons } from './CharacterIcons';
 import { EventEntrantName } from './PlayerProfilePreview';
 import type { LiveMatch } from '../lib/eventDisplay';
+import type { MatchPlayerPreview } from '../lib/playerHubView';
 export function MatchCard({
   match,
   station,
   nextMatch,
   structure,
-  showPlayerPreviews = false,
+  canPreviewMatchPlayer,
   profileMemberNames,
 }: {
   match: LiveMatch;
   station?: string;
   nextMatch?: LiveMatch;
   structure?: string;
-  showPlayerPreviews?: boolean;
+  canPreviewMatchPlayer?: MatchPlayerPreview;
   profileMemberNames?: Readonly<Record<string, string>>;
 }) {
   const presentation = matchPresentation(match);
@@ -60,7 +61,7 @@ export function MatchCard({
           <span>
             <EventEntrantName
               entrantId={p.id}
-              singlesPreview={showPlayerPreviews}
+              singlesPreview={canPreviewMatchPlayer?.(match, i === 0 ? 0 : 1)}
               memberIds={p.memberIds}
               memberNames={profileMemberNames}
               name={matchParticipantName(match, i === 0 ? 0 : 1)}

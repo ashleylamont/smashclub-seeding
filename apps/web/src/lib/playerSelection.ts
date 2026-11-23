@@ -1,6 +1,10 @@
 import { useState } from 'react';
 
 export type PublicPlayer = { id: string; name: string; label: string; companyCode?: string };
+const playerIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const isUuidPlayerId = (id: string) => playerIdPattern.test(id);
+
 export function eventPlayers(
   matches: readonly {
     player1Id: string | null;

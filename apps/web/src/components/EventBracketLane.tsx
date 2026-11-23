@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { LiveMatch } from '../lib/eventDisplay';
+import type { MatchPlayerPreview } from '../lib/playerHubView';
 import { eliminationLaneLayout, type EliminationLane } from '../lib/eliminationLayout';
 import { matchPresentation } from '../lib/matchPresentation';
 import {
@@ -24,7 +25,7 @@ export function EventBracketLane({
   recordedOnly = false,
   roundTitles,
   cardWidth = 250,
-  showPlayerPreviews = false,
+  canPreviewMatchPlayer,
   profileMemberNames,
 }: {
   matches: LiveMatch[];
@@ -36,7 +37,7 @@ export function EventBracketLane({
   recordedOnly?: boolean;
   roundTitles?: string[];
   cardWidth?: number;
-  showPlayerPreviews?: boolean;
+  canPreviewMatchPlayer?: MatchPlayerPreview;
   profileMemberNames?: Readonly<Record<string, string>>;
 }) {
   const canvas = useRef<HTMLDivElement>(null);
@@ -205,7 +206,7 @@ export function EventBracketLane({
                       <span>
                         <EventEntrantName
                           entrantId={id}
-                          singlesPreview={showPlayerPreviews}
+                          singlesPreview={canPreviewMatchPlayer?.(match, side)}
                           memberIds={memberIds}
                           memberNames={profileMemberNames}
                           name={liveBracketSide(match, side, labels)}
