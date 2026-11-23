@@ -619,7 +619,12 @@ it('queues exact-build verification and registry writes while superseding PR che
 it('uses repository-scoped credentials for version PRs and publishes releases after image publication', () => {
   expect(versionWorkflow.on.push.branches).toEqual(['main']);
   expect(versionWorkflow.on).not.toHaveProperty('pull_request');
-  expect(versionWorkflow.permissions).toEqual({ contents: 'read' });
+  expect(versionWorkflow.permissions).toEqual({
+    actions: 'read',
+    checks: 'read',
+    contents: 'read',
+    'pull-requests': 'read',
+  });
   const steps = versionWorkflow.jobs.version.steps;
   const token = steps.find((step: { id?: string }) => step.id === 'release-token');
   expect(token.with).toMatchObject({
@@ -655,16 +660,18 @@ describe('version preflight', () => {
       'persist-credentials': false,
     });
     expect(
-      steps.slice(1, 7).map((step: { id?: string; uses?: string }) => step.id ?? step.uses),
+      steps.slice(1, 9).map((step: { id?: string; uses?: string }) => step.id ?? step.uses),
     ).toEqual([
       'version-source',
       'empty-changesets',
+      'candidate',
       './.github/actions/setup-node-pnpm',
       'release-token',
+      'candidate-final',
       'version-source-final',
       'changesets',
     ]);
-    for (const guard of [steps[1], steps[5]]) {
+    for (const guard of [steps[1], steps[7]]) {
       expect(guard).toMatchObject({
         env: { GH_TOKEN: '${{ github.token }}' },
         run: 'bash scripts/check-version-source.sh',
@@ -674,12 +681,23 @@ describe('version preflight', () => {
     expect(preflight.if).toBe(
       "steps.version-source.outputs.ready == 'true' && github.event_name == 'push'",
     );
-    for (const step of [steps[3], steps[4], steps[5]]) {
-      expect(step.if).toBe(
-        "steps.version-source.outputs.ready == 'true' && steps.empty-changesets.outputs.skip != 'true'",
-      );
+    expect(steps[3]).toMatchObject({
+      if: "steps.version-source.outputs.ready == 'true' && steps.empty-changesets.outputs.skip != 'true'",
+      env: { GH_TOKEN: '${{ github.token }}' },
+      run: 'node scripts/version-candidate.mjs',
+    });
+    for (const step of [steps[4], steps[5], steps[6]]) {
+      expect(step.if).toBe("steps.candidate.outputs.action == 'version'");
     }
-    expect(steps[6].if).toBe("steps.version-source-final.outputs.ready == 'true'");
+    expect(steps[6]).toMatchObject({
+      env: {
+        GH_TOKEN: '${{ github.token }}',
+        EXPECTED_VERSION_CANDIDATE: '${{ steps.candidate.outputs.candidate }}',
+      },
+      run: 'node scripts/version-candidate.mjs',
+    });
+    expect(steps[7].if).toBe("steps.candidate-final.outputs.action == 'version'");
+    expect(steps[8].if).toBe("steps.version-source-final.outputs.ready == 'true'");
     expect(
       steps.find((step: { name?: string }) => step.name?.startsWith('Queue the version PR')).run,
     ).toContain('--match-head-commit "$head"');
