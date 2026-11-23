@@ -164,6 +164,52 @@ const provisionalProfiles = [
   { label: '49 rookie sets', mainSets: 0, rookieSets: 49, skill: 2005, sd: 108, confidence: 0.48 },
 ];
 
+for (const width of [320, 390, 1440]) {
+  for (const theme of ['dark', 'light'] as const) {
+    test(`provisional status is visible and announced at ${width}px in ${theme}`, async ({
+      page,
+    }, info) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const { board: data, unexpected } = await mockRankingsAndProfile(page, true);
+      data.rows[0]!.lastPlayedDate = currentNight;
+      data.rows[2]!.isProvisional = true;
+      await page.goto('/');
+      const board = page.locator('.board');
+      const established = board.getByRole('link', { name: /^Long-absent leader,/i });
+      const longAlias = board.getByRole('link', { name: /^Alex with a long tournament alias/i });
+      const shortAlias = board.getByRole('link', { name: /^Cam,/i });
+      await expect(board.getByRole('listitem')).toHaveCount(3);
+      await ready(page);
+      await page.screenshot({ fullPage: true, path: info.outputPath('provisional-rankings.png') });
+      await board.getByRole('list').scrollIntoViewIfNeeded();
+
+      await expect.soft(longAlias.getByTitle(/^Provisional/)).toBeInViewport({ ratio: 1 });
+      await expect.soft(shortAlias.getByTitle(/^Provisional/)).toBeInViewport({ ratio: 1 });
+      await expect(established.getByTitle(/^Provisional/)).toHaveCount(0);
+      await expect(established).not.toHaveAccessibleName(/provisional/i);
+      await expect
+        .soft(longAlias)
+        .toHaveAccessibleName(
+          /Alex with a long tournament alias from Western Sydney,.*Club, club rating 1533, provisional rating, 20 docked for 2 missed club nights.*1 won, 1 lost, recent form/i,
+        );
+      await expect.soft(shortAlias).toHaveAccessibleName(/Cam,.*provisional rating/i);
+      await established.focus();
+      await page.keyboard.press('Tab');
+      await expect(
+        board.getByRole('button', { name: /Preview Long-absent leader/i }),
+      ).toBeFocused();
+      await page.keyboard.press('Tab');
+      await expect(longAlias).toBeFocused();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+      expect(
+        (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
+      ).toEqual([]);
+      expect(unexpected).toEqual([]);
+    });
+  }
+}
+
 for (const width of [390, 1440]) {
   for (const theme of ['dark', 'light'] as const) {
     test(`ranks and skill use their published meaning at ${width}px in ${theme}`, async ({
