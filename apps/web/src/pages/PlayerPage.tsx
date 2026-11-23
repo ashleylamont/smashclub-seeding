@@ -1,5 +1,6 @@
 import { Select, SelectItem } from '../components/ui/Select';
 import { Button } from '../components/ui/Button';
+import { Disclosure } from '../components/ui/Disclosure';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
@@ -475,13 +476,25 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           </p>
         )}
         {ratedMatches.length > 0 && (
-          <p className="muted chart-caption">
-            Each rated set starts at one evidence unit. The saved margin weight adds units for each
-            game beyond a one-game winning margin, up to two units total. Evidence units weight the
-            WHR fit.
-            {recomputeId &&
-              ' Pre-night win estimates use earlier rated sets and player uncertainty.'}
-          </p>
+          <Disclosure title="How WHR estimates work" className="match-estimates">
+            {recomputeId && (
+              <>
+                <p className="muted chart-caption">
+                  The latest published WHR run reconstructs pre-night odds from earlier rated sets
+                  and accounts for player uncertainty.
+                </p>
+                <p className="muted chart-caption">
+                  Every player in the set needs an earlier rated match for a win estimate. “Separate
+                  rated groups” means no chain of earlier rated opponents connects all the players.
+                </p>
+              </>
+            )}
+            <p className="muted chart-caption">
+              Each rated set starts at one evidence unit. The saved margin weight adds units for
+              each game beyond a one-game winning margin, up to two units total. Evidence units
+              weight the WHR fit.
+            </p>
+          </Disclosure>
         )}
         {logEvents.length === 0 ? (
           <p className="muted">No match history available for this player.</p>

@@ -77,7 +77,7 @@ function ImpactNotes({
       <span className="whr-impact-value whr-forecast">
         {forecast && (
           <>
-            WHR pre-night{forecast.chance && ` · ${forecast.chance}`}
+            {forecast.chance ? `WHR pre-night · ${forecast.chance}` : 'Pre-night odds unavailable'}
             {forecast.note && <span>{forecast.note}</span>}
           </>
         )}
