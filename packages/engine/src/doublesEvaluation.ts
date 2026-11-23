@@ -19,6 +19,8 @@ export interface DoublesEvaluationInput {
   sets: readonly DoublesSet[];
   /** One map per UTC day, derived from strictly earlier singles results. */
   preNightSingles: ReadonlyMap<number, ReadonlyMap<string, SkillEstimate>>;
+  /** Pair model game-margin weight. Defaults to the engine's 0.5. */
+  whrGamesWeight?: number;
 }
 
 interface DoublesModelScore {
@@ -41,7 +43,10 @@ export type DoublesEvaluationComparison =
       sets: number;
       averageSingles: DoublesModelScore;
       pairResidual: DoublesModelScore;
-      /** Equal-weight night means, pair minus singles. Requires at least two held-out nights. */
+      /**
+       * Descriptive percentile intervals of equal-weight night means, pair minus singles.
+       * Requires at least two held-out nights. With two nights, the bounds are their two differences.
+       */
       pairedNightIntervals: { logLoss: DifferenceInterval; brier: DifferenceInterval } | null;
     };
 
@@ -74,6 +79,7 @@ function compare(nights: HeldOutSet[][]): DoublesEvaluationComparison {
     calibration: calibrate(
       sets.map((set) => set[arm].probability),
       outcomes,
+      { splitTies: true },
     ).filter((bin) => bin.count > 0),
   });
   const interval = (metric: 'logLoss' | 'brier'): DifferenceInterval => {
@@ -103,7 +109,7 @@ function compare(nights: HeldOutSet[][]): DoublesEvaluationComparison {
  * be inferred from its estimates. All results from the target day enter the fit together
  * only after both arms predict that day.
  */
-export function evaluateDoubles({ sets, preNightSingles }: DoublesEvaluationInput) {
+export function evaluateDoubles({ sets, preNightSingles, whrGamesWeight }: DoublesEvaluationInput) {
   const skillAt = (id: string, day: number) => {
     const skill = preNightSingles.get(day)?.get(id);
     if (!skill) throw new Error(`Missing pre-night singles estimate for ${id} on UTC day ${day}.`);
@@ -134,7 +140,7 @@ export function evaluateDoubles({ sets, preNightSingles }: DoublesEvaluationInpu
   for (const [day, night] of [...byDay].sort(([a], [b]) => a - b)) {
     night.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     if (earlier.length) {
-      const fit = fitDoubles({ sets: earlier, skillAt });
+      const fit = fitDoubles({ sets: earlier, skillAt, gamesWeight: whrGamesWeight });
       if (!fit.converged)
         throw new Error(`Doubles pair fit did not converge before UTC day ${day}.`);
       heldOut.push(

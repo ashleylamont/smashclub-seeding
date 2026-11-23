@@ -88,6 +88,41 @@ describe('evaluateDoubles', () => {
     );
   });
 
+  it('counts a tied forecast as half a realization whichever side is first', () => {
+    const training = [played('first-a', firstNight), played('first-b', firstNight, { winner: 2 })];
+    const target = played('target', secondNight);
+    const swapped = { ...target, p1: target.p2, p2: target.p1, winner: 2 } as const;
+    const normal = evaluateDoubles({ sets: [...training, target], preNightSingles: singles });
+    const reversed = evaluateDoubles({ sets: [...training, swapped], preNightSingles: singles });
+    const calibration = [{ lower: 0.5, upper: 0.6, count: 1, predicted: 0.5, observed: 0.5 }];
+
+    expect(normal).toEqual(reversed);
+    expect(normal.overall).toMatchObject({
+      status: 'available',
+      averageSingles: { calibration },
+      pairResidual: { calibration },
+    });
+  });
+
+  it('can match the production WHR games weight without changing the singles baseline', () => {
+    const sweep = played('sweep', firstNight, { p1Games: 3, p2Games: 0 });
+    const target = played('target', secondNight);
+    const input = { sets: [sweep, target], preNightSingles: singles };
+    const defaultScore = evaluateDoubles(input).overall;
+    const unweighted = evaluateDoubles({ ...input, whrGamesWeight: 0 }).overall;
+    if (defaultScore.status !== 'available' || unweighted.status !== 'available')
+      throw new Error('Expected held-out predictions.');
+
+    const expectedLogLoss = (gamesWeight: number) => {
+      const fit = fitDoubles({ sets: [sweep], skillAt: (id) => neutral.get(id)!, gamesWeight });
+      return -Math.log(fit.winProbability(target.p1, target.p2, target.time));
+    };
+    expect(defaultScore.pairResidual.logLoss).toBeCloseTo(expectedLogLoss(0.5), 12);
+    expect(unweighted.pairResidual.logLoss).toBeCloseTo(expectedLogLoss(0), 12);
+    expect(unweighted.pairResidual.logLoss).toBeGreaterThan(defaultScore.pairResidual.logLoss);
+    expect(unweighted.averageSingles).toEqual(defaultScore.averageSingles);
+  });
+
   it('reports paired whole-night uncertainty separately from set-weighted metrics', () => {
     const sets = [
       played('first', firstNight),

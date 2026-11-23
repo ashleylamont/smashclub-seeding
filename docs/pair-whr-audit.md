@@ -44,4 +44,8 @@ The option remains experimental and off by default. A decision to change its pri
 
 Import `evaluateDoubles` from `@smashclub/engine` and pass `{ sets, preNightSingles }`. Supply the latest result for each set using unique IDs and integer UTC days since 1970-01-01. For each UTC day, supply a map of player IDs to singles estimates fitted using only results from earlier UTC days.
 
-The evaluator scores both models on the same held-out sets and groups those sets by whether both exact pairs had played on an earlier night. Log loss, Brier score and calibration are set-weighted. The paired 95% bootstrap intervals give each held-out night equal weight and report pair residual minus average singles. A group with fewer than two held-out nights has no interval.
+Pass `whrGamesWeight` to match the game-margin weight of the pair model under review. The default is 0.5.
+
+The evaluator scores both models on the same held-out sets and groups those sets by whether both exact pairs had played on an earlier night. Log loss, Brier score and calibration are set-weighted. An exact 50% probability contributes 0.5 observed to the calibration bin because either side is equally favoured.
+
+The paired bootstrap reports the 2.5th and 97.5th percentiles of the loss difference, pair residual minus average singles, with equal weight per held-out night. A group with fewer than two held-out nights has no interval. With only two nights, the bounds are the two individual night differences. Even if the two differences are independent, continuous, and symmetric around zero, they share a sign and the interval excludes zero half the time. Treat such sparse intervals as descriptive evidence.

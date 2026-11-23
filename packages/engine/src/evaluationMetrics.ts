@@ -18,12 +18,18 @@ export function predictionErrors(p: number, outcome: number) {
   };
 }
 
-export function calibrate(probs: number[], outcomes: number[], bins = 5): CalibrationBin[] {
+export function calibrate(
+  probs: number[],
+  outcomes: number[],
+  { splitTies = false }: { splitTies?: boolean } = {},
+): CalibrationBin[] {
+  const bins = 5;
   // Predictions are symmetric (p and 1−p describe the same set from either
   // side), so fold onto [0.5, 1] where the bins are interpretable.
-  const folded = probs.map((p, i) =>
-    p >= 0.5 ? { p, o: outcomes[i]! } : { p: 1 - p, o: 1 - outcomes[i]! },
-  );
+  const folded = probs.map((p, i) => {
+    if (splitTies && p === 0.5) return { p, o: 0.5 };
+    return p >= 0.5 ? { p, o: outcomes[i]! } : { p: 1 - p, o: 1 - outcomes[i]! };
+  });
   const out: CalibrationBin[] = [];
   for (let b = 0; b < bins; b++) {
     const lower = 0.5 + (0.5 * b) / bins;
