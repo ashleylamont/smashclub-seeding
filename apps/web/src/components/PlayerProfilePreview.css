@@ -1,0 +1,34 @@
+.player-profile-preview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--s3);
+  margin: 0;
+}
+
+.player-profile-preview > div {
+  display: grid;
+  gap: var(--s1);
+}
+
+.player-profile-preview > div:last-child {
+  grid-column: 1 / -1;
+}
+
+.player-profile-preview dt {
+  color: var(--text-soft);
+  font-size: var(--fs-sm);
+}
+
+.player-profile-preview dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0;
+}
+
+.player-profile-preview .num {
+  color: var(--text-h);
+  font-size: var(--fs-lg);
+}

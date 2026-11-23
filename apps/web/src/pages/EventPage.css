@@ -25,6 +25,9 @@
 .event-standings {
   --table-min: 520px;
 }
+.event-standings-player > a {
+  overflow-wrap: anywhere;
+}
 .event-bracket-card .ui-disclosure {
   margin-top: var(--s3);
 }

@@ -7,6 +7,7 @@ import { formatDate } from '../lib/format';
 import './EventPage.css';
 import { ResultGraphic } from '../components/ResultGraphic';
 import { ArchiveBracketGraphic } from '../components/ArchiveBracketGraphic';
+import { PlayerProfilePreview } from '../components/PlayerProfilePreview';
 
 export function EventPage() {
   const { slug } = useParams({ from: '/events/$slug' });
@@ -212,9 +213,12 @@ function Standings({
               <td className="num">{p.place ?? '—'}</td>
               <td>
                 {p.playerId ? (
-                  <Link to="/players/$playerId" params={{ playerId: p.playerId }}>
-                    {p.name}
-                  </Link>
+                  <div className="event-standings-player ui-actions">
+                    <Link to="/players/$playerId" params={{ playerId: p.playerId }}>
+                      {p.name}
+                    </Link>
+                    <PlayerProfilePreview playerId={p.playerId} name={p.name} />
+                  </div>
                 ) : (
                   p.name
                 )}
