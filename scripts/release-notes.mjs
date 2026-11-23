@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { groupReleaseNotes } from '../apps/web/src/lib/changelog.mjs';
+import { readChangelog } from '../apps/web/src/lib/changelog.mjs';
 
 const version = process.argv[2];
 if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) {
@@ -7,10 +7,12 @@ if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) {
 }
 
 const changelog = readFileSync(new URL('../apps/web/CHANGELOG.md', import.meta.url), 'utf8');
-const section = changelog.split(/^## /m).find((section) => section.startsWith(`${version}\n`));
-const notes = section?.slice(version.length).trim();
-if (!notes) throw new Error(`Missing release notes for version ${version}`);
+const release = readChangelog(changelog).releases.find((entry) => entry.version === version);
+if (!release?.notes) throw new Error(`Missing release notes for version ${version}`);
+
+const { highlights, notes } = release;
+const body = highlights
+  ? `${highlights}\n\n<details>\n<summary>Full release notes</summary>\n\n${notes}\n\n</details>`
+  : notes;
 const publicScreenshots = `https://raw.githubusercontent.com/ashleylamont/smashclub-seeding/v${version}/apps/web/public/changelog/`;
-process.stdout.write(
-  `${groupReleaseNotes(notes).replaceAll('](./public/changelog/', `](${publicScreenshots}`)}\n`,
-);
+process.stdout.write(`${body.replaceAll('](./public/changelog/', `](${publicScreenshots}`)}\n`);

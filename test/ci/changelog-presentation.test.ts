@@ -1,5 +1,8 @@
 import { execFileSync } from 'node:child_process';
-import { describe, expect, it } from 'vitest';
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   formatChangelog,
   groupReleaseNotes,
@@ -10,6 +13,13 @@ const repo = 'https://github.com/ashleylamont/smashclub-seeding';
 const build = `[build abcdef1](${repo}/commit/abcdef1234567890abcdef1234567890abcdef12)`;
 const source = `[#42](${repo}/pull/42) · ${build}`;
 const archive = '## Before versioned releases\n\n### 20 October 2025\n\n- Older entry.\n';
+const disclosure = '\n\n<details>\n<summary>Full release notes</summary>\n\n';
+
+const publishedNotes = (version: string, cwd?: string) =>
+  execFileSync(process.execPath, ['scripts/release-notes.mjs', version], {
+    cwd,
+    encoding: 'utf8',
+  });
 
 describe('release note presentation', () => {
   it('groups explicit categories across bumps while keeping nested Markdown, provenance and unlabelled notes', () => {
@@ -137,21 +147,87 @@ describe('release note presentation', () => {
     },
   );
 
-  it('generates GitHub notes with the exact version screenshot URL and no neighboring release', () => {
-    const notes = execFileSync(process.execPath, ['scripts/release-notes.mjs', '0.3.0'], {
-      encoding: 'utf8',
-    });
-    expect(notes.match(/^### .+$/gm)).toEqual([
+  it('starts mixed GitHub releases with two reader-facing changes and keeps full notes available', () => {
+    const [highlights, details] = publishedNotes('0.23.6').split(disclosure);
+    const leads = highlights.split('\n');
+    expect(leads).toHaveLength(2);
+    expect(leads[0]).toMatch(/^- In OBS Display setup, turn on \*\*Use event Twitch announcement/);
+    expect(leads[1]).toMatch(/^- Turn on Include profile mains/);
+    expect(highlights).not.toContain('https://github.com/');
+    expect(details).toContain('### New and improved');
+    expect(details).toContain('Read both player names and the recorded result');
+    expect(details).toContain('### Maintenance');
+    expect(details).toContain('Speed up release verification');
+    expect(details).toContain(`*23 November 2026 · [#596](${repo}/pull/596) · [build `);
+    expect(details).toMatch(/\n\n<\/details>\n$/);
+  });
+
+  it('uses the authored summary and keeps the exact version screenshot and source in full GitHub notes', () => {
+    const notes = publishedNotes('0.3.0');
+    const [highlights, details] = notes.split(disclosure);
+    expect(highlights).toMatch(/^Stream operators could add a Twitch channel link/);
+    expect(highlights).not.toContain('Press S on the overlay');
+    expect(details.match(/^### .+$/gm)).toEqual([
       '### New and improved',
       '### Fixes',
       '### Maintenance',
     ]);
-    expect(notes).toContain('Press S on the overlay');
-    expect(notes).toContain(
+    expect(details).toContain('Press S on the overlay');
+    expect(details).toContain(
       'https://raw.githubusercontent.com/ashleylamont/smashclub-seeding/v0.3.0/apps/web/public/changelog/obs-twitch-link.png',
     );
-    expect(notes).toContain(`*8 November 2026 · [#247](${repo}/pull/247) · [build `);
+    expect(details).toContain(`*8 November 2026 · [#247](${repo}/pull/247) · [build `);
     expect(notes).not.toContain('### Minor Changes');
     expect(notes).not.toContain('## 0.2.11');
+    expect(notes.match(/Stream operators could add a Twitch channel link/g)).toHaveLength(1);
+  });
+
+  it('keeps the legacy release build inside the GitHub disclosure', () => {
+    const [highlights, details] = publishedNotes('0.1.0').split(disclosure);
+    expect(highlights).toMatch(/^Nemesis introduced numbered releases/);
+    expect(highlights).not.toContain('release build');
+    expect(details).toMatch(/^Released 8 November 2026 · \[release build cecd3d4\]/);
+  });
+
+  describe('GitHub release note fallbacks', () => {
+    let fixture: string;
+    const noHighlights = '### Patch Changes\n\n> A historical note with no summary or list.';
+
+    beforeAll(() => {
+      fixture = mkdtempSync(join(tmpdir(), 'nemesis-release-highlights-'));
+      mkdirSync(join(fixture, 'scripts'));
+      mkdirSync(join(fixture, 'apps/web/src/lib'), { recursive: true });
+      for (const file of ['scripts/release-notes.mjs', 'apps/web/src/lib/changelog.mjs']) {
+        copyFileSync(file, join(fixture, file));
+      }
+      writeFileSync(
+        join(fixture, 'apps/web/CHANGELOG.md'),
+        [
+          '# Nemesis changelog',
+          '## 9.1.0',
+          '### Patch Changes',
+          `- 8 November 2026 · **Maintenance** · Verify recorded scores. ${source}`,
+          '- **Maintenance** · Test the packaged app.',
+          '## 9.0.0',
+          noHighlights,
+        ].join('\n\n'),
+      );
+    });
+
+    afterAll(() => {
+      if (fixture) rmSync(fixture, { recursive: true, force: true });
+    });
+
+    it('opens a maintenance-only release with one concrete change', () => {
+      const [highlights, details] = publishedNotes('9.1.0', fixture).split(disclosure);
+      expect(highlights).toBe('- Verify recorded scores.');
+      expect(details).toContain('### Maintenance');
+      expect(details).toContain(`*8 November 2026 · ${source}*`);
+      expect(details).toContain('- Test the packaged app.');
+    });
+
+    it('shows the full Markdown directly when it has no usable opening', () => {
+      expect(publishedNotes('9.0.0', fixture)).toBe(`${noHighlights}\n`);
+    });
   });
 });
