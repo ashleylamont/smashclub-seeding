@@ -100,11 +100,13 @@ export function PlayerProfilePreview({
   name,
   trigger = 'button',
   teamMemberPosition,
+  onViewFullProfile,
 }: {
   playerId: string;
   name: string;
   trigger?: 'button' | 'name';
   teamMemberPosition?: number;
+  onViewFullProfile?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const query = useQuery({
@@ -184,7 +186,11 @@ export function PlayerProfilePreview({
       <div className="modal-actions">
         {query.isError && <Button onClick={() => void query.refetch()}>Retry preview</Button>}
         <Button asChild>
-          <Link to="/players/$playerId" params={{ playerId: redirectTo ?? playerId }}>
+          <Link
+            to="/players/$playerId"
+            params={{ playerId: redirectTo ?? playerId }}
+            onClick={onViewFullProfile}
+          >
             View full profile
           </Link>
         </Button>

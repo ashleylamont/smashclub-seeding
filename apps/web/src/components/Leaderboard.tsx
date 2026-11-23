@@ -3,7 +3,7 @@ import { Select, SelectItem } from './ui/Select';
 import { Switch } from './ui/Switch';
 import { Button } from './ui/Button';
 import { useId, useMemo, useState } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useLocation, useRouter } from '@tanstack/react-router';
 import type { LeaderboardRow } from '../lib/apiTypes';
 import { Sparkline } from './Sparkline';
 import { CharacterIcons } from './CharacterIcons';
@@ -46,6 +46,26 @@ interface Props {
 }
 
 type SortField = 'rank' | 'rating' | 'wins' | 'eventCount' | 'certainty' | 'lastSeen';
+
+interface RankingsView {
+  query: string;
+  companyFilter: string;
+  sortField: SortField;
+  descending: boolean;
+}
+
+const defaultRankingsView: RankingsView = {
+  query: '',
+  companyFilter: 'all',
+  sortField: 'rank',
+  descending: false,
+};
+
+declare module '@tanstack/react-router' {
+  interface HistoryState {
+    rankingsView?: RankingsView;
+  }
+}
 
 /**
  * The board's columns. Every sortable measure has its own column, so the header
@@ -198,12 +218,25 @@ export function Leaderboard({
   onHideInactiveChange,
   inactiveCount,
 }: Props) {
-  const [sortField, setSortField] = useState<SortField>('rank');
-  const [descending, setDescending] = useState(false);
-  const [companyFilter, setCompanyFilter] = useState('all');
-  const [query, setQuery] = useState('');
+  const initialView = useLocation({
+    select: ({ state }) => state.rankingsView ?? defaultRankingsView,
+  });
+  const [view, setView] = useState(initialView);
+  const { query, companyFilter, sortField, descending } = view;
+  const { history } = useRouter();
   const sortLabelId = useId();
   const rankLabel = hideInactive && inactiveCount > 0 ? 'Active rank' : 'Published rank';
+
+  const updateView = (changes: Partial<RankingsView>) =>
+    setView((previous) => ({ ...previous, ...changes }));
+
+  const rememberView = () => {
+    const { href, state } = history.location;
+    if ((state.rankingsView ?? defaultRankingsView) === view) return;
+    // Persist this entry before the profile link pushes the next one.
+    history.replace(href, { ...state, rankingsView: view });
+    history.flush();
+  };
 
   const companies = useMemo(
     () =>
@@ -240,13 +273,11 @@ export function Leaderboard({
   }, [rows, companyFilter, query, sortField, descending]);
 
   const sortBy = (field: SortField): void => {
-    if (field === sortField) {
-      setDescending(!descending);
-    } else {
-      setSortField(field);
-      // Rank reads best ascending; every other measure reads best descending.
-      setDescending(field !== 'rank');
-    }
+    // Rank reads best ascending; every other measure reads best descending.
+    updateView({
+      sortField: field,
+      descending: field === sortField ? !descending : field !== 'rank',
+    });
   };
 
   return (
@@ -259,12 +290,16 @@ export function Leaderboard({
             type="search"
             placeholder="Player name…"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => updateView({ query: event.target.value })}
           />
         </label>
         <label className="control">
           <span className="control-label">Company</span>
-          <Select className="control-input" value={companyFilter} onValueChange={setCompanyFilter}>
+          <Select
+            className="control-input"
+            value={companyFilter}
+            onValueChange={(value) => updateView({ companyFilter: value })}
+          >
             <SelectItem value="all">All companies</SelectItem>
             {companies.map((code) => (
               <SelectItem key={code} value={code}>
@@ -313,7 +348,7 @@ export function Leaderboard({
               type="button"
               className="sort-direction"
               aria-label={`Sorted ${descending ? 'highest first' : 'lowest first'}. Reverse the order.`}
-              onClick={() => setDescending(!descending)}
+              onClick={() => updateView({ descending: !descending })}
             >
               <span aria-hidden="true">{descending ? '▾' : '▴'}</span>
             </Button>
@@ -388,6 +423,7 @@ export function Leaderboard({
                 to="/players/$playerId"
                 params={{ playerId: row.playerId }}
                 className="board-link"
+                onClick={rememberView}
                 /*
                  * The link's label replaces everything inside it for a screen
                  * reader, so it has to carry the row: the marks that only exist
@@ -423,7 +459,7 @@ export function Leaderboard({
 
                 <span className="identity">
                   <span className="identity-label">
-                    <span className="identity-name">
+                    <span className="identity-name" title={row.name}>
                       {row.name}
                       {row.verified && (
                         <span className="verified" title="Claimed by its owner">
@@ -498,7 +534,13 @@ export function Leaderboard({
                   {seen.text}
                 </span>
               </Link>
-              <PlayerProfilePreview playerId={row.playerId} name={row.name} />
+              <div className="board-row-preview">
+                <PlayerProfilePreview
+                  playerId={row.playerId}
+                  name={row.name}
+                  onViewFullProfile={rememberView}
+                />
+              </div>
             </li>
           );
         })}
@@ -511,10 +553,7 @@ export function Leaderboard({
             variant="plain"
             type="button"
             className="link-button"
-            onClick={() => {
-              setQuery('');
-              setCompanyFilter('all');
-            }}
+            onClick={() => updateView({ query: '', companyFilter: 'all' })}
           >
             Clear them
           </Button>
