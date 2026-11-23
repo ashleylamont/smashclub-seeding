@@ -575,12 +575,15 @@
 }
 
 .ops-twitch-promotion,
-.ops-twitch-promotion form {
+.ops-twitch-promotion form,
+.ops-broadcast-presentation,
+.ops-broadcast-presentation form {
   display: grid;
   gap: var(--s2);
 }
 
-.ops-twitch-promotion .ui-field {
+.ops-twitch-promotion .ui-field,
+.ops-broadcast-presentation .ui-field {
   max-width: 36rem;
 }
 

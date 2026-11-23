@@ -11,7 +11,7 @@ import {
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import type { SetCharacterPick } from '@smashclub/shared';
+import type { BroadcastPresentationMode, SetCharacterPick } from '@smashclub/shared';
 import { eventPlans, players, sets } from './domain';
 import { user } from './auth';
 const planId = () =>
@@ -38,6 +38,19 @@ export const eventTwitchPromotions = pgTable(
   },
   (t) => [
     check('event_twitch_promotion_pair', sql`(${t.channel} is null) = (${t.expiresAt} is null)`),
+  ],
+);
+/** Presentation only. Native lifecycle and reporting remain in the Act journal. */
+export const eventBroadcastPresentations = pgTable(
+  'event_broadcast_presentations',
+  {
+    eventPlanId: planId().primaryKey(),
+    mode: text('mode').$type<BroadcastPresentationMode>().notNull(),
+    revision: integer('revision').notNull(),
+  },
+  (t) => [
+    check('event_broadcast_presentation_mode', sql`${t.mode} in ('auto', 'gameplay', 'progress')`),
+    check('event_broadcast_presentation_revision', sql`${t.revision} > 0`),
   ],
 );
 export const eventOperators = pgTable(

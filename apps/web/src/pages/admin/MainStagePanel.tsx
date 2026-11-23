@@ -118,7 +118,7 @@ export function MainStagePanel({
           Auto shows tournament progress between sets and returns to gameplay when this station
           starts a match. Progress pages rotate every {DEFAULT_PROGRESS_SECONDS} seconds by default.
           To adjust a source, open its preview and press S for Display setup. Copy the configured
-          URL from Use with OBS.
+          URL from Use with OBS. Only Follow event overlay uses the event presentation setting.
         </p>
         <BroadcastSources planId={data.plan.id} stationId={station?.id} />
       </Disclosure>
@@ -130,6 +130,7 @@ const broadcastSources = [
   ['auto', 'Automatic intermission overlay'],
   ['gameplay', 'Gameplay-only overlay'],
   ['progress', 'Progress-only overlay'],
+  ['event', 'Follow event overlay'],
 ] as const;
 
 type CopyFeedback = {

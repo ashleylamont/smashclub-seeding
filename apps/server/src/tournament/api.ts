@@ -1,8 +1,9 @@
+import { publicTwitchPromotion, readTwitchPromotion } from '../event-operations/twitchPromotion';
 import {
-  nativeTwitchOpen,
-  publicTwitchPromotion,
-  readTwitchPromotion,
-} from '../event-operations/twitchPromotion';
+  publicBroadcastPresentation,
+  readBroadcastPresentation,
+} from '../event-operations/broadcastPresentation';
+import { nativeBroadcastOpen } from '../event-operations/presentationAccess';
 import { rollingFinals } from './qualifiers';
 import { canUseStrengthSeeding, type strengthSeedPolicy } from './strengthFinals';
 import {
@@ -241,7 +242,12 @@ export class NativeEventApi {
   }
   async snapshot(privateView = false) {
     // Read presentation first so an already committed Act visibility change always wins.
-    const twitch = privateView ? undefined : await readTwitchPromotion(this.ctx.db, this.planId);
+    const [twitch, presentation] = privateView
+      ? []
+      : await Promise.all([
+          readTwitchPromotion(this.ctx.db, this.planId),
+          readBroadcastPresentation(this.ctx.db, this.planId),
+        ]);
     const state = privateView ? await this.state() : await this.publishedState();
     const snapshot = await eventView(this.ctx.db, state, privateView);
     if (!privateView && sharedDispatch(state)) {
@@ -249,10 +255,12 @@ export class NativeEventApi {
       snapshot.callSnapshotVersion = state.sequence;
       for (const match of snapshot.matches) Object.assign(match, calls.get(match.id));
     }
+    const open = nativeBroadcastOpen(state);
     return {
       ...snapshot,
       publicCode: this.publicCode,
-      ...publicTwitchPromotion(twitch, nativeTwitchOpen(state)),
+      ...publicTwitchPromotion(twitch, open),
+      ...publicBroadcastPresentation(presentation, open),
     };
   }
   async plan(revisionEvidence?: 'compact') {

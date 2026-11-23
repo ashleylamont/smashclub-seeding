@@ -13,7 +13,7 @@ import { Input } from '../../components/ui/Input';
 import { Disclosure } from '../../components/ui/Disclosure';
 import { OpsMatchSummary } from './OpsMatchSummary';
 import { OpsAnnouncements } from './OpsAnnouncements';
-import { OpsTwitchPromotion } from './OpsTwitchPromotion';
+import { OpsBroadcastSettings } from './OpsBroadcastSettings';
 import { OpsAccessControls } from './OpsAccessControls';
 import { OpsEventHistory } from './OpsEventHistory';
 import { Tabs, TabList, Tab, TabPanel } from '../../components/ui/Tabs';
@@ -601,7 +601,7 @@ export function EventOperationsPanel({
             callable={callable}
             act={act}
           />
-          <OpsTwitchPromotion
+          <OpsBroadcastSettings
             data={data}
             disabled={!online || pending || event.isError}
             act={act}

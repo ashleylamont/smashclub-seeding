@@ -1,3 +1,4 @@
+import type { BroadcastPresentationMode } from '@smashclub/shared';
 import {
   isNativeRoundRobin,
   liveBracketFeeds,
@@ -12,13 +13,13 @@ import type { PublicFinalsField } from './qualification';
 import type { trpc } from './trpc';
 import type { NativeBracketView } from '../components/EventNightBoard';
 
-export type BroadcastPresentation = 'gameplay' | 'auto' | 'progress';
+export type BroadcastPresentation = BroadcastPresentationMode | 'event';
 export const DEFAULT_PROGRESS_SECONDS = 10;
 export const progressIntervals = [DEFAULT_PROGRESS_SECONDS, 15, 30, 60] as const;
 
 export function broadcastPresentation(search: string): BroadcastPresentation {
   const mode = new URLSearchParams(search).get('presentation');
-  return mode === 'gameplay' || mode === 'progress' ? mode : 'auto';
+  return mode === 'gameplay' || mode === 'progress' || mode === 'event' ? mode : 'auto';
 }
 export function progressInterval(search: string): number {
   const seconds = Number(new URLSearchParams(search).get('cycleSeconds'));
