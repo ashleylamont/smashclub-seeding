@@ -6,6 +6,7 @@ import { Notice } from './ui/Feedback';
 import { Textarea } from './ui/Input';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { captureError, LocalCapture } from '../lib/localCapture';
+import { progressContent } from '../lib/broadcastProgress';
 
 /** Capture stays on this device: no upload, audio request, or automatic permission prompt. */
 export function OverlaySetup({
@@ -280,6 +281,8 @@ function ObsSourceCopy() {
     if (value !== null) source.searchParams.set(key, value);
   }
   if (current.get('guestQr') === '0') source.searchParams.set('guestQr', '0');
+  const content = progressContent(current.toString());
+  if (content !== 'all') source.searchParams.set('progressContent', content);
   source.searchParams.set('controls', '0');
   const url = source.href;
   const copying = feedback?.state === 'copying';

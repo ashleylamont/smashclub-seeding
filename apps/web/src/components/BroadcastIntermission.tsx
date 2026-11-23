@@ -3,6 +3,7 @@ import {
   broadcastPageDensity,
   broadcastProgressPages,
   type PoolPanel,
+  type ProgressContent,
   type ProgressData,
   type ProgressPage,
 } from '../lib/broadcastProgress';
@@ -34,6 +35,7 @@ function useReducedMotion() {
 
 export function BroadcastIntermission({
   data,
+  content,
   seconds,
   announcement,
   controls,
@@ -41,6 +43,7 @@ export function BroadcastIntermission({
   preferRecent,
 }: {
   data: ProgressData;
+  content: ProgressContent;
   seconds: number;
   announcement: string;
   controls: boolean;
@@ -56,8 +59,8 @@ export function BroadcastIntermission({
   }, []);
   const density = broadcastPageDensity(viewportWidth);
   const pages = useMemo(
-    () => broadcastProgressPages(data, preferRecent, broadcastPageDensity(viewportWidth)),
-    [data, preferRecent, viewportWidth],
+    () => broadcastProgressPages(data, preferRecent, broadcastPageDensity(viewportWidth), content),
+    [data, preferRecent, viewportWidth, content],
   );
   const [paused, setPaused] = useState(false);
   const reduced = useReducedMotion();

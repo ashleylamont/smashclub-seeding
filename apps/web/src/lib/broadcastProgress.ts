@@ -14,6 +14,7 @@ import type { trpc } from './trpc';
 import type { NativeBracketView } from '../components/EventNightBoard';
 
 export type BroadcastPresentation = BroadcastPresentationMode | 'event';
+export type ProgressContent = 'all' | 'standings' | 'recent';
 export const DEFAULT_PROGRESS_SECONDS = 10;
 export const progressIntervals = [DEFAULT_PROGRESS_SECONDS, 15, 30, 60] as const;
 
@@ -24,6 +25,11 @@ export function broadcastPresentation(search: string): BroadcastPresentation {
 export function progressInterval(search: string): number {
   const seconds = Number(new URLSearchParams(search).get('cycleSeconds'));
   return progressIntervals.find((option) => option === seconds) ?? DEFAULT_PROGRESS_SECONDS;
+}
+
+export function progressContent(search: string): ProgressContent {
+  const content = new URLSearchParams(search).get('progressContent');
+  return content === 'standings' || content === 'recent' ? content : 'all';
 }
 type PublicSnapshot = Awaited<ReturnType<typeof trpc.eventOps.snapshot.query>>;
 type PoolOrder = Pick<
@@ -251,6 +257,7 @@ export function broadcastProgressPages(
   data: ProgressData,
   preferRecent = false,
   { poolsPerPage, bracketColumns } = broadcastPageDensity(1280),
+  content: ProgressContent = 'all',
 ): ProgressPage[] {
   const pages: ProgressPage[] = [];
   const roundRobin = isNativeRoundRobin(data.plan);
@@ -334,6 +341,11 @@ export function broadcastProgressPages(
       pages.unshift(page);
     else pages.push(page);
   }
-  if (!pages.length || closed) pages.push({ kind: 'summary', key: 'summary' });
-  return pages;
+  const visible =
+    content === 'all'
+      ? pages
+      : pages.filter(({ kind }) => (kind === 'recent-results') === (content === 'recent'));
+  if (!visible.length || (closed && content === 'all'))
+    visible.push({ kind: 'summary', key: 'summary' });
+  return visible;
 }
