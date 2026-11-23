@@ -91,7 +91,7 @@ function TournamentDetail({
 
   const bracket = challongeStateLabel(data.challongeState, { abandoned });
   const sync = syncStateLabel(data.syncState);
-  const isSingles = data.competitionFormat === 'singles';
+  const previewIds = linkedSinglesIds(data);
 
   return (
     <div>
@@ -163,7 +163,7 @@ function TournamentDetail({
           <ul className="live-feed-list">
             {recentSets.map((set) => (
               <li key={set.id}>
-                <SetLine set={set} showPlayerPreviews={isSingles} />
+                <SetLine set={set} previewIds={previewIds} />
                 <span className="muted"> — {timeAgo(set.completedAt)}</span>
               </li>
             ))}
@@ -191,7 +191,7 @@ function TournamentDetail({
                 {standings.map((p) => (
                   <tr key={p.id}>
                     <td className="num">{p.finalRank}</td>
-                    <ParticipantCell player={p} isSingles={isSingles} />
+                    <ParticipantCell name={p.name} playerId={previewIds.get(p.id)} />
                     <td className="num">{p.challongeSeed ?? '—'}</td>
                   </tr>
                 ))}
@@ -220,7 +220,7 @@ function TournamentDetail({
                   .map((p) => (
                     <tr key={p.id}>
                       <td className="num">{p.challongeSeed ?? '—'}</td>
-                      <ParticipantCell player={p} isSingles={isSingles} />
+                      <ParticipantCell name={p.name} playerId={previewIds.get(p.id)} />
                     </tr>
                   ))}
               </tbody>
@@ -297,7 +297,7 @@ function TournamentDetail({
                         {set.displayLabel ?? set.identifier ?? '—'}
                       </td>
                       <td>
-                        <SetLine set={set} showPlayerPreviews={isSingles} />
+                        <SetLine set={set} previewIds={previewIds} />
                         {set.charactersPlayed && (
                           <>
                             <ReportedCharacters
@@ -347,16 +347,19 @@ function TournamentDetail({
   );
 }
 
-function ParticipantCell({
-  player: { name, playerId },
-  isSingles,
-}: {
-  player: TournamentData['participants'][number];
-  isSingles: boolean;
-}) {
+function linkedSinglesIds(data: TournamentData) {
+  const ids = new Map<string, string>();
+  if (data.competitionFormat !== 'singles') return ids;
+  for (const { id, playerId, memberPlayerIds } of data.participants) {
+    if (playerId && !memberPlayerIds?.length) ids.set(id, playerId);
+  }
+  return ids;
+}
+
+function ParticipantCell({ name, playerId }: { name: string; playerId?: string }) {
   return (
     <td className="tournament-participant">
-      {isSingles && playerId ? (
+      {playerId ? (
         <div className="ui-actions">
           <Link to="/players/$playerId" params={{ playerId }}>
             {name}
@@ -370,7 +373,17 @@ function ParticipantCell({
   );
 }
 
-function SetLine({ set, showPlayerPreviews }: { set: TournamentSet; showPlayerPreviews: boolean }) {
+function SetLine({
+  set,
+  previewIds,
+}: {
+  set: TournamentSet;
+  previewIds: ReadonlyMap<string, string>;
+}) {
+  // The side's name follows the participant record. A provider sync can update
+  // that record before it updates the set's denormalized player ID.
+  const firstPlayerId = set.p1ParticipantId ? previewIds.get(set.p1ParticipantId) : undefined;
+  const secondPlayerId = set.p2ParticipantId ? previewIds.get(set.p2ParticipantId) : undefined;
   return (
     <span className="set-line">
       {set.unplayedOutcome && (
@@ -378,14 +391,14 @@ function SetLine({ set, showPlayerPreviews }: { set: TournamentSet; showPlayerPr
       )}
       <span className={set.winner === 1 ? 'set-winner' : undefined}>
         <PlayerProfileName
-          playerId={showPlayerPreviews && set.p1Name ? set.p1PlayerId : null}
+          playerId={set.p1Name && firstPlayerId === set.p1PlayerId ? firstPlayerId : null}
           name={set.p1Name ?? 'TBD'}
         />
       </span>
       <span className="muted"> vs </span>
       <span className={set.winner === 2 ? 'set-winner' : undefined}>
         <PlayerProfileName
-          playerId={showPlayerPreviews && set.p2Name ? set.p2PlayerId : null}
+          playerId={set.p2Name && secondPlayerId === set.p2PlayerId ? secondPlayerId : null}
           name={set.p2Name ?? 'TBD'}
         />
       </span>

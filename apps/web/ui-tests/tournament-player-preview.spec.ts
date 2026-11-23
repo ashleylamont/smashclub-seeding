@@ -271,3 +271,56 @@ test('keeps imported team labels and empty set sides outside player previews', a
   expect(previewRequests).toEqual([]);
   expect(fixture.unexpected).toEqual([]);
 });
+
+test('keeps set names plain when recorded player IDs disagree with the participants', async ({
+  page,
+}) => {
+  const { previewRequests } = await openTournament(page, {
+    ...tournament,
+    provider: 'challonge',
+    sets: [
+      {
+        ...tournament.sets[0]!,
+        p1ParticipantId: 'second',
+        p1Name: secondAlias,
+        p2ParticipantId: null,
+        p2Name: null,
+        p2PlayerId: null,
+      },
+      {
+        ...tournament.sets[1]!,
+        p1PlayerId: firstId,
+      },
+    ],
+  });
+  const sets = page.getByRole('region', { name: 'Tournament sets' });
+  const corrected = sets.getByRole('row', { name: /Championship/ });
+  await expect(corrected.getByText(secondAlias, { exact: true })).toBeVisible();
+  await expect(corrected.getByRole('button', { name: `Preview ${secondAlias}` })).toHaveCount(0);
+  const unlinked = sets.getByRole('row', { name: /Pool set/ });
+  await expect(unlinked.getByText(firstAlias, { exact: true })).toBeVisible();
+  await expect(unlinked.getByRole('button', { name: `Preview ${firstAlias}` })).toHaveCount(0);
+  await expect(unlinked.getByRole('button', { name: `Preview ${secondAlias}` })).toBeVisible();
+  expect(previewRequests).toEqual([]);
+});
+
+test('keeps explicit team labels plain in an older singles-format import', async ({ page }) => {
+  const team = 'Coast / Syd';
+  const { previewRequests } = await openTournament(page, {
+    ...tournament,
+    provider: 'challonge',
+    participants: [
+      { ...tournament.participants[0]!, name: team, memberPlayerIds: [firstId, secondId] },
+      tournament.participants[1]!,
+    ],
+    sets: [{ ...tournament.sets[0]!, p1Name: team }],
+  });
+  const standings = page.getByRole('table').first();
+  const sets = page.getByRole('region', { name: 'Tournament sets' });
+  await expect(standings.getByText(team, { exact: true })).toBeVisible();
+  await expect(sets.getByText(team, { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: `Preview ${team}` })).toHaveCount(0);
+  await expect(standings.getByRole('link', { name: team })).toHaveCount(0);
+  await expect(standings.getByRole('button', { name: `Preview ${secondAlias}` })).toBeVisible();
+  expect(previewRequests).toEqual([]);
+});
