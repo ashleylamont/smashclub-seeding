@@ -203,6 +203,15 @@ Nemesis has one application version, tracked in `apps/web/package.json`, coverin
 
 On `main`, **Version Nemesis** opens or updates the Changesets version PR and queues it for GitHub auto-merge. Required CI checks still gate that merge. A version bump on `main` makes **Publish** run full CI, publish the verified image under the numeric version and create the matching annotated tag and GitHub Release. The in-app `/changelog` uses the same Markdown. Each note includes its Sydney merge date and source build, and version headings link to the tagged release.
 
+### Hand off a versioned release
+
+When you want to ship the pending Changesets, give the **Version Nemesis** PR time to merge. A push to `main` can refresh the version PR and cancel checks on the superseded commit.
+
+1. Pause feature merges to `main` while the version PR runs its required checks. Continue reviewing and verifying feature PRs.
+2. Confirm that auto-merge is enabled and track **All checks** on the latest version PR commit. If the PR refreshes, follow the replacement commit's checks. If the current run fails, stalls, or is cancelled without a replacement, inspect the run and either resolve the problem or resume feature merges and revisit the release.
+3. Resume feature merges after GitHub merges the version PR. Follow the [**Publish** workflow](https://github.com/ashleylamont/smashclub-seeding/actions/workflows/publish.yml) run for that merge commit.
+4. After **Publish** succeeds, confirm that the version appears in [GitHub Releases](https://github.com/ashleylamont/smashclub-seeding/releases) and that its tag points to the version PR's merge commit.
+
 ### Enable the release bot
 
 Install a GitHub App on this repository with repository **Contents** and **Pull requests** set to **Read and write**. Add its client ID as the Actions variable `NEMESIS_RELEASE_APP_CLIENT_ID` and its private key as the Actions secret `NEMESIS_RELEASE_APP_PRIVATE_KEY`. The workflow also accepts the Client ID as a repository secret with the same name. Enable **Allow auto-merge** in the repository's pull request settings, then run **Version Nemesis** once to process any pending notes. The job uses a short-lived installation token scoped to this repository so its PRs start normal CI.
