@@ -106,29 +106,21 @@ function ordinaryAttendancePreview(
     input.poolIndex !== (pool?.index ?? lateAddRecovery?.poolIndex)
   )
     issues.push('The smallest open pool changed.');
-  const involved = state.matches.filter((m) => [m.player1Id, m.player2Id].includes(input.playerId));
-  const matchReview = reviewAffectedMatches(input.action, involved, state.reports);
-  issues.push(...matchReview.issues);
-  const remaining =
-    pool?.entrantIds.filter((id) => input.action !== 'no_show' || id !== input.playerId) ?? [];
-  if (input.action === 'no_show' && remaining.length < 2)
-    issues.push('A pool needs at least two players.');
-  if (input.action === 'redistribute' && remaining.length !== 2)
-    issues.push('Only a two-player pool can be redistributed.');
-  const relocations = attendanceRelocations(state, input.action, pool, remaining, open);
-  if (input.action === 'redistribute' && !relocations.length)
-    issues.push('No safe redistribution is available.');
-  const labels = projectMatchLabels(state);
-  const returnCallMatchIds =
-    lateAddRecovery?.matchIds ??
-    (input.action === 'no_show' && issues.length === 1 ? matchReview.untakenCallIds : []);
+  const draw = reviewAttendanceDraw(state, input, {
+    pool,
+    candidates,
+    open,
+    hasOtherIssues: issues.length > 0,
+  });
+  issues.push(...draw.issues);
+  const returnCallMatchIds = lateAddRecovery?.matchIds ?? draw.returnCallMatchIds;
   return {
     allowed: !issues.length,
     issues,
     ...(returnCallMatchIds.length ? { returnCallMatchIds } : {}),
     requiresExternalAcknowledgement: false,
-    requiresRedistributionApproval: Boolean(relocations.length),
-    relocations,
+    requiresRedistributionApproval: Boolean(draw.relocations.length),
+    relocations: draw.relocations,
     division,
     poolIndex: pool?.index ?? null,
     poolSize: pool?.entrantIds.length ?? 0,
@@ -137,11 +129,7 @@ function ordinaryAttendancePreview(
         ? (pool?.entrantIds.length ?? 0) *
           (state.baseline?.structureOptions?.roundRobinMeetings ?? 1)
         : 0,
-    affectedMatches: involved.map((m) => ({
-      id: m.id,
-      label: labels.get(m.id)?.label ?? m.label,
-      status: m.status,
-    })),
+    affectedMatches: draw.affectedMatches,
     revisionToken: hash({
       entrants: state.entrants,
       pools: state.pools,
@@ -150,6 +138,60 @@ function ordinaryAttendancePreview(
       brackets: state.brackets,
       lifecycle: state.lifecycle,
     }),
+  };
+}
+
+function reviewAttendanceDraw(
+  state: TournamentState,
+  { action, playerId }: Pick<Input, 'action' | 'playerId'>,
+  {
+    pool,
+    candidates,
+    open,
+    hasOtherIssues,
+  }: {
+    pool: Pool | undefined;
+    candidates: readonly Pool[];
+    open: readonly Pool[];
+    hasOtherIssues: boolean;
+  },
+) {
+  const involved = state.matches.filter((m) => [m.player1Id, m.player2Id].includes(playerId));
+  const matchReview = reviewAffectedMatches(action, involved, state.reports);
+  const remaining = pool?.entrantIds.filter((id) => action !== 'no_show' || id !== playerId) ?? [];
+  const relocations = attendanceRelocations(state, action, pool, remaining, open);
+  const redistributionCalls =
+    action === 'redistribute' &&
+    pool &&
+    remaining.length === 2 &&
+    !hasOtherIssues &&
+    !relocations.length
+      ? redistributionCallRecovery(state, pool, candidates)
+      : [];
+  const issues = redistributionCalls.length
+    ? [
+        `Return the untaken ${redistributionCalls.length === 1 ? 'call' : 'calls'}, then refresh this preview.`,
+      ]
+    : matchReview.issues;
+  if (action === 'no_show' && remaining.length < 2)
+    issues.push('A pool needs at least two players.');
+  if (action === 'redistribute' && remaining.length !== 2)
+    issues.push('Only a two-player pool can be redistributed.');
+  if (action === 'redistribute' && !relocations.length && !redistributionCalls.length)
+    issues.push('No safe redistribution is available.');
+  const labels = projectMatchLabels(state);
+  return {
+    issues,
+    returnCallMatchIds:
+      action === 'no_show' && !hasOtherIssues && issues.length === 1
+        ? matchReview.untakenCallIds
+        : redistributionCalls,
+    relocations,
+    affectedMatches: involved.map((m) => ({
+      id: m.id,
+      label: labels.get(m.id)?.label ?? m.label,
+      status: m.status,
+    })),
   };
 }
 
@@ -167,15 +209,50 @@ function attendanceRelocations(
     poolHasCallsOrHistory(state, pool.id)
   )
     return [];
-  const targets = open.filter((target) => target.id !== pool.id);
-  const together = targets.find((target) => target.entrantIds.length <= 3);
-  const destinations = together ? [together, together] : targets.slice(0, 2);
+  const destinations = relocationDestinations(pool.id, open);
   return destinations.length === 2
     ? remaining.map((playerId, i) => ({
         playerId,
         fromPoolIndex: pool.index,
         toPoolIndex: destinations[i]!.index,
       }))
+    : [];
+}
+
+function relocationDestinations(sourceId: string, open: readonly Pool[]) {
+  const targets = open.filter((pool) => pool.id !== sourceId);
+  const together = targets.find((pool) => pool.entrantIds.length <= 3);
+  return together ? [together, together] : targets.slice(0, 2);
+}
+
+function redistributionCallRecovery(
+  state: TournamentState,
+  source: Pool,
+  candidates: readonly Pool[],
+) {
+  const reported = new Set(state.reports.map((report) => report.matchId));
+  const sourceBlocker = poolAttendanceBlocker(state, source, reported);
+  if (typeof sourceBlocker === 'string') return [];
+  const sourceCalls = sourceBlocker?.matchIds ?? [];
+  const open: Pool[] = [];
+  const called: { pool: Pool; matchIds: string[] }[] = [];
+  for (const pool of candidates) {
+    if (pool.id === source.id) continue;
+    const blocker = poolAttendanceBlocker(state, pool, reported);
+    if (!blocker) open.push(pool);
+    else if (typeof blocker === 'object') called.push({ pool, matchIds: blocker.matchIds });
+  }
+  if (relocationDestinations(source.id, open).length === 2) return sourceCalls;
+
+  // Prefer returning calls in one destination in normal pool order. If one
+  // cannot fit the move, it can only succeed by splitting across two targets.
+  const single = called.find(
+    ({ pool }) => relocationDestinations(source.id, [...open, pool]).length === 2,
+  );
+  if (single) return [...sourceCalls, ...single.matchIds];
+  const firstTwo = called.slice(0, 2);
+  return firstTwo.length === 2
+    ? [...sourceCalls, ...firstTwo.flatMap(({ matchIds }) => matchIds)]
     : [];
 }
 
