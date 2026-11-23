@@ -151,7 +151,15 @@ test('creates fixed doubles pairs in the planner and runs a configured double ro
   await mutate(page.request, 'eventOps.softLockPools', { planId, confirm: true });
   await mutate(page.request, 'eventOps.settings', { planId, published: true, playerReports: true });
   type State = {
-    matches: { id: string; revision: number; player1Name: string; player2Name: string }[];
+    matches: {
+      id: string;
+      revision: number;
+      player1Name: string;
+      player1MemberIds: string[];
+      player2Name: string;
+      player2MemberIds: string[];
+    }[];
+    memberNames: Record<string, string>;
   };
   const state = await query<State>(page.request, 'eventOps.snapshot', { planId });
   expect(state.matches).toHaveLength(12);
@@ -162,7 +170,24 @@ test('creates fixed doubles pairs in the planner and runs a configured double ro
   await expect(
     page.getByRole('heading', { name: 'Browser doubles rehearsal', exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole('rowheader', { name: /^Team 1 \(/ }).first()).toBeVisible();
+  const team = state.matches
+    .flatMap((match) => [
+      { name: match.player1Name, memberIds: match.player1MemberIds },
+      { name: match.player2Name, memberIds: match.player2MemberIds },
+    ])
+    .find(({ name }) => name.startsWith('Team 1 ('))!;
+  const memberId = team.memberIds[0]!;
+  const teamRow = page.getByRole('rowheader', { name: /^Team 1\b/ }).first();
+  const preview = teamRow.getByRole('button', {
+    name: `Preview ${state.memberNames[memberId]}`,
+    exact: true,
+  });
+  await preview.press('Enter');
+  await expect(
+    page.getByRole('dialog').getByRole('link', { name: 'View full profile' }),
+  ).toHaveAttribute('href', `/players/${memberId}`);
+  await page.keyboard.press('Escape');
+  await expect(preview).toBeFocused();
   for (const m of state.matches)
     await mutate(page.request, 'eventOps.reportScore', {
       matchId: m.id,

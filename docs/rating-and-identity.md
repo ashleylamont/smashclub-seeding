@@ -8,7 +8,9 @@ Ratings are derived from the full eligible history. Each recompute writes `ratin
 
 ## Board and seeds
 
-The public leaderboard ranks by **club rating**: skill estimate minus a stated attendance penalty. The penalty has a free missed-night window, then a flat per-night charge up to a cap; returning clears it. It changes published order, not the model's fitted skill. The row shows both skill with its uncertainty band and the deduction. Players absent for more than a year are hidden by default, and ranks and movement are recalculated over the visible field.
+The public leaderboard ranks by **club rating**, which subtracts any attendance penalty from the current skill estimate. The penalty follows the club's configured grace period, per-night charge, and cap. Returning clears it. Each row shows the skill estimate, its uncertainty, and any deduction. When rookie anchoring applies, the current skill estimate moves toward the player's starting estimate. The nightly profile breakdown shows the WHR fit before that adjustment.
+
+Rankings hides players who last played six months ago or earlier by default. When this removes players, **Active rank** and movement use the remaining field. Turn off **Hide inactive** to see **Published rank**, the position in the full rated field that also appears on player profiles. When no players are inactive, Rankings shows **Published rank** with the setting on or off. Search, company, and sort controls retain the rank in the selected field.
 
 This separates club attendance from uncertainty. Ranking directly on a conservative estimate made people with little data fall far down the board even when they had not missed an event. The board now states the missed-night rule explicitly, while seeding still uses uncertainty where a surprising draw has a direct competitive cost. Movement compares with a replay that withholds the latest club night, so it describes that night's results rather than an unrelated later recompute.
 

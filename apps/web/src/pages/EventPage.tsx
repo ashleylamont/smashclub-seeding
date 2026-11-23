@@ -1,28 +1,26 @@
 import { Disclosure } from '../components/ui/Disclosure';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
-import { trpc } from '../lib/trpc';
+import { publicEventOverviewQuery } from '../lib/publicArchive';
 import type { EventOverviewData } from '../lib/apiTypes';
 import { formatDate } from '../lib/format';
 import './EventPage.css';
 import { ResultGraphic } from '../components/ResultGraphic';
+import { ArchiveQueryContent, type ArchivePageFeedback } from './ArchiveQueryContent';
 import { ArchiveBracketGraphic } from '../components/ArchiveBracketGraphic';
 import { PlayerProfilePreview } from '../components/PlayerProfilePreview';
 
 export function EventPage() {
   const { slug } = useParams({ from: '/events/$slug' });
-  const query = useQuery({
-    queryKey: ['eventOverview', slug],
-    queryFn: () => trpc.public.eventOverview.query({ slug }),
-  });
-  if (query.isPending) return <p className="loading-text">Loading event…</p>;
-  if (query.isError)
-    return <p className="error-text">Failed to load event: {query.error.message}</p>;
-  if (!query.data) return <p className="error-text">Event not found.</p>;
-  return <EventOverview data={query.data} />;
+  const query = useQuery(publicEventOverviewQuery(slug));
+  return <ArchiveQueryContent key={slug} kind="event" query={query} content={EventOverview} />;
 }
 
-function EventOverview({ data }: { data: EventOverviewData }) {
+function EventOverview({
+  data,
+  headingRef,
+  refreshNotice,
+}: { data: EventOverviewData } & ArchivePageFeedback) {
   const open = data.structure && data.structure !== 'dual_division';
   const doubles = data.competitionFormat === 'doubles';
   const roundRobin = data.structure === 'round_robin';
@@ -37,7 +35,9 @@ function EventOverview({ data }: { data: EventOverviewData }) {
     <div>
       <div className="page-header event-header">
         <div>
-          <h1>{data.name}</h1>
+          <h1 ref={headingRef} tabIndex={-1}>
+            {data.name}
+          </h1>
           <p className="muted">
             {formatDate(data.date)} · {data.brackets.length}{' '}
             {data.brackets.length === 1 ? 'bracket' : 'brackets'}
@@ -49,6 +49,7 @@ function EventOverview({ data }: { data: EventOverviewData }) {
           </Link>
         </div>
       </div>
+      {refreshNotice}
       {data.warnings?.map((warning) => (
         <div className="banner banner-warning" key={warning}>
           {warning}

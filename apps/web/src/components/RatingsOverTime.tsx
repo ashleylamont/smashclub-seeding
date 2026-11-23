@@ -4,7 +4,7 @@ import { Button } from './ui/Button';
 import { LoadingState, Notice } from './ui/Feedback';
 import { useQuery } from '@tanstack/react-query';
 import { trpc } from '../lib/trpc';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useId, useMemo, useState } from 'react';
 import {
   CartesianGrid,
   Line,
@@ -69,6 +69,7 @@ interface Snapshot {
 export function RatingsOverTime({ players }: RatingsOverTimeProps) {
   const [yMode, setYMode] = useState<YMode>('rating');
   const [search, setSearch] = useState('');
+  const conservativeDescriptionId = useId();
 
   /**
    * playerId -> colour slot. The array position *is* the slot, so a player
@@ -158,11 +159,13 @@ export function RatingsOverTime({ players }: RatingsOverTimeProps) {
       <div className="chart-controls">
         <label className="chart-control">
           <span className="control-label">Y-axis</span>
-          <Select value={yMode} onValueChange={(selectedValue) => setYMode(selectedValue as YMode)}>
+          <Select
+            aria-describedby={yMode === 'cautious' ? conservativeDescriptionId : undefined}
+            value={yMode}
+            onValueChange={(selectedValue) => setYMode(selectedValue as YMode)}
+          >
             <SelectItem value="rating">Skill estimate</SelectItem>
-            {/* The seeding basis, not the board's — labelled as such so the
-                chart is not read as disagreeing with the rankings. */}
-            <SelectItem value="cautious">Seeding basis (rating − 2×SD)</SelectItem>
+            <SelectItem value="cautious">Conservative</SelectItem>
           </Select>
         </label>
         <label className="chart-control chart-control-search">
@@ -176,6 +179,13 @@ export function RatingsOverTime({ players }: RatingsOverTimeProps) {
           />
         </label>
       </div>
+
+      {yMode === 'cautious' && (
+        <p className="muted chart-caption" id={conservativeDescriptionId}>
+          Subtracts two standard deviations from each historical skill estimate. Automatic bracket
+          seeds use the draw’s saved ratings, which can include rookie adjustments.
+        </p>
+      )}
 
       {searchResults.length > 0 && (
         <ul className="chart-search-results">

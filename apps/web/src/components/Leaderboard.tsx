@@ -70,9 +70,9 @@ const COLUMNS: {
   { key: 'identity', label: 'Player', field: null, name: 'player' },
   {
     key: 'rating',
-    label: 'Rating',
+    label: 'Club rating',
     field: 'rating',
-    name: 'rating',
+    name: 'club rating',
     title: 'Club rating — the skill estimate less any penalty for missed club nights',
   },
   {
@@ -108,7 +108,7 @@ const COLUMNS: {
  */
 const SORT_OPTIONS: { field: SortField; label: string }[] = [
   { field: 'rank', label: 'Rank' },
-  { field: 'rating', label: 'Rating' },
+  { field: 'rating', label: 'Club rating' },
   { field: 'certainty', label: 'Confidence' },
   { field: 'wins', label: 'Sets won' },
   { field: 'eventCount', label: 'Events' },
@@ -140,7 +140,7 @@ function lastSeenChip(row: LeaderboardRow): { text: string; className: string; t
     title:
       row.activityPenalty > 0
         ? `Last seen ${row.lastPlayedDate}. ${row.missedEvents} club nights missed, costing ${Math.round(row.activityPenalty)} points.`
-        : `Last seen ${row.lastPlayedDate}. Inside the grace window, so nothing has been docked.`,
+        : `Last seen ${row.lastPlayedDate}. No attendance deduction.`,
   };
 }
 
@@ -203,6 +203,7 @@ export function Leaderboard({
   const [companyFilter, setCompanyFilter] = useState('all');
   const [query, setQuery] = useState('');
   const sortLabelId = useId();
+  const rankLabel = hideInactive && inactiveCount > 0 ? 'Active rank' : 'Published rank';
 
   const companies = useMemo(
     () =>
@@ -279,7 +280,7 @@ export function Leaderboard({
           <span className="control-label">Activity</span>
           <label
             className="switch"
-            title="Hides anyone with no event in the last six months. Ranks and movement are counted among the players still shown, so an arrow never comes from someone ageing out."
+            title="Hides players who last played six months ago or earlier. Active rank and movement use the remaining field."
           >
             <Switch checked={hideInactive} onCheckedChange={onHideInactiveChange} />
 
@@ -303,7 +304,7 @@ export function Leaderboard({
             >
               {SORT_OPTIONS.map((option) => (
                 <SelectItem key={option.field} value={option.field}>
-                  {option.label}
+                  {option.field === 'rank' ? rankLabel : option.label}
                 </SelectItem>
               ))}
             </Select>
@@ -320,7 +321,7 @@ export function Leaderboard({
         </div>
 
         <p className="board-count muted num">
-          {visible.length}/{rows.length} players
+          {rankLabel} · {visible.length}/{rows.length} players
           {inactiveCount > 0 && (
             <span className="board-count-note">
               {hideInactive
@@ -394,9 +395,9 @@ export function Leaderboard({
                  * are spelled out here or they are not announced at all.
                  */
                 aria-label={[
-                  `${row.name}, rank ${row.rank}`,
+                  `${row.name}, ${rankLabel.toLowerCase()} ${row.rank}`,
                   `${row.league}`,
-                  `rating ${Math.round(row.clubRating)}`,
+                  `club rating ${Math.round(row.clubRating)}`,
                   ...(row.activityPenalty > 0
                     ? [
                         `${Math.round(row.activityPenalty)} docked for ${row.missedEvents} missed club nights`,

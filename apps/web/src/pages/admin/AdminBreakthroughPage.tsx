@@ -8,6 +8,7 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { eventNameOf } from '@smashclub/shared';
 import { trpc } from '../../lib/trpc';
+import { publicTournamentsQuery } from '../../lib/publicArchive';
 import {
   breakthroughDefaults,
   summariseBreakthrough,
@@ -26,11 +27,7 @@ export function AdminBreakthroughPage() {
   const navigate = useNavigate({ from: '/admin/breakthroughs' });
   const change = (patch: Partial<BreakthroughOptions>) =>
     void navigate({ search: { ...options, ...patch }, replace: true });
-  const tournaments = useQuery({
-    queryKey: ['tournaments'],
-    queryFn: () => trpc.public.tournaments.query(),
-    refetchInterval: 15_000,
-  });
+  const tournaments = useQuery({ ...publicTournamentsQuery, refetchInterval: 15_000 });
   const grouped = new Map<string, string[]>();
   for (const t of tournaments.data ?? []) {
     if (!t.eventDate) continue;

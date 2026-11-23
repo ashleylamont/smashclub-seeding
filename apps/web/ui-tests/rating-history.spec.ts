@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import type { LeaderboardData, RatingHistoryData } from '../src/lib/apiTypes';
-import { chooseOption } from '../test-support/controls';
 import { bracketCaptureOptions, mockEvent, ready } from './fixtures';
 
 const returning = {
@@ -11,11 +10,18 @@ const returning = {
   rank: 1,
   conservativeRating: 1400,
 };
+// A public WHR fixture with rookie anchoring uses 1197 for seeds and 1269 in the chart.
+const anchoredRookie = {
+  historicalSkillRating: 1610.0013812711993,
+  skillRating: 1538.5004834449198,
+  skillSd: 170.54973478376465,
+  conservativeRating: 1197.4010138773906,
+};
 const debut = {
   playerId: 'afcc7fd0-e377-4832-9de0-18a3fa0c194a',
   name: 'Debut player',
   rank: 2,
-  conservativeRating: 1200,
+  conservativeRating: anchoredRookie.conservativeRating,
 };
 const captureStyle = `${readFileSync(bracketCaptureOptions.stylePath, 'utf8')}
 .board-head { position: static !important; }`;
@@ -31,7 +37,13 @@ const nights = [
   },
   { playerId: returning.playerId, eventKey: dates[2]!, postRating: 1710, postRd: 90, played: true },
   { playerId: debut.playerId, eventKey: dates[1]!, postRating: 1460, postRd: 135, played: true },
-  { playerId: debut.playerId, eventKey: dates[2]!, postRating: 1450, postRd: 118, played: true },
+  {
+    playerId: debut.playerId,
+    eventKey: dates[2]!,
+    postRating: anchoredRookie.historicalSkillRating,
+    postRd: anchoredRookie.skillSd,
+    played: true,
+  },
 ];
 
 async function mockRatingHistory(
@@ -51,24 +63,24 @@ async function mockRatingHistory(
       previousRank: player.rank,
       rankDelta: 0,
       league: 'Club',
-      skillRating: 1710,
-      skillSd: 90,
-      clubRating: 1710,
+      skillRating: player === debut ? anchoredRookie.skillRating : 1710,
+      skillSd: player === debut ? anchoredRookie.skillSd : 90,
+      clubRating: player === debut ? anchoredRookie.skillRating : 1710,
       activityPenalty: 0,
       nextMissPenalty: 20,
       missedEvents: 0,
       attendanceStreak: 1,
-      isProvisional: false,
-      rating: 1710,
-      rd: 90,
-      effectiveRd: 90,
+      isProvisional: player === debut,
+      rating: player === debut ? anchoredRookie.historicalSkillRating : 1710,
+      rd: player === debut ? anchoredRookie.skillSd : 90,
+      effectiveRd: player === debut ? anchoredRookie.skillSd : 90,
       wins: 1,
       losses: 1,
       matchCount: 2,
       tournamentCount: 2,
       eventCount: 2,
       sampleConfidence: 0.48,
-      rookieRatio: 0,
+      rookieRatio: player === debut ? 1 : 0,
       lastPlayedDate: '2026-09-29T08:00:00Z',
       companyCode: null,
       companyName: null,
@@ -166,7 +178,30 @@ for (const theme of ['light', 'dark'] as const) {
       await page.screenshot({ path: info.outputPath('missed-night.png') });
       const scan = await new AxeBuilder({ page }).include('.ratings-over-time').analyze();
       expect(scan.violations).toEqual([]);
-      await chooseOption(chart.getByRole('combobox', { name: 'Y-axis' }), 'cautious');
+      const axis = chart.getByRole('combobox', { name: 'Y-axis' });
+      const controls = chart.locator('.chart-controls');
+      const initialControlHeight = await controls.evaluate(
+        (node) => node.getBoundingClientRect().height,
+      );
+      await axis.press('Enter');
+      const menu = page.getByRole('listbox');
+      const conservativeEstimate = menu.getByRole('option', {
+        name: 'Conservative',
+        exact: true,
+      });
+      await expect(menu.getByRole('option', { name: 'Skill estimate', exact: true })).toBeFocused();
+      await page.keyboard.press('ArrowDown');
+      await expect(conservativeEstimate).toBeFocused();
+      await page.screenshot({ path: info.outputPath('chart-axis-menu.png') });
+      await page.keyboard.press('Enter');
+      await expect(axis).toBeFocused();
+      await expect(axis).toContainText('Conservative');
+      await expect(axis).toHaveAccessibleDescription(
+        'Subtracts two standard deviations from each historical skill estimate. Automatic bracket seeds use the draw’s saved ratings, which can include rookie adjustments.',
+      );
+      expect(await controls.evaluate((node) => node.getBoundingClientRect().height)).toBe(
+        initialControlHeight,
+      );
       await plot.focus();
       await plot.press('ArrowLeft');
       await plot.press('ArrowRight');
@@ -174,6 +209,19 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(chart.locator('.tooltip-row').filter({ hasText: returning.name })).toContainText(
         '1460',
       );
+      await plot.press('ArrowRight');
+      await expect(chart.locator('.tooltip-label')).toHaveText(dates[2]!);
+      await expect(chart.locator('.tooltip-row').filter({ hasText: debut.name })).toContainText(
+        '1269',
+      );
+      await chart.screenshot({ path: info.outputPath('conservative-estimate.png') });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+        width,
+      );
+      const conservativeScan = await new AxeBuilder({ page })
+        .include('.ratings-over-time')
+        .analyze();
+      expect(conservativeScan.violations).toEqual([]);
       expect(unexpected).toEqual([]);
     });
   }
