@@ -1,3 +1,4 @@
+import { isKnockout } from '@smashclub/shared';
 import { Button } from '../../components/ui/Button';
 import { matchPresentation } from '../../lib/matchPresentation';
 import { useConfirmation } from '../../lib/confirmation';
@@ -19,11 +20,31 @@ export function PoolDrawControls({
   const confirmAction = useConfirmation();
   const planId = data.plan.id;
   const paused = data.plan.drawPaused;
-  const canSoftLock = paused || (data.plan.status === 'pools_ready' && !data.plan.softLockedAt);
+  const softLocked = data.plan.softLockedAt;
+  const knockout = isKnockout(data.plan.structure);
+  const drawHeading = knockout ? 'Knockout draw' : 'Pool draw';
+  const drawName = drawHeading.toLowerCase();
+  const canSoftLock = paused || (data.plan.status === 'pools_ready' && !softLocked);
+  let state = paused ? 'Paused' : softLocked ? 'Soft-locked' : 'Draft';
+  let description: string | undefined;
+  if (knockout) {
+    if (closed) state = data.plan.status === 'cancelled' ? 'Cancelled' : 'Finalized';
+    else if (paused) description = 'Play is paused. Review the roster before resuming.';
+    else if (!softLocked)
+      description = canSoftLock
+        ? 'Soft-lock the bracket before starting play.'
+        : 'Prepare the bracket in the planner before soft-locking it.';
+  } else {
+    description = paused
+      ? 'Play is paused. Adjust attendance in this desk, then resume the draw.'
+      : softLocked
+        ? 'The TO has committed to these pools and opponents. Late arrivals and no-shows change only their affected pools.'
+        : 'You can still change the roster and rebalance pools in the planner. A TO must explicitly soft-lock the draw before using local attendance changes.';
+  }
   const blocker = !paused && !closed ? data.poolDrawPauseBlocker : null;
   const canUnlock = data.plan.liveOwned
     ? !paused && !closed && blocker === null
-    : data.plan.status === 'pools_ready' && Boolean(data.plan.softLockedAt);
+    : data.plan.status === 'pools_ready' && Boolean(softLocked);
   const calls =
     blocker?.kind === 'untaken_calls' && data.sharedDispatch
       ? data.matches.filter(({ id }) => blocker.matchIds.includes(id))
@@ -32,18 +53,11 @@ export function PoolDrawControls({
     <section className="card ops-setup">
       <div className="ops-pool-draw-description">
         <h3>
-          Pool draw:{' '}
-          {data.plan.drawPaused ? 'Paused' : data.plan.softLockedAt ? 'Soft-locked' : 'Draft'}
+          {drawHeading}: {state}
         </h3>
-        <p className="muted">
-          {data.plan.drawPaused
-            ? 'Play is paused. Adjust attendance in this desk, then resume the draw.'
-            : data.plan.softLockedAt
-              ? 'The TO has committed to these pools and opponents. Late arrivals and no-shows change only their affected pools.'
-              : 'You can still change the roster and rebalance pools in the planner. A TO must explicitly soft-lock the draw before using local attendance changes.'}
-        </p>
-        {data.plan.softLockedAt && (
-          <p className="muted">Soft-locked {new Date(data.plan.softLockedAt).toLocaleString()}.</p>
+        {description && <p className="muted">{description}</p>}
+        {softLocked && (
+          <p className="muted">Soft-locked {new Date(softLocked).toLocaleString()}.</p>
         )}
         {blocker && <p>{blocker.message}</p>}
         {calls.length > 0 && (
@@ -74,17 +88,19 @@ export function PoolDrawControls({
             if (
               !paused &&
               !(await confirmAction(
-                'Soft-lock this pool draw? Existing players will keep their pools and opponents, and the initial match queue will be prepared.',
+                knockout
+                  ? 'Soft-lock this knockout draw? The current bracket and pairings will be prepared for play.'
+                  : 'Soft-lock this pool draw? Existing players will keep their pools and opponents, and the initial match queue will be prepared.',
               ))
             )
               return;
             void act(
               () => trpc.eventOps.softLockPools.mutate({ planId, confirm: true }),
-              paused ? 'Pool draw resumed' : 'Pool draw soft-locked',
+              paused ? `${drawHeading} resumed` : `${drawHeading} soft-locked`,
             );
           }}
         >
-          {data.plan.drawPaused ? 'Resume pool draw' : 'Soft-lock pool draw'}
+          {paused ? `Resume ${drawName}` : `Soft-lock ${drawName}`}
         </Button>
       )}
       {canUnlock && (
@@ -94,15 +110,23 @@ export function PoolDrawControls({
             if (
               await confirmAction(
                 data.plan.liveOwned
-                  ? 'Pause this unplayed draw? Pool assignments and match history stay recorded. You can adjust attendance before resuming.'
-                  : 'Return this pool draw to draft? This clears unplayed matches, saved pool assignments, and pool station settings. The planner may rebalance the pools. Recorded play and linked brackets cannot be cleared this way.',
+                  ? knockout
+                    ? 'Pause this unplayed knockout draw? The bracket and match history stay recorded.'
+                    : 'Pause this unplayed draw? Pool assignments and match history stay recorded. You can adjust attendance before resuming.'
+                  : knockout
+                    ? 'Return this knockout draw to draft? This clears unplayed matches. Recorded play and linked brackets cannot be cleared this way.'
+                    : 'Return this pool draw to draft? This clears unplayed matches, saved pool assignments, and pool station settings. The planner may rebalance the pools. Recorded play and linked brackets cannot be cleared this way.',
               )
             )
               void act(
                 () => trpc.eventOps.unlockPools.mutate({ planId, confirm: true }),
                 data.plan.liveOwned
-                  ? 'Unplayed draw paused. Adjust attendance here before resuming.'
-                  : 'Pool draw returned to draft. You can rebalance it in the planner.',
+                  ? knockout
+                    ? 'Unplayed draw paused. Review the roster before resuming.'
+                    : 'Unplayed draw paused. Adjust attendance here before resuming.'
+                  : knockout
+                    ? 'Knockout draw returned to draft. Review it in the planner.'
+                    : 'Pool draw returned to draft. You can rebalance it in the planner.',
               );
           }}
         >
