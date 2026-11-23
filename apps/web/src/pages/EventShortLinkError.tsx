@@ -9,11 +9,13 @@ import { eventUnavailable } from '../lib/eventErrors';
 export function EventShortLinkError({ error }: ErrorComponentProps) {
   const router = useRouter();
   const matchId = useMatch({ strict: false, select: (match) => match.id });
+  // A mounted catch boundary can retain the original error after a retry.
+  const latestError = useMatch({ strict: false, select: (match) => match.error }) ?? error;
   const pending = useRef(false);
   const [retrying, setRetrying] = useState(false);
   const unavailable =
-    eventUnavailable(error) ||
-    (error instanceof TRPCClientError && error.data?.code === 'BAD_REQUEST');
+    eventUnavailable(latestError) ||
+    (latestError instanceof TRPCClientError && latestError.data?.code === 'BAD_REQUEST');
 
   async function retry() {
     if (pending.current) return;
