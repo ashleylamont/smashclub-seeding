@@ -19,14 +19,12 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { trpc } from '../../lib/trpc';
+import { publicTournamentsQuery } from '../../lib/publicArchive';
 import type { SeedingEntry, SeedingPushLog, SeedingRunData } from '../../lib/apiTypes';
 import { formatDateTime } from '../../lib/format';
 
 export function AdminSeedingPage() {
-  const tournaments = useQuery({
-    queryKey: ['tournaments'],
-    queryFn: () => trpc.public.tournaments.query(),
-  });
+  const tournaments = useQuery(publicTournamentsQuery);
   const [tournamentId, setTournamentId] = useState('');
 
   const seedable = useMemo(
