@@ -18,23 +18,20 @@ async function rpc<T>(
 
 test('a phone TO prints backed-up and published native draws without changing results', async ({
   page,
+  request,
 }, testInfo) => {
-  const login = await page.request.post('/api/auth/sign-in/email', {
+  const login = await request.post('/api/auth/sign-in/email', {
     data: { email: 'admin@smashclub.dev', password: 'devpassword123' },
   });
   expect(login.ok()).toBe(true);
   const players = (
-    await rpc<{ id: string; canonicalName: string; status: string }[]>(
-      page.request,
-      'admin.players',
-      {},
-    )
+    await rpc<{ id: string; canonicalName: string; status: string }[]>(request, 'admin.players', {})
   )
     .filter((p) => p.status === 'active')
     .slice(0, 5);
   const name = 'TO draw and print rehearsal';
   const { planId } = await rpc<{ planId: string }>(
-    page.request,
+    request,
     'admin.eventPlanner.createPlan',
     {
       name,
@@ -59,23 +56,16 @@ test('a phone TO prints backed-up and published native draws without changing re
     'eventOps.prepare',
   ])
     await rpc(
-      page.request,
+      request,
       procedure,
       { planId, ...(procedure === 'eventOps.softLockPools' ? { confirm: true } : {}) },
       true,
     );
-  await rpc(
-    page.request,
-    'eventOps.settings',
-    { planId, published: true, playerReports: true },
-    true,
-  );
+  await rpc(request, 'eventOps.settings', { planId, published: true, playerReports: true }, true);
   const snapshot = () =>
-    rpc<Awaited<ReturnType<typeof trpc.eventOps.snapshot.query>>>(
-      page.request,
-      'eventOps.snapshot',
-      { planId },
-    );
+    rpc<Awaited<ReturnType<typeof trpc.eventOps.snapshot.query>>>(request, 'eventOps.snapshot', {
+      planId,
+    });
   const matchFacts = (matches: Awaited<ReturnType<typeof snapshot>>['matches']) =>
     matches.map(({ id, revision, status, outcome, winnerId, score1, score2 }) => ({
       id,
@@ -96,6 +86,16 @@ test('a phone TO prints backed-up and published native draws without changing re
   };
   const before = (await snapshot()).matches;
   expect(before.some((match) => match.outcome === 'bye')).toBe(true);
+  const email = 'rehearsal-player@smashclub.dev';
+  const organiser = await page.request.post('/api/auth/sign-in/email', {
+    data: { email, password: 'devpassword123' },
+  });
+  expect(organiser.ok()).toBe(true);
+  const unassigned = await page.request.get('/api/trpc/eventOps.overview', {
+    params: { input: JSON.stringify({ planId }) },
+  });
+  expect(unassigned.status()).toBe(403);
+  await rpc(request, 'eventOps.assignTo', { planId, email }, true);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/operate/${planId}?view=draw`);
   const draw = page.getByRole('region', { name: 'Tournament draw', exact: true });
@@ -128,7 +128,7 @@ test('a phone TO prints backed-up and published native draws without changing re
   expect(matchFacts((await snapshot()).matches)).toEqual(matchFacts(before));
   const forfeited = before.find((match) => match.status === 'ready')!;
   await rpc(
-    page.request,
+    request,
     'eventOps.reportScore',
     {
       matchId: forfeited.id,
@@ -146,7 +146,7 @@ test('a phone TO prints backed-up and published native draws without changing re
     if (!ready.length) break;
     for (const match of ready)
       await rpc(
-        page.request,
+        request,
         'eventOps.reportScore',
         {
           matchId: match.id,
@@ -161,7 +161,7 @@ test('a phone TO prints backed-up and published native draws without changing re
   }
   expect((await snapshot()).matches.every((match) => match.status === 'complete')).toBe(true);
   await rpc(
-    page.request,
+    request,
     'eventOps.live.command',
     { planId, requestId: crypto.randomUUID(), command: { kind: 'finalize' } },
     true,

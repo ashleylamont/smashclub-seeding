@@ -246,14 +246,17 @@ export function createNativeRuntime(
       }
     }
   }
-  async function snapshot(planId: string, privateView = false, cursor?: number) {
-    const state = (await app.load(NativeTournament, nativeStream(planId))).state.current[0];
+  async function readState(planId: string) {
+    return (await app.load(NativeTournament, nativeStream(planId))).state.current[0];
+  }
+  async function snapshotFromState(state: TournamentState, privateView = false, cursor?: number) {
     if (!state.baseline)
       throw new TournamentConflict(
         'Baseline transfer is pending. Retry or ask an organiser to recover it.',
       );
     if (!privateView && !state.settings.published)
       throw new TournamentConflict('This event is not published.');
+    const { planId } = state.baseline;
     let publicationBlocked = false;
     await store.query_streams(
       (position) => {
@@ -326,6 +329,7 @@ export function createNativeRuntime(
     await app.query({ stream: nativeStream(planId) }, (event) => {
       if (isDecisionEvent(event.name)) {
         const data = Decision.parse(event.data);
+        if (data.receipt.sequence > state.sequence) return;
         audit.push({
           kind: data.kind,
           actorId: data.actorId,
@@ -338,6 +342,9 @@ export function createNativeRuntime(
       }
     });
     return { ...publicState, reports: state.reports, audit: audit.slice(-100) };
+  }
+  async function snapshot(planId: string, privateView = false, cursor?: number) {
+    return snapshotFromState(await readState(planId), privateView, cursor);
   }
   const replay = (planId: string) =>
     replayNative((fold) => app.query({ stream: nativeStream(planId), after: -1 }, fold));
@@ -368,11 +375,11 @@ export function createNativeRuntime(
   }
   return {
     app,
-    state: async (planId: string) =>
-      (await app.load(NativeTournament, nativeStream(planId))).state.current[0],
+    state: readState,
     command,
     transfer,
     snapshot,
+    snapshotFromState,
     replay,
     recover,
     drainReactions,

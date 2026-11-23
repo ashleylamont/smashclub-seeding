@@ -15,16 +15,34 @@ export function BracketBackupSheets({ data }: { data: Overview }) {
     capturedAt: string;
     resultRevision: number | null;
   } | null>(null);
+  const [focusAvailability, setFocusAvailability] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
+  const availability = useRef<HTMLParagraphElement>(null);
+  const publication = 'publication' in data ? data.publication : null;
+  const finalized = data.plan.bracketMode === 'native' && data.plan.status === 'complete';
   const resultRevision =
-    data.plan.status === 'complete' &&
-    'publication' in data &&
-    data.publication?.status === 'published'
-      ? data.publication.revision
-      : null;
+    finalized && publication?.status === 'published' ? publication.revision : null;
   const published = resultRevision !== null;
-  const sheets = bracketBackupSheets(data).filter((sheet) => !published || !sheet.blank);
+  const unavailable = finalized && !published;
+  const sheets = bracketBackupSheets(data).filter((sheet) => !finalized || !sheet.blank);
+  if (unavailable && preview) {
+    setPreview(null);
+    setFocusAvailability(true);
+  } else if (!unavailable && focusAvailability) {
+    setFocusAvailability(false);
+  }
+  useEffect(() => {
+    if (focusAvailability) availability.current?.focus();
+  }, [focusAvailability]);
   if (!sheets.length) return null;
+  if (unavailable)
+    return (
+      <p className="muted" role="status" ref={availability} tabIndex={-1}>
+        {publication
+          ? 'Print the draw record after the current results are published.'
+          : 'No published draw record is available to print.'}
+      </p>
+    );
   return (
     <div className="bracket-backup-launch">
       <Button
