@@ -11,7 +11,11 @@ import { useConfirmation } from '../../lib/confirmation';
 import { Button } from '../../components/ui/Button';
 import { Select, SelectItem } from '../../components/ui/Select';
 import { useId, useRef, useState, type RefObject } from 'react';
-import { closedFinalizationFeedback, useFinalizationFocus } from './nativeFinalizationFeedback';
+import {
+  closedFinalizationFeedback,
+  useFinalizationFocus,
+  type NativeBracketFeedback,
+} from './nativeFinalizationFeedback';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { trpc } from '../../lib/trpc';
 import { poolOrderControlId, type OpsSection } from '../../lib/opsWorkspace';
@@ -49,10 +53,15 @@ export function NativeBracketControls({
   const cache = useQueryClient();
   const [preview, setPreview] = useState<Preview | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
+  const [feedback, setFeedback] = useState<NativeBracketFeedback | null>(null);
+  const error = feedback?.tone === 'danger' ? feedback.message : '';
+  const message = feedback?.tone === 'success' ? feedback.message : '';
   const ended = data.plan.status === 'complete' || data.plan.status === 'cancelled';
-  const finalizationFocus = useFinalizationFocus(busy, ended, Boolean(error));
+  const finalizationFocus = useFinalizationFocus(
+    busy,
+    ended,
+    feedback?.action === 'finalize' && feedback.tone === 'danger',
+  );
   const heading = nativeFinalizationHeading(structure);
   const combined = preview && 'seedPolicy' in preview ? preview : null;
   const entrantNames = new Map(entrants.map(({ id, name }) => [id, name]));
@@ -68,23 +77,26 @@ export function NativeBracketControls({
           ? qualifierLabel(qualifier)
           : 'Bye';
   const act = async (work: () => Promise<unknown>, success: string, finalizing = false) => {
+    const action = finalizing ? 'finalize' : 'draw';
     if (finalizing) finalizationFocus.restoreAfterFinalization();
     setBusy(true);
-    setError('');
-    setMessage('');
+    setFeedback(null);
     try {
       await work();
-      setMessage(success);
+      setFeedback({ action, tone: 'success', message: success });
       await cache.invalidateQueries({ queryKey: ['eventOps', planId] });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not update native brackets.');
+      setFeedback({
+        action,
+        tone: 'danger',
+        message: cause instanceof Error ? cause.message : 'Could not update native brackets.',
+      });
       if (finalizing) await cache.invalidateQueries({ queryKey: ['eventOps', planId] });
     } finally {
       setBusy(false);
     }
   };
-  if (ended)
-    return closedFinalizationFeedback(heading, finalizationFocus.feedbackRef, error, message);
+  if (ended) return closedFinalizationFeedback(heading, finalizationFocus.feedbackRef, feedback);
 
   return (
     <section className="card native-finals-controls">

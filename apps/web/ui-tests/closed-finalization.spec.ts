@@ -157,3 +157,106 @@ for (const state of ['cancelled', 'blocked'] as const)
     }
     expect(fixture.unexpected).toEqual([]);
   });
+
+test('remote cancellation clears a finals preview error without moving focus', async ({ page }) => {
+  const fixture = await mockEvent(page, { role: 'player', idle: true });
+  Object.assign(fixture.overview.plan, { status: 'underway', structure: 'dual_division' });
+  const previewError = 'Could not load a finals preview.';
+  await page.route(/\/api\/trpc\/eventOps\.native\.preview(?:\?|$)/, (route) => {
+    const payload = {
+      error: {
+        message: previewError,
+        code: -32603,
+        data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
+      },
+    };
+    return route.fulfill({
+      status: 500,
+      json: new URL(route.request().url()).searchParams.has('batch') ? [payload] : payload,
+    });
+  });
+
+  await page.goto(path);
+  const controls = page.locator('.native-finals-controls');
+  await controls.getByRole('button', { name: 'Preview finals', exact: true }).press('Enter');
+  await expect(controls.getByRole('alert')).toContainText(previewError);
+
+  const publicBoard = page.getByRole('link', { name: /Public board/ });
+  await publicBoard.focus();
+  Object.assign(fixture.overview.plan, { status: 'cancelled' });
+  Object.assign(fixture.overview, { finalization: null });
+  await expect(
+    page.getByText('No elimination bracket was generated for this event.'),
+  ).toBeVisible();
+  await expect(controls).toHaveCount(0);
+  await expect(page.getByText(previewError, { exact: true })).toHaveCount(0);
+  await expect(publicBoard).toBeFocused();
+
+  await page.reload();
+  await expect(
+    page.getByText('No elimination bracket was generated for this event.'),
+  ).toBeVisible();
+  await expect(controls).toHaveCount(0);
+  expect(fixture.unexpected).toEqual([]);
+});
+
+for (const failed of [false, true])
+  test(`remote closure retains the finalization ${failed ? 'error' : 'receipt'} without moving focus`, async ({
+    page,
+  }) => {
+    const fixture = await mockEvent(page, { role: 'player', idle: true, bracket: true });
+    Object.assign(fixture.overview.plan, { status: 'underway', structure: 'single_elimination' });
+    Object.assign(fixture.overview, { finalization: { kind: 'ready' } });
+    let release!: () => void;
+    const heldResponse = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const finalizeRequest = /\/api\/trpc\/eventOps\.native\.finalize(?:\?|$)/;
+    const finalizationError = 'The finalization response was interrupted.';
+    await page.route(finalizeRequest, async (route) => {
+      await heldResponse;
+      const payload = failed
+        ? {
+            error: {
+              message: finalizationError,
+              code: -32603,
+              data: { code: 'INTERNAL_SERVER_ERROR', httpStatus: 500 },
+            },
+          }
+        : { result: { data: { alreadyFinalized: false } } };
+      return route.fulfill({
+        status: failed ? 500 : 200,
+        json: new URL(route.request().url()).searchParams.has('batch') ? [payload] : payload,
+      });
+    });
+
+    await page.goto(path);
+    const controls = page.locator('.native-finals-controls');
+    await controls.getByRole('button', { name: 'Finalize native results' }).press('Enter');
+    const dialog = page.getByRole('alertdialog');
+    const started = page.waitForRequest(finalizeRequest);
+    const publicBoard = page.getByRole('link', { name: /Public board/ });
+    try {
+      await dialog.getByRole('button', { name: 'Confirm', exact: true }).press('Enter');
+      await started;
+      await expect(dialog).toHaveCount(0);
+      await publicBoard.focus();
+      Object.assign(fixture.overview.plan, { status: 'complete' });
+      Object.assign(fixture.overview, {
+        finalization: null,
+        publication: { resultId, revision: 1, status: 'published', tournamentIds: [] },
+      });
+      await expect(page.getByText('Result revision 1 published.')).toBeVisible();
+      await expect(controls).toHaveCount(0);
+    } finally {
+      release();
+    }
+    await expect(controls.getByRole(failed ? 'alert' : 'status')).toContainText(
+      failed ? finalizationError : 'Event finalized.',
+    );
+    await expect(publicBoard).toBeFocused();
+    await page.reload();
+    await expect(page.getByText('Result revision 1 published.')).toBeVisible();
+    await expect(controls).toHaveCount(0);
+    expect(fixture.unexpected).toEqual([]);
+  });

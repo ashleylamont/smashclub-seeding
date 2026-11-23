@@ -1,6 +1,12 @@
 import { useLayoutEffect, useRef, type RefObject } from 'react';
 import { Notice } from '../../components/ui/Feedback';
 
+export type NativeBracketFeedback = {
+  action: 'finalize' | 'draw';
+  tone: 'success' | 'danger';
+  message: string;
+};
+
 export function useFinalizationFocus(busy: boolean, ended: boolean, failed: boolean) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const feedbackRef = useRef<HTMLDivElement>(null);
@@ -27,15 +33,14 @@ export function useFinalizationFocus(busy: boolean, ended: boolean, failed: bool
 export function closedFinalizationFeedback(
   heading: string,
   feedbackRef: RefObject<HTMLDivElement | null>,
-  error: string,
-  message: string,
+  feedback: NativeBracketFeedback | null,
 ) {
-  if (!error && !message) return null;
+  if (feedback?.action !== 'finalize' || !feedback.message) return null;
   return (
     <section className="card native-finals-controls">
       <h3>{heading}</h3>
       <div ref={feedbackRef} tabIndex={-1} role="group" aria-label="Finalization feedback">
-        <Notice tone={error ? 'danger' : 'success'}>{error || message}</Notice>
+        <Notice tone={feedback.tone}>{feedback.message}</Notice>
       </div>
     </section>
   );
