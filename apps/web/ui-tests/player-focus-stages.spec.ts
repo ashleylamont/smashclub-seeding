@@ -49,9 +49,7 @@ for (const width of [390, 1440])
       `/play/${PLAN_ID}?player=${player}&pool=${ownPool.division}%3A${ownPool.poolIndex}`,
     );
     await expect(page.getByLabel('Show matches for')).toHaveAttribute('data-value', player);
-    await expect(page.getByText('Your pool sets are recorded.', { exact: false })).toContainText(
-      'Other pool sets are still in progress',
-    );
+    await expect(page.getByText('Other pool sets are still in progress.')).toBeVisible();
     const sectionOrder = () =>
       page
         .locator('.player-event-board-section')

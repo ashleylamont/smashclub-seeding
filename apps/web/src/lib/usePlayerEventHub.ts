@@ -7,6 +7,7 @@ import { useOnlineStatus } from './useOnlineStatus';
 import { useGuestEventAccess } from './useGuestEventAccess';
 import { trpc } from './trpc';
 import { matchPresentation } from './matchPresentation';
+import { playerJourney } from './playerJourney';
 import {
   accountDraftSource,
   clearScoreDrafts,
@@ -110,6 +111,7 @@ export function usePlayerEventHub(planId: string) {
       update(value);
     };
   const playerName = players.find((item) => item.id === player)?.name;
+  const journey = data && player ? playerJourney(data, player) : undefined;
   const reportedIds = new Set(ownReports?.map((report) => report.matchId));
   const stationId =
     data?.stations.find(
@@ -240,6 +242,7 @@ export function usePlayerEventHub(planId: string) {
     players,
     player,
     playerName,
+    journey,
     usingLinkedDefault,
     playerMatches,
     completed,
