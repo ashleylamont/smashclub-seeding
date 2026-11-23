@@ -300,6 +300,7 @@ test('creates fixed doubles pairs in the planner and runs a configured double ro
           }
           await trigger.press('Enter');
           const dialog = archive.getByRole('dialog', { name: alias, exact: true });
+          await expect(dialog.getByText('Club rating', { exact: true })).toBeVisible();
           await expect(dialog.getByRole('link', { name: 'View full profile' })).toHaveAttribute(
             'href',
             `/players/${playerId}`,
