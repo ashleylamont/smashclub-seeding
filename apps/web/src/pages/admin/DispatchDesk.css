@@ -29,6 +29,12 @@
   display: flex;
   align-items: center;
 }
+.dispatch-capacity-warning {
+  flex-basis: 100%;
+}
+.dispatch-capacity-warning > .banner {
+  margin-bottom: 0;
+}
 .dispatch-row {
   padding: 16px 0;
   border-bottom: 1px solid var(--border);

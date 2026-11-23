@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { Disclosure } from '../../components/ui/Disclosure';
+import { Notice } from '../../components/ui/Feedback';
 import { Input } from '../../components/ui/Input';
 import { useConfirmation } from '../../lib/confirmation';
 import type { Desk, Run } from './dispatchTypes';
@@ -31,6 +32,7 @@ export function DispatchSetup({
   const revision = draft?.revision ?? desk.resourceRevision;
   const shared = desk.mode === 'shared';
   const stale = revision !== desk.resourceRevision;
+  const excess = shared && draft && !stale ? projectedOrdinaryUsage(desk, selected) - capacity : 0;
   return (
     <section className="card" id="station-controls" tabIndex={-1}>
       <h3>{shared ? 'Match capacity and named stations' : 'Use a flexible shared match queue'}</h3>
@@ -121,7 +123,21 @@ export function DispatchSetup({
             </Button>
           </p>
         )}
-        <Button variant="primary" type="submit" disabled={disabled || stale}>
+        {excess > 0 && (
+          <div className="dispatch-capacity-warning" id="dispatch-capacity-warning">
+            <Notice tone="warning">
+              Saving would put {excess} {excess === 1 ? 'match' : 'matches'} above the proposed
+              ordinary limit. Existing calls and matches in play will continue. New ordinary calls
+              will wait until capacity is available.
+            </Notice>
+          </div>
+        )}
+        <Button
+          variant="primary"
+          type="submit"
+          disabled={disabled || stale}
+          aria-describedby={excess > 0 ? 'dispatch-capacity-warning' : undefined}
+        >
           {shared ? 'Save capacity' : 'Enable shared match queue'}
         </Button>
         <p>
@@ -247,4 +263,11 @@ export function DispatchSetup({
       )}
     </section>
   );
+}
+
+function projectedOrdinaryUsage(desk: Desk, reservedIds: readonly string[]) {
+  const occupied = desk.stations.filter(({ currentMatchId }) => currentMatchId);
+  const namedBefore = occupied.filter(({ reserved }) => reserved).length;
+  const namedAfter = occupied.filter(({ id }) => reservedIds.includes(id)).length;
+  return desk.active + namedBefore - namedAfter;
 }
