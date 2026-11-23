@@ -2,6 +2,18 @@
 
 Dates show when each change landed, in Sydney time. Select a version to open its GitHub release.
 
+## 0.23.3
+
+### Patch Changes
+
+- 23 November 2026 · **Fix** · When an untaken match call blocks a late singles entry, the attendance preview links to that pairing. Return the call, then refresh the preview to review the new matches before adding the player. If a score arrives before the call is returned, review it first. [#570](https://github.com/ashleylamont/smashclub-seeding/pull/570) · [build 60311c8](https://github.com/ashleylamont/smashclub-seeding/commit/60311c8fd870b64d2bfd966fa6d8c76096c30a47)
+- 23 November 2026 · **Improvement** · Choose one or two recent sets for the gameplay sidebar in OBS Display setup. The preview updates immediately, and the copied source URL keeps your choice. [#568](https://github.com/ashleylamont/smashclub-seeding/pull/568) · [build 91a389a](https://github.com/ashleylamont/smashclub-seeding/commit/91a389a60a5e2a27d56b858eb6f002b23828b8ff)
+- 23 November 2026 · **Fix** · The organiser desk shows when tournament results are ready to publish and explains outstanding steps. [#569](https://github.com/ashleylamont/smashclub-seeding/pull/569) · [build 06e6153](https://github.com/ashleylamont/smashclub-seeding/commit/06e615359affb92443b480a0c0e5fbf6392c9d71)
+- 23 November 2026 · **Fix** · The Match view menu now says when a view shows only some results. Choose Recorded results to find every confirmed score in your current filters. [#567](https://github.com/ashleylamont/smashclub-seeding/pull/567) · [build 8a51d21](https://github.com/ashleylamont/smashclub-seeding/commit/8a51d214d6da32952e63521b71a7560a78f3217d)
+- 23 November 2026 · **Fix** · Remove empty pool links from finished knockout pages so brackets and recorded results are easier to find. [#566](https://github.com/ashleylamont/smashclub-seeding/pull/566) · [build 13a963c](https://github.com/ashleylamont/smashclub-seeding/commit/13a963cd16b10d8d08aa6e8aba9e030f49f34736)
+- 23 November 2026 · **Improvement** · Open **How to read the board** on Rankings to see how tournament placing and bracket seeds relate to club ratings. [#574](https://github.com/ashleylamont/smashclub-seeding/pull/574) · [build c643ec8](https://github.com/ashleylamont/smashclub-seeding/commit/c643ec8023b18c22835e7f521ff1003bd625cd63)
+- 23 November 2026 · **Fix** · Head to Head keeps the verified skill gap for a shared night when the earlier estimate is unavailable. Played results, the current win estimate and attendance deductions stay visible. [#555](https://github.com/ashleylamont/smashclub-seeding/pull/555) · [build 0f70df1](https://github.com/ashleylamont/smashclub-seeding/commit/0f70df16f51473eb417af44b7b687cd9745a568e)
+
 ## 0.23.2
 
 ### Patch Changes
