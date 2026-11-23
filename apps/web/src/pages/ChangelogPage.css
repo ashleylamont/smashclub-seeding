@@ -10,6 +10,9 @@
 
 .changelog-page h2 {
   margin-block: var(--s6) var(--s3);
+}
+
+.changelog-page :is(h2, h3) {
   scroll-margin-block-start: calc(var(--nav-h, 0px) + var(--s3));
 }
 

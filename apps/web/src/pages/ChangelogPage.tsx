@@ -1,4 +1,13 @@
-import { Children, cloneElement, isValidElement, type ComponentProps, type ReactNode } from 'react';
+import { useRouterState } from '@tanstack/react-router';
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useRef,
+  type ComponentProps,
+  type ReactNode,
+} from 'react';
 import { Markdown } from 'markdown-to-jsx';
 import changelog from '../../CHANGELOG.md?raw';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -105,8 +114,35 @@ function Screenshot({ src, alt }: ComponentProps<'img'>) {
 }
 
 export function ChangelogPage() {
+  const page = useRef<HTMLDivElement>(null);
+  const hash = useRouterState({ select: (state) => state.location.hash });
+
+  useEffect(() => {
+    const target = hash ? document.getElementById(hash) : null;
+    if (!target || !page.current?.contains(target)) return;
+
+    // The router scrolls as soon as the route renders. Late fonts can reflow
+    // the earlier entries and move the heading under the sticky navigation.
+    const controller = new AbortController();
+    const cancel = () => controller.abort();
+    const options = { capture: true, passive: true, signal: controller.signal };
+    for (const event of ['keydown', 'pointerdown', 'wheel']) {
+      window.addEventListener(event, cancel, options);
+    }
+    void document.fonts.ready.then(() => {
+      requestAnimationFrame(() => {
+        if (controller.signal.aborted) return;
+        cancel();
+        const top = target.getBoundingClientRect().top;
+        const margin = Number.parseFloat(getComputedStyle(target).scrollMarginBlockStart);
+        if (top < margin - 1 || top >= window.innerHeight) target.scrollIntoView();
+      });
+    });
+    return cancel;
+  }, [hash]);
+
   return (
-    <div className="page changelog-page">
+    <div className="page changelog-page" ref={page}>
       <PageHeader title="Nemesis changelog" />
       <Markdown
         options={{

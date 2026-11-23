@@ -12,13 +12,31 @@ for (const theme of ['dark', 'light'] as const) {
       const { unexpected } = await mockEvent(page);
       // 0.3.0 has a feature with setup instructions and an illustration, as well as fixes
       // and a maintenance note. It exercises grouping and the existing version anchor.
-      await page.goto('/changelog#030');
-      await ready(page);
-
+      // Let the initial fragment scroll occur with fallback fonts in the reported light theme.
+      let releaseFonts: (() => void) | undefined;
+      if (theme === 'light') {
+        const heldFonts = new Promise<void>((resolve) => {
+          releaseFonts = resolve;
+        });
+        await page.route(/\.woff2?(\?.*)?$/, async (route) => {
+          await heldFonts;
+          await route.continue();
+        });
+      }
       const content = page.getByRole('main');
       const versionHeading = content.getByRole('heading', { level: 2, name: '0.3.0', exact: true });
       const versionLink = versionHeading.getByRole('link');
-      await expect(versionLink).toHaveAttribute('href', /\/releases\/tag\/v0\.3\.0$/);
+      try {
+        await page.goto('/changelog#030', { waitUntil: 'domcontentloaded' });
+        await expect(versionLink).toHaveAttribute('href', /\/releases\/tag\/v0\.3\.0$/);
+        if (theme === 'light') {
+          await expect(versionHeading).toBeInViewport();
+          expect(await page.evaluate(() => document.fonts.status)).toBe('loading');
+        }
+      } finally {
+        releaseFonts?.();
+      }
+      await ready(page);
       // Keep release anchors and the version link clear of the sticky navigation.
       await expect
         .poll(async () => {
