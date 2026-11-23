@@ -67,8 +67,9 @@ function PlayerEventHubPage({ hub }: { hub: PlayerEventHub }) {
     Boolean(data?.placements.length || data?.plan.resultsSlug || data?.plan.historicalResultsSlug);
   const updatesInterrupted = !online || publicEvent.isError;
   const labels = closed
-    ? { account: 'View signed-in reports', guest: 'View guest reports', next: 'Pool schedule' }
-    : { account: 'Use signed-in reporting', guest: 'Use venue guest pass', next: 'What next' };
+    ? { account: 'View signed-in reports', guest: 'View guest reports' }
+    : { account: 'Use signed-in reporting', guest: 'Use venue guest pass' };
+  const nextLabel = playerNextSectionLabel(closed, data);
   const reportingStatus = (
     <MatchReportingStatus hub={hub} hasRecordedResults={hasRecordedResults} />
   );
@@ -82,7 +83,7 @@ function PlayerEventHubPage({ hub }: { hub: PlayerEventHub }) {
       <div className="player-event-intro">
         <PageHeader title={publicEvent.data?.plan.name ?? 'Your event'} description={description} />
         {data && !empty && <EventProgress data={data} selectedPool={selectedPool} />}
-        <PlayerEventNavigation board={board} empty={empty} nextLabel={labels.next} />
+        <PlayerEventNavigation board={board} nextLabel={nextLabel} />
         <EventTwitchPromotion
           data={data}
           closed={closed}
@@ -143,9 +144,11 @@ function PlayerEventHubPage({ hub }: { hub: PlayerEventHub }) {
           {!empty && (
             <>
               <PlayerHubMatches hub={hub} data={data} reportingStatus={reportingStatus} />
-              <section id="what-next" aria-label={labels.next}>
-                <PlayerNextSteps hub={hub} data={data} />
-              </section>
+              {nextLabel && (
+                <section id="what-next" aria-label={nextLabel}>
+                  <PlayerNextSteps hub={hub} data={data} />
+                </section>
+              )}
             </>
           )}
           <PlayerHubBoard
@@ -264,23 +267,29 @@ function eventFinalsProgress(data: PublicEventSnapshot) {
   if (pools.length && pools.every((match) => match.status === 'complete')) return 'pending';
 }
 
+function playerNextSectionLabel(closed: boolean, data?: PublicEventSnapshot) {
+  if (!closed) return 'What next';
+  if (data?.matches.length && data.poolRounds?.some(({ rounds }) => rounds.length > 0))
+    return 'Pool schedule';
+}
+
 function PlayerEventNavigation({
   board,
-  empty,
   nextLabel,
 }: {
   board: PlayerEventHub['board'];
-  empty: boolean;
-  nextLabel: string;
+  nextLabel?: string;
 }) {
   return (
     <nav className="player-event-nav" aria-label="Event sections">
       <Button asChild>
         <a href="#my-matches">Find my matches</a>
       </Button>
-      <Button asChild>
-        <a href="#what-next">{empty ? 'What next' : nextLabel}</a>
-      </Button>
+      {nextLabel && (
+        <Button asChild>
+          <a href="#what-next">{nextLabel}</a>
+        </Button>
+      )}
       {(board?.sections ?? ['pools', 'brackets', 'results']).map((section) => (
         <Button key={section} asChild>
           <a href={`#event-${section}`}>

@@ -83,7 +83,10 @@ export function PlayerHubMatches({
   };
 
   return (
-    <section id="my-matches" aria-label="Find my matches and report scores">
+    <section
+      id="my-matches"
+      aria-label={closed ? 'Match history' : 'Find my matches and report scores'}
+    >
       {reportingStatus}
       <PlayerMatchFilter
         players={players}
@@ -168,7 +171,7 @@ export function PlayerHubMatches({
           defaultOpen={!player}
         >
           <div className="player-match-controls">
-            {player && view === 'mine' && (
+            {player && view === 'mine' && (!closed || hub.board?.sections.includes('pools')) && (
               <p className="muted">
                 {closed
                   ? 'The pool filter refines standings and schedule history.'
