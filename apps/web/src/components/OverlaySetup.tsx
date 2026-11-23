@@ -2,6 +2,8 @@ import { Dialog } from './ui/Dialog';
 import { Button } from './ui/Button';
 import { Select, SelectItem } from './ui/Select';
 import { Disclosure } from './ui/Disclosure';
+import { Notice } from './ui/Feedback';
+import { Textarea } from './ui/Input';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { captureError, LocalCapture } from '../lib/localCapture';
 
@@ -172,6 +174,8 @@ export function OverlaySetup({
           </label>
           {presentationControls}
           <Disclosure title="Use with OBS" defaultOpen>
+            <p>Changes update this preview. Paste the copied URL into your OBS Browser Source.</p>
+            <ObsSourceCopy />
             <ol>
               <li>Add this URL as a Browser Source at 1920 × 1080.</li>
               <li>
@@ -179,10 +183,6 @@ export function OverlaySetup({
               </li>
               <li>Fit your video underneath the transparent centre. Keep its 16:9 shape.</li>
             </ol>
-            <p>
-              Set the station above, then copy the updated URL into OBS. Hide these controls before
-              going live.
-            </p>
           </Disclosure>
           <Disclosure title="Show video directly in this browser">
             <p>
@@ -251,5 +251,66 @@ export function OverlaySetup({
         </Dialog>
       )}
     </>
+  );
+}
+
+function ObsSourceCopy() {
+  const [feedback, setFeedback] = useState<{
+    url: string;
+    state: 'copying' | 'copied' | 'failed';
+  }>();
+  const pending = useRef(false);
+  const current = new URLSearchParams(location.search);
+  const source = new URL(location.origin);
+  source.pathname = location.pathname;
+  for (const key of [
+    'station',
+    'presentation',
+    'cycleSeconds',
+    'twitch',
+    'recent',
+    'pool',
+    'captureWidth',
+    'captureHeight',
+  ]) {
+    const value = current.get(key);
+    if (value !== null) source.searchParams.set(key, value);
+  }
+  source.searchParams.set('controls', '0');
+  const url = source.href;
+  const copying = feedback?.state === 'copying';
+  const state = feedback?.url === url ? feedback.state : undefined;
+
+  async function copy() {
+    if (pending.current) return;
+    pending.current = true;
+    setFeedback({ url, state: 'copying' });
+    try {
+      await navigator.clipboard.writeText(url);
+      setFeedback({ url, state: 'copied' });
+    } catch {
+      setFeedback({ url, state: 'failed' });
+    } finally {
+      pending.current = false;
+    }
+  }
+
+  return (
+    <div className="ui-field">
+      <div className="ui-actions">
+        <Button aria-disabled={copying || undefined} onClick={() => void copy()}>
+          Copy OBS source URL
+        </Button>
+        <span role="status">
+          {copying ? 'Copying…' : state === 'copied' ? 'OBS source URL copied.' : ''}
+        </span>
+      </div>
+      {state === 'failed' && (
+        <div className="ui-field">
+          <Notice tone="warning">Clipboard unavailable. Select and copy the OBS source URL.</Notice>
+          <Textarea aria-label="OBS source URL" readOnly rows={6} value={url} spellCheck={false} />
+        </div>
+      )}
+    </div>
   );
 }

@@ -77,9 +77,13 @@ test('public night board and user-initiated overlay capture controls', async ({
   await controls.getByText('Show video directly in this browser', { exact: true }).click();
   await controls.getByRole('button', { name: 'Choose window / screen' }).click();
   await expect(page.getByLabel('Local game capture video', { exact: true })).toBeVisible();
-  await expect(controls.getByRole('status')).toContainText('Shared window / screen is showing');
+  await expect(
+    controls.getByRole('status').filter({ hasText: 'Shared window / screen is showing' }),
+  ).toBeVisible();
   await controls.getByRole('button', { name: 'Open selected video input' }).click();
-  await expect(controls.getByRole('status')).toContainText('Camera / capture card is showing');
+  await expect(
+    controls.getByRole('status').filter({ hasText: 'Camera / capture card is showing' }),
+  ).toBeVisible();
   expect(
     await page.evaluate(
       () => (window as unknown as { __captureTest: { stopped: number } }).__captureTest.stopped,

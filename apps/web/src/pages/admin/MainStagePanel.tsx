@@ -117,8 +117,8 @@ export function MainStagePanel({
         <p>
           Auto shows tournament progress between sets and returns to gameplay when this station
           starts a match. Progress pages rotate every {DEFAULT_PROGRESS_SECONDS} seconds by default.
-          In Display setup (S), you can add a Twitch channel before copying the updated URL into
-          OBS.
+          To adjust a source, open its preview and press S for Display setup. Copy the configured
+          URL from Use with OBS.
         </p>
         <BroadcastSources planId={data.plan.id} stationId={station?.id} />
       </Disclosure>

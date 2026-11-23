@@ -13,7 +13,6 @@ import { PoolFilter } from './PoolStationQueue';
 import { scoreApprovalPolicy } from '../lib/poolFlow';
 import { matchStatus, matchStation } from '../lib/playerMatchView';
 import { nextMeaningfulMatch } from '../lib/matchPresentation';
-import { playerJourney } from '../lib/playerJourney';
 import type { PlayerEventHub, PublicEventSnapshot } from '../lib/usePlayerEventHub';
 
 export function PlayerHubMatches({
@@ -30,6 +29,7 @@ export function PlayerHubMatches({
     player,
     selectedPlayer,
     playerName,
+    journey,
     usingLinkedDefault,
     setSelectedPlayer,
     view,
@@ -59,7 +59,6 @@ export function PlayerHubMatches({
     signedIn,
     keepBrowsingScope,
   } = hub;
-  const journey = player ? playerJourney(data, player) : undefined;
   const nextMatchId = nextMatch?.id;
   const matchGrid = useRef<HTMLDivElement>(null);
   const pendingMatchJump = useRef<string | null>(null);

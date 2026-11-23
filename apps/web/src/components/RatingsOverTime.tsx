@@ -262,17 +262,22 @@ export function RatingsOverTime({ players }: RatingsOverTimeProps) {
             />
             <Tooltip
               cursor={{ stroke: 'var(--border-strong)' }}
+              // Recharts hides the whole tooltip when its filtered payload is empty.
+              filterNull={false}
               content={({ active, payload, label }) => {
                 if (!active || typeof label !== 'string') return null;
-                const sorted = [...(payload ?? [])]
-                  .filter((p) => p.value != null)
-                  .sort((a, b) => (b.value as number) - (a.value as number));
+                const estimates = payload
+                  .filter(
+                    (entry): entry is typeof entry & { value: number } =>
+                      entry.hide !== true && typeof entry.value === 'number',
+                  )
+                  .sort((a, b) => b.value - a.value);
                 const night = chartData.find((point) => point.label === label);
                 return (
                   <div className="custom-tooltip ratings-tooltip" role="status">
                     <p className="tooltip-label">{label}</p>
-                    {sorted.length === 0 && <p>No recorded estimates for these players.</p>}
-                    {sorted.map((entry) => (
+                    {estimates.length === 0 && <p>No recorded estimates for these players.</p>}
+                    {estimates.map((entry) => (
                       <p key={entry.name as string} className="tooltip-row">
                         <span className="tooltip-swatch" style={{ background: entry.color }} />
                         <span className="tooltip-name">
@@ -281,7 +286,7 @@ export function RatingsOverTime({ players }: RatingsOverTimeProps) {
                             <span className="tooltip-attendance">Missed night</span>
                           )}
                         </span>
-                        <span className="num">{(entry.value as number).toFixed(0)}</span>
+                        <span className="num">{entry.value.toFixed(0)}</span>
                       </p>
                     ))}
                   </div>
