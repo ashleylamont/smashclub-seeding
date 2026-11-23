@@ -68,9 +68,9 @@ export function BoardLegend({ leagues }: Props) {
               nights
             </dt>
             <dd>
-              Points docked for missing club nights. The first miss is free; after that it is a flat
-              charge a night up to a cap, and playing once puts all of it back. The{' '}
-              <strong>Seen</strong> column counts the same thing in nights.
+              Any attendance deduction appears beside the rating. The <strong>Seen</strong> column
+              counts missed club nights. Open <strong>How ranking works</strong> at the top of
+              Rankings for the current attendance rule.
             </dd>
           </div>
 

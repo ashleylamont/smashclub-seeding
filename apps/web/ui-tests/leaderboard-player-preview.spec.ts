@@ -29,7 +29,14 @@ const players = [
   },
 ];
 
-async function openRankings(page: Page) {
+async function openRankings(
+  page: Page,
+  activityPolicy: LeaderboardData['activityPolicy'] = {
+    graceEvents: 1,
+    penaltyPerEvent: 20,
+    penaltyCap: 100,
+  },
+) {
   const fixture = await mockEvent(page);
   const requestedPlayers: string[] = [];
   const leaderboard: LeaderboardData = {
@@ -64,7 +71,7 @@ async function openRankings(page: Page) {
       verified: true,
       characters: ['mario', 'kirby'],
     })),
-    activityPolicy: { graceEvents: 1, penaltyPerEvent: 20, penaltyCap: 100 },
+    activityPolicy,
   };
   fixture.responses['public.leaderboard'] = leaderboard;
   fixture.responses['public.ratingHistory'] = { players: [], events: [] };
@@ -85,6 +92,79 @@ async function openRankings(page: Page) {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Rankings' })).toBeVisible();
   return { requestedPlayers, unexpected: fixture.unexpected };
+}
+
+for (const width of [390, 1440]) {
+  for (const theme of ['dark', 'light'] as const) {
+    test(`rankings uses the configured attendance policy at ${width}px in ${theme}`, async ({
+      page,
+    }, info) => {
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      await page.emulateMedia({ colorScheme: theme });
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const { unexpected } = await openRankings(page, {
+        graceEvents: 3,
+        penaltyPerEvent: 15,
+        penaltyCap: 75,
+      });
+
+      const help = page.getByRole('button', { name: 'Explain: How ranking works' });
+      await help.press('Enter');
+      const policy = page.getByRole('dialog', { name: 'How ranking works' });
+      await expect(policy).toContainText(/(?:up to 3 club nights|first 3 missed club nights)/i);
+      await expect(policy).toContainText(/15 points.*75/);
+      await ready(page);
+      await page.screenshot({ path: info.outputPath('ranking-policy.png'), fullPage: true });
+      await page.keyboard.press('Escape');
+      await expect(help).toBeFocused();
+
+      const legend = page.getByRole('button', { name: 'How to read the board' });
+      await legend.press('Enter');
+      const boardKey = page.locator('.board-legend');
+      await expect(legend).toHaveAttribute('aria-expanded', 'true');
+      await expect(boardKey).not.toContainText('The first miss is free');
+      await expect(boardKey).toContainText('How ranking works');
+      await expect(page.getByRole('link', { name: /^Alex & Co/ })).toContainText('1596');
+      await ready(page);
+      await page.screenshot({ path: info.outputPath('expanded-board-key.png'), fullPage: true });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+      expect(
+        (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze())
+          .violations,
+      ).toEqual([]);
+      expect(unexpected).toEqual([]);
+    });
+  }
+}
+
+for (const { name, policy, expected } of [
+  {
+    name: 'the first miss is charged',
+    policy: { graceEvents: 0, penaltyPerEvent: 25, penaltyCap: 90 },
+    expected: /each missed club night costs 25 points.*90/i,
+  },
+  {
+    name: 'one missed night is free',
+    policy: { graceEvents: 1, penaltyPerEvent: 40, penaltyCap: 120 },
+    expected: /first missed club night is free.*40 points.*120/i,
+  },
+  {
+    name: 'the nightly charge is zero',
+    policy: { graceEvents: 3, penaltyPerEvent: 0, penaltyCap: 75 },
+    expected: /there is no attendance penalty/i,
+  },
+  {
+    name: 'the cap is zero',
+    policy: { graceEvents: 3, penaltyPerEvent: 15, penaltyCap: 0 },
+    expected: /there is no attendance penalty/i,
+  },
+]) {
+  test(`ranking help describes the active policy when ${name}`, async ({ page }) => {
+    const { unexpected } = await openRankings(page, policy);
+    await page.getByRole('button', { name: 'Explain: How ranking works' }).press('Enter');
+    await expect(page.getByRole('dialog', { name: 'How ranking works' })).toContainText(expected);
+    expect(unexpected).toEqual([]);
+  });
 }
 
 for (const width of [390, 1440]) {
