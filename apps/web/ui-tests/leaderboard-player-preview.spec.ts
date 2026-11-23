@@ -36,7 +36,7 @@ async function openRankings(
     penaltyPerEvent: 20,
     penaltyCap: 100,
   },
-  leadingPlayerMisses = 0,
+  { leadingPlayerMisses = 0, rankMovement = true } = {},
 ) {
   const fixture = await mockEvent(page);
   const requestedPlayers: string[] = [];
@@ -46,8 +46,8 @@ async function openRankings(
     eventCount: 8,
     rows: players.map((player) => ({
       ...player,
-      previousRank: player.rank + 1,
-      rankDelta: 1,
+      previousRank: rankMovement ? player.rank + 1 : null,
+      rankDelta: rankMovement ? 1 : null,
       league: 'Club',
       skillRating: player.clubRating,
       skillSd: 90,
@@ -97,6 +97,37 @@ async function openRankings(
 
 for (const width of [390, 1440]) {
   for (const theme of ['dark', 'light'] as const) {
+    test(`rankings shows current standings without a prior comparison at ${width}px in ${theme}`, async ({
+      page,
+    }, info) => {
+      await page.clock.setFixedTime(new Date('2026-10-01T12:00:00Z'));
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      await page.emulateMedia({ colorScheme: theme });
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const { unexpected } = await openRankings(page, undefined, { rankMovement: false });
+
+      const row = page.getByRole('link', { name: /^Alex & Co.*rank 2.*no movement recorded/ });
+      await expect(row).toBeVisible();
+      await expect(row).toContainText('1596');
+      await expect(page.getByText('Biggest climb', { exact: true })).toHaveCount(0);
+      await expect(
+        page.locator('.board-link .movement-up, .board-link .movement-down'),
+      ).toHaveCount(0);
+
+      const legend = page.getByRole('button', { name: 'How to read the board' });
+      await legend.press('Enter');
+      await expect(legend).toHaveAttribute('aria-expanded', 'true');
+      await expect(legend).toBeFocused();
+      await ready(page);
+      await page.screenshot({ path: info.outputPath('no-rank-movement.png'), fullPage: true });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+      expect(
+        (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze())
+          .violations,
+      ).toEqual([]);
+      expect(unexpected).toEqual([]);
+    });
+
     test(`rankings uses the configured attendance policy at ${width}px in ${theme}`, async ({
       page,
     }, info) => {
@@ -174,7 +205,7 @@ test('the board shows no attendance deduction beyond the grace window when the c
   const { unexpected } = await openRankings(
     page,
     { graceEvents: 3, penaltyPerEvent: 15, penaltyCap: 0 },
-    4,
+    { leadingPlayerMisses: 4 },
   );
   const missed = page
     .getByRole('link', { name: /^Leading player/ })
