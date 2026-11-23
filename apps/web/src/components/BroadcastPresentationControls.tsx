@@ -4,13 +4,17 @@ import { progressIntervals, type BroadcastPresentation } from '../lib/broadcastP
 export function BroadcastPresentationControls({
   mode,
   seconds,
+  recentCount,
   onMode,
   onSeconds,
+  onRecentCount,
 }: {
   mode: BroadcastPresentation;
   seconds: number;
+  recentCount: number;
   onMode: (mode: BroadcastPresentation) => void;
   onSeconds: (seconds: number) => void;
+  onRecentCount: (count: number) => void;
 }) {
   return (
     <>
@@ -37,6 +41,13 @@ export function BroadcastPresentationControls({
         </Select>
       </label>
       <p className="muted">Reduced motion keeps pages manual.</p>
+      <label>
+        Recent results in the gameplay sidebar
+        <Select value={recentCount} onValueChange={(value) => onRecentCount(Number(value))}>
+          <SelectItem value={1}>1 set</SelectItem>
+          <SelectItem value={2}>2 sets</SelectItem>
+        </Select>
+      </label>
     </>
   );
 }
