@@ -2,6 +2,12 @@
 
 Dates show when each change landed, in Sydney time. Select a version to open its GitHub release.
 
+## 0.23.11
+
+### Patch Changes
+
+- 23 November 2026 · **Fix** · See provisional rating markers beside long player names in Rankings. Screen readers announce the status on the player link. [#626](https://github.com/ashleylamont/smashclub-seeding/pull/626) · [build 24663b6](https://github.com/ashleylamont/smashclub-seeding/commit/24663b617afb780715db5061622d75b38e71eab2)
+
 ## 0.23.10
 
 ### Patch Changes
