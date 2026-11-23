@@ -27,13 +27,14 @@ describe('reviewed corrections to frozen multi-pool standings', () => {
       await event.report(ready, ready.player1Id!);
     }
     const state = await event.state();
+    const fourth = event.fourth!;
     const lowSet = state.matches.find(
       (match) =>
         match.poolId === event.pool.id &&
-        [event.bea, event.fourth].every((id) => [match.player1Id, match.player2Id].includes(id)),
+        [event.bea, fourth].every((id) => [match.player1Id, match.player2Id].includes(id)),
     )!;
-    const { requestId, ...correction } = fixture.score(lowSet, event.fourth);
-    const order = [event.first!, event.alice, event.fourth, event.bea];
+    const { requestId, ...correction } = fixture.score(lowSet, fourth);
+    const order = [event.first!, event.alice, fourth, event.bea];
     return { event, state, correction, requestId, order };
   }
 
