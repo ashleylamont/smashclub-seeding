@@ -87,3 +87,16 @@ export async function expectDoublesFinalsMembership(
   expect(profile.doublesResults.map((row) => row.slug)).not.toContain(mainStanding?.slug);
   expect(profile.doublesMatches.some((row) => row.resultStage === 'group')).toBe(true);
 }
+
+export async function expectDoublesArchivePair(
+  api: ReturnType<typeof appRouter.createCaller>['public'],
+  tournamentIds: string[],
+  memberIds: readonly string[],
+) {
+  const archive = (await api.tournaments()).find((t) => tournamentIds.includes(t.id))!;
+  const overview = await api.eventOverview({ slug: archive.slug });
+  const archivedPair = overview?.divisions
+    .flatMap((d) => d.players)
+    .find((p) => p.verifiedDoublesPair?.members.some((member) => member.playerId === memberIds[0]));
+  expect(archivedPair?.verifiedDoublesPair?.members.map((p) => p.playerId)).toEqual(memberIds);
+}

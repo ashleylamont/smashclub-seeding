@@ -16,6 +16,7 @@ import {
   type Db,
 } from '@smashclub/db';
 import {
+  expectDoublesArchivePair,
   expectDoublesRecapAndHistory,
   expectDoublesFinalsMembership,
   publishedPlayerRating,
@@ -515,6 +516,7 @@ describe('native doubles through shipped APIs', () => {
     );
     expect(historical.some((p) => p.memberPlayerIds?.includes(incoming!.id))).toBe(true);
     expect(historical.some((p) => p.memberPlayerIds?.includes(oldMemberIds[1]!))).toBe(false);
+    await expectDoublesArchivePair(guest.public, sealed.publication!.tournamentIds, newMemberIds);
     expect(sealed.result?.matches.find((m) => m.id === other.id)).toEqual(
       before.matches.find((m) => m.id === other.id),
     );

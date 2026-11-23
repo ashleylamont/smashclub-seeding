@@ -296,3 +296,51 @@ it('limits local result art choices to admin or a common explicit organiser plan
   });
   expect(await canCustomizeResultGraphic(db, to, { tournamentIds: [main] })).toBe(false);
 });
+
+it('leaves imported and unreceipted doubles entrant names without individual previews', async () => {
+  const [first, second] = await playerIds();
+  const [imported, unreceipted] = await db
+    .insert(tournaments)
+    .values([
+      {
+        name: 'Imported doubles',
+        challongeSlug: 'imported-doubles',
+        competitionFormat: 'doubles',
+        challongeState: 'complete',
+      },
+      {
+        name: 'Unreceipted native doubles',
+        challongeSlug: 'unreceipted-native-doubles',
+        competitionFormat: 'doubles',
+        provider: 'native',
+        challongeState: 'complete',
+        raw: { structure: 'round_robin' },
+      },
+    ])
+    .returning();
+  await db.insert(tournamentParticipants).values([
+    {
+      tournamentId: imported!.id,
+      challongeParticipantId: 1,
+      playerId: first,
+      rawName: 'Unverified pair label',
+      cleanedName: 'Unverified pair label',
+      finalRank: 1,
+    },
+    {
+      tournamentId: unreceipted!.id,
+      challongeParticipantId: 1,
+      teamName: 'Native pair label',
+      memberPlayerIds: [first!, second!],
+      rawName: 'Native pair label',
+      cleanedName: 'Native pair label',
+      finalRank: 1,
+    },
+  ]);
+  for (const t of [imported!, unreceipted!]) {
+    const overview = await loadEventOverview(db, t.challongeSlug);
+    const [entrant] = overview!.brackets[0]!.players;
+    expect(entrant?.verifiedDoublesPair).toBeUndefined();
+    expect(entrant?.playerId).toBeNull();
+  }
+});

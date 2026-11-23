@@ -8,6 +8,13 @@ export interface ResultGraphicIdentity {
   members: { name: string; character: string | null }[];
 }
 
+type PublicDoublesMember = { playerId: string; name: string };
+
+export interface PublicDoublesPair {
+  teamName: string | null;
+  members: [PublicDoublesMember, PublicDoublesMember];
+}
+
 type Participant = {
   id: string;
   playerId?: string | null;
@@ -32,6 +39,7 @@ export async function publicParticipantPresentation(
   const profiles = await db.select().from(players);
   const names = new Map(profiles.map((p) => [p.id, publicPlayerName(p)]));
   const canonical = playerIdResolver(profiles);
+  const active = new Set(profiles.filter((p) => p.status === 'active').map((p) => p.id));
   const characters = includeGraphics
     ? await charactersByPlayer(db, [
         ...new Set(
@@ -39,24 +47,41 @@ export async function publicParticipantPresentation(
             .flatMap((p) =>
               p.memberPlayerIds?.length ? p.memberPlayerIds : p.playerId ? [p.playerId] : [],
             )
-            .map(canonical),
+            .map(canonical)
+            .filter((id) => names.has(id)),
         ),
       ])
     : undefined;
   return new Map(
     rows.map((p) => {
-      const team = p.memberPlayerIds?.length ? p.memberPlayerIds.map(canonical) : undefined;
-      const name = team
-        ? `${p.teamName ? `${p.teamName} (` : ''}${team
-            .map((id) => names.get(id) ?? 'Player')
+      const members = p.memberPlayerIds?.length
+        ? p.memberPlayerIds.map((id) => {
+            const playerId = canonical(id);
+            return { playerId, name: names.get(playerId) ?? 'Player' };
+          })
+        : undefined;
+      const name = members
+        ? `${p.teamName ? `${p.teamName} (` : ''}${members
+            .map((member) => member.name)
             .join(' / ')}${p.teamName ? ')' : ''}`
         : publicParticipantName(p);
+      const [first, second] = members ?? [];
+      const verifiedDoublesPair: PublicDoublesPair | undefined =
+        members?.length === 2 &&
+        first?.name &&
+        second?.name &&
+        first.playerId !== second.playerId &&
+        active.has(first.playerId) &&
+        active.has(second.playerId)
+          ? { teamName: p.teamName ?? null, members: [first, second] }
+          : undefined;
       const graphic: ResultGraphicIdentity | undefined = characters && {
-        teamName: team ? (p.teamName ?? null) : null,
-        members: team
-          ? team.map((id) => ({
-              name: names.get(id) ?? 'Player',
-              character: eventCharacters?.get(id)?.character ?? characters.get(id)?.[0] ?? null,
+        teamName: members ? (p.teamName ?? null) : null,
+        members: members
+          ? members.map(({ playerId, name }) => ({
+              name,
+              character:
+                eventCharacters?.get(playerId)?.character ?? characters.get(playerId)?.[0] ?? null,
             }))
           : [
               {
@@ -69,7 +94,7 @@ export async function publicParticipantPresentation(
               },
             ],
       };
-      return [p.id, { name, graphic }];
+      return [p.id, { name, graphic, verifiedDoublesPair }];
     }),
   );
 }

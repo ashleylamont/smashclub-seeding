@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { InMemoryStore } from '@rotorsoft/act';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
+import { publicPlayerName } from '@smashclub/shared';
 import {
   eventPlans,
   eventPlanEntries,
@@ -10,6 +11,8 @@ import {
   nativeResultPublications,
   playerRatings,
   sets,
+  tournaments,
+  tournamentParticipants,
   players,
   user,
   type Db,
@@ -36,7 +39,7 @@ describe('post-lock plan recovery', () => {
     await runtime.shutdown();
     await close();
   });
-  const caller = (actor = nativeAdmin) =>
+  const caller = (actor: typeof nativeAdmin | null = nativeAdmin) =>
     appRouter.createCaller({
       db,
       user: actor,
@@ -54,6 +57,7 @@ describe('post-lock plan recovery', () => {
         })),
       )
       .returning();
+    if (format === 'doubles') members.sort((a, b) => b.id.localeCompare(a.id));
     const { planId } = await caller().admin.eventPlanner.createPlan({
       name: 'Recovery rehearsal',
       eventDate: '2026-10-01T00:00:00Z',
@@ -280,8 +284,152 @@ describe('post-lock plan recovery', () => {
         .where(eq(nativeResultPublications.eventPlanId, planId)),
     ).toHaveLength(1);
   });
+  it('pairs verified public aliases with their ordered member IDs in both archive standings', async () => {
+    const { members, published } = await finalized('doubles');
+    const [tournament] = await db
+      .select()
+      .from(tournaments)
+      .where(eq(tournaments.id, published.publication!.tournamentIds[0]!));
+    const load = () => caller(null).public.eventOverview({ slug: tournament!.challongeSlug });
+    const pairIn = (overview: Awaited<ReturnType<typeof load>>) =>
+      overview!.divisions.flatMap((d) => d.players).find((p) => p.graphic?.teamName === 'Pair 0')!;
+    const [first, second] = members;
+    const overview = await load();
+    const row = pairIn(overview);
+    const expectedPair = {
+      teamName: 'Pair 0',
+      members: [
+        { playerId: first!.id, name: publicPlayerName(first!) },
+        { playerId: second!.id, name: publicPlayerName(second!) },
+      ],
+    };
+    expect(row.entryKey).toBe(`pair:${JSON.stringify([second!.id, first!.id])}`);
+    expect(row.verifiedDoublesPair).toEqual(expectedPair);
+    expect(
+      overview!.brackets[0]!.players.find((p) => p.entryKey === row.entryKey)?.verifiedDoublesPair,
+    ).toEqual(expectedPair);
+
+    await db
+      .update(players)
+      .set({ displayName: 'Player' })
+      .where(inArray(players.id, [first!.id, second!.id]));
+    expect(pairIn(await load()).verifiedDoublesPair?.members).toEqual([
+      { playerId: first!.id, name: 'Player' },
+      { playerId: second!.id, name: 'Player' },
+    ]);
+
+    const [canonical] = await db
+      .insert(players)
+      .values({
+        canonicalName: 'Replacement Private Surname',
+        displayName: 'New public alias',
+      })
+      .returning();
+    await db
+      .update(players)
+      .set({ status: 'merged', mergedIntoPlayerId: canonical!.id })
+      .where(eq(players.id, first!.id));
+    const renamed = await load();
+    expect(pairIn(renamed).entryKey).toBe(row.entryKey);
+    expect(pairIn(renamed).verifiedDoublesPair?.members).toEqual([
+      { playerId: canonical!.id, name: 'New public alias' },
+      { playerId: second!.id, name: 'Player' },
+    ]);
+    expect(JSON.stringify(renamed)).not.toContain('Private Surname');
+
+    await db
+      .update(tournaments)
+      .set({ challongeState: 'underway' })
+      .where(eq(tournaments.id, tournament!.id));
+    expect(pairIn(await load()).verifiedDoublesPair).toBeUndefined();
+    await db
+      .update(tournaments)
+      .set({ challongeState: 'complete' })
+      .where(eq(tournaments.id, tournament!.id));
+    const [entrant] = await db
+      .select()
+      .from(tournamentParticipants)
+      .where(
+        and(
+          eq(tournamentParticipants.tournamentId, tournament!.id),
+          eq(tournamentParticipants.teamName, 'Pair 0'),
+        ),
+      );
+    await db
+      .update(tournamentParticipants)
+      .set({ memberPlayerIds: [crypto.randomUUID(), second!.id] })
+      .where(eq(tournamentParticipants.id, entrant!.id));
+    const missing = pairIn(await load());
+    expect(missing.name).toBe('Pair 0 (Player / Player)');
+    expect(missing.verifiedDoublesPair).toBeUndefined();
+    await db
+      .update(tournamentParticipants)
+      .set({ memberPlayerIds: [first!.id, canonical!.id] })
+      .where(eq(tournamentParticipants.id, entrant!.id));
+    expect(pairIn(await load()).verifiedDoublesPair).toBeUndefined();
+    await db
+      .update(tournamentParticipants)
+      .set({ memberPlayerIds: entrant!.memberPlayerIds })
+      .where(eq(tournamentParticipants.id, entrant!.id));
+    await db
+      .update(players)
+      .set({
+        status: 'active',
+        mergedIntoPlayerId: null,
+        displayName: first!.displayName,
+      })
+      .where(eq(players.id, first!.id));
+    await db
+      .update(players)
+      .set({ displayName: second!.displayName })
+      .where(eq(players.id, second!.id));
+  });
+
+  it('projects only the effective publication through a superseded doubles archive slug', async () => {
+    const { planId, published } = await finalized('doubles');
+    const previousId = published.publication!.tournamentIds[0]!;
+    const [previous] = await db.select().from(tournaments).where(eq(tournaments.id, previousId));
+    const match = published.matches[0]!;
+    await caller().eventOps.live.command({
+      planId,
+      requestId: crypto.randomUUID(),
+      command: {
+        kind: 'replaceResult',
+        resultId: published.result!.id,
+        reason: 'Reviewed score and tiebreaks',
+        corrections: [
+          {
+            matchId: match.id,
+            expectedRevision: match.revision,
+            score1: 0,
+            score2: 2,
+            outcome: 'played',
+          },
+        ],
+        roundRobinOrder: [...published.pools[0]!.order!].reverse(),
+      },
+    });
+    const corrected = await runtime.state(planId);
+    const [latest] = await db
+      .select()
+      .from(tournaments)
+      .where(eq(tournaments.id, corrected.publication!.tournamentIds[0]!));
+    const api = caller(null).public;
+    const current = await api.eventOverview({ slug: latest!.challongeSlug });
+    expect(await api.eventOverview({ slug: previous!.challongeSlug })).toEqual(current);
+    expect(current!.brackets.map((b) => b.tournamentId)).toEqual([latest!.id]);
+    expect(current!.divisions[0]!.players[0]?.verifiedDoublesPair?.members).toHaveLength(2);
+  });
+
   it('withdraws published doubles from pair-rating evidence without changing the sealed record', async () => {
     const { planId, published } = await finalized('doubles');
+    const result = (await caller().public.tournaments()).find(
+      (t) => t.id === published.publication!.tournamentIds[0],
+    )!;
+    expect(
+      (await caller().public.eventOverview({ slug: result.slug }))!.divisions[0]?.players[0]
+        ?.verifiedDoublesPair?.members,
+    ).toHaveLength(2);
     expect(
       (await loadDoublesRatings(db, Date.parse('2026-12-01'))).provenance.sourceResultIds,
     ).toContain(published.result!.id);
@@ -290,6 +438,20 @@ describe('post-lock plan recovery', () => {
       (await loadDoublesRatings(db, Date.parse('2026-12-01'))).provenance.sourceResultIds,
     ).not.toContain(published.result!.id);
     expect((await runtime.state(planId)).result).toEqual(published.result);
+    expect(await caller().public.eventOverview({ slug: result.slug })).toBeNull();
+  });
+  it('retains archive names but omits verified doubles previews when only the plan is deleted', async () => {
+    const { planId, published } = await finalized('doubles');
+    const result = (await caller().public.tournaments()).find(
+      (t) => t.id === published.publication!.tournamentIds[0],
+    )!;
+    const loadOverview = () => caller().public.eventOverview({ slug: result.slug });
+    const before = (await loadOverview())!.divisions[0]!.players;
+    expect(before.map((p) => p.verifiedDoublesPair?.members.length)).toEqual([2, 2]);
+    await recover(planId, 'delete', false);
+    const after = (await loadOverview())!.divisions[0]!.players;
+    expect(after.map((p) => p.name)).toEqual(before.map((p) => p.name));
+    expect(after.every((p) => p.verifiedDoublesPair === undefined)).toBe(true);
   });
   it('retains published results and ratings when only the plan is deleted', async () => {
     const { planId, published } = await finalized();

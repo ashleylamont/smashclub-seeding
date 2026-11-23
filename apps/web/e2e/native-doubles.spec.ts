@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
+import { AxeBuilder } from '@axe-core/playwright';
 import { chooseOption } from '../test-support/controls';
 
 async function query<T>(request: APIRequestContext, procedure: string, input?: object): Promise<T> {
@@ -16,6 +17,7 @@ async function mutate<T>(request: APIRequestContext, procedure: string, data: ob
 
 test('creates fixed doubles pairs in the planner and runs a configured double round robin to public team results', async ({
   page,
+  browser,
 }, testInfo) => {
   test.setTimeout(180_000);
   page.setDefaultTimeout(15_000);
@@ -247,20 +249,112 @@ test('creates fixed doubles pairs in the planner and runs a configured double ro
   );
   const result = results.find((t) => t.name.startsWith('Browser doubles rehearsal'))!;
   expect(result).toBeDefined();
-  await page.goto(`/events/${result.slug}`);
-  await expect(page.locator('.section > .table-scroll .event-standings tbody tr')).toHaveCount(4);
-  await expect(
-    page
-      .locator('.section > .table-scroll')
-      .getByRole('columnheader', { name: 'Team', exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText(/No consolation bracket is linked/)).toHaveCount(0);
-  await expect(page.locator('.section > .table-scroll').getByText(/^Live rename \(/)).toBeVisible();
-  await expect(page.locator('a[href*="challonge.com"]')).toHaveCount(0);
-  await page.setViewportSize({ width: 390, height: 844 });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({
-    path: testInfo.outputPath('native-doubles-results-mobile.png'),
-    fullPage: true,
-  });
+  const firstName = 'MoonlitControllerLongNameForArchiveWrap';
+  const alias = `${firstName} Q N`;
+  for (const [index, playerId] of team.memberIds.entries())
+    await mutate(page.request, 'admin.updatePlayer', {
+      playerId,
+      canonicalName: `${firstName} ${index === 0 ? 'Quinn North' : 'Quill Noble'}`,
+      displayName: null,
+    });
+
+  const archiveUrl = new URL(`/events/${result.slug}`, page.url()).href;
+  for (const theme of ['dark', 'light'] as const)
+    for (const viewport of [
+      { width: 390, height: 844 },
+      { width: 1440, height: 900 },
+    ]) {
+      const context = await browser.newContext({ viewport, reducedMotion: 'reduce' });
+      try {
+        const archive = await context.newPage();
+        await archive.addInitScript(
+          (value) => localStorage.setItem('smashclub:theme', value),
+          theme,
+        );
+        const previewRequests: string[] = [];
+        archive.on('request', (request) => {
+          if (request.url().includes('public.playerPreview')) previewRequests.push(request.url());
+        });
+        await archive.goto(archiveUrl);
+        await expect(archive.locator('html')).toHaveAttribute('data-theme', theme);
+        await archive.evaluate(() => document.fonts.ready);
+        const standings = archive.getByRole('region', { name: 'Open standings', exact: true });
+        await expect(standings.locator('tbody tr')).toHaveCount(4);
+        await expect(
+          standings.getByRole('columnheader', { name: 'Team', exact: true }),
+        ).toBeVisible();
+        await expect(archive.getByText(/No consolation bracket is linked/)).toHaveCount(0);
+        await expect(archive.locator('a[href*="challonge.com"]')).toHaveCount(0);
+
+        const renamedPair = standings.getByRole('row').filter({ hasText: 'Live rename' });
+        await expect(renamedPair.getByText('Live rename', { exact: true })).toBeVisible();
+        expect(previewRequests).toHaveLength(0);
+        for (const [index, playerId] of team.memberIds.entries()) {
+          const trigger = renamedPair.getByRole('button', {
+            name: `Preview ${alias} (${index + 1})`,
+            exact: true,
+          });
+          if (index > 0) {
+            await archive.keyboard.press('Tab');
+            await expect(trigger).toBeFocused();
+          }
+          await trigger.press('Enter');
+          const dialog = archive.getByRole('dialog', { name: alias, exact: true });
+          await expect(dialog.getByRole('link', { name: 'View full profile' })).toHaveAttribute(
+            'href',
+            `/players/${playerId}`,
+          );
+          if (index === 1 && theme === 'dark' && viewport.width === 390) {
+            await dialog
+              .locator('img')
+              .evaluateAll((images) =>
+                Promise.all(images.map((image) => (image as HTMLImageElement).decode())),
+              );
+            await archive.screenshot({
+              path: testInfo.outputPath('native-doubles-archive-phone-preview.png'),
+            });
+          }
+          await archive.keyboard.press('Escape');
+          await expect(dialog).toBeHidden();
+          await expect(trigger).toBeFocused();
+        }
+        expect(previewRequests).toHaveLength(2);
+
+        await archive.getByRole('button', { name: 'View bracket standings', exact: true }).click();
+        const bracket = archive.getByRole('region', {
+          name: `${result.name} standings`,
+          exact: true,
+        });
+        await expect(bracket.getByRole('button', { name: `Preview ${alias} (1)` })).toBeVisible();
+        for (const table of [standings, bracket]) {
+          expect(
+            await table.evaluate((region) => {
+              const { left, right } = region.getBoundingClientRect();
+              return [...region.querySelectorAll('tbody button')].every((button) => {
+                const { left: buttonLeft, right: buttonRight } = button.getBoundingClientRect();
+                return buttonLeft >= left && buttonRight <= right;
+              });
+            }),
+          ).toBe(true);
+        }
+        expect(
+          await archive.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        ).toBe(true);
+        await archive.evaluate(() => document.fonts.ready);
+        expect(
+          (
+            await new AxeBuilder({ page: archive })
+              .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+              .analyze()
+          ).violations,
+        ).toEqual([]);
+        await archive.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+        await archive.screenshot({
+          path: testInfo.outputPath(`native-doubles-archive-${theme}-${viewport.width}.png`),
+          fullPage: true,
+        });
+      } finally {
+        await context.close();
+      }
+    }
 });

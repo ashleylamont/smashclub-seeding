@@ -32,7 +32,7 @@ function publicDoublesMembers(
   const [firstMember, secondMember] = [first, second].flatMap((id) => {
     const alias = Object.hasOwn(names, id) ? names[id] : undefined;
     return id !== entrantId && playerIdPattern.test(id) && alias && alias !== 'Player'
-      ? [{ id, name: alias }]
+      ? [{ playerId: id, name: alias }]
       : [];
   });
   if (!firstMember || !secondMember) return;
@@ -63,17 +63,29 @@ export function EventEntrantName({
   if (!doubles)
     return <PlayerProfileName playerId={singlesPreview ? entrantId : null} name={name} />;
 
-  const [first, second] = doubles.members;
+  return <DoublesMemberNames {...doubles} />;
+}
+
+type DoublesMember = { playerId: string; name: string };
+
+export function DoublesMemberNames({
+  teamName,
+  members,
+}: {
+  teamName: string | null;
+  members: readonly [DoublesMember, DoublesMember];
+}) {
+  const [first, second] = members;
   const sameAlias = first.name === second.name;
 
   return (
     <span className="event-entrant-pair">
-      {doubles.teamName && <span>{doubles.teamName}</span>}
+      {teamName && <span>{teamName}</span>}
       <span className="event-entrant-members">
-        {doubles.members.map(({ id, name }, index) => (
+        {members.map(({ playerId, name }, index) => (
           <PlayerProfilePreview
-            key={id}
-            playerId={id}
+            key={playerId}
+            playerId={playerId}
             name={name}
             trigger="name"
             teamMemberPosition={sameAlias ? index + 1 : undefined}

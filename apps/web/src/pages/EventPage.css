@@ -25,6 +25,13 @@
 .event-standings {
   --table-min: 520px;
 }
+.event-standings-scroll:has(.event-entrant-pair) {
+  container-type: inline-size;
+}
+.event-standings .event-entrant-pair {
+  /* Leave room for the place column when the standings scroll on a phone. */
+  max-inline-size: min(100%, calc(100cqi - var(--s7) - var(--s6)));
+}
 .event-standings-player > a {
   overflow-wrap: anywhere;
 }
