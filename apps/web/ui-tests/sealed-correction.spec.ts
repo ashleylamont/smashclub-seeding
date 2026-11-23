@@ -6,9 +6,10 @@ import { bracketCaptureOptions, mockEvent, PLAN_ID, PLAYER_NAME, ready } from '.
 
 const originalResult = 'b4036118-6ccf-41bd-a0f8-d821186bc405';
 const latestResult = '3edae4ab-15c4-4b7e-ad76-9757e396b679';
+const publishedStatus = 'Live play ended. Score corrections are in Standings / draw.';
 
 async function sealedResult(page: Page, structure = 'single_elimination') {
-  const fixture = await mockEvent(page, { role: 'admin' });
+  const fixture = await mockEvent(page, { role: 'player' });
   const match = fixture.overview.matches.find((item) => item.outcome === 'played')!;
   Object.assign(match, { player1Name: PLAYER_NAME });
   const currentPublication = {
@@ -18,6 +19,7 @@ async function sealedResult(page: Page, structure = 'single_elimination') {
     tournamentIds: [],
   };
   Object.assign(fixture.overview.plan, { status: 'complete', structure });
+  Object.assign(fixture.overview, { finalization: null });
   Object.assign(fixture.overview, { publication: currentPublication });
   const writes: unknown[] = [];
   fixture.mutationResponses.set('eventOps.live.command', (input) => {
@@ -53,6 +55,7 @@ for (const theme of ['dark', 'light'] as const)
       const { correction, first, second, reason } = await open();
       const publish = correction.getByRole('button', { name: 'Publish reviewed correction' });
       await expect(publish).toBeEnabled();
+      await expect(page.getByText(publishedStatus, { exact: true })).toBeVisible();
 
       Object.assign(currentPublication, { resultId: latestResult, revision: 2 });
       Object.assign(match, { revision: match.revision + 1, score1: 3, score2: 0 });
@@ -89,12 +92,15 @@ for (const theme of ['dark', 'light'] as const)
       await expect(second).toHaveValue('1');
       await expect(publish).toBeEnabled();
       expect(writes).toHaveLength(0);
-      await publish.click();
+      await publish.focus();
+      await expect(publish).toBeFocused();
+      await publish.press('Enter');
       await expect
         .poll(() => writes)
         .toMatchObject([
           {
             command: {
+              kind: 'replaceResult',
               resultId: latestResult,
               corrections: [{ expectedRevision: match.revision, score1: 2, score2: 1 }],
             },
@@ -133,6 +139,8 @@ test('an interrupted correction retries its exact command after publication adva
   await expect(retry).toBeEnabled();
   await expect(retry).toBeFocused();
   await expect(correction).toContainText('Results are sealed and publication is pending.');
+  await expect(page.getByText('Live play ended.', { exact: true })).toBeVisible();
+  await expect(page.getByText(publishedStatus, { exact: true })).toHaveCount(0);
   await expect(second).toHaveValue('1');
   await expect(reason).toHaveValue('Reviewed footage showed one more game.');
   await retry.press('Enter');
@@ -186,4 +194,44 @@ for (const keepEditedOrder of [false, true])
     await expect
       .poll(() => writes)
       .toMatchObject([{ command: { resultId: latestResult, roundRobinOrder: expected } }]);
+  });
+
+for (const state of ['cancelled', 'imported', 'blocked'] as const)
+  test(`${state} desk describes the event without promising score corrections`, async ({
+    page,
+  }) => {
+    const { fixture, currentPublication, writes } = await sealedResult(page);
+    if (state === 'cancelled') fixture.overview.plan.status = 'cancelled';
+    if (state === 'imported') {
+      fixture.overview.plan.bracketMode = 'challonge';
+      fixture.responses['eventOps.delivery.status'] = { enabled: false };
+    }
+    if (state === 'blocked') currentPublication.status = 'blocked';
+    else Reflect.deleteProperty(fixture.overview, 'publication');
+
+    await page.goto(`/operate/${PLAN_ID}?view=draw`);
+    await expect(
+      page.getByText(state === 'cancelled' ? 'Event cancelled.' : 'Live play ended.', {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(page.getByText(publishedStatus, { exact: true })).toHaveCount(0);
+    if (state === 'blocked') {
+      await expect(page.getByRole('button', { name: 'Retry result publication' })).toBeEnabled();
+      await expect(
+        page.getByRole('button', { name: 'Publish reviewed correction' }),
+      ).toBeDisabled();
+    } else {
+      await expect(page.getByRole('button', { name: 'Publish reviewed correction' })).toHaveCount(
+        0,
+      );
+    }
+    if (state === 'imported') {
+      await page.getByRole('button', { name: 'Challonge integration' }).press('Enter');
+      await expect(
+        page.getByRole('button', { name: 'Refresh all linked brackets' }),
+      ).toBeDisabled();
+    }
+    expect(writes).toEqual([]);
+    expect(fixture.unexpected).toEqual([]);
   });
