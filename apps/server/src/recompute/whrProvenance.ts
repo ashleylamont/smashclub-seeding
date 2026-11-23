@@ -16,7 +16,12 @@ export async function readWhrRunProvenance(db: Db, recomputeId: string) {
   const snapshot = run?.settingsSnapshot as { rating?: unknown } | null;
   if (!fingerprints || !snapshot?.rating) return null;
   const settings = ratingSettingsSchema.safeParse(snapshot.rating);
-  return settings.success ? { fingerprints, settings: settings.data } : null;
+  if (!settings.success) return null;
+  return {
+    fingerprints,
+    settings: settings.data,
+    convergedPreNightKeys: currentWhrConvergedPreNightKeys(run?.stats),
+  };
 }
 
 export async function loadWhrHistoryThroughDay(db: Db, day: Date, settings: RatingSettings) {
@@ -47,6 +52,15 @@ export function currentWhrPrefixFingerprints(stats: unknown): Record<string, str
   return fingerprints && typeof fingerprints === 'object' && !Array.isArray(fingerprints)
     ? (fingerprints as Record<string, string>)
     : null;
+}
+
+/** A recorded empty list is valid for a run without qualifying earlier fits. */
+export function currentWhrConvergedPreNightKeys(stats: unknown): readonly string[] | null {
+  const keys =
+    stats && typeof stats === 'object' && 'whrConvergedPreNightKeys' in stats
+      ? stats.whrConvergedPreNightKeys
+      : null;
+  return Array.isArray(keys) && keys.every((key) => typeof key === 'string') ? keys : null;
 }
 
 /** Hash the ordered fit inputs. Each checkpoint excludes later nights and debut priors. */

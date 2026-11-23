@@ -28,6 +28,8 @@ export interface WhrRunResult {
   iterations: number;
   /** Distinct events (occasions) the fit ran over. */
   periods: number;
+  /** UTC event keys whose strictly earlier fit converged. */
+  convergedPreNightKeys: string[];
   /**
    * Rank each player held on the board fitted *without* the latest event —
    * the same prefix the ledger already computes — so the recompute can record
@@ -214,6 +216,7 @@ export function runWhrModel(input: WhrModelInput): WhrRunResult {
       converged: true,
       iterations: 0,
       periods: 0,
+      convergedPreNightKeys: [],
       previousRanks: new Map(),
     };
   }
@@ -233,6 +236,7 @@ export function runWhrModel(input: WhrModelInput): WhrRunResult {
   // Evaluate every player from their debut onward, including nights they miss.
   // The played-set ledger reuses these estimates for its existing readers.
   const nightRatings: WhrNightRating[] = [];
+  const convergedPreNightKeys: string[] = [];
   const lastPlayedIndex = new Map<string, number | null>();
   const plans = new Map<string, Map<string, NightPlan>>();
   for (const [eventIndex, eventKey] of orderedEventKeys.entries()) {
@@ -240,6 +244,7 @@ export function runWhrModel(input: WhrModelInput): WhrRunResult {
     const time = nightSets[0]!.day - originDay;
     const nightFit = fits[eventIndex]!;
     const preFit = eventIndex > 0 ? fits[eventIndex - 1]! : null;
+    if (preFit?.converged) convergedPreNightKeys.push(eventKey);
     const playerIds = new Set(nightSets.flatMap(({ set }) => whrSetSides(set).flat()));
     const nightPlans = new Map<string, NightPlan>();
     for (const playerId of playerIds) {
@@ -353,6 +358,7 @@ export function runWhrModel(input: WhrModelInput): WhrRunResult {
     converged: fullFit.converged,
     iterations: fullFit.iterations,
     periods: orderedEventKeys.length,
+    convergedPreNightKeys,
     previousRanks,
   };
 }

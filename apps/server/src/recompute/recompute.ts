@@ -15,6 +15,7 @@ import {
   type LeaderboardRow,
 } from '@smashclub/engine';
 import {
+  currentWhrConvergedPreNightKeys,
   currentWhrPrefixFingerprints,
   whrPrefixFingerprints,
   WHR_PREFIX_FINGERPRINT_VERSION,
@@ -111,6 +112,7 @@ async function computeRatings(
       sets: engineSets.length,
       events: ratingEventRows.length,
       ratingNights: run.nightRatings.length,
+      whrConvergedPreNightKeys: run.convergedPreNightKeys,
       whrPrefixFingerprintVersion: WHR_PREFIX_FINGERPRINT_VERSION,
       whrPrefixFingerprints: Object.fromEntries(
         whrPrefixFingerprints(
@@ -255,5 +257,9 @@ export function hasRatingNightLedger(stats: unknown): boolean {
 
 export async function needsRatingRecompute(db: Db): Promise<boolean> {
   const stats = (await latestCompletedRecompute(db))?.stats;
-  return !hasRatingNightLedger(stats) || !currentWhrPrefixFingerprints(stats);
+  return (
+    !hasRatingNightLedger(stats) ||
+    !currentWhrPrefixFingerprints(stats) ||
+    !currentWhrConvergedPreNightKeys(stats)
+  );
 }

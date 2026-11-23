@@ -401,10 +401,15 @@ async function loadRecapWhrEvidence(
   brackets: readonly RecapTournament[],
 ) {
   const eventKeys = brackets.flatMap(({ eventDate }) => (eventDate ? [eventKeyOf(eventDate)] : []));
-  const lastDay = eventKeys.toSorted().at(-1);
-  if (!lastDay) return;
+  if (eventKeys.length === 0) return;
   const provenance = await readWhrRunProvenance(db, recomputeId);
-  if (!provenance) return;
+  if (!provenance?.convergedPreNightKeys) return;
+  const { convergedPreNightKeys } = provenance;
+  const convergedDays = [...new Set(eventKeys)].filter((day) =>
+    convergedPreNightKeys.includes(day),
+  );
+  const lastDay = convergedDays.toSorted().at(-1);
+  if (!lastDay) return;
   const history = await loadWhrHistoryThroughDay(db, new Date(lastDay), provenance.settings);
   if (!history) return;
 
@@ -412,7 +417,7 @@ async function loadRecapWhrEvidence(
   // evidence if their prefix matches the inputs of that published run.
   const fingerprints = whrPrefixFingerprints(history);
   const evidenceByDay = new Map<string, WhrPriorEvidence>();
-  for (const day of new Set(eventKeys)) {
+  for (const day of convergedDays) {
     const fingerprint = fingerprints.get(day);
     if (fingerprint && fingerprint === provenance.fingerprints[day])
       evidenceByDay.set(day, buildWhrPriorEvidence(history, day));
