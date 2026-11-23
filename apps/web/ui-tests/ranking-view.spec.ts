@@ -191,9 +191,28 @@ for (const width of [390, 1440]) {
       await expect(board.locator('.board-legend')).toContainText(
         'Movement uses the selected ranking field',
       );
+      const guide = board.locator('.board-legend');
+      const placing = guide.locator('.legend-term').filter({
+        has: page.getByText('Tournament placing', { exact: true }),
+      });
+      await expect(placing.getByRole('definition')).toContainText(
+        /finish in a bracket or division.*only eligible sets as rating evidence.*opponent strength/,
+      );
+      const seed = guide.locator('.legend-term').filter({
+        has: page.getByText('Bracket seed', { exact: true }),
+      });
+      await expect(seed.getByRole('definition')).toContainText(
+        /starting position in a draw.*saved skill and uncertainty.*who advances.*pool place and saved rating strength/,
+      );
       await ready(page);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+      expect(
+        (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
+      ).toEqual([]);
       await page.screenshot({ fullPage: true, path: info.outputPath('active-rank.png') });
       await legend.press('Enter');
+      await expect(legend).toHaveAttribute('aria-expanded', 'false');
+      await expect(legend).toBeFocused();
       await activeLink.press('Enter');
 
       const headline = page.locator('.profile-headline');
