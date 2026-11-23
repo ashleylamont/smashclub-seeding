@@ -302,10 +302,40 @@ for (const theme of ['dark', 'light'] as const) {
       await expect(log.getByRole('row', { name: /Singles bracket 3/ })).toContainText(
         'Separate rated groups',
       );
+      await expect(log.getByRole('row', { name: /Singles bracket 3/ })).toContainText(
+        'Pre-night odds unavailable',
+      );
       await expect(log.getByRole('columnheader', { name: 'Evidence' })).toHaveCount(1);
+      const explanation = page.getByRole('button', { name: 'How WHR estimates work' });
+      const priorEvidence = page.getByText(/The latest published WHR run reconstructs/);
+      await expect(explanation).toHaveAttribute('aria-expanded', 'false');
+      await expect(priorEvidence).toBeHidden();
+      await explanation.focus();
+      await explanation.press('Enter');
+      await expect(explanation).toBeFocused();
+      await expect(explanation).toHaveAttribute('aria-expanded', 'true');
+      await expect(priorEvidence).toContainText(
+        'earlier rated sets and accounts for player uncertainty',
+      );
+      await expect(
+        page.getByText(/Every player in the set needs an earlier rated match/),
+      ).toContainText('no chain of earlier rated opponents connects all the players');
       await expect(
         page.getByText(/up to two units total\. Evidence units weight the WHR fit/),
       ).toBeVisible();
+      await ready(page);
+      expect(
+        (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
+      ).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+      await page.evaluate(() => scrollTo(0, 0));
+      await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
+      await page.screenshot({
+        path: testInfo.outputPath('whr-forecast-explanation.png'),
+        fullPage: true,
+      });
+      await explanation.press('Enter');
+      await expect(priorEvidence).toBeHidden();
       await expect(page.getByText(/estimates are approximate and don’t add up/)).toBeVisible();
       await expect(page.getByRole('button', { name: /WHR impact/ })).toHaveCount(0);
       await expect(page.getByRole('dialog')).toHaveCount(0);
