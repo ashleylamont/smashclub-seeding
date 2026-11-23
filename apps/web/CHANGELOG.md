@@ -2,6 +2,19 @@
 
 Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
 
+## 0.23.0
+
+### Minor Changes
+
+- 23 November 2026 · **Feature** · Switch OBS between gameplay, tournament progress and automatic intermissions from the TO desk. Use the Follow event overlay in OBS to receive those changes. [#514](https://github.com/ashleylamont/smashclub-seeding/pull/514) · [build 4609418](https://github.com/ashleylamont/smashclub-seeding/commit/4609418adadc137f9ee52696ef2112425e35968d)
+
+### Patch Changes
+
+- 23 November 2026 · **Fix** · Explain the current attendance policy on the rankings page, including when missed nights carry no penalty. [#523](https://github.com/ashleylamont/smashclub-seeding/pull/523) · [build 7d699d6](https://github.com/ashleylamont/smashclub-seeding/commit/7d699d64272f896902bbe8bb5d4219598281fbc9)
+- 23 November 2026 · **Fix** · Recaps label win estimates as pre-night WHR odds and display very small chances the same way as match history. [#521](https://github.com/ashleylamont/smashclub-seeding/pull/521) · [build 5ed237a](https://github.com/ashleylamont/smashclub-seeding/commit/5ed237ae7838a212007de36ae1ceaf526d4f34ac)
+- 23 November 2026 · **Fix** · Open public player previews for registered doubles teammates from live pools, match cards, brackets, and native event results. [#524](https://github.com/ashleylamont/smashclub-seeding/pull/524) · [build 94059c1](https://github.com/ashleylamont/smashclub-seeding/commit/94059c100b922ec3fd76df3c083e3e2c77fe47d3)
+- 23 November 2026 · **Fix** · Try an event short link again without reloading Nemesis, and keep the chosen pool and results section when the link opens. [#519](https://github.com/ashleylamont/smashclub-seeding/pull/519) · [build b3aab6a](https://github.com/ashleylamont/smashclub-seeding/commit/b3aab6a84697e8b33685d0ea4b6ddfa94144ecd4)
+
 ## 0.22.1
 
 ### Patch Changes
