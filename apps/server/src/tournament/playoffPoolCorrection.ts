@@ -2,7 +2,7 @@ import { finalsRoles } from '@smashclub/shared';
 import { selectFormatFinalists } from '@smashclub/tournament-formats';
 import { hash, requireFact, TournamentConflict } from './facts';
 import { automaticPoolOrder, poolOrderEvidence } from './poolOrders';
-import { poolFinalsConsumed, sourceDescriptor } from './qualifiers';
+import { poolFinalsConsumed, rollingFinals, sourceDescriptor } from './qualifiers';
 import { hasCurrentPendingScoreReview } from './scoreReview';
 import type { CommandEnvelope, TournamentState } from './schemas';
 
@@ -34,13 +34,24 @@ function exactBracketSources(state: TournamentState, bracket: Bracket) {
   );
 }
 
-function recordedPlayoffPool(before: TournamentState) {
+export function usesFrozenMultiPoolFinals(state: TournamentState, pool: Pool) {
+  const structure = state.baseline?.structure;
+  return (
+    (structure === 'dual_division' || structure === 'pools_finals') &&
+    rollingFinals(state) &&
+    state.settings.poolOrderPolicy === 'unique_set_wins_v1' &&
+    state.brackets.some((bracket) => bracket.division === pool.division && bracket.strengthSeeding)
+  );
+}
+
+function recordedPlayoffPool(before: TournamentState, poolId: string) {
   const baseline = before.baseline;
-  const [pool] = before.pools;
+  const pool = before.pools.find(({ id }) => id === poolId);
+  const singlePoolPlayoff = baseline?.structure === 'round_robin_finals';
   requireFact(
-    baseline?.structure === 'round_robin_finals' &&
+    baseline &&
       pool &&
-      before.pools.length === 1 &&
+      (singlePoolPlayoff ? before.pools.length === 1 : usesFrozenMultiPoolFinals(before, pool)) &&
       pool.order &&
       !pool.qualifierDecision &&
       pool.orderDecision?.source === 'automatic' &&
@@ -68,29 +79,42 @@ function recordedPlayoffPool(before: TournamentState) {
   }));
   const { structure, structureOptions } = baseline;
   const roles = finalsRoles(structure, structureOptions);
-  requireFact(before.brackets.length === roles.length, exactEvidence);
+  const brackets = before.brackets.filter(
+    (bracket) =>
+      bracket.division === pool.division ||
+      bracket.qualifierSlots?.some((slot) => slot.poolId === pool.id),
+  );
+  requireFact(
+    brackets.length > 0 &&
+      new Set(brackets.map(({ stage }) => stage)).size === brackets.length &&
+      (!singlePoolPlayoff ||
+        (brackets.length === roles.length && before.brackets.length === roles.length)),
+    exactEvidence,
+  );
   if (before.result)
     requireFact(
       hash(before.result.brackets) === hash(before.brackets) &&
         hash(before.result.poolOrders ?? null) ===
-          hash([{ division: pool.division, order: pool.order }]),
+          hash(before.pools.map(({ division, order }) => ({ division, order: order ?? [] }))),
       exactEvidence,
     );
-  const frozenSlots = roles.flatMap((stage) => {
-    const bracket = before.brackets.find(
-      (item) => item.stage === stage && item.division === pool.division,
-    );
-    const slots = bracket?.qualifierSlots;
-    const selected = selectFormatFinalists(structure, finishers, stage, structureOptions);
+  const frozenSlots = brackets.flatMap((bracket) => {
+    const slots = bracket.qualifierSlots;
+    const poolSlots = slots?.filter((slot) => slot.poolId === pool.id);
+    // The format cut selects places within each frozen pool independently of seeding.
+    const selected = selectFormatFinalists(structure, finishers, bracket.stage, structureOptions);
     requireFact(
-      bracket &&
+      bracket.division === pool.division &&
+        roles.includes(bracket.stage) &&
+        (singlePoolPlayoff || bracket.strengthSeeding) &&
         slots &&
-        selected.length === slots.length &&
+        poolSlots &&
+        selected.length === poolSlots.length &&
+        (!singlePoolPlayoff || poolSlots.length === slots.length) &&
         hash(bracket.entrantIds) === hash(slots.map(({ entrantId }) => entrantId)) &&
         selected.every(({ place, playerId }) =>
-          slots.some(
+          poolSlots.some(
             (slot) =>
-              slot.poolId === pool.id &&
               slot.poolIndex === pool.index &&
               slot.division === pool.division &&
               slot.place === place &&
@@ -103,8 +127,9 @@ function recordedPlayoffPool(before: TournamentState) {
         exactBracketSources(before, bracket),
       exactEvidence,
     );
-    return slots;
+    return poolSlots;
   });
+  requireFact(frozenSlots.length > 0 || singlePoolPlayoff, exactEvidence);
   return { pool, matches, roster, frozenSlots };
 }
 
@@ -119,20 +144,24 @@ export function reviewablePlayoffPoolId(state: TournamentState) {
   )
     return;
   try {
-    return recordedPlayoffPool(state).pool.id;
+    return recordedPlayoffPool(state, pool.id).pool.id;
   } catch (error) {
     if (!(error instanceof TournamentConflict)) throw error;
   }
 }
 
-export function reviewPlayoffPoolOrder(before: TournamentState, corrected: TournamentState) {
-  const { pool, matches, roster, frozenSlots } = recordedPlayoffPool(before);
+export function reviewPlayoffPoolOrder(
+  before: TournamentState,
+  corrected: TournamentState,
+  poolId: string,
+) {
+  const { pool, matches, roster, frozenSlots } = recordedPlayoffPool(before, poolId);
   const order = automaticPoolOrder(corrected, pool);
   requireFact(order, 'The corrected results need a separate ruling for the pool order.');
   const newField = order.filter((id) => roster.has(id));
   requireFact(
     frozenSlots.every((slot) => newField[slot.place - 1] === slot.entrantId),
-    'The correction would change a recorded finals qualification assignment.',
+    'The correction would change a recorded finals qualification assignment. A separate ruling is required.',
   );
   return { pool, matches, order };
 }

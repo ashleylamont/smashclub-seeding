@@ -89,6 +89,11 @@ export function reviewFinalsSlotReplay(
           ];
     }),
   );
+  if (!qualifierChanges.length)
+    return {
+      ...blocked('This correction does not change an existing finals slot.'),
+      unchangedQualifierSlots: true as const,
+    };
   const routes =
     reviewVersion === 2 && qualifierChanges.length > 1
       ? reciprocalRoutes(state, qualifierChanges)
@@ -97,9 +102,7 @@ export function reviewFinalsSlotReplay(
     return blocked(routes.issue, qualifierChanges, routes.returnCallCandidate);
   if (!routes && qualifierChanges.length !== 1)
     return blocked(
-      qualifierChanges.length
-        ? 'This correction changes more than one existing finals slot. Review each affected draw before proceeding.'
-        : 'This correction does not change an existing finals slot.',
+      'This correction changes more than one existing finals slot. Review each affected draw before proceeding.',
       qualifierChanges,
     );
 

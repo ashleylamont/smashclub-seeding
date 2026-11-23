@@ -230,9 +230,7 @@ export function recordScore(
         score2: command.score2,
       };
       const placementReview =
-        winnerId !== match.winnerId && next.baseline?.structure === 'round_robin_finals'
-          ? reviewPlayoffPoolScore(next, input)
-          : null;
+        winnerId !== match.winnerId ? reviewPlayoffPoolScore(next, input) : null;
       const reviewed = placementReview ?? reviewPoolGameCorrection(next, input);
       requireFact(
         reviewed.revisionToken === command.poolGameCorrectionToken,

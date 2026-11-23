@@ -53,7 +53,7 @@ export function reviewPlayoffPoolScore(state: TournamentState, input: PoolGameCo
   requireFact(
     state.lifecycle === 'locked' &&
       source.stage === 'group' &&
-      source.poolId === state.pools[0]?.id &&
+      source.poolId &&
       source.status === 'complete' &&
       source.outcome === 'played' &&
       source.player1Id &&
@@ -76,7 +76,7 @@ export function reviewPlayoffPoolScore(state: TournamentState, input: PoolGameCo
         : match,
     ),
   };
-  const { pool, matches, order } = reviewPlayoffPoolOrder(state, trial);
+  const { pool, matches, order } = reviewPlayoffPoolOrder(state, trial, source.poolId);
   return {
     pool,
     order,
