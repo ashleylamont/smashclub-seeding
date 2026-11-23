@@ -21,9 +21,19 @@ Nemesis also supports fixed-pair **2v2 doubles**, open round robins, and open po
 
 Open **Run event** from the planner. Set up stations and pool queues, assign TOs, and control which pools can play. TOs can start matches, save live game counts, confirm results and review attendee reports. An in-progress score does not become a rating result. Signed-in attendees can report under the event policy; guests use a revocable QR pass. The public **Event night** hub lists published events and provides pools, queues and results without requiring a login. See [event desk and displays](event-night-refinements.md) and [guest reporting and disputes](guest-event-night.md).
 
-Resolve all pool matches and confirm pool finishing orders in the planner. Ties require an organiser decision. The top half of active entrants in each pool, rounded up (at least two), qualify for championship; the rest enter consolation. Preview the four final draws, then create them. Byes advance without inventing played scores. Confirmed results advance winners, while pending reports wait for the policy or a TO decision.
+### Create pool finals
 
-After the final brackets finish and pending submissions are resolved, **Finalize native results** writes the night's played sets to club history and ratings. Finalization is atomic and repeatable without duplicating results; finalized operations become read-only. Byes, forfeits and no-contests do not count as played games.
+On a rolling Nemesis pool draw, you can start ready finals while other pools are still playing. Open **Standings / draw**.
+
+1. Choose **Preview finals** to see which brackets are ready and which pool places are still unresolved.
+2. If a bracket is waiting, review pending scores that affect its qualifying places. If a tie leaves one of those places unresolved, have an event administrator use **Confirm pool orders in planner** to record a ruling.
+3. Review the seed order, then choose **Create ready finals** and confirm. The first bracket created in a division fixes that division's eligible pool rosters. Preview again as more brackets become ready.
+
+The top half of active entrants in each pool, rounded up, qualify for championship, with at least two where available. The rest enter consolation. Byes advance automatically and confirmed results advance winners. Older saved draws that use the whole-event policy still wait for the full field. [Native finals and seeding](native-live-api.md#combined-pool-place-and-whr-seeding)
+
+### Publish native results
+
+Complete all required matches and pool orders, and resolve pending score submissions. In **Standings / draw**, choose **Finalize native results** and confirm. This ends live scoring and publishes the night's played sets to club history and ratings. Retrying finalization does not duplicate results. Byes, forfeits and no-contests do not count as played games.
 
 ## Challonge path
 
