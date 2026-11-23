@@ -1,7 +1,7 @@
 import { Disclosure } from '../components/ui/Disclosure';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
-import { trpc } from '../lib/trpc';
+import { publicEventOverviewQuery } from '../lib/publicArchive';
 import type { EventOverviewData } from '../lib/apiTypes';
 import { formatDate } from '../lib/format';
 import './EventPage.css';
@@ -12,10 +12,7 @@ import { PlayerProfilePreview } from '../components/PlayerProfilePreview';
 
 export function EventPage() {
   const { slug } = useParams({ from: '/events/$slug' });
-  const query = useQuery({
-    queryKey: ['eventOverview', slug],
-    queryFn: () => trpc.public.eventOverview.query({ slug }),
-  });
+  const query = useQuery(publicEventOverviewQuery(slug));
   return <ArchiveQueryContent key={slug} kind="event" query={query} content={EventOverview} />;
 }
 

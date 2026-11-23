@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { isBracketAbandoned, isBracketOver } from '@smashclub/shared';
-import { trpc } from '../lib/trpc';
+import { publicTournamentQuery } from '../lib/publicArchive';
 import type { TournamentData, TournamentSet } from '../lib/apiTypes';
 import { formatDate, formatDateTime, roundLabel, scoreCell, timeAgo } from '../lib/format';
 import { challongeStateLabel, setStateLabel, syncStateLabel } from '../lib/labels';
@@ -19,10 +19,7 @@ import './Tournaments.css';
 
 export function TournamentPage() {
   const { slug } = useParams({ from: '/tournaments/$slug' });
-  const query = useQuery({
-    queryKey: ['tournament', slug],
-    queryFn: () => trpc.public.tournament.query({ slug }),
-  });
+  const query = useQuery(publicTournamentQuery(slug));
 
   return (
     <ArchiveQueryContent key={slug} kind="tournament" query={query} content={TournamentDetail} />

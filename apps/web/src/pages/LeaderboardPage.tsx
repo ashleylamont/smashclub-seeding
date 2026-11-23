@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { trpc } from '../lib/trpc';
+import { publicTournamentsQuery } from '../lib/publicArchive';
 import { timeAgo } from '../lib/format';
 import { filterInactive } from '../lib/activity';
 import { useNow } from '../lib/useNow';
@@ -38,10 +39,7 @@ export function LeaderboardPage() {
     queryKey: ['ratingHistory'],
     queryFn: () => trpc.public.ratingHistory.query(),
   });
-  const tournaments = useQuery({
-    queryKey: ['tournaments'],
-    queryFn: () => trpc.public.tournaments.query(),
-  });
+  const tournaments = useQuery(publicTournamentsQuery);
 
   /**
    * The field the screen is actually about. Hiding the long tail of players who

@@ -256,3 +256,44 @@ test('failed refresh keeps public results visible and a withdrawal clears them',
   await expect(retry).toHaveCount(0);
   expect(network.fixture.unexpected).toEqual([]);
 });
+
+test('a later outage cannot bring back a withdrawn bracket', async ({ context, page }) => {
+  const path = `/tournaments/${slug}?from=club#public-results`;
+  const network = await setup(page, 'public.tournament', path, tournament);
+  network.respond('available');
+  await network.goto();
+
+  const main = page.getByRole('main');
+  const previousEntrant = main.getByText(alias, { exact: true });
+  await expect(previousEntrant).toBeVisible();
+
+  async function reconnect(isoDate: string) {
+    await page.clock.setFixedTime(new Date(isoDate));
+    await context.setOffline(true);
+    await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
+    await context.setOffline(false);
+  }
+
+  network.respond('withdrawn');
+  await reconnect('2026-10-04T00:01:00Z');
+  await expect(main.getByRole('heading', { name: 'Tournament not found' })).toBeVisible();
+  await expect(previousEntrant).toHaveCount(0);
+
+  network.respond('interrupted');
+  await reconnect('2026-10-04T00:02:00Z');
+  await expect(main.getByRole('alert')).toHaveText('Could not load this tournament.');
+  await expect(previousEntrant).toHaveCount(0);
+
+  const republishedName = 'Updated archive after republication';
+  network.fixture.responses['public.tournament'] = {
+    ...tournament,
+    name: republishedName,
+    participants: [],
+  } satisfies TournamentData;
+  network.respond('available');
+  await main.getByRole('button', { name: 'Try again' }).press('Enter');
+  await expect(main.getByRole('heading', { name: republishedName })).toBeFocused();
+  await expect(previousEntrant).toHaveCount(0);
+  await expect(page).toHaveURL(path);
+  expect(network.fixture.unexpected).toEqual([]);
+});

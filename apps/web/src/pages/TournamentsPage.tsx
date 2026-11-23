@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { trpc } from '../lib/trpc';
+import { publicTournamentsQuery } from '../lib/publicArchive';
 import { formatDate } from '../lib/format';
 import { syncStateLabel } from '../lib/labels';
 import { groupTournamentsByEvent, type TournamentEventGroup } from '../lib/eventGrouping';
@@ -11,10 +11,7 @@ import { ArchiveQueryContent, type ArchivePageFeedback } from './ArchiveQueryCon
 import './Tournaments.css';
 
 export function TournamentsPage() {
-  const query = useQuery({
-    queryKey: ['tournaments'],
-    queryFn: () => trpc.public.tournaments.query(),
-  });
+  const query = useQuery(publicTournamentsQuery);
   return <ArchiveQueryContent kind="tournaments" query={query} content={Tournaments} />;
 }
 

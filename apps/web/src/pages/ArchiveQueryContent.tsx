@@ -4,7 +4,6 @@ import { Link } from '@tanstack/react-router';
 import { Button } from '../components/ui/Button';
 import { LoadingState, Notice } from '../components/ui/Feedback';
 import { PageHeader } from '../components/ui/PageHeader';
-import { eventUnavailable } from '../lib/eventErrors';
 
 const labels = {
   tournaments: { title: 'Tournaments', unavailable: 'Tournaments unavailable' },
@@ -43,8 +42,7 @@ export function ArchiveQueryContent<T>({
   }
 
   const { title, unavailable } = labels[kind];
-  // Publication and permission failures replace any previously loaded content.
-  if (eventUnavailable(query.error) || (query.isSuccess && query.data === null)) {
+  if (query.isSuccess && query.data === null) {
     if (kind === 'tournaments')
       return (
         <h1 ref={focusAfterRetry} tabIndex={-1}>
