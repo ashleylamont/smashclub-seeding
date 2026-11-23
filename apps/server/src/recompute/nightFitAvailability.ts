@@ -1,5 +1,5 @@
 import { playerRatings, ratingEvents, ratingNights, tournaments, type Db } from '@smashclub/db';
-import { eventKeyOf } from '@smashclub/engine';
+import { eventKeyOf, type WhrNightRating } from '@smashclub/engine';
 import { and, eq, max, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { currentWhrConvergedPreNightKeys, currentWhrPrefixFingerprints } from './whrProvenance';
@@ -56,4 +56,27 @@ export function publicPostNightEstimate(
   available: boolean,
 ) {
   return available ? { postRating, postRd } : { postRating: null, postRd: null };
+}
+
+type StoredRatingNight = Omit<WhrNightRating, 'playerId'>;
+export type PublicRatingNight = Omit<StoredRatingNight, 'preRating' | 'postRating' | 'postRd'> & {
+  preRating: number | null;
+  postRating: number | null;
+  postRd: number | null;
+};
+
+export function publicRatingNights(
+  rows: StoredRatingNight[],
+  availability: Awaited<ReturnType<typeof readNightFitAvailability>> | null,
+): PublicRatingNight[] {
+  if (!availability) return rows;
+  return rows.map((night, index) => ({
+    ...night,
+    // Before their first rated night a player has the configured debut prior.
+    preRating:
+      (index === 0 && night.played) || availability.before.has(night.eventKey)
+        ? night.preRating
+        : null,
+    ...publicPostNightEstimate(night, availability.after.has(night.eventKey)),
+  }));
 }

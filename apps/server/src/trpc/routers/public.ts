@@ -16,7 +16,7 @@ import {
   tournamentParticipants,
   tournaments,
 } from '@smashclub/db';
-import { eventKeyOf, type WhrNightRating } from '@smashclub/engine';
+import { eventKeyOf } from '@smashclub/engine';
 import { includesResultStage, publicPlayerName, unplayedResultOutcome } from '@smashclub/shared';
 import {
   hasRatingNightLedger,
@@ -25,9 +25,11 @@ import {
 } from '../../recompute/recompute';
 import {
   matchesFullFit,
+  publicRatingNights,
   publicPostNightEstimate,
   readNightFitAvailability,
   recordedRatingEventNight,
+  type PublicRatingNight,
 } from '../../recompute/nightFitAvailability';
 import { readRatingNightHistory } from '../../recompute/ratingNightHistory';
 import { readWhrResultImpact } from '../../recompute/whrResultImpact';
@@ -46,15 +48,6 @@ const playerName = publicPlayerName;
 const verifiedFitsInput = z.object({ verifiedFits: z.boolean().optional() });
 const playerInput = verifiedFitsInput.extend({ playerId: z.uuid() });
 const playedHistoryInput = verifiedFitsInput.nullish();
-type PublicRatingNight = Omit<
-  WhrNightRating,
-  'playerId' | 'preRating' | 'postRating' | 'postRd'
-> & {
-  preRating: number | null;
-  postRating: number | null;
-  postRd: number | null;
-};
-
 /*
  * Nothing on this router is authenticated, so every response here is public.
  * `canonicalName` is the registry's record of a real person's name; the club
@@ -237,17 +230,7 @@ export const publicRouter = router({
           and(eq(ratingNights.recomputeId, recomputeId), eq(ratingNights.playerId, input.playerId)),
         )
         .orderBy(asc(ratingNights.eventKey));
-      nights = availability
-        ? nightRows.map((night, index) => ({
-            ...night,
-            // Before their first rated night a player has the configured debut prior.
-            preRating:
-              (index === 0 && night.played) || availability.before.has(night.eventKey)
-                ? night.preRating
-                : null,
-            ...publicPostNightEstimate(night, availability.after.has(night.eventKey)),
-          }))
-        : nightRows;
+      nights = publicRatingNights(nightRows, availability);
 
       const opponents = players; // alias for readability in the join below
       const eventRows = await ctx.db

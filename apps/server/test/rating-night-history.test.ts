@@ -336,10 +336,10 @@ it('withholds a capped historical fit and keeps a later converged night', async 
     });
 
     await db.update(tournaments).set({ eventDate: null }).where(eq(tournaments.id, first!.id));
-    const undatedForm = (await api.ratingHistory({ verifiedFits: true })).events.filter(
+    const undatedForm = (await api.ratingHistory({ verifiedFits: true })).events.find(
       ({ playerId }) => playerId === player!.id,
     );
-    expect(undatedForm[0]).toMatchObject({
+    expect(undatedForm).toMatchObject({
       eventKey: null,
       won: expect.any(Boolean),
       postRating: null,
