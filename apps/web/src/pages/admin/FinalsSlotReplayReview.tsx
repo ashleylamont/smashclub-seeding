@@ -10,7 +10,7 @@ import { UntakenCallRecovery, type UntakenCallDesk } from './UntakenCallRecovery
 
 type Input = Parameters<typeof trpc.eventOps.live.previewFinalsSlotReplay.query>[0];
 type Preview = Awaited<ReturnType<typeof trpc.eventOps.live.previewFinalsSlotReplay.query>>;
-type Consolation = NonNullable<Extract<Preview, { allowed: true }>['companion']>;
+type Consolation = NonNullable<Extract<Preview, { original: object }>['companion']>;
 
 export function FinalsSlotReplayReview({
   score,
@@ -63,6 +63,8 @@ export function FinalsSlotReplayReview({
     [callDesk],
   );
   const canOpenCall = callDesk && !disabled && !stale && !busy;
+  const placement = preview?.allowed && 'poolPlacementCorrection' in preview ? preview : null;
+  const replay = preview?.allowed && 'original' in preview ? preview : null;
   const names = preview?.entrantNames;
   const name = (id: string | null) => (id ? (names?.[id] ?? 'Player') : 'No entrant');
   const review = async () => {
@@ -71,7 +73,7 @@ export function FinalsSlotReplayReview({
     setPreview(undefined);
     try {
       setPreview(
-        await trpc.eventOps.live.previewFinalsSlotReplay.query({ ...score, reviewVersion: 2 }),
+        await trpc.eventOps.live.previewFinalsSlotReplay.query({ ...score, reviewVersion: 3 }),
       );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not review the finals replay.');
@@ -81,16 +83,31 @@ export function FinalsSlotReplayReview({
   };
   const apply = async () => {
     const recordedReason = reason.trim();
-    if (!preview?.allowed || !recordedReason || (stale && !requestId) || busy || disabled) return;
+    if (
+      !preview?.allowed ||
+      (replay && !recordedReason) ||
+      (stale && !requestId) ||
+      busy ||
+      disabled
+    )
+      return;
     if (
       !requestId &&
       !(await confirm(
-        preview.companion
-          ? 'Correct the pool result, create the championship replay and update the unplayed consolation pairing? The original played score stays on record. Each route advances from its updated pairing.'
-          : 'Correct the pool result and create the reviewed replay? The original played score stays on record. Only the replay will advance in the bracket.',
+        placement
+          ? 'Apply the corrected pool score and use these finishing places with the recorded finals draw?'
+          : replay?.companion
+            ? 'Correct the pool result, create the championship replay and update the unplayed consolation pairing? The original played score stays on record. Each route advances from its updated pairing.'
+            : 'Correct the pool result and create the reviewed replay? The original played score stays on record. Only the replay will advance in the bracket.',
       ))
     )
       return;
+    const scoreChange = {
+      matchId: score.matchId,
+      expectedRevision: score.expectedRevision,
+      score1: score.score1,
+      score2: score.score2,
+    };
     const id = requestId ?? crypto.randomUUID();
     setRequestId(id);
     setBusy(true);
@@ -101,43 +118,53 @@ export function FinalsSlotReplayReview({
             await trpc.eventOps.live.command.mutate({
               planId: score.planId,
               requestId: id,
-              command: {
-                kind: preview.companion ? 'replayFinalsRoutesV2' : 'replayFinalsSlotV1',
-                matchId: score.matchId,
-                expectedRevision: score.expectedRevision,
-                score1: score.score1,
-                score2: score.score2,
-                revisionToken: preview.revisionToken,
-                reason: recordedReason,
-              },
+              command: placement
+                ? {
+                    ...scoreChange,
+                    kind: 'score',
+                    outcome: 'played',
+                    poolGameCorrectionToken: preview.revisionToken,
+                  }
+                : {
+                    ...scoreChange,
+                    kind: replay?.companion ? 'replayFinalsRoutesV2' : 'replayFinalsSlotV1',
+                    revisionToken: preview.revisionToken,
+                    reason: recordedReason,
+                  },
             });
             close();
           } catch (cause) {
             // Retry the same reviewed command after an uncertain response.
             if (cause instanceof TRPCClientError && cause.data?.code === 'CONFLICT') {
-              restoreReviewFocus.current = Boolean(preview.companion);
+              restoreReviewFocus.current = Boolean(placement || replay?.companion);
               setRequestId(undefined);
               setPreview(undefined);
             }
             throw cause;
           }
         },
-        preview.companion
-          ? 'Pool score corrected · championship replay created and consolation pairing updated'
-          : 'Pool score corrected · replay pairing created',
+        placement
+          ? 'Pool score and finishing order corrected'
+          : replay?.companion
+            ? 'Pool score corrected · championship replay created and consolation pairing updated'
+            : 'Pool score corrected · replay pairing created',
       );
     } finally {
       setBusy(false);
     }
   };
+  const [applyLabel, retryLabel, savingLabel] = correctionActionLabels(
+    Boolean(placement),
+    Boolean(replay?.companion),
+  );
   return (
     <>
-      <p>Changing this winner requires a review of the affected finals draw.</p>
+      {!placement && <p>Changing this winner requires a review of the affected finals draw.</p>}
       {error && <Notice tone="danger">{error}</Notice>}
       {preview && (
         <section
           className="ops-finals-replay-review"
-          aria-label="Finals replay review"
+          aria-label={placement ? 'Pool placement correction review' : 'Finals replay review'}
           data-multiple-places={preview.qualifierChanges.length > 1 ? '' : undefined}
           tabIndex={-1}
           ref={summary}
@@ -156,27 +183,46 @@ export function FinalsSlotReplayReview({
               </ul>
             </>
           )}
-          {preview.allowed ? (
+          {placement && (
             <>
-              <h4>{preview.original.label}</h4>
+              <h4>Pool finishing order</h4>
+              {placement.changes.length ? (
+                <ul>
+                  {placement.changes.map(({ entrantId, beforePlace, afterPlace }) => (
+                    <li key={entrantId}>
+                      {name(entrantId)} ·{' '}
+                      <span className="mono">
+                        {beforePlace}&nbsp;→&nbsp;{afterPlace}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>The corrected score confirms the recorded pool places.</p>
+              )}
+              <p>These pool places fit the recorded finals draw.</p>
+            </>
+          )}
+          {replay && (
+            <>
+              <h4>{replay.original.label}</h4>
               <p>
-                <strong>Played set kept in history</strong> · {name(preview.original.player1Id)}{' '}
-                {preview.original.score1}–{preview.original.score2}{' '}
-                {name(preview.original.player2Id)}
+                <strong>Played set kept in history</strong> · {name(replay.original.player1Id)}{' '}
+                {replay.original.score1}–{replay.original.score2} {name(replay.original.player2Id)}
               </p>
               <p>
-                <strong>Replay pairing</strong> · {name(preview.replay.player1Id)} vs{' '}
-                {name(preview.replay.player2Id)}
+                <strong>Replay pairing</strong> · {name(replay.replay.player1Id)} vs{' '}
+                {name(replay.replay.player2Id)}
               </p>
-              {preview.downstream.length > 0 && (
+              {replay.downstream.length > 0 && (
                 <p>
                   <strong>Waiting for the replay</strong> ·{' '}
-                  {preview.downstream.map(({ label }) => label).join(', ')}
+                  {replay.downstream.map(({ label }) => label).join(', ')}
                 </p>
               )}
-              {preview.companion && <ConsolationReview pairing={preview.companion} name={name} />}
+              {replay.companion && <ConsolationReview pairing={replay.companion} name={name} />}
               <p>
-                {preview.companion
+                {replay.companion
                   ? 'Eligible played sets count for ratings. Each route advances from its updated pairing.'
                   : 'Eligible played sets count for ratings. Only the replay advances in the draw.'}
               </p>
@@ -188,7 +234,8 @@ export function FinalsSlotReplayReview({
                 onChange={(event) => setReason(event.target.value)}
               />
             </>
-          ) : (
+          )}
+          {!preview.allowed && (
             <>
               {canOpenCall && callIds.length && !callsStillOpen ? (
                 <p className="muted">Refresh the finals review before continuing.</p>
@@ -214,17 +261,11 @@ export function FinalsSlotReplayReview({
         {preview?.allowed && (
           <Button
             variant="primary"
-            disabled={disabled || (!requestId && stale) || !reason.trim()}
+            disabled={disabled || (!requestId && stale) || Boolean(replay && !reason.trim())}
             pending={busy}
             onClick={() => void apply()}
           >
-            {busy
-              ? 'Saving replay…'
-              : requestId
-                ? 'Retry replay'
-                : preview.companion
-                  ? 'Correct score and update both routes'
-                  : 'Correct score and create replay'}
+            {busy ? savingLabel : requestId ? retryLabel : applyLabel}
           </Button>
         )}
         {!requestId && (
@@ -233,12 +274,27 @@ export function FinalsSlotReplayReview({
             disabled={disabled || stale || busy}
             onClick={() => void review()}
           >
-            {busy ? 'Reviewing…' : preview ? 'Refresh finals review' : 'Review finals replay'}
+            {busy ? 'Reviewing…' : reviewLabel(Boolean(preview), Boolean(placement))}
           </Button>
         )}
       </div>
     </>
   );
+}
+
+function correctionActionLabels(placement: boolean, companion: boolean) {
+  return placement
+    ? ['Correct pool score', 'Retry correction', 'Saving correction…']
+    : [
+        companion ? 'Correct score and update both routes' : 'Correct score and create replay',
+        'Retry replay',
+        'Saving replay…',
+      ];
+}
+
+function reviewLabel(hasPreview: boolean, placement: boolean) {
+  if (placement) return 'Refresh pool review';
+  return hasPreview ? 'Refresh finals review' : 'Review finals replay';
 }
 
 function ConsolationReview({

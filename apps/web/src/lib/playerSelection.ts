@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export type PublicPlayer = { id: string; name: string; label: string };
+export type PublicPlayer = { id: string; name: string; label: string; companyCode?: string };
 export function eventPlayers(
   matches: readonly {
     player1Id: string | null;
@@ -11,7 +11,9 @@ export function eventPlayers(
     stage?: string;
     poolIndex?: number | null;
   }[],
+  entrants: readonly { id: string; companyCode?: string }[] = [],
 ): PublicPlayer[] {
+  const affiliations = new Map(entrants.map(({ id, companyCode }) => [id, companyCode]));
   const players = new Map<string, { name: string; pool: string | null }>();
   for (const match of matches) {
     const pool =
@@ -30,7 +32,7 @@ export function eventPlayers(
       });
   }
   const sorted = [...players]
-    .map(([id, player]) => ({ id, ...player }))
+    .map(([id, player]) => ({ id, ...player, companyCode: affiliations.get(id) }))
     .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
   const names = new Map<string, number>();
   for (const player of sorted) names.set(player.name, (names.get(player.name) ?? 0) + 1);
@@ -38,18 +40,21 @@ export function eventPlayers(
     (names.get(player.name) ?? 0) > 1
       ? `${player.name}${player.pool ? ` · ${player.pool}` : ''}`
       : player.name;
+  const options = sorted.map((player) => {
+    const label = baseLabel(player);
+    return { ...player, label, key: JSON.stringify([label, player.companyCode]) };
+  });
   const totals = new Map<string, number>();
   const seen = new Map<string, number>();
-  for (const player of sorted)
-    totals.set(baseLabel(player), (totals.get(baseLabel(player)) ?? 0) + 1);
-  return sorted.map((player) => {
-    const label = baseLabel(player);
-    const count = (seen.get(label) ?? 0) + 1;
-    seen.set(label, count);
+  for (const { key } of options) totals.set(key, (totals.get(key) ?? 0) + 1);
+  return options.map(({ id, name, companyCode, label, key }) => {
+    const count = (seen.get(key) ?? 0) + 1;
+    seen.set(key, count);
     return {
-      id: player.id,
-      name: player.name,
-      label: (totals.get(label) ?? 0) > 1 ? `${label} (${count})` : label,
+      id,
+      name,
+      label: (totals.get(key) ?? 0) > 1 ? `${label} (${count})` : label,
+      ...(companyCode && { companyCode }),
     };
   });
 }

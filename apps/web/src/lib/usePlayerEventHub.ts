@@ -92,7 +92,7 @@ export function usePlayerEventHub(planId: string) {
   const hasAutomaticReports = data?.matches.some(
     (match) => scoreApprovalPolicy(data, match) !== 'review',
   );
-  const players = eventPlayers(data?.matches ?? []);
+  const players = eventPlayers(data?.matches ?? [], data?.entrants);
   // A linked profile supplies browsing context only, without persisting the account's player ID.
   const linkedPlayerId =
     linkedDefaultAllowed && !session && !redeeming ? claim?.playerId : undefined;

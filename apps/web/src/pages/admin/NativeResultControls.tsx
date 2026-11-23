@@ -17,6 +17,10 @@ type Replacement = CommandInput & {
 };
 type CorrectionBasis = { resultId: string; match: Match; order: string[] };
 
+function sameFinishingOrder(first: string[], second: string[]) {
+  return first.length === second.length && first.every((id, index) => id === second[index]);
+}
+
 function canRetryCorrection(cause: unknown) {
   const code = cause instanceof TRPCClientError ? cause.data?.code : undefined;
   return (
@@ -158,6 +162,7 @@ export function NativeResultControls({
 
   function acceptLatestRevision() {
     if (!latestMatch || fieldsDisabled || !published) return;
+    if (editedOrder && sameFinishingOrder(editedOrder, latestOrder)) setEditedOrder(null);
     setBasis({ resultId: publication.resultId, match: latestMatch, order: latestOrder });
     setError('');
     reasonField.current?.focus();
@@ -265,9 +270,11 @@ export function NativeResultControls({
                 <Select
                   value={id}
                   disabled={fieldsDisabled || !basis}
-                  onValueChange={(value) =>
-                    setEditedOrder(roundRobinOrder.map((old, index) => (index === i ? value : old)))
-                  }
+                  onValueChange={(value) => {
+                    if (!basis) return;
+                    const order = roundRobinOrder.map((old, index) => (index === i ? value : old));
+                    setEditedOrder(sameFinishingOrder(order, basis.order) ? null : order);
+                  }}
                 >
                   {data.entrants.map((e) => (
                     <SelectItem key={e.id} value={e.id}>
@@ -344,10 +351,7 @@ function StaleCorrectionNotice({
   disabled: boolean;
 }) {
   const score = match?.outcome === 'played' ? recordedScoreText(match) : null;
-  const orderChanged =
-    order &&
-    (order.latest.length !== order.previous.length ||
-      order.latest.some((id, index) => id !== order.previous[index]));
+  const orderChanged = order && !sameFinishingOrder(order.latest, order.previous);
   return (
     <Notice tone="warning">
       <p>

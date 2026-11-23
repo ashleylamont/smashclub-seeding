@@ -81,9 +81,8 @@ export function LeaderboardPage() {
   }, [tournaments.data, leaderboard.data]);
 
   /**
-   * Per-player sparkline traces and form pips, derived from the same rating
-   * history the chart uses — one request serves both rather than adding a
-   * per-row query.
+   * Per-player sparklines show estimates after played nights. Form pips use
+   * the same played-set history, without a per-row query.
    */
   const trends = useMemo(() => {
     const map = new Map<string, PlayerTrend>();
@@ -260,10 +259,9 @@ export function LeaderboardPage() {
 
       {leaderboard.data.rows.length === 0 ? (
         <div className="empty-state">
-          <h2>Nothing ranked yet</h2>
+          <h2>No club ratings yet</h2>
           <p className="muted">
-            Register a Challonge tournament in the admin area and sync it — ratings appear here once
-            the first recompute finishes.
+            Rankings appear after the club publishes eligible tournament results.
           </p>
         </div>
       ) : (
@@ -277,7 +275,7 @@ export function LeaderboardPage() {
       )}
 
       {ratingHistory.data && ratingHistory.data.players.length > 0 && (
-        <RatingsOverTime history={ratingHistory.data} />
+        <RatingsOverTime players={ratingHistory.data.players} />
       )}
     </div>
   );

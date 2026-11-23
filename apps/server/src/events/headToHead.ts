@@ -1,8 +1,10 @@
-import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, lt, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import {
   companies,
   playerRatings,
   players,
+  ratingNights,
   recomputes,
   sets,
   tournaments,
@@ -181,9 +183,7 @@ async function recentPairResults(db: Db, firstIds: string[], secondIds: string[]
   return { wins, gamesWon, scoredMeetings, recent: meetings.slice(0, RECENT_LIMIT) };
 }
 
-async function publishedForecast(db: Db, first: string, second: string) {
-  const recomputeId = await latestRecomputeId(db);
-  if (!recomputeId) return null;
+async function publishedForecast(db: Db, recomputeId: string, first: string, second: string) {
   const rows = await db
     .select({
       playerId: playerRatings.playerId,
@@ -224,6 +224,68 @@ async function publishedForecast(db: Db, first: string, second: string) {
   };
 }
 
+async function sharedRatingNight(db: Db, recomputeId: string, first: string, second: string) {
+  const secondNight = alias(ratingNights, 'second_night');
+  const earlierNight = alias(ratingNights, 'earlier_night');
+  // A debut's pre-night estimate is a prior. Both players need earlier evidence.
+  const hadPlayed = (playerId: string) =>
+    exists(
+      db
+        .select({ eventKey: earlierNight.eventKey })
+        .from(earlierNight)
+        .where(
+          and(
+            eq(earlierNight.recomputeId, recomputeId),
+            eq(earlierNight.playerId, playerId),
+            eq(earlierNight.played, true),
+            lt(earlierNight.eventKey, ratingNights.eventKey),
+          ),
+        ),
+    );
+  const [night] = await db
+    .select({
+      eventKey: ratingNights.eventKey,
+      first: {
+        preRating: ratingNights.preRating,
+        postRating: ratingNights.postRating,
+        prePenalty: ratingNights.prePenalty,
+        postPenalty: ratingNights.postPenalty,
+      },
+      second: {
+        preRating: secondNight.preRating,
+        postRating: secondNight.postRating,
+        prePenalty: secondNight.prePenalty,
+        postPenalty: secondNight.postPenalty,
+      },
+    })
+    .from(ratingNights)
+    .innerJoin(
+      secondNight,
+      and(
+        eq(secondNight.recomputeId, ratingNights.recomputeId),
+        eq(secondNight.playerId, second),
+        eq(secondNight.eventKey, ratingNights.eventKey),
+        eq(secondNight.played, true),
+      ),
+    )
+    .where(
+      and(
+        eq(ratingNights.recomputeId, recomputeId),
+        eq(ratingNights.playerId, first),
+        eq(ratingNights.played, true),
+        hadPlayed(first),
+        hadPlayed(second),
+      ),
+    )
+    .orderBy(desc(ratingNights.eventKey))
+    .limit(1);
+  if (!night) return null;
+  const estimates = [night.first, night.second] as const;
+  return estimates.every((estimate) => Object.values(estimate).every(Number.isFinite))
+    ? { eventKey: night.eventKey, estimates }
+    : null;
+}
+
 export function readHeadToHead(db: Db, input: z.infer<typeof headToHeadInput>) {
   return db.transaction(
     async (tx) => {
@@ -248,8 +310,21 @@ export function readHeadToHead(db: Db, input: z.infer<typeof headToHeadInput>) {
       const ids = (side: number) =>
         identities.filter((row) => row.side === side).map((row) => row.historicalId);
       const history = await recentPairResults(tx, ids(0), ids(1));
-      const forecast = await publishedForecast(tx, first.id, second.id);
-      return { status: 'ready' as const, players: [first, second] as const, history, forecast };
+      const recomputeId = await latestRecomputeId(tx);
+      const forecast = recomputeId
+        ? await publishedForecast(tx, recomputeId, first.id, second.id)
+        : null;
+      const ratingNight =
+        forecast && recomputeId
+          ? await sharedRatingNight(tx, recomputeId, first.id, second.id)
+          : null;
+      return {
+        status: 'ready' as const,
+        players: [first, second] as const,
+        history,
+        forecast,
+        ratingNight,
+      };
     },
     { isolationLevel: 'repeatable read', accessMode: 'read only' },
   );

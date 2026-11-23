@@ -313,6 +313,7 @@ export const eventOpsRouter = router({
     return {
       ...(await snapshot(ctx.db, input.planId, true)),
       poolDrawPauseBlocker: null,
+      finalization: null,
       reports: (
         await ctx.db
           .select()

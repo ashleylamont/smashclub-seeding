@@ -1,14 +1,42 @@
 import { randomUUID } from 'node:crypto';
 import { decide, reduceDecision, TournamentConflict } from './domain';
 import { reviewFinalsSlotReplay, type ReplayScore } from './finalsSlotReplay';
+import { reviewPlayoffPoolScore } from './poolGameCorrection';
 import type { TournamentState } from './schemas';
 
 export function previewFinalsSlotReplay(
   state: TournamentState,
   score: ReplayScore,
-  reviewVersion: 1 | 2 = 1,
+  reviewVersion: 1 | 2 | 3 = 1,
 ) {
-  const review = reviewFinalsSlotReplay(state, score, reviewVersion);
+  const replayVersion = reviewVersion === 1 ? 1 : 2;
+  const review = reviewFinalsSlotReplay(state, score, replayVersion);
+  if (
+    reviewVersion === 3 &&
+    state.baseline?.structure === 'round_robin_finals' &&
+    !review.preview.allowed &&
+    !review.preview.qualifierChanges.length
+  ) {
+    try {
+      const { order, pool, revisionToken } = reviewPlayoffPoolScore(state, score);
+      const changes = order.flatMap((entrantId, index) => {
+        const beforePlace = pool.order!.indexOf(entrantId) + 1;
+        const afterPlace = index + 1;
+        return beforePlace === afterPlace ? [] : [{ entrantId, beforePlace, afterPlace }];
+      });
+      return {
+        allowed: true as const,
+        issues: [],
+        qualifierChanges: [],
+        poolPlacementCorrection: true as const,
+        changes,
+        revisionToken,
+      };
+    } catch (error) {
+      if (!(error instanceof TournamentConflict)) throw error;
+      return { ...review.preview, issues: [error.message] };
+    }
+  }
   if (!('returnCallCandidate' in review) || !review.returnCallCandidate) return review.preview;
   const call = state.matches.find(({ id }) => id === review.returnCallCandidate);
   if (!call || state.lifecycle !== 'locked') return review.preview;
@@ -35,7 +63,7 @@ export function previewFinalsSlotReplay(
     });
     if (
       decision &&
-      reviewFinalsSlotReplay(reduceDecision(state, decision), score, reviewVersion).preview.allowed
+      reviewFinalsSlotReplay(reduceDecision(state, decision), score, replayVersion).preview.allowed
     )
       return { ...review.preview, returnCallMatchIds: [call.id] };
   } catch (error) {

@@ -8,6 +8,14 @@
   white-space: normal;
 }
 
+.native-finalization {
+  margin-block-start: var(--s4);
+}
+
+.native-finalization > p {
+  margin-block-end: var(--s2);
+}
+
 .finals-reset-actions {
   margin-block-start: var(--s4);
 }

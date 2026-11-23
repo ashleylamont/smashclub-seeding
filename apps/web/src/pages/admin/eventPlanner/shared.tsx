@@ -1,6 +1,6 @@
 import { Button } from '../../../components/ui/Button';
 import { Textarea } from '../../../components/ui/Input';
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import type { EventPlanIssue } from '../../../lib/apiTypes';
 
 /**
@@ -26,6 +26,7 @@ export function CopyBlock({
   rows?: number;
   hint?: ReactNode;
 }) {
+  const id = useId();
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   const copy = async () => {
@@ -41,7 +42,9 @@ export function CopyBlock({
   return (
     <div className="copy-block">
       <div className="copy-block-header">
-        <span className="form-label">{label}</span>
+        <label className="form-label" htmlFor={id}>
+          {label}
+        </label>
         <Button size="small" type="button" onClick={() => void copy()} disabled={text === ''}>
           {state === 'copied' ? 'Copied ✓' : 'Copy'}
         </Button>
@@ -52,7 +55,14 @@ export function CopyBlock({
         </p>
       )}
       {hint && <p className="form-hint">{hint}</p>}
-      <Textarea className="copy-block-text" readOnly rows={rows} value={text} spellCheck={false} />
+      <Textarea
+        id={id}
+        className="copy-block-text"
+        readOnly
+        rows={rows}
+        value={text}
+        spellCheck={false}
+      />
     </div>
   );
 }

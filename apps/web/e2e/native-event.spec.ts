@@ -52,9 +52,9 @@ async function mutate<T>(request: APIRequestContext, procedure: string, data: ob
 }
 
 test('native event progresses from pools through reviewed finals to public club results', async ({
-  page,
-  browser,
   baseURL,
+  browser,
+  page,
 }, testInfo) => {
   // Rehearse every pool/finals result plus publication and correction through Act.
   // Bound individual API calls above while allowing the complete night on CI.
@@ -246,6 +246,25 @@ test('native event progresses from pools through reviewed finals to public club 
       (m) => m.division === 'lower' && !m.nativeBracketId && m.status !== 'complete',
     ),
   ).toBe(true);
+  const visitor = await browser.newContext({ baseURL });
+  try {
+    const board = await visitor.newPage();
+    await board.goto(`/play/${planId}`);
+    const progress = board.getByRole('complementary', { name: 'Event progress' });
+    const complete = snapshot.matches.filter((match) => match.status === 'complete').length;
+    await expect(progress).toContainText(
+      `Event progress · ${complete} / ${snapshot.matches.length} sets complete`,
+    );
+    await expect(progress.getByRole('progressbar')).toHaveAccessibleDescription(
+      'The remaining finals draws are pending.',
+    );
+    await testInfo.attach('rolling-finals-while-lower-pools-active', {
+      body: await board.screenshot(),
+      contentType: 'image/png',
+    });
+  } finally {
+    await visitor.close();
+  }
   const early = snapshot.matches.find(
     (m) => m.division === 'upper' && m.nativeBracketId && m.status === 'ready',
   )!;

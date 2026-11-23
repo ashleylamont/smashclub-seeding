@@ -1,3 +1,4 @@
+import { recordPlayoffPoolOrder, reviewPlayoffPoolOrder } from './playoffPoolCorrection';
 import { recordReplacementPoolOrder } from './poolOrders';
 import { requireFact } from './facts';
 import { winner } from './scores';
@@ -25,6 +26,11 @@ export function replaceResult(
     );
     state.pools[0]!.order = [...order];
   }
+  const before =
+    state.baseline!.structure === 'round_robin_finals'
+      ? { ...state, matches: structuredClone(state.matches) }
+      : null;
+  let playoffPoolWinnerChanged = false;
   for (const correction of command.corrections) {
     const m = state.matches.find((m) => m.id === correction.matchId);
     requireFact(
@@ -33,7 +39,8 @@ export function replaceResult(
     );
     basis[m.id] = m.revision;
     const correctedWinner = winner({ ...correction, kind: 'score' }, m);
-    if (correctedWinner !== m.winnerId)
+    if (correctedWinner !== m.winnerId) {
+      playoffPoolWinnerChanged ||= m.stage === 'group';
       requireFact(
         !state.matches.some(
           (child) =>
@@ -45,6 +52,7 @@ export function replaceResult(
           ? 'A winner change would invalidate recorded double-elimination routes or the reset final.'
           : 'A winner change would invalidate a recorded downstream pairing.',
       );
+    }
     // A reviewed post-publication ruling changes result facts, never actual opponents or draws.
     Object.assign(m, correction, {
       winnerId: correctedWinner,
@@ -54,6 +62,12 @@ export function replaceResult(
     });
   }
   if (state.baseline!.structure === 'round_robin') recordReplacementPoolOrder(state, envelope);
+  if (before && playoffPoolWinnerChanged) {
+    const { pool, matches, order } = reviewPlayoffPoolOrder(before, state);
+    basis[pool.id] = pool.revision;
+    for (const match of matches) basis[match.id] ??= match.revision;
+    recordPlayoffPoolOrder(state, pool, order, envelope);
+  }
   state.result = {
     ...state.result!,
     id: envelope.id,
@@ -62,7 +76,7 @@ export function replaceResult(
     replacementReason: command.reason,
     sealedAt: envelope.at,
     matches: structuredClone(state.matches),
-    ...(state.baseline!.structure === 'round_robin'
+    ...(state.baseline!.structure === 'round_robin' || (before && playoffPoolWinnerChanged)
       ? { poolOrders: state.pools.map((p) => ({ division: p.division, order: p.order! })) }
       : {}),
   };

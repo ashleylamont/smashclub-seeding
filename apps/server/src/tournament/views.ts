@@ -1,17 +1,13 @@
-import { isGeneratedQualificationWait } from './qualifiers';
 import { legacyQualifierSlots } from './legacyFinalQualifiers';
 import { projectMatchLabels } from './matchNames';
-import {
-  canReviewFrozenPoolResult,
-  poolOrderRevisionToken,
-  poolOrderStatus,
-  poolPlacementSource,
-} from './poolOrders';
+import { poolOrderRevisionToken, poolOrderStatus, poolPlacementSource } from './poolOrders';
 import {
   eventPoolOrderViews,
   hasFixedLegacyFinals,
+  operatorPoolMatchViews,
   worksheetOrderLock,
   type PoolOrderView,
+  type OperatorPoolMatchView,
 } from './poolOrderViews';
 import {
   dispatchAvailability,
@@ -37,7 +33,7 @@ import {
 import { asc, inArray } from 'drizzle-orm';
 import { players, playerCharacters, tournaments, type Db, type eventMatches } from '@smashclub/db';
 import { publicPlayerName, type SetCharacterPick } from '@smashclub/shared';
-import type { ResultGraphicIdentity } from '../events/participantNames';
+import { eventEntrantViews } from './entrantViews';
 import { buildStationQueues } from '../event-operations/queue';
 import { matchAvailability, stationAvailability } from '../event-operations/availability';
 import type { snapshot as sqlSnapshot } from '../event-operations/service';
@@ -49,6 +45,7 @@ import { pendingStrengthFinals } from './strengthFinals';
 import type { Match, QualifierSlot, TournamentState } from './schemas';
 import { nativeCharacterEvidence } from '../players/nativeCharacterEvidence';
 import { leadingCharacters } from '../players/characterEvidence';
+import { loadEventPlayerIdentity } from '../players/eventIdentity';
 
 type SqlSnapshot = Awaited<ReturnType<typeof sqlSnapshot>>;
 type MatchViewFields = Pick<
@@ -65,8 +62,7 @@ export type EventSnapshot = Omit<
   charactersPlayed?: Record<string, SetCharacterPick[]>;
   broadcastSides?: TournamentState['broadcastSides'];
   supersededPlayedSets?: ReturnType<typeof supersededPlayedSetViews>;
-  matches: (SqlSnapshot['matches'][number] &
-    MatchViewFields & { reviewPoolGames?: true; qualificationWait?: true })[];
+  matches: (SqlSnapshot['matches'][number] & MatchViewFields & OperatorPoolMatchView)[];
   nativeBrackets: (SqlSnapshot['nativeBrackets'][number] & { qualifierSlots?: QualifierSlot[] })[];
   pendingFinals?: ReturnType<typeof pendingStrengthFinals>;
   placements: (Omit<SqlSnapshot['placements'][number], 'source'> & {
@@ -205,8 +201,8 @@ export async function eventView(
 ): Promise<EventSnapshot> {
   const baseline = state.baseline!;
   const planId = baseline.planId;
-  const allPlayers = await db.select().from(players);
-  const names = publicEntrantNames(allPlayers, state.entrants);
+  const { profiles, companyCodes } = await loadEventPlayerIdentity(db);
+  const names = publicEntrantNames(profiles, state.entrants);
   const ids = state.entrants.flatMap(memberIds);
   const characters = ids.length
     ? await db
@@ -215,28 +211,10 @@ export async function eventView(
         .where(inArray(playerCharacters.playerId, ids))
         .orderBy(asc(playerCharacters.position))
     : [];
-  const placedIds = new Set(state.pools.flatMap(({ order }) => order ?? []));
   const rows = matchRows(state);
   const picks = await nativeCharacterEvidence(db, state);
   const eventCharacters = leadingCharacters(picks.values());
-  const reviewableMatches = new Set<string>();
-  const qualificationWaits = new Set<string>();
-  if (privateView) {
-    const reviewablePools = new Set(
-      state.pools.filter((pool) => canReviewFrozenPoolResult(state, pool)).map(({ id }) => id),
-    );
-    for (const match of state.matches) {
-      if (
-        match.stage === 'group' &&
-        match.status === 'complete' &&
-        match.outcome === 'played' &&
-        match.poolId &&
-        reviewablePools.has(match.poolId)
-      )
-        reviewableMatches.add(match.id);
-      if (isGeneratedQualificationWait(state, match)) qualificationWaits.add(match.id);
-    }
-  }
+  const poolMatchViews = privateView ? operatorPoolMatchViews(state) : undefined;
   const dispatch = sharedDispatch(state) ? dispatchContext(state) : undefined;
   const pendingReviewIds =
     dispatch?.pendingReports ??
@@ -312,8 +290,7 @@ export async function eventView(
     ...(picks.size && { charactersPlayed: Object.fromEntries(picks) }),
     matches: rows.map((m) => ({
       ...m,
-      ...(reviewableMatches.has(m.id) ? { reviewPoolGames: true as const } : {}),
-      ...(qualificationWaits.has(m.id) ? { qualificationWait: true as const } : {}),
+      ...poolMatchViews?.get(m.id),
       resourceRevision: state.settings.resourceRevision,
       progressRevision: state.matches.find((row) => row.id === m.id)!.progressRevision,
       started: state.matches.find((row) => row.id === m.id)!.started,
@@ -372,23 +349,7 @@ export async function eventView(
         return value;
       })(),
     })),
-    entrants: state.entrants.map((e) => ({
-      id: e.playerId,
-      name: names.get(e.playerId) ?? 'Player',
-      memberPlayerIds: e.memberPlayerIds,
-      ...(placedIds.has(e.playerId) && {
-        graphic: {
-          teamName: e.teamName ?? null,
-          members: memberIds(e).map((id) => ({
-            name: names.get(id) ?? 'Player',
-            character:
-              eventCharacters.get(id)?.character ??
-              characters.find((row) => row.playerId === id)?.characterSlug ??
-              null,
-          })),
-        } satisfies ResultGraphicIdentity,
-      }),
-    })),
+    entrants: eventEntrantViews(state, names, companyCodes, characters, eventCharacters),
     prizes: state.prizes.map((p) => ({
       ...p,
       eventPlanId: planId,

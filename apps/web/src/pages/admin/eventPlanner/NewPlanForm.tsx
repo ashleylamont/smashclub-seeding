@@ -2,6 +2,7 @@ import { TournamentFormatFields } from './TournamentFormatFields';
 import { useId, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  finalsRoles,
   isKnockout,
   isSinglePool,
   type StructureOptions,
@@ -19,6 +20,7 @@ import { TournamentProjection } from './TournamentProjection';
 export function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void }) {
   const queryClient = useQueryClient();
   const poolSizeId = useId();
+  const bracketModeId = useId();
   const [name, setName] = useState('');
   const [eventDate, setEventDate] = useState(defaultEventDate());
   const [slugPrefix, setSlugPrefix] = useState('');
@@ -50,7 +52,7 @@ export function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void
         structure,
         structureOptions,
         eventDate: new Date(eventDate).toISOString(),
-        slugPrefix: slugPrefix.trim() === '' ? null : slugPrefix.trim(),
+        slugPrefix: bracketMode === 'challonge' ? slugPrefix.trim() || null : null,
         upperTargetSize: upperSize,
         rows: rows.map((row) => ({
           lineNumber: row.lineNumber,
@@ -69,6 +71,8 @@ export function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void
     },
   });
 
+  const linked = bracketMode === 'challonge';
+  const hasConsolation = linked || finalsRoles(structure, structureOptions).includes('consolation');
   const total = preview?.length ?? 0;
   const sizes = validUpperSizes(total);
   const matched = preview?.filter((row) => row.playerId !== null).length ?? 0;
@@ -122,15 +126,6 @@ export function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void
             <span className="form-hint">
               All stages share this event date. Singles and doubles ratings are kept separate.
             </span>
-          </label>
-          <label className="form-field">
-            <span className="form-label">Slug prefix (optional)</span>
-            <Input
-              value={slugPrefix}
-              onChange={(event) => setSlugPrefix(event.target.value)}
-              placeholder="june25"
-            />
-            <span className="form-hint">Used to suggest Challonge slugs like june25_upper.</span>
           </label>
           <div className="form-field">
             <label className="form-label" htmlFor={poolSizeId}>
@@ -191,9 +186,13 @@ export function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void
             </div>
           </>
         )}
-        <label className="form-field">
-          <span className="form-label">Bracket system</span>
+        <div className="form-field">
+          <label className="form-label" htmlFor={bracketModeId}>
+            Bracket system
+          </label>
           <Select
+            id={bracketModeId}
+            aria-describedby={`${bracketModeId}-hint`}
             value={bracketMode}
             onValueChange={(selectedValue) => {
               setBracketMode(selectedValue as 'native' | 'challonge');
@@ -209,11 +208,23 @@ export function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void
               <SelectItem value="challonge">Challonge — manage external brackets</SelectItem>
             )}
           </Select>
-          <span className="form-hint">
-            Nemesis runs pools, championship and consolation, then records the finished night in
-            club ratings. Existing Challonge events stay linked to Challonge.
+          <span className="form-hint" id={`${bracketModeId}-hint`}>
+            {linked
+              ? 'Build and attach brackets through the Challonge handoff, then sync results.'
+              : 'Run the selected format in Nemesis and finalize results to update club ratings.'}
           </span>
-        </label>
+        </div>
+        {linked && (
+          <label className="form-field">
+            <span className="form-label">Slug prefix (optional)</span>
+            <Input
+              value={slugPrefix}
+              onChange={(event) => setSlugPrefix(event.target.value)}
+              placeholder="june25"
+            />
+            <span className="form-hint">Used to suggest Challonge slugs like june25_upper.</span>
+          </label>
+        )}
 
         {competitionFormat === 'doubles' && (
           <div>
@@ -264,8 +275,9 @@ export function NewPlanForm({ onCreated }: { onCreated: (planId: string) => void
                   </Select>
                 )}
                 <span className="form-hint">
-                  The default splits attendance evenly. Each pool advances two players; all
-                  remaining players enter consolation.
+                  The default splits attendance evenly. The top half of each pool, rounded up,
+                  advances to championship, and at least two advance when available.
+                  {hasConsolation && ' The remaining entrants enter consolation.'}
                 </span>
               </label>
             )}

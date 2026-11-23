@@ -1,4 +1,5 @@
 import { hash, requireFact } from './facts';
+import { reviewPlayoffPoolOrder } from './playoffPoolCorrection';
 import { canReviewFrozenPoolResult, poolResultBasis } from './poolOrders';
 import type { PoolGameCorrectionInput, TournamentState } from './schemas';
 
@@ -40,5 +41,45 @@ export function reviewPoolGameCorrection(state: TournamentState, input: PoolGame
       resultBasis: poolResultBasis(state, pool),
       brackets,
     }),
+  };
+}
+
+export function reviewPlayoffPoolScore(state: TournamentState, input: PoolGameCorrectionInput) {
+  const source = state.matches.find(({ id }) => id === input.matchId);
+  requireFact(
+    source?.revision === input.expectedRevision,
+    'This match changed. Reopen its score before reviewing the correction.',
+  );
+  requireFact(
+    state.lifecycle === 'locked' &&
+      source.stage === 'group' &&
+      source.poolId === state.pools[0]?.id &&
+      source.status === 'complete' &&
+      source.outcome === 'played' &&
+      source.player1Id &&
+      source.player2Id &&
+      input.score1 !== input.score2,
+    'Review a decisive corrected result for an already-played pool set.',
+  );
+  const winnerId = input.score1 > input.score2 ? source.player1Id : source.player2Id;
+  requireFact(winnerId !== source.winnerId, 'Review a pool correction that changes the winner.');
+  const trial = {
+    ...state,
+    matches: state.matches.map((match) =>
+      match.id === source.id
+        ? {
+            ...source,
+            score1: input.score1,
+            score2: input.score2,
+            winnerId,
+          }
+        : match,
+    ),
+  };
+  const { pool, matches, order } = reviewPlayoffPoolOrder(state, trial);
+  return {
+    pool,
+    order,
+    revisionToken: hash({ input, pool, matches, brackets: state.brackets, order }),
   };
 }

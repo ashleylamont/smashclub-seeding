@@ -75,7 +75,7 @@ Fact catalogue, with where each comes from:
 | --- | --- | --- |
 | **Podium** | `final_rank` 1–3 + seeds + character icons | "Seeded 6th, won the whole thing" is itself a fact |
 | **Biggest upset (seed)** | seed inversion, weighted by log seed ratio | Works with zero rating data |
-| **Biggest upset (rating)** | winner `pre_rating` < loser's; WHR pre-night expected score → "a 12% shot" | Only when rating events exist |
+| **Biggest upset (rating)** | winner `pre_rating` < loser's; WHR pre-night expected score → "a 12% shot" | Requires usable pre-night estimates and connected prior rated results |
 | **Losers-bracket run** | consecutive wins in negative rounds | "Won 5 elimination sets in a row" |
 | **Cinderella / overperformer** | `final_rank` vs `challonge_seed` | Classic SPR |
 | **Nailbiters** | `scores_csv` deciding-game sets | Needs a small tolerant scores parser |

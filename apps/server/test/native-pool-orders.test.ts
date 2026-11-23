@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { captureBaseline, decide, hash, reduceDecision, stableId } from '../src/tournament/domain';
 import { attendancePreview } from '../src/tournament/attendance';
+import { finalizationBlocker } from '../src/tournament/results';
 import {
   poolOrderStatus,
   poolResultBasis,
@@ -41,13 +42,12 @@ function complete(state: TournamentState, poolId?: string) {
     state = apply(state, score(m));
   return state;
 }
-function rule(state: TournamentState, order = state.pools[0]!.entrantIds) {
-  const p = state.pools[0]!;
+function rule(state: TournamentState, order?: string[], p = state.pools[0]!) {
   return apply(state, {
     kind: 'placements',
     poolId: p.id,
     expectedRevision: p.revision,
-    order,
+    order: order ?? p.entrantIds,
     matchRevisions: Object.fromEntries(
       state.matches.filter((m) => m.poolId === p.id).map((m) => [m.id, m.revision]),
     ),
@@ -68,6 +68,26 @@ function tied() {
     ),
   );
 }
+
+it('shows the legacy pool order needed to draw finals and accepts already drawn legacy results', () => {
+  let state = complete(initial(false));
+  expect(finalizationBlocker(state)).toMatchObject({
+    kind: 'pool_order',
+    poolId: state.pools[0]!.id,
+  });
+  expect(() => apply(state, { kind: 'drawFinals' })).toThrow(/confirm their placements/);
+
+  for (const pool of state.pools) state = rule(state, pool.entrantIds, pool);
+  expect(finalizationBlocker(state)).toMatchObject({ kind: 'missing_draw' });
+  state = apply(state, { kind: 'drawFinals' });
+  for (const match of state.matches.filter((match) => match.status === 'ready'))
+    state = apply(state, score(match));
+
+  // Legacy finalization seals the recorded draw without requiring a pool order again.
+  state.pools[0]!.order = null;
+  expect(finalizationBlocker(state)).toBeNull();
+  expect(apply(state, { kind: 'finalize' }).lifecycle).toBe('finalized');
+});
 
 describe('opted-in automatic pool orders', () => {
   it('replays an immutable pre-policy V1 journal with its exact original state hash and manual semantics', () => {

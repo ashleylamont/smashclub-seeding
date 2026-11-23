@@ -19,6 +19,7 @@ import {
 import { eventKeyOf, type WhrNightRating } from '@smashclub/engine';
 import { includesResultStage, publicPlayerName, unplayedResultOutcome } from '@smashclub/shared';
 import { latestRecomputeId } from '../../recompute/recompute';
+import { readRatingNightHistory } from '../../recompute/ratingNightHistory';
 import { readWhrResultImpact } from '../../recompute/whrResultImpact';
 import { getRatingSettings } from '../../settings';
 import { charactersByPlayer, charactersForPlayer } from '../../players/characters';
@@ -328,6 +329,55 @@ export const publicRouter = router({
     };
   }),
 
+  playerPreview: publicProcedure
+    .input(z.object({ playerId: z.uuid() }))
+    .query(({ ctx, input: { playerId } }) =>
+      ctx.db.transaction(
+        async (db) => {
+          const [player] = await db
+            .select({
+              canonicalName: players.canonicalName,
+              displayName: players.displayName,
+              status: players.status,
+              mergedIntoPlayerId: players.mergedIntoPlayerId,
+            })
+            .from(players)
+            .where(eq(players.id, playerId));
+          if (!player) return null;
+          if (player.status === 'merged' && player.mergedIntoPlayerId) {
+            return { profile: null, redirectTo: player.mergedIntoPlayerId };
+          }
+
+          const recomputeId = await latestRecomputeId(db);
+          const ratings = recomputeId
+            ? await db
+                .select({
+                  clubRating: playerRatings.clubRating,
+                  wins: playerRatings.wins,
+                  losses: playerRatings.losses,
+                  isProvisional: playerRatings.isProvisional,
+                })
+                .from(playerRatings)
+                .where(
+                  and(
+                    eq(playerRatings.recomputeId, recomputeId),
+                    eq(playerRatings.playerId, playerId),
+                  ),
+                )
+            : [];
+          return {
+            profile: {
+              name: playerName(player),
+              characters: await charactersForPlayer(db, playerId),
+              rating: ratings.at(0) ?? null,
+            },
+            redirectTo: null,
+          };
+        },
+        { isolationLevel: 'repeatable read', accessMode: 'read only' },
+      ),
+    ),
+
   headToHead: publicProcedure
     .input(headToHeadInput)
     .query(({ ctx, input }) => readHeadToHead(ctx.db, input)),
@@ -336,7 +386,7 @@ export const publicRouter = router({
     .input(z.object({ playerId: z.uuid(), setId: z.uuid(), recomputeId: z.uuid() }))
     .query(({ ctx, input }) => readWhrResultImpact(ctx.db, input)),
 
-  /** Full rating history for every ranked player (the RatingsOverTime chart). */
+  /** Played-set history for rankings form and the player list for rating comparisons. */
   ratingHistory: publicProcedure.query(async ({ ctx }) => {
     const recomputeId = await latestRecomputeId(ctx.db);
     if (!recomputeId) return { events: [], players: [] };
@@ -379,6 +429,11 @@ export const publicRouter = router({
       })),
     };
   }),
+
+  /** Night estimates for the chart's selected players, including nights they missed. */
+  ratingNightHistory: publicProcedure
+    .input(z.object({ playerIds: z.array(z.uuid()).min(1).max(8) }))
+    .query(({ ctx, input }) => readRatingNightHistory(ctx.db, input.playerIds)),
 
   tournaments: publicProcedure.query(async ({ ctx }) => {
     const rows = await ctx.db.select().from(tournaments).orderBy(desc(tournaments.eventDate));

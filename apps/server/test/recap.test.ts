@@ -1,12 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { sets, tournaments, type Db } from '@smashclub/db';
+import { players, sets, tournamentParticipants, tournaments, type Db } from '@smashclub/db';
 import type { RecapFact, RecapFactKind } from '@smashclub/engine';
 import { importRegistryPlayers, registerTournamentSlugs } from '../src/bootstrap/importRegistry';
 import { syncTournament } from '../src/sync/sync';
 import { runRecompute } from '../src/recompute/recompute';
 import { RecomputeTrigger } from '../src/recompute/trigger';
+import * as whrProvenance from '../src/recompute/whrProvenance';
 import { loadEnv } from '../src/env';
+import * as characterReads from '../src/players/characters';
 import { appRouter } from '../src/trpc/router';
 import { createTestDb } from './helpers/testDb';
 import { fixtureClient, type FixtureTournament } from './helpers/challongeFixtures';
@@ -147,6 +149,126 @@ function factsOfKind<K extends RecapFactKind>(
     .filter((f): f is Extract<RecapFact, { kind: K }> => f.kind === kind);
 }
 
+async function publishForecastFixture(history: 'debut' | 'disconnected' | 'connected') {
+  const [underdog, favourite, ...opponents] = await db
+    .insert(players)
+    .values(
+      ['Underdog', 'Favourite', ...Array.from({ length: 12 }, (_, i) => `Opponent ${i}`)].map(
+        (canonicalName) => ({ canonicalName }),
+      ),
+    )
+    .returning();
+  const [earlier, bridge, featured, later] = await db
+    .insert(tournaments)
+    .values(
+      ['2025-03-01T08', '2025-03-08T06', '2025-03-08T08', '2025-03-15T08'].map((date, i) => ({
+        challongeSlug: `forecast-${i}`,
+        name: `Round ${i}`,
+        challongeState: 'complete',
+        eventDate: new Date(`${date}:00:00Z`),
+      })),
+    )
+    .returning();
+  // Link the early same-day result to a doubles bracket. The singles recap
+  // does not display it, though it is part of the combined WHR replay.
+  await db
+    .update(tournaments)
+    .set({ competitionFormat: 'doubles' })
+    .where(eq(tournaments.id, bridge!.id));
+  const earlierMembers = opponents.slice(0, 6);
+  const otherMembers = history === 'connected' ? earlierMembers : opponents.slice(6);
+  const [a, b] = await db
+    .insert(tournamentParticipants)
+    .values([
+      {
+        tournamentId: featured!.id,
+        challongeParticipantId: 31,
+        rawName: 'Underdog',
+        cleanedName: 'Underdog',
+        playerId: underdog!.id,
+        challongeSeed: 8,
+        finalRank: 1,
+      },
+      {
+        tournamentId: featured!.id,
+        challongeParticipantId: 32,
+        rawName: 'Favourite',
+        cleanedName: 'Favourite',
+        playerId: favourite!.id,
+        challongeSeed: 1,
+        finalRank: 2,
+      },
+    ])
+    .returning();
+  const [teamOne, teamTwo] = await db
+    .insert(tournamentParticipants)
+    .values([
+      {
+        tournamentId: bridge!.id,
+        challongeParticipantId: 33,
+        rawName: 'Pair One',
+        cleanedName: 'Pair One',
+        memberPlayerIds: [favourite!.id, opponents[0]!.id],
+      },
+      {
+        tournamentId: bridge!.id,
+        challongeParticipantId: 34,
+        rawName: 'Pair Two',
+        cleanedName: 'Pair Two',
+        memberPlayerIds: [underdog!.id, opponents[6]!.id],
+      },
+    ])
+    .returning();
+  let nextMatch = 1;
+  const played = (tournamentId: string, p1PlayerId: string, p2PlayerId: string) => ({
+    tournamentId,
+    p1PlayerId,
+    p2PlayerId,
+    challongeMatchId: nextMatch++,
+    state: 'complete',
+    round: 1,
+    winner: 1 as const,
+    scoresCsv: '3-0',
+  });
+
+  await db.insert(sets).values([
+    ...earlierMembers.map(({ id }) => played(earlier!.id, favourite!.id, id)),
+    ...(history === 'debut'
+      ? []
+      : otherMembers.map(({ id }) => played(earlier!.id, id, underdog!.id))),
+    { ...played(earlier!.id, favourite!.id, underdog!.id), raw: { outcome: 'forfeit' } },
+    {
+      ...played(bridge!.id, favourite!.id, underdog!.id),
+      p1ParticipantId: teamOne!.id,
+      p2ParticipantId: teamTwo!.id,
+    },
+    played(later!.id, favourite!.id, underdog!.id),
+  ]);
+  const [set] = await db
+    .insert(sets)
+    .values({
+      ...played(featured!.id, underdog!.id, favourite!.id),
+      p1ParticipantId: a!.id,
+      p2ParticipantId: b!.id,
+    })
+    .returning();
+  const { recomputeId } = await runRecompute(db);
+  const api = caller().public;
+  return {
+    recomputeId,
+    bridgeTournamentId: bridge!.id,
+    featuredSetId: set!.id,
+    underdogId: underdog!.id,
+    readRecap: async () => (await api.recap({ slug: featured!.challongeSlug }))!,
+    readImpact: (id: string) =>
+      api.whrResultImpact({
+        setId: set!.id,
+        playerId: underdog!.id,
+        recomputeId: id,
+      }),
+  };
+}
+
 describe('public.recap', () => {
   it('keeps ignored groups visible as excluded but leaves them out of recap results', async () => {
     await sync(['march-main']);
@@ -224,6 +346,100 @@ describe('public.recap', () => {
     // Fox beat Samus in the April final; both had March ratings going in.
     expect(factsOfKind(recap, 'biggest_climb')).toHaveLength(1);
     expect(recap.facts.length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    { history: 'debut' as const, forecastUnavailable: 'first_night', probability: null },
+    { history: 'disconnected' as const, forecastUnavailable: 'disconnected', probability: null },
+    { history: 'connected' as const, forecastUnavailable: null, probability: 0.0286 },
+  ])(
+    'agrees with match odds for $history prior history',
+    async ({ history, forecastUnavailable, probability }) => {
+      const fixture = await publishForecastFixture(history);
+      const impact = await fixture.readImpact(fixture.recomputeId);
+      expect(impact).toMatchObject({ status: 'available', forecastUnavailable });
+      if (impact.status !== 'available') throw new Error('Expected the rated result');
+
+      const recap = await fixture.readRecap();
+      expect(factsOfKind(recap, 'seed_upset')).toMatchObject([
+        { winnerSeed: 8, loserSeed: 1, score: '3-0' },
+      ]);
+      expect(factsOfKind(recap, 'podium')[0]?.places[0]?.player.playerId).toBe(fixture.underdogId);
+      const odds = factsOfKind(recap, 'rating_upset');
+      expect(odds).toHaveLength(probability === null ? 0 : 1);
+      expect(impact.forecast === null).toBe(probability === null);
+      expect(odds[0]?.probability ?? 0).toBeCloseTo(probability ?? 0, 4);
+      expect(impact.forecast?.winProbability ?? 0).toBeCloseTo(odds[0]?.probability ?? 0, 10);
+      const availableFacts = new Set(recap.facts.map(({ id }) => id));
+      expect(recap.highlights.every(({ id }) => availableFacts.has(id))).toBe(true);
+    },
+  );
+
+  it('omits the upset when the result and rating run disagree on the winner', async () => {
+    const fixture = await publishForecastFixture('connected');
+    expect(factsOfKind(await fixture.readRecap(), 'rating_upset')).toHaveLength(1);
+
+    const readCharacters = characterReads.charactersByPlayer;
+    const intercept = vi
+      .spyOn(characterReads, 'charactersByPlayer')
+      .mockImplementationOnce(async (...args) => {
+        // The recap has already read the old score. Publish a new rating run
+        // for the reversed result before it reads the rating events.
+        await db
+          .update(sets)
+          .set({ winner: 2, scoresCsv: '0-3' })
+          .where(eq(sets.id, fixture.featuredSetId));
+        await runRecompute(db);
+        return readCharacters(...args);
+      });
+
+    try {
+      const recap = await fixture.readRecap();
+      expect(factsOfKind(recap, 'seed_upset')).toMatchObject([
+        { winnerSeed: 8, loserSeed: 1, score: '3-0' },
+      ]);
+      expect(factsOfKind(recap, 'rating_upset')).toEqual([]);
+      expect(factsOfKind(await fixture.readRecap(), 'seed_upset')).toEqual([]);
+    } finally {
+      intercept.mockRestore();
+    }
+  });
+
+  it('skips the WHR history reread when the favourite won', async () => {
+    const fixture = await publishForecastFixture('connected');
+    await db
+      .update(sets)
+      .set({ winner: 2, scoresCsv: '0-3' })
+      .where(eq(sets.id, fixture.featuredSetId));
+    await runRecompute(db);
+
+    const history = vi.spyOn(whrProvenance, 'loadWhrHistoryThroughDay');
+    try {
+      const recap = await fixture.readRecap();
+      expect(recap.setsPlayed).toBe(1);
+      expect(factsOfKind(recap, 'rating_upset')).toEqual([]);
+      expect(history.mock.calls.length).toBe(0);
+    } finally {
+      history.mockRestore();
+    }
+  });
+
+  it('waits for a new run to use a corrected doubles bridge as evidence', async () => {
+    const fixture = await publishForecastFixture('disconnected');
+    // Moving the bridge to an earlier night cannot authorize odds built from
+    // the old recompute's disconnected fit.
+    await db
+      .update(tournaments)
+      .set({ eventDate: new Date('2025-03-05T06:00:00Z') })
+      .where(eq(tournaments.id, fixture.bridgeTournamentId));
+    expect(factsOfKind(await fixture.readRecap(), 'rating_upset')).toEqual([]);
+
+    const updated = await runRecompute(db);
+    const impact = await fixture.readImpact(updated.recomputeId);
+    expect(impact).toMatchObject({ status: 'available', forecastUnavailable: null });
+    if (impact.status !== 'available') throw new Error('Expected the rated result');
+    const [bridged] = factsOfKind(await fixture.readRecap(), 'rating_upset');
+    expect(bridged?.probability).toBeCloseTo(impact.forecast!.winProbability, 10);
   });
 
   it('counts head-to-head history only from nights before this one', async () => {

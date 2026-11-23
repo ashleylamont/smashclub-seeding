@@ -1,6 +1,7 @@
 import { rollingFinals, requirePoolCorrectionAllowed } from './qualifiers';
 import { hasFixedLegacyPoolQualifiers } from './legacyFinalQualifiers';
-import { reviewPoolGameCorrection } from './poolGameCorrection';
+import { reviewPlayoffPoolScore, reviewPoolGameCorrection } from './poolGameCorrection';
+import { recordPlayoffPoolOrder } from './playoffPoolCorrection';
 import { advance, reopenAutomaticallySkippedReset } from './brackets';
 import {
   requireFact,
@@ -222,12 +223,17 @@ export function recordScore(
         command.outcome === 'played' && command.score1 !== null && command.score2 !== null,
         'Review a played pool score correction.',
       );
-      const reviewed = reviewPoolGameCorrection(next, {
+      const input = {
         matchId: match.id,
         expectedRevision: command.expectedRevision,
         score1: command.score1,
         score2: command.score2,
-      });
+      };
+      const placementReview =
+        winnerId !== match.winnerId && next.baseline?.structure === 'round_robin_finals'
+          ? reviewPlayoffPoolScore(next, input)
+          : null;
+      const reviewed = placementReview ?? reviewPoolGameCorrection(next, input);
       requireFact(
         reviewed.revisionToken === command.poolGameCorrectionToken,
         'Pool evidence changed. Review the score correction again.',
@@ -238,10 +244,13 @@ export function recordScore(
       Object.assign(match, {
         score1: command.score1,
         score2: command.score2,
+        winnerId,
         revision: match.revision + 1,
         automaticFromRevision: null,
         resultCommandId: envelope.id,
       });
+      if (placementReview)
+        recordPlayoffPoolOrder(next, reviewed.pool, placementReview.order, envelope);
     } else applyScore(next, match, result, envelope.at, false, envelope.id);
     reportId = appendOperatorScoreReport(next, envelope, command, winnerId);
   } else {

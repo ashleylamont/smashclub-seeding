@@ -65,6 +65,8 @@
   text-transform: uppercase;
   letter-spacing: 0.02em;
   color: var(--text-h);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
 }
 
 .tournament-tags {

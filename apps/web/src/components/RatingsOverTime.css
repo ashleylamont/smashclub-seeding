@@ -119,6 +119,7 @@
 }
 
 .ratings-tooltip {
+  max-width: min(22rem, calc(100vw - 2 * var(--s5)));
   max-height: 320px;
   overflow-y: auto;
 }
@@ -136,11 +137,14 @@
   height: 8px;
 }
 
-.tooltip-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.ratings-tooltip .tooltip-name {
+  overflow-wrap: anywhere;
   color: var(--text-h);
+}
+
+.ratings-tooltip .tooltip-attendance {
+  display: block;
+  color: var(--text-soft);
 }
 
 @media (max-width: 860px) {

@@ -229,7 +229,7 @@ async function computeRatings(
 }
 
 /** Latest completed WHR run with current history semantics; no legacy fallback. */
-async function latestCompletedRecompute(db: Db) {
+export async function latestCompletedRecompute(db: Db) {
   const [row] = await db
     .select({ id: recomputes.id, stats: recomputes.stats })
     .from(recomputes)
@@ -249,12 +249,11 @@ export async function latestRecomputeId(db: Db): Promise<string | null> {
   return (await latestCompletedRecompute(db))?.id ?? null;
 }
 
+export function hasRatingNightLedger(stats: unknown): boolean {
+  return stats !== null && typeof stats === 'object' && 'ratingNights' in stats;
+}
+
 export async function needsRatingRecompute(db: Db): Promise<boolean> {
   const stats = (await latestCompletedRecompute(db))?.stats;
-  return (
-    !stats ||
-    typeof stats !== 'object' ||
-    !('ratingNights' in stats) ||
-    !currentWhrPrefixFingerprints(stats)
-  );
+  return !hasRatingNightLedger(stats) || !currentWhrPrefixFingerprints(stats);
 }

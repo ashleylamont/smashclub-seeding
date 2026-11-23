@@ -149,41 +149,41 @@ test('an interrupted correction retries its exact command after publication adva
   await expect(picker).toBeFocused();
 });
 
-test('reviewing a newer round-robin revision loads its unedited finishing order', async ({
-  page,
-}) => {
-  const { fixture, currentPublication, writes, open } = await sealedResult(page, 'round_robin');
-  const placements = fixture.overview.placements
-    .filter(({ division, poolIndex }) => division === 'lower' && poolIndex === 0)
-    .sort((a, b) => a.place - b.place);
-  Object.assign(fixture.overview, { placements });
-  const [first, second] = placements;
-  const { correction } = await open();
-  const name = (id: string) => fixture.overview.entrants.find((item) => item.id === id)!.name;
-  const firstPlace = correction.getByRole('combobox', { name: 'Place 1', exact: true });
-  await expect(firstPlace).toHaveText(new RegExp(name(first!.playerId)));
-  Object.assign(currentPublication, { resultId: latestResult, revision: 2 });
-  Object.assign(first!, { place: 2 });
-  Object.assign(second!, { place: 1 });
-  await expect(correction).toContainText('Result revision 2 published.');
-  const order = correction.getByRole('list', { name: 'Latest finishing order' });
-  await expect(order.getByRole('listitem').first()).toHaveText(name(second!.playerId));
-  await expect(firstPlace).toHaveText(new RegExp(name(first!.playerId)));
-  await correction.getByRole('button', { name: 'Keep draft for revision 2' }).click();
-  await expect(firstPlace).toHaveText(new RegExp(name(second!.playerId)));
-  await correction.getByRole('button', { name: 'Publish reviewed correction' }).click();
-  await expect
-    .poll(() => writes)
-    .toMatchObject([
-      {
-        command: {
-          resultId: latestResult,
-          roundRobinOrder: [
-            second!.playerId,
-            first!.playerId,
-            ...placements.slice(2).map(({ playerId }) => playerId),
-          ],
-        },
-      },
-    ]);
-});
+for (const keepEditedOrder of [false, true])
+  test(`reviewing a newer round-robin revision ${keepEditedOrder ? 'keeps a changed draft order' : 'adopts its order after draft edits are reversed'}`, async ({
+    page,
+  }) => {
+    const { fixture, currentPublication, writes, open } = await sealedResult(page, 'round_robin');
+    const placements = fixture.overview.placements
+      .filter(({ division, poolIndex }) => division === 'lower' && poolIndex === 0)
+      .sort((a, b) => a.place - b.place);
+    Object.assign(fixture.overview, { placements });
+    const [first, second, third, ...remaining] = placements.map(({ playerId }) => playerId);
+    const { correction } = await open();
+    const name = (id: string) => fixture.overview.entrants.find((item) => item.id === id)!.name;
+    const place = (index: number) =>
+      correction.getByRole('combobox', { name: `Place ${index}`, exact: true });
+    await expect(place(1)).toHaveText(new RegExp(name(first!)));
+    await chooseOption(place(1), third!);
+    if (keepEditedOrder) await chooseOption(place(3), first!);
+    else await chooseOption(place(1), first!);
+    const beforeReview = keepEditedOrder ? third! : first!;
+
+    Object.assign(currentPublication, { resultId: latestResult, revision: 2 });
+    Object.assign(placements[0]!, { place: 2 });
+    Object.assign(placements[1]!, { place: 1 });
+    await expect(correction).toContainText('Result revision 2 published.');
+    const order = correction.getByRole('list', { name: 'Latest finishing order' });
+    await expect(order.getByRole('listitem').first()).toHaveText(name(second!));
+    await expect(place(1)).toHaveText(new RegExp(name(beforeReview)));
+    await correction.getByRole('button', { name: 'Keep draft for revision 2' }).click();
+
+    const expected = keepEditedOrder
+      ? [third!, second!, first!, ...remaining]
+      : [second!, first!, third!, ...remaining];
+    await expect(place(1)).toHaveText(new RegExp(name(expected[0]!)));
+    await correction.getByRole('button', { name: 'Publish reviewed correction' }).click();
+    await expect
+      .poll(() => writes)
+      .toMatchObject([{ command: { resultId: latestResult, roundRobinOrder: expected } }]);
+  });

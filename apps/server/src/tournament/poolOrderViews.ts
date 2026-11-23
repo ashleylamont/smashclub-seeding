@@ -1,6 +1,12 @@
 import { hasFixedLegacyPoolQualifiers } from './legacyFinalQualifiers';
-import { canConfirmPoolOrder, plannerPoolOrderBlocker, poolOrderStatus } from './poolOrders';
-import { poolFinalsConsumed, rollingFinals } from './qualifiers';
+import { reviewablePlayoffPoolId } from './playoffPoolCorrection';
+import {
+  canConfirmPoolOrder,
+  canReviewFrozenPoolResult,
+  plannerPoolOrderBlocker,
+  poolOrderStatus,
+} from './poolOrders';
+import { isGeneratedQualificationWait, poolFinalsConsumed, rollingFinals } from './qualifiers';
 import type { TournamentState } from './schemas';
 
 export type PoolOrderView = {
@@ -61,4 +67,33 @@ export function worksheetOrderLock(
   }
   if (pool.qualifierRoster && !pool.qualifierDecision && poolFinalsConsumed(state, pool.id))
     return 'Finals already use this pool order. Called or played opponents and report history stay fixed.';
+}
+
+export type OperatorPoolMatchView = {
+  reviewPoolGames?: true;
+  reviewPlayoffPoolWinner?: true;
+  qualificationWait?: true;
+};
+
+export function operatorPoolMatchViews(state: TournamentState) {
+  const views = new Map<string, OperatorPoolMatchView>();
+  const reviewablePools = new Set(
+    state.pools.filter((pool) => canReviewFrozenPoolResult(state, pool)).map(({ id }) => id),
+  );
+  const playoffPoolId = reviewablePools.size ? undefined : reviewablePlayoffPoolId(state);
+  for (const match of state.matches) {
+    if (isGeneratedQualificationWait(state, match)) {
+      views.set(match.id, { qualificationWait: true });
+    } else if (
+      match.stage === 'group' &&
+      match.status === 'complete' &&
+      match.outcome === 'played' &&
+      match.poolId
+    ) {
+      if (reviewablePools.has(match.poolId)) views.set(match.id, { reviewPoolGames: true });
+      else if (match.poolId === playoffPoolId)
+        views.set(match.id, { reviewPlayoffPoolWinner: true });
+    }
+  }
+  return views;
 }

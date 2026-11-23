@@ -32,7 +32,6 @@ import {
   eventStations,
   eventWithdrawals,
   eventPoolSchedules,
-  players,
   sets,
   tournaments,
   type Db,
@@ -43,6 +42,7 @@ import type { ResultGraphicIdentity } from '../events/participantNames';
 import type { SessionUser } from '../auth';
 import { getPlan, type PlanView } from '../event-planner/plans';
 import { charactersByPlayer } from '../players/characters';
+import { loadEventPlayerIdentity } from '../players/eventIdentity';
 import { matchAvailability, stationAvailability } from './availability';
 import { isOperator, lockEvent, requireOperator } from './access';
 import { operatorTwitchPromotion, publicTwitchPromotion } from './twitchPromotion';
@@ -79,7 +79,8 @@ export async function readSqlSnapshotSource(db: Db, planId: string, privateView 
 
 export async function snapshot(db: Db, planId: string, privateView = false) {
   const { plan, settings, twitch } = await readSqlSnapshotSource(db, planId, privateView);
-  const names = new Map((await db.select().from(players)).map((p) => [p.id, publicPlayerName(p)]));
+  const { profiles, companyCodes } = await loadEventPlayerIdentity(db);
+  const names = new Map(profiles.map((p) => [p.id, publicPlayerName(p)]));
   const rows = await db
     .select()
     .from(eventMatches)
@@ -173,21 +174,26 @@ export async function snapshot(db: Db, planId: string, privateView = false) {
           )
       : [];
   const resultsSlug = nativeResults.at(0)?.slug ?? historicalResultsSlug;
-  const entrants: { id: string; name: string; graphic?: ResultGraphicIdentity }[] = entrantIds.map(
-    (id) => {
-      const name = names.get(id) ?? 'Player';
-      return {
-        id,
-        name,
-        ...(placedIds.has(id) && {
-          graphic: {
-            teamName: null,
-            members: [{ name, character: characters.get(id)?.[0] ?? null }],
-          },
-        }),
-      };
-    },
-  );
+  const entrants: {
+    id: string;
+    name: string;
+    companyCode?: string;
+    graphic?: ResultGraphicIdentity;
+  }[] = entrantIds.map((id) => {
+    const name = names.get(id) ?? 'Player';
+    const companyCode = plan.competitionFormat === 'singles' ? companyCodes.get(id) : undefined;
+    return {
+      id,
+      name,
+      ...(companyCode && { companyCode }),
+      ...(placedIds.has(id) && {
+        graphic: {
+          teamName: null,
+          members: [{ name, character: characters.get(id)?.[0] ?? null }],
+        },
+      }),
+    };
+  });
   const prizes = (
     await db.select().from(eventPrizes).where(eq(eventPrizes.eventPlanId, planId))
   ).map((p) => ({ ...p, playerName: p.playerId ? (names.get(p.playerId) ?? 'Player') : null }));
