@@ -40,9 +40,13 @@ export function formatFact(fact: RecapFact): { headline: string; detail: string 
     }
     case 'rating_upset': {
       const oneIn = Math.max(2, Math.round(1 / Math.max(fact.probability, 0.01)));
+      const chance =
+        Math.round(fact.probability * 100) === 0
+          ? 'less than one chance in 100'
+          : `one chance in ${oneIn}`;
       return {
         headline: `${fact.winner.name} beats the odds`,
-        detail: `The ratings gave them one chance in ${oneIn} against ${fact.loser.name} — ${Math.round(fact.ratingGap)} points apart${inStage(fact.stage)}${fact.score ? `. Won ${fact.score}` : ''}.`,
+        detail: `The ratings gave them ${chance} against ${fact.loser.name} — ${Math.round(fact.ratingGap)} points apart${inStage(fact.stage)}${fact.score ? `. Won ${fact.score}` : ''}.`,
       };
     }
     case 'losers_run':

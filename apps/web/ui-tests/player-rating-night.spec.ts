@@ -269,8 +269,11 @@ for (const theme of ['dark', 'light'] as const) {
       await page.setViewportSize({ width, height: 900 });
       await page.emulateMedia({ colorScheme: theme });
       const fixture = await mockProfile(page, ({ setId }) => {
-        if (setId === setIds[1]) return forecastEffect;
+        if (setId === setIds[1])
+          return { ...forecastEffect, forecast: { winProbability: 0.12, opponentSkill: 1740 } };
         if (setId === setIds[0]) return { ...effect, effectPoints: -0.8 };
+        if (setId.endsWith('000000000003'))
+          return { ...forecastEffect, forecast: { winProbability: 0.004, opponentSkill: 1980 } };
         return {
           ...effect,
           firstNight: false,
@@ -278,7 +281,7 @@ for (const theme of ['dark', 'light'] as const) {
           effectPoints: -22.1,
         };
       });
-      addRatedEvents(fixture.profile, 3);
+      addRatedEvents(fixture.profile, 4);
       await page.goto(`/players/${playerId}`);
       const log = page.getByRole('region', { name: 'Match results' });
       await log.scrollIntoViewIfNeeded();
@@ -292,7 +295,10 @@ for (const theme of ['dark', 'light'] as const) {
         'WHR ≈−20 pts',
       );
       const recent = log.getByRole('row', { name: /Singles bracket 2/ });
-      await expect(recent).toContainText('WHR pre-night · 32% to win');
+      await expect(recent).toContainText('WHR pre-night · 12% to win');
+      await expect(log.getByRole('row', { name: /Singles bracket 4/ })).toContainText(
+        'WHR pre-night · <1% to win',
+      );
       await expect(recent).toContainText('Less likely result');
       await expect(recent).toContainText('1.5 units');
       await expect(recent).toContainText('Margin weight 0.25');
@@ -349,7 +355,9 @@ for (const theme of ['dark', 'light'] as const) {
           element.scrollLeft = 0;
         });
       }
-      expect(fixture.requests).toHaveLength(3);
+      expect(fixture.requests.map(({ setId }) => setId).sort()).toEqual(
+        fixture.profile.events.map(({ setId }) => setId).sort(),
+      );
       await ready(page);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
       expect(

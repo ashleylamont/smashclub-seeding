@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { orientScore, roundLabel, scoreCell } from '../src/lib/format';
+import { orientScore, roundLabel, scoreCell, winProbabilityDisplay } from '../src/lib/format';
+
+describe('winProbabilityDisplay', () => {
+  it('rounds a whole-percent chance and uses bounds at the extremes', () => {
+    expect(winProbabilityDisplay(0.004)).toEqual({ percent: 0, odds: '<1%' });
+    expect(winProbabilityDisplay(0.12)).toEqual({ percent: 12, odds: '12%' });
+    expect(winProbabilityDisplay(0.996)).toEqual({ percent: 100, odds: '>99%' });
+  });
+});
 
 /**
  * Challonge reports scores player-one-first. Anywhere the winner is named

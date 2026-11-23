@@ -2,6 +2,28 @@ import { describe, expect, it } from 'vitest';
 import { formatFact, type RecapFact, type RecapFactKind } from '../src/recap';
 
 describe('formatFact', () => {
+  it('describes a pre-night win estimate that rounds below one percent as a bound', () => {
+    const winner = { playerId: 'x', name: 'Ada', companyCode: null, characters: [] };
+    const loser = { ...winner, playerId: 'y', name: 'Bo' };
+    const fact = {
+      kind: 'rating_upset',
+      tournamentId: 't',
+      winner,
+      loser,
+      probability: 0.004,
+      ratingGap: 320,
+      stage: 'the losers semis',
+      score: '3-2',
+    } satisfies RecapFact;
+
+    expect(formatFact(fact).detail).toBe(
+      'The ratings gave them less than one chance in 100 against Bo — 320 points apart in the losers semis. Won 3-2.',
+    );
+    expect(formatFact({ ...fact, probability: 0.12 }).detail).toBe(
+      'The ratings gave them one chance in 8 against Bo — 320 points apart in the losers semis. Won 3-2.',
+    );
+  });
+
   it('writes copy for every fact kind', () => {
     // A missing branch would ship a blank card, so every kind is exercised.
     const player = { playerId: 'x', name: 'Ada', companyCode: 'ACME', characters: [] };

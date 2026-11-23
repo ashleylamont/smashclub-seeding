@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { Link } from '@tanstack/react-router';
 import type { PlayerData, PlayerMatchLogEntry } from '../lib/apiTypes';
-import { formatDate } from '../lib/format';
+import { formatDate, winProbabilityDisplay } from '../lib/format';
 import { useWhrResultImpacts, type WhrResultImpact } from '../lib/useWhrResultImpacts';
 import { useCharacterReporter } from '../lib/useCharacterReporter';
 import { PlayedCharacterReport } from './PlayedCharacterReport';
@@ -47,12 +47,11 @@ function forecastDetails(
     if (impact.forecastUnavailable === 'disconnected') return { note: 'Separate rated groups' };
     return { note: 'Estimate unavailable' };
   }
-  const chance = Math.round(impact.forecast.winProbability * 100);
-  const odds = chance === 0 ? '<1%' : chance === 100 ? '>99%' : `${chance}%`;
-  const moreLikely = won ? chance > 50 : chance < 50;
+  const { percent, odds } = winProbabilityDisplay(impact.forecast.winProbability);
+  const moreLikely = won ? percent > 50 : percent < 50;
   return {
     chance: `${odds} to win`,
-    note: chance === 50 ? null : moreLikely ? 'More likely result' : 'Less likely result',
+    note: percent === 50 ? null : moreLikely ? 'More likely result' : 'Less likely result',
   };
 }
 
