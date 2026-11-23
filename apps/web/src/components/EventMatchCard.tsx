@@ -2,7 +2,7 @@ import { matchParticipantName, matchPresentation } from '../lib/matchPresentatio
 import { linkedFinalCaption } from '../lib/linkedFinalCaption';
 import { poolKey, poolTitle, usesOpenPools } from '../lib/poolFlow';
 import { CharacterIcons } from './CharacterIcons';
-import { PlayerProfileName } from './PlayerProfilePreview';
+import { EventEntrantName } from './PlayerProfilePreview';
 import type { LiveMatch } from '../lib/eventDisplay';
 export function MatchCard({
   match,
@@ -10,12 +10,14 @@ export function MatchCard({
   nextMatch,
   structure,
   showPlayerPreviews = false,
+  profileMemberNames,
 }: {
   match: LiveMatch;
   station?: string;
   nextMatch?: LiveMatch;
   structure?: string;
   showPlayerPreviews?: boolean;
+  profileMemberNames?: Readonly<Record<string, string>>;
 }) {
   const presentation = matchPresentation(match);
   const linked = linkedFinalCaption(match);
@@ -41,11 +43,13 @@ export function MatchCard({
         {
           characters: match.player1Characters,
           id: match.player1Id,
+          memberIds: match.player1MemberIds,
           score: match.score1,
         },
         {
           characters: match.player2Characters,
           id: match.player2Id,
+          memberIds: match.player2MemberIds,
           score: match.score2,
         },
       ].map((p, i) => (
@@ -54,8 +58,11 @@ export function MatchCard({
           key={i}
         >
           <span>
-            <PlayerProfileName
-              playerId={showPlayerPreviews ? p.id : null}
+            <EventEntrantName
+              entrantId={p.id}
+              singlesPreview={showPlayerPreviews}
+              memberIds={p.memberIds}
+              memberNames={profileMemberNames}
               name={matchParticipantName(match, i === 0 ? 0 : 1)}
             />
             <CharacterIcons slugs={p.characters ?? []} />

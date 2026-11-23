@@ -11,6 +11,17 @@ type HubData = PoolFlowData & {
   entrants?: { id: string; name: string; memberPlayerIds?: string[] }[];
 };
 
+export function publicEventProfilePreviews(
+  data: { plan: { competitionFormat?: string | null }; memberNames?: Record<string, string> },
+  recordedOnly: boolean,
+) {
+  const { competitionFormat } = data.plan;
+  return {
+    showPlayerPreviews: competitionFormat === 'singles' && !recordedOnly,
+    profileMemberNames: competitionFormat === 'doubles' ? data.memberNames : undefined,
+  };
+}
+
 export function resolveHubPlayer(
   players: readonly { id: string }[],
   selected: string,

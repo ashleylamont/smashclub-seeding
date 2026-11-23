@@ -11,7 +11,7 @@ import {
   liveBracketWinner,
 } from '../lib/eventBracket';
 import { CharacterIcons } from './CharacterIcons';
-import { PlayerProfileName } from './PlayerProfilePreview';
+import { EventEntrantName } from './PlayerProfilePreview';
 
 /** HTML cards stay readable at full text size; only the draw scrolls on narrow screens. */
 export function EventBracketLane({
@@ -25,6 +25,7 @@ export function EventBracketLane({
   roundTitles,
   cardWidth = 250,
   showPlayerPreviews = false,
+  profileMemberNames,
 }: {
   matches: LiveMatch[];
   lane: EliminationLane;
@@ -36,6 +37,7 @@ export function EventBracketLane({
   roundTitles?: string[];
   cardWidth?: number;
   showPlayerPreviews?: boolean;
+  profileMemberNames?: Readonly<Record<string, string>>;
 }) {
   const canvas = useRef<HTMLDivElement>(null);
   const [measurements, setMeasurements] = useState<
@@ -191,6 +193,7 @@ export function EventBracketLane({
                 </small>
                 {([0, 1] as const).map((side) => {
                   const id = side === 0 ? match.player1Id : match.player2Id;
+                  const memberIds = side === 0 ? match.player1MemberIds : match.player2MemberIds;
                   const score = scores[side];
                   const characters = side === 0 ? match.player1Characters : match.player2Characters;
                   return (
@@ -200,8 +203,11 @@ export function EventBracketLane({
                       data-entrant-id={id ?? undefined}
                     >
                       <span>
-                        <PlayerProfileName
-                          playerId={showPlayerPreviews ? id : null}
+                        <EventEntrantName
+                          entrantId={id}
+                          singlesPreview={showPlayerPreviews}
+                          memberIds={memberIds}
+                          memberNames={profileMemberNames}
                           name={liveBracketSide(match, side, labels)}
                         />
                         <CharacterIcons slugs={id ? (characters ?? []) : []} />
