@@ -36,6 +36,7 @@ async function openRankings(
     penaltyPerEvent: 20,
     penaltyCap: 100,
   },
+  leadingPlayerMisses = 0,
 ) {
   const fixture = await mockEvent(page);
   const requestedPlayers: string[] = [];
@@ -53,7 +54,7 @@ async function openRankings(
       conservativeRating: player.clubRating - 180,
       activityPenalty: 0,
       nextMissPenalty: 20,
-      missedEvents: 0,
+      missedEvents: player.rank === 1 ? leadingPlayerMisses : 0,
       attendanceStreak: 1,
       isProvisional: player.rank === 3,
       rating: player.clubRating,
@@ -166,6 +167,25 @@ for (const { name, policy, expected } of [
     expect(unexpected).toEqual([]);
   });
 }
+
+test('the board shows no attendance deduction beyond the grace window when the cap is zero', async ({
+  page,
+}, info) => {
+  const { unexpected } = await openRankings(
+    page,
+    { graceEvents: 3, penaltyPerEvent: 15, penaltyCap: 0 },
+    4,
+  );
+  const missed = page
+    .getByRole('link', { name: /^Leading player/ })
+    .getByText('4 missed', { exact: true });
+  await expect(missed).toBeVisible();
+  await expect(missed).toHaveAttribute('title', /no attendance deduction/i);
+  await expect(missed).not.toHaveAttribute('title', /inside the grace window/i);
+  await ready(page);
+  await page.screenshot({ path: info.outputPath('no-attendance-deduction.png'), fullPage: true });
+  expect(unexpected).toEqual([]);
+});
 
 for (const width of [390, 1440]) {
   test.describe(`${width}px player rankings`, () => {
