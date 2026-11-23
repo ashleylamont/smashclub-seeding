@@ -210,18 +210,17 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(
         main.getByRole('heading', { level: 2, name: 'Before versioned releases' }),
       ).toHaveClass('changelog-archive');
-      for (const tier of ['Major Changes', 'Minor Changes', 'Patch Changes']) {
-        for (const heading of await main
-          .getByRole('heading', { level: 3, name: tier, exact: true })
-          .all())
-          await expect(heading).toHaveClass('changelog-release-tier');
-      }
-      await expect(
+      const entriesUnder = (group: string) =>
         main
-          .getByRole('listitem')
-          .filter({ hasText: 'OBS connection-interruption check' })
-          .locator('.changelog-category'),
-      ).toHaveText('Maintenance');
+          .getByRole('heading', { level: 3, name: group, exact: true })
+          .locator('xpath=following-sibling::*[1][self::ul]/li');
+      for (const [group, note] of [
+        ['New and improved', 'Add an optional Twitch channel link'],
+        ['Fixes', 'Automatic OBS sources show recorded progress'],
+        ['Maintenance', 'OBS connection-interruption check'],
+      ]) {
+        await expect(entriesUnder(group).filter({ hasText: note })).toBeVisible();
+      }
       const categories = ['Milestone', 'Feature', 'Improvement', 'Fix', 'Maintenance'];
       for (const category of categories) {
         const annotations = [
@@ -230,9 +229,13 @@ for (const theme of ['light', 'dark'] as const) {
           ),
         ].length;
         expect(annotations).toBeGreaterThan(0);
-        await expect(
-          main.getByRole('listitem').locator(`.changelog-category-${category.toLowerCase()}`),
-        ).toHaveCount(annotations);
+        const badges = main
+          .getByRole('listitem')
+          .locator(`.changelog-category-${category.toLowerCase()}`);
+        // Older archive entries carry badges. Versioned fixes and maintenance
+        // carry the category once in the shared heading for their list.
+        const group = category === 'Fix' ? 'Fixes' : category === 'Maintenance' ? category : null;
+        await expect(group ? badges.or(entriesUnder(group)) : badges).toHaveCount(annotations);
       }
       await expect(main.getByRole('link', { name: '#151', exact: true })).toHaveAttribute(
         'href',

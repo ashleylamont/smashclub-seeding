@@ -786,7 +786,7 @@ it('extracts the current app version notes for publication', () => {
   const notes = execFileSync(process.execPath, ['scripts/release-notes.mjs', version], {
     encoding: 'utf8',
   });
-  expect(notes).toMatch(/^### (Major|Minor|Patch) Changes$/m);
+  expect(notes).toMatch(/^### (New and improved|Fixes|Other changes|Maintenance)$/m);
   expect(notes).not.toContain('Before versioned releases');
 });
 

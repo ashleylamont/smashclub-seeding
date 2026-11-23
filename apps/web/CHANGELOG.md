@@ -1,6 +1,6 @@
 # Nemesis changelog
 
-Dates show when changes landed on main, in Sydney time. Build links identify the corresponding Git commits. Release headings point to versioned application images.
+Dates show when each change landed, in Sydney time. Select a version to open its GitHub release.
 
 ## 0.23.0
 
