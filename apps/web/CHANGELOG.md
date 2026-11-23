@@ -2,6 +2,18 @@
 
 Dates show when each change landed, in Sydney time. Select a version to open its GitHub release.
 
+## 0.23.6
+
+### Patch Changes
+
+- 23 November 2026 · **Fix** · See the knockout draw’s status and what locking or pausing does in Standings / draw. [#594](https://github.com/ashleylamont/smashclub-seeding/pull/594) · [build e70229a](https://github.com/ashleylamont/smashclub-seeding/commit/e70229a10502bff0e26b69e234a3ad977d14815f)
+- 23 November 2026 · **Maintenance** · Speed up release verification by running Linux browser checks against the packaged Nemesis web app. [#596](https://github.com/ashleylamont/smashclub-seeding/pull/596) · [build 7fb47a9](https://github.com/ashleylamont/smashclub-seeding/commit/7fb47a9b7135e6e51a2d130d4894a014f3ed4d2d)
+- 23 November 2026 · **Improvement** · In OBS Display setup, turn on **Use event Twitch announcement** to show the channel announced in Broadcast. Copy the updated source URL to keep the choice. [#604](https://github.com/ashleylamont/smashclub-seeding/pull/604) · [build 1d1f87b](https://github.com/ashleylamont/smashclub-seeding/commit/1d1f87b0c1742694cb5098ffd220f0597e2f2476)
+- 23 November 2026 · **Fix** · Event Night shows the match count without queue instructions when you browse a player’s matches. [#601](https://github.com/ashleylamont/smashclub-seeding/pull/601) · [build 6e5e3ef](https://github.com/ashleylamont/smashclub-seeding/commit/6e5e3ef48205010521cd178e3e89de56bb90b5e2)
+- 23 November 2026 · **Feature** · Turn on Include profile mains in a finished bracket or division’s PNG preview to add players’ saved characters below the standings. [#597](https://github.com/ashleylamont/smashclub-seeding/pull/597) · [build a768017](https://github.com/ashleylamont/smashclub-seeding/commit/a768017c702af10f7029384dca897aafacb2f8d4)
+- 23 November 2026 · **Fix** · Read both player names and the recorded result in the tournament archive on your phone. [#602](https://github.com/ashleylamont/smashclub-seeding/pull/602) · [build 3bcfb5e](https://github.com/ashleylamont/smashclub-seeding/commit/3bcfb5e7dbcc6970d4371870d2c7e79ddc5dd5f4)
+- 23 November 2026 · **Fix** · Organisers can open the unplayed finals removal review when an attendance change is blocked, then return to their draft and refresh the preview. [#609](https://github.com/ashleylamont/smashclub-seeding/pull/609) · [build b8696c0](https://github.com/ashleylamont/smashclub-seeding/commit/b8696c07041635397f90bf36482c8af7d6d12040)
+
 ## 0.23.5
 
 ### Patch Changes
