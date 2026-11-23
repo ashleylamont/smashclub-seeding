@@ -44,12 +44,13 @@ const tournament: TournamentData = {
       unplayedOutcome: 'forfeit',
       excludedFromRatings: true,
     },
-    { ...played, id: 'b', identifier: 'B', scoresCsv: '5-0' },
+    { ...played, id: 'b', identifier: 'Semi-final 2', resultStage: 'final', scoresCsv: '5-0' },
     {
       ...played,
       id: 'c',
       identifier: 'C',
       scoresCsv: null,
+      completedAt: null,
       unplayedOutcome: 'bye',
       excludedFromRatings: true,
     },
@@ -66,7 +67,7 @@ const tournament: TournamentData = {
 };
 
 for (const theme of ['dark', 'light'] as const) {
-  for (const width of [320, 390, 1440]) {
+  for (const width of [320, 390, 760, 1440]) {
     test(`archived forfeits and played scores are distinct at ${width}px in ${theme} mode`, async ({
       page,
     }, testInfo) => {
@@ -112,14 +113,30 @@ for (const theme of ['dark', 'light'] as const) {
       }
       await expect(rows.nth(0).getByText('Forfeit', { exact: true })).toBeInViewport();
       await expect(rows.nth(0)).not.toContainText(/5-0|Played/);
+      await expect(rows.nth(0).getByText('excluded', { exact: true })).toBeVisible();
       await expect(rows.nth(1).getByRole('cell', { name: '5-0', exact: true })).toBeVisible();
       await expect(rows.nth(2).getByText('Bye', { exact: true })).toBeVisible();
       await expect(rows.nth(2).getByRole('cell', { name: 'C', exact: true })).toBeVisible();
+      await expect(rows.nth(2).getByRole('cell').last()).toHaveText(/^\s*(?:Reported)?\s*—$/);
       const namedSet = rows.nth(3);
       const label = namedSet.getByRole('cell', { name: 'Semi-final 1', exact: true });
       await expect(label).toHaveAttribute('title', 'upper Championship · R3 M1');
       if (width === 1440) await expect(label).toHaveCSS('white-space', 'nowrap');
       await expect(namedSet.getByRole('cell', { name: '2-1', exact: true })).toBeVisible();
+      const reportedSet = rows.nth(1);
+      const reportedAt = reportedSet.getByRole('cell', { name: /2026.*06:30/i });
+      await expect(reportedAt).toBeVisible();
+      if (width >= 760) {
+        const setName = reportedSet.getByRole('cell', { name: 'Semi-final 2', exact: true });
+        for (const cell of [setName, reportedAt]) {
+          const lines = await cell.evaluate((element) => {
+            const text = document.createRange();
+            text.selectNodeContents(element);
+            return text.getClientRects().length;
+          });
+          expect(lines, await cell.innerText()).toBeLessThanOrEqual(width === 1440 ? 1 : 2);
+        }
+      }
       await ready(page);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
       expect(
@@ -128,6 +145,17 @@ for (const theme of ['dark', 'light'] as const) {
       await page.evaluate(() => scrollTo(0, 0));
       await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
       await page.screenshot({ path: testInfo.outputPath('archived-outcomes.png'), fullPage: true });
+      if (width === 390 || width === 1440) {
+        const filter = page.getByRole('combobox', { name: 'Filter sets by stage' });
+        await filter.press('ArrowDown');
+        await expect(page.getByRole('listbox')).toBeVisible();
+        await page.keyboard.press('End');
+        await expect(page.getByRole('option', { name: 'Bracket' })).toBeFocused();
+        await page.keyboard.press('Enter');
+        await expect(rows).toHaveCount(2);
+        await expect(rows.first()).toContainText('Semi-final 2');
+        await expect(rows.last()).toContainText('Semi-final 1');
+      }
     });
   }
 }
