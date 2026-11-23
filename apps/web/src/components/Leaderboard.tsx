@@ -398,6 +398,7 @@ export function Leaderboard({
                   `${row.name}, ${rankLabel.toLowerCase()} ${row.rank}`,
                   `${row.league}`,
                   `club rating ${Math.round(row.clubRating)}`,
+                  ...(row.isProvisional ? ['provisional rating'] : []),
                   ...(row.activityPenalty > 0
                     ? [
                         `${Math.round(row.activityPenalty)} docked for ${row.missedEvents} missed club nights`,
@@ -421,15 +422,17 @@ export function Leaderboard({
                 </span>
 
                 <span className="identity">
-                  <span className="identity-name">
-                    {row.name}
-                    {row.verified && (
-                      <span className="verified" title="Claimed by its owner">
-                        ✓
-                      </span>
-                    )}
+                  <span className="identity-label">
+                    <span className="identity-name">
+                      {row.name}
+                      {row.verified && (
+                        <span className="verified" title="Claimed by its owner">
+                          ✓
+                        </span>
+                      )}
+                    </span>
                     {row.isProvisional && (
-                      <span className="provisional" title="Provisional rating">
+                      <span className="provisional" title="Provisional rating" aria-hidden="true">
                         P
                       </span>
                     )}
