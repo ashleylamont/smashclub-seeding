@@ -2,8 +2,8 @@ import { Input } from './ui/Input';
 import { Select, SelectItem } from './ui/Select';
 import { Switch } from './ui/Switch';
 import { Button } from './ui/Button';
-import { useId, useMemo, useState } from 'react';
-import { Link, useLocation, useRouter } from '@tanstack/react-router';
+import { useId, useMemo, useState, type MouseEvent } from 'react';
+import { Link, useLocation, type HistoryState } from '@tanstack/react-router';
 import type { LeaderboardRow } from '../lib/apiTypes';
 import { Sparkline } from './Sparkline';
 import { CharacterIcons } from './CharacterIcons';
@@ -223,19 +223,27 @@ export function Leaderboard({
   });
   const [view, setView] = useState(initialView);
   const { query, companyFilter, sortField, descending } = view;
-  const { history } = useRouter();
   const sortLabelId = useId();
   const rankLabel = hideInactive && inactiveCount > 0 ? 'Active rank' : 'Published rank';
 
   const updateView = (changes: Partial<RankingsView>) =>
     setView((previous) => ({ ...previous, ...changes }));
 
-  const rememberView = () => {
-    const { href, state } = history.location;
-    if ((state.rankingsView ?? defaultRankingsView) === view) return;
-    // Persist this entry before the profile link pushes the next one.
-    history.replace(href, { ...state, rankingsView: view });
-    history.flush();
+  const rememberView = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey
+    )
+      return;
+
+    const state = window.history.state as HistoryState | null;
+    if ((state?.rankingsView ?? defaultRankingsView) === view) return;
+    // Save before the link navigates and keep the router's existing entry keys.
+    window.history.replaceState({ ...state, rankingsView: view }, '');
   };
 
   const companies = useMemo(
@@ -539,6 +547,11 @@ export function Leaderboard({
                   playerId={row.playerId}
                   name={row.name}
                   onViewFullProfile={rememberView}
+                  getFallbackFocus={(trigger) =>
+                    trigger
+                      .closest('.board-row')
+                      ?.querySelector<HTMLAnchorElement>('a.board-link') ?? null
+                  }
                 />
               </div>
             </li>

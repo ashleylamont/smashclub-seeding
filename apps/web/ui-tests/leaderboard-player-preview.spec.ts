@@ -265,7 +265,22 @@ test('browser Back restores Rankings search, company and ascending event sort', 
   await board.getByRole('button', { name: 'Sort by events attended' }).press('Enter');
   await expect(rows.first()).toContainText(alex.name);
   const directLink = rows.getByRole('link', { name: /^Alex Café & Co/ });
-  await expect(directLink).toHaveAttribute('href', `/players/${alex.playerId}`);
+  const profilePath = `/players/${alex.playerId}`;
+  await expect(directLink).toHaveAttribute('href', profilePath);
+  await page
+    .context()
+    .route(`**${profilePath}`, (route) =>
+      route.fulfill({ body: 'Opened profile in a new tab', contentType: 'text/plain' }),
+    );
+  const [profileTab] = await Promise.all([
+    page.context().waitForEvent('page'),
+    directLink.click({ modifiers: ['ControlOrMeta'] }),
+  ]);
+  await expect(profileTab).toHaveURL(profilePath);
+  await profileTab.close();
+  await expect(page).toHaveURL('/');
+  expect(await page.evaluate(() => window.history.state)).toEqual(entryState);
+
   await board
     .getByRole('button', { name: /^Sorted by events attended, highest first/ })
     .press('Enter');
@@ -275,6 +290,7 @@ test('browser Back restores Rankings search, company and ascending event sort', 
 
   await page.goBack();
   await expect(page).toHaveURL('/');
+  expect(await page.evaluate(() => window.history.state)).toMatchObject(entryState);
   await expect(search).toHaveValue('Café & Co');
   await expect(company).toHaveAttribute('data-value', 'SYD');
   await expect(eventsAscending).toBeVisible();
@@ -288,6 +304,7 @@ test('browser Back restores Rankings search, company and ascending event sort', 
   await directLink.click();
   await expect(page.getByRole('heading', { level: 1, name: /^Alex Café & Co/ })).toBeVisible();
   await page.goBack();
+  expect(await page.evaluate(() => window.history.state)).toMatchObject(entryState);
   await expect(search).toHaveValue('Café & Co with');
   await expect(rows).toHaveCount(1);
   await expect(eventsAscending).toBeVisible();
@@ -408,6 +425,7 @@ test('an open phone preview can close after resizing to a wider layout', async (
   await page.setViewportSize({ width: 720, height: 844 });
   const { unexpected } = await openRankings(page);
   const preview = page.getByRole('button', { name: `Preview ${alex.name}` });
+  const directLink = page.getByRole('link', { name: /^Alex Café & Co/ });
   await preview.press('Enter');
   const dialog = page.getByRole('dialog', { name: alex.name });
   await expect(dialog.getByRole('img', { name: 'Mains Mario' })).toBeVisible();
@@ -417,8 +435,7 @@ test('an open phone preview can close after resizing to a wider layout', async (
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await expect(preview).toHaveCount(0);
-  await page.keyboard.press('Tab');
-  await expect(page.locator(':focus-visible')).toBeVisible();
+  await expect(directLink).toBeFocused();
   expect(unexpected).toEqual([]);
 });
 
@@ -431,6 +448,7 @@ test('browser Back restores phone Rankings after the full profile link in Previe
   const search = board.getByRole('searchbox', { name: 'Search' });
   const company = board.getByRole('combobox', { name: 'Company' });
   const sort = board.getByRole('combobox', { name: 'Sort' });
+  const entryState = await page.evaluate(() => window.history.state);
   await search.fill('Café & Co');
   await chooseOption(company, 'SYD');
   await chooseOption(sort, 'eventCount');
@@ -443,6 +461,7 @@ test('browser Back restores phone Rankings after the full profile link in Previe
 
   await page.goBack();
   await expect(page).toHaveURL('/');
+  expect(await page.evaluate(() => window.history.state)).toMatchObject(entryState);
   await expect(dialog).toBeHidden();
   await expect(search).toHaveValue('Café & Co');
   await expect(company).toHaveAttribute('data-value', 'SYD');

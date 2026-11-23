@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState, type MouseEventHandler } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { trpc } from '../lib/trpc';
@@ -101,14 +101,17 @@ export function PlayerProfilePreview({
   trigger = 'button',
   teamMemberPosition,
   onViewFullProfile,
+  getFallbackFocus,
 }: {
   playerId: string;
   name: string;
   trigger?: 'button' | 'name';
   teamMemberPosition?: number;
-  onViewFullProfile?: () => void;
+  onViewFullProfile?: MouseEventHandler<HTMLAnchorElement>;
+  getFallbackFocus?: (trigger: HTMLButtonElement) => HTMLElement | null;
 }) {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const query = useQuery({
     queryKey: ['playerPreview', playerId],
     queryFn: ({ signal }) => trpc.public.playerPreview.query({ playerId }, { signal }),
@@ -120,13 +123,24 @@ export function PlayerProfilePreview({
   const redirectTo = data?.redirectTo;
   const triggerName = teamMemberPosition === undefined ? name : `${name} (${teamMemberPosition})`;
 
+  const focusAfterClose = (event: Event) => {
+    const button = triggerRef.current;
+    if (!button?.isConnected || button.getClientRects().length) return;
+    const fallback = getFallbackFocus?.(button);
+    if (!fallback) return;
+    event.preventDefault();
+    fallback.focus();
+  };
+
   return (
     <Dialog
       title={profile?.name ?? name}
       open={open}
       onOpenChange={setOpen}
+      onCloseAutoFocus={getFallbackFocus ? focusAfterClose : undefined}
       trigger={
         <Button
+          ref={triggerRef}
           size="small"
           variant={trigger === 'name' ? 'plain' : 'default'}
           className={

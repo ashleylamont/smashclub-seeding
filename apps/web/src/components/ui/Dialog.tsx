@@ -9,6 +9,7 @@ export function Dialog({
   children,
   open,
   onOpenChange,
+  onCloseAutoFocus,
   trigger,
   wide = false,
   className = '',
@@ -19,6 +20,7 @@ export function Dialog({
   children: ReactNode;
   open?: boolean;
   onOpenChange: (open: boolean) => void;
+  onCloseAutoFocus?: (event: Event) => void;
   trigger?: ReactNode;
   wide?: boolean;
   className?: string;
@@ -35,14 +37,12 @@ export function Dialog({
         <Primitive.Content
           className={`modal ui-dialog${wide ? ' modal-wide' : ''}${print ? ' ui-print-dialog' : ''} ${className}`}
           {...(!description ? { 'aria-describedby': undefined } : {})}
-          onCloseAutoFocus={
-            trigger
-              ? undefined
-              : (event) => {
-                  event.preventDefault();
-                  if (opener?.isConnected) opener.focus();
-                }
-          }
+          onCloseAutoFocus={(event) => {
+            onCloseAutoFocus?.(event);
+            if (trigger || event.defaultPrevented) return;
+            event.preventDefault();
+            if (opener?.isConnected) opener.focus();
+          }}
         >
           <div className="ui-dialog-heading">
             <Primitive.Title asChild>
