@@ -100,6 +100,43 @@ describe('release note presentation', () => {
     expect(oldNotes).toBe(archive);
   });
 
+  it.each([
+    {
+      description: 'an authored summary',
+      summary: 'See how Nemesis rankings and tournament tools developed.',
+      highlights: 'See how Nemesis rankings and tournament tools developed.',
+    },
+    {
+      description: 'a generated summary',
+      summary: '',
+      highlights: '- Introduce the public Nemesis changelog.',
+    },
+  ])(
+    'keeps legacy release build provenance in the full notes with $description',
+    ({ summary, highlights }) => {
+      const metadata = `Released 8 November 2026 · [release build cecd3d4](${repo}/commit/cecd3d4297b78b3fd03531e5f7c016578fa97739)`;
+      const milestone = '- **Milestone** · Introduce the public Nemesis changelog.';
+      const markdown = [
+        '# Nemesis changelog',
+        '## 0.1.0',
+        summary,
+        metadata,
+        '### Minor Changes',
+        milestone,
+      ]
+        .filter(Boolean)
+        .join('\n\n');
+      expect(readChangelog(markdown).releases).toEqual([
+        {
+          version: '0.1.0',
+          anchor: '010',
+          highlights,
+          notes: `${metadata}\n\n### New and improved\n\n${milestone}`,
+        },
+      ]);
+    },
+  );
+
   it('generates GitHub notes with the exact version screenshot URL and no neighboring release', () => {
     const notes = execFileSync(process.execPath, ['scripts/release-notes.mjs', '0.3.0'], {
       encoding: 'utf8',

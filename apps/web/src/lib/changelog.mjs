@@ -1,5 +1,7 @@
 const releaseVersion = /^(\d+\.\d+\.\d+)\n/;
 const releaseTier = /^### (?:Major|Minor|Patch) Changes[ \t]*$/m;
+const legacyReleaseBuild =
+  /(?:^|\n\n)(Released \d{1,2} [A-Za-z]+ \d{4} · \[release build [\da-f]{7}\]\(https:\/\/github\.com\/[^)]+\/commit\/[\da-f]{40}\))$/;
 const categoryPrefix = /^- (?:\d{1,2} [A-Za-z]+ \d{4} · )?\*\*([^*]+)\*\* · /;
 const generatedSource =
   /^- (\d{1,2} [A-Za-z]+ \d{4}) · (.+?) ((?:\[#\d+\]\(https:\/\/github\.com\/[^)]+\/pull\/\d+\) · )?\[build [\da-f]{7}\]\(https:\/\/github\.com\/[^)]+\/commit\/[\da-f]{40}\))$/;
@@ -97,6 +99,9 @@ export function readChangelog(markdown) {
     const firstTier = releaseTier.exec(notes);
     const introduction = firstTier ? notes.slice(0, firstTier.index).trim() : '';
     const details = firstTier ? notes.slice(firstTier.index) : notes;
+    const provenance = legacyReleaseBuild.exec(introduction);
+    const summary = provenance ? introduction.slice(0, provenance.index).trimEnd() : introduction;
+    const fullNotes = provenance ? `${provenance[1]}\n\n${details}` : details;
     // Match the existing Markdown heading IDs, including duplicate slug suffixes.
     const baseAnchor = version.replaceAll('.', '');
     const count = anchorCounts.get(baseAnchor) ?? 0;
@@ -104,8 +109,8 @@ export function readChangelog(markdown) {
     releases.push({
       version,
       anchor: count ? `${baseAnchor}-${count}` : baseAnchor,
-      highlights: introduction || releaseHighlights(details),
-      notes: groupReleaseNotes(details),
+      highlights: summary || releaseHighlights(details),
+      notes: groupReleaseNotes(fullNotes),
     });
   }
   return { releases, archive: archive.join('') };
