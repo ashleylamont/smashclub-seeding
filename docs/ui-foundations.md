@@ -101,3 +101,16 @@ Use the shared components for every control. Keep primitive imports and control 
 Check the gallery and real workflow on phone and desktop, in both themes, with keyboard-only operation and long aliases. Extend the [UI visual suite](ui-visual-review.md) for new representative states. Browser tests choose items through the visible Radix menu and confirm through the Alert Dialog; they do not operate hidden form proxies. Keep server/domain tests as the authority for scoring and auth semantics.
 
 The gallery includes empty/disabled choices, checkbox and switch labels, persisted disclosure drafts, form submission and cancellable confirmations. All existing control surfaces use the shared foundation, including print previews and local display setup. Result graphics, bracket drawings, charts and paper sheets keep their specialized rendering. Automated checks support review; they do not constitute a designer’s approval of the new baselines or a full screen-reader audit.
+
+## Rehearse a design change
+
+Use this walkthrough to review a design with a designer or tournament organiser. Start the synthetic event using the [local rehearsal setup](development.md#local-rehearsal). Use separate browser profiles for the player and organiser so both accounts stay signed in.
+
+1. Open `/ui` on the local web server. In **Controls**, try a dialog and compare the loading, error and success examples. In **Reporting**, enter a score and check the state before and after confirmation. Use **Foundations** and the navigation theme control to compare dark and light.
+2. Sign in as **Event player**. Open **Event Night**, then open **Nemesis · Rehearsal Night**. Use **Find my matches** and **Show matches for** to locate a pairing. Check which station, match state and next action a player can identify from the page.
+3. Sign in as **Event organiser** in the other profile. In the event address, change `/play/` to `/operate/` and keep the same plan ID. Start in **Run matches** and find the pairing. Check **Broadcast** for the selected station, live-score controls and the **Intermission browser sources** disclosure.
+4. Open **Automatic intermission overlay** from that disclosure in its own tab. Check the scene while the selected station is playing and again after the organiser finishes the set. Match the displayed station, players and gameplay or progress state to the desk.
+
+Check the affected route at phone and desktop widths in both themes. Use the keyboard to open the relevant dialogs or disclosures and return to the control that opened them. For each finding, record the build, role, route, device or viewport, observed state and what the reviewer expected to do next. Include the exact wording for a copy finding and a screenshot with synthetic data for a visual finding.
+
+At the venue, have a tournament organiser repeat the affected task on a phone and laptop during a set transition. For broadcast changes, check the gameplay aperture and progress scene in the actual OBS source at the show resolution. Ask the designer to confirm the visual hierarchy with the rest of the route visible. Record that feedback separately from the local browser rehearsal.
