@@ -1,5 +1,6 @@
 import { AxeBuilder } from '@axe-core/playwright';
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { chooseOption } from '../test-support/controls';
 import { mockEvent, PLAN_ID, ready } from './fixtures';
 
 const channel = 'sydney_smash_tournament01';
@@ -122,6 +123,59 @@ for (const [width, height, fontSize] of [
 
 for (const theme of ['dark', 'light'] as const)
   for (const width of [390, 1440]) {
+    test(`Display setup restores keyboard focus at ${width}px in ${theme}`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const { snapshot, unexpected } = await mockEvent(page, { bracket: true });
+      const active = snapshot.matches.find((match) => match.status === 'playing')!;
+      active.player1Name = 'Alexandria and Jordan with a long tournament team alias';
+      await page.goto(sourcePath({ presentation: 'gameplay', twitch: channel }));
+      const trigger = page.getByRole('button', { name: 'Display setup', exact: true });
+      const dialog = page.getByRole('dialog', { name: 'Display setup', exact: true });
+      const close = dialog.getByRole('button', { name: 'Close dialog', exact: true });
+
+      await trigger.press('Enter');
+      await expect(close).toBeFocused();
+      await expect(trigger).toBeHidden();
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
+      await expect(trigger).toBeFocused();
+      await expect(
+        page.getByRole('region', { name: 'Transparent game capture area' }),
+      ).toBeVisible();
+      await ready(page);
+      await page.screenshot({
+        path: testInfo.outputPath('obs-setup-focus-return.png'),
+        omitBackground: true,
+      });
+
+      await trigger.press('Enter');
+      await close.press('Enter');
+      await expect(dialog).toBeHidden();
+      await expect(trigger).toBeFocused();
+
+      await trigger.press('Enter');
+      const selectedStation = snapshot.stations[1]!.id;
+      await chooseOption(
+        dialog.getByRole('combobox', { name: 'Current match station' }),
+        selectedStation,
+      );
+      expect(new URL(page.url()).searchParams.get('station')).toBe(selectedStation);
+      await dialog.getByRole('button', { name: 'Hide controls', exact: true }).press('Enter');
+      await expect(dialog).toBeHidden();
+      await expect(trigger).toBeFocused();
+
+      const link = twitchLink(page);
+      await link.press('s');
+      await expect(close).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
+      await expect(link).toBeFocused();
+      expect(unexpected).toEqual([]);
+    });
+
     test(`Display setup saves, reloads and clears the Twitch link at ${width}px in ${theme} by keyboard`, async ({
       page,
     }, testInfo) => {

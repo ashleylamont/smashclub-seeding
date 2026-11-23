@@ -143,11 +143,12 @@ export function OverlaySetup({
         <span className="capture-corner capture-corner-tl" />
         <span className="capture-corner capture-corner-br" />
       </div>
-      {showButton && !open && (
+      {showButton && (
         <Button
           type="submit"
           variant="plain"
           className="overlay-setup-toggle"
+          hidden={open}
           onClick={() => setOpen(true)}
           title="Display setup (S)"
         >
