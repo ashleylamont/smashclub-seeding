@@ -1,10 +1,12 @@
 import { Button } from '../components/ui/Button';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { trpc } from '../lib/trpc';
 import type { RecapData, RecapFact, RecapFactEntry, RecapPlayer } from '../lib/apiTypes';
 import { CharacterIcons } from '../components/CharacterIcons';
+import { LoadingState, Notice } from '../components/ui/Feedback';
+import { PageHeader } from '../components/ui/PageHeader';
 import { formatDate } from '../lib/format';
 import { downloadBlob, renderShareCard } from '../lib/shareCard';
 import { bundledResultPortraitUrl } from '../lib/resultGraphicBundledArt';
@@ -21,23 +23,82 @@ import './Recap.css';
 export function RecapPage() {
   const { slug } = useParams({ from: '/recaps/$slug' });
 
+  return <RecapRoute key={slug} slug={slug} />;
+}
+
+function RecapRoute({ slug }: { slug: string }) {
   const query = useQuery({
     queryKey: ['recap', slug],
     queryFn: () => trpc.public.recap.query({ slug }),
   });
+  const [retrying, setRetrying] = useState(false);
+  const retryButton = useRef<HTMLButtonElement>(null);
+  const restoreFocus = useRef(false);
 
-  if (query.isPending) return <p className="loading-text">Loading recap…</p>;
-  if (query.isError)
-    return <p className="error-text">Failed to load recap: {query.error.message}</p>;
-  if (query.data == null) return <p className="error-text">No recap found for this tournament.</p>;
+  async function retry() {
+    if (retrying) return;
+    setRetrying(true);
+    const result = await query.refetch({ cancelRefetch: false });
+    restoreFocus.current = !result.isError && document.activeElement === retryButton.current;
+    setRetrying(false);
+  }
 
-  return <Recap data={query.data} />;
+  function focusAfterRetry(target: HTMLElement | null) {
+    if (!target || !restoreFocus.current) return;
+    restoreFocus.current = false;
+    target.focus();
+  }
+
+  // A refetch resets an uncached query to pending. Keep the same button mounted
+  // until the retry finishes so keyboard focus survives that transition.
+  if (retrying || query.isError)
+    return (
+      <>
+        {retrying ? (
+          <Notice live={false}>
+            <LoadingState>Retrying recap…</LoadingState>
+          </Notice>
+        ) : (
+          <Notice tone="danger">Could not load this recap.</Notice>
+        )}
+        <Button
+          ref={retryButton}
+          aria-disabled={retrying || undefined}
+          onClick={() => void retry()}
+        >
+          Retry
+        </Button>
+      </>
+    );
+
+  if (query.isPending) return <LoadingState>Loading recap…</LoadingState>;
+  if (query.data == null)
+    return (
+      <PageHeader
+        title="Recap not found"
+        actions={
+          <Button asChild>
+            <Link ref={focusAfterRetry} to="/tournaments">
+              Browse tournament results
+            </Link>
+          </Button>
+        }
+      />
+    );
+
+  return <Recap data={query.data} headingRef={focusAfterRetry} />;
 }
 
 /** Facts that head the page rather than sitting in the grid with the rest. */
 const HERO_KINDS = new Set<RecapFact['kind']>(['podium']);
 
-function Recap({ data }: { data: RecapData }) {
+function Recap({
+  data,
+  headingRef,
+}: {
+  data: RecapData;
+  headingRef: (heading: HTMLHeadingElement | null) => void;
+}) {
   const podiums = useMemo(
     () =>
       data.facts
@@ -64,7 +125,9 @@ function Recap({ data }: { data: RecapData }) {
       <div className="page-header">
         <div>
           <p className="eyebrow">The night in review</p>
-          <h1>{headline}</h1>
+          <h1 ref={headingRef} tabIndex={-1}>
+            {headline}
+          </h1>
         </div>
         <ShareBar data={data} headline={headline} podium={podiums[0] ?? null} podiums={podiums} />
       </div>
