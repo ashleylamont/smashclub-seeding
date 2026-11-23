@@ -73,11 +73,13 @@ for (const theme of ['dark', 'light'] as const)
       await expect(copy(automatic)).toBeFocused();
 
       const base = new URL(page.url()).origin;
+      const previewUrlFor = (mode: string, station: string) =>
+        `/overlay/${PLAN_ID}?${new URLSearchParams({ station, presentation: mode })}`;
       const urlFor = (mode: string, station: string) =>
-        `/overlay/${PLAN_ID}?${new URLSearchParams({ station, presentation: mode, controls: '0' })}`;
+        `${previewUrlFor(mode, station)}&controls=0`;
       const autoUrl = base + urlFor('auto', stage!.id);
       for (const [mode, label] of sourceLabels)
-        await expect(preview(label)).toHaveAttribute('href', urlFor(mode, stage!.id));
+        await expect(preview(label)).toHaveAttribute('href', previewUrlFor(mode, stage!.id));
       await page.keyboard.press('Enter');
       await expect(copy(automatic, 'Copied')).toBeFocused();
       await expect(panel.getByText('Automatic intermission overlay URL copied.')).toHaveRole(
@@ -136,7 +138,7 @@ for (const theme of ['dark', 'light'] as const)
       } finally {
         releaseClipboard?.();
       }
-      await expect(preview(gameplay)).toHaveAttribute('href', urlFor('gameplay', setup!.id));
+      await expect(preview(gameplay)).toHaveAttribute('href', previewUrlFor('gameplay', setup!.id));
       await expect(copy(gameplay)).toBeEnabled();
       await expect(panel.getByText('Waiting for the previous copy to finish.')).toBeHidden();
       expect(clipboardContents).toBe(gameplayUrl);
@@ -200,3 +202,76 @@ for (const theme of ['dark', 'light'] as const)
       await expect(preview(gameplay)).toHaveAttribute('target', '_blank');
       expect(unexpected).toEqual([]);
     });
+
+for (const width of [390, 1440]) {
+  const phone = width === 390;
+  test.describe(`OBS source preview at ${width}px`, () => {
+    test.use({ hasTouch: phone, viewport: { width, height: phone ? 844 : 900 } });
+
+    for (const theme of ['dark', 'light'] as const)
+      test(`Follow event setup and copy in ${theme}`, async ({ page }, testInfo) => {
+        await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+        const { snapshot, unexpected } = await mockEvent(page, { role: 'admin' });
+        const [stage, floor] = snapshot.stations;
+        snapshot.matches.find((match) => match.id === stage!.currentMatchId)!.player1Name =
+          'Alexandria with a long tournament alias from Western Sydney';
+        Object.assign(snapshot, { broadcastPresentationMode: 'gameplay' });
+        let clipboard = '';
+        await page.exposeFunction('copyPreviewSource', (value: string) => {
+          clipboard = value;
+        });
+        await page.addInitScript(() => {
+          Object.defineProperty(navigator, 'clipboard', {
+            value: {
+              writeText: (value: string) => Reflect.get(window, 'copyPreviewSource')(value),
+            },
+          });
+        });
+
+        await page.goto(`/operate/${PLAN_ID}?view=broadcast&station=${floor!.id}`);
+        const panel = page.getByRole('tabpanel', { name: 'Broadcast', exact: true });
+        const sources = panel.getByRole('button', { name: 'Intermission browser sources' });
+        if (phone) await sources.tap();
+        else await sources.press('Enter');
+        const preview = panel.getByRole('link', { name: 'Follow event overlay ↗', exact: true });
+        const href = (await preview.getAttribute('href'))!;
+        const url = new URL(href, page.url());
+        expect(url.searchParams.get('station')).toBe(floor!.id);
+        expect(url.searchParams.get('presentation')).toBe('event');
+
+        await page.goto(href);
+        const setup = page.getByRole('button', { name: 'Display setup', exact: true });
+        await expect(setup).toBeVisible();
+        if (phone) await setup.tap();
+        else await setup.press('Enter');
+        const dialog = page.getByRole('dialog', { name: 'Display setup' });
+        await expect(dialog.getByRole('combobox', { name: 'Current match station' })).toContainText(
+          floor!.name,
+        );
+        await expect(
+          dialog.getByRole('combobox', { name: 'Broadcast presentation' }),
+        ).toContainText('Follow event');
+        const timing = dialog.getByRole('combobox', { name: 'Change progress page every' });
+        await expect(timing).toContainText('10 seconds');
+        await chooseOption(timing, '30');
+
+        const copy = dialog.getByRole('button', { name: 'Copy OBS source URL' });
+        if (phone) await copy.tap();
+        else await copy.press('Enter');
+        await expect(dialog.getByRole('status')).toHaveText('OBS source URL copied.');
+        expect(clipboard).toBe(
+          `${url.origin}/overlay/${PLAN_ID}?station=${floor!.id}&presentation=event&cycleSeconds=30&controls=0`,
+        );
+        await ready(page);
+        await page.screenshot({ path: testInfo.outputPath('configured-preview.png') });
+
+        await page.goto(clipboard);
+        await expect(
+          page.getByRole('region', { name: 'Transparent game capture area' }),
+        ).toBeVisible();
+        await expect(setup).toHaveCount(0);
+        await expect(dialog).toHaveCount(0);
+        expect(unexpected).toEqual([]);
+      });
+  });
+}

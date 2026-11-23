@@ -127,8 +127,9 @@ export function MainStagePanel({
         <p>
           Auto shows tournament progress between sets and returns to gameplay when this station
           starts a match. Progress pages rotate every {DEFAULT_PROGRESS_SECONDS} seconds by default.
-          To adjust a source, open its preview and press S for Display setup. Copy the configured
-          URL from Use with OBS. Only Follow event overlay uses the event presentation setting.
+          Open a preview to adjust the source in Display setup. Copy here gives you the preset URL.
+          To include your changes, use Copy OBS source URL in Display setup. Only Follow event
+          overlay uses the event presentation setting.
         </p>
         <BroadcastSources planId={data.plan.id} stationId={station?.id} />
       </Disclosure>
@@ -212,16 +213,18 @@ function BroadcastSourceRows({
         const params = new URLSearchParams({
           ...(stationId ? { station: stationId } : {}),
           presentation: mode,
-          controls: '0',
         });
-        const href = `/overlay/${encodeURIComponent(planId)}?${params}`;
+        const overlay = `/overlay/${encodeURIComponent(planId)}`;
+        const previewHref = `${overlay}?${params}`;
+        params.set('controls', '0');
+        const sourceHref = `${overlay}?${params}`;
         const rowFeedback = feedback?.mode === mode ? feedback : undefined;
         const state = rowFeedback?.state;
         const action = state === 'copying' ? 'Copying' : state === 'copied' ? 'Copied' : 'Copy';
         return (
           <div className="ops-broadcast-source" key={mode}>
             <Button asChild>
-              <a href={href} target="_blank" rel="noreferrer">
+              <a href={previewHref} target="_blank" rel="noreferrer">
                 {label}
                 {'\u00a0'}↗
               </a>
@@ -230,7 +233,7 @@ function BroadcastSourceRows({
               aria-label={`${action} ${label.toLowerCase()} URL`}
               aria-disabled={busy || undefined}
               onClick={() => {
-                const url = new URL(href, window.location.origin).href;
+                const url = new URL(sourceHref, window.location.origin).href;
                 void copyUrl(url, (state) => setFeedback({ mode, state, url }));
               }}
             >

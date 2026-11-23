@@ -179,7 +179,7 @@ test('assigned TO switches an open event-following OBS source independently of f
       ).status(),
     ).toBe(409);
 
-    await following.keyboard.press('s');
+    await following.getByRole('button', { name: 'Display setup', exact: true }).press('Enter');
     const setup = following.getByRole('dialog', { name: 'Display setup' });
     await expect(setup.getByRole('combobox', { name: 'Broadcast presentation' })).toContainText(
       'Follow event',
