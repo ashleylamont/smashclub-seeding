@@ -246,6 +246,7 @@ export function PlayerHubMatches({
               onSubmit={(input) => submitScore(match.id, input)}
               approvalPolicy={!closed && playOpen ? scoreApprovalPolicy(data, match) : 'review'}
               match={match}
+              showPlayerPreviews={!closed && data.plan.competitionFormat === 'singles'}
               memberNames={data.memberNames}
               playedCharacters={data.charactersPlayed?.[match.id]}
               lateReport={
