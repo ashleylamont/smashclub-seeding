@@ -1,8 +1,10 @@
-import { nativeResultPublications, sets } from '@smashclub/db';
+import { eventPlans, nativeResultPublications, sets } from '@smashclub/db';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createPostgresNativeRuntime, type NativeRuntime } from '../src/tournament/runtime';
+import { reviewPlayoffPoolOrder } from '../src/tournament/playoffPoolCorrection';
 import { nativeFinalsSlotReplayFixture } from './helpers/nativeFinalsSlotReplay';
+import { seedNativeDraft } from './helpers/nativeLiveFixture';
 import { postgresCluster } from './helpers/postgres';
 
 describe('reviewed corrections to frozen multi-pool standings', () => {
@@ -172,5 +174,91 @@ describe('reviewed corrections to frozen multi-pool standings', () => {
         .from(nativeResultPublications)
         .where(eq(nativeResultPublications.eventPlanId, event.planId)),
     ).toMatchObject([{ resultId: before.result!.id, revision: 1 }]);
+  });
+
+  it('corrects a sealed automatic pool that froze without eligible entrants', async () => {
+    const planId = await seedNativeDraft(pg.db);
+    await pg.db
+      .update(eventPlans)
+      .set({
+        structure: 'dual_division',
+        structureOptions: { roundRobinMeetings: 1, consolation: false },
+      })
+      .where(eq(eventPlans.id, planId));
+    const { eventOps } = fixture.caller();
+    const state = () => runtime.state(planId);
+    await eventOps.softLockPools({ planId, confirm: true });
+    const initial = await state();
+    const pool = initial.pools.find(({ division, index }) => division === 'upper' && index === 0)!;
+    for (const match of initial.matches) {
+      const entrants = initial.pools.find(({ id }) => id === match.poolId)!.entrantIds;
+      const winner = entrants.find((id) => [match.player1Id, match.player2Id].includes(id))!;
+      await eventOps.reportScore(fixture.score(match, winner));
+    }
+    for (const playerId of pool.entrantIds) {
+      const args = { planId, action: 'withdraw' as const, playerId };
+      const preview = await eventOps.previewAttendance(args);
+      expect(preview.allowed).toBe(true);
+      await eventOps.applyAttendance({ ...args, revisionToken: preview.revisionToken });
+    }
+    const draw = { planId, seedPolicy: 'pool_place_whr_v1' as const };
+    const preview = await eventOps.native.preview(draw);
+    await eventOps.native.generate({
+      ...draw,
+      revisionToken: preview.revisionToken,
+      requestId: crypto.randomUUID(),
+    });
+    for (;;) {
+      const ready = (await state()).matches.find((match) => match.status === 'ready');
+      if (!ready) break;
+      await eventOps.reportScore(fixture.score(ready, ready.player1Id!));
+    }
+    await eventOps.native.finalize({ planId });
+    const before = await state();
+    expect(before.pools.find(({ id }) => id === pool.id)).toMatchObject({
+      qualifierRoster: [],
+      orderDecision: { source: 'automatic' },
+    });
+    const qualifyingPools = before.brackets.flatMap(({ qualifierSlots }) =>
+      (qualifierSlots ?? []).map(({ poolId }) => poolId),
+    );
+    expect(qualifyingPools.length).toBeGreaterThan(0);
+    expect(qualifyingPools).not.toContain(pool.id);
+
+    const missingRoster = structuredClone(before);
+    delete missingRoster.pools.find(({ id }) => id === pool.id)!.qualifierRoster;
+    expect(() => reviewPlayoffPoolOrder(missingRoster, before, pool.id)).toThrow(
+      /exact recorded finals qualification sources/,
+    );
+
+    const third = pool.entrantIds[2]!;
+    const fourth = pool.entrantIds[3]!;
+    const changed = before.matches.find(
+      (match) =>
+        match.poolId === pool.id &&
+        [third, fourth].every((id) => [match.player1Id, match.player2Id].includes(id)),
+    )!;
+    const { requestId, ...correction } = fixture.score(changed, fourth);
+    await eventOps.live.command({
+      planId,
+      requestId,
+      command: {
+        kind: 'replaceResult',
+        resultId: before.result!.id,
+        reason: 'Corrected from original pool results',
+        corrections: [correction],
+      },
+    });
+    const after = await state();
+    expect(after.pools.find(({ id }) => id === pool.id)).toMatchObject({
+      qualifierRoster: [],
+      order: [...pool.entrantIds.slice(0, 2), fourth, third],
+    });
+    expect(after.result).toMatchObject({ revision: 2, replacesResultId: before.result!.id });
+    expect(after.brackets).toEqual(before.brackets);
+    expect(after.matches.filter(({ bracketId }) => bracketId)).toEqual(
+      before.matches.filter(({ bracketId }) => bracketId),
+    );
+    expect(await runtime.replay(planId)).toEqual(after);
   });
 });

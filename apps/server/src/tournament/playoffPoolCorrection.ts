@@ -129,7 +129,8 @@ function recordedPlayoffPool(before: TournamentState, poolId: string) {
     );
     return poolSlots;
   });
-  requireFact(frozenSlots.length > 0 || singlePoolPlayoff, exactEvidence);
+  // An explicitly empty roster qualifies nobody, as confirmed by the exact draw above.
+  requireFact(frozenSlots.length > 0 || roster.size === 0 || singlePoolPlayoff, exactEvidence);
   return { pool, matches, roster, frozenSlots };
 }
 
