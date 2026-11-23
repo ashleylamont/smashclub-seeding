@@ -205,7 +205,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
       <header className="profile-header">
         <div className="profile-identity">
           <p className="eyebrow">
-            {rating ? `Rank #${rating.rank}` : 'Unrated'}
+            {rating ? `Published rank #${rating.rank}` : 'Unrated'}
             {player.companyCode ? ` · ${player.companyCode}` : ''}
           </p>
           <h1 className="profile-name">
@@ -248,12 +248,10 @@ function PlayerProfile({ data }: { data: PlayerData }) {
         {rating && (
           <div className="profile-headline">
             <span className="headline-label">
-              Rating
-              <InfoTip label="Rating" align="end">
-                The board ranks on this: the skill estimate below, less a penalty for missed club
-                nights. Played singles and doubles sets move the estimate. Attendance affects the
-                penalty. Bracket seeding uses a different, more cautious number, so a seed and a
-                rank need not agree.
+              Club rating
+              <InfoTip label="Club rating" align="end">
+                Rankings use club rating. It subtracts any attendance penalty from the skill
+                estimate. Bracket seeds use the skill estimate and its uncertainty.
               </InfoTip>
             </span>
             <span className="headline-value num">{rating.clubRating.toFixed(0)}</span>
@@ -275,8 +273,14 @@ function PlayerProfile({ data }: { data: PlayerData }) {
           <dt>Skill estimate</dt>
           <dd className="num">{rating ? rating.skillRating.toFixed(0) : '—'}</dd>
           <dd className="stat-detail">
-            Best guess at how good you are, from results alone. The rating above is this number less
-            any penalty for missed club nights — with none owing, the two are the same.
+            WHR estimates skill from eligible sets and opponent strength.
+            {rating && rating.isolationFactor > 0 && (
+              <>
+                {' '}
+                Rookie anchoring pulls this figure toward the starting estimate. The nightly
+                breakdown uses WHR estimates before that adjustment.
+              </>
+            )}
           </dd>
         </div>
         <div className="stat">

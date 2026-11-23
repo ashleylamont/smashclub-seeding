@@ -43,12 +43,11 @@ export function BoardLegend({ leagues }: Props) {
         <dl className="legend-terms">
           <div className="legend-term">
             <dt>
-              <span className="legend-sample num legend-sample-rating">1684</span> Rating
+              <span className="legend-sample num legend-sample-rating">1684</span> Club rating
             </dt>
             <dd>
-              What the board is ordered on: the skill estimate, less any penalty for missed club
-              nights. So a place is held by turning up as well as by winning. Bracket seeding uses a
-              more cautious number instead, which is why a seed and a rank can differ.
+              Ranks use the skill estimate after any attendance penalty. Bracket seeds use the skill
+              estimate and its uncertainty.
             </dd>
           </div>
 
@@ -57,8 +56,8 @@ export function BoardLegend({ leagues }: Props) {
               <span className="legend-sample num">1961±138</span> Skill ± band
             </dt>
             <dd>
-              The estimate itself, and how sure of it we are. Play more and the band narrows. With
-              no penalty owing, the rating on the left is exactly this number.
+              The estimate and its uncertainty. Without an attendance penalty, the club rating
+              equals the skill estimate.
             </dd>
           </div>
 
@@ -82,10 +81,9 @@ export function BoardLegend({ leagues }: Props) {
               Movement
             </dt>
             <dd>
-              Places gained or lost over the last club night — compared against a replay with that
-              night withheld, so it reports what the games did rather than what the last recompute
-              happened to change. Counted among the players currently shown, so ▲2 means you passed
-              two of them rather than that two dropped off the board.
+              Places gained or lost over the last club night, measured against a replay that leaves
+              that night out. Movement uses the selected ranking field, even when you search or
+              filter by company.
             </dd>
           </div>
 
