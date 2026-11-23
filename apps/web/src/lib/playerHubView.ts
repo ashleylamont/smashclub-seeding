@@ -143,7 +143,8 @@ export function playerHubView(data: HubData, player = '', selectedPool = '') {
     pendingBrackets,
     linked,
     hasBrackets,
-    sections,
+    sections:
+      closed && !allPools.length ? sections.filter((section) => section !== 'pools') : sections,
     results,
     activePools,
     activeBrackets,
