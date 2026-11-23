@@ -17,11 +17,13 @@ for (const account of [
     await page.getByRole('button', { name: 'Sign in to rehearsal' }).click();
     await expect(page).toHaveURL(/\/me$/);
     await expect(page.locator('.me-account .account-name')).toBeVisible();
+    await expect(page.getByRole('button', { name: /Link (Discord|Google)/ })).toHaveCount(0);
     await expect(page.locator('.app-nav .nav-link', { hasText: 'Admin' })).toHaveCount(
       account === 'Administrator' ? 1 : 0,
     );
     await page.reload();
     await expect(page.locator('.me-account .account-name')).toBeVisible();
+    await expect(page.getByRole('button', { name: /Link (Discord|Google)/ })).toHaveCount(0);
   });
 }
 

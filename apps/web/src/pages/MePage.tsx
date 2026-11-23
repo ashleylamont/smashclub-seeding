@@ -3,11 +3,14 @@ import { LoadingState } from '../components/ui/Feedback';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Navigate, useSearch } from '@tanstack/react-router';
-import { authClient, useCurrentUser } from '../lib/auth';
+import { authClient, useCurrentUser, useSignInOptions } from '../lib/auth';
 import { ProfileClaimSection } from '../components/ProfileClaimSection';
 import './Auth.css';
 
-const PROVIDERS = ['discord', 'google'] as const;
+const PROVIDERS = [
+  { id: 'discord', label: 'Discord' },
+  { id: 'google', label: 'Google' },
+] as const;
 
 export function MePage() {
   const { data: session, isPending } = authClient.useSession();
@@ -41,8 +44,8 @@ export function MePage() {
           </div>
         </div>
         <p className="account-photo-note muted">
-          Your account photo comes from your sign-in provider. Main characters are shown beside your
-          public player name.
+          {session.user.image && 'Your account photo comes from your sign-in provider. '}
+          Main characters are shown beside your public player name.
         </p>
         <LinkedProviders key={session.user.id} userId={session.user.id} />
       </div>
@@ -66,6 +69,7 @@ function LinkedProviders({ userId }: { userId: string }) {
       return res.data;
     },
   });
+  const options = useSignInOptions();
   const [error, setError] = useState<string | null>(null);
 
   if (accounts.isPending) return <LoadingState>Loading linked accounts…</LoadingState>;
@@ -77,7 +81,7 @@ function LinkedProviders({ userId }: { userId: string }) {
     }),
   );
 
-  const link = async (provider: (typeof PROVIDERS)[number]) => {
+  const link = async (provider: (typeof PROVIDERS)[number]['id']) => {
     setError(null);
     try {
       const res = await authClient.linkSocial({ provider, callbackURL: '/me' });
@@ -87,36 +91,54 @@ function LinkedProviders({ userId }: { userId: string }) {
     }
   };
 
-  const unlinked = PROVIDERS.filter((provider) => !linked.has(provider));
+  const configured = options.isSuccess && !options.isFetching ? options.data.providers : [];
+  const providers = PROVIDERS.filter(
+    ({ id }) => linked.has(id) || (accounts.isSuccess && configured.includes(id)),
+  );
+  const canLink = providers.some(({ id }) => !linked.has(id));
 
   return (
     <>
-      <div className="provider-list">
-        {PROVIDERS.map((provider) =>
-          linked.has(provider) ? (
-            <span key={provider} className="chip">
-              ✓ {provider === 'discord' ? 'Discord' : 'Google'} linked
-            </span>
-          ) : (
-            <Button size="small" key={provider} type="button" onClick={() => void link(provider)}>
-              Link {provider === 'discord' ? 'Discord' : 'Google'}
-            </Button>
-          ),
-        )}
-        {accounts.isError && <span className="error-text">{accounts.error.message}</span>}
-        {error && <span className="error-text">{error}</span>}
-      </div>
-      {/* Prompted rather than buried, because the failure mode is silent: sign
-          in with the unlinked provider some day and you get a second, empty
-          account instead of this one. */}
-      {accounts.data && unlinked.length > 0 && (
+      {providers.length > 0 && (
+        <div className="provider-list">
+          {providers.map(({ id, label }) =>
+            linked.has(id) ? (
+              <span key={id} className="chip">
+                ✓ {label} linked
+              </span>
+            ) : (
+              <Button size="small" key={id} type="button" onClick={() => void link(id)}>
+                Link {label}
+              </Button>
+            ),
+          )}
+        </div>
+      )}
+      {accounts.isError && (
+        <p className="error-text" role="alert">
+          {accounts.error.message}
+        </p>
+      )}
+      {options.isPending && <LoadingState>Checking sign-in providers…</LoadingState>}
+      {options.isError && (
+        <div className="provider-list">
+          <p className="error-text" role="alert">
+            Couldn’t check available sign-in providers.
+          </p>
+          <Button size="small" onClick={() => void options.refetch()} pending={options.isFetching}>
+            Retry provider options
+          </Button>
+        </div>
+      )}
+      {error && (
+        <p className="error-text" role="alert">
+          {error}
+        </p>
+      )}
+      {canLink && (
         <p className="muted">
-          Link{' '}
-          {unlinked
-            .map((provider) => (provider === 'discord' ? 'Discord' : 'Google'))
-            .join(' and ')}{' '}
-          so you can sign in either way and still land on this account. A different email address on
-          the other provider is fine.
+          Link another provider here to sign in to this account with it. Signing in separately can
+          create another account.
         </p>
       )}
     </>

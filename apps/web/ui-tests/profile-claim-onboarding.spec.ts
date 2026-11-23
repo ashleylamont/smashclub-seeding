@@ -109,6 +109,101 @@ test('keeps a former account claim, provider state and editor draft private duri
   expect(fixture.unexpected).toEqual([]);
 });
 
+for (const theme of ['dark', 'light'] as const)
+  for (const width of [390, 1440]) {
+    test(`${theme} ${width}px only offers configured account linking and keeps linked identities`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ colorScheme: theme });
+      const fixture = await mockAccount(page, 'Account B');
+      let providers: string[] = [];
+      let links: string[] = ['credential'];
+      await page.route('**/api/auth-options', (route) =>
+        route.fulfill({ json: { credentials: true, providers } }),
+      );
+      await page.route('**/api/auth/list-accounts', (route) =>
+        route.fulfill({ json: links.map((providerId) => ({ providerId })) }),
+      );
+      const requests: unknown[] = [];
+      await page.route('**/api/auth/link-social', async (route) => {
+        requests.push(route.request().postDataJSON());
+        await route.fulfill({ status: 400, json: { message: 'Fixture link failed' } });
+      });
+      const actions = page.getByRole('button', { name: /Link (Discord|Google)/ });
+      const inspect = async (name: string) => {
+        await ready(page);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+        expect(
+          (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze())
+            .violations,
+        ).toEqual([]);
+        await page.screenshot({ path: testInfo.outputPath(`${name}.png`), fullPage: true });
+      };
+      await page.goto('/me');
+      await expect(page.getByRole('heading', { name: 'Your account' })).toBeVisible();
+      await expect(page.getByRole('textbox', { name: 'Search players' })).toBeVisible();
+      await expect(actions).toHaveCount(0);
+      await expect(page.getByText(/sign in either way/i)).toHaveCount(0);
+      await inspect('credentials-only');
+
+      providers = ['google'];
+      links = ['credential', 'discord'];
+      await page.reload();
+      await expect(page.getByText('✓ Discord linked')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Link Discord' })).toHaveCount(0);
+      await expect(actions).toHaveCount(1);
+      const google = page.getByRole('button', { name: 'Link Google' });
+      await google.focus();
+      await expect(google).toBeFocused();
+      await inspect('configured-google-and-linked-discord');
+      await google.press('Enter');
+      await expect(page.getByText('Fixture link failed')).toBeVisible();
+      expect(requests).toEqual([
+        expect.objectContaining({ provider: 'google', callbackURL: '/me' }),
+      ]);
+      expect(fixture.unexpected).toEqual([]);
+    });
+  }
+
+test('keeps linked identities visible while provider options fail and retry', async ({ page }) => {
+  const fixture = await mockAccount(page, 'Account A');
+  let release!: () => void;
+  const firstResponse = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let attempts = 0;
+  await page.route('**/api/auth-options', async (route) => {
+    attempts += 1;
+    if (attempts === 1) {
+      await firstResponse;
+      await route.fulfill({ status: 503, json: { error: 'unavailable' } });
+    } else {
+      await route.fulfill({ json: { credentials: false, providers: ['discord', 'google'] } });
+    }
+  });
+  const linked = page.getByText('✓ Discord linked');
+  const actions = page.getByRole('button', { name: /Link (Discord|Google)/ });
+  await page.goto('/me');
+  try {
+    await expect(linked).toBeVisible();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Checking sign-in providers' }),
+    ).toBeVisible();
+    await expect(actions).toHaveCount(0);
+  } finally {
+    release();
+  }
+  await expect(page.getByRole('alert').filter({ hasText: 'Couldn’t check' })).toBeVisible();
+  await expect(actions).toHaveCount(0);
+  const retry = page.getByRole('button', { name: 'Retry provider options' });
+  await retry.press('Enter');
+  await expect(page.getByRole('button', { name: 'Link Google' })).toBeVisible();
+  await expect(page.getByText('✓ Discord linked')).toBeVisible();
+  await expect(retry).toHaveCount(0);
+  expect(fixture.unexpected).toEqual([]);
+});
+
 const PUBLIC_NAME = 'Returning player with an exceptionally long tournament alias';
 
 function publicPlayer(id = PLAYER_ID, verified = false): PlayerData {
