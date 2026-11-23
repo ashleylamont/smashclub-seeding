@@ -7,7 +7,6 @@ import {
   companies,
   eventPlanBrackets,
   nativeResultPublications,
-  playerRatings,
   players,
   ratingEvents,
   sets,
@@ -26,6 +25,7 @@ import {
   type RecapParticipant,
   type RecapResult,
   type RecapPlayerRef,
+  type RecapRatingEvent,
   type RecapSet,
   type RecapTournament,
   type WhrPriorEvidence,
@@ -42,12 +42,12 @@ import { latestCompletedRecompute } from '../recompute/recompute';
 import {
   loadWhrHistoryThroughDay,
   readWhrRunProvenance,
-  verifiedRankMovementNight,
   whrPrefixFingerprints,
 } from '../recompute/whrProvenance';
 import { publicParticipantPresentation } from '../events/participantNames';
 import { charactersByPlayer } from '../players/characters';
 import { nativeDoublesPoolFacts } from './poolFacts';
+import { loadRecapRankMovement } from './rankMovement';
 import { Result } from '../tournament/schemas';
 import { historicalPlayerIds } from '../identity/playerIds';
 
@@ -289,14 +289,12 @@ export async function loadRecap(
 
   const recompute = doubles ? null : await latestCompletedRecompute(db);
   const recomputeId = recompute?.id ?? null;
-  const { nightEvents, history, rankMovement } = recompute
-    ? await loadRatingContext(
-        db,
-        recompute.id,
-        nightIds,
-        anchorKey !== null && verifiedRankMovementNight(recompute.stats) === anchorKey,
-      )
-    : { nightEvents: [], history: undefined, rankMovement: [] };
+  const { nightEvents, history } = recompute
+    ? await loadRatingContext(db, recompute.id, nightIds)
+    : { nightEvents: [], history: undefined };
+  const rankMovement = recompute
+    ? await loadRecapRankMovement(db, recompute, anchorKey, recapSets, setRows)
+    : [];
   const upsetBrackets = recapRatingUpsetBrackets({
     sets: recapSets,
     participants,
@@ -438,26 +436,14 @@ async function loadRecapWhrEvidence(
 }
 
 interface RatingContext {
-  nightEvents: {
-    playerId: string;
-    setId: string | null;
-    tournamentId: string;
-    isDecay: boolean;
-    won: boolean | null;
-    preRating: number;
-    postRating: number;
-    preRd: number;
-    postRd: number;
-  }[];
+  nightEvents: RecapRatingEvent[];
   history: RecapHistory | undefined;
-  rankMovement: { playerId: string; rank: number; previousRank: number | null }[];
 }
 
 async function loadRatingContext(
   db: Db,
   recomputeId: string,
   nightIds: string[],
-  showRankMovement: boolean,
 ): Promise<RatingContext> {
   const nightRows = await db
     .select({
@@ -482,7 +468,7 @@ async function loadRatingContext(
 
   // The night may not be in this recompute yet (it runs debounced), in which
   // case there is no rating context to build and the recap stays seed-based.
-  if (nightRows.length === 0) return { nightEvents, history: undefined, rankMovement: [] };
+  if (nightRows.length === 0) return { nightEvents, history: undefined };
 
   /*
    * Everything the replay processed before this night's first event. Using
@@ -554,21 +540,9 @@ async function loadRatingContext(
     [...nightsByPlayer].map(([playerId, nights]) => [playerId, nights.size]),
   );
 
-  const rankMovement = showRankMovement
-    ? await db
-        .select({
-          playerId: playerRatings.playerId,
-          rank: playerRatings.rank,
-          previousRank: playerRatings.previousRank,
-        })
-        .from(playerRatings)
-        .where(eq(playerRatings.recomputeId, recomputeId))
-    : [];
-
   return {
     nightEvents,
     history: { priorSetCounts, priorEventCounts, priorPeakRating, priorMeetings },
-    rankMovement,
   };
 }
 

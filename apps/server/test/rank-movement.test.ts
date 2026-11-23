@@ -1,8 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import {
   playerRatings,
   players,
+  ratingNights,
   recomputes,
   sets,
   tournamentParticipants,
@@ -17,6 +18,7 @@ import { RecomputeTrigger } from '../src/recompute/trigger';
 import { loadEnv } from '../src/env';
 import { updateRatingSettings } from '../src/settings';
 import { appRouter } from '../src/trpc/router';
+import { adminCaller } from './helpers/adminCaller';
 import { createTestDb } from './helpers/testDb';
 import { fixtureClient, type FixtureTournament } from './helpers/challongeFixtures';
 
@@ -243,6 +245,58 @@ describe('rank movement over the last club night', () => {
     expect(
       (await api.recap({ slug: 'night1' }))?.facts.some(({ fact }) => fact.kind === 'mover'),
     ).toBe(false);
+  });
+
+  it('keeps movement bound to the published results while tournament dates are edited', async () => {
+    await sync(['night1', 'night2']);
+    const { recomputeId } = await runRecompute(db);
+    const [earlier] = await db
+      .select()
+      .from(tournaments)
+      .where(eq(tournaments.challongeSlug, 'night1'));
+    const [latest] = await db
+      .select()
+      .from(tournaments)
+      .where(eq(tournaments.challongeSlug, 'night2'));
+    if (!earlier?.eventDate || !latest?.eventDate) throw new Error('Expected two dated nights');
+
+    const api = publicApi();
+    const moverIn = async (slug: string) =>
+      (await api.recap({ slug }))?.facts.find(({ fact }) => fact.kind === 'mover')?.fact;
+    const expectedMover = { kind: 'mover', player: { playerId: await playerId('Samus Aran') } };
+    expect(await moverIn('night2')).toMatchObject(expectedMover);
+    expect(await moverIn('night1')).toBeUndefined();
+
+    const admin = adminCaller(db);
+    const queued = vi.spyOn(RecomputeTrigger.prototype, 'request').mockImplementation(() => {});
+    try {
+      const latestDate = latest.eventDate.toISOString();
+      await admin.updateTournament({ tournamentId: earlier.id, eventDate: latestDate });
+      const mixed = await api.recap({ slug: 'night1' });
+      expect(mixed?.tournaments.map(({ slug }) => slug).sort()).toEqual(['night1', 'night2']);
+      expect.soft(mixed?.facts.find(({ fact }) => fact.kind === 'mover')).toBeUndefined();
+
+      await admin.updateTournament({ tournamentId: latest.id, eventDate: null });
+      const moved = await api.recap({ slug: 'night1' });
+      expect(moved?.tournaments.map(({ slug }) => slug)).toEqual(['night1']);
+      expect.soft(moved?.facts.find(({ fact }) => fact.kind === 'mover')).toBeUndefined();
+
+      await admin.updateTournament({
+        tournamentId: earlier.id,
+        eventDate: earlier.eventDate.toISOString(),
+      });
+      await admin.updateTournament({ tournamentId: latest.id, eventDate: latestDate });
+      expect(await moverIn('night2')).toMatchObject(expectedMover);
+      expect(queued).toHaveBeenCalledTimes(4);
+      expect(await db.select({ id: recomputes.id }).from(recomputes)).toEqual([
+        { id: recomputeId },
+      ]);
+
+      await db.delete(ratingNights).where(eq(ratingNights.recomputeId, recomputeId));
+      expect(await moverIn('night2')).toBeUndefined();
+    } finally {
+      queued.mockRestore();
+    }
   });
 
   it('keeps converged ranks while withholding movement from a capped previous fit', async () => {
