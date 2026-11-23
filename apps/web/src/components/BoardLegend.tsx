@@ -45,10 +45,7 @@ export function BoardLegend({ leagues }: Props) {
             <dt>
               <span className="legend-sample num legend-sample-rating">1684</span> Club rating
             </dt>
-            <dd>
-              Ranks use the skill estimate after any attendance penalty. Bracket seeds use the skill
-              estimate and its uncertainty.
-            </dd>
+            <dd>Ranks use the skill estimate after any attendance penalty.</dd>
           </div>
 
           <div className="legend-term">
@@ -84,6 +81,23 @@ export function BoardLegend({ leagues }: Props) {
               Places gained or lost over the last club night, measured against a replay that leaves
               that night out. Movement uses the selected ranking field, even when you search or
               filter by company.
+            </dd>
+          </div>
+
+          <div className="legend-term">
+            <dt>Tournament placing</dt>
+            <dd>
+              Your finish in a bracket or division. WHR uses only eligible sets as rating evidence
+              and accounts for opponent strength.
+            </dd>
+          </div>
+
+          <div className="legend-term">
+            <dt>Bracket seed</dt>
+            <dd>
+              Your starting position in a draw. Automatic rating-based seeds use saved skill and
+              uncertainty. Pool results decide who advances. Nemesis’s combined finals policy uses
+              pool place and saved rating strength to order qualifiers.
             </dd>
           </div>
 

@@ -256,7 +256,7 @@ function PlayerProfile({ data }: { data: PlayerData }) {
               Club rating
               <InfoTip label="Club rating" align="end">
                 Rankings use club rating. It subtracts any attendance penalty from the skill
-                estimate. Bracket seeds use the skill estimate and its uncertainty.
+                estimate.
               </InfoTip>
             </span>
             <span className="headline-value num">{rating.clubRating.toFixed(0)}</span>
